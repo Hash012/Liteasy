@@ -1183,18 +1183,18 @@ export function ThinReadingTab({
               data-thin-reading-layer-body
               data-testid="thin-reading-summary"
             >
-              {summarySentences.map((sentence, index) => {
-                return (
-                  <div className="thin-reading__summary-unit" key={sentence.id}>
-                    <p
-                      className="thin-reading__summary-paragraph"
-                      data-thin-reading-annotation-target="node_summary"
-                      data-thin-reading-layer-body
-                    >
+              <p
+                className="thin-reading__summary-paragraph"
+                data-thin-reading-annotation-target="node_summary"
+                data-thin-reading-layer-body
+              >
+                {summarySentences.map((sentence) => {
+                  return (
                       <span
                         className="thin-reading__summary-sentence"
                         data-thin-reading-summary-evidence-ids={sentence.evidenceIds.join(",")}
                         data-thin-reading-summary-external-source-ids={sentence.externalKnowledge.join(",")}
+                        key={sentence.id}
                       >
                         {splitThinReadingSummaryTextByAnchors({ anchors, sentence }).map((segment, segmentIndex) => (
                           segment.anchor ? (
@@ -1284,10 +1284,9 @@ export function ThinReadingTab({
                       );
                     })}
                       </span>
-                    </p>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </p>
             </div>
           </section>
           {activeLegacyEvidence ? (

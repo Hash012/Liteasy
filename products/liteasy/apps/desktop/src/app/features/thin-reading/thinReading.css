@@ -138,7 +138,6 @@
   user-select: text;
 }
 .thin-reading__summary-paragraph { max-width: 36em; }
-.thin-reading__summary-unit + .thin-reading__summary-unit .thin-reading__summary-paragraph { margin-top: 11px; }
 .thin-reading__summary-sentence { outline-offset: 3px; }
 .thin-reading__anchor {
   background: #d9eaff;

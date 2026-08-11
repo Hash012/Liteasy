@@ -19,6 +19,230 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
+function isBoundedStringArray(
+  value: unknown,
+  maximumItems: number,
+  maximumLength: number
+): value is string[] {
+  return isStringArray(value) && value.length <= maximumItems &&
+    value.every((item) => item.trim().length > 0 && item.length <= maximumLength);
+}
+
+function isPersistedIntentWeights(value: unknown) {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const weights = [value.how, value.what, value.why];
+  return weights.every((weight) => typeof weight === "number" && Number.isFinite(weight) && weight >= 0 && weight <= 1) &&
+    Math.abs((value.how as number) + (value.what as number) + (value.why as number) - 1) <= 0.011;
+}
+
+const persistedPaperTypes = new Set([
+  "benchmark",
+  "dataset",
+  "experimental",
+  "humanities",
+  "position",
+  "survey",
+  "systems",
+  "theoretical",
+  "unknown"
+]);
+
+const persistedLearningGoals = new Set([
+  "conclusion_support",
+  "core_conclusion",
+  "core_idea",
+  "field_position",
+  "paper_panorama",
+  "parent_continuity",
+  "selected_focus"
+]);
+
+const persistedConclusionSupportKinds = new Set([
+  "boundary",
+  "comparison",
+  "derivation",
+  "experiment",
+  "material",
+  "mechanism"
+]);
+
+function isPersistedContentQualityReview(value: unknown, sentenceIds: ReadonlySet<string>) {
+  if (value === null || value === undefined) {
+    return true;
+  }
+  if (!isRecord(value) ||
+    (value.verdict !== "pass" && value.verdict !== "revise") ||
+    (value.severity !== "none" && value.severity !== "advisory" && value.severity !== "blocking") ||
+    (value.intentAlignment !== "aligned" && value.intentAlignment !== "diluted" && value.intentAlignment !== "misaligned") ||
+    (value.logicChain !== "complete" && value.logicChain !== "partial" && value.logicChain !== "broken") ||
+    (value.depthFit !== "appropriate" && value.depthFit !== "shallow" && value.depthFit !== "overextended") ||
+    (value.focus !== "focused" && value.focus !== "diffuse") ||
+    typeof value.reason !== "string" || value.reason.trim().length === 0 || value.reason.length > 420 ||
+    !isBoundedStringArray(value.revisionSentenceIds, 16, 160) ||
+    !value.revisionSentenceIds.every((id) => sentenceIds.has(id))) {
+    return false;
+  }
+  const allDimensionsPass = value.intentAlignment === "aligned" &&
+    value.logicChain === "complete" && value.depthFit === "appropriate" && value.focus === "focused";
+  return value.verdict === "pass"
+    ? allDimensionsPass && value.severity === "none" && value.revisionSentenceIds.length === 0
+    : !allDimensionsPass && value.severity !== "none" && value.revisionSentenceIds.length > 0;
+}
+
+function isPersistedAnswerObligations(value: unknown, status: unknown) {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 8 || !value.every((item) => {
+    if (!isRecord(item) || typeof item.obligation !== "string" || item.obligation.trim().length < 2 ||
+      item.obligation.length > 180 ||
+      (item.paperCoverage !== "complete" && item.paperCoverage !== "partial" && item.paperCoverage !== "none") ||
+      typeof item.reason !== "string" || item.reason.trim().length < 8 || item.reason.length > 300) {
+      return false;
+    }
+    if (item.paperEvidenceIds === undefined) return true;
+    if (!isBoundedStringArray(item.paperEvidenceIds, 12, 160) ||
+      new Set(item.paperEvidenceIds).size !== item.paperEvidenceIds.length) {
+      return false;
+    }
+    return item.paperCoverage === "none"
+      ? item.paperEvidenceIds.length === 0
+      : item.paperEvidenceIds.length > 0;
+  })) {
+    return false;
+  }
+  const derivedStatus = value.every((item) => isRecord(item) && item.paperCoverage === "complete")
+    ? "complete"
+    : value.every((item) => isRecord(item) && item.paperCoverage === "none")
+      ? "none"
+      : "partial";
+  return status === derivedStatus;
+}
+
+function isPersistedRootOrientationReview(value: unknown, sentenceIds: ReadonlySet<string>) {
+  if (value === null || value === undefined) return true;
+  if (!isRecord(value) || value.verdict !== "pass" ||
+    (value.coreIdea !== "covered" && value.coreIdea !== "missing") ||
+    (value.fieldPosition !== "covered" && value.fieldPosition !== "evidence_unavailable" &&
+      value.fieldPosition !== "missing") ||
+    (value.paperPanorama !== "covered" && value.paperPanorama !== "missing") ||
+    (typeof value.paperType !== "string" || !persistedPaperTypes.has(value.paperType)) ||
+    (value.paperTypeVerdict !== "ambiguous" && value.paperTypeVerdict !== "mismatch" &&
+      value.paperTypeVerdict !== "supported") ||
+    (value.retentionVerdict !== "focused" && value.retentionVerdict !== "unfocused") ||
+    typeof value.reason !== "string" || value.reason.trim().length === 0 || value.reason.length > 420 ||
+    !isRecord(value.conclusionSupport)) {
+    return false;
+  }
+  const conclusionSupport = value.conclusionSupport;
+  if ((conclusionSupport.status !== "complete" && conclusionSupport.status !== "missing" &&
+      conclusionSupport.status !== "partial") ||
+    typeof conclusionSupport.reason !== "string" || conclusionSupport.reason.trim().length < 8 ||
+    conclusionSupport.reason.length > 420 || !Array.isArray(conclusionSupport.chains) ||
+    conclusionSupport.chains.length > 4) {
+    return false;
+  }
+  const chainsAreValid = conclusionSupport.chains.every((chain) => {
+    if (!isRecord(chain) || typeof chain.conclusionSentenceId !== "string" ||
+      !sentenceIds.has(chain.conclusionSentenceId) || typeof chain.reason !== "string" ||
+      chain.reason.trim().length < 8 || chain.reason.length > 300 ||
+      (chain.verdict !== "complete" && chain.verdict !== "partial") ||
+      !isBoundedStringArray(chain.supportKinds, 6, 40) || chain.supportKinds.length < 1 ||
+      new Set(chain.supportKinds).size !== chain.supportKinds.length ||
+      !chain.supportKinds.every((kind) => persistedConclusionSupportKinds.has(kind)) ||
+      !isBoundedStringArray(chain.supportSentenceIds, 16, 160) ||
+      chain.supportSentenceIds.length < 1 ||
+      new Set(chain.supportSentenceIds).size !== chain.supportSentenceIds.length ||
+      !chain.supportSentenceIds.every((id) => sentenceIds.has(id))) {
+      return false;
+    }
+    return true;
+  });
+  if (!chainsAreValid) return false;
+  const derivedStatus = conclusionSupport.chains.length === 0
+    ? "missing"
+    : conclusionSupport.chains.every((chain) => isRecord(chain) && chain.verdict === "complete")
+      ? "complete"
+      : "partial";
+  if (conclusionSupport.status !== derivedStatus ||
+    value.paperPanorama !== (derivedStatus === "complete" ? "covered" : "missing")) {
+    return false;
+  }
+  return value.coreIdea === "covered" && derivedStatus === "complete" &&
+    value.fieldPosition !== "missing" && value.paperTypeVerdict !== "mismatch" &&
+    value.retentionVerdict === "focused";
+}
+
+function isPersistedPropositionVerdicts(value: unknown, sentenceIds: ReadonlySet<string>) {
+  if (value === undefined) return true;
+  if (!Array.isArray(value) || value.length < 1 || value.length > 48 || !value.every((item) => (
+    isRecord(item) && typeof item.proposition === "string" &&
+    item.proposition.trim().length >= 2 && item.proposition.length <= 300 &&
+    typeof item.sentenceId === "string" && sentenceIds.has(item.sentenceId) &&
+    item.verdict === "supported"
+  ))) {
+    return false;
+  }
+  const reviewedSentenceIds = new Set(value.flatMap((item) => (
+    isRecord(item) && typeof item.sentenceId === "string" ? [item.sentenceId] : []
+  )));
+  return [...sentenceIds].every((id) => reviewedSentenceIds.has(id));
+}
+
+function isPersistedPaperEvidenceRecovery(value: unknown) {
+  if (!isRecord(value) ||
+    !isBoundedStringArray(value.initialEvidenceIds, 18, 160) ||
+    !isBoundedStringArray(value.addedEvidenceIds, 6, 160) ||
+    !isBoundedStringArray(value.answerObligations, 8, 180) ||
+    (value.finalAnswerability !== "complete" && value.finalAnswerability !== "partial" &&
+      value.finalAnswerability !== "none") ||
+    (value.status !== "exhausted" && value.status !== "no_candidates" && value.status !== "resolved")) {
+    return false;
+  }
+  const allEvidenceIds = [...value.initialEvidenceIds, ...value.addedEvidenceIds];
+  if (new Set(value.initialEvidenceIds).size !== value.initialEvidenceIds.length ||
+    new Set(value.addedEvidenceIds).size !== value.addedEvidenceIds.length ||
+    new Set(allEvidenceIds).size !== allEvidenceIds.length ||
+    !allEvidenceIds.every((id) => /^evidence-[A-Za-z0-9-]{1,150}$/.test(id))) {
+    return false;
+  }
+  if (value.status === "no_candidates") {
+    return value.addedEvidenceIds.length === 0 && value.finalAnswerability !== "complete";
+  }
+  if (value.status === "resolved") {
+    return value.addedEvidenceIds.length > 0 && value.finalAnswerability === "complete";
+  }
+  return value.addedEvidenceIds.length > 0 && value.finalAnswerability !== "complete";
+}
+
+function isPersistedEvidencePlanningCounts(value: unknown) {
+  return isRecord(value) && [
+    value.focus,
+    value.pageRequests,
+    value.searchQueries,
+    value.selectedEvidenceIds
+  ].every((count) => typeof count === "number" && Number.isInteger(count) && count >= 0);
+}
+
+function isPersistedEvidencePlanningAudit(value: unknown) {
+  if (!isRecord(value) ||
+    (value.mode !== "model" && value.mode !== "deterministic_fallback") ||
+    typeof value.repairApplied !== "boolean" ||
+    !isStringArray(value.selectedEvidenceIds) || value.selectedEvidenceIds.length < 1 ||
+    value.selectedEvidenceIds.length > 18 ||
+    new Set(value.selectedEvidenceIds).size !== value.selectedEvidenceIds.length ||
+    !value.selectedEvidenceIds.every((id) => /^evidence-[A-Za-z0-9-]{1,150}$/.test(id)) ||
+    (value.reason !== undefined && value.reason !== "format_invalid" &&
+      value.reason !== "transport_unavailable" && value.reason !== "unavailable_evidence_id")) {
+    return false;
+  }
+  if (value.mode === "model" && value.reason !== undefined) return false;
+  if (value.mode === "deterministic_fallback" && value.reason === undefined) return false;
+  if (value.normalization === undefined) return true;
+  return isRecord(value.normalization) &&
+    isPersistedEvidencePlanningCounts(value.normalization.deduplicated) &&
+    isPersistedEvidencePlanningCounts(value.normalization.truncated);
+}
+
 function isHttpsUrl(value: unknown) {
   if (typeof value !== "string") {
     return false;
@@ -316,20 +540,133 @@ function isPersistedGenerationAudit(value: unknown, availableEvidenceIds: Set<st
     typeof value.model.id !== "string" || value.model.id.trim().length === 0 ||
     typeof value.model.provider !== "string" || value.model.provider.trim().length === 0 ||
     !isRecord(value.qualityGate) || typeof value.qualityGate.attempts !== "number" ||
-    !Number.isInteger(value.qualityGate.attempts) || value.qualityGate.attempts < 1 || value.qualityGate.attempts > 2 ||
+    !Number.isInteger(value.qualityGate.attempts) || value.qualityGate.attempts < 1 || value.qualityGate.attempts > 8 ||
     typeof value.qualityGate.repaired !== "boolean" || !isStringArray(value.qualityGate.repairReasons) ||
-    value.qualityGate.repairReasons.length !== value.qualityGate.attempts - 1 ||
-    value.qualityGate.repaired !== (value.qualityGate.attempts > 1) ||
+    value.qualityGate.repairReasons.length > 12 ||
+    value.qualityGate.repaired !== (value.qualityGate.repairReasons.length > 0) ||
     !value.qualityGate.repairReasons.every((reason) => reason.length <= 600)) {
     return false;
+  }
+  if (value.aiInterpretationReview !== undefined && (!isRecord(value.aiInterpretationReview) ||
+    value.aiInterpretationReview.verdict !== "pass" ||
+    typeof value.aiInterpretationReview.reason !== "string" ||
+    value.aiInterpretationReview.reason.trim().length === 0 ||
+    value.aiInterpretationReview.reason.length > 420 ||
+    !isStringArray(value.aiInterpretationReview.unsafeSentenceIds) ||
+    value.aiInterpretationReview.unsafeSentenceIds.length > 0 ||
+    !isPersistedContentQualityReview(value.aiInterpretationReview.contentQuality, sentenceIds))) {
+    return false;
+  }
+  if (value.externalRetrieval !== undefined) {
+    const retrieval = value.externalRetrieval;
+    const validRoutes = new Set(["support", "challenge", "context"]);
+    const validJoinReasons = new Set(["all_routes_settled", "deadline", "sufficient_sources"]);
+    const validStatuses = new Set(["cancelled", "completed", "failed", "timed_out"]);
+    const validFailures = new Set(["deadline", "invalid_response", "route_unavailable", "unexpected"]);
+    if (!isRecord(retrieval) ||
+      !isStringArray(retrieval.attemptedRoutes) ||
+      !retrieval.attemptedRoutes.every((route) => validRoutes.has(route)) ||
+      !isStringArray(retrieval.completedRoutes) ||
+      !retrieval.completedRoutes.every((route) => validRoutes.has(route)) ||
+      typeof retrieval.carriedSourceCount !== "number" ||
+      !Number.isInteger(retrieval.carriedSourceCount) || retrieval.carriedSourceCount < 0 ||
+      typeof retrieval.trustedSourceCount !== "number" ||
+      !Number.isInteger(retrieval.trustedSourceCount) || retrieval.trustedSourceCount < 0 ||
+      typeof retrieval.deadlineMs !== "number" || retrieval.deadlineMs < 1 ||
+      typeof retrieval.durationMs !== "number" || retrieval.durationMs < 0 ||
+      typeof retrieval.joinReason !== "string" || !validJoinReasons.has(retrieval.joinReason) ||
+      !Array.isArray(retrieval.routeOutcomes) ||
+      retrieval.routeOutcomes.length !== retrieval.attemptedRoutes.length ||
+      !retrieval.routeOutcomes.every((outcome) => isRecord(outcome) &&
+        typeof outcome.route === "string" && validRoutes.has(outcome.route) &&
+        typeof outcome.status === "string" && validStatuses.has(outcome.status) &&
+        typeof outcome.durationMs === "number" && outcome.durationMs >= 0 &&
+        typeof outcome.sourceCount === "number" &&
+        Number.isInteger(outcome.sourceCount) && outcome.sourceCount >= 0 &&
+        typeof outcome.reused === "boolean" &&
+        (outcome.failureKind === undefined || (
+          typeof outcome.failureKind === "string" && validFailures.has(outcome.failureKind)
+        )))) {
+      return false;
+    }
+  }
+  if (value.paperAnswerabilityTransition !== undefined) {
+    const transition = value.paperAnswerabilityTransition;
+    if (!isRecord(transition) ||
+      typeof transition.reason !== "string" ||
+      transition.reason.trim().length === 0 || transition.reason.length > 420 ||
+      (transition.status !== "partial" && transition.status !== "none") ||
+      (transition.answerObligations !== undefined &&
+        !isPersistedAnswerObligations(transition.answerObligations, transition.status)) ||
+      (
+        transition.status === "partial" &&
+        transition.targetSupportMode !== "paper_and_external" &&
+        transition.targetSupportMode !== "ai_interpretation"
+      ) ||
+      (
+        transition.status === "none" &&
+        transition.targetSupportMode !== "external_only" &&
+        transition.targetSupportMode !== "ai_interpretation"
+      )) {
+      return false;
+    }
+  }
+  if (value.paperEvidenceRecovery !== undefined &&
+    !isPersistedPaperEvidenceRecovery(value.paperEvidenceRecovery)) {
+    return false;
+  }
+  if (value.evidencePlanning !== undefined &&
+    !isPersistedEvidencePlanningAudit(value.evidencePlanning)) {
+    return false;
+  }
+  if (value.evidenceLoop !== undefined) {
+    const loop = value.evidenceLoop;
+    const stopReasons = new Set([
+      "maximum_rounds_reached",
+      "no_new_evidence",
+      "observation_sufficient",
+      "observer_unavailable"
+    ]);
+    if (!isRecord(loop) || !Array.isArray(loop.rounds) || loop.rounds.length < 1 || loop.rounds.length > 2 ||
+      typeof loop.stopReason !== "string" || !stopReasons.has(loop.stopReason) ||
+      typeof loop.stopReasonDetail !== "string" || loop.stopReasonDetail.trim().length === 0 ||
+      (loop.fallback !== undefined && loop.fallback !== "deterministic_first_round") ||
+      (loop.stopReason === "observer_unavailable" && loop.fallback !== "deterministic_first_round") ||
+      !loop.rounds.every((round) => isRecord(round) && Number.isInteger(round.round) &&
+        isStringArray(round.focus) && isStringArray(round.observedEvidenceIds) &&
+        isStringArray(round.searchQueries) && isStringArray(round.selectedEvidenceIds) &&
+        Array.isArray(round.pageRequests) && round.pageRequests.every((page) => Number.isInteger(page) && page > 0) &&
+        Array.isArray(round.toolCalls))) {
+      return false;
+    }
   }
   if (value.interpretationPlan !== undefined && (!isRecord(value.interpretationPlan) ||
     (value.interpretationPlan.intent !== "what" && value.interpretationPlan.intent !== "why" &&
       value.interpretationPlan.intent !== "how" && value.interpretationPlan.intent !== "mixed") ||
     (value.interpretationPlan.requestedDepth !== "standard" && value.interpretationPlan.requestedDepth !== "deep") ||
+    (value.interpretationPlan.explanationDepth !== undefined &&
+      value.interpretationPlan.explanationDepth !== "overview" &&
+      value.interpretationPlan.explanationDepth !== "focused" &&
+      value.interpretationPlan.explanationDepth !== "mechanistic" &&
+      value.interpretationPlan.explanationDepth !== "boundary") ||
     typeof value.interpretationPlan.externalKnowledgeNeeded !== "boolean" ||
     !isStringArray(value.interpretationPlan.discourseMoves) ||
     value.interpretationPlan.discourseMoves.length < 1 || value.interpretationPlan.discourseMoves.length > 6 ||
+    (value.interpretationPlan.intentSignals !== undefined &&
+      !isBoundedStringArray(value.interpretationPlan.intentSignals, 24, 160)) ||
+    (value.interpretationPlan.intentWeights !== undefined &&
+      !isPersistedIntentWeights(value.interpretationPlan.intentWeights)) ||
+    (value.interpretationPlan.learningGoals !== undefined &&
+      (!isBoundedStringArray(value.interpretationPlan.learningGoals, 5, 40) ||
+        !value.interpretationPlan.learningGoals.every((goal) => persistedLearningGoals.has(goal)))) ||
+    (value.interpretationPlan.paperTypeHint !== undefined &&
+      (typeof value.interpretationPlan.paperTypeHint !== "string" ||
+        !persistedPaperTypes.has(value.interpretationPlan.paperTypeHint))) ||
+    (value.interpretationPlan.readingMode !== undefined &&
+      value.interpretationPlan.readingMode !== "orientation" &&
+      value.interpretationPlan.readingMode !== "exploration") ||
+    (value.interpretationPlan.retentionFocus !== undefined &&
+      !isBoundedStringArray(value.interpretationPlan.retentionFocus, 5, 420)) ||
     (value.interpretationPlan.externalQuery !== undefined && typeof value.interpretationPlan.externalQuery !== "string") ||
     (value.interpretationPlan.gap !== undefined && typeof value.interpretationPlan.gap !== "string"))) {
     return false;
@@ -351,26 +688,74 @@ function isPersistedGenerationAudit(value: unknown, availableEvidenceIds: Set<st
     typeof value.workload.reason !== "string" || !isStringArray(value.workload.plannedSubagents))) {
     return false;
   }
+  if (value.responsibilitySubagents !== undefined && (!Array.isArray(value.responsibilitySubagents) ||
+    value.responsibilitySubagents.length > 2 ||
+    !value.responsibilitySubagents.every((outcome) => isRecord(outcome) &&
+      (outcome.id === "relationship_mapper" || outcome.id === "visual_editor") &&
+      (outcome.status === "completed" || outcome.status === "failed") &&
+      typeof outcome.durationMs === "number" && outcome.durationMs >= 0 &&
+      typeof outcome.includedInFinalPrompt === "boolean" &&
+      (outcome.failureKind === undefined || outcome.failureKind === "empty_output" ||
+        outcome.failureKind === "unavailable" || outcome.failureKind === "unexpected")))) {
+    return false;
+  }
   if (value.evidencePlan !== undefined && (!isRecord(value.evidencePlan) ||
     !isStringArray(value.evidencePlan.focus) || value.evidencePlan.focus.length < 1 || value.evidencePlan.focus.length > 5 ||
     !isStringArray(value.evidencePlan.selectedEvidenceIds) || value.evidencePlan.selectedEvidenceIds.length < 1 ||
-    value.evidencePlan.selectedEvidenceIds.length > 12 ||
-    !value.evidencePlan.selectedEvidenceIds.every((id) => availableEvidenceIds.has(id)))) {
+    value.evidencePlan.selectedEvidenceIds.length > 18 ||
+    new Set(value.evidencePlan.selectedEvidenceIds).size !== value.evidencePlan.selectedEvidenceIds.length ||
+    !value.evidencePlan.selectedEvidenceIds.every((id) => /^evidence-[A-Za-z0-9-]{1,150}$/.test(id)))) {
     return false;
   }
   if (value.evidenceReview !== undefined && (!isRecord(value.evidenceReview) ||
     value.evidenceReview.verdict !== "pass" || typeof value.evidenceReview.reason !== "string" ||
     value.evidenceReview.reason.trim().length === 0 || value.evidenceReview.reason.length > 420 ||
-    !isStringArray(value.evidenceReview.unsupportedSentenceIds) ||
-    !value.evidenceReview.unsupportedSentenceIds.every((id) => sentenceIds.has(id)))) {
+    !isBoundedStringArray(value.evidenceReview.unsupportedSentenceIds, 16, 160) ||
+    value.evidenceReview.unsupportedSentenceIds.length > 0 ||
+    !isPersistedPropositionVerdicts(value.evidenceReview.propositionVerdicts, sentenceIds) ||
+    !isPersistedRootOrientationReview(value.evidenceReview.rootOrientation, sentenceIds) ||
+    !isPersistedContentQualityReview(value.evidenceReview.contentQuality, sentenceIds))) {
     return false;
+  }
+  if (isRecord(value.evidenceReview) && value.evidenceReview.paperAnswerability !== undefined &&
+    value.evidenceReview.paperAnswerability !== null) {
+    const answerability = value.evidenceReview.paperAnswerability;
+    if (!isRecord(answerability) ||
+      (answerability.status !== "complete" && answerability.status !== "partial" && answerability.status !== "none") ||
+      typeof answerability.reason !== "string" || answerability.reason.trim().length < 8 ||
+      answerability.reason.length > 420 ||
+      (answerability.answerObligations !== undefined &&
+        !isPersistedAnswerObligations(answerability.answerObligations, answerability.status)) ||
+      !isBoundedStringArray(answerability.paperSupportedSentenceIds, 16, 160) ||
+      new Set(answerability.paperSupportedSentenceIds).size !== answerability.paperSupportedSentenceIds.length ||
+      !answerability.paperSupportedSentenceIds.every((id) => sentenceIds.has(id)) ||
+      (answerability.status === "none" && answerability.paperSupportedSentenceIds.length > 0) ||
+      (answerability.status !== "none" && answerability.paperSupportedSentenceIds.length === 0)) {
+      return false;
+    }
   }
   if (value.evidenceToolCalls !== undefined && (!Array.isArray(value.evidenceToolCalls) ||
     !value.evidenceToolCalls.every((call) => isRecord(call) &&
       (call.kind === "read" || call.kind === "search" || call.kind === "view") &&
-      isStringArray(call.evidenceIds) && call.evidenceIds.every((id) => availableEvidenceIds.has(id)) &&
+      isBoundedStringArray(call.evidenceIds, 18, 160) &&
+      new Set(call.evidenceIds).size === call.evidenceIds.length &&
+      call.evidenceIds.every((id) => /^evidence-[A-Za-z0-9-]{1,150}$/.test(id)) &&
       (call.query === undefined || typeof call.query === "string") &&
       (call.pages === undefined || (Array.isArray(call.pages) && call.pages.every((page) => Number.isInteger(page) && page > 0)))))) {
+    return false;
+  }
+  const plannedEvidenceIds = isRecord(value.evidencePlan) && isStringArray(value.evidencePlan.selectedEvidenceIds)
+    ? value.evidencePlan.selectedEvidenceIds
+    : [];
+  const auditedEvidenceIds = new Set(availableEvidenceIds);
+  if (Array.isArray(value.evidenceToolCalls)) {
+    value.evidenceToolCalls.forEach((call) => {
+      if (isRecord(call) && isStringArray(call.evidenceIds)) {
+        call.evidenceIds.forEach((id) => auditedEvidenceIds.add(id));
+      }
+    });
+  }
+  if (!plannedEvidenceIds.every((id) => auditedEvidenceIds.has(id))) {
     return false;
   }
   return value.evidencePlan === undefined || value.evidenceReview !== undefined;
@@ -458,7 +843,7 @@ function isPersistedThinReadingDocument(
       return false;
     }
     if (node.closureState !== undefined &&
-      (node.closureState === "outside_paper") !== !node.withinPaperClosure) {
+      (node.closureState === "inside_paper") !== node.withinPaperClosure) {
       return false;
     }
     if (!isPersistedThinReadingNodeSource(node.source) ||
@@ -568,6 +953,74 @@ function isPersistedThinReadingDocument(
     if (evidence.generationAudit !== undefined &&
       !isPersistedGenerationAudit(evidence.generationAudit, availableEvidenceIds, sentenceIds)) {
       return false;
+    }
+    const hasExplicitSentenceMap = Array.isArray(summarySentences) && summarySentences.length > 0;
+    const hasSentencePaperSupport = hasExplicitSentenceMap && summarySentences.some((sentence) => (
+      isRecord(sentence) && isStringArray(sentence.evidenceIds) && sentence.evidenceIds.length > 0
+    ));
+    const hasSentenceExternalSupport = hasExplicitSentenceMap && summarySentences.some((sentence) => (
+      isRecord(sentence) && isStringArray(sentence.externalKnowledge) && sentence.externalKnowledge.length > 0
+    ));
+    const hasPaperSupport = hasExplicitSentenceMap
+      ? hasSentencePaperSupport
+      : paperEvidence.length > 0;
+    const hasExternalSupport = hasExplicitSentenceMap
+      ? hasSentenceExternalSupport
+      : externalKnowledge.length > 0;
+    const hasAnyPaperReference = paperEvidence.length > 0 || hasSentencePaperSupport;
+    const hasAnyExternalReference = externalKnowledge.length > 0 || hasSentenceExternalSupport;
+    const inferredSupportMode = hasPaperSupport && hasExternalSupport
+      ? "paper_and_external"
+      : hasExternalSupport
+        ? "external_only"
+        : "paper";
+    const declaredSupportMode = node.supportMode;
+    if (declaredSupportMode !== undefined &&
+      declaredSupportMode !== "paper" &&
+      declaredSupportMode !== "paper_and_external" &&
+      declaredSupportMode !== "external_only" &&
+      declaredSupportMode !== "ai_interpretation") {
+      return false;
+    }
+    if (declaredSupportMode === "ai_interpretation") {
+      const audit = evidence.generationAudit;
+      if (hasAnyPaperReference || hasAnyExternalReference || !isRecord(audit) ||
+        !isRecord(audit.externalFallback) || !isRecord(audit.aiInterpretationReview) ||
+        audit.aiInterpretationReview.verdict !== "pass" ||
+        !Array.isArray(summarySentences) || summarySentences.length === 0 ||
+        !summarySentences.every((sentence) => isRecord(sentence) &&
+          sentence.status === "unsupported" && sentence.supportMode === "ai_interpretation")) {
+        return false;
+      }
+    } else if (declaredSupportMode !== undefined && declaredSupportMode !== inferredSupportMode) {
+      return false;
+    }
+    const resolvedSupportMode = declaredSupportMode ?? inferredSupportMode;
+    if (resolvedSupportMode === "external_only" && paperEvidence.length > 0) {
+      return false;
+    }
+    const generationAudit = evidence.generationAudit;
+    const transition = isRecord(generationAudit) && isRecord(generationAudit.paperAnswerabilityTransition)
+      ? generationAudit.paperAnswerabilityTransition
+      : undefined;
+    if (transition && transition.targetSupportMode !== resolvedSupportMode) {
+      return false;
+    }
+    const answerability = isRecord(generationAudit) && isRecord(generationAudit.evidenceReview) &&
+      isRecord(generationAudit.evidenceReview.paperAnswerability)
+      ? generationAudit.evidenceReview.paperAnswerability
+      : undefined;
+    if (answerability) {
+      const expectedClosureState = answerability.status === "complete"
+        ? "inside_paper"
+        : answerability.status === "partial"
+          ? "near_boundary"
+          : "outside_paper";
+      if (node.withinPaperClosure !== (answerability.status === "complete") ||
+        (node.closureState !== undefined && node.closureState !== expectedClosureState) ||
+        (transition && transition.status !== answerability.status)) {
+        return false;
+      }
     }
     if (!node.childIds.every((childId) => isRecord(nodes[childId]))) {
       return false;

@@ -96,11 +96,44 @@ test("projects thin-reading root phases into dedicated task stages", async () =>
     });
     listener?.({
       ...eventBase,
+      eventId: "thin-paper-recovery",
+      phase: "recovering_paper_evidence",
+      planId: "thin-run",
+      progress: 67,
+      sequence: 4,
+      summary: "正在补读论文内尚未规划的相关证据",
+      traceId: "trace-thin",
+      type: "progress.started"
+    });
+    listener?.({
+      ...eventBase,
+      eventId: "thin-review",
+      phase: "repairing_evidence_review",
+      planId: "thin-run",
+      progress: 73,
+      sequence: 5,
+      summary: "证据复核格式无效，正在校正复核结果",
+      traceId: "trace-thin",
+      type: "progress.started"
+    });
+    listener?.({
+      ...eventBase,
+      eventId: "thin-repair",
+      phase: "repairing_structured_output",
+      planId: "thin-run",
+      progress: 68,
+      sequence: 6,
+      summary: "薄读句级证据映射未通过，正在定向修复",
+      traceId: "trace-thin",
+      type: "progress.started"
+    });
+    listener?.({
+      ...eventBase,
       eventId: "thin-validation",
       phase: "auditing_answer",
       planId: "thin-run",
       progress: 78,
-      sequence: 4,
+      sequence: 7,
       summary: "正在核对薄读证据边界",
       traceId: "trace-thin",
       type: "progress.started"
@@ -138,6 +171,18 @@ test("projects thin-reading root phases into dedicated task stages", async () =>
   expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({ stage: "thin_reading_retrieving_evidence" }));
   expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({ stage: "thin_reading_generating_root" }));
   expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({ stage: "thin_reading_validating" }));
+  expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
+    message: "正在补读论文内尚未规划的相关证据",
+    stage: "thin_reading_retrieving_evidence"
+  }));
+  expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
+    message: "证据复核格式无效，正在校正复核结果",
+    stage: "thin_reading_validating"
+  }));
+  expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
+    message: "薄读句级证据映射未通过，正在定向修复",
+    stage: "thin_reading_repairing_trace"
+  }));
 });
 
 test("streams public Agent progress events to the artifact task", async () => {

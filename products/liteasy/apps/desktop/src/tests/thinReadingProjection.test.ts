@@ -84,6 +84,93 @@ function aiSeed(overrides: Partial<ThinReadingNodeSeed> = {}): ThinReadingNodeSe
   };
 }
 
+function mixedAnswerabilitySeed(): ThinReadingNodeSeed {
+  const paperSentenceId = "sentence-paper-boundary";
+  const externalSentenceId = "sentence-external-boundary";
+  return {
+    closureState: "near_boundary",
+    evidence: {
+      externalKnowledge: ["openalex:W424242"],
+      externalSources: [{
+        abstract: "Deployment constraints determine when the mechanism remains effective.",
+        authors: ["A. Researcher"],
+        id: "openalex:W424242",
+        provider: "openalex",
+        relation: "topic_search",
+        relevance: 0.9,
+        retrievalQuery: "deployment constraints",
+        sourceId: "W424242",
+        sourceRecordUrl: "https://openalex.org/W424242",
+        title: "Deployment Constraints",
+        url: "https://openalex.org/W424242"
+      }],
+      generationAudit: {
+        evidenceReview: {
+          paperAnswerability: {
+            answerObligations: [{
+              obligation: "解释目标论文中的机制",
+              paperCoverage: "complete",
+              paperEvidenceIds: ["evidence-1"],
+              reason: "目标论文证据完整覆盖机制义务。"
+            }, {
+              obligation: "解释论文未研究的部署约束",
+              paperCoverage: "none",
+              paperEvidenceIds: [],
+              reason: "该必要义务需要论文外来源。"
+            }],
+            paperSupportedSentenceIds: [paperSentenceId],
+            reason: "论文能回答机制，但完整的部署边界需要论文外证据。",
+            status: "partial"
+          },
+          reason: "论文句和外部句分别由其绑定来源直接支持。",
+          unsupportedSentenceIds: [],
+          verdict: "pass"
+        },
+        model: { id: "test-model", provider: "test" },
+        paperAnswerabilityTransition: {
+          answerObligations: [{
+            obligation: "解释目标论文中的机制",
+            paperCoverage: "complete",
+            paperEvidenceIds: ["evidence-1"],
+            reason: "目标论文证据完整覆盖机制义务。"
+          }, {
+            obligation: "解释论文未研究的部署约束",
+            paperCoverage: "none",
+            paperEvidenceIds: [],
+            reason: "该必要义务需要论文外来源。"
+          }],
+          reason: "论文能回答机制，但完整的部署边界需要论文外证据。",
+          status: "partial",
+          targetSupportMode: "paper_and_external"
+        },
+        qualityGate: { attempts: 1, repaired: false, repairReasons: [] },
+        version: "liteasy.thin-reading-agent/v2"
+      },
+      paperEvidence: ["evidence-1"],
+      summarySentences: [{
+        evidenceIds: ["evidence-1"],
+        externalKnowledge: [],
+        id: paperSentenceId,
+        status: "grounded",
+        supportMode: "paper",
+        text: "论文解释了该机制的内部工作方式。"
+      }, {
+        evidenceIds: [],
+        externalKnowledge: ["openalex:W424242"],
+        id: externalSentenceId,
+        status: "weak",
+        supportMode: "external_only",
+        text: "外部研究补充了该机制的部署约束。"
+      }]
+    },
+    omittedSections: [],
+    recommendations: [],
+    summary: "论文解释了该机制的内部工作方式。外部研究补充了该机制的部署约束。",
+    supportMode: "paper_and_external",
+    withinPaperClosure: false
+  };
+}
+
 describe("thinReadingProjection", () => {
   test("resolves sentence support modes from sentence-level sources", () => {
     expect(resolveThinReadingSentenceSupportMode({
@@ -124,6 +211,49 @@ describe("thinReadingProjection", () => {
     })).toBe("ai_interpretation");
   });
 
+  test("prefers explicit sentence mappings over unused root-level source markers", () => {
+    const paperSentence = {
+      evidenceIds: ["evidence-1"],
+      externalKnowledge: [],
+      id: "sentence-paper",
+      status: "grounded" as const,
+      supportMode: "paper" as const,
+      text: "The target paper directly supports this sentence."
+    };
+
+    expect(resolveThinReadingSupportMode({
+      evidence: {
+        externalKnowledge: ["openalex:W-unused"],
+        paperEvidence: ["evidence-1"],
+        summarySentences: [paperSentence]
+      }
+    })).toBe("paper");
+    expect(() => resolveThinReadingSupportMode({
+      evidence: {
+        externalKnowledge: ["openalex:W-unused"],
+        paperEvidence: ["evidence-1"],
+        summarySentences: [paperSentence]
+      },
+      supportMode: "paper_and_external"
+    })).toThrow("薄读支持模式与正文来源不一致");
+
+    expect(() => resolveThinReadingSupportMode({
+      evidence: {
+        externalKnowledge: ["openalex:W1"],
+        paperEvidence: ["evidence-unused"],
+        summarySentences: [{
+          evidenceIds: [],
+          externalKnowledge: ["openalex:W1"],
+          id: "sentence-external",
+          status: "weak",
+          supportMode: "external_only",
+          text: "A traceable external source supports this sentence."
+        }]
+      },
+      supportMode: "external_only"
+    })).toThrow("external_only 不能携带论文证据");
+  });
+
   test("persists explicit support modes on root and child nodes", () => {
     const root = createThinReadingDocument({
       artifactId: "artifact-support-mode",
@@ -144,6 +274,72 @@ describe("thinReadingProjection", () => {
 
     expect(root.nodes[root.rootNodeId].supportMode).toBe("paper");
     expect(child.nodes[child.activeNodeId].supportMode).toBe("external_only");
+  });
+
+  test("persists and freezes the semantic partial-to-mixed transition", () => {
+    const document = createThinReadingDocument({
+      artifactId: "artifact-answerability-transition",
+      papers: [{ id: "paper-1", title: "Paper" }],
+      rootSeed: mixedAnswerabilitySeed(),
+      targetLanguage: "zh-CN"
+    });
+    const root = document.nodes[document.rootNodeId];
+    const transition = root.evidence.generationAudit?.paperAnswerabilityTransition;
+
+    expect(root).toMatchObject({
+      closureState: "near_boundary",
+      supportMode: "paper_and_external",
+      withinPaperClosure: false
+    });
+    expect(transition).toEqual({
+      answerObligations: [{
+        obligation: "解释目标论文中的机制",
+        paperCoverage: "complete",
+        paperEvidenceIds: ["evidence-1"],
+        reason: "目标论文证据完整覆盖机制义务。"
+      }, {
+        obligation: "解释论文未研究的部署约束",
+        paperCoverage: "none",
+        paperEvidenceIds: [],
+        reason: "该必要义务需要论文外来源。"
+      }],
+      reason: "论文能回答机制，但完整的部署边界需要论文外证据。",
+      status: "partial",
+      targetSupportMode: "paper_and_external"
+    });
+    expect(Object.isFrozen(transition)).toBe(true);
+    expect(Object.isFrozen(transition?.answerObligations)).toBe(true);
+    expect(Object.isFrozen(transition?.answerObligations?.[0])).toBe(true);
+    expect(Object.isFrozen(transition?.answerObligations?.[0].paperEvidenceIds)).toBe(true);
+    const reviewObligations = root.evidence.generationAudit?.evidenceReview?.paperAnswerability
+      ?.answerObligations;
+    expect(Object.isFrozen(reviewObligations)).toBe(true);
+    expect(Object.isFrozen(reviewObligations?.[0])).toBe(true);
+    expect(Object.isFrozen(reviewObligations?.[0].paperEvidenceIds)).toBe(true);
+  });
+
+  test("rejects a paper-answerability transition that disagrees with final sources", () => {
+    const valid = mixedAnswerabilitySeed();
+    expect(() => createThinReadingDocument({
+      artifactId: "artifact-answerability-mismatch",
+      papers: [{ id: "paper-1", title: "Paper" }],
+      rootSeed: {
+        ...valid,
+        evidence: {
+          ...valid.evidence,
+          generationAudit: {
+            ...valid.evidence.generationAudit!,
+            evidenceReview: undefined,
+            paperAnswerabilityTransition: {
+              reason: "错误地声称论文完全不能回答当前问题。",
+              status: "none",
+              targetSupportMode: "external_only"
+            }
+          }
+        }
+      },
+      targetLanguage: "zh-CN"
+    })).toThrow("转档审计与最终句级来源不一致");
   });
 
   test("rejects AI interpretation declarations that conflict with evidence or lack fallback audit", () => {
@@ -263,14 +459,24 @@ describe("thinReadingProjection", () => {
     expect(Object.isFrozen(child.nodes[child.activeNodeId].evidence.summarySentences)).toBe(true);
   });
 
-  test("distinguishes a near-boundary internal level from a real external level", () => {
-    expect(resolveThinReadingClosureState({ depth: 0, withinPaperClosure: true })).toBe("inside_paper");
-    expect(resolveThinReadingClosureState({ depth: 2, withinPaperClosure: true })).toBe("near_boundary");
-    expect(resolveThinReadingClosureState({ depth: 2, withinPaperClosure: false })).toBe("outside_paper");
+  test("derives the paper answerability boundary from final support rather than topology depth", () => {
+    expect(resolveThinReadingClosureState({ depth: 0, supportMode: "paper", withinPaperClosure: true })).toBe("inside_paper");
+    expect(resolveThinReadingClosureState({ depth: 8, supportMode: "paper", withinPaperClosure: true })).toBe("inside_paper");
+    expect(resolveThinReadingClosureState({
+      depth: 1,
+      supportMode: "paper_and_external",
+      withinPaperClosure: false
+    })).toBe("near_boundary");
+    expect(resolveThinReadingClosureState({
+      depth: 1,
+      supportMode: "external_only",
+      withinPaperClosure: false
+    })).toBe("outside_paper");
     expect(resolveThinReadingClosureState({
       closureState: "near_boundary",
       depth: 1,
-      withinPaperClosure: true
+      supportMode: "paper_and_external",
+      withinPaperClosure: false
     })).toBe("near_boundary");
   });
 
@@ -490,28 +696,110 @@ describe("thinReadingProjection", () => {
         stopReasonDetail: "首轮证据已足以支撑核心结论。"
       },
       evidencePlan: { focus: ["核心结论"], selectedEvidenceIds: ["evidence-1"] },
-      evidenceReview: { reason: "句子均由限定证据支持。", unsupportedSentenceIds: [], verdict: "pass" as const },
+      evidencePlanning: {
+        mode: "model" as const,
+        normalization: {
+          deduplicated: { focus: 0, pageRequests: 0, searchQueries: 0, selectedEvidenceIds: 0 },
+          truncated: { focus: 0, pageRequests: 1, searchQueries: 0, selectedEvidenceIds: 0 }
+        },
+        repairApplied: false,
+        selectedEvidenceIds: ["evidence-1"]
+      },
+      evidenceReview: {
+        contentQuality: {
+          depthFit: "appropriate" as const,
+          focus: "focused" as const,
+          intentAlignment: "aligned" as const,
+          logicChain: "complete" as const,
+          reason: "主意图、逻辑链和拓扑深度匹配。",
+          revisionSentenceIds: [],
+          severity: "none" as const,
+          verdict: "pass" as const
+        },
+        reason: "句子均由限定证据支持。",
+        rootOrientation: {
+          conclusionSupport: {
+            chains: [{
+              conclusionSentenceId: "sentence-audit",
+              reason: "机制句直接说明核心结论成立的关键过程。",
+              supportKinds: ["mechanism" as const],
+              supportSentenceIds: ["sentence-audit"],
+              verdict: "complete" as const
+            }],
+            reason: "核心结论具有最短充分的机制支持过程。",
+            status: "complete" as const
+          },
+          coreIdea: "covered" as const,
+          fieldPosition: "evidence_unavailable" as const,
+          paperPanorama: "covered" as const,
+          paperType: "experimental" as const,
+          paperTypeVerdict: "supported" as const,
+          reason: "总述保留核心结论、支持过程和适用边界。",
+          retentionVerdict: "focused" as const,
+          verdict: "pass" as const
+        },
+        unsupportedSentenceIds: [],
+        verdict: "pass" as const
+      },
       interpretationPlan: {
         discourseMoves: ["建立核心思想", "展开全景", "定位领域位置"],
+        explanationDepth: "overview" as const,
         externalKnowledgeNeeded: false,
         intent: "mixed" as const,
+        intentSignals: ["root_orientation:experimental"],
+        intentWeights: { how: 0.25, what: 0.4, why: 0.35 },
         learningGoals: ["core_idea", "paper_panorama", "field_position"] as const,
+        paperTypeHint: "experimental" as const,
         readingMode: "orientation" as const,
+        retentionFocus: ["核心结论", "关键推导", "领域位置"],
         requestedDepth: "standard" as const
       },
       model: { id: "gpt-5-mini", provider: "openai" },
+      paperEvidenceRecovery: {
+        addedEvidenceIds: ["evidence-2"],
+        answerObligations: ["补齐结论成立边界"],
+        finalAnswerability: "partial" as const,
+        initialEvidenceIds: ["evidence-1"],
+        status: "exhausted" as const
+      },
       qualityGate: { attempts: 2, repaired: true, repairReasons: ["首次句级映射不完整"] },
       version: "liteasy.thin-reading-agent/v2" as const
     };
     const rootDocument = createThinReadingDocument({
       artifactId: "artifact-thin-audit",
       papers: [{ id: "paper-1", title: "ColBERT" }],
-      rootSeed: seed({ evidence: { externalKnowledge: [], generationAudit: audit, paperEvidence: ["evidence-1"] } }),
+      rootSeed: seed({
+        evidence: {
+          externalKnowledge: [],
+          generationAudit: audit,
+          paperEvidence: ["evidence-1"],
+          summarySentences: [{
+            evidenceIds: ["evidence-1"],
+            externalKnowledge: [],
+            id: "sentence-audit",
+            status: "grounded",
+            text: "ColBERT 的核心结论由 MaxSim 机制直接支持。"
+          }]
+        }
+      }),
       targetLanguage: "zh-CN"
     });
     const branched = advanceThinReadingDocument(rootDocument, {
       parentNodeId: rootDocument.rootNodeId,
-      seed: seed({ evidence: { externalKnowledge: [], generationAudit: audit, paperEvidence: ["evidence-1"] } }),
+      seed: seed({
+        evidence: {
+          externalKnowledge: [],
+          generationAudit: audit,
+          paperEvidence: ["evidence-1"],
+          summarySentences: [{
+            evidenceIds: ["evidence-1"],
+            externalKnowledge: [],
+            id: "sentence-audit",
+            status: "grounded",
+            text: "ColBERT 的核心结论由 MaxSim 机制直接支持。"
+          }]
+        }
+      }),
       source: { evidenceIds: ["evidence-1"], excerpt: "MaxSim", kind: "selected_text" },
       title: "MaxSim"
     });
@@ -524,7 +812,23 @@ describe("thinReadingProjection", () => {
     expect(Object.isFrozen(branchAudit?.aiInterpretationReview?.unsafeSentenceIds)).toBe(true);
     expect(Object.isFrozen(branchAudit?.qualityGate.repairReasons)).toBe(true);
     expect(Object.isFrozen(branchAudit?.evidencePlan?.selectedEvidenceIds)).toBe(true);
+    expect(Object.isFrozen(branchAudit?.evidencePlanning)).toBe(true);
+    expect(Object.isFrozen(branchAudit?.evidencePlanning?.normalization?.truncated)).toBe(true);
+    expect(Object.isFrozen(branchAudit?.evidencePlanning?.selectedEvidenceIds)).toBe(true);
     expect(Object.isFrozen(branchAudit?.interpretationPlan?.learningGoals)).toBe(true);
+    expect(Object.isFrozen(branchAudit?.interpretationPlan?.intentSignals)).toBe(true);
+    expect(Object.isFrozen(branchAudit?.interpretationPlan?.intentWeights)).toBe(true);
+    expect(Object.isFrozen(branchAudit?.interpretationPlan?.retentionFocus)).toBe(true);
+    expect(Object.isFrozen(branchAudit?.evidenceReview?.contentQuality)).toBe(true);
+    expect(Object.isFrozen(branchAudit?.evidenceReview?.contentQuality?.revisionSentenceIds)).toBe(true);
+    expect(Object.isFrozen(branchAudit?.evidenceReview?.rootOrientation?.conclusionSupport)).toBe(true);
+    expect(Object.isFrozen(branchAudit?.evidenceReview?.rootOrientation?.conclusionSupport.chains)).toBe(true);
+    expect(Object.isFrozen(branchAudit?.evidenceReview?.rootOrientation?.conclusionSupport.chains[0].supportKinds)).toBe(true);
+    expect(Object.isFrozen(branchAudit?.evidenceReview?.rootOrientation?.conclusionSupport.chains[0].supportSentenceIds)).toBe(true);
+    expect(Object.isFrozen(branchAudit?.paperEvidenceRecovery)).toBe(true);
+    expect(Object.isFrozen(branchAudit?.paperEvidenceRecovery?.addedEvidenceIds)).toBe(true);
+    expect(Object.isFrozen(branchAudit?.paperEvidenceRecovery?.answerObligations)).toBe(true);
+    expect(Object.isFrozen(branchAudit?.paperEvidenceRecovery?.initialEvidenceIds)).toBe(true);
     expect(Object.isFrozen(branchAudit?.evidenceLoop?.rounds)).toBe(true);
     expect(Object.isFrozen(branchAudit?.evidenceLoop?.rounds[0].toolCalls[0].evidenceIds)).toBe(true);
   });

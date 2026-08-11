@@ -69,7 +69,8 @@ function makeSupportModeDocument(supportMode: ThinReadingSupportMode): ThinReadi
           }]
         },
         summary: text,
-        supportMode
+        supportMode,
+        withinPaperClosure: false
       }
     });
   }
@@ -338,7 +339,7 @@ describe("ThinReadingTab", () => {
   test("renders the root thin-reading surface and its navigation", () => {
     const document = makeDocument();
 
-    renderTab(document, vi.fn(), vi.fn());
+    const { container } = renderTab(document, vi.fn(), vi.fn());
 
     expect(screen.getByText("总述", { selector: ".is-active" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "论坛" })).toBeInTheDocument();
@@ -353,6 +354,8 @@ describe("ThinReadingTab", () => {
     expect(screen.getByRole("button", { name: "深入了解局限" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "回到上一层：总述" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "查看已生成的下一层页面" })).toBeDisabled();
+    expect(container.querySelectorAll("[data-testid='thin-reading-summary'] > p")).toHaveLength(1);
+    expect(container.querySelector(".thin-reading__summary-unit")).toBeNull();
   });
 
   test("offers relationship-network and mind-map hierarchy views without a top Graph View button", () => {
@@ -430,7 +433,9 @@ describe("ThinReadingTab", () => {
       />
     );
 
-    expect(screen.getByText("将创建新的模型请求，不会续跑已中断的调用。")).toBeInTheDocument();
+    expect(screen.getByText(
+      "将使用已核验的同一输入创建新的模型请求，不会续跑已中断的调用。"
+    )).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "重新提交同一输入" }));
     await waitFor(() => expect(retry).toHaveBeenCalledTimes(1));
   });
@@ -453,11 +458,13 @@ describe("ThinReadingTab", () => {
     );
 
     expect(screen.getByRole("button", { name: "Resubmit the same input" })).toBeInTheDocument();
-    expect(screen.getByText("This creates a new model request; it does not resume the interrupted call.")).toBeInTheDocument();
+    expect(screen.getByText(
+      "This creates a new model request from the same verified input; it does not resume the interrupted call."
+    )).toBeInTheDocument();
     expect(screen.queryByText("重新提交同一输入")).not.toBeInTheDocument();
   });
 
-  test("warns before the closure boundary without mislabelling paper evidence as external", () => {
+  test("does not infer a source boundary from topology depth", () => {
     const fixture = createThinReadingFixture();
     const root = createThinReadingDocument(fixture);
     const document = advanceThinReadingDocument(root, {
@@ -475,9 +482,21 @@ describe("ThinReadingTab", () => {
 
     const { container } = renderTab(secondLevel);
 
-    expect(screen.getByText("接近论文原文闭包")).toBeInTheDocument();
+    expect(screen.getByText("论文内支持")).toBeInTheDocument();
+    expect(screen.queryByText("目标论文仅能部分回答")).not.toBeInTheDocument();
     expect(container.querySelector(".thin-reading__article-meta")).not.toBeInTheDocument();
-    expect(screen.queryByText("已越出论文原文闭包")).not.toBeInTheDocument();
+    expect(screen.queryByText("目标论文无法回答当前问题")).not.toBeInTheDocument();
+  });
+
+  test("shows the partial-answer boundary for the paper-and-external tier", () => {
+    renderTab(makeSupportModeDocument("paper_and_external"));
+
+    expect(screen.getByText("论文 + 外部支持")).toBeInTheDocument();
+    expect(screen.getByText("目标论文仅能部分回答")).toBeInTheDocument();
+    expect(screen.getByText(
+      "目标论文证据可回答当前问题的实质部分；完整回答还需要论文外的可追溯来源。"
+    )).toBeInTheDocument();
+    expect(screen.queryByText("目标论文无法回答当前问题")).not.toBeInTheDocument();
   });
 
   test("opens PDF evidence only from summary markers", () => {
@@ -593,9 +612,12 @@ describe("ThinReadingTab", () => {
       ...fixture,
       rootSeed: {
         ...fixture.rootSeed,
+        summary: "这条论文外线索来自可追溯的主题检索。",
+        supportMode: "external_only",
         withinPaperClosure: false,
         evidence: {
           ...fixture.rootSeed.evidence,
+          claims: [],
           externalKnowledge: ["crossref:10.1038/s41586-021-03819-2"],
           externalSources: [{
             abstract: "A Crossref source.",
@@ -611,6 +633,8 @@ describe("ThinReadingTab", () => {
             title: "Highly accurate protein structure prediction with AlphaFold",
             url: "https://doi.org/10.1038/s41586-021-03819-2"
           }],
+          paperEvidence: [],
+          paperEvidenceSpans: [],
           summarySentences: [{
             evidenceIds: [],
             externalKnowledge: ["crossref:10.1038/s41586-021-03819-2"],
@@ -1557,7 +1581,7 @@ describe("ThinReadingTab", () => {
     expect(marker).toHaveAttribute("href", "https://openalex.org/W42");
     expect(marker.getAttribute("title")).toContain("相关工作");
     expect(marker.closest("sup")).not.toBeNull();
-    expect(screen.queryByLabelText("已越出论文原文闭包")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("目标论文无法回答当前问题")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("本轮外部来源")).not.toBeInTheDocument();
   });
 });

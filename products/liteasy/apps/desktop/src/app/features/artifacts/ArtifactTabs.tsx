@@ -326,7 +326,6 @@ export function ArtifactTabs({
             : "生成任务未完成，请稍后重试。"
           : undefined}
         onRetryInterruptedBranch={activeThinReadingTask?.status === "failed" &&
-          activeThinReadingTask.recoveredAfterRestart &&
           activeThinReadingTask.thinReadingBranchRecovery && onRetryInterruptedThinReadingBranch
           ? () => onRetryInterruptedThinReadingBranch(activeThinReadingTask.id)
           : undefined}

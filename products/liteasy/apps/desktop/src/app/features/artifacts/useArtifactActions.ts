@@ -185,10 +185,16 @@ function buildFailureRecovery(message: string, failedStage: ArtifactTaskStage) {
       "若 PDF 没有文字层，请检查 OCR 语言设置并查看导入阶段返回的具体页码错误。"
     ];
   }
-  if (normalized.includes("证据复核未通过")) {
+  if (
+    normalized.includes("ai 独立理解质量审阅未通过") ||
+    normalized.includes("成文质量审阅") ||
+    normalized.includes("结构质量门") ||
+    normalized.includes("数值命题门") ||
+    normalized.includes("证据复核未通过")
+  ) {
     return [
-      "绑定来源的标题或摘要未直接支持正文判断，系统已阻止保存该句。",
-      "重新生成以检索更直接的来源，或明确要求只使用目标论文内证据。"
+      "系统已阻止保存未通过结构、证据或安全复核的正文。",
+      "可使用相同输入重新生成；显式选择来源时，请确认该来源能够直接支持当前问题。"
     ];
   }
   if (
@@ -1442,20 +1448,20 @@ export function useArtifactActions({
   async function retryInterruptedThinReadingBranch(taskId: string) {
     const task = artifactStore.getTask(taskId);
     const snapshot = task?.thinReadingBranchRecovery;
-    if (!task || task.status !== "failed" || !task.recoveredAfterRestart || !snapshot) {
-      throw new Error("该中断任务缺少可验证的薄读分支输入，不能重新提交。");
+    if (!task || task.status !== "failed" || !snapshot) {
+      throw new Error("该失败任务缺少可验证的薄读分支输入，不能重新提交。");
     }
     const existing = artifactStore.getOpenTabs().find((tab) => tab.artifactId === snapshot.artifactId) ??
       artifactStore.getCatalog().find((tab) => tab.artifactId === snapshot.artifactId);
     const document = existing?.type === "thin_reading" ? existing.thinReadingDocument : undefined;
     if (!document) {
-      throw new Error("原薄读文档不可用，不能重新提交中断任务。");
+      throw new Error("原薄读文档不可用，不能重新提交失败任务。");
     }
     const validation = validateThinReadingBranchRecoverySnapshot(snapshot, document);
     if (!validation.valid) {
       throw new Error(`原输入无法通过当前文档核验：${validation.reason}`);
     }
-    onAnalysisHint("正在重新提交同一薄读输入。这是新的模型请求，不会续跑已中断的调用。");
+    onAnalysisHint("正在使用已核验的同一薄读输入创建新的模型请求。");
     await generateThinReadingBranch({
       artifactId: snapshot.artifactId,
       document,

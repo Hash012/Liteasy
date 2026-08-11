@@ -175,7 +175,17 @@ export type ThinReadingClaimStatus = "grounded" | "unsupported" | "weak";
 
 export type ThinReadingInterpretationIntent = "how" | "mixed" | "what" | "why";
 
+export type ThinReadingExplanationDepth = "boundary" | "focused" | "mechanistic" | "overview";
+
+export type ThinReadingIntentWeights = {
+  how: number;
+  what: number;
+  why: number;
+};
+
 export type ThinReadingLearningGoal =
+  | "conclusion_support"
+  | "core_conclusion"
   | "core_idea"
   | "field_position"
   | "paper_panorama"
@@ -186,13 +196,18 @@ export type ThinReadingReadingMode = "exploration" | "orientation";
 
 export type ThinReadingInterpretationPlan = {
   discourseMoves: readonly string[];
+  explanationDepth?: ThinReadingExplanationDepth;
   externalKnowledgeNeeded: boolean;
   externalQuery?: string;
   gap?: string;
   intent: ThinReadingInterpretationIntent;
+  intentSignals?: readonly string[];
+  intentWeights?: ThinReadingIntentWeights;
   // Optional only for artifacts created before reader-oriented planning was introduced.
   learningGoals?: readonly ThinReadingLearningGoal[];
+  paperTypeHint?: ThinReadingPaperType;
   readingMode?: ThinReadingReadingMode;
+  retentionFocus?: readonly string[];
   requestedDepth: "deep" | "standard";
 };
 
@@ -252,6 +267,55 @@ export type ThinReadingSupportMode =
   | "external_only"
   | "ai_interpretation";
 
+export type ThinReadingPaperAnswerability = "complete" | "none" | "partial";
+
+export type ThinReadingAnswerObligation = {
+  obligation: string;
+  paperCoverage: ThinReadingPaperAnswerability;
+  // Optional only for persisted artifacts created before evidence-level obligation tracing.
+  paperEvidenceIds?: readonly string[];
+  reason: string;
+};
+
+export type ThinReadingPaperAnswerabilityReview = {
+  answerObligations?: readonly ThinReadingAnswerObligation[];
+  paperSupportedSentenceIds: readonly string[];
+  reason: string;
+  status: ThinReadingPaperAnswerability;
+};
+
+export type ThinReadingConclusionSupportKind =
+  | "boundary"
+  | "comparison"
+  | "derivation"
+  | "experiment"
+  | "material"
+  | "mechanism";
+
+export type ThinReadingConclusionSupportChain = {
+  conclusionSentenceId: string;
+  reason: string;
+  supportKinds: readonly ThinReadingConclusionSupportKind[];
+  supportSentenceIds: readonly string[];
+  verdict: "complete" | "partial";
+};
+
+export type ThinReadingRootOrientationReview = {
+  conclusionSupport: {
+    chains: readonly ThinReadingConclusionSupportChain[];
+    reason: string;
+    status: "complete" | "missing" | "partial";
+  };
+  coreIdea: "covered" | "missing";
+  fieldPosition: "covered" | "evidence_unavailable" | "missing";
+  paperPanorama: "covered" | "missing";
+  paperType: ThinReadingPaperType;
+  paperTypeVerdict: "ambiguous" | "mismatch" | "supported";
+  reason: string;
+  retentionVerdict: "focused" | "unfocused";
+  verdict: "fail" | "pass";
+};
+
 export type ThinReadingExternalFallbackReason =
   | "all_routes_failed"
   | "no_trusted_sources"
@@ -265,7 +329,45 @@ export type ThinReadingExternalFallbackAudit = {
   trustedSourceCount: 0;
 };
 
+export type ThinReadingExternalRouteAudit = {
+  durationMs: number;
+  failureKind?: "deadline" | "invalid_response" | "route_unavailable" | "unexpected";
+  reused: boolean;
+  route: "challenge" | "context" | "support";
+  sourceCount: number;
+  status: "cancelled" | "completed" | "failed" | "timed_out";
+};
+
+export type ThinReadingExternalRetrievalAudit = {
+  attemptedRoutes: readonly ("challenge" | "context" | "support")[];
+  carriedSourceCount: number;
+  completedRoutes: readonly ("challenge" | "context" | "support")[];
+  deadlineMs: number;
+  durationMs: number;
+  joinReason: "all_routes_settled" | "deadline" | "sufficient_sources";
+  routeOutcomes: readonly ThinReadingExternalRouteAudit[];
+  trustedSourceCount: number;
+};
+
+export type ThinReadingResponsibilitySubagentAudit = {
+  durationMs: number;
+  failureKind?: "empty_output" | "unavailable" | "unexpected";
+  id: "relationship_mapper" | "visual_editor";
+  includedInFinalPrompt: boolean;
+  status: "completed" | "failed";
+};
+
 export type ThinReadingAiInterpretationReviewAudit = {
+  contentQuality?: {
+    depthFit: "appropriate" | "overextended" | "shallow";
+    focus: "diffuse" | "focused";
+    intentAlignment: "aligned" | "diluted" | "misaligned";
+    logicChain: "broken" | "complete" | "partial";
+    reason: string;
+    revisionSentenceIds: readonly string[];
+    severity: "advisory" | "blocking" | "none";
+    verdict: "pass" | "revise";
+  } | null;
   reason: string;
   unsafeSentenceIds: readonly string[];
   verdict: "pass";
@@ -327,14 +429,51 @@ export type ThinReadingRecommendationPaperEdge = {
   targetPaperId: string;
 };
 
+export type ThinReadingEvidencePlanningAudit = {
+  mode: "deterministic_fallback" | "model";
+  normalization?: {
+    deduplicated: {
+      focus: number;
+      pageRequests: number;
+      searchQueries: number;
+      selectedEvidenceIds: number;
+    };
+    truncated: {
+      focus: number;
+      pageRequests: number;
+      searchQueries: number;
+      selectedEvidenceIds: number;
+    };
+  };
+  reason?: "format_invalid" | "transport_unavailable" | "unavailable_evidence_id";
+  repairApplied: boolean;
+  selectedEvidenceIds: readonly string[];
+};
+
 // This is deliberately attached to the generated node rather than the transient Agent run.
 // A reader reopening an artifact must be able to inspect how its evidence boundary was chosen.
 export type ThinReadingGenerationAudit = {
   aiInterpretationReview?: ThinReadingAiInterpretationReviewAudit;
   contextManagement?: ThinReadingContextAudit;
   externalFallback?: ThinReadingExternalFallbackAudit;
+  externalRetrieval?: ThinReadingExternalRetrievalAudit;
+  paperAnswerabilityTransition?: {
+    answerObligations?: readonly ThinReadingAnswerObligation[];
+    reason: string;
+    status: Exclude<ThinReadingPaperAnswerability, "complete">;
+    targetSupportMode: Extract<ThinReadingSupportMode, "paper_and_external" | "external_only" | "ai_interpretation">;
+  };
+  paperEvidenceRecovery?: {
+    addedEvidenceIds: readonly string[];
+    answerObligations: readonly string[];
+    finalAnswerability: ThinReadingPaperAnswerability;
+    initialEvidenceIds: readonly string[];
+    status: "exhausted" | "no_candidates" | "resolved";
+  };
+  evidencePlanning?: ThinReadingEvidencePlanningAudit;
   interpretationPlan?: ThinReadingInterpretationPlan;
   evidenceLoop?: {
+    fallback?: "deterministic_first_round";
     rounds: readonly {
       focus: readonly string[];
       observedEvidenceIds: readonly string[];
@@ -349,7 +488,7 @@ export type ThinReadingGenerationAudit = {
         query?: string;
       }[];
     }[];
-    stopReason: "maximum_rounds_reached" | "no_new_evidence" | "observation_sufficient";
+    stopReason: "maximum_rounds_reached" | "no_new_evidence" | "observation_sufficient" | "observer_unavailable";
     stopReasonDetail: string;
   };
   evidencePlan?: {
@@ -363,22 +502,24 @@ export type ThinReadingGenerationAudit = {
     query?: string;
   }[];
   evidenceReview?: {
+    contentQuality?: {
+      depthFit: "appropriate" | "overextended" | "shallow";
+      focus: "diffuse" | "focused";
+      intentAlignment: "aligned" | "diluted" | "misaligned";
+      logicChain: "broken" | "complete" | "partial";
+      reason: string;
+      revisionSentenceIds: readonly string[];
+      severity: "advisory" | "blocking" | "none";
+      verdict: "pass" | "revise";
+    } | null;
     propositionVerdicts?: readonly {
       proposition: string;
       sentenceId: string;
       verdict: ThinReadingPropositionVerdict;
     }[];
+    paperAnswerability?: ThinReadingPaperAnswerabilityReview | null;
     reason: string;
-    rootOrientation?: {
-      coreIdea: "covered" | "missing";
-      fieldPosition: "covered" | "evidence_unavailable" | "missing";
-      paperPanorama: "covered" | "missing";
-      paperType: ThinReadingPaperType;
-      paperTypeVerdict: "ambiguous" | "mismatch" | "supported";
-      reason: string;
-      retentionVerdict: "focused" | "unfocused";
-      verdict: "pass" | "fail";
-    } | null;
+    rootOrientation?: ThinReadingRootOrientationReview | null;
     unsupportedSentenceIds: readonly string[];
     verdict: "pass";
   };
@@ -399,6 +540,7 @@ export type ThinReadingGenerationAudit = {
     rationale: string;
     status: "evaluated" | "failed_closed";
   };
+  responsibilitySubagents?: readonly ThinReadingResponsibilitySubagentAudit[];
   workload?: ThinReadingWorkloadAudit;
   version: "liteasy.thin-reading-agent/v1" | "liteasy.thin-reading-agent/v2";
 };

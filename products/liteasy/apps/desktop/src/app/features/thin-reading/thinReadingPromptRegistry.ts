@@ -413,6 +413,22 @@ export function getThinReadingPaperTypeLabel(
   return promptLanguage(targetLanguage) === "en-US" ? profile.labelEn : profile.labelZh;
 }
 
+export function getThinReadingPaperTypeFocus(
+  paperType: ThinReadingPaperType,
+  targetLanguage: string
+) {
+  const profile = paperTypeProfiles[paperType] ?? paperTypeProfiles.unknown;
+  return promptLanguage(targetLanguage) === "en-US" ? profile.focusEn : profile.focusZh;
+}
+
+export function getThinReadingPaperTypeRetentionTest(
+  paperType: ThinReadingPaperType,
+  targetLanguage: string
+) {
+  const profile = paperTypeProfiles[paperType] ?? paperTypeProfiles.unknown;
+  return promptLanguage(targetLanguage) === "en-US" ? profile.retentionTestEn : profile.retentionTestZh;
+}
+
 export function getThinReadingFewShotExamples(
   paperType: ThinReadingPaperType,
   targetLanguage: string

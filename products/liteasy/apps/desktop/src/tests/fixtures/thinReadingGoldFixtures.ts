@@ -95,6 +95,14 @@ export const thinReadingGoldFixtures: readonly GoldFixture[] = Object.freeze([
     omittedSectionKeys: ["taxonomy_branches", "historical_trajectory"],
     paperType: "survey",
     requiredRootOrientation: {
+      conclusionSupport: [{
+        kind: "comparison",
+        propositions: ["给出索引与查询处理的主要比较轴线"]
+      }, {
+        kind: "boundary",
+        propositions: ["过滤检索和系统优化仍是开放问题"]
+      }],
+      coreConclusion: ["组织向量数据库的知识地图"],
       coreIdea: [["taxonomy", "分类框架"]],
       fieldPosition: [["开放问题", "未解问题", "open problems"]],
       paperPanorama: [["知识地图", "knowledge map"], ["比较轴线", "comparison axes"]]
@@ -113,6 +121,17 @@ export const thinReadingGoldFixtures: readonly GoldFixture[] = Object.freeze([
     omittedSectionKeys: ["ablation", "limitations"],
     paperType: "experimental",
     requiredRootOrientation: {
+      conclusionSupport: [{
+        kind: "mechanism",
+        propositions: ["在可离线编码文档的同时提高检索效果"]
+      }, {
+        kind: "experiment",
+        propositions: ["关键实验表明这种交互方式优于单向量基线"]
+      }],
+      coreConclusion: [
+        "MaxSim late interaction 保留 token-level matching",
+        "提高检索效果"
+      ],
       coreIdea: ["MaxSim", ["late interaction", "后期交互"]],
       fieldPosition: [["单向量基线", "single-vector baseline"]],
       paperPanorama: [["token-level matching", "词元级匹配"], ["离线编码", "offline encoding"]]
@@ -131,6 +150,17 @@ export const thinReadingGoldFixtures: readonly GoldFixture[] = Object.freeze([
     omittedSectionKeys: ["reliability", "deployment_constraints"],
     paperType: "systems",
     requiredRootOrientation: {
+      conclusionSupport: [{
+        kind: "mechanism",
+        propositions: ["changes the graph architecture and search data flow"]
+      }, {
+        kind: "comparison",
+        propositions: ["extra graph connectivity for lower latency and higher throughput"]
+      }],
+      coreConclusion: [
+        "predicate filtering is handled during traversal",
+        "lower latency and higher throughput under selective filters"
+      ],
       coreIdea: ["graph architecture", "predicate filtering"],
       fieldPosition: [["during traversal", "handled during traversal"]],
       paperPanorama: [["latency", "throughput"], ["tradeoff", "extra graph connectivity"]]
@@ -149,6 +179,14 @@ export const thinReadingGoldFixtures: readonly GoldFixture[] = Object.freeze([
     omittedSectionKeys: ["evaluation_usage", "bias"],
     paperType: "dataset",
     requiredRootOrientation: {
+      conclusionSupport: [{
+        kind: "material",
+        propositions: ["双人复核的标注协议保证一致性"]
+      }, {
+        kind: "boundary",
+        propositions: ["语言与地域分布构成明确的偏差边界"]
+      }],
+      coreConclusion: ["构建了可复用的多领域数据集资源", "扩大了任务覆盖范围"],
       coreIdea: [["资源", "数据集"]],
       fieldPosition: [["可复用", "扩大了任务覆盖范围"]],
       paperPanorama: ["标注协议", ["覆盖范围", "偏差边界"]]
@@ -167,6 +205,14 @@ export const thinReadingGoldFixtures: readonly GoldFixture[] = Object.freeze([
     omittedSectionKeys: ["counterexample", "prior_theory"],
     paperType: "theoretical",
     requiredRootOrientation: {
+      conclusionSupport: [{
+        kind: "derivation",
+        propositions: ["proof route couples a stability lemma with a telescoping argument"]
+      }, {
+        kind: "boundary",
+        propositions: ["when the improved rate changes the existing theory map"]
+      }],
+      coreConclusion: ["proves a tighter convergence bound under a smoothness assumption"],
       coreIdea: ["convergence bound"],
       fieldPosition: ["existing theory map"],
       paperPanorama: ["smoothness assumption", "proof route"]
@@ -185,6 +231,17 @@ export const thinReadingGoldFixtures: readonly GoldFixture[] = Object.freeze([
     omittedSectionKeys: ["counter_reading", "historical_context"],
     paperType: "humanities",
     requiredRootOrientation: {
+      conclusionSupport: [{
+        kind: "derivation",
+        propositions: ["沿概念谱系展开解释路径"]
+      }, {
+        kind: "material",
+        propositions: ["以档案证据校正既有叙事"]
+      }, {
+        kind: "boundary",
+        propositions: ["材料缺口限定了这种解释边界"]
+      }],
+      coreConclusion: ["制度语言如何重塑公共记忆"],
       coreIdea: [["中心论题", "核心论题"]],
       fieldPosition: [["校正既有叙事", "既有叙事"]],
       paperPanorama: [["解释路径", "阐释路径"], ["档案证据", "历史材料"], ["解释边界", "局限"]]

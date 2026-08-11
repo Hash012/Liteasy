@@ -3,7 +3,8 @@ import { generateAssistantAnswer } from "../app/features/assistant/generateAssis
 import { createSettingsStore } from "../app/features/settings/settings.store";
 import {
   evaluateThinReadingGoldCase,
-  type ThinReadingGoldConcept
+  type ThinReadingGoldConcept,
+  type ThinReadingGoldStandard
 } from "../app/features/thin-reading/thinReadingEvaluation";
 import type { RetrievalChunk } from "../app/features/retrieval/retrieval.types";
 import type { ThinReadingPaperType } from "../app/features/thin-reading/thinReading.types";
@@ -23,11 +24,7 @@ type LiveThinReadingGoldCase = {
   paperType: ThinReadingPaperType;
   page: number;
   question: string;
-  requiredRootOrientation?: {
-    coreIdea: readonly ThinReadingGoldConcept[];
-    fieldPosition: readonly ThinReadingGoldConcept[];
-    paperPanorama: readonly ThinReadingGoldConcept[];
-  };
+  requiredRootOrientation?: NonNullable<ThinReadingGoldStandard["requiredRootOrientation"]>;
   requiredTerminology?: readonly { original: ThinReadingGoldConcept; translation: ThinReadingGoldConcept }[];
   targetLanguage?: string;
   title: string;
@@ -245,6 +242,14 @@ const liveGoldCases: Record<string, LiveThinReadingGoldCase> = {
     page: 2,
     question: "用中文生成 ColBERT 的薄读总述。必须保留 late interaction（后期交互）这个关键术语，说明 MaxSim 的作用、效率取舍和评测边界。",
     requiredRootOrientation: {
+      conclusionSupport: [{
+        kind: "mechanism",
+        propositions: ["MaxSim", ["token-level matching", "词元级匹配"]]
+      }],
+      coreConclusion: [
+        ["late interaction", "后期交互", "后交互", "晚期交互", "后段交互", "延迟交互"],
+        ["效率", "高效", "廉价", "剪枝", "efficient", "efficiency", "cheap", "pruning"]
+      ],
       coreIdea: ["late interaction", ["后期交互", "后交互", "晚期交互", "后段交互", "延迟交互"]],
       fieldPosition: [["独立编码", "分别编码"], ["联合处理", "联合编码", "交互模型"]],
       paperPanorama: ["MaxSim", ["效率", "高效", "廉价", "剪枝"]]

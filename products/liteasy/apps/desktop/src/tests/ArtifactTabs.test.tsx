@@ -7,8 +7,71 @@ import type { ArtifactTab } from "../app/features/artifacts/artifact.types";
 import type { ArtifactExportOutcome } from "../app/features/artifacts/artifactExport.types";
 import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
 import { propsWithVisualAndFigure, unauthorizedProps } from "./fixtures/thinReadingVisualProps";
+import { createThinReadingBranchRecoverySnapshot } from "../app/features/artifacts/artifactTaskRecovery";
 
 describe("ArtifactTabs", () => {
+  test("offers same-input retry for any failed thin-reading task with a valid snapshot", async () => {
+    const document = createThinReadingDocument({
+      artifactId: "artifact-runtime-failure",
+      papers: [{ id: "paper-1", title: "ColBERT" }],
+      rootSeed: {
+        evidence: { externalKnowledge: [], paperEvidence: ["evidence-1"] },
+        omittedSections: [{ id: "section-experiments", label: "实验", sectionKey: "experiments" }],
+        recommendations: [],
+        summary: "ColBERT 使用 late interaction 保留细粒度匹配信号。",
+        withinPaperClosure: true
+      },
+      targetLanguage: "zh-CN"
+    });
+    const source = { kind: "omitted_section" as const, label: "实验", sectionKey: "experiments" };
+    const onRetry = vi.fn(async () => undefined);
+
+    render(
+      <ArtifactTabs
+        activeArtifactId={document.artifactId}
+        analysisHint=""
+        canStartAnalysis
+        onRetryInterruptedThinReadingBranch={onRetry}
+        onStartAnalysis={vi.fn()}
+        selectedCount={1}
+        selectionLocked
+        tabs={[{
+          artifactId: document.artifactId,
+          papers: [{ id: "paper-1", title: "ColBERT" }],
+          thinReadingDocument: document,
+          title: "薄读",
+          type: "thin_reading"
+        }]}
+        tasks={[{
+          artifactId: document.artifactId,
+          failure: {
+            failedStage: "thin_reading_validating",
+            message: "审阅服务暂未完成请求。",
+            occurredAt: "2026-08-11T05:00:00.000Z",
+            recovery: ["重新提交同一输入"]
+          },
+          id: "runtime-failed-branch",
+          message: "Agent 分析失败",
+          progress: 73,
+          stage: "failed",
+          status: "failed",
+          thinReadingBranchRecovery: createThinReadingBranchRecoverySnapshot({
+            artifactId: document.artifactId,
+            document,
+            parentNodeId: document.rootNodeId,
+            primaryPaperId: "paper-1",
+            source
+          }),
+          type: "thin_reading"
+        }]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "重新提交同一输入" }));
+    await waitFor(() => expect(onRetry).toHaveBeenCalledWith("runtime-failed-branch"));
+    expect(screen.getByText("将使用已核验的同一输入创建新的模型请求，不会续跑已中断的调用。")).toBeInTheDocument();
+  });
+
   test("keeps the authorized multimodal switch on and forwards toggles", () => {
     const onToggle = vi.fn();
     const tab: ArtifactTab = {

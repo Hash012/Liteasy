@@ -22,7 +22,7 @@ function mapArtifactProgressStage(
   options?: AgentArtifactGenerationOptions
 ): ArtifactTaskStage {
   if (artifactType === "thin_reading") {
-    if (phase === "retrieving_evidence") {
+    if (phase === "retrieving_evidence" || phase === "recovering_paper_evidence") {
       return "thin_reading_retrieving_evidence";
     }
     if (phase === "retrieving_external_knowledge") {
@@ -36,7 +36,14 @@ function mapArtifactProgressStage(
     if (phase === "repairing_structured_output") {
       return "thin_reading_repairing_trace";
     }
-    if (phase === "auditing_answer" || phase === "structuring_artifact") {
+    if (
+      phase === "auditing_answer" ||
+      phase === "repairing_ai_interpretation_review" ||
+      phase === "repairing_evidence_review" ||
+      phase === "reviewing_ai_interpretation" ||
+      phase === "reviewing_evidence_claims" ||
+      phase === "structuring_artifact"
+    ) {
       return "thin_reading_validating";
     }
     return "thin_reading_planning";

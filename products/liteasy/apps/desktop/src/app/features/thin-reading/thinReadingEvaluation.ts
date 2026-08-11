@@ -1,4 +1,5 @@
 import type {
+  ThinReadingConclusionSupportKind,
   ThinReadingNodeSeed,
   ThinReadingPaperType,
   ThinReadingExternalSource
@@ -22,6 +23,11 @@ export type ThinReadingGoldTerminology = {
   translation: ThinReadingGoldConcept;
 };
 
+export type ThinReadingGoldConclusionSupport = {
+  kind: ThinReadingConclusionSupportKind;
+  propositions: readonly ThinReadingGoldConcept[];
+};
+
 export type ThinReadingGoldStandard = {
   acceptablePaperTypes?: readonly ThinReadingPaperType[];
   expectedOmittedSectionKeys?: readonly string[];
@@ -34,6 +40,8 @@ export type ThinReadingGoldStandard = {
   requiredBranchConcepts?: readonly ThinReadingGoldConcept[];
   requiredParentContinuityConcepts?: readonly ThinReadingGoldConcept[];
   requiredRootOrientation?: {
+    conclusionSupport: readonly ThinReadingGoldConclusionSupport[];
+    coreConclusion: readonly ThinReadingGoldConcept[];
     coreIdea: readonly ThinReadingGoldConcept[];
     fieldPosition: readonly ThinReadingGoldConcept[];
     paperPanorama: readonly ThinReadingGoldConcept[];
@@ -161,15 +169,25 @@ function rootOrientationCoverage(summary: string, gold: ThinReadingGoldStandard)
   if (gold.stage !== "root" || !gold.requiredRootOrientation) {
     return metric(0, 0);
   }
-  const dimensions = [
+  const orientationDimensions = [
     gold.requiredRootOrientation.coreIdea,
+    gold.requiredRootOrientation.coreConclusion,
     gold.requiredRootOrientation.paperPanorama,
     gold.requiredRootOrientation.fieldPosition
   ];
+  const supportDimensions = gold.requiredRootOrientation.conclusionSupport.map((step) => (
+    step.propositions
+  ));
+  const dimensions = [...orientationDimensions, ...supportDimensions];
   const coveredDimensions = dimensions.filter((concepts) => (
     conceptRecall(summary, concepts).score >= 0.8
   )).length;
-  return metric(coveredDimensions, dimensions.length);
+  // Every root overview needs at least one concrete support step. An empty list
+  // cannot turn a topical abstract into a complete conclusion-support chain.
+  return metric(
+    coveredDimensions,
+    orientationDimensions.length + Math.max(1, supportDimensions.length)
+  );
 }
 
 function unique(values: readonly string[]) {
@@ -533,7 +551,10 @@ export function evaluateThinReadingGoldCase(input: {
     issues.push(issue("summary_core_recall_below_threshold", "总述核心概念命中率低于 0.80。"));
   }
   if (rootOrientationCoverageMetric.score < 1) {
-    issues.push(issue("root_orientation_incomplete", "根级总述没有同时建立核心思想、论文全景和有证据的领域位置。"));
+    issues.push(issue(
+      "root_orientation_incomplete",
+      "根级总述没有同时建立核心思想、核心结论、最短充分支持过程、论文全景和有证据的领域位置。"
+    ));
   }
   if (citationPrecisionMetric.score < 0.9) {
     issues.push(issue("citation_precision_below_threshold", "引用精度低于 0.90。"));

@@ -8,6 +8,7 @@ import {
   parseThinReadingAiInterpretationReview,
   parseThinReadingEvidenceObservation,
   parseThinReadingEvidencePlan,
+  parseThinReadingEvidencePlanWithAudit,
   parseThinReadingEvidenceReview,
   parseThinReadingModelSeed,
   resolveThinReadingOmittedSections,
@@ -136,6 +137,44 @@ describe("thinReadingAgent", () => {
     })).toThrow("thin_reading_visualization_intent_invalid");
   });
 
+  test("drops invalid automatic visual enhancements without rejecting the grounded body", () => {
+    const dropped: string[] = [];
+    const seed = parseThinReadingModelSeed(JSON.stringify({
+      ...v2ModelOutput,
+      interactiveDemo: {
+        description: "自动生成但未由用户请求的演示。",
+        html: `<div>${"demo".repeat(30)}</div>`,
+        kind: "html",
+        title: "自动演示"
+      },
+      recommendedFigures: [{
+        evidenceIds: ["evidence-survey-taxonomy"],
+        figureId: "figure-not-available",
+        reason: "模型自动推荐了当前不可用的图。"
+      }],
+      visualizationIntent: {
+        ...v2ModelOutput.visualizationIntent,
+        evidenceIds: ["evidence-not-reviewed"]
+      }
+    }), {
+      allowedEvidenceIds: ["evidence-survey-taxonomy"],
+      availableFigureIds: [],
+      invalidOptionalEnhancementPolicy: "drop",
+      onOptionalEnhancementDropped: (reason) => dropped.push(reason),
+      source: { kind: "root_overview" }
+    });
+
+    expect(seed.summary).toBe(v2ModelOutput.summary);
+    expect(seed.evidence.recommendedFigures).toEqual([]);
+    expect(seed.visualizationIntent).toBeUndefined();
+    expect(seed.evidence).not.toHaveProperty("interactiveDemo");
+    expect(dropped).toEqual(expect.arrayContaining([
+      expect.stringContaining("figure-not-available"),
+      expect.stringContaining("visualization intent"),
+      expect.stringContaining("HTML demo")
+    ]));
+  });
+
   test("requires explicit intent shape only for a bounded prompt-only visualization request", () => {
     const output = {
       ...v2ModelOutput,
@@ -254,7 +293,7 @@ describe("thinReadingAgent", () => {
     expect(prompt).toContain("evidence-survey-taxonomy");
     expect(prompt).toContain("分类框架");
     expect(prompt).toContain("omittedSections 必须在 summary 定稿之后生成");
-    expect(prompt).toContain("差集中的合格模块都应返回，最多 8 个");
+    expect(prompt).toContain("不要用宽泛词语命中代替是否已经讲清的判断");
     expect(prompt).toContain("禁止设想点击后的文章再反推按钮");
     expect(prompt).toContain("不得将无证据句写入正文");
     expect(prompt).toContain("不要复制整张 evidence 矩阵");
@@ -541,7 +580,10 @@ describe("thinReadingAgent", () => {
         interpretationPlan: {
           discourseMoves: ["先指出问题", "补齐必要前提", "给出因果链", "收束到边界"],
           externalKnowledgeNeeded: false,
+          explanationDepth: "mechanistic",
           intent: "why",
+          intentSignals: ["current_prompt:why", "topology:depth_2"],
+          intentWeights: { how: 0.15, what: 0.15, why: 0.7 },
           learningGoals: ["selected_focus", "parent_continuity"],
           readingMode: "exploration",
           requestedDepth: "deep"
@@ -557,6 +599,11 @@ describe("thinReadingAgent", () => {
     expect(prompt).toContain("不得输出关联证据的并列堆砌");
     expect(prompt).toContain("自主探索");
     expect(prompt).toContain("不得重做根级总述");
+    expect(prompt).toContain("成文意图配比：是什么 15%，为什么 70%，怎么样/如何 15%");
+    expect(prompt).toContain("为什么是主意图");
+    expect(prompt).toContain("是什么只用于补齐因果链必需的定义");
+    expect(prompt).toContain("拓扑解释深度：机制展开");
+    expect(prompt).toContain("current_prompt:why");
   });
 
   test("requires branch explanations to retain numbers when they summarize a numeric paper assertion", () => {
@@ -593,7 +640,7 @@ describe("thinReadingAgent", () => {
       requireExplicitTraceability: true,
       requireNumericFidelity: true,
       targetLanguage: "zh-CN"
-    })).toThrow("概括了包含数值的论文断言（0.34、0.39、14.7）");
+    })).toThrow("没有保留可验证的定量锚点");
 
     expect(parseThinReadingModelSeed(JSON.stringify({
       ...baseOutput,
@@ -612,7 +659,7 @@ describe("thinReadingAgent", () => {
       targetLanguage: "zh-CN"
     }).summary).toContain("14.7%");
 
-    expect(() => parseThinReadingModelSeed(JSON.stringify({
+    expect(parseThinReadingModelSeed(JSON.stringify({
       ...baseOutput,
       claims: [{ evidenceIds: [numericEvidence.id], status: "grounded", text: "检索效果明显改善。" }],
       summary: "该方法在目标数据集上的检索效果明显改善，得分从 0.34 提升到 0.39，原文报告增幅为 14.7%。",
@@ -627,9 +674,9 @@ describe("thinReadingAgent", () => {
       requireExplicitTraceability: true,
       requireNumericFidelity: true,
       targetLanguage: "zh-CN"
-    })).toThrow("定性解释（定量数字）");
+    }).summary).toContain("0.34");
 
-    expect(() => parseThinReadingModelSeed(JSON.stringify({
+    expect(parseThinReadingModelSeed(JSON.stringify({
       ...baseOutput,
       claims: [{ evidenceIds: [numericEvidence.id], status: "grounded", text: "目标评测数据集上的检索得分最终提升到 0.39。" }],
       summary: "该方法在目标评测数据集上的检索得分最终提升到 0.39，整体结果得到改善。",
@@ -644,19 +691,19 @@ describe("thinReadingAgent", () => {
       requireExplicitTraceability: true,
       requireNumericFidelity: true,
       targetLanguage: "zh-CN"
-    })).toThrow("截断了原文的定量区间或前后对比（0.34、0.39）");
+    }).summary).toContain("0.39");
 
     expect(buildThinReadingAgentPrompt({
       context: { ...context, depth: 1, source: { kind: "selected_text", excerpt: "性能提升" } },
       prepared: numericAnalysis
-    })).toEqual(expect.stringContaining("按原文断言拆成最小命题"));
+    })).toEqual(expect.stringContaining("按定量命题拆分"));
     expect(buildThinReadingAgentPrompt({
       context: { ...context, depth: 1, source: { kind: "selected_text", excerpt: "性能提升" } },
       prepared: numericAnalysis
-    })).toContain("明显改善（得分从 0.34 提升到 0.39，增幅 14.7%）");
+    })).toContain("不得要求补入同一长 evidence 中属于其他命题的数字");
   });
 
-  test("requires 4096 only for the sentence that summarizes its source assertion", () => {
+  test("does not require an exact configuration value when the sentence makes no numeric claim", () => {
     const mixedEvidence = {
       ...prepared.evidence[0],
       id: "evidence-projection-and-interaction",
@@ -694,14 +741,14 @@ describe("thinReadingAgent", () => {
       targetLanguage: "en-US"
     }).summary).toContain("Late interaction");
 
-    expect(() => parseThinReadingModelSeed(JSON.stringify(baseOutput(
+    expect(parseThinReadingModelSeed(JSON.stringify(baseOutput(
       "The encoder projects each vector to a fixed dimension with a linear layer."
     )), {
       analysis: mixedAnalysis,
       requireExplicitTraceability: true,
       requireNumericFidelity: true,
       targetLanguage: "en-US"
-    })).toThrow("4096");
+    }).summary).toContain("fixed dimension");
 
     expect(parseThinReadingModelSeed(JSON.stringify(baseOutput(
       "The encoder projects each vector to 4096 dimensions with a linear layer."
@@ -751,14 +798,14 @@ describe("thinReadingAgent", () => {
       targetLanguage: "zh-CN"
     }).summary).not.toContain("25");
 
-    expect(() => parseThinReadingModelSeed(JSON.stringify(output(
+    expect(parseThinReadingModelSeed(JSON.stringify(output(
       "该基准使用固定的仿真时间窗口来比较 CoreNEURON 与 NEURON 的运行结果。"
     )), {
       analysis: mixedAssertionAnalysis,
       requireExplicitTraceability: true,
       requireNumericFidelity: true,
       targetLanguage: "zh-CN"
-    })).toThrow("概括了包含数值的论文断言（25）");
+    }).summary).toContain("固定的仿真时间窗口");
   });
 
   test("keeps formula bounds only when a branch sentence explains the constraint", () => {
@@ -806,7 +853,7 @@ describe("thinReadingAgent", () => {
       requireExplicitTraceability: true,
       requireNumericFidelity: true,
       targetLanguage: "en-US"
-    })).toThrow("（0）");
+    })).toThrow("定量边界");
 
     expect(parseThinReadingModelSeed(JSON.stringify(baseOutput(
       "The compression parameter Mβ = 0 retains no candidate edges."
@@ -818,7 +865,7 @@ describe("thinReadingAgent", () => {
     }).summary).toContain("Mβ = 0");
   });
 
-  test("still requires a measured zero rather than accepting a qualitative substitute", () => {
+  test("accepts an exact zero relation expressed without a digit", () => {
     const zeroMeasurement = {
       ...prepared.evidence[0],
       id: "evidence-zero-percent",
@@ -847,14 +894,14 @@ describe("thinReadingAgent", () => {
       withinPaperClosure: true
     });
 
-    expect(() => parseThinReadingModelSeed(JSON.stringify(baseOutput(
+    expect(parseThinReadingModelSeed(JSON.stringify(baseOutput(
       "The controlled input has no observed errors."
     )), {
       analysis: zeroAnalysis,
       requireExplicitTraceability: true,
       requireNumericFidelity: true,
       targetLanguage: "en-US"
-    })).toThrow("（0）");
+    }).summary).toContain("no observed errors");
   });
 
   test("treats an equality-form metric as a measurement rather than a formula boundary", () => {
@@ -890,7 +937,7 @@ describe("thinReadingAgent", () => {
       requireExplicitTraceability: true,
       requireNumericFidelity: true,
       targetLanguage: "en-US"
-    })).toThrow("（0.8）");
+    })).toThrow("没有保留可验证的定量锚点");
   });
 
   test("retains quantitative counts but ignores document-structural numbers", () => {
@@ -931,6 +978,16 @@ describe("thinReadingAgent", () => {
       targetLanguage: "zh-CN"
     }).summary).toBe("该段直接说明了方法的核心机制与其在整体流程中的作用。");
 
+    expect(parseThinReadingModelSeed(JSON.stringify(baseOutput(
+      structuralEvidence.id,
+      "该方法的核心机制由三段关键证据共同支撑，并形成完整的流程说明。"
+    )), {
+      analysis: structuralAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    }).summary).toContain("三段关键证据");
+
     const quantitativeEvidence = {
       ...structuralEvidence,
       id: "evidence-sample-count",
@@ -951,7 +1008,7 @@ describe("thinReadingAgent", () => {
       requireExplicitTraceability: true,
       requireNumericFidelity: true,
       targetLanguage: "zh-CN"
-    })).toThrow("概括了包含数值的论文断言（100）");
+    })).toThrow("没有保留可验证的定量锚点");
 
     expect(parseThinReadingModelSeed(JSON.stringify(baseOutput(
       quantitativeEvidence.id,
@@ -962,6 +1019,512 @@ describe("thinReadingAgent", () => {
       requireNumericFidelity: true,
       targetLanguage: "zh-CN"
     }).summary).toBe("该实验评估了 100 个样本，并据此报告了方法的实验表现。");
+  });
+
+  test("validates the adopted HelioX speedup propositions without requiring every number in the evidence", () => {
+    const helioEvidence = {
+      ...prepared.evidence[0],
+      id: "evidence-heliox-speedups",
+      quote: "With 1000 neurons and batch size 4, the reported raw times were 220.99 ms, 9.47 ms, 60.41 ms, and 5.06 ms. HelioX reports training and inference speedups over JAXLEY of 11.94x and 4.33x, respectively.",
+      summary: "在 1000 个神经元、batch size 为 4 的设置中还报告了多项原始时间；相对 JAXLEY 的训练与推理加速比分别为 11.94 倍和 4.33 倍。",
+      terms: ["HelioX", "JAXLEY", "training speedup", "inference speedup"]
+    };
+    const helioAnalysis = {
+      ...prepared,
+      evidence: [helioEvidence],
+      evidencePrompt: `[${helioEvidence.id}] ${helioEvidence.quote}`
+    };
+    const summary = "在论文报告的 MNIST 实验设置下，HelioX 相对 JAXLEY 的训练和推理加速比分别为 11.94× 和 4.33×。";
+
+    expect(parseThinReadingModelSeed(JSON.stringify({
+      claims: [{ evidenceIds: [helioEvidence.id], status: "grounded", text: summary }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [helioEvidence.id],
+      paperType: "systems",
+      summary,
+      summarySentences: [{
+        evidenceIds: [helioEvidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text: summary
+      }],
+      withinPaperClosure: true
+    }), {
+      analysis: helioAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    }).summary).toContain("11.94× 和 4.33×");
+  });
+
+  test("rejects an invented quantitative value even when another value in the sentence is supported", () => {
+    const evidence = {
+      ...prepared.evidence[0],
+      id: "evidence-two-speedups",
+      quote: "The reported training and inference speedups are 11.94x and 4.33x, respectively.",
+      summary: "训练与推理加速比分别为 11.94 倍和 4.33 倍。"
+    };
+    const analysis = {
+      ...prepared,
+      evidence: [evidence],
+      evidencePrompt: `[${evidence.id}] ${evidence.quote}`
+    };
+    const summary = "训练与推理加速比分别为 11.94× 和 4.50×。";
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      claims: [{ evidenceIds: [evidence.id], status: "grounded", text: summary }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [evidence.id],
+      paperType: "systems",
+      summary,
+      summarySentences: [{
+        evidenceIds: [evidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text: summary
+      }],
+      withinPaperClosure: true
+    }), {
+      analysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    })).toThrow("未直接支持的数值“4.50”");
+  });
+
+  test("does not splice the same numeric value across experiment scopes", () => {
+    const evidence = {
+      ...prepared.evidence[0],
+      id: "evidence-cross-experiment-same-value",
+      quote: "On dataset Alpha, model HelioX reaches accuracy 91%; on dataset Beta, model HelioX reaches recall 91%.",
+      summary: "HelioX 在 Alpha 数据集上的准确率为 91%；在 Beta 数据集上的召回率为 91%。"
+    };
+    const analysis = {
+      ...prepared,
+      evidence: [evidence],
+      evidencePrompt: `[${evidence.id}] ${evidence.quote}`
+    };
+    const summary = "On dataset Beta, model HelioX reaches accuracy 91%.";
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      claims: [{ evidenceIds: [evidence.id], status: "grounded", text: summary }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [evidence.id],
+      paperType: "experimental",
+      summary,
+      summarySentences: [{
+        evidenceIds: [evidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text: summary
+      }],
+      withinPaperClosure: true
+    }), {
+      analysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en"
+    })).toThrow("实验条件或适用范围与来源不一致");
+  });
+
+  test("rejects reassigning a supported value to a different metric", () => {
+    const evidence = {
+      ...prepared.evidence[0],
+      id: "evidence-metric-role",
+      quote: "On Dataset A, accuracy is 90%, while recall is 80%.",
+      summary: "Dataset A 上的准确率为 90%，召回率为 80%。"
+    };
+    const summary = "在 Dataset A 上，该方法的召回率达到 90%，但这个数值实际属于另一个指标。";
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      claims: [{ evidenceIds: [evidence.id], status: "grounded", text: summary }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [evidence.id],
+      paperType: "experimental",
+      summary,
+      summarySentences: [{ evidenceIds: [evidence.id], externalKnowledge: [], status: "grounded", text: summary }],
+      withinPaperClosure: true
+    }), {
+      analysis: { ...prepared, evidence: [evidence], evidencePrompt: evidence.quote },
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    })).toThrow("指标与来源不一致");
+  });
+
+  test("rejects reassigning a supported value to a different subject", () => {
+    const evidence = {
+      ...prepared.evidence[0],
+      id: "evidence-subject-role",
+      quote: "Model A has an accuracy of 90%, while Model B has an accuracy of 80%.",
+      summary: "Model A 的准确率为 90%，Model B 的准确率为 80%。"
+    };
+    const summary = "The bound result says Model B has an accuracy of 90%, which assigns the value to the wrong model.";
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      claims: [{ evidenceIds: [evidence.id], status: "grounded", text: summary }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [evidence.id],
+      paperType: "experimental",
+      summary,
+      summarySentences: [{ evidenceIds: [evidence.id], externalKnowledge: [], status: "grounded", text: summary }],
+      withinPaperClosure: true
+    }), {
+      analysis: { ...prepared, evidence: [evidence], evidencePrompt: evidence.quote },
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en-US"
+    })).toThrow("主体与来源不一致");
+  });
+
+  test("rejects reassigning a supported value to a different comparator", () => {
+    const evidence = {
+      ...prepared.evidence[0],
+      id: "evidence-comparator-role",
+      quote: "HelioX is 2x faster than CoreNEURON and 3x faster than JAXLEY.",
+      summary: "HelioX 相对 CoreNEURON 快 2 倍，相对 JAXLEY 快 3 倍。"
+    };
+    const summary = "HelioX is 3x faster than CoreNEURON in the reported comparison, but that value belongs to JAXLEY.";
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      claims: [{ evidenceIds: [evidence.id], status: "grounded", text: summary }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [evidence.id],
+      paperType: "systems",
+      summary,
+      summarySentences: [{ evidenceIds: [evidence.id], externalKnowledge: [], status: "grounded", text: summary }],
+      withinPaperClosure: true
+    }), {
+      analysis: { ...prepared, evidence: [evidence], evidencePrompt: evidence.quote },
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en-US"
+    })).toThrow("比较对象与来源不一致");
+  });
+
+  test("rejects reversing a supported quantitative direction", () => {
+    const evidence = {
+      ...prepared.evidence[0],
+      id: "evidence-relation-direction",
+      quote: "On Dataset B, recall increases by 5 percentage points.",
+      summary: "Dataset B 上的召回率提高 5 个百分点。"
+    };
+    const summary = "On Dataset B, recall decreases by 5 percentage points according to the bound result.";
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      claims: [{ evidenceIds: [evidence.id], status: "grounded", text: summary }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [evidence.id],
+      paperType: "experimental",
+      summary,
+      summarySentences: [{ evidenceIds: [evidence.id], externalKnowledge: [], status: "grounded", text: summary }],
+      withinPaperClosure: true
+    }), {
+      analysis: { ...prepared, evidence: [evidence], evidencePrompt: evidence.quote },
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en-US"
+    })).toThrow("比较或变化方向与来源不一致");
+  });
+
+  test("rejects moving a value across an explicit evaluation scope or dropping attached uncertainty", () => {
+    const scopedEvidence = {
+      ...prepared.evidence[0],
+      id: "evidence-scope-role",
+      quote: "On Dataset B, recall is 80%.",
+      summary: "Dataset B 上的召回率为 80%。"
+    };
+    const scopedSummary = "On Dataset A, the reported recall is 80%, although the bound result uses another dataset.";
+    const uncertainEvidence = {
+      ...prepared.evidence[0],
+      id: "evidence-uncertainty-role",
+      quote: "On Dataset C, accuracy is 90% ± 2% across runs.",
+      summary: "Dataset C 上跨轮次准确率为 90% ± 2%。"
+    };
+    const uncertainSummary = "On Dataset C, the exact accuracy is 90% across runs, with the source uncertainty omitted.";
+    const output = (evidenceId: string, summary: string) => JSON.stringify({
+      claims: [{ evidenceIds: [evidenceId], status: "grounded", text: summary }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [evidenceId],
+      paperType: "experimental",
+      summary,
+      summarySentences: [{ evidenceIds: [evidenceId], externalKnowledge: [], status: "grounded", text: summary }],
+      withinPaperClosure: true
+    });
+
+    expect(() => parseThinReadingModelSeed(output(scopedEvidence.id, scopedSummary), {
+      analysis: { ...prepared, evidence: [scopedEvidence], evidencePrompt: scopedEvidence.quote },
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en-US"
+    })).toThrow("实验条件或适用范围与来源不一致");
+    expect(() => parseThinReadingModelSeed(output(uncertainEvidence.id, uncertainSummary), {
+      analysis: { ...prepared, evidence: [uncertainEvidence], evidencePrompt: uncertainEvidence.quote },
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en-US"
+    })).toThrow("删除了来源中的误差或不确定性");
+  });
+
+  test("preserves upper-bound qualifiers for adopted quantitative values", () => {
+    const evidence = {
+      ...prepared.evidence[0],
+      id: "evidence-maximum-speedup",
+      quote: "HelioX achieves up to a 2.25x speedup over CoreNEURON.",
+      summary: "HelioX 相对 CoreNEURON 的最高加速比为 2.25 倍。"
+    };
+    const analysis = {
+      ...prepared,
+      evidence: [evidence],
+      evidencePrompt: `[${evidence.id}] ${evidence.quote}`
+    };
+    const output = (summary: string) => JSON.stringify({
+      claims: [{ evidenceIds: [evidence.id], status: "grounded", text: summary }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [evidence.id],
+      paperType: "systems",
+      summary,
+      summarySentences: [{
+        evidenceIds: [evidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text: summary
+      }],
+      withinPaperClosure: true
+    });
+
+    expect(() => parseThinReadingModelSeed(output(
+      "HelioX 相对 CoreNEURON 的加速比为 2.25×。"
+    ), {
+      analysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    })).toThrow("删除了来源中的必要限定词");
+
+    expect(parseThinReadingModelSeed(output(
+      "HelioX 相对 CoreNEURON 的最高加速比为 2.25×。"
+    ), {
+      analysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    }).summary).toContain("最高加速比");
+  });
+
+  test("does not treat percentage points as a percentage", () => {
+    const evidence = {
+      ...prepared.evidence[0],
+      id: "evidence-percentage-points",
+      quote: "Accuracy increases by 5 percentage points.",
+      summary: "准确率提高 5 个百分点。"
+    };
+    const analysis = {
+      ...prepared,
+      evidence: [evidence],
+      evidencePrompt: `[${evidence.id}] ${evidence.quote}`
+    };
+    const summary = "该方法在目标评测数据集上的准确率提高了 5%，但这一单位表达需要由原文直接支持。";
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      claims: [{ evidenceIds: [evidence.id], status: "grounded", text: summary }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [evidence.id],
+      paperType: "experimental",
+      summary,
+      summarySentences: [{
+        evidenceIds: [evidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text: summary
+      }],
+      withinPaperClosure: true
+    }), {
+      analysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    })).toThrow("单位或量纲与来源不一致");
+  });
+
+  test("supports deterministic unit conversion for external-only quantitative evidence", () => {
+    const externalSource = {
+      abstract: "The benchmark reports an inference latency of 1000 ms for the evaluated system.",
+      authors: ["A. Author"],
+      id: "openalex:W-NUMERIC-UNIT",
+      provider: "openalex" as const,
+      relation: "topic_search" as const,
+      relevance: 0.91,
+      retrievalQuery: "evaluated system inference latency",
+      sourceId: "W-NUMERIC-UNIT",
+      sourceRecordUrl: "https://openalex.org/W-NUMERIC-UNIT",
+      title: "Latency Evaluation",
+      url: "https://openalex.org/W-NUMERIC-UNIT"
+    };
+    const summary = "可追溯外部来源报告，该系统在相同基准设置下的推理延迟为 1 s。";
+
+    const parsed = parseThinReadingModelSeed(JSON.stringify({
+      claims: [],
+      externalKnowledge: [externalSource.id],
+      omittedSections: [],
+      paperEvidence: [],
+      paperType: "systems",
+      summary,
+      summarySentences: [{
+        evidenceIds: [],
+        externalKnowledge: [externalSource.id],
+        status: "weak",
+        text: summary
+      }],
+      withinPaperClosure: false
+    }), {
+      externalSources: [externalSource],
+      requireExplicitTraceability: true,
+      requireExternalKnowledge: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    });
+
+    expect(parsed.supportMode).toBe("external_only");
+    expect(parsed.summary).toContain("1 s");
+  });
+
+  test("accepts conservative rounding but preserves approximate source qualifiers", () => {
+    const exactEvidence = {
+      ...prepared.evidence[0],
+      id: "evidence-exact-speedup",
+      quote: "The measured inference speedup is 11.94x over the baseline.",
+      summary: "相对基线测得的推理加速比为 11.94 倍。"
+    };
+    const approximateEvidence = {
+      ...prepared.evidence[0],
+      id: "evidence-approximate-speedup",
+      quote: "The measured inference speedup is approximately 12x over the baseline.",
+      summary: "相对基线测得的推理加速比约为 12 倍。"
+    };
+    const output = (evidenceId: string, summary: string) => JSON.stringify({
+      claims: [{ evidenceIds: [evidenceId], status: "grounded", text: summary }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [evidenceId],
+      paperType: "systems",
+      summary,
+      summarySentences: [{
+        evidenceIds: [evidenceId],
+        externalKnowledge: [],
+        status: "grounded",
+        text: summary
+      }],
+      withinPaperClosure: true
+    });
+
+    expect(parseThinReadingModelSeed(output(
+      exactEvidence.id,
+      "在论文报告的该基准设置下，系统相对基线的推理加速比约为 12×。"
+    ), {
+      analysis: {
+        ...prepared,
+        evidence: [exactEvidence],
+        evidencePrompt: `[${exactEvidence.id}] ${exactEvidence.quote}`
+      },
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    }).summary).toContain("约为 12×");
+
+    expect(() => parseThinReadingModelSeed(output(
+      approximateEvidence.id,
+      "在论文报告的该基准设置下，系统相对基线的推理加速比为 12×。"
+    ), {
+      analysis: {
+        ...prepared,
+        evidence: [approximateEvidence],
+        evidencePrompt: `[${approximateEvidence.id}] ${approximateEvidence.quote}`
+      },
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    })).toThrow("删除了来源中的必要限定词");
+  });
+
+  test("treats common two-digit Chinese number words as exact numeric equivalents", () => {
+    const evidence = {
+      ...prepared.evidence[0],
+      id: "evidence-chinese-number-word",
+      quote: "The measured inference speedup is 12x over the baseline.",
+      summary: "相对基线测得的推理加速比为 12 倍。"
+    };
+    const summary = "在相同设置下，系统相对基线的推理加速比为十二倍。";
+
+    expect(parseThinReadingModelSeed(JSON.stringify({
+      claims: [{ evidenceIds: [evidence.id], status: "grounded", text: summary }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [evidence.id],
+      paperType: "systems",
+      summary,
+      summarySentences: [{
+        evidenceIds: [evidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text: summary
+      }],
+      withinPaperClosure: true
+    }), {
+      analysis: {
+        ...prepared,
+        evidence: [evidence],
+        evidencePrompt: `[${evidence.id}] ${evidence.quote}`
+      },
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    }).summary).toContain("十二倍");
+  });
+
+  test("rejects dropping an explicit source unit from a quantitative claim", () => {
+    const evidence = {
+      ...prepared.evidence[0],
+      id: "evidence-explicit-latency-unit",
+      quote: "The measured inference latency is 1000 ms on the benchmark.",
+      summary: "该基准上的推理延迟为 1000 ms。"
+    };
+    const summary = "论文在该基准设置下报告的推理延迟为 1000，但正文没有保留单位。";
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      claims: [{ evidenceIds: [evidence.id], status: "grounded", text: summary }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [evidence.id],
+      paperType: "systems",
+      summary,
+      summarySentences: [{
+        evidenceIds: [evidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text: summary
+      }],
+      withinPaperClosure: true
+    }), {
+      analysis: {
+        ...prepared,
+        evidence: [evidence],
+        evidencePrompt: `[${evidence.id}] ${evidence.quote}`
+      },
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    })).toThrow("单位或量纲与来源不一致");
   });
 
   test("builds and validates an evidence-only reading plan", () => {
@@ -1012,6 +1575,53 @@ describe("thinReadingAgent", () => {
         selectedEvidenceIds: { maxItems: 8 }
       }
     });
+  });
+
+  test("deterministically normalizes recoverable evidence-plan array overflow", () => {
+    const allowedEvidenceIds = Array.from({ length: 13 }, (_, index) => `evidence-${index + 1}`);
+
+    expect(parseThinReadingEvidencePlanWithAudit({
+      allowedEvidenceIds,
+      output: JSON.stringify({
+        focus: ["核心机制", " 核心机制 ", "主要结果", "关键限制", "实验设置", "领域位置", "补充背景"],
+        pageRequests: [1, 1, 2, 3, 4],
+        searchQueries: ["mechanism", " mechanism ", "result", "limitation", "background"],
+        selectedEvidenceIds: [...allowedEvidenceIds, allowedEvidenceIds[0]]
+      })
+    })).toEqual({
+      normalization: {
+        deduplicated: { focus: 1, pageRequests: 1, searchQueries: 1, selectedEvidenceIds: 1 },
+        truncated: { focus: 1, pageRequests: 1, searchQueries: 1, selectedEvidenceIds: 1 }
+      },
+      plan: {
+        focus: ["核心机制", "主要结果", "关键限制", "实验设置", "领域位置"],
+        pageRequests: [1, 2, 3],
+        searchQueries: ["mechanism", "result", "limitation"],
+        selectedEvidenceIds: allowedEvidenceIds.slice(0, 12)
+      }
+    });
+  });
+
+  test("does not hide malformed or unavailable planner items beyond array limits", () => {
+    const allowedEvidenceIds = Array.from({ length: 12 }, (_, index) => `evidence-${index + 1}`);
+
+    expect(() => parseThinReadingEvidencePlan({
+      allowedEvidenceIds,
+      output: JSON.stringify({
+        focus: ["核心机制"],
+        pageRequests: [1, 2, 3, "4"],
+        selectedEvidenceIds: allowedEvidenceIds
+      })
+    })).toThrow("pageRequests");
+
+    expect(() => parseThinReadingEvidencePlan({
+      allowedEvidenceIds,
+      output: JSON.stringify({
+        focus: ["核心机制"],
+        pageRequests: [1, 2, 3],
+        selectedEvidenceIds: [...allowedEvidenceIds, "evidence-forged-tail"]
+      })
+    })).toThrow("不可用的 evidence ID：evidence-forged-tail");
   });
 
   test("bounds the second-round evidence observation decision to the original allowlist", () => {
@@ -1086,7 +1696,23 @@ describe("thinReadingAgent", () => {
       }],
       withinPaperClosure: true
     }), { analysis: prepared, requireExplicitTraceability: true, targetLanguage: "zh-CN" });
-    const prompt = buildThinReadingEvidenceReviewPrompt({ node, prepared, rootOverview: true });
+    const interpretationPlan = {
+      discourseMoves: ["先给出对象", "补齐前提", "给出因果链", "收束到边界"],
+      explanationDepth: "mechanistic" as const,
+      externalKnowledgeNeeded: false,
+      intent: "why" as const,
+      intentSignals: ["current_prompt:why", "reading_path:why"],
+      intentWeights: { how: 0.15, what: 0.15, why: 0.7 },
+      learningGoals: ["selected_focus", "parent_continuity"] as const,
+      readingMode: "exploration" as const,
+      requestedDepth: "deep" as const
+    };
+    const prompt = buildThinReadingEvidenceReviewPrompt({
+      interpretationPlan,
+      node,
+      prepared,
+      rootOverview: true
+    });
     const sentenceId = node.evidence.summarySentences[0].id;
     expect(prompt).toContain("证据复核 Agent");
     expect(prompt).toContain(sentenceId);
@@ -1103,7 +1729,21 @@ describe("thinReadingAgent", () => {
     expect(prompt).toContain("修辞性过渡本身不是事实命题");
     expect(prompt).toContain("root_orientation_review_required=true");
     expect(prompt).toContain("核心思想、论文全景、领域位置");
+    expect(prompt).toContain("核心结论及其最短充分支持链");
+    expect(prompt).toContain("conclusionSupport");
     expect(prompt).toContain("evidence_unavailable");
+    expect(prompt).toContain("成文质量审阅与证据审阅共用本次调用");
+    expect(prompt).toContain("候选规划推测本轮主意图为为什么");
+    expect(prompt).toContain("是什么 15%、为什么 70%、怎么样/如何 15%");
+    expect(prompt).toContain("逻辑链是否完整");
+    expect(prompt).toContain("拓扑深度只决定解释粒度");
+    expect(prompt).toContain("目标论文证据能否继续完整回答当前问题");
+    expect(prompt).toContain("answerObligations");
+    expect(prompt).toContain("全部 complete 才是 complete");
+    expect(prompt).toContain("全部 none 才是 none");
+    expect(prompt).toContain("paperEvidenceIds");
+    expect(prompt).toContain("当前草稿漏写、写浅或没有绑定");
+    expect(prompt).toContain("属于 contentQuality/正文修复问题");
     expect(prompt).not.toContain("reason 只写 8-420");
     expect(prompt).not.toContain("论文内证据矩阵");
     expect(parseThinReadingEvidenceReview({
@@ -1158,19 +1798,64 @@ describe("thinReadingAgent", () => {
     expect(() => parseThinReadingEvidenceReview({
       output: JSON.stringify({
         propositionVerdicts: [{ proposition: "taxonomy 组织知识地图", sentenceId, verdict: "supported" }],
+        paperAnswerability: {
+          answerObligations: [{
+            obligation: "解释综述的分类框架及其组织作用",
+            paperCoverage: "complete",
+            paperEvidenceIds: ["evidence-survey-taxonomy"],
+            reason: "目标论文证据覆盖该必要语义义务。"
+          }],
+          paperSupportedSentenceIds: [sentenceId],
+          reason: "论文证据可以完整回答当前综述首页任务。",
+          status: "complete"
+        },
         reason: "句子有直接证据，但首页方向审计字段缺失。",
         unsupportedSentenceIds: [],
         verdict: "pass"
       }),
       requireRootOrientation: true,
+      paperEvidenceIds: ["evidence-survey-taxonomy"],
+      paperSentenceIds: [sentenceId],
       sentenceIds: [sentenceId]
     })).toThrow("缺少首页方向审计");
 
     const rootReview = parseThinReadingEvidenceReview({
       output: JSON.stringify({
         propositionVerdicts: [{ proposition: "taxonomy 组织知识地图", sentenceId, verdict: "supported" }],
+        paperAnswerability: {
+          answerObligations: [{
+            obligation: "解释综述的分类框架及其组织作用",
+            paperCoverage: "complete",
+            paperEvidenceIds: ["evidence-survey-taxonomy"],
+            reason: "目标论文证据覆盖该必要语义义务。"
+          }],
+          paperSupportedSentenceIds: [sentenceId],
+          reason: "论文证据可以完整回答当前综述首页任务。",
+          status: "complete"
+        },
         reason: "正文命题有直接证据，首页建立了综述的组织主轴。",
+        contentQuality: {
+          depthFit: "appropriate",
+          focus: "focused",
+          intentAlignment: "aligned",
+          logicChain: "complete",
+          reason: "正文以为什么为主，只用必要定义建立因果链，深度与当前拓扑相符。",
+          revisionSentenceIds: [],
+          severity: "none",
+          verdict: "pass"
+        },
         rootOrientation: {
+          conclusionSupport: {
+            chains: [{
+              conclusionSentenceId: sentenceId,
+              reason: "分类框架的组织作用直接支撑这条核心结论。",
+              supportKinds: ["mechanism"],
+              supportSentenceIds: [sentenceId],
+              verdict: "complete"
+            }],
+            reason: "核心结论和分类框架的组织机制构成最短充分支持链。",
+            status: "complete"
+          },
           coreIdea: "covered",
           fieldPosition: "evidence_unavailable",
           paperPanorama: "covered",
@@ -1183,19 +1868,121 @@ describe("thinReadingAgent", () => {
         unsupportedSentenceIds: [],
         verdict: "pass"
       }),
+      paperEvidenceIds: ["evidence-survey-taxonomy"],
+      paperSentenceIds: [sentenceId],
       requireRootOrientation: true,
       sentenceIds: [sentenceId]
     });
     expect(rootReview.rootOrientation).toMatchObject({
+      conclusionSupport: { status: "complete" },
       fieldPosition: "evidence_unavailable",
       verdict: "pass"
     });
+    expect(rootReview.contentQuality).toMatchObject({
+      intentAlignment: "aligned",
+      logicChain: "complete",
+      verdict: "pass"
+    });
+    expect(rootReview.paperAnswerability).toEqual({
+      answerObligations: [{
+        obligation: "解释综述的分类框架及其组织作用",
+        paperCoverage: "complete",
+        paperEvidenceIds: ["evidence-survey-taxonomy"],
+        reason: "目标论文证据覆盖该必要语义义务。"
+      }],
+      paperSupportedSentenceIds: [sentenceId],
+      reason: "论文证据可以完整回答当前综述首页任务。",
+      status: "complete"
+    });
+
+    expect(() => parseThinReadingEvidenceReview({
+      output: JSON.stringify({
+        propositionVerdicts: [{ proposition: "taxonomy 组织知识地图", sentenceId, verdict: "supported" }],
+        paperAnswerability: {
+          answerObligations: [{
+            obligation: "解释当前问题要求的论文外事实",
+            paperCoverage: "none",
+            paperEvidenceIds: [],
+            reason: "目标论文证据不覆盖该必要语义义务。"
+          }],
+          paperSupportedSentenceIds: [sentenceId],
+          reason: "声称论文完全不能回答，却又列出论文支持句。",
+          status: "none"
+        },
+        reason: "回答能力结论自相矛盾。",
+        unsupportedSentenceIds: [],
+        verdict: "pass"
+      }),
+      paperEvidenceIds: ["evidence-survey-taxonomy"],
+      paperSentenceIds: [sentenceId],
+      sentenceIds: [sentenceId]
+    })).toThrow("none 不能列出论文支持句");
+
+    expect(() => parseThinReadingEvidenceReview({
+      output: JSON.stringify({
+        propositionVerdicts: [{ proposition: "taxonomy 组织知识地图", sentenceId, verdict: "supported" }],
+        paperAnswerability: {
+          answerObligations: [{
+            obligation: "解释综述的分类框架及其组织作用",
+            paperCoverage: "complete",
+            paperEvidenceIds: ["evidence-survey-taxonomy"],
+            reason: "目标论文证据覆盖该必要语义义务。"
+          }],
+          paperSupportedSentenceIds: [sentenceId],
+          reason: "逐项均完整，却错误聚合为部分回答。",
+          status: "partial"
+        },
+        reason: "回答能力聚合结论自相矛盾。",
+        unsupportedSentenceIds: [],
+        verdict: "pass"
+      }),
+      paperEvidenceIds: ["evidence-survey-taxonomy"],
+      paperSentenceIds: [sentenceId],
+      requirePaperAnswerability: true,
+      sentenceIds: [sentenceId]
+    })).toThrow("逐项语义义务聚合结果 complete 不一致");
+
+    expect(() => parseThinReadingEvidenceReview({
+      output: JSON.stringify({
+        propositionVerdicts: [{ proposition: "taxonomy 组织知识地图", sentenceId, verdict: "supported" }],
+        reason: "正文证据成立，但缺少独立论文回答能力判断。",
+        unsupportedSentenceIds: [],
+        verdict: "pass"
+      }),
+      requirePaperAnswerability: true,
+      sentenceIds: [sentenceId]
+    })).toThrow("缺少论文回答能力审计");
+
+    expect(() => parseThinReadingEvidenceReview({
+      output: JSON.stringify({
+        propositionVerdicts: [{ proposition: "taxonomy 组织知识地图", sentenceId, verdict: "supported" }],
+        reason: "正文证据成立，但成文质量判定自相矛盾。",
+        contentQuality: {
+          depthFit: "appropriate",
+          focus: "focused",
+          intentAlignment: "aligned",
+          logicChain: "complete",
+          reason: "所有成文维度已经通过却错误要求改写。",
+          revisionSentenceIds: [sentenceId],
+          severity: "advisory",
+          verdict: "revise"
+        },
+        unsupportedSentenceIds: [],
+        verdict: "pass"
+      }),
+      sentenceIds: [sentenceId]
+    })).toThrow("成文质量审阅返回矛盾");
 
     expect(() => parseThinReadingEvidenceReview({
       output: JSON.stringify({
         propositionVerdicts: [{ proposition: "taxonomy 组织知识地图", sentenceId, verdict: "supported" }],
         reason: "首页方向审计自相矛盾。",
         rootOrientation: {
+          conclusionSupport: {
+            chains: [],
+            reason: "核心结论缺失，因此不存在可审计的支持链。",
+            status: "missing"
+          },
           coreIdea: "missing",
           fieldPosition: "covered",
           paperPanorama: "covered",
@@ -1210,7 +1997,39 @@ describe("thinReadingAgent", () => {
       }),
       requireRootOrientation: true,
       sentenceIds: [sentenceId]
-    })).toThrow("首页方向审计返回矛盾");
+    })).toThrow("结论支持链与 paperPanorama 返回矛盾");
+
+    expect(() => parseThinReadingEvidenceReview({
+      output: JSON.stringify({
+        propositionVerdicts: [{ proposition: "taxonomy 组织知识地图", sentenceId, verdict: "supported" }],
+        reason: "首页把宏观概括误当成了完整支持链。",
+        rootOrientation: {
+          conclusionSupport: {
+            chains: [{
+              conclusionSentenceId: sentenceId,
+              reason: "只指出结论，没有给出机制、推导或决定性证据。",
+              supportKinds: ["mechanism"],
+              supportSentenceIds: [sentenceId],
+              verdict: "partial"
+            }],
+            reason: "结论支持过程仍不完整。",
+            status: "partial"
+          },
+          coreIdea: "covered",
+          fieldPosition: "evidence_unavailable",
+          paperPanorama: "covered",
+          paperType: "survey",
+          paperTypeVerdict: "supported",
+          reason: "错误地把不完整支持链标成通过。",
+          retentionVerdict: "focused",
+          verdict: "pass"
+        },
+        unsupportedSentenceIds: [],
+        verdict: "pass"
+      }),
+      requireRootOrientation: true,
+      sentenceIds: [sentenceId]
+    })).toThrow("结论支持链");
   });
 
   test("normalizes evidence-review diagnostics without weakening its verdict contract", () => {
@@ -1275,6 +2094,17 @@ describe("thinReadingAgent", () => {
 
   test("reviews AI interpretation for disguised sourcing and empirical claims", () => {
     const prompt = buildThinReadingAiInterpretationReviewPrompt({
+      interpretationPlan: {
+        discourseMoves: ["先解释原因", "补齐因果链", "说明成立边界"],
+        explanationDepth: "mechanistic",
+        externalKnowledgeNeeded: true,
+        intent: "why",
+        intentSignals: ["current_prompt:why", "topology:depth_2"],
+        intentWeights: { how: 0.2, what: 0.15, why: 0.65 },
+        learningGoals: ["selected_focus", "parent_continuity"],
+        readingMode: "exploration",
+        requestedDepth: "deep"
+      },
       sentences: [{
         evidenceIds: [],
         externalKnowledge: [],
@@ -1290,6 +2120,9 @@ describe("thinReadingAgent", () => {
     expect(prompt).toContain("精确经验数据");
     expect(prompt).toContain("谨慎的概念推理");
     expect(prompt).toContain("不确定性措辞");
+    expect(prompt).toContain("为什么=65%");
+    expect(prompt).toContain("逻辑链");
+    expect(prompt).toContain("contentQuality");
 
     expect(parseThinReadingAiInterpretationReview(JSON.stringify({
       reason: "句子保持为明确的不确定性推理，没有伪造来源。",
@@ -1333,11 +2166,12 @@ describe("thinReadingAgent", () => {
     expect(thinReadingAiInterpretationReviewJsonSchema).toMatchObject({
       additionalProperties: false,
       properties: {
+        contentQuality: expect.any(Object),
         reason: { type: "string" },
         unsafeSentenceIds: { type: "array" },
         verdict: { enum: ["fail", "pass"], type: "string" }
       },
-      required: ["reason", "unsafeSentenceIds", "verdict"]
+      required: ["contentQuality", "reason", "unsafeSentenceIds", "verdict"]
     });
     expect(thinReadingAiInterpretationReviewSchema.safeParse({
       extra: true,
@@ -1351,6 +2185,48 @@ describe("thinReadingAgent", () => {
       unsafeSentenceIds: [],
       verdict: "pass"
     }), ["sentence-ai-1"])).toThrow("返回格式无效");
+  });
+
+  test("validates AI interpretation composition quality independently from safety", () => {
+    expect(parseThinReadingAiInterpretationReview(JSON.stringify({
+      contentQuality: {
+        depthFit: "shallow",
+        focus: "focused",
+        intentAlignment: "aligned",
+        logicChain: "partial",
+        reason: "回答方向正确，但缺少从前提到结果的关键连接。",
+        revisionSentenceIds: ["sentence-ai-1"],
+        severity: "advisory",
+        verdict: "revise"
+      },
+      reason: "没有伪造来源或精确经验事实。",
+      unsafeSentenceIds: [],
+      verdict: "pass"
+    }), ["sentence-ai-1"])).toMatchObject({
+      contentQuality: {
+        logicChain: "partial",
+        revisionSentenceIds: ["sentence-ai-1"],
+        verdict: "revise"
+      },
+      unsafeSentenceIds: [],
+      verdict: "pass"
+    });
+
+    expect(() => parseThinReadingAiInterpretationReview(JSON.stringify({
+      contentQuality: {
+        depthFit: "appropriate",
+        focus: "focused",
+        intentAlignment: "aligned",
+        logicChain: "complete",
+        reason: "矛盾的改写结论。",
+        revisionSentenceIds: ["sentence-ai-1"],
+        severity: "advisory",
+        verdict: "pass"
+      },
+      reason: "安全边界通过。",
+      unsafeSentenceIds: [],
+      verdict: "pass"
+    }), ["sentence-ai-1"])).toThrow("成文质量审阅返回矛盾");
   });
 
   test("keeps parent semantic context while hiding transient evidence identifiers", () => {
@@ -1974,8 +2850,19 @@ describe("thinReadingAgent", () => {
     ]);
   });
 
-  test("keeps every uncovered topic when the semantic difference contains more than four", () => {
-    const candidates = ["定义", "数据", "流程", "指标", "案例", "复现"].map((label, index) => ({
+  test("keeps every uncovered topic when the semantic difference contains more than the old fixed limit", () => {
+    const candidates = [
+      "定义",
+      "数据",
+      "流程",
+      "指标",
+      "案例",
+      "复现",
+      "误差分析",
+      "消融",
+      "适用边界",
+      "开放问题"
+    ].map((label, index) => ({
       label,
       sectionKey: `custom_${index}`
     }));
@@ -1984,7 +2871,20 @@ describe("thinReadingAgent", () => {
       candidates,
       currentSummary: "当前页只讲核心结论。",
       paperType: "unknown"
-    }).map((item) => item.label)).toEqual(["定义", "数据", "流程", "指标", "案例", "复现"]);
+    }).map((item) => item.label)).toEqual(candidates.map((item) => item.label));
+  });
+
+  test("does not discard a model-judged detail merely because its broad facet was mentioned", () => {
+    expect(resolveThinReadingOmittedSections({
+      candidates: [{ label: "方法成立所需的冻结点约束", sectionKey: "method_freeze_point" }],
+      currentSummary: "当前页已经概括了论文的方法与核心结论，但没有解释冻结点约束。",
+      paperType: "systems"
+    })).toEqual([
+      expect.objectContaining({
+        label: "方法成立所需的冻结点约束",
+        sectionKey: "method_freeze_point"
+      })
+    ]);
   });
 
   test("uses paper evidence as a fallback without repeating modules covered by ancestors", () => {
@@ -2364,7 +3264,7 @@ describe("thinReadingAgent", () => {
     });
   });
 
-  test("marks the node outside the paper closure when retrieval coverage is insufficient", () => {
+  test("does not turn aggregate retrieval confidence into a semantic paper boundary", () => {
     const weakPrepared: PreparedMultiPaperAnalysis = {
       ...prepared,
       retrievalConfidence: 0.62,
@@ -2389,7 +3289,8 @@ describe("thinReadingAgent", () => {
       analysis: weakPrepared
     });
 
-    expect(seed.withinPaperClosure).toBe(false);
+    expect(seed.withinPaperClosure).toBe(true);
+    expect(seed.closureState).toBe("inside_paper");
   });
 
   test("rejects external source ids that were not returned by this retrieval turn", () => {
@@ -2422,6 +3323,153 @@ describe("thinReadingAgent", () => {
         url: "https://openalex.org/W-ALLOWED"
       }]
     })).toThrow("本轮检索中不存在");
+  });
+
+  test("derives the final support mode from sentence mappings instead of unused source markers", () => {
+    const externalSource = {
+      abstract: "A traceable but unused source about an adjacent retrieval topic.",
+      authors: ["A. Author"],
+      id: "openalex:W-unused",
+      provider: "openalex" as const,
+      relation: "topic_search" as const,
+      relevance: 0.8,
+      retrievalQuery: "adjacent retrieval topic",
+      sourceId: "W-unused",
+      sourceRecordUrl: "https://openalex.org/W-unused",
+      title: "Adjacent Retrieval Topic",
+      url: "https://openalex.org/W-unused"
+    };
+    const summary = "目标论文使用 taxonomy（分类框架）组织向量数据库系统。";
+    const seed = parseThinReadingModelSeed(JSON.stringify({
+      claims: [{ evidenceIds: [prepared.evidence[0].id], status: "grounded", text: summary }],
+      externalKnowledge: [externalSource.id],
+      omittedSections: [],
+      paperEvidence: [prepared.evidence[0].id],
+      paperType: "survey",
+      summary,
+      summarySentences: [{
+        evidenceIds: [prepared.evidence[0].id],
+        externalKnowledge: [],
+        status: "grounded",
+        text: summary
+      }],
+      withinPaperClosure: true
+    }), {
+      analysis: prepared,
+      externalSources: [externalSource],
+      requireExplicitTraceability: true,
+      targetLanguage: "zh-CN"
+    });
+
+    expect(seed.supportMode).toBe("paper");
+    expect(seed.evidence.externalKnowledge).toEqual([]);
+    expect(seed.evidence.externalSources).toEqual([]);
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      claims: [{ evidenceIds: [prepared.evidence[0].id], status: "grounded", text: summary }],
+      externalKnowledge: [externalSource.id],
+      omittedSections: [],
+      paperEvidence: [prepared.evidence[0].id],
+      paperType: "survey",
+      summary,
+      summarySentences: [{
+        evidenceIds: [prepared.evidence[0].id],
+        externalKnowledge: [],
+        status: "grounded",
+        text: summary
+      }],
+      withinPaperClosure: true
+    }), {
+      analysis: prepared,
+      externalSources: [externalSource],
+      requireExplicitTraceability: true,
+      supportMode: "paper_and_external",
+      targetLanguage: "zh-CN"
+    })).toThrow("paper_and_external 必须同时保留实质论文证据与可追溯外部来源");
+  });
+
+  test("allows an initial paper route to finish as mixed support when the body actually uses both sources", () => {
+    const externalSource = {
+      abstract: "A follow-up study identifies deployment constraints outside the target paper.",
+      authors: ["A. Author"],
+      id: "openalex:W-mixed-route",
+      provider: "openalex" as const,
+      relation: "topic_search" as const,
+      relevance: 0.8,
+      retrievalQuery: "deployment constraints",
+      sourceId: "W-mixed-route",
+      sourceRecordUrl: "https://openalex.org/W-mixed-route",
+      title: "Deployment Constraints",
+      url: "https://openalex.org/W-mixed-route"
+    };
+    const paperSentence = "目标论文使用 taxonomy（分类框架）组织向量数据库系统。";
+    const externalSentence = "后续研究补充了目标论文未讨论的部署约束。";
+    const seed = parseThinReadingModelSeed(JSON.stringify({
+      claims: [{ evidenceIds: [prepared.evidence[0].id], status: "grounded", text: paperSentence }],
+      externalKnowledge: [externalSource.id],
+      omittedSections: [],
+      paperEvidence: [prepared.evidence[0].id],
+      paperType: "survey",
+      summary: `${paperSentence}${externalSentence}`,
+      summarySentences: [{
+        evidenceIds: [prepared.evidence[0].id],
+        externalKnowledge: [],
+        status: "grounded",
+        text: paperSentence
+      }, {
+        evidenceIds: [],
+        externalKnowledge: [externalSource.id],
+        status: "weak",
+        text: externalSentence
+      }],
+      withinPaperClosure: false
+    }), {
+      analysis: prepared,
+      externalSources: [externalSource],
+      requireExplicitTraceability: true,
+      supportMode: "paper",
+      targetLanguage: "zh-CN"
+    });
+
+    expect(seed.supportMode).toBe("paper_and_external");
+    expect(seed.evidence.externalKnowledge).toEqual([externalSource.id]);
+  });
+
+  test("rejects paper evidence markers in an external-only body", () => {
+    const externalSource = {
+      abstract: "The study organizes ablation experiments by module to separate layout and vectorization factors.",
+      authors: ["A. Author"],
+      id: "openalex:W-unused-paper",
+      provider: "openalex" as const,
+      relation: "topic_search" as const,
+      relevance: 0.8,
+      retrievalQuery: "module ablation planning",
+      sourceId: "W-unused-paper",
+      sourceRecordUrl: "https://openalex.org/W-unused-paper",
+      title: "Planning Modular Ablation Experiments",
+      url: "https://openalex.org/W-unused-paper"
+    };
+    const summary = "该研究按模块组织消融实验，以区分布局和向量化因素。";
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      claims: [{ evidenceIds: [prepared.evidence[0].id], status: "grounded", text: summary }],
+      externalKnowledge: [externalSource.id],
+      omittedSections: [],
+      paperEvidence: [prepared.evidence[0].id],
+      paperType: "experimental",
+      summary,
+      summarySentences: [{
+        evidenceIds: [],
+        externalKnowledge: [externalSource.id],
+        status: "weak",
+        text: summary
+      }],
+      withinPaperClosure: false
+    }), {
+      analysis: prepared,
+      externalSources: [externalSource],
+      requireExplicitTraceability: true,
+      targetLanguage: "zh-CN"
+    })).toThrow("external_only 必须排除论文证据");
   });
 
   test("requires a source-mapped summary sentence for an explicit beyond-paper generation", () => {

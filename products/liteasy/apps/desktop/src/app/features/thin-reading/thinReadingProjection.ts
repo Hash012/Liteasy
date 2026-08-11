@@ -4,6 +4,7 @@ import type {
   ThinReadingAnnotation,
   ThinReadingAnnotationSyncState,
   ThinReadingAnnotationTarget,
+  ThinReadingAnswerObligation,
   ThinReadingAnchor,
   ThinReadingDocument,
   ThinReadingDocumentV2,
@@ -20,6 +21,7 @@ import type {
   ThinReadingNodeEvidenceV1,
   ThinReadingNodeSeed,
   ThinReadingNodeSource,
+  ThinReadingPaperAnswerability,
   ThinReadingRecommendationPaperEdge,
   ThinReadingRecommendationScope,
   ThinReadingSummarySentence,
@@ -45,17 +47,22 @@ export type ThinReadingBranchOption = {
 export function resolveThinReadingClosureState(input: {
   closureState?: ThinReadingClosureState;
   depth: number;
+  supportMode?: ThinReadingSupportMode;
   withinPaperClosure: boolean;
 }): ThinReadingClosureState {
-  if (!input.withinPaperClosure) {
-    return "outside_paper";
+  if (input.closureState) {
+    return input.closureState;
   }
-  if (input.closureState === "near_boundary") {
+  if (input.supportMode === "paper_and_external") {
     return "near_boundary";
   }
-  // The next interaction at depth three retrieves external sources. Flag the
-  // preceding internal level so readers understand the transition before it occurs.
-  return input.depth >= 2 ? "near_boundary" : "inside_paper";
+  if (input.supportMode === "external_only" || input.supportMode === "ai_interpretation") {
+    return "outside_paper";
+  }
+  if (input.supportMode === "paper") {
+    return "inside_paper";
+  }
+  return input.withinPaperClosure ? "inside_paper" : "outside_paper";
 }
 
 export function resolveThinReadingSentenceSupportMode(
@@ -75,6 +82,30 @@ const thinReadingExternalFallbackReasons = new Set([
   "no_trusted_sources",
   "verification_exhausted"
 ]);
+
+function assertAnswerObligationsMatchStatus(
+  obligations: readonly ThinReadingAnswerObligation[] | undefined,
+  status: ThinReadingPaperAnswerability
+) {
+  if (!obligations?.length) return;
+  for (const obligation of obligations) {
+    if (!obligation.paperEvidenceIds) continue;
+    if (obligation.paperCoverage === "none" && obligation.paperEvidenceIds.length > 0) {
+      throw new Error("薄读论文回答义务的 none 覆盖不能携带论文 evidence ID。");
+    }
+    if (obligation.paperCoverage !== "none" && obligation.paperEvidenceIds.length === 0) {
+      throw new Error("薄读论文回答义务的 complete/partial 覆盖缺少论文 evidence ID。");
+    }
+  }
+  const derivedStatus = obligations.every((item) => item.paperCoverage === "complete")
+    ? "complete"
+    : obligations.every((item) => item.paperCoverage === "none")
+      ? "none"
+      : "partial";
+  if (derivedStatus !== status) {
+    throw new Error("薄读论文回答义务与聚合回答能力状态不一致。");
+  }
+}
 
 function isValidFallbackRoute(value: unknown) {
   return typeof value === "string" && thinReadingExternalFallbackRoutes.has(value);
@@ -127,22 +158,53 @@ function assertAiInterpretationEvidenceIsolated(evidence: ThinReadingNodeEvidenc
   }
 }
 
+function assertPaperAnswerabilityTransitionMatchesSupportMode(
+  evidence: Pick<ThinReadingNodeEvidence, "generationAudit">,
+  supportMode: ThinReadingSupportMode
+) {
+  const transition = evidence.generationAudit?.paperAnswerabilityTransition;
+  if (!transition) return;
+  assertAnswerObligationsMatchStatus(transition.answerObligations, transition.status);
+  const validTarget = transition.status === "partial"
+    ? transition.targetSupportMode === "paper_and_external" ||
+      transition.targetSupportMode === "ai_interpretation"
+    : transition.status === "none" && (
+      transition.targetSupportMode === "external_only" ||
+      transition.targetSupportMode === "ai_interpretation"
+    );
+  if (!validTarget || transition.targetSupportMode !== supportMode) {
+    throw new Error("薄读论文回答能力转档审计与最终句级来源不一致。");
+  }
+  const finalAnswerability = evidence.generationAudit?.evidenceReview?.paperAnswerability;
+  if (finalAnswerability && finalAnswerability.status !== transition.status) {
+    throw new Error("薄读论文回答能力转档审计与最终语义复核不一致。");
+  }
+}
+
 export function resolveThinReadingSupportMode(input: {
   evidence: Pick<ThinReadingNodeEvidence,
     "externalKnowledge" | "generationAudit" | "paperEvidence" | "summarySentences">;
   supportMode?: ThinReadingSupportMode;
 }): ThinReadingSupportMode {
-  const hasPaper = input.evidence.paperEvidence.length > 0 ||
-    Boolean(input.evidence.summarySentences?.some((sentence) => sentence.evidenceIds.length > 0));
-  const hasExternal = input.evidence.externalKnowledge.length > 0 ||
-    Boolean(input.evidence.summarySentences?.some((sentence) => sentence.externalKnowledge.length > 0));
+  const summarySentences = input.evidence.summarySentences ?? [];
+  const hasExplicitSentenceMap = summarySentences.length > 0;
+  const hasPaper = hasExplicitSentenceMap
+    ? summarySentences.some((sentence) => sentence.evidenceIds.length > 0)
+    : input.evidence.paperEvidence.length > 0;
+  const hasExternal = hasExplicitSentenceMap
+    ? summarySentences.some((sentence) => sentence.externalKnowledge.length > 0)
+    : input.evidence.externalKnowledge.length > 0;
+  const hasAnyPaperReference = input.evidence.paperEvidence.length > 0 ||
+    summarySentences.some((sentence) => sentence.evidenceIds.length > 0);
+  const hasAnyExternalReference = input.evidence.externalKnowledge.length > 0 ||
+    summarySentences.some((sentence) => sentence.externalKnowledge.length > 0);
   const inferred = hasPaper && hasExternal
     ? "paper_and_external"
     : hasExternal
       ? "external_only"
       : "paper";
   if (input.supportMode === "ai_interpretation") {
-    if (hasPaper || hasExternal) {
+    if (hasAnyPaperReference || hasAnyExternalReference) {
       throw new Error("薄读支持模式与正文来源不一致：AI 理解不能携带论文或外部引用。");
     }
     if (!input.evidence.generationAudit?.externalFallback) {
@@ -153,17 +215,35 @@ export function resolveThinReadingSupportMode(input: {
       throw new Error("AI 理解节点缺少通过的 AI 独立理解审阅。");
     }
     assertAiInterpretationEvidenceIsolated(input.evidence as ThinReadingNodeEvidence);
+    assertPaperAnswerabilityTransitionMatchesSupportMode(input.evidence, "ai_interpretation");
     return "ai_interpretation";
   }
   if (input.supportMode && input.supportMode !== inferred) {
     throw new Error("薄读支持模式与正文来源不一致。");
   }
-  return input.supportMode ?? inferred;
+  const resolved = input.supportMode ?? inferred;
+  if (resolved === "external_only" && input.evidence.paperEvidence.length > 0) {
+    throw new Error("薄读支持模式与正文来源不一致：external_only 不能携带论文证据。");
+  }
+  assertPaperAnswerabilityTransitionMatchesSupportMode(input.evidence, resolved);
+  return resolved;
 }
 
-function assertAiInterpretationSeedBoundary(seed: ThinReadingNodeSeed) {
+function assertThinReadingSeedBoundary(seed: ThinReadingNodeSeed) {
   if (seed.supportMode === "ai_interpretation" && seed.withinPaperClosure !== false) {
     throw new Error("AI 理解节点必须越出论文闭包。");
+  }
+  const answerability = seed.evidence.generationAudit?.evidenceReview?.paperAnswerability;
+  if (!answerability) return;
+  assertAnswerObligationsMatchStatus(answerability.answerObligations, answerability.status);
+  const expectedClosureState: ThinReadingClosureState = answerability.status === "complete"
+    ? "inside_paper"
+    : answerability.status === "partial"
+      ? "near_boundary"
+      : "outside_paper";
+  if (seed.withinPaperClosure !== (answerability.status === "complete") ||
+    (seed.closureState !== undefined && seed.closureState !== expectedClosureState)) {
+    throw new Error("薄读论文回答能力语义复核与节点闭包状态不一致。");
   }
 }
 
@@ -297,6 +377,12 @@ function freezeAiInterpretationReview(
   review: NonNullable<ThinReadingGenerationAudit["aiInterpretationReview"]>
 ) {
   return Object.freeze({
+    contentQuality: review.contentQuality
+      ? Object.freeze({
+          ...review.contentQuality,
+          revisionSentenceIds: Object.freeze([...review.contentQuality.revisionSentenceIds])
+        })
+      : review.contentQuality,
     reason: review.reason,
     unsafeSentenceIds: Object.freeze([...review.unsafeSentenceIds]),
     verdict: review.verdict
@@ -315,6 +401,21 @@ function freezeExternalFallbackAudit(
   });
 }
 
+function freezeExternalRetrievalAudit(
+  audit: NonNullable<ThinReadingGenerationAudit["externalRetrieval"]>
+) {
+  return Object.freeze({
+    attemptedRoutes: Object.freeze([...audit.attemptedRoutes]),
+    carriedSourceCount: audit.carriedSourceCount,
+    completedRoutes: Object.freeze([...audit.completedRoutes]),
+    deadlineMs: audit.deadlineMs,
+    durationMs: audit.durationMs,
+    joinReason: audit.joinReason,
+    routeOutcomes: Object.freeze(audit.routeOutcomes.map((outcome) => Object.freeze({ ...outcome }))),
+    trustedSourceCount: audit.trustedSourceCount
+  });
+}
+
 function freezeGenerationAudit(audit: ThinReadingGenerationAudit): ThinReadingGenerationAudit {
   return Object.freeze({
     aiInterpretationReview: audit.aiInterpretationReview
@@ -326,17 +427,65 @@ function freezeGenerationAudit(audit: ThinReadingGenerationAudit): ThinReadingGe
     externalFallback: audit.externalFallback
       ? freezeExternalFallbackAudit(audit.externalFallback)
       : undefined,
+    externalRetrieval: audit.externalRetrieval
+      ? freezeExternalRetrievalAudit(audit.externalRetrieval)
+      : undefined,
+    paperAnswerabilityTransition: audit.paperAnswerabilityTransition
+      ? Object.freeze({
+          ...audit.paperAnswerabilityTransition,
+          answerObligations: audit.paperAnswerabilityTransition.answerObligations
+            ? Object.freeze(audit.paperAnswerabilityTransition.answerObligations.map((item) => (
+                Object.freeze({
+                  ...item,
+                  paperEvidenceIds: item.paperEvidenceIds
+                    ? Object.freeze([...item.paperEvidenceIds])
+                    : undefined
+                })
+              )))
+            : undefined
+        })
+      : undefined,
+    paperEvidenceRecovery: audit.paperEvidenceRecovery
+      ? Object.freeze({
+          ...audit.paperEvidenceRecovery,
+          addedEvidenceIds: Object.freeze([...audit.paperEvidenceRecovery.addedEvidenceIds]),
+          answerObligations: Object.freeze([...audit.paperEvidenceRecovery.answerObligations]),
+          initialEvidenceIds: Object.freeze([...audit.paperEvidenceRecovery.initialEvidenceIds])
+        })
+      : undefined,
+    evidencePlanning: audit.evidencePlanning
+      ? Object.freeze({
+          ...audit.evidencePlanning,
+          normalization: audit.evidencePlanning.normalization
+            ? Object.freeze({
+                deduplicated: Object.freeze({ ...audit.evidencePlanning.normalization.deduplicated }),
+                truncated: Object.freeze({ ...audit.evidencePlanning.normalization.truncated })
+              })
+            : undefined,
+          selectedEvidenceIds: Object.freeze([...audit.evidencePlanning.selectedEvidenceIds])
+        })
+      : undefined,
     interpretationPlan: audit.interpretationPlan
       ? Object.freeze({
           ...audit.interpretationPlan,
           discourseMoves: Object.freeze([...audit.interpretationPlan.discourseMoves]),
+          ...(audit.interpretationPlan.intentSignals ? {
+            intentSignals: Object.freeze([...audit.interpretationPlan.intentSignals])
+          } : {}),
+          ...(audit.interpretationPlan.intentWeights ? {
+            intentWeights: Object.freeze({ ...audit.interpretationPlan.intentWeights })
+          } : {}),
           ...(audit.interpretationPlan.learningGoals ? {
             learningGoals: Object.freeze([...audit.interpretationPlan.learningGoals])
+          } : {}),
+          ...(audit.interpretationPlan.retentionFocus ? {
+            retentionFocus: Object.freeze([...audit.interpretationPlan.retentionFocus])
           } : {})
         })
       : undefined,
     evidenceLoop: audit.evidenceLoop
       ? Object.freeze({
+          fallback: audit.evidenceLoop.fallback,
           rounds: Object.freeze(audit.evidenceLoop.rounds.map((round) => Object.freeze({
             ...round,
             focus: Object.freeze([...round.focus]),
@@ -363,8 +512,51 @@ function freezeGenerationAudit(audit: ThinReadingGenerationAudit): ThinReadingGe
     evidenceReview: audit.evidenceReview
       ? Object.freeze({
           ...audit.evidenceReview,
+          contentQuality: audit.evidenceReview.contentQuality
+            ? Object.freeze({
+                ...audit.evidenceReview.contentQuality,
+                revisionSentenceIds: Object.freeze([
+                  ...audit.evidenceReview.contentQuality.revisionSentenceIds
+                ])
+              })
+            : audit.evidenceReview.contentQuality,
+          propositionVerdicts: audit.evidenceReview.propositionVerdicts
+            ? Object.freeze(audit.evidenceReview.propositionVerdicts.map((item) => Object.freeze({ ...item })))
+            : undefined,
+          paperAnswerability: audit.evidenceReview.paperAnswerability
+            ? Object.freeze({
+                ...audit.evidenceReview.paperAnswerability,
+                answerObligations: audit.evidenceReview.paperAnswerability.answerObligations
+                  ? Object.freeze(audit.evidenceReview.paperAnswerability.answerObligations.map((item) => (
+                      Object.freeze({
+                        ...item,
+                        paperEvidenceIds: item.paperEvidenceIds
+                          ? Object.freeze([...item.paperEvidenceIds])
+                          : undefined
+                      })
+                    )))
+                  : undefined,
+                paperSupportedSentenceIds: Object.freeze([
+                  ...audit.evidenceReview.paperAnswerability.paperSupportedSentenceIds
+                ])
+              })
+            : audit.evidenceReview.paperAnswerability,
           rootOrientation: audit.evidenceReview.rootOrientation
-            ? Object.freeze({ ...audit.evidenceReview.rootOrientation })
+            ? Object.freeze({
+                ...audit.evidenceReview.rootOrientation,
+                conclusionSupport: Object.freeze({
+                  ...audit.evidenceReview.rootOrientation.conclusionSupport,
+                  chains: Object.freeze(
+                    audit.evidenceReview.rootOrientation.conclusionSupport.chains.map((chain) => (
+                      Object.freeze({
+                        ...chain,
+                        supportKinds: Object.freeze([...chain.supportKinds]),
+                        supportSentenceIds: Object.freeze([...chain.supportSentenceIds])
+                      })
+                    ))
+                  )
+                })
+              })
             : audit.evidenceReview.rootOrientation,
           unsupportedSentenceIds: Object.freeze([...audit.evidenceReview.unsupportedSentenceIds])
         })
@@ -381,6 +573,9 @@ function freezeGenerationAudit(audit: ThinReadingGenerationAudit): ThinReadingGe
       ...audit.qualityGate,
       repairReasons: Object.freeze([...audit.qualityGate.repairReasons])
     }),
+    responsibilitySubagents: audit.responsibilitySubagents
+      ? Object.freeze(audit.responsibilitySubagents.map((outcome) => Object.freeze({ ...outcome })))
+      : undefined,
     workload: audit.workload
       ? Object.freeze({
           ...audit.workload,
@@ -525,7 +720,7 @@ function toV2Evidence(evidence: ThinReadingNodeEvidence): ThinReadingNodeV2["evi
 export function createThinReadingDocument(
   input: CreateThinReadingDocumentInput
 ): ThinReadingDocumentV2 {
-  assertAiInterpretationSeedBoundary(input.rootSeed);
+  assertThinReadingSeedBoundary(input.rootSeed);
   const papers = [...input.papers];
   const paperIds = papers.map((paper) => paper.id);
   const paperTitles = papers.map((paper) => paper.title);
@@ -540,11 +735,16 @@ export function createThinReadingDocument(
     [input.artifactId, input.targetLanguage, ...papers.flatMap((paper) => [paper.id, paper.title])].join("\u0000")
   )}`;
   const rootTitle = createRootTitle(paperTitles, input.targetLanguage);
+  const rootSupportMode = resolveThinReadingSupportMode({
+    evidence: input.rootSeed.evidence,
+    supportMode: input.rootSeed.supportMode
+  });
   const rootNode: ThinReadingNodeV2 = {
     childIds: [],
     closureState: resolveThinReadingClosureState({
       closureState: input.rootSeed.closureState,
       depth: 0,
+      supportMode: rootSupportMode,
       withinPaperClosure: input.rootSeed.withinPaperClosure
     }),
     createdAt: createNodeCreatedAt(rootNodeId),
@@ -562,10 +762,7 @@ export function createThinReadingDocument(
     recommendations: retainCommunityRecommendations(input.rootSeed.recommendations),
     source: { kind: "root_overview" },
     summary: input.rootSeed.summary,
-    supportMode: resolveThinReadingSupportMode({
-      evidence: input.rootSeed.evidence,
-      supportMode: input.rootSeed.supportMode
-    }),
+    supportMode: rootSupportMode,
     title: rootTitle,
     withinPaperClosure: input.rootSeed.withinPaperClosure,
     ...(input.rootSeed.visualizationIntent ? {
@@ -660,14 +857,19 @@ export function advanceThinReadingDocument(
   if (existingChild) {
     return freezeDocument({ ...v2Document, activeNodeId: childId });
   }
-  assertAiInterpretationSeedBoundary(input.seed);
+  assertThinReadingSeedBoundary(input.seed);
   const source = input.source;
+  const childSupportMode = resolveThinReadingSupportMode({
+    evidence: input.seed.evidence,
+    supportMode: input.seed.supportMode
+  });
 
   const child: ThinReadingNodeV2 = {
     childIds: [],
     closureState: resolveThinReadingClosureState({
       closureState: input.seed.closureState,
       depth: parent.depth + 1,
+      supportMode: childSupportMode,
       withinPaperClosure: input.seed.withinPaperClosure
     }),
     createdAt: input.createdAt ?? createNodeCreatedAt(childId),
@@ -681,10 +883,7 @@ export function advanceThinReadingDocument(
     recommendations: retainCommunityRecommendations(input.seed.recommendations),
     source,
     summary: input.seed.summary,
-    supportMode: resolveThinReadingSupportMode({
-      evidence: input.seed.evidence,
-      supportMode: input.seed.supportMode
-    }),
+    supportMode: childSupportMode,
     title: input.title,
     withinPaperClosure: input.seed.withinPaperClosure,
     ...(input.seed.visualizationIntent ? {

@@ -8,7 +8,7 @@ export type { ArtifactFailureCode } from "./artifact.types";
 
 const publicMessages: Record<ArtifactFailureCode, string> = {
   artifact_generation_failed: "生成任务未完成，请稍后重试。",
-  artifact_verification_failed: "生成结果未通过证据校验，请调整资料或稍后重试。",
+  artifact_verification_failed: "生成结果未通过结构、证据或安全校验，系统未保存该结果。",
   document_processing_failed: "PDF 处理未完成，请确认文件可用后重新导入。",
   external_retrieval_failed: "外部文献检索暂时不可用，请稍后重试。",
   model_authentication_failed: "请登录或重新登录 Liteasy 账号，再使用模型服务。",
@@ -39,6 +39,12 @@ export function resolveArtifactFailureCode(
   const normalized = message.toLowerCase();
   if (
     normalized.includes("审计未通过") ||
+    normalized.includes("ai 独立理解质量审阅未通过") ||
+    normalized.includes("成文质量审阅") ||
+    normalized.includes("来源约束无法满足") ||
+    normalized.includes("结构质量门") ||
+    normalized.includes("数值命题门") ||
+    normalized.includes("证据复核未通过") ||
     normalized.includes("verification failed") ||
     normalized.includes("artifact workflow")
   ) return "artifact_verification_failed";
@@ -64,7 +70,8 @@ export function resolveArtifactFailureCode(
   if (
     normalized.includes("failed to fetch") ||
     normalized.includes("econnrefused") ||
-    normalized.includes("连接失败")
+    normalized.includes("连接失败") ||
+    /(?:cloud_proxy|responses api).*\b(?:408|500|502|503|504)\b/.test(normalized)
   ) return "service_unavailable";
   return "artifact_generation_failed";
 }

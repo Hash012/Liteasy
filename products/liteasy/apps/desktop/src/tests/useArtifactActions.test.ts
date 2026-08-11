@@ -15,6 +15,7 @@ import type { AgentRun } from "../app/features/agent-api/agentApi.types";
 import type { MineruFigure } from "../app/features/import/import.types";
 import { v1Fixture } from "./fixtures/thinReadingVersionFixtures";
 import { artifactWithSelectedObject } from "./fixtures/visualizationFixtures";
+import { createThinReadingBranchRecoverySnapshot } from "../app/features/artifacts/artifactTaskRecovery";
 
 function createMindmapArtifact(verificationStatus: "fail" | "pass" = "pass") {
   const verification = {
@@ -610,6 +611,61 @@ describe("useArtifactActions", () => {
     );
   });
 
+  test("retries a failed thin-reading branch with a valid snapshot without requiring restart recovery", async () => {
+    const fixture = createThinReadingFixture();
+    const document = createThinReadingDocument(fixture);
+    const papers = fixture.papers.map((item) => ({ id: item.id, title: item.title }));
+    const sourceSection = document.nodes[document.rootNodeId].omittedSections[0];
+    const source = {
+      kind: "omitted_section" as const,
+      label: sourceSection.label,
+      sectionKey: sourceSection.sectionKey
+    };
+    const { artifactStore, onAnalysisHint, result, runAgentAnalysis } = renderArtifactActions({
+      imported: true,
+      selectedPapers: papers
+    });
+    runAgentAnalysis.mockResolvedValueOnce(createCompletedThinReadingRun());
+    artifactStore.upsertTab({
+      artifactId: document.artifactId,
+      papers,
+      thinReadingDocument: document,
+      title: "薄读",
+      type: "thin_reading"
+    });
+    const taskId = artifactStore.createTask("thin_reading");
+    artifactStore.updateTask(taskId, {
+      artifactId: document.artifactId,
+      thinReadingBranchRecovery: createThinReadingBranchRecoverySnapshot({
+        artifactId: document.artifactId,
+        document,
+        parentNodeId: document.rootNodeId,
+        primaryPaperId: document.paperIds[0],
+        source
+      })
+    });
+    artifactStore.failTask(taskId, {
+      failedStage: "thin_reading_validating",
+      message: "审阅服务暂未完成请求。",
+      occurredAt: "2026-08-11T05:00:00.000Z",
+      recovery: ["重新提交同一输入"]
+    });
+
+    expect(artifactStore.getTask(taskId)?.recoveredAfterRestart).toBeUndefined();
+    await act(async () => {
+      await result.current.retryInterruptedThinReadingBranch(taskId);
+    });
+
+    expect(runAgentAnalysis).toHaveBeenCalledWith(
+      "thin_reading",
+      expect.any(Function),
+      expect.objectContaining({ thinReadingContext: expect.objectContaining({ source }) })
+    );
+    expect(onAnalysisHint).toHaveBeenCalledWith(
+      "正在使用已核验的同一薄读输入创建新的模型请求。"
+    );
+  });
+
   test("rejects an injected generated-object claim that differs from the selected semantic object", async () => {
     const fixture = createThinReadingFixture();
     const document = createThinReadingDocument(fixture);
@@ -1144,7 +1200,7 @@ describe("useArtifactActions", () => {
       ]
     });
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
-      "Agent 分析失败：生成结果未通过证据校验，请调整资料或稍后重试。"
+      "Agent 分析失败：生成结果未通过结构、证据或安全校验，系统未保存该结果。"
     );
   });
 
@@ -1257,7 +1313,7 @@ describe("useArtifactActions", () => {
     });
   });
 
-  test("diagnoses evidence-review failures as source support problems", async () => {
+  test("diagnoses evidence-review failures as blocked unverified output", async () => {
     const { artifactStore, result, runAgentAnalysis } = renderArtifactActions({ imported: true });
     runAgentAnalysis.mockImplementationOnce(async (_artifactType, onProgress) => {
       onProgress?.({
@@ -1278,10 +1334,11 @@ describe("useArtifactActions", () => {
 
     expect(artifactStore.getTasks()[0]).toMatchObject({
       failure: {
+        code: "artifact_verification_failed",
         failedStage: "thin_reading_planning",
         recovery: [
-          expect.stringContaining("标题或摘要未直接支持"),
-          expect.stringContaining("只使用目标论文内证据")
+          expect.stringContaining("阻止保存未通过结构、证据或安全复核"),
+          expect.stringContaining("相同输入重新生成")
         ]
       },
       status: "failed"

@@ -149,6 +149,72 @@ describe("thinReadingEvaluation", () => {
     }));
   });
 
+  test("rejects a topical root abstract that names components without stating a conclusion-support chain", () => {
+    const fixture = thinReadingGoldFixtures.find(({ gold }) =>
+      gold.id === "gold-experimental-colbert"
+    )!;
+    const summary = "ColBERT 涉及 MaxSim、late interaction（后期交互）、token-level matching（词元级匹配）、离线编码、检索效果、关键实验和单向量基线，是一项覆盖多方面的检索研究。";
+    const candidate = {
+      ...fixture.candidate,
+      evidence: {
+        ...fixture.candidate.evidence,
+        claims: fixture.candidate.evidence.claims?.map((claim) => ({ ...claim, text: summary })),
+        summarySentences: fixture.candidate.evidence.summarySentences?.map((sentence) => ({
+          ...sentence,
+          text: summary
+        }))
+      },
+      summary
+    };
+
+    const report = evaluateThinReadingGoldCase({ candidate, gold: fixture.gold });
+
+    expect(report.metrics.summaryCoreRecall.score).toBe(1);
+    expect(report.metrics.rootOrientationCoverage.score).toBeLessThan(1);
+    expect(report.issues).toContainEqual(expect.objectContaining({
+      code: "root_orientation_incomplete"
+    }));
+  });
+
+  test("accepts a concise one-sentence root when its conclusion and support relation are complete", () => {
+    const fixture = thinReadingGoldFixtures.find(({ gold }) =>
+      gold.id === "gold-experimental-colbert"
+    )!;
+    const summary = "MaxSim 保留词元匹配，实验中优于单向量基线。";
+    const candidate = {
+      ...fixture.candidate,
+      evidence: {
+        ...fixture.candidate.evidence,
+        claims: fixture.candidate.evidence.claims?.map((claim) => ({ ...claim, text: summary })),
+        summarySentences: fixture.candidate.evidence.summarySentences?.map((sentence) => ({
+          ...sentence,
+          text: summary
+        }))
+      },
+      summary
+    };
+    const gold = {
+      ...fixture.gold,
+      requiredRootOrientation: {
+        conclusionSupport: [{
+          kind: "experiment" as const,
+          propositions: ["实验中优于单向量基线"]
+        }],
+        coreConclusion: ["MaxSim 保留词元匹配"],
+        coreIdea: ["MaxSim"],
+        fieldPosition: ["单向量基线"],
+        paperPanorama: ["词元匹配"]
+      },
+      requiredSummaryConcepts: ["MaxSim", "词元匹配"]
+    };
+
+    const report = evaluateThinReadingGoldCase({ candidate, gold });
+
+    expect(candidate.evidence.summarySentences).toHaveLength(1);
+    expect(report.metrics.rootOrientationCoverage.score).toBe(1);
+    expect(report.passed).toBe(true);
+  });
+
   test("rejects sentence evidence mappings that do not cover the displayed summary", () => {
     const fixture = thinReadingGoldFixtures.find(({ gold }) =>
       gold.id === "gold-experimental-colbert"

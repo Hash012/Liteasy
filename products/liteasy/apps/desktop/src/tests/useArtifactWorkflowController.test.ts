@@ -584,7 +584,7 @@ describe("useArtifactWorkflowController", () => {
       status: "failed"
     }));
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
-      "Agent 分析失败：生成结果未通过证据校验，请调整资料或稍后重试。"
+      "Agent 分析失败：生成结果未通过结构、证据或安全校验，系统未保存该结果。"
     );
   });
 
