@@ -2,6 +2,30 @@ import type { SettingsState, UpdateSettingCommand } from "./settings.types";
 
 const viewSettingsStorageKey = "liteasy.view-settings.v1";
 
+type DesktopRuntimeEnv = {
+  VITE_FORUM_API_URL?: string;
+  VITE_LITEASY_CLOUD_URL?: string;
+};
+
+function releaseEndpoint(value: string | undefined, fallback: string) {
+  if (!value?.trim()) return fallback;
+  let parsed: URL;
+  try {
+    parsed = new URL(value.trim());
+  } catch {
+    throw new Error("desktop_runtime_endpoint_invalid");
+  }
+  const loopback = parsed.protocol === "http:" &&
+    new Set(["127.0.0.1", "[::1]", "localhost"]).has(parsed.hostname);
+  if (
+    (!loopback && parsed.protocol !== "https:") || parsed.username || parsed.password ||
+    parsed.search || parsed.hash || (parsed.pathname !== "/" && parsed.pathname !== "")
+  ) {
+    throw new Error("desktop_runtime_endpoint_invalid");
+  }
+  return parsed.toString().replace(/\/$/, "");
+}
+
 function loadPersistedViewSettings(): Partial<SettingsState> {
   try {
     const value = globalThis.localStorage?.getItem(viewSettingsStorageKey);
@@ -38,7 +62,9 @@ function persistViewSettings(state: SettingsState) {
   }
 }
 
-export function createSettingsStore() {
+export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.env) {
+  const cloudEndpoint = releaseEndpoint(runtimeEnv.VITE_LITEASY_CLOUD_URL, "http://127.0.0.1:8787");
+  const forumEndpoint = releaseEndpoint(runtimeEnv.VITE_FORUM_API_URL, "");
   const state: SettingsState = {
     "network.recommendation.enabled": true,
     "network.recommendation.sort_mode": "relevance",
@@ -47,10 +73,10 @@ export function createSettingsStore() {
     "assistant.default_output_mode": "mindmap",
     "assistant.language": "zh-CN",
     "import.ocr_language": "eng",
-    "thin_reading.intuecho_endpoint": "",
+    "thin_reading.intuecho_endpoint": forumEndpoint,
     "models.default_provider": "openai",
-    "models.cloud_proxy_endpoint": "http://127.0.0.1:8787",
-    "models.control_plane_endpoint": "http://127.0.0.1:8787",
+    "models.cloud_proxy_endpoint": cloudEndpoint,
+    "models.control_plane_endpoint": cloudEndpoint,
     "view.font_family": '"Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", sans-serif',
     "view.font_size": "14",
     "view.pdf_background": "paper",
@@ -71,3 +97,5 @@ export function createSettingsStore() {
     }
   };
 }
+
+export type { DesktopRuntimeEnv };
