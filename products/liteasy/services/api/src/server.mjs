@@ -12,6 +12,7 @@ import {
 import { AccountLifecycleError } from "./accountLifecycleError.mjs";
 import { ExternalRetrievalError } from "./externalRetrievalConnectors.mjs";
 import { IdentityError, requireFreshMfa } from "./identityVerifier.mjs";
+import { IntuechoLiteratureClientError } from "./intuechoLiteratureClient.mjs";
 import { authorizeLibraryScope, LibraryAuthorizationError } from "./libraryAuthorization.mjs";
 import { LibraryRepositoryError } from "./libraryRepository.mjs";
 import { ModelProxyError } from "./modelProxyService.mjs";
@@ -142,6 +143,15 @@ function errorMessage(code) {
     external_retrieval_provider_timeout: "A literature provider timed out. Retry later.",
     external_retrieval_provider_unavailable: "A literature provider is temporarily unavailable.",
     external_retrieval_unavailable: "No configured literature source is currently available.",
+    INVALID_LITERATURE_QUERY: "The literature identity request is invalid.",
+    LITERATURE_CANDIDATE_NOT_FOUND: "The literature candidate is no longer available.",
+    LITERATURE_CORROBORATION_REQUIRED: "The literature candidate requires another independent source.",
+    LITERATURE_IDENTITY_CONFLICT: "The literature identifiers conflict with an existing record.",
+    LITERATURE_PROVIDER_UNAVAILABLE: "The literature identity provider is temporarily unavailable.",
+    LITERATURE_RATE_LIMITED: "Too many literature identity requests were submitted. Retry later.",
+    intuecho_literature_response_invalid: "The literature authority returned an invalid response.",
+    intuecho_literature_unavailable: "The literature authority is temporarily unavailable.",
+    literature_projection_not_confirmed: "The literature projection is not confirmed at that revision.",
     external_retrieval_relation_request_invalid: "The paper relation request is invalid.",
     external_retrieval_relation_paper_invalid: "The paper relation request contains an invalid paper.",
     external_retrieval_relation_limit_invalid: "Select no more than 24 papers for relation analysis.",
@@ -208,6 +218,7 @@ function sendError(response, error, traceId) {
   const known = error instanceof AccountLifecycleError ||
     error instanceof ExternalRetrievalError ||
     error instanceof IdentityError ||
+    error instanceof IntuechoLiteratureClientError ||
     error instanceof LibraryAuthorizationError ||
     error instanceof LibraryRepositoryError ||
     error instanceof ModelProxyError ||
@@ -312,6 +323,39 @@ export function createCloudRequestHandler(runtime, config) {
         );
         const object = await runtime.visualizationService.openRasterAsset(identity.subject, rasterAssetMatch[1]);
         await sendPrivateRasterStream(response, object);
+        return;
+      }
+
+      if (runtime.literatureAuthorityClient && (
+        (request.method === "POST" && new Set([
+          "/v1/literature:confirm",
+          "/v1/literature:resolve",
+          "/v1/literature:verify"
+        ]).has(url.pathname)) ||
+        (request.method === "GET" && /^\/v1\/literature\/[^/]+\/relations$/.test(url.pathname))
+      )) {
+        await runtime.identityVerifier.verifyAuthorizationHeader(
+          request.headers.authorization,
+          "liteasy-desktop"
+        );
+        if (request.method === "GET") {
+          const encodedLiteratureId = url.pathname.slice("/v1/literature/".length, -"/relations".length);
+          let literatureId;
+          try {
+            literatureId = decodeURIComponent(encodedLiteratureId);
+          } catch {
+            throw new IntuechoLiteratureClientError("INVALID_LITERATURE_QUERY", 400);
+          }
+          sendJson(response, 200, await runtime.literatureAuthorityClient.relations(literatureId));
+          return;
+        }
+        const body = await readJsonBody(request);
+        const result = url.pathname.endsWith(":resolve")
+          ? await runtime.literatureAuthorityClient.resolve(body)
+          : url.pathname.endsWith(":confirm")
+            ? await runtime.literatureAuthorityClient.confirm(body)
+            : { literature: await runtime.literatureAuthorityClient.verifyProjection(body) };
+        sendJson(response, 200, result);
         return;
       }
 

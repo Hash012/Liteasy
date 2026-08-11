@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-import { inferPaperIdentityMetadataFromPdfText, paperIdentityFromLiterature, resolvePaperIdentity } from "./paperIdentity";
+import {
+  inferPaperIdentityMetadataFromPdfText,
+  normalizeLiteratureIdentifier,
+  paperIdentityFromLiterature,
+  resolvePaperIdentity
+} from "./paperIdentity";
 import type { PaperIdentity, PaperIdentityCandidate } from "./paperIdentity";
 import type { Paper } from "../workspace/workspace.types";
 import type {
@@ -15,7 +20,10 @@ const confirmableLiteratureIdentifierSchema = z.object({
     "doi",
     "arxiv_id",
     "semantic_scholar_id",
-    "openalex_id"
+    "openalex_id",
+    "openreview_id",
+    "dblp_key",
+    "pmlr_id"
   ]),
   role: z.literal("confirmable").optional(),
   source: z.literal("public_registry"),
@@ -49,7 +57,16 @@ const literatureRecordSchema = z.object({
   provenance: z.object({
     confirmedAt: z.string().datetime({ offset: true }),
     mode: z.literal("public_registry"),
-    provider: z.enum(["intuecho", "openalex", "crossref", "arxiv", "semantic_scholar"]).optional()
+    provider: z.enum([
+      "intuecho",
+      "openalex",
+      "crossref",
+      "arxiv",
+      "semantic_scholar",
+      "openreview",
+      "dblp",
+      "pmlr"
+    ]).optional()
   }).strict(),
   revision: z.number().int().positive(),
   status: z.literal("confirmed"),
@@ -63,6 +80,16 @@ const literatureRecordSchema = z.object({
       path: ["identifiers"]
     });
   }
+  for (const [index, identifier] of record.identifiers.entries()) {
+    const normalized = normalizeLiteratureIdentifier(identifier.kind, identifier.value);
+    if (!normalized || (identifier.kind === "arxiv_id" && !/v[1-9]\d*$/.test(normalized))) {
+      context.addIssue({
+        code: "custom",
+        message: "正式文献包含无效或非具体版本的标识。",
+        path: ["identifiers", index, "value"]
+      });
+    }
+  }
 });
 const literatureSnapshotSchema = z.object({
   literature: literatureRecordSchema,
@@ -72,7 +99,16 @@ const legacyLiteratureRecordSchema = z.object({
   authors: z.array(z.string().trim().min(1).max(300)).max(200).default([]),
   documentType: z.string().trim().min(1).max(100).optional(),
   identifiers: z.array(z.object({
-    kind: z.enum(["doi", "arxiv_id", "semantic_scholar_id", "openalex_id", "title_authors_year_hash"]),
+    kind: z.enum([
+      "doi",
+      "arxiv_id",
+      "semantic_scholar_id",
+      "openalex_id",
+      "openreview_id",
+      "dblp_key",
+      "pmlr_id",
+      "title_authors_year_hash"
+    ]),
     source: z.enum(["inferred", "manual", "metadata"]),
     value: z.string().trim().min(1).max(1000)
   }).strict()).max(20).default([]),

@@ -89,6 +89,50 @@ function mockPdfSelection({
 }
 
 describe("ReaderPane", () => {
+  test.each([
+    ["ambiguous", "选择身份候选"],
+    ["conflict", "处理身份冲突"],
+    ["unavailable", "重试身份确认"],
+    ["unresolved", "确认文献身份"]
+  ] as const)("shows the %s literature identity state as a recoverable action", (status, label) => {
+    const onResolveLiteratureIdentity = vi.fn();
+    const request = { purpose: "liteasy_pdf_annotation" as const, query: "State paper" };
+    const literatureResolution = status === "ambiguous"
+      ? {
+          candidates: [{
+            candidateKey: "crossref:doi:10.1000/state",
+            provider: "crossref" as const,
+            record: { authors: [], identifiers: [], title: "State paper" }
+          }],
+          request,
+          status,
+          unavailableProviders: [],
+          updatedAt: "2026-08-11T00:00:00.000Z"
+        }
+      : {
+          request,
+          status,
+          unavailableProviders: [],
+          updatedAt: "2026-08-11T00:00:00.000Z"
+        };
+    render(
+      <ReaderPane
+        analysisHint=""
+        artifactTabs={[]}
+        artifactTasks={[]}
+        literatureResolution={literatureResolution}
+        onResolveLiteratureIdentity={onResolveLiteratureIdentity}
+        onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
+        selectedPaperIds={[readerTestPaper.id]}
+        selectionLocked={true}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: label }));
+    expect(onResolveLiteratureIdentity).toHaveBeenCalledOnce();
+  });
+
   test("matches Agent evidence quotes across PDF text-layer spans", () => {
     const textLayer = document.createElement("div");
     textLayer.innerHTML = [

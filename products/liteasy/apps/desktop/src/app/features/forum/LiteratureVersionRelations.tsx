@@ -34,7 +34,10 @@ type LiteratureVersionRelationsProps = {
 const identifierLabels: Record<LiteratureIdentifier["kind"], string> = {
   arxiv_id: "arXiv",
   doi: "DOI",
+  dblp_key: "DBLP",
   openalex_id: "OpenAlex",
+  openreview_id: "OpenReview",
+  pmlr_id: "PMLR",
   semantic_scholar_id: "Semantic Scholar",
   title_authors_year_hash: "候选别名"
 };
@@ -52,9 +55,28 @@ function relationLabel(version: LiteratureVersionRelation) {
 function preferredIdentifier(identifiers: LiteratureIdentifier[]) {
   return identifiers.find((identifier) => identifier.kind === "doi")
     ?? identifiers.find((identifier) => identifier.kind === "arxiv_id")
+    ?? identifiers.find((identifier) => identifier.kind === "openreview_id")
+    ?? identifiers.find((identifier) => identifier.kind === "dblp_key")
+    ?? identifiers.find((identifier) => identifier.kind === "pmlr_id")
     ?? identifiers.find((identifier) => identifier.kind === "openalex_id")
     ?? identifiers.find((identifier) => identifier.kind === "semantic_scholar_id")
     ?? identifiers[0];
+}
+
+function claimEvidenceLabel(evidence: Record<string, unknown>) {
+  const sourceEvidence = evidence.sourceEvidence;
+  if (sourceEvidence && typeof sourceEvidence === "object" && !Array.isArray(sourceEvidence)) {
+    const artifactHash = "artifactHash" in sourceEvidence && typeof sourceEvidence.artifactHash === "string"
+      ? sourceEvidence.artifactHash
+      : "";
+    if (artifactHash) return `官方数据摘要 ${artifactHash.slice(0, 19)}...`;
+  }
+  const recordUrl = typeof evidence.recordUrl === "string" ? evidence.recordUrl.trim() : "";
+  if (recordUrl) return recordUrl;
+  const basis = typeof evidence.confirmationBasis === "string" ? evidence.confirmationBasis : "";
+  if (basis === "independent_provider_bibliography") return "独立来源题录一致";
+  if (basis === "user_selected_refetch") return "用户选择后服务端重新回查";
+  return "服务端按来源内 ID 重新回查";
 }
 
 async function defaultCopyText(value: string) {
@@ -161,6 +183,25 @@ export function LiteratureVersionRelations({
       {loadState === "ready" && result?.versions.length === 0 ? (
         <div className="literature-version-state">暂无已确认的关联版本</div>
       ) : null}
+      {(result?.claims ?? []).map((claim) => (
+        <article
+          aria-label={`身份确认来源 ${literatureProviderLabel(claim.provider)}`}
+          className="literature-version-relation"
+          key={`${claim.provider}:${claim.providerRecordId}`}
+        >
+          <div className="literature-version-heading">
+            <strong>身份确认来源</strong>
+            <span>{literatureProviderLabel(claim.provider)} · 已确认</span>
+          </div>
+          <span className="literature-version-identifier">
+            {identifierLabels[claim.identifier.kind]} {claim.identifier.value}
+          </span>
+          <span className="literature-version-evidence">证据：{claimEvidenceLabel(claim.evidence)}</span>
+          <time className="literature-version-evidence" dateTime={claim.observedAt}>
+            观测时间：{new Date(claim.observedAt).toLocaleString()}
+          </time>
+        </article>
+      ))}
       {result?.versions.map((version) => {
         const identifier = preferredIdentifier(version.literature.identifiers);
         return (

@@ -3,6 +3,7 @@ import {
   createLiteratureCitationExport,
   formatLiteratureBibtex,
   groupLiteratureCandidates,
+  literatureRecordUrl,
   literatureVersionOpenTarget,
   preferredCitationLiterature
 } from "../app/features/forum/literatureVersioning";
@@ -120,5 +121,17 @@ describe("literatureVersioning", () => {
       kind: "external",
       url: "https://doi.org/10.1000/published"
     });
+  });
+
+  test("opens official OpenReview, DBLP, and PMLR records when no DOI is available", () => {
+    expect(literatureRecordUrl(record({
+      identifiers: [{ kind: "openreview_id", source: "public_registry", value: "OR-ICLR-2026" }]
+    }))).toBe("https://openreview.net/forum?id=OR-ICLR-2026");
+    expect(literatureRecordUrl(record({
+      identifiers: [{ kind: "dblp_key", source: "public_registry", value: "conf/aaai/Lovelace26" }]
+    }))).toBe("https://dblp.org/rec/conf/aaai/Lovelace26");
+    expect(literatureRecordUrl(record({
+      identifiers: [{ kind: "pmlr_id", source: "public_registry", value: "v235/abad-rocamora24a" }]
+    }))).toBe("https://proceedings.mlr.press/v235/abad-rocamora24a.html");
   });
 });

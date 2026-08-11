@@ -55,6 +55,37 @@ test("obtains a dedicated service token and verifies an exact projection revisio
   assert.deepEqual(JSON.parse(requests[1].init.body), { literatureId: literature.literatureId, revision: 3 });
 });
 
+test("uses the service token for private resolution, confirmation, and relations without a user subject", async () => {
+  const requests = [];
+  const client = new IntuechoLiteratureClient(config, {
+    fetchImpl: async (url, init) => {
+      requests.push({ init, url });
+      if (url === config.tokenUrl) {
+        return response(200, { access_token: "service-token", expires_in: 300, token_type: "Bearer" });
+      }
+      if (url.endsWith(":resolve")) {
+        return response(200, { candidates: [], status: "not_found", unavailableProviders: [] });
+      }
+      if (url.endsWith(":confirm")) return response(200, { literature });
+      return response(200, { claims: [], literatureId: literature.literatureId, versions: [] });
+    }
+  });
+
+  await client.resolve({ purpose: "liteasy_pdf_annotation", query: "Private paper" });
+  await client.confirm({ candidateKey: "crossref:doi:10.1000/liteasy", mode: "candidate" });
+  await client.relations(literature.literatureId);
+
+  const authorityRequests = requests.filter(({ url }) => url !== config.tokenUrl);
+  assert.deepEqual(authorityRequests.map(({ url }) => url), [
+    "https://intuecho.internal/v1/internal/literature:resolve",
+    "https://intuecho.internal/v1/internal/literature:confirm",
+    `https://intuecho.internal/v1/internal/literature/${literature.literatureId}/relations`
+  ]);
+  assert.equal(authorityRequests.every(({ init }) => init.headers.authorization === "Bearer service-token"), true);
+  assert.equal(JSON.stringify(authorityRequests).includes("userSubject"), false);
+  assert.equal(JSON.stringify(authorityRequests).includes("sessionId"), false);
+});
+
 test("refreshes the service token once after an unauthorized verification", async () => {
   let tokenRequests = 0;
   let verificationRequests = 0;

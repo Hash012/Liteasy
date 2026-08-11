@@ -52,7 +52,8 @@ export async function startCloudRuntime(config, dependencies = {}) {
   const identityAdminClient = dependencies.identityAdminClient ?? new IdentityAdminClient(config.identity);
   const intuechoLifecycleClient = dependencies.intuechoLifecycleClient ??
     new IntuechoLifecycleClient(config.intuecho);
-  const literatureProjectionVerifier = dependencies.literatureProjectionVerifier ??
+  const literatureAuthorityClient = dependencies.literatureAuthorityClient ??
+    dependencies.literatureProjectionVerifier ??
     (config.intuecho?.literatureProjection
       ? new IntuechoLiteratureClient(config.intuecho.literatureProjection, {
           fetchImpl: dependencies.intuechoLiteratureFetch
@@ -68,7 +69,7 @@ export async function startCloudRuntime(config, dependencies = {}) {
     intuechoLifecycleClient
   );
   const libraryRepository = dependencies.libraryRepository ?? new PostgresLibraryRepository(pool, {
-    literatureProjectionVerifier
+    literatureProjectionVerifier: literatureAuthorityClient
   });
   const visualizationRepository = dependencies.visualizationRepository ??
     new PostgresVisualizationRepository(pool);
@@ -219,7 +220,7 @@ export async function startCloudRuntime(config, dependencies = {}) {
       identityVerifier,
       externalKnowledgeService,
       libraryRepository,
-      literatureProjectionVerifier,
+      literatureAuthorityClient,
       modelProxyService,
       objectStore,
       organizationGovernanceRepository,

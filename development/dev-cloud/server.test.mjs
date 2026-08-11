@@ -44,6 +44,9 @@ const authenticatedJsonPaths = new Set([
   "/v1/collection/items",
   "/v1/collection/list",
   "/v1/documents/metadata-sync",
+  "/v1/literature:confirm",
+  "/v1/literature:resolve",
+  "/v1/literature:verify",
   "/v1/org/create",
   "/v1/org/governance-summary",
   "/v1/org/invite",
@@ -600,7 +603,7 @@ test("persists literature through an idempotent library metadata update", async 
   const verifiedReferences = [];
   const literature = {
     authors: ["Ada Lovelace"],
-    identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/liteasy" }],
+    identifiers: [{ kind: "doi", role: "confirmable", source: "public_registry", value: "10.1000/liteasy" }],
     literatureId: "literature_confirmed_liteasy",
     provenance: {
       confirmedAt: "2026-08-09T00:00:00.000Z",
@@ -688,6 +691,50 @@ test("persists literature through an idempotent library metadata update", async 
     { literatureId: literature.literatureId, revision: 1 },
     { literatureId: literature.literatureId, revision: 2 }
   ]);
+});
+
+test("proxies private literature identity without forwarding the local account session", async () => {
+  const calls = [];
+  const authority = {
+    async confirm(input) {
+      calls.push({ confirm: input });
+      return { literature: { literatureId: "literature-private", revision: 1, status: "confirmed" } };
+    },
+    async relations(literatureId) {
+      calls.push({ relations: literatureId });
+      return { literatureId, versions: [] };
+    },
+    async resolve(input) {
+      calls.push({ resolve: input });
+      return { candidates: [], status: "not_found", unavailableProviders: [] };
+    },
+    async verifyProjection(input) {
+      calls.push({ verify: input });
+      return { literatureId: input.literatureId, revision: input.revision, status: "confirmed" };
+    }
+  };
+  const handler = createDevCloudRequestHandler({ literatureProjectionVerifier: authority });
+  const headers = { authorization: "Bearer literature-private-user", "content-type": "application/json" };
+
+  for (const [method, url, body] of [
+    ["POST", "/v1/literature:resolve", { purpose: "liteasy_pdf_annotation", query: "Private paper" }],
+    ["POST", "/v1/literature:confirm", { candidateKey: "crossref:doi:10.1000/private", mode: "candidate" }],
+    ["POST", "/v1/literature:verify", { literatureId: "literature-private", revision: 1 }],
+    ["GET", "/v1/literature/literature-private/relations", undefined]
+  ]) {
+    const result = await invokeHandler({
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      handler,
+      headers,
+      method,
+      url
+    });
+    assert.equal(result.statusCode, 200, JSON.stringify(result.json));
+  }
+
+  assert.equal(calls.length, 4);
+  assert.equal(JSON.stringify(calls).includes("sessionId"), false);
+  assert.equal(JSON.stringify(calls).includes("literature-private-user"), false);
 });
 
 test("fails closed when literature projection verification is unavailable", async () => {

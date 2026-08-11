@@ -2,7 +2,10 @@ export type ConfirmableLiteratureIdentifierKind =
   | "doi"
   | "arxiv_id"
   | "semantic_scholar_id"
-  | "openalex_id";
+  | "openalex_id"
+  | "openreview_id"
+  | "dblp_key"
+  | "pmlr_id";
 
 export type CandidateLiteratureAliasKind = "title_authors_year_hash";
 
@@ -40,7 +43,10 @@ export type LiteratureProvider =
   | "openalex"
   | "crossref"
   | "arxiv"
-  | "semantic_scholar";
+  | "semantic_scholar"
+  | "openreview"
+  | "dblp"
+  | "pmlr";
 
 export type LiteratureDisplayRecord = {
   authors: string[];
@@ -63,6 +69,13 @@ export type LiteratureCandidate = {
   record: LiteratureDisplayRecord;
   relations?: LiteratureCandidateRelation[];
   recordUrl?: string;
+  sourceEvidence?: {
+    artifactHash: `sha256:${string}`;
+    artifactUrl: string;
+    entryKey: string;
+    sourceKind: "official_volume_bibtex";
+    volume: number;
+  };
 };
 
 export type LiteratureRecord = LiteratureDisplayRecord & {
@@ -146,6 +159,15 @@ export type LiteratureRelation = {
   verificationStatus: "confirmed";
 };
 
+export type LiteratureIdentityClaim = {
+  evidence: Record<string, unknown>;
+  identifier: ConfirmedLiteratureIdentifier;
+  observedAt: string;
+  provider: Exclude<LiteratureProvider, "intuecho">;
+  providerRecordId: string;
+  verificationStatus: "confirmed";
+};
+
 export type LiteratureVersionRelation = {
   direction: "from_current" | "to_current";
   literature: LiteratureRecord;
@@ -153,6 +175,7 @@ export type LiteratureVersionRelation = {
 };
 
 export type LiteratureRelationsResult = {
+  claims: LiteratureIdentityClaim[];
   literatureId: string;
   versions: LiteratureVersionRelation[];
 };

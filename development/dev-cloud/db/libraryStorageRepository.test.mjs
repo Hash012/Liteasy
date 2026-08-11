@@ -49,7 +49,7 @@ function assertInvalidRevision(operation) {
 const pdf = Buffer.from("%PDF-1.7\nLiteasy storage fixture\n%%EOF");
 const confirmedLiterature = {
   authors: ["Ada Lovelace"],
-  identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/liteasy" }],
+  identifiers: [{ kind: "doi", role: "confirmable", source: "public_registry", value: "10.1000/liteasy" }],
   literatureId: "literature_confirmed_liteasy",
   provenance: {
     confirmedAt: "2026-08-09T00:00:00.000Z",

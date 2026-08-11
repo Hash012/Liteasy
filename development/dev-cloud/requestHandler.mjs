@@ -829,6 +829,21 @@ async function verifyLiteratureProjection(verifier, value) {
   return literature;
 }
 
+function writeLiteratureAuthorityError(request, response, error) {
+  const statusCode = Number.isInteger(error?.status) && error.status >= 400 && error.status <= 599
+    ? error.status
+    : 503;
+  const code = typeof error?.code === "string" && error.code.trim()
+    ? error.code
+    : "intuecho_literature_unavailable";
+  writeJson(request, response, statusCode, {
+    code,
+    message: statusCode === 503
+      ? "文献身份服务暂时不可用，请稍后重试。"
+      : "文献身份请求未完成，请检查后重试。"
+  });
+}
+
 function writeOrganizationError(request, response, error) {
   if (error instanceof OrganizationRepositoryError) {
     writeJson(request, response, error.statusCode, {
@@ -1023,7 +1038,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
   });
   libraryStorageRepository.purgeExpired?.();
   libraryStorageRepository.reconcileObjects?.();
-  const literatureProjectionVerifier = createLiteratureProjectionVerifier(
+  const literatureAuthorityClient = createLiteratureProjectionVerifier(
     config,
     customConfig.literatureProjectionVerifier
   );
@@ -1118,6 +1133,41 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         endpoints: availableEndpoints,
         publicOrigin: getPublicOrigin(request, config)
       });
+      return;
+    }
+
+    if (
+      (method === "POST" && new Set([
+        "/v1/literature:confirm",
+        "/v1/literature:resolve",
+        "/v1/literature:verify"
+      ]).has(url.pathname)) ||
+      (method === "GET" && /^\/v1\/literature\/[^/]+\/relations$/.test(url.pathname))
+    ) {
+      const body = method === "POST" ? await readJsonOrWriteError(request, response) : {};
+      if (body === null || !authorizeAccountScopedBody(request, response, body, authService)) return;
+      if (!literatureAuthorityClient) {
+        writeLiteratureAuthorityError(request, response, null);
+        return;
+      }
+      delete body.sessionId;
+      try {
+        if (method === "GET") {
+          const encodedLiteratureId = url.pathname.slice("/v1/literature/".length, -"/relations".length);
+          writeJson(request, response, 200, await literatureAuthorityClient.relations(
+            decodeURIComponent(encodedLiteratureId)
+          ));
+          return;
+        }
+        const result = url.pathname.endsWith(":resolve")
+          ? await literatureAuthorityClient.resolve(body)
+          : url.pathname.endsWith(":confirm")
+            ? await literatureAuthorityClient.confirm(body)
+            : { literature: await literatureAuthorityClient.verifyProjection(body) };
+        writeJson(request, response, 200, result);
+      } catch (error) {
+        writeLiteratureAuthorityError(request, response, error);
+      }
       return;
     }
 
@@ -3016,7 +3066,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         if (Object.prototype.hasOwnProperty.call(body, "folderId")) changes.folderId = body.folderId;
         if (Object.prototype.hasOwnProperty.call(body, "title")) changes.title = body.title;
         if (Object.prototype.hasOwnProperty.call(body, "literature")) {
-          changes.literature = await verifyLiteratureProjection(literatureProjectionVerifier, body.literature);
+          changes.literature = await verifyLiteratureProjection(literatureAuthorityClient, body.literature);
         }
         changes.expectedRevision = body.expectedRevision;
         writeJson(request, response, 200, executeLibraryMutation(

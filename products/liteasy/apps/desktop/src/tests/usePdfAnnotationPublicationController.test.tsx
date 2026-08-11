@@ -93,6 +93,7 @@ function setup(input: {
   persistPaperLiterature?: ReturnType<typeof vi.fn>;
   resolveLiterature?: ReturnType<typeof vi.fn>;
   confirmLiterature?: ReturnType<typeof vi.fn>;
+  verifyLiterature?: ReturnType<typeof vi.fn>;
   applyAnnotationPublications?: ReturnType<typeof vi.fn>;
   onPaperUpdated?: ReturnType<typeof vi.fn>;
 } = {}) {
@@ -105,12 +106,18 @@ function setup(input: {
   );
   const resolveLiterature = input.resolveLiterature ?? vi.fn();
   const confirmLiterature = input.confirmLiterature ?? vi.fn();
+  const verifyLiterature = input.verifyLiterature ?? vi.fn();
   const applyAnnotationPublications = input.applyAnnotationPublications ?? vi.fn().mockImplementation(
     async (operations: ForumAnnotationPublicationOperation[]) => ({ results: operations.map((operation) => receipt(operation)) })
   );
   const onPaperUpdated = input.onPaperUpdated ?? vi.fn();
   const hook = renderHook(() => usePdfAnnotationPublicationController({
-    forumClient: { applyAnnotationPublications, confirmLiterature, resolveLiterature },
+    forumClient: { applyAnnotationPublications },
+    literatureClient: {
+      confirmLiterature,
+      resolveLiterature,
+      verifyLiterature
+    },
     literatureMetadataRepository: { load: loadLiterature },
     literatureResolutionRepository: { load: loadResolution, save: saveResolution },
     onPaperUpdated,
@@ -127,6 +134,7 @@ function setup(input: {
     persistPaperLiterature,
     resolveLiterature,
     saveResolution,
+    verifyLiterature,
     workspaceStore
   };
 }
@@ -457,37 +465,75 @@ describe("usePdfAnnotationPublicationController", () => {
     expect(publication).toMatchObject({ state: "published" });
   });
 
-  test("resolves and persists an exact identity after document import without publishing", async () => {
-    const exactCandidate = {
-      candidateKey: "crossref:doi:10.1000/imported",
-      provider: "crossref" as const,
-      record: {
-        authors: ["Ada Lovelace"],
-        identifiers: [{ kind: "doi" as const, source: "public_registry" as const, value: "10.1000/imported" }],
-        title: "Imported Paper"
-      }
-    };
-    const confirmed = literature({ literatureId: "literature-imported" });
-    const context = setup({
-      confirmLiterature: vi.fn().mockResolvedValue({ literature: confirmed }),
-      resolveLiterature: vi.fn().mockResolvedValue({
-        candidate: exactCandidate,
-        confirmationMode: "candidate",
-        status: "exact",
-        unavailableProviders: []
-      })
-    });
+  test("stages imported identity hints locally without contacting Intuecho", async () => {
+    const context = setup();
 
-    await act(() => context.result.current.actions.resolvePaperIdentity(paper(), {
+    await act(() => context.result.current.actions.stagePaperIdentity(paper(), {
       identifiers: [{ kind: "doi", value: "10.1000/imported" }]
     }));
 
-    expect(context.persistPaperLiterature).toHaveBeenCalledWith(paper(), confirmed);
+    expect(context.resolveLiterature).not.toHaveBeenCalled();
+    expect(context.confirmLiterature).not.toHaveBeenCalled();
+    expect(context.persistPaperLiterature).not.toHaveBeenCalled();
     expect(context.applyAnnotationPublications).not.toHaveBeenCalled();
     expect(context.saveResolution).toHaveBeenLastCalledWith("paper-1", expect.objectContaining({
-      literatureId: "literature-imported",
-      status: "confirmed"
+      request: expect.objectContaining({
+        hints: { identifiers: [{ kind: "doi", value: "10.1000/imported" }] }
+      }),
+      status: "unresolved"
     }));
+  });
+
+  test("hydrates every non-confirmed resolution status for visible user recovery", async () => {
+    const candidate = {
+      candidateKey: "crossref:doi:10.1000/state",
+      provider: "crossref" as const,
+      record: {
+        authors: ["Ada Lovelace"],
+        identifiers: [{ kind: "doi" as const, source: "public_registry" as const, value: "10.1000/state" }],
+        title: "State paper"
+      }
+    };
+    const request = { purpose: "liteasy_pdf_annotation" as const, query: "State paper" };
+    const states = {
+      ambiguous: { candidates: [candidate], request, status: "ambiguous" as const, unavailableProviders: [], updatedAt: "2026-08-11T00:00:00.000Z" },
+      candidate: { candidates: [candidate], request, status: "candidate" as const, unavailableProviders: [], updatedAt: "2026-08-11T00:00:00.000Z" },
+      conflict: { request, status: "conflict" as const, unavailableProviders: [], updatedAt: "2026-08-11T00:00:00.000Z" },
+      unavailable: { request, status: "unavailable" as const, unavailableProviders: ["crossref" as const], updatedAt: "2026-08-11T00:00:00.000Z" },
+      unresolved: { request, status: "unresolved" as const, unavailableProviders: [], updatedAt: "2026-08-11T00:00:00.000Z" }
+    };
+    const papers = Object.keys(states).map((id) => paper({ id }));
+    const context = setup({
+      initialPapers: papers,
+      loadResolution: vi.fn(async (paperId: keyof typeof states) => states[paperId])
+    });
+
+    await act(() => context.result.current.actions.hydrateResolutionStates(papers));
+
+    expect(context.result.current.model.resolutionsByPaperId).toEqual(states);
+  });
+
+  test("recovers a legacy confirmed resolution through Liteasy without writing another resolution", async () => {
+    const confirmed = literature({ literatureId: "literature-restored", revision: 4 });
+    const context = setup({
+      loadResolution: vi.fn().mockResolvedValue({
+        literatureId: confirmed.literatureId,
+        request: { purpose: "liteasy_pdf_annotation", query: "10.1000/test" },
+        revision: confirmed.revision,
+        status: "confirmed",
+        updatedAt: "2026-08-11T00:00:00.000Z"
+      }),
+      verifyLiterature: vi.fn().mockResolvedValue(confirmed)
+    });
+
+    await act(() => context.result.current.actions.resolvePaperIdentity(paper()));
+
+    expect(context.verifyLiterature).toHaveBeenCalledWith({
+      literatureId: "literature-restored",
+      revision: 4
+    });
+    expect(context.persistPaperLiterature).toHaveBeenCalledWith(paper(), confirmed);
+    expect(context.saveResolution).not.toHaveBeenCalled();
   });
 
   test("exposes a cancellable resolving model before the resolver returns and ignores its late result", async () => {

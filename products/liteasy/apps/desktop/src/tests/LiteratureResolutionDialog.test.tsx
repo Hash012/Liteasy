@@ -42,7 +42,7 @@ describe("LiteratureResolutionDialog", () => {
 
     expect(screen.getByText("正在识别文献")).toBeInTheDocument();
     const dialog = screen.getByRole("dialog", { name: "确认文献身份" });
-    const cancel = screen.getByRole("button", { name: "取消公开" });
+    const cancel = screen.getByRole("button", { name: "关闭" });
     expect(cancel).toBeEnabled();
     await waitFor(() => expect(dialog).toHaveFocus());
     await user.tab();
@@ -59,7 +59,7 @@ describe("LiteratureResolutionDialog", () => {
     }} />);
 
     expect(screen.getByText("正在确认 A Test Paper")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "取消公开" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "关闭" })).toBeEnabled();
   });
 
   test("cancels the modal with Escape", async () => {
@@ -124,6 +124,36 @@ describe("LiteratureResolutionDialog", () => {
     expect(screen.getByText("来源：Crossref")).toBeInTheDocument();
   });
 
+  test("shows the official PMLR volume artifact and digest for audit", () => {
+    render(<LiteratureResolutionDialog {...actions()} model={{
+      ...candidatesModel,
+      candidates: [{
+        candidateKey: "pmlr:pmlr_id:v235/abad-rocamora24a",
+        provider: "pmlr",
+        record: {
+          authors: ["Elias Abad Rocamora"],
+          documentType: "conference-paper",
+          identifiers: [{ kind: "pmlr_id", source: "public_registry", value: "v235/abad-rocamora24a" }],
+          title: "An ICML Paper",
+          year: 2024
+        },
+        recordUrl: "https://proceedings.mlr.press/v235/abad-rocamora24a.html",
+        sourceEvidence: {
+          artifactHash: `sha256:${"a".repeat(64)}`,
+          artifactUrl: "https://proceedings.mlr.press/v235/assets/bib/bibliography.bib",
+          entryKey: "pmlr-v235-abad-rocamora24a",
+          sourceKind: "official_volume_bibtex",
+          volume: 235
+        }
+      }]
+    }} />);
+
+    expect(screen.getByText("来源：PMLR · 官方卷 BibTeX v235 · SHA-256 aaaaaaaa…aaaaaaaa")).toHaveAttribute(
+      "title",
+      `https://proceedings.mlr.press/v235/assets/bib/bibliography.bib\nsha256:${"a".repeat(64)}`
+    );
+  });
+
   test("allows corrected bibliography to restart provider search without creating a manual record", async () => {
     const callbacks = actions();
     const user = userEvent.setup();
@@ -162,11 +192,11 @@ describe("LiteratureResolutionDialog", () => {
     const user = userEvent.setup();
     const { rerender } = render(<LiteratureResolutionDialog {...callbacks} model={candidatesModel} />);
 
-    await user.click(screen.getByRole("button", { name: "取消公开" }));
+    await user.click(screen.getByRole("button", { name: "关闭" }));
     expect(callbacks.onCancel).toHaveBeenCalledTimes(1);
 
     rerender(<LiteratureResolutionDialog {...callbacks} model={{ ...candidatesModel, pending: true }} />);
     expect(screen.getByRole("button", { name: "选择 A Test Paper" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "取消公开" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "关闭" })).toBeEnabled();
   });
 });

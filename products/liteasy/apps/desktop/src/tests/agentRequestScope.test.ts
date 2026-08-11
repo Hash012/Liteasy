@@ -170,6 +170,7 @@ test("preserves source-confirmed paper identity in thin-reading agent context", 
   expect(getAgentRequestThinReadingContext(request)?.primaryPaperIdentity).toEqual({
     id: "doi:10.1000/confirmed",
     kind: "doi",
+    role: "confirmable_hint",
     source: "public_registry",
     value: "10.1000/confirmed"
   });

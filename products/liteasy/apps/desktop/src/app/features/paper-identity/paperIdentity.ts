@@ -6,6 +6,9 @@ export type PaperIdentityKind =
   | "arxiv_id"
   | "semantic_scholar_id"
   | "openalex_id"
+  | "openreview_id"
+  | "dblp_key"
+  | "pmlr_id"
   | "title_authors_year_hash"
   | "local_paper_id";
 
@@ -48,6 +51,9 @@ export function paperIdentityFromLiterature(
   const priority: readonly PaperIdentityCandidate["kind"][] = [
     "doi",
     "arxiv_id",
+    "openreview_id",
+    "dblp_key",
+    "pmlr_id",
     "semantic_scholar_id",
     "openalex_id",
     "title_authors_year_hash"
@@ -104,6 +110,9 @@ export type PaperIdentityInput = Paper & {
 const identityPriority: readonly PaperIdentityKind[] = Object.freeze([
   "doi",
   "arxiv_id",
+  "openreview_id",
+  "dblp_key",
+  "pmlr_id",
   "semantic_scholar_id",
   "openalex_id",
   "title_authors_year_hash",
@@ -182,29 +191,75 @@ export function normalizeLiteratureIdentifier(kind: string, value: unknown): str
   const normalized = String(value ?? "").trim();
   if (!normalized) return "";
   if (kind === "doi") {
-    return normalized
+    const identifier = normalized
       .replace(/^(?:https?:\/\/)?(?:dx\.)?doi\.org\//i, "")
       .replace(/^doi:\s*/i, "")
       .replace(/[.,;:]+$/, "")
       .toLocaleLowerCase("en-US");
+    return identifier.length <= 1_000 && /^10\.\d{4,9}\/[^\s?#]+$/u.test(identifier) ? identifier : "";
   }
   if (kind === "arxiv_id") {
-    return normalized
+    const identifier = normalized
       .replace(/^https?:\/\/(?:www\.)?arxiv\.org\/(?:abs|pdf)\//i, "")
       .replace(/^arxiv:\s*/i, "")
       .replace(/\.pdf$/i, "")
-      .replace(/v\d+$/i, "")
       .toLocaleLowerCase("en-US");
+    return /^(?:\d{4}\.\d{4,5}|[a-z][a-z0-9.-]*\/\d{7})(?:v[1-9]\d*)?$/.test(identifier)
+      ? identifier
+      : "";
   }
   if (kind === "semantic_scholar_id") {
-    return normalized
+    const identifier = normalized
       .replace(/^corpusid\s*:\s*/i, "corpus:")
       .replace(/\s*:\s*/g, ":")
       .toLocaleLowerCase("en-US");
+    return /^(?:corpus:[1-9]\d*|[a-f0-9]{40})$/.test(identifier) ? identifier : "";
   }
   if (kind === "openalex_id") {
     const workId = normalized.replace(/^https?:\/\/(?:www\.)?openalex\.org\//i, "");
     return /^w\d+$/i.test(workId) ? workId.toUpperCase() : "";
+  }
+  if (kind === "openreview_id") {
+    let noteId = normalized.replace(/^openreview:\s*/i, "");
+    try {
+      const url = new URL(noteId);
+      if (!new Set(["openreview.net", "www.openreview.net", "api.openreview.net", "api2.openreview.net"]).has(url.hostname)) return "";
+      noteId = url.searchParams.get("id") ?? "";
+    } catch {
+      // Plain OpenReview note ids are accepted below.
+    }
+    return /^[A-Za-z0-9_-]{6,200}$/.test(noteId) ? noteId : "";
+  }
+  if (kind === "dblp_key") {
+    let key = normalized
+      .replace(/^https?:\/\/(?:www\.)?dblp\.org\/rec\//i, "")
+      .replace(/\.(?:html|xml|json)$/i, "");
+    try {
+      key = decodeURIComponent(key);
+    } catch {
+      return "";
+    }
+    return /^(?:conf|journals)\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.:+-]+$/.test(key) && !key.includes("..")
+      ? key
+      : "";
+  }
+  if (kind === "pmlr_id") {
+    let identifier = normalized.replace(/^pmlr:\s*/i, "");
+    try {
+      const url = new URL(identifier);
+      if (!new Set(["proceedings.mlr.press", "www.proceedings.mlr.press"]).has(url.hostname)) return "";
+      identifier = url.pathname.replace(/^\/+/, "").replace(/\.html$/i, "");
+    } catch {
+      // Non-URL PMLR identifiers are normalized below.
+    }
+    identifier = identifier.replace(/^pmlr-v(\d{1,4})-/i, "v$1/").toLocaleLowerCase("en-US");
+    return /^v[1-9]\d{0,3}\/[a-z0-9][a-z0-9._-]{0,199}$/.test(identifier) && !identifier.includes("..")
+      ? identifier
+      : "";
+  }
+  if (kind === "title_authors_year_hash") {
+    const identifier = normalized.toLocaleLowerCase("en-US");
+    return /^(?:sha256:[a-f0-9]{64}|[a-f0-9]{8})$/.test(identifier) ? identifier : "";
   }
   return normalized.toLocaleLowerCase("en-US");
 }

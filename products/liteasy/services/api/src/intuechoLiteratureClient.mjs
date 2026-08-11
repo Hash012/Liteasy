@@ -48,17 +48,17 @@ export class IntuechoLiteratureClient {
     return body.access_token;
   }
 
-  async verifyProjection(reference, { retry = true } = {}) {
+  async #request(path, { body, method = "POST", retry = true } = {}) {
     const token = await this.#accessToken();
     let response;
     try {
-      response = await this.fetchImpl(`${this.config.apiUrl}/v1/internal/literature:verify`, {
-        body: JSON.stringify(reference),
+      response = await this.fetchImpl(`${this.config.apiUrl}${path}`, {
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         headers: {
           authorization: `Bearer ${token}`,
-          "content-type": "application/json"
+          ...(body === undefined ? {} : { "content-type": "application/json" })
         },
-        method: "POST",
+        method,
         signal: AbortSignal.timeout(5_000)
       });
     } catch {
@@ -66,13 +66,51 @@ export class IntuechoLiteratureClient {
     }
     if (response.status === 401 && retry) {
       this.cachedToken = null;
-      return this.verifyProjection(reference, { retry: false });
+      return this.#request(path, { body, method, retry: false });
     }
-    if (new Set([404, 409]).has(response.status)) {
-      throw new IntuechoLiteratureClientError("literature_projection_not_confirmed", 409);
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      const upstreamCode = typeof payload?.code === "string"
+        ? payload.code
+        : typeof payload?.error === "string" ? payload.error : undefined;
+      throw new IntuechoLiteratureClientError(upstreamCode, response.status);
     }
-    if (!response.ok) throw new IntuechoLiteratureClientError();
-    const body = await response.json().catch(() => null);
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      throw new IntuechoLiteratureClientError("intuecho_literature_response_invalid");
+    }
+    return payload;
+  }
+
+  async confirm(input) {
+    const body = await this.#request("/v1/internal/literature:confirm", { body: input });
+    try {
+      return { literature: normalizeLiteratureMetadata(body.literature) };
+    } catch {
+      throw new IntuechoLiteratureClientError("intuecho_literature_response_invalid");
+    }
+  }
+
+  relations(literatureId) {
+    return this.#request(
+      `/v1/internal/literature/${encodeURIComponent(literatureId)}/relations`,
+      { method: "GET" }
+    );
+  }
+
+  resolve(input) {
+    return this.#request("/v1/internal/literature:resolve", { body: input });
+  }
+
+  async verifyProjection(reference) {
+    let body;
+    try {
+      body = await this.#request("/v1/internal/literature:verify", { body: reference });
+    } catch (error) {
+      if (error instanceof IntuechoLiteratureClientError && new Set([404, 409]).has(error.status)) {
+        throw new IntuechoLiteratureClientError("literature_projection_not_confirmed", 409);
+      }
+      throw error;
+    }
     let literature;
     try {
       literature = normalizeLiteratureMetadata(body?.literature);

@@ -461,7 +461,7 @@ describe("useWorkspaceActions", () => {
 
     expect(workspaceStore.getState().papers).toEqual([
       expect.objectContaining({
-        arxivId: "1706.03762",
+        arxivId: "1706.03762v5",
         doi: "10.48550/arxiv.1706.03762",
         id: paper.id
       })
@@ -469,7 +469,7 @@ describe("useWorkspaceActions", () => {
     expect(onPaperIdentityReady).toHaveBeenCalledWith({
       firstPageText: "Preprint arXiv: 1706.03762v5. DOI: 10.48550/arXiv.1706.03762",
       paper: expect.objectContaining({
-        arxivId: "1706.03762",
+        arxivId: "1706.03762v5",
         doi: "10.48550/arxiv.1706.03762",
         id: paper.id
       })

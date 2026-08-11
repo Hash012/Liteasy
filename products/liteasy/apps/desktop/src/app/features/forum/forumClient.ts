@@ -5,11 +5,6 @@ import type {
   ForumContext,
   ForumDraftUpdate,
   ForumFeedQuery,
-  ForumLiteratureConfirmInput,
-  ForumLiteratureConfirmResult,
-  ForumLiteratureRelationsResult,
-  ForumLiteratureResolveInput,
-  ForumLiteratureResolveResult,
   ForumPost
 } from "./forum.types";
 
@@ -157,8 +152,6 @@ export function createForumClient({
           duplicateFailures.get(operation) ?? failedPublication(operation, message)) };
       }
     },
-    confirmLiterature: (input: ForumLiteratureConfirmInput) =>
-      postJson<ForumLiteratureConfirmResult>("/v1/literature:confirm", input),
     async createDraftHandoff(context: ForumContext, update?: ForumDraftUpdate) {
       const response = await fetchImpl(joinUrl(apiBaseUrl, "/v1/integrations/desktop/annotation-handoffs"), {
         body: JSON.stringify({
@@ -205,13 +198,6 @@ export function createForumClient({
         }))
       }));
     },
-    literatureRelations: (literatureId: string) =>
-      request<ForumLiteratureRelationsResult>(
-        `/v1/literature/${encodeURIComponent(literatureId)}/relations`,
-        true
-      ),
-    resolveLiterature: (input: ForumLiteratureResolveInput) =>
-      postJson<ForumLiteratureResolveResult>("/v1/literature:resolve", input)
   };
 }
 

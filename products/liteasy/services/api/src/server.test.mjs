@@ -159,6 +159,24 @@ function runtime() {
       async getTree(scope) { calls.push({ scope }); return { tree: { entries: [], folders: [], revision: 0, ...scope } }; },
       async recordDocumentAccess(scope, input) { calls.push({ access: input, scope }); }
     },
+    literatureAuthorityClient: {
+      async confirm(input) {
+        calls.push({ literatureConfirm: input });
+        return { literature: { literatureId: "literature-private", revision: 1, status: "confirmed" } };
+      },
+      async relations(literatureId) {
+        calls.push({ literatureRelations: literatureId });
+        return { claims: [], literatureId, versions: [] };
+      },
+      async resolve(input) {
+        calls.push({ literatureResolve: input });
+        return { candidates: [], status: "not_found", unavailableProviders: [] };
+      },
+      async verifyProjection(input) {
+        calls.push({ literatureVerify: input });
+        return { literatureId: input.literatureId, revision: input.revision, status: "confirmed" };
+      }
+    },
     modelProxyService: {
       async generate(input, context) {
         calls.push({ modelGenerate: input, modelContext: context });
@@ -481,6 +499,28 @@ function runtime() {
     }
   };
 }
+
+test("proxies private literature identity operations without forwarding the desktop subject", async () => {
+  const instance = runtime();
+  const handler = createCloudRequestHandler(instance, internalConfig());
+
+  for (const [method, url, body] of [
+    ["POST", "/v1/literature:resolve", { purpose: "liteasy_pdf_annotation", query: "Private paper" }],
+    ["POST", "/v1/literature:confirm", { candidateKey: "crossref:doi:10.1000/private", mode: "candidate" }],
+    ["POST", "/v1/literature:verify", { literatureId: "literature-private", revision: 1 }],
+    ["GET", "/v1/literature/literature-private/relations", undefined]
+  ]) {
+    const result = response();
+    await handler(request(method, url, body), result);
+    assert.equal(result.status, 200, `${method} ${url}: ${result.body}`);
+  }
+
+  const authorityCalls = instance.calls.filter((call) =>
+    call.literatureResolve || call.literatureConfirm || call.literatureVerify || call.literatureRelations);
+  assert.equal(authorityCalls.length, 4);
+  assert.equal(JSON.stringify(authorityCalls).includes("user_1"), false);
+  assert.equal(instance.calls.filter((call) => call.audience === "liteasy-desktop").length, 4);
+});
 
 test("authenticates formal model generation and derives the subject from the desktop token", async () => {
   const instance = runtime();

@@ -42,7 +42,14 @@ describe("literature identity conformance", () => {
     }
   });
 
-  test("recognizes legacy aliases and PMLR hints without promoting PMLR to an identity", () => {
+  test("rejects malformed confirmable identifiers and candidate hashes", () => {
+    expect(normalizeLiteratureIdentifier("doi", "not-a-doi")).toBe("");
+    expect(normalizeLiteratureIdentifier("doi", "https://doi.org/10.1000/valid?utm_source=tracker")).toBe("");
+    expect(normalizeLiteratureIdentifier("semantic_scholar_id", "not-an-id")).toBe("");
+    expect(normalizeLiteratureIdentifier("title_authors_year_hash", "metadata-title")).toBe("");
+  });
+
+  test("recognizes legacy aliases and bounded PMLR volume hints", () => {
     for (const value of fixture.legacyTitleAuthorYearHashes) {
       expect(isLegacyTitleAuthorsYearHash(value)).toBe(true);
     }

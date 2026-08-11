@@ -21,8 +21,11 @@ export type LiteratureVersionOpenTarget =
 const providerLabels: Record<LiteratureProvider, string> = {
   arxiv: "arXiv",
   crossref: "Crossref",
+  dblp: "DBLP",
   intuecho: "Intuecho",
   openalex: "OpenAlex",
+  openreview: "OpenReview",
+  pmlr: "PMLR",
   semantic_scholar: "Semantic Scholar"
 };
 
@@ -137,6 +140,9 @@ export function createLiteratureCitationExport({
 function preferredIdentifier(record: LiteratureRecord) {
   return record.identifiers.find((identifier) => identifier.kind === "doi")
     ?? record.identifiers.find((identifier) => identifier.kind === "arxiv_id")
+    ?? record.identifiers.find((identifier) => identifier.kind === "openreview_id")
+    ?? record.identifiers.find((identifier) => identifier.kind === "dblp_key")
+    ?? record.identifiers.find((identifier) => identifier.kind === "pmlr_id")
     ?? record.identifiers.find((identifier) => identifier.kind === "openalex_id")
     ?? record.identifiers.find((identifier) => identifier.kind === "semantic_scholar_id");
 }
@@ -156,6 +162,16 @@ export function literatureRecordUrl(
   if (identifier.kind === "doi") return `https://doi.org/${encodeIdentifierPath(identifier.value)}`;
   if (identifier.kind === "arxiv_id") return `https://arxiv.org/abs/${encodeIdentifierPath(identifier.value)}`;
   if (identifier.kind === "openalex_id") return `https://openalex.org/${encodeURIComponent(identifier.value)}`;
+  if (identifier.kind === "openreview_id") {
+    return `https://openreview.net/forum?id=${encodeURIComponent(identifier.value)}`;
+  }
+  if (identifier.kind === "dblp_key") {
+    return `https://dblp.org/rec/${identifier.value.split("/").map(encodeURIComponent).join("/")}`;
+  }
+  if (identifier.kind === "pmlr_id") {
+    const [volume, ...slug] = identifier.value.split("/");
+    return slug.length ? `https://proceedings.mlr.press/${encodeURIComponent(volume)}/${encodeURIComponent(slug.join("/"))}.html` : null;
+  }
   if (identifier.kind === "semantic_scholar_id") {
     return `https://www.semanticscholar.org/paper/${encodeURIComponent(identifier.value)}`;
   }

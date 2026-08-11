@@ -65,7 +65,9 @@ function PdfAnnotationPublicationBrowserFixture() {
           };
         })
       };
-    },
+    }
+  }), []);
+  const literatureClient = useMemo(() => ({
     async confirmLiterature(_input: LiteratureConfirmInput) {
       literatureRef.current = candidateLiterature;
       return { literature: candidateLiterature };
@@ -80,10 +82,14 @@ function PdfAnnotationPublicationBrowserFixture() {
         status: "ambiguous" as const,
         unavailableProviders: []
       };
+    },
+    async verifyLiterature() {
+      return literatureRef.current ?? candidateLiterature;
     }
   }), []);
   const controller = usePdfAnnotationPublicationController({
     forumClient,
+    literatureClient,
     literatureMetadataRepository: {
       async load() {
         return literatureRef.current;

@@ -104,6 +104,30 @@ describe("literatureRecord", () => {
         }
       }),
       version: 1
+    },
+    {
+      literature: fixtureLiterature({
+        identifiers: [{ kind: "doi", source: "public_registry", value: "not-a-doi" }]
+      }),
+      version: 1
+    },
+    {
+      literature: fixtureLiterature({
+        identifiers: [{ kind: "semantic_scholar_id", source: "public_registry", value: "paper-123" }]
+      }),
+      version: 1
+    },
+    {
+      literature: fixtureLiterature({
+        identifiers: [{ kind: "title_authors_year_hash", source: "metadata", value: "metadata-title" }]
+      }),
+      version: 1
+    },
+    {
+      literature: fixtureLiterature({
+        identifiers: [{ kind: "arxiv_id", source: "public_registry", value: "2401.01234" }]
+      }),
+      version: 1
     }
   ])("rejects a malformed authoritative snapshot", (value) => {
     expect(() => normalizeLiteratureSnapshot(value)).toThrow("文献元数据快照无效");
@@ -125,7 +149,7 @@ describe("literatureRecord", () => {
   test("uses stable identifier priority instead of provider result order", () => {
     const literature = fixtureLiterature({
       identifiers: [
-        { kind: "arxiv_id", source: "public_registry", value: "2401.01234" },
+        { kind: "arxiv_id", source: "public_registry", value: "2401.01234v2" },
         { kind: "doi", source: "public_registry", value: "10.1000/preferred" }
       ]
     });
@@ -150,7 +174,7 @@ describe("literatureRecord", () => {
 
   test("prefers confirmed literature over legacy flat paper identifiers", () => {
     const literature = fixtureLiterature({
-      identifiers: [{ kind: "arxiv_id", source: "public_registry", value: "2401.01234" }]
+      identifiers: [{ kind: "arxiv_id", source: "public_registry", value: "2401.01234v2" }]
     });
 
     expect(resolvePaperIdentity({
@@ -161,7 +185,7 @@ describe("literatureRecord", () => {
     }).primary).toMatchObject({
       kind: "arxiv_id",
       source: "public_registry",
-      value: "2401.01234"
+      value: "2401.01234v2"
     });
   });
 

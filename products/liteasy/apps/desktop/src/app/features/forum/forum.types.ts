@@ -1,14 +1,6 @@
-import type {
-  LiteratureConfirmInput,
-  LiteratureRecord,
-  LiteratureRelationsResult,
-  LiteratureResolveInput,
-  LiteratureResolveResult
-} from "../paper-identity/literature.types";
-
 export type ForumPaperIdentity = {
   id: string;
-  kind: "doi" | "arxiv_id" | "semantic_scholar_id" | "openalex_id" | "title_authors_year_hash";
+  kind: "doi" | "arxiv_id" | "semantic_scholar_id" | "openalex_id" | "openreview_id" | "dblp_key" | "pmlr_id" | "title_authors_year_hash";
   source: "inferred" | "metadata";
   value: string;
 };
@@ -75,12 +67,6 @@ export type ForumPost = {
   viewer_saved: boolean;
   work_id: string | null;
 };
-
-export type ForumLiteratureResolveInput = LiteratureResolveInput;
-export type ForumLiteratureResolveResult = LiteratureResolveResult;
-export type ForumLiteratureConfirmInput = LiteratureConfirmInput;
-export type ForumLiteratureConfirmResult = { literature: LiteratureRecord };
-export type ForumLiteratureRelationsResult = LiteratureRelationsResult;
 
 type ForumAnnotationPublicationOperationBase = {
   annotationId: string;

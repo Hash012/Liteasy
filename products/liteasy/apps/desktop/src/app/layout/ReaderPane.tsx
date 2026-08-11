@@ -1,5 +1,11 @@
 import { Button } from "@fluentui/react-components";
-import { AddRegular, SubtractRegular } from "@fluentui/react-icons";
+import {
+  AddRegular,
+  CheckmarkCircleRegular,
+  DocumentSearchRegular,
+  SubtractRegular,
+  WarningRegular
+} from "@fluentui/react-icons";
 import { useMemo, useState } from "react";
 import liteasyLogoUrl from "../../assets/liteasyclaw-logo.jpg";
 import { ArtifactTabs } from "../features/artifacts/ArtifactTabs";
@@ -19,6 +25,7 @@ import type {
   LiteratureRelation,
   LiteratureRelationsResult
 } from "../features/paper-identity/literature.types";
+import type { LiteratureResolutionState } from "../features/paper-identity/literatureResolutionRepository";
 import type { MineruFigure } from "../features/import/import.types";
 import type { TeamAnnotation } from "../features/organization/teamAnnotationClient";
 import type { VisualizationTabData } from "../features/visualization/visualization.types";
@@ -45,6 +52,7 @@ type ReaderPaneProps = {
   loadPdfSource?: (sourcePath: string) => Promise<Uint8Array>;
   loadOrganizationAnnotations?: (paper: Paper) => Promise<TeamAnnotation[]>;
   loadLiteratureRelations?: (literatureId: string) => Promise<LiteratureRelationsResult>;
+  literatureResolution?: LiteratureResolutionState;
   organizationAnnotationActorId?: string;
   canModerateOrganizationAnnotations?: boolean;
   onAddExternalPdfToLibrary?: (input: { bytes: Uint8Array; fileName: string; title: string }) => Promise<void>;
@@ -54,6 +62,7 @@ type ReaderPaneProps = {
   ) => Promise<{ created: boolean; documentId: string } | void>;
   onOpenExternalFullText?: (source: ThinReadingExternalSource) => Promise<void>;
   onOpenLiteratureVersion?: (literature: LiteratureRecord, relation: LiteratureRelation) => void | Promise<void>;
+  onResolveLiteratureIdentity?: () => void;
   onPaperAnnotated?: (paperId: string) => Promise<void>;
   onPromoteExternalPaperToLibrary?: (source: ThinReadingExternalSource) => Promise<void>;
   onArtifactDynamicAction?: (action: UIDslActionRef) => void;
@@ -116,12 +125,14 @@ export function ReaderPane({
   loadPdfSource,
   loadOrganizationAnnotations,
   loadLiteratureRelations,
+  literatureResolution,
   organizationAnnotationActorId,
   canModerateOrganizationAnnotations,
   onAddExternalPdfToLibrary,
   onAcquireLiteratureVersion,
   onOpenExternalFullText,
   onOpenLiteratureVersion,
+  onResolveLiteratureIdentity,
   onPaperAnnotated,
   onPromoteExternalPaperToLibrary,
   onArtifactDynamicAction,
@@ -162,6 +173,17 @@ export function ReaderPane({
     return selectedPapers.filter((paper) => selectedPaperIdSet.has(paper.id));
   }, [selectedPaperIds, selectedPapers]);
   const artifactRegionVisible = showArtifactRegion && !layoutCollapsed.bottom;
+  const identityLabel = activePaper?.literature
+    ? "身份已确认"
+    : literatureResolution?.status === "candidate" || literatureResolution?.status === "ambiguous"
+      ? "选择身份候选"
+      : literatureResolution?.status === "confirmed"
+        ? "恢复身份快照"
+      : literatureResolution?.status === "conflict"
+          ? "处理身份冲突"
+          : literatureResolution?.status === "unavailable" || literatureResolution?.status === "resolving"
+            ? "重试身份确认"
+            : "确认文献身份";
 
   return (
     <main className="pane center">
@@ -190,6 +212,22 @@ export function ReaderPane({
               title="放大 PDF 页面"
               type="button"
             />
+            <Button
+              aria-label={identityLabel}
+              appearance="subtle"
+              disabled={Boolean(activePaper.literature) || !onResolveLiteratureIdentity}
+              icon={activePaper.literature
+                ? <CheckmarkCircleRegular />
+                : literatureResolution?.status === "conflict" || literatureResolution?.status === "unavailable"
+                  ? <WarningRegular />
+                  : <DocumentSearchRegular />}
+              onClick={onResolveLiteratureIdentity}
+              size="small"
+              title={identityLabel}
+              type="button"
+            >
+              {identityLabel}
+            </Button>
           </div>
         ) : null}
         <DockLayoutControls

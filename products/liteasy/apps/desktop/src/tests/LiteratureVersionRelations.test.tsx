@@ -22,6 +22,23 @@ describe("LiteratureVersionRelations", () => {
     const onAcquireVersion = vi.fn(async () => ({ created: true, documentId: "metadata-publication" }));
     const onOpenVersion = vi.fn();
     const loadRelations = vi.fn(async () => ({
+      claims: [{
+        evidence: {
+          confirmationBasis: "primary_registry_refetch",
+          recordUrl: "https://arxiv.org/abs/2401.01234v2",
+          sourceTier: "primary"
+        },
+        identifier: {
+          kind: "arxiv_id" as const,
+          role: "confirmable" as const,
+          source: "public_registry" as const,
+          value: "2401.01234v2"
+        },
+        observedAt: "2026-08-09T00:00:00.000Z",
+        provider: "arxiv" as const,
+        providerRecordId: "2401.01234v2",
+        verificationStatus: "confirmed" as const
+      }],
       literatureId: "literature-preprint",
       versions: [{
         direction: "from_current" as const,
@@ -59,6 +76,9 @@ describe("LiteratureVersionRelations", () => {
     expect(screen.getByText("Published Version")).toBeInTheDocument();
     expect(screen.getByText("DOI 10.1000/publication")).toBeInTheDocument();
     expect(screen.getByText("来源：Crossref · 已确认")).toBeInTheDocument();
+    expect(screen.getByRole("article", { name: "身份确认来源 arXiv" })).toBeInTheDocument();
+    expect(screen.getByText("arXiv 2401.01234v2")).toBeInTheDocument();
+    expect(screen.getByText("证据：https://arxiv.org/abs/2401.01234v2")).toBeInTheDocument();
     expect(loadRelations).toHaveBeenCalledWith("literature-preprint");
 
     await user.click(screen.getByRole("button", { name: "打开 Published Version" }));
@@ -81,7 +101,7 @@ describe("LiteratureVersionRelations", () => {
     const user = userEvent.setup();
     const loadRelations = vi.fn()
       .mockRejectedValueOnce(new Error("offline"))
-      .mockResolvedValueOnce({ literatureId: currentLiterature.literatureId, versions: [] });
+      .mockResolvedValueOnce({ claims: [], literatureId: currentLiterature.literatureId, versions: [] });
 
     render(<LiteratureVersionRelations currentLiterature={currentLiterature} loadRelations={loadRelations} />);
 

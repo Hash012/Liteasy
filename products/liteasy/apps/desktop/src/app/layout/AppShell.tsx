@@ -110,6 +110,7 @@ import type { PdfEvidenceTarget } from "../features/pdf/PdfReader";
 import type { Paper } from "../features/workspace/workspace.types";
 import { cloneWorkspaceState } from "../features/workspace/workspaceStateHelpers";
 import { literatureMetadataRepository } from "../features/paper-identity/literatureMetadataRepository";
+import { createLiteratureAuthorityClient } from "../features/paper-identity/literatureAuthorityClient";
 import { createPdfLiteratureHints } from "../features/paper-identity/literatureRecord";
 import type { LiteratureRecord, LiteratureRelation } from "../features/paper-identity/literature.types";
 import { literatureVersionOpenTarget } from "../features/forum/literatureVersioning";
@@ -307,7 +308,7 @@ export function AppShell({
     });
   }, [localDevCloudEnv, settingsState]);
   const leftRail = useLeftRailNavigation();
-  const resolveImportedPaperIdentityRef = useRef<((input: {
+  const stageImportedPaperIdentityRef = useRef<((input: {
     firstPageText: string;
     paper: Paper;
   }) => Promise<void>) | null>(null);
@@ -349,7 +350,7 @@ export function AppShell({
       : undefined,
     onAnalysisHint: setAnalysisHint,
     onImportJobsChanged: setImportJobsByDocumentId,
-    onPaperIdentityReady: (input) => resolveImportedPaperIdentityRef.current?.(input),
+    onPaperIdentityReady: (input) => stageImportedPaperIdentityRef.current?.(input),
     onWorkspaceChanged: setWorkspaceState,
     ocrLanguage: settingsState["import.ocr_language"],
     workspaceStore: workspaceStoreRef.current
@@ -1099,8 +1100,13 @@ export function AppShell({
     cloudLibraryClient: pdfPublicationCloudClient,
     literatureMetadataRepository
   }), [organizationSummary?.myRole, organizationSummary?.organizationId, pdfPublicationCloudClient]);
+  const literatureAuthorityClient = useMemo(() => createLiteratureAuthorityClient({
+    endpoint: externalKnowledgeEndpoint,
+    getSessionId: () => cloudAccessTokenRef.current
+  }), [externalKnowledgeEndpoint]);
   const pdfAnnotationPublication = usePdfAnnotationPublicationController({
     forumClient: forum.client,
+    literatureClient: literatureAuthorityClient,
     literatureMetadataRepository,
     onPaperUpdated: (paper) => {
       const current = cloneWorkspaceState(workspaceStoreRef.current.getState());
@@ -1112,13 +1118,16 @@ export function AppShell({
     persistPaperLiterature: persistPdfPaperLiterature,
     workspaceStore: workspaceStoreRef.current
   });
-  resolveImportedPaperIdentityRef.current = async ({ firstPageText, paper }) => {
+  stageImportedPaperIdentityRef.current = async ({ firstPageText, paper }) => {
     const hints = createPdfLiteratureHints(paper, { firstPageText });
     const hasStableIdentifier = Boolean(hints.identifiers?.length);
     const hasCompleteBibliography = Boolean(hints.title && hints.authors?.length && hints.year);
     if (!hasStableIdentifier && !hasCompleteBibliography) return;
-    await pdfAnnotationPublication.actions.resolvePaperIdentity(paper, hints);
+    await pdfAnnotationPublication.actions.stagePaperIdentity(paper, hints);
   };
+  useEffect(() => {
+    void pdfAnnotationPublication.actions.hydrateResolutionStates(workspaceStoreRef.current.getState().papers);
+  }, [workspacePaperIdentityKey]);
   const leftPaneSize = paneLayout.collapsed.left
     ? "0px"
     : `minmax(220px, ${paneLayout.layout.left}fr)`;
@@ -1802,12 +1811,19 @@ export function AppShell({
         externalKnowledgeEndpoint={externalKnowledgeEndpoint}
         layoutCollapsed={paneLayout.collapsed}
         loadPdfSource={externalPapers.loadPdfSource}
-        loadLiteratureRelations={forum.client.literatureRelations}
+        literatureResolution={pdfAnnotationPublication.model.resolutionsByPaperId[paper.id]}
+        loadLiteratureRelations={literatureAuthorityClient.literatureRelations}
         onAddExternalPdfToLibrary={workspaceActions.addExternalPdfToLibrary}
         onAcquireLiteratureVersion={(literature, relation) =>
           externalPapers.acquireLiteratureVersion(literature, relation.evidence)}
         onOpenExternalFullText={externalPapers.openExternalFullTextInReader}
         onOpenLiteratureVersion={openLiteratureVersion}
+        onResolveLiteratureIdentity={() => {
+          void pdfAnnotationPublication.actions.resolvePaperIdentity(
+            paper,
+            createPdfLiteratureHints(paper, {})
+          );
+        }}
         onPaperAnnotated={
           isPaperCacheAvailable() ? externalPapers.promoteCachedPaperToLibrary : undefined
         }

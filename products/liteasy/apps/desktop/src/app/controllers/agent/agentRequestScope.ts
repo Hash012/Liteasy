@@ -314,6 +314,14 @@ function normalizePaperIdentityCandidate(value: unknown): PaperIdentityCandidate
   return {
     id: candidate.id,
     kind,
+    role: candidate.role === "confirmed_identifier" || candidate.role === "confirmable_hint" ||
+      candidate.role === "candidate_alias" || candidate.role === "local_compatibility"
+      ? candidate.role
+      : kind === "title_authors_year_hash"
+        ? "candidate_alias"
+        : kind === "local_paper_id"
+          ? "local_compatibility"
+          : "confirmable_hint",
     source,
     value: candidate.value
   };

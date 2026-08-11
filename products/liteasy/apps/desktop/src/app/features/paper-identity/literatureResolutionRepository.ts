@@ -12,14 +12,32 @@ import type {
 } from "./literature.types";
 
 const identifierSchema = z.object({
-  kind: z.enum(["doi", "arxiv_id", "semantic_scholar_id", "openalex_id", "title_authors_year_hash"]),
+  kind: z.enum([
+    "doi",
+    "arxiv_id",
+    "semantic_scholar_id",
+    "openalex_id",
+    "openreview_id",
+    "dblp_key",
+    "pmlr_id",
+    "title_authors_year_hash"
+  ]),
   role: z.enum(["confirmable", "candidate_alias"]).optional(),
   source: z.enum(["public_registry", "manual", "inferred", "metadata"]),
   value: z.string().trim().min(1).max(1000)
 }).strict();
 const candidateSchema = z.object({
   candidateKey: z.string().trim().min(1).max(1500),
-  provider: z.enum(["intuecho", "openalex", "crossref", "arxiv", "semantic_scholar"]),
+  provider: z.enum([
+    "intuecho",
+    "openalex",
+    "crossref",
+    "arxiv",
+    "semantic_scholar",
+    "openreview",
+    "dblp",
+    "pmlr"
+  ]),
   record: z.object({
     authors: z.array(z.string().trim().min(1).max(300)).max(200),
     documentType: z.string().trim().min(1).max(100).optional(),
@@ -36,8 +54,44 @@ const candidateSchema = z.object({
       value: z.string().trim().min(1).max(1000)
     }).strict()
   }).strict()).max(20).optional(),
-  recordUrl: z.string().trim().url().max(2000).optional()
-}).strict();
+  recordUrl: z.string().trim().url().max(2000).optional(),
+  sourceEvidence: z.object({
+    artifactHash: z.string().regex(/^sha256:[a-f0-9]{64}$/)
+      .transform((value) => value as `sha256:${string}`),
+    artifactUrl: z.string().trim().url().max(2000),
+    entryKey: z.string().regex(/^pmlr-v[1-9]\d{0,3}-[a-z0-9][a-z0-9._-]{0,199}$/),
+    sourceKind: z.literal("official_volume_bibtex"),
+    volume: z.number().int().positive().max(9999)
+  }).strict().optional()
+}).strict().superRefine((value, context) => {
+  if (value.provider !== "pmlr") return;
+  const primary = value.record.identifiers[0];
+  const match = primary?.kind === "pmlr_id"
+    ? /^v([1-9]\d{0,3})\/([a-z0-9][a-z0-9._-]{0,199})$/.exec(primary.value)
+    : null;
+  const expectedVolume = Number(match?.[1]);
+  const expectedEntryKey = match ? `pmlr-v${match[1]}-${match[2]}` : null;
+  const expectedRecordUrl = match ? `https://proceedings.mlr.press/${primary.value}.html` : null;
+  let artifactUrlMatches = false;
+  try {
+    const artifactUrl = new URL(value.sourceEvidence?.artifactUrl ?? "");
+    artifactUrlMatches = artifactUrl.protocol === "https:" && artifactUrl.hostname === "proceedings.mlr.press" &&
+      !artifactUrl.username && !artifactUrl.password &&
+      !artifactUrl.search && !artifactUrl.hash &&
+      artifactUrl.pathname.endsWith(`/v${expectedVolume}/assets/bib/bibliography.bib`);
+  } catch {
+    artifactUrlMatches = false;
+  }
+  if (!match || value.candidateKey !== `pmlr:pmlr_id:${primary.value}` ||
+    value.recordUrl !== expectedRecordUrl || value.sourceEvidence?.volume !== expectedVolume ||
+    value.sourceEvidence?.entryKey !== expectedEntryKey || !artifactUrlMatches) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["sourceEvidence"],
+      message: "PMLR 审计证据必须与来源内 ID 和卷级 BibTeX 一致。"
+    });
+  }
+});
 const requestSchema = z.object({
   hints: z.object({
     authors: z.array(z.string().trim().min(1).max(300)).max(200).optional(),
@@ -61,9 +115,12 @@ const unavailableProvidersSchema = z.array(z.enum([
   "openalex",
   "crossref",
   "arxiv",
-  "semantic_scholar"
-])).max(4);
-const resolutionSchema = z.discriminatedUnion("status", [
+  "semantic_scholar",
+  "openreview",
+  "dblp",
+  "pmlr"
+])).max(7);
+const activeResolutionSchema = z.discriminatedUnion("status", [
   z.object({
     request: requestSchema,
     status: z.literal("resolving"),
@@ -72,7 +129,7 @@ const resolutionSchema = z.discriminatedUnion("status", [
   z.object({
     candidates: z.array(candidateSchema).min(1).max(20),
     request: requestSchema,
-    status: z.literal("candidate"),
+    status: z.enum(["candidate", "ambiguous"]),
     unavailableProviders: unavailableProvidersSchema,
     updatedAt: z.string().datetime({ offset: true })
   }).strict(),
@@ -82,18 +139,19 @@ const resolutionSchema = z.discriminatedUnion("status", [
     unavailableProviders: unavailableProvidersSchema,
     updatedAt: z.string().datetime({ offset: true })
   }).strict(),
-  z.object({
+]);
+const legacyConfirmedResolutionSchema = z.object({
     literatureId: z.string().trim().min(1).max(200),
     request: requestSchema,
     revision: z.number().int().positive(),
     status: z.literal("confirmed"),
     updatedAt: z.string().datetime({ offset: true })
-  }).strict()
+  }).strict();
+const resolutionSchema = z.union([activeResolutionSchema, legacyConfirmedResolutionSchema]);
+const snapshotSchema = z.union([
+  z.object({ resolution: resolutionSchema, version: z.literal(1) }).strict(),
+  z.object({ resolution: activeResolutionSchema, version: z.literal(2) }).strict()
 ]);
-const snapshotSchema = z.object({
-  resolution: resolutionSchema,
-  version: z.literal(1)
-}).strict();
 
 export type LiteratureResolutionState = z.infer<typeof resolutionSchema>;
 
@@ -127,7 +185,7 @@ export function resolutionStateFromResult(
     return {
       candidates: result.candidates,
       request,
-      status: "candidate",
+      status: "ambiguous",
       unavailableProviders: result.unavailableProviders,
       updatedAt
     };
@@ -161,12 +219,12 @@ export function createLiteratureResolutionRepository(
     },
     async save(paperId: string, resolution: LiteratureResolutionState): Promise<void> {
       if (dependencies.isAvailable && !dependencies.isAvailable()) return;
-      const parsed = resolutionSchema.safeParse(resolution);
+      const parsed = activeResolutionSchema.safeParse(resolution);
       if (!parsed.success) throw new Error("文献身份解析状态无效。");
       await dependencies.saveArtifact({
         artifactKind: "literature-resolution",
         paperId: requirePaperId(paperId),
-        snapshot: { resolution: parsed.data, version: 1 }
+        snapshot: { resolution: parsed.data, version: 2 }
       });
     }
   };

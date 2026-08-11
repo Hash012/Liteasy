@@ -52,6 +52,20 @@ test("rejects unknown literature fields at the Liteasy API boundary", () => {
   }), /literature_metadata_invalid/);
 });
 
+test("rejects malformed or versionless identifiers in confirmed projections", () => {
+  for (const identifier of [
+    { kind: "doi", source: "public_registry", value: "not-a-doi" },
+    { kind: "semantic_scholar_id", source: "public_registry", value: "paper-123" },
+    { kind: "title_authors_year_hash", source: "metadata", value: "metadata-title" },
+    { kind: "arxiv_id", source: "public_registry", value: "2401.01234" }
+  ]) {
+    assert.throws(() => normalizeLiteratureMetadata({
+      ...confirmedLiterature,
+      identifiers: [identifier]
+    }), /literature_metadata_invalid/);
+  }
+});
+
 test("accepts a public-registry record without importing Intuecho contracts", () => {
   const record = normalizeLiteratureMetadata({
     ...confirmedLiterature,
@@ -67,6 +81,21 @@ test("accepts a public-registry record without importing Intuecho contracts", ()
   assert.equal(record.provenance.provider, "openalex");
   assert.equal(record.identifiers[0].source, "public_registry");
   assert.equal(record.identifiers[0].role, "confirmable");
+});
+
+test("accepts an Intuecho-confirmed PMLR projection with its volume-qualified id", () => {
+  const record = normalizeLiteratureMetadata({
+    ...confirmedLiterature,
+    identifiers: [{ kind: "pmlr_id", source: "public_registry", value: "pmlr-v235-abad-rocamora24a" }],
+    provenance: {
+      confirmedAt: "2026-08-09T00:00:00.000Z",
+      mode: "public_registry",
+      provider: "pmlr"
+    }
+  });
+
+  assert.equal(record.identifiers[0].value, "v235/abad-rocamora24a");
+  assert.equal(record.provenance.provider, "pmlr");
 });
 
 test("upgrades old confirmed snapshots with explicit identifier roles", () => {

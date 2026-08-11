@@ -33,8 +33,11 @@ type LiteratureResolutionDialogProps = {
 
 const identifierLabels: Record<LiteratureIdentifierKind, string> = {
   arxiv_id: "arXiv",
+  dblp_key: "DBLP",
   doi: "DOI",
   openalex_id: "OpenAlex",
+  openreview_id: "OpenReview",
+  pmlr_id: "PMLR",
   semantic_scholar_id: "Semantic Scholar",
   title_authors_year_hash: "题名作者年份"
 };
@@ -99,6 +102,11 @@ export function LiteratureResolutionDialog({
                     {group.candidates.map((candidate) => {
                       const primaryIdentifier = candidate.record.identifiers[0];
                       const relation = candidate.relations?.[0];
+                      const pmlrEvidence = candidate.provider === "pmlr" ? candidate.sourceEvidence : undefined;
+                      const pmlrDigest = pmlrEvidence?.artifactHash.slice("sha256:".length);
+                      const pmlrAuditLabel = pmlrEvidence && pmlrDigest
+                        ? ` · 官方卷 BibTeX v${pmlrEvidence.volume} · SHA-256 ${pmlrDigest.slice(0, 8)}…${pmlrDigest.slice(-8)}`
+                        : "";
                       const byline = [
                         candidate.record.authors.join("、"),
                         candidate.record.year ? String(candidate.record.year) : ""
@@ -113,9 +121,13 @@ export function LiteratureResolutionDialog({
                           {primaryIdentifier ? (
                             <div>{identifierLabels[primaryIdentifier.kind]} {primaryIdentifier.value}</div>
                           ) : null}
-                          <div className="literature-candidate-source">
+                          <div
+                            className="literature-candidate-source"
+                            title={pmlrEvidence ? `${pmlrEvidence.artifactUrl}\n${pmlrEvidence.artifactHash}` : undefined}
+                          >
                             来源：{literatureProviderLabel(candidate.provider)}
                             {relation ? ` · 证据：${relationEvidenceLabel(relation.evidence)}` : ""}
+                            {pmlrAuditLabel}
                           </div>
                           <Button
                             appearance="secondary"
@@ -141,7 +153,10 @@ export function LiteratureResolutionDialog({
                 provider === "semantic_scholar" ? "Semantic Scholar" :
                   provider === "openalex" ? "OpenAlex" :
                     provider === "crossref" ? "Crossref" :
-                      provider === "arxiv" ? "arXiv" : provider
+                      provider === "arxiv" ? "arXiv" :
+                        provider === "openreview" ? "OpenReview" :
+                          provider === "dblp" ? "DBLP" :
+                            provider === "pmlr" ? "PMLR" : provider
               ).join("、")}</div>
             ) : null}
           </div>
@@ -206,7 +221,7 @@ export function LiteratureResolutionDialog({
               appearance="secondary"
               onClick={onCancel}
             >
-              取消公开
+              关闭
             </Button>
             {model.kind === "unavailable" || model.kind === "unresolved" || model.kind === "conflict" ? (
               <Button appearance="primary" disabled={model.pending} onClick={onRetry}>
