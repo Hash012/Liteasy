@@ -1,0 +1,80 @@
+{
+	admin off
+	email {$ACME_EMAIL}
+}
+
+(access_log) {
+	log {
+		output stdout
+		format json
+	}
+}
+
+(static_security) {
+	encode zstd gzip
+	header {
+		-Server
+		Permissions-Policy "camera=(), geolocation=(), microphone=()"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+	}
+}
+
+{$MARKETING_HOST} {
+	import access_log
+	import static_security
+	root * /srv/marketing
+	file_server
+}
+
+{$COMMUNITY_HOST} {
+	import access_log
+	import static_security
+
+	@community_api path /healthz /readyz /v1/*
+	handle @community_api {
+		reverse_proxy intuecho-api:4040
+	}
+
+	handle {
+		root * /srv/community
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+{$ADMIN_HOST} {
+	import access_log
+	import static_security
+	root * /srv/admin
+	try_files {path} /index.html
+	file_server
+}
+
+{$API_HOST} {
+	import access_log
+	reverse_proxy liteasy-api:8787
+}
+
+{$AUTH_HOST} {
+	import access_log
+
+	@external_admin {
+		path /admin /admin/*
+		not remote_ip private_ranges {$KEYCLOAK_ADMIN_ALLOWED_CIDRS}
+	}
+	respond @external_admin 404
+	reverse_proxy keycloak:8080
+}
+
+{$IDENTITY_HOST} {
+	import access_log
+
+	@external_request {
+		not remote_ip private_ranges
+	}
+	respond @external_request 404
+	reverse_proxy identity-management:9090
+}

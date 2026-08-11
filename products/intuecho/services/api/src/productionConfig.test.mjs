@@ -81,6 +81,40 @@ test("requires HTTPS and non-loopback services outside tests", () => {
   );
 });
 
+test("accepts the fixed Tauri origin alongside HTTPS browser origins in staging", () => {
+  const config = loadIntuechoProductionConfig(environment({
+    INTUECHO_ADMIN_API_URL: "https://api.staging.liteasyclaw.com",
+    INTUECHO_ALLOWED_ORIGINS: "https://community.staging.liteasyclaw.com,http://tauri.localhost",
+    INTUECHO_IDP_DISCOVERY_URL: "https://auth.staging.liteasyclaw.com/realms/liteasy/.well-known/openid-configuration",
+    INTUECHO_IDP_INTROSPECTION_URL: "https://auth.staging.liteasyclaw.com/realms/liteasy/protocol/openid-connect/token/introspect",
+    INTUECHO_IDP_ISSUER: "https://auth.staging.liteasyclaw.com/realms/liteasy",
+    INTUECHO_IDP_JWKS_URL: "https://auth.staging.liteasyclaw.com/realms/liteasy/protocol/openid-connect/certs",
+    INTUECHO_IDP_TOKEN_URL: "https://auth.staging.liteasyclaw.com/realms/liteasy/protocol/openid-connect/token",
+    INTUECHO_ORGANIZATION_API_URL: "https://api.staging.liteasyclaw.com",
+    NODE_ENV: "staging"
+  }));
+
+  assert.deepEqual(config.allowedOrigins, [
+    "https://community.staging.liteasyclaw.com",
+    "http://tauri.localhost"
+  ]);
+  assert.throws(
+    () => loadIntuechoProductionConfig(environment({
+      INTUECHO_ADMIN_API_URL: "https://api.staging.liteasyclaw.com",
+      INTUECHO_ALLOWED_ORIGINS: "http://community.staging.liteasyclaw.com",
+      NODE_ENV: "staging"
+    })),
+    /must use HTTPS/
+  );
+  assert.throws(
+    () => loadIntuechoProductionConfig(environment({
+      INTUECHO_ALLOWED_ORIGINS: "http://tauri.localhost:1420",
+      NODE_ENV: "staging"
+    })),
+    /must use HTTPS/
+  );
+});
+
 test("pins the production PMLR adapter to the official origin", () => {
   assert.throws(
     () => loadIntuechoProductionConfig(environment({

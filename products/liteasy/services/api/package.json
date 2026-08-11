@@ -12,6 +12,7 @@
     "test:postgres:integration": "node scripts/verify-postgres-integration.mjs",
     "test:postgres:visualization": "node src/visualizationPostgres.integration.test.mjs",
     "test:s3:integration": "node scripts/verify-s3-integration.mjs",
+    "verify:staging-s3": "node scripts/verify-staging-s3-compatibility.mjs",
     "test:multimodal-release": "node --test src/staticScienceVisualizationCompilers.test.mjs src/interactiveMathVisualizationCompilers.test.mjs src/reactionProcessValidation.test.mjs src/processRasterVisualizationCompilers.test.mjs src/staticScienceReleaseGate.test.mjs src/interactiveMathReleaseGate.test.mjs src/processRasterReleaseGate.test.mjs src/multimodalReleaseGate.test.mjs src/visualizationProviderSmoke.test.mjs src/runtime.test.mjs",
     "test:provider-smoke": "LITEASY_VISUALIZATION_SMOKE_REQUIRED=1 node --test src/visualizationProviderSmoke.test.mjs"
   },

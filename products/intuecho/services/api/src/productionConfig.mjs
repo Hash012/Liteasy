@@ -54,7 +54,16 @@ function parseOrigins(value, environment) {
     throw new Error("intuecho_config_invalid: INTUECHO_ALLOWED_ORIGINS cannot use a wildcard");
   }
   return origins.map((origin) => {
-    const parsed = new URL(parseUrl(origin, "INTUECHO_ALLOWED_ORIGINS", environment));
+    let parsed;
+    try {
+      parsed = new URL(origin);
+    } catch {
+      throw new Error("intuecho_config_invalid: INTUECHO_ALLOWED_ORIGINS must be a valid URL");
+    }
+    const tauriOrigin = parsed.origin === "http://tauri.localhost";
+    if (!tauriOrigin) {
+      parsed = new URL(parseUrl(origin, "INTUECHO_ALLOWED_ORIGINS", environment));
+    }
     if (parsed.origin !== origin) {
       throw new Error("intuecho_config_invalid: INTUECHO_ALLOWED_ORIGINS must contain origins only");
     }

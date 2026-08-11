@@ -1,0 +1,11 @@
+[Unit]
+Description=Liteasy staging storage maintenance
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/bin/bash /usr/local/sbin/liteasy-staging-maintenance
+TimeoutStartSec=30min

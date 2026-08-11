@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Liteasy staging storage maintenance every day
+
+[Timer]
+OnCalendar=*-*-* 03:20:00 Asia/Shanghai
+Persistent=true
+RandomizedDelaySec=15m
+Unit=liteasy-staging-maintenance.service
+
+[Install]
+WantedBy=timers.target

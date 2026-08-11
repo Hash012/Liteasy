@@ -56,6 +56,9 @@ test("grants only runtime data privileges to a validated application role", asyn
   const grants = harness.queries.map((entry) => entry.sql).filter((sql) => /^(GRANT|ALTER DEFAULT)/.test(sql));
   assert.ok(grants.some((sql) => sql.includes("SELECT, INSERT, UPDATE, DELETE")));
   assert.equal(grants.some((sql) => /GRANT (ALL|CREATE)/.test(sql)), false);
+  assert.ok(harness.queries.some((entry) =>
+    entry.sql === 'REVOKE INSERT, UPDATE, DELETE ON schema_migrations FROM "liteasy_app"'
+  ));
   await assert.rejects(
     () => migratePostgres(fakePool().pool, { applicationRole: "bad-role", directory }),
     /postgres_application_role_invalid/

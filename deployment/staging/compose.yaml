@@ -1,0 +1,239 @@
+name: liteasy-staging
+
+x-json-logging: &json-logging
+  driver: json-file
+  options:
+    max-file: "5"
+    max-size: "10m"
+
+x-node-service: &node-service
+  cap_drop:
+    - ALL
+  init: true
+  logging: *json-logging
+  read_only: true
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:size=256m,mode=1777
+
+services:
+  gateway:
+    image: ${GATEWAY_IMAGE:?set a digest-pinned GATEWAY_IMAGE}
+    cap_drop:
+      - ALL
+    env_file:
+      - ${GATEWAY_ENV_FILE:?set GATEWAY_ENV_FILE}
+    logging: *json-logging
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    volumes:
+      - caddy-config:/config
+      - caddy-data:/data
+    networks:
+      edge:
+      backend:
+        aliases:
+          - ${ADMIN_HOST:?set ADMIN_HOST}
+          - ${API_HOST:?set API_HOST}
+          - ${AUTH_HOST:?set AUTH_HOST}
+          - ${COMMUNITY_HOST:?set COMMUNITY_HOST}
+          - ${IDENTITY_HOST:?set IDENTITY_HOST}
+          - ${MARKETING_HOST:?set MARKETING_HOST}
+    mem_limit: 192m
+
+  keycloak:
+    image: ${KEYCLOAK_IMAGE:?set a digest-pinned KEYCLOAK_IMAGE}
+    command:
+      - start
+      - --import-realm
+    cap_drop:
+      - ALL
+    env_file:
+      - ${KEYCLOAK_ENV_FILE:?set KEYCLOAK_ENV_FILE}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000;
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3;
+          grep -q '200 OK' <&3
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 40s
+    logging: *json-logging
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    volumes:
+      - ${RDS_CA_CERT_FILE:?set RDS_CA_CERT_FILE}:/run/certs/aliyun-rds-ca.pem:ro
+      - ./keycloak/liteasy-staging-realm.json:/opt/keycloak/data/import/liteasy-realm.json:ro
+    networks:
+      - backend
+      - egress
+    mem_limit: 1100m
+
+  identity-management:
+    <<: *node-service
+    image: ${IDENTITY_MANAGEMENT_IMAGE:?set a digest-pinned IDENTITY_MANAGEMENT_IMAGE}
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    env_file:
+      - ${IDENTITY_MANAGEMENT_ENV_FILE:?set IDENTITY_MANAGEMENT_ENV_FILE}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:9090/readyz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks:
+      - backend
+      - egress
+    mem_limit: 192m
+
+  liteasy-api:
+    <<: *node-service
+    image: ${LITEASY_API_IMAGE:?set a digest-pinned LITEASY_API_IMAGE}
+    depends_on:
+      identity-management:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    env_file:
+      - ${LITEASY_API_ENV_FILE:?set LITEASY_API_ENV_FILE}
+    environment:
+      NODE_EXTRA_CA_CERTS: /run/certs/aliyun-rds-ca.pem
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:8787/readyz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    volumes:
+      - ${RDS_CA_CERT_FILE}:/run/certs/aliyun-rds-ca.pem:ro
+    networks:
+      - backend
+      - egress
+    mem_limit: 1100m
+
+  intuecho-api:
+    <<: *node-service
+    image: ${INTUECHO_API_IMAGE:?set a digest-pinned INTUECHO_API_IMAGE}
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      liteasy-api:
+        condition: service_healthy
+    env_file:
+      - ${INTUECHO_API_ENV_FILE:?set INTUECHO_API_ENV_FILE}
+    environment:
+      NODE_EXTRA_CA_CERTS: /run/certs/aliyun-rds-ca.pem
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:4040/readyz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    volumes:
+      - ${RDS_CA_CERT_FILE}:/run/certs/aliyun-rds-ca.pem:ro
+    networks:
+      - backend
+      - egress
+    mem_limit: 512m
+
+  liteasy-migrate:
+    <<: *node-service
+    image: ${LITEASY_API_IMAGE}
+    command:
+      - node
+      - src/migrate.mjs
+    env_file:
+      - ${LITEASY_API_ENV_FILE}
+    environment:
+      NODE_EXTRA_CA_CERTS: /run/certs/aliyun-rds-ca.pem
+    profiles:
+      - migration
+    restart: "no"
+    volumes:
+      - ${RDS_CA_CERT_FILE}:/run/certs/aliyun-rds-ca.pem:ro
+    networks:
+      - backend
+      - egress
+    mem_limit: 512m
+
+  intuecho-migrate:
+    <<: *node-service
+    image: ${INTUECHO_API_IMAGE}
+    command:
+      - npm
+      - run
+      - migrate
+      - --workspace=@intuecho/api
+    env_file:
+      - ${INTUECHO_API_ENV_FILE}
+    environment:
+      NODE_EXTRA_CA_CERTS: /run/certs/aliyun-rds-ca.pem
+    profiles:
+      - migration
+    restart: "no"
+    volumes:
+      - ${RDS_CA_CERT_FILE}:/run/certs/aliyun-rds-ca.pem:ro
+    networks:
+      - backend
+      - egress
+    mem_limit: 384m
+
+  liteasy-maintenance:
+    <<: *node-service
+    image: ${LITEASY_API_IMAGE}
+    command:
+      - node
+      - src/maintainStorage.mjs
+    env_file:
+      - ${LITEASY_API_ENV_FILE}
+    environment:
+      NODE_EXTRA_CA_CERTS: /run/certs/aliyun-rds-ca.pem
+    profiles:
+      - maintenance
+    restart: "no"
+    volumes:
+      - ${RDS_CA_CERT_FILE}:/run/certs/aliyun-rds-ca.pem:ro
+    networks:
+      - backend
+      - egress
+    mem_limit: 1100m
+
+networks:
+  backend:
+    internal: true
+  edge:
+  egress:
+
+volumes:
+  caddy-config:
+  caddy-data:
