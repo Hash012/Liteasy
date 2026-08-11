@@ -152,6 +152,7 @@ test("initializes the source-confirmed SQLite schema on an empty database", () =
   const identifierTableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'literature_identifiers_v2'").get().sql;
   assert.match(identifierTableSql, /identifier_role/);
   assert.match(identifierTableSql, /candidate_alias/);
+  assert.equal(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'literature_identities_v2'").get(), undefined);
   db.close();
 });
 

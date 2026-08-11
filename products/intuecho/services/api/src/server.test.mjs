@@ -499,12 +499,11 @@ test("hydrates canonical literature display metadata on annotation reads and tit
   db.close();
 });
 
-test("keeps legacy identity storage read-only and removes manual confirmation", async () => {
+test("does not create legacy identity storage on a clean database and removes manual confirmation", async () => {
   const db = new Database(":memory:");
   const repository = new SqliteAnnotationCommunityRepository(db);
   assert.equal(repository.confirmLiterature, undefined);
-  assert.throws(() => db.prepare("INSERT INTO literature_identities_v2(literature_id, identity_kind, identity_value, identity_source, created_at) VALUES (?, 'doi', ?, 'metadata', ?)")
-    .run("legacy-record", "10.1000/legacy", "2026-08-09T00:00:00.000Z"), /legacy_literature_identity_is_read_only/);
+  assert.equal(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'literature_identities_v2'").get(), undefined);
   db.close();
 });
 

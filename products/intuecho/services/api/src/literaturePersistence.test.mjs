@@ -184,6 +184,59 @@ test("SQLite stores independently corroborated aggregate claims in one confirmat
   }
 });
 
+test("SQLite records a new provider claim without changing an otherwise identical literature revision", async () => {
+  const db = new Database(":memory:");
+  try {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    const identifiers = [
+      { kind: "openalex_id", source: "public_registry", value: "W777" },
+      { kind: "semantic_scholar_id", source: "public_registry", value: "corpus:777" }
+    ];
+    const first = await repository.confirmRefetchedLiterature(owner, candidate({
+      candidateKey: "openalex:openalex_id:W777",
+      identifiers,
+      provider: "openalex"
+    }));
+    const second = await repository.confirmRefetchedLiterature(owner, candidate({
+      candidateKey: "semantic_scholar:semantic_scholar_id:corpus:777",
+      identifiers: [identifiers[1], identifiers[0]],
+      provider: "semantic_scholar"
+    }));
+
+    assert.equal(first.revision, 1);
+    assert.equal(second.revision, 1);
+    assert.deepEqual(db.prepare("SELECT revision, source_provider FROM literature_records_v2").get(), {
+      revision: 1,
+      source_provider: "openalex"
+    });
+    assert.equal(db.prepare("SELECT count(*) AS count FROM literature_identity_claims_v2").get().count, 2);
+  } finally {
+    db.close();
+  }
+});
+
+test("SQLite preserves confirmed literature when the repository is reopened", async () => {
+  const db = new Database(":memory:");
+  try {
+    const firstRepository = new SqliteAnnotationCommunityRepository(db);
+    const confirmed = await firstRepository.confirmRefetchedLiterature(owner, candidate());
+
+    const reopenedRepository = new SqliteAnnotationCommunityRepository(db);
+
+    assert.deepEqual(
+      await reopenedRepository.findLiteratureById(confirmed.literatureId),
+      confirmed
+    );
+    assert.equal(
+      db.prepare("SELECT confirmation_status FROM literature_records_v2 WHERE id = ?")
+        .get(confirmed.literatureId).confirmation_status,
+      "confirmed"
+    );
+  } finally {
+    db.close();
+  }
+});
+
 test("SQLite does not merge aggregate preprint and publication records with matching bibliography", async () => {
   const db = new Database(":memory:");
   try {
@@ -769,6 +822,29 @@ test("PostgreSQL stores independently corroborated aggregate claims in one confi
     { identifierId: doiIdentifier.id, provider: "openalex" },
     { identifierId: doiIdentifier.id, provider: "semantic_scholar" }
   ]);
+});
+
+test("PostgreSQL records a new provider claim without changing an otherwise identical literature revision", async () => {
+  const harness = postgresHarness();
+  const identifiers = [
+    { kind: "openalex_id", source: "public_registry", value: "W777" },
+    { kind: "semantic_scholar_id", source: "public_registry", value: "corpus:777" }
+  ];
+  const first = await harness.repository.confirmRefetchedLiterature(owner, candidate({
+    candidateKey: "openalex:openalex_id:W777",
+    identifiers,
+    provider: "openalex"
+  }));
+  const second = await harness.repository.confirmRefetchedLiterature(owner, candidate({
+    candidateKey: "semantic_scholar:semantic_scholar_id:corpus:777",
+    identifiers: [identifiers[1], identifiers[0]],
+    provider: "semantic_scholar"
+  }));
+
+  assert.equal(first.revision, 1);
+  assert.equal(second.revision, 1);
+  assert.equal(harness.records.values().next().value.source_provider, "openalex");
+  assert.equal(harness.claims.length, 2);
 });
 
 test("PostgreSQL backfills an evidenced preprint relation when the target is confirmed later", async () => {

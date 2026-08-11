@@ -190,12 +190,12 @@ export class PostgresAnnotationCommunityRepository {
         const existingIdentities = (await client.query("SELECT identifier_kind AS kind, normalized_value AS value FROM literature_identifiers WHERE literature_id = $1 ORDER BY identifier_kind, normalized_value", [literatureId])).rows;
         const existingIdentityKeys = new Set(existingIdentities.map((identifier) => `${identifier.kind}:${normalizeIdentity(identifier.kind, identifier.value)}`));
         const identityAddition = normalized.some((identifier) => !existingIdentityKeys.has(`${identifier.kind}:${identifier.value}`));
-        const changed = existing.title !== input.title || currentAuthors !== nextAuthors || existing.publication_year !== (input.year ?? null) || existing.version_kind !== (input.documentType ?? null) || existing.confirmation_status !== "confirmed" || existing.source_provider !== provider || identityAddition || claimResults.some((result) => !result.rows[0]);
+        const changed = existing.title !== input.title || currentAuthors !== nextAuthors || existing.publication_year !== (input.year ?? null) || existing.version_kind !== (input.documentType ?? null) || existing.confirmation_status !== "confirmed" || identityAddition;
         if (changed) {
           const current = await this.#literatureSnapshot(literatureId, client);
           const revision = Number(existing.revision ?? 1);
           await client.query("INSERT INTO literature_record_versions(id, literature_id, revision, snapshot, changed_by, created_at) VALUES ($1, $2, $3, $4::jsonb, $5, $6) ON CONFLICT (literature_id, revision) DO NOTHING", [`literature_record_version_${randomUUID()}`, literatureId, revision, JSON.stringify(current), literatureResolverActor, now]);
-          await client.query(`UPDATE literature_records SET title = $2, authors = $3::jsonb, publication_year = $4, version_kind = $5, record_source = 'public_registry', source_provider = $6, confirmed_at = $7, revision = $8, confirmation_status = 'confirmed', updated_at = $9 WHERE id = $1`, [literatureId, input.title, nextAuthors, input.year ?? null, input.documentType ?? null, provider, now, revision + 1, now]);
+          await client.query(`UPDATE literature_records SET title = $2, authors = $3::jsonb, publication_year = $4, version_kind = $5, record_source = 'public_registry', source_provider = CASE WHEN confirmation_status = 'confirmed' THEN source_provider ELSE $6 END, confirmed_at = $7, revision = $8, confirmation_status = 'confirmed', updated_at = $9 WHERE id = $1`, [literatureId, input.title, nextAuthors, input.year ?? null, input.documentType ?? null, provider, now, revision + 1, now]);
         }
       }
       for (const identifier of normalized) {
