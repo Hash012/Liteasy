@@ -118,6 +118,11 @@ test("production migration set includes visualization and literature projections
     "022_visualization_cost_policy_lifecycle.sql",
     "023_visualization_generation_requests.sql",
     "024_literature_projections.sql",
-    "025_personalization_explicit_opt_in.sql"
+    "025_personalization_explicit_opt_in.sql",
+    "026_normalize_library_literature_references.sql"
   ]);
+  const normalization = migrations.at(-1).sql;
+  assert.match(normalization, /FOREIGN KEY \(literature_id, literature_revision\)/);
+  assert.match(normalization, /AND CASE[\s\S]+THEN \(entry\.metadata -> 'literature' ->> 'revision'\)::bigint/);
+  assert.match(normalization, /metadata = entry\.metadata - 'literature'/);
 });

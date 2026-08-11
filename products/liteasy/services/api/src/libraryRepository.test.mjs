@@ -16,6 +16,9 @@ const confirmedLiterature = {
 function postgresHarness(entryKind) {
   const queries = [];
   const state = {
+    literatureId: null,
+    literatureProjection: null,
+    literatureRevision: null,
     metadata: { retained: true },
     revision: 1
   };
@@ -29,6 +32,9 @@ function postgresHarness(entryKind) {
     file_name: entryKind === "pdf" ? "Paper.pdf" : "Paper",
     folder_id: null,
     metadata: state.metadata,
+    literature_id: state.literatureId,
+    literature_projection: state.literatureProjection,
+    literature_revision: state.literatureRevision,
     normalized_name: "paper.pdf",
     purge_after: null,
     scope_id: "user-1",
@@ -47,8 +53,11 @@ function postgresHarness(entryKind) {
       }
       if (/SELECT entry\.\*, reference\.content_hash/.test(sql)) return { rows: [row()] };
       if (/SELECT snapshot = \$3::jsonb AS matches/.test(sql)) return { rows: [{ matches: true }] };
-      if (/jsonb_set\(metadata, '\{literature\}'/.test(sql)) {
-        state.metadata = { ...state.metadata, literature: JSON.parse(values.at(-1)) };
+      if (/SET literature_id = \$2, literature_revision = \$3/.test(sql)) {
+        state.literatureId = values[1];
+        state.literatureRevision = values[2];
+        state.literatureProjection = confirmedLiterature;
+        delete state.metadata.literature;
         return { rows: [] };
       }
       if (/UPDATE library_scope_revisions/.test(sql)) {
@@ -99,7 +108,9 @@ for (const entryKind of ["pdf", "metadata_only"]) {
     assert.deepEqual(updated.document.metadata.literature, confirmedLiterature);
     assert.equal(updated.revision, 2);
     assert.equal(harness.state.revision, 2);
-    assert.equal(harness.queries.some(({ sql }) => /jsonb_set\(metadata, '\{literature\}'/.test(sql)), true);
+    assert.equal(harness.state.metadata.literature, undefined);
+    assert.equal(harness.state.literatureId, confirmedLiterature.literatureId);
+    assert.equal(harness.state.literatureRevision, confirmedLiterature.revision);
     assert.equal(harness.queries.some(({ sql }) => /INSERT INTO idempotency_records/.test(sql)), true);
     const audit = harness.queries.find(({ sql }) => /INSERT INTO audit_events/.test(sql));
     assert.deepEqual(JSON.parse(audit.values.at(-1)), {

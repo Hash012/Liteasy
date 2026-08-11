@@ -139,10 +139,14 @@ async function requireFolder(client, scope, folderId, status) {
 async function requireEntry(client, scope, documentId, status) {
   const result = await client.query(`
     SELECT entry.*, reference.content_hash, object.byte_length, object.status AS object_status,
-           object.security_scan_hash, object.security_scanned_at
+           object.security_scan_hash, object.security_scanned_at,
+           literature_projection.snapshot AS literature_projection
       FROM library_entries entry
       LEFT JOIN storage_object_references reference USING (document_id)
       LEFT JOIN storage_objects object ON object.content_hash = reference.content_hash
+      LEFT JOIN literature_record_projections literature_projection
+        ON literature_projection.literature_id = entry.literature_id
+       AND literature_projection.revision = entry.literature_revision
      WHERE entry.document_id = $1 AND entry.scope_type = $2 AND entry.scope_id = $3
      FOR UPDATE OF entry
   `, [documentId, scope.scopeType, scope.scopeId]);
@@ -217,6 +221,10 @@ function mapFolder(row) {
 }
 
 function mapEntry(row) {
+  const metadata = {
+    ...(row.metadata ?? {}),
+    ...(row.literature_projection ? { literature: row.literature_projection } : {})
+  };
   const base = {
     createdAt: row.created_at.toISOString(),
     documentId: row.document_id,
@@ -235,7 +243,7 @@ function mapEntry(row) {
       ...base,
       doi: row.metadata?.doi,
       externalUrl: row.metadata?.externalUrl,
-      metadata: row.metadata ?? {},
+      metadata,
       sourceId: row.metadata?.sourceId
     };
   }
@@ -244,7 +252,7 @@ function mapEntry(row) {
     byteLength: Number(row.byte_length),
     contentHash: row.content_hash,
     fileName: row.file_name,
-    metadata: row.metadata ?? {},
+    metadata,
     uploadedBy: row.created_by
   };
 }
@@ -299,10 +307,14 @@ export class PostgresLibraryRepository {
         ORDER BY normalized_name, folder_id
       `, [scope.scopeType, scope.scopeId, normalizedStatus]),
       this.pool.query(`
-        SELECT entry.*, reference.content_hash, object.byte_length
+        SELECT entry.*, reference.content_hash, object.byte_length,
+               literature_projection.snapshot AS literature_projection
           FROM library_entries entry
           LEFT JOIN storage_object_references reference USING (document_id)
           LEFT JOIN storage_objects object ON object.content_hash = reference.content_hash
+          LEFT JOIN literature_record_projections literature_projection
+            ON literature_projection.literature_id = entry.literature_id
+           AND literature_projection.revision = entry.literature_revision
          WHERE entry.scope_type = $1 AND entry.scope_id = $2
            AND entry.status = $3 AND entry.availability = 'available'
            AND (entry.entry_kind = 'metadata_only' OR object.security_scan_hash = object.content_hash)
@@ -429,10 +441,10 @@ export class PostgresLibraryRepository {
         }
         await client.query(`
           UPDATE library_entries
-             SET metadata = jsonb_set(metadata, '{literature}', $2::jsonb, true),
-                 updated_at = now()
+             SET literature_id = $2, literature_revision = $3,
+                 metadata = metadata - 'literature', updated_at = now()
            WHERE document_id = $1
-        `, [documentId, JSON.stringify(literature)]);
+        `, [documentId, literature.literatureId, literature.revision]);
       }
       if (current.entry_kind === "pdf") {
         const fileName = Object.hasOwn(input, "fileName") ? pdfName(input.fileName) : {
@@ -667,13 +679,15 @@ export class PostgresLibraryRepository {
       const result = await client.query(`
         INSERT INTO library_entries(
           document_id, scope_type, scope_id, folder_id, entry_kind, file_name,
-          normalized_name, title, metadata, logical_bytes, availability, created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, 'available', $11)
+          normalized_name, title, metadata, logical_bytes, availability, created_by,
+          literature_id, literature_revision
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, 'available', $11, $12, $13)
         RETURNING *
       `, [
         copiedDocumentId, targetScope.scopeType, targetScope.scopeId, folderId,
         source.entry_kind, name.name, name.normalizedName, source.title,
-        JSON.stringify(source.metadata ?? {}), Number(source.logical_bytes), input.actorId
+        JSON.stringify(source.metadata ?? {}), Number(source.logical_bytes), input.actorId,
+        source.literature_id, source.literature_revision
       ]);
       if (source.entry_kind === "pdf") {
         await client.query(`
@@ -685,7 +699,8 @@ export class PostgresLibraryRepository {
         entry: mapEntry({
           ...result.rows[0],
           byte_length: source.entry_kind === "pdf" ? source.byte_length : null,
-          content_hash: source.entry_kind === "pdf" ? source.content_hash : null
+          content_hash: source.entry_kind === "pdf" ? source.content_hash : null,
+          literature_projection: source.literature_projection
         })
       };
     });
@@ -695,10 +710,14 @@ export class PostgresLibraryRepository {
     const scope = validateScope(scopeInput);
     if (!/^[a-f0-9]{64}$/.test(contentHash)) throw new LibraryRepositoryError("storage_content_hash_invalid");
     const result = await this.pool.query(`
-      SELECT entry.*, reference.content_hash, object.byte_length
+      SELECT entry.*, reference.content_hash, object.byte_length,
+             literature_projection.snapshot AS literature_projection
         FROM library_entries entry
         JOIN storage_object_references reference USING (document_id)
         JOIN storage_objects object ON object.content_hash = reference.content_hash
+        LEFT JOIN literature_record_projections literature_projection
+          ON literature_projection.literature_id = entry.literature_id
+         AND literature_projection.revision = entry.literature_revision
        WHERE entry.scope_type = $1 AND entry.scope_id = $2
          AND entry.status = 'active' AND entry.availability = 'available'
          AND object.security_scan_hash = object.content_hash
@@ -712,7 +731,10 @@ export class PostgresLibraryRepository {
     const scope = validateScope(scopeInput);
     if (typeof documentId !== "string" || !documentId) throw new LibraryRepositoryError("library_document_invalid");
     const result = await this.pool.query(`
-      SELECT entry.document_id, entry.file_name, entry.title, entry.metadata,
+      SELECT entry.document_id, entry.file_name, entry.title,
+             CASE WHEN literature_projection.snapshot IS NULL THEN entry.metadata
+                  ELSE entry.metadata || jsonb_build_object('literature', literature_projection.snapshot)
+              END AS metadata,
              reference.content_hash, object.byte_length, object.media_type, object.storage_key,
              COALESCE((
                SELECT revision FROM library_scope_revisions
@@ -721,6 +743,9 @@ export class PostgresLibraryRepository {
         FROM library_entries entry
         JOIN storage_object_references reference USING (document_id)
         JOIN storage_objects object ON object.content_hash = reference.content_hash
+        LEFT JOIN literature_record_projections literature_projection
+          ON literature_projection.literature_id = entry.literature_id
+         AND literature_projection.revision = entry.literature_revision
        WHERE entry.document_id = $1
          AND entry.scope_type = $2 AND entry.scope_id = $3
          AND entry.entry_kind = 'pdf' AND entry.status = 'active'
