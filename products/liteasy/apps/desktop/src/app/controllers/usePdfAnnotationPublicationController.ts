@@ -14,6 +14,11 @@ import type {
   LiteratureResolveResult
 } from "../features/paper-identity/literature.types";
 import {
+  literatureResolutionRepository as defaultLiteratureResolutionRepository,
+  resolutionStateFromResult,
+  type LiteratureResolutionState
+} from "../features/paper-identity/literatureResolutionRepository";
+import {
   confirmPdfAnnotationPublication,
   type PdfAnnotationPublication,
   type PdfAnnotationV2
@@ -43,6 +48,10 @@ type PdfAnnotationPublicationControllerInput = {
   literatureMetadataRepository: {
     load(paperId: string): Promise<LiteratureRecord | undefined>;
   };
+  literatureResolutionRepository?: {
+    load(paperId: string): Promise<LiteratureResolutionState | undefined>;
+    save(paperId: string, resolution: LiteratureResolutionState): Promise<void>;
+  };
   onPaperUpdated(paper: Paper): void;
   persistPaperLiterature(
     paper: Paper,
@@ -68,6 +77,7 @@ type PaperLiteraturePersistenceInput = {
 
 type ActiveResolution = {
   candidates: LiteratureCandidate[];
+  paperId: string;
   pending: boolean;
   request: ForumLiteratureResolveInput;
   resolve: (literature: LiteratureRecord | undefined) => void;
@@ -200,6 +210,7 @@ function searchDraftFromRequest(request: ForumLiteratureResolveInput): Literatur
 export function usePdfAnnotationPublicationController({
   forumClient,
   literatureMetadataRepository,
+  literatureResolutionRepository = defaultLiteratureResolutionRepository,
   onPaperUpdated,
   persistPaperLiterature,
   workspaceStore
@@ -222,6 +233,23 @@ export function usePdfAnnotationPublicationController({
     activeResolutionRef.current = null;
     setLiteratureDialog(null);
     active.resolve(literature);
+  }
+
+  async function saveResolution(paperId: string, resolution: LiteratureResolutionState) {
+    await literatureResolutionRepository.save(paperId, resolution);
+  }
+
+  async function saveConfirmedResolution(
+    active: Pick<ActiveResolution, "paperId" | "request">,
+    literature: LiteratureRecord
+  ) {
+    await saveResolution(active.paperId, {
+      literatureId: literature.literatureId,
+      request: active.request,
+      revision: literature.revision,
+      status: "confirmed",
+      updatedAt: new Date().toISOString()
+    });
   }
 
   function showCandidates(
@@ -261,6 +289,7 @@ export function usePdfAnnotationPublicationController({
     });
     try {
       const confirmed = await forumClientRef.current.confirmLiterature({ candidateKey, mode });
+      await saveConfirmedResolution(active, confirmed.literature);
       finishResolution(active, confirmed.literature);
     } catch (error) {
       showCandidates(
@@ -275,6 +304,8 @@ export function usePdfAnnotationPublicationController({
   async function applyResolveResult(active: ActiveResolution, result: LiteratureResolveResult) {
     if (!isActive(active)) return;
     active.unavailableProviders = result.unavailableProviders;
+    await saveResolution(active.paperId, resolutionStateFromResult(active.request, result));
+    if (!isActive(active)) return;
     if (result.status === "exact") {
       active.candidates = [result.candidate];
       await confirmCandidate(active, result.candidate.candidateKey, result.confirmationMode);
@@ -318,6 +349,11 @@ export function usePdfAnnotationPublicationController({
     active.pending = true;
     setLiteratureDialog((current) => current ? { ...current, message: undefined, pending: true } : current);
     try {
+      await saveResolution(active.paperId, {
+        request: active.request,
+        status: "resolving",
+        updatedAt: new Date().toISOString()
+      });
       const result = await forumClientRef.current.resolveLiterature(active.request);
       if (!isActive(active)) return;
       active.pending = false;
@@ -325,6 +361,12 @@ export function usePdfAnnotationPublicationController({
     } catch (error) {
       if (!isActive(active)) return;
       active.pending = false;
+      await saveResolution(active.paperId, {
+        request: active.request,
+        status: "unavailable",
+        unavailableProviders: active.unavailableProviders,
+        updatedAt: new Date().toISOString()
+      }).catch(() => undefined);
       setLiteratureDialog({
         kind: "unavailable",
         message: errorMessage(error, "文献检索暂时不可用，请重试。"),
@@ -336,7 +378,8 @@ export function usePdfAnnotationPublicationController({
   }
 
   function resolveAndConfirm(
-    hints: ChangePdfAnnotationPublicationInput["literatureHints"]
+    hints: ChangePdfAnnotationPublicationInput["literatureHints"],
+    paperId: string
   ): Promise<LiteratureRecord | undefined> | undefined {
     if (activeResolutionRef.current) return undefined;
     const request: ForumLiteratureResolveInput = {
@@ -347,6 +390,7 @@ export function usePdfAnnotationPublicationController({
     return new Promise<LiteratureRecord | undefined>((resolve) => {
       const active: ActiveResolution = {
         candidates: [],
+        paperId,
         pending: false,
         request,
         resolve,
@@ -358,8 +402,76 @@ export function usePdfAnnotationPublicationController({
         pending: true,
         unavailableProviders: []
       });
-      void attemptResolution(active);
+      void literatureResolutionRepository.load(paperId).then((stored) => {
+        if (!isActive(active)) return;
+        if (stored?.status === "candidate") {
+          active.request = stored.request;
+          showCandidates(active, stored.candidates, stored.unavailableProviders);
+          return;
+        }
+        void attemptResolution(active);
+      }).catch(() => {
+        if (isActive(active)) void attemptResolution(active);
+      });
     });
+  }
+
+  async function resolvePaperIdentity(
+    paper: Paper,
+    hints: ChangePdfAnnotationPublicationInput["literatureHints"]
+  ): Promise<LiteratureResolutionState | undefined> {
+    if (paper.literature || await literatureMetadataRepository.load(paper.id)) return undefined;
+    const request: ForumLiteratureResolveInput = {
+      ...(hints ? { hints: boundedHints(hints) } : {}),
+      limit: 5,
+      purpose: "liteasy_pdf_annotation"
+    };
+    await saveResolution(paper.id, {
+      request,
+      status: "resolving",
+      updatedAt: new Date().toISOString()
+    });
+    let result: LiteratureResolveResult;
+    try {
+      result = await forumClientRef.current.resolveLiterature(request);
+    } catch {
+      const unavailable: LiteratureResolutionState = {
+        request,
+        status: "unavailable",
+        unavailableProviders: [],
+        updatedAt: new Date().toISOString()
+      };
+      await saveResolution(paper.id, unavailable);
+      return unavailable;
+    }
+    const state = resolutionStateFromResult(request, result);
+    await saveResolution(paper.id, state);
+    if (result.status !== "exact") return state;
+    const confirmed = await forumClientRef.current.confirmLiterature({
+      candidateKey: result.candidate.candidateKey,
+      mode: result.confirmationMode
+    });
+    await saveResolution(paper.id, {
+      literatureId: confirmed.literature.literatureId,
+      request,
+      revision: confirmed.literature.revision,
+      status: "confirmed",
+      updatedAt: new Date().toISOString()
+    });
+    const persistedPaper = await persistPaperLiterature(paper, confirmed.literature) ?? {
+      ...paper,
+      literature: confirmed.literature
+    };
+    latestPapersRef.current.set(persistedPaper.id, persistedPaper);
+    workspaceStore.updatePapers([persistedPaper]);
+    onPaperUpdated(persistedPaper);
+    return {
+      literatureId: confirmed.literature.literatureId,
+      request,
+      revision: confirmed.literature.revision,
+      status: "confirmed",
+      updatedAt: new Date().toISOString()
+    };
   }
 
   async function performPublication(
@@ -434,7 +546,7 @@ export function usePdfAnnotationPublicationController({
             confirmedLiterature = await literatureMetadataRepository.load(currentPaper.id);
           }
           if (!confirmedLiterature) {
-            const pendingResolution = resolveAndConfirm(input.literatureHints);
+            const pendingResolution = resolveAndConfirm(input.literatureHints, currentPaper.id);
             if (!pendingResolution) return { ...busyPublication };
             confirmedLiterature = await pendingResolution;
             if (!confirmedLiterature) {
@@ -566,6 +678,7 @@ export function usePdfAnnotationPublicationController({
     actions: {
       cancelResolution,
       changePublication,
+      resolvePaperIdentity,
       retryResolution,
       searchLiterature,
       selectCandidate

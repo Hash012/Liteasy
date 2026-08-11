@@ -189,7 +189,7 @@ export function normalizeLiteratureRecord(value: unknown): LiteratureRecord {
 export { paperIdentityFromLiterature };
 
 export function createPdfLiteratureHints(
-  paper: Pick<Paper, "arxivId" | "doi" | "id" | "semanticScholarId" | "title">,
+  paper: Pick<Paper, "arxivId" | "authors" | "doi" | "id" | "semanticScholarId" | "title" | "year">,
   input: { embeddedMetadata?: PdfEmbeddedMetadata; firstPageText?: string }
 ): NonNullable<LiteratureResolveInput["hints"]> {
   const embedded = input.embeddedMetadata ?? {};
@@ -208,10 +208,11 @@ export function createPdfLiteratureHints(
       candidate.kind === "arxiv_id" ||
       candidate.kind === "semantic_scholar_id")
     .map(({ kind, value }) => ({ kind, value }));
-  const authors = parsePdfAuthors(embedded.authors);
+  const embeddedAuthors = parsePdfAuthors(embedded.authors);
+  const authors = embeddedAuthors.length > 0 ? embeddedAuthors : parsePdfAuthors(paper.authors);
   const title = (compact(embedded.title) || compact(paper.title)).slice(0, 1000);
   const pmlr = parsePmlrHint((input.firstPageText ?? "").slice(0, 20_000));
-  const year = normalizeYear(embedded.year) ?? pmlr?.year;
+  const year = normalizeYear(embedded.year) ?? normalizeYear(paper.year) ?? pmlr?.year;
   return {
     ...(authors.length > 0 ? { authors } : {}),
     ...(identifiers.length > 0 ? { identifiers } : {}),

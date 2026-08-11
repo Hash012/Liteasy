@@ -21,6 +21,7 @@ fn artifact_kind_is_allowed(kind: &str) -> bool {
             | "bibliographic-identity"
             | "citations"
             | "fulltext"
+            | "literature-resolution"
             | "reader-state"
     )
 }
@@ -211,6 +212,7 @@ mod tests {
         assert!(artifact_kind_is_allowed("annotations"));
         assert!(artifact_kind_is_allowed("anchor-graph"));
         assert!(artifact_kind_is_allowed("bibliographic-identity"));
+        assert!(artifact_kind_is_allowed("literature-resolution"));
         assert!(artifact_kind_is_allowed("citations"));
         assert!(!artifact_kind_is_allowed("../../outside"));
     }

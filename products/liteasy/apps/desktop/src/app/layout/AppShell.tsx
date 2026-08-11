@@ -110,6 +110,7 @@ import type { PdfEvidenceTarget } from "../features/pdf/PdfReader";
 import type { Paper } from "../features/workspace/workspace.types";
 import { cloneWorkspaceState } from "../features/workspace/workspaceStateHelpers";
 import { literatureMetadataRepository } from "../features/paper-identity/literatureMetadataRepository";
+import { createPdfLiteratureHints } from "../features/paper-identity/literatureRecord";
 import type { LiteratureRecord, LiteratureRelation } from "../features/paper-identity/literature.types";
 import { literatureVersionOpenTarget } from "../features/forum/literatureVersioning";
 import { canManageOrganizationLibrary } from "../features/organization/organizationStoragePolicy";
@@ -306,6 +307,10 @@ export function AppShell({
     });
   }, [localDevCloudEnv, settingsState]);
   const leftRail = useLeftRailNavigation();
+  const resolveImportedPaperIdentityRef = useRef<((input: {
+    firstPageText: string;
+    paper: Paper;
+  }) => Promise<void>) | null>(null);
   function openDockedLeftRailView(view: LeftRailView) {
     leftRail.setLeftRailView(view);
     const regionId = dock.findItemRegion(view) ?? "left";
@@ -344,6 +349,7 @@ export function AppShell({
       : undefined,
     onAnalysisHint: setAnalysisHint,
     onImportJobsChanged: setImportJobsByDocumentId,
+    onPaperIdentityReady: (input) => resolveImportedPaperIdentityRef.current?.(input),
     onWorkspaceChanged: setWorkspaceState,
     ocrLanguage: settingsState["import.ocr_language"],
     workspaceStore: workspaceStoreRef.current
@@ -1106,6 +1112,13 @@ export function AppShell({
     persistPaperLiterature: persistPdfPaperLiterature,
     workspaceStore: workspaceStoreRef.current
   });
+  resolveImportedPaperIdentityRef.current = async ({ firstPageText, paper }) => {
+    const hints = createPdfLiteratureHints(paper, { firstPageText });
+    const hasStableIdentifier = Boolean(hints.identifiers?.length);
+    const hasCompleteBibliography = Boolean(hints.title && hints.authors?.length && hints.year);
+    if (!hasStableIdentifier && !hasCompleteBibliography) return;
+    await pdfAnnotationPublication.actions.resolvePaperIdentity(paper, hints);
+  };
   const leftPaneSize = paneLayout.collapsed.left
     ? "0px"
     : `minmax(220px, ${paneLayout.layout.left}fr)`;

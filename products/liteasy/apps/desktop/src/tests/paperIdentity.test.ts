@@ -27,6 +27,7 @@ describe("paperIdentity", () => {
 
     expect(identity.primary).toMatchObject({
       kind: "doi",
+      role: "confirmable_hint",
       source: "metadata",
       value: "10.1145/1234567.8901234"
     });
@@ -62,7 +63,7 @@ describe("paperIdentity", () => {
       id: "paper-hash",
       title: "Stable Title",
       year: 2026
-    }).primary.kind).toBe("title_authors_year_hash");
+    }).primary).toMatchObject({ kind: "title_authors_year_hash", role: "candidate_alias" });
 
     expect(resolvePaperIdentity({
       id: "paper-local",

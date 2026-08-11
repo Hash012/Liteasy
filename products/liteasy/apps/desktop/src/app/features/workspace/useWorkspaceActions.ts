@@ -71,6 +71,7 @@ type UseWorkspaceActionsInput = {
   savePaperArtifact?: typeof saveUserPaperArtifact;
   onAnalysisHint: (message: string) => void;
   onImportJobsChanged: (jobsByDocumentId: Record<string, ImportJob>) => void;
+  onPaperIdentityReady?: (input: { firstPageText: string; paper: Paper }) => Promise<void> | void;
   onWorkspaceChanged: (state: WorkspaceState) => void;
   workspaceStore: WorkspaceStore;
 };
@@ -106,6 +107,7 @@ export function useWorkspaceActions({
   savePaperArtifact = saveUserPaperArtifact,
   onAnalysisHint,
   onImportJobsChanged,
+  onPaperIdentityReady,
   onWorkspaceChanged,
   ocrLanguage = "eng",
   workspaceStore
@@ -495,14 +497,22 @@ export function useWorkspaceActions({
               .map((chunk) => chunk.snippet)
               .join("\n");
             const inferredIdentity = inferPaperIdentityMetadataFromPdfText(firstPageText);
-            if ((inferredIdentity.doi && !paper.doi) || (inferredIdentity.arxivId && !paper.arxivId)) {
-              workspaceStore.updatePapers([{
+            const resolvedPaper = (inferredIdentity.doi && !paper.doi) || (inferredIdentity.arxivId && !paper.arxivId)
+              ? {
                 ...paper,
                 ...(paper.doi ? {} : inferredIdentity.doi ? { doi: inferredIdentity.doi } : {}),
                 ...(paper.arxivId ? {} : inferredIdentity.arxivId ? { arxivId: inferredIdentity.arxivId } : {})
-              }]);
+              }
+              : paper;
+            if (resolvedPaper !== paper) {
+              workspaceStore.updatePapers([resolvedPaper]);
               syncWorkspace();
             }
+            void Promise.resolve(onPaperIdentityReady?.({ firstPageText, paper: resolvedPaper }))
+              .catch((error) => {
+                const reason = error instanceof Error ? error.message : String(error);
+                onAnalysisHint(`《${paper.title}》文献身份确认失败：${reason}`);
+              });
             importStore.markParsed(jobId, {
               paperId: paper.id,
               chunks,

@@ -116,6 +116,7 @@ describe("literatureRecord", () => {
 
     expect(identity.primary).toMatchObject({
       kind: "doi",
+      role: "confirmed_identifier",
       source: "public_registry",
       value: "10.1000/example"
     });

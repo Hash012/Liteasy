@@ -88,6 +88,8 @@ function deferred<T>() {
 function setup(input: {
   initialPapers?: Paper[];
   loadLiterature?: ReturnType<typeof vi.fn>;
+  loadResolution?: ReturnType<typeof vi.fn>;
+  saveResolution?: ReturnType<typeof vi.fn>;
   persistPaperLiterature?: ReturnType<typeof vi.fn>;
   resolveLiterature?: ReturnType<typeof vi.fn>;
   confirmLiterature?: ReturnType<typeof vi.fn>;
@@ -96,6 +98,8 @@ function setup(input: {
 } = {}) {
   const workspaceStore = createWorkspaceStore(input.initialPapers ?? [paper()]);
   const loadLiterature = input.loadLiterature ?? vi.fn().mockResolvedValue(undefined);
+  const loadResolution = input.loadResolution ?? vi.fn().mockResolvedValue(undefined);
+  const saveResolution = input.saveResolution ?? vi.fn().mockResolvedValue(undefined);
   const persistPaperLiterature = input.persistPaperLiterature ?? vi.fn().mockImplementation(
     async (current: Paper, confirmed: LiteratureRecord) => ({ ...current, literature: confirmed })
   );
@@ -108,6 +112,7 @@ function setup(input: {
   const hook = renderHook(() => usePdfAnnotationPublicationController({
     forumClient: { applyAnnotationPublications, confirmLiterature, resolveLiterature },
     literatureMetadataRepository: { load: loadLiterature },
+    literatureResolutionRepository: { load: loadResolution, save: saveResolution },
     onPaperUpdated,
     persistPaperLiterature,
     workspaceStore
@@ -117,9 +122,11 @@ function setup(input: {
     applyAnnotationPublications,
     confirmLiterature,
     loadLiterature,
+    loadResolution,
     onPaperUpdated,
     persistPaperLiterature,
     resolveLiterature,
+    saveResolution,
     workspaceStore
   };
 }
@@ -412,6 +419,75 @@ describe("usePdfAnnotationPublicationController", () => {
     await act(async () => { publication = await pending; });
     expect(publication).toMatchObject({ state: "published" });
     expect(context.confirmLiterature).toHaveBeenCalledWith({ candidateKey: candidate.candidateKey, mode: "candidate" });
+  });
+
+  test("restores persisted candidates without repeating provider search", async () => {
+    const candidate = {
+      candidateKey: "crossref:doi:10.1000/persisted",
+      provider: "crossref" as const,
+      record: {
+        authors: ["Ada Lovelace"],
+        identifiers: [{ kind: "doi" as const, source: "public_registry" as const, value: "10.1000/persisted" }],
+        title: "Persisted Candidate"
+      }
+    };
+    const context = setup({
+      confirmLiterature: vi.fn().mockResolvedValue({ literature: literature() }),
+      loadResolution: vi.fn().mockResolvedValue({
+        candidates: [candidate],
+        request: { limit: 5, purpose: "liteasy_pdf_annotation" },
+        status: "candidate",
+        unavailableProviders: [],
+        updatedAt: "2026-08-11T00:00:00.000Z"
+      })
+    });
+
+    let pending!: Promise<ReturnType<typeof annotation>["publication"]>;
+    act(() => {
+      pending = context.result.current.actions.changePublication({
+        annotation: annotation(), operation: "publish", paper: paper()
+      });
+    });
+    await waitFor(() => expect(context.result.current.model.literatureDialog?.kind).toBe("candidates"));
+    expect(context.resolveLiterature).not.toHaveBeenCalled();
+
+    act(() => context.result.current.actions.selectCandidate(candidate.candidateKey));
+    let publication!: ReturnType<typeof annotation>["publication"];
+    await act(async () => { publication = await pending; });
+    expect(publication).toMatchObject({ state: "published" });
+  });
+
+  test("resolves and persists an exact identity after document import without publishing", async () => {
+    const exactCandidate = {
+      candidateKey: "crossref:doi:10.1000/imported",
+      provider: "crossref" as const,
+      record: {
+        authors: ["Ada Lovelace"],
+        identifiers: [{ kind: "doi" as const, source: "public_registry" as const, value: "10.1000/imported" }],
+        title: "Imported Paper"
+      }
+    };
+    const confirmed = literature({ literatureId: "literature-imported" });
+    const context = setup({
+      confirmLiterature: vi.fn().mockResolvedValue({ literature: confirmed }),
+      resolveLiterature: vi.fn().mockResolvedValue({
+        candidate: exactCandidate,
+        confirmationMode: "candidate",
+        status: "exact",
+        unavailableProviders: []
+      })
+    });
+
+    await act(() => context.result.current.actions.resolvePaperIdentity(paper(), {
+      identifiers: [{ kind: "doi", value: "10.1000/imported" }]
+    }));
+
+    expect(context.persistPaperLiterature).toHaveBeenCalledWith(paper(), confirmed);
+    expect(context.applyAnnotationPublications).not.toHaveBeenCalled();
+    expect(context.saveResolution).toHaveBeenLastCalledWith("paper-1", expect.objectContaining({
+      literatureId: "literature-imported",
+      status: "confirmed"
+    }));
   });
 
   test("exposes a cancellable resolving model before the resolver returns and ignores its late result", async () => {

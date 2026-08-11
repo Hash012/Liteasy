@@ -49,6 +49,7 @@ function renderWorkspaceActions(
       pages: ExtractedPdfPage[];
     }>;
     moveLocalLibraryResource?: MoveLocalLibraryResource;
+    onPaperIdentityReady?: (input: { firstPageText: string; paper: Paper }) => Promise<void> | void;
     persistDroppedPdfFiles?: PersistDroppedPdfFiles;
     savePaperArtifact?: (input: {
       artifactKind: string;
@@ -86,6 +87,7 @@ function renderWorkspaceActions(
       savePaperArtifact: options.savePaperArtifact,
       onAnalysisHint,
       onImportJobsChanged,
+      onPaperIdentityReady: options.onPaperIdentityReady,
       onWorkspaceChanged,
       workspaceStore
     })
@@ -436,7 +438,9 @@ describe("useWorkspaceActions", () => {
 
   test("fills missing DOI and arXiv metadata from explicitly marked first-page text", async () => {
     const paper = { id: "demo-identifiers", sourcePath: "fixtures/identifiers.pdf", title: "Metadata from PDF" };
+    const onPaperIdentityReady = vi.fn();
     const { result, workspaceStore } = renderWorkspaceActions([paper], {
+      onPaperIdentityReady,
       extractPaperChunks: async (input) => [{
         page: 1,
         paperId: input.id,
@@ -462,6 +466,14 @@ describe("useWorkspaceActions", () => {
         id: paper.id
       })
     ]);
+    expect(onPaperIdentityReady).toHaveBeenCalledWith({
+      firstPageText: "Preprint arXiv: 1706.03762v5. DOI: 10.48550/arXiv.1706.03762",
+      paper: expect.objectContaining({
+        arxivId: "1706.03762",
+        doi: "10.48550/arxiv.1706.03762",
+        id: paper.id
+      })
+    });
   });
 
   test("does not queue duplicate imports while a selected paper is already queued or parsing", async () => {

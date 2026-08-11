@@ -7,6 +7,7 @@ export type UserPaperArtifactKind =
   | "bibliographic-identity"
   | "citations"
   | "fulltext"
+  | "literature-resolution"
   | "reader-state";
 
 export function isUserPaperArtifactStoreAvailable() {

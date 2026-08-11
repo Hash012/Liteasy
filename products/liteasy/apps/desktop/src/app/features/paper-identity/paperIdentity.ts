@@ -16,14 +16,24 @@ export type PaperIdentitySource =
   | "metadata"
   | "public_registry";
 
+export type PaperIdentityCandidateRole =
+  | "candidate_alias"
+  | "confirmable_hint"
+  | "confirmed_identifier"
+  | "local_compatibility";
+
 export type PaperIdentityCandidate = {
   id: string;
   kind: PaperIdentityKind;
+  role: PaperIdentityCandidateRole;
   source: PaperIdentitySource;
   value: string;
 };
 
 export type PaperIdentity = {
+  authority:
+    | { kind: "candidate_hints" }
+    | { kind: "confirmed_literature"; literatureId: string; revision: number };
   candidates: readonly PaperIdentityCandidate[];
   paperId: string;
   primary: PaperIdentityCandidate;
@@ -47,6 +57,7 @@ export function paperIdentityFromLiterature(
     .map((identifier) => ({
       id: `${identifier.kind}:${identifier.value}`,
       kind: identifier.kind as PaperIdentityCandidate["kind"],
+      role: identifier.role === "candidate_alias" ? "candidate_alias" as const : "confirmed_identifier" as const,
       source: identifier.source,
       value: identifier.value
     }))
@@ -54,11 +65,17 @@ export function paperIdentityFromLiterature(
   const fallback: PaperIdentityCandidate = {
     id: `local_paper_id:${paper.id}`,
     kind: "local_paper_id",
+    role: "local_compatibility",
     source: "local",
     value: paper.id
   };
   const primary = candidates[0] ?? fallback;
   return Object.freeze({
+    authority: Object.freeze({
+      kind: "confirmed_literature" as const,
+      literatureId: literature.literatureId,
+      revision: literature.revision
+    }),
     candidates: Object.freeze([...candidates, fallback].map((candidate) => Object.freeze({ ...candidate }))),
     paperId: paper.id,
     primary: Object.freeze({ ...primary }),
@@ -274,11 +291,17 @@ function normalizeYear(value: unknown) {
 function createCandidate(
   kind: PaperIdentityKind,
   value: string,
-  source: PaperIdentitySource
+  source: PaperIdentitySource,
+  role: PaperIdentityCandidateRole = kind === "title_authors_year_hash"
+    ? "candidate_alias"
+    : kind === "local_paper_id"
+      ? "local_compatibility"
+      : "confirmable_hint"
 ): PaperIdentityCandidate {
   return {
     id: `${kind}:${value}`,
     kind,
+    role,
     source,
     value
   };
@@ -350,6 +373,7 @@ export function resolvePaperIdentity(input: PaperIdentityInput): PaperIdentity {
     createCandidate("local_paper_id", input.id, "local");
 
   return Object.freeze({
+    authority: Object.freeze({ kind: "candidate_hints" as const }),
     candidates: Object.freeze(candidates.map((candidate) => Object.freeze({ ...candidate }))),
     paperId: input.id,
     primary: Object.freeze({ ...primary }),
@@ -384,9 +408,28 @@ export function inferPaperIdentityMetadataFromPdfText(value: string): Pick<Paper
 }
 
 export function freezePaperIdentity(identity: PaperIdentity): PaperIdentity {
+  const authority = identity.authority?.kind === "confirmed_literature" &&
+    typeof identity.authority.literatureId === "string" && Number.isSafeInteger(identity.authority.revision)
+    ? identity.authority
+    : { kind: "candidate_hints" as const };
   return Object.freeze({
     ...identity,
-    candidates: Object.freeze(identity.candidates.map((candidate) => Object.freeze({ ...candidate }))),
-    primary: Object.freeze({ ...identity.primary })
+    authority: Object.freeze({ ...authority }),
+    candidates: Object.freeze(identity.candidates.map((candidate) => Object.freeze({
+      ...candidate,
+      role: candidate.role ?? (candidate.kind === "title_authors_year_hash"
+        ? "candidate_alias"
+        : candidate.kind === "local_paper_id"
+          ? "local_compatibility"
+          : "confirmable_hint")
+    }))),
+    primary: Object.freeze({
+      ...identity.primary,
+      role: identity.primary.role ?? (identity.primary.kind === "title_authors_year_hash"
+        ? "candidate_alias"
+        : identity.primary.kind === "local_paper_id"
+          ? "local_compatibility"
+          : "confirmable_hint")
+    })
   });
 }
