@@ -2,9 +2,9 @@
 
 这是仓库唯一的基础设施与部署编排入口。应用实现仍位于各产品/平台目录；本目录只保存环境配置 schema、容器编排、迁移调用和部署验证。
 
-当前 `local/` 是可重建的本地 Linux 基础设施，包含 PostgreSQL、Keycloak 和公共身份适配器，明确不是生产部署。运行方式见 [local/README.md](local/README.md)。
+当前 `local/` 是可重建的本地 Linux 基础设施，包含 PostgreSQL、Keycloak 和公共身份适配器，明确不是生产部署。运行方式见 [local/README.md](local/README.md)。`staging/` 是面向阿里云香港 ECS、托管 PostgreSQL 和私有对象存储的首个远程预发布定义，部署门禁、域名、容量边界及已知阻断见 [staging/README.md](staging/README.md)。
 
-`scripts/` 保存部署门禁检查。未来 staging/production 定义应按环境新增明确目录，并使用受审镜像 digest、密钥管理、可信 TLS、备份/PITR、监控和网络策略；不得复制本地 SQLite、Docker volume、自签名私钥或 `.env` 上线。
+`scripts/` 保存部署门禁检查。未来 production 定义应使用独立环境目录，并使用受审镜像 digest、密钥管理、可信 TLS、备份/PITR、监控和网络策略；不得把 staging 原地提升为生产，也不得复制本地 SQLite、Docker volume、自签名私钥或 `.env` 上线。
 
 ## 运行与验证
 
