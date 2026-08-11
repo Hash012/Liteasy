@@ -119,9 +119,11 @@ test("production migration set includes visualization and literature projections
     "023_visualization_generation_requests.sql",
     "024_literature_projections.sql",
     "025_personalization_explicit_opt_in.sql",
-    "026_normalize_library_literature_references.sql"
+    "026_normalize_library_literature_references.sql",
+    "027_visualization_reservation_groups.sql"
   ]);
-  const normalization = migrations.at(-1).sql;
+  const normalization = migrations.find(({ name }) => name === "026_normalize_library_literature_references.sql")?.sql;
+  assert.ok(normalization);
   assert.match(normalization, /FOREIGN KEY \(literature_id, literature_revision\)/);
   assert.match(normalization, /AND CASE[\s\S]+THEN \(entry\.metadata -> 'literature' ->> 'revision'\)::bigint/);
   assert.match(normalization, /metadata = entry\.metadata - 'literature'/);

@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Complete physics and chemistry process animations, governed raster illustration generation, cross-modality evaluation, performance benchmarks, and the final release gate for thin-reading multimodality.
+**Goal:** Complete physics and chemistry process animations, governed raster illustration generation, authoritative process/raster compilers, cross-modality evaluation, performance benchmarks, and the final release gate for thin-reading multimodality.
 
-**Architecture:** Process artifacts use deterministic state timelines produced by bounded workers; the renderer only projects validated states into Canvas/SVG. Raster generation is an optional provider operation behind the control-plane route, with strict image dimensions, content, OCR, source-separation, and evidence checks. A fixture-driven evaluator measures correctness, evidence binding, accessibility, latency, bundle cost, and fallback behavior before any modality is advertised.
+**Architecture:** Process artifacts use deterministic state timelines produced by bounded workers; the renderer only projects validated states into Canvas/SVG. The Liteasy API compiler remains the publication authority for `physics_process`, `reaction_process`, and `raster_illustration`: provider output can only be typed specs or normalized image assets and must pass service hard validation before publication. Raster generation is an optional provider operation behind the control-plane route, with strict image dimensions, content, OCR, source-separation, and evidence checks. A fixture-driven evaluator measures correctness, evidence binding, accessibility, latency, bundle cost, and fallback behavior before any modality is advertised.
 
 **Tech Stack:** TypeScript 5.8, Node.js 20, Canvas/SVG, Web Workers, Sharp (existing image boundary if available), provider gateway from plan 02, Vitest, Node test runner, Playwright, npm build tooling.
 
@@ -16,6 +16,7 @@
 - Every animation is bounded, reproducible, cancellable, and labelled as a model projection rather than proof of real-world completeness.
 - Raster pixels are never evidence; factual labels and relationships remain bound to typed evidence and pass the same hard gates as vector artifacts.
 - Release checks fail closed and preserve the fixed order: generated visualization above prose, original paper figures below prose.
+- Generated process and raster modalities remain disabled in the shared production catalog until their service compiler, service hard validator, desktop Skill, Kernel or validator, Renderer, accessibility projection, fallback, normal/refusal/interaction fixtures, desktop/mobile visual tests, and catalog gate all pass.
 
 ---
 
@@ -175,7 +176,44 @@ git add products/liteasy/services/api/src/visualizationRasterService.mjs product
 git commit -m "feat: govern raster illustration generation"
 ```
 
-### Task 4: Fixture Evaluator And Performance Benchmarks
+### Task 4: Authoritative Process And Raster Compilers
+
+**Files:**
+- Create: `products/liteasy/services/api/src/processRasterVisualizationCompilers.mjs`
+- Test: `products/liteasy/services/api/src/processRasterVisualizationCompilers.test.mjs`
+- Test: `products/liteasy/services/api/src/processRasterReleaseGate.test.mjs`
+- Create: `development/test-data/thin-reading-multimodal/process-raster-conformance.v1.json`
+- Test: `products/liteasy/apps/desktop/src/tests/processRasterConformance.test.ts`
+- Modify: `products/liteasy/packages/shared/visualizationBuiltins.v1.json`
+
+**Interfaces:**
+- Consumes: `PhysicsProcessSpecV1`, `ReactionProcessSpecV1`, `RasterIllustrationSpecV1`, shared JSON Schema, process/raster validators, and normalized raster assets.
+- Produces: service compiler descriptors, server domain hard validation, process/raster conformance fixtures, and catalog enablement only when the complete chain exists.
+
+- [ ] **Step 1: Write failing service compiler and catalog tests**
+
+The tests must reject process timelines with missing evidence, unbounded frame counts, non-finite states, failed physics invariants, unbalanced reactions, unsupported mechanisms, raster labels without evidence, source-figure identity collisions, external references, and catalog entries with no compiler.
+
+- [ ] **Step 2: Implement service compiler descriptors and hard validators**
+
+Add immutable compiler descriptors for `physics_process`, `reaction_process`, and `raster_illustration`. Process compilers validate typed specs only, enforce deterministic replay metadata, and reject arbitrary animation scripts or DOM. The raster compiler accepts only normalized image metadata plus typed evidence-bound labels, verifies digest and asset boundaries through the raster service, and rejects provider-specific fields.
+
+- [ ] **Step 3: Add cross-runtime conformance fixtures**
+
+Fixtures cover normal, refusal/fallback, invalid evidence, invalid process bounds, invalid chemistry conservation, invalid raster digest/reference, and interaction metadata for all three generated modalities. Desktop and API tests must agree on pass/fail/omit outcomes.
+
+- [ ] **Step 4: Enable catalog entries and commit**
+
+Only this task may enable `physics_process`, `reaction_process`, and `raster_illustration` in the shared production catalog, and only in the same focused change that proves the service compiler registry and desktop implementation chain are complete.
+
+```bash
+cd products/liteasy/services/api && node --test src/processRasterVisualizationCompilers.test.mjs src/processRasterReleaseGate.test.mjs
+cd products/liteasy/apps/desktop && npm test -- src/tests/processRasterConformance.test.ts
+git add products/liteasy/services/api/src/processRasterVisualizationCompilers.mjs products/liteasy/services/api/src/processRasterVisualizationCompilers.test.mjs products/liteasy/services/api/src/processRasterReleaseGate.test.mjs development/test-data/thin-reading-multimodal/process-raster-conformance.v1.json products/liteasy/apps/desktop/src/tests/processRasterConformance.test.ts products/liteasy/packages/shared/visualizationBuiltins.v1.json
+git commit -m "feat: validate process and raster artifacts on server"
+```
+
+### Task 5: Fixture Evaluator And Performance Benchmarks
 
 **Files:**
 - Create: `products/liteasy/apps/desktop/src/tests/fixtures/multimodalEvaluationFixtures.ts`
@@ -218,7 +256,7 @@ git add products/liteasy/apps/desktop/src/tests/fixtures/multimodalEvaluationFix
 git commit -m "test: add multimodal evaluation gates"
 ```
 
-### Task 5: Final Release Gate And Provider Smoke Verification
+### Task 6: Final Release Gate And Provider Smoke Verification
 
 **Files:**
 - Create: `products/liteasy/apps/desktop/src/tests/multimodalReleaseGate.test.ts`
@@ -250,7 +288,7 @@ Expected: FAIL until all modality registrations, reader order, and capability pr
 
 - [ ] **Step 3: Implement release command and provider smoke test**
 
-Add `npm run test:multimodal-release` to run focused unit tests, browser pixel tests, the benchmark script, the production build, offline/revalidation tests, and reduced-motion checks. The API smoke test uses an administrator-provided test route only when `LITEASY_VISUALIZATION_SMOKE_ROUTE` is set; otherwise it reports `skipped_configuration` and does not fabricate a pass. It checks route revision, reservation/settlement/rollback, normalized structured/image output, redacted logs, cancellation, and idempotency.
+Add `npm run test:multimodal-release` to run focused unit tests, browser pixel tests, the benchmark script, the production build, offline/revalidation tests, reduced-motion checks, and cross-runtime catalog/compiler/desktop-chain consistency for every advertised modality. The API smoke test uses an administrator-provided test route only when `LITEASY_VISUALIZATION_SMOKE_ROUTE` is set; otherwise it reports `skipped_configuration` and does not fabricate a pass. It checks route revision, reservation/settlement/rollback, normalized structured/image output, redacted logs, cancellation, and idempotency.
 
 - [ ] **Step 4: Document the gates and run the full affected suite**
 

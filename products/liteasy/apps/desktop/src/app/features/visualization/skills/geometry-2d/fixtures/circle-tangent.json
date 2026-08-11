@@ -1,0 +1,39 @@
+{
+  "constraints": [
+    {
+      "evidenceClaimIds": ["claim-tangent"],
+      "id": "tangent",
+      "kind": "tangent",
+      "objectIds": ["circle", "line"]
+    }
+  ],
+  "objects": [
+    {
+      "data": {
+        "cx": 0,
+        "cy": 0,
+        "radius": 1
+      },
+      "evidenceClaimIds": ["claim-circle"],
+      "id": "circle",
+      "kind": "circle"
+    },
+    {
+      "data": {
+        "x1": -1,
+        "x2": 1,
+        "y1": 1,
+        "y2": 1
+      },
+      "evidenceClaimIds": ["claim-line"],
+      "id": "line",
+      "kind": "line"
+    }
+  ],
+  "viewport": {
+    "xMin": -2,
+    "xMax": 2,
+    "yMin": -2,
+    "yMax": 2
+  }
+}

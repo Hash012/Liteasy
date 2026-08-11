@@ -5,6 +5,66 @@
       "generated": false,
       "modality": "source_figure",
       "skillId": "source-figure"
+    },
+    {
+      "enabled": true,
+      "generated": true,
+      "modality": "semantic_graph",
+      "skillId": "semantic-graph"
+    },
+    {
+      "enabled": true,
+      "generated": true,
+      "modality": "circuit",
+      "skillId": "circuit"
+    },
+    {
+      "enabled": true,
+      "generated": true,
+      "modality": "physics_diagram",
+      "skillId": "physics-diagram"
+    },
+    {
+      "enabled": true,
+      "generated": true,
+      "modality": "biology_structure",
+      "skillId": "biology-structure"
+    },
+    {
+      "enabled": true,
+      "generated": true,
+      "modality": "function_plot",
+      "skillId": "function-plot"
+    },
+    {
+      "enabled": true,
+      "generated": true,
+      "modality": "geometry_2d",
+      "skillId": "geometry-2d"
+    },
+    {
+      "enabled": true,
+      "generated": true,
+      "modality": "geometry_3d",
+      "skillId": "geometry-3d"
+    },
+    {
+      "enabled": true,
+      "generated": true,
+      "modality": "physics_process",
+      "skillId": "physics-process"
+    },
+    {
+      "enabled": true,
+      "generated": true,
+      "modality": "reaction_process",
+      "skillId": "reaction-process"
+    },
+    {
+      "enabled": true,
+      "generated": true,
+      "modality": "raster_illustration",
+      "skillId": "raster-illustration"
     }
   ],
   "version": "liteasy.visualization-builtins/v1"

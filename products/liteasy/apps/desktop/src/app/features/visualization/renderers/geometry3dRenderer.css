@@ -1,0 +1,69 @@
+.visualization-geometry-3d {
+  display: grid;
+  gap: 10px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.visualization-geometry-3d__toolbar,
+.visualization-geometry-3d__objects {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.visualization-geometry-3d__stage {
+  aspect-ratio: 4 / 3;
+  background: #f8fafc;
+  border: 1px solid #d8e1e8;
+  border-radius: 8px;
+  max-width: 760px;
+  min-height: 280px;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.visualization-geometry-3d__fallback,
+.visualization-geometry-3d__fallback svg,
+.visualization-geometry-3d__canvas {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.visualization-geometry-3d__fallback,
+.visualization-geometry-3d__canvas {
+  inset: 0;
+  position: absolute;
+}
+
+.visualization-geometry-3d__canvas {
+  cursor: grab;
+  touch-action: none;
+}
+
+.visualization-geometry-3d__canvas:active {
+  cursor: grabbing;
+}
+
+.visualization-geometry-3d__table {
+  border-collapse: collapse;
+  color: #36454f;
+  font-size: 12px;
+  width: 100%;
+}
+
+.visualization-geometry-3d__table th,
+.visualization-geometry-3d__table td {
+  border-bottom: 1px solid #e7edf2;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.visualization-geometry-3d__table th {
+  color: #1d2b36;
+  font-weight: 600;
+  width: 36%;
+}

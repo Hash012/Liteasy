@@ -278,6 +278,12 @@ describe("thinReadingAgent", () => {
     expect(prompt).toContain("先选证据，再写句子");
     expect(prompt).toContain("evidence ID 不是主题标签");
     expect(prompt).toContain("主体、关系、对象、条件和范围");
+    expect(prompt).toContain("函数、定义域与关键点");
+    expect(prompt).toContain("平面几何构造");
+    expect(prompt).toContain("状态或速度随时间变化");
+    expect(prompt).toContain("总反应式或配平关系不等于已知反应过程");
+    expect(prompt).toContain("不能因为论文很短");
+    expect(prompt).toContain("单个术语定义、单个数值比较、普通历史叙述");
   });
 
   test("builds a source-free prompt for orchestration-authorized AI interpretation", () => {

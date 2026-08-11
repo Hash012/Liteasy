@@ -11,6 +11,7 @@ import {
   GetPublicAccessBlockCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
+  PutObjectCommand,
   S3Client
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
@@ -180,6 +181,52 @@ export class S3ObjectStore {
     }
     await this.deleteKey(staged.storageKey);
     return { ...staged, storageKey: finalKey };
+  }
+
+  async putImmutableObject(input, {
+    contentHash,
+    maximumBytes = 16 * 1024 * 1024,
+    mediaType,
+    metadata = {}
+  } = {}) {
+    const bytes = Buffer.from(input ?? []);
+    if (bytes.length === 0 || bytes.length > maximumBytes) throw new Error("storage_object_size_invalid");
+    if (!/^[a-f0-9]{64}$/.test(contentHash ?? "") ||
+      createHash("sha256").update(bytes).digest("hex") !== contentHash) {
+      throw new Error("storage_content_hash_invalid");
+    }
+    if (typeof mediaType !== "string" || !/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/i.test(mediaType)) {
+      throw new Error("storage_media_type_invalid");
+    }
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata) ||
+      Object.entries(metadata).some(([key, value]) => !/^[a-z0-9-]{1,80}$/.test(key) || typeof value !== "string" || value.length > 512)) {
+      throw new Error("storage_metadata_invalid");
+    }
+    const storageKey = this.objectKey(contentHash);
+    let existing;
+    try {
+      existing = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: storageKey }));
+    } catch (error) {
+      if (!isMissingObject(error)) throw error;
+    }
+    if (!existing) {
+      await this.client.send(new PutObjectCommand({
+        Body: bytes,
+        Bucket: this.bucket,
+        ContentType: mediaType,
+        Key: storageKey,
+        Metadata: {
+          ...metadata,
+          "byte-length": String(bytes.length),
+          sha256: contentHash
+        }
+      }));
+      existing = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: storageKey }));
+    }
+    if (Number(existing.ContentLength) !== bytes.length || existing.ContentType !== mediaType || existing.Metadata?.sha256 !== contentHash) {
+      throw new Error("storage_existing_object_integrity_mismatch");
+    }
+    return { byteLength: bytes.length, contentHash, mediaType, storageKey };
   }
 
   async openObject(storageKey) {

@@ -1,0 +1,106 @@
+{
+  "version": "liteasy.interactive-math-conformance/v1",
+  "source": {
+    "evidence": [
+      { "id": "evidence-1", "kind": "paper", "quote": "Bounded interactive math evidence." }
+    ],
+    "intent": {
+      "candidateModalities": ["function_plot", "geometry_2d", "geometry_3d"],
+      "purpose": "explain_math"
+    },
+    "nodeId": "node-1"
+  },
+  "modalities": {
+    "function_plot": {
+      "valid": {
+        "accessibility": { "objectReadingOrder": ["vertex"], "summary": "Quadratic function plot." },
+        "evidenceBindings": [{ "claimId": "claim-math", "confidence": "direct", "evidenceIds": ["evidence-1"] }],
+        "interaction": { "pan": true, "zoom": true, "rotate": false, "playback": "none", "parameterIds": [], "selectableObjectIds": ["vertex"] },
+        "semanticObjects": [
+          { "objectId": "vertex", "kind": "function_plot_key_point", "label": "vertex", "objectPath": ["vertex"], "evidenceClaimIds": ["claim-math"], "selectable": true }
+        ],
+        "spec": {
+          "modality": "function_plot",
+          "payload": {
+            "expression": "x^2",
+            "variable": "x",
+            "domain": { "min": -2, "max": 2 },
+            "parameters": [],
+            "axes": { "xLabel": "x", "yLabel": "f(x)" },
+            "keyPoints": [{ "id": "vertex", "x": 0, "y": 0, "label": "vertex", "evidenceClaimIds": ["claim-math"] }],
+            "auxiliaryCurves": []
+          }
+        }
+      },
+      "invalid": {
+        "domain": {
+          "diagnosticCode": "function_plot_expression_forbidden",
+          "patch": { "spec": { "payload": { "expression": "globalThis.alert(1)" } } }
+        }
+      }
+    },
+    "geometry_2d": {
+      "valid": {
+        "accessibility": { "objectReadingOrder": ["circle", "line", "tangent-point"], "summary": "Circle tangent to a line." },
+        "evidenceBindings": [{ "claimId": "claim-math", "confidence": "direct", "evidenceIds": ["evidence-1"] }],
+        "interaction": { "pan": true, "zoom": true, "rotate": false, "playback": "none", "parameterIds": [], "selectableObjectIds": ["circle", "line", "tangent-point"] },
+        "semanticObjects": [
+          { "objectId": "circle", "kind": "circle", "label": "circle", "objectPath": ["circle"], "evidenceClaimIds": ["claim-math"], "selectable": true },
+          { "objectId": "line", "kind": "line", "label": "line", "objectPath": ["line"], "evidenceClaimIds": ["claim-math"], "selectable": true },
+          { "objectId": "tangent-point", "kind": "derived_point", "label": "tangent-point", "objectPath": ["tangent-point"], "evidenceClaimIds": ["claim-math"], "selectable": true }
+        ],
+        "spec": {
+          "modality": "geometry_2d",
+          "payload": {
+            "objects": [
+              { "id": "circle", "kind": "circle", "data": { "cx": 0, "cy": 0, "radius": 1 }, "evidenceClaimIds": ["claim-math"] },
+              { "id": "line", "kind": "line", "data": { "x1": -1, "x2": 1, "y1": 1, "y2": 1 }, "evidenceClaimIds": ["claim-math"] }
+            ],
+            "constraints": [{ "id": "tangent", "kind": "tangent", "objectIds": ["circle", "line"], "evidenceClaimIds": ["claim-math"] }],
+            "viewport": { "xMin": -2, "xMax": 2, "yMin": -2, "yMax": 2 }
+          }
+        }
+      },
+      "invalid": {
+        "domain": {
+          "diagnosticCode": "geometry_radius_invalid",
+          "patch": { "spec": { "payload": { "objects": [{ "id": "circle", "kind": "circle", "data": { "cx": 0, "cy": 0, "radius": 0 }, "evidenceClaimIds": ["claim-math"] }] } } }
+        }
+      }
+    },
+    "geometry_3d": {
+      "valid": {
+        "accessibility": { "objectReadingOrder": ["cube", "mid-section"], "summary": "Cube with a diagonal plane section." },
+        "evidenceBindings": [{ "claimId": "claim-math", "confidence": "direct", "evidenceIds": ["evidence-1"] }],
+        "interaction": { "pan": true, "zoom": true, "rotate": true, "playback": "none", "parameterIds": ["mid-section"], "selectableObjectIds": ["cube", "mid-section"] },
+        "semanticObjects": [
+          { "objectId": "cube", "kind": "mesh", "label": "cube", "objectPath": ["cube"], "evidenceClaimIds": ["claim-math"], "selectable": true },
+          { "objectId": "mid-section", "kind": "section", "label": "mid-section", "objectPath": ["mid-section"], "evidenceClaimIds": ["claim-math"], "selectable": true }
+        ],
+        "spec": {
+          "modality": "geometry_3d",
+          "payload": {
+            "objects": [
+              {
+                "id": "cube",
+                "kind": "mesh",
+                "vertices": [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0], [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]],
+                "faces": [[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4], [2, 3, 7, 6], [1, 2, 6, 5], [0, 3, 7, 4]],
+                "evidenceClaimIds": ["claim-math"]
+              }
+            ],
+            "constraints": [{ "id": "bounded-section", "kind": "plane_section", "objectIds": ["cube"], "evidenceClaimIds": ["claim-math"] }],
+            "sections": [{ "id": "mid-section", "objectId": "cube", "plane": [1, 1, 1, -1.5], "evidenceClaimIds": ["claim-math"] }],
+            "camera": { "position": [3, 3, 3], "target": [0.5, 0.5, 0.5], "minDistance": 1, "maxDistance": 10 }
+          }
+        }
+      },
+      "invalid": {
+        "domain": {
+          "diagnosticCode": "geometry_3d_face_degenerate",
+          "patch": { "spec": { "payload": { "objects": [{ "id": "cube", "kind": "mesh", "vertices": [[0, 0, 0], [1, 0, 0], [1, 1, 0]], "faces": [[0, 0, 0]], "evidenceClaimIds": ["claim-math"] }] } } }
+        }
+      }
+    }
+  }
+}

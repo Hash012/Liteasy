@@ -81,6 +81,20 @@ async function sendPdfStream(response, object, fileName, mode) {
   await pipeline(object.body, response);
 }
 
+async function sendPrivateRasterStream(response, object) {
+  response.writeHead(200, {
+    ...(response.liteasyCorsOrigin ? {
+      "access-control-allow-origin": response.liteasyCorsOrigin,
+      vary: "Origin"
+    } : {}),
+    "cache-control": "private, no-store",
+    "content-length": String(object.byteLength),
+    "content-type": "image/png",
+    "x-content-type-options": "nosniff"
+  });
+  await pipeline(object.body, response);
+}
+
 async function readJsonBody(request, maximumBytes = 1024 * 1024) {
   const contentType = request.headers["content-type"] ?? "";
   if (!contentType.toLowerCase().startsWith("application/json")) {
@@ -289,6 +303,17 @@ export function createCloudRequestHandler(runtime, config) {
         traceId,
         url
       })) return;
+
+      const rasterAssetMatch = url.pathname.match(/^\/v1\/account\/visualization\/assets\/([a-f0-9]{64})$/);
+      if (request.method === "GET" && rasterAssetMatch) {
+        const identity = await runtime.identityVerifier.verifyAuthorizationHeader(
+          request.headers.authorization,
+          "liteasy-desktop"
+        );
+        const object = await runtime.visualizationService.openRasterAsset(identity.subject, rasterAssetMatch[1]);
+        await sendPrivateRasterStream(response, object);
+        return;
+      }
 
       if (request.method === "POST" && new Set([
         "/v1/internal/intuecho/organizations/access",

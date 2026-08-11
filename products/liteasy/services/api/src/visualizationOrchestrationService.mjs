@@ -73,6 +73,9 @@ export function visualizationOrchestrationReason(error) {
     code.includes("thin_reading_visualization_source"))) return "evidence_invalid";
   if (typeof code === "string" && (code.includes("validation") || code.includes("compiler") ||
     code.includes("proposal") || code.includes("artifact_schema"))) return "validation_failed";
+  if (typeof code === "string" && code.startsWith("visualization_raster_")) {
+    return code.endsWith("_unavailable") ? "modality_unavailable" : "validation_failed";
+  }
   if (typeof code === "string" && (code.includes("provider") || code.includes("route"))) return "provider_unavailable";
   return "internal_failure";
 }

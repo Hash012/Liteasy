@@ -127,15 +127,34 @@ export type ReactionProcessSpecV1 = {
   species: Array<{ id: string; formula: string; state: "s" | "l" | "g" | "aq"; evidenceClaimIds: string[] }>;
   steps: Array<{ id: string; reactants: Array<{ speciesId: string; coefficient: number }>; products: Array<{ speciesId: string; coefficient: number }>; mechanism?: Array<{ id: string; label: string; evidenceClaimIds: string[] }>; evidenceClaimIds: string[] }>;
   conditions: Array<{ id: string; label: string; value?: string; evidenceClaimIds: string[] }>;
-  atomMap: Array<{ id: string; fromSpeciesId: string; fromAtom: number; toSpeciesId: string; toAtom: number; evidenceClaimIds: string[] }>;
+  atomMap: Array<{
+    id: string;
+    stepId?: string;
+    fromSpeciesId: string;
+    fromMolecule?: number;
+    fromAtom: number;
+    toSpeciesId: string;
+    toMolecule?: number;
+    toAtom: number;
+    evidenceClaimIds: string[];
+  }>;
 };
 
 export type RasterIllustrationSpecV1 = {
   visualSchema: string;
   composition: { width: number; height: number; aspectRatio: number };
   labels: Array<{ id: string; text: string; evidenceClaimIds: string[] }>;
-  styleLock: { palette: string[]; typography: string; prohibitDecorativeClaims: boolean };
+  styleLock: { palette: string[]; typography: string; prohibitDecorativeClaims: boolean; allowTransparency?: boolean };
   evidenceClaimIds: string[];
+  asset?: {
+    assetRef: string;
+    byteLength: number;
+    height: number;
+    labelVerification: { engine: string; verifiedLabelIds: string[] };
+    mimeType: "image/png";
+    sha256: string;
+    width: number;
+  };
 };
 
 export type SourceFigureRefV1 = {

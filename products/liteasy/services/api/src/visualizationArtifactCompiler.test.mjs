@@ -107,6 +107,29 @@ test("compiles provider JSON text with server-owned identity, versions, usage, a
   }]);
 });
 
+test("derives a stable artifact identifier when the production reservation view has no artifactId", async () => {
+  const productionReservation = { ...reservation };
+  delete productionReservation.artifactId;
+  const first = await registry().compile({
+    locale: "zh-CN",
+    modality: "semantic_graph",
+    nodeId: "node-1",
+    proposal: proposal(),
+    reservation: productionReservation,
+    source
+  });
+  const second = await registry().compile({
+    locale: "zh-CN",
+    modality: "semantic_graph",
+    nodeId: "node-1",
+    proposal: proposal(),
+    reservation: productionReservation,
+    source
+  });
+  assert.match(first.artifactId, /^vizart_[a-f0-9]{32}$/);
+  assert.equal(second.artifactId, first.artifactId);
+});
+
 test("rejects unknown compilers, malformed or schema-invalid proposals, unbound evidence, and modality drift", async (t) => {
   await assert.rejects(
     () => registry().compile({ locale: "zh-CN", modality: "circuit", nodeId: "node-1", proposal: proposal(), reservation, source }),
@@ -166,7 +189,7 @@ test("fails closed when a hard validator does not pass", async () => {
   );
 });
 
-test("builds a bounded provider payload and production catalog enables no generated modality", () => {
+test("builds a bounded provider payload and supports an explicit empty generated catalog", () => {
   const instance = registry();
   assert.equal("compilers" in instance, false);
   assert.deepEqual(instance.availableModalities(), ["semantic_graph"]);
@@ -179,7 +202,9 @@ test("builds a bounded provider payload and production catalog enables no genera
     schema: proposalSchema,
     schemaName: "liteasy_semantic_graph_proposal_v1"
   });
-  assert.deepEqual(new VisualizationArtifactCompilerRegistry().availableModalities(), []);
+  assert.deepEqual(new VisualizationArtifactCompilerRegistry({
+    catalog: { entries: [], version: "liteasy.visualization-builtins/v1" }
+  }).availableModalities(), []);
 });
 
 test("rejects an enabled generated catalog entry without a compiler", () => {

@@ -1,0 +1,15 @@
+{
+  "annotations": [
+    { "evidenceClaimIds": ["claim-physics"], "id": "label-trajectory", "objectId": "projectile", "text": "抛体受重力作用" }
+  ],
+  "constraints": [
+    { "evidenceClaimIds": ["claim-physics"], "id": "constraint-ground", "kind": "ground_reference", "objectIds": ["projectile"] }
+  ],
+  "objects": [
+    { "evidenceClaimIds": ["claim-physics"], "id": "projectile", "kind": "mass", "label": "抛体", "position": [180, 180] }
+  ],
+  "rays": [],
+  "vectors": [
+    { "direction": [0, 1], "evidenceClaimIds": ["claim-physics"], "id": "gravity", "magnitude": 9.8, "objectId": "projectile", "unit": "N" }
+  ]
+}

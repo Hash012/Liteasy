@@ -1,0 +1,16 @@
+{
+  "costClass": "low",
+  "evidenceRequirements": ["all objects, constraints, and derived construction facts must cite evidence claims"],
+  "fallbackModalities": ["source_figure"],
+  "id": "geometry-2d",
+  "integrityRules": ["typed geometry_2d spec only", "no generated SVG or HTML", "reject degenerate primitives"],
+  "kernelId": "geometry-2d-v1",
+  "modality": "geometry_2d",
+  "outputSchemaId": "liteasy.visualization/geometry-2d/v1",
+  "remote": false,
+  "rendererId": "geometry-2d-svg",
+  "runtimeVersion": "liteasy.visualization-runtime/v1",
+  "styleLock": ["trusted local SVG renderer", "observation-only pan, zoom, selection, and construction visibility"],
+  "validatorIds": ["schema-identity", "evidence-claims", "stable-object-ids", "interaction-allowlist", "resource-limits", "accessibility-reading-order"],
+  "version": "1.0.0"
+}

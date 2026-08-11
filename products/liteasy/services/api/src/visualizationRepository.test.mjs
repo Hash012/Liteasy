@@ -74,21 +74,26 @@ function transactionHarness() {
         return { rows: row ? [row] : [] };
       }
       if (normalized.includes("FROM visualization_provider_configs")) {
-        return { rows: [{ route_id: "route-1", provider_id: "provider-1", revision: "1", enabled: true, circuit_state: "closed", circuit_open_until: null, modalities: ["semantic_graph"], operations: ["structured_generation", "validation"], data_classes: ["paper"], route_available: true }] };
+        return { rows: [{ route_id: "route-1", provider_id: "provider-1", revision: "1", enabled: true, circuit_state: "closed", circuit_open_until: null, modalities: ["semantic_graph"], operations: state.routeOperations ?? ["structured_generation", "validation"], data_classes: ["paper"], route_available: true }] };
       }
       if (normalized.includes("FROM visualization_cost_policies")) return { rows: state.availableCostPolicy ? [{ modality: "semantic_graph", operation: "structured_generation", data_class: "paper", unit_cost: 4, revision: "1", enabled: true }] : [] };
       if (normalized.includes("FROM visualization_quota_reservations") && normalized.includes("idempotency_key")) {
         const row = [...state.reservations.values()].find((item) => item.subject_id === values[0] && item.idempotency_key === values[1]);
         return { rows: row ? [row] : [] };
       }
+      if (normalized.startsWith("SELECT COUNT")) {
+        const groups = new Set([...state.reservations.values()]
+          .filter((row) => row.state === "reserved")
+          .map((row) => row.reservation_group_id ?? row.reservation_id));
+        return { rows: [{ active_count: String(groups.size) }] };
+      }
       if (normalized.includes("FROM visualization_quota_reservations") && normalized.includes("reservation_id")) {
         const row = state.reservations.get(values[0]);
         return { rows: row ? [row] : [] };
       }
       if (normalized.startsWith("SELECT COALESCE(SUM")) return { rows: [{ used_units: "0" }] };
-      if (normalized.startsWith("SELECT COUNT")) return { rows: [{ active_count: "0" }] };
       if (normalized.startsWith("INSERT INTO visualization_quota_reservations")) {
-        const row = { reservation_id: values[0], subject_id: values[1], idempotency_key: values[2], modality: values[3], route_id: values[4], route_revision: String(values[5]), policy_revision: String(values[6]), requested_by: values[7], cost_table_revision: String(values[8]), reserved_units: values[9], settled_units: null, state: "reserved", expires_at: new Date(values[10]), created_at: new Date(), updated_at: new Date() };
+        const row = { reservation_id: values[0], subject_id: values[1], idempotency_key: values[2], modality: values[3], route_id: values[4], route_revision: String(values[5]), policy_revision: String(values[6]), requested_by: values[7], cost_table_revision: String(values[8]), reserved_units: values[9], reservation_group_id: values[10], settled_units: null, state: "reserved", expires_at: new Date(values[11]), created_at: new Date(), updated_at: new Date() };
         state.reservations.set(row.reservation_id, row);
         return { rows: [row] };
       }
@@ -179,6 +184,65 @@ test("reserve requires a non-empty entitlement modality allowlist and prices the
   harness.state.entitlements.get("user-1").allowed_modalities = ["semantic_graph"];
   await repository.reserve(subject, { idempotencyKey: "request-0004", modality: "semantic_graph", routeId: "route-1", traceId: "trace-1" });
   assert.equal(harness.calls.some(({ sql, values }) => sql.includes("visualization_cost_policies") && values.includes("provider-1")), true);
+});
+
+test("reserve selects and pins the highest-priority compatible route when the worker supplies no route id", async () => {
+  const harness = transactionHarness();
+  harness.state.entitlements.set("user-1", { subject_id: "user-1", allowed: true, explicit_requests_allowed: true, allowed_modalities: ["semantic_graph"], revision: "1" });
+  harness.state.preferences.set("user-1", { subject_id: "user-1", enabled: true, revision: "1" });
+  harness.state.policies.set("user-1", { subject_id: "user-1", daily_units: "8", monthly_units: "16", max_concurrency: "2", timezone: "UTC", revision: "1" });
+  const repository = new PostgresVisualizationRepository(harness.pool);
+
+  const result = await repository.reserve(subject, {
+    dataClass: "paper",
+    idempotencyKey: "request-auto-route",
+    modality: "semantic_graph",
+    operation: "structured_generation",
+    traceId: "trace-auto-route"
+  });
+
+  assert.equal(result.reservation.routeId, "route-1");
+  const routeSelection = harness.calls.find(({ sql }) => sql.includes("operations ? $1"));
+  assert.deepEqual(routeSelection.values, ["structured_generation", "semantic_graph", "paper"]);
+});
+
+test("two provider stages in one reservation group consume a single concurrency slot", async () => {
+  const harness = transactionHarness();
+  harness.state.routeOperations = ["structured_generation", "image_generation"];
+  harness.state.entitlements.set("user-1", { subject_id: "user-1", allowed: true, explicit_requests_allowed: true, allowed_modalities: ["semantic_graph"], revision: "1" });
+  harness.state.preferences.set("user-1", { subject_id: "user-1", enabled: true, revision: "1" });
+  harness.state.policies.set("user-1", { subject_id: "user-1", daily_units: "16", monthly_units: "32", max_concurrency: "1", timezone: "UTC", revision: "1" });
+  const repository = new PostgresVisualizationRepository(harness.pool);
+
+  const structured = await repository.reserve(subject, {
+    idempotencyKey: "request-group-structured",
+    modality: "semantic_graph",
+    operation: "structured_generation",
+    reservationId: "reservation-group-root",
+    routeId: "route-1",
+    traceId: "trace-group-structured"
+  });
+  const image = await repository.reserve(subject, {
+    idempotencyKey: "request-group-image",
+    modality: "semantic_graph",
+    operation: "image_generation",
+    reservationGroupId: structured.reservation.reservationId,
+    reservationId: "reservation-group-image",
+    routeId: "route-1",
+    traceId: "trace-group-image"
+  });
+
+  assert.equal(structured.reservation.reservationGroupId, "reservation-group-root");
+  assert.equal(image.reservation.reservationGroupId, "reservation-group-root");
+  assert.equal([...harness.state.reservations.values()].length, 2);
+
+  await assert.rejects(() => repository.reserve(subject, {
+    idempotencyKey: "request-independent",
+    modality: "semantic_graph",
+    operation: "structured_generation",
+    routeId: "route-1",
+    traceId: "trace-independent"
+  }), /visualization_concurrency_exceeded/);
 });
 
 test("settlement and rollback write user ledger transitions independently from provider costs", async () => {
@@ -870,7 +934,7 @@ test("publication locks and rechecks governance before atomically saving and set
     if (sql.includes("FROM visualization_quota_reservations") && sql.includes("FOR UPDATE")) return { rows: [reservation] };
     if (sql.includes("FROM visualization_entitlements") && sql.includes("FOR UPDATE")) return { rows: [{ allowed: true, allowed_modalities: ["semantic_graph"] }] };
     if (sql.includes("FROM visualization_user_preferences")) return { rows: [{ enabled: true }] };
-    if (sql.includes("FROM visualization_provider_configs") && sql.includes("FOR UPDATE")) return { rows: [{ enabled: true, revision: "7" }] };
+    if (sql.includes("FROM visualization_provider_configs") && sql.includes("FOR UPDATE")) return { rows: [{ enabled: true, revision: "7", route_id: "route-1" }] };
     if (sql.includes("FROM library_entries entry")) {
       return { rows: [{ content_hash: values[0] === "document-2" ? "d".repeat(64) : "c".repeat(64) }] };
     }
@@ -925,6 +989,129 @@ test("publication locks and rechecks governance before atomically saving and set
     calls.indexOf(calls.find((sql) => sql.startsWith("UPDATE visualization_quota_reservations"))));
 });
 
+test("atomically publishes raster output and settles structured plus image reservations", async () => {
+  const reservations = [
+    {
+      cost_table_revision: "1",
+      idempotency_key: "request-raster:image",
+      modality: "raster_illustration",
+      policy_revision: "1",
+      reservation_id: "reservation-image",
+      reservation_group_id: "reservation-structured",
+      reserved_units: 4,
+      route_id: "route-image",
+      route_revision: "3",
+      state: "reserved",
+      subject_id: "user-1"
+    },
+    {
+      cost_table_revision: "1",
+      idempotency_key: "request-raster:structured",
+      modality: "raster_illustration",
+      policy_revision: "1",
+      reservation_id: "reservation-structured",
+      reservation_group_id: "reservation-structured",
+      reserved_units: 1,
+      route_id: "route-structured",
+      route_revision: "5",
+      state: "reserved",
+      subject_id: "user-1"
+    }
+  ];
+  const harness = adminPool(async (sql, values) => {
+    if (sql.includes("FROM visualization_quota_reservations") && sql.includes("ANY($1::text[])")) {
+      assert.deepEqual(values[0], ["reservation-image", "reservation-structured"]);
+      return { rows: reservations };
+    }
+    if (sql.includes("FROM visualization_entitlements")) return { rows: [{ allowed: true, allowed_modalities: ["raster_illustration"] }] };
+    if (sql.includes("FROM visualization_user_preferences")) return { rows: [{ enabled: true }] };
+    if (sql.includes("FROM visualization_provider_configs") && sql.includes("ANY($1::text[])")) {
+      return { rows: [
+        { circuit_state: "closed", enabled: true, revision: "3", route_id: "route-image" },
+        { circuit_state: "closed", enabled: true, revision: "5", route_id: "route-structured" }
+      ] };
+    }
+    if (sql.includes("FROM library_entries entry")) return { rows: [{ content_hash: "c".repeat(64) }] };
+    if (sql.startsWith("INSERT INTO visualization_artifacts")) return { rows: [{
+      artifact_id: "artifact-raster-1",
+      body: { artifactId: "artifact-raster-1" },
+      modality: "raster_illustration",
+      reservation_id: "reservation-image",
+      state: "ready"
+    }] };
+    if (sql.startsWith("UPDATE visualization_quota_reservations")) {
+      const current = reservations.find((reservation) => reservation.reservation_id === values[0]);
+      return { rows: [{ ...current, settled_units: current.reserved_units, state: "settled" }] };
+    }
+    return { rows: [] };
+  });
+  const repository = new PostgresVisualizationRepository(harness.pool);
+
+  const result = await repository.publish("user-1", {
+    artifact: {
+      artifactId: "artifact-raster-1",
+      body: { artifactId: "artifact-raster-1" },
+      contentHash: null,
+      evidenceHash: "a".repeat(64),
+      modality: "raster_illustration",
+      nodeId: "node-1",
+      specHash: "b".repeat(64),
+      state: "ready"
+    },
+    auxiliaryReservationIds: ["reservation-structured"],
+    documents: [{
+      access: { allowed: true, scopeId: "user-1", scopeType: "user", sourceIdentityHash: "c".repeat(64) },
+      documentId: "document-1",
+      isPrimary: true,
+      sourceIdentityHash: "c".repeat(64)
+    }],
+    reservationId: "reservation-image",
+    routeId: "route-image",
+    routeRevision: 3,
+    traceId: "trace-raster-publish",
+    validation: { outcome: "pass" }
+  });
+
+  assert.deepEqual(result.reservations.map(({ reservationId, state }) => ({ reservationId, state })), [
+    { reservationId: "reservation-image", state: "settled" },
+    { reservationId: "reservation-structured", state: "settled" }
+  ]);
+  assert.equal(harness.calls.filter(({ sql }) => sql.startsWith("UPDATE visualization_quota_reservations")).length, 2);
+  assert.equal(harness.calls.filter(({ sql }) => sql.startsWith("INSERT INTO visualization_usage_ledger")).length, 2);
+  assert.equal(harness.calls.some(({ sql }) => sql === "COMMIT"), true);
+});
+
+test("rolls back the whole raster publication transaction when an auxiliary route revision changed", async () => {
+  const reservations = [
+    { modality: "raster_illustration", reservation_group_id: "reservation-structured", reservation_id: "reservation-image", reserved_units: 4, route_id: "route-image", route_revision: "3", state: "reserved", subject_id: "user-1" },
+    { modality: "raster_illustration", reservation_group_id: "reservation-structured", reservation_id: "reservation-structured", reserved_units: 1, route_id: "route-structured", route_revision: "5", state: "reserved", subject_id: "user-1" }
+  ];
+  const harness = adminPool(async (sql) => {
+    if (sql.includes("FROM visualization_quota_reservations")) return { rows: reservations };
+    if (sql.includes("FROM visualization_entitlements")) return { rows: [{ allowed: true, allowed_modalities: ["raster_illustration"] }] };
+    if (sql.includes("FROM visualization_user_preferences")) return { rows: [{ enabled: true }] };
+    if (sql.includes("FROM visualization_provider_configs")) return { rows: [
+      { circuit_state: "closed", enabled: true, revision: "3", route_id: "route-image" },
+      { circuit_state: "closed", enabled: true, revision: "6", route_id: "route-structured" }
+    ] };
+    return { rows: [] };
+  });
+  const repository = new PostgresVisualizationRepository(harness.pool);
+
+  await assert.rejects(() => repository.publish("user-1", {
+    artifact: { artifactId: "artifact-raster-1", body: {}, evidenceHash: "a".repeat(64), modality: "raster_illustration", specHash: "b".repeat(64), state: "ready" },
+    auxiliaryReservationIds: ["reservation-structured"],
+    documents: [{ access: { allowed: true, scopeId: "user-1", scopeType: "user", sourceIdentityHash: "c".repeat(64) }, documentId: "document-1", isPrimary: true, sourceIdentityHash: "c".repeat(64) }],
+    reservationId: "reservation-image",
+    routeId: "route-image",
+    routeRevision: 3,
+    traceId: "trace-raster-stale-route",
+    validation: { outcome: "pass" }
+  }), /visualization_route_revision_changed/);
+  assert.equal(harness.calls.some(({ sql }) => sql.startsWith("INSERT INTO visualization_artifacts")), false);
+  assert.equal(harness.calls.some(({ sql }) => sql === "ROLLBACK"), true);
+});
+
 test("reloads published artifacts by subject in requested order and fails closed on missing rows", async () => {
   const rows = [
     { artifact_id: "artifact-2", body: { artifactId: "artifact-2" }, modality: "semantic_graph", state: "ready" },
@@ -944,5 +1131,33 @@ test("reloads published artifacts by subject in requested order and fails closed
   await assert.rejects(
     () => missing.getPublishedArtifacts("user-1", ["artifact-1", "artifact-2"]),
     /visualization_artifact_not_found/
+  );
+});
+
+test("resolves a published raster asset only inside the current subject boundary", async () => {
+  const sha256 = "a".repeat(64);
+  const asset = {
+    assetRef: `raster:${sha256}`,
+    byteLength: 128,
+    mimeType: "image/png",
+    sha256
+  };
+  const repository = new PostgresVisualizationRepository({
+    async query(sql, values) {
+      assert.match(sql, /subject_id = \$1 AND modality = 'raster_illustration'/);
+      assert.match(sql, /body #>> '\{spec,payload,asset,sha256\}' = \$2/);
+      assert.deepEqual(values, ["user-1", sha256]);
+      return { rows: [{ artifact_id: "artifact-raster-1", asset }] };
+    }
+  });
+
+  assert.deepEqual(await repository.getPublishedRasterAsset("user-1", sha256), {
+    artifactId: "artifact-raster-1",
+    asset
+  });
+  const missing = new PostgresVisualizationRepository({ async query() { return { rows: [] }; } });
+  await assert.rejects(
+    () => missing.getPublishedRasterAsset("user-2", sha256),
+    /visualization_raster_asset_not_found/
   );
 });

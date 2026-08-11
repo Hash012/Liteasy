@@ -16,11 +16,15 @@
     "verify:production-assets": "node scripts/verify-production-assets.mjs",
     "gate:retrieval-sample": "node scripts/retrieval-gate-sample.mjs",
     "gate:retrieval-report": "vitest run src/tests/retrievalGateWorksheet.test.ts",
+    "label:multimodal-decisions": "node scripts/multimodal-decision-gate-label.mjs",
     "test:thin-reading-eval": "vitest run src/tests/thinReadingEvaluation.test.ts src/tests/thinReadingRealPdfGold.test.ts",
     "test:thin-reading-live-model": "node scripts/thin-reading-live-model-eval.mjs",
     "test:thin-reading-external-live": "node scripts/thin-reading-external-knowledge-live-eval.mjs",
     "test:thin-reading-ocr-offline": "node scripts/thin-reading-ocr-offline-eval.mjs",
     "test:thin-reading-openalex-live": "node scripts/thin-reading-openalex-live-eval.mjs",
+    "benchmark:visualization": "vite-node scripts/benchmark-visualization-runtime.ts --fixtures ../../../../development/test-data/thin-reading-multimodal --dist dist",
+    "record:multimodal-decisions": "vite-node scripts/record-multimodal-decision-evaluation.ts",
+    "test:multimodal-release": "npm run build && vitest run src/tests/staticScienceConformance.test.ts src/tests/interactiveMathConformance.test.ts src/tests/processRasterConformance.test.ts src/tests/staticScienceReleaseGate.test.ts src/tests/interactiveMathReleaseGate.test.ts src/tests/processRasterReleaseGate.test.ts src/tests/multimodalEvaluation.test.ts src/tests/visualizationDecisionEvaluation.test.ts src/tests/visualizationPerformance.test.ts src/tests/multimodalReleaseGate.test.ts src/tests/builtinSkillRegistry.test.ts src/tests/visualizationRendererRegistry.test.ts && npm run benchmark:visualization",
     "tauri": "tauri"
   },
   "dependencies": {
@@ -42,6 +46,7 @@
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "tesseract.js": "^6.0.1",
+    "three": "^0.185.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -54,6 +59,7 @@
     "@types/d3-force": "^3.0.10",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
+    "@types/three": "^0.185.4",
     "@vitejs/plugin-react": "^4.4.1",
     "jsdom": "^26.1.0",
     "typescript": "^5.8.3",

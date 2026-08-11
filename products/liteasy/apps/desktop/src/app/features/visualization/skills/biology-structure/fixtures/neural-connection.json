@@ -1,0 +1,15 @@
+{
+  "connections": [
+    { "evidenceClaimIds": ["claim-biology"], "from": "soma", "id": "connection-1", "label": "sends signal", "to": "axon" }
+  ],
+  "ontologyVersion": "liteasy-neuro/v1",
+  "regions": [
+    { "evidenceClaimIds": ["claim-biology"], "id": "region-synapse", "label": "突触区", "structureId": "synapse" }
+  ],
+  "structures": [
+    { "evidenceClaimIds": ["claim-biology"], "id": "neuron", "label": "神经元", "ontologyId": "liteasy:neuron" },
+    { "evidenceClaimIds": ["claim-biology"], "id": "soma", "label": "胞体", "ontologyId": "liteasy:soma", "parentId": "neuron" },
+    { "evidenceClaimIds": ["claim-biology"], "id": "axon", "label": "轴突", "ontologyId": "liteasy:axon", "parentId": "neuron" },
+    { "evidenceClaimIds": ["claim-biology"], "id": "synapse", "label": "突触", "ontologyId": "liteasy:synapse", "parentId": "axon" }
+  ]
+}

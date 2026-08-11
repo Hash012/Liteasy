@@ -1167,6 +1167,7 @@ export function AssistantPane({
         }
       } else {
         const answer = await generateAssistantAnswer({
+          enableVisualizationDecisionPlanner: true,
           importedChunksByPaperId,
           mode,
           modelTransport,

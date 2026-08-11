@@ -1,0 +1,496 @@
+{
+  "protocolVersion": 2,
+  "records": [
+    {
+      "caseId": "vector-database-taxonomy",
+      "input": {
+        "evidence": [
+          {
+            "id": "evidence-vector-taxonomy",
+            "page": 2,
+            "quote": "The survey organizes vector database systems into indexing, query processing, and storage components, and describes the dependencies among these components."
+          }
+        ],
+        "question": "Generate a thin-reading overview that explains the system taxonomy and only requests a generated visual when it materially improves understanding.",
+        "targetLanguage": "en-US",
+        "title": "Survey of Vector Database Management Systems"
+      },
+      "providerRecording": {
+        "attempts": [
+          {
+            "accepted": true,
+            "promptSha256": "3a2f62e4c41fbdfe217ae0abd5edae6478f1f3c8ffad58ee1134dcc56965c7e3",
+            "responseSha256": "6d52dfb0c8ad653c3c68d1a4d2ddafb02d8775cb8d5141ef89395023e0c486a3"
+          }
+        ],
+        "endpoint": "https://vip.auto-code.net/v1/responses",
+        "model": "gpt-5.4-mini",
+        "plannerContract": "liteasy.visualization-decision-planner/v1",
+        "promptSha256": "3a2f62e4c41fbdfe217ae0abd5edae6478f1f3c8ffad58ee1134dcc56965c7e3",
+        "providerId": "openai-compatible",
+        "recordedAt": "2026-08-11T04:57:27.748Z",
+        "response": {
+          "output": {
+            "basis": "semantic_structure",
+            "decision": "generate",
+            "evidenceIds": [
+              "evidence-vector-taxonomy"
+            ],
+            "rationale": "证据明确给出至少三个已证实组件：索引、查询处理、存储，并说明它们之间存在依赖关系。用结构图比纯文字更能直接呈现系统分类和组件间关系，属于应生成可视化的情形。"
+          },
+          "sha256": "6d52dfb0c8ad653c3c68d1a4d2ddafb02d8775cb8d5141ef89395023e0c486a3"
+        },
+        "routeId": "vip-auto-code-planner-evaluation",
+        "schemaSha256": "a85901f35862aaf0c96e1bca118b279eeba13edb0a5886b0b01eae7a91c56fe3"
+      },
+      "review": {
+        "decision": "generate",
+        "rationale": "系统组件及其依赖关系属于典型结构型知识，组件图可清晰呈现索引、查询、存储之间的关联，显著优于纯文字罗列，比文字描述更直观高效。",
+        "reviewedAt": "2026-08-11T04:50:35.193Z",
+        "reviewerId": "science-viz-expert-01",
+        "reviewerRole": "domain_expert"
+      }
+    },
+    {
+      "caseId": "bounded-quadratic-function",
+      "input": {
+        "evidence": [
+          {
+            "id": "evidence-quadratic-domain",
+            "page": 3,
+            "quote": "For f(x) = x^2 - 4x + 3 on the closed domain -1 <= x <= 5, the vertex is (2, -1), and the endpoint values are f(-1) = 8 and f(5) = 8."
+          }
+        ],
+        "question": "Generate a thin-reading overview of the bounded function and only request a generated visual when it materially improves understanding.",
+        "targetLanguage": "en-US",
+        "title": "A Worked Study of Bounded Quadratic Optimization"
+      },
+      "providerRecording": {
+        "attempts": [
+          {
+            "accepted": true,
+            "promptSha256": "39b9c2f0b1db5221ef05f3defc410498e431b72b5aa53b54e2928f0943474409",
+            "responseSha256": "86b3b51521c2e5be10ef124868602c8b03e134e06275b2cde1e0ba1c40859de5"
+          }
+        ],
+        "endpoint": "https://vip.auto-code.net/v1/responses",
+        "model": "gpt-5.4-mini",
+        "plannerContract": "liteasy.visualization-decision-planner/v1",
+        "promptSha256": "39b9c2f0b1db5221ef05f3defc410498e431b72b5aa53b54e2928f0943474409",
+        "providerId": "openai-compatible",
+        "recordedAt": "2026-08-11T04:57:27.748Z",
+        "response": {
+          "output": {
+            "basis": "bounded_function_relationship",
+            "decision": "generate",
+            "evidenceIds": [
+              "evidence-quadratic-domain"
+            ],
+            "rationale": "证据给出了二次函数、闭区间定义域以及顶点和端点值，图能直接显示抛物线在边界内的形状、最低点与端点关系，比纯文字更清楚地呈现函数与约束区间的对应关系。"
+          },
+          "sha256": "86b3b51521c2e5be10ef124868602c8b03e134e06275b2cde1e0ba1c40859de5"
+        },
+        "routeId": "vip-auto-code-planner-evaluation",
+        "schemaSha256": "a85901f35862aaf0c96e1bca118b279eeba13edb0a5886b0b01eae7a91c56fe3"
+      },
+      "review": {
+        "decision": "generate",
+        "rationale": "二次函数在闭区间上的图像能直观展示顶点、端点值与开口方向，帮助读者快速把握最值位置，几何理解明显改善。",
+        "reviewedAt": "2026-08-11T04:50:35.193Z",
+        "reviewerId": "science-viz-expert-01",
+        "reviewerRole": "domain_expert"
+      }
+    },
+    {
+      "caseId": "circle-tangent-construction",
+      "input": {
+        "evidence": [
+          {
+            "id": "evidence-circle-tangent",
+            "page": 4,
+            "quote": "Given circle O and external point P, draw the circle with diameter OP; its intersections T1 and T2 with circle O are the tangent points because angle OTP is a right angle."
+          }
+        ],
+        "question": "Generate a thin-reading overview of the geometric construction and only request a generated visual when it materially improves understanding.",
+        "targetLanguage": "en-US",
+        "title": "Tangent Construction from an External Point"
+      },
+      "providerRecording": {
+        "attempts": [
+          {
+            "accepted": true,
+            "promptSha256": "ebd8ad350ce5112f217939a302c4835c4323dd7aeba26dd5bf35eee458f136ec",
+            "responseSha256": "a870961d30c89f5952af7c5b5e2d3990fd381bf37f1d183575d2294bd24783db"
+          }
+        ],
+        "endpoint": "https://vip.auto-code.net/v1/responses",
+        "model": "gpt-5.4-mini",
+        "plannerContract": "liteasy.visualization-decision-planner/v1",
+        "promptSha256": "ebd8ad350ce5112f217939a302c4835c4323dd7aeba26dd5bf35eee458f136ec",
+        "providerId": "openai-compatible",
+        "recordedAt": "2026-08-11T04:57:27.748Z",
+        "response": {
+          "output": {
+            "basis": "planar_geometry",
+            "decision": "generate",
+            "evidenceIds": [
+              "evidence-circle-tangent"
+            ],
+            "rationale": "证据给出了圆、外点、以 OP 为直径的辅助圆、两个交点以及切点判定，涉及明确的点线圆关系与直角约束；一张图能显著帮助看清构造步骤和切点为何成立。"
+          },
+          "sha256": "a870961d30c89f5952af7c5b5e2d3990fd381bf37f1d183575d2294bd24783db"
+        },
+        "routeId": "vip-auto-code-planner-evaluation",
+        "schemaSha256": "a85901f35862aaf0c96e1bca118b279eeba13edb0a5886b0b01eae7a91c56fe3"
+      },
+      "review": {
+        "decision": "generate",
+        "rationale": "圆与直径作图、切点定位是纯几何构造，插图可一步展示全部辅助线和直角关系，文字难以替代其空间直观性。",
+        "reviewedAt": "2026-08-11T04:50:35.193Z",
+        "reviewerId": "science-viz-expert-01",
+        "reviewerRole": "domain_expert"
+      }
+    },
+    {
+      "caseId": "cube-midsection-geometry",
+      "input": {
+        "evidence": [
+          {
+            "id": "evidence-cube-section",
+            "page": 5,
+            "quote": "A plane through the midpoints of six suitably chosen cube edges cuts the cube in a regular hexagonal cross-section whose opposite sides are parallel."
+          }
+        ],
+        "question": "Generate a thin-reading overview of the spatial section and only request a generated visual when it materially improves understanding.",
+        "targetLanguage": "en-US",
+        "title": "Plane Sections of a Cube"
+      },
+      "providerRecording": {
+        "attempts": [
+          {
+            "accepted": true,
+            "promptSha256": "4329eac78f9495bd152cbfdbe084e5275ec93e22450796a37794717f09237f1d",
+            "responseSha256": "d1afff48311f2e1f48d55df46c9082f874e4c208aa2fb00332d0ab5274fa32b5"
+          }
+        ],
+        "endpoint": "https://vip.auto-code.net/v1/responses",
+        "model": "gpt-5.4-mini",
+        "plannerContract": "liteasy.visualization-decision-planner/v1",
+        "promptSha256": "4329eac78f9495bd152cbfdbe084e5275ec93e22450796a37794717f09237f1d",
+        "providerId": "openai-compatible",
+        "recordedAt": "2026-08-11T04:57:27.748Z",
+        "response": {
+          "output": {
+            "basis": "spatial_geometry",
+            "decision": "generate",
+            "evidenceIds": [
+              "evidence-cube-section"
+            ],
+            "rationale": "证据明确给出立方体被平面截出的空间截面是正六边形，并且涉及六条棱的中点与对边平行关系。这里需要通过图来同时看清平面与立方体的空间位置、截面形状及对应边的平行关系，显著优于纯文字。"
+          },
+          "sha256": "d1afff48311f2e1f48d55df46c9082f874e4c208aa2fb00332d0ab5274fa32b5"
+        },
+        "routeId": "vip-auto-code-planner-evaluation",
+        "schemaSha256": "a85901f35862aaf0c96e1bca118b279eeba13edb0a5886b0b01eae7a91c56fe3"
+      },
+      "review": {
+        "decision": "generate",
+        "rationale": "三维立方体中的六边形截面极依赖空间想象，生成剖切示意图能清晰呈现中点连线和平行关系，大幅提升几何理解。",
+        "reviewedAt": "2026-08-11T04:50:35.193Z",
+        "reviewerId": "science-viz-expert-01",
+        "reviewerRole": "domain_expert"
+      }
+    },
+    {
+      "caseId": "projectile-motion-process",
+      "input": {
+        "evidence": [
+          {
+            "id": "evidence-projectile",
+            "page": 2,
+            "quote": "With constant gravitational acceleration and no drag, horizontal velocity remains constant while vertical velocity decreases linearly, producing a parabolic trajectory until the projectile returns to its launch height."
+          }
+        ],
+        "question": "Generate a thin-reading overview of the motion process and only request a generated visual when it materially improves understanding.",
+        "targetLanguage": "en-US",
+        "title": "Projectile Motion without Drag"
+      },
+      "providerRecording": {
+        "attempts": [
+          {
+            "accepted": true,
+            "promptSha256": "0827832858bb09e528c2cee36e03cdba576451b45ed5964669f58e830b5f0c74",
+            "responseSha256": "d4f480fa1eca327459a1e59090294d27b66c38f8ecc0023242e36f65e228805d"
+          }
+        ],
+        "endpoint": "https://vip.auto-code.net/v1/responses",
+        "model": "gpt-5.4-mini",
+        "plannerContract": "liteasy.visualization-decision-planner/v1",
+        "promptSha256": "0827832858bb09e528c2cee36e03cdba576451b45ed5964669f58e830b5f0c74",
+        "providerId": "openai-compatible",
+        "recordedAt": "2026-08-11T04:57:27.748Z",
+        "response": {
+          "output": {
+            "basis": "temporal_physics",
+            "decision": "generate",
+            "evidenceIds": [
+              "evidence-projectile"
+            ],
+            "rationale": "证据明确给出随时间变化的运动过程：水平速度恒定、竖直速度线性减小，并最终形成回到发射高度的抛物线轨迹。图能显著帮助把速度分解、时间演化和轨迹关系一起看清，优于薄读正文。"
+          },
+          "sha256": "d4f480fa1eca327459a1e59090294d27b66c38f8ecc0023242e36f65e228805d"
+        },
+        "routeId": "vip-auto-code-planner-evaluation",
+        "schemaSha256": "a85901f35862aaf0c96e1bca118b279eeba13edb0a5886b0b01eae7a91c56fe3"
+      },
+      "review": {
+        "decision": "generate",
+        "rationale": "对于抛体运动的速度分量变化和抛物线轨迹的理解依赖于受力分析和运动分析，用轨迹图配合受力与速度的矢量箭头能直观展示水平匀速、竖直匀减速的过程，优于纯公式描述，和读者手动分析的过程更贴合，便于理解记忆。",
+        "reviewedAt": "2026-08-11T04:50:35.193Z",
+        "reviewerId": "science-viz-expert-01",
+        "reviewerRole": "domain_expert"
+      }
+    },
+    {
+      "caseId": "methane-combustion-sequence",
+      "input": {
+        "evidence": [
+          {
+            "id": "evidence-combustion",
+            "page": 6,
+            "quote": "The balanced overall reaction is CH4 + 2 O2 -> CO2 + 2 H2O; the evidence establishes only the overall stoichiometry and does not establish a molecular mechanism."
+          }
+        ],
+        "question": "Generate a thin-reading overview of the reaction and only request a generated visual when it materially improves understanding.",
+        "targetLanguage": "en-US",
+        "title": "Stoichiometry of Methane Combustion"
+      },
+      "providerRecording": {
+        "attempts": [
+          {
+            "accepted": true,
+            "promptSha256": "d26532b80de9ea8e9378d4d4b3aa194f6483149fc55e7912c185f61e7a48a2b3",
+            "responseSha256": "67ee7e2a6d307aee6380357e1964606f49ec55e1eec12724b67896e11553d0c6"
+          }
+        ],
+        "endpoint": "https://vip.auto-code.net/v1/responses",
+        "model": "gpt-5.4-mini",
+        "plannerContract": "liteasy.visualization-decision-planner/v1",
+        "promptSha256": "d26532b80de9ea8e9378d4d4b3aa194f6483149fc55e7912c185f61e7a48a2b3",
+        "providerId": "openai-compatible",
+        "recordedAt": "2026-08-11T04:57:27.748Z",
+        "response": {
+          "output": {
+            "basis": "plain_text_sufficient",
+            "decision": "omit",
+            "evidenceIds": [],
+            "rationale": "证据只给出甲烷燃烧的总配平方程和整体化学计量，没有中间体、分步过程或需要通过图来理解的结构关系；正文即可准确表达。"
+          },
+          "sha256": "67ee7e2a6d307aee6380357e1964606f49ec55e1eec12724b67896e11553d0c6"
+        },
+        "routeId": "vip-auto-code-planner-evaluation",
+        "schemaSha256": "a85901f35862aaf0c96e1bca118b279eeba13edb0a5886b0b01eae7a91c56fe3"
+      },
+      "review": {
+        "decision": "omit",
+        "rationale": "仅给出总反应方程式，未涉及分子尺度步骤或中间体，图示无非是原子重排的静态示意，对理解整体计量比无实质性增益。",
+        "reviewedAt": "2026-08-11T04:50:35.193Z",
+        "reviewerId": "science-viz-expert-01",
+        "reviewerRole": "domain_expert"
+      }
+    },
+    {
+      "caseId": "single-term-definition",
+      "input": {
+        "evidence": [
+          {
+            "id": "evidence-power-definition",
+            "page": 1,
+            "quote": "Statistical power is the probability that a hypothesis test rejects the null hypothesis when a specified alternative hypothesis is true."
+          }
+        ],
+        "question": "Generate a thin-reading overview and only request a generated visual when it materially improves understanding.",
+        "targetLanguage": "en-US",
+        "title": "Terminology Note on Statistical Power"
+      },
+      "providerRecording": {
+        "attempts": [
+          {
+            "accepted": true,
+            "promptSha256": "e72deed347c1a6af40ef3f8f89e6d58bd669373ae8b001646ad687c980c3dd91",
+            "responseSha256": "ce5ae51f1b063d2c3ddd9316f0d4fa48da0427207e7222a2ea4c850f6d853038"
+          }
+        ],
+        "endpoint": "https://vip.auto-code.net/v1/responses",
+        "model": "gpt-5.4-mini",
+        "plannerContract": "liteasy.visualization-decision-planner/v1",
+        "promptSha256": "e72deed347c1a6af40ef3f8f89e6d58bd669373ae8b001646ad687c980c3dd91",
+        "providerId": "openai-compatible",
+        "recordedAt": "2026-08-11T04:57:27.748Z",
+        "response": {
+          "output": {
+            "basis": "plain_text_sufficient",
+            "decision": "omit",
+            "evidenceIds": [],
+            "rationale": "The evidence gives a single terminology definition with no component hierarchy, geometry, process, or time-varying relationship that would benefit from a controlled visualization. A concise textual explanation is sufficient."
+          },
+          "sha256": "ce5ae51f1b063d2c3ddd9316f0d4fa48da0427207e7222a2ea4c850f6d853038"
+        },
+        "routeId": "vip-auto-code-planner-evaluation",
+        "schemaSha256": "a85901f35862aaf0c96e1bca118b279eeba13edb0a5886b0b01eae7a91c56fe3"
+      },
+      "review": {
+        "decision": "omit",
+        "rationale": "统计功效是一句话的定量定义，不包含结构或过程信息，更不需要交互，插图既不必要也无助于概念澄清。",
+        "reviewedAt": "2026-08-11T04:50:35.193Z",
+        "reviewerId": "science-viz-expert-01",
+        "reviewerRole": "domain_expert"
+      }
+    },
+    {
+      "caseId": "historical-background-note",
+      "input": {
+        "evidence": [
+          {
+            "id": "evidence-peer-review-history",
+            "page": 1,
+            "quote": "The journal introduced external referee reports gradually during the nineteenth century, with editorial practices varying across disciplines and institutions."
+          }
+        ],
+        "question": "Generate a thin-reading overview and only request a generated visual when it materially improves understanding.",
+        "targetLanguage": "en-US",
+        "title": "A Short Historical Note on Peer Review"
+      },
+      "providerRecording": {
+        "attempts": [
+          {
+            "accepted": true,
+            "promptSha256": "3941629ebecb5e2999ded75f91177a0445c67453c77db5c4df5dccc54e48725f",
+            "responseSha256": "a45b6cb244309a7c46d41caa4bc61884def447372830046e8d3a2208d2e4429f"
+          }
+        ],
+        "endpoint": "https://vip.auto-code.net/v1/responses",
+        "model": "gpt-5.4-mini",
+        "plannerContract": "liteasy.visualization-decision-planner/v1",
+        "promptSha256": "3941629ebecb5e2999ded75f91177a0445c67453c77db5c4df5dccc54e48725f",
+        "providerId": "openai-compatible",
+        "recordedAt": "2026-08-11T04:57:27.748Z",
+        "response": {
+          "output": {
+            "basis": "plain_text_sufficient",
+            "decision": "omit",
+            "evidenceIds": [],
+            "rationale": "证据只说明同行评审在19世纪逐步引入且不同学科与机构做法不同，没有给出足够的组件、关系层级、几何或时序细节；用简洁正文即可表达，图不会显著提升理解。"
+          },
+          "sha256": "a45b6cb244309a7c46d41caa4bc61884def447372830046e8d3a2208d2e4429f"
+        },
+        "routeId": "vip-auto-code-planner-evaluation",
+        "schemaSha256": "a85901f35862aaf0c96e1bca118b279eeba13edb0a5886b0b01eae7a91c56fe3"
+      },
+      "review": {
+        "decision": "omit",
+        "rationale": "历史叙述呈时间线索，而且此处无复杂因果关系或对比数据，纯文字足以陈述，插图不会改善理解。",
+        "reviewedAt": "2026-08-11T04:50:35.193Z",
+        "reviewerId": "science-viz-expert-01",
+        "reviewerRole": "domain_expert"
+      }
+    },
+    {
+      "caseId": "unsupported-reaction-mechanism",
+      "input": {
+        "evidence": [
+          {
+            "id": "evidence-catalytic-yield",
+            "page": 7,
+            "quote": "The catalyst increased the isolated product yield from 41% to 68% under the reported conditions; no intermediate species or elementary reaction steps were measured."
+          }
+        ],
+        "question": "Generate a thin-reading overview and only request a generated visual when it materially improves understanding; do not infer an unsupported mechanism.",
+        "targetLanguage": "en-US",
+        "title": "Observed Yield in a Catalytic Reaction"
+      },
+      "providerRecording": {
+        "attempts": [
+          {
+            "accepted": true,
+            "promptSha256": "6c68d305e548a5ab5e1230b6e5dbac31e690a456d72f6f2ff3921829c318fb49",
+            "responseSha256": "10191d70394174dce82fc5b5e2581c296508088c4f0fb78acf6395bfb0e75265"
+          }
+        ],
+        "endpoint": "https://vip.auto-code.net/v1/responses",
+        "model": "gpt-5.4-mini",
+        "plannerContract": "liteasy.visualization-decision-planner/v1",
+        "promptSha256": "6c68d305e548a5ab5e1230b6e5dbac31e690a456d72f6f2ff3921829c318fb49",
+        "providerId": "openai-compatible",
+        "recordedAt": "2026-08-11T04:57:27.748Z",
+        "response": {
+          "output": {
+            "basis": "plain_text_sufficient",
+            "decision": "omit",
+            "evidenceIds": [],
+            "rationale": "证据只给出了同一条件下产率从41%到68%的简单数值比较，没有中间体、步骤、拓扑或时序关系；用正文即可准确表达，图只会重复信息。"
+          },
+          "sha256": "10191d70394174dce82fc5b5e2581c296508088c4f0fb78acf6395bfb0e75265"
+        },
+        "routeId": "vip-auto-code-planner-evaluation",
+        "schemaSha256": "a85901f35862aaf0c96e1bca118b279eeba13edb0a5886b0b01eae7a91c56fe3"
+      },
+      "review": {
+        "decision": "omit",
+        "rationale": "仅报告产率提升，未测量中间体或基元步骤，生成任何反应路径图都属猜测，且对“产率变化”这一单一比较无额外帮助",
+        "reviewedAt": "2026-08-11T04:50:35.193Z",
+        "reviewerId": "science-viz-expert-01",
+        "reviewerRole": "domain_expert"
+      }
+    },
+    {
+      "caseId": "plain-limitations-statement",
+      "input": {
+        "evidence": [
+          {
+            "id": "evidence-sample-limitation",
+            "page": 9,
+            "quote": "The observational sample contains 18 participants from one institution, so the reported association cannot establish causality or population-wide generalization."
+          }
+        ],
+        "question": "Generate a thin-reading overview and only request a generated visual when it materially improves understanding.",
+        "targetLanguage": "en-US",
+        "title": "Limitations of a Small Observational Sample"
+      },
+      "providerRecording": {
+        "attempts": [
+          {
+            "accepted": true,
+            "promptSha256": "6ca056c2f6c2e9543e85f4290a5e05e997abe44f51360375c1f50f342ebaa51a",
+            "responseSha256": "fee6da0339d9472a5145569848aa365c049b5e60baddeee859c59c225da1d34f"
+          }
+        ],
+        "endpoint": "https://vip.auto-code.net/v1/responses",
+        "model": "gpt-5.4-mini",
+        "plannerContract": "liteasy.visualization-decision-planner/v1",
+        "promptSha256": "6ca056c2f6c2e9543e85f4290a5e05e997abe44f51360375c1f50f342ebaa51a",
+        "providerId": "openai-compatible",
+        "recordedAt": "2026-08-11T04:57:27.748Z",
+        "response": {
+          "output": {
+            "basis": "plain_text_sufficient",
+            "decision": "omit",
+            "evidenceIds": [],
+            "rationale": "证据只是对一个小型观察样本的局限性作定性说明，核心信息是样本量与推广/因果边界的文字判断，不涉及需要图示化的多组件结构、几何关系、时间过程或反应步骤。"
+          },
+          "sha256": "fee6da0339d9472a5145569848aa365c049b5e60baddeee859c59c225da1d34f"
+        },
+        "routeId": "vip-auto-code-planner-evaluation",
+        "schemaSha256": "a85901f35862aaf0c96e1bca118b279eeba13edb0a5886b0b01eae7a91c56fe3"
+      },
+      "review": {
+        "decision": "omit",
+        "rationale": "局限性陈述为文本性论断（样本量、因果推断），没有需要形象化展示的结构或比较，插图毫无必要。",
+        "reviewedAt": "2026-08-11T04:50:35.193Z",
+        "reviewerId": "science-viz-expert-01",
+        "reviewerRole": "domain_expert"
+      }
+    }
+  ],
+  "schema": "liteasy.multimodal-decision-evaluation/v2"
+}

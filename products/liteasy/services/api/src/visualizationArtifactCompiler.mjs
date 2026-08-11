@@ -192,6 +192,13 @@ function usage(reservation) {
   };
 }
 
+function artifactIdForReservation(reservation) {
+  const reservationId = identifier(reservation?.reservationId);
+  return reservation?.artifactId === undefined
+    ? `vizart_${createHash("sha256").update(reservationId).digest("hex").slice(0, 32)}`
+    : identifier(reservation.artifactId);
+}
+
 export class VisualizationArtifactCompilerRegistry {
   #compilers;
   #now;
@@ -240,7 +247,7 @@ export class VisualizationArtifactCompilerRegistry {
     };
   }
 
-  async compile(input) {
+  prepareProposal(input) {
     const modality = identifier(input?.modality);
     const nodeId = identifier(input?.nodeId);
     const compiler = this.#compilers.get(modality);
@@ -248,11 +255,36 @@ export class VisualizationArtifactCompilerRegistry {
     if (input.source?.nodeId !== nodeId || !input.source?.intent?.candidateModalities?.includes(modality)) {
       fail("visualization_compiler_source_invalid");
     }
-    const evidenceIds = sourceEvidenceIds(input.source);
-    const proposal = normalizedProposal(input.proposal, modality, evidenceIds, compiler.validateProposal);
-    const artifactId = identifier(input.reservation?.artifactId);
+    const proposal = normalizedProposal(
+      input.proposal,
+      modality,
+      sourceEvidenceIds(input.source),
+      compiler.validateProposal
+    );
+    if (modality === "raster_illustration" && Object.hasOwn(proposal.spec.payload ?? {}, "asset")) {
+      fail("visualization_proposal_server_field_invalid");
+    }
+    return deepFreeze(canonical(proposal));
+  }
+
+  async compile(input) {
+    const modality = identifier(input?.modality);
+    const nodeId = identifier(input?.nodeId);
+    const compiler = this.#compilers.get(modality);
+    if (!compiler) fail("visualization_compiler_not_found", 503);
+    const proposal = this.prepareProposal(input);
+    const artifactId = artifactIdForReservation(input.reservation);
     const artifactUsage = usage(input.reservation);
     const createdAt = this.#now().toISOString();
+    const spec = modality === "raster_illustration"
+      ? {
+          ...proposal.spec,
+          payload: {
+            ...proposal.spec.payload,
+            asset: object(input.rasterAsset) ? canonical(input.rasterAsset) : fail("visualization_raster_asset_required")
+          }
+        }
+      : proposal.spec;
     const base = {
       accessibility: proposal.accessibility,
       artifactId,
@@ -266,7 +298,7 @@ export class VisualizationArtifactCompilerRegistry {
       modality,
       nodeId,
       semanticObjects: proposal.semanticObjects,
-      spec: proposal.spec,
+      spec,
       usage: artifactUsage
     };
     const checks = [];
@@ -294,7 +326,7 @@ export class VisualizationArtifactCompilerRegistry {
       evidenceHash: digest(input.source.evidence),
       modality,
       nodeId,
-      specHash: digest(proposal.spec),
+      specHash: digest(spec),
       state: "ready"
     };
     const validation = await this.#validateArtifact({ artifact: envelope, modality, phase: "publication" });

@@ -1,0 +1,37 @@
+import type { Geometry3DSpecV1 } from "../../app/features/visualization/visualizationArtifact.types";
+
+export const cubeSectionFixture = {
+  camera: {
+    maxDistance: 10,
+    minDistance: 1,
+    position: [3, 3, 3],
+    target: [0.5, 0.5, 0.5]
+  },
+  constraints: [{ evidenceClaimIds: ["claim-section"], id: "bounded-section", kind: "plane_section", objectIds: ["cube"] }],
+  objects: [
+    {
+      evidenceClaimIds: ["claim-cube"],
+      faces: [
+        [0, 1, 2, 3],
+        [4, 5, 6, 7],
+        [0, 1, 5, 4],
+        [2, 3, 7, 6],
+        [1, 2, 6, 5],
+        [0, 3, 7, 4]
+      ],
+      id: "cube",
+      kind: "mesh",
+      vertices: [
+        [0, 0, 0],
+        [1, 0, 0],
+        [1, 1, 0],
+        [0, 1, 0],
+        [0, 0, 1],
+        [1, 0, 1],
+        [1, 1, 1],
+        [0, 1, 1]
+      ]
+    }
+  ],
+  sections: [{ evidenceClaimIds: ["claim-section"], id: "mid-section", objectId: "cube", plane: [1, 1, 1, -1.5] }]
+} as const satisfies Geometry3DSpecV1;

@@ -1,3 +1,5 @@
+import { validateAndStoreRasterIllustration } from "./visualizationRasterService.mjs";
+
 const unavailableCapability = Object.freeze({
   allowed: false,
   availableModalities: [],
@@ -194,13 +196,15 @@ export class VisualizationServiceError extends Error {
 }
 
 export class VisualizationService {
-  constructor({ authorizeDocument, gateway, repository, validateArtifact }) {
+  constructor({ authorizeDocument, gateway, objectStore, rasterOcr, repository, validateArtifact }) {
     if (!repository || !gateway || typeof authorizeDocument !== "function" ||
       typeof validateArtifact !== "function") {
       throw new Error("visualization_service_dependencies_invalid");
     }
     this.authorizeDocument = authorizeDocument;
     this.gateway = gateway;
+    this.objectStore = objectStore;
+    this.rasterOcr = rasterOcr;
     this.repository = repository;
     this.validateArtifact = validateArtifact;
   }
@@ -245,12 +249,72 @@ export class VisualizationService {
     }
   }
 
+  async openRasterAsset(subjectId, sha256) {
+    if (typeof sha256 !== "string" || !/^[a-f0-9]{64}$/.test(sha256)) {
+      throw new VisualizationServiceError("visualization_raster_asset_invalid");
+    }
+    if (!this.objectStore || typeof this.objectStore.objectKey !== "function" ||
+      typeof this.objectStore.openObject !== "function") {
+      throw new VisualizationServiceError("visualization_raster_asset_unavailable", 503);
+    }
+    try {
+      const owned = await this.repository.getPublishedRasterAsset(subjectId, sha256);
+      const asset = owned?.asset;
+      if (!asset || asset.assetRef !== `raster:${sha256}` || asset.sha256 !== sha256 ||
+        asset.mimeType !== "image/png" || !Number.isSafeInteger(asset.byteLength) ||
+        asset.byteLength < 1 || asset.byteLength > 16 * 1024 * 1024) {
+        throw new VisualizationServiceError("visualization_raster_asset_integrity_mismatch", 500);
+      }
+      const object = await this.objectStore.openObject(this.objectStore.objectKey(sha256));
+      if (object?.byteLength !== asset.byteLength || object?.mediaType !== "image/png" ||
+        object?.metadata?.sha256 !== sha256 || object?.metadata?.["byte-length"] !== String(asset.byteLength) ||
+        object?.metadata?.["asset-kind"] !== "generated-raster") {
+        throw new VisualizationServiceError("visualization_raster_asset_integrity_mismatch", 500);
+      }
+      return { ...object, artifactId: owned.artifactId, sha256 };
+    } catch (error) {
+      throw publicError(error);
+    }
+  }
+
+  async materializeRasterAsset(input, context = {}) {
+    try {
+      throwIfAborted(context.signal);
+      return await validateAndStoreRasterIllustration({
+        image: input?.image,
+        objectStore: this.objectStore,
+        ocr: this.rasterOcr,
+        signal: context.signal,
+        sourceIdentityHashes: input?.sourceIdentityHashes,
+        spec: input?.spec
+      });
+    } catch (error) {
+      if (context.signal?.aborted || error?.name === "AbortError") {
+        throw new VisualizationServiceError("visualization_request_aborted", 499);
+      }
+      const code = error?.code ?? error?.message;
+      throw new VisualizationServiceError(
+        typeof code === "string" && code.startsWith("raster_") ? `visualization_${code}` : "visualization_raster_validation_failed",
+        code === "raster_ocr_unavailable" ? 503 : 422
+      );
+    }
+  }
+
   async rollbackGeneratedReservation(subjectId, reservationId, error, context = {}) {
     try {
       await rollback(this.repository, subjectId, reservationId, error, context.traceId);
     } catch (rollbackError) {
       throw publicError(rollbackError);
     }
+  }
+
+  async rollbackGeneratedReservations(subjectId, reservationIds, error, context = {}) {
+    const ids = [...new Set(reservationIds ?? [])];
+    const results = await Promise.allSettled(ids.map((reservationId) => (
+      rollback(this.repository, subjectId, reservationId, error, context.traceId)
+    )));
+    const failed = results.find((result) => result.status === "rejected");
+    if (failed) throw publicError(failed.reason);
   }
 
   async generate(subjectId, input, context = {}) {
@@ -405,6 +469,17 @@ export class VisualizationService {
 
   async submit(subjectId, input, context = {}) {
     const reservationId = identifier(input?.reservationId, "visualization_reservation_invalid");
+    const auxiliaryReservationIds = input?.auxiliaryReservationIds ?? [];
+    if (!Array.isArray(auxiliaryReservationIds) || auxiliaryReservationIds.length > 8) {
+      throw new VisualizationServiceError("visualization_reservation_invalid");
+    }
+    const reservationIds = [
+      reservationId,
+      ...auxiliaryReservationIds.map((value) => identifier(value, "visualization_reservation_invalid"))
+    ];
+    if (new Set(reservationIds).size !== reservationIds.length) {
+      throw new VisualizationServiceError("visualization_reservation_invalid");
+    }
     try {
       throwIfAborted(context.signal);
       const validation = await this.validateArtifact({
@@ -427,6 +502,7 @@ export class VisualizationService {
       throwIfAborted(context.signal);
       return await this.repository.publish(subjectId, {
         artifact: input.artifact,
+        ...(auxiliaryReservationIds.length > 0 ? { auxiliaryReservationIds } : {}),
         documents: authorizedDocuments,
         reservationId,
         routeId: input.routeId,
@@ -435,7 +511,11 @@ export class VisualizationService {
         validation
       });
     } catch (error) {
-      await rollback(this.repository, subjectId, reservationId, error, context.traceId);
+      const rollbackResults = await Promise.allSettled(reservationIds.map((identifier) => (
+        rollback(this.repository, subjectId, identifier, error, context.traceId)
+      )));
+      const rollbackFailure = rollbackResults.find((result) => result.status === "rejected");
+      if (rollbackFailure) throw publicError(rollbackFailure.reason);
       throw publicError(error);
     }
   }

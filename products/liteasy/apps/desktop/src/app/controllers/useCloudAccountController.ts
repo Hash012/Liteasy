@@ -18,6 +18,7 @@ import {
   createVisualizationOrchestrationClient,
   type VisualizationOrchestrationClient
 } from "../features/visualization/visualizationOrchestrationClient";
+import { configureRasterAssetClient } from "../features/visualization/rasterAssetClient";
 
 type UseCloudAccountControllerInput = {
   accountCapabilitiesTransport?: AccountCapabilitiesTransport;
@@ -114,6 +115,15 @@ export function useCloudAccountController({
       subjectId: accountSession.userId ?? accountSession.email
     });
   }, [accountSession?.email, accountSession?.sessionId, accountSession?.userId, controlPlaneEndpoint, visualizationFetch, visualizationStorage]);
+
+  useEffect(() => {
+    configureRasterAssetClient(accountSession ? {
+      endpoint: controlPlaneEndpoint,
+      fetchImpl: visualizationFetch,
+      getAccessToken: () => accountSession.sessionId
+    } : null);
+    return () => configureRasterAssetClient(null);
+  }, [accountSession?.sessionId, controlPlaneEndpoint, visualizationFetch]);
 
   useEffect(() => {
     if (

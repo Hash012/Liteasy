@@ -66,6 +66,31 @@ test("normalizes explicit price metadata but never fabricates price from token u
   assert.equal("cost" in unpriced, false);
 });
 
+test("requests a bounded PNG from an OpenAI-compatible image endpoint", async () => {
+  const calls = [];
+  const bytes = Buffer.from("png bytes");
+  const imageRoute = { ...route, endpoint: "https://provider.example/v1/images/generations", operations: ["image_generation"] };
+  const result = await openAiCompatibleVisualizationAdapter.generateImage({
+    payload: { height: 1024, prompt: "A typed scientific diagram", width: 1024 },
+    request: async (url, init) => {
+      calls.push({ init, url });
+      return new Response(JSON.stringify({ data: [{ b64_json: bytes.toString("base64") }] }), { status: 200 });
+    },
+    route: imageRoute
+  });
+
+  assert.deepEqual(result, { bytes, mimeType: "image/png" });
+  assert.equal(calls[0].url, imageRoute.endpoint);
+  assert.deepEqual(JSON.parse(calls[0].init.body), {
+    model: imageRoute.model,
+    output_format: "png",
+    prompt: "A typed scientific diagram",
+    quality: "medium",
+    size: "1024x1024"
+  });
+  assert.equal(calls[0].init.responseMaxBytes, 16 * 1024 * 1024);
+});
+
 test("rejects non-success, invalid JSON, and missing structured output", async (t) => {
   const cases = [
     ["non-success", new Response("unavailable", { status: 503 }), /visualization_provider_unavailable/],

@@ -1,0 +1,110 @@
+.visualization-interactive-math {
+  display: grid;
+  gap: 10px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.visualization-interactive-math__toolbar {
+  align-items: center;
+  display: flex;
+  gap: 2px;
+}
+
+.visualization-interactive-math__stage {
+  background: #ffffff;
+  border: 1px solid #d8e1e8;
+  border-radius: 8px;
+  cursor: grab;
+  max-width: 100%;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+}
+
+.visualization-interactive-math__stage:active {
+  cursor: grabbing;
+}
+
+.visualization-interactive-math__stage:focus-visible {
+  outline: 2px solid #0f6cbd;
+  outline-offset: 2px;
+}
+
+.visualization-function-plot__svg,
+.visualization-geometry-2d__svg {
+  max-width: 100%;
+}
+
+.visualization-function-plot__svg svg,
+.visualization-geometry-2d__svg svg {
+  height: auto;
+  max-width: 100%;
+  pointer-events: none;
+  width: 100%;
+}
+
+.visualization-function-plot__stage {
+  aspect-ratio: 16 / 9;
+}
+
+.visualization-geometry-2d__stage {
+  aspect-ratio: 1;
+  max-width: 560px;
+}
+
+.visualization-interactive-math__parameters {
+  display: grid;
+  gap: 8px;
+}
+
+.visualization-interactive-math__parameter {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(28px, auto) minmax(120px, 1fr) minmax(56px, auto);
+  max-width: 560px;
+}
+
+.visualization-interactive-math__parameter > span,
+.visualization-interactive-math__parameter > output {
+  color: #36454f;
+  font-size: 12px;
+}
+
+.visualization-interactive-math__parameter > output {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.visualization-interactive-math__objects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.visualization-interactive-math__table {
+  border-collapse: collapse;
+  color: #36454f;
+  font-size: 12px;
+  width: 100%;
+}
+
+.visualization-interactive-math__table th,
+.visualization-interactive-math__table td {
+  border-bottom: 1px solid #e7edf2;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.visualization-interactive-math__table th {
+  color: #1d2b36;
+  font-weight: 600;
+  width: 36%;
+}
+
+@media (max-width: 480px) {
+  .visualization-interactive-math__parameter {
+    grid-template-columns: minmax(24px, auto) minmax(88px, 1fr) minmax(48px, auto);
+  }
+}

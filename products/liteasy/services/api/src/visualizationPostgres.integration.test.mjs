@@ -458,7 +458,7 @@ async function verifyPublicationAndProviderAccountingTransactions(pool) {
       maxConcurrency: 1,
       modalities: ["semantic_graph"],
       model: "integration-accounting-model",
-      operations: ["structured_generation"],
+      operations: ["structured_generation", "image_generation"],
       priority: 10,
       providerId,
       region: "cn-east",
@@ -584,6 +584,86 @@ async function verifyPublicationAndProviderAccountingTransactions(pool) {
       { document_id: secondaryDocumentFixture.document.documentId, is_primary: false },
       { document_id: documentFixture.document.documentId, is_primary: true }
     ].sort((left, right) => left.document_id.localeCompare(right.document_id)));
+
+    const groupSchema = await pool.query(`
+      SELECT column_name, is_nullable
+        FROM information_schema.columns
+       WHERE table_schema = current_schema()
+         AND table_name = 'visualization_quota_reservations'
+         AND column_name = 'reservation_group_id'
+    `);
+    assert.deepEqual(groupSchema.rows, [{ column_name: "reservation_group_id", is_nullable: "NO" }]);
+    const groupForeignKey = await pool.query(`
+      SELECT pg_get_constraintdef(oid) AS definition
+        FROM pg_constraint
+       WHERE conname = 'visualization_reservation_group_fk'
+         AND conrelid = 'visualization_quota_reservations'::regclass
+    `);
+    assert.match(groupForeignKey.rows[0]?.definition ?? "", /FOREIGN KEY \(reservation_group_id\).*visualization_quota_reservations\(reservation_id\)/);
+
+    const groupRoot = (await repository.reserve(subjectId, {
+      ...reservation(`accounting-group-structured-${suffix}`, routeId, suffix),
+      operation: "structured_generation",
+      reservationId: `vizres-group-root-${suffix}`
+    })).reservation;
+    const groupImage = (await repository.reserve(subjectId, {
+      ...reservation(`accounting-group-image-${suffix}`, routeId, suffix),
+      operation: "image_generation",
+      reservationGroupId: groupRoot.reservationId,
+      reservationId: `vizres-group-image-${suffix}`
+    })).reservation;
+    assert.equal(groupRoot.reservationGroupId, groupRoot.reservationId);
+    assert.equal(groupImage.reservationGroupId, groupRoot.reservationId);
+    await assert.rejects(() => repository.reserve(subjectId, {
+      ...reservation(`accounting-group-independent-${suffix}`, routeId, suffix),
+      operation: "structured_generation"
+    }), /visualization_concurrency_exceeded/);
+
+    const groupedArtifact = publicationArtifact(`${suffix}-reservation-group`);
+    const groupedPublication = await repository.publish(subjectId, {
+      ...publishInput(groupImage, groupedArtifact),
+      auxiliaryReservationIds: [groupRoot.reservationId]
+    });
+    assert.deepEqual(groupedPublication.reservations.map((item) => ({
+      reservationGroupId: item.reservationGroupId,
+      reservationId: item.reservationId,
+      state: item.state
+    })), [
+      { reservationGroupId: groupRoot.reservationId, reservationId: groupImage.reservationId, state: "settled" },
+      { reservationGroupId: groupRoot.reservationId, reservationId: groupRoot.reservationId, state: "settled" }
+    ]);
+    const groupedRows = await pool.query(`
+      SELECT reservation.reservation_id, reservation.reservation_group_id, reservation.state,
+             count(DISTINCT usage.event_id) FILTER (WHERE usage.event_type = 'settled')::integer AS settlement_count,
+             count(DISTINCT artifact.artifact_id)::integer AS artifact_count
+        FROM visualization_quota_reservations reservation
+        LEFT JOIN visualization_usage_ledger usage
+          ON usage.subject_id = reservation.subject_id
+         AND usage.reservation_id = reservation.reservation_id
+        LEFT JOIN visualization_artifacts artifact
+          ON artifact.subject_id = reservation.subject_id
+         AND artifact.reservation_id = reservation.reservation_id
+       WHERE reservation.subject_id = $1
+         AND reservation.reservation_id = ANY($2::text[])
+       GROUP BY reservation.reservation_id, reservation.reservation_group_id, reservation.state
+       ORDER BY reservation.reservation_id
+    `, [subjectId, [groupRoot.reservationId, groupImage.reservationId]]);
+    assert.deepEqual(groupedRows.rows, [
+      {
+        artifact_count: 1,
+        reservation_group_id: groupRoot.reservationId,
+        reservation_id: groupImage.reservationId,
+        settlement_count: 1,
+        state: "settled"
+      },
+      {
+        artifact_count: 0,
+        reservation_group_id: groupRoot.reservationId,
+        reservation_id: groupRoot.reservationId,
+        settlement_count: 1,
+        state: "settled"
+      }
+    ].sort((left, right) => left.reservation_id.localeCompare(right.reservation_id)));
 
     await assertRejectedPublication("modality", async ({ artifact, input }) => {
       Object.assign(artifact, publicationArtifact(`${suffix}-modality-invalid`, "circuit"), {
@@ -739,6 +819,33 @@ async function verifyPublicationAndProviderAccountingTransactions(pool) {
       user_rollback_rows: 1
     });
 
+    const staleGroupRoot = (await repository.reserve(subjectId, {
+      ...reservation(`accounting-stale-group-structured-${suffix}`, routeId, suffix),
+      operation: "structured_generation",
+      reservationId: `vizres-stale-group-root-${suffix}`
+    })).reservation;
+    const staleGroupImage = (await repository.reserve(subjectId, {
+      ...reservation(`accounting-stale-group-image-${suffix}`, routeId, suffix),
+      operation: "image_generation",
+      reservationGroupId: staleGroupRoot.reservationId,
+      reservationId: `vizres-stale-group-image-${suffix}`
+    })).reservation;
+    await pool.query("UPDATE visualization_provider_configs SET revision = revision + 1 WHERE route_id = $1", [routeId]);
+    const staleGroupedArtifact = publicationArtifact(`${suffix}-stale-reservation-group`);
+    await assert.rejects(() => repository.publish(subjectId, {
+      ...publishInput(staleGroupImage, staleGroupedArtifact),
+      auxiliaryReservationIds: [staleGroupRoot.reservationId]
+    }), /visualization_route_revision_changed/);
+    for (const reservationRow of [staleGroupRoot, staleGroupImage]) {
+      const snapshot = await failedPublicationSnapshot(pool, subjectId, reservationRow.reservationId);
+      assert.deepEqual(snapshot, { artifact_count: 0, settlement_count: 0, state: "reserved" });
+      await repository.rollback(subjectId, {
+        reasonCode: "integration_stale_group_release",
+        reservationId: reservationRow.reservationId,
+        traceId: `trace-stale-group-rollback-${suffix}`
+      });
+    }
+
     const deletionRequest = {
       artifactId: multiSourceArtifact.artifactId,
       artifactRevision: 1,
@@ -762,7 +869,7 @@ async function verifyPublicationAndProviderAccountingTransactions(pool) {
       traceId: `trace-visualization-delete-${suffix}`
     });
     assert.equal(purge.result.deletedVisualizationGenerationRequests, 1);
-    assert.equal(purge.result.deletedVisualizationArtifactSources, 3);
+    assert.equal(purge.result.deletedVisualizationArtifactSources, 4);
     assert.equal((await pool.query(
       "SELECT count(*)::integer AS count FROM visualization_generation_requests WHERE subject_id = $1",
       [subjectId]
