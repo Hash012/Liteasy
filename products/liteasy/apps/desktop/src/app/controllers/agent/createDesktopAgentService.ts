@@ -91,6 +91,7 @@ export function createDesktopAgentService(
         ...environment.knowledge,
         agentCoreContext: coreTurn.runtimeContext.prompt,
         artifactType: request.input.artifactType,
+        enableVisualizationDecisionPlanner: true,
         mode: request.input.mode,
         onDelta: request.input.artifactType
           ? (delta) => reportDelta(delta)

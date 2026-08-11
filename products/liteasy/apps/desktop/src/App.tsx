@@ -31,6 +31,9 @@ const PhysicsProcessBrowserFixture = import.meta.env.DEV
 const ReactionProcessBrowserFixture = import.meta.env.DEV
   ? lazy(() => import("./tests/fixtures/reactionProcessBrowserFixture"))
   : null;
+const RasterIllustrationBrowserFixture = import.meta.env.DEV
+  ? lazy(() => import("./tests/fixtures/rasterIllustrationBrowserFixture"))
+  : null;
 
 export default function App() {
   const fixture = import.meta.env.DEV ? window.location.search : "";
@@ -101,6 +104,13 @@ export default function App() {
     return (
       <Suspense fallback={null}>
         <ReactionProcessBrowserFixture />
+      </Suspense>
+    );
+  }
+  if (fixture === "?raster-illustration-fixture" && RasterIllustrationBrowserFixture) {
+    return (
+      <Suspense fallback={null}>
+        <RasterIllustrationBrowserFixture />
       </Suspense>
     );
   }

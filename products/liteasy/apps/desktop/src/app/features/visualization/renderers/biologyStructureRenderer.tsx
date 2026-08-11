@@ -5,6 +5,7 @@ import { validateBiologyStructure } from "../kernels/biologyStructureKernel";
 import { createSafeSvgScene } from "../rendering/safeSvgScene";
 
 export type BiologyStructureRenderResult = {
+  accessibility: { summary: string };
   selectableObjectIds: readonly string[];
   svg: string;
 };
@@ -15,6 +16,7 @@ export function renderBiologyStructure(spec: BiologyStructureSpecV1): BiologyStr
     .filter((object) => object.kind.startsWith("liteasy:"))
     .map((object) => object.label);
   return {
+    accessibility: { summary: structureLabels.join(", ") },
     selectableObjectIds: result.selectableObjectIds,
     svg: createSafeSvgScene({
       description: structureLabels.join(", "),
@@ -29,7 +31,7 @@ export function renderBiologyStructure(spec: BiologyStructureSpecV1): BiologyStr
 export function BiologyStructureRenderer({ rendered }: { rendered: BiologyStructureRenderResult }): JSX.Element {
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   return (
-    <section aria-label={rendered.selectableObjectIds.join(", ")} className="visualization-biology-structure">
+    <section aria-label={rendered.accessibility.summary} className="visualization-biology-structure">
       <div dangerouslySetInnerHTML={{ __html: rendered.svg }} />
       <div aria-label="生物结构对象">
         {rendered.selectableObjectIds.map((id) => (

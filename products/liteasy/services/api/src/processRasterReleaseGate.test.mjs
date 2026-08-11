@@ -12,15 +12,15 @@ const expectedSkillIds = {
   reaction_process: "reaction-process"
 };
 
-test("shared catalog enables exactly the verified process/raster generated modalities", () => {
+test("shared catalog publishes process/raster modalities after end-to-end gates pass", () => {
   const catalog = visualizationBuiltinCatalog();
   assert.deepEqual(catalog.entries
     .filter((entry) => entry.enabled && processModalities.includes(entry.modality))
     .map((entry) => entry.modality)
-    .sort(), processModalities);
+    .sort(), [...processModalities].sort());
 });
 
-test("server advertises catalog-enabled process/raster modalities only with matching compilers", () => {
+test("server advertises published process/raster modalities", () => {
   const registry = new VisualizationArtifactCompilerRegistry({
     compilers: {
       ...productionStaticScienceVisualizationCompilers,
@@ -28,7 +28,7 @@ test("server advertises catalog-enabled process/raster modalities only with matc
       ...productionProcessRasterVisualizationCompilers
     }
   });
-  assert.deepEqual(registry.availableModalities().filter((modality) => processModalities.includes(modality)).sort(), processModalities);
+  assert.deepEqual(registry.availableModalities().filter((modality) => processModalities.includes(modality)).sort(), [...processModalities].sort());
   for (const modality of processModalities) {
     assert.equal(productionProcessRasterVisualizationCompilers[modality].implementation.skillId, expectedSkillIds[modality]);
   }

@@ -26,20 +26,21 @@ describe("interactive math release gate", () => {
     expect(getUnavailableVisualizationModalityReasons(disabledCatalog).function_plot).toBe("catalog_disabled");
   });
 
-  test("advertises every enabled math modality only with its complete local chain", async () => {
+  test("publishes interactive math after its runtime, visual, provider, and decision gates pass", () => {
     expect(getAvailableVisualizationModalities()).toEqual(expect.arrayContaining([...mathModalities]));
     for (const modality of mathModalities) {
       expect(getUnavailableVisualizationModalityReasons()).not.toHaveProperty(modality);
     }
-    const summaries = getBuiltinSkillSummary();
-    for (const modality of mathModalities) {
-      const skill = summaries.find((item) => item.modality === modality);
-      expect(skill).toBeTruthy();
-      await expect(loadVisualizationRenderer(skill!.rendererId)).resolves.toMatchObject({
-        id: skill!.rendererId,
-        modality,
-        version: "1.0.0"
-      });
-    }
   });
+
+  test.each(mathModalities)("loads the published %s renderer implementation", async (modality) => {
+    const summaries = getBuiltinSkillSummary();
+    const skill = summaries.find((item) => item.modality === modality);
+    expect(skill).toBeTruthy();
+    await expect(loadVisualizationRenderer(skill!.rendererId)).resolves.toMatchObject({
+      id: skill!.rendererId,
+      modality,
+      version: "1.0.0"
+    });
+  }, 10_000);
 });

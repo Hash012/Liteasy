@@ -5,9 +5,9 @@ const functionPlotFixture = {
   auxiliaryCurves: [],
   axes: { xLabel: "x", yLabel: "f(x)" },
   domain: { min: -2, max: 2 },
-  expression: "x^2",
+  expression: "a*x^2",
   keyPoints: [{ evidenceClaimIds: ["claim-vertex"], id: "vertex", label: "vertex", x: 0, y: 0 }],
-  parameters: [],
+  parameters: [{ evidenceClaimIds: ["claim-parameter"], id: "a", max: 2, min: 0.5, value: 1 }],
   variable: "x"
 } as const satisfies FunctionPlotSpecV1;
 

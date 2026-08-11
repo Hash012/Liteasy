@@ -118,6 +118,7 @@ test("production migration set includes visualization and literature projections
     "022_visualization_cost_policy_lifecycle.sql",
     "023_visualization_generation_requests.sql",
     "024_literature_projections.sql",
-    "025_personalization_explicit_opt_in.sql"
+    "025_personalization_explicit_opt_in.sql",
+    "026_visualization_reservation_groups.sql"
   ]);
 });

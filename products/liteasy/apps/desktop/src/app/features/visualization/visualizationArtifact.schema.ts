@@ -131,15 +131,34 @@ const reactionProcessSchema = z.object({
   species: z.array(z.object({ id: stableIdSchema, formula: boundedText(120), state: z.enum(["s", "l", "g", "aq"]), evidenceClaimIds: evidenceIdsSchema }).strict()).max(256),
   steps: z.array(z.object({ id: stableIdSchema, reactants: z.array(z.object({ speciesId: stableIdSchema, coefficient: z.number().int().positive() }).strict()).max(256), products: z.array(z.object({ speciesId: stableIdSchema, coefficient: z.number().int().positive() }).strict()).max(256), mechanism: z.array(z.object({ id: stableIdSchema, label: boundedText(240), evidenceClaimIds: evidenceIdsSchema }).strict()).max(256).optional(), evidenceClaimIds: evidenceIdsSchema }).strict()).max(256),
   conditions: z.array(z.object({ id: stableIdSchema, label: boundedText(240), value: z.string().max(240).optional(), evidenceClaimIds: evidenceIdsSchema }).strict()).max(256),
-  atomMap: z.array(z.object({ id: stableIdSchema, fromSpeciesId: stableIdSchema, fromAtom: z.number().int().nonnegative(), toSpeciesId: stableIdSchema, toAtom: z.number().int().nonnegative(), evidenceClaimIds: evidenceIdsSchema }).strict()).max(4096)
+  atomMap: z.array(z.object({
+    id: stableIdSchema,
+    stepId: stableIdSchema.optional(),
+    fromSpeciesId: stableIdSchema,
+    fromMolecule: z.number().int().nonnegative().optional(),
+    fromAtom: z.number().int().nonnegative(),
+    toSpeciesId: stableIdSchema,
+    toMolecule: z.number().int().nonnegative().optional(),
+    toAtom: z.number().int().nonnegative(),
+    evidenceClaimIds: evidenceIdsSchema
+  }).strict()).max(4096)
 }).strict();
 
 const rasterIllustrationSchema = z.object({
   visualSchema: boundedText(10000),
   composition: z.object({ width: z.number().int().positive().max(4096), height: z.number().int().positive().max(4096), aspectRatio: z.number().positive().finite() }).strict(),
   labels: z.array(z.object({ id: stableIdSchema, text: boundedText(500), evidenceClaimIds: evidenceIdsSchema }).strict()).max(256),
-  styleLock: z.object({ palette: z.array(boundedText(40)).max(32), typography: boundedText(240), prohibitDecorativeClaims: z.literal(true) }).strict(),
-  evidenceClaimIds: evidenceIdsSchema
+  styleLock: z.object({ palette: z.array(boundedText(40)).max(32), typography: boundedText(240), prohibitDecorativeClaims: z.literal(true), allowTransparency: z.boolean().optional() }).strict(),
+  evidenceClaimIds: evidenceIdsSchema,
+  asset: z.object({
+    assetRef: z.string().regex(/^raster:[a-f0-9]{64}$/),
+    byteLength: z.number().int().positive().max(16 * 1024 * 1024),
+    height: z.number().int().positive().max(4096),
+    labelVerification: z.object({ engine: boundedText(120), verifiedLabelIds: z.array(stableIdSchema).max(256) }).strict(),
+    mimeType: z.literal("image/png"),
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+    width: z.number().int().positive().max(4096)
+  }).strict().optional()
 }).strict();
 
 const sourceFigureSchema = z.object({

@@ -71,11 +71,14 @@ import {
 import type { ThinReadingWorkloadAudit } from "../thin-reading/thinReading.types";
 import { loadThinReadingAnchorReferenceIndex } from "../thin-reading/thinReadingAnchorReferences";
 import { rankThinReadingAnchors } from "../thin-reading/thinReadingAnchorQuality";
+import { resolveThinReadingVisualizationIntentRequest } from "../thin-reading/thinReadingPromptRegistry";
+import { runVisualizationDecisionPlanner } from "../visualization/visualizationDecisionPlanner";
 
 type GenerateAssistantAnswerInput = {
   agentCoreContext?: AgentCorePromptContext;
   artifactType?: AgentArtifactType;
   auditTransport?: ModelAuditTransport;
+  enableVisualizationDecisionPlanner?: boolean;
   importedChunksByPaperId: Record<string, RetrievalChunk[]>;
   mode: Exclude<AssistantMode, "command">;
   modelTransport?: ModelTransport;
@@ -116,6 +119,95 @@ function extractRequiredChineseTerminology(
     terminology.set(`${original}\u0000${translation}`, { original, translation });
   }
   return [...terminology.values()];
+}
+
+function visualizationDecisionQuestion(context: ThinReadingGenerationContext) {
+  if (context.prompt?.trim()) return context.prompt.trim();
+  if (context.source.kind === "selected_text") {
+    return context.source.prompt?.trim() || `解释所选文本：${context.source.excerpt.slice(0, 600)}`;
+  }
+  if (context.source.kind === "omitted_section") return `解释未覆盖模块：${context.source.label}`;
+  if (context.source.kind === "visualization_target") return "深入解释当前选择的可视化对象。";
+  return "生成薄读初始总述，并仅在受控可视化能显著提升理解时生成。";
+}
+
+async function planThinReadingVisualization(input: {
+  context: ThinReadingGenerationContext;
+  evidence: readonly PreparedMultiPaperAnalysis["evidence"][number][];
+  gateway: ReturnType<typeof createModelGatewayFromSettings>;
+  model: string;
+  provider: string;
+  signal?: AbortSignal;
+}) {
+  const requested = resolveThinReadingVisualizationIntentRequest(input.context.source);
+  if (input.evidence.length === 0) {
+    return {
+      audit: {
+        attempts: 0,
+        basis: null,
+        decision: "omit" as const,
+        evidenceIds: [],
+        rationale: "当前节点没有可供可视化必要性门验证的论文证据。",
+        status: "failed_closed" as const
+      },
+      intent: null
+    };
+  }
+  try {
+    const planning = await runVisualizationDecisionPlanner({
+      evidence: input.evidence.map(({ id, page, quote }) => ({ id, page, quote })),
+      generate: async ({ prompt, schema, schemaName }) => {
+        const generation = await input.gateway.generateAnswer({
+          model: input.model,
+          outputFormat: { name: schemaName, schema, strict: true },
+          prompt,
+          provider: input.provider,
+          requireLive: true,
+          signal: input.signal
+        });
+        return { text: generation.answer };
+      },
+      question: visualizationDecisionQuestion(input.context),
+      requestedBy: requested ? "explicit_user_request" : "automatic",
+      title: input.context.primaryPaperTitle ?? "当前论文"
+    });
+    let intent = planning.intent;
+    if (intent && requested?.candidateModalities) {
+      const allowed = new Set<string>(requested.candidateModalities);
+      if (intent.candidateModalities.some((modality) => !allowed.has(modality))) {
+        throw new Error("visualization_decision_explicit_modality_mismatch");
+      }
+      intent = {
+        ...intent,
+        candidateModalities: [...requested.candidateModalities],
+        ...(requested.purpose ? { purpose: requested.purpose } : {})
+      };
+    }
+    return {
+      audit: {
+        attempts: planning.attempts.length,
+        basis: planning.decision.basis,
+        decision: planning.decision.decision,
+        evidenceIds: [...planning.decision.evidenceIds],
+        rationale: planning.decision.rationale,
+        status: "evaluated" as const
+      },
+      intent
+    };
+  } catch (error) {
+    if (input.signal?.aborted || isAbortError(error)) throw error;
+    return {
+      audit: {
+        attempts: 2,
+        basis: null,
+        decision: "omit" as const,
+        evidenceIds: [],
+        rationale: "可视化必要性门未返回可验证结果，已按省略处理。",
+        status: "failed_closed" as const
+      },
+      intent: null
+    };
+  }
 }
 
 type ThinReadingGenerationResult = {
@@ -1029,7 +1121,7 @@ function truncateThinReadingRepairEvidence(value: string, maximum = 1200) {
     : `${normalized.slice(0, maximum).trimEnd()}…`;
 }
 
-function buildThinReadingRepairPrompt(input: {
+export function buildThinReadingRepairPrompt(input: {
   basePrompt: string;
   invalidOutput: string;
   requireExternalKnowledge: boolean;
@@ -1551,6 +1643,7 @@ function removeUnsupportedReviewedSentences(input: {
 
 async function generateThinReadingWithQualityRepair(input: {
   context: ThinReadingGenerationContext;
+  enableVisualizationDecisionPlanner?: boolean;
   gateway: ReturnType<typeof createModelGatewayFromSettings>;
   model: string;
   onDelta?: (delta: string, accumulated: string) => void;
@@ -2051,6 +2144,31 @@ async function generateThinReadingWithQualityRepair(input: {
           `fieldPosition=${orientation.fieldPosition}；retention=${orientation.retentionVerdict}。${orientation.reason}`
         );
       }
+      let visualizationDecisionAudit: ThinReadingGenerationAudit["visualizationDecision"];
+      if (!supportMode && input.enableVisualizationDecisionPlanner) {
+        input.onProgress?.({
+          phase: "planning_visualization",
+          progress: 78,
+          summary: "正在判断受控可视化是否能实质提升理解"
+        });
+        const adoptedEvidenceIds = new Set(parsedRootSeed.evidence.paperEvidence);
+        const visualization = await planThinReadingVisualization({
+          context: generationContext,
+          evidence: generationPrepared.evidence.filter(({ id }) => adoptedEvidenceIds.has(id)),
+          gateway: input.gateway,
+          model: input.model,
+          provider: input.provider,
+          signal: input.signal
+        });
+        visualizationDecisionAudit = visualization.audit;
+        if (visualization.audit.status === "failed_closed") {
+          repairReasons.push("可视化必要性门未返回可验证结果，已失败关闭为省略。");
+        }
+        const { visualizationIntent: _provisionalVisualizationIntent, ...seedWithoutProvisionalIntent } = parsedRootSeed;
+        parsedRootSeed = visualization.intent
+          ? { ...seedWithoutProvisionalIntent, visualizationIntent: visualization.intent }
+          : seedWithoutProvisionalIntent;
+      }
       const qualityGate = {
         attempts: attempt,
         repaired: attempt > 1 || deterministicRepairApplied,
@@ -2100,6 +2218,7 @@ async function generateThinReadingWithQualityRepair(input: {
         ...(!supportMode && evidenceToolCalls ? { evidenceToolCalls } : {}),
         model: { id: input.model, provider: input.provider },
         qualityGate,
+        ...(visualizationDecisionAudit ? { visualizationDecision: visualizationDecisionAudit } : {}),
         workload,
         version: "liteasy.thin-reading-agent/v2"
       };
@@ -2165,6 +2284,7 @@ export async function generateAssistantAnswer({
   agentCoreContext,
   artifactType,
   auditTransport,
+  enableVisualizationDecisionPlanner,
   importedChunksByPaperId,
   mode,
   modelTransport,
@@ -2424,6 +2544,7 @@ export async function generateAssistantAnswer({
     });
     const thinReadingGeneration = await generateThinReadingWithQualityRepair({
       context,
+      enableVisualizationDecisionPlanner,
       gateway,
       model,
       onDelta,

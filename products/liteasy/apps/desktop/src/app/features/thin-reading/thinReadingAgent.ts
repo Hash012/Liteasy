@@ -2149,6 +2149,9 @@ export function buildThinReadingVisualGuidance(context: ThinReadingGenerationCon
     "- 把正文写成知识原子化笔记：每句话只承担一个可复述的概念、机制、证据或边界；按“对象是什么 → 如何运作 → 证据/限制”串起来。短句优先，不堆术语，不平均复述章节。",
     "- 原文图只在能直接澄清正文机制、结构或结果时选 1-2 张；recommendedFigures 的 figureId 必须来自目录，evidenceIds 必须绑定本轮证据，并告诉读者看图时关注什么；不合适就留空。",
     "- 仅当一张图能比正文更清楚地解释结构、比较、过程、几何或证据关系时，返回 visualizationIntent；它只列 purpose、候选受控模态、支撑它的本轮 evidence ID、requestedBy 和预期学习收益。",
+    "- 数学与几何按读者必须在脑中重建的关系判断：证据完整给出函数、定义域与关键点时，function_plot 可直接呈现形状、边界和最值；平面几何构造或空间截面若完整给出点、线、圆、角、相交、相切或截面关系，按真实空间维度选择 geometry_2d 或 geometry_3d。不能因为论文很短、只讨论一个构造或没有实验，就把本来依赖空间理解的内容判为无图。",
+    "- 物理过程按证据是否足以重建动态关系判断：证据完整给出状态或速度随时间变化、相互作用及轨迹时，physics_process 能把时间演化、分量和路径放在同一受控表达中，应视为实质学习增益。化学中只有证据支持的步骤、物种和守恒关系才可选择 reaction_process；总反应式或配平关系不等于已知反应过程。",
+    "- 保持克制：单个术语定义、单个数值比较、普通历史叙述、纯局限性陈述，以及证据未支持的机理仍应返回 null；不得为了生成图而补造函数性质、几何约束、反应步骤或因果关系。",
     "- 证据不足、图文重复、候选模态与内容不匹配，或没有可靠图形表达时，visualizationIntent 必须为 null。不得生成图形源码、可执行内容或标记语言。",
     requestedVisualization?.purpose
       ? `- 本轮用户明确要求可视化：若证据与模态匹配，visualizationIntent.requestedBy 必须为 explicit_user_request，purpose 必须为 ${requestedVisualization.purpose}，candidateModalities 仅可使用 ${requestedVisualization.candidateModalities.join(", ")}；不匹配时仍返回 null。`

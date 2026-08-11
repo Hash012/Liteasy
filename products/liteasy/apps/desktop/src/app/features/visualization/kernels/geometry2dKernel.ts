@@ -111,6 +111,21 @@ function validateObject(object: GeometryObject): void {
     numberData(object, "x");
     numberData(object, "y");
   }
+  if (object.kind === "arc") {
+    numberData(object, "cx");
+    numberData(object, "cy");
+    if (numberData(object, "radius") <= 0) throw new Error("geometry_radius_invalid");
+    const sweep = Math.abs(numberData(object, "endAngle") - numberData(object, "startAngle"));
+    if (sweep <= epsilon || sweep > 360 + epsilon) throw new Error("geometry_arc_invalid");
+  }
+  if (object.kind === "polygon") {
+    const points = pointData(object);
+    if (points.length < 3 || Math.abs(polygonArea(points)) <= epsilon) throw new Error("geometry_polygon_invalid");
+  }
+  if (object.kind === "curve") {
+    const points = pointData(object);
+    if (points.length < 2 || pathLength(points) <= epsilon) throw new Error("geometry_curve_invalid");
+  }
 }
 
 function deriveCircleLineTangentPoint(circle: GeometryObject, line: GeometryObject): Geometry2DDerivedPointV1 {
@@ -135,6 +150,29 @@ function numberData(object: GeometryObject, key: string): number {
   const value = object.data[key];
   if (typeof value !== "number" || !Number.isFinite(value)) throw new Error("geometry_coordinate_invalid");
   return value;
+}
+
+function pointData(object: GeometryObject): Array<{ x: number; y: number }> {
+  const value = object.data.points;
+  if (!Array.isArray(value) || value.length % 2 !== 0) throw new Error(`geometry_${object.kind}_invalid`);
+  return Array.from({ length: value.length / 2 }, (_, index) => ({
+    x: value[index * 2],
+    y: value[index * 2 + 1]
+  }));
+}
+
+function polygonArea(points: readonly { x: number; y: number }[]): number {
+  return points.reduce((area, point, index) => {
+    const next = points[(index + 1) % points.length];
+    return area + point.x * next.y - next.x * point.y;
+  }, 0) / 2;
+}
+
+function pathLength(points: readonly { x: number; y: number }[]): number {
+  return points.slice(1).reduce((length, point, index) => {
+    const previous = points[index];
+    return length + Math.hypot(point.x - previous.x, point.y - previous.y);
+  }, 0);
 }
 
 function round(value: number): number {

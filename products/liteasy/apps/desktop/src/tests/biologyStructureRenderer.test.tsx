@@ -9,6 +9,7 @@ describe("renderBiologyStructure", () => {
 
     expect(rendered.svg).toContain('role="img"');
     expect(rendered.svg).not.toContain("<script");
+    expect(rendered.accessibility.summary).toBe("神经元, 胞体, 轴突, 突触");
     expect(rendered.selectableObjectIds).toEqual(["neuron", "soma", "axon", "synapse", "connection-1"]);
   });
 

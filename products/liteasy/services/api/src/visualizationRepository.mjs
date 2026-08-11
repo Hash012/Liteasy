@@ -167,6 +167,7 @@ async function completeProviderInvocationRow(client, input) {
 function reservationView(row) {
   return row ? {
     reservationId: row.reservation_id,
+    reservationGroupId: row.reservation_group_id ?? row.reservation_id,
     subjectId: row.subject_id,
     idempotencyKey: row.idempotency_key,
     modality: row.modality,
@@ -365,6 +366,13 @@ function operationKey(value) {
 function routeId(value) {
   if (typeof value !== "string" || !/^[A-Za-z0-9._:-]{1,120}$/.test(value)) {
     throw new Error("visualization_route_id_invalid");
+  }
+  return value;
+}
+
+function reservationIdentifier(value) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9._:-]{1,160}$/.test(value)) {
+    throw new VisualizationRepositoryError("visualization_reservation_invalid");
   }
   return value;
 }
@@ -684,7 +692,7 @@ export class PostgresVisualizationRepository {
                        LEFT JOIN visualization_quota_reservations r ON r.reservation_id = u.reservation_id
                        WHERE u.subject_id = e.subject_id
                          AND COALESCE(r.created_at, u.created_at) >= date_trunc('month', $2::timestamptz, COALESCE(q.timezone, 'UTC'))), 0) AS monthly_used,
-             (SELECT COUNT(*) FROM visualization_quota_reservations r
+             (SELECT COUNT(DISTINCT COALESCE(r.reservation_group_id, r.reservation_id)) FROM visualization_quota_reservations r
                WHERE r.subject_id = e.subject_id AND r.state = 'reserved' AND r.expires_at > $2::timestamptz) AS active_count
         FROM visualization_entitlements e
         LEFT JOIN visualization_user_preferences p ON p.subject_id = e.subject_id
@@ -911,6 +919,13 @@ export class PostgresVisualizationRepository {
   async publish(subject, input) {
     const id = subjectId(subject);
     const reservationId = required(input, "reservationId");
+    const auxiliaryReservationIds = input?.auxiliaryReservationIds ?? [];
+    if (!Array.isArray(auxiliaryReservationIds) || auxiliaryReservationIds.length > 8 ||
+      auxiliaryReservationIds.some((value) => typeof value !== "string" || !/^[A-Za-z0-9._:-]{1,160}$/.test(value)) ||
+      new Set([reservationId, ...auxiliaryReservationIds]).size !== auxiliaryReservationIds.length + 1) {
+      throw new VisualizationRepositoryError("visualization_reservation_invalid");
+    }
+    const reservationIds = [reservationId, ...auxiliaryReservationIds].sort();
     const artifact = input?.artifact;
     const sources = publicationSources(input);
     const primarySource = sources.find(({ isPrimary }) => isPrimary);
@@ -919,24 +934,38 @@ export class PostgresVisualizationRepository {
       throw new Error("visualization_validation_failed");
     }
     return withPostgresTransaction(this.pool, async (client) => {
-      const reservation = (await client.query(`
-        SELECT * FROM visualization_quota_reservations
-         WHERE reservation_id = $1 AND subject_id = $2 FOR UPDATE
-      `, [reservationId, id])).rows[0];
-      if (!reservation) throw new Error("visualization_reservation_not_found");
-      if (reservation.state !== "reserved") {
-        if (reservation.state === "settled") {
+      const reservationRows = reservationIds.length === 1
+        ? (await client.query(`
+          SELECT * FROM visualization_quota_reservations
+           WHERE reservation_id = $1 AND subject_id = $2 FOR UPDATE
+        `, [reservationId, id])).rows
+        : (await client.query(`
+          SELECT * FROM visualization_quota_reservations
+           WHERE reservation_id = ANY($1::text[]) AND subject_id = $2
+           ORDER BY reservation_id FOR UPDATE
+        `, [reservationIds, id])).rows;
+      if (reservationRows.length !== reservationIds.length) throw new Error("visualization_reservation_not_found");
+      const reservationsById = new Map(reservationRows.map((row) => [row.reservation_id, row]));
+      const reservations = reservationIds.map((identifier) => reservationsById.get(identifier));
+      const reservation = reservationsById.get(reservationId);
+      if (reservations.some((row) => row.state !== "reserved")) {
+        if (reservations.every((row) => row.state === "settled")) {
           const committed = (await client.query(`
             SELECT * FROM visualization_artifacts
              WHERE subject_id = $1 AND reservation_id = $2
              ORDER BY updated_at DESC LIMIT 1
           `, [id, reservationId])).rows[0];
           if (!committed) throw new Error("visualization_artifact_not_found");
-          return { artifact: artifactView(committed), replayed: true, reservation: reservationView(reservation) };
+          return {
+            artifact: artifactView(committed),
+            replayed: true,
+            reservation: reservationView(reservation),
+            reservations: reservations.map(reservationView)
+          };
         }
         throw new Error("visualization_reservation_not_publishable");
       }
-      if (reservation.expires_at && new Date(reservation.expires_at).getTime() <= Date.now()) {
+      if (reservations.some((row) => row.expires_at && new Date(row.expires_at).getTime() <= Date.now())) {
         throw new Error("visualization_reservation_expired");
       }
       const entitlement = (await client.query(`
@@ -945,9 +974,16 @@ export class PostgresVisualizationRepository {
       const preference = (await client.query(`
         SELECT enabled FROM visualization_user_preferences WHERE subject_id = $1 FOR UPDATE
       `, [id])).rows[0];
-      const route = (await client.query(`
-        SELECT * FROM visualization_provider_configs WHERE route_id = $1 FOR UPDATE
-      `, [reservation.route_id])).rows[0];
+      const routeRows = reservationIds.length === 1
+        ? (await client.query(`
+          SELECT * FROM visualization_provider_configs WHERE route_id = $1 FOR UPDATE
+        `, [reservation.route_id])).rows
+        : (await client.query(`
+          SELECT * FROM visualization_provider_configs
+           WHERE route_id = ANY($1::text[]) ORDER BY route_id FOR UPDATE
+        `, [[...new Set(reservations.map((row) => row.route_id))].sort()])).rows;
+      const routesById = new Map(routeRows.map((row) => [row.route_id, row]));
+      const route = routesById.get(reservation.route_id);
       if (!entitlement?.allowed || preference?.enabled === false ||
         !entitlement.allowed_modalities?.includes(reservation.modality)) {
         throw new Error("visualization_entitlement_revoked");
@@ -955,6 +991,13 @@ export class PostgresVisualizationRepository {
       if (!route?.enabled || route.circuit_state === "open" ||
         Number(route.revision) !== Number(reservation.route_revision) ||
         input.routeId !== reservation.route_id || input.routeRevision !== Number(reservation.route_revision)) {
+        throw new Error("visualization_route_revision_changed");
+      }
+      if (reservations.some((row) => {
+        const currentRoute = routesById.get(row.route_id);
+        return !currentRoute?.enabled || currentRoute.circuit_state === "open" ||
+          Number(currentRoute.revision) !== Number(row.route_revision);
+      })) {
         throw new Error("visualization_route_revision_changed");
       }
       for (const source of sources) {
@@ -981,10 +1024,11 @@ export class PostgresVisualizationRepository {
           throw new Error("visualization_source_access_revoked");
         }
       }
-      if (artifact.modality !== undefined && artifact.modality !== reservation.modality) {
+      if (reservations.some((row) => row.modality !== reservation.modality) ||
+        new Set(reservations.map((row) => row.reservation_group_id ?? row.reservation_id)).size !== 1 ||
+        (artifact.modality !== undefined && artifact.modality !== reservation.modality)) {
         throw new Error("visualization_artifact_modality_mismatch");
       }
-      const settledUnits = Number(reservation.reserved_units);
       const insertedArtifact = await client.query(`
         INSERT INTO visualization_artifacts(
           subject_id, reservation_id, artifact_id, document_id, node_id, modality, state,
@@ -1005,22 +1049,36 @@ export class PostgresVisualizationRepository {
           ) VALUES ($1,$2,$3,$4,$5)
         `, [id, required(artifact, "artifactId"), source.documentId, source.sourceIdentityHash, source.isPrimary]);
       }
-      const updated = (await client.query(`
-        UPDATE visualization_quota_reservations
-           SET state = 'settled', settled_units = $2, updated_at = now()
-         WHERE reservation_id = $1 RETURNING *
-      `, [reservationId, settledUnits])).rows[0];
-      await client.query(`
-        INSERT INTO visualization_usage_ledger(
-          event_id, subject_id, reservation_id, idempotency_key, event_type,
-          units_delta, policy_revision, cost_table_revision, reason_code, trace_id
-        ) VALUES ($1,$2,$3,$4,'settled',$5,$6,$7,'completed',$8)
-      `, [
-        `vusage_${randomUUID()}`, id, reservationId, `${reservationId}:settled`,
-        settledUnits - Number(reservation.reserved_units),
-        Number(reservation.policy_revision), Number(reservation.cost_table_revision ?? reservation.policy_revision), required(input, "traceId")
-      ]);
-      return { artifact: artifactView(insertedArtifact.rows[0]) ?? artifact, replayed: false, reservation: reservationView(updated) };
+      const updatedReservations = [];
+      for (const currentReservation of reservations) {
+        const settledUnits = Number(currentReservation.reserved_units);
+        const updated = (await client.query(`
+          UPDATE visualization_quota_reservations
+             SET state = 'settled', settled_units = $2, updated_at = now()
+           WHERE reservation_id = $1 RETURNING *
+        `, [currentReservation.reservation_id, settledUnits])).rows[0];
+        updatedReservations.push(updated);
+        await client.query(`
+          INSERT INTO visualization_usage_ledger(
+            event_id, subject_id, reservation_id, idempotency_key, event_type,
+            units_delta, policy_revision, cost_table_revision, reason_code, trace_id
+          ) VALUES ($1,$2,$3,$4,'settled',$5,$6,$7,'completed',$8)
+        `, [
+          `vusage_${randomUUID()}`, id, currentReservation.reservation_id,
+          `${currentReservation.reservation_id}:settled`,
+          settledUnits - Number(currentReservation.reserved_units),
+          Number(currentReservation.policy_revision),
+          Number(currentReservation.cost_table_revision ?? currentReservation.policy_revision),
+          required(input, "traceId")
+        ]);
+      }
+      const updatedById = new Map(updatedReservations.map((row) => [row.reservation_id, row]));
+      return {
+        artifact: artifactView(insertedArtifact.rows[0]) ?? artifact,
+        replayed: false,
+        reservation: reservationView(updatedById.get(reservationId)),
+        reservations: reservationIds.map((identifier) => reservationView(updatedById.get(identifier)))
+      };
     });
   }
 
@@ -1028,14 +1086,24 @@ export class PostgresVisualizationRepository {
     const id = subjectId(subject);
     const idempotencyKey = operationKey(input?.idempotencyKey);
     const modality = required(input, "modality");
-    const routeIdentifier = routeId(input?.routeId);
+    let routeIdentifier = input?.routeId === undefined ? null : routeId(input.routeId);
     const requestedBy = requestOrigin(input?.requestedBy);
+    const requestedReservationGroupId = input?.reservationGroupId === undefined
+      ? null
+      : reservationIdentifier(input.reservationGroupId);
     const operation = input?.operation ?? (input?.imageGeneration ? "image_generation" : "structured_generation");
     if (!["structured_generation", "image_generation", "validation"].includes(operation)) {
       throw new VisualizationRepositoryError("visualization_operation_invalid");
     }
     const dataClass = typeof input?.dataClass === "string" && input.dataClass.trim() ? input.dataClass.trim() : "paper";
-    const hash = requestHash({ dataClass, modality, operation, requestedBy, routeId: routeIdentifier });
+    const hash = requestHash({
+      dataClass,
+      modality,
+      operation,
+      requestedBy,
+      reservationGroupId: requestedReservationGroupId,
+      routeId: routeIdentifier
+    });
     return withPostgresTransaction(this.pool, async (client) => {
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`visualization-reserve:${id}`]);
       const currentTime = this.now();
@@ -1056,8 +1124,15 @@ export class PostgresVisualizationRepository {
         throw new VisualizationRepositoryError("visualization_modality_not_allowed", 403);
       }
       if (!policy) throw new VisualizationRepositoryError("visualization_quota_unconfigured", 503);
-      const route = (await client.query("SELECT * FROM visualization_provider_configs WHERE route_id = $1 FOR UPDATE", [routeIdentifier])).rows[0];
+      const route = (await client.query(routeIdentifier
+        ? "SELECT * FROM visualization_provider_configs WHERE route_id = $1 FOR UPDATE"
+        : `SELECT * FROM visualization_provider_configs
+             WHERE enabled = true AND circuit_state <> 'open'
+               AND operations ? $1 AND modalities ? $2 AND data_classes ? $3
+             ORDER BY priority, route_id LIMIT 1 FOR UPDATE`,
+      routeIdentifier ? [routeIdentifier] : [operation, modality, dataClass])).rows[0];
       if (!route?.enabled || route.circuit_state === "open" || !route.operations?.includes?.(operation) || !route.modalities?.includes?.(modality) || !route.data_classes?.includes?.(dataClass)) throw new VisualizationRepositoryError("visualization_route_unavailable", 503);
+      routeIdentifier = route.route_id;
       const costPolicy = (await client.query(`
         SELECT * FROM visualization_cost_policies
          WHERE modality = $1 AND operation = $2 AND data_class = $3 AND provider_id = $4 AND enabled = true
@@ -1067,6 +1142,19 @@ export class PostgresVisualizationRepository {
       `, [modality, operation, dataClass, route.provider_id])).rows[0];
       if (!costPolicy) throw new VisualizationRepositoryError("visualization_cost_policy_unconfigured", 503);
       const reservedUnits = positiveUnits(Number(costPolicy.unit_cost));
+      let reservationGroup;
+      if (requestedReservationGroupId) {
+        reservationGroup = (await client.query(`
+          SELECT * FROM visualization_quota_reservations
+           WHERE reservation_id = $1 AND subject_id = $2
+             AND state = 'reserved' AND expires_at > $3 FOR UPDATE
+        `, [requestedReservationGroupId, id, currentTime])).rows[0];
+        if (!reservationGroup || reservationGroup.state !== "reserved" ||
+          reservationGroup.modality !== modality ||
+          (reservationGroup.reservation_group_id ?? reservationGroup.reservation_id) !== requestedReservationGroupId) {
+          throw new VisualizationRepositoryError("visualization_reservation_group_invalid", 409);
+        }
+      }
       await this.#expireReservations(client, id, input.traceId ?? `trace_${randomUUID()}`, currentTime);
       const usage = await client.query(`
         SELECT
@@ -1076,20 +1164,24 @@ export class PostgresVisualizationRepository {
           LEFT JOIN visualization_quota_reservations r ON r.reservation_id = u.reservation_id
          WHERE u.subject_id = $1
       `, [id, ianaTimezone(policy.timezone ?? "UTC"), currentTime]);
-      const active = await client.query("SELECT COUNT(*) AS active_count FROM visualization_quota_reservations WHERE subject_id = $1 AND state = 'reserved' AND expires_at > $2", [id, currentTime]);
+      const active = await client.query("SELECT COUNT(DISTINCT COALESCE(reservation_group_id, reservation_id)) AS active_count FROM visualization_quota_reservations WHERE subject_id = $1 AND state = 'reserved' AND expires_at > $2", [id, currentTime]);
       if (Number(usage.rows[0]?.daily_used ?? usage.rows[0]?.used_units ?? 0) + reservedUnits > Number(policy.daily_units)
         || Number(usage.rows[0]?.monthly_used ?? 0) + reservedUnits > Number(policy.monthly_units)) throw new Error("visualization_quota_exceeded");
-      if (Number(active.rows[0]?.active_count ?? 0) >= Number(policy.max_concurrency)) {
+      if (!reservationGroup && Number(active.rows[0]?.active_count ?? 0) >= Number(policy.max_concurrency)) {
         throw new VisualizationRepositoryError("visualization_concurrency_exceeded", 429);
       }
       const reservationId = input.reservationId ?? `vizres_${randomUUID()}`;
+      const reservationGroupId = requestedReservationGroupId ?? reservationId;
       const ttlMs = input.ttlMs ?? 120000;
       if (!Number.isSafeInteger(ttlMs) || ttlMs < 1000 || ttlMs > 900000) throw new VisualizationRepositoryError("visualization_reservation_ttl_invalid");
-      const expiresAt = new Date(currentTime.getTime() + ttlMs);
+      const requestedExpiresAt = new Date(currentTime.getTime() + ttlMs);
+      const expiresAt = reservationGroup
+        ? new Date(Math.min(requestedExpiresAt.getTime(), new Date(reservationGroup.expires_at).getTime()))
+        : requestedExpiresAt;
       const routeRevision = Number(route.revision);
       const policyRevision = Number(policy.revision);
       const costTableRevision = Number(costPolicy.revision);
-      const result = await client.query(`INSERT INTO visualization_quota_reservations(reservation_id, subject_id, idempotency_key, modality, route_id, route_revision, policy_revision, requested_by, cost_table_revision, reserved_units, state, expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'reserved',$11) RETURNING *`, [reservationId, id, idempotencyKey, modality, routeIdentifier, routeRevision, policyRevision, requestedBy, costTableRevision, reservedUnits, expiresAt]);
+      const result = await client.query(`INSERT INTO visualization_quota_reservations(reservation_id, subject_id, idempotency_key, modality, route_id, route_revision, policy_revision, requested_by, cost_table_revision, reserved_units, reservation_group_id, state, expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'reserved',$12) RETURNING *`, [reservationId, id, idempotencyKey, modality, routeIdentifier, routeRevision, policyRevision, requestedBy, costTableRevision, reservedUnits, reservationGroupId, expiresAt]);
       const reservation = result.rows[0];
       await client.query("INSERT INTO visualization_usage_ledger(event_id, subject_id, reservation_id, idempotency_key, event_type, units_delta, policy_revision, cost_table_revision, trace_id) VALUES ($1,$2,$3,$4,'reserved',$5,$6,$7,$8)", [`vusage_${randomUUID()}`, id, reservationId, idempotencyKey, reservedUnits, policyRevision, costTableRevision, input.traceId ?? `trace_${randomUUID()}`]);
       const response = { reservation: reservationView(reservation) };
@@ -1332,6 +1424,28 @@ export class PostgresVisualizationRepository {
       throw new VisualizationRepositoryError("visualization_artifact_not_found", 404);
     }
     return artifactIds.map((artifactId) => byId.get(artifactId));
+  }
+
+  async getPublishedRasterAsset(subject, sha256) {
+    const id = subjectId(subject);
+    if (typeof sha256 !== "string" || !/^[a-f0-9]{64}$/.test(sha256)) {
+      throw new VisualizationRepositoryError("visualization_raster_asset_invalid");
+    }
+    const result = await this.pool.query(`
+      SELECT artifact_id, body #> '{spec,payload,asset}' AS asset
+        FROM visualization_artifacts
+       WHERE subject_id = $1 AND modality = 'raster_illustration'
+         AND state IN ('ready','degraded')
+         AND body #>> '{spec,payload,asset,sha256}' = $2
+       ORDER BY updated_at DESC LIMIT 1
+    `, [id, sha256]);
+    if (!result.rows[0]) {
+      throw new VisualizationRepositoryError("visualization_raster_asset_not_found", 404);
+    }
+    return {
+      artifactId: result.rows[0].artifact_id,
+      asset: result.rows[0].asset
+    };
   }
 
   async findReusableArtifact(subject, input) {

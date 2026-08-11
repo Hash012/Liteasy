@@ -29,4 +29,17 @@ describe("solveGeometry2D", () => {
       constraints: [{ ...tangentFixture.constraints[0], evidenceClaimIds: [] }]
     })).toThrow("geometry_evidence_missing");
   });
+
+  test("rejects degenerate bounded paths", () => {
+    expect(() => validateGeometry2D({
+      constraints: [],
+      objects: [{ data: { points: [0, 0, 0, 0] }, evidenceClaimIds: ["claim-polygon"], id: "polygon", kind: "polygon" }],
+      viewport: tangentFixture.viewport
+    })).toThrow("geometry_polygon_invalid");
+    expect(() => validateGeometry2D({
+      constraints: [],
+      objects: [{ data: { cx: 0, cy: 0, endAngle: 0, radius: 1, startAngle: 0 }, evidenceClaimIds: ["claim-arc"], id: "arc", kind: "arc" }],
+      viewport: tangentFixture.viewport
+    })).toThrow("geometry_arc_invalid");
+  });
 });

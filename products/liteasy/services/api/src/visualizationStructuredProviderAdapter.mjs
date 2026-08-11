@@ -88,6 +88,45 @@ async function generateStructured({ payload: payloadInput, request, route }) {
   return { ...(cost ? { cost } : {}), text };
 }
 
+function imagePayload(payload) {
+  if (!object(payload) || typeof payload.prompt !== "string" || !payload.prompt.trim() || payload.prompt.length > 32_000 ||
+    !Number.isSafeInteger(payload.width) || !Number.isSafeInteger(payload.height) || payload.width < 1 || payload.height < 1 ||
+    payload.width > 4096 || payload.height > 4096) {
+    throw new VisualizationProviderError("visualization_provider_request_invalid");
+  }
+  return payload;
+}
+
+async function generateImage({ payload: payloadInput, request, route }) {
+  if (typeof request !== "function" || !object(route) || typeof route.model !== "string") {
+    throw new VisualizationProviderError("visualization_provider_request_invalid");
+  }
+  const payload = imagePayload(payloadInput);
+  const response = await request(route.endpoint, {
+    body: JSON.stringify({
+      model: route.model,
+      output_format: "png",
+      prompt: payload.prompt,
+      quality: "medium",
+      size: `${payload.width}x${payload.height}`
+    }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    responseMaxBytes: 16 * 1024 * 1024
+  });
+  const body = await jsonResponse(response);
+  const encoded = body?.data?.[0]?.b64_json;
+  if (typeof encoded !== "string" || encoded.length === 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) {
+    throw new VisualizationProviderError("visualization_provider_response_invalid");
+  }
+  const bytes = Buffer.from(encoded, "base64");
+  if (bytes.length === 0 || bytes.length > 16 * 1024 * 1024) {
+    throw new VisualizationProviderError("visualization_provider_response_invalid");
+  }
+  const cost = explicitCost(body);
+  return { bytes, ...(cost ? { cost } : {}), mimeType: "image/png" };
+}
+
 async function probe({ request, route }) {
   if (typeof request !== "function" || !object(route) || typeof route.model !== "string") {
     throw new VisualizationProviderError("visualization_provider_request_invalid");
@@ -118,6 +157,7 @@ async function probe({ request, route }) {
 }
 
 export const openAiCompatibleVisualizationAdapter = Object.freeze({
+  generateImage,
   generateStructured,
   probe
 });

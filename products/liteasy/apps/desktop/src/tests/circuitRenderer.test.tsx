@@ -10,6 +10,7 @@ describe("renderCircuit", () => {
     expect(rendered.svg).toContain('role="img"');
     expect(rendered.svg).toContain("object-battery");
     expect(rendered.svg).not.toContain("<script");
+    expect(rendered.accessibility.summary).toBe("battery, resistor, wire-1, wire-2");
     expect(rendered.selectableObjectIds).toEqual(["battery", "resistor", "wire-1", "wire-2"]);
   });
 

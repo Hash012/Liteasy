@@ -45,6 +45,17 @@ function input(modality, proposal) {
     modality,
     nodeId: fixture.source.nodeId,
     proposal,
+    ...(modality === "raster_illustration" ? {
+      rasterAsset: {
+        assetRef: `raster:${"a".repeat(64)}`,
+        byteLength: 1024,
+        height: 512,
+        labelVerification: { engine: "fixture-ocr/v1", verifiedLabelIds: ["label-1"] },
+        mimeType: "image/png",
+        sha256: "a".repeat(64),
+        width: 512
+      }
+    } : {}),
     reservation: { ...reservation, artifactId: `artifact-${modality}` },
     source: fixture.source
   };
@@ -52,6 +63,33 @@ function input(modality, proposal) {
 
 test("provides a production compiler for every process/raster catalog candidate", () => {
   assert.deepEqual(Object.keys(productionProcessRasterVisualizationCompilers).sort(), processModalities);
+});
+
+test("rejects provider-supplied raster assets and requires server-owned asset metadata", async () => {
+  const registry = new VisualizationArtifactCompilerRegistry({
+    catalog,
+    compilers: productionProcessRasterVisualizationCompilers
+  });
+  const proposal = fixture.modalities.raster_illustration.valid;
+  await assert.rejects(
+    () => registry.compile({
+      ...input("raster_illustration", proposal),
+      proposal: {
+        ...proposal,
+        spec: {
+          ...proposal.spec,
+          payload: { ...proposal.spec.payload, asset: { sha256: "a".repeat(64) } }
+        }
+      }
+    }),
+    /visualization_proposal/
+  );
+  const withoutAsset = input("raster_illustration", proposal);
+  delete withoutAsset.rasterAsset;
+  await assert.rejects(
+    () => registry.compile(withoutAsset),
+    /visualization_raster_asset_required/
+  );
 });
 
 test("compiles valid process/raster conformance proposals", async () => {

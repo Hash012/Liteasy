@@ -97,6 +97,9 @@ function artifact(reservation) {
 function harness({
   compile,
   generate,
+  materializeRasterAsset,
+  modality = "semantic_graph",
+  prepareProposal,
   requestedArtifactCount = 1,
   resolve,
   submit
@@ -107,12 +110,18 @@ function harness({
   const sourceResolver = {
     async resolve(input) {
       calls.push(["resolve", input]);
-      return resolve ? resolve({ calls, generation }) : source();
+      return resolve ? resolve({ calls, generation }) : source({
+        intent: { candidateModalities: [modality], requestedBy: "explicit_user_request" }
+      });
     }
   };
   const compilerRegistry = {
-    has: (modality) => modality === "semantic_graph",
-    providerPayload(modality) { calls.push(["providerPayload", modality]); return { schema: {}, schemaName: "proposal", prompt: "bounded" }; },
+    has: (candidate) => candidate === modality,
+    prepareProposal(input) {
+      calls.push(["prepareProposal", input]);
+      return prepareProposal ? prepareProposal(input) : JSON.parse(input.proposal);
+    },
+    providerPayload(candidate) { calls.push(["providerPayload", candidate]); return { schema: {}, schemaName: "proposal", prompt: "bounded" }; },
     async compile(input) {
       calls.push(["compile", input]);
       return compile ? compile(input, { calls, generation }) : artifact(input.reservation);
@@ -122,7 +131,7 @@ function harness({
     async accountCapability() {
       return {
         allowed: true,
-        availableModalities: ["semantic_graph"],
+        availableModalities: [modality],
         enabled: true,
         explicitRequestsAllowed: true,
         quota: { available: true },
@@ -145,6 +154,15 @@ function harness({
     },
     async rollbackGeneratedReservation(_subjectId, reservationId, error) {
       calls.push(["rollback", reservationId, error.code ?? error.message]);
+    },
+    async rollbackGeneratedReservations(_subjectId, reservationIds, error) {
+      calls.push(["rollbackMany", reservationIds, error.code ?? error.message]);
+    },
+    async materializeRasterAsset(input, context) {
+      calls.push(["materializeRasterAsset", input, context]);
+      return materializeRasterAsset
+        ? materializeRasterAsset(input, context, { calls, generation })
+        : null;
     },
     async submit(_subjectId, input, context) {
       calls.push(["submit", input, context]);
@@ -188,12 +206,107 @@ test("uses one reservation idempotency key for each requested artifact", async (
   assert.equal(instance.calls.filter(([name]) => name === "submit").length, 2);
 });
 
+test("generates raster proposal and PNG under separate reservations then publishes both atomically", async () => {
+  const proposal = {
+    spec: {
+      modality: "raster_illustration",
+      payload: {
+        composition: { aspectRatio: 1, height: 2, width: 2 },
+        evidenceClaimIds: ["claim-1"],
+        labels: [{ evidenceClaimIds: ["claim-1"], id: "label-1", text: "cell" }],
+        styleLock: { palette: ["#ffffff"], prohibitDecorativeClaims: true, typography: "system" },
+        visualSchema: "labelled cell"
+      }
+    }
+  };
+  let sequence = 0;
+  const instance = harness({
+    compile: async (input) => {
+      assert.equal(input.reservation.reservationId, "reservation-image");
+      assert.equal(input.rasterAsset.assetRef, `raster:${"d".repeat(64)}`);
+      return {
+        ...artifact({ artifactId: "artifact-raster-1" }),
+        modality: "raster_illustration",
+        spec: { ...proposal.spec, payload: { ...proposal.spec.payload, asset: input.rasterAsset } }
+      };
+    },
+    generate: async (input) => {
+      sequence += 1;
+      return sequence === 1
+        ? {
+            reservation: { artifactId: "artifact-structured", reservationId: "reservation-structured", routeId: "route-structured", routeRevision: 5 },
+            result: { text: JSON.stringify(proposal) }
+          }
+        : {
+            reservation: { artifactId: "artifact-raster-1", reservationId: "reservation-image", routeId: "route-image", routeRevision: 3 },
+            result: { bytes: new Uint8Array([137, 80, 78, 71]), mimeType: "image/png" }
+          };
+    },
+    materializeRasterAsset: async () => ({
+      assetRef: `raster:${"d".repeat(64)}`,
+      byteLength: 4,
+      height: 2,
+      labelVerification: { engine: "fixture-ocr/v1", verifiedLabelIds: ["label-1"] },
+      mimeType: "image/png",
+      sha256: "d".repeat(64),
+      width: 2
+    }),
+    modality: "raster_illustration",
+    prepareProposal: (input) => JSON.parse(input.proposal)
+  });
+
+  const result = await instance.worker.drainOne();
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(
+    instance.calls.filter(([name]) => name === "generate").map(([, input]) => input.providerRequest.operation),
+    ["structured_generation", "image_generation"]
+  );
+  const submission = instance.calls.find(([name]) => name === "submit")[1];
+  assert.equal(submission.reservationId, "reservation-image");
+  assert.deepEqual(submission.auxiliaryReservationIds, ["reservation-structured"]);
+});
+
+test("rolls back both raster reservations when OCR or storage validation fails", async () => {
+  const proposal = {
+    spec: {
+      modality: "raster_illustration",
+      payload: {
+        composition: { aspectRatio: 1, height: 2, width: 2 },
+        evidenceClaimIds: ["claim-1"],
+        labels: [{ evidenceClaimIds: ["claim-1"], id: "label-1", text: "cell" }],
+        styleLock: { palette: ["#ffffff"], prohibitDecorativeClaims: true, typography: "system" },
+        visualSchema: "labelled cell"
+      }
+    }
+  };
+  let sequence = 0;
+  const instance = harness({
+    generate: async () => {
+      sequence += 1;
+      return sequence === 1
+        ? { reservation: { reservationId: "reservation-structured", routeId: "route-structured", routeRevision: 5 }, result: { text: JSON.stringify(proposal) } }
+        : { reservation: { reservationId: "reservation-image", routeId: "route-image", routeRevision: 3 }, result: { bytes: new Uint8Array([1]), mimeType: "image/png" } };
+    },
+    materializeRasterAsset: async () => { throw coded("visualization_raster_ocr_label_mismatch"); },
+    modality: "raster_illustration",
+    prepareProposal: (input) => JSON.parse(input.proposal)
+  });
+
+  const result = await instance.worker.drainOne();
+  assert.equal(result.reasonCode, "validation_failed");
+  assert.deepEqual(instance.calls.find(([name]) => name === "rollbackMany").slice(1), [
+    ["reservation-structured", "reservation-image"],
+    "visualization_validation_failed"
+  ]);
+  assert.equal(instance.calls.some(([name]) => name === "submit"), false);
+});
+
 test("rolls back compiler rejection before failing the request", async () => {
   const instance = harness({ compile: async () => { throw coded("visualization_proposal_invalid"); } });
   const result = await instance.worker.drainOne();
   assert.equal(result.status, "failed");
   assert.equal(result.reasonCode, "validation_failed");
-  assert.deepEqual(instance.calls.find(([name]) => name === "rollback").slice(1), ["reservation-1", "visualization_validation_failed"]);
+  assert.deepEqual(instance.calls.find(([name]) => name === "rollbackMany").slice(1), [["reservation-1"], "visualization_validation_failed"]);
   assert.equal(instance.calls.some(([name]) => name === "submit"), false);
 });
 
@@ -233,7 +346,7 @@ test("cancellation wins before provider, during provider, and after provider bef
     const result = await instance.worker.drainOne();
     assert.equal(result.status, "cancelled");
     assert.equal(instance.calls.some(([name]) => name === "submit"), false);
-    assert.equal(instance.calls.some(([name]) => name === "rollback"), true);
+    assert.equal(instance.calls.some(([name]) => name === "rollbackMany"), true);
   });
 });
 

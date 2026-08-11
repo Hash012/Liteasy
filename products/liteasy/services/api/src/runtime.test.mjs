@@ -58,6 +58,7 @@ test("does not become ready until PostgreSQL migrations and S3 controls pass", a
     objectStorage: "ready",
     pdfSecurity: "ready",
     postgres: "ready",
+    rasterOcr: "ready",
     storageWorkflows: "current"
   });
   await runtime.close();
@@ -219,7 +220,8 @@ test("constructs visualization gateway with the validated hostname policy and se
   assert.deepEqual(Object.keys(options.adapters).sort(), ["openai", "openai-compatible"]);
   assert.equal(options.secretStore.resolve("viz-secret:provider-1"), "deployment-secret");
   assert.deepEqual(runtime.visualizationArtifactCompilerRegistry.availableModalities().sort(), [
-    "biology_structure", "circuit", "function_plot", "geometry_2d", "geometry_3d", "physics_diagram", "physics_process", "raster_illustration", "reaction_process", "semantic_graph"
+    "biology_structure", "circuit", "function_plot", "geometry_2d", "geometry_3d",
+    "physics_diagram", "physics_process", "raster_illustration", "reaction_process", "semantic_graph"
   ]);
   await runtime.close();
 });

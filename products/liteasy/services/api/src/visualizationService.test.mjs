@@ -101,7 +101,13 @@ function serviceHarness(overrides = {}) {
   });
   return {
     calls,
-    service: new VisualizationService({ authorizeDocument, gateway, repository, validateArtifact })
+    service: new VisualizationService({
+      authorizeDocument,
+      gateway,
+      objectStore: overrides.objectStore,
+      repository,
+      validateArtifact
+    })
   };
 }
 
@@ -147,6 +153,62 @@ test("account capability exposes only the fail-closed desktop projection", async
     quota: { available: false },
     serviceAvailable: false
   });
+});
+
+test("opens only an owned generated raster whose S3 metadata matches the artifact", async () => {
+  const sha256 = "a".repeat(64);
+  const body = Buffer.from([137, 80, 78, 71]);
+  const instance = serviceHarness({
+    objectStore: {
+      objectKey(value) {
+        assert.equal(value, sha256);
+        return `private/objects/${value}`;
+      },
+      async openObject(storageKey) {
+        assert.equal(storageKey, `private/objects/${sha256}`);
+        return {
+          body,
+          byteLength: body.byteLength,
+          mediaType: "image/png",
+          metadata: {
+            "asset-kind": "generated-raster",
+            "byte-length": String(body.byteLength),
+            sha256
+          }
+        };
+      }
+    },
+    repository: {
+      async getPublishedRasterAsset(subjectId, digest) {
+        assert.equal(subjectId, "user_1");
+        assert.equal(digest, sha256);
+        return {
+          artifactId: "artifact-raster-1",
+          asset: {
+            assetRef: `raster:${sha256}`,
+            byteLength: body.byteLength,
+            mimeType: "image/png",
+            sha256
+          }
+        };
+      }
+    }
+  });
+
+  const opened = await instance.service.openRasterAsset("user_1", sha256);
+  assert.equal(opened.artifactId, "artifact-raster-1");
+  assert.equal(opened.body, body);
+
+  instance.service.objectStore.openObject = async () => ({
+    body,
+    byteLength: body.byteLength,
+    mediaType: "image/png",
+    metadata: { sha256 }
+  });
+  await assert.rejects(
+    () => instance.service.openRasterAsset("user_1", sha256),
+    /visualization_raster_asset_integrity_mismatch/
+  );
 });
 
 test("reloads and strictly validates subject-bound published artifact bodies", async () => {
@@ -302,6 +364,28 @@ test("submission rechecks all publication gates before settling", async () => {
     traceId: "trace_4",
     validation: { outcome: "pass", validatorVersions: { schema: "1" } }
   });
+});
+
+test("submission passes both raster reservations to publication and rolls both back on failure", async () => {
+  const instance = serviceHarness({ repository: {
+    async publish() {
+      throw new Error("visualization_route_revision_changed");
+    }
+  } });
+  await assert.rejects(() => instance.service.submit("user_1", {
+    artifact: { artifactId: "artifact-raster-1", modality: "raster_illustration" },
+    auxiliaryReservationIds: ["reservation-structured"],
+    document: { documentId: "document_1", sourceIdentityHash },
+    modality: "raster_illustration",
+    reservationId: "reservation-image",
+    routeId: "route-image",
+    routeRevision: 3
+  }, { traceId: "trace-raster-submit" }), /visualization_route_revision_changed/);
+
+  assert.deepEqual(
+    instance.calls.filter(([name]) => name === "rollback").map(([, , input]) => input.reservationId).sort(),
+    ["reservation-image", "reservation-structured"]
+  );
 });
 
 test("submission authorizes every unique source before publishing once", async () => {

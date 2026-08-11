@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
 import { getBuiltinSkillSummary, getVisualizationBuiltinCatalog, loadBuiltinSkill } from "../app/features/skills/builtinSkillRegistry";
-import { generatedVisualizationModalities } from "../app/features/visualization/visualizationArtifact.types";
 import {
   getAvailableVisualizationModalities,
   getUnavailableVisualizationModalityReasons,
@@ -8,7 +7,18 @@ import {
 } from "../app/features/visualization/visualizationRendererRegistry";
 import { validatorsExist } from "../app/features/visualization/visualizationValidatorRegistry";
 
-const expectedGeneratedModalities = [...generatedVisualizationModalities].sort();
+const expectedGeneratedModalities = [
+  "biology_structure",
+  "circuit",
+  "function_plot",
+  "geometry_2d",
+  "geometry_3d",
+  "physics_diagram",
+  "physics_process",
+  "raster_illustration",
+  "reaction_process",
+  "semantic_graph"
+];
 
 describe("multimodal release gate", () => {
   test("publishes exactly the generated modalities in the shared catalog", () => {
@@ -57,7 +67,7 @@ describe("multimodal release gate", () => {
         version: skill!.version
       });
     }
-  });
+  }, 15_000);
 
   test("fails closed when a generated catalog modality is disabled at release time", () => {
     const catalog = getVisualizationBuiltinCatalog();

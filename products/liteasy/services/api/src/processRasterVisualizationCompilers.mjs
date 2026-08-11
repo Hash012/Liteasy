@@ -1,3 +1,5 @@
+import { validateReactionProcessPayload } from "./reactionProcessValidation.mjs";
+
 function pass() {
   return { outcome: "pass" };
 }
@@ -22,7 +24,9 @@ function proposalSchema(modality) {
         additionalProperties: false,
         properties: {
           modality: { const: modality },
-          payload: { type: "object" }
+          payload: modality === "raster_illustration"
+            ? { properties: { asset: false }, type: "object" }
+            : { type: "object" }
         },
         required: ["modality", "payload"],
         type: "object"
@@ -62,18 +66,7 @@ function validatePhysicsProcess({ artifact }) {
 
 function validateReactionProcess({ artifact }) {
   try {
-    const payload = artifact.spec.payload;
-    const speciesById = new Map(payload.species.map((species) => [species.id, species]));
-    if (speciesById.size !== payload.species.length) throw new Error("reaction_species_duplicate");
-    for (const species of payload.species) {
-      requireEvidence(species.evidenceClaimIds, "reaction_species_unbound");
-      parseFormula(species.formula);
-    }
-    for (const step of payload.steps) {
-      requireEvidence(step.evidenceClaimIds, "reaction_step_unbound");
-      for (const mechanism of step.mechanism ?? []) requireEvidence(mechanism.evidenceClaimIds, "reaction_mechanism_unbound");
-      assertConserved(step, speciesById);
-    }
+    validateReactionProcessPayload(artifact.spec.payload);
     return pass();
   } catch (error) {
     return fail(error.message);
@@ -92,40 +85,20 @@ function validateRasterIllustration({ artifact }) {
     if (payload.styleLock?.prohibitDecorativeClaims !== true) throw new Error("raster_style_lock_invalid");
     for (const label of payload.labels) requireEvidence(label.evidenceClaimIds, "raster_evidence_missing");
     if (/(?:https?:|<script|foreignObject)/iu.test(payload.visualSchema)) throw new Error("raster_external_reference");
+    const asset = payload.asset;
+    if (!asset || typeof asset.sha256 !== "string" || !/^[a-f0-9]{64}$/u.test(asset.sha256) ||
+      asset.assetRef !== `raster:${asset.sha256}` || asset.mimeType !== "image/png" ||
+      !Number.isSafeInteger(asset.byteLength) || asset.byteLength <= 0 ||
+      asset.width !== payload.composition.width || asset.height !== payload.composition.height ||
+      !asset.labelVerification || typeof asset.labelVerification.engine !== "string" ||
+      !Array.isArray(asset.labelVerification.verifiedLabelIds) ||
+      payload.labels.some((label) => !asset.labelVerification.verifiedLabelIds.includes(label.id))) {
+      throw new Error("raster_asset_metadata_invalid");
+    }
     return pass();
   } catch (error) {
     return fail(error.message);
   }
-}
-
-function parseFormula(formula) {
-  if (!/^(?:[A-Z][a-z]?\d*)+$/u.test(formula)) throw new Error("reaction_formula_invalid");
-  const counts = {};
-  for (const match of formula.matchAll(/([A-Z][a-z]?)(\d*)/gu)) {
-    counts[match[1]] = (counts[match[1]] ?? 0) + (match[2] ? Number(match[2]) : 1);
-  }
-  return counts;
-}
-
-function assertConserved(step, speciesById) {
-  const reactants = aggregate(step.reactants, speciesById);
-  const products = aggregate(step.products, speciesById);
-  const elements = new Set([...Object.keys(reactants), ...Object.keys(products)]);
-  for (const element of elements) {
-    if ((reactants[element] ?? 0) !== (products[element] ?? 0)) throw new Error("reaction_conservation_failed");
-  }
-}
-
-function aggregate(items, speciesById) {
-  const counts = {};
-  for (const item of items) {
-    const species = speciesById.get(item.speciesId);
-    if (!species) throw new Error("reaction_reference_invalid");
-    for (const [element, count] of Object.entries(parseFormula(species.formula))) {
-      counts[element] = (counts[element] ?? 0) + count * item.coefficient;
-    }
-  }
-  return counts;
 }
 
 function descriptor({

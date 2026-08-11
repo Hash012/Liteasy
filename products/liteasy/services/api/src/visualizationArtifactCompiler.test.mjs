@@ -107,6 +107,29 @@ test("compiles provider JSON text with server-owned identity, versions, usage, a
   }]);
 });
 
+test("derives a stable artifact identifier when the production reservation view has no artifactId", async () => {
+  const productionReservation = { ...reservation };
+  delete productionReservation.artifactId;
+  const first = await registry().compile({
+    locale: "zh-CN",
+    modality: "semantic_graph",
+    nodeId: "node-1",
+    proposal: proposal(),
+    reservation: productionReservation,
+    source
+  });
+  const second = await registry().compile({
+    locale: "zh-CN",
+    modality: "semantic_graph",
+    nodeId: "node-1",
+    proposal: proposal(),
+    reservation: productionReservation,
+    source
+  });
+  assert.match(first.artifactId, /^vizart_[a-f0-9]{32}$/);
+  assert.equal(second.artifactId, first.artifactId);
+});
+
 test("rejects unknown compilers, malformed or schema-invalid proposals, unbound evidence, and modality drift", async (t) => {
   await assert.rejects(
     () => registry().compile({ locale: "zh-CN", modality: "circuit", nodeId: "node-1", proposal: proposal(), reservation, source }),

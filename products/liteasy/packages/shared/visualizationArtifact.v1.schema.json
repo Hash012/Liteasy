@@ -2183,11 +2183,22 @@
                         "maxLength": 120,
                         "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
                       },
+                      "stepId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120,
+                        "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+                      },
                       "fromSpeciesId": {
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 120,
                         "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+                      },
+                      "fromMolecule": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
                       },
                       "fromAtom": {
                         "type": "integer",
@@ -2199,6 +2210,11 @@
                         "minLength": 1,
                         "maxLength": 120,
                         "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+                      },
+                      "toMolecule": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
                       },
                       "toAtom": {
                         "type": "integer",
@@ -2339,6 +2355,9 @@
                     "prohibitDecorativeClaims": {
                       "type": "boolean",
                       "const": true
+                    },
+                    "allowTransparency": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -2357,6 +2376,73 @@
                     "maxLength": 120,
                     "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
                   }
+                },
+                "asset": {
+                  "type": "object",
+                  "properties": {
+                    "assetRef": {
+                      "type": "string",
+                      "pattern": "^raster:[a-f0-9]{64}$"
+                    },
+                    "byteLength": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 16777216
+                    },
+                    "height": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 4096
+                    },
+                    "labelVerification": {
+                      "type": "object",
+                      "properties": {
+                        "engine": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "verifiedLabelIds": {
+                          "maxItems": 256,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120,
+                            "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+                          }
+                        }
+                      },
+                      "required": [
+                        "engine",
+                        "verifiedLabelIds"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "mimeType": {
+                      "type": "string",
+                      "const": "image/png"
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    },
+                    "width": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 4096
+                    }
+                  },
+                  "required": [
+                    "assetRef",
+                    "byteLength",
+                    "height",
+                    "labelVerification",
+                    "mimeType",
+                    "sha256",
+                    "width"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [

@@ -17,6 +17,30 @@ const validators = {
   reaction_process: (spec: VisualizationSpecV1) => validateReactionProcess(spec.payload as never)
 } satisfies Record<string, (spec: VisualizationSpecV1) => unknown>;
 
+function publishedSpec(modality: VisualizationModality): VisualizationSpecV1 {
+  const spec = fixture.modalities[modality].valid.spec as VisualizationSpecV1;
+  if (spec.modality !== "raster_illustration") return spec;
+  const sha256 = "a".repeat(64);
+  return {
+    ...spec,
+    payload: {
+      ...spec.payload,
+      asset: {
+        assetRef: `raster:${sha256}`,
+        byteLength: 1024,
+        height: spec.payload.composition.height,
+        labelVerification: {
+          engine: "fixture-ocr/v1",
+          verifiedLabelIds: spec.payload.labels.map((label) => label.id)
+        },
+        mimeType: "image/png",
+        sha256,
+        width: spec.payload.composition.width
+      }
+    }
+  };
+}
+
 function mergePatch(base: unknown, patch: unknown): unknown {
   if (!patch || typeof patch !== "object" || Array.isArray(patch)) return patch;
   const output = { ...(base as Record<string, unknown>) };
@@ -31,8 +55,14 @@ function mergePatch(base: unknown, patch: unknown): unknown {
 describe("process/raster cross-runtime conformance", () => {
   test("accepts every valid process/raster fixture", () => {
     for (const modality of Object.keys(validators) as VisualizationModality[]) {
-      expect(() => validators[modality](fixture.modalities[modality].valid.spec)).not.toThrow();
+      expect(() => validators[modality](publishedSpec(modality))).not.toThrow();
     }
+  });
+
+  test("rejects a generation-stage raster proposal before the server binds its asset", () => {
+    expect(() => validators.raster_illustration(
+      fixture.modalities.raster_illustration.valid.spec
+    )).toThrow("raster_asset_metadata_invalid");
   });
 
   test("rejects domain-invalid fixtures with the shared diagnostic code", () => {

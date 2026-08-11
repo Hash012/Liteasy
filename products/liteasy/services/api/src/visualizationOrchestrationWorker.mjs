@@ -3,6 +3,7 @@ import {
   availableVisualizationModalities,
   visualizationOrchestrationReason
 } from "./visualizationOrchestrationService.mjs";
+import { rasterProviderPayload } from "./visualizationRasterService.mjs";
 
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
@@ -113,6 +114,16 @@ export class VisualizationOrchestrationWorker {
     await this.visualizationService.rollbackGeneratedReservation(subjectId, reservationId, rollbackError, { traceId });
   }
 
+  async #rollbackAll(subjectId, reservationIds, error, traceId) {
+    const reason = visualizationOrchestrationReason(error);
+    const rollbackError = reason === "validation_failed" ? failure("visualization_validation_failed") : error;
+    if (typeof this.visualizationService.rollbackGeneratedReservations === "function") {
+      await this.visualizationService.rollbackGeneratedReservations(subjectId, reservationIds, rollbackError, { traceId });
+      return;
+    }
+    for (const reservationId of reservationIds) await this.#rollback(subjectId, reservationId, error, traceId);
+  }
+
   async #generateOne(claim, index, signal) {
     await this.#requestIsRunning(claim);
     const source = await this.#currentSource(claim);
@@ -141,14 +152,50 @@ export class VisualizationOrchestrationWorker {
         requestedBy: source.intent.requestedBy === "automatic" ? "automatic" : "explicit"
       }
     }, { signal, traceId: claim.traceId });
+    const reservationIds = [generation.reservation.reservationId];
     let submissionStarted = false;
     try {
+      const proposal = modality === "raster_illustration"
+        ? this.compilerRegistry.prepareProposal({
+            modality,
+            nodeId: source.nodeId,
+            proposal: generation.result.text,
+            source
+          })
+        : generation.result.text;
+      let primaryGeneration = generation;
+      let rasterAsset;
+      if (modality === "raster_illustration") {
+        rasterProviderPayload(proposal.spec.payload);
+        await this.#requestIsRunning(claim);
+        await this.#currentSource(claim);
+        primaryGeneration = await this.visualizationService.generate(claim.subjectId, {
+          providerRequest: {
+            dataClass: "paper",
+            operation: "image_generation",
+            payload: rasterProviderPayload(proposal.spec.payload)
+          },
+          reservation: {
+            idempotencyKey: `${claim.requestId}:artifact:${index}:image`,
+            modality,
+            reservationGroupId: generation.reservation.reservationGroupId ?? generation.reservation.reservationId,
+            requestedBy: source.intent.requestedBy === "automatic" ? "automatic" : "explicit"
+          }
+        }, { signal, traceId: claim.traceId });
+        reservationIds.push(primaryGeneration.reservation.reservationId);
+        rasterAsset = await this.visualizationService.materializeRasterAsset({
+          image: primaryGeneration.result,
+          sourceIdentityHashes: source.documents.map(({ sourceIdentityHash }) => sourceIdentityHash),
+          spec: proposal.spec.payload
+        }, { signal, traceId: claim.traceId });
+      }
       const artifact = await this.compilerRegistry.compile({
         locale: source.locale,
         modality,
         nodeId: source.nodeId,
-        proposal: generation.result.text,
-        reservation: generation.reservation,
+        proposal,
+        ...(rasterAsset ? { rasterAsset } : {}),
+        reservation: primaryGeneration.reservation,
         source
       });
       await this.#requestIsRunning(claim);
@@ -158,14 +205,15 @@ export class VisualizationOrchestrationWorker {
         artifact: publicationEnvelope(artifact, current),
         documents: current.documents,
         modality,
-        reservationId: generation.reservation.reservationId,
-        routeId: generation.reservation.routeId,
-        routeRevision: generation.reservation.routeRevision
+        ...(modality === "raster_illustration" ? { auxiliaryReservationIds: [generation.reservation.reservationId] } : {}),
+        reservationId: primaryGeneration.reservation.reservationId,
+        routeId: primaryGeneration.reservation.routeId,
+        routeRevision: primaryGeneration.reservation.routeRevision
       }, { signal, traceId: claim.traceId });
       return publication.artifact?.artifactId ?? artifact.artifactId;
     } catch (error) {
       if (!submissionStarted) {
-        await this.#rollback(claim.subjectId, generation.reservation.reservationId, error, claim.traceId);
+        await this.#rollbackAll(claim.subjectId, reservationIds, error, claim.traceId);
       }
       throw error;
     }

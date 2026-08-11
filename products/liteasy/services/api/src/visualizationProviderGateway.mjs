@@ -231,7 +231,7 @@ function pinnedLookup(records) {
   };
 }
 
-async function pinnedHttpsFetch(url, init, security) {
+export async function pinnedHttpsFetch(url, init, security, requestImpl = httpsRequest) {
   const parsed = new URL(url);
   const headers = Object.fromEntries(new Headers(init.headers).entries());
   const body = init.body;
@@ -239,7 +239,7 @@ async function pinnedHttpsFetch(url, init, security) {
     throw new VisualizationProviderError("visualization_provider_request_invalid");
   }
   return new Promise((resolve, reject) => {
-    const request = httpsRequest(parsed, {
+    const request = requestImpl(parsed, {
       headers,
       lookup: security.lookup,
       method: init.method ?? "GET",
@@ -247,6 +247,7 @@ async function pinnedHttpsFetch(url, init, security) {
     }, (response) => {
       const maximumBytes = Number.isSafeInteger(security?.maximumBytes) ? security.maximumBytes : responseLimits.structured_generation;
       const declared = Number(response.headers["content-length"] ?? 0);
+      const peerAddress = response.socket?.remoteAddress;
       if (declared > maximumBytes) {
         response.destroy();
         reject(new VisualizationProviderError("visualization_provider_response_too_large"));
@@ -275,7 +276,9 @@ async function pinnedHttpsFetch(url, init, security) {
           status: response.statusCode,
           statusText: response.statusMessage
         });
-        Object.defineProperty(result, "peerAddress", { value: response.socket.remoteAddress });
+        if (typeof peerAddress === "string") {
+          Object.defineProperty(result, "peerAddress", { value: peerAddress });
+        }
         resolve(result);
       });
     });

@@ -468,6 +468,15 @@ function runtime() {
       async generate(subjectId, input, context) {
         calls.push({ context, subjectId, visualizationGenerate: input });
         return { reservation: { reservationId: "reservation-1" }, result: { text: "validated" } };
+      },
+      async openRasterAsset(subjectId, sha256) {
+        calls.push({ rasterAsset: sha256, subjectId });
+        return {
+          body: Readable.from([Buffer.from([137, 80, 78, 71])]),
+          byteLength: 4,
+          mediaType: "image/png",
+          metadata: { sha256 }
+        };
       }
     }
   };
@@ -491,6 +500,26 @@ test("authenticates formal model generation and derives the subject from the des
   const call = instance.calls.find((item) => item.modelGenerate);
   assert.equal(call.modelContext.subjectId, "user_1");
   assert.match(call.modelContext.traceId, /^trace_/);
+  assert.equal(instance.calls.some((item) => item.audience === "liteasy-desktop"), true);
+});
+
+test("streams an owned raster asset through the private desktop account route", async () => {
+  const instance = runtime();
+  const handler = createCloudRequestHandler(instance, internalConfig());
+  const result = response();
+  const sha256 = "a".repeat(64);
+
+  await handler(request("GET", `/v1/account/visualization/assets/${sha256}`), result);
+
+  assert.equal(result.status, 200);
+  assert.equal(result.headers["cache-control"], "private, no-store");
+  assert.equal(result.headers["content-length"], "4");
+  assert.equal(result.headers["content-type"], "image/png");
+  assert.deepEqual(result.body, Buffer.from([137, 80, 78, 71]));
+  assert.deepEqual(instance.calls.find((item) => item.rasterAsset), {
+    rasterAsset: sha256,
+    subjectId: "user_1"
+  });
   assert.equal(instance.calls.some((item) => item.audience === "liteasy-desktop"), true);
 });
 

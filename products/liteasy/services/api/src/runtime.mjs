@@ -42,6 +42,7 @@ import { PostgresVisualizationRepository } from "./visualizationRepository.mjs";
 import { VisualizationService } from "./visualizationService.mjs";
 import { productionVisualizationProviderAdapters } from "./visualizationStructuredProviderAdapter.mjs";
 import { ThinReadingVisualizationSourceResolver } from "./thinReadingVisualizationSource.mjs";
+import { LocalTesseractRasterOcr } from "./visualizationRasterOcr.mjs";
 
 export async function startCloudRuntime(config, dependencies = {}) {
   const pool = dependencies.pool ?? createPostgresPool(config.database);
@@ -109,9 +110,12 @@ export async function startCloudRuntime(config, dependencies = {}) {
         sourceIdentityHash: current.contentHash
       };
     });
+  const visualizationRasterOcr = dependencies.visualizationRasterOcr ?? new LocalTesseractRasterOcr();
   const visualizationService = dependencies.visualizationService ?? new VisualizationService({
     authorizeDocument: visualizationDocumentAuthorizer,
     gateway: visualizationProviderGateway,
+    objectStore,
+    rasterOcr: visualizationRasterOcr,
     repository: visualizationRepository,
     validateArtifact: dependencies.visualizationArtifactValidator ?? validateVisualizationArtifact
   });
@@ -196,6 +200,9 @@ export async function startCloudRuntime(config, dependencies = {}) {
     await verifyPostgresMigrations(pool);
     const objectStorage = await objectStore.assertSecurityConfiguration();
     const identity = await identityReadinessCheck(config.identity);
+    const rasterOcr = typeof visualizationRasterOcr.assertConfigured === "function"
+      ? await visualizationRasterOcr.assertConfigured()
+      : { engine: visualizationRasterOcr.engine ?? "injected", languages: [] };
     const storageWorkflows = await pdfUploadService.repairPendingWorkflows();
     const pdfSecurity = await pdfUploadService.assertNoUnverifiedObjects();
     visualizationOrchestrationWorker.scheduleRecovery?.();
@@ -229,6 +236,7 @@ export async function startCloudRuntime(config, dependencies = {}) {
       visualizationOrchestrationService,
       visualizationOrchestrationWorker,
       visualizationProviderGateway,
+      visualizationRasterOcr,
       visualizationRepository,
       visualizationService,
       readiness: Object.freeze({
@@ -238,6 +246,7 @@ export async function startCloudRuntime(config, dependencies = {}) {
         objectStorage: objectStorage.privateAccess ? "ready" : "failed",
         pdfSecurity: pdfSecurity.unverified === 0 ? "ready" : "failed",
         postgres: postgres.writable ? "ready" : "failed",
+        rasterOcr: rasterOcr.languages.includes("eng") && rasterOcr.languages.includes("chi_sim") ? "ready" : "injected",
         storageWorkflows: storageWorkflows.scanned === storageWorkflows.repaired ? "current" : "failed"
       })
     };

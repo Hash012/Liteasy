@@ -1,4 +1,5 @@
 import {
+  buildThinReadingRepairPrompt,
   buildThinReadingExternalQueryPlan,
   generateAssistantAnswer,
   planThinReadingInterpretation,
@@ -28,6 +29,10 @@ vi.mock("../app/features/thin-reading/thinReadingExternalKnowledgeClient", async
 
 afterEach(() => {
   thinReadingExternalKnowledgeClientConstructionError = undefined;
+});
+
+test("exports the production thin-reading repair prompt for evaluation recording", () => {
+  expect(typeof buildThinReadingRepairPrompt).toBe("function");
 });
 
 const liveModelTransport = async () => ({
@@ -976,6 +981,7 @@ test("parses thin-reading structured output from a live model request", async ()
       ok: true,
       status: 200
     }),
+    enableVisualizationDecisionPlanner: true,
     importedChunksByPaperId: {
       "demo-1": [
         {
@@ -991,7 +997,24 @@ test("parses thin-reading structured output from a live model request", async ()
     mode: "qa",
     modelTransport: async (request) => {
       requests.push({ body: request.body, url: request.url });
-      const prompt = String(JSON.parse(request.body).prompt);
+      const body = JSON.parse(request.body) as { outputFormat?: { name?: string }; prompt: string };
+      const prompt = String(body.prompt);
+      if (body.outputFormat?.name === "liteasy_visualization_decision_v1") {
+        const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              basis: "semantic_structure",
+              decision: "generate",
+              evidenceIds: [evidenceId],
+              rationale: "The method has interacting token representations and a matching relation that benefit from a structural view."
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
       if (prompt.includes("证据复核 Agent")) {
         return {
           json: async () => ({ answer: JSON.stringify(passingEvidenceReview(prompt)), execution: { backend: "dev_cloud", mode: "live", provider: "openai" } }),
@@ -1127,7 +1150,17 @@ test("parses thin-reading structured output from a live model request", async ()
     },
     paperType: "experimental",
     summary: expect.stringContaining("MaxSim"),
+    visualizationIntent: expect.objectContaining({
+      candidateModalities: ["semantic_graph"],
+      requestedBy: "automatic"
+    }),
     withinPaperClosure: true
+  });
+  expect(result.thinReading?.rootSeed.evidence.generationAudit?.visualizationDecision).toMatchObject({
+    attempts: 1,
+    basis: "semantic_structure",
+    decision: "generate",
+    status: "evaluated"
   });
   expect(result.content).toContain("ColBERT 的核心贡献");
   expect(externalRetrievalCalls).toBe(1);

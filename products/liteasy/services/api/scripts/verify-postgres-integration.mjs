@@ -51,7 +51,9 @@ try {
     "021_visualization_final_review.sql",
     "022_visualization_cost_policy_lifecycle.sql",
     "023_visualization_generation_requests.sql",
-    "024_literature_projections.sql"
+    "024_literature_projections.sql",
+    "025_personalization_explicit_opt_in.sql",
+    "026_visualization_reservation_groups.sql"
   ]);
   await assert.rejects(
     () => pool.query("CREATE TABLE app_role_must_not_create(id text)"),
@@ -355,7 +357,8 @@ try {
     /storage_object_not_published/
   );
   await repository.markPdfObjectPublished(upload.workflow.workflow_id);
-  await repository.completePdfUpload(upload.workflow, "trace_integration_3_complete");
+  const completedUpload = await repository.completePdfUpload(upload.workflow, "trace_integration_3_complete");
+  assert.equal(completedUpload.revision, 4);
   const scannedObject = await pool.query(`
     SELECT security_scan_hash, security_scanner, security_scanner_version
       FROM storage_objects WHERE content_hash = $1
@@ -375,22 +378,22 @@ try {
   const tree = await repository.getTree(personalScope);
   assert.equal(tree.tree.folders.length, 1);
   assert.equal(tree.tree.entries.length, 2);
-  assert.equal(tree.tree.revision, 3);
+  assert.equal(tree.tree.revision, 4);
   assert.equal(tree.quota.limitBytes, 1048576);
 
   const nested = await repository.createFolder(personalScope, {
     actorId: "user_1",
-    expectedRevision: 3,
+    expectedRevision: 4,
     idempotencyKey: "folder-create-nested-0001",
     name: "Drafts",
     parentFolderId: folder.folder.folderId,
     traceId: "trace_integration_4"
   });
-  assert.equal(nested.revision, 4);
+  assert.equal(nested.revision, 5);
   await assert.rejects(
     () => repository.updateFolder(personalScope, {
       actorId: "user_1",
-      expectedRevision: 4,
+      expectedRevision: 5,
       folderId: folder.folder.folderId,
       idempotencyKey: "folder-cycle-0001",
       parentFolderId: nested.folder.folderId,
@@ -401,50 +404,50 @@ try {
   const moved = await repository.updateEntry(personalScope, {
     actorId: "user_1",
     documentId: metadata.entry.documentId,
-    expectedRevision: 4,
+    expectedRevision: 5,
     folderId: nested.folder.folderId,
     idempotencyKey: "entry-move-0001",
     title: "Verified paper revised",
     traceId: "trace_integration_5"
   });
   assert.equal(moved.document.folderId, nested.folder.folderId);
-  assert.equal(moved.revision, 5);
+  assert.equal(moved.revision, 6);
 
   const trashedFolder = await repository.trashFolder(personalScope, {
     actorId: "user_1",
-    expectedRevision: 5,
+    expectedRevision: 6,
     folderId: folder.folder.folderId,
     idempotencyKey: "folder-trash-0001",
     traceId: "trace_integration_6"
   });
   assert.equal(trashedFolder.folder.status, "trashed");
-  assert.equal(trashedFolder.revision, 6);
+  assert.equal(trashedFolder.revision, 7);
   assert.equal((await repository.getTree(personalScope)).tree.entries.length, 0);
   assert.equal((await repository.getTree(personalScope, "trashed")).tree.entries.length, 2);
 
   const replacement = await repository.createFolder(personalScope, {
     actorId: "user_1",
-    expectedRevision: 6,
+    expectedRevision: 7,
     idempotencyKey: "folder-create-replacement-0001",
     name: "Research",
     traceId: "trace_integration_7"
   });
-  assert.equal(replacement.revision, 7);
+  assert.equal(replacement.revision, 8);
   const restoredFolder = await repository.restoreFolder(personalScope, {
     actorId: "user_1",
-    expectedRevision: 7,
+    expectedRevision: 8,
     folderId: folder.folder.folderId,
     idempotencyKey: "folder-restore-0001",
     traceId: "trace_integration_8"
   });
   assert.equal(restoredFolder.folder.name, "Research (2)");
-  assert.equal(restoredFolder.revision, 8);
+  assert.equal(restoredFolder.revision, 9);
   assert.equal((await repository.getTree(personalScope)).tree.entries.length, 2);
 
   const trashedEntry = await repository.trashEntry(personalScope, {
     actorId: "user_1",
     documentId: metadata.entry.documentId,
-    expectedRevision: 8,
+    expectedRevision: 9,
     idempotencyKey: "entry-trash-0001",
     traceId: "trace_integration_9"
   });
@@ -452,12 +455,12 @@ try {
   const purgedEntry = await repository.purgeEntry(personalScope, {
     actorId: "user_1",
     documentId: metadata.entry.documentId,
-    expectedRevision: 9,
+    expectedRevision: 10,
     idempotencyKey: "entry-purge-0001",
     traceId: "trace_integration_10"
   });
   assert.equal(purgedEntry.result.purged, true);
-  assert.equal(purgedEntry.revision, 10);
+  assert.equal(purgedEntry.revision, 11);
   assert.equal((await repository.getTree(personalScope)).tree.entries.length, 1);
 
   const sourcePdf = (await repository.getTree(personalScope)).tree.entries[0];
@@ -1102,7 +1105,7 @@ try {
   await repository.trashEntry(personalScope, {
     actorId: "user_1",
     documentId: sourcePdf.documentId,
-    expectedRevision: 10,
+    expectedRevision: 11,
     idempotencyKey: "entry-trash-source-pdf-0001",
     traceId: "trace_integration_12"
   });
@@ -1566,7 +1569,7 @@ try {
   process.stdout.write(`${JSON.stringify({
     auditEvents: verifiedAudit.rows[0].count,
     accountDeletion: true,
-    migrations: 24,
+    migrations: 26,
     revision: 12,
     verified: true
   })}\n`);

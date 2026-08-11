@@ -9,6 +9,7 @@ import type {
   VisualizationArtifactV1,
   GeneratedVisualizationModality
 } from "../visualization/visualizationArtifact.types";
+import type { VisualizationDecisionOutput } from "../visualization/visualizationDecisionPlanner";
 
 export type ThinReadingPaper = PaperIdentityInput;
 
@@ -389,6 +390,14 @@ export type ThinReadingGenerationAudit = {
     attempts: number;
     repaired: boolean;
     repairReasons: readonly string[];
+  };
+  visualizationDecision?: {
+    attempts: number;
+    basis: VisualizationDecisionOutput["basis"] | null;
+    decision: "generate" | "omit";
+    evidenceIds: readonly string[];
+    rationale: string;
+    status: "evaluated" | "failed_closed";
   };
   workload?: ThinReadingWorkloadAudit;
   version: "liteasy.thin-reading-agent/v1" | "liteasy.thin-reading-agent/v2";

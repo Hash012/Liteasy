@@ -1,0 +1,165 @@
+{
+  "schema": "liteasy.multimodal-decision-cases/v1",
+  "cases": [
+    {
+      "id": "vector-database-taxonomy",
+      "title": "Survey of Vector Database Management Systems",
+      "targetLanguage": "en-US",
+      "question": "Generate a thin-reading overview that explains the system taxonomy and only requests a generated visual when it materially improves understanding.",
+      "reviewZh": {
+        "title": "向量数据库管理系统综述",
+        "question": "生成一份解释系统分类框架的薄读总述，并且仅当生成图能够实质提升理解时才请求可视化。",
+        "evidence": [
+          { "id": "evidence-vector-taxonomy", "text": "该综述将向量数据库系统划分为索引、查询处理和存储组件，并说明这些组件之间的依赖关系。" }
+        ]
+      },
+      "evidence": [
+        { "id": "evidence-vector-taxonomy", "page": 2, "quote": "The survey organizes vector database systems into indexing, query processing, and storage components, and describes the dependencies among these components." }
+      ]
+    },
+    {
+      "id": "bounded-quadratic-function",
+      "title": "A Worked Study of Bounded Quadratic Optimization",
+      "targetLanguage": "en-US",
+      "question": "Generate a thin-reading overview of the bounded function and only request a generated visual when it materially improves understanding.",
+      "reviewZh": {
+        "title": "有界二次优化实例研究",
+        "question": "生成一份解释该有界函数的薄读总述，并且仅当生成图能够实质提升理解时才请求可视化。",
+        "evidence": [
+          { "id": "evidence-quadratic-domain", "text": "对于闭区间 -1 <= x <= 5 上的 f(x) = x^2 - 4x + 3，顶点为 (2, -1)，两个端点的函数值分别为 f(-1) = 8 和 f(5) = 8。" }
+        ]
+      },
+      "evidence": [
+        { "id": "evidence-quadratic-domain", "page": 3, "quote": "For f(x) = x^2 - 4x + 3 on the closed domain -1 <= x <= 5, the vertex is (2, -1), and the endpoint values are f(-1) = 8 and f(5) = 8." }
+      ]
+    },
+    {
+      "id": "circle-tangent-construction",
+      "title": "Tangent Construction from an External Point",
+      "targetLanguage": "en-US",
+      "question": "Generate a thin-reading overview of the geometric construction and only request a generated visual when it materially improves understanding.",
+      "reviewZh": {
+        "title": "从圆外一点作切线",
+        "question": "生成一份解释该几何作图过程的薄读总述，并且仅当生成图能够实质提升理解时才请求可视化。",
+        "evidence": [
+          { "id": "evidence-circle-tangent", "text": "给定圆 O 和圆外一点 P，以 OP 为直径作圆；该圆与圆 O 的交点 T1 和 T2 即为切点，因为角 OTP 是直角。" }
+        ]
+      },
+      "evidence": [
+        { "id": "evidence-circle-tangent", "page": 4, "quote": "Given circle O and external point P, draw the circle with diameter OP; its intersections T1 and T2 with circle O are the tangent points because angle OTP is a right angle." }
+      ]
+    },
+    {
+      "id": "cube-midsection-geometry",
+      "title": "Plane Sections of a Cube",
+      "targetLanguage": "en-US",
+      "question": "Generate a thin-reading overview of the spatial section and only request a generated visual when it materially improves understanding.",
+      "reviewZh": {
+        "title": "立方体的平面截面",
+        "question": "生成一份解释该空间截面的薄读总述，并且仅当生成图能够实质提升理解时才请求可视化。",
+        "evidence": [
+          { "id": "evidence-cube-section", "text": "一个经过立方体六条适当选取的棱之中点的平面，会截得一个正六边形截面，其中两两相对的边互相平行。" }
+        ]
+      },
+      "evidence": [
+        { "id": "evidence-cube-section", "page": 5, "quote": "A plane through the midpoints of six suitably chosen cube edges cuts the cube in a regular hexagonal cross-section whose opposite sides are parallel." }
+      ]
+    },
+    {
+      "id": "projectile-motion-process",
+      "title": "Projectile Motion without Drag",
+      "targetLanguage": "en-US",
+      "question": "Generate a thin-reading overview of the motion process and only request a generated visual when it materially improves understanding.",
+      "reviewZh": {
+        "title": "无空气阻力的抛体运动",
+        "question": "生成一份解释该运动过程的薄读总述，并且仅当生成图能够实质提升理解时才请求可视化。",
+        "evidence": [
+          { "id": "evidence-projectile", "text": "在重力加速度恒定且没有空气阻力时，水平速度保持不变，竖直速度线性减小，因此物体在回到发射高度之前形成抛物线轨迹。" }
+        ]
+      },
+      "evidence": [
+        { "id": "evidence-projectile", "page": 2, "quote": "With constant gravitational acceleration and no drag, horizontal velocity remains constant while vertical velocity decreases linearly, producing a parabolic trajectory until the projectile returns to its launch height." }
+      ]
+    },
+    {
+      "id": "methane-combustion-sequence",
+      "title": "Stoichiometry of Methane Combustion",
+      "targetLanguage": "en-US",
+      "question": "Generate a thin-reading overview of the reaction and only request a generated visual when it materially improves understanding.",
+      "reviewZh": {
+        "title": "甲烷燃烧的化学计量关系",
+        "question": "生成一份解释该反应的薄读总述，并且仅当生成图能够实质提升理解时才请求可视化。",
+        "evidence": [
+          { "id": "evidence-combustion", "text": "配平后的总反应为 CH4 + 2 O2 -> CO2 + 2 H2O；现有证据只确立了总反应的化学计量关系，并未确立分子反应机理。" }
+        ]
+      },
+      "evidence": [
+        { "id": "evidence-combustion", "page": 6, "quote": "The balanced overall reaction is CH4 + 2 O2 -> CO2 + 2 H2O; the evidence establishes only the overall stoichiometry and does not establish a molecular mechanism." }
+      ]
+    },
+    {
+      "id": "single-term-definition",
+      "title": "Terminology Note on Statistical Power",
+      "targetLanguage": "en-US",
+      "question": "Generate a thin-reading overview and only request a generated visual when it materially improves understanding.",
+      "reviewZh": {
+        "title": "统计功效术语说明",
+        "question": "生成一份薄读总述，并且仅当生成图能够实质提升理解时才请求可视化。",
+        "evidence": [
+          { "id": "evidence-power-definition", "text": "统计功效是指：当某个给定的备择假设为真时，假设检验拒绝原假设的概率。" }
+        ]
+      },
+      "evidence": [
+        { "id": "evidence-power-definition", "page": 1, "quote": "Statistical power is the probability that a hypothesis test rejects the null hypothesis when a specified alternative hypothesis is true." }
+      ]
+    },
+    {
+      "id": "historical-background-note",
+      "title": "A Short Historical Note on Peer Review",
+      "targetLanguage": "en-US",
+      "question": "Generate a thin-reading overview and only request a generated visual when it materially improves understanding.",
+      "reviewZh": {
+        "title": "同行评议简史",
+        "question": "生成一份薄读总述，并且仅当生成图能够实质提升理解时才请求可视化。",
+        "evidence": [
+          { "id": "evidence-peer-review-history", "text": "该期刊在十九世纪逐步引入外部审稿意见，不同学科与机构采用的编辑实践并不相同。" }
+        ]
+      },
+      "evidence": [
+        { "id": "evidence-peer-review-history", "page": 1, "quote": "The journal introduced external referee reports gradually during the nineteenth century, with editorial practices varying across disciplines and institutions." }
+      ]
+    },
+    {
+      "id": "unsupported-reaction-mechanism",
+      "title": "Observed Yield in a Catalytic Reaction",
+      "targetLanguage": "en-US",
+      "question": "Generate a thin-reading overview and only request a generated visual when it materially improves understanding; do not infer an unsupported mechanism.",
+      "reviewZh": {
+        "title": "催化反应的实测产率",
+        "question": "生成一份薄读总述，并且仅当生成图能够实质提升理解时才请求可视化；不得推断证据不支持的反应机理。",
+        "evidence": [
+          { "id": "evidence-catalytic-yield", "text": "在报告的实验条件下，催化剂使分离产率从 41% 提高到 68%；实验没有测量任何中间体物种或基元反应步骤。" }
+        ]
+      },
+      "evidence": [
+        { "id": "evidence-catalytic-yield", "page": 7, "quote": "The catalyst increased the isolated product yield from 41% to 68% under the reported conditions; no intermediate species or elementary reaction steps were measured." }
+      ]
+    },
+    {
+      "id": "plain-limitations-statement",
+      "title": "Limitations of a Small Observational Sample",
+      "targetLanguage": "en-US",
+      "question": "Generate a thin-reading overview and only request a generated visual when it materially improves understanding.",
+      "reviewZh": {
+        "title": "小规模观察样本的局限",
+        "question": "生成一份薄读总述，并且仅当生成图能够实质提升理解时才请求可视化。",
+        "evidence": [
+          { "id": "evidence-sample-limitation", "text": "该观察样本仅包含来自同一机构的 18 名参与者，因此报告的相关性既不能确立因果关系，也不能推广到总体人群。" }
+        ]
+      },
+      "evidence": [
+        { "id": "evidence-sample-limitation", "page": 9, "quote": "The observational sample contains 18 participants from one institution, so the reported association cannot establish causality or population-wide generalization." }
+      ]
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import { validatePhysicsDiagram } from "../kernels/physicsDiagramKernel";
 import { createSafeSvgScene } from "../rendering/safeSvgScene";
 
 export type PhysicsDiagramRenderResult = {
+  accessibility: { summary: string };
   selectableObjectIds: readonly string[];
   svg: string;
 };
@@ -11,6 +12,7 @@ export type PhysicsDiagramRenderResult = {
 export function renderPhysicsDiagram(spec: PhysicsDiagramSpecV1): PhysicsDiagramRenderResult {
   const result = validatePhysicsDiagram(spec);
   return {
+    accessibility: { summary: result.semanticObjects.map((object) => object.label).join(", ") },
     selectableObjectIds: result.selectableObjectIds,
     svg: createSafeSvgScene({
       edges: result.layout.edges,
@@ -23,9 +25,9 @@ export function renderPhysicsDiagram(spec: PhysicsDiagramSpecV1): PhysicsDiagram
 
 export function PhysicsDiagramRenderer({ rendered }: { rendered: PhysicsDiagramRenderResult }): JSX.Element {
   return (
-    <section aria-label={rendered.selectableObjectIds.join(", ")} className="visualization-physics-diagram">
+    <section aria-label={rendered.accessibility.summary} className="visualization-physics-diagram">
       <div
-        aria-label={rendered.selectableObjectIds.join(", ")}
+        aria-label={rendered.accessibility.summary}
         dangerouslySetInnerHTML={{ __html: rendered.svg }}
       />
     </section>

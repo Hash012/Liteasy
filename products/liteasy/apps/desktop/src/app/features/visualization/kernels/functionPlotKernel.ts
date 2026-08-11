@@ -20,8 +20,15 @@ export type FunctionPlotSegmentV1 = {
   points: readonly FunctionPlotPointV1[];
 };
 
+export type FunctionPlotCurveV1 = {
+  evidenceClaimIds: readonly string[];
+  id: string;
+  segments: readonly FunctionPlotSegmentV1[];
+};
+
 export type FunctionPlotSampleResultV1 = {
   accessibility: AccessibilityProjectionV1;
+  auxiliaryCurves: readonly FunctionPlotCurveV1[];
   interaction: InteractionContractV1;
   points: readonly FunctionPlotPointV1[];
   semanticObjects: readonly SemanticObjectV1[];
@@ -81,18 +88,94 @@ function parseFunctionExpression(expression: string, variables: readonly string[
   }
 }
 
-export function sampleFunctionPlot(spec: FunctionPlotSpecV1, sampleCount = defaultSamples): FunctionPlotSampleResultV1 {
+export function sampleFunctionPlot(
+  spec: FunctionPlotSpecV1,
+  sampleCount = defaultSamples,
+  sampleDomain = spec.domain
+): FunctionPlotSampleResultV1 {
   validateFunctionPlot(spec);
+  if (!Number.isFinite(sampleDomain.min) || !Number.isFinite(sampleDomain.max) || sampleDomain.min >= sampleDomain.max) {
+    throw new Error("function_plot_domain_invalid");
+  }
   const boundedSampleCount = Math.min(Math.max(3, Math.floor(sampleCount)), maxSamples);
   const ast = parseBoundedExpression(spec.expression, { variables: [spec.variable, ...spec.parameters.map((parameter) => parameter.id)] });
   const parameterValues = Object.fromEntries(spec.parameters.map((parameter) => [parameter.id, parameter.value]));
+  const primary = sampleAst(ast, spec.variable, parameterValues, sampleDomain, boundedSampleCount);
+  const auxiliaryCurves = spec.auxiliaryCurves.map((curve) => ({
+    evidenceClaimIds: curve.evidenceClaimIds,
+    id: curve.id,
+    segments: sampleAst(
+      parseBoundedExpression(curve.expression, { variables: [spec.variable, ...spec.parameters.map((parameter) => parameter.id)] }),
+      spec.variable,
+      parameterValues,
+      sampleDomain,
+      boundedSampleCount
+    ).segments
+  }));
+
+  const warnings = keyPointWarnings(spec, ast, parameterValues);
+  const selectableObjectIds = [
+    ...spec.keyPoints.map((point) => point.id),
+    ...spec.auxiliaryCurves.map((curve) => curve.id)
+  ];
+  return {
+    accessibility: {
+      dataTable: [
+        { label: spec.axes.xLabel, value: `${round(sampleDomain.min)} to ${round(sampleDomain.max)}` },
+        { label: spec.axes.yLabel, value: `${primary.segments.length} curve segment${primary.segments.length === 1 ? "" : "s"}` },
+        ...auxiliaryCurves.map((curve) => ({ label: curve.id, value: `${curve.segments.length} curve segment${curve.segments.length === 1 ? "" : "s"}` })),
+        ...spec.keyPoints.map((point) => ({ label: point.label ?? point.id, value: `(${point.x}, ${point.y})` }))
+      ],
+      objectReadingOrder: selectableObjectIds,
+      summary: `${spec.axes.yLabel} over ${spec.axes.xLabel} from ${round(sampleDomain.min)} to ${round(sampleDomain.max)}`
+    },
+    auxiliaryCurves,
+    interaction: {
+      pan: true,
+      zoom: true,
+      rotate: false,
+      playback: "none",
+      parameterIds: spec.parameters.map((parameter) => parameter.id),
+      selectableObjectIds
+    },
+    points: primary.points,
+    semanticObjects: [
+      ...spec.keyPoints.map((point) => ({
+        evidenceClaimIds: [...point.evidenceClaimIds],
+        kind: "function_plot_key_point",
+        label: point.label ?? point.id,
+        objectId: point.id,
+        objectPath: [point.id],
+        selectable: true
+      })),
+      ...spec.auxiliaryCurves.map((curve) => ({
+        evidenceClaimIds: [...curve.evidenceClaimIds],
+        kind: "function_plot_auxiliary_curve",
+        label: curve.id,
+        objectId: curve.id,
+        objectPath: [curve.id],
+        selectable: true
+      }))
+    ],
+    segments: primary.segments,
+    warnings
+  };
+}
+
+function sampleAst(
+  ast: ExpressionAstV1,
+  variable: string,
+  parameterValues: Readonly<Record<string, number>>,
+  domain: { min: number; max: number },
+  sampleCount: number
+): { points: FunctionPlotPointV1[]; segments: FunctionPlotSegmentV1[] } {
   const points: FunctionPlotPointV1[] = [];
   const segments: FunctionPlotSegmentV1[] = [];
   let current: FunctionPlotPointV1[] = [];
 
-  for (let index = 0; index < boundedSampleCount; index += 1) {
-    const x = spec.domain.min + (spec.domain.max - spec.domain.min) * (index / (boundedSampleCount - 1));
-    const y = evaluateAt(ast, spec.variable, x, parameterValues);
+  for (let index = 0; index < sampleCount; index += 1) {
+    const x = domain.min + (domain.max - domain.min) * (index / (sampleCount - 1));
+    const y = evaluateAt(ast, variable, x, parameterValues);
     if (y === null) {
       if (current.length > 0) {
         segments.push({ id: `segment-${segments.length}`, points: current });
@@ -110,39 +193,7 @@ export function sampleFunctionPlot(spec: FunctionPlotSpecV1, sampleCount = defau
     current.push(point);
   }
   if (current.length > 0) segments.push({ id: `segment-${segments.length}`, points: current });
-
-  const warnings = keyPointWarnings(spec, ast, parameterValues);
-  const selectableObjectIds = spec.keyPoints.map((point) => point.id);
-  return {
-    accessibility: {
-      dataTable: [
-        { label: spec.axes.xLabel, value: `${spec.domain.min} to ${spec.domain.max}` },
-        { label: spec.axes.yLabel, value: `${segments.length} curve segment${segments.length === 1 ? "" : "s"}` },
-        ...spec.keyPoints.map((point) => ({ label: point.label ?? point.id, value: `(${point.x}, ${point.y})` }))
-      ],
-      objectReadingOrder: selectableObjectIds,
-      summary: `${spec.axes.yLabel} over ${spec.axes.xLabel} from ${spec.domain.min} to ${spec.domain.max}`
-    },
-    interaction: {
-      pan: true,
-      zoom: true,
-      rotate: false,
-      playback: "none",
-      parameterIds: spec.parameters.map((parameter) => parameter.id),
-      selectableObjectIds
-    },
-    points,
-    semanticObjects: spec.keyPoints.map((point) => ({
-      evidenceClaimIds: [...point.evidenceClaimIds],
-      kind: "function_plot_key_point",
-      label: point.label ?? point.id,
-      objectId: point.id,
-      objectPath: [point.id],
-      selectable: true
-    })),
-    segments,
-    warnings
-  };
+  return { points, segments };
 }
 
 function evaluateAt(

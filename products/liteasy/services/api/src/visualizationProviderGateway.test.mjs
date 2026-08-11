@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import test from "node:test";
 import { EnvironmentVisualizationSecretStore } from "./visualizationSecretStore.mjs";
 import { VisualizationCircuitBreaker } from "./visualizationCircuitBreaker.mjs";
-import { VisualizationProviderGateway } from "./visualizationProviderGateway.mjs";
+import { pinnedHttpsFetch, VisualizationProviderGateway } from "./visualizationProviderGateway.mjs";
 
 const route = Object.freeze({
   circuitFailures: 0,
@@ -427,6 +428,68 @@ test("rejects a connection whose peer differs from the DNS-validated address", a
     /visualization_egress_denied/
   );
   assert.equal(pinnedAddress, publicAddress);
+});
+
+test("does not dereference a missing response socket after an HTTPS request is aborted", async () => {
+  function requestWithoutSocket(_url, _options, receiveResponse) {
+    const request = new EventEmitter();
+    request.write = () => {};
+    request.end = () => {
+      const response = new EventEmitter();
+      Object.assign(response, {
+        destroy() {},
+        headers: {},
+        socket: null,
+        statusCode: 200,
+        statusMessage: "OK"
+      });
+      receiveResponse(response);
+      queueMicrotask(() => response.emit("end"));
+    };
+    return request;
+  }
+
+  const response = await pinnedHttpsFetch("https://provider.example/v1/generate", {
+    headers: {},
+    method: "POST"
+  }, {
+    lookup() {},
+    maximumBytes: 1024
+  }, requestWithoutSocket);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.peerAddress, undefined);
+});
+
+test("captures the HTTPS peer before Node releases the response socket", async () => {
+  function requestWithReleasedSocket(_url, _options, receiveResponse) {
+    const request = new EventEmitter();
+    request.write = () => {};
+    request.end = () => {
+      const response = new EventEmitter();
+      Object.assign(response, {
+        destroy() {},
+        headers: {},
+        socket: { remoteAddress: publicAddress },
+        statusCode: 200,
+        statusMessage: "OK"
+      });
+      receiveResponse(response);
+      response.socket = null;
+      queueMicrotask(() => response.emit("end"));
+    };
+    return request;
+  }
+
+  const response = await pinnedHttpsFetch("https://provider.example/v1/generate", {
+    headers: {},
+    method: "POST"
+  }, {
+    lookup() {},
+    maximumBytes: 1024
+  }, requestWithReleasedSocket);
+
+  assert.equal(response.peerAddress, publicAddress);
 });
 
 test("counts route probes against max concurrency", async () => {

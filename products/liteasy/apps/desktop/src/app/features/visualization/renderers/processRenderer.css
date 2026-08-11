@@ -1,0 +1,114 @@
+.visualization-process {
+  display: grid;
+  gap: 10px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.visualization-process__stage {
+  aspect-ratio: 16 / 9;
+  background: #ffffff;
+  border: 1px solid #d8e1e8;
+  border-radius: 8px;
+  max-width: 720px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.visualization-process__stage svg {
+  display: block;
+  height: auto;
+  width: 100%;
+}
+
+.visualization-process__toolbar,
+.visualization-process__objects {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.visualization-process__toolbar output,
+.visualization-process__timeline output,
+.visualization-process__parameter output {
+  color: #36454f;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.visualization-process__timeline,
+.visualization-process__parameter {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(44px, auto) minmax(120px, 1fr) minmax(64px, auto);
+  max-width: 620px;
+}
+
+.visualization-process__timeline > span,
+.visualization-process__parameter > span {
+  color: #36454f;
+  font-size: 12px;
+}
+
+.visualization-process__timeline output,
+.visualization-process__parameter output {
+  text-align: right;
+}
+
+.visualization-process__parameters {
+  display: grid;
+  gap: 8px;
+}
+
+.visualization-process__conditions {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  max-width: 620px;
+}
+
+.visualization-process__conditions > div {
+  display: grid;
+  font-size: 12px;
+  gap: 10px;
+  grid-template-columns: minmax(100px, 1fr) minmax(100px, 2fr);
+}
+
+.visualization-process__conditions dt {
+  color: #1d2b36;
+  font-weight: 600;
+}
+
+.visualization-process__conditions dd {
+  color: #36454f;
+  margin: 0;
+}
+
+.visualization-process__table {
+  border-collapse: collapse;
+  color: #36454f;
+  font-size: 12px;
+  width: 100%;
+}
+
+.visualization-process__table th,
+.visualization-process__table td {
+  border-bottom: 1px solid #e7edf2;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.visualization-process__table th {
+  color: #1d2b36;
+  font-weight: 600;
+  width: 36%;
+}
+
+@media (max-width: 480px) {
+  .visualization-process__timeline,
+  .visualization-process__parameter {
+    grid-template-columns: minmax(36px, auto) minmax(88px, 1fr) minmax(54px, auto);
+  }
+}

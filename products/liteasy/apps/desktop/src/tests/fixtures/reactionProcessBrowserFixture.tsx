@@ -3,7 +3,7 @@ import { ReactionProcessRenderer, renderReactionProcess } from "../../app/featur
 
 const fixture = {
   atomMap: [],
-  conditions: [],
+  conditions: [{ evidenceClaimIds: ["reaction-claim"], id: "ignition", label: "点火", value: "已提供" }],
   species: [
     { evidenceClaimIds: ["reaction-claim"], formula: "CH4", id: "ch4", state: "g" },
     { evidenceClaimIds: ["reaction-claim"], formula: "O2", id: "o2", state: "g" },

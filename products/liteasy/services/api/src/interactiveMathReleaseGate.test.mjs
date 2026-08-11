@@ -14,12 +14,12 @@ const expectedSkillIds = {
   geometry_3d: "geometry-3d"
 };
 
-test("shared catalog enables exactly the verified interactive math generated modalities", () => {
+test("shared catalog publishes interactive math after runtime and visual gates pass", () => {
   const enabledMath = catalog.entries
     .filter((entry) => entry.enabled && mathModalities.includes(entry.modality))
     .map((entry) => entry.modality)
     .sort();
-  assert.deepEqual(enabledMath, mathModalities);
+  assert.deepEqual(enabledMath, [...mathModalities].sort());
 });
 
 test("every interactive math modality has a matching server compiler descriptor", () => {
@@ -33,7 +33,7 @@ test("every interactive math modality has a matching server compiler descriptor"
   }
 });
 
-test("server advertises catalog-enabled static and math generated modalities", () => {
+test("server advertises published interactive math modalities", () => {
   const registry = new VisualizationArtifactCompilerRegistry({
     compilers: {
       ...productionStaticScienceVisualizationCompilers,
@@ -41,5 +41,5 @@ test("server advertises catalog-enabled static and math generated modalities", (
       ...productionProcessRasterVisualizationCompilers
     }
   });
-  assert.deepEqual(registry.availableModalities().filter((modality) => mathModalities.includes(modality)).sort(), mathModalities);
+  assert.deepEqual(registry.availableModalities().filter((modality) => mathModalities.includes(modality)).sort(), [...mathModalities].sort());
 });

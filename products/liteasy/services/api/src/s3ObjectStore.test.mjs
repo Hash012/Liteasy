@@ -119,6 +119,45 @@ test("publishes by content hash, verifies the result, and removes staging", asyn
   assert.deepEqual(calls, ["HeadObjectCommand", "CopyObjectCommand", "HeadObjectCommand", "DeleteObjectCommand"]);
 });
 
+test("stores a validated immutable raster object and verifies the published head", async () => {
+  const bytes = Buffer.from("png payload");
+  const hash = (await import("node:crypto")).createHash("sha256").update(bytes).digest("hex");
+  const calls = [];
+  let headCount = 0;
+  const client = {
+    async send(command) {
+      calls.push({ input: command.input, name: command.constructor.name });
+      if (command.constructor.name === "HeadObjectCommand") {
+        headCount += 1;
+        if (headCount === 1) {
+          const error = new Error("missing");
+          error.name = "NotFound";
+          throw error;
+        }
+        return { ContentLength: bytes.length, ContentType: "image/png", Metadata: { sha256: hash } };
+      }
+      return {};
+    }
+  };
+  const store = new S3ObjectStore(config(), { client });
+
+  const result = await store.putImmutableObject(bytes, {
+    contentHash: hash,
+    mediaType: "image/png",
+    metadata: { "asset-kind": "generated-raster" }
+  });
+
+  assert.deepEqual(result, {
+    byteLength: bytes.length,
+    contentHash: hash,
+    mediaType: "image/png",
+    storageKey: `documents/objects/${hash.slice(0, 2)}/${hash}`
+  });
+  assert.deepEqual(calls.map(({ name }) => name), ["HeadObjectCommand", "PutObjectCommand", "HeadObjectCommand"]);
+  assert.equal(calls[1].input.Metadata["asset-kind"], "generated-raster");
+  assert.equal(calls[1].input.Metadata.sha256, hash);
+});
+
 test("lists a bounded set of staging objects older than the retention cutoff", async () => {
   const calls = [];
   const client = {

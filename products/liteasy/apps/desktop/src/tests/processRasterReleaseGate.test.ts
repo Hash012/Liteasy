@@ -26,17 +26,21 @@ describe("process/raster release gate", () => {
     expect(getUnavailableVisualizationModalityReasons(disabledCatalog).physics_process).toBe("catalog_disabled");
   });
 
-  test("advertises process/raster modalities only with a complete local chain", async () => {
+  test("publishes process/raster modalities after their end-to-end release gates pass", () => {
     expect(getAvailableVisualizationModalities()).toEqual(expect.arrayContaining([...processModalities]));
-    const summaries = getBuiltinSkillSummary();
     for (const modality of processModalities) {
-      const skill = summaries.find((item) => item.modality === modality);
-      expect(skill).toBeTruthy();
-      await expect(loadVisualizationRenderer(skill!.rendererId)).resolves.toMatchObject({
-        id: skill!.rendererId,
-        modality,
-        version: "1.0.0"
-      });
+      expect(getUnavailableVisualizationModalityReasons()).not.toHaveProperty(modality);
     }
   });
+
+  test.each(processModalities)("loads the published %s renderer implementation", async (modality) => {
+    const summaries = getBuiltinSkillSummary();
+    const skill = summaries.find((item) => item.modality === modality);
+    expect(skill).toBeTruthy();
+    await expect(loadVisualizationRenderer(skill!.rendererId)).resolves.toMatchObject({
+      id: skill!.rendererId,
+      modality,
+      version: "1.0.0"
+    });
+  }, 10_000);
 });
