@@ -37,13 +37,18 @@ function normalizedError(error) {
 export function registerLiteratureRoutes(app, {
   currentUser,
   rateLimiter,
-  requireDesktopUser,
   requireService,
   requireUser,
   resolver
 }) {
-  if (!app || !currentUser || !rateLimiter || !requireDesktopUser || !requireUser || !resolver) {
+  if (!app || !currentUser || !rateLimiter || !requireUser || !resolver) {
     throw new TypeError("literature route dependencies are required");
+  }
+
+  function serviceActor(service) {
+    const id = String(service?.clientId ?? service?.subject ?? service?.id ?? "").trim();
+    if (!id) throw new LiteratureRouteError("INVALID_LITERATURE_QUERY");
+    return Object.freeze({ id });
   }
 
   async function resolve(request, reply) {
@@ -88,6 +93,49 @@ export function registerLiteratureRoutes(app, {
     }
   });
   if (requireService) {
+    app.post("/v1/internal/literature::resolve", async (request, reply) => {
+      const service = requireService(request, reply);
+      if (!service) return;
+      const parsed = literatureResolveInputSchema.safeParse(request.body);
+      if (!parsed.success || parsed.data.purpose !== "liteasy_pdf_annotation") {
+        throw new LiteratureRouteError("INVALID_LITERATURE_QUERY");
+      }
+      const actor = serviceActor(service);
+      if (!rateLimiter.tryConsume("resolve", `service:${actor.id}`)) {
+        throw new LiteratureRouteError("LITERATURE_RATE_LIMITED");
+      }
+      try {
+        const result = await resolver.resolve(actor, parsed.data);
+        if (result?.status === "unavailable") throw new LiteratureRouteError("LITERATURE_PROVIDER_UNAVAILABLE");
+        return result;
+      } catch (error) {
+        throw normalizedError(error);
+      }
+    });
+    app.post("/v1/internal/literature::confirm", async (request, reply) => {
+      const service = requireService(request, reply);
+      if (!service) return;
+      const parsed = literatureConfirmInputSchema.safeParse(request.body);
+      if (!parsed.success) throw new LiteratureRouteError("INVALID_LITERATURE_QUERY");
+      const actor = serviceActor(service);
+      if (!rateLimiter.tryConsume("confirm", `service:${actor.id}`)) {
+        throw new LiteratureRouteError("LITERATURE_RATE_LIMITED");
+      }
+      try {
+        return { literature: await resolver.confirm(actor, parsed.data) };
+      } catch (error) {
+        throw normalizedError(error);
+      }
+    });
+    app.get("/v1/internal/literature/:literatureId/relations", async (request, reply) => {
+      const service = requireService(request, reply);
+      if (!service) return;
+      try {
+        return await resolver.relations(request.params.literatureId);
+      } catch (error) {
+        throw normalizedError(error);
+      }
+    });
     app.post("/v1/internal/literature::verify", async (request, reply) => {
       const service = requireService(request, reply);
       if (!service) return;

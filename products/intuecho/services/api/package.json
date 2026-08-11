@@ -12,6 +12,8 @@
     "test:postgres:integration": "node scripts/verify-postgres-integration.mjs"
   },
   "dependencies": {
+    "@citation-js/core": "^0.8.2",
+    "@citation-js/plugin-bibtex": "^0.8.2",
     "@fastify/cors": "^10.0.2",
     "@intuecho/contracts": "*",
     "better-sqlite3": "^11.8.1",

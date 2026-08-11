@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import Database from "better-sqlite3";
 import { SqliteAnnotationCommunityRepository } from "./annotationCommunitySqlite.mjs";
@@ -10,12 +11,14 @@ function publicIdentifier(kind, value) {
   return { kind, source: "public_registry", value };
 }
 
-function candidate({ candidateKey, identifiers, provider, relations, title = "A Paper", authors = ["A. Author"], documentType, year = 2026 }) {
+function candidate({ candidateKey, identifiers, provider, recordUrl, relations, sourceEvidence, title = "A Paper", authors = ["A. Author"], documentType, year = 2026 }) {
   return {
     candidateKey,
     provider,
     record: { authors, ...(documentType ? { documentType } : {}), identifiers, title, year },
-    ...(relations ? { relations } : {})
+    ...(recordUrl ? { recordUrl } : {}),
+    ...(relations ? { relations } : {}),
+    ...(sourceEvidence ? { sourceEvidence } : {})
   };
 }
 
@@ -33,6 +36,12 @@ function repository(overrides = {}) {
     },
     async findLiteratureByIdentifiers() {
       return null;
+    },
+    async findLiteratureClaims() {
+      return [];
+    },
+    async findLiteratureRelations() {
+      return [];
     },
     async searchStoredLiterature() {
       return [];
@@ -105,7 +114,7 @@ test("normalizes DOI URL queries before internal lookup even when providers are 
         provider: "intuecho",
         record: {
           authors: ["Ada Lovelace"],
-          identifiers: [{ ...publicIdentifier("doi", "10.1000/verified"), role: "confirmable" }],
+          identifiers: stored.identifiers,
           title: "Confirmed DOI Record",
           year: 1843
         }
@@ -142,6 +151,82 @@ test("normalizes lowercase OpenAlex queries before repository lookup", async () 
 
   assert.equal(result.status, "exact");
   assert.equal(result.candidate.candidateKey, "intuecho:literature-openalex");
+});
+
+test("treats an exact OpenReview id as primary-source evidence", async () => {
+  const matched = candidate({
+    candidateKey: "openreview:openreview_id:OR-ICLR-2026",
+    documentType: "conference-paper",
+    identifiers: [publicIdentifier("openreview_id", "OR-ICLR-2026")],
+    provider: "openreview",
+    title: "An ICLR Paper"
+  });
+  const resolver = createLiteratureResolver({
+    providers: [provider("openreview", { search: async () => [matched] })],
+    repository: repository()
+  });
+
+  const result = await resolver.resolve(user, {
+    hints: { identifiers: [{ kind: "openreview_id", value: "OR-ICLR-2026" }] },
+    purpose: "liteasy_pdf_annotation"
+  });
+
+  assert.equal(result.status, "exact");
+  assert.equal(result.candidate.provider, "openreview");
+});
+
+test("treats an exact PMLR volume paper id as primary-source evidence", async () => {
+  const matched = candidate({
+    candidateKey: "pmlr:pmlr_id:v235/abad-rocamora24a",
+    documentType: "conference-paper",
+    identifiers: [publicIdentifier("pmlr_id", "v235/abad-rocamora24a")],
+    provider: "pmlr",
+    recordUrl: "https://proceedings.mlr.press/v235/abad-rocamora24a.html",
+    sourceEvidence: {
+      artifactHash: `sha256:${"a".repeat(64)}`,
+      artifactUrl: "https://proceedings.mlr.press/v235/assets/bib/bibliography.bib",
+      entryKey: "pmlr-v235-abad-rocamora24a",
+      sourceKind: "official_volume_bibtex",
+      volume: 235
+    },
+    title: "An ICML Paper",
+    year: 2024
+  });
+  const resolver = createLiteratureResolver({
+    providers: [provider("pmlr", { search: async () => [matched] })],
+    repository: repository()
+  });
+
+  const result = await resolver.resolve(user, {
+    hints: { identifiers: [{ kind: "pmlr_id", value: "v235/abad-rocamora24a" }] },
+    purpose: "forum_compose"
+  });
+
+  assert.equal(result.status, "exact");
+  assert.equal(result.confirmationMode, "candidate");
+  assert.equal(result.candidate.provider, "pmlr");
+});
+
+test("keeps a single DBLP aggregate record ambiguous until user confirmation", async () => {
+  const matched = candidate({
+    candidateKey: "dblp:dblp_key:conf/aaai/Lovelace26",
+    documentType: "conference-paper",
+    identifiers: [publicIdentifier("dblp_key", "conf/aaai/Lovelace26")],
+    provider: "dblp",
+    title: "An AAAI Paper"
+  });
+  const resolver = createLiteratureResolver({
+    providers: [provider("dblp", { search: async () => [matched] })],
+    repository: repository()
+  });
+
+  const result = await resolver.resolve(user, {
+    hints: { identifiers: [{ kind: "dblp_key", value: "conf/aaai/Lovelace26" }] },
+    purpose: "liteasy_pdf_annotation"
+  });
+
+  assert.equal(result.status, "ambiguous");
+  assert.equal(result.candidates[0].provider, "dblp");
 });
 
 test("keeps a fingerprint alias match to a confirmed record ambiguous", async () => {
@@ -710,7 +795,7 @@ test("re-fetches an external candidate and never accepts the client record", asy
       direction: "to_current",
       evidence: { sourceField: "relation.has-preprint" },
       relationType: "is_preprint_of",
-      targetIdentifier: { kind: "arxiv_id", value: "2401.01234" }
+      targetIdentifier: { kind: "arxiv_id", value: "2401.01234v2" }
     }],
     title: "Verified Provider Record"
   });
@@ -738,6 +823,62 @@ test("re-fetches an external candidate and never accepts the client record", asy
 
   assert.deepEqual(result, { source: "refetched", title: "Verified Provider Record" });
   assert.deepEqual(confirmedCandidate.relations, refetched.relations);
+});
+
+test("forwards audited PMLR source evidence through the confirmation boundary", async () => {
+  const db = new Database(":memory:");
+  const literatureRepository = new SqliteAnnotationCommunityRepository(db);
+  const artifactContent = Buffer.from("@InProceedings{pmlr-v235-abad-rocamora24a}");
+  const sourceEvidence = {
+    artifactHash: `sha256:${createHash("sha256").update(artifactContent).digest("hex")}`,
+    artifactUrl: "https://proceedings.mlr.press/v235/assets/bib/bibliography.bib",
+    entryKey: "pmlr-v235-abad-rocamora24a",
+    sourceKind: "official_volume_bibtex",
+    volume: 235
+  };
+  const refetched = candidate({
+    candidateKey: "pmlr:pmlr_id:v235/abad-rocamora24a",
+    documentType: "conference-paper",
+    identifiers: [publicIdentifier("pmlr_id", "v235/abad-rocamora24a")],
+    provider: "pmlr",
+    recordUrl: "https://proceedings.mlr.press/v235/abad-rocamora24a.html",
+    sourceEvidence,
+    title: "Verified PMLR Record",
+    year: 2024
+  });
+  Object.defineProperty(refetched, "sourceArtifact", {
+    enumerable: false,
+    value: {
+      artifactUrl: sourceEvidence.artifactUrl,
+      content: artifactContent,
+      mediaType: "application/x-bibtex"
+    }
+  });
+  let confirmedCandidate;
+  const resolver = createLiteratureResolver({
+    providers: [provider("pmlr", { fetchCandidate: async () => refetched })],
+    repository: repository({
+      async confirmRefetchedLiterature(_owner, verifiedCandidate) {
+        confirmedCandidate = verifiedCandidate;
+        return literatureRepository.confirmRefetchedLiterature(_owner, verifiedCandidate);
+      }
+    })
+  });
+
+  try {
+    const confirmed = await resolver.confirm(user, {
+      candidateKey: refetched.candidateKey,
+      mode: "candidate"
+    });
+
+    assert.equal(confirmed.status, "confirmed");
+    assert.deepEqual(confirmedCandidate.sourceEvidence, sourceEvidence);
+    assert.deepEqual(confirmedCandidate.sourceArtifact.content, artifactContent);
+    assert.equal(Object.keys(confirmedCandidate).includes("sourceArtifact"), false);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM literature_source_artifacts_v2").get().count, 1);
+  } finally {
+    db.close();
+  }
 });
 
 test("re-fetches an independent aggregate source before corroborated confirmation", async () => {
@@ -947,11 +1088,23 @@ test("projects related confirmed versions with direction relative to the current
     toLiteratureId: publication.literatureId,
     verificationStatus: "confirmed"
   };
+  const claim = {
+    evidence: { confirmationBasis: "primary_registry_refetch", sourceTier: "primary" },
+    identifier: { ...current.identifiers[0], role: "confirmable" },
+    observedAt: "2026-08-09T00:00:00.000Z",
+    provider: "arxiv",
+    providerRecordId: "2401.01234",
+    verificationStatus: "confirmed"
+  };
   const resolver = createLiteratureResolver({
     providers: [],
     repository: repository({
       async findLiteratureById(literatureId) {
         return literatureId === current.literatureId ? current : literatureId === publication.literatureId ? publication : null;
+      },
+      async findLiteratureClaims(literatureId) {
+        assert.equal(literatureId, current.literatureId);
+        return [claim];
       },
       async findLiteratureRelations(literatureId) {
         assert.equal(literatureId, current.literatureId);
@@ -961,6 +1114,7 @@ test("projects related confirmed versions with direction relative to the current
   });
 
   assert.deepEqual(await resolver.relations(current.literatureId), {
+    claims: [claim],
     literatureId: current.literatureId,
     versions: [{ direction: "from_current", literature: publication, relation }]
   });

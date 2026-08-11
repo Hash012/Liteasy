@@ -147,7 +147,16 @@ export function AnnotationApp() {
     const kind = params.get("literatureIdentityKind") as PaperIdentity["kind"] | null;
     return {
       ...(params.get("literatureId") ? { literatureId: params.get("literatureId")! } : {}),
-      ...(kind && new Set(["doi", "arxiv_id", "semantic_scholar_id", "openalex_id", "title_authors_year_hash"]).has(kind) ? { literatureIdentityKind: kind } : {}),
+      ...(kind && new Set([
+        "doi",
+        "arxiv_id",
+        "semantic_scholar_id",
+        "openalex_id",
+        "openreview_id",
+        "dblp_key",
+        "pmlr_id",
+        "title_authors_year_hash"
+      ]).has(kind) ? { literatureIdentityKind: kind } : {}),
       ...(params.get("literatureIdentityValue") ? { literatureIdentityValue: params.get("literatureIdentityValue")! } : {}),
       sort: "recommended"
     };

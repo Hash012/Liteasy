@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import Database from "better-sqlite3";
 import { SqliteAnnotationCommunityRepository } from "./annotationCommunitySqlite.mjs";
@@ -10,6 +11,8 @@ function candidate({
   candidateKey = "crossref:doi:10.1000/verified",
   identifiers = [{ kind: "doi", source: "public_registry", value: "10.1000/verified" }],
   provider = "crossref",
+  recordUrl,
+  sourceEvidence,
   documentType,
   title = "Verified Registry Title",
   year = 2026
@@ -18,7 +21,20 @@ function candidate({
     candidateKey,
     provider,
     record: { authors: ["Verified Author"], ...(documentType ? { documentType } : {}), identifiers, title, year },
-    recordUrl: "https://registry.example.test/record"
+    recordUrl: recordUrl ?? (provider === "pmlr"
+      ? `https://proceedings.mlr.press/${identifiers.find((identifier) => identifier.kind === "pmlr_id")?.value}.html`
+      : "https://registry.example.test/record"),
+    ...(sourceEvidence ? { sourceEvidence } : {})
+  };
+}
+
+function pmlrSourceEvidence(volume, slug) {
+  return {
+    artifactHash: `sha256:${"a".repeat(64)}`,
+    artifactUrl: `https://proceedings.mlr.press/v${volume}/assets/bib/bibliography.bib`,
+    entryKey: `pmlr-v${volume}-${slug}`,
+    sourceKind: "official_volume_bibtex",
+    volume
   };
 }
 
@@ -32,29 +48,212 @@ test("SQLite reuses one confirmed literature id across owners and separates iden
     assert.equal(second.literatureId, first.literatureId);
     assert.equal(first.status, "confirmed");
     assert.equal(first.revision, 1);
-    assert.deepEqual(first.identifiers, [{
-      kind: "doi",
-      role: "confirmable",
-      source: "public_registry",
-      value: "10.1000/verified"
-    }]);
-    assert.equal(db.prepare("SELECT count(*) AS count FROM literature_records_v2").get().count, 1);
-    assert.deepEqual(db.prepare("SELECT id, identifier_kind, normalized_value FROM literature_identifiers_v2").all(), [
-      { id: db.prepare("SELECT id FROM literature_identifiers_v2").get().id, identifier_kind: "doi", normalized_value: "10.1000/verified" }
+    assert.deepEqual(first.identifiers, [
+      {
+        kind: "doi",
+        role: "confirmable",
+        source: "public_registry",
+        value: "10.1000/verified"
+      },
+      {
+        kind: "title_authors_year_hash",
+        role: "candidate_alias",
+        source: "metadata",
+        value: "sha256:42b41d09d804fbbd3e7921ae50a0564104a76155862756c0f35e90b327e7e93a"
+      }
     ]);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM literature_records_v2").get().count, 1);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM literature_identifiers_v2").get().count, 2);
     assert.deepEqual(db.prepare(`
       SELECT identifier.literature_id, claim.identifier_id, claim.provider,
              claim.provider_record_id, claim.verification_status
         FROM literature_identity_claims_v2 claim
         JOIN literature_identifiers_v2 identifier ON identifier.id = claim.identifier_id
     `).all(), [{
-      identifier_id: db.prepare("SELECT id FROM literature_identifiers_v2").get().id,
+      identifier_id: db.prepare("SELECT id FROM literature_identifiers_v2 WHERE identifier_kind = 'doi'").get().id,
       literature_id: first.literatureId,
       provider: "crossref",
       provider_record_id: "10.1000/verified",
       verification_status: "confirmed"
     }]);
     assert.deepEqual(new Set(db.prepare("SELECT changed_by FROM literature_record_versions_v2").all().map((row) => row.changed_by)), new Set(["literature_resolver"]));
+    assert.deepEqual(await repository.findLiteratureClaims(first.literatureId), [{
+      evidence: {
+        candidateKey: "crossref:doi:10.1000/verified",
+        confirmationBasis: "primary_registry_refetch",
+        recordUrl: "https://registry.example.test/record",
+        sourceTier: "primary"
+      },
+      identifier: {
+        kind: "doi",
+        role: "confirmable",
+        source: "public_registry",
+        value: "10.1000/verified"
+      },
+      observedAt: db.prepare("SELECT observed_at FROM literature_identity_claims_v2").get().observed_at,
+      provider: "crossref",
+      providerRecordId: "10.1000/verified",
+      verificationStatus: "confirmed"
+    }]);
+  } finally {
+    db.close();
+  }
+});
+
+test("SQLite keeps candidate bibliography aliases non-owning while stable identifiers stay unique", async () => {
+  const db = new Database(":memory:");
+  try {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    const first = await repository.confirmRefetchedLiterature(owner, candidate({
+      documentType: "journal-article",
+      identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/first" }],
+      candidateKey: "crossref:doi:10.1000/first",
+      title: "Shared Bibliography"
+    }));
+    const second = await repository.confirmRefetchedLiterature(owner, candidate({
+      documentType: "journal-article",
+      identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/second" }],
+      candidateKey: "crossref:doi:10.1000/second",
+      title: "Shared Bibliography"
+    }));
+
+    assert.notEqual(second.literatureId, first.literatureId);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM literature_identifiers_v2 WHERE identifier_kind = 'title_authors_year_hash'").get().count, 2);
+    const bibliographyAlias = db.prepare("SELECT normalized_value FROM literature_identifiers_v2 WHERE identifier_kind = 'title_authors_year_hash' LIMIT 1").get().normalized_value;
+    assert.equal(await repository.findLiteratureByIdentifiers([{
+      kind: "title_authors_year_hash",
+      value: bibliographyAlias
+    }]), null);
+    assert.throws(() => db.prepare(`
+      INSERT INTO literature_identifiers_v2(
+        id, literature_id, identifier_kind, identifier_role, normalized_value, is_legacy_alias, created_at
+      ) VALUES ('duplicate-doi', ?, 'doi', 'confirmable', '10.1000/first', 0, 'now')
+    `).run(second.literatureId), /UNIQUE/);
+  } finally {
+    db.close();
+  }
+});
+
+test("SQLite persists OpenReview as primary evidence and DBLP as aggregate evidence", async () => {
+  const db = new Database(":memory:");
+  try {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    const openReview = await repository.confirmRefetchedLiterature(owner, candidate({
+      candidateKey: "openreview:openreview_id:OR-ICLR-2026",
+      documentType: "conference-paper",
+      identifiers: [{ kind: "openreview_id", source: "public_registry", value: "OR-ICLR-2026" }],
+      provider: "openreview",
+      title: "An ICLR Paper"
+    }));
+    const dblp = await repository.confirmRefetchedLiterature(owner, candidate({
+      candidateKey: "dblp:dblp_key:conf/aaai/Lovelace26",
+      documentType: "conference-paper",
+      identifiers: [{ kind: "dblp_key", source: "public_registry", value: "conf/aaai/Lovelace26" }],
+      provider: "dblp",
+      title: "An AAAI Paper"
+    }));
+
+    assert.notEqual(openReview.literatureId, dblp.literatureId);
+    const claims = db.prepare(`
+      SELECT claim.provider, identifier.identifier_kind, claim.evidence_json
+        FROM literature_identity_claims_v2 claim
+        JOIN literature_identifiers_v2 identifier ON identifier.id = claim.identifier_id
+       ORDER BY claim.provider
+    `).all();
+    assert.deepEqual(claims.map((row) => ({
+      identifierKind: row.identifier_kind,
+      provider: row.provider
+    })), [
+      { identifierKind: "dblp_key", provider: "dblp" },
+      { identifierKind: "openreview_id", provider: "openreview" }
+    ]);
+    assert.equal(JSON.parse(claims[0].evidence_json).confirmationBasis, "user_selected_refetch");
+    assert.equal(JSON.parse(claims[0].evidence_json).sourceTier, "aggregate");
+    assert.equal(JSON.parse(claims[1].evidence_json).confirmationBasis, "primary_registry_refetch");
+    assert.equal(JSON.parse(claims[1].evidence_json).sourceTier, "primary");
+  } finally {
+    db.close();
+  }
+});
+
+test("SQLite persists audited PMLR evidence and separates volumes and preprint versions", async () => {
+  const db = new Database(":memory:");
+  try {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    const first = await repository.confirmRefetchedLiterature(owner, candidate({
+      candidateKey: "pmlr:pmlr_id:v235/shared-paper24a",
+      documentType: "conference-paper",
+      identifiers: [{ kind: "pmlr_id", source: "public_registry", value: "v235/shared-paper24a" }],
+      provider: "pmlr",
+      sourceEvidence: pmlrSourceEvidence(235, "shared-paper24a")
+    }));
+    const second = await repository.confirmRefetchedLiterature(owner, candidate({
+      candidateKey: "pmlr:pmlr_id:v236/shared-paper24a",
+      documentType: "conference-paper",
+      identifiers: [{ kind: "pmlr_id", source: "public_registry", value: "v236/shared-paper24a" }],
+      provider: "pmlr",
+      sourceEvidence: pmlrSourceEvidence(236, "shared-paper24a")
+    }));
+    const preprint = await repository.confirmRefetchedLiterature(owner, candidate({
+      candidateKey: "arxiv:arxiv_id:2401.01234v1",
+      documentType: "preprint",
+      identifiers: [{ kind: "arxiv_id", source: "public_registry", value: "2401.01234v1" }],
+      provider: "arxiv"
+    }));
+
+    assert.notEqual(first.literatureId, second.literatureId);
+    assert.notEqual(first.literatureId, preprint.literatureId);
+    const evidence = JSON.parse(db.prepare("SELECT evidence_json FROM literature_identity_claims_v2 WHERE provider_record_id = 'v235/shared-paper24a'").get().evidence_json);
+    assert.equal(evidence.confirmationBasis, "primary_registry_refetch");
+    assert.equal(evidence.sourceTier, "primary");
+    assert.deepEqual(evidence.sourceEvidence, pmlrSourceEvidence(235, "shared-paper24a"));
+    await assert.rejects(() => repository.confirmRefetchedLiterature(owner, candidate({
+      candidateKey: "pmlr:pmlr_id:v237/unaudited24a",
+      identifiers: [{ kind: "pmlr_id", source: "public_registry", value: "v237/unaudited24a" }],
+      provider: "pmlr"
+    })), /LITERATURE_CONFIRMATION_INVALID/);
+  } finally {
+    db.close();
+  }
+});
+
+test("SQLite preserves a content-addressed PMLR volume snapshot for audit replay", async () => {
+  const db = new Database(":memory:");
+  try {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    const content = Buffer.from("@InProceedings{pmlr-v235-replayable24a}");
+    const artifactHash = `sha256:${createHash("sha256").update(content).digest("hex")}`;
+    const verified = candidate({
+      candidateKey: "pmlr:pmlr_id:v235/replayable24a",
+      documentType: "conference-paper",
+      identifiers: [{ kind: "pmlr_id", source: "public_registry", value: "v235/replayable24a" }],
+      provider: "pmlr",
+      sourceEvidence: {
+        artifactHash,
+        artifactUrl: "https://proceedings.mlr.press/v235/assets/bib/bibliography.bib",
+        entryKey: "pmlr-v235-replayable24a",
+        sourceKind: "official_volume_bibtex",
+        volume: 235
+      }
+    });
+    Object.defineProperty(verified, "sourceArtifact", {
+      enumerable: false,
+      value: {
+        artifactUrl: verified.sourceEvidence.artifactUrl,
+        content,
+        mediaType: "application/x-bibtex"
+      }
+    });
+
+    await repository.confirmRefetchedLiterature(owner, verified);
+
+    const stored = db.prepare("SELECT artifact_hash, artifact_url, content, byte_length FROM literature_source_artifacts_v2").get();
+    assert.equal(stored.artifact_hash, artifactHash);
+    assert.equal(stored.artifact_url, verified.sourceEvidence.artifactUrl);
+    assert.deepEqual(stored.content, content);
+    assert.equal(stored.byte_length, content.byteLength);
+    assert.throws(() => db.prepare("UPDATE literature_source_artifacts_v2 SET artifact_url = ? WHERE artifact_hash = ?")
+      .run("https://proceedings.mlr.press/changed", artifactHash), /literature_source_artifact_is_append_only/);
   } finally {
     db.close();
   }
@@ -79,9 +278,35 @@ test("SQLite reuses one version when two aggregate providers independently confi
 
     assert.equal(semanticScholar.literatureId, openAlex.literatureId);
     assert.equal(db.prepare("SELECT count(*) AS count FROM literature_records_v2").get().count, 1);
-    assert.equal(db.prepare("SELECT count(*) AS count FROM literature_identifiers_v2").get().count, 2);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM literature_identifiers_v2").get().count, 3);
     assert.equal(db.prepare("SELECT count(*) AS count FROM literature_identity_claims_v2").get().count, 2);
     const claim = db.prepare("SELECT evidence_json FROM literature_identity_claims_v2 WHERE provider = 'semantic_scholar'").get();
+    assert.equal(JSON.parse(claim.evidence_json).confirmationBasis, "independent_provider_bibliography");
+  } finally {
+    db.close();
+  }
+});
+
+test("SQLite applies the aggregate corroboration rule to DBLP", async () => {
+  const db = new Database(":memory:");
+  try {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    const openAlex = await repository.confirmRefetchedLiterature(owner, candidate({
+      candidateKey: "openalex:openalex_id:W2026001",
+      documentType: "conference-paper",
+      identifiers: [{ kind: "openalex_id", source: "public_registry", value: "W2026001" }],
+      provider: "openalex"
+    }));
+    const dblp = await repository.confirmRefetchedLiterature({ id: "another-owner" }, candidate({
+      candidateKey: "dblp:dblp_key:conf/icml/Verified26",
+      documentType: "conference-paper",
+      identifiers: [{ kind: "dblp_key", source: "public_registry", value: "conf/icml/Verified26" }],
+      provider: "dblp"
+    }));
+
+    assert.equal(dblp.literatureId, openAlex.literatureId);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM literature_records_v2").get().count, 1);
+    const claim = db.prepare("SELECT evidence_json FROM literature_identity_claims_v2 WHERE provider = 'dblp'").get();
     assert.equal(JSON.parse(claim.evidence_json).confirmationBasis, "independent_provider_bibliography");
   } finally {
     db.close();
@@ -281,6 +506,53 @@ test("SQLite rejects fingerprint-only candidates and conflicting bibliography fo
   }
 });
 
+test("SQLite rejects versionless arXiv primaries even when a DOI is also present", async () => {
+  const db = new Database(":memory:");
+  try {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    await assert.rejects(() => repository.confirmRefetchedLiterature(owner, candidate({
+      candidateKey: "arxiv:arxiv_id:2401.01234",
+      identifiers: [
+        { kind: "arxiv_id", source: "public_registry", value: "2401.01234" },
+        { kind: "doi", source: "public_registry", value: "10.1000/secondary" }
+      ],
+      provider: "arxiv"
+    })), /LITERATURE_CANDIDATE_NOT_FOUND/);
+  } finally {
+    db.close();
+  }
+});
+
+test("SQLite fails closed when a confirmed status has no valid concrete identifier", async () => {
+  const db = new Database(":memory:");
+  try {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    const now = "2026-08-11T00:00:00.000Z";
+    db.prepare(`INSERT INTO literature_records_v2(
+      id, title, authors_json, publication_year, version_kind, record_source,
+      source_provider, confirmed_at, revision, confirmation_status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, 'public_registry', ?, ?, 1, 'confirmed', ?, ?)`).run(
+      "corrupt-confirmed", "Corrupt Confirmed", JSON.stringify(["Author"]), 2026,
+      "publication", "crossref", now, now, now
+    );
+    db.prepare(`INSERT INTO literature_identifiers_v2(
+      id, literature_id, identifier_kind, identifier_role, normalized_value,
+      is_legacy_alias, created_at
+    ) VALUES (?, ?, 'doi', 'confirmable', ?, 0, ?)`).run(
+      "corrupt-doi", "corrupt-confirmed", "not-a-doi", now
+    );
+
+    assert.equal(await repository.findLiteratureById("corrupt-confirmed"), null);
+    assert.equal(await repository.findLiteratureByIdentifiers([{
+      kind: "doi",
+      value: "10.1000/not-present"
+    }]), null);
+    assert.equal(await repository.verifyLiteratureProjection("corrupt-confirmed", 1), null);
+  } finally {
+    db.close();
+  }
+});
+
 test("SQLite rejects a compatibility alias as the provider primary identifier", async () => {
   const db = new Database(":memory:");
   try {
@@ -343,7 +615,7 @@ test("SQLite binds a provider record id to one literature even when its external
     assert.equal(refreshed.literatureId, first.literatureId);
     assert.equal(refreshed.revision, 2);
     assert.equal(db.prepare("SELECT count(*) AS count FROM literature_identity_claims_v2").get().count, 1);
-    assert.equal(db.prepare("SELECT count(*) AS count FROM literature_identifiers_v2 WHERE literature_id = ?").get(first.literatureId).count, 3);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM literature_identifiers_v2 WHERE literature_id = ?").get(first.literatureId).count, 4);
   } finally {
     db.close();
   }
@@ -384,8 +656,8 @@ test("SQLite keeps preprint and publication identities separate and returns evid
   try {
     const repository = new SqliteAnnotationCommunityRepository(db);
     const preprint = await repository.confirmRefetchedLiterature(owner, candidate({
-      candidateKey: "arxiv:arxiv_id:2401.01234",
-      identifiers: [{ kind: "arxiv_id", source: "public_registry", value: "2401.01234" }],
+      candidateKey: "arxiv:arxiv_id:2401.01234v1",
+      identifiers: [{ kind: "arxiv_id", source: "public_registry", value: "2401.01234v1" }],
       provider: "arxiv"
     }));
     const publication = await repository.confirmRefetchedLiterature(owner, candidate({
@@ -431,9 +703,9 @@ test("SQLite creates an evidenced preprint relation when the target version is c
     const repository = new SqliteAnnotationCommunityRepository(db);
     const preprint = await repository.confirmRefetchedLiterature(owner, {
       ...candidate({
-        candidateKey: "arxiv:arxiv_id:2401.01234",
+        candidateKey: "arxiv:arxiv_id:2401.01234v1",
         documentType: "preprint",
-        identifiers: [{ kind: "arxiv_id", source: "public_registry", value: "2401.01234" }],
+        identifiers: [{ kind: "arxiv_id", source: "public_registry", value: "2401.01234v1" }],
         provider: "arxiv"
       }),
       relations: [{
@@ -456,7 +728,7 @@ test("SQLite creates an evidenced preprint relation when the target version is c
     })), [{
       createdAt: "timestamp",
       evidence: {
-        candidateKey: "arxiv:arxiv_id:2401.01234",
+        candidateKey: "arxiv:arxiv_id:2401.01234v1",
         sourceField: "arxiv:doi",
         targetIdentifier: { kind: "doi", value: "10.1000/publication" }
       },
@@ -477,11 +749,11 @@ test("SQLite rejects one formal publication record that binds both publication D
     const repository = new SqliteAnnotationCommunityRepository(db);
     await assert.rejects(() => repository.confirmRefetchedLiterature(owner, candidate({
       identifiers: [
-        { kind: "semantic_scholar_id", source: "public_registry", value: "semantic-123" },
+        { kind: "semantic_scholar_id", source: "public_registry", value: "corpus:123" },
         { kind: "doi", source: "public_registry", value: "10.1000/publication" },
-        { kind: "arxiv_id", source: "public_registry", value: "2401.01234" }
+        { kind: "arxiv_id", source: "public_registry", value: "2401.01234v1" }
       ],
-      candidateKey: "semantic_scholar:semantic_scholar_id:semantic-123",
+      candidateKey: "semantic_scholar:semantic_scholar_id:corpus:123",
       provider: "semantic_scholar",
       documentType: "publication"
     })), /LITERATURE_IDENTITY_CONFLICT/);
@@ -504,6 +776,7 @@ test("SQLite projection verification requires the exact confirmed revision", asy
 });
 
 function postgresHarness() {
+  const artifacts = [];
   const records = new Map();
   const identifiers = [];
   const claims = [];
@@ -513,7 +786,7 @@ function postgresHarness() {
     async query(sql, values = []) {
       const query = sql.trim();
       if (query.startsWith("BEGIN ") || query === "COMMIT" || query === "ROLLBACK" || query.includes("pg_advisory_xact_lock")) return { rows: [] };
-      if (query.startsWith("SELECT literature_id, identifier_kind, normalized_value FROM literature_identifiers")) {
+      if (query.includes("FROM literature_identifiers") && query.includes("identifier_kind = ANY")) {
         return { rows: identifiers.filter((item) => values[0].includes(item.identifier_kind)) };
       }
       if (query.startsWith("SELECT literature_id FROM literature_identifiers")) {
@@ -569,7 +842,11 @@ function postgresHarness() {
       }
       if (query.startsWith("SELECT identity_kind AS kind")) return { rows: [] };
       if (query.startsWith("INSERT INTO literature_identifiers")) {
-        if (!identifiers.some((item) => item.identifier_kind === values[2] && item.normalized_value === values[4])) {
+        const duplicateOwner = identifiers.some((item) => item.literature_id === values[1] &&
+          item.identifier_kind === values[2] && item.normalized_value === values[4]);
+        const duplicateConfirmable = values[3] === "confirmable" && identifiers.some((item) =>
+          item.identifier_role === "confirmable" && item.identifier_kind === values[2] && item.normalized_value === values[4]);
+        if (!duplicateOwner && !duplicateConfirmable) {
           identifiers.push({
             id: values[0],
             identifier_kind: values[2],
@@ -596,13 +873,37 @@ function postgresHarness() {
             literature_id: identifier.literature_id,
             observed_at: values[5],
             provider: values[2],
-            provider_record_id: values[3]
+            provider_record_id: values[3],
+            verification_status: "confirmed"
+          });
+        }
+        return { rows: [] };
+      }
+      if (query.startsWith("INSERT INTO literature_source_artifacts")) {
+        if (!artifacts.some((artifact) => artifact.artifact_hash === values[0])) {
+          artifacts.push({
+            artifact_hash: values[0],
+            artifact_url: values[1],
+            byte_length: values[4],
+            content: values[3],
+            media_type: values[2]
           });
         }
         return { rows: [] };
       }
       if (query.startsWith("SELECT claim.provider, claim.evidence, identifier.literature_id")) {
         return { rows: claims.filter((claim) => Array.isArray(claim.evidence?.relations)) };
+      }
+      if (query.startsWith("SELECT claim.provider, claim.provider_record_id")) {
+        return { rows: claims.filter((claim) => claim.literature_id === values[0]).map((claim) => {
+          const identifier = identifiers.find((item) => item.id === claim.identifier_id);
+          return {
+            ...claim,
+            identifier_kind: identifier.identifier_kind,
+            identifier_role: identifier.identifier_role,
+            normalized_value: identifier.normalized_value
+          };
+        }) };
       }
       if (query.startsWith("SELECT literature.id") && query.includes("identifier.identifier_kind")) {
         const identifier = identifiers.find((item) => item.identifier_kind === values[0] && item.normalized_value === values[1]);
@@ -633,7 +934,7 @@ function postgresHarness() {
     release() {}
   };
   const pool = { async connect() { return client; }, async query(sql, values) { return client.query(sql, values); } };
-  return { claims, identifiers, records, relations, repository: new PostgresAnnotationCommunityRepository(pool), versions };
+  return { artifacts, claims, identifiers, records, relations, repository: new PostgresAnnotationCommunityRepository(pool), versions };
 }
 
 test("PostgreSQL confirmation stores one identifier owner and one provider claim", async () => {
@@ -643,12 +944,20 @@ test("PostgreSQL confirmation stores one identifier owner and one provider claim
   assert.equal(record.status, "confirmed");
   assert.equal(record.revision, 1);
   assert.equal(harness.records.size, 1);
-  assert.deepEqual(harness.identifiers.map(({ id: _id, ...identifier }) => identifier), [{
-    identifier_kind: "doi",
-    identifier_role: "confirmable",
-    literature_id: record.literatureId,
-    normalized_value: "10.1000/verified"
-  }]);
+  assert.deepEqual(harness.identifiers.map(({ id: _id, ...identifier }) => identifier), [
+    {
+      identifier_kind: "doi",
+      identifier_role: "confirmable",
+      literature_id: record.literatureId,
+      normalized_value: "10.1000/verified"
+    },
+    {
+      identifier_kind: "title_authors_year_hash",
+      identifier_role: "candidate_alias",
+      literature_id: record.literatureId,
+      normalized_value: "sha256:42b41d09d804fbbd3e7921ae50a0564104a76155862756c0f35e90b327e7e93a"
+    }
+  ]);
   assert.deepEqual(harness.claims.map(({ identifier_id: _identifierId, ...claim }) => claim), [{
     evidence: {
       candidateKey: "crossref:doi:10.1000/verified",
@@ -659,7 +968,8 @@ test("PostgreSQL confirmation stores one identifier owner and one provider claim
     literature_id: record.literatureId,
     observed_at: harness.claims[0].observed_at,
     provider: "crossref",
-    provider_record_id: "10.1000/verified"
+    provider_record_id: "10.1000/verified",
+    verification_status: "confirmed"
   }]);
   assert.deepEqual(harness.versions, [{
     changedBy: "literature_resolver",
@@ -667,6 +977,73 @@ test("PostgreSQL confirmation stores one identifier owner and one provider claim
     revision: 1
   }]);
   assert.equal(harness.versions[0].changedBy, "literature_resolver");
+  assert.deepEqual((await harness.repository.findLiteratureClaims(record.literatureId)).map((claim) => ({
+    identifier: claim.identifier,
+    provider: claim.provider,
+    providerRecordId: claim.providerRecordId,
+    verificationStatus: claim.verificationStatus
+  })), [{
+    identifier: {
+      kind: "doi",
+      role: "confirmable",
+      source: "public_registry",
+      value: "10.1000/verified"
+    },
+    provider: "crossref",
+    providerRecordId: "10.1000/verified",
+    verificationStatus: "confirmed"
+  }]);
+});
+
+test("PostgreSQL stores audited PMLR evidence as a primary claim", async () => {
+  const harness = postgresHarness();
+  const sourceEvidence = pmlrSourceEvidence(235, "verified24a");
+  const record = await harness.repository.confirmRefetchedLiterature(owner, candidate({
+    candidateKey: "pmlr:pmlr_id:v235/verified24a",
+    documentType: "conference-paper",
+    identifiers: [{ kind: "pmlr_id", source: "public_registry", value: "v235/verified24a" }],
+    provider: "pmlr",
+    sourceEvidence
+  }));
+
+  assert.equal(record.status, "confirmed");
+  assert.equal(harness.claims[0].evidence.sourceTier, "primary");
+  assert.deepEqual(harness.claims[0].evidence.sourceEvidence, sourceEvidence);
+});
+
+test("PostgreSQL preserves a content-addressed PMLR volume snapshot", async () => {
+  const harness = postgresHarness();
+  const content = Buffer.from("@InProceedings{pmlr-v235-replayable24a}");
+  const artifactHash = `sha256:${createHash("sha256").update(content).digest("hex")}`;
+  const sourceEvidence = {
+    ...pmlrSourceEvidence(235, "replayable24a"),
+    artifactHash
+  };
+  const verified = candidate({
+    candidateKey: "pmlr:pmlr_id:v235/replayable24a",
+    documentType: "conference-paper",
+    identifiers: [{ kind: "pmlr_id", source: "public_registry", value: "v235/replayable24a" }],
+    provider: "pmlr",
+    sourceEvidence
+  });
+  Object.defineProperty(verified, "sourceArtifact", {
+    enumerable: false,
+    value: {
+      artifactUrl: sourceEvidence.artifactUrl,
+      content,
+      mediaType: "application/x-bibtex"
+    }
+  });
+
+  await harness.repository.confirmRefetchedLiterature(owner, verified);
+
+  assert.deepEqual(harness.artifacts, [{
+    artifact_hash: artifactHash,
+    artifact_url: sourceEvidence.artifactUrl,
+    byte_length: content.byteLength,
+    content,
+    media_type: "application/x-bibtex"
+  }]);
 });
 
 test("PostgreSQL rejects a compatibility alias as the provider primary identifier", async () => {
@@ -700,6 +1077,39 @@ test("PostgreSQL stores confirmable identifiers and candidate aliases with expli
   ]);
 });
 
+test("PostgreSQL keeps bibliography aliases non-owning and rejects versionless arXiv primaries", async () => {
+  const harness = postgresHarness();
+  const first = await harness.repository.confirmRefetchedLiterature(owner, candidate({
+    candidateKey: "crossref:doi:10.1000/first",
+    documentType: "journal-article",
+    identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/first" }],
+    title: "Shared Bibliography"
+  }));
+  const second = await harness.repository.confirmRefetchedLiterature(owner, candidate({
+    candidateKey: "crossref:doi:10.1000/second",
+    documentType: "journal-article",
+    identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/second" }],
+    title: "Shared Bibliography"
+  }));
+  const bibliographyAliases = harness.identifiers.filter((identifier) =>
+    identifier.identifier_kind === "title_authors_year_hash");
+
+  assert.notEqual(second.literatureId, first.literatureId);
+  assert.equal(bibliographyAliases.length, 2);
+  assert.equal(await harness.repository.findLiteratureByIdentifiers([{
+    kind: "title_authors_year_hash",
+    value: bibliographyAliases[0].normalized_value
+  }]), null);
+  await assert.rejects(() => harness.repository.confirmRefetchedLiterature(owner, candidate({
+    candidateKey: "arxiv:arxiv_id:2401.01234",
+    identifiers: [
+      { kind: "arxiv_id", source: "public_registry", value: "2401.01234" },
+      { kind: "doi", source: "public_registry", value: "10.1000/secondary" }
+    ],
+    provider: "arxiv"
+  })), /LITERATURE_CANDIDATE_NOT_FOUND/);
+});
+
 test("PostgreSQL reuses one version when two aggregate providers independently confirm the same bibliography", async () => {
   const harness = postgresHarness();
   const openAlex = await harness.repository.confirmRefetchedLiterature(owner, candidate({
@@ -717,8 +1127,28 @@ test("PostgreSQL reuses one version when two aggregate providers independently c
 
   assert.equal(semanticScholar.literatureId, openAlex.literatureId);
   assert.equal(harness.records.size, 1);
-  assert.equal(harness.identifiers.length, 2);
+  assert.equal(harness.identifiers.length, 3);
   assert.equal(harness.claims.length, 2);
+});
+
+test("PostgreSQL applies the aggregate corroboration rule to DBLP", async () => {
+  const harness = postgresHarness();
+  const openAlex = await harness.repository.confirmRefetchedLiterature(owner, candidate({
+    candidateKey: "openalex:openalex_id:W2026001",
+    documentType: "conference-paper",
+    identifiers: [{ kind: "openalex_id", source: "public_registry", value: "W2026001" }],
+    provider: "openalex"
+  }));
+  const dblp = await harness.repository.confirmRefetchedLiterature({ id: "another-owner" }, candidate({
+    candidateKey: "dblp:dblp_key:conf/icml/Verified26",
+    documentType: "conference-paper",
+    identifiers: [{ kind: "dblp_key", source: "public_registry", value: "conf/icml/Verified26" }],
+    provider: "dblp"
+  }));
+
+  assert.equal(dblp.literatureId, openAlex.literatureId);
+  assert.equal(harness.records.size, 1);
+  assert.equal(harness.claims.find((claim) => claim.provider === "dblp").evidence.confirmationBasis, "independent_provider_bibliography");
 });
 
 test("PostgreSQL reuses one version when primary and aggregate providers independently confirm the same bibliography", async () => {
@@ -851,9 +1281,9 @@ test("PostgreSQL backfills an evidenced preprint relation when the target is con
   const harness = postgresHarness();
   const preprint = await harness.repository.confirmRefetchedLiterature(owner, {
     ...candidate({
-      candidateKey: "arxiv:arxiv_id:2401.01234",
+      candidateKey: "arxiv:arxiv_id:2401.01234v1",
       documentType: "preprint",
-      identifiers: [{ kind: "arxiv_id", source: "public_registry", value: "2401.01234" }],
+      identifiers: [{ kind: "arxiv_id", source: "public_registry", value: "2401.01234v1" }],
       provider: "arxiv"
     }),
     relations: [{
@@ -871,7 +1301,7 @@ test("PostgreSQL backfills an evidenced preprint relation when the target is con
 
   assert.deepEqual(harness.relations, [{
     evidence: {
-      candidateKey: "arxiv:arxiv_id:2401.01234",
+      candidateKey: "arxiv:arxiv_id:2401.01234v1",
       sourceField: "arxiv:doi",
       targetIdentifier: { kind: "doi", value: "10.1000/publication" }
     },

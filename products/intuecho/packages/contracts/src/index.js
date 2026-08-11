@@ -37,7 +37,16 @@ export const createFeedbackSchema = z.object({ kind: z.enum(["bug", "idea", "exp
 
 export const paperIdentitySchema = z.object({
   id: z.string().trim().min(1).max(1200),
-  kind: z.enum(["doi", "arxiv_id", "semantic_scholar_id", "openalex_id", "title_authors_year_hash"]),
+  kind: z.enum([
+    "doi",
+    "arxiv_id",
+    "semantic_scholar_id",
+    "openalex_id",
+    "openreview_id",
+    "dblp_key",
+    "pmlr_id",
+    "title_authors_year_hash"
+  ]),
   source: z.enum(["inferred", "metadata"]),
   value: z.string().trim().min(1).max(1000)
 });
@@ -113,7 +122,10 @@ export const confirmableLiteratureIdentifierKindSchema = z.enum([
   "doi",
   "arxiv_id",
   "semantic_scholar_id",
-  "openalex_id"
+  "openalex_id",
+  "openreview_id",
+  "dblp_key",
+  "pmlr_id"
 ]);
 
 export const candidateLiteratureAliasKindSchema = z.enum([
@@ -131,6 +143,27 @@ export const literatureSourceSchema = z.enum(["public_registry", "manual", "infe
 
 function expectedLiteratureIdentifierRole(kind) {
   return kind === "title_authors_year_hash" ? "candidate_alias" : "confirmable";
+}
+
+function isNormalizedLiteratureIdentifier(kind, value, concreteArxiv = false) {
+  if (kind === "doi") return /^10\.\d{4,9}\/[^\s?#]+$/u.test(value);
+  if (kind === "arxiv_id") {
+    const pattern = concreteArxiv
+      ? /^(?:\d{4}\.\d{4,5}|[a-z][a-z0-9.-]*\/\d{7})v[1-9]\d*$/
+      : /^(?:\d{4}\.\d{4,5}|[a-z][a-z0-9.-]*\/\d{7})(?:v[1-9]\d*)?$/;
+    return pattern.test(value);
+  }
+  if (kind === "semantic_scholar_id") return /^(?:corpus:[1-9]\d*|[a-f0-9]{40})$/.test(value);
+  if (kind === "openalex_id") return /^W\d+$/.test(value);
+  if (kind === "openreview_id") return /^[A-Za-z0-9_-]{6,200}$/.test(value);
+  if (kind === "dblp_key") {
+    return /^(?:conf|journals)\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.:+-]+$/.test(value) && !value.includes("..");
+  }
+  if (kind === "pmlr_id") {
+    return /^v[1-9]\d{0,3}\/[a-z0-9][a-z0-9._-]{0,199}$/.test(value) && !value.includes("..");
+  }
+  if (kind === "title_authors_year_hash") return /^(?:sha256:[a-f0-9]{64}|[a-f0-9]{8})$/.test(value);
+  return false;
 }
 
 export const literatureIdentifierSchema = z.object({
@@ -164,6 +197,13 @@ const confirmedLiteratureIdentifierSchema = literatureIdentifierSchema.superRefi
       message: "候选别名只能作为元数据兼容信息。"
     });
   }
+  if (!isNormalizedLiteratureIdentifier(value.kind, value.value, true)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["value"],
+      message: "正式文献标识必须是规范格式并指向具体版本。"
+    });
+  }
 }).transform((value) => {
   const role = expectedLiteratureIdentifierRole(value.kind);
   return {
@@ -181,24 +221,96 @@ const literatureDisplaySchema = z.object({
   year: z.number().int().min(1000).max(9999).optional()
 });
 
-const literatureProviderSchema = z.enum(["intuecho", "openalex", "crossref", "arxiv", "semantic_scholar"]);
+const literatureProviderSchema = z.enum([
+  "intuecho",
+  "openalex",
+  "crossref",
+  "arxiv",
+  "semantic_scholar",
+  "openreview",
+  "dblp",
+  "pmlr"
+]);
+
+const literatureEvidenceProviderSchema = z.enum([
+  "openalex",
+  "crossref",
+  "arxiv",
+  "semantic_scholar",
+  "openreview",
+  "dblp",
+  "pmlr"
+]);
+
+const literatureSourceEvidenceSchema = z.object({
+  artifactHash: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+  artifactUrl: z.string().url().refine((value) => new URL(value).protocol === "https:"),
+  entryKey: z.string().regex(/^pmlr-v[1-9]\d{0,3}-[a-z0-9][a-z0-9._-]{0,199}$/),
+  sourceKind: z.literal("official_volume_bibtex"),
+  volume: z.number().int().positive().max(9999)
+}).strict();
 
 const literatureCandidateRelationSchema = z.object({
   direction: z.enum(["from_current", "to_current"]),
   evidence: z.record(z.unknown()).refine((value) => Object.keys(value).length > 0),
   relationType: z.enum(["is_preprint_of", "version_of", "translation_of"]),
   targetIdentifier: z.object({
-    kind: literatureIdentifierKindSchema,
+    kind: confirmableLiteratureIdentifierKindSchema,
     value: z.string().trim().min(1).max(1000)
   }).strict()
-}).strict();
+}).strict().superRefine((value, context) => {
+  if (!isNormalizedLiteratureIdentifier(value.targetIdentifier.kind, value.targetIdentifier.value, true)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["targetIdentifier", "value"],
+      message: "版本关系目标必须是规范化的具体文献标识。"
+    });
+  }
+});
 
 export const literatureCandidateSchema = z.object({
   candidateKey: z.string().trim().min(1).max(1000),
   provider: literatureProviderSchema,
   record: literatureDisplaySchema,
   relations: z.array(literatureCandidateRelationSchema).max(20).optional(),
-  recordUrl: z.string().url().refine((value) => new URL(value).protocol === "https:").optional()
+  recordUrl: z.string().url().refine((value) => new URL(value).protocol === "https:").optional(),
+  sourceEvidence: literatureSourceEvidenceSchema.optional()
+}).superRefine((value, context) => {
+  if (value.provider !== "pmlr") return;
+  if (!value.sourceEvidence) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["sourceEvidence"],
+      message: "PMLR 候选必须携带官方卷数据审计证据。"
+    });
+    return;
+  }
+  const primary = value.record.identifiers[0];
+  const match = primary?.kind === "pmlr_id"
+    ? /^v([1-9]\d{0,3})\/([a-z0-9][a-z0-9._-]{0,199})$/.exec(primary.value)
+    : null;
+  const expectedVolume = Number(match?.[1]);
+  const expectedEntryKey = match ? `pmlr-v${match[1]}-${match[2]}` : null;
+  const expectedRecordUrl = match ? `https://proceedings.mlr.press/${primary.value}.html` : null;
+  let artifactUrlMatches = false;
+  try {
+    const artifactUrl = new URL(value.sourceEvidence.artifactUrl);
+    artifactUrlMatches = artifactUrl.protocol === "https:" && artifactUrl.hostname === "proceedings.mlr.press" &&
+      !artifactUrl.username && !artifactUrl.password &&
+      !artifactUrl.search && !artifactUrl.hash &&
+      artifactUrl.pathname.endsWith(`/v${expectedVolume}/assets/bib/bibliography.bib`);
+  } catch {
+    artifactUrlMatches = false;
+  }
+  if (!match || value.candidateKey !== `pmlr:pmlr_id:${primary.value}` ||
+    value.recordUrl !== expectedRecordUrl || value.sourceEvidence.volume !== expectedVolume ||
+    value.sourceEvidence.entryKey !== expectedEntryKey || !artifactUrlMatches) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["sourceEvidence"],
+      message: "PMLR 审计证据必须与来源内 ID、正式记录 URL 和卷级 BibTeX 一致。"
+    });
+  }
 });
 
 export const literatureRecordSchema = z.object({
@@ -284,7 +396,17 @@ export const literatureRelationSchema = z.object({
   path: ["toLiteratureId"]
 });
 
+export const literatureIdentityClaimSchema = z.object({
+  evidence: z.record(z.string(), z.unknown()),
+  identifier: confirmedLiteratureIdentifierSchema,
+  observedAt: z.string().datetime(),
+  provider: literatureEvidenceProviderSchema,
+  providerRecordId: z.string().trim().min(1).max(1000),
+  verificationStatus: z.literal("confirmed")
+}).strict();
+
 export const literatureRelationsResultSchema = z.object({
+  claims: z.array(literatureIdentityClaimSchema).max(100),
   literatureId: z.string().trim().min(1).max(200),
   versions: z.array(z.object({
     direction: z.enum(["from_current", "to_current"]),

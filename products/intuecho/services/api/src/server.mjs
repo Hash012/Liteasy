@@ -118,20 +118,12 @@ export async function createIntuechoApp({
       return reply.code(401).send({ error: "INVALID_AUTHORIZATION", message: "登录凭据格式无效。", traceId: request.id });
     }
     try {
-      if (request.url.split("?", 1)[0] === "/v1/internal/literature:verify") {
+      if (isInternalLiteratureRequest(request)) {
         request.intuechoLiteratureService = await literatureServiceIdentityVerifier(match[1]);
       } else if (request.url.startsWith("/v1/admin/")) {
         request.intuechoAdmin = await adminIdentityVerifier(match[1]);
       } else if (isLiteratureRequest(request)) {
-        try {
-          request.intuechoDesktopUser = await desktopIdentityVerifier(match[1]);
-        } catch (desktopError) {
-          try {
-            request.intuechoUser = await identityVerifier(match[1]);
-          } catch {
-            throw desktopError;
-          }
-        }
+        request.intuechoUser = await identityVerifier(match[1]);
       } else if (isDesktopIntegrationRequest(request)) {
         request.intuechoDesktopUser = await desktopIdentityVerifier(match[1]);
       } else {
@@ -158,7 +150,6 @@ export async function createIntuechoApp({
 
   function isDesktopIntegrationRequest(request) {
     const pathname = request.url.split("?", 1)[0];
-    if (isLiteratureRequest(request)) return true;
     return request.method === "POST" && new Set([
       "/v1/integrations/desktop/draft-handoffs",
       "/v1/integrations/desktop/annotation-handoffs",
@@ -173,6 +164,14 @@ export async function createIntuechoApp({
     const pathname = request.url.split("?", 1)[0];
     if (request.method === "GET") return /^\/v1\/literature\/[^/]+\/relations$/.test(pathname);
     return request.method === "POST" && new Set(["/v1/literature:resolve", "/v1/literature:confirm"]).has(pathname);
+  }
+
+  function isInternalLiteratureRequest(request) {
+    const pathname = request.url.split("?", 1)[0];
+    return pathname === "/v1/internal/literature:verify" ||
+      pathname === "/v1/internal/literature:resolve" ||
+      pathname === "/v1/internal/literature:confirm" ||
+      /^\/v1\/internal\/literature\/[^/]+\/relations$/.test(pathname);
   }
 
   function requireDesktopUser(request, reply) {
@@ -216,7 +215,6 @@ export async function createIntuechoApp({
   registerLiteratureRoutes(app, {
     currentUser: (request) => request.intuechoUser ?? request.intuechoDesktopUser ?? null,
     rateLimiter: literatureRateLimiter ?? createLiteratureRateLimiter(),
-    requireDesktopUser,
     requireService: (request, reply) => {
       if (request.intuechoLiteratureService) return request.intuechoLiteratureService;
       reply.code(401).send({ error: "LITERATURE_SERVICE_AUTH_REQUIRED", traceId: request.id });

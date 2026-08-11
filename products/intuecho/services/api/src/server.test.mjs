@@ -23,6 +23,7 @@ const fourthHeader = { authorization: "Bearer fourth-token" };
 const adminHeader = { authorization: "Bearer admin-token" };
 const desktopHeader = { authorization: "Bearer desktop-token" };
 const otherDesktopHeader = { authorization: "Bearer other-desktop-token" };
+const literatureServiceHeader = { authorization: "Bearer literature-service-token" };
 
 async function identityVerifier(token) {
   const identity = identities.get(token);
@@ -40,6 +41,13 @@ async function adminIdentityVerifier(token) {
 async function desktopIdentityVerifier(token) {
   if (token === "desktop-token") return identities.get("user-token");
   if (token === "other-desktop-token") return identities.get("same-name-token");
+  throw new IdentityVerificationError("INVALID_SESSION_AUDIENCE", "当前会话不适用于 Intuecho。", 403);
+}
+
+async function literatureServiceIdentityVerifier(token) {
+  if (token === "literature-service-token") {
+    return { clientId: "liteasy-literature-service", id: "liteasy-literature-service" };
+  }
   throw new IdentityVerificationError("INVALID_SESSION_AUDIENCE", "当前会话不适用于 Intuecho。", 403);
 }
 
@@ -71,6 +79,7 @@ async function withApp(run, {
   desktopIdentityVerifier: selectedDesktopIdentityVerifier = desktopIdentityVerifier,
   fixture = true,
   identityVerifier: selectedIdentityVerifier = identityVerifier,
+  literatureServiceIdentityVerifier: selectedLiteratureServiceIdentityVerifier = literatureServiceIdentityVerifier,
   literatureRateLimiter,
   literatureResolver
 } = {}) {
@@ -85,6 +94,7 @@ async function withApp(run, {
     databasePath,
     desktopIdentityVerifier: selectedDesktopIdentityVerifier,
     identityVerifier: selectedIdentityVerifier,
+    literatureServiceIdentityVerifier: selectedLiteratureServiceIdentityVerifier,
     literatureRateLimiter,
     literatureResolver
   });
@@ -127,13 +137,24 @@ function literatureResolver(overrides = {}) {
       };
     },
     async relations(literatureId) {
-      return { literatureId, versions: [] };
+      return {
+        claims: [{
+          evidence: { confirmationBasis: "primary_registry_refetch", sourceTier: "primary" },
+          identifier: { kind: "doi", role: "confirmable", source: "public_registry", value: "10.1000/reliable" },
+          observedAt: "2026-08-09T00:00:00.000Z",
+          provider: "crossref",
+          providerRecordId: "10.1000/reliable",
+          verificationStatus: "confirmed"
+        }],
+        literatureId,
+        versions: []
+      };
     },
     ...overrides
   };
 }
 
-test("literature routes accept authenticated Web and desktop audiences while rejecting anonymous requests", async () => {
+test("public literature routes accept Web sessions while rejecting anonymous and Desktop sessions", async () => {
   await withApp(async (app) => {
     const anonymous = await app.inject({
       method: "POST",
@@ -159,11 +180,11 @@ test("literature routes accept authenticated Web and desktop audiences while rej
       payload: { purpose: "liteasy_pdf_annotation", query: "10.1000/reliable" },
       url: "/v1/literature:resolve"
     });
-    assert.equal(desktop.statusCode, 200, desktop.body);
-    assert.equal(desktop.json().status, "exact");
+    assert.equal(desktop.statusCode, 401, desktop.body);
+    assert.equal(desktop.json().error, "INVALID_SESSION");
 
     const confirmed = await app.inject({
-      headers: desktopHeader,
+      headers: userHeader,
       method: "POST",
       payload: { candidateKey: "crossref:doi:10.1000/reliable", mode: "candidate" },
       url: "/v1/literature:confirm"
@@ -173,13 +194,63 @@ test("literature routes accept authenticated Web and desktop audiences while rej
     assert.equal(confirmed.json().literature.status, "confirmed");
 
     const relations = await app.inject({
-      headers: desktopHeader,
+      headers: userHeader,
       method: "GET",
       url: "/v1/literature/literature-1/relations"
     });
     assert.equal(relations.statusCode, 200, relations.body);
-    assert.deepEqual(relations.json(), { literatureId: "literature-1", versions: [] });
+    assert.equal(relations.json().claims[0].providerRecordId, "10.1000/reliable");
+    assert.deepEqual(relations.json().versions, []);
   }, { literatureResolver: literatureResolver() });
+});
+
+test("internal literature routes use one service actor without receiving a Liteasy user", async () => {
+  const calls = [];
+  await withApp(async (app) => {
+    const resolved = await app.inject({
+      headers: literatureServiceHeader,
+      method: "POST",
+      payload: { purpose: "liteasy_pdf_annotation", query: "10.1000/reliable" },
+      url: "/v1/internal/literature:resolve"
+    });
+    assert.equal(resolved.statusCode, 200, resolved.body);
+
+    const confirmed = await app.inject({
+      headers: literatureServiceHeader,
+      method: "POST",
+      payload: { candidateKey: "crossref:doi:10.1000/reliable", mode: "candidate" },
+      url: "/v1/internal/literature:confirm"
+    });
+    assert.equal(confirmed.statusCode, 200, confirmed.body);
+
+    const relations = await app.inject({
+      headers: literatureServiceHeader,
+      method: "GET",
+      url: "/v1/internal/literature/literature-1/relations"
+    });
+    assert.equal(relations.statusCode, 200, relations.body);
+    assert.deepEqual(calls.map((call) => call.operation), ["resolve", "confirm", "relations"]);
+    assert.deepEqual(calls.slice(0, 2).map((call) => call.owner), [
+      { id: "liteasy-literature-service" },
+      { id: "liteasy-literature-service" }
+    ]);
+    assert.equal(JSON.stringify(calls).includes("user-1"), false);
+  }, {
+    literatureResolver: {
+      async confirm(owner, input) {
+        calls.push({ input, operation: "confirm", owner });
+        return literatureResolver().confirm(owner, input);
+      },
+      async relations(literatureId) {
+        calls.push({ literatureId, operation: "relations" });
+        return { literatureId, versions: [] };
+      },
+      async resolve(owner, input) {
+        calls.push({ input, operation: "resolve", owner });
+        return literatureResolver().resolve(owner, input);
+      }
+    }
+  });
 });
 
 test("literature routes project invalid requests and resolver failures without provider details", async () => {

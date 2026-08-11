@@ -14,7 +14,7 @@
       "kind": "doi"
     },
     {
-      "expected": "2401.01234",
+      "expected": "2401.01234v2",
       "inputs": ["arXiv:2401.01234v2", "https://arxiv.org/pdf/2401.01234v2.pdf"],
       "kind": "arxiv_id"
     },
@@ -27,6 +27,21 @@
       "expected": "W123",
       "inputs": ["w123", "https://openalex.org/W123"],
       "kind": "openalex_id"
+    },
+    {
+      "expected": "OR-NeurIPS-2026",
+      "inputs": ["OR-NeurIPS-2026", "https://openreview.net/forum?id=OR-NeurIPS-2026"],
+      "kind": "openreview_id"
+    },
+    {
+      "expected": "conf/icml/LovelaceH26",
+      "inputs": ["conf/icml/LovelaceH26", "https://dblp.org/rec/conf/icml/LovelaceH26.html"],
+      "kind": "dblp_key"
+    },
+    {
+      "expected": "v235/abad-rocamora24a",
+      "inputs": ["pmlr-v235-abad-rocamora24a", "https://proceedings.mlr.press/v235/abad-rocamora24a.html"],
+      "kind": "pmlr_id"
     }
   ],
   "fingerprints": [

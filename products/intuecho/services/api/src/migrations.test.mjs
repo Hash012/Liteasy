@@ -25,7 +25,11 @@ test("loads ordered immutable forum migrations", () => {
     "016_source_confirmed_literature_identity.sql",
     "017_constrain_legacy_aggregate_confirmation.sql",
     "018_align_literature_identity_model.sql",
-    "019_classify_literature_identifiers.sql"
+    "019_classify_literature_identifiers.sql",
+    "020_expand_computer_science_literature_sources.sql",
+    "021_add_audited_pmlr_identity.sql",
+    "022_preserve_literature_source_artifacts.sql",
+    "023_enforce_version_identity_boundaries.sql"
   ]);
   assert.match(migrations[0].checksum, /^[a-f0-9]{64}$/);
   assert.match(migrations[0].sql, /CREATE TABLE moderation_audit/);
@@ -64,6 +68,22 @@ test("loads ordered immutable forum migrations", () => {
   assert.match(migrations[17].sql, /ADD COLUMN identifier_id/);
   assert.match(migrations[18].sql, /ADD COLUMN identifier_role/);
   assert.match(migrations[18].sql, /candidate_alias/);
+  assert.match(migrations[19].sql, /openreview_id/);
+  assert.match(migrations[19].sql, /dblp_key/);
+  assert.match(migrations[20].sql, /pmlr_id/);
+  assert.match(migrations[20].sql, /'pmlr'/);
+  assert.match(migrations[21].sql, /CREATE TABLE literature_source_artifacts/);
+  assert.match(migrations[21].sql, /literature_source_artifact_is_append_only/);
+  assert.match(migrations[22].sql, /literature_identifiers_confirmable_kind_value_key/);
+  assert.match(migrations[22].sql, /legacy_unverified/);
+  assert.match(migrations[22].sql, /literature_identifiers_normalized_format_check/);
+  assert.match(migrations[22].sql, /WHEN 'openalex_id'/);
+  assert.match(migrations[22].sql, /identifier_kind <> 'pmlr_id'/);
+  assert.ok(
+    migrations[22].sql.indexOf("SET is_legacy_alias = true") <
+      migrations[22].sql.indexOf("CREATE UNIQUE INDEX literature_identifiers_confirmable_kind_value_key"),
+    "unversioned arXiv aliases must be excluded before enforcing confirmable uniqueness"
+  );
 });
 
 test("readiness rejects missing, changed and unknown migrations", async () => {
@@ -74,7 +94,7 @@ test("readiness rejects missing, changed and unknown migrations", async () => {
   }));
   assert.deepEqual(await verifyIntuechoMigrations({
     async query() { return { rows }; }
-  }), { count: 19, current: true });
+  }), { count: 23, current: true });
   await assert.rejects(
     () => verifyIntuechoMigrations({
       async query() { return { rows: [
@@ -142,8 +162,9 @@ test("initializes the source-confirmed SQLite schema on an empty database", () =
   assert.deepEqual(new Set([
     "literature_identifiers_v2",
     "literature_identity_claims_v2",
-    "literature_relations_v2"
-  ]), new Set(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('literature_identifiers_v2', 'literature_identity_claims_v2', 'literature_relations_v2')").all().map((row) => row.name)));
+    "literature_relations_v2",
+    "literature_source_artifacts_v2"
+  ]), new Set(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('literature_identifiers_v2', 'literature_identity_claims_v2', 'literature_relations_v2', 'literature_source_artifacts_v2')").all().map((row) => row.name)));
   const claimColumns = db.prepare("PRAGMA table_info(literature_identity_claims_v2)").all().map((column) => column.name);
   assert.deepEqual(claimColumns, ["id", "identifier_id", "provider", "provider_record_id", "verification_status", "evidence_json", "observed_at", "created_at"]);
   const identifierColumns = db.prepare("PRAGMA table_info(literature_identifiers_v2)").all();
@@ -152,7 +173,37 @@ test("initializes the source-confirmed SQLite schema on an empty database", () =
   const identifierTableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'literature_identifiers_v2'").get().sql;
   assert.match(identifierTableSql, /identifier_role/);
   assert.match(identifierTableSql, /candidate_alias/);
+  const identifierIndexes = db.prepare("PRAGMA index_list(literature_identifiers_v2)").all();
+  const confirmableIndex = identifierIndexes.find((index) => index.name === "literature_identifiers_v2_confirmable_kind_value_idx");
+  assert.equal(confirmableIndex?.unique, 1);
+  assert.equal(confirmableIndex?.partial, 1);
   assert.equal(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'literature_identities_v2'").get(), undefined);
+  db.close();
+});
+
+test("downgrades legacy records without a valid concrete identifier regardless of provider", () => {
+  const db = new Database(":memory:");
+  db.exec(`
+    CREATE TABLE literature_records_v2 (id TEXT PRIMARY KEY, title TEXT NOT NULL, authors_json TEXT NOT NULL, publication_year INTEGER, version_kind TEXT, record_source TEXT NOT NULL, source_provider TEXT, confirmed_at TEXT, revision INTEGER NOT NULL DEFAULT 1, confirmation_status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE TABLE literature_identifiers_v2 (id TEXT PRIMARY KEY, literature_id TEXT NOT NULL, identifier_kind TEXT NOT NULL, identifier_role TEXT NOT NULL, normalized_value TEXT NOT NULL, is_legacy_alias INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, UNIQUE(literature_id, identifier_kind, normalized_value));
+    CREATE TABLE literature_identity_claims_v2 (id TEXT PRIMARY KEY, identifier_id TEXT NOT NULL, provider TEXT NOT NULL, provider_record_id TEXT NOT NULL, verification_status TEXT NOT NULL, evidence_json TEXT NOT NULL, observed_at TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(provider, provider_record_id));
+    INSERT INTO literature_records_v2 VALUES ('legacy-arxiv', 'Legacy arXiv', '["Author"]', 2026, 'preprint', 'public_registry', 'arxiv', '2026-08-09T00:00:00.000Z', 1, 'confirmed', '2026-08-09T00:00:00.000Z', '2026-08-09T00:00:00.000Z');
+    INSERT INTO literature_records_v2 VALUES ('legacy-aggregate', 'Legacy Aggregate', '["Author"]', 2026, 'preprint', 'public_registry', 'openalex', '2026-08-09T00:00:00.000Z', 1, 'confirmed', '2026-08-09T00:00:00.000Z', '2026-08-09T00:00:00.000Z');
+    INSERT INTO literature_records_v2 VALUES ('malformed-doi', 'Malformed DOI', '["Author"]', 2026, 'publication', 'public_registry', 'crossref', '2026-08-09T00:00:00.000Z', 1, 'confirmed', '2026-08-09T00:00:00.000Z', '2026-08-09T00:00:00.000Z');
+    INSERT INTO literature_identifiers_v2 VALUES ('legacy-arxiv-id', 'legacy-arxiv', 'arxiv_id', 'confirmable', '2401.01234', 0, '2026-08-09T00:00:00.000Z');
+    INSERT INTO literature_identifiers_v2 VALUES ('legacy-aggregate-id', 'legacy-aggregate', 'arxiv_id', 'confirmable', '2401.01234', 0, '2026-08-09T00:00:00.000Z');
+    INSERT INTO literature_identifiers_v2 VALUES ('malformed-doi-id', 'malformed-doi', 'doi', 'confirmable', 'not-a-doi', 0, '2026-08-09T00:00:00.000Z');
+    INSERT INTO literature_identity_claims_v2 VALUES ('legacy-arxiv-claim', 'legacy-arxiv-id', 'arxiv', '2401.01234', 'confirmed', '{}', '2026-08-09T00:00:00.000Z', '2026-08-09T00:00:00.000Z');
+    INSERT INTO literature_identity_claims_v2 VALUES ('legacy-aggregate-claim', 'legacy-aggregate-id', 'openalex', 'W123', 'confirmed', '{"candidateKey":"openalex:openalex_id:W123"}', '2026-08-09T00:00:00.000Z', '2026-08-09T00:00:00.000Z');
+    INSERT INTO literature_identity_claims_v2 VALUES ('malformed-doi-claim', 'malformed-doi-id', 'crossref', 'not-a-doi', 'confirmed', '{}', '2026-08-09T00:00:00.000Z', '2026-08-09T00:00:00.000Z');
+  `);
+
+  initializeAnnotationCommunitySqlite(db);
+
+  assert.equal(db.prepare("SELECT confirmation_status FROM literature_records_v2 WHERE id = 'legacy-arxiv'").get().confirmation_status, "legacy_unverified");
+  assert.equal(db.prepare("SELECT confirmation_status FROM literature_records_v2 WHERE id = 'legacy-aggregate'").get().confirmation_status, "legacy_unverified");
+  assert.equal(db.prepare("SELECT confirmation_status FROM literature_records_v2 WHERE id = 'malformed-doi'").get().confirmation_status, "legacy_unverified");
+  assert.equal(db.prepare("SELECT is_legacy_alias FROM literature_identifiers_v2 WHERE id = 'legacy-arxiv-id'").get().is_legacy_alias, 1);
   db.close();
 });
 

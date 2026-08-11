@@ -31,7 +31,16 @@ function plazaFilters(query = {}) {
   const literatureIdentityKind = String(query.literatureIdentityKind ?? "");
   const literatureIdentityValue = String(query.literatureIdentityValue ?? "").trim();
   const literatureId = String(query.literatureId ?? "").trim();
-  if (literatureIdentityValue && !new Set(["doi", "arxiv_id", "semantic_scholar_id", "openalex_id", "title_authors_year_hash"]).has(literatureIdentityKind)) {
+  if (literatureIdentityValue && !new Set([
+    "doi",
+    "arxiv_id",
+    "semantic_scholar_id",
+    "openalex_id",
+    "openreview_id",
+    "dblp_key",
+    "pmlr_id",
+    "title_authors_year_hash"
+  ]).has(literatureIdentityKind)) {
     throw new AnnotationCommunityError("INVALID_LITERATURE_FILTER");
   }
   return {

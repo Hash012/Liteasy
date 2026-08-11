@@ -1,18 +1,31 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
   hasCrossVersionIdentifierConflict,
+  isConcreteConfirmableLiteratureIdentifier,
   isConfirmableLiteratureIdentifierKind,
+  isVersionSpecificArxivIdentifier,
   literatureIdentifierRole,
   LiteratureIdentityConflictError,
   normalizeLiteratureIdentifier,
   normalizeLiteratureRelations,
+  normalizeLiteratureSourceArtifact,
+  normalizeLiteratureSourceEvidence,
   sameLiteratureBibliography,
   sameLiteratureVersionBibliography,
-  selectLiteratureClaimIdentifier
+  selectLiteratureClaimIdentifier,
+  titleAuthorsYearFingerprint
 } from "./literatureIdentity.mjs";
 
-const aggregateLiteratureProviders = new Set(["openalex", "semantic_scholar"]);
-const confirmedLiteratureProviders = new Set(["crossref", "arxiv", "openalex", "semantic_scholar"]);
+const aggregateLiteratureProviders = new Set(["openalex", "semantic_scholar", "dblp"]);
+const confirmedLiteratureProviders = new Set([
+  "crossref",
+  "arxiv",
+  "openalex",
+  "semantic_scholar",
+  "openreview",
+  "dblp",
+  "pmlr"
+]);
 const literatureResolverActor = "literature_resolver";
 
 export class AnnotationCommunityError extends Error {
@@ -122,9 +135,10 @@ export function initializeAnnotationCommunitySqlite(db) {
     CREATE TABLE IF NOT EXISTS literature_records_v2 (id TEXT PRIMARY KEY, title TEXT NOT NULL, authors_json TEXT NOT NULL, publication_year INTEGER, version_kind TEXT, record_source TEXT NOT NULL DEFAULT 'legacy_metadata' CHECK(record_source IN ('legacy_metadata', 'public_registry', 'manual')), source_provider TEXT, confirmed_at TEXT, revision INTEGER NOT NULL DEFAULT 1 CHECK(revision > 0), confirmation_status TEXT NOT NULL DEFAULT 'legacy_unverified' CHECK(confirmation_status IN ('confirmed', 'legacy_unverified')), created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS desktop_annotation_handoffs_v2 (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, payload_json TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, consumed_at TEXT);
     CREATE TABLE IF NOT EXISTS literature_record_versions_v2 (id TEXT PRIMARY KEY, literature_id TEXT NOT NULL REFERENCES literature_records_v2(id) ON DELETE CASCADE, revision INTEGER NOT NULL CHECK(revision > 0), snapshot_json TEXT NOT NULL CHECK(json_valid(snapshot_json) AND json_type(snapshot_json) = 'object'), changed_by TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(literature_id, revision));
-    CREATE TABLE IF NOT EXISTS literature_identifiers_v2 (id TEXT PRIMARY KEY, literature_id TEXT NOT NULL REFERENCES literature_records_v2(id) ON DELETE CASCADE, identifier_kind TEXT NOT NULL CHECK(identifier_kind IN ('doi', 'arxiv_id', 'semantic_scholar_id', 'openalex_id', 'title_authors_year_hash')), identifier_role TEXT NOT NULL CHECK(identifier_role IN ('confirmable', 'candidate_alias')) CHECK((identifier_kind = 'title_authors_year_hash' AND identifier_role = 'candidate_alias') OR (identifier_kind IN ('doi', 'arxiv_id', 'semantic_scholar_id', 'openalex_id') AND identifier_role = 'confirmable')), normalized_value TEXT NOT NULL, is_legacy_alias INTEGER NOT NULL DEFAULT 0 CHECK(is_legacy_alias IN (0, 1)), created_at TEXT NOT NULL, UNIQUE(literature_id, identifier_kind, normalized_value), UNIQUE(identifier_kind, normalized_value));
-    CREATE TABLE IF NOT EXISTS literature_identity_claims_v2 (id TEXT PRIMARY KEY, identifier_id TEXT NOT NULL REFERENCES literature_identifiers_v2(id) ON DELETE CASCADE, provider TEXT NOT NULL CHECK(provider IN ('crossref', 'arxiv', 'openalex', 'semantic_scholar')), provider_record_id TEXT NOT NULL, verification_status TEXT NOT NULL CHECK(verification_status = 'confirmed'), evidence_json TEXT NOT NULL CHECK(json_valid(evidence_json) AND json_type(evidence_json) = 'object'), observed_at TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(provider, provider_record_id));
-    CREATE TABLE IF NOT EXISTS literature_relations_v2 (id TEXT PRIMARY KEY, from_literature_id TEXT NOT NULL REFERENCES literature_records_v2(id) ON DELETE CASCADE, to_literature_id TEXT NOT NULL REFERENCES literature_records_v2(id) ON DELETE CASCADE, relation_type TEXT NOT NULL CHECK(relation_type IN ('is_preprint_of', 'version_of', 'translation_of')), provider TEXT NOT NULL CHECK(provider IN ('intuecho', 'crossref', 'arxiv', 'openalex', 'semantic_scholar')), verification_status TEXT NOT NULL CHECK(verification_status = 'confirmed'), evidence_json TEXT NOT NULL CHECK(json_valid(evidence_json) AND json_type(evidence_json) = 'object'), created_at TEXT NOT NULL, CHECK(from_literature_id <> to_literature_id), UNIQUE(from_literature_id, to_literature_id, relation_type));
+    CREATE TABLE IF NOT EXISTS literature_identifiers_v2 (id TEXT PRIMARY KEY, literature_id TEXT NOT NULL REFERENCES literature_records_v2(id) ON DELETE CASCADE, identifier_kind TEXT NOT NULL CHECK(identifier_kind IN ('doi', 'arxiv_id', 'semantic_scholar_id', 'openalex_id', 'openreview_id', 'dblp_key', 'pmlr_id', 'title_authors_year_hash')), identifier_role TEXT NOT NULL CHECK(identifier_role IN ('confirmable', 'candidate_alias')) CHECK((identifier_kind = 'title_authors_year_hash' AND identifier_role = 'candidate_alias') OR (identifier_kind IN ('doi', 'arxiv_id', 'semantic_scholar_id', 'openalex_id', 'openreview_id', 'dblp_key', 'pmlr_id') AND identifier_role = 'confirmable')), normalized_value TEXT NOT NULL, is_legacy_alias INTEGER NOT NULL DEFAULT 0 CHECK(is_legacy_alias IN (0, 1)), created_at TEXT NOT NULL, UNIQUE(literature_id, identifier_kind, normalized_value));
+    CREATE TABLE IF NOT EXISTS literature_identity_claims_v2 (id TEXT PRIMARY KEY, identifier_id TEXT NOT NULL REFERENCES literature_identifiers_v2(id) ON DELETE CASCADE, provider TEXT NOT NULL CHECK(provider IN ('crossref', 'arxiv', 'openalex', 'semantic_scholar', 'openreview', 'dblp', 'pmlr')), provider_record_id TEXT NOT NULL, verification_status TEXT NOT NULL CHECK(verification_status = 'confirmed'), evidence_json TEXT NOT NULL CHECK(json_valid(evidence_json) AND json_type(evidence_json) = 'object'), observed_at TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(provider, provider_record_id));
+    CREATE TABLE IF NOT EXISTS literature_source_artifacts_v2 (artifact_hash TEXT PRIMARY KEY CHECK(artifact_hash GLOB 'sha256:*' AND length(artifact_hash) = 71), artifact_url TEXT NOT NULL, media_type TEXT NOT NULL CHECK(media_type = 'application/x-bibtex'), content BLOB NOT NULL CHECK(length(content) BETWEEN 1 AND 20971520), byte_length INTEGER NOT NULL CHECK(byte_length = length(content)), observed_at TEXT NOT NULL, created_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS literature_relations_v2 (id TEXT PRIMARY KEY, from_literature_id TEXT NOT NULL REFERENCES literature_records_v2(id) ON DELETE CASCADE, to_literature_id TEXT NOT NULL REFERENCES literature_records_v2(id) ON DELETE CASCADE, relation_type TEXT NOT NULL CHECK(relation_type IN ('is_preprint_of', 'version_of', 'translation_of')), provider TEXT NOT NULL CHECK(provider IN ('intuecho', 'crossref', 'arxiv', 'openalex', 'semantic_scholar', 'openreview', 'dblp', 'pmlr')), verification_status TEXT NOT NULL CHECK(verification_status = 'confirmed'), evidence_json TEXT NOT NULL CHECK(json_valid(evidence_json) AND json_type(evidence_json) = 'object'), created_at TEXT NOT NULL, CHECK(from_literature_id <> to_literature_id), UNIQUE(from_literature_id, to_literature_id, relation_type));
     CREATE INDEX IF NOT EXISTS literature_relations_v2_from_idx ON literature_relations_v2(from_literature_id, relation_type, to_literature_id);
     CREATE INDEX IF NOT EXISTS literature_relations_v2_to_idx ON literature_relations_v2(to_literature_id, relation_type, from_literature_id);
     CREATE TRIGGER IF NOT EXISTS literature_record_versions_append_only_update_v2
@@ -136,6 +150,16 @@ export function initializeAnnotationCommunitySqlite(db) {
     BEFORE DELETE ON literature_record_versions_v2
     BEGIN
       SELECT RAISE(ABORT, 'literature_record_version_is_append_only');
+    END;
+    CREATE TRIGGER IF NOT EXISTS literature_source_artifacts_append_only_update_v2
+    BEFORE UPDATE ON literature_source_artifacts_v2
+    BEGIN
+      SELECT RAISE(ABORT, 'literature_source_artifact_is_append_only');
+    END;
+    CREATE TRIGGER IF NOT EXISTS literature_source_artifacts_append_only_delete_v2
+    BEFORE DELETE ON literature_source_artifacts_v2
+    BEGIN
+      SELECT RAISE(ABORT, 'literature_source_artifact_is_append_only');
     END;
     CREATE TRIGGER IF NOT EXISTS literature_records_record_source_insert_guard_v2
     BEFORE INSERT ON literature_records_v2
@@ -230,8 +254,14 @@ export function initializeAnnotationCommunitySqlite(db) {
     .some((column) => column.name === "id" && column.pk === 1);
   const identifierRoleIsPresent = db.prepare("PRAGMA table_info(literature_identifiers_v2)").all()
     .some((column) => column.name === "identifier_role");
-  const rebuildIdentifiers = !identifierIdIsPrimaryKey || !identifierRoleIsPresent;
-  if (rebuildIdentifiers || !claimColumns.has("identifier_id")) {
+  const identifierSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'literature_identifiers_v2'").get()?.sql ?? "";
+  const claimSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'literature_identity_claims_v2'").get()?.sql ?? "";
+  const rebuildIdentifiers = !identifierIdIsPrimaryKey || !identifierRoleIsPresent ||
+    /UNIQUE\s*\(\s*identifier_kind\s*,\s*normalized_value\s*\)/i.test(identifierSql) ||
+    !identifierSql.includes("'openreview_id'") || !identifierSql.includes("'dblp_key'") || !identifierSql.includes("'pmlr_id'");
+  const rebuildClaims = !claimColumns.has("identifier_id") ||
+    !claimSql.includes("'openreview'") || !claimSql.includes("'dblp'") || !claimSql.includes("'pmlr'");
+  if (rebuildIdentifiers || rebuildClaims) {
     db.transaction(() => {
       const identifierTable = rebuildIdentifiers ? "literature_identifiers_aligned_v2" : "literature_identifiers_v2";
       if (rebuildIdentifiers) {
@@ -239,14 +269,13 @@ export function initializeAnnotationCommunitySqlite(db) {
           CREATE TABLE literature_identifiers_aligned_v2 (
             id TEXT PRIMARY KEY,
             literature_id TEXT NOT NULL REFERENCES literature_records_v2(id) ON DELETE CASCADE,
-            identifier_kind TEXT NOT NULL CHECK(identifier_kind IN ('doi', 'arxiv_id', 'semantic_scholar_id', 'openalex_id', 'title_authors_year_hash')),
+            identifier_kind TEXT NOT NULL CHECK(identifier_kind IN ('doi', 'arxiv_id', 'semantic_scholar_id', 'openalex_id', 'openreview_id', 'dblp_key', 'pmlr_id', 'title_authors_year_hash')),
             identifier_role TEXT NOT NULL CHECK(identifier_role IN ('confirmable', 'candidate_alias')),
             normalized_value TEXT NOT NULL,
             is_legacy_alias INTEGER NOT NULL DEFAULT 0 CHECK(is_legacy_alias IN (0, 1)),
             created_at TEXT NOT NULL,
-            CHECK((identifier_kind = 'title_authors_year_hash' AND identifier_role = 'candidate_alias') OR (identifier_kind IN ('doi', 'arxiv_id', 'semantic_scholar_id', 'openalex_id') AND identifier_role = 'confirmable')),
-            UNIQUE(literature_id, identifier_kind, normalized_value),
-            UNIQUE(identifier_kind, normalized_value)
+            CHECK((identifier_kind = 'title_authors_year_hash' AND identifier_role = 'candidate_alias') OR (identifier_kind IN ('doi', 'arxiv_id', 'semantic_scholar_id', 'openalex_id', 'openreview_id', 'dblp_key', 'pmlr_id') AND identifier_role = 'confirmable')),
+            UNIQUE(literature_id, identifier_kind, normalized_value)
           );
         `);
         const insertIdentifier = db.prepare("INSERT INTO literature_identifiers_aligned_v2(id, literature_id, identifier_kind, identifier_role, normalized_value, is_legacy_alias, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)");
@@ -266,7 +295,7 @@ export function initializeAnnotationCommunitySqlite(db) {
       CREATE TABLE literature_identity_claims_aligned_v2 (
         id TEXT PRIMARY KEY,
         identifier_id TEXT NOT NULL REFERENCES ${identifierTable}(id) ON DELETE CASCADE,
-        provider TEXT NOT NULL CHECK(provider IN ('crossref', 'arxiv', 'openalex', 'semantic_scholar')),
+        provider TEXT NOT NULL CHECK(provider IN ('crossref', 'arxiv', 'openalex', 'semantic_scholar', 'openreview', 'dblp', 'pmlr')),
         provider_record_id TEXT NOT NULL,
         verification_status TEXT NOT NULL CHECK(verification_status = 'confirmed'),
         evidence_json TEXT NOT NULL CHECK(json_valid(evidence_json) AND json_type(evidence_json) = 'object'),
@@ -293,8 +322,50 @@ export function initializeAnnotationCommunitySqlite(db) {
       db.exec("ALTER TABLE literature_identity_claims_aligned_v2 RENAME TO literature_identity_claims_v2");
     })();
   }
-  db.exec("CREATE INDEX IF NOT EXISTS literature_identity_claims_v2_identifier_idx ON literature_identity_claims_v2(identifier_id, observed_at DESC)");
   db.exec(`
+    UPDATE literature_identifiers_v2
+       SET is_legacy_alias = 1
+     WHERE identifier_kind = 'arxiv_id'
+       AND normalized_value NOT GLOB '*v[1-9]'
+       AND normalized_value NOT GLOB '*v[1-9][0-9]*'
+  `);
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS literature_identifiers_v2_confirmable_kind_value_idx ON literature_identifiers_v2(identifier_kind, normalized_value) WHERE identifier_role = 'confirmable' AND NOT (identifier_kind = 'arxiv_id' AND is_legacy_alias = 1)");
+  db.exec("CREATE INDEX IF NOT EXISTS literature_identity_claims_v2_identifier_idx ON literature_identity_claims_v2(identifier_id, observed_at DESC)");
+  const relationSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'literature_relations_v2'").get()?.sql ?? "";
+  if (!relationSql.includes("'openreview'") || !relationSql.includes("'dblp'") || !relationSql.includes("'pmlr'")) {
+    db.transaction(() => {
+      db.exec(`
+        CREATE TABLE literature_relations_aligned_v2 (
+          id TEXT PRIMARY KEY,
+          from_literature_id TEXT NOT NULL REFERENCES literature_records_v2(id) ON DELETE CASCADE,
+          to_literature_id TEXT NOT NULL REFERENCES literature_records_v2(id) ON DELETE CASCADE,
+          relation_type TEXT NOT NULL CHECK(relation_type IN ('is_preprint_of', 'version_of', 'translation_of')),
+          provider TEXT NOT NULL CHECK(provider IN ('intuecho', 'crossref', 'arxiv', 'openalex', 'semantic_scholar', 'openreview', 'dblp', 'pmlr')),
+          verification_status TEXT NOT NULL CHECK(verification_status = 'confirmed'),
+          evidence_json TEXT NOT NULL CHECK(json_valid(evidence_json) AND json_type(evidence_json) = 'object'),
+          created_at TEXT NOT NULL,
+          CHECK(from_literature_id <> to_literature_id),
+          UNIQUE(from_literature_id, to_literature_id, relation_type)
+        );
+        INSERT INTO literature_relations_aligned_v2 SELECT * FROM literature_relations_v2;
+        DROP TABLE literature_relations_v2;
+        ALTER TABLE literature_relations_aligned_v2 RENAME TO literature_relations_v2;
+      `);
+    })();
+  }
+  db.exec("CREATE INDEX IF NOT EXISTS literature_relations_v2_from_idx ON literature_relations_v2(from_literature_id, relation_type, to_literature_id)");
+  db.exec("CREATE INDEX IF NOT EXISTS literature_relations_v2_to_idx ON literature_relations_v2(to_literature_id, relation_type, from_literature_id)");
+  db.exec(`
+    UPDATE literature_records_v2
+       SET confirmation_status = 'legacy_unverified'
+     WHERE source_provider = 'arxiv'
+       AND confirmation_status = 'confirmed'
+       AND NOT EXISTS (
+         SELECT 1 FROM literature_identifiers_v2 identifier
+          WHERE identifier.literature_id = literature_records_v2.id
+            AND identifier.identifier_kind = 'arxiv_id'
+            AND identifier.is_legacy_alias = 0
+       );
     UPDATE literature_records_v2
        SET confirmation_status = 'confirmed'
      WHERE record_source = 'public_registry'
@@ -305,14 +376,24 @@ export function initializeAnnotationCommunitySqlite(db) {
          ))
          OR (source_provider = 'arxiv' AND EXISTS (
            SELECT 1 FROM literature_identifiers_v2 identifier
-            WHERE identifier.literature_id = literature_records_v2.id AND identifier.identifier_kind = 'arxiv_id'
+            WHERE identifier.literature_id = literature_records_v2.id
+              AND identifier.identifier_kind = 'arxiv_id'
+              AND identifier.is_legacy_alias = 0
          ))
-         OR (source_provider IN ('openalex', 'semantic_scholar') AND (
+         OR (source_provider = 'openreview' AND EXISTS (
+           SELECT 1 FROM literature_identifiers_v2 identifier
+            WHERE identifier.literature_id = literature_records_v2.id AND identifier.identifier_kind = 'openreview_id'
+         ))
+         OR (source_provider = 'pmlr' AND EXISTS (
+           SELECT 1 FROM literature_identifiers_v2 identifier
+            WHERE identifier.literature_id = literature_records_v2.id AND identifier.identifier_kind = 'pmlr_id'
+         ))
+         OR (source_provider IN ('openalex', 'semantic_scholar', 'dblp') AND (
            EXISTS (
              SELECT 1 FROM literature_identity_claims_v2 claim
              JOIN literature_identifiers_v2 claim_identifier ON claim_identifier.id = claim.identifier_id
               WHERE claim_identifier.literature_id = literature_records_v2.id
-                AND claim.provider IN ('openalex', 'semantic_scholar')
+                AND claim.provider IN ('openalex', 'semantic_scholar', 'dblp')
                 AND (
                   NULLIF(json_extract(claim.evidence_json, '$.candidateKey'), '') IS NOT NULL
                   OR json_extract(claim.evidence_json, '$.confirmationBasis') IN (
@@ -327,23 +408,33 @@ export function initializeAnnotationCommunitySqlite(db) {
                FROM literature_identity_claims_v2 claim
                JOIN literature_identifiers_v2 claim_identifier ON claim_identifier.id = claim.identifier_id
               WHERE claim_identifier.literature_id = literature_records_v2.id
-                AND claim.provider IN ('openalex', 'semantic_scholar')
+                AND claim.provider IN ('openalex', 'semantic_scholar', 'dblp')
            )
          ))
        )
   `);
+  const downgradeLiterature = db.prepare("UPDATE literature_records_v2 SET confirmation_status = 'legacy_unverified' WHERE id = ?");
+  const storedIdentifiers = db.prepare("SELECT identifier_kind AS kind, identifier_role AS role, normalized_value AS value, is_legacy_alias FROM literature_identifiers_v2 WHERE literature_id = ?");
+  for (const record of db.prepare("SELECT id FROM literature_records_v2 WHERE confirmation_status = 'confirmed'").all()) {
+    if (!storedIdentifiers.all(record.id).some(isConcreteConfirmableLiteratureIdentifier)) {
+      downgradeLiterature.run(record.id);
+    }
+  }
   for (const row of db.prepare(`
     SELECT literature.*
       FROM literature_records_v2 literature
      WHERE literature.confirmation_status = 'confirmed'
-       AND literature.source_provider IN ('crossref', 'arxiv', 'openalex', 'semantic_scholar')
+       AND literature.source_provider IN ('crossref', 'arxiv', 'openalex', 'semantic_scholar', 'openreview', 'dblp', 'pmlr')
   `).all()) {
     const observedAt = row.confirmed_at ?? row.updated_at;
     const providerIdentifierKind = {
       arxiv: "arxiv_id",
       crossref: "doi",
       openalex: "openalex_id",
-      semantic_scholar: "semantic_scholar_id"
+      semantic_scholar: "semantic_scholar_id",
+      openreview: "openreview_id",
+      dblp: "dblp_key",
+      pmlr: "pmlr_id"
     }[row.source_provider];
     const providerIdentifier = db.prepare("SELECT id, identifier_kind AS kind, normalized_value AS value FROM literature_identifiers_v2 WHERE literature_id = ? AND identifier_kind = ? ORDER BY normalized_value LIMIT 1").get(row.id, providerIdentifierKind);
     const identifiers = db.prepare("SELECT id, identifier_kind AS kind, normalized_value AS value FROM literature_identifiers_v2 WHERE literature_id = ? ORDER BY identifier_kind, normalized_value").all(row.id);
@@ -470,12 +561,15 @@ export class SqliteAnnotationCommunityRepository {
   async confirmRefetchedLiterature(owner, verifiedCandidate) {
     const provider = verifiedCandidate?.provider;
     const record = verifiedCandidate?.record;
-    if (!new Set(["crossref", "arxiv", "openalex", "semantic_scholar"]).has(provider) ||
+    if (!confirmedLiteratureProviders.has(provider) ||
       !verifiedCandidate?.candidateKey || !record || !Array.isArray(record.identifiers)) {
       throw new AnnotationCommunityError("LITERATURE_CANDIDATE_NOT_FOUND", 404);
     }
     const primary = record.identifiers[0];
     if (!primary || !isConfirmableLiteratureIdentifierKind(primary.kind) || primary.source !== "public_registry") {
+      throw new AnnotationCommunityError("LITERATURE_CANDIDATE_NOT_FOUND", 404);
+    }
+    if (primary.kind === "arxiv_id" && !isVersionSpecificArxivIdentifier(primary.value)) {
       throw new AnnotationCommunityError("LITERATURE_CANDIDATE_NOT_FOUND", 404);
     }
     const expectedKey = `${provider}:${primary.kind}:${normalizeIdentity(primary.kind, primary.value)}`;
@@ -488,6 +582,7 @@ export class SqliteAnnotationCommunityRepository {
     const ownerId = typeof owner === "string" ? owner : owner?.id;
     if (!ownerId) throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_OWNER_REQUIRED");
     const evidenceCandidates = [verifiedCandidate, ...(Array.isArray(verifiedCandidate.corroborations) ? verifiedCandidate.corroborations : [])];
+    const sourceArtifacts = evidenceCandidates.map(normalizeLiteratureSourceArtifact).filter(Boolean);
     if (new Set(evidenceCandidates.map((candidate) => candidate?.provider)).size !== evidenceCandidates.length) {
       throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_INVALID");
     }
@@ -496,12 +591,16 @@ export class SqliteAnnotationCommunityRepository {
       const primary = candidateRecord?.identifiers?.[0];
       if (!confirmedLiteratureProviders.has(candidate?.provider) || !candidate?.candidateKey || !primary ||
         !isConfirmableLiteratureIdentifierKind(primary.kind) ||
+        (primary.kind === "arxiv_id" && !isVersionSpecificArxivIdentifier(primary.value)) ||
         primary.source !== "public_registry" || candidateRecord.identifiers.some((identifier) => identifier.source !== "public_registry")) {
         throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_INVALID");
       }
       const expectedKey = primary ? `${candidate.provider}:${primary.kind}:${normalizeIdentity(primary.kind, primary.value)}` : "";
       if (candidate.candidateKey !== expectedKey || hasCrossVersionIdentifierConflict(candidateRecord)) {
         throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_CONFLICT");
+      }
+      if (candidate.provider === "pmlr" && !normalizeLiteratureSourceEvidence(candidate)) {
+        throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_INVALID");
       }
       if (candidate !== verifiedCandidate && !sameLiteratureVersionBibliography(record, candidateRecord)) {
         throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_CONFLICT");
@@ -517,16 +616,33 @@ export class SqliteAnnotationCommunityRepository {
     if (!input.identifiers.some((identifier) => isConfirmableLiteratureIdentifierKind(identifier.kind))) {
       throw new AnnotationCommunityError("LITERATURE_IDENTITY_REQUIRED");
     }
-    const normalized = [...new Map(input.identifiers.map((identifier) => {
+    const providerIdentifiers = [...new Map(input.identifiers
+      .filter((identifier) => isConfirmableLiteratureIdentifierKind(identifier.kind))
+      .map((identifier) => {
       const value = normalizeIdentity(identifier.kind, identifier.value);
       return [`${identifier.kind}:${value}`, { ...identifier, value }];
-    })).values()];
+    })).values()].filter((identifier) => identifier.kind !== "arxiv_id" || isVersionSpecificArxivIdentifier(identifier.value));
+    if (!providerIdentifiers.some((identifier) => isConfirmableLiteratureIdentifierKind(identifier.kind))) {
+      throw new AnnotationCommunityError("LITERATURE_IDENTITY_REQUIRED");
+    }
+    let bibliographyAlias = null;
+    try {
+      bibliographyAlias = {
+        kind: "title_authors_year_hash",
+        source: "metadata",
+        value: titleAuthorsYearFingerprint(input)
+      };
+    } catch {
+      // Incomplete bibliographies cannot produce a candidate alias.
+    }
+    const normalized = bibliographyAlias ? [...providerIdentifiers, bibliographyAlias] : providerIdentifiers;
     return this.db.transaction(() => {
       const providerRecords = evidenceCandidates.map((candidate) => ({
         candidate,
         providerRecordId: normalizeIdentity(candidate.record.identifiers[0].kind, candidate.record.identifiers[0].value)
       }));
-      const identityMatches = this.#matchingLiteratureIds(normalized);
+      const identityMatches = this.#matchingLiteratureIds(providerIdentifiers);
+      const bibliographyMatches = bibliographyAlias ? this.#matchingLiteratureIds([bibliographyAlias], true, true) : new Set();
       const existingClaims = providerRecords.map(({ candidate, providerRecordId }) => this.db.prepare(`
           SELECT identifier.literature_id, claim.identifier_id
             FROM literature_identity_claims_v2 claim
@@ -534,6 +650,10 @@ export class SqliteAnnotationCommunityRepository {
            WHERE claim.provider = ? AND claim.provider_record_id = ?
         `).get(candidate.provider, providerRecordId));
       const matched = new Set(identityMatches);
+      for (const literatureId of bibliographyMatches) {
+        const existingRecord = this.#literatureRecord(literatureId);
+        if (existingRecord && sameLiteratureVersionBibliography(input, existingRecord)) matched.add(literatureId);
+      }
       for (const existingClaim of existingClaims) if (existingClaim) matched.add(existingClaim.literature_id);
       const providerBibliographyMatches = new Set();
       for (const candidate of evidenceCandidates) {
@@ -546,6 +666,10 @@ export class SqliteAnnotationCommunityRepository {
       }
       if (matched.size > 1) throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_CONFLICT");
       const now = new Date().toISOString();
+      for (const artifact of sourceArtifacts) {
+        this.db.prepare("INSERT OR IGNORE INTO literature_source_artifacts_v2(artifact_hash, artifact_url, media_type, content, byte_length, observed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+          .run(artifact.artifactHash, artifact.artifactUrl, artifact.mediaType, artifact.content, artifact.byteLength, now, now);
+      }
       const literatureId = [...matched][0] ?? `literature_${randomUUID()}`;
       const existing = matched.size ? this.db.prepare("SELECT * FROM literature_records_v2 WHERE id = ?").get(literatureId) : null;
       if (existing && !sameLiteratureBibliography(input, {
@@ -589,7 +713,8 @@ export class SqliteAnnotationCommunityRepository {
               : "primary_registry_refetch",
           ...(candidate.recordUrl ? { recordUrl: candidate.recordUrl } : {}),
           ...(relations.length ? { relations } : {}),
-          sourceTier: new Set(["crossref", "arxiv"]).has(candidate.provider) ? "primary" : "aggregate"
+          ...(normalizeLiteratureSourceEvidence(candidate) ? { sourceEvidence: normalizeLiteratureSourceEvidence(candidate) } : {}),
+          sourceTier: new Set(["crossref", "arxiv", "openreview", "pmlr"]).has(candidate.provider) ? "primary" : "aggregate"
         };
         this.db.prepare(`INSERT INTO literature_identity_claims_v2(id, identifier_id, provider, provider_record_id, verification_status, evidence_json, observed_at, created_at)
           VALUES (?, ?, ?, ?, 'confirmed', ?, ?, ?)
@@ -643,6 +768,34 @@ export class SqliteAnnotationCommunityRepository {
       provider: row.provider,
       relationType: row.relation_type,
       toLiteratureId: row.to_literature_id,
+      verificationStatus: row.verification_status
+    }));
+  }
+
+  async findLiteratureClaims(literatureId) {
+    return this.db.prepare(`
+      SELECT claim.provider, claim.provider_record_id, claim.verification_status,
+             claim.evidence_json, claim.observed_at,
+             identifier.identifier_kind, identifier.identifier_role, identifier.normalized_value
+        FROM literature_identity_claims_v2 claim
+        JOIN literature_identifiers_v2 identifier ON identifier.id = claim.identifier_id
+        JOIN literature_records_v2 literature ON literature.id = identifier.literature_id
+       WHERE identifier.literature_id = ?
+         AND literature.confirmation_status = 'confirmed'
+         AND claim.verification_status = 'confirmed'
+         AND NOT (identifier.identifier_kind = 'arxiv_id' AND identifier.is_legacy_alias = 1)
+       ORDER BY claim.observed_at, claim.provider, claim.provider_record_id
+    `).all(literatureId).map((row) => ({
+      evidence: parseJson(row.evidence_json, {}),
+      identifier: {
+        kind: row.identifier_kind,
+        role: row.identifier_role,
+        source: row.identifier_role === "candidate_alias" ? "metadata" : "public_registry",
+        value: row.normalized_value
+      },
+      observedAt: row.observed_at,
+      provider: row.provider,
+      providerRecordId: row.provider_record_id,
       verificationStatus: row.verification_status
     }));
   }
@@ -846,14 +999,15 @@ export class SqliteAnnotationCommunityRepository {
   #literatureRecord(id) {
     const row = this.db.prepare("SELECT * FROM literature_records_v2 WHERE id = ?").get(id);
     if (!row || row.confirmation_status !== "confirmed") return null;
-    return this.#literatureSnapshot(id, row);
+    const snapshot = this.#literatureSnapshot(id, row);
+    return snapshot?.identifiers.some(isConcreteConfirmableLiteratureIdentifier) ? snapshot : null;
   }
 
   #literatureSnapshot(id, providedRow = null) {
     const row = providedRow ?? this.db.prepare("SELECT * FROM literature_records_v2 WHERE id = ?").get(id);
     if (!row) return null;
     const identifiers = row.confirmation_status === "confirmed" || !this.hasLegacyLiteratureIdentities
-      ? this.db.prepare("SELECT identifier_kind AS kind, identifier_role AS role, CASE identifier_role WHEN 'candidate_alias' THEN 'metadata' ELSE 'public_registry' END AS source, normalized_value AS value FROM literature_identifiers_v2 WHERE literature_id = ? ORDER BY identifier_kind, normalized_value").all(id)
+      ? this.db.prepare("SELECT identifier_kind AS kind, identifier_role AS role, CASE identifier_role WHEN 'candidate_alias' THEN 'metadata' ELSE 'public_registry' END AS source, normalized_value AS value FROM literature_identifiers_v2 WHERE literature_id = ? AND NOT (identifier_kind = 'arxiv_id' AND is_legacy_alias = 1) ORDER BY identifier_kind, normalized_value").all(id)
       : this.db.prepare("SELECT identity_kind AS kind, identity_source AS source, identity_value AS value FROM literature_identities_v2 WHERE literature_id = ? ORDER BY identity_kind, identity_value").all(id);
     if (row.confirmation_status !== "confirmed") {
       return {
@@ -891,6 +1045,8 @@ export class SqliteAnnotationCommunityRepository {
         JOIN literature_records_v2 literature ON literature.id = identifier.literature_id
        WHERE identifier.identifier_kind = ?
          AND identifier.normalized_value = ?
+         AND identifier.identifier_role = 'confirmable'
+         AND NOT (identifier.identifier_kind = 'arxiv_id' AND identifier.is_legacy_alias = 1)
          AND literature.confirmation_status = 'confirmed'
     `).get(identifier.kind, normalizeIdentity(identifier.kind, identifier.value))?.id ?? null;
   }
@@ -948,13 +1104,22 @@ export class SqliteAnnotationCommunityRepository {
     }
   }
 
-  #matchingLiteratureIds(identifiers) {
+  #matchingLiteratureIds(identifiers, allowMultiple = false, includeCandidateAliases = false) {
     const keys = new Set((identifiers ?? []).map((identifier) => `${identifier.kind}:${normalizeIdentity(identifier.kind, identifier.value)}`));
     const literatureIds = new Set();
-    for (const row of this.db.prepare("SELECT literature_id, identifier_kind, normalized_value FROM literature_identifiers_v2").all()) {
-      if (keys.has(`${row.identifier_kind}:${normalizeIdentity(row.identifier_kind, row.normalized_value)}`)) literatureIds.add(row.literature_id);
+    const rows = includeCandidateAliases
+      ? this.db.prepare("SELECT literature_id, identifier_kind, normalized_value FROM literature_identifiers_v2 WHERE NOT (identifier_kind = 'arxiv_id' AND is_legacy_alias = 1)").all()
+      : this.db.prepare("SELECT literature_id, identifier_kind, normalized_value FROM literature_identifiers_v2 WHERE identifier_role = 'confirmable' AND NOT (identifier_kind = 'arxiv_id' AND is_legacy_alias = 1)").all();
+    for (const row of rows) {
+      let value;
+      try {
+        value = normalizeIdentity(row.identifier_kind, row.normalized_value);
+      } catch {
+        continue;
+      }
+      if (keys.has(`${row.identifier_kind}:${value}`)) literatureIds.add(row.literature_id);
     }
-    if (literatureIds.size > 1) throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_CONFLICT");
+    if (!allowMultiple && literatureIds.size > 1) throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_CONFLICT");
     return literatureIds;
   }
 
@@ -966,7 +1131,7 @@ export class SqliteAnnotationCommunityRepository {
         JOIN literature_identifiers_v2 identifier ON identifier.id = claim.identifier_id
         JOIN literature_records_v2 literature ON literature.id = identifier.literature_id
        WHERE claim.provider <> ?
-         AND (? IN ('openalex', 'semantic_scholar') OR claim.provider IN ('openalex', 'semantic_scholar'))
+         AND (? IN ('openalex', 'semantic_scholar', 'dblp') OR claim.provider IN ('openalex', 'semantic_scholar', 'dblp'))
          AND literature.confirmation_status = 'confirmed'
          AND literature.publication_year = ?
        ORDER BY identifier.literature_id
@@ -979,7 +1144,7 @@ export class SqliteAnnotationCommunityRepository {
 
   #resolveLiterature(reference, now, changedBy) {
     if (reference?.literatureId) {
-      if (!this.db.prepare("SELECT 1 FROM literature_records_v2 WHERE id = ? AND confirmation_status = 'confirmed'").get(reference.literatureId)) {
+      if (!this.#literatureRecord(reference.literatureId)) {
         throw new AnnotationCommunityError("LITERATURE_NOT_FOUND", 404);
       }
       return reference.literatureId;

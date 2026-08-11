@@ -1,15 +1,18 @@
 import {
+  attachLiteratureSourceArtifact,
   hasCrossVersionIdentifierConflict,
   isCandidateLiteratureAliasKind,
   isConfirmableLiteratureIdentifierKind,
+  normalizeLiteratureSourceEvidence,
   normalizeLiteratureIdentifier,
   normalizeLiteratureRelations,
+  normalizeLiteratureSourceArtifact,
   sameLiteratureVersionBibliography
 } from "./literatureIdentity.mjs";
 
 const MAX_CANDIDATES = 10;
-const primaryRegistryProviders = new Set(["crossref", "arxiv"]);
-const aggregateRegistryProviders = new Set(["openalex", "semantic_scholar"]);
+const primaryRegistryProviders = new Set(["crossref", "arxiv", "openreview", "pmlr"]);
+const aggregateRegistryProviders = new Set(["openalex", "semantic_scholar", "dblp"]);
 
 export class LiteratureResolverError extends Error {
   constructor(code) {
@@ -85,13 +88,18 @@ function externalCandidate(value, providerName) {
   } catch {
     // An optional source URL is discarded unless it is HTTPS.
   }
-  return {
+  const sourceEvidence = normalizeLiteratureSourceEvidence(value);
+  if (providerName === "pmlr" && !sourceEvidence) return null;
+  const projected = {
     candidateKey: expectedKey,
     provider: providerName,
     record,
     ...(relations.length ? { relations } : {}),
-    ...(recordUrl ? { recordUrl } : {})
+    ...(recordUrl ? { recordUrl } : {}),
+    ...(sourceEvidence ? { sourceEvidence } : {})
   };
+  const sourceArtifact = normalizeLiteratureSourceArtifact(value);
+  return sourceArtifact ? attachLiteratureSourceArtifact(projected, sourceArtifact) : projected;
 }
 
 function identityKeys(candidate) {
@@ -189,7 +197,10 @@ function requestedLiteratureIdentifiers(input) {
     ["doi", /^(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:\s*)?10\.\d{4,9}\/.+/i],
     ["arxiv_id", /^(?:https?:\/\/(?:www\.)?arxiv\.org\/(?:abs|pdf)\/|arxiv:\s*)?\d{4}\.\d{4,5}(?:v\d+)?(?:\.pdf)?$/i],
     ["openalex_id", /^(?:https?:\/\/(?:www\.)?openalex\.org\/)?W\d+$/i],
-    ["semantic_scholar_id", /^corpusid\s*:\s*.+$/i]
+    ["semantic_scholar_id", /^corpusid\s*:\s*.+$/i],
+    ["openreview_id", /^(?:https?:\/\/(?:www\.)?openreview\.net\/forum\?id=|openreview:\s*)[A-Za-z0-9_-]{6,200}$/i],
+    ["dblp_key", /^(?:https?:\/\/(?:www\.)?dblp\.org\/rec\/)?(?:conf|journals)\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.:+-]+(?:\.(?:html|xml|json))?$/i],
+    ["pmlr_id", /^(?:https?:\/\/(?:www\.)?proceedings\.mlr\.press\/)?(?:pmlr-v\d{1,4}-|v\d{1,4}\/)[a-z0-9][a-z0-9._-]{0,199}(?:\.html)?$/i]
   ];
   for (const [kind, pattern] of candidates) {
     if (!pattern.test(query)) continue;
@@ -376,14 +387,19 @@ export function createLiteratureResolver({ providers, repository }) {
       if (input.mode === "corroborated" && corroborations.length === 0) {
         throw new LiteratureResolverError("LITERATURE_CORROBORATION_REQUIRED");
       }
-      return repository.confirmRefetchedLiterature(owner, {
+      const confirmation = {
         candidateKey: candidate.candidateKey,
         provider: candidate.provider,
         record: candidate.record,
         ...(corroborations.length ? { corroborations } : {}),
         ...(candidate.relations ? { relations: candidate.relations } : {}),
-        ...(candidate.recordUrl ? { recordUrl: candidate.recordUrl } : {})
-      });
+        ...(candidate.recordUrl ? { recordUrl: candidate.recordUrl } : {}),
+        ...(candidate.sourceEvidence ? { sourceEvidence: candidate.sourceEvidence } : {})
+      };
+      return repository.confirmRefetchedLiterature(
+        owner,
+        candidate.sourceArtifact ? attachLiteratureSourceArtifact(confirmation, candidate.sourceArtifact) : confirmation
+      );
     },
 
     async verifyProjection(literatureId, revision) {
@@ -393,7 +409,10 @@ export function createLiteratureResolver({ providers, repository }) {
     async relations(literatureId) {
       const current = await repository.findLiteratureById(literatureId);
       if (!current) throw new LiteratureResolverError("LITERATURE_CANDIDATE_NOT_FOUND");
-      const relations = await repository.findLiteratureRelations(literatureId);
+      const [claims, relations] = await Promise.all([
+        repository.findLiteratureClaims(literatureId),
+        repository.findLiteratureRelations(literatureId)
+      ]);
       const versions = [];
       for (const relation of relations) {
         const direction = relation.fromLiteratureId === literatureId ? "from_current" : "to_current";
@@ -403,7 +422,7 @@ export function createLiteratureResolver({ providers, repository }) {
         const literature = await repository.findLiteratureById(relatedLiteratureId);
         if (literature) versions.push({ direction, literature, relation });
       }
-      return { literatureId, versions };
+      return { claims, literatureId, versions };
     }
   });
 }

@@ -54,8 +54,13 @@ test("keeps optional literature provider keys in the runtime-only configuration"
   assert.deepEqual(config.literatureProviders, {
     arxivEndpoint: "https://export.arxiv.org/api/query",
     crossrefEndpoint: "https://api.crossref.org/works",
+    dblpRecordEndpoint: "https://dblp.org/rec",
+    dblpSearchEndpoint: "https://dblp.org/search/publ/api",
     openAlexApiKey: "openalex-secret",
     openAlexEndpoint: "https://api.openalex.org/works",
+    openReviewEndpoint: "https://api2.openreview.net/notes",
+    openReviewSearchEndpoint: "https://api2.openreview.net/notes/search",
+    pmlrEndpoint: "https://proceedings.mlr.press",
     semanticScholarApiKey: "semantic-scholar-secret",
     semanticScholarEndpoint: "https://api.semanticscholar.org/graph/v1/paper"
   });
@@ -73,6 +78,15 @@ test("requires HTTPS and non-loopback services outside tests", () => {
       NODE_ENV: "production"
     })),
     /cannot use loopback/
+  );
+});
+
+test("pins the production PMLR adapter to the official origin", () => {
+  assert.throws(
+    () => loadIntuechoProductionConfig(environment({
+      INTUECHO_PMLR_ENDPOINT: "https://mirror.example.test"
+    })),
+    /must use the official PMLR origin/
   );
 });
 

@@ -8,6 +8,7 @@ import {
   desktopAnnotationPublicationBatchSchema,
   literatureCandidateSchema,
   literatureConfirmInputSchema,
+  literatureIdentityClaimSchema,
   literatureRecordSchema,
   literatureRelationsResultSchema,
   literatureResolveInputSchema,
@@ -15,12 +16,88 @@ import {
 } from "@intuecho/contracts";
 
 test("separates confirmable identifier kinds from candidate aliases", () => {
-  for (const kind of ["doi", "arxiv_id", "openalex_id", "semantic_scholar_id"]) {
+  for (const kind of [
+    "doi",
+    "arxiv_id",
+    "openalex_id",
+    "semantic_scholar_id",
+    "openreview_id",
+    "dblp_key",
+    "pmlr_id"
+  ]) {
     assert.equal(confirmableLiteratureIdentifierKindSchema.safeParse(kind).success, true);
     assert.equal(candidateLiteratureAliasKindSchema.safeParse(kind).success, false);
   }
   assert.equal(confirmableLiteratureIdentifierKindSchema.safeParse("title_authors_year_hash").success, false);
   assert.equal(candidateLiteratureAliasKindSchema.safeParse("title_authors_year_hash").success, true);
+});
+
+test("accepts source-confirmed computer-science venue candidates", () => {
+  for (const [provider, kind, value] of [
+    ["openreview", "openreview_id", "NeurIPS2026-paper"],
+    ["dblp", "dblp_key", "conf/aaai/Author26"],
+    ["pmlr", "pmlr_id", "v235/abad-rocamora24a"]
+  ]) {
+    assert.equal(literatureCandidateSchema.safeParse({
+      candidateKey: `${provider}:${kind}:${value}`,
+      provider,
+      record: {
+        authors: ["A. Author"],
+        documentType: "conference-paper",
+        identifiers: [{ kind, source: "public_registry", value }],
+        title: "A Conference Paper",
+        year: 2026
+      },
+      recordUrl: provider === "openreview"
+        ? `https://openreview.net/forum?id=${value}`
+        : provider === "pmlr"
+          ? `https://proceedings.mlr.press/${value}.html`
+          : `https://dblp.org/rec/${value}`,
+      ...(provider === "pmlr" ? {
+        sourceEvidence: {
+          artifactHash: `sha256:${"a".repeat(64)}`,
+          artifactUrl: "https://proceedings.mlr.press/v235/assets/bib/bibliography.bib",
+          entryKey: "pmlr-v235-abad-rocamora24a",
+          sourceKind: "official_volume_bibtex",
+          volume: 235
+        }
+      } : {})
+    }).success, true);
+  }
+});
+
+test("binds PMLR audit evidence to the exact official record and volume", () => {
+  const candidate = {
+    candidateKey: "pmlr:pmlr_id:v235/abad-rocamora24a",
+    provider: "pmlr",
+    record: {
+      authors: ["Elias Abad Rocamora"],
+      documentType: "conference-paper",
+      identifiers: [{ kind: "pmlr_id", source: "public_registry", value: "v235/abad-rocamora24a" }],
+      title: "An ICML Paper",
+      year: 2024
+    },
+    recordUrl: "https://proceedings.mlr.press/v235/abad-rocamora24a.html",
+    sourceEvidence: {
+      artifactHash: `sha256:${"a".repeat(64)}`,
+      artifactUrl: "https://proceedings.mlr.press/v235/assets/bib/bibliography.bib",
+      entryKey: "pmlr-v235-abad-rocamora24a",
+      sourceKind: "official_volume_bibtex",
+      volume: 235
+    }
+  };
+
+  assert.equal(literatureCandidateSchema.safeParse(candidate).success, true);
+  for (const invalid of [
+    { ...candidate, sourceEvidence: undefined },
+    { ...candidate, recordUrl: "https://proceedings.mlr.press/v236/abad-rocamora24a.html" },
+    { ...candidate, sourceEvidence: { ...candidate.sourceEvidence, volume: 236 } },
+    { ...candidate, sourceEvidence: { ...candidate.sourceEvidence, entryKey: "pmlr-v235-other24a" } },
+    { ...candidate, sourceEvidence: { ...candidate.sourceEvidence, artifactUrl: "https://proceedings.mlr.press/v236/assets/bib/bibliography.bib" } },
+    { ...candidate, sourceEvidence: { ...candidate.sourceEvidence, artifactUrl: "https://mirror.example.test/v235/assets/bib/bibliography.bib" } }
+  ]) {
+    assert.equal(literatureCandidateSchema.safeParse(invalid).success, false);
+  }
 });
 
 test("validates related confirmed literature versions for user-side consumption", () => {
@@ -35,6 +112,23 @@ test("validates related confirmed literature versions for user-side consumption"
     year: 2026
   };
   assert.equal(literatureRelationsResultSchema.safeParse({
+    claims: [{
+      evidence: {
+        confirmationBasis: "primary_registry_refetch",
+        recordUrl: "https://doi.org/10.1000/preprint",
+        sourceTier: "primary"
+      },
+      identifier: {
+        kind: "arxiv_id",
+        role: "confirmable",
+        source: "public_registry",
+        value: "2401.01234v2"
+      },
+      observedAt: "2026-08-09T00:00:00.000Z",
+      provider: "arxiv",
+      providerRecordId: "2401.01234v2",
+      verificationStatus: "confirmed"
+    }],
     literatureId: "literature-preprint",
     versions: [{
       direction: "from_current",
@@ -50,6 +144,14 @@ test("validates related confirmed literature versions for user-side consumption"
       }
     }]
   }).success, true);
+  assert.equal(literatureIdentityClaimSchema.safeParse({
+    evidence: {},
+    identifier: literature.identifiers[0],
+    observedAt: "2026-08-09T00:00:00.000Z",
+    provider: "intuecho",
+    providerRecordId: "internal",
+    verificationStatus: "confirmed"
+  }).success, false);
 });
 
 test("accepts only source-confirmed candidate modes", () => {
@@ -117,6 +219,15 @@ test("rejects unverified record provenance and fingerprint-only formal records",
     ...record,
     identifiers: [{ kind: "title_authors_year_hash", source: "public_registry", value: `sha256:${"a".repeat(64)}` }]
   }).success, false);
+  for (const identifier of [
+    { kind: "doi", source: "public_registry", value: "not-a-doi" },
+    { kind: "arxiv_id", source: "public_registry", value: "2401.01234" }
+  ]) {
+    assert.equal(literatureRecordSchema.safeParse({
+      ...record,
+      identifiers: [identifier]
+    }).success, false);
+  }
 });
 
 test("keeps confirmation modes and legacy identities within their source boundaries", () => {
@@ -342,11 +453,11 @@ test("declares optional HTTPS provider record URLs", () => {
 
 test("accepts only evidenced provider version relations", () => {
   const candidate = {
-    candidateKey: "arxiv:arxiv_id:2401.01234",
+    candidateKey: "arxiv:arxiv_id:2401.01234v2",
     provider: "arxiv",
     record: {
       authors: ["A. Author"],
-      identifiers: [{ kind: "arxiv_id", source: "public_registry", value: "2401.01234" }],
+      identifiers: [{ kind: "arxiv_id", source: "public_registry", value: "2401.01234v2" }],
       title: "A Preprint"
     },
     relations: [{
@@ -360,5 +471,19 @@ test("accepts only evidenced provider version relations", () => {
   assert.equal(literatureCandidateSchema.safeParse({
     ...candidate,
     relations: [{ ...candidate.relations[0], evidence: {} }]
+  }).success, false);
+  assert.equal(literatureCandidateSchema.safeParse({
+    ...candidate,
+    relations: [{
+      ...candidate.relations[0],
+      targetIdentifier: { kind: "title_authors_year_hash", value: `sha256:${"a".repeat(64)}` }
+    }]
+  }).success, false);
+  assert.equal(literatureCandidateSchema.safeParse({
+    ...candidate,
+    relations: [{
+      ...candidate.relations[0],
+      targetIdentifier: { kind: "arxiv_id", value: "2401.01234" }
+    }]
   }).success, false);
 });

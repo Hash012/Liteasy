@@ -62,6 +62,16 @@ function parseOrigins(value, environment) {
   });
 }
 
+function parseOfficialPmlrEndpoint(value, environment) {
+  const endpoint = parseUrl(value, "INTUECHO_PMLR_ENDPOINT", environment);
+  const parsed = new URL(endpoint);
+  if (parsed.protocol !== "https:" || parsed.hostname !== "proceedings.mlr.press" ||
+    parsed.username || parsed.password || parsed.search || parsed.hash || parsed.pathname !== "/") {
+    throw new Error("intuecho_config_invalid: INTUECHO_PMLR_ENDPOINT must use the official PMLR origin");
+  }
+  return parsed.origin;
+}
+
 function databaseConfig(env, environment, name = "INTUECHO_DATABASE_URL") {
   const sslMode = required(env, "INTUECHO_DATABASE_SSL_MODE").toLowerCase();
   if (!allowedSslModes.has(sslMode)) {
@@ -115,8 +125,13 @@ export function loadIntuechoProductionConfig(env = process.env) {
     literatureProviders: Object.freeze({
       arxivEndpoint: parseUrl(env.INTUECHO_ARXIV_ENDPOINT ?? "https://export.arxiv.org/api/query", "INTUECHO_ARXIV_ENDPOINT", environment),
       crossrefEndpoint: parseUrl(env.INTUECHO_CROSSREF_ENDPOINT ?? "https://api.crossref.org/works", "INTUECHO_CROSSREF_ENDPOINT", environment),
+      dblpRecordEndpoint: parseUrl(env.INTUECHO_DBLP_RECORD_ENDPOINT ?? "https://dblp.org/rec", "INTUECHO_DBLP_RECORD_ENDPOINT", environment),
+      dblpSearchEndpoint: parseUrl(env.INTUECHO_DBLP_SEARCH_ENDPOINT ?? "https://dblp.org/search/publ/api", "INTUECHO_DBLP_SEARCH_ENDPOINT", environment),
       openAlexApiKey: env.INTUECHO_OPENALEX_API_KEY?.trim() || null,
       openAlexEndpoint: parseUrl(env.INTUECHO_OPENALEX_ENDPOINT ?? "https://api.openalex.org/works", "INTUECHO_OPENALEX_ENDPOINT", environment),
+      openReviewEndpoint: parseUrl(env.INTUECHO_OPENREVIEW_ENDPOINT ?? "https://api2.openreview.net/notes", "INTUECHO_OPENREVIEW_ENDPOINT", environment),
+      openReviewSearchEndpoint: parseUrl(env.INTUECHO_OPENREVIEW_SEARCH_ENDPOINT ?? "https://api2.openreview.net/notes/search", "INTUECHO_OPENREVIEW_SEARCH_ENDPOINT", environment),
+      pmlrEndpoint: parseOfficialPmlrEndpoint(env.INTUECHO_PMLR_ENDPOINT ?? "https://proceedings.mlr.press", environment),
       semanticScholarApiKey: env.INTUECHO_SEMANTIC_SCHOLAR_API_KEY?.trim() || null,
       semanticScholarEndpoint: parseUrl(env.INTUECHO_SEMANTIC_SCHOLAR_ENDPOINT ?? "https://api.semanticscholar.org/graph/v1/paper", "INTUECHO_SEMANTIC_SCHOLAR_ENDPOINT", environment)
     }),

@@ -90,13 +90,10 @@ function runtime(overrides = {}) {
   };
 }
 
-test("uses each authenticated audience for literature resolution and keeps provider errors public", async () => {
+test("keeps public literature resolution on the Intuecho Web audience", async () => {
   const instance = runtime();
   instance.identityVerifier.verifyAuthorizationHeader = async (header, audience) => {
     instance.calls.push({ audience, header });
-    if (header === "Bearer web-token" && audience === "liteasy-desktop") {
-      throw new Error("desktop audience rejected");
-    }
     return { audience, name: "同名研究者", subject: "user-1", token: header.slice("Bearer ".length) };
   };
   const app = await createProductionIntuechoApp(instance, config());
@@ -118,7 +115,9 @@ test("uses each authenticated audience for literature resolution and keeps provi
       url: "/v1/literature:resolve"
     });
     assert.equal(desktop.statusCode, 200, desktop.body);
-    assert.equal(instance.calls.find((item) => item.audience === "liteasy-desktop").audience, "liteasy-desktop");
+    assert.equal(instance.calls.filter((item) => item.header === "Bearer desktop-token").every(
+      (item) => item.audience === "intuecho-web"
+    ), true);
 
     const desktopConfirm = await app.inject({
       headers: { authorization: "Bearer desktop-token" },
@@ -192,6 +191,97 @@ test("protects authoritative literature projection verification with the dedicat
       url: "/v1/internal/literature:verify"
     });
     assert.equal(forbidden.statusCode, 403, forbidden.body);
+  } finally {
+    await app.close();
+  }
+});
+
+test("resolves and confirms private Liteasy literature through a service actor", async () => {
+  const resolverCalls = [];
+  const instance = runtime({
+    literatureResolver: {
+      async confirm(actor, input) {
+        resolverCalls.push({ actor, input, operation: "confirm" });
+        return {
+          authors: ["A. Author"],
+          identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/private" }],
+          literatureId: "literature-private",
+          provenance: {
+            confirmedAt: "2026-08-11T00:00:00.000Z",
+            mode: "public_registry",
+            provider: "crossref"
+          },
+          revision: 1,
+          status: "confirmed",
+          title: "Private Library Resolution"
+        };
+      },
+      async relations(literatureId) {
+        resolverCalls.push({ literatureId, operation: "relations" });
+        return { literatureId, versions: [] };
+      },
+      async resolve(actor, input) {
+        resolverCalls.push({ actor, input, operation: "resolve" });
+        return {
+          candidate: {
+            candidateKey: "crossref:doi:10.1000/private",
+            provider: "crossref",
+            record: {
+              authors: ["A. Author"],
+              identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/private" }],
+              title: "Private Library Resolution"
+            }
+          },
+          confirmationMode: "candidate",
+          status: "exact",
+          unavailableProviders: []
+        };
+      }
+    }
+  });
+  instance.identityVerifier.verifyAuthorizationHeader = async (header, audience) => ({
+    audience,
+    clientId: header === "Bearer service-token" ? "liteasy-literature-service" : "different-service",
+    subject: "service-subject",
+    token: header.slice("Bearer ".length)
+  });
+  const app = await createProductionIntuechoApp(instance, config());
+  try {
+    const headers = { authorization: "Bearer service-token" };
+    const resolved = await app.inject({
+      headers,
+      method: "POST",
+      payload: { purpose: "liteasy_pdf_annotation", query: "10.1000/private" },
+      url: "/v1/internal/literature:resolve"
+    });
+    assert.equal(resolved.statusCode, 200, resolved.body);
+
+    const confirmed = await app.inject({
+      headers,
+      method: "POST",
+      payload: { candidateKey: "crossref:doi:10.1000/private", mode: "candidate" },
+      url: "/v1/internal/literature:confirm"
+    });
+    assert.equal(confirmed.statusCode, 200, confirmed.body);
+
+    const relations = await app.inject({
+      headers,
+      method: "GET",
+      url: "/v1/internal/literature/literature-private/relations"
+    });
+    assert.equal(relations.statusCode, 200, relations.body);
+    assert.deepEqual(resolverCalls.map((call) => call.operation), ["resolve", "confirm", "relations"]);
+    assert.deepEqual(resolverCalls[0].actor, { id: "liteasy-literature-service" });
+    assert.deepEqual(resolverCalls[1].actor, { id: "liteasy-literature-service" });
+    assert.equal(JSON.stringify(resolverCalls).includes("user-1"), false);
+
+    const rejected = await app.inject({
+      headers: { authorization: "Bearer wrong-service" },
+      method: "POST",
+      payload: { purpose: "liteasy_pdf_annotation", query: "10.1000/private" },
+      url: "/v1/internal/literature:resolve"
+    });
+    assert.equal(rejected.statusCode, 403);
   } finally {
     await app.close();
   }

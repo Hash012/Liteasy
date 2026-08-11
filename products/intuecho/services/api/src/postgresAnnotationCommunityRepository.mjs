@@ -3,19 +3,31 @@ import { withTransaction } from "./postgres.mjs";
 import { AnnotationCommunityError, desktopAnnotationPublicationDigest, localSemanticSimilarity } from "./annotationCommunitySqlite.mjs";
 import {
   hasCrossVersionIdentifierConflict,
+  isConcreteConfirmableLiteratureIdentifier,
   isConfirmableLiteratureIdentifierKind,
+  isVersionSpecificArxivIdentifier,
   literatureIdentifierRole,
   LiteratureIdentityConflictError,
   normalizeLiteratureIdentifier,
   normalizeLiteratureRelations,
+  normalizeLiteratureSourceArtifact,
+  normalizeLiteratureSourceEvidence,
   sameLiteratureBibliography,
   sameLiteratureVersionBibliography,
   selectLiteratureClaimIdentifier,
   titleAuthorsYearFingerprint
 } from "./literatureIdentity.mjs";
 
-const aggregateLiteratureProviders = new Set(["openalex", "semantic_scholar"]);
-const confirmedLiteratureProviders = new Set(["crossref", "arxiv", "openalex", "semantic_scholar"]);
+const aggregateLiteratureProviders = new Set(["openalex", "semantic_scholar", "dblp"]);
+const confirmedLiteratureProviders = new Set([
+  "crossref",
+  "arxiv",
+  "openalex",
+  "semantic_scholar",
+  "openreview",
+  "dblp",
+  "pmlr"
+]);
 const literatureResolverActor = "literature_resolver";
 
 function normalizeIdentity(kind, value) {
@@ -81,12 +93,15 @@ export class PostgresAnnotationCommunityRepository {
   async confirmRefetchedLiterature(owner, verifiedCandidate) {
     const provider = verifiedCandidate?.provider;
     const record = verifiedCandidate?.record;
-    if (!new Set(["crossref", "arxiv", "openalex", "semantic_scholar"]).has(provider) ||
+    if (!confirmedLiteratureProviders.has(provider) ||
       !verifiedCandidate?.candidateKey || !record || !Array.isArray(record.identifiers)) {
       throw new AnnotationCommunityError("LITERATURE_CANDIDATE_NOT_FOUND", 404);
     }
     const primary = record.identifiers[0];
     if (!primary || !isConfirmableLiteratureIdentifierKind(primary.kind) || primary.source !== "public_registry") {
+      throw new AnnotationCommunityError("LITERATURE_CANDIDATE_NOT_FOUND", 404);
+    }
+    if (primary.kind === "arxiv_id" && !isVersionSpecificArxivIdentifier(primary.value)) {
       throw new AnnotationCommunityError("LITERATURE_CANDIDATE_NOT_FOUND", 404);
     }
     const expectedKey = `${provider}:${primary.kind}:${normalizeIdentity(primary.kind, primary.value)}`;
@@ -99,6 +114,7 @@ export class PostgresAnnotationCommunityRepository {
     const ownerId = typeof owner === "string" ? owner : owner?.id;
     if (!ownerId) throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_OWNER_REQUIRED");
     const evidenceCandidates = [verifiedCandidate, ...(Array.isArray(verifiedCandidate.corroborations) ? verifiedCandidate.corroborations : [])];
+    const sourceArtifacts = evidenceCandidates.map(normalizeLiteratureSourceArtifact).filter(Boolean);
     if (new Set(evidenceCandidates.map((candidate) => candidate?.provider)).size !== evidenceCandidates.length) {
       throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_INVALID");
     }
@@ -107,12 +123,16 @@ export class PostgresAnnotationCommunityRepository {
       const primary = candidateRecord?.identifiers?.[0];
       if (!confirmedLiteratureProviders.has(candidate?.provider) || !candidate?.candidateKey || !primary ||
         !isConfirmableLiteratureIdentifierKind(primary.kind) ||
+        (primary.kind === "arxiv_id" && !isVersionSpecificArxivIdentifier(primary.value)) ||
         primary.source !== "public_registry" || candidateRecord.identifiers.some((identifier) => identifier.source !== "public_registry")) {
         throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_INVALID");
       }
       const expectedKey = primary ? `${candidate.provider}:${primary.kind}:${normalizeIdentity(primary.kind, primary.value)}` : "";
       if (candidate.candidateKey !== expectedKey || hasCrossVersionIdentifierConflict(candidateRecord)) {
         throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_CONFLICT");
+      }
+      if (candidate.provider === "pmlr" && !normalizeLiteratureSourceEvidence(candidate)) {
+        throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_INVALID");
       }
       if (candidate !== verifiedCandidate && !sameLiteratureVersionBibliography(record, candidateRecord)) {
         throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_CONFLICT");
@@ -128,10 +148,26 @@ export class PostgresAnnotationCommunityRepository {
     if (!input.identifiers.some((identifier) => isConfirmableLiteratureIdentifierKind(identifier.kind))) {
       throw new AnnotationCommunityError("LITERATURE_IDENTITY_REQUIRED");
     }
-    const normalized = [...new Map(input.identifiers.map((identifier) => {
+    const providerIdentifiers = [...new Map(input.identifiers
+      .filter((identifier) => isConfirmableLiteratureIdentifierKind(identifier.kind))
+      .map((identifier) => {
       const value = normalizeIdentity(identifier.kind, identifier.value);
       return [`${identifier.kind}:${value}`, { ...identifier, value }];
-    })).values()];
+    })).values()].filter((identifier) => identifier.kind !== "arxiv_id" || isVersionSpecificArxivIdentifier(identifier.value));
+    if (!providerIdentifiers.some((identifier) => isConfirmableLiteratureIdentifierKind(identifier.kind))) {
+      throw new AnnotationCommunityError("LITERATURE_IDENTITY_REQUIRED");
+    }
+    let bibliographyAlias = null;
+    try {
+      bibliographyAlias = {
+        kind: "title_authors_year_hash",
+        source: "metadata",
+        value: titleAuthorsYearFingerprint(input)
+      };
+    } catch {
+      // Incomplete bibliographies cannot produce a candidate alias.
+    }
+    const normalized = bibliographyAlias ? [...providerIdentifiers, bibliographyAlias] : providerIdentifiers;
     return withTransaction(this.pool, async (client) => {
       const providerRecords = evidenceCandidates.map((candidate) => ({
         candidate,
@@ -149,7 +185,10 @@ export class PostgresAnnotationCommunityRepository {
       for (const identifier of lockOrder) {
         await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`${identifier.kind}:${identifier.value}`]);
       }
-      const identityMatches = await this.#matchingLiteratureIds(normalized, client, true);
+      const identityMatches = await this.#matchingLiteratureIds(providerIdentifiers, client, true);
+      const bibliographyMatches = bibliographyAlias
+        ? await this.#matchingLiteratureIds([bibliographyAlias], client, true, true, true)
+        : new Set();
       const claimResults = [];
       for (const { candidate, providerRecordId } of providerRecords) {
         claimResults.push(await client.query(`
@@ -161,6 +200,10 @@ export class PostgresAnnotationCommunityRepository {
         `, [candidate.provider, providerRecordId]));
       }
       const matched = new Set(identityMatches);
+      for (const literatureId of bibliographyMatches) {
+        const existingRecord = await this.#literatureRecord(literatureId, client);
+        if (existingRecord && sameLiteratureVersionBibliography(input, existingRecord)) matched.add(literatureId);
+      }
       for (const claimResult of claimResults) if (claimResult.rows[0]) matched.add(claimResult.rows[0].literature_id);
       const providerBibliographyMatches = new Set();
       for (const candidate of evidenceCandidates) {
@@ -173,6 +216,18 @@ export class PostgresAnnotationCommunityRepository {
       }
       if (matched.size > 1) throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_CONFLICT");
       const now = new Date();
+      for (const artifact of sourceArtifacts) {
+        await client.query(`INSERT INTO literature_source_artifacts(artifact_hash, artifact_url, media_type, content, byte_length, observed_at, created_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $6)
+          ON CONFLICT (artifact_hash) DO NOTHING`, [
+          artifact.artifactHash,
+          artifact.artifactUrl,
+          artifact.mediaType,
+          artifact.content,
+          artifact.byteLength,
+          now
+        ]);
+      }
       const literatureId = [...matched][0] ?? `literature_${randomUUID()}`;
       const existingResult = matched.size ? await client.query("SELECT * FROM literature_records WHERE id = $1 FOR UPDATE", [literatureId]) : { rows: [] };
       const existing = existingResult.rows[0];
@@ -215,7 +270,8 @@ export class PostgresAnnotationCommunityRepository {
               : "primary_registry_refetch",
           ...(candidate.recordUrl ? { recordUrl: candidate.recordUrl } : {}),
           ...(relations.length ? { relations } : {}),
-          sourceTier: new Set(["crossref", "arxiv"]).has(candidate.provider) ? "primary" : "aggregate"
+          ...(normalizeLiteratureSourceEvidence(candidate) ? { sourceEvidence: normalizeLiteratureSourceEvidence(candidate) } : {}),
+          sourceTier: new Set(["crossref", "arxiv", "openreview", "pmlr"]).has(candidate.provider) ? "primary" : "aggregate"
         };
         await client.query(`INSERT INTO literature_identity_claims(id, identifier_id, provider, provider_record_id, verification_status, evidence, observed_at, created_at)
           VALUES ($1, $2, $3, $4, 'confirmed', $5::jsonb, $6, $6)
@@ -284,6 +340,35 @@ export class PostgresAnnotationCommunityRepository {
       provider: row.provider,
       relationType: row.relation_type,
       toLiteratureId: row.to_literature_id,
+      verificationStatus: row.verification_status
+    }));
+  }
+
+  async findLiteratureClaims(literatureId, client = this.pool) {
+    const result = await client.query(`
+      SELECT claim.provider, claim.provider_record_id, claim.verification_status,
+             claim.evidence, claim.observed_at,
+             identifier.identifier_kind, identifier.identifier_role, identifier.normalized_value
+        FROM literature_identity_claims claim
+        JOIN literature_identifiers identifier ON identifier.id = claim.identifier_id
+        JOIN literature_records literature ON literature.id = identifier.literature_id
+       WHERE identifier.literature_id = $1
+         AND literature.confirmation_status = 'confirmed'
+         AND claim.verification_status = 'confirmed'
+         AND NOT (identifier.identifier_kind = 'arxiv_id' AND identifier.is_legacy_alias)
+       ORDER BY claim.observed_at, claim.provider, claim.provider_record_id
+    `, [literatureId]);
+    return result.rows.map((row) => ({
+      evidence: row.evidence ?? {},
+      identifier: {
+        kind: row.identifier_kind,
+        role: row.identifier_role,
+        source: row.identifier_role === "candidate_alias" ? "metadata" : "public_registry",
+        value: row.normalized_value
+      },
+      observedAt: row.observed_at instanceof Date ? row.observed_at.toISOString() : new Date(row.observed_at).toISOString(),
+      provider: row.provider,
+      providerRecordId: row.provider_record_id,
       verificationStatus: row.verification_status
     }));
   }
@@ -525,7 +610,8 @@ export class PostgresAnnotationCommunityRepository {
     const result = await client.query("SELECT * FROM literature_records WHERE id = $1", [id]);
     const row = result.rows[0];
     if (!row || row.confirmation_status !== "confirmed") return null;
-    return this.#literatureSnapshot(id, client, row);
+    const snapshot = await this.#literatureSnapshot(id, client, row);
+    return snapshot?.identifiers.some(isConcreteConfirmableLiteratureIdentifier) ? snapshot : null;
   }
 
   async #literatureSnapshot(id, client = this.pool, providedRow = null) {
@@ -533,7 +619,7 @@ export class PostgresAnnotationCommunityRepository {
     const row = result.rows[0];
     if (!row) return null;
     const identities = row.confirmation_status === "confirmed"
-      ? await client.query("SELECT identifier_kind AS kind, identifier_role AS role, CASE identifier_role WHEN 'candidate_alias' THEN 'metadata' ELSE 'public_registry' END AS source, normalized_value AS value FROM literature_identifiers WHERE literature_id = $1 ORDER BY identifier_kind, normalized_value", [id])
+      ? await client.query("SELECT identifier_kind AS kind, identifier_role AS role, CASE identifier_role WHEN 'candidate_alias' THEN 'metadata' ELSE 'public_registry' END AS source, normalized_value AS value FROM literature_identifiers WHERE literature_id = $1 AND NOT (identifier_kind = 'arxiv_id' AND is_legacy_alias) ORDER BY identifier_kind, normalized_value", [id])
       : await client.query("SELECT identity_kind AS kind, identity_source AS source, identity_value AS value FROM literature_identities WHERE literature_id = $1 ORDER BY identity_kind, identity_value", [id]);
     if (row.confirmation_status !== "confirmed") {
       return {
@@ -573,6 +659,8 @@ export class PostgresAnnotationCommunityRepository {
         JOIN literature_records literature ON literature.id = identifier.literature_id
        WHERE identifier.identifier_kind = $1
          AND identifier.normalized_value = $2
+         AND identifier.identifier_role = 'confirmable'
+         AND NOT (identifier.identifier_kind = 'arxiv_id' AND identifier.is_legacy_alias)
          AND literature.confirmation_status = 'confirmed'
     `, [identifier.kind, normalizeIdentity(identifier.kind, identifier.value)]);
     return result.rows[0]?.id ?? null;
@@ -632,19 +720,31 @@ export class PostgresAnnotationCommunityRepository {
     }
   }
 
-  async #matchingLiteratureIds(identifiers, client = this.pool, lock = false) {
+  async #matchingLiteratureIds(identifiers, client = this.pool, lock = false, allowMultiple = false, includeCandidateAliases = false) {
     const keys = new Set((identifiers ?? []).map((identifier) => `${identifier.kind}:${normalizeIdentity(identifier.kind, identifier.value)}`));
     const kinds = [...new Set((identifiers ?? []).map((identifier) => identifier.kind))];
     if (kinds.length === 0) return new Set();
-    const result = await client.query("SELECT literature_id, identifier_kind, normalized_value FROM literature_identifiers WHERE identifier_kind = ANY($1::text[])", [kinds]);
+    const result = await client.query(`
+      SELECT literature_id, identifier_kind, identifier_role, normalized_value
+        FROM literature_identifiers
+       WHERE identifier_kind = ANY($1::text[])
+         AND NOT (identifier_kind = 'arxiv_id' AND is_legacy_alias)
+    `, [kinds]);
     const literatureIds = new Set();
     for (const row of result.rows) {
-      if (keys.has(`${row.identifier_kind}:${normalizeIdentity(row.identifier_kind, row.normalized_value)}`)) literatureIds.add(row.literature_id);
+      if (!includeCandidateAliases && row.identifier_role !== "confirmable") continue;
+      let value;
+      try {
+        value = normalizeIdentity(row.identifier_kind, row.normalized_value);
+      } catch {
+        continue;
+      }
+      if (keys.has(`${row.identifier_kind}:${value}`)) literatureIds.add(row.literature_id);
     }
     if (lock && literatureIds.size > 0) {
       await client.query("SELECT literature_id FROM literature_identifiers WHERE literature_id = ANY($1::text[]) FOR UPDATE", [[...literatureIds]]);
     }
-    if (literatureIds.size > 1) throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_CONFLICT");
+    if (!allowMultiple && literatureIds.size > 1) throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_CONFLICT");
     return literatureIds;
   }
 
@@ -671,8 +771,9 @@ export class PostgresAnnotationCommunityRepository {
 
   async #resolveLiterature(client, reference, changedBy) {
     if (reference?.literatureId) {
-      const found = await client.query("SELECT 1 FROM literature_records WHERE id = $1 AND confirmation_status = 'confirmed'", [reference.literatureId]);
-      if (!found.rows[0]) throw new AnnotationCommunityError("LITERATURE_NOT_FOUND", 404);
+      if (!await this.#literatureRecord(reference.literatureId, client)) {
+        throw new AnnotationCommunityError("LITERATURE_NOT_FOUND", 404);
+      }
       return reference.literatureId;
     }
     throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_REQUIRED", 409);

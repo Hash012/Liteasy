@@ -22,7 +22,7 @@ export type {
 
 export type PaperIdentity = {
   id: string;
-  kind: "doi" | "arxiv_id" | "semantic_scholar_id" | "openalex_id" | "title_authors_year_hash";
+  kind: "doi" | "arxiv_id" | "semantic_scholar_id" | "openalex_id" | "openreview_id" | "dblp_key" | "pmlr_id" | "title_authors_year_hash";
   source: "inferred" | "metadata";
   value: string;
 };

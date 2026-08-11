@@ -4,7 +4,10 @@ export type ConfirmableLiteratureIdentifierKind =
   | "doi"
   | "arxiv_id"
   | "semantic_scholar_id"
-  | "openalex_id";
+  | "openalex_id"
+  | "openreview_id"
+  | "dblp_key"
+  | "pmlr_id";
 
 export type CandidateLiteratureAliasKind = "title_authors_year_hash";
 
@@ -39,7 +42,7 @@ export type ConfirmedLiteratureIdentifier =
 
 export type LiteratureCandidate = {
   candidateKey: string;
-  provider: "intuecho" | "openalex" | "crossref" | "arxiv" | "semantic_scholar";
+  provider: "intuecho" | "openalex" | "crossref" | "arxiv" | "semantic_scholar" | "openreview" | "dblp" | "pmlr";
   record: {
     authors: string[];
     documentType?: string;
@@ -51,9 +54,16 @@ export type LiteratureCandidate = {
     direction: "from_current" | "to_current";
     evidence: Record<string, unknown>;
     relationType: "is_preprint_of" | "version_of" | "translation_of";
-    targetIdentifier: { kind: LiteratureIdentifierKind; value: string };
+    targetIdentifier: { kind: ConfirmableLiteratureIdentifierKind; value: string };
   }>;
   recordUrl?: string;
+  sourceEvidence?: {
+    artifactHash: `sha256:${string}`;
+    artifactUrl: string;
+    entryKey: string;
+    sourceKind: "official_volume_bibtex";
+    volume: number;
+  };
 };
 
 export type LiteratureRecord = {
@@ -64,7 +74,7 @@ export type LiteratureRecord = {
   provenance: {
     confirmedAt: string;
     mode: "public_registry";
-    provider?: "intuecho" | "openalex" | "crossref" | "arxiv" | "semantic_scholar";
+    provider?: "intuecho" | "openalex" | "crossref" | "arxiv" | "semantic_scholar" | "openreview" | "dblp" | "pmlr";
   };
   revision: number;
   status: "confirmed";
@@ -90,7 +100,7 @@ export type LiteratureResolveInput = {
 };
 
 export type LiteratureProviderAvailability = {
-  unavailableProviders: Array<"openalex" | "crossref" | "arxiv" | "semantic_scholar">;
+  unavailableProviders: Array<"openalex" | "crossref" | "arxiv" | "semantic_scholar" | "openreview" | "dblp" | "pmlr">;
 };
 
 export type LiteratureResolveResult =
@@ -110,9 +120,18 @@ export type LiteratureRelation = {
   createdAt: string;
   evidence: Record<string, unknown>;
   fromLiteratureId: string;
-  provider: "intuecho" | "openalex" | "crossref" | "arxiv" | "semantic_scholar";
+  provider: "intuecho" | "openalex" | "crossref" | "arxiv" | "semantic_scholar" | "openreview" | "dblp" | "pmlr";
   relationType: LiteratureRelationType;
   toLiteratureId: string;
+  verificationStatus: "confirmed";
+};
+
+export type LiteratureIdentityClaim = {
+  evidence: Record<string, unknown>;
+  identifier: ConfirmedLiteratureIdentifier;
+  observedAt: string;
+  provider: Exclude<LiteratureCandidate["provider"], "intuecho">;
+  providerRecordId: string;
   verificationStatus: "confirmed";
 };
 
@@ -123,6 +142,7 @@ export type LiteratureVersionRelation = {
 };
 
 export type LiteratureRelationsResult = {
+  claims: LiteratureIdentityClaim[];
   literatureId: string;
   versions: LiteratureVersionRelation[];
 };
@@ -131,7 +151,7 @@ export type ConfirmedLiteratureReference = { literatureId: string };
 
 export type PaperIdentity = {
   id: string;
-  kind: "doi" | "arxiv_id" | "semantic_scholar_id" | "openalex_id" | "title_authors_year_hash";
+  kind: "doi" | "arxiv_id" | "semantic_scholar_id" | "openalex_id" | "openreview_id" | "dblp_key" | "pmlr_id" | "title_authors_year_hash";
   source: "inferred" | "metadata";
   value: string;
 };
@@ -267,6 +287,7 @@ export declare const literatureConfirmInputSchema: z.ZodType<LiteratureConfirmIn
 export declare const literatureProjectionVerificationSchema: z.ZodType<LiteratureProjectionVerification>;
 export declare const literatureRelationTypeSchema: z.ZodType<LiteratureRelationType>;
 export declare const literatureRelationSchema: z.ZodType<LiteratureRelation>;
+export declare const literatureIdentityClaimSchema: z.ZodType<LiteratureIdentityClaim>;
 export declare const literatureRelationsResultSchema: z.ZodType<LiteratureRelationsResult>;
 export declare const confirmedLiteratureReferenceSchema: z.ZodType<ConfirmedLiteratureReference>;
 export declare const literatureReferenceSchema: z.ZodType<LiteratureReference>;

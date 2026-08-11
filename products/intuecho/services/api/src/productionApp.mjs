@@ -43,7 +43,6 @@ function requireAdmin(request) {
 
 function isDesktopIntegrationRequest(request) {
   const pathname = request.url.split("?", 1)[0];
-  if (isLiteratureRequest(request)) return true;
   return request.method === "POST" && new Set([
     "/v1/integrations/desktop/draft-handoffs",
     "/v1/integrations/desktop/annotation-handoffs",
@@ -58,6 +57,14 @@ function isLiteratureRequest(request) {
   const pathname = request.url.split("?", 1)[0];
   if (request.method === "GET") return /^\/v1\/literature\/[^/]+\/relations$/.test(pathname);
   return request.method === "POST" && new Set(["/v1/literature:resolve", "/v1/literature:confirm"]).has(pathname);
+}
+
+function isInternalLiteratureRequest(request) {
+  const pathname = request.url.split("?", 1)[0];
+  return pathname === "/v1/internal/literature:verify" ||
+    pathname === "/v1/internal/literature:resolve" ||
+    pathname === "/v1/internal/literature:confirm" ||
+    /^\/v1\/internal\/literature\/[^/]+\/relations$/.test(pathname);
 }
 
 function validated(schema, value, code) {
@@ -139,7 +146,7 @@ export async function createProductionIntuechoApp(runtime, config, { logger = fa
   app.addHook("preHandler", async (request) => {
     const authorization = request.headers.authorization;
     if (!authorization) return;
-    if (request.url.split("?", 1)[0] === "/v1/internal/literature:verify") {
+    if (isInternalLiteratureRequest(request)) {
       const identity = await runtime.identityVerifier.verifyAuthorizationHeader(
         authorization,
         config.literatureProjection.audience
@@ -160,33 +167,16 @@ export async function createProductionIntuechoApp(runtime, config, { logger = fa
       return;
     }
     if (isLiteratureRequest(request)) {
-      try {
-        const identity = await runtime.identityVerifier.verifyAuthorizationHeader(
-          authorization,
-          "liteasy-desktop"
-        );
-        request.intuechoDesktopUser = Object.freeze({
-          id: identity.subject,
-          initials: initialsFor(identity.name),
-          name: identity.name
-        });
-        return;
-      } catch (desktopError) {
-        try {
-          const identity = await runtime.identityVerifier.verifyAuthorizationHeader(
-            authorization,
-            "intuecho-web"
-          );
-          request.intuechoUser = Object.freeze({
-            id: identity.subject,
-            initials: initialsFor(identity.name),
-            name: identity.name
-          });
-          return;
-        } catch {
-          throw desktopError;
-        }
-      }
+      const identity = await runtime.identityVerifier.verifyAuthorizationHeader(
+        authorization,
+        "intuecho-web"
+      );
+      request.intuechoUser = Object.freeze({
+        id: identity.subject,
+        initials: initialsFor(identity.name),
+        name: identity.name
+      });
+      return;
     }
     if (isDesktopIntegrationRequest(request)) {
       const identity = await runtime.identityVerifier.verifyAuthorizationHeader(
@@ -245,7 +235,6 @@ export async function createProductionIntuechoApp(runtime, config, { logger = fa
   registerLiteratureRoutes(app, {
     currentUser: (request) => request.intuechoUser ?? request.intuechoDesktopUser ?? null,
     rateLimiter: runtime.literatureRateLimiter ?? createLiteratureRateLimiter(),
-    requireDesktopUser,
     requireService: (request) => {
       if (!request.intuechoLiteratureService) throw new ProductionIdentityError("authentication_required");
       return request.intuechoLiteratureService;
