@@ -14,7 +14,7 @@ describe("visualization artifact schema", () => {
       "../../packages/shared/visualizationArtifact.v1.schema.json"
     ), "utf8");
     const generated = `${JSON.stringify(createVisualizationArtifactJsonSchema(), null, 2)}\n`;
-    expect(generated).toBe(committed);
+    expect(generated).toBe(committed.replace(/\r\n/g, "\n"));
   });
 
   test("rejects a modality/spec mismatch and executable fields", () => {
