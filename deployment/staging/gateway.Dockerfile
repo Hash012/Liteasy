@@ -30,6 +30,13 @@ RUN npm run build
 
 FROM ${CADDY_IMAGE}
 
+ARG SOURCE_REVISION
+ARG SOURCE_VERSION
+ARG SOURCE_URL=https://github.com/Hash012/Liteasy
+LABEL org.opencontainers.image.revision=${SOURCE_REVISION} \
+      org.opencontainers.image.source=${SOURCE_URL} \
+      org.opencontainers.image.version=${SOURCE_VERSION}
+
 COPY deployment/staging/Caddyfile /etc/caddy/Caddyfile
 COPY products/marketing /srv/marketing
 COPY --from=intuecho-web-build /src/apps/web/dist /srv/community

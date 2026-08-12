@@ -1,10 +1,12 @@
 # 阿里云香港预发布环境：第一次部署操作手册
 
-本手册面向第一次使用服务器的操作者，目标是在阿里云香港地域建立 Liteasy/Intuecho 的私有预发布环境。预发布环境用于真实依赖联调和少量受邀测试，不等于生产环境验收通过。
+本手册面向第一次使用服务器的操作者，目标是在阿里云香港地域建立 Liteasy/Intuecho 的私有预发布环境。当前发布目标严格限定为**受控的 10 人限量预发布**，用于真实依赖联调和具名受邀测试，不等于公开测试或生产环境验收通过。
 
 > 当前仍不能直接邀请用户测试。仓库已提供阿里云 OSS 安全适配和真实 ClamAV PDF 扫描服务，但必须在目标资源上重复验收；Keycloak 邮箱与 MFA、Windows 安装包签名和下载发布仍未完成。本文会明确标出这些停止点，不要使用假地址、演示服务或关闭安全检查来绕过它们。
 
 > 不要在聊天、Git、工单、截图或 Shell 命令中发送或记录密码、私钥、AccessKey、client secret。需要协作时只提供 ECS 私网 IP、RDS 内网域名、bucket 名、endpoint、ACR 地址等非敏感信息。
+
+> 10 人是账号总量上限，不是并发承诺。当前 2 vCPU、4 GiB ECS 曾在无用户负载时发生 `freshclam` OOM，因此人数少不能作为不会 OOM 的证据。必须执行本文的单路 PDF 扫描、32 MiB 文件上限、资源告警和自动停止条件；未完成容量验收前不得扩大用户数或开放注册。
 
 ## 本文当前是否完整
 
@@ -19,6 +21,23 @@
 | Windows Authenticode 签名 | 没有组织签名证书和已确认的签名服务 | 当前是发布阻塞项 |
 | 官网安装包下载 | 仓库没有不可变下载存储和发布流水线 | 当前是发布阻塞项 |
 | RDS 恢复、监控和告警 | 本文给出配置与演练步骤，但必须在你的阿里云账号中实际完成 | 没有证据前不能宣称已完成 |
+
+### 受控 10 人预发布边界
+
+本环境达到第 15 节门禁后，只能按以下边界发布：
+
+| 项目 | 强制边界 |
+| --- | --- |
+| 用户 | 最多 10 个具名受邀账号；不得使用共享账号、公开邀请码或匿名注册 |
+| 注册 | 邀请和验证期间逐个创建账号；第 10 个账号完成后关闭 Keycloak 自助注册。替换人员时先禁用并审计旧账号，再创建新账号 |
+| 登录安全 | 真实 SMTP、邮箱验证、MFA、恢复流程和具名管理员仍是发布前置条件，不因用户少而豁免 |
+| AI/生成能力 | `modelProxy` 保持 `unavailable`；不配置模型供应商密钥，不对测试者承诺模型生成或高内存批处理能力 |
+| PDF | 单文件最多 32 MiB；扫描器最多同时处理 1 个请求；不得批量上传或并发发起 PDF/OCR 任务 |
+| 流量 | 不进行公开推广、开放注册或自动化压测；测试者按预约窗口使用大 PDF/OCR 功能 |
+| 运维 | 发布窗口必须有维护者值守，并具备关闭注册、暂停上传或停止测试的权限 |
+| 扩容 | 增加第 11 个账号、提高 PDF 上限/并发、开放模型能力或转为公开测试前，先升级到至少 4 vCPU、8 GiB 并重新完成容量验收 |
+
+任一条件发生时立即停止新增登录和 PDF 上传，保留日志并进入故障处理：宿主机或容器出现 OOM；任一核心容器意外重启；可用内存持续 5 分钟低于 15%；swap 使用持续 5 分钟高于 75%；任一公网 readiness 连续两次失败；PDF 扫描出现非验收操作导致的 `clamav_connection_failed`。恢复后必须重新执行健康、扫描和受控并发验收，不能只看容器重新变为 `healthy`。
 
 “文档写完”不等于“外部资源已经存在”。遇到上述阻塞项时，正确动作是停在该节并补齐真实服务或负责人，而不是填写一个假地址继续启动。
 
@@ -68,7 +87,7 @@
 
 内部端口 `4040`、`8080`、`8787`、`9000` 和 `9090` 只在 Docker 网络中使用。安全组和 Docker 都不应把这些端口发布到互联网。Caddy 是唯一公网入口，对外只监听 `80` 和 `443`。
 
-当前 ECS 为 2 vCPU、4 GiB，只适合 10～30 名受邀用户的低并发测试。公开测试前至少升级到 4 vCPU、8 GiB，或者把 Keycloak 和扫描服务迁出此 ECS。Swap 只能缓解偶发内存压力，不能替代升级。
+当前 ECS 为 2 vCPU、4 GiB，只允许本文定义的 10 人限量、低并发预发布。公开测试、超过 10 个账号或提高 PDF/AI 并发前，至少升级到 4 vCPU、8 GiB，或者把 Keycloak 和扫描服务迁出此 ECS。Swap 只能缓解偶发内存压力，不能替代升级。
 
 ## 2. 先理解这些词
 
@@ -685,21 +704,29 @@ docker login --username=<ACR用户名> registry.cn-hongkong.aliyuncs.com
 ```bash
 docker build \
   --file products/liteasy/services/api/Dockerfile \
+  --build-arg SOURCE_REVISION=<git-sha> \
+  --build-arg SOURCE_VERSION=controlled-10-user-staging-<git-sha> \
   --tag <acr>/liteasy-api:<git-sha> \
   products/liteasy
 
 docker build \
   --file products/intuecho/services/api/Dockerfile \
+  --build-arg SOURCE_REVISION=<git-sha> \
+  --build-arg SOURCE_VERSION=controlled-10-user-staging-<git-sha> \
   --tag <acr>/intuecho-api:<git-sha> \
   products/intuecho
 
 docker build \
+  --build-arg SOURCE_REVISION=<git-sha> \
+  --build-arg SOURCE_VERSION=controlled-10-user-staging-<git-sha> \
   --tag <acr>/identity-management:<git-sha> \
   platform/identity-service
 
 docker build \
   --file deployment/staging/gateway.Dockerfile \
   --build-arg CADDY_IMAGE='<评审后的Caddy镜像>@sha256:<digest>' \
+  --build-arg SOURCE_REVISION=<git-sha> \
+  --build-arg SOURCE_VERSION=controlled-10-user-staging-<git-sha> \
   --build-arg VITE_INTUECHO_API_URL=https://community.staging.liteasyclaw.com \
   --build-arg VITE_LITEASY_CLOUD_URL=https://api.staging.liteasyclaw.com \
   --build-arg VITE_LITEASY_IDENTITY_URL=https://auth.staging.liteasyclaw.com/realms/liteasy \
@@ -1657,9 +1684,9 @@ sudo docker compose \
 
 生产环境必须另建域名、ECS/容器平台、RDS 数据库、bucket、独立 secret 和配置目录，并重新评估托管秘密服务。只能提升经过评审的镜像 digest；不得把这个可变的预发布主机或其数据库原地改名为生产。
 
-## 15. 邀请测试前的最终门禁
+## 15. 受控 10 人预发布的最终门禁
 
-以下全部完成前，不得邀请测试人员：
+以下全部完成前，不得邀请测试人员；完成后也只授权本节定义的 10 人限量预发布：
 
 - 公网 IP 已确认可长期保留，六个 A 记录都只指向该地址。
 - ECS 仓库、构建记录和四个应用镜像对应同一完整 Git SHA，镜像全部以 digest 固定。
@@ -1675,3 +1702,10 @@ sudo docker compose \
 - Docker 日志轮转为 `json-file 10m 5`，SLS 已采集容器日志和维护结果。
 - 每日维护任务手工运行成功、timer 已启用，测试失败日志确实触发联系人告警。
 - ECS、RDS、OSS 和公网健康监控已启用，至少两名联系人完成通知验证。
+- Keycloak 中只有审批过的具名测试账号，诊断账号和临时 client 已清理；第 10 个账号完成验证后已关闭自助注册。
+- PDF 扫描器实际运行配置为 `PDF_SCANNER_MAX_CONCURRENT=1`、`PDF_SCANNER_MAX_BYTES=33554432`，并用一个接近 32 MiB 的 PDF 完成单路上传验收。
+- 模型供应商配置保持为空，`/readyz` 明确显示 `modelProxy: "unavailable"`；测试说明中已列明当前不提供模型生成能力。
+- 已配置可用内存、swap、容器 OOM/重启和公网 readiness 告警；任一停止条件触发时有明确值班人暂停测试。
+- 已用 10 个独立测试账号完成受控容量验收：同时登录和浏览论坛，串行完成 PDF 上传/扫描；期间无 OOM、无意外容器重启、无连续 readiness 失败，且资源未触发停止阈值。
+
+门禁通过后的发布记录必须写明：`release_scope=controlled-10-user-staging`、10 个账号的非敏感标识、允许功能、禁用功能、PDF 限制、值班人、开始/结束时间和停止条件。不得使用“正式上线”“生产可用”或“公开发布完成”描述本环境。

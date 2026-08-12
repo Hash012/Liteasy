@@ -39,7 +39,28 @@ test("the staging realm has three PKCE clients and separated service identities"
   ]);
   assert.equal(publicClients.every((client) =>
     client.attributes?.["pkce.code.challenge.method"] === "S256" &&
-    client.directAccessGrantsEnabled === false
+    client.directAccessGrantsEnabled === false &&
+    ["basic", "email", "profile"].every((scope) => client.defaultClientScopes?.includes(scope))
+  ), true);
+  assert.equal(realm.clients.filter((client) => client.serviceAccountsEnabled).every((client) =>
+    client.defaultClientScopes?.includes("basic")
+  ), true);
+  const clientScopes = new Map(realm.clientScopes.map((scope) => [scope.name, scope]));
+  assert.deepEqual(
+    [...clientScopes.keys()].filter((name) => ["basic", "email", "profile"].includes(name)).sort(),
+    ["basic", "email", "profile"]
+  );
+  assert.equal(clientScopes.get("basic").protocolMappers.some((mapper) =>
+    mapper.protocolMapper === "oidc-sub-mapper" && mapper.config?.["access.token.claim"] === "true"
+  ), true);
+  assert.equal(clientScopes.get("basic").protocolMappers.some((mapper) =>
+    mapper.config?.["claim.name"] === "auth_time"
+  ), true);
+  assert.equal(clientScopes.get("profile").protocolMappers.some((mapper) =>
+    mapper.config?.["claim.name"] === "preferred_username"
+  ), true);
+  assert.equal(clientScopes.get("email").protocolMappers.some((mapper) =>
+    mapper.config?.["claim.name"] === "email"
   ), true);
   assert.equal(new Set(realm.clients.map((client) => client.clientId)).size, realm.clients.length);
   assert.equal(realm.users.length, 1);
@@ -94,6 +115,24 @@ test("Liteasy API image build includes shared runtime schemas", () => {
   assert.match(ignore, /!packages\/shared\/visualizationBuiltins\.v1\.json/);
 });
 
+test("all application images expose the immutable source revision", () => {
+  const dockerfiles = [
+    "gateway.Dockerfile",
+    "../../products/liteasy/services/api/Dockerfile",
+    "../../products/intuecho/services/api/Dockerfile",
+    "../../platform/identity-service/Dockerfile"
+  ];
+
+  for (const dockerfile of dockerfiles) {
+    const source = fs.readFileSync(new URL(dockerfile, directory), "utf8");
+    assert.match(source, /ARG SOURCE_REVISION/);
+    assert.match(source, /ARG SOURCE_VERSION/);
+    assert.match(source, /org\.opencontainers\.image\.revision=\$\{SOURCE_REVISION\}/);
+    assert.match(source, /org\.opencontainers\.image\.source=\$\{SOURCE_URL\}/);
+    assert.match(source, /org\.opencontainers\.image\.version=\$\{SOURCE_VERSION\}/);
+  }
+});
+
 test("the staging PDF scanner is pinned, internal, and self-contained", () => {
   const scannerDirectory = new URL("pdf-scanner/", directory);
   const compose = fs.readFileSync(new URL("compose.yaml", scannerDirectory), "utf8");
@@ -115,6 +154,8 @@ test("the staging PDF scanner is pinned, internal, and self-contained", () => {
   assert.match(compose, /clamav:[\s\S]+?networks:\n      - scanner/);
   assert.match(compose, /freshclam:[\s\S]+?networks:\n      - update-egress/);
   assert.match(compose, /pdf-scanner:[\s\S]+?networks:\n      - scanner\n      - application-backend/);
+  assert.match(compose, /PDF_SCANNER_MAX_BYTES: "33554432"/);
+  assert.match(compose, /PDF_SCANNER_MAX_CONCURRENT: "1"/);
   assert.doesNotMatch(runtimeInstaller, /\/root\/liteasy-pdf-scanner/);
   assert.doesNotMatch(swapInstaller, /\/root\/liteasy-pdf-scanner/);
   assert.match(runtimeInstaller, /script_directory=/);

@@ -1,6 +1,13 @@
 ARG NODE_IMAGE=node:22-alpine@sha256:968df39aedcea65eeb078fb336ed7191baf48f972b4479711397108be0966920
 FROM ${NODE_IMAGE}
 
+ARG SOURCE_REVISION
+ARG SOURCE_VERSION
+ARG SOURCE_URL=https://github.com/Hash012/Liteasy
+LABEL org.opencontainers.image.revision=${SOURCE_REVISION} \
+      org.opencontainers.image.source=${SOURCE_URL} \
+      org.opencontainers.image.version=${SOURCE_VERSION}
+
 ENV NODE_ENV=production
 WORKDIR /app
 
