@@ -123,9 +123,12 @@ export function createIdentityVerifier(config, dependencies = {}) {
         throw new IdentityError("access_token_audience_mismatch", 403);
       }
       return {
+        adminMfaVerified: verified.payload.liteasy_admin_mfa === true,
         audience: expectedAudience,
         authTime: Number(verified.payload.auth_time),
-        authenticationMethods: stringArray(verified.payload.amr),
+        authenticationMethods: verified.payload.liteasy_admin_mfa === true
+          ? [...new Set([...stringArray(verified.payload.amr), "mfa"])]
+          : stringArray(verified.payload.amr),
         clientId: typeof introspection.client_id === "string" ? introspection.client_id :
           typeof verified.payload.client_id === "string" ? verified.payload.client_id :
             typeof verified.payload.azp === "string" ? verified.payload.azp : null,
@@ -159,7 +162,7 @@ export function createIdentityVerifier(config, dependencies = {}) {
 
 export function requireFreshMfa(identity, { maximumAgeSeconds = 300, nowSeconds = Date.now() / 1000 } = {}) {
   if (identity.audience !== "liteasy-admin") throw new IdentityError("admin_audience_required", 403);
-  if (!identity.authenticationMethods.includes("mfa")) throw new IdentityError("mfa_required", 403);
+  if (identity.adminMfaVerified !== true) throw new IdentityError("mfa_required", 403);
   if (!Number.isFinite(identity.authTime) || nowSeconds - identity.authTime > maximumAgeSeconds || identity.authTime > nowSeconds + 5) {
     throw new IdentityError("fresh_authentication_required", 403);
   }

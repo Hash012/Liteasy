@@ -91,6 +91,7 @@ function runtime() {
       async verifyAuthorizationHeader(header, audience) {
         calls.push({ audience, header });
         return {
+          adminMfaVerified: audience === "liteasy-admin",
           audience,
           authenticationMethods: ["pwd", "mfa"],
           authTime: Math.floor(Date.now() / 1000) - 10,
@@ -847,6 +848,7 @@ test("requires fresh platform administrator authorization for visualization enti
 
   const staleInstance = runtime();
   staleInstance.identityVerifier.verifyAuthorizationHeader = async (_header, audience) => ({
+    adminMfaVerified: true,
     audience,
     authenticationMethods: ["pwd", "mfa"],
     authTime: Math.floor(Date.now() / 1000) - 600,

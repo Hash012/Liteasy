@@ -15,6 +15,31 @@
   "ssoSessionMaxLifespan": 28800,
   "offlineSessionMaxLifespanEnabled": true,
   "offlineSessionMaxLifespan": 2592000,
+  "authenticationFlows": [
+    {
+      "alias": "liteasy-admin-browser",
+      "description": "Dedicated administrator flow requiring password and OTP on every login",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-username-password-form",
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "authenticatorFlow": false
+        },
+        {
+          "authenticator": "auth-otp-form",
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "authenticatorFlow": false
+        }
+      ]
+    }
+  ],
   "clientScopes": [
     {
       "name": "basic",
@@ -222,6 +247,7 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "defaultClientScopes": ["basic", "profile", "email"],
+      "authenticationFlowBindingOverrides": { "browser": "liteasy-admin-browser" },
       "redirectUris": ["${LITEASY_ADMIN_REDIRECT_URI}"],
       "webOrigins": ["${LITEASY_ADMIN_WEB_ORIGIN}"],
       "attributes": {
@@ -240,6 +266,20 @@
             "id.token.claim": "false",
             "included.custom.audience": "liteasy-admin",
             "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "liteasy-admin-mfa-proof",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true",
+            "claim.name": "liteasy_admin_mfa",
+            "claim.value": "true",
+            "jsonType.label": "boolean"
           }
         }
       ]

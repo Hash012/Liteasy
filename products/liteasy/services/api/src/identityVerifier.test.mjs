@@ -38,6 +38,7 @@ function verifier(overrides = {}) {
 
 test("derives the user identity from a signed, active audience-bound token", async () => {
   assert.deepEqual(await verifier().verifyAuthorizationHeader("Bearer signed-token", "liteasy-desktop"), {
+    adminMfaVerified: false,
     audience: "liteasy-desktop",
     authTime: 100,
     authenticationMethods: ["pwd"],
@@ -108,11 +109,27 @@ test("requires a dedicated client and scope for Intuecho service authorization",
 });
 
 test("requires recent MFA for high-risk administrator operations", () => {
-  const identity = { audience: "liteasy-admin", authTime: 1_000, authenticationMethods: ["pwd", "mfa"] };
+  const identity = { adminMfaVerified: true, audience: "liteasy-admin", authTime: 1_000, authenticationMethods: ["mfa"] };
   assert.equal(requireFreshMfa(identity, { nowSeconds: 1_100 }), identity);
-  assert.throws(() => requireFreshMfa({ ...identity, authenticationMethods: ["pwd"] }, { nowSeconds: 1_100 }), IdentityError);
+  assert.throws(() => requireFreshMfa({ ...identity, adminMfaVerified: false }, { nowSeconds: 1_100 }), IdentityError);
   assert.throws(() => requireFreshMfa(identity, { nowSeconds: 1_400 }), /fresh_authentication_required/);
   assert.throws(() => requireFreshMfa({ ...identity, audience: "liteasy-desktop" }, { nowSeconds: 1_100 }), /admin_audience_required/);
+});
+
+test("derives the administrator MFA proof only from the dedicated signed claim", async () => {
+  const admin = verifier({
+    fetchImpl: async () => ({ ok: true, async json() { return {
+      active: true, aud: "liteasy-admin", sub: "admin_1"
+    }; } }),
+    verifyJwt: async () => ({ payload: {
+      amr: ["pwd"], aud: "liteasy-admin", auth_time: 1_000, exp: 2_000, iat: 1_000,
+      iss: "https://identity.example", liteasy_admin_mfa: true, sub: "admin_1"
+    } })
+  });
+
+  const identity = await admin.verifyAuthorizationHeader("Bearer admin-token", "liteasy-admin");
+  assert.equal(identity.adminMfaVerified, true);
+  assert.deepEqual(identity.authenticationMethods, ["pwd", "mfa"]);
 });
 
 test("verifies OIDC discovery, introspection authentication and signing keys before readiness", async () => {

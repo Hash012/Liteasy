@@ -63,6 +63,19 @@ test("the staging realm has three PKCE clients and separated service identities"
     mapper.config?.["claim.name"] === "email"
   ), true);
   assert.equal(new Set(realm.clients.map((client) => client.clientId)).size, realm.clients.length);
+  const adminClient = realm.clients.find((client) => client.clientId === "liteasy-admin-public");
+  assert.equal(adminClient.authenticationFlowBindingOverrides?.browser, "liteasy-admin-browser");
+  assert.equal(adminClient.protocolMappers.some((mapper) =>
+    mapper.protocolMapper === "oidc-hardcoded-claim-mapper" &&
+    mapper.config?.["claim.name"] === "liteasy_admin_mfa" &&
+    mapper.config?.["claim.value"] === "true" &&
+    mapper.config?.["jsonType.label"] === "boolean"
+  ), true);
+  const adminFlow = realm.authenticationFlows.find((flow) => flow.alias === "liteasy-admin-browser");
+  assert.deepEqual(adminFlow.authenticationExecutions.map((execution) => [execution.authenticator, execution.requirement]), [
+    ["auth-username-password-form", "REQUIRED"],
+    ["auth-otp-form", "REQUIRED"]
+  ]);
   assert.equal(realm.users.length, 1);
   assert.equal(realm.users[0].serviceAccountClientId, "liteasy-keycloak-admin");
 
