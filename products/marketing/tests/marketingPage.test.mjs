@@ -28,11 +28,15 @@ test("keeps development language and the retired brand out of public copy", () =
   }
 });
 
-test("keeps one conversion goal and truthful fallback status", () => {
+test("connects the forum, download gate, and real application flow", () => {
   assert.ok((html.match(/href="#waitlist"/g) ?? []).length >= 2);
   assert.match(html, /data-waitlist-form/);
-  assert.match(script, /体验申请入口尚未开放/);
-  assert.doesNotMatch(script, /提交成功|申请成功/);
+  assert.match(html, /href="https:\/\/community\.staging\.liteasyclaw\.com\/"/);
+  assert.match(html, /data-download-link>Download/);
+  assert.match(html, /提交体验申请并获取安装包/);
+  assert.match(script, /fetch\(waitlistUrl/);
+  assert.match(script, /安装包面向已提交体验申请的用户开放/);
+  assert.match(script, /window\.location\.assign\(result\.downloadUrl\)/);
 });
 
 test("declares the preserved semantic page framework", () => {

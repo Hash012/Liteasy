@@ -39,6 +39,7 @@ services:
     volumes:
       - caddy-config:/config
       - caddy-data:/data
+      - /run/liteasy-waitlist:/run/liteasy-waitlist:ro
     networks:
       edge:
       backend:

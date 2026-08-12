@@ -22,10 +22,18 @@ try {
   await page.getByRole("button", { name: "聚焦关联" }).click();
   assert.equal(await page.locator("[data-association-title]").textContent(), "聚焦关联");
 
+  await page.route("**/api/waitlist", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, message: "体验申请已提交。安装包准备完成后，我们将通过邮件通知你。" })
+    });
+  });
+  await page.getByRole("link", { name: "Download" }).click();
+  await page.getByText("安装包面向已提交体验申请的用户开放").waitFor();
   await page.locator('[data-waitlist-form] input[name="email"]').fill("reader@example.com");
   await page.locator('[data-waitlist-form] select[name="role"]').selectOption({ label: "研究生" });
   await page.locator("[data-waitlist-form]").evaluate((form) => form.requestSubmit());
-  await page.getByText("体验申请入口尚未开放").waitFor();
+  await page.getByText("体验申请已提交").waitFor();
   assert.equal(
     await page.locator("img").evaluateAll((images) => images.every((image) => image.complete && image.naturalWidth > 0)),
     true

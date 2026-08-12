@@ -256,16 +256,49 @@ associationButtons.forEach((button) => {
   });
 });
 
-const waitlistUrl = window.LITEASY_WAITLIST_URL || "";
+const waitlistUrl = window.LITEASY_WAITLIST_URL || "/api/waitlist";
 const waitlistForm = document.querySelector("[data-waitlist-form]");
 const formStatus = document.querySelector("[data-form-status]");
+const submitButton = waitlistForm.querySelector('button[type="submit"]');
+const submitButtonLabel = submitButton.innerHTML;
 
-waitlistForm.addEventListener("submit", (event) => {
-  if (waitlistUrl) {
-    waitlistForm.action = waitlistUrl;
-    waitlistForm.method = "get";
-    return;
-  }
+document.querySelectorAll("[data-download-link]").forEach((link) => {
+  link.addEventListener("click", () => {
+    formStatus.textContent = "安装包面向已提交体验申请的用户开放。请先完成下方申请，审核信息提交后即可获取当前版本。";
+  });
+});
+
+waitlistForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  formStatus.textContent = "体验申请入口尚未开放。开放后可在这里提交申请。";
+  if (!waitlistForm.reportValidity()) return;
+
+  submitButton.disabled = true;
+  submitButton.textContent = "正在提交申请...";
+  formStatus.textContent = "";
+
+  try {
+    const response = await fetch(waitlistUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(Object.fromEntries(new FormData(waitlistForm)))
+    });
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok || !result.ok) {
+      throw new Error(result.error || "申请提交失败，请稍后重试。");
+    }
+
+    if (!result.downloadUrl) {
+      formStatus.textContent = result.message || "体验申请已提交。安装包准备完成后，我们将通过邮件通知你。";
+      return;
+    }
+
+    formStatus.textContent = "体验申请已提交，安装包即将开始下载。";
+    window.location.assign(result.downloadUrl);
+  } catch (error) {
+    formStatus.textContent = error.message || "申请提交失败，请稍后重试。";
+  } finally {
+    submitButton.disabled = false;
+    submitButton.innerHTML = submitButtonLabel;
+  }
 });

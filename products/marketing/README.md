@@ -30,4 +30,4 @@ MARKETING_BASE_URL=http://127.0.0.1:8090 npm run verify:browser
 
 营销站没有登录功能，不接收 Liteasy 或 Intuecho 的账号密码。
 
-部署页面需要在加载 `app.js` 前设置公开的 `window.LITEASY_WAITLIST_URL`，该地址是体验申请的真实提交目标。未设置时表单会明确提示入口尚未开放，不会显示虚假的提交成功状态。
+页面默认向同域 `/api/waitlist` 提交 JSON 申请。部署在不同 API 域名时，可以在加载 `app.js` 前设置 `window.LITEASY_WAITLIST_URL` 覆盖该地址。服务端在安装包可用时返回短时 `downloadUrl`，页面会在申请保存成功后自动开始下载；安装包未就绪时只确认申请已记录，不会显示虚假的下载成功状态。

@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "preview": "python3 -m http.server 8080 --bind 127.0.0.1",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --test tests/*.test.mjs waitlist/*.test.mjs",
     "verify:browser": "node tests/verifyMarketingBrowser.mjs"
   }
 }

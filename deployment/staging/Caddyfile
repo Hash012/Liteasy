@@ -25,8 +25,22 @@
 {$MARKETING_HOST} {
 	import access_log
 	import static_security
-	root * /srv/marketing
-	file_server
+
+	@waitlist path /api/waitlist /healthz/waitlist
+	handle @waitlist {
+		uri replace /healthz/waitlist /healthz
+		reverse_proxy unix//run/liteasy-waitlist/waitlist.sock
+	}
+
+	@download path /downloads/liteasy-windows
+	handle @download {
+		reverse_proxy unix//run/liteasy-waitlist/waitlist.sock
+	}
+
+	handle {
+		root * /srv/marketing
+		file_server
+	}
 }
 
 {$COMMUNITY_HOST} {
