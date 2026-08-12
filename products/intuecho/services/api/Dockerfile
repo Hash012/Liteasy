@@ -15,7 +15,10 @@ COPY --chown=node:node package.json package-lock.json ./
 COPY --chown=node:node apps/web/package.json ./apps/web/package.json
 COPY --chown=node:node packages/contracts/package.json ./packages/contracts/package.json
 COPY --chown=node:node services/api/package.json ./services/api/package.json
-RUN npm ci --omit=dev --workspace=@intuecho/api --workspace=@intuecho/contracts && npm cache clean --force
+RUN apk add --no-cache --virtual .build-deps python3 make g++ \
+    && npm ci --omit=dev --workspace=@intuecho/api --workspace=@intuecho/contracts \
+    && npm cache clean --force \
+    && apk del .build-deps
 
 COPY --chown=node:node packages/contracts/src ./packages/contracts/src
 COPY --chown=node:node services/api/migrations ./services/api/migrations

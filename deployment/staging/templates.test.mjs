@@ -133,6 +133,15 @@ test("all application images expose the immutable source revision", () => {
   }
 });
 
+test("the Intuecho API can build native dependencies without prebuilt downloads", () => {
+  const dockerfile = fs.readFileSync(
+    new URL("../../products/intuecho/services/api/Dockerfile", import.meta.url),
+    "utf8"
+  );
+  assert.match(dockerfile, /apk add --no-cache --virtual \.build-deps python3 make g\+\+/);
+  assert.match(dockerfile, /apk del \.build-deps/);
+});
+
 test("the staging PDF scanner is pinned, internal, and self-contained", () => {
   const scannerDirectory = new URL("pdf-scanner/", directory);
   const compose = fs.readFileSync(new URL("compose.yaml", scannerDirectory), "utf8");
