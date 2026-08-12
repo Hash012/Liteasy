@@ -90,11 +90,11 @@ function oauthSession(user: User | null): AdminSession | null {
   };
 }
 
-export async function beginAdminLogin(config: AdminRuntimeConfig, prompt?: "login") {
+export const adminLoginRequest = Object.freeze({ max_age: 0, prompt: "login" as const });
+
+export async function beginAdminLogin(config: AdminRuntimeConfig) {
   const configuration = await loadAdminIdentityConfiguration(config);
-  await manager(configuration).signinRedirect({
-    ...(prompt ? { prompt } : {})
-  });
+  await manager(configuration).signinRedirect(adminLoginRequest);
 }
 
 export async function completeAdminLogin(config: AdminRuntimeConfig) {

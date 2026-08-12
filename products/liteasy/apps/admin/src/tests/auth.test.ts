@@ -1,5 +1,6 @@
 import { expect, test, vi } from "vitest";
 import {
+  adminLoginRequest,
   loadAdminIdentityConfiguration,
   validateAdminIdentityConfiguration
 } from "../auth";
@@ -9,6 +10,10 @@ const config = {
   forumUrl: "https://forum.liteasy.example",
   identityUrl: "https://identity.liteasy.example"
 };
+
+test("requires an explicit fresh login for every admin authorization", () => {
+  expect(adminLoginRequest).toEqual({ max_age: 0, prompt: "login" });
+});
 
 test("accepts only an audience-bound public admin PKCE configuration", () => {
   expect(validateAdminIdentityConfiguration({

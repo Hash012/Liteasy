@@ -101,8 +101,8 @@ export function App() {
               </MessageBar>
             ) : null}
             <form className="admin-signin-form" onSubmit={login}>
-              <Button appearance="primary" disabled={submitting} type="submit">
-                {submitting ? "正在登录" : "登录"}
+              <Button appearance="primary" disabled={submitting} icon={<ShieldLockRegular />} type="submit">
+                {submitting ? "正在跳转" : "使用统一账号登录"}
               </Button>
             </form>
           </section>
@@ -121,7 +121,7 @@ export function App() {
       <AdminWorkspace
         api={api}
         onLogout={logout}
-        onReauthenticate={() => beginAdminLogin(config, "login")}
+        onReauthenticate={() => beginAdminLogin(config)}
         session={sessionState.session}
       />
     </AdminProvider>
