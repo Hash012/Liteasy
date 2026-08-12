@@ -1,6 +1,6 @@
-import { Button, Checkbox, Input, Textarea, Tooltip } from "@fluentui/react-components";
+import { Button, Checkbox, Input, Portal, Textarea } from "@fluentui/react-components";
 import { Add20Regular, Dismiss20Regular, Send20Regular } from "@fluentui/react-icons";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { canonicalizeInheritedTargets, inheritedTargetsAreCanonical } from "./canonicalizeInheritedTargets";
 import { communityApi } from "./communityApi";
 import type {
@@ -39,6 +39,19 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
   const [pending, setPending] = useState(false);
   const publicationAttempt = useRef(0);
   const publicationCanonicalizingRef = useRef(false);
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
+    const viewportWidth = document.documentElement.clientWidth;
+    const scrollbarWidth = viewportWidth > 0 ? window.innerWidth - viewportWidth : 0;
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
+    };
+  }, []);
 
   async function setReplyPublication(enabled: boolean) {
     if (publicationCanonicalizingRef.current) return;
@@ -119,9 +132,9 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
   }
 
   const isReplyEdit = Boolean(sourceReplyId);
-  return <div className="drawer-backdrop" role="presentation">
+  return <Portal><div className="drawer-backdrop" role="presentation">
     <aside className="annotation-drawer" role="dialog" aria-modal="true" aria-labelledby="composer-title">
-      <header><div><span>{original ? "编辑" : parent ? "回复" : "新批注"}</span><h2 id="composer-title">{parent ? `回复 ${parent.author.name}` : isReplyEdit ? "编辑回复" : "发布批注"}</h2></div><Tooltip content="关闭" relationship="label"><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="关闭" onClick={onClose} /></Tooltip></header>
+      <header><div><span>{original ? "编辑" : parent ? "回复" : "新批注"}</span><h2 id="composer-title">{parent ? `回复 ${parent.author.name}` : isReplyEdit ? "编辑回复" : "发布批注"}</h2></div><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="关闭" title="关闭" onClick={onClose} /></header>
       <form onSubmit={submit}>
         <label className="field-label">批注内容<Textarea value={body} onChange={(_, data) => setBody(data.value)} resize="vertical" rows={7} required /></label>
         {!isReplyEdit && parent && <ReplyPublicationFields disabled={publicationCanonicalizing} publishAsAnnotation={publishAsAnnotation} targets={targets} visibility={parent.visibility} onEnabledChange={setReplyPublication} onTargetsChange={updateReplyTargets} />}
@@ -138,5 +151,5 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
         <div className="drawer-actions"><Button type="button" appearance="secondary" onClick={onClose}>取消</Button><Button type="submit" appearance="primary" icon={<Send20Regular />} disabled={pending || publicationCanonicalizing || !body.trim() || (Boolean(parent) && publishAsAnnotation && !replyTargetsReady) || (!parent && !isReplyEdit && targets.length === 0)}>{pending ? "正在保存" : original ? "保存修改" : "发布"}</Button></div>
       </form>
     </aside>
-  </div>;
+  </div></Portal>;
 }

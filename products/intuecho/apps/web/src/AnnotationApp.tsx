@@ -171,7 +171,11 @@ export function AnnotationApp() {
   const unreadMessages = inbox.data?.conversations.reduce((total, item) => total + item.unreadCount, 0) ?? 0;
 
   useEffect(() => {
-    setAuthRequiredHandler(() => setAuthOpen(true));
+    setAuthRequiredHandler(() => {
+      setSession(null);
+      setConversation(null);
+      setAuthOpen(true);
+    });
     void identityApi.initialize().then((result) => {
       setIdentityMode(result.mode);
       setSession(result.session);
@@ -213,7 +217,7 @@ export function AnnotationApp() {
     else operation();
   }
 
-  return <FluentProvider theme={intuechoTheme} className="annotation-app">
+  return <FluentProvider applyStylesToPortals={false} theme={intuechoTheme} className="annotation-app">
     <AppHeader
       filters={filters}
       onChangeFilters={setFilters}
@@ -276,7 +280,7 @@ function AppHeader({ filters, onChangeFilters, onLogin, onLogout, onPublish, onV
         <button className={view === "organizations" ? "active" : ""} aria-label="组织批注" aria-current={view === "organizations" ? "page" : undefined} onClick={() => onView("organizations")}><PeopleTeam20Regular /><span className="nav-label">组织批注</span></button>
       </div>
       <div className="sidebar-publish">
-        <Tooltip content="发布批注" relationship="label"><Button appearance="primary" className="publish-action" icon={<Add20Regular />} aria-label="发布批注" onClick={onPublish}>新批注</Button></Tooltip>
+        <Button type="button" appearance="primary" className="publish-action" icon={<Add20Regular />} aria-label="发布批注" title="发布批注" onClick={onPublish}>新批注</Button>
       </div>
     </nav>
     <div className="header-primary">

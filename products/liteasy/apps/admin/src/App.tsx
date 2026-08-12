@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { type PropsWithChildren, useEffect, useMemo, useState } from "react";
 import {
   Button,
   FluentProvider,
@@ -27,6 +27,10 @@ type SessionState =
   | { kind: "loading" }
   | { error?: string; kind: "anonymous" }
   | { kind: "authenticated"; session: AdminSession };
+
+export function AdminProvider({ children }: PropsWithChildren) {
+  return <FluentProvider applyStylesToPortals={false} className="admin-provider" theme={webLightTheme}>{children}</FluentProvider>;
+}
 
 function message(error: unknown) {
   return error instanceof Error ? error.message : "身份请求失败。";
@@ -78,15 +82,15 @@ export function App() {
 
   if (sessionState.kind === "loading") {
     return (
-      <FluentProvider className="admin-provider" theme={webLightTheme}>
+      <AdminProvider>
         <main className="admin-loading"><Spinner label="正在验证管理员身份" /></main>
-      </FluentProvider>
+      </AdminProvider>
     );
   }
 
   if (sessionState.kind === "anonymous") {
     return (
-      <FluentProvider className="admin-provider" theme={webLightTheme}>
+      <AdminProvider>
         <main className="admin-signin">
           <section className="admin-signin-panel" aria-labelledby="admin-signin-title">
             <ShieldLockRegular aria-hidden className="admin-signin-icon" />
@@ -103,7 +107,7 @@ export function App() {
             </form>
           </section>
         </main>
-      </FluentProvider>
+      </AdminProvider>
     );
   }
 
@@ -113,13 +117,13 @@ export function App() {
     forumUrl: config.forumUrl
   });
   return (
-    <FluentProvider className="admin-provider" theme={webLightTheme}>
+    <AdminProvider>
       <AdminWorkspace
         api={api}
         onLogout={logout}
         onReauthenticate={() => beginAdminLogin(config, "login")}
         session={sessionState.session}
       />
-    </FluentProvider>
+    </AdminProvider>
   );
 }

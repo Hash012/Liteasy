@@ -119,6 +119,16 @@ beforeEach(() => {
 });
 afterEach(() => cleanup());
 
+test("keeps the composer close control free of dynamic tooltip portals", async () => {
+  const user = userEvent.setup();
+  render(<AnnotationComposer context={{}} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+  const close = screen.getByRole("button", { name: "关闭" });
+  expect(close).toHaveAttribute("title", "关闭");
+  await user.hover(close);
+  expect(screen.queryByRole("tooltip", { name: "关闭" })).not.toBeInTheDocument();
+});
+
 test("keeps a reply pure until independent publication is explicitly enabled", async () => {
   const user = userEvent.setup();
   render(<AnnotationComposer context={{ replyTo: publicParent }} onClose={vi.fn()} onSaved={vi.fn()} />);

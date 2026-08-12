@@ -181,7 +181,11 @@ export async function resolveIdentitySession() {
 
 export async function clearRejectedIdentitySession() {
   storeSession(sessionStorage, oauthSessionProjectionKey, null);
-  if (import.meta.env.DEV) {
+  const mode = await identityMode().catch(() => "unavailable" as const);
+  if (mode === "oauth") {
+    const manager = await oauthManager().catch(() => null);
+    await manager?.removeUser().catch(() => undefined);
+  } else if (mode === "development" && import.meta.env.DEV) {
     const { developmentIdentity } = await import("./developmentIdentity");
     developmentIdentity.clear();
   }
