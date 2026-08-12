@@ -29,12 +29,12 @@
 	@waitlist path /api/waitlist /healthz/waitlist
 	handle @waitlist {
 		uri replace /healthz/waitlist /healthz
-		reverse_proxy unix//run/liteasy-waitlist/waitlist.sock
+		reverse_proxy 172.20.0.1:8787
 	}
 
 	@download path /downloads/liteasy-windows
 	handle @download {
-		reverse_proxy unix//run/liteasy-waitlist/waitlist.sock
+		reverse_proxy 172.20.0.1:8787
 	}
 
 	handle {

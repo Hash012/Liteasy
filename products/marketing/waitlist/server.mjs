@@ -15,8 +15,8 @@ function getConfig(overrides = {}) {
     ? originSetting
     : String(originSetting).split(",").map((origin) => origin.trim()).filter(Boolean);
   return {
-    host: overrides.host ?? process.env.HOST ?? "127.0.0.1",
-    port: Number(overrides.port ?? process.env.PORT ?? 8787),
+    host: overrides.host ?? process.env.WAITLIST_HOST ?? process.env.HOST ?? "127.0.0.1",
+    port: Number(overrides.port ?? process.env.WAITLIST_PORT ?? process.env.PORT ?? 8787),
     socketPath: overrides.socketPath ?? process.env.WAITLIST_SOCKET_PATH ?? "",
     dataFile: overrides.dataFile ?? resolve(dataDir, "waitlist-submissions.jsonl"),
     allowedOrigins,
