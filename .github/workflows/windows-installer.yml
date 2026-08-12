@@ -27,6 +27,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Report workflow start
+        continue-on-error: true
+        shell: pwsh
+        run: Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=started"
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -45,11 +50,26 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Report dependency installation
+        continue-on-error: true
+        shell: pwsh
+        run: Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=dependencies"
+
       - name: Test desktop frontend
         run: npm test
 
+      - name: Report frontend tests
+        continue-on-error: true
+        shell: pwsh
+        run: Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=frontend_tests"
+
       - name: Test Tauri host
         run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Report Tauri tests
+        continue-on-error: true
+        shell: pwsh
+        run: Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=tauri_tests"
 
       - name: Build and verify production assets
         env:
@@ -58,12 +78,22 @@ jobs:
           VITE_LITEASY_CLOUD_URL: https://api.staging.liteasyclaw.com
         run: npm run build
 
+      - name: Report production asset build
+        continue-on-error: true
+        shell: pwsh
+        run: Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=frontend_build"
+
       - name: Build NSIS installer
         env:
           VITE_FORUM_API_URL: https://community.staging.liteasyclaw.com
           VITE_FORUM_WEB_URL: https://community.staging.liteasyclaw.com
           VITE_LITEASY_CLOUD_URL: https://api.staging.liteasyclaw.com
         run: npm run tauri -- build --bundles nsis
+
+      - name: Report installer build
+        continue-on-error: true
+        shell: pwsh
+        run: Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=installer_build"
 
       - name: Verify and stage unsigned installer
         id: installer
