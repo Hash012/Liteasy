@@ -41,7 +41,6 @@ test("declares the preserved semantic page framework", () => {
   }
   assert.match(html, /role="tablist"[^>]*aria-label="薄读工作流"/);
   assert.match(html, /role="tablist"[^>]*aria-label="薄读多模态呈现"/);
-  assert.match(html, /role="tablist"[^>]*aria-label="关联推荐交互"/);
   assert.match(html, /aria-live="polite"/);
 });
 
@@ -66,15 +65,15 @@ test("offers Thin Reading's parallel multimodal understanding modes", () => {
   }
 });
 
-test("presents association recommendations as a reversible reading interaction", () => {
-  for (const label of ["标出概念", "聚焦关联", "打开文献", "逐层返回"]) {
+test("presents association recommendations as an interactive reading canvas", () => {
+  for (const label of ["标出概念", "聚焦关联", "打开文献"]) {
     assert.match(`${html}\n${script}`, new RegExp(label));
   }
-  for (const key of ["anchors", "focus", "paper", "return"]) {
-    assert.match(script, new RegExp(`\\b${key}: \\{`));
-  }
+  for (const key of ["anchors", "focus", "paper"]) assert.match(script, new RegExp(`\\b${key}: \\{`));
+  assert.doesNotMatch(`${html}\n${script}`, /逐层返回/);
   assert.match(html, /从一个概念，<br \/>走进一片研究/);
   assert.match(html, /相关推荐/);
+  assert.match(html, /association-graph-product\.png/);
 });
 
 test("ships an accessible Intuecho shared-reading visual", async () => {
@@ -86,7 +85,7 @@ test("ships an accessible Intuecho shared-reading visual", async () => {
 test("connects every tab to an existing panel", () => {
   const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]));
   const tabs = [...html.matchAll(/<button\s+([^>]*\brole="tab"[^>]*)>/g)].map((match) => match[1]);
-  assert.equal(tabs.length, 15);
+  assert.equal(tabs.length, 11);
   const tabIds = tabs.map((attributes) => attributes.match(/\bid="([^"]+)"/)?.[1]);
   assert.equal(new Set(tabIds).size, tabs.length);
   for (const attributes of tabs) {

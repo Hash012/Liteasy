@@ -19,9 +19,7 @@ try {
   await figureTab.press("ArrowRight");
   assert.equal(await page.locator("[data-result-title]").textContent(), "结构表达");
 
-  const associationTab = page.getByRole("tab", { name: "标出概念" });
-  await associationTab.focus();
-  await associationTab.press("ArrowRight");
+  await page.getByRole("button", { name: "聚焦关联" }).click();
   assert.equal(await page.locator("[data-association-title]").textContent(), "聚焦关联");
 
   await page.locator('[data-waitlist-form] input[name="email"]').fill("reader@example.com");

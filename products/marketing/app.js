@@ -96,6 +96,7 @@ const associationData = {
     title: "标出概念",
     copy: "点开“相关推荐”，正文中的关键概念会变成可以继续探索的入口。",
     use: "相关推荐 · 概念锚点 · 原位置保留",
+    canvasNote: "点击概念锚点，关联推荐从当前正文位置展开。",
     className: "association-anchors-preview",
     ariaLabel: "正文中的相关推荐概念标记预览",
     markup: `<div class="association-toolbar"><span>薄读 / 正文</span><button type="button">相关推荐</button></div><p>Late interaction 让查询与文档 token 保持细粒度匹配。</p><div class="association-anchor-chip">细粒度匹配 <span>3 篇关联论文</span></div><div class="association-anchor-chip association-anchor-chip--second">Late interaction <span>查看关联</span></div>`
@@ -105,6 +106,7 @@ const associationData = {
     title: "聚焦关联",
     copy: "选择一个概念后，其他正文变得安静，相关锚点、连线和文献节点留在视野中央。",
     use: "聚焦概念 · 其他内容弱化 · 关联线索突出",
+    canvasNote: "当前概念被高亮，其他正文淡出，关联节点和连线成为视觉主线。",
     className: "association-focus-preview",
     ariaLabel: "聚焦概念及其关联文献预览",
     markup: `<div class="association-toolbar"><span>正在聚焦「Late interaction」</span><button type="button">返回正文</button></div><div class="association-graph-mini"><span class="association-node-mini association-node-mini--root">Late interaction</span><span class="association-node-mini association-node-mini--one">方法来源</span><span class="association-node-mini association-node-mini--two">后续研究</span><span class="association-node-mini association-node-mini--three">相关概念</span><i></i><i></i><i></i></div>`
@@ -114,19 +116,11 @@ const associationData = {
     title: "打开文献",
     copy: "点击关联文献节点，阅读卡片会在当前路径中打开，告诉你它与正在阅读的内容如何相关。",
     use: "关联文献 · 关系类型 · 推荐理由",
+    canvasNote: "点击论文节点，查看它与当前概念的关系和推荐理由。",
     className: "association-paper-preview",
     ariaLabel: "关联文献阅读卡片预览",
     markup: `<div class="association-toolbar"><span>关联文献 / 1 of 3</span><button type="button">返回关联图</button></div><div class="association-reading-card"><p class="association-card-label">CITES TARGET</p><h4>Efficient and Effective Passage Search</h4><p>从当前概念继续，查看这篇文献如何承接方法脉络。</p><div><span>推荐理由</span><strong>方法关系 · 高相关</strong></div></div>`
   },
-  return: {
-    kicker: "不丢失阅读位置",
-    title: "逐层返回",
-    copy: "从阅读卡片回到关联图，再回到正文；每一层都保留当前焦点，继续沿原来的问题阅读。",
-    use: "阅读卡片 → 关联图 → 正文 · Escape 可返回",
-    className: "association-return-preview",
-    ariaLabel: "关联推荐逐层返回路径预览",
-    markup: `<div class="association-return-stage"><div class="association-return-step"><b>正文</b><span>Late interaction</span></div><i>→</i><div class="association-return-step is-active"><b>关联图</b><span>3 篇文献</span></div><i>→</i><div class="association-return-step"><b>阅读卡片</b><span>当前文献</span></div><p>按 Escape 逐层返回，焦点回到原来的位置</p></div>`
-  }
 };
 
 const header = document.querySelector("[data-header]");
@@ -229,6 +223,8 @@ const associationCopy = document.querySelector("[data-association-copy]");
 const associationUse = document.querySelector("[data-association-use]");
 const associationPreview = document.querySelector("[data-association-preview]");
 const associationPanel = document.querySelector("#association-panel");
+const associationCanvas = document.querySelector("[data-association-canvas]");
+const associationCanvasNote = document.querySelector("[data-association-canvas-note]");
 
 function updateAssociation(state) {
   const data = associationData[state];
@@ -241,10 +237,10 @@ function updateAssociation(state) {
   associationTitle.textContent = data.title;
   associationCopy.textContent = data.copy;
   associationUse.textContent = data.use;
-  associationPreview.className = `artifact-preview association-preview ${data.className}`;
-  associationPreview.innerHTML = data.markup;
-  associationPreview.setAttribute("aria-label", data.ariaLabel);
-  associationPanel.setAttribute("aria-labelledby", `association-${state}`);
+  associationCanvas?.classList.toggle("is-focus", state === "focus");
+  associationCanvas?.classList.toggle("is-paper", state === "paper");
+  associationCanvasNote.textContent = data.canvasNote;
+  associationPanel.setAttribute("data-association-state", state);
 }
 
 associationButtons.forEach((button) => {
