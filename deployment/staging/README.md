@@ -703,6 +703,7 @@ docker login --username=<ACR用户名> registry.cn-hongkong.aliyuncs.com
 
 ```bash
 docker build \
+  --provenance=false \
   --file products/liteasy/services/api/Dockerfile \
   --build-arg SOURCE_REVISION=<git-sha> \
   --build-arg SOURCE_VERSION=controlled-10-user-staging-<git-sha> \
@@ -710,6 +711,7 @@ docker build \
   products/liteasy
 
 docker build \
+  --provenance=false \
   --file products/intuecho/services/api/Dockerfile \
   --build-arg SOURCE_REVISION=<git-sha> \
   --build-arg SOURCE_VERSION=controlled-10-user-staging-<git-sha> \
@@ -717,12 +719,14 @@ docker build \
   products/intuecho
 
 docker build \
+  --provenance=false \
   --build-arg SOURCE_REVISION=<git-sha> \
   --build-arg SOURCE_VERSION=controlled-10-user-staging-<git-sha> \
   --tag <acr>/identity-management:<git-sha> \
   platform/identity-service
 
 docker build \
+  --provenance=false \
   --file deployment/staging/gateway.Dockerfile \
   --build-arg CADDY_IMAGE='<评审后的Caddy镜像>@sha256:<digest>' \
   --build-arg SOURCE_REVISION=<git-sha> \
