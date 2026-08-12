@@ -9,6 +9,7 @@ Restart=always
 RestartSec=3
 RuntimeDirectory=liteasy-waitlist
 RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=restart
 Environment=WAITLIST_SOCKET_PATH=/run/liteasy-waitlist/waitlist.sock
 EnvironmentFile=-/opt/liteasy/waitlist/.env
 UMask=0077
