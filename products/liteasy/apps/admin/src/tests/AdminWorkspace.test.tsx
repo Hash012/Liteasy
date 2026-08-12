@@ -71,7 +71,10 @@ test("loads identity, policy, retrieval, audit, and forum data into task views",
   />);
 
   await waitFor(() => expect(api.identity).toHaveBeenCalled());
-  expect(await screen.findByText("MFA 有效")).toBeInTheDocument();
+  expect(await screen.findByText("多因素认证有效")).toBeInTheDocument();
+  expect(screen.getAllByText("平台管理员").length).toBeGreaterThan(0);
+  expect(screen.getByText("高风险操作认证")).toBeInTheDocument();
+  expect(screen.getByText("最近 5 分钟内已完成多因素认证")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "组织治理" }));
   expect(await screen.findByText("Research Team")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "模型与检索" }));

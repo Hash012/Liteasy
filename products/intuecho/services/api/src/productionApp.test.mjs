@@ -61,6 +61,7 @@ function runtime(overrides = {}) {
       async verifyAuthorizationHeader(header, audience) {
         calls.push({ audience, header });
         if (audience === "liteasy-admin") return {
+          adminMfaVerified: true,
           audience,
           authenticationMethods: ["pwd", "mfa"],
           authTime: Date.now() / 1000,

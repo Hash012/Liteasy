@@ -122,6 +122,17 @@ function formatDate(value: string | null | undefined) {
   }).format(new Date(value));
 }
 
+function roleLabel(role: string) {
+  return ({
+    developer_diagnostics: "开发诊断管理员",
+    platform_admin: "平台管理员"
+  } as Record<string, string>)[role] ?? role;
+}
+
+function authenticationMethodLabel(method: string) {
+  return ({ mfa: "多因素认证", otp: "动态验证码", pwd: "密码" } as Record<string, string>)[method] ?? method;
+}
+
 function Section({ children, title }: { children: ReactNode; title: string }) {
   return (
     <section className="admin-section">
@@ -474,9 +485,14 @@ export function AdminWorkspace({
         <div className="admin-brand"><ShieldLockRegular /><strong>Liteasy 管理后台</strong></div>
         <div className="admin-topbar-actions">
           <span className="admin-subject">{identity?.principal.subjectId ?? session.subjectId}</span>
+          {identity?.principal.roles.map((role) => (
+            <Badge appearance="filled" className="admin-role-badge" color="brand" key={role}>
+              {roleLabel(role)}
+            </Badge>
+          ))}
           {identity ? (
-            <Badge appearance="tint" color={identity.authentication.fresh ? "success" : "warning"}>
-              {identity.authentication.fresh ? "MFA 有效" : "需要重新认证"}
+            <Badge appearance="tint" className="admin-authentication-badge" color={identity.authentication.fresh ? "success" : "warning"}>
+              {identity.authentication.fresh ? "多因素认证有效" : "需要重新认证"}
             </Badge>
           ) : null}
           <Tooltip content="刷新" relationship="label">
@@ -659,10 +675,10 @@ function Overview({
       </div>
       <Section title="当前身份">
         <dl className="admin-details">
-          <div><dt>Subject</dt><dd>{identity?.principal.subjectId ?? "-"}</dd></div>
-          <div><dt>角色</dt><dd>{identity?.principal.roles.join(", ") || "-"}</dd></div>
-          <div><dt>认证方法</dt><dd>{identity?.authentication.methods.join(", ") || "-"}</dd></div>
-          <div><dt>新鲜认证</dt><dd>{identity?.authentication.fresh ? "是" : "否"}</dd></div>
+          <div><dt>用户标识</dt><dd>{identity?.principal.subjectId ?? "-"}</dd></div>
+          <div><dt>平台角色</dt><dd>{identity?.principal.roles.map(roleLabel).join("、") || "-"}</dd></div>
+          <div><dt>登录验证</dt><dd>{identity?.authentication.methods.map(authenticationMethodLabel).join("、") || "-"}</dd></div>
+          <div><dt>高风险操作认证</dt><dd>{identity?.authentication.fresh ? "最近 5 分钟内已完成多因素认证" : "需要重新完成多因素认证"}</dd></div>
         </dl>
       </Section>
       <Section title="模型策略">

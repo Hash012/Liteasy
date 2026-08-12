@@ -132,10 +132,14 @@ export function createProductionIdentityVerifier(config, dependencies = {}) {
       if (new Set(["intuecho-web", "liteasy-desktop"]).has(expectedAudience) && !name) {
         throw new ProductionIdentityError("identity_display_name_missing", 403);
       }
+      const adminMfaVerified = verified.payload.liteasy_admin_mfa === true;
       return Object.freeze({
+        adminMfaVerified,
         audience: expectedAudience,
         authTime: Number(verified.payload.auth_time),
-        authenticationMethods: stringArray(verified.payload.amr),
+        authenticationMethods: adminMfaVerified
+          ? [...new Set([...stringArray(verified.payload.amr), "mfa"])]
+          : stringArray(verified.payload.amr),
         clientId: typeof active.client_id === "string"
           ? active.client_id
           : typeof verified.payload.client_id === "string" ? verified.payload.client_id : null,
@@ -155,7 +159,7 @@ export function requireFreshAdminMfa(
   if (identity?.audience !== "liteasy-admin") {
     throw new ProductionIdentityError("admin_audience_required", 403);
   }
-  if (!identity.authenticationMethods.includes("mfa")) {
+  if (identity.adminMfaVerified !== true) {
     throw new ProductionIdentityError("mfa_required", 403);
   }
   if (

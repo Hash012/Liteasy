@@ -442,8 +442,12 @@ textarea {
 
   .admin-brand strong,
   .admin-subject,
-  .admin-topbar-actions > span {
+  .admin-authentication-badge {
     display: none;
+  }
+
+  .admin-role-badge {
+    display: inline-flex;
   }
 
   .admin-content {

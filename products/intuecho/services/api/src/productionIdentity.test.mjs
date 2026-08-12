@@ -58,18 +58,47 @@ test("rejects revoked, cross-audience and nameless Web tokens", async () => {
 
 test("requires recent MFA for forum moderation", () => {
   const identity = {
+    adminMfaVerified: true,
     audience: "liteasy-admin",
     authTime: 1_000,
     authenticationMethods: ["pwd", "mfa"]
   };
   assert.equal(requireFreshAdminMfa(identity, { nowSeconds: 1_100 }), identity);
   assert.throws(
-    () => requireFreshAdminMfa({ ...identity, authenticationMethods: ["pwd"] }, { nowSeconds: 1_100 }),
+    () => requireFreshAdminMfa({ ...identity, adminMfaVerified: false }, { nowSeconds: 1_100 }),
     ProductionIdentityError
   );
   assert.throws(
     () => requireFreshAdminMfa(identity, { nowSeconds: 1_400 }),
     /fresh_authentication_required/
+  );
+});
+
+test("derives administrator MFA proof only from the dedicated signed claim", async () => {
+  function adminVerifier(payload) {
+    return createProductionIdentityVerifier(config, {
+      fetchImpl: async () => ({ ok: true, async json() {
+        return { active: true, aud: "liteasy-admin", sub: "admin-1" };
+      } }),
+      jwks: {},
+      verifyJwt: async () => ({ payload: {
+        aud: "liteasy-admin", auth_time: 1_000, exp: 2_000, iat: 1_000,
+        iss: config.issuer, sub: "admin-1", ...payload
+      } })
+    });
+  }
+
+  const verified = await adminVerifier({ amr: ["pwd"], liteasy_admin_mfa: true })
+    .verifyAuthorizationHeader("Bearer signed-token", "liteasy-admin");
+  assert.equal(verified.adminMfaVerified, true);
+  assert.deepEqual(verified.authenticationMethods, ["pwd", "mfa"]);
+
+  const legacyAmrOnly = await adminVerifier({ amr: ["pwd", "mfa"] })
+    .verifyAuthorizationHeader("Bearer signed-token", "liteasy-admin");
+  assert.equal(legacyAmrOnly.adminMfaVerified, false);
+  assert.throws(
+    () => requireFreshAdminMfa(legacyAmrOnly, { nowSeconds: 1_100 }),
+    /mfa_required/
   );
 });
 
