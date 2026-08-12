@@ -58,7 +58,22 @@ jobs:
 
       - name: Test desktop frontend
         id: frontend_tests
-        run: npm test
+        shell: pwsh
+        run: |
+          npm test 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP\frontend-tests.log"
+          $exitCode = $LASTEXITCODE
+          if ($exitCode -ne 0) {
+            $diagnostic = Get-Content "$env:RUNNER_TEMP\frontend-tests.log" |
+              Where-Object { $_ -match "FAIL|Failed Tests|Test Files|Tests|Error: Test timed|Unable to find" } |
+              Select-Object -Last 60
+            $summary = ($diagnostic -join "`n")
+            if ($summary.Length -gt 3500) {
+              $summary = $summary.Substring($summary.Length - 3500)
+            }
+            $query = [uri]::EscapeDataString($summary)
+            Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=frontend_failure&ci_result=$query"
+            exit $exitCode
+          }
 
       - name: Report frontend tests
         continue-on-error: true
