@@ -12,6 +12,7 @@ import {
   PostgresExternalKnowledgeRepository
 } from "./externalKnowledgeService.mjs";
 import { PostgresLibraryRepository } from "./libraryRepository.mjs";
+import { PostgresMarketingApplicationRepository } from "./marketingApplicationRepository.mjs";
 import { ModelProxyService } from "./modelProxyService.mjs";
 import { createModelUpstreamProviders } from "./modelUpstreamProviders.mjs";
 import { verifyPostgresMigrations } from "./migrations.mjs";
@@ -71,6 +72,8 @@ export async function startCloudRuntime(config, dependencies = {}) {
   const libraryRepository = dependencies.libraryRepository ?? new PostgresLibraryRepository(pool, {
     literatureProjectionVerifier: literatureAuthorityClient
   });
+  const marketingApplicationRepository = dependencies.marketingApplicationRepository ??
+    new PostgresMarketingApplicationRepository(pool);
   const visualizationRepository = dependencies.visualizationRepository ??
     new PostgresVisualizationRepository(pool);
   const visualizationArtifactCompilerRegistry = dependencies.visualizationArtifactCompilerRegistry ??
@@ -220,6 +223,7 @@ export async function startCloudRuntime(config, dependencies = {}) {
       identityVerifier,
       externalKnowledgeService,
       libraryRepository,
+      marketingApplicationRepository,
       literatureAuthorityClient,
       modelProxyService,
       objectStore,

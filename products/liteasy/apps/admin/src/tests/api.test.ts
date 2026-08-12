@@ -23,6 +23,7 @@ test("uses a liteasy-admin bearer token and formal control-plane contracts", asy
   });
 
   await client.identity();
+  await client.marketingApplications({ limit: 100 });
   await client.saveModelPolicy({
     cloudProxyEndpoint: "https://models.liteasy.example",
     defaultProvider: "openai",
@@ -32,8 +33,9 @@ test("uses a liteasy-admin bearer token and formal control-plane contracts", asy
 
   expect(requests[0]).toMatchObject({ url: "https://api.liteasy.example/v1/admin/me" });
   expect((requests[0].init?.headers as Record<string, string>).Authorization).toBe("Bearer admin-token");
-  expect(requests[1].url).toBe("https://api.liteasy.example/v1/admin/model-policy/set");
-  expect(JSON.parse(String(requests[1].init?.body))).toEqual(expect.objectContaining({
+  expect(requests[1].url).toBe("https://api.liteasy.example/v1/admin/marketing-applications?limit=100");
+  expect(requests[2].url).toBe("https://api.liteasy.example/v1/admin/model-policy/set");
+  expect(JSON.parse(String(requests[2].init?.body))).toEqual(expect.objectContaining({
     expectedRevision: 1,
     idempotencyKey: "set-model-policy:00000000-0000-4000-8000-000000000001"
   }));

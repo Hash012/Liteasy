@@ -1515,7 +1515,9 @@ $installer | Format-List FullName,Length,LastWriteTime
 
 只应选中本次构建产生的一个 `.exe`。记录应用版本、完整 Git SHA 和文件名。
 
-### 12.3 Authenticode 是当前强制停止点
+### 12.3 Authenticode 与受控 staging 例外
+
+生产发布和不受控公开发布必须使用受信任的 Authenticode 签名。`0.1.0` 可在负责人明确批准后作为受控 staging 例外发布未签名的 Windows x64 安装包；该例外不得沿用到其他版本或环境，发布元数据必须记录 `signed: false`，测试用户必须提前知晓 Windows 会显示“未知发布者”。
 
 不得使用自签名证书发布给测试用户。继续前必须由组织完成以下输入：
 
@@ -1554,11 +1556,11 @@ $hash | Format-List Algorithm,Hash,Path
 5. 安装同产品 ID 的下一候选版本，验证升级后本地库和登录状态符合设计。
 6. 从 Windows 设置卸载，再确认程序文件移除且用户文献库没有被误删。
 
-任一项失败都保留截图、Windows build、安装包 SHA-256 和日志，停止发布。
+签名发布时任一项失败都保留截图、Windows build、安装包 SHA-256 和日志，停止发布。已批准的未签名 staging 例外应确认签名状态恰为 `NotSigned`，不得把 `HashMismatch`、`NotTrusted` 或其他异常状态当作未签名例外。
 
-### 12.5 公开下载路径是当前强制停止点
+### 12.5 受控下载路径
 
-当前仓库的 `products/marketing/index.html` 只有未来的 GitHub 社区和论坛占位链接，没有安装包下载按钮；仓库也没有把签名安装包发布到 OSS/CDN 的流水线。因此现在不能给出一个真实下载 URL，也不能把 PDF 私有 bucket 临时改成公共下载 bucket。
+营销站通过体验申请签发短时下载令牌，安装包由与用户 PDF bucket 分离的 waitlist 制品目录提供。GitHub Actions 使用短时 OIDC 身份把固定版本安装包原子发布到该目录；服务端校验仓库、工作流、提交 SHA、版本、文件名和 SHA-256，不保存长期 GitHub 凭据。
 
 发布前必须另行评审并实现：
 
@@ -1568,7 +1570,7 @@ $hash | Format-List Algorithm,Hash,Path
 4. 同目录发布 SHA-256 文件和版本说明。
 5. 营销站的真实下载按钮和自动化发布步骤，并在外网验证下载后的哈希与第 12.3 节一致。
 
-在这五项、真实签名和第 12.4 节 E2E 完成前，不要把安装包放到公开首页，也不要通过聊天、网盘临时分发给测试者。
+生产或不受控公开发布仍须完成真实签名和第 12.4 节完整 E2E。受控 staging 例外只能通过申请后的短时令牌分发，不得通过聊天、网盘或无鉴权静态路径分发。
 
 ## 13. 常见故障如何判断
 

@@ -9,13 +9,14 @@ import { PdfUploadError } from "./pdfUploadService.mjs";
 import { createCloudRequestHandler } from "./server.mjs";
 import { VisualizationServiceError } from "./visualizationService.mjs";
 
-function request(method, url, body, authorization = "Bearer valid") {
+function request(method, url, body, authorization = "Bearer valid", extraHeaders = {}) {
   const stream = Readable.from(body === undefined ? [] : [JSON.stringify(body)]);
   stream.method = method;
   stream.url = url;
   stream.headers = {
     authorization,
-    ...(body === undefined ? {} : { "content-type": "application/json" })
+    ...(body === undefined ? {} : { "content-type": "application/json" }),
+    ...extraHeaders
   };
   return stream;
 }
@@ -190,6 +191,20 @@ function runtime() {
         calls.push({ modelContext: context, modelStream: input });
         yield "Live ";
         yield "stream";
+      }
+    },
+    marketingApplicationRepository: {
+      async create(input) {
+        calls.push({ marketingApplicationCreate: input });
+        return { application: { applicationId: input.applicationId } };
+      },
+      async list(principal, input) {
+        calls.push({ marketingApplicationList: input, principal });
+        return { applications: [], nextBefore: null };
+      },
+      async markInstallerDownloaded(applicationId) {
+        calls.push({ marketingInstallerDownloaded: applicationId });
+        return { application: { applicationId, installerDownloadedAt: "2026-08-13T08:05:00.000Z" } };
       }
     },
     objectStore: {
@@ -1152,6 +1167,35 @@ test("lists governance metadata and requires fresh MFA for organization suspensi
   assert.equal(mutation.principal.subjectId, "admin_1");
   assert.equal(mutation.setOrganizationStatus.status, "suspended");
   assert.match(mutation.setOrganizationStatus.traceId, /^trace_/);
+});
+
+test("stores marketing applications with a server secret and lists them for platform admins", async () => {
+  const instance = runtime();
+  const handler = createCloudRequestHandler(instance, {
+    allowedOrigins: [],
+    database: { sslMode: "verify-full" },
+    environment: "production",
+    marketing: { applicationSecret: "marketing-application-secret" },
+    s3: { region: "test" }
+  });
+  const denied = response();
+  await handler(request("POST", "/v1/internal/marketing/applications", {
+    applicationId: "123e4567-e89b-42d3-a456-426614174000"
+  }), denied);
+  assert.equal(denied.status, 401);
+
+  const stored = response();
+  await handler(request("POST", "/v1/internal/marketing/applications", {
+    applicationId: "123e4567-e89b-42d3-a456-426614174000"
+  }, "Bearer valid", { "x-liteasy-marketing-secret": "marketing-application-secret" }), stored);
+  assert.equal(stored.status, 201, stored.body.toString("utf8"));
+  assert.equal(instance.calls.find((item) => item.marketingApplicationCreate).marketingApplicationCreate.applicationId,
+    "123e4567-e89b-42d3-a456-426614174000");
+
+  const listed = response();
+  await handler(request("GET", "/v1/admin/marketing-applications?limit=25"), listed);
+  assert.equal(listed.status, 200, listed.body.toString("utf8"));
+  assert.equal(instance.calls.find((item) => item.marketingApplicationList).marketingApplicationList.limit, 25);
 });
 
 test("serves desktop model policy and protects control-plane administration", async () => {

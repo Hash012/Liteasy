@@ -6,6 +6,7 @@ import type {
   ForumTagAppeal,
   GovernanceDirectory,
   ModelPolicy,
+  MarketingApplication,
   RetrievalSource,
   StorageQuota,
   VisualizationAuditRow,
@@ -153,6 +154,15 @@ export function createAdminApiClient({
     },
     modelPolicy() {
       return cloudGet<ModelPolicy>("/v1/admin/model-policy");
+    },
+    marketingApplications(input: { before?: string; limit?: number } = {}) {
+      const params = new URLSearchParams();
+      if (input.before) params.set("before", input.before);
+      if (input.limit !== undefined) params.set("limit", String(input.limit));
+      const query = params.size ? `?${params}` : "";
+      return cloudGet<{ applications: MarketingApplication[]; nextBefore: string | null }>(
+        `/v1/admin/marketing-applications${query}`
+      );
     },
     moderateForumAnnotation(input: { action: "restore" | "withdraw"; annotationId: string; reason: string }) {
       return request<{ action: string; annotationId: string; ok: boolean }>(

@@ -50,6 +50,16 @@ test("loads identity, policy, retrieval, audit, and forum data into task views",
       syncedAt: "2026-08-07T00:00:00.000Z",
       updatedBy: "admin-1"
     })),
+    marketingApplications: vi.fn(async () => ({ applications: [{
+      applicationId: "123e4567-e89b-42d3-a456-426614174000",
+      email: "reader@example.com",
+      field: "信息检索",
+      installerDownloadedAt: null,
+      problem: "理解复杂论文",
+      role: "研究生",
+      source: "marketing-site",
+      submittedAt: "2026-08-07T00:00:00.000Z"
+    }], nextBefore: null })),
     retrievalSources: vi.fn(async () => ({ sources: [{
       baseUrl: "https://search.example",
       connectorType: "crossref",
@@ -80,6 +90,9 @@ test("loads identity, policy, retrieval, audit, and forum data into task views",
   fireEvent.click(screen.getByRole("button", { name: "模型与检索" }));
   expect(await screen.findByDisplayValue("https://models.liteasy.example")).toBeInTheDocument();
   expect(screen.getByText("Public Search")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "体验申请" }));
+  expect(await screen.findByText("reader@example.com")).toBeInTheDocument();
+  expect(screen.getByText("理解复杂论文")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "审计" }));
   expect(await screen.findByText("model_policy_updated")).toBeInTheDocument();
   expect(screen.getByText("trace-1")).toBeInTheDocument();

@@ -34,6 +34,7 @@ import {
   DataUsageSettingsRegular,
   DeleteRegular,
   DocumentArrowDownRegular,
+  FormMultipleRegular,
   GaugeRegular,
   KeyRegular,
   PeopleTeamRegular,
@@ -52,12 +53,13 @@ import type {
   ForumTagAppeal,
   GovernanceDirectory,
   ModelPolicy,
+  MarketingApplication,
   OrganizationGovernance,
   RetrievalSource,
   StorageQuota
 } from "./types";
 
-type AdminView = "accounts" | "audit" | "forum" | "models" | "organizations" | "overview" | "quotas" | "support" | "visualization";
+type AdminView = "accounts" | "applications" | "audit" | "forum" | "models" | "organizations" | "overview" | "quotas" | "support" | "visualization";
 type Notice = { intent: "error" | "success" | "warning"; message: string; title: string };
 type RetrievalConnectorType = Exclude<RetrievalSource["connectorType"], null>;
 type Confirmation = {
@@ -70,6 +72,7 @@ type Confirmation = {
 const navigation: Array<{ icon: ReactElement; id: AdminView; label: string }> = [
   { icon: <ShieldLockRegular />, id: "overview", label: "概览" },
   { icon: <PeopleTeamRegular />, id: "accounts", label: "账号与角色" },
+  { icon: <FormMultipleRegular />, id: "applications", label: "体验申请" },
   { icon: <DatabaseRegular />, id: "organizations", label: "组织治理" },
   { icon: <GaugeRegular />, id: "quotas", label: "配额" },
   { icon: <KeyRegular />, id: "support", label: "支持访问" },
@@ -173,6 +176,8 @@ export function AdminWorkspace({
   });
   const [sources, setSources] = useState<RetrievalSource[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [applications, setApplications] = useState<MarketingApplication[]>([]);
+  const [nextApplicationBefore, setNextApplicationBefore] = useState<string | null>(null);
   const [nextAuditBefore, setNextAuditBefore] = useState<string | null>(null);
   const [forumAnnotations, setForumAnnotations] = useState<ForumAnnotation[]>([]);
   const [forumTagAppeals, setForumTagAppeals] = useState<ForumTagAppeal[]>([]);
@@ -191,13 +196,14 @@ export function AdminWorkspace({
     try {
       const currentIdentity = await api.identity();
       setIdentity(currentIdentity);
-      const [governanceResult, modelResult, sourceResult, auditResult, forumResult, appealResult] = await Promise.allSettled([
+      const [governanceResult, modelResult, sourceResult, auditResult, forumResult, appealResult, applicationResult] = await Promise.allSettled([
         api.governance(),
         api.modelPolicy(),
         api.retrievalSources(),
         api.audit({ limit: 50 }),
         api.forumAnnotations(),
-        api.forumTagAppeals()
+        api.forumTagAppeals(),
+        api.marketingApplications({ limit: 100 })
       ]);
       if (governanceResult.status === "fulfilled") setGovernance(governanceResult.value);
       else setNotice({ intent: "warning", message: errorMessage(governanceResult.reason), title: "治理目录加载失败" });
@@ -221,6 +227,12 @@ export function AdminWorkspace({
       else {
         setForumTagAppeals([]);
         setForumError((current) => current || errorMessage(appealResult.reason));
+      }
+      if (applicationResult.status === "fulfilled") {
+        setApplications(applicationResult.value.applications);
+        setNextApplicationBefore(applicationResult.value.nextBefore);
+      } else {
+        setNotice({ intent: "warning", message: errorMessage(applicationResult.reason), title: "体验申请加载失败" });
       }
     } catch (error) {
       setNotice({ intent: "error", message: errorMessage(error), title: "管理数据加载失败" });
@@ -477,6 +489,15 @@ export function AdminWorkspace({
     );
   }
 
+  async function loadMoreApplications() {
+    if (!nextApplicationBefore) return;
+    await execute("已加载更多体验申请。", async () => {
+      const result = await api.marketingApplications({ before: nextApplicationBefore, limit: 100 });
+      setApplications((current) => [...current, ...result.applications]);
+      setNextApplicationBefore(result.nextBefore);
+    });
+  }
+
   const activeLabel = navigation.find((item) => item.id === view)?.label ?? "管理后台";
 
   return (
@@ -550,6 +571,14 @@ export function AdminWorkspace({
             onAccountStatus={submitAccountStatus}
             onRoleGrant={submitRoleGrant}
             onRoleRevoke={submitRoleRevoke}
+          />
+        ) : null}
+        {!loading && view === "applications" ? (
+          <ApplicationsView
+            applications={applications}
+            busy={busy}
+            hasMore={Boolean(nextApplicationBefore)}
+            onLoadMore={loadMoreApplications}
           />
         ) : null}
         {!loading && view === "organizations" ? (
@@ -648,6 +677,39 @@ export function AdminWorkspace({
           </DialogSurface>
         </Dialog>
       ) : null}
+    </div>
+  );
+}
+
+function ApplicationsView({ applications, busy, hasMore, onLoadMore }: {
+  applications: MarketingApplication[];
+  busy: boolean;
+  hasMore: boolean;
+  onLoadMore: () => Promise<void>;
+}) {
+  return (
+    <div className="admin-view">
+      <div className="admin-metrics">
+        <div className="admin-metric"><span>申请总数</span><strong>{applications.length}{hasMore ? "+" : ""}</strong></div>
+        <div className="admin-metric"><span>已获取安装包</span><strong>{applications.filter((item) => item.installerDownloadedAt).length}</strong></div>
+        <div className="admin-metric"><span>今日申请</span><strong>{applications.filter((item) => new Date(item.submittedAt).toDateString() === new Date().toDateString()).length}</strong></div>
+      </div>
+      <Section title="体验申请记录">
+        {applications.length ? (
+          <div className="admin-table-wrap"><Table size="small"><TableHeader><TableRow>
+            <TableHeaderCell>提交时间</TableHeaderCell><TableHeaderCell>联系邮箱</TableHeaderCell><TableHeaderCell>身份 / 领域</TableHeaderCell><TableHeaderCell>希望解决的问题</TableHeaderCell><TableHeaderCell>安装包</TableHeaderCell>
+          </TableRow></TableHeader><TableBody>
+            {applications.map((application) => <TableRow key={application.applicationId}>
+              <TableCell>{formatDate(application.submittedAt)}</TableCell>
+              <TableCell><a href={`mailto:${application.email}`}>{application.email}</a></TableCell>
+              <TableCell>{application.role}<br /><small>{application.field || "未填写"}</small></TableCell>
+              <TableCell>{application.problem || "未填写"}</TableCell>
+              <TableCell>{application.installerDownloadedAt ? <Badge color="success">已下载</Badge> : <Badge color="informative">未下载</Badge>}<br /><small>{formatDate(application.installerDownloadedAt)}</small></TableCell>
+            </TableRow>)}
+          </TableBody></Table></div>
+        ) : <Empty>暂无体验申请</Empty>}
+        {hasMore ? <Button disabled={busy} onClick={() => void onLoadMore()}>加载更多</Button> : null}
+      </Section>
     </div>
   );
 }

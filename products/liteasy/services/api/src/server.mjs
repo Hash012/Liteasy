@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import http from "node:http";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
@@ -15,6 +15,7 @@ import { IdentityError, requireFreshMfa } from "./identityVerifier.mjs";
 import { IntuechoLiteratureClientError } from "./intuechoLiteratureClient.mjs";
 import { authorizeLibraryScope, LibraryAuthorizationError } from "./libraryAuthorization.mjs";
 import { LibraryRepositoryError } from "./libraryRepository.mjs";
+import { MarketingApplicationError } from "./marketingApplicationRepository.mjs";
 import { ModelProxyError } from "./modelProxyService.mjs";
 import { PdfUploadError } from "./pdfUploadService.mjs";
 import { PlatformAdminError } from "./platformAdminRepository.mjs";
@@ -115,6 +116,19 @@ async function readJsonBody(request, maximumBytes = 1024 * 1024) {
     return value;
   } catch {
     throw new LibraryRepositoryError("request_json_invalid", 400);
+  }
+}
+
+function requireMarketingSecret(request, config) {
+  const supplied = request.headers["x-liteasy-marketing-secret"];
+  const expected = config.marketing?.applicationSecret;
+  if (typeof supplied !== "string" || typeof expected !== "string") {
+    throw new MarketingApplicationError("marketing_service_authentication_required", 401);
+  }
+  const suppliedHash = createHash("sha256").update(supplied).digest();
+  const expectedHash = createHash("sha256").update(expected).digest();
+  if (!timingSafeEqual(suppliedHash, expectedHash)) {
+    throw new MarketingApplicationError("marketing_service_authentication_required", 401);
   }
 }
 
@@ -221,6 +235,7 @@ function sendError(response, error, traceId) {
     error instanceof IntuechoLiteratureClientError ||
     error instanceof LibraryAuthorizationError ||
     error instanceof LibraryRepositoryError ||
+    error instanceof MarketingApplicationError ||
     error instanceof ModelProxyError ||
     error instanceof PdfUploadError ||
     error instanceof PlatformAdminError ||
@@ -301,6 +316,23 @@ export function createCloudRequestHandler(runtime, config) {
       }
       if (request.method === "GET" && url.pathname === "/v1/identity/admin-config") {
         sendJson(response, 200, publicAdminIdentityConfig(config));
+        return;
+      }
+
+      if (request.method === "POST" && url.pathname === "/v1/internal/marketing/applications") {
+        requireMarketingSecret(request, config);
+        sendJson(response, 201, await runtime.marketingApplicationRepository.create(
+          await readJsonBody(request, 32 * 1024)
+        ));
+        return;
+      }
+
+      if (request.method === "POST" && url.pathname === "/v1/internal/marketing/installer-downloaded") {
+        requireMarketingSecret(request, config);
+        const body = await readJsonBody(request, 4 * 1024);
+        sendJson(response, 200, await runtime.marketingApplicationRepository.markInstallerDownloaded(
+          body.applicationId
+        ));
         return;
       }
 
@@ -611,6 +643,19 @@ export function createCloudRequestHandler(runtime, config) {
           principal,
           await readJsonBody(request)
         ));
+        return;
+      }
+
+      if (request.method === "GET" && url.pathname === "/v1/admin/marketing-applications") {
+        const identity = await runtime.identityVerifier.verifyAuthorizationHeader(
+          request.headers.authorization,
+          "liteasy-admin"
+        );
+        const principal = await runtime.platformAdminRepository.principal(identity);
+        sendJson(response, 200, await runtime.marketingApplicationRepository.list(principal, {
+          before: url.searchParams.get("before") || undefined,
+          limit: url.searchParams.has("limit") ? Number(url.searchParams.get("limit")) : undefined
+        }));
         return;
       }
 

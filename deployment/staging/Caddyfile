@@ -26,7 +26,7 @@
 	import access_log
 	import static_security
 
-	@waitlist path /api/waitlist /healthz/waitlist
+	@waitlist path /api/waitlist /api/releases/windows-installer /healthz/waitlist
 	handle @waitlist {
 		uri replace /healthz/waitlist /healthz
 		reverse_proxy 172.20.0.1:8787

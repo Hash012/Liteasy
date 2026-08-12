@@ -2,11 +2,18 @@ name: Build Windows installer
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_staging:
+        description: "Publish the unsigned installer to staging"
+        required: true
+        type: boolean
+        default: false
   push:
     tags:
       - "v*"
 
 permissions:
+  id-token: write
   contents: read
 
 jobs:
@@ -23,7 +30,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: products/liteasy/apps/desktop/package-lock.json
 
@@ -45,14 +52,85 @@ jobs:
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
       - name: Build and verify production assets
+        env:
+          VITE_FORUM_API_URL: https://community.staging.liteasyclaw.com
+          VITE_FORUM_WEB_URL: https://community.staging.liteasyclaw.com
+          VITE_LITEASY_CLOUD_URL: https://api.staging.liteasyclaw.com
         run: npm run build
 
       - name: Build NSIS installer
+        env:
+          VITE_FORUM_API_URL: https://community.staging.liteasyclaw.com
+          VITE_FORUM_WEB_URL: https://community.staging.liteasyclaw.com
+          VITE_LITEASY_CLOUD_URL: https://api.staging.liteasyclaw.com
         run: npm run tauri -- build --bundles nsis
+
+      - name: Verify and stage unsigned installer
+        id: installer
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem .\src-tauri\target\release\bundle\nsis\*-setup.exe)
+          if ($installers.Count -ne 1) {
+            throw "Expected exactly one NSIS installer, found $($installers.Count)."
+          }
+          $signature = Get-AuthenticodeSignature $installers[0].FullName
+          if ($signature.Status -ne "NotSigned") {
+            throw "Staging unsigned release expected NotSigned, received $($signature.Status)."
+          }
+          $published = Join-Path $env:RUNNER_TEMP "Liteasy_0.1.0_x64-setup.exe"
+          Copy-Item $installers[0].FullName $published
+          $hash = (Get-FileHash -Algorithm SHA256 $published).Hash.ToLowerInvariant()
+          "path=$published" >> $env:GITHUB_OUTPUT
+          "sha256=$hash" >> $env:GITHUB_OUTPUT
+          "size=$((Get-Item $published).Length)" >> $env:GITHUB_OUTPUT
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
           name: Liteasy-windows-x64-installer
-          path: products/liteasy/apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+          path: ${{ steps.installer.outputs.path }}
           if-no-files-found: error
+          retention-days: 14
+
+      - name: Request staging upload identity
+        if: (github.event_name == 'workflow_dispatch' && inputs.publish_staging) || startsWith(github.ref, 'refs/tags/v')
+        id: oidc
+        shell: pwsh
+        run: |
+          $audience = [uri]::EscapeDataString("liteasy-staging-installer-upload")
+          $response = Invoke-RestMethod `
+            -Headers @{ Authorization = "Bearer $env:ACTIONS_ID_TOKEN_REQUEST_TOKEN" } `
+            -Uri "$env:ACTIONS_ID_TOKEN_REQUEST_URL&audience=$audience"
+          Write-Output "::add-mask::$($response.value)"
+          "token=$($response.value)" >> $env:GITHUB_OUTPUT
+
+      - name: Publish unsigned installer to staging
+        if: (github.event_name == 'workflow_dispatch' && inputs.publish_staging) || startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          INSTALLER_PATH: ${{ steps.installer.outputs.path }}
+          INSTALLER_SHA256: ${{ steps.installer.outputs.sha256 }}
+          RELEASE_TOKEN: ${{ steps.oidc.outputs.token }}
+        run: |
+          $headers = @{
+            Authorization = "Bearer $env:RELEASE_TOKEN"
+            "X-Liteasy-Release-Filename" = "Liteasy_0.1.0_x64-setup.exe"
+            "X-Liteasy-Release-Sha" = "$env:GITHUB_SHA"
+            "X-Liteasy-Release-Sha256" = "$env:INSTALLER_SHA256"
+            "X-Liteasy-Release-Version" = "0.1.0"
+          }
+          Invoke-RestMethod `
+            -ContentType "application/octet-stream" `
+            -Headers $headers `
+            -InFile $env:INSTALLER_PATH `
+            -Method Put `
+            -Uri "https://staging.liteasyclaw.com/api/releases/windows-installer"
+
+      - name: Verify staging publication
+        if: (github.event_name == 'workflow_dispatch' && inputs.publish_staging) || startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $health = Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist"
+          if (-not $health.ok -or -not $health.installerReady) {
+            throw "Staging installer did not become ready."
+          }

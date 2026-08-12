@@ -301,6 +301,9 @@ export function loadCloudConfig(env = process.env) {
     }),
     environment,
     host: env.LITEASY_CLOUD_HOST?.trim() || "127.0.0.1",
+    marketing: Object.freeze({
+      applicationSecret: requireDeploymentSecret(env, "LITEASY_MARKETING_APPLICATION_SECRET")
+    }),
     identity: Object.freeze({
       adminClientId,
       clientId: identityClientId,

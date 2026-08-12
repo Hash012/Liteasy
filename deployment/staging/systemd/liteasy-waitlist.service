@@ -1,6 +1,7 @@
 [Unit]
 Description=Liteasy marketing application and download service
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 WorkingDirectory=/opt/liteasy/waitlist

@@ -120,6 +120,17 @@ export type AuditEvent = {
   traceId: string;
 };
 
+export type MarketingApplication = {
+  applicationId: string;
+  email: string;
+  field: string;
+  installerDownloadedAt: string | null;
+  problem: string;
+  role: string;
+  source: "marketing-site";
+  submittedAt: string;
+};
+
 export type ForumAnnotation = {
   authorId: string;
   authorName: string;
