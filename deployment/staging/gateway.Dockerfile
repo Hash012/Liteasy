@@ -37,6 +37,10 @@ LABEL org.opencontainers.image.revision=${SOURCE_REVISION} \
       org.opencontainers.image.source=${SOURCE_URL} \
       org.opencontainers.image.version=${SOURCE_VERSION}
 
+# The upstream binary carries cap_net_bind_service. Remove the file capability so
+# it remains executable under Compose's cap_drop=ALL and no-new-privileges policy.
+RUN setcap -r /usr/bin/caddy
+
 COPY deployment/staging/Caddyfile /etc/caddy/Caddyfile
 COPY products/marketing /srv/marketing
 COPY --from=intuecho-web-build /src/apps/web/dist /srv/community

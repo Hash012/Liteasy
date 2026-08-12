@@ -133,6 +133,11 @@ test("all application images expose the immutable source revision", () => {
   }
 });
 
+test("the gateway binary runs under the hardened Compose capability policy", () => {
+  const dockerfile = fs.readFileSync(new URL("gateway.Dockerfile", directory), "utf8");
+  assert.match(dockerfile, /RUN setcap -r \/usr\/bin\/caddy/);
+});
+
 test("the Intuecho API can build native dependencies without prebuilt downloads", () => {
   const dockerfile = fs.readFileSync(
     new URL("../../products/intuecho/services/api/Dockerfile", import.meta.url),
