@@ -255,7 +255,9 @@ a { color: inherit; text-decoration: none; }
 .annotation-author span { overflow: hidden; color: var(--intuecho-faint); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .annotation-card > header time { color: var(--intuecho-faint); font-size: 11px; white-space: nowrap; }
 .author-actions { display: flex; align-items: center; gap: 1px; }
-.annotation-content { max-width: 68ch; }
+.annotation-content { display: block; max-width: 68ch; color: inherit; text-decoration: none; }
+.annotation-content:hover .annotation-body { color: var(--intuecho-brand); }
+.annotation-content:focus-visible { border-radius: 2px; outline: 2px solid var(--intuecho-brand); outline-offset: 3px; }
 .annotation-body { margin: 17px 0 16px; color: #202624; font-family: var(--intuecho-serif); font-size: 16px; line-height: 1.82; white-space: pre-wrap; overflow-wrap: anywhere; }
 .target-list,
 .selected-targets { display: grid; gap: 6px; }
@@ -298,6 +300,8 @@ a { color: inherit; text-decoration: none; }
 .reply-publication-state.published { color: #2d6740; }
 .derived-reply-context,
 .inherited-visibility { margin: 8px 0; color: var(--intuecho-muted); font-size: 12px; }
+.derived-reply-context a { color: var(--intuecho-brand); text-decoration: none; }
+.derived-reply-context a:hover { text-decoration: underline; }
 .reply-publication-fields { display: grid; gap: 10px; }
 .reply-publication-fields .literature-target-editor { margin-top: 2px; }
 .empty-replies { display: block; padding: 12px 0; color: var(--intuecho-faint); font-size: 12px; }

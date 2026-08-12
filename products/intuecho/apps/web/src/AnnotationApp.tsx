@@ -414,9 +414,9 @@ export function AnnotationCard({ annotation, onCompose, onConversation, session 
         <Tooltip content="私聊" relationship="label"><Button appearance="subtle" icon={<Chat20Regular />} aria-label="私聊" onClick={() => void message()} /></Tooltip>
       </div>}
     </header>
-    <div className="annotation-content"><p className="annotation-body">{current.body}</p></div>
+    <a className="annotation-content" href={`/annotations/${encodeURIComponent(current.id)}`}><p className="annotation-body">{current.body}</p></a>
     {current.withdrawnAt && <p className="moderation-state">已由组织管理员撤回</p>}
-    {current.originalReply && <p className="derived-reply-context">回复了某条批注</p>}
+    {current.originalReply?.status === "available" && <p className="derived-reply-context"><a href={`/annotations/${encodeURIComponent(current.originalReply.parentAnnotationId)}`}>回复了某条批注</a></p>}
     {current.originalReply?.status === "parent_deleted" && <p className="deleted-reply-context">原回复对象已删除</p>}
     <div className="target-list">{current.targets.map((target, index) => <TargetChip key={`${target.kind}-${index}`} target={target} />)}</div>
     {current.tags.length > 0 && <div className="annotation-tags">{current.tags.map((tag) => tag.origin === "platform" && current.viewerIsAuthor && tag.state === "active" ? <button type="button" key={`${tag.origin}-${tag.name}`} className="platform-tag" aria-label={`申诉平台标签 ${tag.name}`} onClick={() => { setAppealReason(""); setAppealTag(tag.name); }}>#{tag.name} · 平台</button> : <span key={`${tag.origin}-${tag.name}`} className={tag.origin === "platform" ? "platform-tag" : ""}>#{tag.name}{tag.origin === "platform" ? tag.state === "appealed" ? " · 审核中" : tag.state === "upheld" ? " · 已维持" : " · 平台" : ""}</span>)}</div>}

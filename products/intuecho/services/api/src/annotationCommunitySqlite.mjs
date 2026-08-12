@@ -1389,14 +1389,19 @@ export class SqliteAnnotationCommunityRepository {
     const rating = this.db.prepare("SELECT count(*) AS count, avg(rating) AS average FROM annotation_ratings_v2 WHERE annotation_id = ?").get(row.id);
     const viewerRating = viewer?.id ? this.db.prepare("SELECT rating FROM annotation_ratings_v2 WHERE annotation_id = ? AND user_id = ?").get(row.id, viewer.id)?.rating ?? null : null;
     const viewerSaved = viewer?.id ? Boolean(this.db.prepare("SELECT 1 FROM annotation_saves_v2 WHERE annotation_id = ? AND user_id = ?").get(row.id, viewer.id)) : false;
-    const sourceReply = row.source_reply_id ? this.db.prepare("SELECT parent_deleted_at FROM annotation_replies_v2 WHERE id = ?").get(row.source_reply_id) : null;
+    const sourceReply = row.source_reply_id ? this.db.prepare("SELECT parent_annotation_id, parent_deleted_at FROM annotation_replies_v2 WHERE id = ?").get(row.source_reply_id) : null;
+    const originalReply = !row.source_reply_id
+      ? null
+      : !sourceReply || sourceReply.parent_deleted_at
+        ? { replyId: row.source_reply_id, status: "parent_deleted" }
+        : { parentAnnotationId: sourceReply.parent_annotation_id, replyId: row.source_reply_id, status: "available" };
     return {
       author: { id: row.author_id, initials: row.author_initials, name: row.author_name, profile: parseJson(row.author_profile_snapshot_json, {}) },
       body: row.body,
       createdAt: row.created_at,
       id: row.id,
       organizationId: row.organization_id,
-      originalReply: row.source_reply_id ? { replyId: row.source_reply_id, status: sourceReply?.parent_deleted_at ? "parent_deleted" : "available" } : null,
+      originalReply,
       ratingAverage: rating.average === null ? null : Number(Number(rating.average).toFixed(2)),
       ratingCount: Number(rating.count),
       revision: row.revision,

@@ -1019,14 +1019,21 @@ export class PostgresAnnotationCommunityRepository {
       ? await client.query(`SELECT (SELECT rating FROM annotation_ratings WHERE annotation_id = $1 AND user_id = $2) AS rating, EXISTS(SELECT 1 FROM annotation_saves WHERE annotation_id = $1 AND user_id = $2) AS saved`, [row.id, viewer.id])
       : { rows: [{ rating: null, saved: false }] };
     const rating = await client.query("SELECT count(*)::int AS count, avg(rating)::double precision AS average FROM annotation_ratings WHERE annotation_id = $1", [row.id]);
-    const sourceReply = row.source_reply_id ? await client.query("SELECT parent_deleted_at FROM annotation_replies WHERE id = $1", [row.source_reply_id]) : { rows: [] };
+    const sourceReply = row.source_reply_id
+      ? (await client.query("SELECT parent_annotation_id, parent_deleted_at FROM annotation_replies WHERE id = $1", [row.source_reply_id])).rows[0] ?? null
+      : null;
+    const originalReply = !row.source_reply_id
+      ? null
+      : !sourceReply || sourceReply.parent_deleted_at
+        ? { replyId: row.source_reply_id, status: "parent_deleted" }
+        : { parentAnnotationId: sourceReply.parent_annotation_id, replyId: row.source_reply_id, status: "available" };
     return {
       author: { id: row.author_id, initials: row.author_initials, name: row.author_name, profile: row.author_profile_snapshot },
       body: row.body,
       createdAt: row.created_at,
       id: row.id,
       organizationId: row.organization_id,
-      originalReply: row.source_reply_id ? { replyId: row.source_reply_id, status: sourceReply.rows[0]?.parent_deleted_at ? "parent_deleted" : "available" } : null,
+      originalReply,
       ratingAverage: rating.rows[0].average === null ? null : Number(Number(rating.rows[0].average).toFixed(2)),
       ratingCount: Number(rating.rows[0].count),
       revision: Number(row.revision),

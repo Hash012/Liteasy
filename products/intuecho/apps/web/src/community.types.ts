@@ -56,7 +56,10 @@ export type CommunityAnnotation = {
   createdAt: string;
   id: string;
   organizationId: string | null;
-  originalReply: { replyId: string; status: "available" | "parent_deleted" } | null;
+  originalReply: (
+    | { parentAnnotationId: string; replyId: string; status: "available" }
+    | { replyId: string; status: "parent_deleted" }
+  ) | null;
   ratingAverage: number | null;
   ratingCount: number;
   revision: number;

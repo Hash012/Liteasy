@@ -1400,10 +1400,21 @@ test("annotation community publishes multi-target annotations, derived passages,
     assert.equal(promotedReply.statusCode, 201, promotedReply.body);
     assert.equal(promotedReply.json().reply.derivedAnnotationId, promotedReply.json().annotation.id);
     assert.equal(promotedReply.json().annotation.originalReply.status, "available");
+    assert.equal(promotedReply.json().annotation.originalReply.parentAnnotationId, annotation.id);
 
     const replies = await app.inject({ method: "GET", url: `/v1/annotations/${annotation.id}/replies` });
     assert.equal(replies.statusCode, 200);
     assert.equal(replies.json().replies.length, 2);
+    const plazaBeforeParentWithdrawal = await app.inject({ method: "GET", url: "/v1/plaza?sort=latest" });
+    assert.equal(plazaBeforeParentWithdrawal.statusCode, 200, plazaBeforeParentWithdrawal.body);
+    assert.deepEqual(
+      plazaBeforeParentWithdrawal.json().annotations.find((item) => item.id === promotedReply.json().annotation.id)?.originalReply,
+      {
+        parentAnnotationId: annotation.id,
+        replyId: promotedReply.json().reply.id,
+        status: "available"
+      }
+    );
 
     const rated = await app.inject({
       headers: sameNameHeader,
@@ -1420,7 +1431,10 @@ test("annotation community publishes multi-target annotations, derived passages,
     assert.equal(withdrawn.statusCode, 200);
     const retained = await app.inject({ method: "GET", url: `/v1/annotations/${promotedReply.json().annotation.id}` });
     assert.equal(retained.statusCode, 200, retained.body);
-    assert.equal(retained.json().annotation.originalReply.status, "parent_deleted");
+    assert.deepEqual(retained.json().annotation.originalReply, {
+      replyId: promotedReply.json().reply.id,
+      status: "parent_deleted"
+    });
 
     const filtered = await app.inject({
       method: "GET",
@@ -1428,6 +1442,10 @@ test("annotation community publishes multi-target annotations, derived passages,
     });
     assert.equal(filtered.statusCode, 200, filtered.body);
     assert.deepEqual(filtered.json().annotations.map((item) => item.id), [promotedReply.json().annotation.id]);
+    assert.deepEqual(filtered.json().annotations[0].originalReply, {
+      replyId: promotedReply.json().reply.id,
+      status: "parent_deleted"
+    });
   });
 });
 

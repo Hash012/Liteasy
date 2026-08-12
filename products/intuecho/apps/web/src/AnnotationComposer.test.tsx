@@ -301,7 +301,7 @@ test("clearing inherited targets disables only independent publication", async (
 
 test("edits a derived annotation through its canonical source reply", async () => {
   const user = userEvent.setup();
-  const derived = { ...publicParent, body: "Old reply", id: "annotation-derived", originalReply: { replyId: "reply-source", status: "available" as const }, viewerIsAuthor: true };
+  const derived = { ...publicParent, body: "Old reply", id: "annotation-derived", originalReply: { parentAnnotationId: publicParent.id, replyId: "reply-source", status: "available" as const }, viewerIsAuthor: true };
   render(<AnnotationComposer context={{ edit: derived }} onClose={vi.fn()} onSaved={vi.fn()} />);
 
   const body = screen.getByLabelText("批注内容");
@@ -422,14 +422,16 @@ test("renders one reply with one projection link and independent projection cont
   expect(await screen.findAllByText("A linked reply")).toHaveLength(1);
   expect(screen.getAllByRole("link", { name: "查看同步发布的批注" })).toHaveLength(1);
 
-  rerender(<AnnotationCard annotation={{ ...publicParent, body: publishedReply.body, id: publishedReply.derivedAnnotationId!, originalReply: { replyId: publishedReply.id, status: "available" }, viewerIsAuthor: true }} session={null} onCompose={vi.fn()} />);
-  expect(screen.getByText("回复了某条批注")).toBeVisible();
+  rerender(<AnnotationCard annotation={{ ...publicParent, body: publishedReply.body, id: publishedReply.derivedAnnotationId!, originalReply: { parentAnnotationId: "annotation-parent/with spaces", replyId: publishedReply.id, status: "available" }, viewerIsAuthor: true }} session={null} onCompose={vi.fn()} />);
+  expect(screen.getByRole("link", { name: "回复了某条批注" })).toHaveAttribute("href", "/annotations/annotation-parent%2Fwith%20spaces");
+  expect(screen.getByRole("link", { name: publishedReply.body })).toHaveAttribute("href", "/annotations/annotation-derived%2F1");
   expect(screen.getByRole("button", { name: "回复" })).toBeVisible();
   expect(screen.getByRole("button", { name: "收藏" })).toBeVisible();
   expect(screen.getByRole("button", { name: "编辑批注" })).toBeVisible();
 });
 
-test("shows the fixed deleted-parent context on a derived card", () => {
+test("shows the fixed deleted-parent context without a stale parent link on a derived card", () => {
   render(<AnnotationCard annotation={{ ...publicParent, originalReply: { replyId: "reply-source", status: "parent_deleted" } }} session={null} onCompose={vi.fn()} />);
   expect(screen.getByText("原回复对象已删除")).toBeVisible();
+  expect(screen.queryByRole("link", { name: "回复了某条批注" })).not.toBeInTheDocument();
 });
