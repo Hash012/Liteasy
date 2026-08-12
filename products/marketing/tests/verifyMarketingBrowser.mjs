@@ -14,11 +14,13 @@ try {
   await page.getByRole("tab", { name: "核对依据" }).click();
   assert.equal(await page.locator("[data-workflow-title]").textContent(), "核对依据");
 
-  const graphTab = page.getByRole("tab", { name: "关系图" });
-  await graphTab.focus();
-  await graphTab.press("ArrowRight");
-  assert.equal(await page.locator("[data-result-title]").textContent(), "图表与示意");
+  const figureTab = page.getByRole("tab", { name: "论文原图" });
+  await figureTab.focus();
+  await figureTab.press("ArrowRight");
+  assert.equal(await page.locator("[data-result-title]").textContent(), "结构表达");
 
+  await page.locator('[data-waitlist-form] input[name="email"]').fill("reader@example.com");
+  await page.locator('[data-waitlist-form] select[name="role"]').selectOption({ label: "研究生" });
   await page.locator("[data-waitlist-form]").evaluate((form) => form.requestSubmit());
   await page.getByText("体验申请入口尚未开放").waitFor();
   assert.equal(

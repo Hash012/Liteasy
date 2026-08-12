@@ -40,7 +40,7 @@ test("declares the preserved semantic page framework", () => {
     assert.match(html, new RegExp(`data-marketing-section="${section}"`));
   }
   assert.match(html, /role="tablist"[^>]*aria-label="薄读工作流"/);
-  assert.match(html, /role="tablist"[^>]*aria-label="理解方式预览"/);
+  assert.match(html, /role="tablist"[^>]*aria-label="薄读多模态呈现"/);
   assert.match(html, /aria-live="polite"/);
 });
 
@@ -53,12 +53,15 @@ test("offers the approved five-step researcher workflow", () => {
   }
 });
 
-test("offers five user-facing understanding results", () => {
-  for (const label of ["薄读", "关系图", "图表与示意", "对比表", "汇报与文档"]) {
+test("offers Thin Reading's parallel multimodal understanding modes", () => {
+  for (const label of ["论文原图", "结构表达", "科学图解", "数学与几何", "过程演示", "视觉重绘"]) {
     assert.match(`${html}\n${script}`, new RegExp(label));
   }
-  for (const key of ["thin", "graph", "visual", "compare", "document"]) {
+  for (const key of ["sourceFigure", "structure", "science", "math", "process", "illustration"]) {
     assert.match(script, new RegExp(`\\b${key}: \\{`));
+  }
+  for (const retired of ["关系图", "对比表", "汇报与文档"]) {
+    assert.doesNotMatch(`${html}\n${script}`, new RegExp(retired));
   }
 });
 
@@ -71,7 +74,7 @@ test("ships an accessible Intuecho shared-reading visual", async () => {
 test("connects every tab to an existing panel", () => {
   const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]));
   const tabs = [...html.matchAll(/<button\s+([^>]*\brole="tab"[^>]*)>/g)].map((match) => match[1]);
-  assert.equal(tabs.length, 10);
+  assert.equal(tabs.length, 11);
   const tabIds = tabs.map((attributes) => attributes.match(/\bid="([^"]+)"/)?.[1]);
   assert.equal(new Set(tabIds).size, tabs.length);
   for (const attributes of tabs) {

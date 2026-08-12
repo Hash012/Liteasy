@@ -27,70 +27,66 @@ const workflowData = {
 };
 
 const resultData = {
-  thin: {
-    kicker: "从问题开始",
-    title: "薄读",
-    copy: "先读懂你最想知道的，再沿词句、板块和关联线索逐层探索。",
-    use: "适合：快速进入一篇复杂文献",
-    className: "result-thin-preview",
-    ariaLabel: "从用户问题逐层深入的薄读预览",
+  sourceFigure: {
+    kicker: "保留原文关系",
+    title: "论文原图",
+    copy: "自动找到与当前理解相关的原图、表格或图注，连同页码与证据位置放回阅读上下文。",
+    use: "薄读呈现：原图、图注与位置关联",
+    className: "result-source-figure-preview",
+    ariaLabel: "论文原图自动定位插入预览",
     markup: `
-      <div class="thin-toolbar"><span>薄读</span><span>从你的问题开始</span></div>
-      <p>为什么这项方法能在更少计算量下保留关键关系？</p>
-      <div class="thin-tokens"><span>查看方法依据</span><span>理解实验结果</span><span>继续探索局限</span></div>`
+      <div class="thin-toolbar"><span>薄读 / 论文原图</span><span>第 4 页 · Fig. 2</span></div>
+      <div class="source-figure-card"><img src="assets/program.png" alt="论文原图的示意预览" /><span class="source-figure-marker">当前段落相关</span><p>方法结构 · 原图与图注保持原文身份</p></div>`
   },
-  graph: {
-    kicker: "看见联系",
-    title: "关系图",
-    copy: "把当前内容与概念、证据和相关文献之间的联系放在同一视野中。",
-    use: "适合：追踪概念与研究脉络",
-    className: "result-graph-preview",
-    ariaLabel: "概念、证据和相关文献关系图预览",
-    markup: `<img class="result-visual" src="assets/map-visual.svg" alt="当前问题与概念、证据和相关文献组成的关系图" />`
-  },
-  visual: {
-    kicker: "换一种方式理解",
-    title: "图表与示意",
-    copy: "用结构图、公式、图表或过程演示，把复杂内容变成可以观察和操作的解释。",
-    use: "适合：理解结构、数量与过程",
-    className: "result-visual-preview",
-    ariaLabel: "图表、公式和过程示意预览",
+  structure: {
+    kicker: "生成结构表达",
+    title: "结构表达",
+    copy: "把论文中的概念、步骤、因果或时间关系生成结构图，让复杂论述有清晰的形状。",
+    use: "薄读生成：流程图、思维导图、因果图与时间线",
+    className: "result-structure-preview",
+    ariaLabel: "薄读生成结构表达预览",
     markup: `
-      <div class="visual-explanation" aria-hidden="true">
-        <div class="visual-formula">输入 <span>&#8594;</span> 关系提取 <span>&#8594;</span> 证据核对</div>
-        <div class="visual-bars"><span style="--value: 42%"></span><span style="--value: 68%"></span><span style="--value: 84%"></span></div>
-      </div>
-      <p class="preview-caption">结构、数量与过程在同一解释中相互对应</p>`
+      <div class="structure-canvas"><span class="structure-node structure-node--root">研究问题</span><span class="structure-node structure-node--one">方法</span><span class="structure-node structure-node--two">证据</span><span class="structure-node structure-node--three">结果</span><i class="structure-line structure-line--a"></i><i class="structure-line structure-line--b"></i><i class="structure-line structure-line--c"></i></div><p class="preview-caption">结构由当前文献证据绑定，可继续查看节点依据</p>`
   },
-  compare: {
-    kicker: "并列判断",
-    title: "对比表",
-    copy: "把多篇文献的研究对象、方法、证据和结论放在同一视野中比较。",
-    use: "适合：综述与方案比较",
-    className: "result-compare-preview",
-    ariaLabel: "多篇文献对比表预览",
+  science: {
+    kicker: "生成科学图解",
+    title: "科学图解",
+    copy: "根据论文中的证据生成受控的电路、物理示意或生物结构图，帮助你观察对象、连接与标注。",
+    use: "薄读生成：电路、物理示意与生物结构",
+    className: "result-science-preview",
+    ariaLabel: "薄读生成科学图解预览",
     markup: `
-      <table class="comparison-preview">
-        <caption class="sr-only">三篇示例文献的方法与证据对比</caption>
-        <thead><tr><th>文献</th><th>研究重点</th><th>证据</th></tr></thead>
-        <tbody><tr><th>A</th><td>效率</td><td>消融实验</td></tr><tr><th>B</th><td>表达能力</td><td>基准测试</td></tr><tr><th>C</th><td>可解释性</td><td>案例分析</td></tr></tbody>
-      </table>`
+      <div class="science-diagram"><span class="science-label science-label--input">输入</span><span class="science-box science-box--core">核心对象</span><span class="science-label science-label--output">输出</span><i class="science-arrow science-arrow--a"></i><i class="science-arrow science-arrow--b"></i><small>证据绑定标注</small></div>`
   },
-  document: {
-    kicker: "带走这一轮理解",
-    title: "汇报与文档",
-    copy: "把阅读结果整理为汇报结构或可继续编辑、保存的文档。",
-    use: "适合：组会、课堂与研究记录",
-    className: "result-document-preview",
-    ariaLabel: "汇报结构与可编辑文档预览",
+  math: {
+    kicker: "生成数学与几何表达",
+    title: "数学与几何",
+    copy: "把论文里的函数、几何关系和空间结构生成可观察的表达，并支持缩放、旋转或查看关键参数。",
+    use: "薄读生成：函数图像、二维几何与三维几何",
+    className: "result-math-preview",
+    ariaLabel: "薄读生成数学与几何表达预览",
     markup: `
-      <div class="document-preview">
-        <p class="document-preview__eyebrow">LITEASY / READING NOTES</p>
-        <h4>研究问题与当前判断</h4>
-        <p>整理核心理解、依据、关联文献与下一步问题。</p>
-        <div class="document-preview__lines"><span></span><span></span><span></span></div>
-        <p class="document-preview__formats">DOCX · PDF · Markdown</p>
-      </div>`
+      <div class="math-stage"><div class="math-axes"><i></i><i></i><b>f(x)</b><span>可缩放 · 可旋转 · 可选中</span></div><div class="math-control">参数 <strong>a = 2.0</strong><em></em></div></div>`
+  },
+  process: {
+    kicker: "生成过程演示",
+    title: "过程演示",
+    copy: "把物理变化或化学反应拆成可逐步查看的过程，配合方程、事件和证据标记观察变化。",
+    use: "薄读生成：物理过程与化学反应过程",
+    className: "result-process-preview",
+    ariaLabel: "薄读生成过程演示预览",
+    markup: `
+      <div class="process-stage"><div class="process-scene"><span>初始状态</span><i>&#8594;</i><b>变化中</b><i>&#8594;</i><span>结果状态</span></div><div class="process-timeline"><span></span><b></b><i></i></div><p>逐帧查看 · 关键事件与证据绑定</p></div>`
+  },
+  illustration: {
+    kicker: "生成证据绑定插图",
+    title: "视觉重绘",
+    copy: "当原文图像难以直接阅读时，把已核对的结构和标签重绘成清晰的辅助插图，并明确标记它不是论文原图。",
+    use: "薄读生成：带证据标签的辅助视觉表达",
+    className: "result-illustration-preview",
+    ariaLabel: "薄读生成证据绑定辅助插图预览",
+    markup: `
+      <div class="illustration-stage"><div class="illustration-card"><span class="illustration-badge">AI 辅助插图</span><div class="illustration-shape"></div><div class="illustration-labels"><span>对象 A</span><span>对象 B</span><span>证据 01</span></div></div><p>与原文图清晰区分，标签与证据保持对应</p></div>`
   }
 };
 

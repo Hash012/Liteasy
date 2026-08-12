@@ -168,27 +168,31 @@
             <p class="eyebrow">WAYS TO UNDERSTAND</p>
             <h2 id="results-title">用最合适的方式，<br />理解眼前的问题。</h2>
           </div>
-          <p>同一份材料可以成为逐层讲述、关系网络、图表与示意、文献对比，也可以整理成能够继续编辑和保存的研究记录。</p>
+          <p>薄读会判断什么样的表达最能帮助当前理解：保留论文原图，或生成与证据绑定的结构、图解、数学表达和过程演示。</p>
         </div>
         <div class="content-shell artifact-layout result-layout">
-          <div class="artifact-tabs result-tabs" role="tablist" aria-label="理解方式预览">
-            <button id="result-thin" class="artifact-tab result-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="result-panel" data-result="thin">薄读</button>
-            <button id="result-graph" class="artifact-tab result-tab" type="button" role="tab" aria-selected="false" aria-controls="result-panel" data-result="graph">关系图</button>
-            <button id="result-visual" class="artifact-tab result-tab" type="button" role="tab" aria-selected="false" aria-controls="result-panel" data-result="visual">图表与示意</button>
-            <button id="result-compare" class="artifact-tab result-tab" type="button" role="tab" aria-selected="false" aria-controls="result-panel" data-result="compare">对比表</button>
-            <button id="result-document" class="artifact-tab result-tab" type="button" role="tab" aria-selected="false" aria-controls="result-panel" data-result="document">汇报与文档</button>
+          <div class="artifact-tabs result-tabs" role="tablist" aria-label="薄读多模态呈现">
+            <button id="result-sourceFigure" class="artifact-tab result-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="result-panel" data-result="sourceFigure">论文原图</button>
+            <button id="result-structure" class="artifact-tab result-tab" type="button" role="tab" aria-selected="false" aria-controls="result-panel" data-result="structure">结构表达</button>
+            <button id="result-science" class="artifact-tab result-tab" type="button" role="tab" aria-selected="false" aria-controls="result-panel" data-result="science">科学图解</button>
+            <button id="result-math" class="artifact-tab result-tab" type="button" role="tab" aria-selected="false" aria-controls="result-panel" data-result="math">数学与几何</button>
+            <button id="result-process" class="artifact-tab result-tab" type="button" role="tab" aria-selected="false" aria-controls="result-panel" data-result="process">过程演示</button>
+            <button id="result-illustration" class="artifact-tab result-tab" type="button" role="tab" aria-selected="false" aria-controls="result-panel" data-result="illustration">视觉重绘</button>
           </div>
-          <div id="result-panel" class="artifact-panel result-panel" role="tabpanel" aria-labelledby="result-thin" tabindex="0">
+          <div id="result-panel" class="artifact-panel result-panel" role="tabpanel" aria-labelledby="result-sourceFigure" tabindex="0">
             <div class="artifact-description result-description">
-              <p class="artifact-kicker" data-result-kicker>从问题开始</p>
-              <h3 data-result-title>薄读</h3>
-              <p data-result-copy>先读懂你最想知道的，再沿词句、板块和关联线索逐层探索。</p>
-              <span data-result-use>适合：快速进入一篇复杂文献</span>
+              <p class="artifact-kicker" data-result-kicker>保留原文关系</p>
+              <h3 data-result-title>论文原图</h3>
+              <p data-result-copy>自动找到与当前理解相关的原图、表格或图注，连同页码与证据位置放回阅读上下文。</p>
+              <span data-result-use>薄读呈现：原图、图注与位置关联</span>
             </div>
-            <div class="artifact-preview result-preview result-thin-preview" data-result-preview aria-label="从用户问题逐层深入的薄读预览">
-              <div class="thin-toolbar"><span>薄读</span><span>从你的问题开始</span></div>
-              <p>为什么这项方法能在更少计算量下保留关键关系？</p>
-              <div class="thin-tokens"><span>查看方法依据</span><span>理解实验结果</span><span>继续探索局限</span></div>
+            <div class="artifact-preview result-preview result-source-figure-preview" data-result-preview aria-label="论文原图自动定位插入预览">
+              <div class="thin-toolbar"><span>薄读 / 论文原图</span><span>第 4 页 · Fig. 2</span></div>
+              <div class="source-figure-card">
+                <img src="assets/program.png" alt="论文原图的示意预览" />
+                <span class="source-figure-marker">当前段落相关</span>
+                <p>方法结构 · 原图与图注保持原文身份</p>
+              </div>
             </div>
           </div>
         </div>
