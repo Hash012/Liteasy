@@ -1,0 +1,17 @@
+*
+!services/
+services/*
+!services/api/
+!services/api/migrations/
+!services/api/migrations/**
+!services/api/scripts/
+!services/api/scripts/**
+!services/api/src/
+!services/api/src/**
+!services/api/package.json
+!services/api/package-lock.json
+!packages/
+packages/*
+!packages/shared/
+!packages/shared/visualizationArtifact.v1.schema.json
+!packages/shared/visualizationBuiltins.v1.json

@@ -1,0 +1,10 @@
+[Unit]
+Description=Liteasy staging swap file
+Before=swap.target
+
+[Swap]
+What=/swapfile
+Priority=-2
+
+[Install]
+WantedBy=swap.target

@@ -1,0 +1,19 @@
+[req]
+distinguished_name = subject
+prompt = no
+
+[subject]
+O = Liteasy Staging
+CN = pdf-scanner
+
+[server_ext]
+basicConstraints = critical,CA:FALSE
+keyUsage = critical,digitalSignature,keyEncipherment
+extendedKeyUsage = serverAuth
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid,issuer
+subjectAltName = @server_names
+
+[server_names]
+DNS.1 = pdf-scanner
+DNS.2 = liteasy-pdf-scanner

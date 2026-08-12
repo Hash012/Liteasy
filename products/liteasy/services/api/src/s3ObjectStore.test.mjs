@@ -89,6 +89,101 @@ test("refuses buckets without complete private access, encryption and recovery p
   await assert.rejects(() => unsafe.assertSecurityConfiguration(), /public_access_not_blocked/);
 });
 
+test("verifies Aliyun OSS with private ACL, encrypted probes, versioning, and anonymous denial", async () => {
+  const commands = [];
+  const anonymousMethods = [];
+  const client = {
+    async send(command) {
+      commands.push(command.constructor.name);
+      if (command.constructor.name === "GetBucketAclCommand") {
+        return {
+          Grants: [{
+            Grantee: { ID: "owner-id", Type: "CanonicalUser" },
+            Permission: "FULL_CONTROL"
+          }],
+          Owner: { ID: "owner-id" }
+        };
+      }
+      if (command.constructor.name === "GetBucketVersioningCommand") return { Status: "Enabled" };
+      if (command.constructor.name === "HeadObjectCommand") return { ServerSideEncryption: "AES256" };
+      return {};
+    }
+  };
+  const store = new S3ObjectStore({
+    ...config(),
+    endpoint: "https://oss-cn-hongkong.aliyuncs.com",
+    securityProfile: "aliyun-oss"
+  }, {
+    anonymousFetch: async (_url, init) => {
+      anonymousMethods.push(init.method);
+      return { body: undefined, status: 403 };
+    },
+    client
+  });
+
+  assert.deepEqual(await store.assertSecurityConfiguration(), {
+    encryption: true,
+    privateAccess: true,
+    versioningOrObjectLock: true
+  });
+  assert.deepEqual(commands, [
+    "GetBucketAclCommand",
+    "GetBucketVersioningCommand",
+    "PutObjectCommand",
+    "HeadObjectCommand",
+    "DeleteObjectCommand"
+  ]);
+  assert.equal(commands.filter((name) => name === "DeleteObjectCommand").length, 1);
+  assert.deepEqual(anonymousMethods, ["HEAD", "HEAD", "GET", "PUT"]);
+});
+
+test("fails closed for unsafe Aliyun OSS ACL, encryption, versioning, or anonymous access", async () => {
+  const baseConfig = {
+    ...config(),
+    endpoint: "https://oss-cn-hongkong.aliyuncs.com",
+    securityProfile: "aliyun-oss"
+  };
+  const client = (overrides = {}) => ({
+    async send(command) {
+      if (command.constructor.name === "GetBucketAclCommand") {
+        return overrides.acl ?? {
+          Grants: [{ Grantee: { ID: "owner-id", Type: "CanonicalUser" }, Permission: "FULL_CONTROL" }],
+          Owner: { ID: "owner-id" }
+        };
+      }
+      if (command.constructor.name === "GetBucketVersioningCommand") {
+        return { Status: overrides.versioning ?? "Enabled" };
+      }
+      if (command.constructor.name === "HeadObjectCommand") {
+        return {
+          ServerSideEncryption: Object.hasOwn(overrides, "encryption")
+            ? overrides.encryption
+            : "AES256"
+        };
+      }
+      return {};
+    }
+  });
+  const denied = async () => ({ body: undefined, status: 403 });
+
+  await assert.rejects(() => new S3ObjectStore(baseConfig, {
+    anonymousFetch: denied,
+    client: client({ acl: { Grants: [], Owner: { ID: "owner-id" } } })
+  }).assertSecurityConfiguration(), /public_access_not_blocked/);
+  await assert.rejects(() => new S3ObjectStore(baseConfig, {
+    anonymousFetch: denied,
+    client: client({ versioning: "Suspended" })
+  }).assertSecurityConfiguration(), /recovery_protection_missing/);
+  await assert.rejects(() => new S3ObjectStore(baseConfig, {
+    anonymousFetch: denied,
+    client: client({ encryption: undefined })
+  }).assertSecurityConfiguration(), /encryption_missing/);
+  await assert.rejects(() => new S3ObjectStore(baseConfig, {
+    anonymousFetch: async () => ({ body: undefined, status: 200 }),
+    client: client()
+  }).assertSecurityConfiguration(), /anonymous_access_not_blocked/);
+});
+
 test("publishes by content hash, verifies the result, and removes staging", async () => {
   const hash = "a".repeat(64);
   const calls = [];

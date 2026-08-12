@@ -1,6 +1,7 @@
 import { parseVisualizationSecrets } from "./visualizationSecretStore.mjs";
 
 const allowedEnvironments = new Set(["production", "staging", "test"]);
+const allowedS3SecurityProfiles = new Set(["aws-s3", "aliyun-oss"]);
 const allowedSslModes = new Set(["require", "verify-ca", "verify-full"]);
 
 function parseVisualizationEgressHostnames(value) {
@@ -185,6 +186,24 @@ function normalizePrefix(value) {
   return prefix;
 }
 
+function validateS3SecurityProfile(value, { endpoint, forcePathStyle }) {
+  const profile = (value ?? "aws-s3").trim().toLowerCase();
+  if (!allowedS3SecurityProfiles.has(profile)) {
+    throw new Error("cloud_config_invalid: LITEASY_S3_SECURITY_PROFILE must be aws-s3 or aliyun-oss");
+  }
+  if (profile === "aliyun-oss") {
+    if (!endpoint) {
+      throw new Error("cloud_config_invalid: aliyun-oss requires LITEASY_S3_ENDPOINT");
+    }
+    const parsed = new URL(endpoint);
+    if (forcePathStyle || parsed.port || parsed.pathname !== "/" || parsed.search || parsed.hash ||
+      !/^oss-[a-z0-9-]+\.aliyuncs\.com$/i.test(parsed.hostname)) {
+      throw new Error("cloud_config_invalid: aliyun-oss requires an official virtual-hosted OSS endpoint");
+    }
+  }
+  return profile;
+}
+
 function requirePublicClientId(env, name, confidentialClientId) {
   const value = required(env, name);
   if (!/^[A-Za-z0-9._~-]{1,200}$/.test(value)) {
@@ -220,6 +239,12 @@ export function loadCloudConfig(env = process.env) {
   if (!/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket)) {
     throw new Error("cloud_config_invalid: LITEASY_S3_BUCKET is invalid");
   }
+  const s3Endpoint = validateEndpoint(env.LITEASY_S3_ENDPOINT?.trim(), environment);
+  const s3ForcePathStyle = parseBoolean(env.LITEASY_S3_FORCE_PATH_STYLE, "LITEASY_S3_FORCE_PATH_STYLE");
+  const s3SecurityProfile = validateS3SecurityProfile(env.LITEASY_S3_SECURITY_PROFILE, {
+    endpoint: s3Endpoint,
+    forcePathStyle: s3ForcePathStyle
+  });
 
   const identityClientId = required(env, "LITEASY_IDP_CLIENT_ID");
   const desktopClientId = requirePublicClientId(
@@ -362,10 +387,11 @@ export function loadCloudConfig(env = process.env) {
     }),
     s3: Object.freeze({
       bucket,
-      endpoint: validateEndpoint(env.LITEASY_S3_ENDPOINT?.trim(), environment),
-      forcePathStyle: parseBoolean(env.LITEASY_S3_FORCE_PATH_STYLE, "LITEASY_S3_FORCE_PATH_STYLE"),
+      endpoint: s3Endpoint,
+      forcePathStyle: s3ForcePathStyle,
       prefix: normalizePrefix(env.LITEASY_S3_PREFIX),
-      region: required(env, "LITEASY_S3_REGION")
+      region: required(env, "LITEASY_S3_REGION"),
+      securityProfile: s3SecurityProfile
     }),
     visualization: Object.freeze({
       egressHostnames: parseVisualizationEgressHostnames(env.LITEASY_VISUALIZATION_EGRESS_HOSTNAMES),

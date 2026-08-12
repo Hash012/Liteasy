@@ -119,7 +119,7 @@ services:
     env_file:
       - ${LITEASY_API_ENV_FILE:?set LITEASY_API_ENV_FILE}
     environment:
-      NODE_EXTRA_CA_CERTS: /run/certs/aliyun-rds-ca.pem
+      NODE_EXTRA_CA_CERTS: /run/certs/liteasy-api-ca.pem
     healthcheck:
       test:
         - CMD
@@ -131,7 +131,7 @@ services:
       retries: 20
       start_period: 20s
     volumes:
-      - ${RDS_CA_CERT_FILE}:/run/certs/aliyun-rds-ca.pem:ro
+      - ${STAGING_RUNTIME_DIR:?set STAGING_RUNTIME_DIR}/liteasy-api-ca.pem:/run/certs/liteasy-api-ca.pem:ro
     networks:
       - backend
       - egress
@@ -217,12 +217,12 @@ services:
     env_file:
       - ${LITEASY_API_ENV_FILE}
     environment:
-      NODE_EXTRA_CA_CERTS: /run/certs/aliyun-rds-ca.pem
+      NODE_EXTRA_CA_CERTS: /run/certs/liteasy-api-ca.pem
     profiles:
       - maintenance
     restart: "no"
     volumes:
-      - ${RDS_CA_CERT_FILE}:/run/certs/aliyun-rds-ca.pem:ro
+      - ${STAGING_RUNTIME_DIR}/liteasy-api-ca.pem:/run/certs/liteasy-api-ca.pem:ro
     networks:
       - backend
       - egress

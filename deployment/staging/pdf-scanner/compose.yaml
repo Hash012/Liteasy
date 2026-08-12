@@ -1,0 +1,159 @@
+name: liteasy-pdf-scanner
+
+x-json-logging: &json-logging
+  driver: json-file
+  options:
+    max-file: "5"
+    max-size: "10m"
+
+services:
+  clamav:
+    build:
+      context: .
+      dockerfile: clamav.Dockerfile
+    image: liteasy-pdf-scanner-clamav:1.5.4
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - clamdscan --config-file=/etc/clamav/clamd.conf --ping=1:1 >/dev/null 2>&1
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 90s
+    logging: *json-logging
+    mem_limit: 1400m
+    pids_limit: 128
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    volumes:
+      - clamav-db:/var/lib/clamav:ro
+    networks:
+      - scanner
+
+  freshclam:
+    image: liteasy-pdf-scanner-clamav:1.5.4
+    entrypoint:
+      - freshclam
+    command:
+      - --daemon
+      - --foreground
+      - --stdout
+      - --checks=12
+      - --datadir=/var/lib/clamav
+      - --user=clamav
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - find /var/lib/clamav -maxdepth 1 \( -name daily.cvd -o -name daily.cld \) -mtime -7 | grep -q .
+      interval: 5m
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: *json-logging
+    mem_limit: 1024m
+    pids_limit: 64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /var/log/clamav:size=16m,mode=0750,uid=100,gid=101
+    volumes:
+      - clamav-db:/var/lib/clamav
+    networks:
+      - update-egress
+
+  pdf-scanner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: liteasy-pdf-scanner-adapter:1.0.0
+    depends_on:
+      clamav:
+        condition: service_healthy
+    cap_drop:
+      - ALL
+    env_file:
+      - /etc/liteasy/staging/pdf-scanner.env
+    environment:
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: "3310"
+      CLAMAV_TIMEOUT_MS: "110000"
+      NODE_EXTRA_CA_CERTS: /run/tls/ca.crt
+      PDF_SCANNER_HOST: 0.0.0.0
+      PDF_SCANNER_MAX_BYTES: "268435456"
+      PDF_SCANNER_MAX_CONCURRENT: "2"
+      PDF_SCANNER_PORT: "8443"
+      PDF_SCANNER_TLS_CERT_FILE: /run/tls/server.crt
+      PDF_SCANNER_TLS_KEY_FILE: /run/tls/server.key
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('https://pdf-scanner:8443/readyz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    init: true
+    logging: *json-logging
+    mem_limit: 160m
+    pids_limit: 64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 15s
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    volumes:
+      - /etc/liteasy/staging/pdf-scanner/tls:/run/tls:ro
+    networks:
+      - scanner
+      - application-backend
+
+  scanner-verifier:
+    image: liteasy-pdf-scanner-adapter:1.0.0
+    entrypoint:
+      - node
+      - /verification/acceptance.mjs
+    command:
+      - full
+    cap_drop:
+      - ALL
+    env_file:
+      - /etc/liteasy/staging/pdf-scanner.env
+    environment:
+      NODE_EXTRA_CA_CERTS: /run/tls/ca.crt
+      PDF_SCANNER_URL: https://pdf-scanner:8443/v1/pdf:scan
+    profiles:
+      - acceptance
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./acceptance.mjs:/verification/acceptance.mjs:ro
+      - /etc/liteasy/staging/pdf-scanner/tls/ca.crt:/run/tls/ca.crt:ro
+    networks:
+      - scanner
+
+volumes:
+  clamav-db:
+
+networks:
+  scanner:
+    internal: true
+  update-egress:
+  application-backend:
+    external: true
+    name: liteasy-staging_backend

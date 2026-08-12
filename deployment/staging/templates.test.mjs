@@ -77,6 +77,64 @@ test("staging containers rotate local Docker logs", () => {
   assert.equal(compose.match(/logging: \*json-logging/g)?.length, 3);
 });
 
+test("Liteasy API image build includes shared runtime schemas", () => {
+  const dockerfile = fs.readFileSync(
+    new URL("../../products/liteasy/services/api/Dockerfile", import.meta.url),
+    "utf8"
+  );
+  const ignore = fs.readFileSync(
+    new URL("../../products/liteasy/.dockerignore", import.meta.url),
+    "utf8"
+  );
+  assert.match(dockerfile, /services\/api\/package\.json/);
+  assert.match(dockerfile, /packages\/shared\/visualizationArtifact\.v1\.schema\.json/);
+  assert.match(dockerfile, /packages\/shared\/visualizationBuiltins\.v1\.json/);
+  assert.match(dockerfile, /import\(\"\.\/src\/server\.mjs\"\)/);
+  assert.match(ignore, /!packages\/shared\/visualizationArtifact\.v1\.schema\.json/);
+  assert.match(ignore, /!packages\/shared\/visualizationBuiltins\.v1\.json/);
+});
+
+test("the staging PDF scanner is pinned, internal, and self-contained", () => {
+  const scannerDirectory = new URL("pdf-scanner/", directory);
+  const compose = fs.readFileSync(new URL("compose.yaml", scannerDirectory), "utf8");
+  const clamavDockerfile = fs.readFileSync(
+    new URL("clamav.Dockerfile", scannerDirectory),
+    "utf8"
+  );
+  const adapterDockerfile = fs.readFileSync(new URL("Dockerfile", scannerDirectory), "utf8");
+  const runtimeInstaller = fs.readFileSync(
+    new URL("install-runtime.sh", scannerDirectory),
+    "utf8"
+  );
+  const swapInstaller = fs.readFileSync(new URL("install-swap.sh", scannerDirectory), "utf8");
+
+  assert.match(clamavDockerfile, /^FROM clamav\/clamav@sha256:[a-f0-9]{64}$/m);
+  assert.match(adapterDockerfile, /^FROM node@sha256:[a-f0-9]{64}$/m);
+  assert.match(compose, /scanner:\n    internal: true/);
+  assert.doesNotMatch(compose, /^\s+ports:/m);
+  assert.match(compose, /clamav:[\s\S]+?networks:\n      - scanner/);
+  assert.match(compose, /freshclam:[\s\S]+?networks:\n      - update-egress/);
+  assert.match(compose, /pdf-scanner:[\s\S]+?networks:\n      - scanner\n      - application-backend/);
+  assert.doesNotMatch(runtimeInstaller, /\/root\/liteasy-pdf-scanner/);
+  assert.doesNotMatch(swapInstaller, /\/root\/liteasy-pdf-scanner/);
+  assert.match(runtimeInstaller, /script_directory=/);
+  assert.match(runtimeInstaller, /docker run --rm/);
+  assert.match(runtimeInstaller, /--network none/);
+  assert.match(runtimeInstaller, /^node_image=node@sha256:[a-f0-9]{64}$/m);
+  assert.match(swapInstaller, /script_directory=/);
+});
+
+test("only Liteasy services receive the scanner CA trust bundle", () => {
+  const compose = fs.readFileSync(new URL("compose.yaml", directory), "utf8");
+  assert.equal(compose.match(/NODE_EXTRA_CA_CERTS: \/run\/certs\/liteasy-api-ca\.pem/g)?.length, 2);
+  assert.equal(
+    compose.match(/\$\{STAGING_RUNTIME_DIR(?::\?set STAGING_RUNTIME_DIR)?\}\/liteasy-api-ca\.pem/g)?.length,
+    2
+  );
+  assert.equal(compose.match(/:\/run\/certs\/liteasy-api-ca\.pem:ro/g)?.length, 2);
+  assert.equal(compose.match(/NODE_EXTRA_CA_CERTS: \/run\/certs\/aliyun-rds-ca\.pem/g)?.length, 3);
+});
+
 test("maintenance scheduling reports success and failure to the system log", () => {
   const script = fs.readFileSync(new URL("scripts/run-maintenance.sh", directory), "utf8");
   const service = fs.readFileSync(

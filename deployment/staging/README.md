@@ -2,7 +2,7 @@
 
 本手册面向第一次使用服务器的操作者，目标是在阿里云香港地域建立 Liteasy/Intuecho 的私有预发布环境。预发布环境用于真实依赖联调和少量受邀测试，不等于生产环境验收通过。
 
-> 当前不能直接邀请用户测试。阿里云 OSS 的 S3 契约兼容性、真实 PDF 扫描服务、Keycloak 邮箱与 MFA、Windows 安装包签名和下载发布尚未完成。本文会明确标出这些停止点，不要使用假地址、演示服务或关闭安全检查来绕过它们。
+> 当前仍不能直接邀请用户测试。仓库已提供阿里云 OSS 安全适配和真实 ClamAV PDF 扫描服务，但必须在目标资源上重复验收；Keycloak 邮箱与 MFA、Windows 安装包签名和下载发布仍未完成。本文会明确标出这些停止点，不要使用假地址、演示服务或关闭安全检查来绕过它们。
 
 > 不要在聊天、Git、工单、截图或 Shell 命令中发送或记录密码、私钥、AccessKey、client secret。需要协作时只提供 ECS 私网 IP、RDS 内网域名、bucket 名、endpoint、ACR 地址等非敏感信息。
 
@@ -13,8 +13,8 @@
 | 范围 | 当前状态 | 能否继续 |
 | --- | --- | --- |
 | DNS、安全组、ECS、RDS、ACR、Compose 和 Caddy | 本文提供逐步操作 | 可以按顺序建立 |
-| OSS 作为现有 S3 客户端后端 | 必须用真实 bucket 运行兼容性探针 | 探针通过后才能继续 Liteasy |
-| PDF 安全扫描 | 仓库中没有可部署的真实扫描服务 | 未采购或实现前停止上传测试 |
+| OSS 作为现有 S3 客户端后端 | 已有显式 `aliyun-oss` 安全模式，仍须用真实 bucket 运行探针 | 探针通过后才能继续 Liteasy |
+| PDF 安全扫描 | 已有私有 HTTPS ClamAV 部署 | EICAR、鉴权、哈希绑定和故障关闭验收通过后可以继续 |
 | Keycloak 邮件、MFA、恢复 | 需要真实 SMTP 和人工 E2E | 验收通过前不能邀请用户 |
 | Windows Authenticode 签名 | 没有组织签名证书和已确认的签名服务 | 当前是发布阻塞项 |
 | 官网安装包下载 | 仓库没有不可变下载存储和发布流水线 | 当前是发布阻塞项 |
@@ -36,7 +36,7 @@
 必须按章节顺序执行。每一节的验证结果符合预期后再继续；遇到“停止”字样就不要自行填写假值绕过。大致分为四个阶段：
 
 1. 第 3～8 节：建立 DNS、安全组、ECS、RDS 和 OSS 等云资源。
-2. 第 8～10 节：由维护者解决 OSS 兼容性、真实 PDF 扫描服务、镜像和密钥。
+2. 第 8～10 节：由维护者部署并验收 OSS 适配、PDF 扫描服务、镜像和 root-only 运行配置。
 3. 第 11 节：迁移数据库、启动服务并逐项验收。
 4. 第 12～15 节：签名 Windows 安装包，完成上线门禁。
 
@@ -89,7 +89,7 @@
 | RDS | 阿里云托管数据库；本项目使用 PostgreSQL，并且只开放内网连接 |
 | OSS / S3 | 对象存储及其接口；用于保存 PDF 等文件，不等同于 ECS 磁盘 |
 | ACR | 阿里云容器镜像服务，ECS 从这里拉取已构建的应用镜像 |
-| KMS Secrets Manager | 托管密码和 client secret 的服务；不是把秘密写进代码仓库 |
+| root-only 运行配置 | `/etc/liteasy/staging/*.env`；由 root 保管密码和 client secret，不写进代码仓库 |
 | Docker Compose | 按 `compose.yaml` 一次启动和连接多个容器的工具 |
 | 镜像 | 容器应用的只读打包产物 |
 | digest | 镜像内容的固定 SHA-256 身份；相同 digest 表示相同内容 |
@@ -116,7 +116,7 @@
 | 已评审提交（文中的 `<git-sha>`） | `git rev-parse HEAD` 的输出 | 构建机 | 可以 |
 | 证书通知邮箱 | `<MONITORED_EMAIL>` | 你能正常收信的运维邮箱 | 可以 |
 | 学术接口联系邮箱 | `<RESEARCH_CONTACT_EMAIL>` | 你能正常收信且允许对外显示的邮箱 | 可以 |
-| 所有密码和 secret | 不写入此表 | KMS Secrets Manager | 不可以 |
+| 所有密码和 secret | 不写入此表 | 对应云账号/服务控制台或 root-only env；另做加密离线备份 | 不可以 |
 | SSH 私钥 | 只保存在你的电脑 | 创建 ECS 密钥对时获得 | 不可以 |
 
 你的公网 IP 可能会变化。在自己的 Windows PowerShell 执行下列命令，记录返回的 IPv4；不要在 ECS 上执行，因为那会得到服务器出口 IP：
@@ -554,32 +554,77 @@ psql "host=<RDS_INTERNAL_HOST> port=5432 dbname=keycloak user=keycloak_app sslmo
 - 名称：唯一且包含 `staging`，例如 `liteasy-staging-hk-<随机后缀>`。
 - 读写权限 ACL：私有。
 - 版本控制：启用。
-- 服务端加密：启用；优先使用 KMS 托管密钥，预发布也可先使用 OSS 托管加密。
+- 服务端加密：启用；本预发布不购买 KMS 时选择 OSS 托管的 `AES256` 加密。
 - 静态网站托管：关闭。
 - 公共访问：关闭。
 - 生命周期：创建规则 `staging-compatibility-noncurrent-cleanup`，作用范围选择前缀 `compatibility/`；当前版本不要自动删除，非当前/历史版本保留 `7` 天后删除，并清理过期删除标记。保存后重新打开规则核对前缀，绝不能把规则作用到整个 bucket。
 
 只创建专用于该 staging bucket 的 RAM 身份。不要使用阿里云主账号 AccessKey，也不要直接授予账号级 `AliyunOSSFullAccess`。所需最小权限必须覆盖 bucket 安全配置读取、版本状态读取，以及对象上传、分片上传、复制、元数据读取、下载、列举和删除。
 
-### 8.2 这里是第一个强制停止点
+### 8.2 OSS 安全适配仍是目标环境门禁
 
-Liteasy 当前使用 AWS S3 API，还会调用 Public Access Block、加密、版本控制或对象锁等管理 API。阿里云 OSS 是否完整支持这些调用尚未在你的 bucket 上证明。
+Liteasy 的 `LITEASY_S3_SECURITY_PROFILE=aliyun-oss` 会按阿里云 OSS 实际能力验证：bucket ACL 只有所有者、版本控制启用、随机对象确实被服务端加密、匿名读取/列举/写入均被拒绝，以及上传、复制、读取、元数据和删除数据面契约正常。它不会把 OSS 不支持的 AWS Public Access Block 或 Bucket Encryption 管理 API 当作必需调用。
 
 因此：
 
-1. 先创建专用 bucket 和最小权限 RAM 凭据。
-2. 将凭据存入 KMS，不要发送到聊天。
-3. 完成第 10 节运行配置。
-4. 拉取 Liteasy 镜像后，执行第 11.2 节兼容性探针。
-5. 探针未通过时，停止部署 Liteasy；不得删除或弱化 `assertSecurityConfiguration`。
+1. 创建专用 bucket 和最小权限 RAM 凭据；不要使用主账号 AccessKey。
+2. AccessKey ID 和 secret 只写入 `/etc/liteasy/staging/liteasy-api.env`，文件保持 `root:root 0600`，不要发送到聊天。
+3. 确认该 env 中存在 `LITEASY_S3_SECURITY_PROFILE=aliyun-oss`。
+4. 构建并拉取包含该适配器的新 Liteasy API 镜像后，执行第 11.2 节真实兼容性探针。
+5. 探针未输出 `"verified":true` 时停止部署；不得删除或弱化 `assertSecurityConfiguration`。
 
-如果 OSS 不兼容，应实现原生 OSS 适配器，或者改用满足现有 S3 契约的托管服务。
+### 8.3 部署仓库内的私有 PDF 扫描服务
 
-### 8.3 PDF 扫描服务是第二个强制停止点
+阿里云“恶意文件检测”资源包和绑定的 `LiteasyStagingFileScannerRole` 不会自动生成 Liteasy 所需的私有同步 HTTPS URL，也不会给出可填入 `LITEASY_PDF_SCANNER_SECRET` 的共享密钥。它可以作为 OSS 侧的第二层异步检测，但不能替代上传事务中必须返回哈希绑定结论的扫描接口。
 
-仓库只有私有 HTTPS PDF 扫描客户端契约，没有可部署的扫描服务。`LITEASY_PDF_SCANNER_URL` 不能填写不存在的地址、回显服务或永远返回 clean 的假服务。
+本仓库的 `deployment/staging/pdf-scanner/` 提供该接口：Node HTTPS 适配器把 PDF 流式发送给 ClamAV，不把文件写入宿主机；`clamd` 只在内部网络，只有 `freshclam` 拥有病毒库更新出口，所有容器都不发布宿主机端口。扫描器 secret 和私有 CA 由安装器在 ECS 上生成并写入 root-only 文件，不需要购买 KMS，也不需要人工编写或记忆。
 
-在真实扫描服务完成并通过哈希绑定、超时、恶意文件和不可用场景测试前，Liteasy 上传链不能邀请用户测试。
+当前 4 GiB ECS 先确认已启用第 6.4 节的 2 GiB swap；ClamAV 实际常驻内存接近 1 GiB，业务公开测试前仍必须把 ECS 升级到至少 8 GiB。先阅读本节，等第 10.5 节四个业务 env 和 `config.env` 都填写完成后，再回到仓库根目录执行：
+
+```bash
+cd /opt/liteasy/repository
+sudo deployment/staging/pdf-scanner/install-runtime.sh
+sudo docker compose \
+  --env-file deployment/staging/config.env \
+  --file deployment/staging/compose.yaml \
+  create
+sudo docker compose \
+  --project-directory deployment/staging/pdf-scanner \
+  --file deployment/staging/pdf-scanner/compose.yaml \
+  up --detach --build --wait clamav freshclam pdf-scanner
+```
+
+`create` 只创建尚未启动的业务容器和内部 `liteasy-staging_backend` 网络，不执行数据库迁移。安装器会把 `LITEASY_PDF_SCANNER_URL`、随机 secret 和独立 CA 组合包安全写入运行配置；重复执行会保留现有 CA 和 secret。
+
+先运行完整验收：
+
+```bash
+sudo docker compose \
+  --project-directory deployment/staging/pdf-scanner \
+  --file deployment/staging/pdf-scanner/compose.yaml \
+  --profile acceptance run --rm --no-deps scanner-verifier
+```
+
+命令输出必须包含一行结论 JSON，其中 `cleanPdf` 为 `accepted`、`eicarPdf` 为 `rejected`、`integrityMismatch` 和 `unauthorized` 均为 `rejected`，并包含 `scanner:"clamav"` 与真实版本；Compose 自身的容器创建提示可以忽略。
+
+再验证 ClamAV 故障时失败关闭，并立即恢复服务：
+
+```bash
+sudo docker compose \
+  --project-directory deployment/staging/pdf-scanner \
+  --file deployment/staging/pdf-scanner/compose.yaml \
+  stop clamav
+sudo docker compose \
+  --project-directory deployment/staging/pdf-scanner \
+  --file deployment/staging/pdf-scanner/compose.yaml \
+  --profile acceptance run --rm --no-deps scanner-verifier unavailable
+sudo docker compose \
+  --project-directory deployment/staging/pdf-scanner \
+  --file deployment/staging/pdf-scanner/compose.yaml \
+  up --detach --wait clamav pdf-scanner
+```
+
+不可用验收必须输出 `{"readiness":"unavailable","scan":"failed_closed"}`，恢复后再原样运行一次完整验收。任一步失败都停止上传测试；不要填假 URL、部署永远返回 clean 的服务，或临时关闭扫描检查。
 
 ## 9. 创建 ACR 并构建镜像
 
@@ -639,8 +684,9 @@ docker login --username=<ACR用户名> registry.cn-hongkong.aliyuncs.com
 
 ```bash
 docker build \
+  --file products/liteasy/services/api/Dockerfile \
   --tag <acr>/liteasy-api:<git-sha> \
-  products/liteasy/services/api
+  products/liteasy
 
 docker build \
   --file products/intuecho/services/api/Dockerfile \
@@ -660,6 +706,17 @@ docker build \
   --tag <acr>/staging-gateway:<git-sha> \
   .
 ```
+
+Liteasy API 必须以 `products/liteasy` 作为构建上下文，因为运行时还需要
+`products/liteasy/packages/shared` 中的可视化 schema 和内置目录。构建后先验证镜像能完整加载服务模块：
+
+```bash
+docker run --rm --entrypoint node \
+  <acr>/liteasy-api:<git-sha> \
+  --input-type=module -e 'await import("./src/server.mjs"); console.log("server_import=ok")'
+```
+
+必须输出 `server_import=ok`。出现 `ENOENT` 或模块加载错误时停止，不要推送镜像。
 
 在推送 gateway 前验证 Caddyfile，下面两个 CIDR 是文档测试地址，只用于解析配置：
 
@@ -710,7 +767,7 @@ sudo docker login --username=<ACR用户名> registry.cn-hongkong.aliyuncs.com
 
 由于本手册使用 `sudo docker`，必须使用 `sudo docker login`；普通用户执行的登录不会自动提供给 root 的 Docker 客户端。
 
-## 10. 准备运行配置和 KMS 密钥
+## 10. 准备运行配置和 root-only 密钥
 
 ### 10.1 创建文件
 
@@ -782,28 +839,29 @@ KEYCLOAK_ADMIN_ALLOWED_CIDRS=replace-with-space-separated-operator-public-cidrs
 
 `ACME_EMAIL` 改成确实能收信的证书运维邮箱；`KEYCLOAK_ADMIN_ALLOWED_CIDRS` 按第 5.5 节填写一个或多个空格分隔的公网 CIDR。保存 `nano` 或 `sudoedit` 时，通常依次按 `Ctrl+O`、回车、`Ctrl+X`。
 
-### 10.3 在 KMS 中创建密钥
+### 10.3 不购买 KMS 时密钥从哪里来
 
-在阿里云控制台打开“密钥管理服务 KMS”，选择香港地域并开通 Secrets Manager。使用“创建凭据/创建 Secret”，类型选择通用凭据，名称建议以 `liteasy-staging-` 开头，描述中写明用途和负责人。每个值都由密码管理器生成，不要在 Shell 中用明文命令生成。
+本预发布明确不购买 KMS，这与四个 env 文件不冲突：env 文件既是容器的输入，也是当前权威副本。它们必须保持 `root:root 0600`，不得进入 Git、聊天、截图或普通备份。你不需要人工记忆随机值；需要查看或修改时只使用 `sudoedit`。服务器丢失时不能从记忆恢复，应在部署完成后把这些 env 和私有 CA/密钥做一份位于服务器之外的加密离线备份；没有加密备份就只能逐项轮换凭据。
 
-至少创建下列独立凭据，不要重复使用同一个随机值：
+各类值的来源如下：
 
-- 五个数据库账号密码：`liteasy_app`、`liteasy_migrator`、`intuecho_app`、`intuecho_migrator`、`keycloak_app`。
-- Keycloak bootstrap 管理员密码。
-- Liteasy、Intuecho、identity-management 的各个 OIDC confidential client secret。
-- OSS 专用 RAM AccessKey secret。
-- PDF 扫描服务 secret。
-- 后续模型服务和学术提供方密钥。
+| 类型 | 从哪里取得或如何设置 |
+| --- | --- |
+| 五个 RDS 密码 | 创建 `liteasy_app`、`liteasy_migrator`、`intuecho_app`、`intuecho_migrator`、`keycloak_app` 账号时在 RDS 控制台设置的密码；必须与控制台中的账号一一对应 |
+| OSS AccessKey ID/secret | 阿里云 RAM 中专用于 `liteasy-staging-hk` 的身份创建 AccessKey 时获得；不是阿里云主账号密码 |
+| Keycloak bootstrap 密码 | 本预发布新生成的独立随机值，只写在 `keycloak.env` |
+| OIDC confidential client secrets | 本预发布新生成的独立随机值；按第 10.4 节把同一值填到 Keycloak 一侧和对应服务一侧 |
+| PDF 扫描 secret | 不手工填写；第 8.3 节安装器自动生成并同步到 `pdf-scanner.env` 与 `liteasy-api.env` |
+| SMTP 密码 | 邮箱或邮件服务商提供的 SMTP/应用专用密码；后续只在 Keycloak 管理页配置 |
+| 模型和学术服务 API key | 对应服务商账号中创建；未购买或未审批就保持注释/空值 |
 
-建议名称示例为 `liteasy-staging-rds-liteasy-app`、`liteasy-staging-keycloak-bootstrap`、`liteasy-staging-oidc-liteasy-cloud`。数据库密码和 client secret 至少 32 个随机字符。数据库 URL 中的密码应使用第 7.2 节规定的 URL 安全字符集；不要把含 `@`、`:`、`/` 的原始密码直接拼进 URL。
+需要由本机新建的密码和 client secret 使用彼此不同的 64 位十六进制随机值；可在受控终端逐次执行 `openssl rand -hex 32`，立即粘贴到 `sudoedit` 打开的目标行。命令本身不会把随机结果写入 Shell 历史，但终端滚动区仍可能保留显示，填完后清屏并关闭会话。数据库 URL 使用这种十六进制值无需额外 URL 编码。不要使用姓名、邮箱、同一个“通用密码”或短句，也不要让多个独立 client 共用一个 secret。
 
-创建后在 KMS 中确认每个凭据状态为“启用”，并只给实际运维身份读取权限。不要给 ECS 上所有进程或阿里云主账号以外的普通成员授予全量 KMS 管理权限。当前部署尚未实现自动读取 KMS，因此不要开启一个无人维护的自动轮换计划；每次手工轮换都必须同步更新对应 env 文件并滚动重启服务。
-
-仓库目前没有自动把 KMS secret 渲染到 env 文件的部署程序。这是生产前必须补齐的自动化缺口。预发布阶段可以由授权运维人员通过 `sudoedit` 手工写入，但值仍应以 KMS 为权威来源，且不得出现在 Shell 历史中。
+本机文件方案的代价是没有集中审计、自动轮换和托管恢复。每次手工轮换必须同时更新所有配对行并滚动重启对应容器；生产环境应重新评估托管秘密服务或等价的专用秘密分发机制。
 
 ### 10.4 对应的 client secret 必须完全一致
 
-以下左右两边必须引用同一个 KMS secret 版本：
+以下左右两边必须填写完全相同的值：
 
 | `keycloak.env` | 对应服务配置 |
 | --- | --- |
@@ -815,7 +873,7 @@ KEYCLOAK_ADMIN_ALLOWED_CIDRS=replace-with-space-separated-operator-public-cidrs
 | `INTUECHO_ORGANIZATION_SERVICE_SECRET` | `intuecho-api.env` 的 `INTUECHO_ORGANIZATION_SERVICE_CLIENT_SECRET` |
 | `LITEASY_LITERATURE_SERVICE_CLIENT_SECRET` | `liteasy-api.env` 的 `LITEASY_IDP_LITERATURE_SERVICE_CLIENT_SECRET` |
 
-`LITEASY_VISUALIZATION_SERVICE_CLIENT_SECRET` 也必须是独立 KMS secret，供后续对应服务使用。
+`LITEASY_VISUALIZATION_SERVICE_CLIENT_SECRET` 也必须是独立随机值，供后续对应服务使用。
 
 ### 10.5 填写并检查五个运行文件
 
@@ -833,7 +891,8 @@ sudoedit /etc/liteasy/staging/intuecho-api.env
 - 所有 RDS URL 使用内网域名。
 - 应用账号与 migrator 账号必须不同。
 - OSS bucket 必须是第 8 节创建的私有 staging bucket。
-- `LITEASY_PDF_SCANNER_URL` 只能填写真实、私有、HTTPS 扫描服务。
+- `LITEASY_S3_SECURITY_PROFILE` 必须是 `aliyun-oss`。
+- `LITEASY_PDF_SCANNER_URL` 和 `LITEASY_PDF_SCANNER_SECRET` 先保留占位符，再由第 8.3 节安装器自动替换；不要人工创造另一组扫描 secret。
 - `LITEASY_RECOMMENDATION_CONTACT_EMAIL` 和 `LITEASY_RETRIEVAL_CONTACT_EMAIL` 都要替换成第 3 节记录的真实 `<RESEARCH_CONTACT_EMAIL>`；`operations@liteasyclaw.com` 并未在仓库中证明存在，不能自行假定。
 - 不需要的模型密钥保持注释，不要填写假值。
 - 不得删除 TLS、OIDC audience 或独立 client 的检查项。
@@ -841,10 +900,13 @@ sudoedit /etc/liteasy/staging/intuecho-api.env
 检查文件所有权和权限：
 
 ```bash
-sudo stat -c "%U %G %a %n" /etc/liteasy/staging/*.env /etc/liteasy/staging/aliyun-rds-ca.pem
+sudo stat -c "%U %G %a %n" \
+  /etc/liteasy/staging/*.env \
+  /etc/liteasy/staging/aliyun-rds-ca.pem \
+  /etc/liteasy/staging/liteasy-api-ca.pem
 ```
 
-五个 env 文件应为 `root root 600`，CA 文件应为 `root root 644`。
+六个 env 文件（包括扫描器 env）应为 `root root 600`，两个 CA 文件应为 `root root 644`。`liteasy-api-ca.pem` 尚不存在时，说明第 8.3 节安装器还没有成功执行。
 
 检查非注释配置行中是否还有占位符：
 
@@ -1103,7 +1165,7 @@ https://auth.staging.liteasyclaw.com/admin/
 必须完成：
 
 1. 选择 `liteasy` realm。
-2. 进入 `Realm settings -> Email`，填写真实 SMTP 主机、端口、发件人和加密方式。SMTP 密码的权威副本保存在 KMS，需要配置时由授权运维人员填入 Keycloak 页面；不要发送到聊天。然后点击测试连接/发送测试邮件，测试邮件未收到就停止。
+2. 进入 `Realm settings -> Email`，填写真实 SMTP 主机、端口、发件人和加密方式。SMTP 密码使用邮箱或邮件服务商提供的应用专用密码，由授权运维人员直接填入 Keycloak 页面，并在服务器外的加密离线备份中保存；不要发送到聊天。然后点击测试连接/发送测试邮件，测试邮件未收到就停止。
 3. 进入 `Realm settings -> Login` 打开 `Verify email`；再到 `Authentication -> Required actions` 确认 `Verify Email` 已启用。用一个新测试账号完成邮箱验证。
 4. 在 `Authentication -> Policies` 配置组织认可的 OTP 或 WebAuthn 策略；在 `Required actions` 启用对应注册动作。若选择 OTP，应把 `Configure OTP` 设为默认动作，使新用户首次登录必须配置；再用测试账号完成第二因素注册和重新登录。仅在界面中打开开关但未实际登录不算验收。
 5. 启用并实际测试忘记密码、恢复代码或组织选定的账号恢复流程，确认恢复过程不会绕过 MFA。
@@ -1248,7 +1310,7 @@ logger -p local0.err -t liteasy-maintenance "result=failure test=true"
 4. 创建后只把 ECS 私网 IP 加入临时实例白名单。记录临时 RDS 内网地址 `<RESTORED_RDS_INTERNAL_HOST>`。
 5. 等待实例状态为“运行中”，恢复任务状态为“成功”。失败或只创建了空实例时停止并联系阿里云支持。
 
-在 ECS 上使用 KMS 中原有账号密码，通过 `psql -W` 只读检查恢复实例；不要修改 `/etc/liteasy/staging/*.env`，也不要让在线容器连接临时实例：
+在 ECS 上使用与 root-only env 对应的原有账号密码，通过 `psql -W` 只读检查恢复实例；不要修改 `/etc/liteasy/staging/*.env`，也不要让在线容器连接临时实例：
 
 ```bash
 psql "host=<RESTORED_RDS_INTERNAL_HOST> port=5432 dbname=liteasy user=liteasy_app sslmode=verify-full sslrootcert=/etc/liteasy/staging/aliyun-rds-ca.pem" -W -c "select count(*) as migration_count from schema_migrations; select count(*) as table_count from pg_tables where schemaname = 'public';"
@@ -1593,7 +1655,7 @@ sudo docker compose \
 
 不要把 PITR 直接覆盖原 RDS，不要删除已应用 migration 记录，不要编辑旧 SQL checksum，也不要只恢复 Liteasy 而让 Intuecho/Keycloak 留在另一个不一致时间点。仓库当前没有自动执行跨 RDS 和 OSS 一致切换的程序，因此该路径属于事故变更，必须由熟悉 PostgreSQL、OSS 和本项目配置的人现场执行并保留变更记录。
 
-生产环境必须另建域名、ECS/容器平台、RDS 数据库、bucket、KMS secret 和配置目录。只能提升经过评审的镜像 digest；不得把这个可变的预发布主机或其数据库原地改名为生产。
+生产环境必须另建域名、ECS/容器平台、RDS 数据库、bucket、独立 secret 和配置目录，并重新评估托管秘密服务。只能提升经过评审的镜像 digest；不得把这个可变的预发布主机或其数据库原地改名为生产。
 
 ## 15. 邀请测试前的最终门禁
 

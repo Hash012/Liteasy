@@ -21,7 +21,8 @@ const config = {
   endpoint,
   forcePathStyle: process.env.LITEASY_S3_FORCE_PATH_STYLE === "true",
   prefix: `compatibility/${operationId}`,
-  region
+  region,
+  securityProfile: process.env.LITEASY_S3_SECURITY_PROFILE?.trim() || "aws-s3"
 };
 const client = createS3Client(config);
 const store = new S3ObjectStore(config, { client });
@@ -44,7 +45,9 @@ try {
   assert.equal(downloaded.metadata.sha256, expectedHash);
   process.stdout.write(`${JSON.stringify({
     byteLength: bytes.length,
-    compatibility: "aws-s3-contract",
+    compatibility: config.securityProfile === "aliyun-oss"
+      ? "aliyun-oss-s3-contract"
+      : "aws-s3-contract",
     security,
     verified: true
   })}\n`);

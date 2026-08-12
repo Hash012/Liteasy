@@ -162,7 +162,7 @@ npm run bootstrap:admin
 - Windows Credential Manager 上的桌面 OAuth 2.1 Authorization Code + PKCE 实机登录、恢复、轮换和撤销证据；开发账号的 opaque session 仍不能冒充正式 OIDC access token。
 - 真实 IdP management API、staging 三 audience 全会话吊销、失败重试和最终删除证据；仓库内适配器及本机 PostgreSQL 测试不能替代这些证据。
 - 固定检索连接器已有仓库实现，但 staging 的真实 Crossref/OpenAlex/Semantic Scholar 连通、上游限流/故障演练和可选 Semantic Scholar secret 轮换尚无证据；模型与检索密钥的托管 Secrets Manager/KMS 轮换、访问审计同样未验收。
-- PDF 扫描协议和失败关闭已有仓库实现，但 staging 尚未连接真实扫描引擎，也没有病毒库/规则更新、恶意样本拒绝、超时、部署网络、secret 轮换和告警证据。
+- PDF 扫描协议、ClamAV 私有 HTTPS 部署、病毒库更新隔离、恶意样本拒绝和失败关闭已有仓库实现；目标 staging 仍须保留每次发布的 EICAR、超时/停机、部署网络、secret 轮换和告警证据。
 - 在 staging 使用部署所有的 Crossref 联系邮箱完成真实外部连通、限流和故障演练。
 - 正式审计独立归档目标和维护任务的部署调度、监控与告警。
 - Intuecho 独立 PostgreSQL 目标环境部署、备份与恢复证据。

@@ -47,6 +47,7 @@ test("loads a strict production PostgreSQL and S3 configuration", () => {
   const config = loadCloudConfig(validEnv());
   assert.equal(config.database.sslMode, "verify-full");
   assert.equal(config.s3.forcePathStyle, false);
+  assert.equal(config.s3.securityProfile, "aws-s3");
   assert.equal(config.pdfSecurity.endpoint, "https://scanner.internal/v1/pdf:scan");
   assert.equal(config.pdfSecurity.timeoutMs, 120_000);
   assert.deepEqual(publicCloudConfig(config), {
@@ -221,6 +222,30 @@ test("rejects SQLite, loopback production databases, insecure S3 and weak TLS mo
     () => loadCloudConfig(validEnv({ LITEASY_ALLOWED_ORIGINS: "http://untrusted.example" })),
     /must be HTTPS/
   );
+  assert.throws(
+    () => loadCloudConfig(validEnv({ LITEASY_S3_SECURITY_PROFILE: "unchecked" })),
+    /LITEASY_S3_SECURITY_PROFILE/
+  );
+  assert.throws(
+    () => loadCloudConfig(validEnv({ LITEASY_S3_SECURITY_PROFILE: "aliyun-oss" })),
+    /requires LITEASY_S3_ENDPOINT/
+  );
+  assert.throws(
+    () => loadCloudConfig(validEnv({
+      LITEASY_S3_ENDPOINT: "https://objects.example.com",
+      LITEASY_S3_SECURITY_PROFILE: "aliyun-oss"
+    })),
+    /official virtual-hosted OSS endpoint/
+  );
+});
+
+test("accepts the explicit Aliyun OSS security profile only on an official endpoint", () => {
+  const config = loadCloudConfig(validEnv({
+    LITEASY_S3_ENDPOINT: "https://oss-cn-hongkong.aliyuncs.com",
+    LITEASY_S3_SECURITY_PROFILE: "aliyun-oss"
+  }));
+  assert.equal(config.s3.endpoint, "https://oss-cn-hongkong.aliyuncs.com");
+  assert.equal(config.s3.securityProfile, "aliyun-oss");
 });
 
 test("allows loopback services only under the explicit test environment", () => {

@@ -4,6 +4,7 @@ import { pipeline } from "node:stream/promises";
 import {
   CopyObjectCommand,
   DeleteObjectCommand,
+  GetBucketAclCommand,
   GetBucketEncryptionCommand,
   GetBucketVersioningCommand,
   GetObjectCommand,
@@ -17,6 +18,8 @@ import {
 import { Upload } from "@aws-sdk/lib-storage";
 
 const defaultMaximumPdfBytes = 256 * 1024 * 1024;
+const supportedSecurityProfiles = new Set(["aws-s3", "aliyun-oss"]);
+const acceptedOssEncryptionModes = new Set(["AES256", "KMS", "aws:kms"]);
 
 function commandFailedWithMissingConfiguration(error) {
   return new Set([
@@ -32,6 +35,41 @@ function copySource(bucket, key) {
 
 function isMissingObject(error) {
   return error?.name === "NotFound" || error?.$metadata?.httpStatusCode === 404;
+}
+
+function encodedKey(key) {
+  return key.split("/").map(encodeURIComponent).join("/");
+}
+
+function aliyunBucketUrl(config) {
+  const url = new URL(config.endpoint);
+  url.hostname = `${config.bucket}.${url.hostname}`;
+  url.pathname = "/";
+  url.search = "";
+  url.hash = "";
+  return url;
+}
+
+async function responseStatus(fetchImpl, url, init) {
+  let response;
+  try {
+    response = await fetchImpl(url, {
+      ...init,
+      redirect: "manual",
+      signal: AbortSignal.timeout(10_000)
+    });
+    return response.status;
+  } catch {
+    throw new Error("storage_bucket_anonymous_access_check_failed");
+  } finally {
+    await response?.body?.cancel?.().catch(() => undefined);
+  }
+}
+
+function assertAnonymousDenied(status) {
+  if (status !== 401 && status !== 403) {
+    throw new Error("storage_bucket_anonymous_access_not_blocked");
+  }
 }
 
 function createPdfValidationTransform(maximumBytes) {
@@ -74,10 +112,22 @@ export function createS3Client(config, S3ClientType = S3Client) {
 }
 
 export class S3ObjectStore {
-  constructor(config, { client = createS3Client(config), UploadType = Upload } = {}) {
+  constructor(config, {
+    anonymousFetch = fetch,
+    client = createS3Client(config),
+    UploadType = Upload
+  } = {}) {
+    const securityProfile = config.securityProfile ?? "aws-s3";
+    if (!supportedSecurityProfiles.has(securityProfile)) {
+      throw new TypeError("storage_security_profile_invalid");
+    }
     this.bucket = config.bucket;
     this.client = client;
+    this.endpoint = config.endpoint;
+    this.forcePathStyle = config.forcePathStyle ?? false;
     this.prefix = config.prefix;
+    this.securityProfile = securityProfile;
+    this.anonymousFetch = anonymousFetch;
     this.UploadType = UploadType;
   }
 
@@ -91,6 +141,9 @@ export class S3ObjectStore {
   }
 
   async assertSecurityConfiguration() {
+    if (this.securityProfile === "aliyun-oss") {
+      return this.assertAliyunOssSecurityConfiguration();
+    }
     const publicAccess = await this.client.send(new GetPublicAccessBlockCommand({ Bucket: this.bucket }));
     const block = publicAccess.PublicAccessBlockConfiguration;
     if (!block || ![block.BlockPublicAcls, block.IgnorePublicAcls, block.BlockPublicPolicy, block.RestrictPublicBuckets].every(Boolean)) {
@@ -114,6 +167,75 @@ export class S3ObjectStore {
     if (versioning.Status !== "Enabled" && !objectLockEnabled) {
       throw new Error("storage_bucket_recovery_protection_missing");
     }
+    return {
+      encryption: true,
+      privateAccess: true,
+      versioningOrObjectLock: true
+    };
+  }
+
+  async assertAliyunOssSecurityConfiguration() {
+    if (!this.endpoint || this.forcePathStyle) throw new Error("storage_aliyun_oss_endpoint_invalid");
+
+    const acl = await this.client.send(new GetBucketAclCommand({ Bucket: this.bucket }));
+    const ownerId = acl.Owner?.ID;
+    const grants = acl.Grants ?? [];
+    const ownerOnly = typeof ownerId === "string" && ownerId.length > 0 && grants.length === 1 &&
+      grants[0].Grantee?.Type === "CanonicalUser" && grants[0].Grantee?.ID === ownerId &&
+      grants[0].Permission === "FULL_CONTROL" && !grants[0].Grantee?.URI;
+    if (!ownerOnly) throw new Error("storage_bucket_public_access_not_blocked");
+
+    const versioning = await this.client.send(new GetBucketVersioningCommand({ Bucket: this.bucket }));
+    if (versioning.Status !== "Enabled") {
+      throw new Error("storage_bucket_recovery_protection_missing");
+    }
+
+    const operationId = randomUUID();
+    const objectProbeKey = `compatibility/security/${operationId}`;
+    const stagingProbeKey = `${this.prefix}/.staging/.security/${operationId}`;
+    const anonymousWriteKey = `${this.prefix}/.staging/.security/${operationId}-anonymous-write`;
+    const probeBytes = Buffer.from("Liteasy OSS security probe", "utf8");
+    const bucketUrl = aliyunBucketUrl({ bucket: this.bucket, endpoint: this.endpoint });
+    const objectUrl = new URL(encodedKey(objectProbeKey), bucketUrl);
+    const stagingUrl = new URL(encodedKey(stagingProbeKey), bucketUrl);
+    const anonymousWriteUrl = new URL(encodedKey(anonymousWriteKey), bucketUrl);
+    const listUrl = new URL(bucketUrl);
+    listUrl.searchParams.set("list-type", "2");
+    listUrl.searchParams.set("max-keys", "1");
+    listUrl.searchParams.set("prefix", this.prefix);
+    let anonymousWriteMayExist = false;
+
+    try {
+      await this.client.send(new PutObjectCommand({
+        Body: probeBytes,
+        Bucket: this.bucket,
+        ContentType: "application/octet-stream",
+        Key: objectProbeKey,
+        Metadata: { purpose: "security-probe" }
+      }));
+      const head = await this.client.send(new HeadObjectCommand({
+        Bucket: this.bucket,
+        Key: objectProbeKey
+      }));
+      if (!acceptedOssEncryptionModes.has(head.ServerSideEncryption)) {
+        throw new Error("storage_bucket_encryption_missing");
+      }
+
+      assertAnonymousDenied(await responseStatus(this.anonymousFetch, objectUrl, { method: "HEAD" }));
+      assertAnonymousDenied(await responseStatus(this.anonymousFetch, stagingUrl, { method: "HEAD" }));
+      assertAnonymousDenied(await responseStatus(this.anonymousFetch, listUrl, { method: "GET" }));
+      const writeStatus = await responseStatus(this.anonymousFetch, anonymousWriteUrl, {
+        body: probeBytes,
+        headers: { "content-type": "application/octet-stream" },
+        method: "PUT"
+      });
+      anonymousWriteMayExist = writeStatus >= 200 && writeStatus < 300;
+      assertAnonymousDenied(writeStatus);
+    } finally {
+      await this.deleteKey(objectProbeKey).catch(() => undefined);
+      if (anonymousWriteMayExist) await this.deleteKey(anonymousWriteKey).catch(() => undefined);
+    }
+
     return {
       encryption: true,
       privateAccess: true,
