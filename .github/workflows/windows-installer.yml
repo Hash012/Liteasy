@@ -48,6 +48,7 @@ jobs:
           workspaces: products/liteasy/apps/desktop/src-tauri -> target
 
       - name: Install frontend dependencies
+        id: dependencies
         run: npm ci
 
       - name: Report dependency installation
@@ -56,6 +57,7 @@ jobs:
         run: Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=dependencies"
 
       - name: Test desktop frontend
+        id: frontend_tests
         run: npm test
 
       - name: Report frontend tests
@@ -64,6 +66,7 @@ jobs:
         run: Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=frontend_tests"
 
       - name: Test Tauri host
+        id: tauri_tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
       - name: Report Tauri tests
@@ -72,6 +75,7 @@ jobs:
         run: Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=tauri_tests"
 
       - name: Build and verify production assets
+        id: frontend_build
         env:
           VITE_FORUM_API_URL: https://community.staging.liteasyclaw.com
           VITE_FORUM_WEB_URL: https://community.staging.liteasyclaw.com
@@ -84,6 +88,7 @@ jobs:
         run: Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=frontend_build"
 
       - name: Build NSIS installer
+        id: installer_build
         env:
           VITE_FORUM_API_URL: https://community.staging.liteasyclaw.com
           VITE_FORUM_WEB_URL: https://community.staging.liteasyclaw.com
@@ -157,6 +162,7 @@ jobs:
             -Uri "https://staging.liteasyclaw.com/api/releases/windows-installer"
 
       - name: Verify staging publication
+        id: staging_verification
         if: (github.event_name == 'workflow_dispatch' && inputs.publish_staging) || startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         run: |
@@ -164,3 +170,19 @@ jobs:
           if (-not $health.ok -or -not $health.installerReady) {
             throw "Staging installer did not become ready."
           }
+
+      - name: Report workflow outcome
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $query = [uri]::EscapeDataString((ConvertTo-Json -Compress @{
+            dependencies = "${{ steps.dependencies.outcome }}"
+            frontendBuild = "${{ steps.frontend_build.outcome }}"
+            frontendTests = "${{ steps.frontend_tests.outcome }}"
+            installerBuild = "${{ steps.installer_build.outcome }}"
+            stagingVerification = "${{ steps.staging_verification.outcome }}"
+            tag = "$env:GITHUB_REF_NAME"
+            tauriTests = "${{ steps.tauri_tests.outcome }}"
+          }))
+          Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=outcome&ci_result=$query"
