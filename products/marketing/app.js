@@ -180,5 +180,5 @@ waitlistForm.addEventListener("submit", (event) => {
     return;
   }
   event.preventDefault();
-  formStatus.textContent = "体验申请入口正在配置中。请保留你的信息，稍后可通过配置接入正式表单。";
+  formStatus.textContent = "体验申请入口尚未开放。开放后可在这里提交申请。";
 });
