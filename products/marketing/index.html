@@ -199,6 +199,38 @@
         <p class="content-shell artifact-disclaimer">示意内容用于展示理解方式，不代表特定论文的真实结论。</p>
       </section>
 
+      <section id="associations" class="section associations-section" data-marketing-section="associations" aria-labelledby="associations-title">
+        <div class="content-shell section-intro associations-intro">
+          <div>
+            <p class="eyebrow">FOLLOW THE THREAD</p>
+            <h2 id="associations-title">从一个概念，<br />走进一片研究。</h2>
+          </div>
+          <p>关联推荐不把你带离当前阅读。它把正文里的概念、关联文献和阅读卡片放在同一条可返回的路径上。</p>
+        </div>
+        <div class="content-shell artifact-layout association-layout">
+          <div class="artifact-tabs association-tabs" role="tablist" aria-label="关联推荐交互">
+            <button id="association-anchors" class="artifact-tab association-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="association-panel" data-association="anchors">标出概念</button>
+            <button id="association-focus" class="artifact-tab association-tab" type="button" role="tab" aria-selected="false" aria-controls="association-panel" data-association="focus">聚焦关联</button>
+            <button id="association-paper" class="artifact-tab association-tab" type="button" role="tab" aria-selected="false" aria-controls="association-panel" data-association="paper">打开文献</button>
+            <button id="association-return" class="artifact-tab association-tab" type="button" role="tab" aria-selected="false" aria-controls="association-panel" data-association="return">逐层返回</button>
+          </div>
+          <div id="association-panel" class="artifact-panel association-panel" role="tabpanel" aria-labelledby="association-anchors" tabindex="0">
+            <div class="artifact-description association-description">
+              <p class="artifact-kicker" data-association-kicker>从正文里开始</p>
+              <h3 data-association-title>标出概念</h3>
+              <p data-association-copy>点开“相关推荐”，正文中的关键概念会变成可以继续探索的入口。</p>
+              <span data-association-use>相关推荐 · 概念锚点 · 原位置保留</span>
+            </div>
+            <div class="artifact-preview association-preview association-anchors-preview" data-association-preview aria-label="正文中的相关推荐概念标记预览">
+              <div class="association-toolbar"><span>薄读 / 正文</span><button type="button">相关推荐</button></div>
+              <p>Late interaction 让查询与文档 token 保持细粒度匹配。</p>
+              <div class="association-anchor-chip">细粒度匹配 <span>3 篇关联论文</span></div>
+              <div class="association-anchor-chip association-anchor-chip--second">Late interaction <span>查看关联</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="intuecho" class="section frontier-section" data-marketing-section="intuecho" aria-labelledby="intuecho-title">
         <div class="content-shell frontier-layout">
           <div class="frontier-visual">

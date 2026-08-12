@@ -19,6 +19,11 @@ try {
   await figureTab.press("ArrowRight");
   assert.equal(await page.locator("[data-result-title]").textContent(), "结构表达");
 
+  const associationTab = page.getByRole("tab", { name: "标出概念" });
+  await associationTab.focus();
+  await associationTab.press("ArrowRight");
+  assert.equal(await page.locator("[data-association-title]").textContent(), "聚焦关联");
+
   await page.locator('[data-waitlist-form] input[name="email"]').fill("reader@example.com");
   await page.locator('[data-waitlist-form] select[name="role"]').selectOption({ label: "研究生" });
   await page.locator("[data-waitlist-form]").evaluate((form) => form.requestSubmit());

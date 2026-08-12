@@ -36,11 +36,12 @@ test("keeps one conversion goal and truthful fallback status", () => {
 });
 
 test("declares the preserved semantic page framework", () => {
-  for (const section of ["hero", "workflow", "evidence", "results", "intuecho", "waitlist"]) {
+  for (const section of ["hero", "workflow", "evidence", "results", "associations", "intuecho", "waitlist"]) {
     assert.match(html, new RegExp(`data-marketing-section="${section}"`));
   }
   assert.match(html, /role="tablist"[^>]*aria-label="薄读工作流"/);
   assert.match(html, /role="tablist"[^>]*aria-label="薄读多模态呈现"/);
+  assert.match(html, /role="tablist"[^>]*aria-label="关联推荐交互"/);
   assert.match(html, /aria-live="polite"/);
 });
 
@@ -65,6 +66,17 @@ test("offers Thin Reading's parallel multimodal understanding modes", () => {
   }
 });
 
+test("presents association recommendations as a reversible reading interaction", () => {
+  for (const label of ["标出概念", "聚焦关联", "打开文献", "逐层返回"]) {
+    assert.match(`${html}\n${script}`, new RegExp(label));
+  }
+  for (const key of ["anchors", "focus", "paper", "return"]) {
+    assert.match(script, new RegExp(`\\b${key}: \\{`));
+  }
+  assert.match(html, /从一个概念，<br \/>走进一片研究/);
+  assert.match(html, /相关推荐/);
+});
+
 test("ships an accessible Intuecho shared-reading visual", async () => {
   const svg = await readFile(new URL("assets/intuecho-reading-visual.svg", root), "utf8");
   assert.match(svg, /<title[^>]*>[^<]*共享批注/);
@@ -74,7 +86,7 @@ test("ships an accessible Intuecho shared-reading visual", async () => {
 test("connects every tab to an existing panel", () => {
   const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]));
   const tabs = [...html.matchAll(/<button\s+([^>]*\brole="tab"[^>]*)>/g)].map((match) => match[1]);
-  assert.equal(tabs.length, 11);
+  assert.equal(tabs.length, 15);
   const tabIds = tabs.map((attributes) => attributes.match(/\bid="([^"]+)"/)?.[1]);
   assert.equal(new Set(tabIds).size, tabs.length);
   for (const attributes of tabs) {
