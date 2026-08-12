@@ -43,3 +43,27 @@ test("declares the preserved semantic page framework", () => {
   assert.match(html, /role="tablist"[^>]*aria-label="理解方式预览"/);
   assert.match(html, /aria-live="polite"/);
 });
+
+test("offers the approved five-step researcher workflow", () => {
+  for (const label of ["打开文献", "看见核心", "选择深入", "核对依据", "留下理解"]) {
+    assert.match(`${html}\n${script}`, new RegExp(label));
+  }
+  for (const key of ["open", "core", "explore", "verify", "keep"]) {
+    assert.match(script, new RegExp(`\\b${key}: \\{`));
+  }
+});
+
+test("offers five user-facing understanding results", () => {
+  for (const label of ["薄读", "关系图", "图表与示意", "对比表", "汇报与文档"]) {
+    assert.match(`${html}\n${script}`, new RegExp(label));
+  }
+  for (const key of ["thin", "graph", "visual", "compare", "document"]) {
+    assert.match(script, new RegExp(`\\b${key}: \\{`));
+  }
+});
+
+test("ships an accessible Intuecho shared-reading visual", async () => {
+  const svg = await readFile(new URL("assets/intuecho-reading-visual.svg", root), "utf8");
+  assert.match(svg, /<title[^>]*>[^<]*共享批注/);
+  assert.match(svg, /<desc[^>]*>[^<]*文献位置/);
+});

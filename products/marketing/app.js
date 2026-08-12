@@ -1,79 +1,96 @@
 const workflowData = {
-  workspace: {
+  open: {
     number: "01 / 05",
-    title: "建立工作区",
-    copy: "围绕当前课题整理文献、标签、笔记与阅读上下文。"
+    title: "打开文献",
+    copy: "把当前真正想理解的文献带进桌面阅读工作台。"
   },
-  select: {
+  core: {
     number: "02 / 05",
-    title: "锁定文献",
-    copy: "选择真正需要理解的文献，让后续分析始终围绕明确的材料展开。"
+    title: "看见核心",
+    copy: "从你最想知道的内容开始，建立对论文主线的第一层理解。"
   },
-  import: {
+  explore: {
     number: "03 / 05",
-    title: "解析文献",
-    copy: "识别文献结构、段落关系和关键论证，为深入阅读建立基础。"
+    title: "选择深入",
+    copy: "选中词句或尚未展开的板块，沿着问题进入下一层。"
   },
-  ask: {
+  verify: {
     number: "04 / 05",
-    title: "追问与验证",
-    copy: "围绕不理解的地方继续提问，并回到相关原文位置检查依据。"
+    title: "核对依据",
+    copy: "辨认内容依据，并回到相关原文位置核对上下文。"
   },
-  artifact: {
+  keep: {
     number: "05 / 05",
-    title: "生成产物",
-    copy: "将理解延展为树状展开、思维导图、问答解析或汇报骨架。"
+    title: "留下理解",
+    copy: "批注、整理、导出或分享这一轮阅读形成的理解。"
   }
 };
 
-const artifactData = {
+const resultData = {
   thin: {
-    kicker: "逐层阅读",
+    kicker: "从问题开始",
     title: "薄读",
-    copy: "先理解文献最重要的部分，再沿着问题逐层深入。",
-    use: "适合：快速建立整体判断",
-    className: "artifact-thin-preview",
+    copy: "先读懂你最想知道的，再沿词句、板块和关联线索逐层探索。",
+    use: "适合：快速进入一篇复杂文献",
+    className: "result-thin-preview",
+    ariaLabel: "从用户问题逐层深入的薄读预览",
     markup: `
-      <div class="thin-toolbar"><span>薄读</span><span>总述 · 第 0 层</span></div>
-      <p>先保留文献中最值得理解的核心，再根据兴趣和疑问，继续进入方法、实验与局限。</p>
-      <div class="thin-tokens"><span>深入了解实验</span><span>方法细节</span><span>局限</span></div>`
+      <div class="thin-toolbar"><span>薄读</span><span>从你的问题开始</span></div>
+      <p>为什么这项方法能在更少计算量下保留关键关系？</p>
+      <div class="thin-tokens"><span>查看方法依据</span><span>理解实验结果</span><span>继续探索局限</span></div>`
   },
-  tree: {
-    kicker: "从整体到细节",
-    title: "树形展开",
-    copy: "将章节、论点、方法和结论拆解为可以继续探索的理解路径。",
-    use: "适合：系统精读与逻辑梳理",
-    className: "tree-preview",
-    markup: `
-      <img class="artifact-visual" src="assets/tree-visual.svg" alt="文献主线拆解为研究问题、核心方法、实验设计和结论与局限" />`
+  graph: {
+    kicker: "看见联系",
+    title: "关系图",
+    copy: "把当前内容与概念、证据和相关文献之间的联系放在同一视野中。",
+    use: "适合：追踪概念与研究脉络",
+    className: "result-graph-preview",
+    ariaLabel: "概念、证据和相关文献关系图预览",
+    markup: `<img class="result-visual" src="assets/map-visual.svg" alt="当前问题与概念、证据和相关文献组成的关系图" />`
   },
-  map: {
-    kicker: "结构化表达",
-    title: "思维导图",
-    copy: "把文献中的问题、方法、证据与启发组织成一张知识骨架。",
-    use: "适合：建立知识骨架",
-    className: "map-preview",
+  visual: {
+    kicker: "换一种方式理解",
+    title: "图表与示意",
+    copy: "用结构图、公式、图表或过程演示，把复杂内容变成可以观察和操作的解释。",
+    use: "适合：理解结构、数量与过程",
+    className: "result-visual-preview",
+    ariaLabel: "图表、公式和过程示意预览",
     markup: `
-      <img class="artifact-visual" src="assets/map-visual.svg" alt="文献问题、方法、证据与启发组成知识关系图" />`
+      <div class="visual-explanation" aria-hidden="true">
+        <div class="visual-formula">输入 <span>&#8594;</span> 关系提取 <span>&#8594;</span> 证据核对</div>
+        <div class="visual-bars"><span style="--value: 42%"></span><span style="--value: 68%"></span><span style="--value: 84%"></span></div>
+      </div>
+      <p class="preview-caption">结构、数量与过程在同一解释中相互对应</p>`
   },
-  ppt: {
-    kicker: "面向表达",
-    title: "PPT",
-    copy: "将文献理解整理为适合组会、课堂或研究汇报的表达脉络。",
-    use: "适合：汇报与交流",
-    className: "ppt-preview",
+  compare: {
+    kicker: "并列判断",
+    title: "对比表",
+    copy: "把多篇文献的研究对象、方法、证据和结论放在同一视野中比较。",
+    use: "适合：综述与方案比较",
+    className: "result-compare-preview",
+    ariaLabel: "多篇文献对比表预览",
     markup: `
-      <p class="ppt-eyebrow">LITEASYCLAW / LITERATURE BRIEF</p><h4>文献理解<br />汇报骨架</h4><span class="ppt-bar"></span><span class="ppt-page">01 / 08</span>`
+      <table class="comparison-preview">
+        <caption class="sr-only">三篇示例文献的方法与证据对比</caption>
+        <thead><tr><th>文献</th><th>研究重点</th><th>证据</th></tr></thead>
+        <tbody><tr><th>A</th><td>效率</td><td>消融实验</td></tr><tr><th>B</th><td>表达能力</td><td>基准测试</td></tr><tr><th>C</th><td>可解释性</td><td>案例分析</td></tr></tbody>
+      </table>`
   },
-  qa: {
-    kicker: "带着问题阅读",
-    title: "问答式解析",
-    copy: "围绕真正不理解的地方提问，让解释始终贴近文献上下文。",
-    use: "适合：针对性理解与复盘",
-    className: "qa-preview",
+  document: {
+    kicker: "带走这一轮理解",
+    title: "汇报与文档",
+    copy: "把阅读结果整理为汇报结构或可继续编辑、保存的文档。",
+    use: "适合：组会、课堂与研究记录",
+    className: "result-document-preview",
+    ariaLabel: "汇报结构与可编辑文档预览",
     markup: `
-      <div class="qa-message question">这一结论的原文依据在哪里？</div>
-      <div class="qa-message answer">可回到相关段落与上下文继续检查，让理解不止停留在一段结论。<br /><span class="qa-cite">引用定位：相关段落</span></div>`
+      <div class="document-preview">
+        <p class="document-preview__eyebrow">LITEASY / READING NOTES</p>
+        <h4>研究问题与当前判断</h4>
+        <p>整理核心理解、依据、关联文献与下一步问题。</p>
+        <div class="document-preview__lines"><span></span><span></span><span></span></div>
+        <p class="document-preview__formats">DOCX · PDF · Markdown</p>
+      </div>`
   }
 };
 
@@ -132,40 +149,41 @@ workflowButtons.forEach((button) => {
   });
 });
 
-const artifactButtons = [...document.querySelectorAll("[data-artifact]")];
-const artifactKicker = document.querySelector("[data-artifact-kicker]");
-const artifactTitle = document.querySelector("[data-artifact-title]");
-const artifactCopy = document.querySelector("[data-artifact-copy]");
-const artifactUse = document.querySelector("[data-artifact-use]");
-const artifactPreview = document.querySelector("[data-artifact-preview]");
-const artifactPanel = document.querySelector("#artifact-panel");
+const resultButtons = [...document.querySelectorAll("[data-result]")];
+const resultKicker = document.querySelector("[data-result-kicker]");
+const resultTitle = document.querySelector("[data-result-title]");
+const resultCopy = document.querySelector("[data-result-copy]");
+const resultUse = document.querySelector("[data-result-use]");
+const resultPreview = document.querySelector("[data-result-preview]");
+const resultPanel = document.querySelector("#result-panel");
 
-function updateArtifact(artifact) {
-  const data = artifactData[artifact];
-  artifactButtons.forEach((button) => {
-    const active = button.dataset.artifact === artifact;
+function updateResult(result) {
+  const data = resultData[result];
+  resultButtons.forEach((button) => {
+    const active = button.dataset.result === result;
     button.classList.toggle("is-active", active);
     button.setAttribute("aria-selected", String(active));
   });
-  artifactKicker.textContent = data.kicker;
-  artifactTitle.textContent = data.title;
-  artifactCopy.textContent = data.copy;
-  artifactUse.textContent = data.use;
-  artifactPreview.className = `artifact-preview ${data.className}`;
-  artifactPreview.innerHTML = data.markup;
-  artifactPanel.setAttribute("aria-labelledby", `artifact-${artifact}`);
+  resultKicker.textContent = data.kicker;
+  resultTitle.textContent = data.title;
+  resultCopy.textContent = data.copy;
+  resultUse.textContent = data.use;
+  resultPreview.className = `artifact-preview result-preview ${data.className}`;
+  resultPreview.innerHTML = data.markup;
+  resultPreview.setAttribute("aria-label", data.ariaLabel);
+  resultPanel.setAttribute("aria-labelledby", `result-${result}`);
 }
 
-artifactButtons.forEach((button) => {
-  button.addEventListener("click", () => updateArtifact(button.dataset.artifact));
+resultButtons.forEach((button) => {
+  button.addEventListener("click", () => updateResult(button.dataset.result));
   button.addEventListener("keydown", (event) => {
     if (!["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft"].includes(event.key)) return;
     event.preventDefault();
-    const currentIndex = artifactButtons.indexOf(button);
+    const currentIndex = resultButtons.indexOf(button);
     const direction = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : -1;
-    const nextIndex = (currentIndex + direction + artifactButtons.length) % artifactButtons.length;
-    artifactButtons[nextIndex].focus();
-    updateArtifact(artifactButtons[nextIndex].dataset.artifact);
+    const nextIndex = (currentIndex + direction + resultButtons.length) % resultButtons.length;
+    resultButtons[nextIndex].focus();
+    updateResult(resultButtons[nextIndex].dataset.result);
   });
 });
 

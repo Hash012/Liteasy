@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 420" role="img" aria-labelledby="title desc">
+  <title id="title">Intuecho 共享批注</title>
+  <desc id="desc">共享批注与讨论关联到当前文献位置，并连接到其他读者的理解路径。</desc>
+  <rect width="720" height="420" fill="#ecf0ea" />
+  <rect x="54" y="44" width="270" height="332" rx="5" fill="#fffdf8" stroke="#b9c9c0" />
+  <text x="82" y="78" fill="#2f6a58" font-family="IBM Plex Mono, monospace" font-size="11">CURRENT READING</text>
+  <text x="82" y="116" fill="#18201d" font-family="Noto Serif SC, serif" font-size="22" font-weight="600">当前阅读位置</text>
+  <path d="M82 148H288M82 174H274M82 200H288M82 226H248M82 278H288M82 304H266" stroke="#c8d2cb" stroke-width="4" />
+  <rect x="78" y="239" width="218" height="28" rx="3" fill="#f4dcd6" />
+  <circle cx="324" cy="253" r="7" fill="#c85b45" />
+  <path d="M331 253C380 253 382 112 430 112M331 253H430M331 253C380 253 382 338 430 338" fill="none" stroke="#719080" stroke-width="2" />
+  <g font-family="Noto Sans SC, sans-serif">
+    <rect x="430" y="70" width="230" height="84" rx="5" fill="#fffdf8" stroke="#9eb0a7" />
+    <text x="452" y="98" fill="#c85b45" font-size="11" font-weight="700">共享批注</text>
+    <text x="452" y="126" fill="#18201d" font-size="15">另一位读者补充了适用前提</text>
+    <rect x="430" y="211" width="230" height="84" rx="5" fill="#fffdf8" stroke="#9eb0a7" />
+    <text x="452" y="239" fill="#2f6a58" font-size="11" font-weight="700">相关讨论</text>
+    <text x="452" y="267" fill="#18201d" font-size="15">围绕同一证据继续核对与讨论</text>
+    <rect x="430" y="316" width="230" height="48" rx="5" fill="#dce9e1" stroke="#9eb0a7" />
+    <text x="452" y="346" fill="#18201d" font-size="15">另一条理解路径</text>
+  </g>
+</svg>
