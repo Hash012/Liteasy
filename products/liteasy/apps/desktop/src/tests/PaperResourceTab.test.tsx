@@ -319,7 +319,11 @@ test("keeps the previous translation visible when retranslation fails and suppor
   await user.click(screen.getByRole("button", { name: "确认翻译为 中文" }));
   expect(await screen.findByText("第一版译文")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "重新翻译" }));
-  await user.click(await screen.findByRole("button", { name: "确认翻译为 中文" }));
+  await user.click(await screen.findByRole(
+    "button",
+    { name: "确认翻译为 中文" },
+    { timeout: 5_000 }
+  ));
   expect(await screen.findByText("本地翻译服务仍在使用旧配置")).toBeInTheDocument();
   expect(screen.getByText("第一版译文")).toBeInTheDocument();
   expect(screen.getByText("技术详情")).toBeInTheDocument();

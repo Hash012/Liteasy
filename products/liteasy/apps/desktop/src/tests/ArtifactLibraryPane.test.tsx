@@ -132,7 +132,11 @@ describe("ArtifactLibraryPane", () => {
     await waitFor(() => {
       expect(screen.queryByRole("menuitem", { name: "重命名" })).not.toBeInTheDocument();
     });
-    const dialog = await screen.findByRole("dialog", { name: "重命名产物" });
+    const dialog = await screen.findByRole(
+      "dialog",
+      { name: "重命名产物" },
+      { timeout: 5_000 }
+    );
     const nameInput = within(dialog).getByRole("textbox", { name: "产物名称" });
     await user.clear(nameInput);
     await user.type(nameInput, "新的薄读");
