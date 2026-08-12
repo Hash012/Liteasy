@@ -37,6 +37,8 @@ test("connects the forum, download gate, and real application flow", () => {
   assert.match(script, /fetch\(waitlistUrl/);
   assert.match(script, /安装包面向已提交体验申请的用户开放/);
   assert.match(script, /window\.location\.assign\(result\.downloadUrl\)/);
+  assert.match(html, /styles\.css\?v=20260813-1/);
+  assert.match(html, /app\.js\?v=20260813-1/);
 });
 
 test("declares the preserved semantic page framework", () => {

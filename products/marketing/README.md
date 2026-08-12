@@ -31,3 +31,5 @@ MARKETING_BASE_URL=http://127.0.0.1:8090 npm run verify:browser
 营销站没有登录功能，不接收 Liteasy 或 Intuecho 的账号密码。
 
 页面默认向同域 `/api/waitlist` 提交 JSON 申请。部署在不同 API 域名时，可以在加载 `app.js` 前设置 `window.LITEASY_WAITLIST_URL` 覆盖该地址。服务端在安装包可用时返回短时 `downloadUrl`，页面会在申请保存成功后自动开始下载；安装包未就绪时只确认申请已记录，不会显示虚假的下载成功状态。
+
+预发布环境的服务配置示例位于 `waitlist/.env.example`。只有经过评审和签名的 Windows 安装包才能写入 `WAITLIST_INSTALLER_PATH`；`WAITLIST_DOWNLOAD_SECRET` 使用独立随机值并只保存在服务器运行配置中。下载地址包含短时签名，不能绕过体验申请直接访问。
