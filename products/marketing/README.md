@@ -18,6 +18,14 @@ cd products/marketing && npm run preview
 
 打开 `http://127.0.0.1:8080`。部署时只发布本目录的静态文件，不把桌面源码、论坛源码、开发配置或文档复制到站点根目录。
 
+桌面与移动端浏览器验证需要仓库中已安装的 Liteasy Desktop Playwright 依赖。启动预览后运行：
+
+```bash
+MARKETING_BASE_URL=http://127.0.0.1:8090 npm run verify:browser
+```
+
+验证截图写入 `/tmp/liteasy-marketing-desktop.png` 和 `/tmp/liteasy-marketing-mobile.png`，不提交到仓库。
+
 ## 体验申请
 
 营销站没有登录功能，不接收 Liteasy 或 Intuecho 的账号密码。

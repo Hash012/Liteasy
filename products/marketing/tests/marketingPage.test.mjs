@@ -67,3 +67,28 @@ test("ships an accessible Intuecho shared-reading visual", async () => {
   assert.match(svg, /<title[^>]*>[^<]*共享批注/);
   assert.match(svg, /<desc[^>]*>[^<]*文献位置/);
 });
+
+test("connects every tab to an existing panel", () => {
+  const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]));
+  const tabs = [...html.matchAll(/<button\s+([^>]*\brole="tab"[^>]*)>/g)].map((match) => match[1]);
+  assert.equal(tabs.length, 10);
+  const tabIds = tabs.map((attributes) => attributes.match(/\bid="([^"]+)"/)?.[1]);
+  assert.equal(new Set(tabIds).size, tabs.length);
+  for (const attributes of tabs) {
+    const controls = attributes.match(/\baria-controls="([^"]+)"/)?.[1];
+    assert.ok(controls && ids.has(controls));
+    assert.match(attributes, /\baria-selected="(?:true|false)"/);
+  }
+});
+
+test("declares an accessible mobile navigation toggle", () => {
+  assert.match(html, /<button[^>]*aria-expanded="false"[^>]*aria-controls="site-nav"[^>]*data-menu-toggle/);
+});
+
+test("gives every marketing SVG a title and description", async () => {
+  for (const file of ["map-visual.svg", "tree-visual.svg", "thin-reading-visual.svg", "intuecho-reading-visual.svg"]) {
+    const svg = await readFile(new URL(`assets/${file}`, root), "utf8");
+    assert.match(svg, /<title\b[^>]*>[^<]+<\/title>/);
+    assert.match(svg, /<desc\b[^>]*>[^<]+<\/desc>/);
+  }
+});
