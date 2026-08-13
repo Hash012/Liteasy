@@ -27,8 +27,7 @@ function validateRequest(body) {
   const filename = typeof body.filename === "string" ? body.filename.trim() : "";
   const bytesBase64 = typeof body.bytesBase64 === "string" ? body.bytesBase64.trim() : "";
   if (!filename || filename.length > 180 || !/\.pdf$/i.test(filename) ||
-    /[\u0000-\u001f/\\]/.test(filename) || !bytesBase64 || bytesBase64.length > 33_554_432 ||
-    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(bytesBase64)) {
+    /[\u0000-\u001f/\\]/.test(filename) || !validBase64(bytesBase64)) {
     throw new MineruPdfError("invalid_mineru_pdf_request");
   }
   const bytes = Buffer.from(bytesBase64, "base64");
@@ -37,6 +36,28 @@ function validateRequest(body) {
     throw new MineruPdfError("invalid_mineru_pdf_content", 413);
   }
   return { bytes, filename };
+}
+
+function validBase64(value) {
+  if (!value || value.length > 33_554_432 || value.length % 4 !== 0) return false;
+  let padding = 0;
+  if (value.endsWith("==")) padding = 2;
+  else if (value.endsWith("=")) padding = 1;
+  const contentLength = value.length - padding;
+  if ((padding === 0 && contentLength % 4 !== 0) ||
+    (padding === 1 && contentLength % 4 !== 3) ||
+    (padding === 2 && contentLength % 4 !== 2)) return false;
+  for (let index = 0; index < contentLength; index += 1) {
+    const code = value.charCodeAt(index);
+    if (!(
+      (code >= 65 && code <= 90) || (code >= 97 && code <= 122) ||
+      (code >= 48 && code <= 57) || code === 43 || code === 47
+    )) return false;
+  }
+  for (let index = contentLength; index < value.length; index += 1) {
+    if (value.charCodeAt(index) !== 61) return false;
+  }
+  return true;
 }
 
 function textFromContentItem(item) {

@@ -51,6 +51,16 @@ test("rejects malformed, oversized, and non-PDF content before extraction", asyn
   assert.equal(calls, 0);
 });
 
+test("validates a maximum-size base64 request without regular expression stack overflow", async () => {
+  const bytes = Buffer.alloc(maximumMineruPdfBytes);
+  bytes.write("%PDF-");
+  const service = new MineruPdfService({ token: "mineru-test-token" }, {
+    extractImpl: async () => ({ contentList: [], images: [], markdown: "large", state: "done" })
+  });
+  const result = await service.extract({ bytesBase64: bytes.toString("base64"), filename: "large.pdf" });
+  assert.equal(result.markdown, "large");
+});
+
 test("deduplicates in-flight extraction and maps upstream details to a safe error", async () => {
   let resolveExtraction;
   const logged = [];

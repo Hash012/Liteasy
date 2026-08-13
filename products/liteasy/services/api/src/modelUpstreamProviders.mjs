@@ -84,7 +84,16 @@ async function fetchUpstream(fetchImpl, url, init, signal, timeoutMs, allowedFai
 async function fetchOpenAiResponse(fetchImpl, url, input, model, stream, timeoutMs) {
   const request = (includeOutputFormat, allowedFailureStatuses) => fetchUpstream(fetchImpl, url, {
     body: JSON.stringify(openAiBody(
-      includeOutputFormat ? input : { ...input, outputFormat: undefined },
+      includeOutputFormat ? input : {
+        ...input,
+        outputFormat: undefined,
+        prompt: input.outputFormat ? [
+          input.prompt,
+          "Return exactly one JSON object and no Markdown or code fences.",
+          `The JSON object must conform to schema ${input.outputFormat.name}:`,
+          JSON.stringify(input.outputFormat.schema)
+        ].join("\n") : input.prompt
+      },
       model,
       stream
     )),

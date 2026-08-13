@@ -62,6 +62,25 @@ test("rejects provider and model choices outside server policy before upstream a
   );
 });
 
+test("accepts released desktop OpenAI model aliases while the deployment selects the upstream model", async () => {
+  const observedModels = [];
+  const instance = service({
+    providers: {
+      openai: {
+        async generate(input) { observedModels.push(input.model); return "Real answer"; },
+        model: "gpt-5.6-sol",
+        async *stream() { yield "Real answer"; }
+      }
+    }
+  }).instance;
+
+  for (const model of ["gpt-5-mini", "gpt-5-mini-auditor"]) {
+    const result = await instance.generate(body({ model }), context());
+    assert.equal(result.answer, "Real answer");
+  }
+  assert.deepEqual(observedModels, ["gpt-5-mini", "gpt-5-mini-auditor"]);
+});
+
 test("rejects unknown fields, oversized prompts, and loose structured-output contracts", async () => {
   const { instance } = service();
   await assert.rejects(

@@ -3,6 +3,9 @@ import { ModelUpstreamError } from "./modelUpstreamProviders.mjs";
 const maximumPromptChars = 240_000;
 const maximumOutputChars = 2_000_000;
 const maximumSchemaBytes = 64 * 1024;
+const compatibleClientModels = Object.freeze({
+  openai: new Set(["gpt-5-mini", "gpt-5-mini-auditor"])
+});
 
 export class ModelProxyError extends Error {
   constructor(code, status = 400) {
@@ -89,7 +92,7 @@ function providerForRequest(providers, policy, input) {
   }
   const provider = providers[input.provider];
   if (!provider) throw new ModelProxyError("model_provider_unavailable", 503);
-  if (input.model !== provider.model) {
+  if (input.model !== provider.model && !compatibleClientModels[input.provider]?.has(input.model)) {
     throw new ModelProxyError("model_not_allowed", 403);
   }
   return provider;

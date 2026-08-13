@@ -70,6 +70,10 @@ test("retries structured OpenAI Responses once without text.format on compatible
       assert.equal(bodies.length, 2);
       assert.equal(bodies[0].text.format.type, "json_schema");
       assert.equal("text" in bodies[1], false);
+      assert.match(bodies[1].input, /Return exactly one JSON object/);
+      assert.match(bodies[1].input, /thin_reading/);
+      assert.match(bodies[1].input, /\"summary\"/);
+      assert.ok(bodies[1].input.startsWith("Return JSON"));
     });
   }
 });
