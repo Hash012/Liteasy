@@ -52,7 +52,7 @@ test("encrypts provider credentials and returns status only", async () => {
   const service = new AiProviderConfigurationService({
     encryptionKey: Buffer.alloc(32, 5),
     environment: "staging",
-    fallbackConfig: { mineru: { timeoutMs: 600_000 }, models: { timeoutMs: 60_000 } },
+    fallbackConfig: { mineru: { timeoutMs: 600_000 }, models: { timeoutMs: 300_000 } },
     mineruPdfService: { reconfigure(config) { reconfigured.mineru = config; } },
     modelProxyService: { reconfigure(providers) { reconfigured.providers = providers; } },
     pool

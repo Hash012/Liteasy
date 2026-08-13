@@ -89,6 +89,7 @@ test("loads deployment-scoped model providers without exposing credentials", () 
 
   assert.equal(config.models.providers.openai.model, "gpt-5-mini");
   assert.equal(config.models.providers.deepseek.apiKey, "deepseek-deployment-secret");
+  assert.equal(config.models.timeoutMs, 300_000);
   assert.equal(publicCloudConfig(config).modelProxy, "configured");
   assert.equal(JSON.stringify(publicCloudConfig(config)).includes("openai"), false);
   assert.equal(JSON.stringify(publicCloudConfig(config)).includes("secret"), false);

@@ -353,7 +353,7 @@ export function loadCloudConfig(env = process.env) {
       timeoutMs: parsePositiveInteger(
         env.LITEASY_MODEL_TIMEOUT_MS,
         "LITEASY_MODEL_TIMEOUT_MS",
-        60_000,
+        300_000,
         300_000
       )
     }),

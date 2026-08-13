@@ -20,14 +20,28 @@ function requestSignal(signal, timeoutMs) {
   return signal ? AbortSignal.any([signal, timeout]) : timeout;
 }
 
-async function readBody(response, maximumBytes = maximumUpstreamBodyBytes) {
+async function readChunk(reader, signal) {
+  try {
+    return await reader.read();
+  } catch (error) {
+    if (signal?.aborted) {
+      throw new ModelUpstreamError("model_request_aborted", 499, "client request aborted");
+    }
+    if (error?.name === "TimeoutError" || error?.name === "AbortError") {
+      throw new ModelUpstreamError("model_provider_timeout", 504, String(error));
+    }
+    throw new ModelUpstreamError("model_provider_unavailable", 503, String(error));
+  }
+}
+
+async function readBody(response, maximumBytes = maximumUpstreamBodyBytes, signal) {
   if (!response.body) return "";
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let byteLength = 0;
   let text = "";
   while (true) {
-    const { done, value } = await reader.read();
+    const { done, value } = await readChunk(reader, signal);
     if (done) break;
     byteLength += value.byteLength;
     if (byteLength > maximumBytes) {
@@ -75,7 +89,7 @@ async function fetchUpstream(fetchImpl, url, init, signal, timeoutMs, allowedFai
     throw new ModelUpstreamError("model_provider_unavailable", 503, String(error));
   }
   if (!response.ok && !allowedFailureStatuses?.has(response.status)) {
-    const detail = (await readBody(response, 16 * 1024)).replace(/\s+/g, " ").slice(0, 16 * 1024);
+    const detail = (await readBody(response, 16 * 1024, signal)).replace(/\s+/g, " ").slice(0, 16 * 1024);
     throw statusError(response, detail);
   }
   return response;
@@ -111,8 +125,8 @@ async function fetchOpenAiResponse(fetchImpl, url, input, model, stream, timeout
   return response;
 }
 
-async function jsonPayload(response) {
-  const text = await readBody(response);
+async function jsonPayload(response, signal) {
+  const text = await readBody(response, maximumUpstreamBodyBytes, signal);
   try {
     return JSON.parse(text);
   } catch {
@@ -170,7 +184,7 @@ function deepSeekBody(input, model, stream) {
   };
 }
 
-async function* ssePayloads(response) {
+async function* ssePayloads(response, signal) {
   if (!response.body) {
     throw new ModelUpstreamError("model_provider_response_invalid", 502, "upstream stream has no body");
   }
@@ -180,7 +194,7 @@ async function* ssePayloads(response) {
   let byteLength = 0;
 
   while (true) {
-    const { done, value } = await reader.read();
+    const { done, value } = await readChunk(reader, signal);
     if (done) break;
     byteLength += value.byteLength;
     if (byteLength > maximumUpstreamBodyBytes) {
@@ -246,7 +260,7 @@ function createOpenAiProvider(config, options) {
         false,
         timeoutMs
       );
-      const answer = outputTextFromOpenAi(await jsonPayload(response));
+      const answer = outputTextFromOpenAi(await jsonPayload(response, input.signal));
       if (!answer) {
         throw new ModelUpstreamError("model_provider_response_invalid", 502, "OpenAI response has no output text");
       }
@@ -261,7 +275,7 @@ function createOpenAiProvider(config, options) {
         true,
         timeoutMs
       );
-      for await (const payload of ssePayloads(response)) {
+      for await (const payload of ssePayloads(response, input.signal)) {
         if (payload?.type === "response.output_text.delta" && typeof payload.delta === "string") {
           yield payload.delta;
         }
@@ -281,7 +295,7 @@ function createDeepSeekProvider(config, options) {
         headers: providerHeaders(config.apiKey),
         method: "POST"
       }, input.signal, timeoutMs);
-      const answer = outputTextFromDeepSeek(await jsonPayload(response));
+      const answer = outputTextFromDeepSeek(await jsonPayload(response, input.signal));
       if (!answer) {
         throw new ModelUpstreamError("model_provider_response_invalid", 502, "DeepSeek response has no assistant content");
       }
@@ -293,7 +307,7 @@ function createDeepSeekProvider(config, options) {
         headers: providerHeaders(config.apiKey),
         method: "POST"
       }, input.signal, timeoutMs);
-      for await (const payload of ssePayloads(response)) {
+      for await (const payload of ssePayloads(response, input.signal)) {
         const delta = Array.isArray(payload?.choices) ? payload.choices[0]?.delta?.content : undefined;
         if (typeof delta === "string" && delta.length > 0) yield delta;
       }
@@ -302,7 +316,7 @@ function createDeepSeekProvider(config, options) {
 }
 
 export function createModelUpstreamProviders(config = {}, options = {}) {
-  const timeoutMs = config.timeoutMs ?? 60_000;
+  const timeoutMs = config.timeoutMs ?? 300_000;
   const providers = {};
   if (config.providers?.openai) {
     providers.openai = createOpenAiProvider(config.providers.openai, { ...options, timeoutMs });

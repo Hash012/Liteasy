@@ -180,7 +180,7 @@ export class AiProviderConfigurationService {
           provider: "openai"
         }
       },
-      timeoutMs: this.fallbackConfig.models?.timeoutMs ?? 60_000
+      timeoutMs: this.fallbackConfig.models?.timeoutMs ?? 300_000
     };
     this.modelProxyService.reconfigure(createModelUpstreamProviders(models, { fetchImpl: this.fetchImpl }));
     this.mineruPdfService.reconfigure({

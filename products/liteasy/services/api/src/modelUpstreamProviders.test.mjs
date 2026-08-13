@@ -126,6 +126,27 @@ test("parses fragmented DeepSeek SSE without returning reasoning fields", async 
   assert.deepEqual(deltas, ["Hel", "lo"]);
 });
 
+test("reports an upstream timeout that occurs while reading the streaming response body", async () => {
+  const providers = createModelUpstreamProviders(config(), {
+    fetchImpl: async () => new Response(new ReadableStream({
+      pull() {
+        throw new DOMException("timed out", "AbortError");
+      }
+    }), { status: 200 })
+  });
+
+  await assert.rejects(async () => {
+    for await (const _delta of providers.openai.stream({ prompt: "Summarize", provider: "openai" })) {
+      // Consume the stream so response-body failures are observed.
+    }
+  }, (error) => {
+    assert.equal(error instanceof ModelUpstreamError, true);
+    assert.equal(error.code, "model_provider_timeout");
+    assert.equal(error.status, 504);
+    return true;
+  });
+});
+
 test("keeps raw upstream errors inside the server boundary", async () => {
   const providers = createModelUpstreamProviders(config(), {
     fetchImpl: async () => new Response(JSON.stringify({
