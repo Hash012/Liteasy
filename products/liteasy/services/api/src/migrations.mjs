@@ -6,6 +6,15 @@ import { fileURLToPath } from "node:url";
 const migrationDirectory = fileURLToPath(new URL("../migrations/", import.meta.url));
 const migrationNamePattern = /^\d{3}_[a-z0-9_]+\.sql$/;
 const advisoryLockName = "liteasy-cloud-schema-migrations-v1";
+const acceptedLegacyChecksums = new Map([
+  ["029_encrypted_ai_provider_configuration.sql", new Set([
+    "fc270c8a63cf09bb994a73257ceb6a56f64e62454850554ca8d1df2226a3ec09"
+  ])]
+]);
+
+function migrationChecksumMatches(migration, checksum) {
+  return checksum === migration.checksum || acceptedLegacyChecksums.get(migration.name)?.has(checksum) === true;
+}
 
 function quotedIdentifier(value) {
   if (!/^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(value ?? "")) {
@@ -45,7 +54,7 @@ export async function migratePostgres(pool, { applicationRole, directory = migra
     const existing = new Map(existingResult.rows.map((row) => [row.name, row.checksum_sha256]));
     for (const migration of readMigrations(directory)) {
       const priorChecksum = existing.get(migration.name);
-      if (priorChecksum && priorChecksum !== migration.checksum) {
+      if (priorChecksum && !migrationChecksumMatches(migration, priorChecksum)) {
         throw new Error(`postgres_migration_changed: ${migration.name}`);
       }
       if (priorChecksum) continue;
@@ -98,7 +107,7 @@ export async function verifyPostgresMigrations(pool, { directory = migrationDire
   for (const migration of expected) {
     const checksum = applied.get(migration.name);
     if (!checksum) throw new Error(`postgres_migration_missing: ${migration.name}`);
-    if (checksum !== migration.checksum) throw new Error(`postgres_migration_changed: ${migration.name}`);
+    if (!migrationChecksumMatches(migration, checksum)) throw new Error(`postgres_migration_changed: ${migration.name}`);
   }
   const unknown = [...applied.keys()].filter((name) => !expected.some((migration) => migration.name === name));
   if (unknown.length > 0) throw new Error(`postgres_migration_unknown: ${unknown.join(",")}`);

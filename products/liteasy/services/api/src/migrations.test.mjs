@@ -73,6 +73,20 @@ test("rejects a migration whose applied content was changed", async () => {
   assert.ok(harness.queries.some((entry) => entry.sql.includes("pg_advisory_unlock")));
 });
 
+test("accepts only the known deployed checksum for migration 029", async () => {
+  const current = readMigrations().find(({ name }) => name === "029_encrypted_ai_provider_configuration.sql");
+  assert.ok(current);
+  const legacyChecksum = "fc270c8a63cf09bb994a73257ceb6a56f64e62454850554ca8d1df2226a3ec09";
+  const existing = readMigrations().map((migration) => ({
+    checksum_sha256: migration.name === current.name ? legacyChecksum : migration.checksum,
+    name: migration.name
+  }));
+  assert.deepEqual(
+    await verifyPostgresMigrations({ async query() { return { rows: existing }; } }),
+    { count: existing.length, current: true }
+  );
+});
+
 test("runtime verification requires the exact immutable migration set", async () => {
   const directory = migrationDirectory({ "001_first.sql": "SELECT 1;\n" });
   const expected = readMigrations(directory)[0];
