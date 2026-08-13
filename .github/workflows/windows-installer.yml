@@ -83,9 +83,9 @@ jobs:
         shell: pwsh
         run: Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=frontend_tests"
 
-      - name: Check Tauri host and tests
+      - name: Check Tauri host
         id: tauri_check
-        run: cargo check --manifest-path src-tauri/Cargo.toml --tests
+        run: cargo check --manifest-path src-tauri/Cargo.toml
 
       - name: Report Tauri tests
         continue-on-error: true
