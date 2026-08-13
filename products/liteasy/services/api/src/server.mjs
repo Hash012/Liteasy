@@ -645,6 +645,7 @@ export function createCloudRequestHandler(runtime, config) {
           ...directory,
           accounts: directory.accounts.map((account) => ({
             ...account,
+            activeRoleGrants: projection.grants[account.subjectId] ?? [],
             platformRoles: projection.roles[account.subjectId] ?? [],
             projectedStatus: projection.statuses[account.subjectId] ?? null
           }))

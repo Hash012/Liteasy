@@ -61,6 +61,7 @@ export type GovernanceDirectory = {
 
 export type AccountDirectoryEntry = {
   accountType: "person" | "service";
+  activeRoleGrants: Array<Pick<PlatformRoleGrant, "grantId" | "role">>;
   createdAt: string;
   email: string | null;
   emailVerified: boolean;

@@ -10,6 +10,7 @@ test("loads identity, policy, retrieval, audit, and forum data into task views",
     accounts: vi.fn(async () => ({
       accounts: [{
         accountType: "person",
+        activeRoleGrants: [{ grantId: "rolegrant-directory-user", role: "platform_admin" }],
         createdAt: "2026-08-06T00:00:00.000Z",
         email: "reader@example.com",
         emailVerified: true,
@@ -60,6 +61,7 @@ test("loads identity, policy, retrieval, audit, and forum data into task views",
       supportGrants: []
     })),
     grantRole: vi.fn(async () => ({ grant: { grantId: "rolegrant-2" } })),
+    revokeRole: vi.fn(async () => ({ grantId: "rolegrant-directory-user", revoked: true as const })),
     identity: vi.fn(async () => ({
       authentication: { fresh: true, methods: ["pwd", "mfa"] },
       principal: { grants: [], roles: ["platform_admin"], subjectId: "admin-1" }
@@ -121,6 +123,17 @@ test("loads identity, policy, retrieval, audit, and forum data into task views",
     reason: "预发布管理账号授权",
     role: "platform_admin",
     subjectId: "directory-user-id"
+  }));
+  const revokeSection = screen.getByRole("heading", { name: "撤销平台角色" }).closest("section");
+  expect(revokeSection).not.toBeNull();
+  const revokeForm = within(revokeSection as HTMLElement);
+  expect(revokeForm.getByRole("combobox", { name: /要撤销的平台角色/ })).toHaveValue("rolegrant-directory-user");
+  await user.type(revokeForm.getByRole("textbox", { name: /原因/ }), "撤销不再需要的管理员授权");
+  await user.click(revokeForm.getByRole("button", { name: "撤销角色" }));
+  await user.click(await screen.findByRole("button", { name: "确认" }));
+  await waitFor(() => expect(api.revokeRole).toHaveBeenCalledWith({
+    grantId: "rolegrant-directory-user",
+    reason: "撤销不再需要的管理员授权"
   }));
   fireEvent.click(screen.getByRole("button", { name: "组织治理" }));
   expect(await screen.findByText("Research Team")).toBeInTheDocument();

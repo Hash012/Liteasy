@@ -670,11 +670,11 @@ export class PostgresPlatformAdminRepository {
       throw new PlatformAdminError("account_directory_query_invalid");
     }
     if (subjectIds.length === 0) {
-      return { roles: Object.create(null), statuses: Object.create(null) };
+      return { grants: Object.create(null), roles: Object.create(null), statuses: Object.create(null) };
     }
     const [roleResult, statusResult] = await Promise.all([
       this.pool.query(`
-        SELECT subject_id, role FROM platform_role_grants
+        SELECT grant_id, subject_id, role FROM platform_role_grants
          WHERE subject_id = ANY($1::text[]) AND state = 'active'
          ORDER BY subject_id, role
       `, [subjectIds]),
@@ -683,15 +683,17 @@ export class PostgresPlatformAdminRepository {
          WHERE subject_id = ANY($1::text[])
       `, [subjectIds])
     ]);
+    const grants = Object.create(null);
     const roles = Object.create(null);
     for (const row of roleResult.rows) {
+      (grants[row.subject_id] ??= []).push({ grantId: row.grant_id, role: row.role });
       (roles[row.subject_id] ??= []).push(row.role);
     }
     const statuses = Object.create(null);
     for (const row of statusResult.rows) {
       statuses[row.subject_id] = { status: row.status, updatedAt: row.updated_at.toISOString() };
     }
-    return { roles, statuses };
+    return { grants, roles, statuses };
   }
 
   async setOrganizationStatus(principal, input) {

@@ -325,8 +325,8 @@ test("projects active roles and latest account status for a bounded identity pag
     async query(sql, values) {
       calls.push({ sql, values });
       if (sql.includes("FROM platform_role_grants")) return { rows: [
-        { role: "platform_admin", subject_id: "user_1" },
-        { role: "platform_admin", subject_id: "user_2" }
+        { grant_id: "rolegrant_1", role: "platform_admin", subject_id: "user_1" },
+        { grant_id: "rolegrant_2", role: "platform_admin", subject_id: "user_2" }
       ] };
       return { rows: [{ status: "disabled", subject_id: "user_2", updated_at: timestamp }] };
     }
@@ -337,6 +337,7 @@ test("projects active roles and latest account status for a bounded identity pag
   assert.deepEqual(Object.fromEntries(Object.entries(result.roles)), {
     user_1: ["platform_admin"], user_2: ["platform_admin"]
   });
+  assert.deepEqual(result.grants.user_2, [{ grantId: "rolegrant_2", role: "platform_admin" }]);
   assert.deepEqual(result.statuses.user_2, { status: "disabled", updatedAt: timestamp.toISOString() });
   assert.deepEqual(calls[0].values, [["user_1", "user_2"]]);
   await assert.rejects(() => repository.accountDirectoryProjection({

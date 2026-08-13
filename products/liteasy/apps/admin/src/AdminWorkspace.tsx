@@ -806,6 +806,8 @@ function AccountsView({ accountDirectory, busy, governance, identity, onAccountP
   selectedAccountSubject: string;
 }) {
   const pageEnd = Math.min(accountDirectory.first + accountDirectory.accounts.length, accountDirectory.total);
+  const selectedAccount = accountDirectory.accounts.find((account) => account.subjectId === selectedAccountSubject);
+  const selectedRoleGrants = selectedAccount?.activeRoleGrants ?? [];
   return (
     <div className="admin-view">
       <Section title="账号目录">
@@ -863,9 +865,14 @@ function AccountsView({ accountDirectory, busy, governance, identity, onAccountP
       </Section>
       <Section title="撤销平台角色">
         <form className="admin-form" onSubmit={onRoleRevoke}>
-          <Field label="Grant ID" required><Input name="grantId" required /></Field>
+          <Field hint={selectedAccount ? `当前账号：${selectedAccount.username}` : "请先在账号目录中选择账号。"} label="要撤销的平台角色" required>
+            <Select disabled={!selectedRoleGrants.length} key={selectedAccountSubject} name="grantId" required>
+              {!selectedRoleGrants.length ? <option value="">该账号没有活动的平台角色</option> : null}
+              {selectedRoleGrants.map((grant) => <option key={grant.grantId} value={grant.grantId}>{roleLabel(grant.role)}</option>)}
+            </Select>
+          </Field>
           <ReasonField />
-          <Button appearance="secondary" disabled={busy} icon={<DeleteRegular />} type="submit">撤销角色</Button>
+          <Button appearance="secondary" disabled={busy || !selectedRoleGrants.length} icon={<DeleteRegular />} type="submit">撤销角色</Button>
         </form>
       </Section>
       <Section title="我的角色授权">

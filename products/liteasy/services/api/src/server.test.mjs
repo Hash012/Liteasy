@@ -339,6 +339,7 @@ function runtime() {
       async accountDirectoryProjection(principal, subjectIds) {
         calls.push({ accountDirectoryProjection: subjectIds, principal });
         return {
+          grants: { user_2: [{ grantId: "rolegrant_2", role: "platform_admin" }] },
           roles: { user_2: ["platform_admin"] },
           statuses: { user_2: { status: "active", updatedAt: "2026-08-12T01:00:00.000Z" } }
         };
@@ -1202,6 +1203,7 @@ test("lists a bounded identity directory with platform role and status projectio
   assert.equal(result.status, 200, result.body.toString("utf8"));
   const body = jsonBody(result);
   assert.equal(body.accounts[0].subjectId, "user_2");
+  assert.deepEqual(body.accounts[0].activeRoleGrants, [{ grantId: "rolegrant_2", role: "platform_admin" }]);
   assert.deepEqual(body.accounts[0].platformRoles, ["platform_admin"]);
   assert.equal(body.accounts[0].projectedStatus.status, "active");
   assert.deepEqual(instance.calls.find((item) => item.accountDirectory).accountDirectory, {
