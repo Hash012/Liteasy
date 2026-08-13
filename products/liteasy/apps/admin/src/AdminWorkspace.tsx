@@ -289,7 +289,7 @@ export function AdminWorkspace({
     const data = new FormData(event.currentTarget);
     await execute("平台角色已授予。", () => api.grantRole({
       reason: value(data, "reason"),
-      role: value(data, "role") as "platform_admin" | "developer_diagnostics",
+      role: "platform_admin",
       subjectId: value(data, "subjectId")
     }), refresh);
   }
@@ -782,10 +782,8 @@ function AccountsView({ busy, governance, identity, onAccountStatus, onRoleGrant
       </Section>
       <Section title="授予平台角色">
         <form className="admin-form" onSubmit={onRoleGrant}>
-          <Field label="Subject ID" required><Input name="subjectId" required /></Field>
-          <Field label="角色" required>
-            <Select name="role"><option value="platform_admin">platform_admin</option><option value="developer_diagnostics">developer_diagnostics</option></Select>
-          </Field>
+          <Field hint="从 Keycloak 用户详情复制 ID，不要填写邮箱或用户名。" label="用户标识" required><Input name="subjectId" required /></Field>
+          <Field label="平台角色"><Input readOnly value="平台管理员" /></Field>
           <ReasonField />
           <Button appearance="primary" disabled={busy} icon={<SaveRegular />} type="submit">授予角色</Button>
         </form>

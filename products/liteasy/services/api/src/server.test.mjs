@@ -6,6 +6,7 @@ import { LibraryAuthorizationError } from "./libraryAuthorization.mjs";
 import { LibraryRepositoryError } from "./libraryRepository.mjs";
 import { ModelProxyError } from "./modelProxyService.mjs";
 import { PdfUploadError } from "./pdfUploadService.mjs";
+import { PlatformAdminError } from "./platformAdminRepository.mjs";
 import { createCloudRequestHandler } from "./server.mjs";
 import { VisualizationServiceError } from "./visualizationService.mjs";
 
@@ -1091,6 +1092,26 @@ test("requires the admin audience and fresh MFA before a platform role mutation"
   assert.equal(denied.status, 403);
   assert.equal(jsonBody(denied).code, "mfa_required");
   assert.equal(withoutMfa.calls.some((call) => call.grantRole), false);
+});
+
+test("returns actionable validation messages for invalid platform role grants", async () => {
+  const instance = runtime();
+  instance.platformAdminRepository.grantRole = async () => {
+    throw new PlatformAdminError("platform_role_invalid", 400);
+  };
+  const result = response();
+  await createCloudRequestHandler(instance, {
+    allowedOrigins: ["http://tauri.localhost"], database: { sslMode: "verify-full" },
+    environment: "production", s3: { region: "test" }
+  })(request("POST", "/v1/admin/roles/grant", {
+    idempotencyKey: "grant-role-invalid-0001",
+    reason: "Approved administrator grant",
+    role: "invalid",
+    subjectId: "admin_2"
+  }), result);
+  assert.equal(result.status, 400);
+  assert.equal(jsonBody(result).code, "platform_role_invalid");
+  assert.equal(jsonBody(result).message, "平台角色无效，请刷新管理页面后重试。");
 });
 
 test("requires the admin audience and fresh MFA for account lifecycle changes", async () => {

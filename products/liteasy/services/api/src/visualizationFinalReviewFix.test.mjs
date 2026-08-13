@@ -28,6 +28,7 @@ function validEnv(overrides = {}) {
     LITEASY_IDP_TOKEN_URL: "https://identity.internal/oauth2/token",
     LITEASY_INTUECHO_ADMIN_API_URL: "https://forum-api.internal",
     LITEASY_INTUECHO_LITERATURE_API_URL: "https://forum-literature-api.internal",
+    LITEASY_MARKETING_APPLICATION_SECRET: "marketing-application-secret",
     LITEASY_MIGRATION_DATABASE_URL: "postgresql://liteasy_migrator:secret@db.internal/liteasy",
     LITEASY_PDF_SCANNER_SECRET: "scanner-deployment-secret",
     LITEASY_PDF_SCANNER_URL: "https://scanner.internal/v1/pdf:scan",

@@ -7,6 +7,18 @@ Object.defineProperty(globalThis, "NodeFilter", {
   value: window.NodeFilter ?? { FILTER_ACCEPT: 1, FILTER_REJECT: 2, FILTER_SKIP: 3, SHOW_ELEMENT: 1 }
 });
 
+class ResizeObserverStub implements ResizeObserver {
+  disconnect() {}
+  observe() {}
+  unobserve() {}
+}
+
+Object.defineProperty(globalThis, "ResizeObserver", {
+  configurable: true,
+  value: ResizeObserverStub,
+  writable: true
+});
+
 afterEach(async () => {
   cleanup();
   await new Promise((resolve) => setTimeout(resolve, 0));
