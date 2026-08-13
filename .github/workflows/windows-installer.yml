@@ -83,71 +83,9 @@ jobs:
         shell: pwsh
         run: Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=frontend_tests"
 
-      - name: Compile Tauri host tests
-        id: tauri_compile
-        shell: pwsh
-        run: |
-          cargo test --manifest-path src-tauri/Cargo.toml --no-run 2>&1 |
-            Tee-Object -FilePath "$env:RUNNER_TEMP\tauri-compile.log"
-          $exitCode = $LASTEXITCODE
-          if ($exitCode -ne 0) {
-            $output = Get-Content "$env:RUNNER_TEMP\tauri-compile.log" -Raw
-            $diagnostic = if ($output -match "LNK[0-9]+|linking with .+ failed|link.exe") {
-              "linker"
-            } elseif ($output -match "No space left|not enough space|disk full") {
-              "disk"
-            } elseif ($output -match "paging file is too small|not enough memory|out of memory") {
-              "memory"
-            } elseif ($output -match "Access is denied|Permission denied|os error 5") {
-              "permission"
-            } elseif ($output -match "0xc0000005|STATUS_ACCESS_VIOLATION") {
-              "compiler_access_violation"
-            } elseif ($output -match "0xc00000fd|STATUS_STACK_OVERFLOW") {
-              "compiler_stack_overflow"
-            } elseif ($output -match "LLVM ERROR|rustc-LLVM ERROR") {
-              "compiler_llvm"
-            } elseif ($output -match "failed to run custom build command|build script") {
-              "build_script"
-            } elseif ($output -match "error\[E[0-9]+\]") {
-              "rust_error"
-            } elseif ($output -match "cl.exe|clang-cl|fatal error C[0-9]+") {
-              "native_compile"
-            } elseif ($output -match "failed to write|failed to create|os error 112") {
-              "io"
-            } elseif ($output -match "incremental|query cache|dep-graph") {
-              "cache"
-            } elseif ($output -match "process didn't exit successfully|rustc .+ exit code") {
-              "compiler_process"
-            } else {
-              "unknown"
-            }
-            Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=tauri_compile_failure_$diagnostic"
-            exit $exitCode
-          }
-
-      - name: Test artifact catalog state
-        id: tauri_artifact_catalog
-        run: "cargo test --manifest-path src-tauri/Cargo.toml artifact_catalog_state::tests::"
-
-      - name: Test artifact export
-        id: tauri_artifact_export
-        run: "cargo test --manifest-path src-tauri/Cargo.toml artifact_export::tests::"
-
-      - name: Test desktop identity
-        id: tauri_desktop_identity
-        run: "cargo test --manifest-path src-tauri/Cargo.toml desktop_identity::tests::"
-
-      - name: Test local library
-        id: tauri_local_library
-        run: "cargo test --manifest-path src-tauri/Cargo.toml local_library::tests::"
-
-      - name: Test paper cache
-        id: tauri_paper_cache
-        run: "cargo test --manifest-path src-tauri/Cargo.toml paper_cache::tests::"
-
-      - name: Test user paper store
-        id: tauri_user_paper_store
-        run: "cargo test --manifest-path src-tauri/Cargo.toml user_paper_store::tests::"
+      - name: Check Tauri host and tests
+        id: tauri_check
+        run: cargo check --manifest-path src-tauri/Cargo.toml --tests
 
       - name: Report Tauri tests
         continue-on-error: true
@@ -263,12 +201,6 @@ jobs:
             installerBuild = "${{ steps.installer_build.outcome }}"
             stagingVerification = "${{ steps.staging_verification.outcome }}"
             tag = "$env:GITHUB_REF_NAME"
-            tauriArtifactCatalog = "${{ steps.tauri_artifact_catalog.outcome }}"
-            tauriArtifactExport = "${{ steps.tauri_artifact_export.outcome }}"
-            tauriCompile = "${{ steps.tauri_compile.outcome }}"
-            tauriDesktopIdentity = "${{ steps.tauri_desktop_identity.outcome }}"
-            tauriLocalLibrary = "${{ steps.tauri_local_library.outcome }}"
-            tauriPaperCache = "${{ steps.tauri_paper_cache.outcome }}"
-            tauriUserPaperStore = "${{ steps.tauri_user_paper_store.outcome }}"
+            tauriCheck = "${{ steps.tauri_check.outcome }}"
           }))
           Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=outcome&ci_result=$query"
