@@ -1,4 +1,10 @@
+import { readFileSync } from "node:fs";
 import { validateReactionProcessPayload } from "./reactionProcessValidation.mjs";
+
+const artifactSchema = JSON.parse(readFileSync(new URL(
+  "../../../packages/shared/visualizationArtifact.v1.schema.json",
+  import.meta.url
+), "utf8"));
 
 function pass() {
   return { outcome: "pass" };
@@ -13,24 +19,19 @@ function requireEvidence(ids, code) {
 }
 
 function proposalSchema(modality) {
+  const spec = structuredClone(artifactSchema.properties.spec.oneOf.find(
+    (candidate) => candidate.properties?.modality?.const === modality
+  ));
+  if (!spec) throw new Error("visualization_compiler_schema_missing");
+  delete spec.properties.payload.properties.asset;
   return {
     additionalProperties: false,
     properties: {
-      accessibility: { additionalProperties: true, type: "object" },
-      evidenceBindings: { type: "array" },
-      interaction: { type: "object" },
-      semanticObjects: { type: "array" },
-      spec: {
-        additionalProperties: false,
-        properties: {
-          modality: { const: modality },
-          payload: modality === "raster_illustration"
-            ? { properties: { asset: false }, type: "object" }
-            : { type: "object" }
-        },
-        required: ["modality", "payload"],
-        type: "object"
-      }
+      accessibility: structuredClone(artifactSchema.properties.accessibility),
+      evidenceBindings: structuredClone(artifactSchema.properties.evidenceBindings),
+      interaction: structuredClone(artifactSchema.properties.interaction),
+      semanticObjects: structuredClone(artifactSchema.properties.semanticObjects),
+      spec
     },
     required: ["accessibility", "evidenceBindings", "interaction", "semanticObjects", "spec"],
     type: "object"

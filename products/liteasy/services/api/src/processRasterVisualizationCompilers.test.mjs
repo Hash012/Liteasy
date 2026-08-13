@@ -65,6 +65,18 @@ test("provides a production compiler for every process/raster catalog candidate"
   assert.deepEqual(Object.keys(productionProcessRasterVisualizationCompilers).sort(), processModalities);
 });
 
+test("derives provider proposal fields from the publication schema without server-owned raster assets", () => {
+  const schema = productionProcessRasterVisualizationCompilers.raster_illustration.proposalSchema;
+  assert.deepEqual(schema.properties.evidenceBindings.items.required, ["claimId", "evidenceIds", "confidence"]);
+  assert.deepEqual(schema.properties.semanticObjects.items.required, [
+    "objectId", "kind", "label", "objectPath", "evidenceClaimIds", "selectable"
+  ]);
+  assert.deepEqual(schema.properties.spec.properties.payload.required, [
+    "visualSchema", "composition", "labels", "styleLock", "evidenceClaimIds"
+  ]);
+  assert.equal("asset" in schema.properties.spec.properties.payload.properties, false);
+});
+
 test("rejects provider-supplied raster assets and requires server-owned asset metadata", async () => {
   const registry = new VisualizationArtifactCompilerRegistry({
     catalog,
