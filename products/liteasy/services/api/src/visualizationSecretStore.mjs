@@ -39,7 +39,9 @@ export class EnvironmentVisualizationSecretStore {
     const isEnvironment = environment === process.env ||
       Object.prototype.hasOwnProperty.call(environment ?? {}, secretEnvironmentVariable);
     const entries = environment instanceof Map ? Object.fromEntries(environment) : environment;
-    this.secrets = parseVisualizationSecrets(isEnvironment ? entries?.[secretEnvironmentVariable] : JSON.stringify(entries));
+    this.secrets = {
+      ...parseVisualizationSecrets(isEnvironment ? entries?.[secretEnvironmentVariable] : JSON.stringify(entries))
+    };
   }
 
   resolve(secretRef) {
@@ -47,5 +49,13 @@ export class EnvironmentVisualizationSecretStore {
     const secret = this.secrets[reference];
     if (typeof secret !== "string") throw new Error("visualization_secret_not_found");
     return secret;
+  }
+
+  set(secretRef, secret) {
+    const reference = validateVisualizationSecretRef(secretRef);
+    if (typeof secret !== "string" || secret.length < 1 || secret.length > 4096) {
+      throw new Error("visualization_secret_value_invalid");
+    }
+    this.secrets[reference] = secret;
   }
 }

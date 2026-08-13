@@ -48,6 +48,7 @@ import { AdminApiError, type AdminApiClient } from "./api";
 import { VisualizationGovernanceView } from "./VisualizationGovernanceView";
 import type {
   AccountDirectoryPage,
+  AiProviderConfigurationStatus,
   AdminIdentity,
   AdminSession,
   AuditEvent,
@@ -183,6 +184,15 @@ export function AdminWorkspace({
   });
   const [selectedAccountSubject, setSelectedAccountSubject] = useState("");
   const [policy, setPolicy] = useState<ModelPolicy | null>(null);
+  const [aiProviderConfiguration, setAiProviderConfiguration] = useState<AiProviderConfigurationStatus>({
+    configured: false,
+    mineruConfigured: false,
+    modelProviderConfigured: false,
+    revision: 0,
+    updatedAt: null,
+    updatedBy: null,
+    writable: false
+  });
   const [governance, setGovernance] = useState<GovernanceDirectory>({
     accountStatuses: [], organizations: [], roleGrants: [], supportGrants: []
   });
@@ -208,10 +218,11 @@ export function AdminWorkspace({
     try {
       const currentIdentity = await api.identity();
       setIdentity(currentIdentity);
-      const [accountResult, governanceResult, modelResult, sourceResult, auditResult, forumResult, appealResult, applicationResult] = await Promise.allSettled([
+      const [accountResult, governanceResult, modelResult, aiProviderResult, sourceResult, auditResult, forumResult, appealResult, applicationResult] = await Promise.allSettled([
         api.accounts({ first: 0, max: accountPageSize }),
         api.governance(),
         api.modelPolicy(),
+        api.aiProviderConfiguration(),
         api.retrievalSources(),
         api.audit({ limit: 50 }),
         api.forumAnnotations(),
@@ -226,6 +237,8 @@ export function AdminWorkspace({
       else if (!(modelResult.reason instanceof AdminApiError && modelResult.reason.code === "model_policy_not_configured")) {
         setNotice({ intent: "warning", message: errorMessage(modelResult.reason), title: "模型策略加载失败" });
       }
+      if (aiProviderResult.status === "fulfilled") setAiProviderConfiguration(aiProviderResult.value);
+      else setNotice({ intent: "warning", message: errorMessage(aiProviderResult.reason), title: "AI 服务配置加载失败" });
       if (sourceResult.status === "fulfilled") setSources(sourceResult.value.sources);
       if (auditResult.status === "fulfilled") {
         setAuditEvents(auditResult.value.events);
@@ -428,6 +441,24 @@ export function AdminWorkspace({
       });
       setPolicy(result.policy);
     }, refresh);
+  }
+
+  async function submitAiProviderConfiguration(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    await execute("AI 服务配置已加密保存并生效。", async () => {
+      const result = await api.saveAiProviderConfiguration({
+        apiKey: value(data, "apiKey"),
+        baseUrl: value(data, "baseUrl"),
+        expectedRevision: aiProviderConfiguration.revision,
+        mineruToken: value(data, "mineruToken"),
+        model: value(data, "model"),
+        reason: value(data, "reason")
+      });
+      setAiProviderConfiguration(result.configuration);
+      form.reset();
+    });
   }
 
   async function submitSource(event: FormEvent<HTMLFormElement>) {
@@ -634,11 +665,13 @@ export function AdminWorkspace({
         ) : null}
         {!loading && view === "models" ? (
           <ModelsView
+            aiProviderConfiguration={aiProviderConfiguration}
             busy={busy}
             onCancelSource={() => setSourceDraft(null)}
             onEditSource={setSourceDraft}
             onRemoveSource={removeSource}
             onSavePolicy={submitModelPolicy}
+            onSaveAiProviderConfiguration={submitAiProviderConfiguration}
             onSaveSource={submitSource}
             policy={policy}
             sourceDraft={sourceDraft}
@@ -1008,21 +1041,25 @@ function SupportView({ busy, grants, onDownload, onGrant, onRevoke }: {
 }
 
 function ModelsView({
+  aiProviderConfiguration,
   busy,
   onCancelSource,
   onEditSource,
   onRemoveSource,
   onSavePolicy,
+  onSaveAiProviderConfiguration,
   onSaveSource,
   policy,
   sourceDraft,
   sources
 }: {
+  aiProviderConfiguration: AiProviderConfigurationStatus;
   busy: boolean;
   onCancelSource: () => void;
   onEditSource: (source: RetrievalSource) => void;
   onRemoveSource: (source: RetrievalSource) => void;
   onSavePolicy: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  onSaveAiProviderConfiguration: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   onSaveSource: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   policy: ModelPolicy | null;
   sourceDraft: RetrievalSource | null;
@@ -1030,6 +1067,22 @@ function ModelsView({
 }) {
   return (
     <div className="admin-view">
+      <Section title="AI 服务凭据">
+        <dl className="admin-details">
+          <div><dt>模型服务</dt><dd><Badge color={aiProviderConfiguration.modelProviderConfigured ? "success" : "warning"}>{aiProviderConfiguration.modelProviderConfigured ? "已配置" : "未配置"}</Badge></dd></div>
+          <div><dt>MinerU</dt><dd><Badge color={aiProviderConfiguration.mineruConfigured ? "success" : "warning"}>{aiProviderConfiguration.mineruConfigured ? "已配置" : "未配置"}</Badge></dd></div>
+          <div><dt>修订号</dt><dd>{aiProviderConfiguration.revision}</dd></div>
+          <div><dt>更新时间</dt><dd>{formatDate(aiProviderConfiguration.updatedAt)}</dd></div>
+        </dl>
+        <form className="admin-form admin-form-horizontal" onSubmit={onSaveAiProviderConfiguration}>
+          <Field label="Responses API 地址" required><Input autoComplete="off" name="baseUrl" placeholder="https://provider.example/v1" required type="url" /></Field>
+          <Field label="模型标识" required><Input autoComplete="off" name="model" required /></Field>
+          <Field label="模型 API Key" required><Input autoComplete="new-password" name="apiKey" required type="password" /></Field>
+          <Field label="MinerU Token" required><Input autoComplete="new-password" name="mineruToken" required type="password" /></Field>
+          <ReasonField />
+          <Button appearance="primary" disabled={busy || !aiProviderConfiguration.writable} icon={<ShieldLockRegular />} type="submit">加密保存并应用</Button>
+        </form>
+      </Section>
       <Section title="模型代理策略">
         <form className="admin-form admin-form-horizontal" key={policy?.revision ?? 0} onSubmit={onSavePolicy}>
           <Field label="代理端点" required><Input defaultValue={policy?.cloudProxyEndpoint ?? ""} name="cloudProxyEndpoint" required type="url" /></Field>

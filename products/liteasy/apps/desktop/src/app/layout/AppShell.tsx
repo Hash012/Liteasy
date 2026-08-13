@@ -330,6 +330,7 @@ export function AppShell({
         });
       }
       return extractPdfResourcesWithMineruFallback({
+        accessToken: cloudAccessTokenRef.current,
         endpoint: settingsState["models.cloud_proxy_endpoint"].startsWith("http")
           ? settingsState["models.cloud_proxy_endpoint"]
           : resolveLocalDevCloudEndpoint(undefined, localDevCloudEnv),

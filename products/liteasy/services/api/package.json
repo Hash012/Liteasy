@@ -23,6 +23,7 @@
     "@tesseract.js-data/eng": "1.0.0",
     "ajv": "^8.17.1",
     "jose": "^6.2.8",
+    "mineru-open-sdk": "0.2.5",
     "pg": "^8.16.3",
     "tesseract.js": "6.0.1"
   },

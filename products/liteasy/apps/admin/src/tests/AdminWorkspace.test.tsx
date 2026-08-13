@@ -66,6 +66,15 @@ test("loads identity, policy, retrieval, audit, and forum data into task views",
       authentication: { fresh: true, methods: ["pwd", "mfa"] },
       principal: { grants: [], roles: ["platform_admin"], subjectId: "admin-1" }
     })),
+    aiProviderConfiguration: vi.fn(async () => ({
+      configured: true,
+      mineruConfigured: true,
+      modelProviderConfigured: true,
+      revision: 2,
+      updatedAt: "2026-08-07T00:00:00.000Z",
+      updatedBy: "admin-1",
+      writable: true
+    })),
     modelPolicy: vi.fn(async () => ({
       cloudProxyEndpoint: "https://models.liteasy.example",
       defaultProvider: "openai",
@@ -139,6 +148,8 @@ test("loads identity, policy, retrieval, audit, and forum data into task views",
   expect(await screen.findByText("Research Team")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "模型与检索" }));
   expect(await screen.findByDisplayValue("https://models.liteasy.example")).toBeInTheDocument();
+  expect(screen.getAllByText("已配置")).toHaveLength(2);
+  expect(screen.queryByText(/provider-secret|mineru-secret/)).not.toBeInTheDocument();
   expect(screen.getByText("Public Search")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "体验申请" }));
   expect(await screen.findByText("reader@example.com")).toBeInTheDocument();

@@ -1,5 +1,7 @@
 import { VisualizationProviderError } from "./visualizationProviderGateway.mjs";
 
+const structuredOutputFallbackStatuses = new Set([400, 422, 500, 502]);
+
 function object(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : null;
 }
@@ -60,26 +62,40 @@ async function jsonResponse(response) {
   }
 }
 
+async function requestStructuredResponse({ input, model, request, schema, schemaName, url }) {
+  const send = (includeFormat) => request(url, {
+    body: JSON.stringify({
+      input,
+      model,
+      ...(includeFormat ? {
+        text: {
+          format: { name: schemaName, schema, strict: true, type: "json_schema" }
+        }
+      } : {})
+    }),
+    headers: { "content-type": "application/json" },
+    method: "POST"
+  });
+  let response = await send(true);
+  if (structuredOutputFallbackStatuses.has(response?.status)) {
+    await response.body?.cancel?.().catch(() => {});
+    response = await send(false);
+  }
+  return response;
+}
+
 async function generateStructured({ payload: payloadInput, request, route }) {
   if (typeof request !== "function" || !object(route) || typeof route.model !== "string") {
     throw new VisualizationProviderError("visualization_provider_request_invalid");
   }
   const payload = structuredPayload(payloadInput);
-  const response = await request(route.endpoint, {
-    body: JSON.stringify({
-      input: payload.prompt,
-      model: route.model,
-      text: {
-        format: {
-          name: payload.schemaName,
-          schema: payload.schema,
-          strict: true,
-          type: "json_schema"
-        }
-      }
-    }),
-    headers: { "content-type": "application/json" },
-    method: "POST"
+  const response = await requestStructuredResponse({
+    input: payload.prompt,
+    model: route.model,
+    request,
+    schema: payload.schema,
+    schemaName: payload.schemaName,
+    url: route.endpoint
   });
   const body = await jsonResponse(response);
   const text = responseText(body);
@@ -131,21 +147,13 @@ async function probe({ request, route }) {
   if (typeof request !== "function" || !object(route) || typeof route.model !== "string") {
     throw new VisualizationProviderError("visualization_provider_request_invalid");
   }
-  const response = await request(route.endpoint, {
-    body: JSON.stringify({
-      input: "Return an empty JSON object.",
-      model: route.model,
-      text: {
-        format: {
-          name: "liteasy_visualization_probe",
-          schema: { additionalProperties: false, properties: {}, required: [], type: "object" },
-          strict: true,
-          type: "json_schema"
-        }
-      }
-    }),
-    headers: { "content-type": "application/json" },
-    method: "POST"
+  const response = await requestStructuredResponse({
+    input: "Return an empty JSON object.",
+    model: route.model,
+    request,
+    schema: { additionalProperties: false, properties: {}, required: [], type: "object" },
+    schemaName: "liteasy_visualization_probe",
+    url: route.endpoint
   });
   const body = await jsonResponse(response);
   if (!responseText(body)) throw new VisualizationProviderError("visualization_provider_response_invalid");

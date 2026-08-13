@@ -29,6 +29,7 @@ function endpoint(baseEndpoint: string) {
 }
 
 export async function extractMineruPdfResources(input: {
+  accessToken?: string;
   endpoint: string;
   loadPdfSource: (sourcePath: string) => Promise<Uint8Array>;
   paper: Paper;
@@ -42,7 +43,10 @@ export async function extractMineruPdfResources(input: {
       bytesBase64: base64(bytes),
       filename: `${input.paper.title.slice(0, 100) || input.paper.id}.pdf`
     }),
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      ...(input.accessToken?.trim() ? { Authorization: `Bearer ${input.accessToken.trim()}` } : {}),
+      "Content-Type": "application/json"
+    },
     method: "POST"
   });
   const payload = await response.json() as MineruResponse & { message?: string };
@@ -61,6 +65,7 @@ export async function extractMineruPdfResources(input: {
 }
 
 export async function extractPdfResourcesWithMineruFallback(input: {
+  accessToken?: string;
   endpoint: string;
   extractFallback: () => Promise<RetrievalChunk[]>;
   loadPdfSource: (sourcePath: string) => Promise<Uint8Array>;

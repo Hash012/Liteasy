@@ -116,6 +116,16 @@ export type ModelPolicy = {
   updatedBy: string;
 };
 
+export type AiProviderConfigurationStatus = {
+  configured: boolean;
+  mineruConfigured: boolean;
+  modelProviderConfigured: boolean;
+  revision: number;
+  updatedAt: string | null;
+  updatedBy: string | null;
+  writable: boolean;
+};
+
 export type RetrievalSource = {
   baseUrl: string;
   connectorType: "crossref" | "openalex" | "semantic_scholar" | null;

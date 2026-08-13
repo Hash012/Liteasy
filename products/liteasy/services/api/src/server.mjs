@@ -17,6 +17,7 @@ import { authorizeLibraryScope, LibraryAuthorizationError } from "./libraryAutho
 import { LibraryRepositoryError } from "./libraryRepository.mjs";
 import { MarketingApplicationError } from "./marketingApplicationRepository.mjs";
 import { ModelProxyError } from "./modelProxyService.mjs";
+import { maximumMineruRequestBytes, MineruPdfError } from "./mineruPdfService.mjs";
 import { PdfUploadError } from "./pdfUploadService.mjs";
 import { PlatformAdminError } from "./platformAdminRepository.mjs";
 import { startCloudRuntime } from "./runtime.mjs";
@@ -192,6 +193,19 @@ function errorMessage(code) {
     model_provider_unavailable: "The model provider is not configured or is temporarily unavailable.",
     model_request_aborted: "The model request was cancelled.",
     model_request_invalid: "The model request is invalid.",
+    ai_provider_api_key_invalid: "Enter a valid model API key.",
+    ai_provider_base_url_invalid: "Enter a valid HTTPS model API base URL.",
+    ai_provider_configuration_invalid: "The AI provider configuration is invalid.",
+    ai_provider_configuration_revision_conflict: "The AI provider configuration changed. Refresh and retry.",
+    ai_provider_configuration_revision_invalid: "The AI provider configuration revision is invalid.",
+    ai_provider_configuration_write_unavailable: "Encrypted AI provider configuration is not enabled for this deployment.",
+    ai_provider_mineru_token_invalid: "Enter a valid MinerU token.",
+    ai_provider_model_invalid: "Enter a valid model identifier.",
+    invalid_mineru_pdf_content: "The PDF is invalid or exceeds the 24 MB extraction limit.",
+    invalid_mineru_pdf_request: "MinerU extraction requires a valid PDF filename and Base64 content.",
+    mineru_capacity_exceeded: "The PDF extraction service is busy. Retry shortly.",
+    mineru_extraction_failed: "The PDF extraction service is temporarily unavailable. Retry later.",
+    mineru_not_configured: "The PDF extraction service is not configured.",
     pdf_security_rejected: "The PDF was rejected by the security policy.",
     recommendation_candidate_invalid: "The recommendation candidate is invalid.",
     recommendation_candidate_not_found: "The recommendation candidate is no longer available.",
@@ -243,6 +257,7 @@ function sendError(response, error, traceId) {
     error instanceof LibraryAuthorizationError ||
     error instanceof LibraryRepositoryError ||
     error instanceof MarketingApplicationError ||
+    error instanceof MineruPdfError ||
     error instanceof ModelProxyError ||
     error instanceof PdfUploadError ||
     error instanceof PlatformAdminError ||
@@ -310,8 +325,12 @@ export function createCloudRequestHandler(runtime, config) {
         return;
       }
       if (request.method === "GET" && url.pathname === "/readyz") {
+        const deployment = publicCloudConfig(config);
         sendJson(response, 200, {
-          deployment: publicCloudConfig(config),
+          deployment: {
+            ...deployment,
+            modelProxy: runtime.readiness.modelProxy ?? deployment.modelProxy
+          },
           readiness: runtime.readiness,
           status: "ready"
         });
@@ -542,6 +561,19 @@ export function createCloudRequestHandler(runtime, config) {
         return;
       }
 
+      if (request.method === "POST" && url.pathname === "/v1/pdf/mineru-extract") {
+        const identity = await runtime.identityVerifier.verifyAuthorizationHeader(
+          request.headers.authorization,
+          "liteasy-desktop"
+        );
+        const body = await readJsonBody(request, maximumMineruRequestBytes);
+        sendJson(response, 200, await runtime.mineruPdfService.extract(body, {
+          subjectId: identity.subject,
+          traceId
+        }));
+        return;
+      }
+
       if (request.method === "GET" && url.pathname === "/v1/admin/me") {
         const identity = await runtime.identityVerifier.verifyAuthorizationHeader(
           request.headers.authorization,
@@ -579,6 +611,19 @@ export function createCloudRequestHandler(runtime, config) {
         ["/v1/admin/support-access/grant", "grantSupportAccess"],
         ["/v1/admin/support-access/revoke", "revokeSupportAccess"]
       ]);
+      if (request.method === "POST" && url.pathname === "/v1/admin/ai-provider-configuration") {
+        const identity = requireFreshMfa(await runtime.identityVerifier.verifyAuthorizationHeader(
+          request.headers.authorization,
+          "liteasy-admin"
+        ));
+        const principal = await runtime.platformAdminRepository.principal(identity);
+        const body = await readJsonBody(request, 16 * 1024);
+        sendJson(response, 200, await runtime.aiProviderConfigurationService.save(principal, {
+          ...body,
+          traceId
+        }));
+        return;
+      }
       if (request.method === "POST" && adminMutationRoutes.has(url.pathname)) {
         const identity = requireFreshMfa(await runtime.identityVerifier.verifyAuthorizationHeader(
           request.headers.authorization,
@@ -595,6 +640,7 @@ export function createCloudRequestHandler(runtime, config) {
       }
 
       if (request.method === "GET" && new Set([
+        "/v1/admin/ai-provider-configuration",
         "/v1/admin/governance",
         "/v1/admin/model-policy",
         "/v1/admin/retrieval-sources"
@@ -604,7 +650,9 @@ export function createCloudRequestHandler(runtime, config) {
           "liteasy-admin"
         );
         const principal = await runtime.platformAdminRepository.principal(identity);
-        const result = url.pathname.endsWith("model-policy")
+        const result = url.pathname.endsWith("ai-provider-configuration")
+          ? await runtime.aiProviderConfigurationService.status(principal)
+          : url.pathname.endsWith("model-policy")
           ? await runtime.platformAdminRepository.getModelPolicy(principal)
           : url.pathname.endsWith("governance")
             ? await runtime.platformAdminRepository.listGovernance(principal)

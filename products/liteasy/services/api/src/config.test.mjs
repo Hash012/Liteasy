@@ -94,6 +94,17 @@ test("loads deployment-scoped model providers without exposing credentials", () 
   assert.equal(JSON.stringify(publicCloudConfig(config)).includes("secret"), false);
 });
 
+test("loads only a valid 32-byte platform configuration encryption key", () => {
+  const encoded = Buffer.alloc(32, 7).toString("base64");
+  const config = loadCloudConfig(validEnv({ LITEASY_PLATFORM_CONFIG_ENCRYPTION_KEY: encoded }));
+  assert.equal(config.platform.configurationEncryptionKey.byteLength, 32);
+  assert.equal(JSON.stringify(publicCloudConfig(config)).includes(encoded), false);
+  assert.throws(
+    () => loadCloudConfig(validEnv({ LITEASY_PLATFORM_CONFIG_ENCRYPTION_KEY: "too-short" })),
+    /Base64 32-byte key/
+  );
+});
+
 test("loads visualization secret references from the deployment-owned JSON variable only", () => {
   const config = loadCloudConfig(validEnv({
     LITEASY_VISUALIZATION_EGRESS_HOSTNAMES: "provider.example, backup.example",

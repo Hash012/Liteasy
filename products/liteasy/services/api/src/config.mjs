@@ -51,6 +51,18 @@ function optionalSecret(value, name) {
   return value.trim();
 }
 
+function optionalEncryptionKey(value) {
+  if (value === undefined || value === "") return undefined;
+  if (typeof value !== "string" || !/^[A-Za-z0-9+/]{43}=$/.test(value)) {
+    throw new Error("cloud_config_invalid: LITEASY_PLATFORM_CONFIG_ENCRYPTION_KEY must be a Base64 32-byte key");
+  }
+  const key = Buffer.from(value, "base64");
+  if (key.byteLength !== 32) {
+    throw new Error("cloud_config_invalid: LITEASY_PLATFORM_CONFIG_ENCRYPTION_KEY must be a Base64 32-byte key");
+  }
+  return key;
+}
+
 function requireDeploymentSecret(env, name) {
   const value = required(env, name);
   if (value.length < 16 || value.length > 4096) {
@@ -293,6 +305,10 @@ export function loadCloudConfig(env = process.env) {
       return configured ? [[provider, configured]] : [];
     })
   );
+  const mineruToken = optionalSecret(
+    env.LITEASY_MINERU_TOKEN ?? env.MINERU_TOKEN,
+    "LITEASY_MINERU_TOKEN"
+  );
   return Object.freeze({
     allowedOrigins: Object.freeze(parseAllowedOrigins(required(env, "LITEASY_ALLOWED_ORIGINS"), environment)),
     database: Object.freeze({
@@ -340,6 +356,24 @@ export function loadCloudConfig(env = process.env) {
         60_000,
         300_000
       )
+    }),
+    mineru: Object.freeze({
+      maximumConcurrency: parsePositiveInteger(
+        env.LITEASY_MINERU_MAXIMUM_CONCURRENCY,
+        "LITEASY_MINERU_MAXIMUM_CONCURRENCY",
+        2,
+        8
+      ),
+      timeoutMs: parsePositiveInteger(
+        env.LITEASY_MINERU_TIMEOUT_MS,
+        "LITEASY_MINERU_TIMEOUT_MS",
+        600_000,
+        900_000
+      ),
+      token: mineruToken
+    }),
+    platform: Object.freeze({
+      configurationEncryptionKey: optionalEncryptionKey(env.LITEASY_PLATFORM_CONFIG_ENCRYPTION_KEY)
     }),
     port: parsePort(env.LITEASY_CLOUD_PORT),
     pdfSecurity: Object.freeze({

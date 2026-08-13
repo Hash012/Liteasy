@@ -8,7 +8,7 @@ const credentialFieldPattern = /(api.?key|authorization|credential|password|secr
 const routeFields = new Set([
   "circuitFailures", "circuitOpenUntil", "circuitState", "dataClasses", "enabled", "endpoint",
   "maxConcurrency", "modalities", "model", "operations", "priority", "providerId", "region",
-  "revision", "routeId", "secretRef", "timeoutMs"
+  "revision", "routeId", "secretRef", "timeoutMs", "updatedAt", "updatedBy"
 ]);
 const supportedOperations = new Set(["structured_generation", "image_generation", "validation"]);
 const responseLimits = Object.freeze({

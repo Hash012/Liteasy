@@ -228,6 +228,19 @@ function runtime() {
         return { application: { applicationId, installerDownloadedAt: "2026-08-13T08:05:00.000Z" } };
       }
     },
+    mineruPdfService: {
+      configured: true,
+      async extract(body, context) {
+        calls.push({ mineruExtract: body, mineruContext: context });
+        return {
+          cache: "miss",
+          figureAnalysis: { status: "skipped" },
+          figures: [],
+          markdown: "# Parsed paper",
+          pages: [{ page: 1, text: "Parsed paper", textExtraction: "mineru" }]
+        };
+      }
+    },
     objectStore: {
       async openObject(storageKey) {
         calls.push({ storageKey });
@@ -444,7 +457,13 @@ function runtime() {
       }
     },
     pool: {},
-    readiness: { identity: "ready", migrations: "current", objectStorage: "ready", postgres: "ready" },
+    readiness: {
+      identity: "ready",
+      migrations: "current",
+      modelProxy: "configured",
+      objectStorage: "ready",
+      postgres: "ready"
+    },
     recommendationRepository: {
       async clearCache(subjectId, input) {
         calls.push({ recommendationCacheClear: input, subjectId });
@@ -1361,6 +1380,25 @@ test("returns stable safe errors without internal exception text", async () => {
   assert.equal(result.status, 401);
   assert.equal(result.body.includes("access_token_invalid"), true);
   assert.match(jsonBody(result).traceId, /^trace_/);
+});
+
+test("authenticates and forwards a bounded MinerU PDF extraction request", async () => {
+  const instance = runtime();
+  const handler = createCloudRequestHandler(instance, internalConfig());
+  const result = response();
+  const body = {
+    bytesBase64: Buffer.from("%PDF-1.7\nfixture").toString("base64"),
+    filename: "paper.pdf"
+  };
+  await handler(request("POST", "/v1/pdf/mineru-extract", body, "Bearer desktop-token"), result);
+  assert.equal(result.status, 200, result.body.toString("utf8"));
+  assert.equal(jsonBody(result).markdown, "# Parsed paper");
+  const extraction = instance.calls.find((call) => call.mineruExtract);
+  assert.deepEqual(extraction.mineruExtract, body);
+  assert.equal(extraction.mineruContext.subjectId, "user_1");
+  assert.match(extraction.mineruContext.traceId, /^trace_/);
+  const authentication = instance.calls.find((call) => call.header === "Bearer desktop-token");
+  assert.equal(authentication.audience, "liteasy-desktop");
 });
 
 test("maps PDF scanner rejection and outage to stable upload errors", async () => {

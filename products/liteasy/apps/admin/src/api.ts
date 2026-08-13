@@ -1,4 +1,5 @@
 import type {
+  AiProviderConfigurationStatus,
   AccountDirectoryPage,
   AdminApiErrorBody,
   AdminIdentity,
@@ -163,6 +164,9 @@ export function createAdminApiClient({
     modelPolicy() {
       return cloudGet<ModelPolicy>("/v1/admin/model-policy");
     },
+    aiProviderConfiguration() {
+      return cloudGet<AiProviderConfigurationStatus>("/v1/admin/ai-provider-configuration");
+    },
     marketingApplications(input: { before?: string; limit?: number } = {}) {
       const params = new URLSearchParams();
       if (input.before) params.set("before", input.before);
@@ -223,6 +227,19 @@ export function createAdminApiClient({
         ...input,
         idempotencyKey: idempotencyKey("set-model-policy")
       });
+    },
+    saveAiProviderConfiguration(input: {
+      apiKey: string;
+      baseUrl: string;
+      expectedRevision: number;
+      mineruToken: string;
+      model: string;
+      reason: string;
+    }) {
+      return cloudPost<{ configuration: AiProviderConfigurationStatus }>(
+        "/v1/admin/ai-provider-configuration",
+        { ...input, idempotencyKey: idempotencyKey("set-ai-provider-configuration") }
+      );
     },
     saveQuota(input: {
       expectedRevision: number;

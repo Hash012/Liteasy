@@ -20,12 +20,17 @@ test("preserves the original MinerU Markdown alongside retrieval chunks", async 
   vi.stubGlobal("fetch", fetchMock);
 
   const result = await extractMineruPdfResources({
+    accessToken: "desktop-access-token",
     endpoint: "http://127.0.0.1:8787",
     loadPdfSource: async () => new Uint8Array([37, 80, 68, 70, 45]),
     paper: { id: "paper-1", sourcePath: "/library/paper.pdf", title: "Full extraction" }
   });
 
   expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:8787/v1/pdf/mineru-extract", expect.objectContaining({ method: "POST" }));
+  expect(fetchMock).toHaveBeenCalledWith(
+    "http://127.0.0.1:8787/v1/pdf/mineru-extract",
+    expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer desktop-access-token" }) })
+  );
   expect(result.chunks[0]).toMatchObject({
     sourceMarkdown: "# Full extraction\n\n$E = mc^2$",
     textExtraction: "mineru"

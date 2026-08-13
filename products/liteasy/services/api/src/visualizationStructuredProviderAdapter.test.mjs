@@ -36,6 +36,44 @@ test("sends the exact strict Responses schema through the gateway request", asyn
   assert.deepEqual(calls[0].init.headers, { "content-type": "application/json" });
 });
 
+test("retries structured generation without text.format only for compatibility statuses", async (t) => {
+  for (const status of [400, 422, 500, 502]) {
+    await t.test(String(status), async () => {
+      const bodies = [];
+      const result = await openAiCompatibleVisualizationAdapter.generateStructured({
+        payload,
+        request: async (_url, init) => {
+          bodies.push(JSON.parse(init.body));
+          return bodies.length === 1
+            ? new Response("schema unsupported", { status })
+            : new Response(JSON.stringify({ output_text: "{\"nodes\":[]}" }), { status: 200 });
+        },
+        route
+      });
+      assert.deepEqual(result, { text: "{\"nodes\":[]}" });
+      assert.equal(bodies[0].text.format.strict, true);
+      assert.equal("text" in bodies[1], false);
+    });
+  }
+});
+
+test("does not retry structured generation on authentication or rate-limit failures", async (t) => {
+  for (const status of [401, 403, 429]) {
+    await t.test(String(status), async () => {
+      let calls = 0;
+      await assert.rejects(() => openAiCompatibleVisualizationAdapter.generateStructured({
+        payload,
+        request: async () => {
+          calls += 1;
+          return new Response("denied", { status });
+        },
+        route
+      }), /visualization_provider_unavailable/);
+      assert.equal(calls, 1);
+    });
+  }
+});
+
 test("normalizes explicit price metadata but never fabricates price from token usage", async () => {
   const priced = await openAiCompatibleVisualizationAdapter.generateStructured({
     payload,

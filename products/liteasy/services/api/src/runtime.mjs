@@ -1,5 +1,6 @@
 import { PostgresAccountLifecycleRepository } from "./accountLifecycleRepository.mjs";
 import { AccountLifecycleService } from "./accountLifecycleService.mjs";
+import { AiProviderConfigurationService } from "./aiProviderConfigurationService.mjs";
 import { PostgresAgentArtifactRepository } from "./agentArtifactRepository.mjs";
 import { createIdentityVerifier, verifyIdentityProviderReadiness } from "./identityVerifier.mjs";
 import { IdentityAdminClient } from "./identityAdminClient.mjs";
@@ -15,6 +16,7 @@ import { PostgresLibraryRepository } from "./libraryRepository.mjs";
 import { PostgresMarketingApplicationRepository } from "./marketingApplicationRepository.mjs";
 import { ModelProxyService } from "./modelProxyService.mjs";
 import { createModelUpstreamProviders } from "./modelUpstreamProviders.mjs";
+import { MineruPdfService } from "./mineruPdfService.mjs";
 import { verifyPostgresMigrations } from "./migrations.mjs";
 import { PostgresOrganizationGovernanceRepository } from "./organizationGovernanceRepository.mjs";
 import { PostgresOrganizationPolicyRepository } from "./organizationPolicyRepository.mjs";
@@ -88,17 +90,19 @@ export async function startCloudRuntime(config, dependencies = {}) {
     });
   const visualizationProviderAdapters = dependencies.visualizationProviderAdapters ??
     productionVisualizationProviderAdapters;
+  const visualizationSecretStore = dependencies.visualizationSecretStore ??
+    new EnvironmentVisualizationSecretStore(config.visualization?.secrets ?? {});
   const visualizationProviderGateway = dependencies.visualizationProviderGateway ??
     (dependencies.visualizationProviderGatewayFactory
       ? dependencies.visualizationProviderGatewayFactory({
         adapters: visualizationProviderAdapters,
         egressPolicy: { allowedHostnames: config.visualization?.egressHostnames ?? [] },
-        secretStore: new EnvironmentVisualizationSecretStore(config.visualization?.secrets ?? {})
+        secretStore: visualizationSecretStore
       })
       : new VisualizationProviderGateway({
         adapters: visualizationProviderAdapters,
         egressPolicy: { allowedHostnames: config.visualization?.egressHostnames ?? [] },
-        secretStore: new EnvironmentVisualizationSecretStore(config.visualization?.secrets ?? {})
+        secretStore: visualizationSecretStore
       }));
   const visualizationDocumentAuthorizer = dependencies.visualizationDocumentAuthorizer ??
     (async ({ document, subjectId }) => {
@@ -158,6 +162,22 @@ export async function startCloudRuntime(config, dependencies = {}) {
     loadPolicy: () => platformAdminRepository.loadModelPolicy(),
     providers: modelProviders
   });
+  const mineruPdfService = dependencies.mineruPdfService ?? new MineruPdfService({
+    ...config.mineru,
+    model: config.models?.providers?.openai,
+    modelFetch: dependencies.modelFetch
+  });
+  const aiProviderConfigurationService = dependencies.aiProviderConfigurationService ??
+    new AiProviderConfigurationService({
+      encryptionKey: config.platform?.configurationEncryptionKey,
+      environment: config.environment,
+      fallbackConfig: config,
+      fetchImpl: dependencies.modelFetch,
+      mineruPdfService,
+      modelProxyService,
+      pool,
+      visualizationSecretStore
+    });
   const retrievalConfig = config.retrieval ?? {
     contactEmail: config.recommendation.mailto,
     maximumPdfBytes: 32 * 1024 * 1024,
@@ -209,9 +229,11 @@ export async function startCloudRuntime(config, dependencies = {}) {
       : { engine: visualizationRasterOcr.engine ?? "injected", languages: [] };
     const storageWorkflows = await pdfUploadService.repairPendingWorkflows();
     const pdfSecurity = await pdfUploadService.assertNoUnverifiedObjects();
+    await aiProviderConfigurationService.initialize();
     visualizationOrchestrationWorker.scheduleRecovery?.();
     return {
       accountLifecycleService,
+      aiProviderConfigurationService,
       identityAdminClient,
       agentArtifactRepository,
       close: async () => {
@@ -227,6 +249,7 @@ export async function startCloudRuntime(config, dependencies = {}) {
       marketingApplicationRepository,
       literatureAuthorityClient,
       modelProxyService,
+      mineruPdfService,
       objectStore,
       organizationGovernanceRepository,
       organizationPolicyRepository,
@@ -248,7 +271,8 @@ export async function startCloudRuntime(config, dependencies = {}) {
       readiness: Object.freeze({
         identity: identity.discovery && identity.jwks ? "ready" : "failed",
         migrations: "current",
-        modelProxy: Object.keys(modelProviders).length > 0 ? "configured" : "unavailable",
+        get modelProxy() { return modelProxyService.configured ? "configured" : "unavailable"; },
+        get mineru() { return mineruPdfService.configured ? "configured" : "unavailable"; },
         objectStorage: objectStorage.privateAccess ? "ready" : "failed",
         pdfSecurity: pdfSecurity.unverified === 0 ? "ready" : "failed",
         postgres: postgres.writable ? "ready" : "failed",

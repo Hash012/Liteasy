@@ -1,4 +1,5 @@
 const maximumUpstreamBodyBytes = 4 * 1024 * 1024;
+const structuredOutputFallbackStatuses = new Set([400, 422, 500, 502]);
 
 export class ModelUpstreamError extends Error {
   constructor(code, status, internalDetail) {
@@ -57,7 +58,7 @@ function statusError(response, detail) {
   return new ModelUpstreamError("model_provider_unavailable", 503, diagnostic);
 }
 
-async function fetchUpstream(fetchImpl, url, init, signal, timeoutMs) {
+async function fetchUpstream(fetchImpl, url, init, signal, timeoutMs, allowedFailureStatuses) {
   let response;
   try {
     response = await fetchImpl(url, {
@@ -73,9 +74,30 @@ async function fetchUpstream(fetchImpl, url, init, signal, timeoutMs) {
     }
     throw new ModelUpstreamError("model_provider_unavailable", 503, String(error));
   }
-  if (!response.ok) {
+  if (!response.ok && !allowedFailureStatuses?.has(response.status)) {
     const detail = (await readBody(response, 16 * 1024)).replace(/\s+/g, " ").slice(0, 16 * 1024);
     throw statusError(response, detail);
+  }
+  return response;
+}
+
+async function fetchOpenAiResponse(fetchImpl, url, input, model, stream, timeoutMs) {
+  const request = (includeOutputFormat, allowedFailureStatuses) => fetchUpstream(fetchImpl, url, {
+    body: JSON.stringify(openAiBody(
+      includeOutputFormat ? input : { ...input, outputFormat: undefined },
+      model,
+      stream
+    )),
+    headers: providerHeaders(input.apiKey),
+    method: "POST"
+  }, input.signal, timeoutMs, allowedFailureStatuses);
+
+  let response = await request(Boolean(input.outputFormat), input.outputFormat
+    ? structuredOutputFallbackStatuses
+    : undefined);
+  if (input.outputFormat && structuredOutputFallbackStatuses.has(response.status)) {
+    await response.body?.cancel?.().catch(() => {});
+    response = await request(false);
   }
   return response;
 }
@@ -207,11 +229,14 @@ function createOpenAiProvider(config, options) {
   return Object.freeze({
     model: config.model,
     async generate(input) {
-      const response = await fetchUpstream(fetchImpl, upstreamUrl(config.baseUrl, "responses"), {
-        body: JSON.stringify(openAiBody(input, config.model, false)),
-        headers: providerHeaders(config.apiKey),
-        method: "POST"
-      }, input.signal, timeoutMs);
+      const response = await fetchOpenAiResponse(
+        fetchImpl,
+        upstreamUrl(config.baseUrl, "responses"),
+        { ...input, apiKey: config.apiKey },
+        config.model,
+        false,
+        timeoutMs
+      );
       const answer = outputTextFromOpenAi(await jsonPayload(response));
       if (!answer) {
         throw new ModelUpstreamError("model_provider_response_invalid", 502, "OpenAI response has no output text");
@@ -219,11 +244,14 @@ function createOpenAiProvider(config, options) {
       return answer;
     },
     async *stream(input) {
-      const response = await fetchUpstream(fetchImpl, upstreamUrl(config.baseUrl, "responses"), {
-        body: JSON.stringify(openAiBody(input, config.model, true)),
-        headers: providerHeaders(config.apiKey),
-        method: "POST"
-      }, input.signal, timeoutMs);
+      const response = await fetchOpenAiResponse(
+        fetchImpl,
+        upstreamUrl(config.baseUrl, "responses"),
+        { ...input, apiKey: config.apiKey },
+        config.model,
+        true,
+        timeoutMs
+      );
       for await (const payload of ssePayloads(response)) {
         if (payload?.type === "response.output_text.delta" && typeof payload.delta === "string") {
           yield payload.delta;

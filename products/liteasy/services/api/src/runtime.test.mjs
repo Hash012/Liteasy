@@ -54,6 +54,7 @@ test("does not become ready until PostgreSQL migrations and S3 controls pass", a
   assert.deepEqual(runtime.readiness, {
     identity: "ready",
     migrations: "current",
+    mineru: "unavailable",
     modelProxy: "unavailable",
     objectStorage: "ready",
     pdfSecurity: "ready",

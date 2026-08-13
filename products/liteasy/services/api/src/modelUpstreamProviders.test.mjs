@@ -45,6 +45,55 @@ test("uses only the deployment model and credential for OpenAI Responses", async
   assert.equal(observed.headers.Authorization, "Bearer deployment-openai-secret");
 });
 
+test("retries structured OpenAI Responses once without text.format on compatible gateway failures", async (t) => {
+  for (const status of [400, 422, 500, 502]) {
+    await t.test(String(status), async () => {
+      const bodies = [];
+      const providers = createModelUpstreamProviders(config(), {
+        fetchImpl: async (_url, init) => {
+          bodies.push(JSON.parse(init.body));
+          return bodies.length === 1
+            ? new Response("schema unsupported", { status })
+            : new Response(JSON.stringify({ output_text: "{\"summary\":\"validated downstream\"}" }), { status: 200 });
+        }
+      });
+      const answer = await providers.openai.generate({
+        outputFormat: {
+          name: "thin_reading",
+          schema: { properties: { summary: { type: "string" } }, required: ["summary"], type: "object" },
+          strict: true
+        },
+        prompt: "Return JSON",
+        provider: "openai"
+      });
+      assert.equal(answer, "{\"summary\":\"validated downstream\"}");
+      assert.equal(bodies.length, 2);
+      assert.equal(bodies[0].text.format.type, "json_schema");
+      assert.equal("text" in bodies[1], false);
+    });
+  }
+});
+
+test("does not remove structured output on authentication or rate-limit failures", async (t) => {
+  for (const status of [401, 403, 429]) {
+    await t.test(String(status), async () => {
+      let calls = 0;
+      const providers = createModelUpstreamProviders(config(), {
+        fetchImpl: async () => {
+          calls += 1;
+          return new Response("denied", { status });
+        }
+      });
+      await assert.rejects(() => providers.openai.generate({
+        outputFormat: { name: "result", schema: { type: "object" }, strict: true },
+        prompt: "Return JSON",
+        provider: "openai"
+      }), ModelUpstreamError);
+      assert.equal(calls, 1);
+    });
+  }
+});
+
 test("parses fragmented DeepSeek SSE without returning reasoning fields", async () => {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({

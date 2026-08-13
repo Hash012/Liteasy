@@ -82,6 +82,13 @@ test("rejects credential material in routes and resolves only deployment secret 
     () => gateway.validateRoute({ ...route, apiKey: "do-not-store-credentials" }),
     /visualization_route_credential_material_rejected/
   );
+  const normalized = gateway.validateRoute({
+    ...route,
+    updatedAt: "2026-08-13T00:00:00.000Z",
+    updatedBy: "admin-subject"
+  });
+  assert.equal("updatedAt" in normalized, false);
+  assert.equal("updatedBy" in normalized, false);
 });
 
 test("opens the route circuit after three failures without sending paper content in probes", async () => {

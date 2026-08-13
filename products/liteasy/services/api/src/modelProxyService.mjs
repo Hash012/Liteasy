@@ -102,6 +102,17 @@ export class ModelProxyService {
     this.providers = providers;
   }
 
+  get configured() {
+    return Object.keys(this.providers).length > 0;
+  }
+
+  reconfigure(providers) {
+    if (!providers || typeof providers !== "object" || Array.isArray(providers)) {
+      throw new Error("model_provider_configuration_invalid");
+    }
+    this.providers = providers;
+  }
+
   async #prepare(body) {
     const input = generationInput(body);
     const policy = await this.loadPolicy();
