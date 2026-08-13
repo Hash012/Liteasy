@@ -80,9 +80,33 @@ jobs:
         shell: pwsh
         run: Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=frontend_tests"
 
-      - name: Test Tauri host
-        id: tauri_tests
-        run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Compile Tauri host tests
+        id: tauri_compile
+        run: cargo test --manifest-path src-tauri/Cargo.toml --no-run
+
+      - name: Test artifact catalog state
+        id: tauri_artifact_catalog
+        run: cargo test --manifest-path src-tauri/Cargo.toml artifact_catalog_state::tests::
+
+      - name: Test artifact export
+        id: tauri_artifact_export
+        run: cargo test --manifest-path src-tauri/Cargo.toml artifact_export::tests::
+
+      - name: Test desktop identity
+        id: tauri_desktop_identity
+        run: cargo test --manifest-path src-tauri/Cargo.toml desktop_identity::tests::
+
+      - name: Test local library
+        id: tauri_local_library
+        run: cargo test --manifest-path src-tauri/Cargo.toml local_library::tests::
+
+      - name: Test paper cache
+        id: tauri_paper_cache
+        run: cargo test --manifest-path src-tauri/Cargo.toml paper_cache::tests::
+
+      - name: Test user paper store
+        id: tauri_user_paper_store
+        run: cargo test --manifest-path src-tauri/Cargo.toml user_paper_store::tests::
 
       - name: Report Tauri tests
         continue-on-error: true
@@ -198,6 +222,12 @@ jobs:
             installerBuild = "${{ steps.installer_build.outcome }}"
             stagingVerification = "${{ steps.staging_verification.outcome }}"
             tag = "$env:GITHUB_REF_NAME"
-            tauriTests = "${{ steps.tauri_tests.outcome }}"
+            tauriArtifactCatalog = "${{ steps.tauri_artifact_catalog.outcome }}"
+            tauriArtifactExport = "${{ steps.tauri_artifact_export.outcome }}"
+            tauriCompile = "${{ steps.tauri_compile.outcome }}"
+            tauriDesktopIdentity = "${{ steps.tauri_desktop_identity.outcome }}"
+            tauriLocalLibrary = "${{ steps.tauri_local_library.outcome }}"
+            tauriPaperCache = "${{ steps.tauri_paper_cache.outcome }}"
+            tauriUserPaperStore = "${{ steps.tauri_user_paper_store.outcome }}"
           }))
           Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=outcome&ci_result=$query"
