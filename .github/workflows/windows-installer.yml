@@ -82,7 +82,29 @@ jobs:
 
       - name: Compile Tauri host tests
         id: tauri_compile
-        run: cargo test --manifest-path src-tauri/Cargo.toml --no-run
+        shell: pwsh
+        run: |
+          cargo test --manifest-path src-tauri/Cargo.toml --no-run 2>&1 |
+            Tee-Object -FilePath "$env:RUNNER_TEMP\tauri-compile.log"
+          $exitCode = $LASTEXITCODE
+          if ($exitCode -ne 0) {
+            $output = Get-Content "$env:RUNNER_TEMP\tauri-compile.log" -Raw
+            $diagnostic = if ($output -match "LNK[0-9]+|linking with .+ failed|link.exe") {
+              "linker"
+            } elseif ($output -match "No space left|not enough space|disk full") {
+              "disk"
+            } elseif ($output -match "Access is denied|Permission denied|os error 5") {
+              "permission"
+            } elseif ($output -match "failed to run custom build command|build script") {
+              "build_script"
+            } elseif ($output -match "error\[E[0-9]+\]|could not compile") {
+              "compile"
+            } else {
+              "unknown"
+            }
+            Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=tauri_compile_failure_$diagnostic"
+            exit $exitCode
+          }
 
       - name: Test artifact catalog state
         id: tauri_artifact_catalog
