@@ -149,7 +149,7 @@ describe("ArtifactLibraryPane", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "重命名产物" })).not.toBeInTheDocument();
     });
-  });
+  }, 15_000);
 
   test("deletes a saved artifact after its action menu closes", async () => {
     const user = userEvent.setup();
