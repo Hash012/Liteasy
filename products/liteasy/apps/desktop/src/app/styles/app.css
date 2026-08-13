@@ -5164,6 +5164,17 @@ body {
   gap: 12px;
 }
 
+.privacy-settings-panel {
+  display: grid;
+  gap: 6px;
+}
+
+.privacy-settings-description {
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .view-settings-panel .fui-Field {
   gap: 5px;
 }

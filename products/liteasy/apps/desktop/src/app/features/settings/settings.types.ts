@@ -6,6 +6,7 @@ export type SettingKey =
   | "assistant.default_output_mode"
   | "assistant.language"
   | "import.ocr_language"
+  | "privacy.cloud_pdf_parsing.enabled"
   | "thin_reading.intuecho_endpoint"
   | "models.default_provider"
   | "models.cloud_proxy_endpoint"
@@ -23,6 +24,7 @@ export type SettingsState = {
   "assistant.default_output_mode": string;
   "assistant.language": string;
   "import.ocr_language": "chi_sim" | "eng" | "eng+chi_sim";
+  "privacy.cloud_pdf_parsing.enabled": boolean;
   "thin_reading.intuecho_endpoint": string;
   "models.default_provider": string;
   "models.cloud_proxy_endpoint": string;

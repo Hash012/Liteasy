@@ -1,6 +1,7 @@
 import type { SettingsState, UpdateSettingCommand } from "./settings.types";
 
 const viewSettingsStorageKey = "liteasy.view-settings.v1";
+const privacySettingsStorageKey = "liteasy.privacy-settings.v1";
 
 type DesktopRuntimeEnv = {
   VITE_FORUM_API_URL?: string;
@@ -46,6 +47,19 @@ function loadPersistedViewSettings(): Partial<SettingsState> {
   }
 }
 
+function loadPersistedPrivacySettings(): Partial<SettingsState> {
+  try {
+    const value = globalThis.localStorage?.getItem(privacySettingsStorageKey);
+    if (!value) return {};
+    const parsed = JSON.parse(value) as Partial<SettingsState>;
+    return {
+      "privacy.cloud_pdf_parsing.enabled": parsed["privacy.cloud_pdf_parsing.enabled"] === true
+    };
+  } catch {
+    return {};
+  }
+}
+
 function persistViewSettings(state: SettingsState) {
   try {
     globalThis.localStorage?.setItem(
@@ -59,6 +73,19 @@ function persistViewSettings(state: SettingsState) {
     );
   } catch {
     // 隐私模式或宿主禁用 storage 时，设置仍在当前会话生效。
+  }
+}
+
+function persistPrivacySettings(state: SettingsState) {
+  try {
+    globalThis.localStorage?.setItem(
+      privacySettingsStorageKey,
+      JSON.stringify({
+        "privacy.cloud_pdf_parsing.enabled": state["privacy.cloud_pdf_parsing.enabled"]
+      })
+    );
+  } catch {
+    // 隐私模式或宿主禁用 storage 时，授权仅在当前会话生效。
   }
 }
 
@@ -79,6 +106,7 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
     "assistant.default_output_mode": "mindmap",
     "assistant.language": "zh-CN",
     "import.ocr_language": "eng",
+    "privacy.cloud_pdf_parsing.enabled": false,
     "thin_reading.intuecho_endpoint": forumEndpoint,
     "models.default_provider": "openai",
     "models.cloud_proxy_endpoint": cloudEndpoint,
@@ -87,7 +115,8 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
     "view.font_size": "14",
     "view.pdf_background": "paper",
     "view.pdf_custom_background": "#ffffff",
-    ...loadPersistedViewSettings()
+    ...loadPersistedViewSettings(),
+    ...loadPersistedPrivacySettings()
   };
 
   return {
@@ -95,6 +124,9 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
       state[command.target] = command.value as never;
       if (command.target.startsWith("view.")) {
         persistViewSettings(state);
+      }
+      if (command.target.startsWith("privacy.")) {
+        persistPrivacySettings(state);
       }
       return state[command.target];
     },

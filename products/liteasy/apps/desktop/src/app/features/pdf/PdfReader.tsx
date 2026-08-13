@@ -93,6 +93,7 @@ export type PdfAnnotationPublicationChange = {
 
 type PdfReaderProps = {
   allowServerPdfParsing?: boolean;
+  cloudAccessToken?: string | null;
   /** Where the structured citation parser lives; its snapshot is what thin reading reads back. */
   externalKnowledgeEndpoint?: string;
   loadLiteratureHints?: typeof collectPdfLiteratureHints;
@@ -1072,6 +1073,7 @@ function PdfThumbnail({ active, activePaper, pageNumber, pdfDocument }: PdfThumb
 
 export function PdfReader({
   allowServerPdfParsing = false,
+  cloudAccessToken,
   externalKnowledgeEndpoint = "",
   loadLiteratureHints = collectPdfLiteratureHints,
   loadLiteratureRelations,
@@ -1134,6 +1136,7 @@ export function PdfReader({
    */
   const citationParsing = usePdfCitationParsing({
     activePaper,
+    accessToken: cloudAccessToken,
     allowServerPdfParsing,
     endpoint: externalKnowledgeEndpoint,
     // Parsing a partially-extracted document would store a snapshot missing whole sections of

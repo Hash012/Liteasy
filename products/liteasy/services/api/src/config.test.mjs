@@ -95,6 +95,25 @@ test("loads deployment-scoped model providers without exposing credentials", () 
   assert.equal(JSON.stringify(publicCloudConfig(config)).includes("secret"), false);
 });
 
+test("allows only HTTPS or Docker-internal HTTP for the optional GROBID service", () => {
+  const internal = loadCloudConfig(validEnv({
+    LITEASY_GROBID_ENDPOINT: "http://grobid:8070",
+    LITEASY_GROBID_MAX_PDF_BYTES: "33554432",
+    LITEASY_GROBID_TIMEOUT_MS: "180000"
+  }));
+  assert.equal(internal.grobid.endpoint, "http://grobid:8070");
+  assert.equal(internal.grobid.maximumPdfBytes, 32 * 1024 * 1024);
+  assert.throws(() => loadCloudConfig(validEnv({
+    LITEASY_GROBID_ENDPOINT: "http://203.0.113.10:8070"
+  })), /must use HTTPS or a Docker-internal HTTP hostname/);
+  assert.throws(() => loadCloudConfig(validEnv({
+    LITEASY_GROBID_ENDPOINT: "http://grobid.example.internal:8070"
+  })), /must use HTTPS or a Docker-internal HTTP hostname/);
+  assert.throws(() => loadCloudConfig(validEnv({
+    LITEASY_GROBID_ENDPOINT: "http://user:secret@grobid:8070"
+  })), /is invalid/);
+});
+
 test("loads only a valid 32-byte platform configuration encryption key", () => {
   const encoded = Buffer.alloc(32, 7).toString("base64");
   const config = loadCloudConfig(validEnv({ LITEASY_PLATFORM_CONFIG_ENCRYPTION_KEY: encoded }));

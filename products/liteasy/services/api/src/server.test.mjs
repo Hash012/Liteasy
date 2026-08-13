@@ -22,6 +22,18 @@ function request(method, url, body, authorization = "Bearer valid", extraHeaders
   return stream;
 }
 
+function binaryRequest(method, url, body, authorization = "Bearer valid", extraHeaders = {}) {
+  const stream = Readable.from([body]);
+  stream.method = method;
+  stream.url = url;
+  stream.headers = {
+    authorization,
+    "content-type": "application/pdf",
+    ...extraHeaders
+  };
+  return stream;
+}
+
 function response() {
   const result = new Writable({
     write(chunk, _encoding, callback) {
@@ -46,6 +58,7 @@ function internalConfig() {
     allowedOrigins: [],
     database: { sslMode: "verify-full" },
     environment: "production",
+    grobid: { maximumPdfBytes: 32 * 1024 * 1024 },
     identity: {
       intuechoServiceClientId: "intuecho-organization-service",
       visualizationServiceClientId: "liteasy-visualization-service"
@@ -238,6 +251,18 @@ function runtime() {
           figures: [],
           markdown: "# Parsed paper",
           pages: [{ page: 1, text: "Parsed paper", textExtraction: "mineru" }]
+        };
+      }
+    },
+    grobidParseService: {
+      async parse(pdfBytes, context) {
+        calls.push({ grobidContext: context, grobidPdfBytes: pdfBytes });
+        return {
+          contentFingerprint: "a".repeat(64),
+          parser: "grobid",
+          parserVersion: 1,
+          reused: false,
+          tei: "<TEI><text /></TEI>"
         };
       }
     },
@@ -1399,6 +1424,45 @@ test("authenticates and forwards a bounded MinerU PDF extraction request", async
   assert.match(extraction.mineruContext.traceId, /^trace_/);
   const authentication = instance.calls.find((call) => call.header === "Bearer desktop-token");
   assert.equal(authentication.audience, "liteasy-desktop");
+});
+
+test("authenticates before reading raw PDF bytes for cloud structure parsing", async () => {
+  const pdfBytes = Buffer.from("%PDF-1.7\nfixture");
+  const instance = runtime();
+  const handler = createCloudRequestHandler(instance, internalConfig());
+  const result = response();
+  await handler(binaryRequest(
+    "POST",
+    "/v1/research/parse-pdf",
+    pdfBytes,
+    "Bearer desktop-token"
+  ), result);
+
+  assert.equal(result.status, 200, result.body.toString("utf8"));
+  assert.equal(jsonBody(result).parser, "grobid");
+  const parsing = instance.calls.find((call) => call.grobidPdfBytes);
+  assert.deepEqual(parsing.grobidPdfBytes, pdfBytes);
+  assert.equal(parsing.grobidContext.subjectId, "user_1");
+  assert.match(parsing.grobidContext.traceId, /^trace_/);
+  assert.deepEqual(instance.calls.find((call) => call.header === "Bearer desktop-token"), {
+    audience: "liteasy-desktop",
+    header: "Bearer desktop-token"
+  });
+});
+
+test("does not invoke cloud structure parsing for an unauthenticated PDF request", async () => {
+  const instance = runtime();
+  instance.identityVerifier.verifyAuthorizationHeader = async () => {
+    throw new IdentityError("authentication_required", 401);
+  };
+  const result = response();
+  await createCloudRequestHandler(instance, internalConfig())(
+    binaryRequest("POST", "/v1/research/parse-pdf", Buffer.from("%PDF-private"), ""),
+    result
+  );
+
+  assert.equal(result.status, 401);
+  assert.equal(instance.calls.some((call) => call.grobidPdfBytes), false);
 });
 
 test("maps PDF scanner rejection and outage to stable upload errors", async () => {

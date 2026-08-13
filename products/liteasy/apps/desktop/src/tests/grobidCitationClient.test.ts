@@ -72,7 +72,11 @@ describe("grobidCitationClient", () => {
       ok: true,
       status: 200
     }));
-    const client = createGrobidCitationClient({ endpoint: "https://cloud.example.com/", transport });
+    const client = createGrobidCitationClient({
+      accessToken: "desktop-access-token",
+      endpoint: "https://cloud.example.com/",
+      transport
+    });
     const result = await client({
       pageTexts: { 1: "Prior work [1].", 2: "Bourdieu (1984)." },
       pdfBytes: new TextEncoder().encode("%PDF-1.7 fixture")
@@ -80,12 +84,25 @@ describe("grobidCitationClient", () => {
 
     expect(result).toMatchObject({ contentFingerprint: "a".repeat(64), parser: "grobid", parserVersion: 1 });
     expect(transport).toHaveBeenCalledWith(expect.objectContaining({
-      headers: { "Content-Type": "application/pdf" },
+      headers: {
+        Authorization: "Bearer desktop-access-token",
+        "Content-Type": "application/pdf"
+      },
       method: "POST",
       url: "https://cloud.example.com/v1/research/parse-pdf"
     }));
     const body = transport.mock.calls[0][0].body;
     expect(Object.prototype.toString.call(body)).toBe("[object ArrayBuffer]");
     expect(new TextDecoder().decode(new Uint8Array(body))).toBe("%PDF-1.7 fixture");
+  });
+
+  test("refuses to construct an anonymous PDF upload", async () => {
+    const transport = vi.fn();
+    const client = createGrobidCitationClient({ endpoint: "https://cloud.example.com", transport });
+    await expect(client({
+      pageTexts: {},
+      pdfBytes: new TextEncoder().encode("%PDF-private")
+    })).rejects.toThrow("请先登录 Liteasy 账号");
+    expect(transport).not.toHaveBeenCalled();
   });
 });

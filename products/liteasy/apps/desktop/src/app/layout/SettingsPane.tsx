@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { BotRegular, ChevronDownRegular, ChevronRightRegular, DatabaseRegular, EyeRegular, FolderRegular, SettingsRegular } from "@fluentui/react-icons";
+import { BotRegular, ChevronDownRegular, ChevronRightRegular, DatabaseRegular, EyeRegular, FolderRegular, LockClosedRegular, SettingsRegular } from "@fluentui/react-icons";
 import { AgentSettingsPanel } from "../features/agent-core/AgentSettingsPanel";
 import { ViewSettingsPanel } from "../features/settings/ViewSettingsPanel";
+import { PrivacySettingsPanel } from "../features/settings/PrivacySettingsPanel";
 import type { AgentCoreCatalogEntry } from "../features/agent-core/agentCoreConfig";
 import { LibraryLocationPanel } from "../features/library/LibraryLocationPanel";
 import { DocumentMetadataSyncPanel } from "../features/metadata/DocumentMetadataSyncPanel";
@@ -42,6 +43,7 @@ export function SettingsPane({
   const [viewExpanded, setViewExpanded] = useState(true);
   const [agentExpanded, setAgentExpanded] = useState(false);
   const [syncExpanded, setSyncExpanded] = useState(true);
+  const [privacyExpanded, setPrivacyExpanded] = useState(true);
   const [libraryExpanded, setLibraryExpanded] = useState(libraryRootPath == null);
   return (
     <section aria-label="左边栏设置" className="settings-panel">
@@ -54,6 +56,16 @@ export function SettingsPane({
         </button>
         {viewExpanded ? <div className="sidebar-section-content">
           <ViewSettingsPanel onUpdateSetting={onUpdateSetting} settings={settings} />
+        </div> : null}
+      </section>
+      <section className="sidebar-section settings-privacy-section">
+        <button aria-expanded={privacyExpanded} aria-label={`${privacyExpanded ? "收起" : "展开"}隐私设置`} className="sidebar-section-header" onClick={() => setPrivacyExpanded((current) => !current)} type="button">
+          <span aria-hidden="true" className="sidebar-section-disclosure">{privacyExpanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
+          <LockClosedRegular />
+          <span>隐私</span>
+        </button>
+        {privacyExpanded ? <div className="sidebar-section-content">
+          <PrivacySettingsPanel onUpdateSetting={onUpdateSetting} settings={settings} />
         </div> : null}
       </section>
       <section className="sidebar-section settings-agent-section">

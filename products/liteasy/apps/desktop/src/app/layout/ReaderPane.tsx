@@ -43,6 +43,7 @@ import type { ThinReadingVisualizationStatus } from "../features/artifacts/artif
 
 type ReaderPaneProps = {
   allowServerPdfParsing?: boolean;
+  cloudAccessToken?: string | null;
   analysisHint: string;
   artifactTabs: ArtifactTab[];
   artifactTasks: ArtifactTask[];
@@ -116,6 +117,7 @@ const defaultLayoutCollapsed: PaneCollapseState = {
 
 export function ReaderPane({
   allowServerPdfParsing = false,
+  cloudAccessToken,
   analysisHint,
   artifactTabs,
   artifactTasks,
@@ -249,6 +251,7 @@ export function ReaderPane({
         >
           <PdfReader
             allowServerPdfParsing={allowServerPdfParsing}
+            cloudAccessToken={cloudAccessToken}
             externalKnowledgeEndpoint={externalKnowledgeEndpoint}
             loadPdfSource={loadPdfSource}
             loadLiteratureRelations={loadLiteratureRelations}

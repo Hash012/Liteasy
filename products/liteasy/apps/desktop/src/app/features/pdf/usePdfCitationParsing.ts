@@ -10,6 +10,7 @@ import {
 
 type UsePdfCitationParsingInput = {
   activePaper: Paper | null;
+  accessToken?: string | null;
   allowServerPdfParsing: boolean;
   enabled?: boolean;
   endpoint: string;
@@ -42,6 +43,7 @@ export async function loadPaperPdfBytes(input: {
  */
 export function usePdfCitationParsing({
   activePaper,
+  accessToken,
   allowServerPdfParsing,
   enabled = true,
   endpoint,
@@ -96,12 +98,17 @@ export function usePdfCitationParsing({
       return;
     }
 
+    const normalizedAccessToken = accessToken?.trim();
+    if (!normalizedAccessToken) {
+      setWarning("请先登录 Liteasy 账号后使用云端结构解析，当前使用本地引用解析。");
+      return;
+    }
     const controller = new AbortController();
     attemptedPaperIdRef.current = paperId;
     setLoading(true);
     setWarning("");
     void loadPaperPdfBytes({ loadPdfSource, signal: controller.signal, sourcePath })
-      .then((pdfBytes) => createGrobidCitationClient({ endpoint })({
+      .then((pdfBytes) => createGrobidCitationClient({ accessToken: normalizedAccessToken, endpoint })({
         pageTexts,
         pdfBytes,
         signal: controller.signal
@@ -127,6 +134,7 @@ export function usePdfCitationParsing({
   }, [
     activePaper?.id,
     activePaper?.sourcePath,
+    accessToken,
     allowServerPdfParsing,
     enabled,
     endpoint,

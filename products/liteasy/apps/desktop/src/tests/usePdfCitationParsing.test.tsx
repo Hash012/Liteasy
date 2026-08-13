@@ -27,6 +27,7 @@ describe("usePdfCitationParsing", () => {
     const loadPdfSource = vi.fn(async () => new TextEncoder().encode("%PDF-1.7"));
     const { result } = renderHook(() => usePdfCitationParsing({
       activePaper: paper,
+      accessToken: "desktop-access-token",
       allowServerPdfParsing: false,
       endpoint: "http://127.0.0.1:8787",
       fullDocumentTextReady: true,
@@ -57,6 +58,7 @@ describe("usePdfCitationParsing", () => {
 
     const { result } = renderHook(() => usePdfCitationParsing({
       activePaper: paper,
+      accessToken: "desktop-access-token",
       allowServerPdfParsing: true,
       endpoint: "http://127.0.0.1:8787",
       fullDocumentTextReady: true,
@@ -68,7 +70,11 @@ describe("usePdfCitationParsing", () => {
     expect(loadPdfSource).toHaveBeenCalledWith(paper.sourcePath);
     expect(fetchMock).toHaveBeenCalledWith(
       "http://127.0.0.1:8787/v1/research/parse-pdf",
-      expect.objectContaining({ body: expect.anything(), method: "POST" })
+      expect.objectContaining({
+        body: expect.anything(),
+        headers: expect.objectContaining({ Authorization: "Bearer desktop-access-token" }),
+        method: "POST"
+      })
     );
     // The parsed snapshot is what gets stored; interpreting it belongs to whoever reads the
     // `citations` artifact back, which is thin reading rather than the reader.
@@ -76,5 +82,21 @@ describe("usePdfCitationParsing", () => {
       artifactKind: "citations",
       paperId: paper.id
     }));
+  });
+
+  test("does not read PDF bytes when consent is enabled but the account is signed out", async () => {
+    vi.mocked(loadUserPaperArtifact).mockResolvedValue(undefined);
+    const loadPdfSource = vi.fn(async () => new TextEncoder().encode("%PDF-private"));
+    const { result } = renderHook(() => usePdfCitationParsing({
+      activePaper: paper,
+      allowServerPdfParsing: true,
+      endpoint: "https://api.example.com",
+      fullDocumentTextReady: true,
+      loadPdfSource,
+      pageTexts
+    }));
+
+    await waitFor(() => expect(result.current.warning).toContain("请先登录"));
+    expect(loadPdfSource).not.toHaveBeenCalled();
   });
 });

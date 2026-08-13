@@ -52,6 +52,7 @@ test("does not become ready until PostgreSQL migrations and S3 controls pass", a
   assert.equal(securityChecked, true);
   assert.equal(runtime.identityVerifier, identityVerifier);
   assert.deepEqual(runtime.readiness, {
+    grobid: "unavailable",
     identity: "ready",
     migrations: "current",
     mineru: "unavailable",

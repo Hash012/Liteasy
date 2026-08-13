@@ -1804,7 +1804,8 @@ export function AppShell({
     return (
       <ReaderPane
         {...teamAnnotations.readerBindings(paper)}
-        allowServerPdfParsing={false}
+        allowServerPdfParsing={settingsState["privacy.cloud_pdf_parsing.enabled"]}
+        cloudAccessToken={accountSession?.sessionId}
         analysisHint={analysisHint}
         artifactTabs={artifactTabs}
         artifactTasks={artifactTasks}

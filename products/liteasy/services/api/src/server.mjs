@@ -11,6 +11,7 @@ import {
 } from "./config.mjs";
 import { AccountLifecycleError } from "./accountLifecycleError.mjs";
 import { ExternalRetrievalError } from "./externalRetrievalConnectors.mjs";
+import { GrobidParseError } from "./grobidParseService.mjs";
 import { IdentityError, requireFreshMfa } from "./identityVerifier.mjs";
 import { IntuechoLiteratureClientError } from "./intuechoLiteratureClient.mjs";
 import { authorizeLibraryScope, LibraryAuthorizationError } from "./libraryAuthorization.mjs";
@@ -120,6 +121,22 @@ async function readJsonBody(request, maximumBytes = 1024 * 1024) {
   }
 }
 
+async function readPdfBody(request, maximumBytes) {
+  const contentType = String(request.headers["content-type"] ?? "").toLowerCase();
+  if (!contentType.startsWith("application/pdf")) {
+    throw new GrobidParseError("grobid_content_type_invalid", 415);
+  }
+  const chunks = [];
+  let byteLength = 0;
+  for await (const chunk of request) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    byteLength += bytes.length;
+    if (byteLength > maximumBytes) throw new GrobidParseError("grobid_pdf_too_large", 413);
+    chunks.push(bytes);
+  }
+  return Buffer.concat(chunks);
+}
+
 function requireMarketingSecret(request, config) {
   const supplied = request.headers["x-liteasy-marketing-secret"];
   const expected = config.marketing?.applicationSecret;
@@ -193,6 +210,15 @@ function errorMessage(code) {
     model_provider_unavailable: "The model provider is not configured or is temporarily unavailable.",
     model_request_aborted: "The model request was cancelled.",
     model_request_invalid: "The model request is invalid.",
+    grobid_content_type_invalid: "Cloud structure parsing accepts PDF files only.",
+    grobid_not_configured: "Cloud structure parsing is not configured.",
+    grobid_pdf_invalid: "The uploaded PDF is invalid.",
+    grobid_pdf_too_large: "The PDF exceeds the cloud structure parsing limit.",
+    grobid_request_aborted: "Cloud structure parsing was cancelled.",
+    grobid_response_invalid: "The structure parser returned an invalid response.",
+    grobid_timeout: "Cloud structure parsing timed out. Local citation parsing remains available.",
+    grobid_unavailable: "Cloud structure parsing is temporarily unavailable. Local citation parsing remains available.",
+    grobid_upstream_error: "Cloud structure parsing failed. Local citation parsing remains available.",
     ai_provider_api_key_invalid: "Enter a valid model API key.",
     ai_provider_base_url_invalid: "Enter a valid HTTPS model API base URL.",
     ai_provider_configuration_invalid: "The AI provider configuration is invalid.",
@@ -252,6 +278,7 @@ function errorMessage(code) {
 function sendError(response, error, traceId) {
   const known = error instanceof AccountLifecycleError ||
     error instanceof ExternalRetrievalError ||
+    error instanceof GrobidParseError ||
     error instanceof IdentityError ||
     error instanceof IntuechoLiteratureClientError ||
     error instanceof LibraryAuthorizationError ||
@@ -568,6 +595,22 @@ export function createCloudRequestHandler(runtime, config) {
         );
         const body = await readJsonBody(request, maximumMineruRequestBytes);
         sendJson(response, 200, await runtime.mineruPdfService.extract(body, {
+          subjectId: identity.subject,
+          traceId
+        }));
+        return;
+      }
+
+      if (request.method === "POST" && url.pathname === "/v1/research/parse-pdf") {
+        const identity = await runtime.identityVerifier.verifyAuthorizationHeader(
+          request.headers.authorization,
+          "liteasy-desktop"
+        );
+        const controller = new AbortController();
+        request.once("aborted", () => controller.abort());
+        const pdfBytes = await readPdfBody(request, config.grobid.maximumPdfBytes);
+        sendJson(response, 200, await runtime.grobidParseService.parse(pdfBytes, {
+          signal: controller.signal,
           subjectId: identity.subject,
           traceId
         }));

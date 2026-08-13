@@ -157,6 +157,7 @@ async function defaultTransport(request: Parameters<GrobidCitationTransport>[0])
 }
 
 export function createGrobidCitationClient(input: {
+  accessToken?: string | null;
   endpoint: string;
   transport?: GrobidCitationTransport;
 }) {
@@ -165,13 +166,18 @@ export function createGrobidCitationClient(input: {
     pdfBytes: Uint8Array;
     signal?: AbortSignal;
   }): Promise<GrobidCitationSnapshot> => {
+    const accessToken = input.accessToken?.trim();
+    if (!accessToken) throw new Error("请先登录 Liteasy 账号，再使用云端结构解析。");
     const body = request.pdfBytes.buffer.slice(
       request.pdfBytes.byteOffset,
       request.pdfBytes.byteOffset + request.pdfBytes.byteLength
     ) as ArrayBuffer;
     const response = await (input.transport ?? defaultTransport)({
       body,
-      headers: { "Content-Type": "application/pdf" },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/pdf"
+      },
       method: "POST",
       signal: request.signal,
       url: `${input.endpoint.replace(/\/+$/u, "")}/v1/research/parse-pdf`

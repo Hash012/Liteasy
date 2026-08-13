@@ -2,6 +2,8 @@ import { PostgresAccountLifecycleRepository } from "./accountLifecycleRepository
 import { AccountLifecycleService } from "./accountLifecycleService.mjs";
 import { AiProviderConfigurationService } from "./aiProviderConfigurationService.mjs";
 import { PostgresAgentArtifactRepository } from "./agentArtifactRepository.mjs";
+import { PostgresGrobidParseRepository } from "./grobidParseRepository.mjs";
+import { GrobidParseService } from "./grobidParseService.mjs";
 import { createIdentityVerifier, verifyIdentityProviderReadiness } from "./identityVerifier.mjs";
 import { IdentityAdminClient } from "./identityAdminClient.mjs";
 import { IntuechoLifecycleClient } from "./intuechoLifecycleClient.mjs";
@@ -66,6 +68,13 @@ export async function startCloudRuntime(config, dependencies = {}) {
     new PostgresAccountLifecycleRepository(pool);
   const agentArtifactRepository = dependencies.agentArtifactRepository ??
     new PostgresAgentArtifactRepository(pool);
+  const grobidParseRepository = dependencies.grobidParseRepository ??
+    new PostgresGrobidParseRepository(pool);
+  const grobidParseService = dependencies.grobidParseService ?? new GrobidParseService({
+    ...config.grobid,
+    fetchImpl: dependencies.grobidFetch,
+    repository: grobidParseRepository
+  });
   const accountLifecycleService = dependencies.accountLifecycleService ?? new AccountLifecycleService(
     accountLifecycleRepository,
     identityAdminClient,
@@ -224,6 +233,7 @@ export async function startCloudRuntime(config, dependencies = {}) {
     await verifyPostgresMigrations(pool);
     const objectStorage = await objectStore.assertSecurityConfiguration();
     const identity = await identityReadinessCheck(config.identity);
+    const grobid = await grobidParseService.assertConfigured();
     const rasterOcr = typeof visualizationRasterOcr.assertConfigured === "function"
       ? await visualizationRasterOcr.assertConfigured()
       : { engine: visualizationRasterOcr.engine ?? "injected", languages: [] };
@@ -244,6 +254,7 @@ export async function startCloudRuntime(config, dependencies = {}) {
         }
       },
       identityVerifier,
+      grobidParseService,
       externalKnowledgeService,
       libraryRepository,
       marketingApplicationRepository,
@@ -270,6 +281,7 @@ export async function startCloudRuntime(config, dependencies = {}) {
       visualizationService,
       readiness: Object.freeze({
         identity: identity.discovery && identity.jwks ? "ready" : "failed",
+        grobid: grobid.configured ? "ready" : "unavailable",
         migrations: "current",
         get modelProxy() { return modelProxyService.configured ? "configured" : "unavailable"; },
         get mineru() { return mineruPdfService.configured ? "configured" : "unavailable"; },

@@ -1,4 +1,5 @@
 import { parseVisualizationSecrets } from "./visualizationSecretStore.mjs";
+import { isIP } from "node:net";
 
 const allowedEnvironments = new Set(["production", "staging", "test"]);
 const allowedS3SecurityProfiles = new Set(["aws-s3", "aliyun-oss"]);
@@ -161,6 +162,28 @@ function requireServiceEndpoint(env, name, environment) {
     throw new Error(`cloud_config_invalid: ${name} cannot contain credentials, query, or fragment`);
   }
   return value;
+}
+
+function optionalInternalServiceEndpoint(env, name, environment) {
+  if (!env[name]?.trim()) return undefined;
+  const value = env[name].trim();
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`cloud_config_invalid: ${name} must be a URL`);
+  }
+  const dockerInternal = parsed.protocol === "http:" && isIP(parsed.hostname) === 0 &&
+    /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(parsed.hostname) &&
+    !new Set(["localhost", "127.0.0.1", "0.0.0.0"]).has(parsed.hostname);
+  if (environment !== "test" && parsed.protocol !== "https:" && !dockerInternal) {
+    throw new Error(`cloud_config_invalid: ${name} must use HTTPS or a Docker-internal HTTP hostname`);
+  }
+  if (!new Set(["http:", "https:"]).has(parsed.protocol) || parsed.username || parsed.password ||
+    parsed.search || parsed.hash || (parsed.pathname !== "/" && parsed.pathname !== "")) {
+    throw new Error(`cloud_config_invalid: ${name} is invalid`);
+  }
+  return parsed.toString().replace(/\/$/, "");
 }
 
 function optionalModelProvider(env, provider, environment) {
@@ -354,6 +377,21 @@ export function loadCloudConfig(env = process.env) {
         env.LITEASY_MODEL_TIMEOUT_MS,
         "LITEASY_MODEL_TIMEOUT_MS",
         300_000,
+        300_000
+      )
+    }),
+    grobid: Object.freeze({
+      endpoint: optionalInternalServiceEndpoint(env, "LITEASY_GROBID_ENDPOINT", environment),
+      maximumPdfBytes: parsePositiveInteger(
+        env.LITEASY_GROBID_MAX_PDF_BYTES,
+        "LITEASY_GROBID_MAX_PDF_BYTES",
+        32 * 1024 * 1024,
+        64 * 1024 * 1024
+      ),
+      timeoutMs: parsePositiveInteger(
+        env.LITEASY_GROBID_TIMEOUT_MS,
+        "LITEASY_GROBID_TIMEOUT_MS",
+        180_000,
         300_000
       )
     }),

@@ -34,22 +34,30 @@ describe("SettingsPane", () => {
     });
   });
 
-  test("does not ask desktop users for deployment secrets or PDF upload consent", async () => {
+  test("offers explicit, default-off cloud PDF parsing consent without deployment secrets", async () => {
     const user = userEvent.setup();
+    const onUpdateSetting = vi.fn();
 
     render(
       <SettingsPane
         documentMetadataSyncResult={null}
         documentMetadataSyncStatus="idle"
+        onUpdateSetting={onUpdateSetting}
+        settings={{ "privacy.cloud_pdf_parsing.enabled": false }}
       />
     );
 
     const pane = screen.getByLabelText("左边栏设置");
-    await user.click(within(pane).getByRole("button", { name: "展开 Agent 设置" }));
     expect(within(pane).queryByLabelText("OpenAlex API 密钥")).not.toBeInTheDocument();
-    expect(within(pane).queryByRole("checkbox", {
-      name: "允许上传 PDF 用于结构解析"
-    })).not.toBeInTheDocument();
+    const toggle = within(pane).getByRole("switch", { name: "允许云端结构解析 PDF" });
+    expect(toggle).not.toBeChecked();
+    expect(within(pane).getByText(/云端不保存原始 PDF/)).toBeInTheDocument();
+    await user.click(toggle);
+    expect(onUpdateSetting).toHaveBeenCalledWith({
+      intent: "update_setting",
+      target: "privacy.cloud_pdf_parsing.enabled",
+      value: true
+    });
   });
 
   test("renders a collapsible, user-facing metadata sync section", async () => {
