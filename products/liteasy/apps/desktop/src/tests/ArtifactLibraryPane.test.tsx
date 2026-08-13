@@ -137,7 +137,7 @@ describe("ArtifactLibraryPane", () => {
       { name: "重命名产物" },
       { timeout: 5_000 }
     );
-    const nameInput = within(dialog).getByRole("textbox", { name: "产物名称" });
+    const nameInput = within(dialog).getByLabelText("产物名称");
     await user.clear(nameInput);
     await user.type(nameInput, "新的薄读");
     expect(dialog).toBeInTheDocument();
