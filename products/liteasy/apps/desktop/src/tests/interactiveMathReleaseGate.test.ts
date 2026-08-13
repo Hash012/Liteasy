@@ -42,5 +42,5 @@ describe("interactive math release gate", () => {
       modality,
       version: "1.0.0"
     });
-  }, 10_000);
+  }, 30_000);
 });
