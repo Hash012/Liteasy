@@ -19,6 +19,9 @@ permissions:
 jobs:
   build-windows:
     runs-on: windows-latest
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_PROFILE_TEST_DEBUG: 0
     defaults:
       run:
         working-directory: products/liteasy/apps/desktop
@@ -93,12 +96,28 @@ jobs:
               "linker"
             } elseif ($output -match "No space left|not enough space|disk full") {
               "disk"
+            } elseif ($output -match "paging file is too small|not enough memory|out of memory") {
+              "memory"
             } elseif ($output -match "Access is denied|Permission denied|os error 5") {
               "permission"
+            } elseif ($output -match "0xc0000005|STATUS_ACCESS_VIOLATION") {
+              "compiler_access_violation"
+            } elseif ($output -match "0xc00000fd|STATUS_STACK_OVERFLOW") {
+              "compiler_stack_overflow"
+            } elseif ($output -match "LLVM ERROR|rustc-LLVM ERROR") {
+              "compiler_llvm"
             } elseif ($output -match "failed to run custom build command|build script") {
               "build_script"
-            } elseif ($output -match "error\[E[0-9]+\]|could not compile") {
-              "compile"
+            } elseif ($output -match "error\[E[0-9]+\]") {
+              "rust_error"
+            } elseif ($output -match "cl.exe|clang-cl|fatal error C[0-9]+") {
+              "native_compile"
+            } elseif ($output -match "failed to write|failed to create|os error 112") {
+              "io"
+            } elseif ($output -match "incremental|query cache|dep-graph") {
+              "cache"
+            } elseif ($output -match "process didn't exit successfully|rustc .+ exit code") {
+              "compiler_process"
             } else {
               "unknown"
             }
