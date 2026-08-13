@@ -84,23 +84,16 @@ test("the staging realm has three PKCE clients and separated service identities"
   assert.equal(referencedVariables.every((name) => configured[name]), true);
 });
 
-test("the gateway restricts Keycloak administration to explicit operator CIDRs", () => {
+test("the gateway exposes Keycloak administration through the public HTTPS gateway", () => {
   const gateway = environment("gateway");
   assert.equal(
     gateway.ACME_EMAIL,
     "replace-with-monitored-certificate-email@example.invalid"
   );
-  assert.equal(
-    gateway.KEYCLOAK_ADMIN_ALLOWED_CIDRS,
-    "replace-with-space-separated-operator-public-cidrs"
-  );
 
   const caddyfile = fs.readFileSync(new URL("Caddyfile", directory), "utf8");
-  assert.match(
-    caddyfile,
-    /not remote_ip private_ranges \{\$KEYCLOAK_ADMIN_ALLOWED_CIDRS\}/
-  );
-  assert.equal(caddyfile.match(/KEYCLOAK_ADMIN_ALLOWED_CIDRS/g)?.length, 1);
+  assert.match(caddyfile, /\{\$AUTH_HOST\}[\s\S]*reverse_proxy keycloak:8080/);
+  assert.equal(caddyfile.includes("KEYCLOAK_ADMIN_ALLOWED_CIDRS"), false);
 });
 
 test("staging containers rotate local Docker logs", () => {

@@ -262,44 +262,13 @@ $names | ForEach-Object { Resolve-DnsName $_ -Type A }
 
 ### 5.5 Keycloak 管理页面和 404 的具体含义
 
-公网 OIDC 登录端点必须开放，所以 `auth.staging.liteasyclaw.com` 的普通登录路径允许所有人访问。但 Keycloak 管理路径 `/admin` 只允许：
-
-- Docker/VPC 私网来源；或
-- `/etc/liteasy/staging/gateway.env` 中 `KEYCLOAK_ADMIN_ALLOWED_CIDRS` 指定的一个或多个运维公网 IP。
-
-`/etc/liteasy/staging/gateway.env` 是 ECS 上的运行时文件，不在 Git 仓库中。只有执行第 10.1 节的 `sudo install ... gateway.env` 命令后它才会出现；仓库中可以直接查看的是模板 `deployment/staging/templates/gateway.env.example`。
-
-一个管理员时这样填写。以下地址仍然只是格式示例，必须换成管理员自己查询到的 IP：
-
-```dotenv
-KEYCLOAK_ADMIN_ALLOWED_CIDRS=203.0.113.10/32
-```
-
-多个管理员从不同公网 IP 运维时，在同一行用空格分隔，每个固定 IPv4 后都加 `/32`：
-
-```dotenv
-KEYCLOAK_ADMIN_ALLOWED_CIDRS=203.0.113.10/32 198.51.100.20/32
-```
-
-不要使用逗号、分号或换行拼接，也不要填写 `0.0.0.0/0`。`203.0.113.10` 和 `198.51.100.20` 都是文档保留地址，不能原样使用。配置完成后，列出的 IP 都能打开：
+公网 OIDC 登录端点和 Keycloak 管理路径 `/admin` 都通过 HTTPS 公网入口提供。配置完成后可以打开：
 
 ```text
 https://auth.staging.liteasyclaw.com/admin/
 ```
 
-其他公网 IP 会得到 `404`，这是预期的安全行为。绝不能为了访问管理页而开放 `8080`。如果某位管理员的公网 IP 变化，应更新这一行并只重建 gateway 容器：
-
-```bash
-sudoedit /etc/liteasy/staging/gateway.env
-sudo docker compose \
-  --env-file deployment/staging/config.env \
-  --file deployment/staging/compose.yaml \
-  up --detach --force-recreate gateway
-```
-
-这条限制已经写在仓库的 `deployment/staging/Caddyfile` 中。你不需要在阿里云创建所谓“404 规则”，也不要手工改 Caddyfile；只需在第 10.2 节填写白名单 IP 并重建 gateway。
-
-白名单控制的是“哪些网络可以看到管理登录页”，不是“谁拥有管理员权限”。每位管理员仍必须使用自己的具名 Keycloak 管理员账号和自己的 MFA，不能共用账号。如果多人都通过同一个办公室出口或公司 VPN，可以只填写该固定出口 IP；这是比不断添加家庭动态 IP 更稳定的方式。SSH 的 TCP `22` 安全组规则与这里相互独立，多名运维人员应在安全组中为每个来源 IP 分别创建 `/32` 规则。
+公网开放只代表登录页面可被访问，不代表任何人拥有管理权限。每位管理员仍必须使用自己的具名 Keycloak 管理员账号、强密码和 MFA，不能共用账号。绝不能为了访问管理页而开放 Keycloak 容器的内部端口 `8080`。
 
 `identity.staging.liteasyclaw.com` 是服务间账号生命周期接口，不是管理网页。它始终拒绝普通公网来源；不要为它增加公网白名单。当前 DNS 必须直接解析到 ECS，不要在前面临时加入 CDN 或其他代理，否则 Caddy 看到的来源 IP 会变化，白名单规则需要另行评审。
 
@@ -1174,9 +1143,9 @@ curl.exe --fail https://auth.staging.liteasyclaw.com/realms/liteasy/.well-known/
 
 外网访问 `https://identity.staging.liteasyclaw.com/readyz` 应返回 `404`，这是预期行为，不是健康检查失败。
 
-### 11.7 验证白名单并配置 Keycloak
+### 11.7 验证公网管理入口并配置 Keycloak
 
-从 `KEYCLOAK_ADMIN_ALLOWED_CIDRS` 指定的任一公网 IP 打开：
+从任意允许访问 HTTPS 的网络打开：
 
 ```text
 https://auth.staging.liteasyclaw.com/admin/
@@ -1184,14 +1153,14 @@ https://auth.staging.liteasyclaw.com/admin/
 
 使用 `keycloak.env` 中的 bootstrap 管理员登录。该凭据只属于 Keycloak 基础设施，不是产品用户。
 
-先验证 Caddy 白名单确实生效：
+先验证公网管理入口：
 
-1. 分别在每个白名单网络的 Windows 电脑执行 `curl.exe -I https://auth.staging.liteasyclaw.com/admin/`，都应得到登录页或合理的 `2xx/3xx`，不应是 `404`。
-2. 手机关闭 Wi-Fi、只使用移动网络后打开同一地址，应得到 `404`。这一步证明非白名单公网来源被拒绝。
-3. 手机移动网络访问 `https://auth.staging.liteasyclaw.com/realms/liteasy/.well-known/openid-configuration` 应仍能看到 JSON；普通登录端点必须公开。
-4. 从白名单电脑和手机访问 `https://identity.staging.liteasyclaw.com/readyz` 都应得到 `404`；identity-management 没有公网管理页面。
+1. 在 Windows 执行 `curl.exe -I https://auth.staging.liteasyclaw.com/admin/`，应得到 Keycloak 的 `2xx/3xx` 或登录跳转，不应是 Gateway 的 `404`。
+2. 手机关闭 Wi-Fi、只使用移动网络后访问同一地址，也应得到 Keycloak 的 `2xx/3xx` 或登录跳转。
+3. 手机移动网络访问 `https://auth.staging.liteasyclaw.com/realms/liteasy/.well-known/openid-configuration` 应仍能看到 JSON。
+4. 从公网访问 `https://identity.staging.liteasyclaw.com/readyz` 仍应得到 `404`；identity-management 没有公网管理页面。
 
-如果第 1 步也是 `404`，先核对当前公网 IP 并按第 5.5 节重建 gateway。不要开放 `8080`。如果第 2 步能看到 Keycloak 管理登录页，立即停止部署并检查 `gateway.env` 是否仍为示例值、gateway 是否已重建，以及 DNS 前是否加入了代理。
+如果前两步仍是 `404`，检查 gateway 是否已使用最新镜像并重建。不要开放 `8080`。
 
 必须完成：
 
@@ -1212,7 +1181,7 @@ https://auth.staging.liteasyclaw.com/admin/
 5. 让本人从其白名单网络登录 `/admin/`，完成改密和 OTP 绑定，再退出并重新登录一次。
 6. 由另一位管理员确认该账号能完成职责内操作、不能完成职责外操作，并在 Keycloak 管理事件中能区分具体用户名。
 
-每增加一个管理员，都要同时检查其公网出口是否已经作为独立 `/32` 写入 `KEYCLOAK_ADMIN_ALLOWED_CIDRS`，以及 SSH 是否确实需要单独开放；网络白名单和 Keycloak 角色缺一不可。
+每增加一个管理员，都要继续执行具名账号、最小 realm-management 角色和 MFA 验收；公网入口本身不授予任何平台权限。
 
 注意：`--import-realm` 对已存在的 realm 使用忽略策略。修改仓库中的 realm JSON 后重启，不会自动更新已经存入 RDS 的 realm；后续变更必须通过受审的 Keycloak 管理操作或专门迁移完成。
 
@@ -1600,12 +1569,7 @@ sudo ss -lntup | grep -E ':(80|443)[[:space:]]'
 
 ### Keycloak 管理页返回 404
 
-这是来源 IP 不在白名单时的预期行为。检查：
-
-1. 你当前公网 IP 是否变化。
-2. `gateway.env` 的 `KEYCLOAK_ADMIN_ALLOWED_CIDRS` 是否包含当前真实 IP 加 `/32`，多个值之间是否只使用空格。
-3. 修改后是否执行 `--force-recreate gateway`。
-4. 不要开放 `8080`。
+公网开放模式下，`/admin/` 不应由 Gateway 因来源 IP 返回 404。检查 gateway 是否已经更新到当前发布的镜像并重建；Keycloak 内部端口 `8080` 仍不应对公网发布。
 
 ### 网页返回 502
 

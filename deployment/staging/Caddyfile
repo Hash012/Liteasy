@@ -74,12 +74,6 @@
 
 {$AUTH_HOST} {
 	import access_log
-
-	@external_admin {
-		path /admin /admin/*
-		not remote_ip private_ranges {$KEYCLOAK_ADMIN_ALLOWED_CIDRS}
-	}
-	respond @external_admin 404
 	reverse_proxy keycloak:8080
 }
 
