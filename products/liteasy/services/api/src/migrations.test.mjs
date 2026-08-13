@@ -125,7 +125,8 @@ test("production migration set includes visualization and literature projections
     "026_normalize_library_literature_references.sql",
     "027_visualization_reservation_groups.sql",
     "028_marketing_experience_applications.sql",
-    "029_encrypted_ai_provider_configuration.sql"
+    "029_encrypted_ai_provider_configuration.sql",
+    "030_visualization_provider_timeout.sql"
   ]);
   const normalization = migrations.find(({ name }) => name === "026_normalize_library_literature_references.sql")?.sql;
   assert.ok(normalization);

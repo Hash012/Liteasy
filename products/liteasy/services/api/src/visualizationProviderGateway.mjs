@@ -69,7 +69,7 @@ export function normalizeRoute(route) {
     throw new Error("visualization_route_circuit_invalid");
   }
   if (!Number.isInteger(route.maxConcurrency) || route.maxConcurrency < 1 || !Number.isInteger(route.priority) || route.priority < 0
-    || !Number.isInteger(route.revision) || route.revision < 1 || !Number.isInteger(route.timeoutMs) || route.timeoutMs < 100 || route.timeoutMs > 300_000) {
+    || !Number.isInteger(route.revision) || route.revision < 1 || !Number.isInteger(route.timeoutMs) || route.timeoutMs < 100 || route.timeoutMs > 600_000) {
     throw new Error("visualization_route_limits_invalid");
   }
   if (typeof route.enabled !== "boolean") throw new Error("visualization_route_enabled_invalid");

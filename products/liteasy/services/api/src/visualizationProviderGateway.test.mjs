@@ -91,6 +91,15 @@ test("rejects credential material in routes and resolves only deployment secret 
   assert.equal("updatedBy" in normalized, false);
 });
 
+test("allows the provider-declared ten minute image generation timeout only at its boundary", () => {
+  const { gateway } = gatewayWithFailingAdapter({});
+  assert.equal(gateway.validateRoute({ ...route, timeoutMs: 600_000 }).timeoutMs, 600_000);
+  assert.throws(
+    () => gateway.validateRoute({ ...route, timeoutMs: 600_001 }),
+    /visualization_route_limits_invalid/
+  );
+});
+
 test("opens the route circuit after three failures without sending paper content in probes", async () => {
   const { gateway, probeRequests } = gatewayWithFailingAdapter({ threshold: 3 });
   await failThreeCalls(gateway);
