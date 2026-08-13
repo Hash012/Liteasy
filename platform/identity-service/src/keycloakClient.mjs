@@ -17,6 +17,42 @@ async function json(response, code) {
   }
 }
 
+function optionalText(value, maximum, code) {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "string" || value.length > maximum) {
+    throw new IdentityManagementError(code);
+  }
+  return value;
+}
+
+function account(user) {
+  const createdAt = new Date(user?.createdTimestamp);
+  if (
+    !user || typeof user !== "object" ||
+    typeof user.id !== "string" || !/^[A-Za-z0-9._:-]{1,300}$/.test(user.id) ||
+    typeof user.username !== "string" || user.username.length < 1 || user.username.length > 300 ||
+    typeof user.enabled !== "boolean" ||
+    typeof user.emailVerified !== "boolean" ||
+    !Number.isSafeInteger(user.createdTimestamp) || user.createdTimestamp < 0 ||
+    !Number.isFinite(createdAt.getTime())
+  ) {
+    throw new IdentityManagementError("keycloak_admin_invalid_response");
+  }
+  return Object.freeze({
+    accountType: typeof user.serviceAccountClientId === "string" || user.username.startsWith("service-account-")
+      ? "service"
+      : "person",
+    createdAt: createdAt.toISOString(),
+    email: optionalText(user.email, 320, "keycloak_admin_invalid_response"),
+    emailVerified: user.emailVerified,
+    enabled: user.enabled,
+    firstName: optionalText(user.firstName, 300, "keycloak_admin_invalid_response"),
+    lastName: optionalText(user.lastName, 300, "keycloak_admin_invalid_response"),
+    subjectId: user.id,
+    username: user.username
+  });
+}
+
 export class KeycloakClient {
   constructor(config, { fetchImpl = fetch } = {}) {
     this.config = config;
@@ -74,6 +110,38 @@ export class KeycloakClient {
     const token = await this.#adminToken();
     await this.#request("", { token });
     return { adminApi: true };
+  }
+
+  async listAccounts({ first, max, search }) {
+    const token = await this.#adminToken();
+    const listQuery = new URLSearchParams({
+      briefRepresentation: "true",
+      first: String(first),
+      max: String(max)
+    });
+    const countQuery = new URLSearchParams();
+    if (search) {
+      listQuery.set("search", search);
+      countQuery.set("search", search);
+    }
+    const [listResponse, countResponse] = await Promise.all([
+      this.#request(`/users?${listQuery}`, { token }),
+      this.#request(`/users/count${countQuery.size ? `?${countQuery}` : ""}`, { token })
+    ]);
+    const [users, total] = await Promise.all([
+      json(listResponse, "keycloak_admin_invalid_response"),
+      json(countResponse, "keycloak_admin_invalid_response")
+    ]);
+    if (!Array.isArray(users) || !Number.isSafeInteger(total) || total < 0) {
+      throw new IdentityManagementError("keycloak_admin_invalid_response");
+    }
+    return Object.freeze({
+      accounts: users.map(account),
+      first,
+      max,
+      search,
+      total
+    });
   }
 
   async setStatus(subjectId, status) {

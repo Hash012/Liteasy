@@ -11,6 +11,38 @@ async function responseJson(response, code) {
   }
 }
 
+function optionalText(value, maximum) {
+  return value === null || value === undefined
+    ? null
+    : typeof value === "string" && value.length <= maximum
+      ? value
+      : undefined;
+}
+
+function account(value) {
+  const createdAt = new Date(value?.createdAt);
+  const email = optionalText(value?.email, 320);
+  const firstName = optionalText(value?.firstName, 300);
+  const lastName = optionalText(value?.lastName, 300);
+  if (
+    !value || typeof value !== "object" ||
+    typeof value.subjectId !== "string" || !/^[A-Za-z0-9._:-]{1,300}$/.test(value.subjectId) ||
+    typeof value.username !== "string" || value.username.length > 300 ||
+    !new Set(["person", "service"]).has(value.accountType) ||
+    typeof value.enabled !== "boolean" || typeof value.emailVerified !== "boolean" ||
+    email === undefined || firstName === undefined || lastName === undefined ||
+    !Number.isFinite(createdAt.getTime())
+  ) {
+    throw new AccountLifecycleError("identity_management_invalid_response", 503);
+  }
+  return Object.freeze({
+    accountType: value.accountType,
+    createdAt: createdAt.toISOString(), email, emailVerified: value.emailVerified,
+    enabled: value.enabled, firstName, lastName,
+    subjectId: value.subjectId, username: value.username
+  });
+}
+
 export class IdentityAdminClient {
   constructor(config, { fetchImpl = fetch } = {}) {
     this.config = config;
@@ -95,6 +127,37 @@ export class IdentityAdminClient {
       status: body.status,
       subjectId: body.subjectId,
       updatedAt: updatedAt.toISOString()
+    });
+  }
+
+  async listAccounts(input) {
+    const accessToken = await this.#accessToken();
+    const query = new URLSearchParams({ first: String(input.first), max: String(input.max) });
+    if (input.search) query.set("search", input.search);
+    let response;
+    try {
+      response = await this.fetchImpl(`${this.config.managementUrl}/v1/accounts?${query}`, {
+        headers: { authorization: `Bearer ${accessToken}` },
+        method: "GET",
+        signal: AbortSignal.timeout(10_000)
+      });
+    } catch {
+      throw new AccountLifecycleError("identity_management_unavailable", 503);
+    }
+    const body = await responseJson(response, "identity_management_unavailable");
+    if (
+      !Array.isArray(body.accounts) ||
+      body.first !== input.first || body.max !== input.max || body.search !== input.search ||
+      !Number.isSafeInteger(body.total) || body.total < 0
+    ) {
+      throw new AccountLifecycleError("identity_management_invalid_response", 503);
+    }
+    return Object.freeze({
+      accounts: body.accounts.map(account),
+      first: body.first,
+      max: body.max,
+      search: body.search,
+      total: body.total
     });
   }
 }

@@ -34,6 +34,27 @@ function requiredHeader(request, name, pattern, code) {
   return value;
 }
 
+function accountDirectoryQuery(url) {
+  const allowed = new Set(["first", "max", "search"]);
+  if ([...url.searchParams.keys()].some((key) => (
+    !allowed.has(key) || url.searchParams.getAll(key).length !== 1
+  ))) {
+    throw new IdentityManagementError("account_directory_query_invalid", 400);
+  }
+  const firstValue = url.searchParams.get("first") ?? "0";
+  const maxValue = url.searchParams.get("max") ?? "50";
+  if (!/^\d+$/.test(firstValue) || !/^\d+$/.test(maxValue)) {
+    throw new IdentityManagementError("account_directory_query_invalid", 400);
+  }
+  const first = Number(firstValue);
+  const max = Number(maxValue);
+  const search = (url.searchParams.get("search") ?? "").trim();
+  if (!Number.isSafeInteger(first) || first < 0 || first > 1_000_000 || max < 1 || max > 100 || search.length > 100) {
+    throw new IdentityManagementError("account_directory_query_invalid", 400);
+  }
+  return { first, max, search };
+}
+
 export function createIdentityManagementHandler(config, keycloak, dependencies = {}) {
   const authorize = dependencies.authorize ?? authorizeManagementRequest;
   return async function handler(request, response) {
@@ -46,6 +67,11 @@ export function createIdentityManagementHandler(config, keycloak, dependencies =
       if (request.method === "GET" && url.pathname === "/readyz") {
         await keycloak.verifyReadiness();
         send(response, 200, { dependencies: { keycloakAdminApi: true }, status: "ready" });
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/v1/accounts") {
+        await authorize(request.headers.authorization, config.authorization, dependencies.fetchImpl);
+        send(response, 200, await keycloak.listAccounts(accountDirectoryQuery(url)));
         return;
       }
       const match = /^\/v1\/accounts\/([^/]+)\/status$/.exec(url.pathname);

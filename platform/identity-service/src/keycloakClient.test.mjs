@@ -58,3 +58,47 @@ test("does not claim revocation when activating an account", async () => {
   assert.equal(result.allSessionsRevoked, false);
   assert.deepEqual(result.revokedAudiences, []);
 });
+
+test("lists a bounded account page with only approved identity fields", async () => {
+  const calls = [];
+  const client = new KeycloakClient(config, { fetchImpl: mockFetch([
+    new Response(JSON.stringify({ access_token: "admin-token" })),
+    new Response(JSON.stringify([{
+      access: { manage: true },
+      attributes: { private: ["hidden"] },
+      createdTimestamp: 1786492800000,
+      email: "reader@example.com",
+      emailVerified: true,
+      enabled: true,
+      firstName: "Lin",
+      id: "subject-4",
+      lastName: "Qiao",
+      username: "reader@example.com"
+    }])),
+    new Response(JSON.stringify(1))
+  ], calls) });
+  const result = await client.listAccounts({ first: 50, max: 25, search: "reader" });
+  assert.deepEqual(result, {
+    accounts: [{
+      accountType: "person",
+      createdAt: "2026-08-12T00:00:00.000Z",
+      email: "reader@example.com",
+      emailVerified: true,
+      enabled: true,
+      firstName: "Lin",
+      lastName: "Qiao",
+      subjectId: "subject-4",
+      username: "reader@example.com"
+    }],
+    first: 50,
+    max: 25,
+    search: "reader",
+    total: 1
+  });
+  assert.match(calls[1].url, /\/users\?/);
+  assert.equal(new URL(calls[1].url).searchParams.get("briefRepresentation"), "true");
+  assert.equal(new URL(calls[1].url).searchParams.get("search"), "reader");
+  assert.match(calls[1].options.headers.authorization, /^Bearer /);
+  assert.match(calls[2].url, /\/users\/count\?search=reader$/);
+  assert.equal("attributes" in result.accounts[0], false);
+});

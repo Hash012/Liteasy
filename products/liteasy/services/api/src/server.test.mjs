@@ -89,6 +89,26 @@ function runtime() {
       }
     },
     calls,
+    identityAdminClient: {
+      async listAccounts(input) {
+        calls.push({ accountDirectory: input });
+        return {
+          accounts: [{
+            accountType: "person",
+            createdAt: "2026-08-12T00:00:00.000Z",
+            email: "reader@example.com",
+            emailVerified: true,
+            enabled: true,
+            firstName: "Lin",
+            lastName: "Qiao",
+            subjectId: "user_2",
+            username: "reader@example.com"
+          }],
+          ...input,
+          total: 1
+        };
+      }
+    },
     identityVerifier: {
       async verifyAuthorizationHeader(header, audience) {
         calls.push({ audience, header });
@@ -316,6 +336,13 @@ function runtime() {
       }
     },
     platformAdminRepository: {
+      async accountDirectoryProjection(principal, subjectIds) {
+        calls.push({ accountDirectoryProjection: subjectIds, principal });
+        return {
+          roles: { user_2: ["platform_admin"] },
+          statuses: { user_2: { status: "active", updatedAt: "2026-08-12T01:00:00.000Z" } }
+        };
+      },
       async hasRole(subjectId, role) {
         calls.push({ hasRole: role, subjectId });
         return true;
@@ -1162,6 +1189,38 @@ test("reads and updates storage quotas through the administrator audience", asyn
   assert.equal(mutation.principal.subjectId, "admin_1");
   assert.match(mutation.setQuota.traceId, /^trace_/);
   assert.equal(instance.calls.filter((item) => item.audience === "liteasy-admin").length, 2);
+});
+
+test("lists a bounded identity directory with platform role and status projections", async () => {
+  const instance = runtime();
+  const handler = createCloudRequestHandler(instance, {
+    allowedOrigins: ["http://tauri.localhost"], database: { sslMode: "verify-full" },
+    environment: "production", s3: { region: "test" }
+  });
+  const result = response();
+  await handler(request("GET", "/v1/admin/accounts?first=0&max=50&search=reader"), result);
+  assert.equal(result.status, 200, result.body.toString("utf8"));
+  const body = jsonBody(result);
+  assert.equal(body.accounts[0].subjectId, "user_2");
+  assert.deepEqual(body.accounts[0].platformRoles, ["platform_admin"]);
+  assert.equal(body.accounts[0].projectedStatus.status, "active");
+  assert.deepEqual(instance.calls.find((item) => item.accountDirectory).accountDirectory, {
+    first: 0, max: 50, search: "reader"
+  });
+  assert.deepEqual(instance.calls.find((item) => item.accountDirectoryProjection).accountDirectoryProjection, ["user_2"]);
+  assert.equal(instance.calls[0].audience, "liteasy-admin");
+});
+
+test("rejects unbounded account directory queries before identity management access", async () => {
+  const instance = runtime();
+  const result = response();
+  await createCloudRequestHandler(instance, {
+    allowedOrigins: ["http://tauri.localhost"], database: { sslMode: "verify-full" },
+    environment: "production", s3: { region: "test" }
+  })(request("GET", "/v1/admin/accounts?max=500"), result);
+  assert.equal(result.status, 400);
+  assert.equal(jsonBody(result).code, "account_directory_query_invalid");
+  assert.equal(instance.calls.some((item) => item.accountDirectory), false);
 });
 
 test("lists governance metadata and requires fresh MFA for organization suspension", async () => {

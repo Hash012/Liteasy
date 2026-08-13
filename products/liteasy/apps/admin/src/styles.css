@@ -237,6 +237,29 @@ textarea {
   flex: 1;
 }
 
+.admin-directory-summary,
+.admin-directory-pagination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #616161;
+  font-size: 12px;
+}
+
+.admin-directory-summary {
+  margin: 12px 0 8px;
+}
+
+.admin-directory-pagination {
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.admin-identifier {
+  font-family: Consolas, "SFMono-Regular", monospace;
+  font-size: 12px;
+}
+
 .admin-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

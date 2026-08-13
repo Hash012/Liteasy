@@ -39,6 +39,7 @@ import {
   KeyRegular,
   PeopleTeamRegular,
   PersonSettingsRegular,
+  SearchRegular,
   SaveRegular,
   ShieldLockRegular,
   SignOutRegular
@@ -46,6 +47,7 @@ import {
 import { AdminApiError, type AdminApiClient } from "./api";
 import { VisualizationGovernanceView } from "./VisualizationGovernanceView";
 import type {
+  AccountDirectoryPage,
   AdminIdentity,
   AdminSession,
   AuditEvent,
@@ -68,6 +70,8 @@ type Confirmation = {
   requireReason?: boolean;
   title: string;
 };
+
+const accountPageSize = 50;
 
 const navigation: Array<{ icon: ReactElement; id: AdminView; label: string }> = [
   { icon: <ShieldLockRegular />, id: "overview", label: "概览" },
@@ -136,6 +140,10 @@ function authenticationMethodLabel(method: string) {
   return ({ mfa: "多因素认证", otp: "动态验证码", pwd: "密码" } as Record<string, string>)[method] ?? method;
 }
 
+function accountStatusLabel(status: string) {
+  return ({ active: "启用", deleted: "已删除", disabled: "禁用" } as Record<string, string>)[status] ?? status;
+}
+
 function Section({ children, title }: { children: ReactNode; title: string }) {
   return (
     <section className="admin-section">
@@ -170,6 +178,10 @@ export function AdminWorkspace({
 }) {
   const [view, setView] = useState<AdminView>("overview");
   const [identity, setIdentity] = useState<AdminIdentity | null>(null);
+  const [accountDirectory, setAccountDirectory] = useState<AccountDirectoryPage>({
+    accounts: [], first: 0, max: accountPageSize, search: "", total: 0
+  });
+  const [selectedAccountSubject, setSelectedAccountSubject] = useState("");
   const [policy, setPolicy] = useState<ModelPolicy | null>(null);
   const [governance, setGovernance] = useState<GovernanceDirectory>({
     accountStatuses: [], organizations: [], roleGrants: [], supportGrants: []
@@ -196,7 +208,8 @@ export function AdminWorkspace({
     try {
       const currentIdentity = await api.identity();
       setIdentity(currentIdentity);
-      const [governanceResult, modelResult, sourceResult, auditResult, forumResult, appealResult, applicationResult] = await Promise.allSettled([
+      const [accountResult, governanceResult, modelResult, sourceResult, auditResult, forumResult, appealResult, applicationResult] = await Promise.allSettled([
+        api.accounts({ first: 0, max: accountPageSize }),
         api.governance(),
         api.modelPolicy(),
         api.retrievalSources(),
@@ -205,6 +218,8 @@ export function AdminWorkspace({
         api.forumTagAppeals(),
         api.marketingApplications({ limit: 100 })
       ]);
+      if (accountResult.status === "fulfilled") setAccountDirectory(accountResult.value);
+      else setNotice({ intent: "warning", message: errorMessage(accountResult.reason), title: "账号目录加载失败" });
       if (governanceResult.status === "fulfilled") setGovernance(governanceResult.value);
       else setNotice({ intent: "warning", message: errorMessage(governanceResult.reason), title: "治理目录加载失败" });
       if (modelResult.status === "fulfilled") setPolicy(modelResult.value);
@@ -282,6 +297,18 @@ export function AdminWorkspace({
       `${input.subjectId} -> ${input.status}`,
       () => execute("账号状态已更新。", () => api.accountStatus(input), refresh)
     );
+  }
+
+  async function loadAccounts(first: number, search: string) {
+    await execute("账号目录已刷新。", async () => {
+      setAccountDirectory(await api.accounts({ first, max: accountPageSize, search }));
+    });
+  }
+
+  async function searchAccounts(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    await loadAccounts(0, value(data, "search"));
   }
 
   async function submitRoleGrant(event: FormEvent<HTMLFormElement>) {
@@ -565,12 +592,17 @@ export function AdminWorkspace({
         ) : null}
         {!loading && view === "accounts" ? (
           <AccountsView
+            accountDirectory={accountDirectory}
             busy={busy}
             governance={governance}
             identity={identity}
+            onAccountPage={(first) => loadAccounts(first, accountDirectory.search)}
+            onAccountSearch={searchAccounts}
             onAccountStatus={submitAccountStatus}
             onRoleGrant={submitRoleGrant}
             onRoleRevoke={submitRoleRevoke}
+            onSelectAccount={setSelectedAccountSubject}
+            selectedAccountSubject={selectedAccountSubject}
           />
         ) : null}
         {!loading && view === "applications" ? (
@@ -760,19 +792,60 @@ function Overview({
   );
 }
 
-function AccountsView({ busy, governance, identity, onAccountStatus, onRoleGrant, onRoleRevoke }: {
+function AccountsView({ accountDirectory, busy, governance, identity, onAccountPage, onAccountSearch, onAccountStatus, onRoleGrant, onRoleRevoke, onSelectAccount, selectedAccountSubject }: {
+  accountDirectory: AccountDirectoryPage;
   busy: boolean;
   governance: GovernanceDirectory;
   identity: AdminIdentity | null;
+  onAccountPage: (first: number) => Promise<void>;
+  onAccountSearch: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   onAccountStatus: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   onRoleGrant: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   onRoleRevoke: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  onSelectAccount: (subjectId: string) => void;
+  selectedAccountSubject: string;
 }) {
+  const pageEnd = Math.min(accountDirectory.first + accountDirectory.accounts.length, accountDirectory.total);
   return (
-    <div className="admin-view admin-two-columns">
-      <Section title="账号状态">
+    <div className="admin-view">
+      <Section title="账号目录">
+        <form className="admin-filter" onSubmit={onAccountSearch}>
+          <Field label="搜索账号">
+            <Input defaultValue={accountDirectory.search} maxLength={100} name="search" placeholder="用户名、邮箱或姓名" />
+          </Field>
+          <Button disabled={busy} icon={<SearchRegular />} type="submit">搜索</Button>
+        </form>
+        <div className="admin-directory-summary">
+          <span>共 {accountDirectory.total} 个账号</span>
+          {accountDirectory.total ? <span>当前显示 {accountDirectory.first + 1}-{pageEnd}</span> : null}
+        </div>
+        {accountDirectory.accounts.length ? (
+          <div className="admin-table-wrap"><Table size="small"><TableHeader><TableRow>
+            <TableHeaderCell>账号</TableHeaderCell><TableHeaderCell>邮箱</TableHeaderCell><TableHeaderCell>身份状态</TableHeaderCell><TableHeaderCell>平台角色</TableHeaderCell><TableHeaderCell>创建时间</TableHeaderCell><TableHeaderCell>用户标识</TableHeaderCell><TableHeaderCell>操作</TableHeaderCell>
+          </TableRow></TableHeader><TableBody>
+            {accountDirectory.accounts.map((account) => {
+              const name = [account.firstName, account.lastName].filter(Boolean).join(" ");
+              return <TableRow key={account.subjectId}>
+                <TableCell>{name || account.username}<br /><small>{name ? account.username : account.accountType === "service" ? "服务账号" : "个人账号"}</small></TableCell>
+                <TableCell>{account.email || "-"}{account.email ? <><br /><small>{account.emailVerified ? "已验证" : "未验证"}</small></> : null}</TableCell>
+                <TableCell><Badge color={account.enabled ? "success" : "danger"}>{account.enabled ? "启用" : "禁用"}</Badge>{account.projectedStatus ? <><br /><small>平台记录：{accountStatusLabel(account.projectedStatus.status)}</small></> : null}</TableCell>
+                <TableCell>{account.platformRoles.length ? account.platformRoles.map(roleLabel).join("、") : "-"}</TableCell>
+                <TableCell>{formatDate(account.createdAt)}</TableCell>
+                <TableCell><span className="admin-identifier">{account.subjectId}</span></TableCell>
+                <TableCell><Button appearance="subtle" onClick={() => onSelectAccount(account.subjectId)}>用于操作</Button></TableCell>
+              </TableRow>;
+            })}
+          </TableBody></Table></div>
+        ) : <Empty>{accountDirectory.search ? "没有匹配的账号" : "暂无账号"}</Empty>}
+        <div className="admin-directory-pagination">
+          <Button disabled={busy || accountDirectory.first === 0} onClick={() => void onAccountPage(Math.max(0, accountDirectory.first - accountDirectory.max))}>上一页</Button>
+          <Button disabled={busy || pageEnd >= accountDirectory.total} onClick={() => void onAccountPage(accountDirectory.first + accountDirectory.max)}>下一页</Button>
+        </div>
+      </Section>
+      <div className="admin-two-columns">
+      <Section title="变更账号状态">
         <form className="admin-form" onSubmit={onAccountStatus}>
-          <Field label="Subject ID" required><Input name="subjectId" required /></Field>
+          <Field hint="可从上方账号目录选择，也可填写 Keycloak 用户 ID。" label="用户标识" required><Input name="subjectId" onChange={(_, data) => onSelectAccount(data.value)} required value={selectedAccountSubject} /></Field>
           <Field label="目标状态" required>
             <Select name="status"><option value="active">启用</option><option value="disabled">禁用</option><option value="deleted">删除</option></Select>
           </Field>
@@ -782,7 +855,7 @@ function AccountsView({ busy, governance, identity, onAccountStatus, onRoleGrant
       </Section>
       <Section title="授予平台角色">
         <form className="admin-form" onSubmit={onRoleGrant}>
-          <Field hint="从 Keycloak 用户详情复制 ID，不要填写邮箱或用户名。" label="用户标识" required><Input name="subjectId" required /></Field>
+          <Field hint="可从上方账号目录选择，也可填写 Keycloak 用户 ID。" label="用户标识" required><Input name="subjectId" onChange={(_, data) => onSelectAccount(data.value)} required value={selectedAccountSubject} /></Field>
           <Field label="平台角色"><Input readOnly value="平台管理员" /></Field>
           <ReasonField />
           <Button appearance="primary" disabled={busy} icon={<SaveRegular />} type="submit">授予角色</Button>
@@ -809,13 +882,14 @@ function AccountsView({ busy, governance, identity, onAccountStatus, onRoleGrant
           </TableBody></Table></div>
         ) : <Empty>没有平台角色授权</Empty>}
       </Section>
-      <Section title="账号状态投影">
+      <Section title="账号状态变更记录">
         {governance.accountStatuses.length ? (
           <div className="admin-table-wrap"><Table size="small"><TableHeader><TableRow><TableHeaderCell>Subject</TableHeaderCell><TableHeaderCell>状态</TableHeaderCell><TableHeaderCell>更新时间</TableHeaderCell><TableHeaderCell>原因</TableHeaderCell></TableRow></TableHeader><TableBody>
             {governance.accountStatuses.map((account) => <TableRow key={account.subjectId}><TableCell>{account.subjectId}</TableCell><TableCell>{account.status}</TableCell><TableCell>{formatDate(account.updatedAt)}</TableCell><TableCell>{account.reason}</TableCell></TableRow>)}
           </TableBody></Table></div>
         ) : <Empty>没有账号状态变更记录</Empty>}
       </Section>
+      </div>
     </div>
   );
 }

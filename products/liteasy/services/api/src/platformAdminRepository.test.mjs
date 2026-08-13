@@ -318,6 +318,32 @@ test("lists bounded governance metadata without reading document content", async
   assert.equal(queries.every((sql) => !/storage_key|content_hash|body/i.test(sql)), true);
 });
 
+test("projects active roles and latest account status for a bounded identity page", async () => {
+  const timestamp = new Date("2026-08-12T01:00:00.000Z");
+  const calls = [];
+  const repository = new PostgresPlatformAdminRepository({
+    async query(sql, values) {
+      calls.push({ sql, values });
+      if (sql.includes("FROM platform_role_grants")) return { rows: [
+        { role: "platform_admin", subject_id: "user_1" },
+        { role: "platform_admin", subject_id: "user_2" }
+      ] };
+      return { rows: [{ status: "disabled", subject_id: "user_2", updated_at: timestamp }] };
+    }
+  }, { environment: "production" });
+  const result = await repository.accountDirectoryProjection({
+    roles: ["platform_admin"], subjectId: "admin_1"
+  }, ["user_1", "user_2"]);
+  assert.deepEqual(Object.fromEntries(Object.entries(result.roles)), {
+    user_1: ["platform_admin"], user_2: ["platform_admin"]
+  });
+  assert.deepEqual(result.statuses.user_2, { status: "disabled", updatedAt: timestamp.toISOString() });
+  assert.deepEqual(calls[0].values, [["user_1", "user_2"]]);
+  await assert.rejects(() => repository.accountDirectoryProjection({
+    roles: ["platform_admin"], subjectId: "admin_1"
+  }, Array.from({ length: 101 }, (_, index) => `user_${index}`)), /account_directory_query_invalid/);
+});
+
 test("suspends an organization with optimistic revision and audit in one transaction", async () => {
   const timestamp = new Date("2026-08-07T03:00:00.000Z");
   const harness = transactionHarness(async (sql) => {

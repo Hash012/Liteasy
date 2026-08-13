@@ -1,4 +1,5 @@
 import type {
+  AccountDirectoryPage,
   AdminApiErrorBody,
   AdminIdentity,
   AuditEvent,
@@ -85,6 +86,13 @@ export function createAdminApiClient({
   }
 
   return {
+    accounts(input: { first?: number; max?: number; search?: string } = {}) {
+      const params = new URLSearchParams();
+      if (input.first !== undefined) params.set("first", String(input.first));
+      if (input.max !== undefined) params.set("max", String(input.max));
+      if (input.search) params.set("search", input.search);
+      return cloudGet<AccountDirectoryPage>(`/v1/admin/accounts${params.size ? `?${params}` : ""}`);
+    },
     accountStatus(input: { reason: string; status: "active" | "disabled" | "deleted"; subjectId: string }) {
       return cloudPost<{ account: { status: string; subjectId: string } }>("/v1/admin/accounts/status", {
         ...input,

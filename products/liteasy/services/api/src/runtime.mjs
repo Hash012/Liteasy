@@ -212,6 +212,7 @@ export async function startCloudRuntime(config, dependencies = {}) {
     visualizationOrchestrationWorker.scheduleRecovery?.();
     return {
       accountLifecycleService,
+      identityAdminClient,
       agentArtifactRepository,
       close: async () => {
         try {

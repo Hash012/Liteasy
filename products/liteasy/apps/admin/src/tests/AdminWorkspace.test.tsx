@@ -7,6 +7,25 @@ import type { AdminApiClient } from "../api";
 test("loads identity, policy, retrieval, audit, and forum data into task views", async () => {
   const user = userEvent.setup();
   const api = {
+    accounts: vi.fn(async () => ({
+      accounts: [{
+        accountType: "person",
+        createdAt: "2026-08-06T00:00:00.000Z",
+        email: "reader@example.com",
+        emailVerified: true,
+        enabled: true,
+        firstName: "Lin",
+        lastName: "Qiao",
+        platformRoles: ["platform_admin"],
+        projectedStatus: null,
+        subjectId: "directory-user-id",
+        username: "reader@example.com"
+      }],
+      first: 0,
+      max: 50,
+      search: "",
+      total: 1
+    })),
     audit: vi.fn(async () => ({ events: [{
       action: "model_policy_updated",
       actorAudience: "liteasy-admin",
@@ -89,16 +108,19 @@ test("loads identity, policy, retrieval, audit, and forum data into task views",
   expect(screen.getByText("高风险操作认证")).toBeInTheDocument();
   expect(screen.getByText("最近 5 分钟内已完成多因素认证")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "账号与角色" }));
+  expect(await screen.findByRole("heading", { name: "账号目录" })).toBeInTheDocument();
+  expect(screen.getByText("Lin Qiao")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "用于操作" }));
   const grantSection = screen.getByRole("heading", { name: "授予平台角色" }).closest("section");
   expect(grantSection).not.toBeNull();
   const grantForm = within(grantSection as HTMLElement);
-  await user.type(grantForm.getByRole("textbox", { name: /用户标识/ }), "new-user-id");
+  expect(grantForm.getByRole("textbox", { name: /用户标识/ })).toHaveValue("directory-user-id");
   await user.type(grantForm.getByRole("textbox", { name: /原因/ }), "预发布管理账号授权");
   await user.click(grantForm.getByRole("button", { name: "授予角色" }));
   await waitFor(() => expect(api.grantRole).toHaveBeenCalledWith({
     reason: "预发布管理账号授权",
     role: "platform_admin",
-    subjectId: "new-user-id"
+    subjectId: "directory-user-id"
   }));
   fireEvent.click(screen.getByRole("button", { name: "组织治理" }));
   expect(await screen.findByText("Research Team")).toBeInTheDocument();

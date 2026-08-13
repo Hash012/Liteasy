@@ -59,6 +59,28 @@ export type GovernanceDirectory = {
   supportGrants: SupportGrant[];
 };
 
+export type AccountDirectoryEntry = {
+  accountType: "person" | "service";
+  createdAt: string;
+  email: string | null;
+  emailVerified: boolean;
+  enabled: boolean;
+  firstName: string | null;
+  lastName: string | null;
+  platformRoles: Array<"platform_admin" | "developer_diagnostics">;
+  projectedStatus: { status: "active" | "disabled" | "deleted"; updatedAt: string } | null;
+  subjectId: string;
+  username: string;
+};
+
+export type AccountDirectoryPage = {
+  accounts: AccountDirectoryEntry[];
+  first: number;
+  max: number;
+  search: string;
+  total: number;
+};
+
 export type AdminPrincipal = {
   grants: PlatformRoleGrant[];
   roles: string[];

@@ -662,6 +662,38 @@ export class PostgresPlatformAdminRepository {
     };
   }
 
+  async accountDirectoryProjection(principal, subjectIds) {
+    this.#requirePlatformAdmin(principal);
+    if (!Array.isArray(subjectIds) || subjectIds.length > 100 || subjectIds.some((value) => (
+      typeof value !== "string" || !/^[A-Za-z0-9._:-]{1,300}$/.test(value)
+    ))) {
+      throw new PlatformAdminError("account_directory_query_invalid");
+    }
+    if (subjectIds.length === 0) {
+      return { roles: Object.create(null), statuses: Object.create(null) };
+    }
+    const [roleResult, statusResult] = await Promise.all([
+      this.pool.query(`
+        SELECT subject_id, role FROM platform_role_grants
+         WHERE subject_id = ANY($1::text[]) AND state = 'active'
+         ORDER BY subject_id, role
+      `, [subjectIds]),
+      this.pool.query(`
+        SELECT subject_id, status, updated_at FROM account_status_projections
+         WHERE subject_id = ANY($1::text[])
+      `, [subjectIds])
+    ]);
+    const roles = Object.create(null);
+    for (const row of roleResult.rows) {
+      (roles[row.subject_id] ??= []).push(row.role);
+    }
+    const statuses = Object.create(null);
+    for (const row of statusResult.rows) {
+      statuses[row.subject_id] = { status: row.status, updatedAt: row.updated_at.toISOString() };
+    }
+    return { roles, statuses };
+  }
+
   async setOrganizationStatus(principal, input) {
     this.#requirePlatformAdmin(principal);
     exactFields(input, new Set([

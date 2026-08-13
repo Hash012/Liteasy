@@ -143,6 +143,7 @@ function errorMessage(code) {
     authentication_required: "Sign in to access cloud resources.",
     identity_service_unavailable: "Identity verification is temporarily unavailable. Retry later.",
     identity_subject_invalid: "请输入 Keycloak 用户详情中的有效用户 ID，不要填写邮箱或用户名。",
+    account_directory_query_invalid: "账号目录查询条件无效，请刷新页面后重试。",
     idempotency_key_invalid: "操作标识无效，请刷新页面后重试。",
     service_client_mismatch: "The calling service identity is not authorized.",
     service_scope_required: "The calling service lacks the required authorization scope.",
@@ -609,6 +610,45 @@ export function createCloudRequestHandler(runtime, config) {
             ? await runtime.platformAdminRepository.listGovernance(principal)
             : await runtime.platformAdminRepository.listRetrievalSources(principal);
         sendJson(response, 200, result);
+        return;
+      }
+
+      if (request.method === "GET" && url.pathname === "/v1/admin/accounts") {
+        const identity = await runtime.identityVerifier.verifyAuthorizationHeader(
+          request.headers.authorization,
+          "liteasy-admin"
+        );
+        const principal = await runtime.platformAdminRepository.principal(identity);
+        const allowed = new Set(["first", "max", "search"]);
+        if ([...url.searchParams.keys()].some((key) => (
+          !allowed.has(key) || url.searchParams.getAll(key).length !== 1
+        ))) {
+          throw new PlatformAdminError("account_directory_query_invalid");
+        }
+        const firstValue = url.searchParams.get("first") ?? "0";
+        const maxValue = url.searchParams.get("max") ?? "50";
+        const search = (url.searchParams.get("search") ?? "").trim();
+        if (!/^\d+$/.test(firstValue) || !/^\d+$/.test(maxValue)) {
+          throw new PlatformAdminError("account_directory_query_invalid");
+        }
+        const first = Number(firstValue);
+        const max = Number(maxValue);
+        if (!Number.isSafeInteger(first) || first < 0 || first > 1_000_000 || max < 1 || max > 100 || search.length > 100) {
+          throw new PlatformAdminError("account_directory_query_invalid");
+        }
+        const directory = await runtime.identityAdminClient.listAccounts({ first, max, search });
+        const projection = await runtime.platformAdminRepository.accountDirectoryProjection(
+          principal,
+          directory.accounts.map((account) => account.subjectId)
+        );
+        sendJson(response, 200, {
+          ...directory,
+          accounts: directory.accounts.map((account) => ({
+            ...account,
+            platformRoles: projection.roles[account.subjectId] ?? [],
+            projectedStatus: projection.statuses[account.subjectId] ?? null
+          }))
+        });
         return;
       }
 

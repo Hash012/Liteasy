@@ -59,3 +59,33 @@ test("fails closed when the identity provider omits one audience", async () => {
     traceId: "trace_1"
   }), /identity_session_revocation_unconfirmed/);
 });
+
+test("lists a validated account directory page through the management identity", async () => {
+  const calls = [];
+  const client = new IdentityAdminClient(config, { fetchImpl: async (url, request) => {
+    calls.push({ request, url });
+    if (url === config.tokenUrl) return response({ access_token: "service-token", token_type: "Bearer" });
+    return response({
+      accounts: [{
+        accountType: "person",
+        createdAt: "2026-08-12T00:00:00.000Z",
+        email: "reader@example.com",
+        emailVerified: true,
+        enabled: true,
+        firstName: "Lin",
+        lastName: "Qiao",
+        subjectId: "user_1",
+        username: "reader@example.com"
+      }],
+      first: 0,
+      max: 50,
+      search: "reader",
+      total: 1
+    });
+  } });
+  const result = await client.listAccounts({ first: 0, max: 50, search: "reader" });
+  assert.equal(result.accounts[0].subjectId, "user_1");
+  assert.equal(new URL(calls[1].url).searchParams.get("search"), "reader");
+  assert.equal(calls[1].request.headers.authorization, "Bearer service-token");
+  assert.equal(new URLSearchParams(calls[0].request.body).get("scope"), "accounts:write sessions:revoke");
+});
