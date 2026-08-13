@@ -83,15 +83,6 @@ jobs:
         shell: pwsh
         run: Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=frontend_tests"
 
-      - name: Check Tauri host
-        id: tauri_check
-        run: cargo check --manifest-path src-tauri/Cargo.toml
-
-      - name: Report Tauri tests
-        continue-on-error: true
-        shell: pwsh
-        run: Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=tauri_tests"
-
       - name: Build and verify production assets
         id: frontend_build
         env:
@@ -104,6 +95,15 @@ jobs:
         continue-on-error: true
         shell: pwsh
         run: Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=frontend_build"
+
+      - name: Check Tauri host
+        id: tauri_check
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: Report Tauri host check
+        continue-on-error: true
+        shell: pwsh
+        run: Invoke-RestMethod -Uri "https://staging.liteasyclaw.com/healthz/waitlist?ci_stage=tauri_check"
 
       - name: Build NSIS installer
         id: installer_build
