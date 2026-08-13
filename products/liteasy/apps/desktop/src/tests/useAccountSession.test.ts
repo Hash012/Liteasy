@@ -156,7 +156,6 @@ describe("useAccountSession", () => {
 
   test("restores a formal session only through the Tauri secure-credential command", async () => {
     const accessToken = `eyJ.${"a".repeat(40)}.sig`;
-    const onSessionRestored = vi.fn();
     const invoke = vi.fn(async (command: string) => {
       expect(command).toBe("restore_desktop_oauth_session");
       return {
@@ -186,8 +185,7 @@ describe("useAccountSession", () => {
         })) as typeof fetch,
         desktopIdentityHostAvailable: true,
         desktopIdentityInvoke: invoke,
-        getSettings: () => settingsStore.getState(),
-        onSessionRestored
+        getSettings: () => settingsStore.getState()
       })
     );
 
@@ -200,7 +198,7 @@ describe("useAccountSession", () => {
     expect(result.current.accountSession?.userId).toBe("user-1");
     expect(result.current.accountSession?.membershipTier).toBe("basic");
     expect(window.localStorage.getItem("liteasy.account.session.v1")).toBeNull();
-    expect(onSessionRestored).toHaveBeenCalledTimes(1);
+    expect(settingsStore.getState()["models.control_plane_endpoint"]).toBe("https://api.liteasy.example");
   });
 
 });

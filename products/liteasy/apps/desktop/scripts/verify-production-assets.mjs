@@ -47,6 +47,18 @@ export function verifyProductionAssets(directory = buildDirectory) {
       }
     }
   }
+  const expectedCloudEndpoint = process.env.VITE_LITEASY_CLOUD_URL?.trim();
+  if (expectedCloudEndpoint) {
+    const endpointBundled = walk(directory).some((filePath) => (
+      /\.(?:html|js|json|mjs)$/i.test(filePath) &&
+      fs.readFileSync(filePath, "utf8").includes(expectedCloudEndpoint)
+    ));
+    if (!endpointBundled) {
+      violations.push("configured cloud endpoint is missing from production assets");
+    }
+  } else if (process.env.CI === "true") {
+    violations.push("VITE_LITEASY_CLOUD_URL is required for CI production builds");
+  }
   if (violations.length > 0) {
     throw new Error(`production_asset_boundary:\n${violations.join("\n")}`);
   }

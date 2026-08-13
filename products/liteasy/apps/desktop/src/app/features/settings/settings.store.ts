@@ -63,7 +63,13 @@ function persistViewSettings(state: SettingsState) {
 }
 
 export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.env) {
-  const cloudEndpoint = releaseEndpoint(runtimeEnv.VITE_LITEASY_CLOUD_URL, "http://127.0.0.1:8787");
+  if (!import.meta.env.DEV && !runtimeEnv.VITE_LITEASY_CLOUD_URL?.trim()) {
+    throw new Error("desktop_cloud_endpoint_required");
+  }
+  const cloudEndpoint = releaseEndpoint(
+    runtimeEnv.VITE_LITEASY_CLOUD_URL,
+    import.meta.env.DEV ? "http://127.0.0.1:8787" : ""
+  );
   const forumEndpoint = releaseEndpoint(runtimeEnv.VITE_FORUM_API_URL, "");
   const state: SettingsState = {
     "network.recommendation.enabled": true,

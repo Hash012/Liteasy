@@ -84,8 +84,7 @@ export function useCloudAccountController({
     shouldShowLoginReminder
   } = useAccountSession({
     accountTransport,
-    getSettings,
-    onSessionRestored: applyLocalDevCloudDefaults
+    getSettings
   });
   const { isCloudReachable } = useCloudAvailabilityProbe({
     enabled: isOnline && accountSession !== null,

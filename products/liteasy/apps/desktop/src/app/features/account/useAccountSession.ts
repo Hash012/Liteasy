@@ -1,5 +1,5 @@
 import { formatCloudConnectionError } from "../network/cloudErrorMessage";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   createAuthenticatedCloudAccountSession,
   createRegisteredCloudAccountSession,
@@ -34,7 +34,6 @@ type UseAccountSessionInput = {
   desktopIdentityHostAvailable?: boolean;
   desktopIdentityFetch?: typeof fetch;
   getSettings: () => SettingsState;
-  onSessionRestored?: () => void;
 };
 
 export function useAccountSession({
@@ -42,11 +41,8 @@ export function useAccountSession({
   desktopIdentityHostAvailable = isDesktopIdentityHostAvailable(),
   desktopIdentityFetch,
   desktopIdentityInvoke,
-  getSettings,
-  onSessionRestored
+  getSettings
 }: UseAccountSessionInput) {
-  const onSessionRestoredRef = useRef(onSessionRestored);
-  onSessionRestoredRef.current = onSessionRestored;
   const [accountSession, setAccountSession] = useState<AccountSession | null>(null);
   const [accountPending, setAccountPending] = useState(false);
   const [accountMessage, setAccountMessage] = useState<string | undefined>();
@@ -58,7 +54,6 @@ export function useAccountSession({
   useEffect(() => {
     const storedSession = loadStoredAccountSession();
     if (storedSession) {
-      onSessionRestoredRef.current?.();
       setAccountSession(storedSession);
       setAccountMessage("已恢复本地云账号会话。");
 
@@ -89,7 +84,6 @@ export function useAccountSession({
           setAccountSession(storeAccountSession(restoredSession));
           setAuthenticationMode("oauth");
           setAccountMessage("登录会话已从操作系统安全存储恢复。");
-          onSessionRestoredRef.current?.();
         })
         .catch((error) => {
           const code = error instanceof Error ? error.message : String(error);

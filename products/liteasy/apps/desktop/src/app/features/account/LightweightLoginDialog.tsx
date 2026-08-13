@@ -33,7 +33,7 @@ export function LightweightLoginDialog({
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const showDevelopmentLogin = isLoopbackAccountEndpoint(controlPlaneEndpoint);
+  const showDevelopmentLogin = import.meta.env.DEV && isLoopbackAccountEndpoint(controlPlaneEndpoint);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
