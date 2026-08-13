@@ -180,7 +180,7 @@ describe("ArtifactLibraryPane", () => {
 
     await user.click(screen.getByRole("button", { name: "产物操作：薄读" }));
     await user.click(screen.getByRole("menuitem", { name: "重命名" }));
-    await user.click(screen.getByRole("button", { name: "保存" }));
+    await user.click(await screen.findByRole("button", { name: "保存" }));
 
     expect(screen.getByRole("dialog", { name: "重命名产物" })).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("network unavailable");
@@ -200,7 +200,7 @@ describe("ArtifactLibraryPane", () => {
 
     await user.click(screen.getByRole("button", { name: "产物操作：薄读" }));
     await user.click(screen.getByRole("menuitem", { name: "删除" }));
-    await user.click(screen.getByRole("button", { name: "确认删除" }));
+    await user.click(await screen.findByRole("button", { name: "确认删除" }));
 
     expect(screen.getByRole("dialog", { name: "删除产物" })).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("network unavailable");

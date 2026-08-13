@@ -562,7 +562,7 @@ export function PaperResourceTab({
           </details>
         </section>
       ) : null}
-      <Dialog modalType="modal" onOpenChange={(_, data) => setTranslationDialogOpen(data.open)} open={translationDialogOpen}>
+      {translationDialogOpen ? <Dialog modalType="modal" onOpenChange={(_, data) => setTranslationDialogOpen(data.open)} open>
         <DialogSurface aria-label="选择翻译语言">
           <DialogBody>
             <DialogTitle>翻译 MinerU 提取内容</DialogTitle>
@@ -601,7 +601,7 @@ export function PaperResourceTab({
             </DialogActions>
           </DialogBody>
         </DialogSurface>
-      </Dialog>
+      </Dialog> : null}
       {!translatedContent && (isFigureCollection ? (
         orderedFigures.length > 0 ? (
           <section className="paper-resource-tab__figure-list" aria-label="按论文出现顺序排列的插图">

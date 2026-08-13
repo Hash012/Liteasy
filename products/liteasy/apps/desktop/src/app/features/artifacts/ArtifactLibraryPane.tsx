@@ -246,12 +246,12 @@ export function ArtifactLibraryPane({
         />
       )}
 
-      <Dialog
+      {renameTarget ? <Dialog
         modalType="modal"
         onOpenChange={(_, data) => {
           if (!data.open && !dialogPending) setRenameTarget(null);
         }}
-        open={renameTarget !== null}
+        open
       >
         <DialogSurface aria-label="重命名产物">
           <form onSubmit={(event) => {
@@ -285,14 +285,14 @@ export function ArtifactLibraryPane({
             </DialogBody>
           </form>
         </DialogSurface>
-      </Dialog>
+      </Dialog> : null}
 
-      <Dialog
+      {deleteTarget ? <Dialog
         modalType="modal"
         onOpenChange={(_, data) => {
           if (!data.open && !dialogPending) setDeleteTarget(null);
         }}
-        open={deleteTarget !== null}
+        open
       >
         <DialogSurface aria-label="删除产物">
           <DialogBody>
@@ -313,7 +313,7 @@ export function ArtifactLibraryPane({
             </DialogActions>
           </DialogBody>
         </DialogSurface>
-      </Dialog>
+      </Dialog> : null}
     </section>
   );
 }
@@ -345,12 +345,15 @@ function SavedArtifactList({
 
   useEffect(() => {
     if (openMenuArtifactId !== null || pendingAction === null) return;
-    setPendingAction(null);
-    if (pendingAction.kind === "rename") {
-      onRename(pendingAction.artifact);
-      return;
-    }
-    onDelete(pendingAction.artifact);
+    const frame = window.requestAnimationFrame(() => {
+      setPendingAction(null);
+      if (pendingAction.kind === "rename") {
+        onRename(pendingAction.artifact);
+        return;
+      }
+      onDelete(pendingAction.artifact);
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [onDelete, onRename, openMenuArtifactId, pendingAction]);
 
   function scheduleDialog(kind: "delete" | "rename", artifact: ArtifactTab) {
