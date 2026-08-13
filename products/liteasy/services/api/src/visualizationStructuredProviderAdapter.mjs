@@ -65,7 +65,12 @@ async function jsonResponse(response) {
 async function requestStructuredResponse({ input, model, request, schema, schemaName, url }) {
   const send = (includeFormat) => request(url, {
     body: JSON.stringify({
-      input,
+      input: includeFormat ? input : [
+        input,
+        "Return exactly one JSON object and no Markdown or code fences.",
+        `The JSON object must conform to schema ${schemaName}:`,
+        JSON.stringify(schema)
+      ].join("\n"),
       model,
       ...(includeFormat ? {
         text: {

@@ -53,6 +53,10 @@ test("retries structured generation without text.format only for compatibility s
       assert.deepEqual(result, { text: "{\"nodes\":[]}" });
       assert.equal(bodies[0].text.format.strict, true);
       assert.equal("text" in bodies[1], false);
+      assert.match(bodies[1].input, /Return exactly one JSON object/);
+      assert.match(bodies[1].input, /semantic_graph_proposal/);
+      assert.match(bodies[1].input, /\"additionalProperties\":false/);
+      assert.ok(bodies[1].input.startsWith(payload.prompt));
     });
   }
 });
