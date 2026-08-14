@@ -35,6 +35,7 @@ export type AcademicProfileTransport = (
 
 type CreateAcademicProfileClientInput = {
   endpoint: string;
+  refreshSession?: () => Promise<AccountSession | null>;
   transport?: AcademicProfileTransport;
 };
 
@@ -122,6 +123,7 @@ function createIdempotencyKey() {
 
 export function createAcademicProfileClient({
   endpoint,
+  refreshSession,
   transport = defaultTransport
 }: CreateAcademicProfileClientInput) {
   async function request(
@@ -129,15 +131,22 @@ export function createAcademicProfileClient({
     session: AccountSession,
     body: Record<string, unknown>
   ): Promise<AcademicProfileSnapshot> {
-    const response = await transport({
-      body: JSON.stringify({ ...body, sessionId: session.sessionId }),
+    const send = (activeSession: AccountSession) => transport({
+      body: JSON.stringify({ ...body, sessionId: activeSession.sessionId }),
       headers: {
-        Authorization: `Bearer ${session.sessionId}`,
+        Authorization: `Bearer ${activeSession.sessionId}`,
         "Content-Type": "application/json"
       },
       method: "POST",
       url: buildUrl(endpoint, action)
     });
+    let response = await send(session);
+    if (response.status === 401 && refreshSession) {
+      const refreshedSession = await refreshSession();
+      if (refreshedSession) {
+        response = await send(refreshedSession);
+      }
+    }
     if (!response.ok) {
       throw new Error(`学术档案同步失败（${response.status}）`);
     }

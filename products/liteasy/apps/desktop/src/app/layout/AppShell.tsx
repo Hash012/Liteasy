@@ -254,9 +254,13 @@ export function AppShell({
   const latestArtifactIdRef = useRef<string | null>(null);
   const latestArtifactTaskIdRef = useRef<string | null>(null);
   const cloudAccessTokenRef = useRef<string | undefined>(undefined);
+  const cloudRefreshAccessTokenRef = useRef<() => Promise<string | null | undefined>>(
+    async () => undefined
+  );
   const forum = useForumController({ getSessionId: () => cloudAccessTokenRef.current });
   const effectiveModelTransport = useMemo(() => modelTransport ?? createBearerModelTransport({
-    getAccessToken: () => cloudAccessTokenRef.current
+    getAccessToken: () => cloudAccessTokenRef.current,
+    refreshAccessToken: () => cloudRefreshAccessTokenRef.current()
   }), [modelTransport]);
   const resolveIntuechoEndpoint = () =>
     settingsStoreRef.current.getState()["thin_reading.intuecho_endpoint"].trim() ||
@@ -694,6 +698,8 @@ export function AppShell({
     accountSession,
     loginDialogOpen
   } = cloudAccount.model;
+  cloudRefreshAccessTokenRef.current = async () =>
+    (await cloudAccount.actions.refreshAccountSession())?.sessionId;
   multimodalVisualizationCapabilityRef.current = cloudAccount.model.multimodalVisualization;
   updateMultimodalVisualizationCapabilityRef.current =
     cloudAccount.actions.setMultimodalVisualizationCapability;
@@ -724,6 +730,7 @@ export function AppShell({
       setSettingsState(cloneSettingsState(settingsStoreRef.current.getState()));
     },
     profileSamplingEnabled: settingsState["profile.enabled"],
+    refreshAccountSession: cloudAccount.actions.refreshAccountSession,
     transport: academicProfileTransport
   });
   function handleProfileExport() {

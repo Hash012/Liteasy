@@ -1,5 +1,5 @@
 import { formatCloudConnectionError } from "../network/cloudErrorMessage";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createAuthenticatedCloudAccountSession,
   createRegisteredCloudAccountSession,
@@ -54,6 +54,32 @@ export function useAccountSession({
   const [shouldShowLoginReminder, setShouldShowLoginReminder] = useState(
     !loadSuppressLoginReminderPreference()
   );
+  const getSettingsRef = useRef(getSettings);
+  getSettingsRef.current = getSettings;
+  const oauthRefreshPromiseRef = useRef<Promise<AccountSession> | null>(null);
+
+  const refreshSystemBrowserSession = useCallback((message: string) => {
+    if (oauthRefreshPromiseRef.current) {
+      return oauthRefreshPromiseRef.current;
+    }
+    const refreshPromise = restoreSystemBrowserSession({
+      endpoint: getSettingsRef.current()["models.control_plane_endpoint"],
+      fetchImpl: desktopIdentityFetch,
+      invoke: desktopIdentityInvoke
+    }).then((refreshedSession) => {
+      const storedSession = storeAccountSession(refreshedSession);
+      setAccountSession(storedSession);
+      setAuthenticationMode("oauth");
+      setAccountMessage(message);
+      return storedSession;
+    }).finally(() => {
+      if (oauthRefreshPromiseRef.current === refreshPromise) {
+        oauthRefreshPromiseRef.current = null;
+      }
+    });
+    oauthRefreshPromiseRef.current = refreshPromise;
+    return refreshPromise;
+  }, [desktopIdentityFetch, desktopIdentityInvoke]);
 
   useEffect(() => {
     const storedSession = loadStoredAccountSession();
@@ -62,6 +88,7 @@ export function useAccountSession({
       setAccountMessage("已恢复本地云账号会话。");
 
       if (storedSession.sessionId.startsWith("ltsy_")) {
+        setAuthenticationMode("development");
         void validateStoredCloudAccountSession(getSettings(), storedSession.sessionId, {
           transport: accountTransport
         })
@@ -74,21 +101,14 @@ export function useAccountSession({
             clearStoredAccountSession();
             setAccountMessage("登录会话已过期，请重新登录。");
           });
+      } else if (desktopIdentityHostAvailable) {
+        setAuthenticationMode("oauth");
       }
       return;
     }
     if (desktopIdentityHostAvailable) {
       setAccountPending(true);
-      void restoreSystemBrowserSession({
-        endpoint: getSettings()["models.control_plane_endpoint"],
-        fetchImpl: desktopIdentityFetch,
-        invoke: desktopIdentityInvoke
-      })
-        .then((restoredSession) => {
-          setAccountSession(storeAccountSession(restoredSession));
-          setAuthenticationMode("oauth");
-          setAccountMessage("登录会话已从操作系统安全存储恢复。");
-        })
+      void refreshSystemBrowserSession("登录会话已从操作系统安全存储恢复。")
         .catch((error) => {
           const code = error instanceof Error ? error.message : String(error);
           if (!code.includes("oauth_session_not_found") && !code.includes("oauth_configuration_unavailable")) {
@@ -98,6 +118,13 @@ export function useAccountSession({
         .finally(() => setAccountPending(false));
     }
   }, []);
+
+  const refreshAccountSession = useCallback(async () => {
+    if (!desktopIdentityHostAvailable || authenticationMode !== "oauth" || !accountSession) {
+      return null;
+    }
+    return refreshSystemBrowserSession("登录会话已自动续期。");
+  }, [accountSession, authenticationMode, desktopIdentityHostAvailable, refreshSystemBrowserSession]);
 
   useEffect(() => {
     if (!desktopIdentityHostAvailable || authenticationMode !== "oauth" || !accountSession) {
@@ -120,14 +147,9 @@ export function useAccountSession({
 
     async function refreshSession() {
       try {
-        const refreshedSession = await restoreSystemBrowserSession({
-          endpoint: getSettings()["models.control_plane_endpoint"],
-          fetchImpl: desktopIdentityFetch,
-          invoke: desktopIdentityInvoke
-        });
+        const refreshedSession = await refreshAccountSession();
         if (cancelled) return;
-        setAccountSession(storeAccountSession(refreshedSession));
-        setAccountMessage("登录会话已自动续期。");
+        if (!refreshedSession) return;
       } catch {
         if (cancelled) return;
         const remainingMs = expiresAt - Date.now();
@@ -147,7 +169,7 @@ export function useAccountSession({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [accountSession, authenticationMode, desktopIdentityFetch, desktopIdentityHostAvailable, desktopIdentityInvoke]);
+  }, [accountSession, authenticationMode, desktopIdentityHostAvailable, refreshAccountSession]);
 
   async function loginPersonalAccountWithSystemBrowser() {
     setAccountPending(true);
@@ -256,6 +278,7 @@ export function useAccountSession({
     loginPersonalAccount,
     logoutFromCloudAccount,
     registerPersonalAccount,
+    refreshAccountSession,
     setSuppressLoginReminder,
     shouldShowLoginReminder
   };

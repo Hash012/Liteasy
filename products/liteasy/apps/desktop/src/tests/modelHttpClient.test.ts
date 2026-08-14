@@ -47,6 +47,35 @@ test("refuses an anonymous cloud model request before network access", async () 
   expect(fetchImpl).not.toHaveBeenCalled();
 });
 
+test("refreshes an expired access token and retries a model request once", async () => {
+  const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+    const authorization = (init?.headers as Record<string, string>)?.Authorization;
+    return new Response(JSON.stringify(authorization === "Bearer access-token-2"
+      ? { answer: "ok" }
+      : { code: "identity_token_invalid" }), {
+      headers: { "Content-Type": "application/json" },
+      status: authorization === "Bearer access-token-2" ? 200 : 401
+    });
+  });
+  const refreshAccessToken = vi.fn(async () => "access-token-2");
+  const transport = createBearerModelTransport({
+    fetchImpl,
+    getAccessToken: () => "access-token-1",
+    refreshAccessToken
+  });
+
+  const response = await transport({
+    body: "{}",
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+    url: "https://models.liteasy.example/v1/model/generate"
+  });
+
+  expect(response.status).toBe(200);
+  expect(refreshAccessToken).toHaveBeenCalledTimes(1);
+  expect(fetchImpl).toHaveBeenCalledTimes(2);
+});
+
 test("posts a typed model request to the backend endpoint", async () => {
   const requests: Array<{ body: string; url: string }> = [];
   const client = createHttpModelClient({

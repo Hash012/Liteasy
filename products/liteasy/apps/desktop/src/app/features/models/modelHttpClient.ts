@@ -25,6 +25,7 @@ export type ModelTransport = (
 type BearerModelTransportInput = {
   fetchImpl?: typeof fetch;
   getAccessToken: () => string | null | undefined;
+  refreshAccessToken?: () => Promise<string | null | undefined>;
 };
 
 type CreateHttpModelClientInput = {
@@ -109,22 +110,37 @@ async function defaultTransport(request: ModelTransportRequest): Promise<ModelTr
 
 export function createBearerModelTransport({
   fetchImpl = fetch,
-  getAccessToken
+  getAccessToken,
+  refreshAccessToken
 }: BearerModelTransportInput): ModelTransport {
   return async (request) => {
     const accessToken = getAccessToken()?.trim();
     if (!accessToken) {
       throw new Error("请先登录 Liteasy 账号，再使用云端模型服务。");
     }
-    return fetchImpl(request.url, {
+    const send = (token: string) => fetchImpl(request.url, {
       body: request.body,
       headers: {
         ...request.headers,
-        Authorization: `Bearer ${accessToken}`
+        Authorization: `Bearer ${token}`
       },
       method: request.method,
       signal: request.signal
     });
+    const response = await send(accessToken);
+    if (response.status !== 401 || !refreshAccessToken || request.signal?.aborted) {
+      return response;
+    }
+    let refreshedAccessToken: string | null | undefined;
+    try {
+      refreshedAccessToken = (await refreshAccessToken())?.trim();
+    } catch {
+      return response;
+    }
+    if (refreshedAccessToken) {
+      await response.body?.cancel().catch(() => undefined);
+    }
+    return refreshedAccessToken ? send(refreshedAccessToken) : response;
   };
 }
 

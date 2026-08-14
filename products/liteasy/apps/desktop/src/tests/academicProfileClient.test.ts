@@ -52,4 +52,25 @@ describe("academic profile cloud contract", () => {
     expect(requests[2].parsedBody.expectedVersion).toBe(7);
     expect(new Set(requests.map(({ parsedBody }) => parsedBody.idempotencyKey)).size).toBe(3);
   });
+
+  test("refreshes an expired OAuth session and retries with the new bearer token", async () => {
+    const transport = vi.fn(async (request: { headers: Record<string, string> }) => ({
+      json: async () => snapshot,
+      ok: request.headers.Authorization === "Bearer access-token-2",
+      status: request.headers.Authorization === "Bearer access-token-2" ? 200 : 401
+    }));
+    const refreshSession = vi.fn(async () => ({ ...session, sessionId: "access-token-2" }));
+    const client = createAcademicProfileClient({
+      endpoint: "https://cloud.example.test",
+      refreshSession,
+      transport
+    });
+
+    await expect(client.save(session, { disciplines: [], stage: "博士研究生" }, 5))
+      .resolves.toEqual(snapshot);
+    expect(refreshSession).toHaveBeenCalledTimes(1);
+    expect(transport).toHaveBeenCalledTimes(2);
+    expect(transport.mock.calls[1][0].headers.Authorization).toBe("Bearer access-token-2");
+    expect(JSON.parse(transport.mock.calls[1][0].body).sessionId).toBe("access-token-2");
+  });
 });

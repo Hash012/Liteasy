@@ -250,4 +250,46 @@ describe("useAccountSession", () => {
     expect(result.current.accountMessage).toBe("登录会话已自动续期。");
   });
 
+  test("keeps OAuth refresh enabled when the account hook remounts", async () => {
+    const identityConfig = {
+      audience: "liteasy-desktop",
+      authorizationFlow: "authorization_code_pkce",
+      clientId: "liteasy-desktop-public",
+      issuer: "https://identity.example.com",
+      revocationUrl: "https://identity.example.com/oauth2/revoke"
+    };
+    let tokenVersion = 0;
+    const invoke = vi.fn(async () => ({
+      email: "tian@example.com",
+      expiresAt: "2099-08-14T10:00:00Z",
+      name: "Tian",
+      sessionId: `access-token-${++tokenVersion}`,
+      userId: "user-1"
+    }));
+    const options = {
+      desktopIdentityFetch: vi.fn(async () => new Response(JSON.stringify(identityConfig), {
+        headers: { "Content-Type": "application/json" },
+        status: 200
+      })) as typeof fetch,
+      desktopIdentityHostAvailable: true,
+      desktopIdentityInvoke: invoke,
+      getSettings: () => createSeededSettingsStore({
+        "models.control_plane_endpoint": "https://api.liteasy.example"
+      }).getState()
+    };
+    const first = renderHook(() => useAccountSession(options));
+    await waitFor(() => expect(first.result.current.accountSession?.sessionId).toBe("access-token-1"));
+    first.unmount();
+    invoke.mockClear();
+
+    const second = renderHook(() => useAccountSession(options));
+    await waitFor(() => expect(second.result.current.accountMessage).toBe("已恢复本地云账号会话。"));
+    await act(async () => {
+      await second.result.current.refreshAccountSession();
+    });
+
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(second.result.current.accountSession?.sessionId).toBe("access-token-2");
+  });
+
 });

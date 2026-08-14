@@ -24,6 +24,7 @@ type UseProfileActionsInput = {
   controlPlaneEndpoint?: string;
   onProfileSamplingChanged?: (enabled: boolean) => void;
   profileSamplingEnabled?: boolean;
+  refreshAccountSession?: () => Promise<AccountSession | null>;
   transport?: AcademicProfileTransport;
 };
 
@@ -36,6 +37,7 @@ export function useProfileActions({
   controlPlaneEndpoint = "http://127.0.0.1:8787",
   onProfileSamplingChanged,
   profileSamplingEnabled = false,
+  refreshAccountSession,
   transport
 }: UseProfileActionsInput = {}) {
   const [academicArchiveOpen, setAcademicArchiveOpen] = useState(false);
@@ -74,9 +76,13 @@ export function useProfileActions({
   const client = useMemo(
     () =>
       accountSession
-        ? createAcademicProfileClient({ endpoint: controlPlaneEndpoint, transport })
+        ? createAcademicProfileClient({
+            endpoint: controlPlaneEndpoint,
+            refreshSession: refreshAccountSession,
+            transport
+          })
         : null,
-    [accountSession?.sessionId, controlPlaneEndpoint, transport]
+    [accountSession?.sessionId, controlPlaneEndpoint, refreshAccountSession, transport]
   );
 
   useEffect(() => {

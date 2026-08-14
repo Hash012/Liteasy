@@ -47,6 +47,7 @@ type CloudAccountActions = {
   generateVisualization: VisualizationOrchestrationClient["startAndWait"];
   logoutFromCloudAccount: () => void;
   openLoginDialog: () => void;
+  refreshAccountSession: () => Promise<AccountSession | null>;
   setMultimodalVisualizationCapability: (value: unknown) => void;
   setSuppressLoginReminder: (checked: boolean) => void;
   skipLogin: () => void;
@@ -79,6 +80,7 @@ export function useCloudAccountController({
     loginPersonalAccount,
     loginPersonalAccountWithSystemBrowser,
     logoutFromCloudAccount,
+    refreshAccountSession,
     registerPersonalAccount,
     setSuppressLoginReminder,
     shouldShowLoginReminder
@@ -186,6 +188,7 @@ export function useCloudAccountController({
         setLoginDialogOpen(true);
       },
       pendingVisualizationRequests: () => visualizationClient?.pending() ?? [],
+      refreshAccountSession,
       resumeVisualizationGeneration: async (request, signal) => {
         if (!visualizationClient) throw new Error("visualization_account_session_required");
         return visualizationClient.resumeAndWait(request, signal);
