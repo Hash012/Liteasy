@@ -162,17 +162,22 @@ async function readStreamingAnswer(input: {
         continue;
       }
       if ("type" in event && event.type === "error") {
+        const code = "code" in event && typeof event.code === "string"
+          ? event.code
+          : undefined;
         const detail = "message" in event && typeof event.message === "string"
           ? event.message
-          : "code" in event && typeof event.code === "string"
-            ? event.code
+          : code
+            ? code
             : "error" in event && typeof event.error === "string"
               ? event.error
               : "unknown_stream_error";
         const trace = "traceId" in event && typeof event.traceId === "string"
           ? `（${event.traceId}）`
           : "";
-        throw new Error(`模型流式请求失败（${input.source}）：${detail}${trace}`);
+        throw new Error(
+          `模型流式请求失败（${input.source}）：${code ? `${code}: ` : ""}${detail}${trace}`
+        );
       }
       if (
         "type" in event &&

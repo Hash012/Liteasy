@@ -6,6 +6,7 @@ import { createSeededSettingsStore } from "../app/features/settings/settingsStat
 
 describe("useAccountSession", () => {
   beforeEach(() => {
+    vi.useRealTimers();
     clearStoredAccountSession();
     window.localStorage.clear();
   });
@@ -160,7 +161,7 @@ describe("useAccountSession", () => {
       expect(command).toBe("restore_desktop_oauth_session");
       return {
         email: "tian@example.com",
-        expiresAt: "2026-07-10T09:30:00Z",
+        expiresAt: "2099-07-10T09:30:00Z",
         name: "Tian",
         sessionId: accessToken,
         userId: "user-1"
@@ -199,6 +200,54 @@ describe("useAccountSession", () => {
     expect(result.current.accountSession?.membershipTier).toBe("basic");
     expect(window.localStorage.getItem("liteasy.account.session.v1")).toBeNull();
     expect(settingsStore.getState()["models.control_plane_endpoint"]).toBe("https://api.liteasy.example");
+  });
+
+  test("refreshes a formal OAuth session before its access token expires", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-14T09:00:00Z"));
+    const invoke = vi.fn(async (command: string) => ({
+      email: "tian@example.com",
+      expiresAt: command === "begin_desktop_oauth_login"
+        ? "2026-08-14T09:01:30Z"
+        : "2026-08-14T10:00:30Z",
+      name: "Tian",
+      sessionId: command === "begin_desktop_oauth_login" ? "access-token-1" : "access-token-2",
+      userId: "user-1"
+    }));
+    const identityConfig = {
+      audience: "liteasy-desktop",
+      authorizationFlow: "authorization_code_pkce",
+      clientId: "liteasy-desktop-public",
+      issuer: "https://identity.example.com",
+      revocationUrl: "https://identity.example.com/oauth2/revoke"
+    };
+    const settingsStore = createSeededSettingsStore({
+      "models.control_plane_endpoint": "https://api.liteasy.example"
+    });
+    const { result } = renderHook(() => useAccountSession({
+      desktopIdentityFetch: vi.fn(async () => new Response(JSON.stringify(identityConfig), {
+        headers: { "Content-Type": "application/json" },
+        status: 200
+      })) as typeof fetch,
+      desktopIdentityHostAvailable: true,
+      desktopIdentityInvoke: invoke,
+      getSettings: () => settingsStore.getState()
+    }));
+
+    await act(async () => {
+      await result.current.loginPersonalAccountWithSystemBrowser();
+    });
+    expect(result.current.accountSession?.sessionId).toBe("access-token-1");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+
+    expect(invoke).toHaveBeenLastCalledWith("restore_desktop_oauth_session", {
+      configuration: identityConfig
+    });
+    expect(result.current.accountSession?.sessionId).toBe("access-token-2");
+    expect(result.current.accountMessage).toBe("登录会话已自动续期。");
   });
 
 });

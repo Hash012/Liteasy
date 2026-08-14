@@ -300,5 +300,5 @@ test("reports stable errors that occur after a model stream starts", async () =>
     onDelta: () => {},
     prompt: "stream",
     provider: "openai"
-  })).rejects.toThrow("The model provider timed out.（trace_stream_1）");
+  })).rejects.toThrow("model_provider_timeout: The model provider timed out.（trace_stream_1）");
 });

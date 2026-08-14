@@ -98,6 +98,26 @@ test("does not remove structured output on authentication or rate-limit failures
   }
 });
 
+test("retries once when the provider times out before returning a response", async () => {
+  let calls = 0;
+  const providers = createModelUpstreamProviders(config(), {
+    fetchImpl: async () => {
+      calls += 1;
+      return calls === 1
+        ? new Response("gateway timeout", { status: 504 })
+        : new Response(JSON.stringify({ output_text: "Recovered answer" }), { status: 200 });
+    }
+  });
+
+  const answer = await providers.openai.generate({
+    prompt: "Explain the paper",
+    provider: "openai"
+  });
+
+  assert.equal(answer, "Recovered answer");
+  assert.equal(calls, 2);
+});
+
 test("parses fragmented DeepSeek SSE without returning reasoning fields", async () => {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({

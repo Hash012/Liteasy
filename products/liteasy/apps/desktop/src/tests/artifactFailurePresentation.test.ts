@@ -28,3 +28,10 @@ test("classifies transient model 5xx responses as service failures", () => {
     "thin_reading_validating"
   )).toBe("service_unavailable");
 });
+
+test("classifies streamed provider timeouts as service failures", () => {
+  expect(resolveArtifactFailureCode(
+    "模型流式请求失败（cloud_proxy）：model_provider_timeout: The model provider timed out.",
+    "thin_reading_validating"
+  )).toBe("service_unavailable");
+});

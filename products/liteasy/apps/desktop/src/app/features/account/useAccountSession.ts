@@ -36,6 +36,10 @@ type UseAccountSessionInput = {
   getSettings: () => SettingsState;
 };
 
+const oauthRefreshLeadMs = 60_000;
+const oauthRefreshRetryMs = 15_000;
+const maximumTimerDelayMs = 2_147_000_000;
+
 export function useAccountSession({
   accountTransport,
   desktopIdentityHostAvailable = isDesktopIdentityHostAvailable(),
@@ -94,6 +98,56 @@ export function useAccountSession({
         .finally(() => setAccountPending(false));
     }
   }, []);
+
+  useEffect(() => {
+    if (!desktopIdentityHostAvailable || authenticationMode !== "oauth" || !accountSession) {
+      return;
+    }
+    const expiresAt = Date.parse(accountSession.expiresAt);
+    if (!Number.isFinite(expiresAt)) {
+      return;
+    }
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    function scheduleRefresh() {
+      const delayMs = Math.max(0, expiresAt - Date.now() - oauthRefreshLeadMs);
+      timer = setTimeout(
+        delayMs > maximumTimerDelayMs ? scheduleRefresh : () => void refreshSession(),
+        Math.min(delayMs, maximumTimerDelayMs)
+      );
+    }
+
+    async function refreshSession() {
+      try {
+        const refreshedSession = await restoreSystemBrowserSession({
+          endpoint: getSettings()["models.control_plane_endpoint"],
+          fetchImpl: desktopIdentityFetch,
+          invoke: desktopIdentityInvoke
+        });
+        if (cancelled) return;
+        setAccountSession(storeAccountSession(refreshedSession));
+        setAccountMessage("登录会话已自动续期。");
+      } catch {
+        if (cancelled) return;
+        const remainingMs = expiresAt - Date.now();
+        if (remainingMs <= 0) {
+          setAccountSession(null);
+          clearStoredAccountSession();
+          setAuthenticationMode(null);
+          setAccountMessage("登录会话已过期，请重新登录。");
+          return;
+        }
+        timer = setTimeout(() => void refreshSession(), Math.min(oauthRefreshRetryMs, remainingMs));
+      }
+    }
+
+    scheduleRefresh();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [accountSession, authenticationMode, desktopIdentityFetch, desktopIdentityHostAvailable, desktopIdentityInvoke]);
 
   async function loginPersonalAccountWithSystemBrowser() {
     setAccountPending(true);

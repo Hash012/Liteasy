@@ -68,6 +68,8 @@ export function resolveArtifactFailureCode(
     return "model_rate_limited";
   }
   if (
+    normalized.includes("model_provider_timeout") ||
+    normalized.includes("model_provider_unavailable") ||
     normalized.includes("failed to fetch") ||
     normalized.includes("econnrefused") ||
     normalized.includes("连接失败") ||

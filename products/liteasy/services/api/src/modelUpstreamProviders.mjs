@@ -95,6 +95,17 @@ async function fetchUpstream(fetchImpl, url, init, signal, timeoutMs, allowedFai
   return response;
 }
 
+async function retryInitialTimeout(request) {
+  try {
+    return await request();
+  } catch (error) {
+    if (!(error instanceof ModelUpstreamError) || error.code !== "model_provider_timeout") {
+      throw error;
+    }
+    return request();
+  }
+}
+
 async function fetchOpenAiResponse(fetchImpl, url, input, model, stream, timeoutMs) {
   const request = (includeOutputFormat, allowedFailureStatuses) => fetchUpstream(fetchImpl, url, {
     body: JSON.stringify(openAiBody(
@@ -252,14 +263,14 @@ function createOpenAiProvider(config, options) {
   return Object.freeze({
     model: config.model,
     async generate(input) {
-      const response = await fetchOpenAiResponse(
+      const response = await retryInitialTimeout(() => fetchOpenAiResponse(
         fetchImpl,
         upstreamUrl(config.baseUrl, "responses"),
         { ...input, apiKey: config.apiKey },
         config.model,
         false,
         timeoutMs
-      );
+      ));
       const answer = outputTextFromOpenAi(await jsonPayload(response, input.signal));
       if (!answer) {
         throw new ModelUpstreamError("model_provider_response_invalid", 502, "OpenAI response has no output text");
@@ -267,14 +278,14 @@ function createOpenAiProvider(config, options) {
       return answer;
     },
     async *stream(input) {
-      const response = await fetchOpenAiResponse(
+      const response = await retryInitialTimeout(() => fetchOpenAiResponse(
         fetchImpl,
         upstreamUrl(config.baseUrl, "responses"),
         { ...input, apiKey: config.apiKey },
         config.model,
         true,
         timeoutMs
-      );
+      ));
       for await (const payload of ssePayloads(response, input.signal)) {
         if (payload?.type === "response.output_text.delta" && typeof payload.delta === "string") {
           yield payload.delta;
@@ -290,11 +301,11 @@ function createDeepSeekProvider(config, options) {
   return Object.freeze({
     model: config.model,
     async generate(input) {
-      const response = await fetchUpstream(fetchImpl, upstreamUrl(config.baseUrl, "chat/completions"), {
+      const response = await retryInitialTimeout(() => fetchUpstream(fetchImpl, upstreamUrl(config.baseUrl, "chat/completions"), {
         body: JSON.stringify(deepSeekBody(input, config.model, false)),
         headers: providerHeaders(config.apiKey),
         method: "POST"
-      }, input.signal, timeoutMs);
+      }, input.signal, timeoutMs));
       const answer = outputTextFromDeepSeek(await jsonPayload(response, input.signal));
       if (!answer) {
         throw new ModelUpstreamError("model_provider_response_invalid", 502, "DeepSeek response has no assistant content");
@@ -302,11 +313,11 @@ function createDeepSeekProvider(config, options) {
       return answer;
     },
     async *stream(input) {
-      const response = await fetchUpstream(fetchImpl, upstreamUrl(config.baseUrl, "chat/completions"), {
+      const response = await retryInitialTimeout(() => fetchUpstream(fetchImpl, upstreamUrl(config.baseUrl, "chat/completions"), {
         body: JSON.stringify(deepSeekBody(input, config.model, true)),
         headers: providerHeaders(config.apiKey),
         method: "POST"
-      }, input.signal, timeoutMs);
+      }, input.signal, timeoutMs));
       for await (const payload of ssePayloads(response, input.signal)) {
         const delta = Array.isArray(payload?.choices) ? payload.choices[0]?.delta?.content : undefined;
         if (typeof delta === "string" && delta.length > 0) yield delta;
