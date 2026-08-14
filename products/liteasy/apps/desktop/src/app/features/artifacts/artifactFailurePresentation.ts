@@ -17,6 +17,32 @@ const publicMessages: Record<ArtifactFailureCode, string> = {
   service_unavailable: "相关服务暂时不可用，请检查网络后重试。"
 };
 
+function verificationFailureMessage(message: string) {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("首页方向质量门")) {
+    return "薄读正文未通过首页方向审阅，系统未保存该结果。请缩小问题范围或重新生成。";
+  }
+  if (normalized.includes("数值命题门")) {
+    return "薄读正文中的数值与来源未能一致对应，系统未保存该结果。请重新生成或减少精确数值要求。";
+  }
+  if (normalized.includes("证据复核未通过")) {
+    return "薄读正文中仍有命题缺少来源直接支持，系统未保存该结果。请确认论文能够回答当前问题后重试。";
+  }
+  if (normalized.includes("成文质量审阅")) {
+    return "薄读正文的重点、逻辑或解释深度未通过审阅，系统未保存该结果。请缩小问题范围后重试。";
+  }
+  if (normalized.includes("来源约束无法满足")) {
+    return "当前论文或所选来源不足以支持这次薄读，系统未保存无可靠依据的结果。请调整问题或补充来源。";
+  }
+  if (normalized.includes("ai 独立理解质量审阅未通过")) {
+    return "AI 独立分析中仍包含无法安全确认的事实性内容，系统未保存该结果。请补充可靠来源后重试。";
+  }
+  if (normalized.includes("结构质量门")) {
+    return "模型连续返回了不符合薄读结构要求的结果，系统未保存该结果。请重新生成。";
+  }
+  return publicMessages.artifact_verification_failed;
+}
+
 export function isModelAuthenticationFailure(message: string) {
   const normalized = message.toLowerCase();
   return (
@@ -42,6 +68,7 @@ export function resolveArtifactFailureCode(
     normalized.includes("ai 独立理解质量审阅未通过") ||
     normalized.includes("成文质量审阅") ||
     normalized.includes("来源约束无法满足") ||
+    normalized.includes("首页方向质量门") ||
     normalized.includes("结构质量门") ||
     normalized.includes("数值命题门") ||
     normalized.includes("证据复核未通过") ||
@@ -98,7 +125,9 @@ export function presentArtifactFailure(
           provider: failure.provider
         }
       : undefined,
-    message: publicMessages[code],
+    message: code === "artifact_verification_failed"
+      ? verificationFailureMessage(failure.message)
+      : publicMessages[code],
     traceId
   };
 }

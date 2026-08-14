@@ -188,6 +188,7 @@ function buildFailureRecovery(message: string, failedStage: ArtifactTaskStage) {
   if (
     normalized.includes("ai 独立理解质量审阅未通过") ||
     normalized.includes("成文质量审阅") ||
+    normalized.includes("首页方向质量门") ||
     normalized.includes("结构质量门") ||
     normalized.includes("数值命题门") ||
     normalized.includes("证据复核未通过")

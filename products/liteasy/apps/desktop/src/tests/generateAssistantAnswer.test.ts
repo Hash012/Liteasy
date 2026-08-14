@@ -640,6 +640,7 @@ function generateFocusedRecoveryBoundaryForTest(
 
 function generateEvidenceReviewTransportBoundaryForTest(input: {
   failuresBeforeSuccess: number;
+  invalidFormatsBeforeFailure?: number;
   reviewError: Error;
 }) {
   const store = createSettingsStore();
@@ -667,7 +668,20 @@ function generateEvidenceReviewTransportBoundaryForTest(input: {
       const body = JSON.parse(request.body) as { outputFormat?: { name?: string }; prompt: string };
       if (body.outputFormat?.name === "liteasy_thin_reading_evidence_review") {
         reviewCalls += 1;
-        if (reviewCalls <= input.failuresBeforeSuccess) throw input.reviewError;
+        const invalidFormatsBeforeFailure = input.invalidFormatsBeforeFailure ?? 0;
+        if (reviewCalls <= invalidFormatsBeforeFailure) {
+          return {
+            json: async () => ({
+              answer: "not-json",
+              execution: { backend: "dev_cloud", mode: "live", provider: "deepseek" }
+            }),
+            ok: true,
+            status: 200
+          };
+        }
+        if (reviewCalls <= invalidFormatsBeforeFailure + input.failuresBeforeSuccess) {
+          throw input.reviewError;
+        }
         return {
           json: async () => ({
             answer: JSON.stringify(passingEvidenceReview(body.prompt)),
@@ -3269,6 +3283,21 @@ test("fails after three evidence review transport attempts without regenerating 
   await expect(run.result).rejects.toBe(reviewError);
   expect(run.bodyCallCount()).toBe(1);
   expect(run.reviewCallCount()).toBe(3);
+});
+
+test("keeps transport retries available after evidence review format repairs", async () => {
+  const reviewError = new Error("evidence review upstream temporarily unavailable");
+  const run = generateEvidenceReviewTransportBoundaryForTest({
+    failuresBeforeSuccess: 2,
+    invalidFormatsBeforeFailure: 2,
+    reviewError
+  });
+
+  const result = await run.result;
+
+  expect(result.thinReading?.rootSeed.supportMode).toBe("paper");
+  expect(run.bodyCallCount()).toBe(1);
+  expect(run.reviewCallCount()).toBe(5);
 });
 
 test("recovers unplanned paper evidence before crossing the semantic source boundary", async () => {
@@ -7516,6 +7545,58 @@ test("uses reviewer-only retries when AI interpretation review formatting remain
   await expect(result).rejects.not.toThrow("薄读 Agent 结构质量门连续失败");
   expect(generationCalls).toBe(1);
   expect(reviewCalls).toBe(3);
+});
+
+test("keeps transport retries available after AI interpretation review format repairs", async () => {
+  let generationCalls = 0;
+  let reviewCalls = 0;
+  const reviewError = new Error("AI interpretation review upstream temporarily unavailable");
+
+  const result = await generateAiInterpretationFallbackForTest({
+    modelTransport: async (request) => {
+      const body = JSON.parse(request.body) as { outputFormat?: { name?: string } };
+      const isReview = body.outputFormat?.name === "liteasy_thin_reading_ai_interpretation_review";
+      if (!isReview) {
+        generationCalls += 1;
+        return {
+          json: async () => ({
+            answer: JSON.stringify(aiInterpretationAnswer("一种可能的理解是，替代交互机制或许会改变检索效率与表达能力的权衡。")),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      reviewCalls += 1;
+      if (reviewCalls <= 2) {
+        return {
+          json: async () => ({
+            answer: "not-json",
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (reviewCalls <= 4) throw reviewError;
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            reason: "该句只表达明确标记的概念可能性。",
+            unsafeSentenceIds: [],
+            verdict: "pass"
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  expect(result.thinReading?.rootSeed.supportMode).toBe("ai_interpretation");
+  expect(generationCalls).toBe(1);
+  expect(reviewCalls).toBe(5);
 });
 
 test("repairs a failed AI interpretation review and reviews the repaired output again", async () => {

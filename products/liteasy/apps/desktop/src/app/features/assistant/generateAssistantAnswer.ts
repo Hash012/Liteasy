@@ -2535,8 +2535,11 @@ async function reviewThinReadingEvidence(input: {
   });
   let reviewPrompt = basePrompt;
   let retryKind: "format" | "transport" = "format";
-  for (let reviewAttempt = 0; reviewAttempt < 3; reviewAttempt += 1) {
-    if (reviewAttempt > 0) {
+  let formatAttempts = 0;
+  let requestAttempts = 0;
+  let transportFailures = 0;
+  while (formatAttempts < 3) {
+    if (requestAttempts > 0) {
       input.onProgress?.({
         phase: "repairing_evidence_review",
         progress: 73,
@@ -2545,6 +2548,7 @@ async function reviewThinReadingEvidence(input: {
           : "证据复核格式无效，正在校正复核结果"
       });
     }
+    requestAttempts += 1;
     let generation: Awaited<ReturnType<typeof input.gateway.generateAnswer>>;
     try {
       generation = await input.gateway.generateAnswer({
@@ -2564,10 +2568,11 @@ async function reviewThinReadingEvidence(input: {
         input.signal?.aborted ||
         isAbortError(error) ||
         isNonRetryableThinReadingReviewerRequestError(error) ||
-        reviewAttempt === 2
+        transportFailures >= 2
       ) {
         throw new ThinReadingEvidenceReviewRequestError(error);
       }
+      transportFailures += 1;
       retryKind = "transport";
       continue;
     }
@@ -2581,7 +2586,8 @@ async function reviewThinReadingEvidence(input: {
         sentenceIds
       });
     } catch (error) {
-      if (reviewAttempt === 2) {
+      formatAttempts += 1;
+      if (formatAttempts >= 3) {
         throw new ThinReadingEvidenceReviewRequestError(error);
       }
       reviewPrompt = buildThinReadingAuxiliaryRetryPrompt({
@@ -2620,8 +2626,11 @@ async function reviewThinReadingAiInterpretation(input: {
   });
   let reviewPrompt = basePrompt;
   let retryKind: "format" | "transport" = "format";
-  for (let reviewAttempt = 0; reviewAttempt < 3; reviewAttempt += 1) {
-    if (reviewAttempt > 0) {
+  let formatAttempts = 0;
+  let requestAttempts = 0;
+  let transportFailures = 0;
+  while (formatAttempts < 3) {
+    if (requestAttempts > 0) {
       input.onProgress?.({
         phase: "repairing_ai_interpretation_review",
         progress: 73,
@@ -2630,6 +2639,7 @@ async function reviewThinReadingAiInterpretation(input: {
           : "AI 独立理解审阅格式无效，正在校正审阅结果"
       });
     }
+    requestAttempts += 1;
     let generation: Awaited<ReturnType<typeof input.gateway.generateAnswer>>;
     try {
       generation = await input.gateway.generateAnswer({
@@ -2649,17 +2659,19 @@ async function reviewThinReadingAiInterpretation(input: {
         input.signal?.aborted ||
         isAbortError(error) ||
         isNonRetryableThinReadingReviewerRequestError(error) ||
-        reviewAttempt === 2
+        transportFailures >= 2
       ) {
         throw error;
       }
+      transportFailures += 1;
       retryKind = "transport";
       continue;
     }
     try {
       return parseThinReadingAiInterpretationReview(generation.answer, sentenceIds);
     } catch (error) {
-      if (reviewAttempt === 2) throw error;
+      formatAttempts += 1;
+      if (formatAttempts >= 3) throw error;
       reviewPrompt = buildThinReadingAuxiliaryRetryPrompt({
         allowedSentenceIds: sentenceIds,
         basePrompt,
