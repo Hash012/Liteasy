@@ -1946,30 +1946,6 @@ export function prioritizeThinReadingGenerationSources(input: {
   return [...selected.values()];
 }
 
-function selectThinReadingAnchorSources(sources: readonly ThinReadingExternalSource[]) {
-  const usable = sources
-    .filter((source) => source.isRetracted !== true)
-    .sort((left, right) => right.relevance - left.relevance);
-  const highRelevance = usable.filter((source) => source.relevance >= 0.42);
-  return (highRelevance.length > 0 ? highRelevance : usable).slice(0, 4);
-}
-
-function selectThinReadingAnchorFullTextCandidates(
-  groups: readonly (readonly ThinReadingExternalSource[])[]
-) {
-  const selected = new Map<string, ThinReadingExternalSource>();
-  const maximumAutomaticPdfs = 8;
-  const maximumGroupSize = Math.max(0, ...groups.map((group) => group.length));
-  for (let rank = 0; rank < maximumGroupSize; rank += 1) {
-    for (const group of groups) {
-      const candidate = group.filter((source) => source.fullTextUrl)[rank];
-      if (candidate) selected.set(candidate.id, candidate);
-      if (selected.size >= maximumAutomaticPdfs) return [...selected.values()];
-    }
-  }
-  return [...selected.values()];
-}
-
 async function attachThinReadingAnchorSources(input: {
   context: ThinReadingGenerationContext;
   endpoint: string;
@@ -1985,11 +1961,6 @@ async function attachThinReadingAnchorSources(input: {
     return input.seed;
   }
 
-  input.onProgress?.({
-    phase: "retrieving_external_knowledge",
-    progress: 74,
-    summary: "正在围绕薄读锚点检索关联论文"
-  });
   const referencesByAnchorId = input.context.primaryPaperId
     ? await loadThinReadingAnchorReferenceIndex({
         anchors,
@@ -2011,86 +1982,7 @@ async function attachThinReadingAnchorSources(input: {
       anchors: rankedAnchors
     }
   };
-  let search: ReturnType<typeof createThinReadingExternalKnowledgeClient>;
-  try {
-    search = createThinReadingExternalKnowledgeClient({
-      endpoint: input.endpoint,
-      transport: input.transport
-    });
-  } catch (error) {
-    if (input.signal?.aborted || isAbortError(error)) {
-      throw error;
-    }
-    return seedWithRankedAnchors;
-  }
-  const results = await Promise.allSettled(rankedAnchors.map((anchor) => search({
-    // Presence keeps this an anchor-aware request. When local citations exist, their
-    // bibliography entries seed the graph before the query fills remaining coverage.
-    anchorReferences: referencesByAnchorId.get(anchor.id) ?? [],
-    artifactId: input.context.artifactId,
-    intent: "context",
-    limit: 12,
-    query: anchor.searchQuery,
-    signal: input.signal,
-    targetPaperIdentity: input.context.primaryPaperIdentity,
-    targetPaperTitle: input.context.primaryPaperTitle
-  })));
-  if (input.signal?.aborted) {
-    throw new DOMException("The operation was aborted", "AbortError");
-  }
-  const cancelledResult = results.find((result) => (
-    result.status === "rejected" && isAbortError(result.reason)
-  ));
-  if (cancelledResult?.status === "rejected") {
-    throw cancelledResult.reason;
-  }
-
-  const sourcesByAnchorId = new Map<string, readonly ThinReadingExternalSource[]>();
-  const retrievedSourceGroups: ThinReadingExternalSource[][] = [];
-  results.forEach((result, index) => {
-    if (result.status !== "fulfilled") {
-      return;
-    }
-    const selected = selectThinReadingAnchorSources(result.value.sources);
-    sourcesByAnchorId.set(rankedAnchors[index].id, selected);
-    retrievedSourceGroups.push(selected);
-  });
-  if (retrievedSourceGroups.length === 0) {
-    return seedWithRankedAnchors;
-  }
-
-  let externalSources = mergeThinReadingExternalSources(
-    input.seed.evidence.externalSources,
-    ...retrievedSourceGroups
-  );
-  const fullTextCandidates = selectThinReadingAnchorFullTextCandidates(retrievedSourceGroups);
-  if (fullTextCandidates.length > 0) {
-    try {
-      const enrichedCandidates = await enrichThinReadingSourcesWithFullText({
-        endpoint: input.endpoint,
-        maximumSources: fullTextCandidates.length,
-        signal: input.signal,
-        sources: fullTextCandidates,
-        transport: input.pdfTransport
-      });
-      externalSources = mergeThinReadingExternalSources(externalSources, enrichedCandidates);
-    } catch (error) {
-      if (input.signal?.aborted || isAbortError(error)) {
-        throw error;
-      }
-    }
-  }
-  return {
-    ...seedWithRankedAnchors,
-    evidence: {
-      ...seedWithRankedAnchors.evidence,
-      anchors: rankedAnchors.map((anchor) => ({
-        ...anchor,
-        externalSourceIds: sourcesByAnchorId.get(anchor.id)?.map((source) => source.id) ?? []
-      })),
-      externalSources
-    }
-  };
+  return seedWithRankedAnchors;
 }
 
 function shouldAcquireThinReadingFullText(context: ThinReadingGenerationContext) {

@@ -18,6 +18,7 @@ import type {
   ThinReadingExternalSource
 } from "../thin-reading/thinReading.types";
 import type { ThinReadingPaperRelationsTransport } from "../thin-reading/thinReadingPaperRelationsClient";
+import type { ThinReadingExternalKnowledgeTransport } from "../thin-reading/thinReadingExternalKnowledgeClient";
 import type { ForumFeedQuery, ForumPost } from "../forum/forum.types";
 import type { MineruFigure } from "../import/import.types";
 import type { VisualizationTabData } from "../visualization/visualization.types";
@@ -40,6 +41,7 @@ type ArtifactTabsProps = {
   developerDiagnostics?: boolean;
   externalKnowledgeEndpoint?: string;
   paperRelationsTransport?: ThinReadingPaperRelationsTransport;
+  recommendationTransport?: ThinReadingExternalKnowledgeTransport;
   intuechoEndpoint?: string;
   intuechoSessionId?: string;
   mineruFiguresByPaperId?: Record<string, MineruFigure[]>;
@@ -185,6 +187,7 @@ export function ArtifactTabs({
   developerDiagnostics = false,
   externalKnowledgeEndpoint,
   paperRelationsTransport,
+  recommendationTransport,
   intuechoEndpoint,
   intuechoSessionId,
   mineruFiguresByPaperId,
@@ -339,6 +342,7 @@ export function ArtifactTabs({
         onToggleVisualization={onToggleThinReadingVisualization}
         paperRelationsEndpoint={externalKnowledgeEndpoint}
         paperRelationsTransport={paperRelationsTransport}
+        recommendationTransport={recommendationTransport}
         papers={activeTab.papers ?? []}
         visualizationArtifacts={thinReadingVisualizationReadyArtifacts}
         visualizationCapability={thinReadingVisualizationCapability}

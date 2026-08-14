@@ -29,13 +29,19 @@ function publicationSources(input) {
       : [];
   if (values.length < 1 || values.length > 256) throw new Error("visualization_source_invalid");
   const sources = values.map((source) => {
+    const artifactAccess = source?.access?.kind === "agent_artifact" &&
+      typeof source.access.artifactId === "string" && /^[A-Za-z0-9._-]{1,120}$/.test(source.access.artifactId) &&
+      Number.isSafeInteger(source.access.artifactRevision) && source.access.artifactRevision >= 1 &&
+      typeof source.access.intentHash === "string" && /^[a-f0-9]{64}$/.test(source.access.intentHash) &&
+      typeof source.access.nodeId === "string" && /^[A-Za-z0-9._:-]{1,160}$/.test(source.access.nodeId);
     if (!source || typeof source !== "object" || Array.isArray(source) ||
       typeof source.documentId !== "string" || !/^[A-Za-z0-9._:-]{1,160}$/.test(source.documentId) ||
       typeof source.sourceIdentityHash !== "string" || !/^[a-f0-9]{64}$/.test(source.sourceIdentityHash) ||
       typeof source.isPrimary !== "boolean" || source.access?.allowed !== true ||
       !new Set(["user", "organization"]).has(source.access.scopeType) ||
       typeof source.access.scopeId !== "string" || source.access.scopeId.length === 0 ||
-      source.access.sourceIdentityHash !== source.sourceIdentityHash) {
+      source.access.sourceIdentityHash !== source.sourceIdentityHash ||
+      (source.access.kind !== undefined && !artifactAccess)) {
       throw new Error("visualization_source_access_revoked");
     }
     return source;
@@ -1001,6 +1007,18 @@ export class PostgresVisualizationRepository {
         throw new Error("visualization_route_revision_changed");
       }
       for (const source of sources) {
+        if (source.access.kind === "agent_artifact") {
+          const currentArtifact = (await client.query(`
+            SELECT revision FROM agent_artifacts
+             WHERE subject_id = $1 AND artifact_id = $2
+             FOR UPDATE
+          `, [id, source.access.artifactId])).rows[0];
+          if (!currentArtifact || Number(currentArtifact.revision) !== source.access.artifactRevision ||
+            source.access.scopeType !== "user" || source.access.scopeId !== id) {
+            throw new Error("visualization_source_access_revoked");
+          }
+          continue;
+        }
         const current = (await client.query(`
           SELECT reference.content_hash
             FROM library_entries entry

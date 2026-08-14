@@ -1847,6 +1847,7 @@ export function AppShell({
         intuechoEndpoint={resolveIntuechoEndpoint()}
         intuechoSessionId={accountSession?.sessionId}
         paperRelationsTransport={effectiveModelTransport}
+        recommendationTransport={effectiveModelTransport}
         onLoadForumFeed={forum.loadFeed}
         onChangeAnnotationPublication={pdfAnnotationPublication.actions.changePublication}
         onStartAnalysis={startReaderScopedAnalysis}

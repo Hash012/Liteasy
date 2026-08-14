@@ -2306,7 +2306,7 @@ test("parses thin-reading structured output from a live model request", async ()
       ],
       anchors: [
         expect.objectContaining({
-          externalSourceIds: ["openalex:W123"],
+          externalSourceIds: [],
           quality: {
             citationProvenance: 0,
             evidenceAttention: 1,
@@ -2323,10 +2323,10 @@ test("parses thin-reading structured output from a live model request", async ()
     withinPaperClosure: true
   });
   expect(result.content).toContain("ColBERT 的核心贡献");
-  expect(externalRetrievalCalls).toBe(1);
+  expect(externalRetrievalCalls).toBe(0);
 });
 
-test("persists ranked anchor quality when every per-anchor search fails", async () => {
+test("persists ranked anchor quality without blocking on per-anchor search", async () => {
   const store = createSettingsStore();
   let externalRetrievalCalls = 0;
   store.apply({
@@ -2416,7 +2416,7 @@ test("persists ranked anchor quality when every per-anchor search fails", async 
     }
   });
 
-  expect(externalRetrievalCalls).toBe(1);
+  expect(externalRetrievalCalls).toBe(0);
   expect(result.thinReading?.rootSeed.evidence.anchors).toEqual([
     expect.objectContaining({
       externalSourceIds: [],

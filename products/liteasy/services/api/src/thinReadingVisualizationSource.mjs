@@ -223,9 +223,6 @@ export async function resolveThinReadingVisualizationSource(input, dependencies)
 
   const paperIds = [...new Set(paper.map((item) => item.paperId))];
   const paperSources = await loadPaperSources(dependencies.pool, subjectId, paperIds);
-  if (paperIds.some((id) => !/^[a-f0-9]{64}$/.test(paperSources.get(id)?.sourceIdentityHash ?? ""))) {
-    fail("thin_reading_visualization_source_access_revoked", 403);
-  }
   const metadataIds = [...new Set(external.filter((item) => item.kind === "external_metadata").map((item) => item.source.id))];
   const metadataSources = await loadMetadataSources(dependencies.pool, subjectId, metadataIds);
   if (metadataIds.some((id) => !sameExternalIdentity(metadataSources.get(id)?.cached_source, external.find((item) => item.source.id === id)?.source))) {
@@ -237,8 +234,17 @@ export async function resolveThinReadingVisualizationSource(input, dependencies)
     fail("thin_reading_visualization_external_grant_invalid", 403);
   }
 
+  const paperSnapshotHashes = new Map(paperIds.map((paperId) => [paperId, digest({
+    artifactId,
+    evidence: paper.filter((item) => item.paperId === paperId).map(({ id, page, quote }) => ({ id, page, quote })),
+    nodeId,
+    paperId
+  })]));
   const normalizedEvidence = [
-    ...paper.map((item) => ({ ...item, sourceIdentityHash: paperSources.get(item.paperId).sourceIdentityHash })),
+    ...paper.map((item) => ({
+      ...item,
+      sourceIdentityHash: paperSources.get(item.paperId)?.sourceIdentityHash ?? paperSnapshotHashes.get(item.paperId)
+    })),
     ...external.map((item) => {
       if (item.kind === "external_metadata") {
         const cached = metadataSources.get(item.source.id);
@@ -266,20 +272,6 @@ export async function resolveThinReadingVisualizationSource(input, dependencies)
     fail("thin_reading_visualization_evidence_too_large", 413);
   }
 
-  const externalDocuments = external.map((item) => ({
-    documentId: item.sourceId ?? item.source.id,
-    sourceIdentityHash: normalizedEvidence.find((evidence) => evidence.id === item.id).sourceIdentityHash
-  }));
-  const uniqueDocuments = new Map([
-    ...paperIds.map((documentId) => [documentId, { documentId, ...paperSources.get(documentId) }]),
-    ...externalDocuments.map((document) => [document.documentId, document])
-  ]);
-  const documents = [...uniqueDocuments.values()];
-  if (documents.length === 0) fail();
-  const primaryDocumentId = paperIds.includes(document.paperIds?.[0]) ? document.paperIds[0] : documents[0].documentId;
-  const projectedDocuments = documents.map((source) => ({ ...source, isPrimary: source.documentId === primaryDocumentId }));
-  if (projectedDocuments.filter((source) => source.isPrimary).length !== 1) fail();
-
   const locale = boundedText(document.targetLanguage, 35);
   const intentHash = digest({
     artifactRevision: stored.revision,
@@ -287,6 +279,33 @@ export async function resolveThinReadingVisualizationSource(input, dependencies)
     intent,
     nodeId
   });
+  const artifactAuthorization = {
+    artifactId,
+    artifactRevision: stored.revision,
+    intentHash,
+    kind: "agent_artifact",
+    nodeId
+  };
+  const externalDocuments = external.map((item) => ({
+    authorization: artifactAuthorization,
+    documentId: item.sourceId ?? item.source.id,
+    sourceIdentityHash: normalizedEvidence.find((evidence) => evidence.id === item.id).sourceIdentityHash
+  }));
+  const uniqueDocuments = new Map([
+    ...paperIds.map((documentId) => [documentId, paperSources.has(documentId)
+      ? { documentId, ...paperSources.get(documentId) }
+      : {
+          authorization: artifactAuthorization,
+          documentId,
+          sourceIdentityHash: paperSnapshotHashes.get(documentId)
+        }]),
+    ...externalDocuments.map((source) => [source.documentId, source])
+  ]);
+  const documents = [...uniqueDocuments.values()];
+  if (documents.length === 0) fail();
+  const primaryDocumentId = paperIds.includes(document.paperIds?.[0]) ? document.paperIds[0] : documents[0].documentId;
+  const projectedDocuments = documents.map((source) => ({ ...source, isPrimary: source.documentId === primaryDocumentId }));
+  if (projectedDocuments.filter((source) => source.isPrimary).length !== 1) fail();
   return {
     artifactRevision: stored.revision,
     documents: projectedDocuments,

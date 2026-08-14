@@ -21,6 +21,7 @@ type ClientInput = {
   fetchImpl?: (input: string, init?: RequestInit) => Promise<HttpResponse>;
   getAccessToken: () => string | undefined;
   getCapability: () => MultimodalVisualizationCapability;
+  refreshAccessToken?: () => Promise<string | undefined>;
   now?: () => Date;
   setTimeoutImpl?: typeof setTimeout;
   storage?: Storage;
@@ -98,6 +99,7 @@ export function createVisualizationOrchestrationClient({
   fetchImpl = fetch,
   getAccessToken,
   getCapability,
+  refreshAccessToken,
   now = () => new Date(),
   setTimeoutImpl = setTimeout,
   storage,
@@ -107,17 +109,22 @@ export function createVisualizationOrchestrationClient({
   const store = createVisualizationPendingRequestStore({ endpoint: baseUrl, now, storage, subjectId });
 
   async function request(path: string, init: RequestInit, signal?: AbortSignal) {
-    const token = getAccessToken()?.trim();
-    if (!token) throw new VisualizationOrchestrationClientError("capability_unavailable");
-    const response = await fetchImpl(`${baseUrl}${path}`, {
+    const send = async (accessToken?: string) => fetchImpl(`${baseUrl}${path}`, {
       ...init,
       headers: {
         Accept: "application/json",
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${accessToken}`,
         ...(init.body ? { "Content-Type": "application/json" } : {})
       },
       signal
     });
+    const token = getAccessToken()?.trim();
+    if (!token) throw new VisualizationOrchestrationClientError("capability_unavailable");
+    let response = await send(token);
+    if (response.status === 401 && refreshAccessToken && !signal?.aborted) {
+      const refreshed = (await refreshAccessToken())?.trim();
+      if (refreshed) response = await send(refreshed);
+    }
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {

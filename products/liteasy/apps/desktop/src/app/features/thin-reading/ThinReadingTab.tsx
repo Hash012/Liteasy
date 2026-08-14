@@ -37,6 +37,8 @@ import {
   type ThinReadingCommunityRecommendationState
 } from "./useThinReadingCommunityRecommendations";
 import { useThinReadingPaperRelations } from "./useThinReadingPaperRelations";
+import { useThinReadingAnchorRecommendations } from "./useThinReadingAnchorRecommendations";
+import type { ThinReadingExternalKnowledgeTransport } from "./thinReadingExternalKnowledgeClient";
 import type { ThinReadingPaperRelationsTransport } from "./thinReadingPaperRelationsClient";
 import type { ForumFeedQuery, ForumPost } from "../forum/forum.types";
 import type {
@@ -89,6 +91,7 @@ export type ThinReadingTabProps = {
   intuechoSessionId?: string;
   paperRelationsEndpoint?: string;
   paperRelationsTransport?: ThinReadingPaperRelationsTransport;
+  recommendationTransport?: ThinReadingExternalKnowledgeTransport;
   figures?: readonly MineruFigure[];
   headerAction?: ReactNode;
   onLoadForumFeed?: (query: ForumFeedQuery) => Promise<ForumPost[]>;
@@ -302,6 +305,7 @@ export function ThinReadingTab({
   onUpdateDocument,
   paperRelationsEndpoint = "",
   paperRelationsTransport,
+  recommendationTransport,
   papers,
   visualizationArtifacts = [],
   visualizationCapability,
@@ -352,11 +356,39 @@ export function ThinReadingTab({
       setLegacyActiveNodeId(document.activeNodeId);
     }
   }, [artifactId, document.activeNodeId, document.version]);
+  const targetPaper = papers.find((paper) => document.paperIds.includes(paper.id));
+  const anchorRecommendations = useThinReadingAnchorRecommendations({
+    anchors: activeNode.evidence.anchors ?? [],
+    artifactId,
+    enabled: recommendationStage !== "article",
+    endpoint: paperRelationsEndpoint,
+    evidence: activeNode.evidence,
+    nodeId: activeNode.id,
+    onPersist: (evidence) => {
+      if (document.version === "liteasy.thin-reading/v1") return;
+      const node = document.nodes[activeNode.id];
+      if (!node) return;
+      onUpdateDocument(artifactId, {
+        ...document,
+        nodes: { ...document.nodes, [node.id]: { ...node, evidence } }
+      });
+    },
+    targetPaper,
+    transport: recommendationTransport
+  });
+  const recommendationNode = {
+    ...activeNode,
+    evidence: {
+      ...activeNode.evidence,
+      anchors: anchorRecommendations.anchors,
+      externalSources: anchorRecommendations.externalSources
+    }
+  };
   const paperRelations = useThinReadingPaperRelations({
     artifactId,
     enabled: recommendationStage === "graph",
     endpoint: paperRelationsEndpoint,
-    node: activeNode,
+    node: recommendationNode,
     onPersist: (recommendationPaperEdges) => {
       if (document.version === "liteasy.thin-reading/v1") return;
       const node = document.nodes[activeNode.id];
@@ -449,8 +481,8 @@ export function ThinReadingTab({
     : "";
   const closureState = resolveThinReadingClosureState(activeNode);
   const externalSourceById = useMemo(
-    () => new Map((activeNode.evidence.externalSources ?? []).map((source) => [source.id, source])),
-    [activeNode.evidence.externalSources]
+    () => new Map(anchorRecommendations.externalSources.map((source) => [source.id, source])),
+    [anchorRecommendations.externalSources]
   );
   const figureById = useMemo(
     () => new Map(figures.map((figure) => [figure.id, figure])),
@@ -907,7 +939,7 @@ export function ThinReadingTab({
     ...(document.version === "liteasy.thin-reading/v2" ? (activeNode as ThinReadingNodeV2).visualizations : []),
     ...visualizationArtifacts.filter((artifact) => artifact.nodeId === activeNode.id)
   ].filter((artifact, index, all) => all.findIndex((candidate) => candidate.artifactId === artifact.artifactId) === index);
-  const anchors = activeNode.evidence.anchors ?? [];
+  const anchors = anchorRecommendations.anchors;
   const activeAnchor = anchors.find((anchor) => anchor.id === activeAnchorId) ?? null;
   const marksVisible = recommendationStage !== "article";
   const associationGraphOpen = recommendationStage === "graph";
@@ -1534,7 +1566,9 @@ export function ThinReadingTab({
           anchorCount={graphAnchorViews.length}
           anchored="viewport"
           emptyAnchorsMessage="这一节的正文没有可展开的概念。"
-          emptySourcesMessage="这些概念还没有检索到可验证的关联文献。"
+          emptySourcesMessage={anchorRecommendations.loading
+            ? "正在检索可验证的关联文献..."
+            : "这些概念还没有检索到可验证的关联文献。"}
           onAddToLibrary={onPromoteExternalPaperToLibrary
             ? (source) => void runAnchorPaperAction(source, onPromoteExternalPaperToLibrary)
             : undefined}

@@ -100,6 +100,7 @@ export function useCloudAccountController({
   const accountCapabilities = useAccountCapabilities({
     accountSession,
     endpoint: getSettings()["models.control_plane_endpoint"],
+    refreshSession: refreshAccountSession,
     transport: accountCapabilitiesTransport
   });
   const multimodalVisualizationRef = useRef(accountCapabilities.multimodalVisualization);
@@ -112,6 +113,7 @@ export function useCloudAccountController({
       fetchImpl: visualizationFetch,
       getAccessToken: () => accountSession.sessionId,
       getCapability: () => multimodalVisualizationRef.current,
+      refreshAccessToken: async () => (await refreshAccountSession())?.sessionId,
       storage: visualizationStorage,
       subjectId: accountSession.userId ?? accountSession.email
     });

@@ -213,10 +213,10 @@ function relationInput(value) {
 }
 
 function relationCacheKey(input, sources) {
-  return `relations:${createHash("sha256").update(JSON.stringify({
+  return createHash("sha256").update(JSON.stringify({
     papers: input.papers,
     sources: sources.map(({ baseUrl, connectorType, revision, sourceId }) => ({ baseUrl, connectorType, revision, sourceId }))
-  })).digest("hex")}`;
+  })).digest("hex");
 }
 
 function validEvidenceUrl(value) {

@@ -113,8 +113,32 @@ export async function startCloudRuntime(config, dependencies = {}) {
         egressPolicy: { allowedHostnames: config.visualization?.egressHostnames ?? [] },
         secretStore: visualizationSecretStore
       }));
+  const thinReadingVisualizationSourceResolver = dependencies.thinReadingVisualizationSourceResolver ??
+    new ThinReadingVisualizationSourceResolver({ agentArtifactRepository, pool });
   const visualizationDocumentAuthorizer = dependencies.visualizationDocumentAuthorizer ??
     (async ({ document, subjectId }) => {
+      if (document?.authorization?.kind === "agent_artifact") {
+        const authorization = document.authorization;
+        const source = await thinReadingVisualizationSourceResolver.resolve({
+          artifactId: authorization.artifactId,
+          nodeId: authorization.nodeId,
+          subjectId
+        });
+        const current = source.documents.find((candidate) => candidate.documentId === document.documentId);
+        return {
+          allowed: source.artifactRevision === authorization.artifactRevision &&
+            source.intentHash === authorization.intentHash &&
+            current?.sourceIdentityHash === document.sourceIdentityHash,
+          artifactId: authorization.artifactId,
+          artifactRevision: authorization.artifactRevision,
+          intentHash: authorization.intentHash,
+          kind: "agent_artifact",
+          nodeId: authorization.nodeId,
+          scopeId: subjectId,
+          scopeType: "user",
+          sourceIdentityHash: current?.sourceIdentityHash
+        };
+      }
       const scope = await authorizeLibraryScope(pool, {
         audience: "liteasy-desktop",
         subject: subjectId
@@ -138,8 +162,6 @@ export async function startCloudRuntime(config, dependencies = {}) {
   });
   const visualizationGenerationRepository = dependencies.visualizationGenerationRepository ??
     new PostgresVisualizationGenerationRepository(pool);
-  const thinReadingVisualizationSourceResolver = dependencies.thinReadingVisualizationSourceResolver ??
-    new ThinReadingVisualizationSourceResolver({ agentArtifactRepository, pool });
   const visualizationOrchestrationWorker = dependencies.visualizationOrchestrationWorker ??
     new VisualizationOrchestrationWorker({
       compilerRegistry: visualizationArtifactCompilerRegistry,

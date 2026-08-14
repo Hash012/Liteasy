@@ -230,23 +230,28 @@ export class VisualizationOrchestrationWorker {
   }
 
   async #process(claim, signal) {
-    const artifactIds = [];
     try {
-      for (let index = 0; index < claim.requestedArtifactCount; index += 1) {
-        artifactIds.push(await this.#generateOne(claim, index, signal));
+      const results = await Promise.allSettled(
+        Array.from({ length: claim.requestedArtifactCount }, (_, index) => this.#generateOne(claim, index, signal))
+      );
+      const artifactIds = results.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+      const failed = results.find((result) => result.status === "rejected");
+      if (failed?.status === "rejected") {
+        const reason = visualizationOrchestrationReason(failed.reason);
+        if (artifactIds.length > 0 && reason !== "cancelled") {
+          return this.generationRepository.markSucceeded(
+            claim.subjectId,
+            claim.requestId,
+            artifactIds,
+            "partial_generation_failed"
+          );
+        }
+        throw failed.reason;
       }
       return await this.generationRepository.markSucceeded(claim.subjectId, claim.requestId, artifactIds);
     } catch (error) {
       const reason = visualizationOrchestrationReason(error);
       if (this.#closed && reason === "cancelled") return null;
-      if (artifactIds.length > 0 && reason !== "cancelled") {
-        return this.generationRepository.markSucceeded(
-          claim.subjectId,
-          claim.requestId,
-          artifactIds,
-          "partial_generation_failed"
-        );
-      }
       return this.#finishTerminal(claim, reason === "cancelled" ? "cancelled" : "failed", reason);
     }
   }

@@ -230,6 +230,14 @@ test("constructs visualization gateway with the validated hostname policy and se
 
 test("wires scope-bearing document authorization and an operational visualization validator", async () => {
   const pool = poolWithReadiness();
+  const artifactSourceHash = "b".repeat(64);
+  const artifactAuthorization = {
+    artifactId: "artifact-1",
+    artifactRevision: 3,
+    intentHash: "c".repeat(64),
+    kind: "agent_artifact",
+    nodeId: "node-1"
+  };
   const runtime = await startCloudRuntime({ recommendation: {
     endpoint: "https://api.crossref.org/works", mailto: "test@example.com", timeoutMs: 1000
   } }, {
@@ -246,6 +254,20 @@ test("wires scope-bearing document authorization and an operational visualizatio
       async repairPendingWorkflows() { return { repaired: 0, scanned: 0 }; }
     },
     pool,
+    thinReadingVisualizationSourceResolver: {
+      async resolve() {
+        return {
+          artifactRevision: 3,
+          documents: [{
+            authorization: artifactAuthorization,
+            documentId: "local-paper-1",
+            isPrimary: true,
+            sourceIdentityHash: artifactSourceHash
+          }],
+          intentHash: artifactAuthorization.intentHash
+        };
+      }
+    },
     visualizationProviderGateway: { generateStructured() {} },
     visualizationRepository: { capability() {} }
   });
@@ -261,6 +283,24 @@ test("wires scope-bearing document authorization and an operational visualizatio
     scopeId: "user-1",
     scopeType: "user",
     sourceIdentityHash: "a".repeat(64)
+  });
+  assert.deepEqual(await runtime.visualizationService.authorizeDocument({
+    document: {
+      authorization: artifactAuthorization,
+      documentId: "local-paper-1",
+      sourceIdentityHash: artifactSourceHash
+    },
+    subjectId: "user-1"
+  }), {
+    allowed: true,
+    artifactId: "artifact-1",
+    artifactRevision: 3,
+    intentHash: artifactAuthorization.intentHash,
+    kind: "agent_artifact",
+    nodeId: "node-1",
+    scopeId: "user-1",
+    scopeType: "user",
+    sourceIdentityHash: artifactSourceHash
   });
   assert.deepEqual(await runtime.visualizationService.validateArtifact({
     modality: "semantic_graph",

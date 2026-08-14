@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AccountSession } from "./account.types";
 import {
+  AccountCapabilitiesClientError,
   loadAccountCapabilities,
   parseMultimodalVisualizationCapability,
   type AccountCapabilities,
@@ -16,10 +17,12 @@ const unavailableCapabilities: AccountCapabilities = {
 export function useAccountCapabilities({
   accountSession,
   endpoint,
+  refreshSession,
   transport
 }: {
   accountSession: AccountSession | null;
   endpoint: string;
+  refreshSession?: () => Promise<AccountSession | null>;
   transport?: AccountCapabilitiesTransport;
 }) {
   const [generation, setGeneration] = useState(0);
@@ -58,17 +61,29 @@ export function useAccountCapabilities({
     invalidated.current = false;
     setState({ key: sessionKey, capabilities: unavailableCapabilities });
     if (!accountSession) return () => { active = false; };
-    void loadAccountCapabilities({
-      endpoint,
-      sessionId: accountSession.sessionId,
-      transport
-    }).then((result) => {
+    const load = async () => {
+      try {
+        return await loadAccountCapabilities({
+          endpoint,
+          sessionId: accountSession.sessionId,
+          transport
+        });
+      } catch (error) {
+        if (!(error instanceof AccountCapabilitiesClientError) || error.status !== 401 || !refreshSession) {
+          throw error;
+        }
+        const refreshed = await refreshSession();
+        if (!refreshed) throw error;
+        return loadAccountCapabilities({ endpoint, sessionId: refreshed.sessionId, transport });
+      }
+    };
+    void load().then((result) => {
       if (active) setState({ key: sessionKey, capabilities: result });
     }).catch(() => {
       if (active) setState({ key: sessionKey, capabilities: unavailableCapabilities });
     });
     return () => { active = false; };
-  }, [accountSession?.sessionId, endpoint, sessionKey, transport]);
+  }, [accountSession?.sessionId, endpoint, refreshSession, sessionKey, transport]);
 
   const capabilities = !invalidated.current && state.key === sessionKey ? state.capabilities : unavailableCapabilities;
   return useMemo(() => ({

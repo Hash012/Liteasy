@@ -40,6 +40,12 @@ export type AccountCapabilitiesTransport = (
   status: number;
 }>;
 
+export class AccountCapabilitiesClientError extends Error {
+  constructor(public readonly status?: number) {
+    super(status ? `account_capabilities_unavailable:${status}` : "account_capabilities_unavailable");
+  }
+}
+
 async function defaultTransport(request: AccountCapabilitiesTransportRequest) {
   return fetch(request.url, {
     cache: "no-store",
@@ -125,7 +131,7 @@ export async function loadAccountCapabilities({
     url: `${endpoint.replace(/\/+$/, "")}/v1/account/capabilities`
   });
   if (!response.ok) {
-    throw new Error(`account_capabilities_unavailable:${response.status}`);
+    throw new AccountCapabilitiesClientError(response.status);
   }
   const payload = await response.json();
   if (

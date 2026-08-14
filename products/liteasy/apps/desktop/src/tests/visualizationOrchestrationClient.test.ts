@@ -103,6 +103,34 @@ test("polls active requests with server delay clamped to 250..2000", async () =>
   expect(delays).toEqual([250, 2_000]);
 });
 
+test("refreshes an expired token and retries the visualization request once", async () => {
+  const authorizations: string[] = [];
+  const refreshAccessToken = vi.fn(async () => "token-2");
+  const client = createVisualizationOrchestrationClient({
+    endpoint: "https://api.example",
+    fetchImpl: async (_url, init) => {
+      const authorization = String((init?.headers as Record<string, string>).Authorization);
+      authorizations.push(authorization);
+      return authorization === "Bearer token-2"
+        ? response({
+            artifacts: [artifact()],
+            requestId: "request-1",
+            resultArtifactIds: ["result-1"],
+            status: "succeeded"
+          })
+        : response({ code: "unauthorized" }, 401);
+    },
+    getAccessToken: () => "token-1",
+    getCapability: () => capability,
+    refreshAccessToken,
+    storage: window.localStorage,
+    subjectId: "user-1"
+  });
+  await expect(client.startAndWait(generation())).resolves.toHaveLength(1);
+  expect(authorizations).toEqual(["Bearer token-1", "Bearer token-2"]);
+  expect(refreshAccessToken).toHaveBeenCalledTimes(1);
+});
+
 test.each([
   ["capability_unauthorized", "capability_unavailable"],
   ["quota_exhausted", "quota_unavailable"],

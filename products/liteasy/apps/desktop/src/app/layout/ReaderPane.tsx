@@ -37,6 +37,7 @@ import type {
   ThinReadingExternalSource
 } from "../features/thin-reading/thinReading.types";
 import type { ThinReadingPaperRelationsTransport } from "../features/thin-reading/thinReadingPaperRelationsClient";
+import type { ThinReadingExternalKnowledgeTransport } from "../features/thin-reading/thinReadingExternalKnowledgeClient";
 import { DockLayoutControls } from "./DockLayoutControls";
 import type { PaneCollapseState } from "./paneLayout.types";
 import type { ThinReadingVisualizationStatus } from "../features/artifacts/artifact.types";
@@ -102,6 +103,7 @@ type ReaderPaneProps = {
   thinReadingVisualizationReadyArtifacts?: readonly VisualizationArtifactV1[];
   thinReadingVisualizationStatuses?: Record<string, ThinReadingVisualizationStatus>;
   paperRelationsTransport?: ThinReadingPaperRelationsTransport;
+  recommendationTransport?: ThinReadingExternalKnowledgeTransport;
   showArtifactRegion?: boolean;
   selectedPapers?: Paper[];
   selectedPaperIds: string[];
@@ -162,6 +164,7 @@ export function ReaderPane({
   thinReadingVisualizationReadyArtifacts = [],
   thinReadingVisualizationStatuses = {},
   paperRelationsTransport,
+  recommendationTransport,
   selectedPapers = [],
   selectedPaperIds,
   selectionLocked,
@@ -279,6 +282,7 @@ export function ReaderPane({
                 developerDiagnostics={developerDiagnostics}
                 externalKnowledgeEndpoint={externalKnowledgeEndpoint}
                 paperRelationsTransport={paperRelationsTransport}
+                recommendationTransport={recommendationTransport}
                 intuechoEndpoint={intuechoEndpoint}
                 intuechoSessionId={intuechoSessionId}
                 mineruFiguresByPaperId={mineruFiguresByPaperId}

@@ -80,6 +80,37 @@ test("does not retain a stale allowed capability after refresh fails", async () 
   await waitFor(() => expect(result.current.multimodalVisualization.allowed).toBe(false));
 });
 
+test("refreshes an expired session and retries capability discovery once", async () => {
+  const transport = vi.fn(async (request: { headers: Record<string, string> }) => {
+    const authorized = request.headers.Authorization === "Bearer account-refreshed";
+    return {
+      json: async () => authorized ? ({
+        developerDiagnostics: false,
+        multimodalVisualization: {
+          allowed: true,
+          enabled: true,
+          serviceAvailable: true,
+          explicitRequestsAllowed: true,
+          quota: { available: true },
+          availableModalities: ["semantic_graph"]
+        }
+      }) : ({ code: "unauthorized" }),
+      ok: authorized,
+      status: authorized ? 200 : 401
+    };
+  });
+  const refreshSession = vi.fn(async () => session("account-refreshed"));
+  const { result } = renderHook(() => useAccountCapabilities({
+    accountSession: session("account-expired"),
+    endpoint: "https://api.liteasy.example",
+    refreshSession,
+    transport
+  }));
+  await waitFor(() => expect(result.current.multimodalVisualization.allowed).toBe(true));
+  expect(refreshSession).toHaveBeenCalledTimes(1);
+  expect(transport).toHaveBeenCalledTimes(2);
+});
+
 test("does not restore a previous account capability after an account switch", async () => {
   let resolveAccountA: ((value: {
     json: () => Promise<unknown>;

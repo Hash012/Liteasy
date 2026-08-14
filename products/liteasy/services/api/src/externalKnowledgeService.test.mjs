@@ -63,7 +63,7 @@ test("relations keeps only verified edges whose endpoints are requested", async 
   assert.equal(result.edges[0].kind, "direct_citation");
   assert.equal(result.warnings.length, 0);
   assert.equal(saved[0].subjectId, "user-1");
-  assert.match(saved[0].cacheKey, /^relations:/);
+  assert.match(saved[0].cacheKey, /^[a-f0-9]{64}$/);
 });
 
 test("relations maps DOI-resolved graph records back onto a mixed Crossref and OpenAlex page", async () => {

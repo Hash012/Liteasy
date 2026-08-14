@@ -164,13 +164,24 @@ test("rejects v1, omitted, mismatched, and unbound thin-reading requests", async
   }
 });
 
-test("rejects paper evidence when current source access is missing", async () => {
-  await assert.rejects(
-    () => resolveThinReadingVisualizationSource({
-      artifactId: "artifact-1", nodeId: "node-1", subjectId: "user-1"
-    }, dependencies(thinReadingArtifact(), { paperRows: [] }).value),
-    /thin_reading_visualization_source_access_revoked/
-  );
+test("authorizes local paper evidence through the subject-owned artifact snapshot", async () => {
+  const result = await resolveThinReadingVisualizationSource({
+    artifactId: "artifact-1", nodeId: "node-1", subjectId: "user-1"
+  }, dependencies(thinReadingArtifact(), { paperRows: [] }).value);
+  assert.match(result.documents[0].sourceIdentityHash, /^[a-f0-9]{64}$/);
+  assert.deepEqual(result.documents[0], {
+    authorization: {
+      artifactId: "artifact-1",
+      artifactRevision: 3,
+      intentHash: result.intentHash,
+      kind: "agent_artifact",
+      nodeId: "node-1"
+    },
+    documentId: "document-1",
+    isPrimary: true,
+    sourceIdentityHash: result.documents[0].sourceIdentityHash
+  });
+  assert.equal(result.evidence[0].sourceIdentityHash, result.documents[0].sourceIdentityHash);
 });
 
 test("requires an unexpired subject-bound grant for external full-text evidence", async () => {
