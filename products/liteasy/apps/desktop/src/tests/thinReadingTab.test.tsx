@@ -223,6 +223,22 @@ describe("ThinReadingTab", () => {
     expect(screen.getByTestId("thin-reading-visuals")).toHaveTextContent("未生成");
   });
 
+  test("hides the visualization stage when the current node does not need one", () => {
+    const document = makeDocument();
+    render(
+      <ThinReadingTab
+        {...propsWithVisualAndFigure}
+        artifactId={document.artifactId}
+        document={document}
+        visualizationStatus={{ reasonCode: "intent_unavailable", status: "omitted" }}
+      />
+    );
+
+    expect(screen.queryByTestId("thin-reading-visuals")).not.toBeInTheDocument();
+    expect(screen.queryByText("已简化")).not.toBeInTheDocument();
+    expect(screen.getByTestId("thin-reading-prose")).toBeVisible();
+  });
+
   test("renders the persisted support mode as the only support class and localized label", () => {
     const cases = [
       ["paper", "论文内支持"],

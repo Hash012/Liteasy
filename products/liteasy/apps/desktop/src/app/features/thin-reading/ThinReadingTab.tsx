@@ -1015,7 +1015,9 @@ export function ThinReadingTab({
               />
               {!visualizationCapability?.allowed ? <small>暂不可用</small> : null}
               {visualizationCapability?.allowed && visualizationStatus?.status === "generating" ? <small>生成中</small> : null}
-              {visualizationCapability?.allowed && visualizationStatus?.status === "omitted" ? <small>已简化</small> : null}
+              {visualizationCapability?.allowed && visualizationStatus?.status === "omitted" && visualizationStatus.reasonCode !== "intent_unavailable"
+                ? <small>已简化</small>
+                : null}
               {visualizationCapability?.allowed && visualizationStatus?.status === "idle" ? <small>未生成</small> : null}
             </span>
           </Tooltip>

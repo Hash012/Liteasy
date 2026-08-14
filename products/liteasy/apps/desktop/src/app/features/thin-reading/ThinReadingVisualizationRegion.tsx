@@ -19,6 +19,10 @@ function statusCopy(status: ThinReadingVisualizationStatus | undefined) {
 const artifactsEmptyCopy = "未生成";
 
 export function ThinReadingVisualizationRegion({ artifacts, onDeepDiveTarget, status }: ThinReadingVisualizationRegionProps) {
+  if (artifacts.length === 0 && status?.status === "omitted" && status.reasonCode === "intent_unavailable") {
+    return null;
+  }
+
   const copy = statusCopy(status);
   return (
     <section aria-label="生成可视化" className="thin-reading__visualizations" data-testid="thin-reading-visuals">
