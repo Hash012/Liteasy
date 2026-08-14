@@ -130,12 +130,19 @@ jobs:
           if ($signature.Status -ne "NotSigned") {
             throw "Staging unsigned release expected NotSigned, received $($signature.Status)."
           }
-          $published = Join-Path $env:RUNNER_TEMP "Liteasy_0.1.7_x64-setup.exe"
+          $version = (Get-Content .\package.json -Raw | ConvertFrom-Json).version
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Desktop package version is invalid: $version"
+          }
+          $filename = "Liteasy_${version}_x64-setup.exe"
+          $published = Join-Path $env:RUNNER_TEMP $filename
           Copy-Item $installers[0].FullName $published
           $hash = (Get-FileHash -Algorithm SHA256 $published).Hash.ToLowerInvariant()
+          "filename=$filename" >> $env:GITHUB_OUTPUT
           "path=$published" >> $env:GITHUB_OUTPUT
           "sha256=$hash" >> $env:GITHUB_OUTPUT
           "size=$((Get-Item $published).Length)" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
@@ -167,10 +174,10 @@ jobs:
         run: |
           $headers = @{
             Authorization = "Bearer $env:RELEASE_TOKEN"
-            "X-Liteasy-Release-Filename" = "Liteasy_0.1.7_x64-setup.exe"
+            "X-Liteasy-Release-Filename" = "${{ steps.installer.outputs.filename }}"
             "X-Liteasy-Release-Sha" = "$env:GITHUB_SHA"
             "X-Liteasy-Release-Sha256" = "$env:INSTALLER_SHA256"
-            "X-Liteasy-Release-Version" = "0.1.7"
+            "X-Liteasy-Release-Version" = "${{ steps.installer.outputs.version }}"
           }
           Invoke-RestMethod `
             -ContentType "application/octet-stream" `
