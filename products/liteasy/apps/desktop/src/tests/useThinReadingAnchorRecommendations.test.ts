@@ -63,3 +63,25 @@ test("loads anchor recommendations with bounded concurrency and publishes each c
   expect(onAnchor).toHaveBeenCalledTimes(5);
   expect(result.get("anchor-4")?.[0].id).toBe("openalex:W4");
 });
+
+test("adds a provider fallback query without a product-specific CamelCase name", async () => {
+  const bodies: Array<Record<string, unknown>> = [];
+  const value = anchor(1);
+  value.searchQuery = "BrainPilot multi-agent scientific workflow";
+  await retrieveThinReadingAnchorRecommendations({
+    anchors: [value],
+    artifactId: "artifact-1",
+    endpoint: "https://api.example",
+    existingSources: [],
+    onAnchor: vi.fn(),
+    signal: new AbortController().signal,
+    transport: async (request) => {
+      bodies.push(JSON.parse(request.body));
+      return { json: async () => ({ sources: [] }), ok: true, status: 200 };
+    }
+  });
+  expect(bodies[0].queryVariants).toEqual([
+    "BrainPilot multi-agent scientific workflow",
+    "multi-agent scientific workflow"
+  ]);
+});

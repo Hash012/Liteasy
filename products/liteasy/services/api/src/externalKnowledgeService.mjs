@@ -46,6 +46,9 @@ function searchInput(value) {
   )) {
     throw new ExternalRetrievalError("external_retrieval_query_invalid");
   }
+  const queryVariants = [...new Set((value.queryVariants ?? []).map((item) => (
+    requiredText(item, 2, 2000, "external_retrieval_query_invalid")
+  )))].filter((item) => item !== query);
   if (value.anchorReferences !== undefined) {
     if (!Array.isArray(value.anchorReferences) || value.anchorReferences.length > 50) {
       throw new ExternalRetrievalError("external_retrieval_anchor_invalid");
@@ -66,7 +69,7 @@ function searchInput(value) {
     requiredText(value.targetPaperIdentity.kind, 1, 50, "external_retrieval_target_invalid");
     requiredText(value.targetPaperIdentity.value, 1, 500, "external_retrieval_target_invalid");
   }
-  return { artifactId, limit, query };
+  return { artifactId, limit, query, queryVariants };
 }
 
 function downloadInput(value) {
@@ -96,6 +99,7 @@ function retrievalCacheKey(input, sources) {
   return createHash("sha256").update(JSON.stringify({
     limit: input.limit,
     query: input.query,
+    queryVariants: input.queryVariants,
     sources: sources.map((source) => ({
       baseUrl: source.baseUrl,
       connectorType: source.connectorType,
@@ -519,14 +523,16 @@ export class ExternalKnowledgeService {
     );
     const selectedCandidates = cached ?? await (async () => {
       const attempts = await Promise.allSettled(configuredSources.map(async (source) => {
-      const connector = this.connectors[source.connectorType];
-      if (typeof connector !== "function") {
-        throw new ExternalRetrievalError("external_retrieval_source_invalid", 503);
-      }
-      return {
-        connectorSourceId: source.sourceId,
-        sources: await connector(source, { ...input, signal })
-      };
+        const connector = this.connectors[source.connectorType];
+        if (typeof connector !== "function") {
+          throw new ExternalRetrievalError("external_retrieval_source_invalid", 503);
+        }
+        let sources = await connector(source, { ...input, signal });
+        for (const query of input.queryVariants) {
+          if (sources.length > 0) break;
+          sources = await connector(source, { ...input, query, signal });
+        }
+        return { connectorSourceId: source.sourceId, sources };
       }));
       const completed = attempts.filter((result) => result.status === "fulfilled").map((result) => result.value);
       if (completed.length === 0) {

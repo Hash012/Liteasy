@@ -352,6 +352,51 @@ test("uses enabled connectors and returns only server-issued PDF grants", async 
   assert.equal(saved[0].values[0].source.id, source.id);
 });
 
+test("uses a query variant only when a connector returns no primary results", async () => {
+  const calls = [];
+  const service = new ExternalKnowledgeService({
+    connectors: {
+      crossref: async (_configured, input) => {
+        calls.push(["crossref", input.query]);
+        return [source];
+      },
+      openalex: async (_configured, input) => {
+        calls.push(["openalex", input.query]);
+        return input.query === "multi-agent scientific workflow" ? [{
+          ...source,
+          id: "openalex:W123",
+          provider: "openalex",
+          sourceId: "W123",
+          sourceRecordUrl: "https://openalex.org/W123",
+          url: "https://openalex.org/W123"
+        }] : [];
+      }
+    },
+    downloader: {},
+    repository: {
+      async issuePdfGrants() { return new Map(); },
+      async listEnabledSources() { return [
+        { baseUrl: "https://api.crossref.org/works", connectorType: "crossref", revision: 1, sourceId: "crossref" },
+        { baseUrl: "https://api.openalex.org/works", connectorType: "openalex", revision: 1, sourceId: "openalex" }
+      ]; },
+      async loadRetrievalCache() { return null; },
+      async saveRetrievalCache(_subjectId, key) { assert.match(key, /^[a-f0-9]{64}$/); }
+    }
+  });
+  const result = await service.search({ subjectId: "user" }, {
+    artifactId: "artifact",
+    limit: 8,
+    query: "BrainPilot multi-agent scientific workflow",
+    queryVariants: ["BrainPilot multi-agent scientific workflow", "multi-agent scientific workflow"]
+  });
+  assert.deepEqual(calls, [
+    ["crossref", "BrainPilot multi-agent scientific workflow"],
+    ["openalex", "BrainPilot multi-agent scientific workflow"],
+    ["openalex", "multi-agent scientific workflow"]
+  ]);
+  assert.deepEqual(result.sources.map(({ provider }) => provider), ["crossref", "openalex"]);
+});
+
 test("reuses only the current subject cache and issues fresh PDF grants", async () => {
   let connectorCalls = 0;
   let grantSequence = 0;

@@ -39,6 +39,14 @@ function selectSources(sources: readonly ThinReadingExternalSource[]) {
   return (highRelevance.length > 0 ? highRelevance : usable).slice(0, 4);
 }
 
+function queryVariants(query: string) {
+  const fallback = query.split(/\s+/u)
+    .filter((token) => !/[a-z][A-Z]/u.test(token))
+    .join(" ")
+    .trim();
+  return fallback !== query && fallback.length >= 2 ? [query, fallback] : undefined;
+}
+
 export async function retrieveThinReadingAnchorRecommendations(input: RetrievalInput) {
   const sourceById = new Map(input.existingSources.map((source) => [source.id, source]));
   const pending = input.anchors.filter((anchor) => (
@@ -61,6 +69,7 @@ export async function retrieveThinReadingAnchorRecommendations(input: RetrievalI
           intent: "context",
           limit: 12,
           query: anchor.searchQuery,
+          queryVariants: queryVariants(anchor.searchQuery),
           signal: input.signal,
           targetPaperIdentity: targetIdentity(input.targetPaper),
           targetPaperTitle: input.targetPaper?.title
