@@ -54,6 +54,29 @@ test("provides a production compiler for every static catalog candidate", () => 
   assert.deepEqual(Object.keys(productionStaticScienceVisualizationCompilers).sort(), staticModalities);
 });
 
+test("derives static provider proposal fields from the publication schema", () => {
+  for (const modality of staticModalities) {
+    const schema = productionStaticScienceVisualizationCompilers[modality].proposalSchema;
+    assert.deepEqual(schema.properties.evidenceBindings.items.required, ["claimId", "evidenceIds", "confidence"]);
+    assert.deepEqual(schema.properties.semanticObjects.items.required, [
+      "objectId", "kind", "label", "objectPath", "evidenceClaimIds", "selectable"
+    ]);
+    assert.equal(schema.properties.spec.properties.modality.const, modality);
+    assert.equal(schema.properties.spec.properties.payload.type, "object");
+  }
+});
+
+test("constrains provider evidence references to the resolved source IDs", () => {
+  const registry = new VisualizationArtifactCompilerRegistry({
+    catalog,
+    compilers: productionStaticScienceVisualizationCompilers
+  });
+  const allowed = fixture.source.evidence.map(({ id }) => id);
+  const schema = registry.providerPayload("semantic_graph", fixture.source).schema;
+  assert.deepEqual(schema.properties.evidenceBindings.items.properties.evidenceIds.items.enum, allowed);
+  assert.deepEqual(schema.properties.spec.properties.payload.properties.claims.items.properties.evidenceIds.items.enum, allowed);
+});
+
 test("compiles valid static science conformance proposals", async () => {
   const registry = new VisualizationArtifactCompilerRegistry({
     catalog,

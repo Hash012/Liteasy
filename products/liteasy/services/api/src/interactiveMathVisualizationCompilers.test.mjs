@@ -54,6 +54,18 @@ test("provides a production compiler for every interactive math catalog candidat
   assert.deepEqual(Object.keys(productionInteractiveMathVisualizationCompilers).sort(), mathModalities);
 });
 
+test("derives math provider proposal fields from the publication schema", () => {
+  for (const modality of mathModalities) {
+    const schema = productionInteractiveMathVisualizationCompilers[modality].proposalSchema;
+    assert.deepEqual(schema.properties.evidenceBindings.items.required, ["claimId", "evidenceIds", "confidence"]);
+    assert.deepEqual(schema.properties.semanticObjects.items.required, [
+      "objectId", "kind", "label", "objectPath", "evidenceClaimIds", "selectable"
+    ]);
+    assert.equal(schema.properties.spec.properties.modality.const, modality);
+    assert.equal(schema.properties.spec.properties.payload.type, "object");
+  }
+});
+
 test("compiles valid interactive math conformance proposals", async () => {
   const registry = new VisualizationArtifactCompilerRegistry({
     catalog,
