@@ -11,12 +11,14 @@ import {
   parseThinReadingEvidencePlanWithAudit,
   parseThinReadingEvidenceReview,
   parseThinReadingModelSeed,
+  resolveThinReadingMappedSupportMode,
   resolveThinReadingOmittedSections,
   thinReadingEvidenceObservationJsonSchema,
   thinReadingEvidencePlanJsonSchema,
   thinReadingEvidenceReviewJsonSchema,
   thinReadingAiInterpretationReviewSchema,
-  thinReadingAiInterpretationReviewJsonSchema
+  thinReadingAiInterpretationReviewJsonSchema,
+  thinReadingModelOutputJsonSchema
 } from "../app/features/thin-reading/thinReadingAgent";
 import { classifyThinReadingPaper } from "../app/features/thin-reading/thinReadingPromptRegistry";
 import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
@@ -112,6 +114,19 @@ function aiInterpretationOutputWith(overrides: Record<string, unknown>) {
 }
 
 describe("thinReadingAgent", () => {
+  test("derives support mode only from displayed sentence mappings", () => {
+    expect(resolveThinReadingMappedSupportMode([{
+      evidenceIds: [],
+      externalKnowledge: ["openalex:W1"]
+    }])).toBe("external_only");
+    expect(resolveThinReadingMappedSupportMode([{
+      evidenceIds: ["evidence-1"],
+      externalKnowledge: []
+    }, {
+      evidenceIds: [],
+      externalKnowledge: ["openalex:W1"]
+    }])).toBe("paper_and_external");
+  });
   test("returns a typed visualization intent without executable visual fields", () => {
     const seed = parseThinReadingModelSeed(JSON.stringify(v2ModelOutput), {
       allowedEvidenceIds: ["evidence-survey-taxonomy"]
@@ -173,6 +188,49 @@ describe("thinReadingAgent", () => {
       expect.stringContaining("visualization intent"),
       expect.stringContaining("HTML demo")
     ]));
+  });
+
+  test("drops structurally invalid automatic enhancements before the body schema gate", () => {
+    const dropped: string[] = [];
+    const seed = parseThinReadingModelSeed(JSON.stringify({
+      ...v2ModelOutput,
+      interactiveDemo: { description: "短", html: "short", kind: "html", title: "演示" },
+      mermaid: 42,
+      recommendedFigures: [{ evidenceIds: [], figureId: "", reason: "短" }],
+      visualizationIntent: {
+        ...v2ModelOutput.visualizationIntent,
+        evidenceIds: []
+      }
+    }), {
+      allowedEvidenceIds: ["evidence-survey-taxonomy"],
+      invalidOptionalEnhancementPolicy: "drop",
+      onOptionalEnhancementDropped: (reason) => dropped.push(reason),
+      source: { kind: "root_overview" }
+    });
+
+    expect(seed.summary).toBe(v2ModelOutput.summary);
+    expect(seed.evidence.recommendedFigures).toEqual([]);
+    expect(seed.visualizationIntent).toBeUndefined();
+    expect(seed.evidence).not.toHaveProperty("interactiveDemo");
+    expect(seed.evidence.mermaid).toBe("");
+    expect(dropped).toEqual(expect.arrayContaining([
+      expect.stringContaining("推荐原文图结构无效"),
+      expect.stringContaining("HTML demo 结构无效"),
+      expect.stringContaining("Mermaid 结构无效"),
+      expect.stringContaining("visualization intent 结构无效")
+    ]));
+  });
+
+  test("keeps explicitly requested HTML demos strict when their structure is invalid", () => {
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      ...v2ModelOutput,
+      interactiveDemo: { description: "短", html: "short", kind: "html", title: "演示" }
+    }), {
+      allowedEvidenceIds: ["evidence-survey-taxonomy"],
+      invalidOptionalEnhancementPolicy: "drop",
+      requestedOutput: "html_demo",
+      source: { kind: "root_overview" }
+    })).toThrow("interactiveDemo.description");
   });
 
   test("requires explicit intent shape only for a bounded prompt-only visualization request", () => {
@@ -305,6 +363,7 @@ describe("thinReadingAgent", () => {
     expect(prompt).toContain("Reader-facing anchors");
     expect(prompt).toContain("claim | concept | contribution | limitation | mechanism | method | result");
     expect(prompt).toContain("3–8 non-overlapping high-value anchors");
+    expect(prompt).toContain("2–160 characters");
     expect(prompt).toContain("Cover every sentence that contains an independent high-value");
     expect(prompt).toContain("读后留存测试");
     expect(prompt).toContain("首次承担实质含义");
@@ -541,6 +600,61 @@ describe("thinReadingAgent", () => {
     expect(anchorIssues).toEqual([
       "薄读锚点必须逐字对应且只出现一次于摘要句中：数据结构优化。"
     ]);
+  });
+
+  test("quarantines an overlong optional anchor before the full output schema gate", () => {
+    const overlongText = "长".repeat(161);
+    const summary = `核心机制是${overlongText}。`;
+    const anchorIssues: string[] = [];
+    const seed = parseThinReadingModelSeed(JSON.stringify({
+      anchors: [{
+        importance: 0.9,
+        kind: "mechanism",
+        searchQuery: "hierarchical scheduling mechanism",
+        summarySentenceIndex: 0,
+        text: overlongText
+      }],
+      claims: [],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: ["evidence-survey-taxonomy"],
+      paperType: "systems",
+      summary,
+      summarySentences: [{
+        evidenceIds: ["evidence-survey-taxonomy"],
+        externalKnowledge: [],
+        status: "grounded",
+        text: summary
+      }],
+      withinPaperClosure: true
+    }), {
+      analysis: prepared,
+      invalidAnchorPolicy: "drop",
+      onInvalidAnchor: (reason) => anchorIssues.push(reason),
+      targetLanguage: "zh-CN"
+    });
+
+    expect(seed.summary).toBe(summary);
+    expect(seed.evidence.anchors).toEqual([]);
+    expect(anchorIssues).toEqual([
+      expect.stringContaining("anchors.0.text: must be 2-160 characters after trimming")
+    ]);
+  });
+
+  test("publishes Zod string limits in the provider output schema", () => {
+    const outputProperties = thinReadingModelOutputJsonSchema.properties as Record<string, unknown>;
+    const anchors = outputProperties.anchors as { items: { properties: Record<string, unknown> } };
+    const claims = outputProperties.claims as { items: { properties: Record<string, unknown> } };
+    const sentences = outputProperties.summarySentences as {
+      items: { properties: Record<string, unknown> };
+    };
+    const anchorSchema = anchors.items.properties;
+
+    expect(anchorSchema.text).toEqual({ maxLength: 160, minLength: 2, type: "string" });
+    expect(anchorSchema.searchQuery).toEqual({ maxLength: 180, minLength: 3, type: "string" });
+    expect(claims.items.properties.text).toEqual({ maxLength: 320, minLength: 8, type: "string" });
+    expect(sentences.items.properties.text).toEqual({ maxLength: 420, minLength: 2, type: "string" });
+    expect(outputProperties.summary).toEqual({ minLength: 24, type: "string" });
   });
 
   test("rejects anchor kinds outside the controlled semantic vocabulary", () => {

@@ -86,29 +86,48 @@ const thinReadingPaperTypeSchema = z.enum([
   "unknown"
 ] satisfies [ThinReadingPaperType, ...ThinReadingPaperType[]]);
 
+const maximumThinReadingAnchors = 8;
 const maximumOmittedSectionEnvelope = 24;
 const generatedModalitySchema = z.enum(generatedVisualizationModalities);
 
+const thinReadingAnchorModelSchema = z.object({
+  importance: z.number().finite().min(0).max(1),
+  kind: z.enum(thinReadingAnchorKinds),
+  searchQuery: normalizedStringSchema({ maximumLength: 180, minimumLength: 3 }),
+  summarySentenceIndex: z.number().int().min(0),
+  text: normalizedStringSchema({ maximumLength: 160, minimumLength: 2 })
+}).strict();
+
+const thinReadingInteractiveDemoModelSchema = z.object({
+  description: normalizedStringSchema({ maximumLength: 320, minimumLength: 8 }),
+  html: z.string().min(80).max(60_000),
+  kind: z.literal("html"),
+  title: normalizedStringSchema({ maximumLength: 96, minimumLength: 2 })
+}).strict();
+
+const thinReadingRecommendedFigureModelSchema = z.object({
+  evidenceIds: z.array(normalizedStringSchema({ maximumLength: 120 })).min(1).max(4),
+  figureId: normalizedStringSchema({ maximumLength: 180 }),
+  reason: normalizedStringSchema({ maximumLength: 240, minimumLength: 8 })
+}).strict();
+
+const thinReadingVisualizationIntentModelSchema = z.object({
+  candidateModalities: z.array(generatedModalitySchema).min(1).max(3),
+  evidenceIds: z.array(normalizedStringSchema({ maximumLength: 120 })).min(1).max(32),
+  expectedLearningGain: z.enum(["low", "medium", "high"]),
+  purpose: z.enum(["explain_structure", "compare", "show_process", "show_geometry", "show_evidence"]),
+  requestedBy: z.enum(["automatic", "explicit_user_request"])
+}).strict();
+
 const thinReadingModelOutputSchema = z.object({
-  anchors: z.array(z.object({
-    importance: z.number().finite().min(0).max(1),
-    kind: z.enum(thinReadingAnchorKinds),
-    searchQuery: normalizedStringSchema({ maximumLength: 180, minimumLength: 3 }),
-    summarySentenceIndex: z.number().int().min(0),
-    text: normalizedStringSchema({ maximumLength: 160, minimumLength: 2 })
-  }).strict()).max(8).default([]),
+  anchors: z.array(thinReadingAnchorModelSchema).max(maximumThinReadingAnchors).default([]),
   claims: z.array(z.object({
     evidenceIds: z.array(normalizedStringSchema({ maximumLength: 120 })).default([]),
     status: z.enum(["grounded", "unsupported", "weak"]).default("weak"),
     text: normalizedStringSchema({ maximumLength: 320, minimumLength: 8 })
   }).strict()).default([]),
   externalKnowledge: z.array(normalizedStringSchema({ maximumLength: 180 })).max(8).default([]),
-  interactiveDemo: z.object({
-    description: normalizedStringSchema({ maximumLength: 320, minimumLength: 8 }),
-    html: z.string().min(80).max(60_000),
-    kind: z.literal("html"),
-    title: normalizedStringSchema({ maximumLength: 96, minimumLength: 2 })
-  }).strict().nullable().default(null),
+  interactiveDemo: thinReadingInteractiveDemoModelSchema.nullable().default(null),
   mermaid: z.string().max(8_000).default(""),
   omittedSections: z.array(z.object({
     label: normalizedStringSchema({ maximumLength: 96 }),
@@ -116,11 +135,7 @@ const thinReadingModelOutputSchema = z.object({
   }).strict()).max(maximumOmittedSectionEnvelope).default([]),
   paperEvidence: z.array(normalizedStringSchema({ maximumLength: 160 })).default([]),
   paperType: thinReadingPaperTypeSchema.default("unknown"),
-  recommendedFigures: z.array(z.object({
-    evidenceIds: z.array(normalizedStringSchema({ maximumLength: 120 })).min(1).max(4),
-    figureId: normalizedStringSchema({ maximumLength: 180 }),
-    reason: normalizedStringSchema({ maximumLength: 240, minimumLength: 8 })
-  }).strict()).max(2).default([]),
+  recommendedFigures: z.array(thinReadingRecommendedFigureModelSchema).max(2).default([]),
   summary: normalizedStringSchema({ minimumLength: 24 }),
   summarySentences: z.array(z.object({
     evidenceIds: z.array(normalizedStringSchema({ maximumLength: 120 })).default([]),
@@ -128,19 +143,11 @@ const thinReadingModelOutputSchema = z.object({
     status: z.enum(["grounded", "unsupported", "weak"]).default("weak"),
     text: normalizedStringSchema({ maximumLength: 420, minimumLength: 2 })
   }).strict()).default([]),
-  visualizationIntent: z.object({
-    candidateModalities: z.array(generatedModalitySchema).min(1).max(3),
-    evidenceIds: z.array(normalizedStringSchema({ maximumLength: 120 })).min(1).max(32),
-    expectedLearningGain: z.enum(["low", "medium", "high"]),
-    purpose: z.enum(["explain_structure", "compare", "show_process", "show_geometry", "show_evidence"]),
-    requestedBy: z.enum(["automatic", "explicit_user_request"])
-  }).strict().nullable().default(null),
+  visualizationIntent: thinReadingVisualizationIntentModelSchema.nullable().default(null),
   withinPaperClosure: z.boolean()
 }).strict();
 
-const jsonString = { type: "string" } as const;
 const claimStatusSchema = { enum: ["grounded", "unsupported", "weak"], type: "string" } as const;
-const stringArraySchema = { items: jsonString, type: "array" } as const;
 
 // Kept alongside the Zod parser so providers constrain the same envelope before text reaches it.
 export const thinReadingModelOutputJsonSchema: Record<string, unknown> = {
@@ -152,71 +159,94 @@ export const thinReadingModelOutputJsonSchema: Record<string, unknown> = {
         properties: {
           importance: { maximum: 1, minimum: 0, type: "number" },
           kind: { enum: [...thinReadingAnchorKinds], type: "string" },
-          searchQuery: jsonString,
+          searchQuery: { maxLength: 180, minLength: 3, type: "string" },
           summarySentenceIndex: { minimum: 0, type: "integer" },
-          text: jsonString
+          text: { maxLength: 160, minLength: 2, type: "string" }
         },
         required: ["summarySentenceIndex", "text", "kind", "importance", "searchQuery"],
         type: "object"
       },
-      maxItems: 8,
+      maxItems: maximumThinReadingAnchors,
       type: "array"
     },
     claims: {
       items: {
         additionalProperties: false,
-        properties: { evidenceIds: stringArraySchema, status: claimStatusSchema, text: jsonString },
+        properties: {
+          evidenceIds: { items: { maxLength: 120, minLength: 1, type: "string" }, type: "array" },
+          status: claimStatusSchema,
+          text: { maxLength: 320, minLength: 8, type: "string" }
+        },
         required: ["text", "evidenceIds", "status"],
         type: "object"
       },
       type: "array"
     },
-    externalKnowledge: stringArraySchema,
+    externalKnowledge: {
+      items: { maxLength: 180, minLength: 1, type: "string" },
+      maxItems: 8,
+      type: "array"
+    },
     interactiveDemo: {
       anyOf: [{
         additionalProperties: false,
         properties: {
-          description: jsonString,
-          html: jsonString,
+          description: { maxLength: 320, minLength: 8, type: "string" },
+          html: { maxLength: 60_000, minLength: 80, type: "string" },
           kind: { const: "html", type: "string" },
-          title: jsonString
+          title: { maxLength: 96, minLength: 2, type: "string" }
         },
         required: ["kind", "title", "description", "html"],
         type: "object"
       }, { type: "null" }]
     },
-    mermaid: jsonString,
+    mermaid: { maxLength: 8_000, type: "string" },
     omittedSections: {
       items: {
         additionalProperties: false,
-        properties: { label: jsonString, sectionKey: jsonString },
+        properties: {
+          label: { maxLength: 96, minLength: 1, type: "string" },
+          sectionKey: { maxLength: 96, minLength: 1, type: "string" }
+        },
         required: ["sectionKey", "label"],
         type: "object"
       },
       maxItems: maximumOmittedSectionEnvelope,
       type: "array"
     },
-    paperEvidence: stringArraySchema,
+    paperEvidence: {
+      items: { maxLength: 160, minLength: 1, type: "string" },
+      type: "array"
+    },
     paperType: { enum: thinReadingPaperTypeSchema.options, type: "string" },
     recommendedFigures: {
       items: {
         additionalProperties: false,
-        properties: { evidenceIds: stringArraySchema, figureId: jsonString, reason: jsonString },
+        properties: {
+          evidenceIds: {
+            items: { maxLength: 120, minLength: 1, type: "string" },
+            maxItems: 4,
+            minItems: 1,
+            type: "array"
+          },
+          figureId: { maxLength: 180, minLength: 1, type: "string" },
+          reason: { maxLength: 240, minLength: 8, type: "string" }
+        },
         required: ["figureId", "evidenceIds", "reason"],
         type: "object"
       },
       maxItems: 2,
       type: "array"
     },
-    summary: jsonString,
+    summary: { minLength: 24, type: "string" },
     summarySentences: {
       items: {
         additionalProperties: false,
         properties: {
-          evidenceIds: stringArraySchema,
-          externalKnowledge: stringArraySchema,
+          evidenceIds: { items: { maxLength: 120, minLength: 1, type: "string" }, type: "array" },
+          externalKnowledge: { items: { maxLength: 180, minLength: 1, type: "string" }, type: "array" },
           status: claimStatusSchema,
-          text: jsonString
+          text: { maxLength: 420, minLength: 2, type: "string" }
         },
         required: ["text", "evidenceIds", "externalKnowledge", "status"],
         type: "object"
@@ -233,7 +263,12 @@ export const thinReadingModelOutputJsonSchema: Record<string, unknown> = {
             minItems: 1,
             type: "array"
           },
-          evidenceIds: { items: jsonString, maxItems: 32, minItems: 1, type: "array" },
+          evidenceIds: {
+            items: { maxLength: 120, minLength: 1, type: "string" },
+            maxItems: 32,
+            minItems: 1,
+            type: "array"
+          },
           expectedLearningGain: { enum: ["low", "medium", "high"], type: "string" },
           purpose: { enum: ["explain_structure", "compare", "show_process", "show_geometry", "show_evidence"], type: "string" },
           requestedBy: { enum: ["automatic", "explicit_user_request"], type: "string" }
@@ -767,6 +802,20 @@ export type RequiredChineseTerminology = {
   translation: string;
 };
 
+export function resolveThinReadingMappedSupportMode(
+  sentences: readonly Pick<ThinReadingSummarySentence, "evidenceIds" | "externalKnowledge">[]
+): Exclude<ThinReadingSupportMode, "ai_interpretation"> | undefined {
+  const hasPaperSupport = sentences.some((sentence) => sentence.evidenceIds.length > 0);
+  const hasExternalSupport = sentences.some((sentence) => sentence.externalKnowledge.length > 0);
+  return hasPaperSupport && hasExternalSupport
+    ? "paper_and_external"
+    : hasPaperSupport
+      ? "paper"
+      : hasExternalSupport
+        ? "external_only"
+        : undefined;
+}
+
 type ParseThinReadingModelSeedOptions = {
   allowedEvidenceIds?: readonly string[];
   availableFigureIds?: readonly string[];
@@ -953,6 +1002,62 @@ function normalizeOptionalVisualOutput(input: {
   };
 }
 
+function normalizeStructurallyOptionalModelOutput(input: {
+  onDropped?: (reason: string) => void;
+  record: Record<string, unknown>;
+  requestedOutput?: ThinReadingRequestedOutput;
+  source?: ThinReadingNodeSource;
+}) {
+  const normalized = { ...input.record };
+  if ("recommendedFigures" in normalized) {
+    if (!Array.isArray(normalized.recommendedFigures)) {
+      input.onDropped?.("自动推荐原文图结构无效，已省略。");
+      normalized.recommendedFigures = [];
+    } else {
+      const figures = normalized.recommendedFigures.flatMap((figure, index) => {
+        const parsed = thinReadingRecommendedFigureModelSchema.safeParse(figure);
+        if (parsed.success) return [parsed.data];
+        input.onDropped?.(
+          `自动推荐原文图结构无效（recommendedFigures.${index}）：${formatZodIssues(parsed.error)}。`
+        );
+        return [];
+      });
+      if (figures.length > 2) {
+        input.onDropped?.("自动推荐原文图超过 2 项，已省略多余项目。");
+      }
+      normalized.recommendedFigures = figures.slice(0, 2);
+    }
+  }
+
+  if ("interactiveDemo" in normalized && normalized.interactiveDemo !== null) {
+    const parsed = thinReadingInteractiveDemoModelSchema.safeParse(normalized.interactiveDemo);
+    if (!parsed.success && input.requestedOutput !== "html_demo") {
+      input.onDropped?.("未明确请求的 HTML demo 结构无效，已省略。");
+      normalized.interactiveDemo = null;
+    }
+  }
+
+  if ("mermaid" in normalized) {
+    const valid = typeof normalized.mermaid === "string" && normalized.mermaid.length <= 8_000;
+    if (!valid && input.requestedOutput !== "mermaid") {
+      input.onDropped?.("未明确请求的 Mermaid 结构无效，已省略。");
+      normalized.mermaid = "";
+    }
+  }
+
+  if ("visualizationIntent" in normalized && normalized.visualizationIntent !== null) {
+    const parsed = thinReadingVisualizationIntentModelSchema.safeParse(normalized.visualizationIntent);
+    const explicitlyRequested = input.source
+      ? resolveThinReadingVisualizationIntentRequest(input.source)?.explicit === true
+      : false;
+    if (!parsed.success && !explicitlyRequested) {
+      input.onDropped?.("自动 visualization intent 结构无效，已省略。");
+      normalized.visualizationIntent = null;
+    }
+  }
+  return normalized;
+}
+
 function escapeRegularExpression(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -1080,11 +1185,12 @@ function assertThinReadingSummarySingleParagraph(summary: string) {
   }
 }
 
-function formatZodIssues(error: z.ZodError) {
+function formatZodIssues(error: z.ZodError, pathPrefix: readonly PropertyKey[] = []) {
   return error.issues
     .slice(0, 4)
     .map((issue) => {
-      const path = issue.path.length > 0 ? issue.path.join(".") : "root";
+      const fullPath = [...pathPrefix, ...issue.path];
+      const path = fullPath.length > 0 ? fullPath.join(".") : "root";
       return `${path}: ${issue.message}`;
     })
     .join("；");
@@ -2185,16 +2291,42 @@ export function parseThinReadingModelSeed(
 
   if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
     const record = raw as Record<string, unknown>;
+    let normalizedRecord = { ...record };
     if (Array.isArray(record.anchors)) {
-      raw = {
-        ...record,
-        anchors: record.anchors.map((anchor) => {
-          if (!anchor || typeof anchor !== "object" || Array.isArray(anchor)) return anchor;
-          const { label: _legacyLabel, ...current } = anchor as Record<string, unknown>;
-          return current;
-        })
-      };
+      const normalizedAnchors = record.anchors.map((anchor) => {
+        if (!anchor || typeof anchor !== "object" || Array.isArray(anchor)) return anchor;
+        const { label: _legacyLabel, ...current } = anchor as Record<string, unknown>;
+        return current;
+      });
+      const anchors = options.invalidAnchorPolicy === "drop" && options.supportMode !== "ai_interpretation"
+        ? normalizedAnchors.flatMap((anchor, index) => {
+            const parsedAnchor = thinReadingAnchorModelSchema.safeParse(anchor);
+            if (parsedAnchor.success) return [anchor];
+            options.onInvalidAnchor?.(
+              `薄读锚点结构无效：${formatZodIssues(parsedAnchor.error, ["anchors", index])}。`
+            );
+            return [];
+          }).slice(0, maximumThinReadingAnchors)
+        : normalizedAnchors;
+      if (anchors.length < normalizedAnchors.length && anchors.length === maximumThinReadingAnchors) {
+        options.onInvalidAnchor?.(
+          `薄读锚点数量超过 ${maximumThinReadingAnchors}，已隔离多余锚点。`
+        );
+      }
+      normalizedRecord.anchors = anchors;
     }
+    if (
+      options.invalidOptionalEnhancementPolicy === "drop" &&
+      options.supportMode !== "ai_interpretation"
+    ) {
+      normalizedRecord = normalizeStructurallyOptionalModelOutput({
+        onDropped: options.onOptionalEnhancementDropped,
+        record: normalizedRecord,
+        requestedOutput: options.requestedOutput,
+        source: options.source
+      });
+    }
+    raw = normalizedRecord;
   }
 
   const parsedResult = thinReadingModelOutputSchema.safeParse(raw);
@@ -2351,11 +2483,7 @@ export function parseThinReadingModelSeed(
   }
   const supportMode: ThinReadingSupportMode = isAiInterpretation
     ? "ai_interpretation"
-    : hasMappedPaperEvidence && hasMappedExternalKnowledge
-      ? "paper_and_external"
-      : hasMappedPaperEvidence
-        ? "paper"
-        : "external_only";
+    : resolveThinReadingMappedSupportMode(summarySentences) ?? "external_only";
   if (supportMode === "external_only" && (
     paperEvidence.length > 0 || claims.some((claim) => claim.evidenceIds.length > 0)
   )) {
@@ -2811,8 +2939,9 @@ export function buildThinReadingAgentPrompt(input: {
       : "",
     externalRelationSentenceRule(),
     evidenceFirstSentenceProtocol(),
-    "Reader-facing anchors: after forming summarySentences, return 3–8 non-overlapping high-value anchors for the contribution, mechanism, result, or limitation. Cover every sentence that contains an independent high-value contribution, mechanism, result, or limitation; a dense sentence may have more than one anchor, while background transitions need none. Prefer preserving a distinct valuable concept over stopping at an arbitrary small count. Each anchor.text must be an exact contiguous phrase copied from summarySentences[summarySentenceIndex].text and occur exactly once in that sentence. Use a specific academic searchQuery of 4–8 established concepts likely to occur in scholarly titles or abstracts; exclude the current paper/system name, author names, and implementation-specific role labels. Anchors belong to the thin-reading output, never to a source-PDF coordinate, and must not contain source IDs or retrieval-process language.",
+    "Reader-facing anchors: after forming summarySentences, return 3–8 non-overlapping high-value anchors for the contribution, mechanism, result, or limitation. Cover every sentence that contains an independent high-value contribution, mechanism, result, or limitation; a dense sentence may have more than one anchor, while background transitions need none. Prefer preserving a distinct valuable concept over stopping at an arbitrary small count. After trimming, each anchor.text must contain 2–160 characters, be an exact contiguous phrase copied from summarySentences[summarySentenceIndex].text, and occur exactly once in that sentence. Use a specific academic searchQuery of 4–8 established concepts likely to occur in scholarly titles or abstracts and keep it within 3–180 characters; exclude the current paper/system name, author names, and implementation-specific role labels. Anchors belong to the thin-reading output, never to a source-PDF coordinate, and must not contain source IDs or retrieval-process language.",
     `Anchor kind contract: anchors[].kind must be exactly one of ${thinReadingAnchorKinds.join(" | ")}. Use mechanism for how a process works, method for an approach or procedure, contribution for the paper's distinct addition, and result for an observed outcome. Never invent a new kind.`,
+    "Field length contract after trimming: summary must contain at least 24 characters; each summarySentences[].text must contain 2–420 characters; each claims[].text must contain 8–320 characters. Keep IDs, labels, figure reasons, and optional visual metadata within the JSON schema limits.",
     "内部工作流（只在脑中执行，不要输出这些步骤）：",
     "1. Context assembly：先识别当前层级、目标论文、既定模块/正文选区、完整祖先阅读路径与父节点 claim/evidence。",
     "2. Evidence sieve：从证据矩阵中选出最能改变读者理解的 evidence ID，区分主张、机制、结果、局限和背景。",

@@ -139,7 +139,7 @@ const taskStageLabels: Record<ArtifactTask["stage"], string> = {
   thin_reading_generating_root: "生成薄读总述",
   thin_reading_parsing_document: "解析论文文本",
   thin_reading_planning: "规划薄读路径",
-  thin_reading_repairing_trace: "修复句级证据映射",
+  thin_reading_repairing_trace: "修复薄读结构",
   thin_reading_retrieving_evidence: "检索薄读证据",
   thin_reading_retrieving_external_knowledge: "检索外部文献",
   thin_reading_saving: "保存薄读节点",

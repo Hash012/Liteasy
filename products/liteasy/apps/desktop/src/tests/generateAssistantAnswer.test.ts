@@ -38,6 +38,41 @@ test("exports the production thin-reading repair prompt for evaluation recording
   expect(typeof buildThinReadingRepairPrompt).toBe("function");
 });
 
+test("routes an anchor schema path to anchor-only repair constraints", () => {
+  const prompt = buildThinReadingRepairPrompt({
+    basePrompt: "base prompt",
+    invalidOutput: "{}",
+    reason: "薄读 Agent 返回格式无效：anchors.2.text: must be 2-160 characters after trimming。",
+    requireExternalKnowledge: false
+  });
+
+  expect(prompt).toContain("本轮只修复 anchors");
+  expect(prompt).toContain("必须为 2–160 个字符");
+  expect(prompt).not.toContain("将 summary 整理成知识原子化");
+});
+
+test("keeps the tail of a large structured output in repair context", () => {
+  const prompt = buildThinReadingRepairPrompt({
+    basePrompt: "base prompt",
+    invalidOutput: JSON.stringify({
+      interactiveDemo: {
+        description: "A requested demonstration with a large body.",
+        html: `<main>${"content".repeat(3_000)}</main>`,
+        kind: "html",
+        title: "Large demo"
+      },
+      summary: "A grounded summary that must remain visible to the repair model.",
+      tailMarker: "TAIL_FIELD_RETAINED"
+    }),
+    reason: "interactiveDemo.html exceeds a downstream constraint",
+    requireExternalKnowledge: false
+  });
+
+  expect(prompt).toContain("TAIL_FIELD_RETAINED");
+  expect(prompt).toContain("interactiveDemo.html omitted from repair context");
+  expect(prompt).toContain("A grounded summary that must remain visible");
+});
+
 const liveModelTransport = async () => ({
   json: async () => ({
     answer: "云端回答：这篇综述如何定义向量数据库系统？ [demo-2 p.4]",
@@ -1637,6 +1672,104 @@ test("uses semantic partial answerability to preserve paper evidence and add tra
   expect(
     result.thinReading?.rootSeed.evidence.generationAudit?.paperAnswerabilityTransition
   ).toMatchObject({ status: "partial", targetSupportMode: "paper_and_external" });
+});
+
+test("fails closed when paper answerability oscillates after an external transition", async () => {
+  const store = createSettingsStore();
+  let bodyAttempts = 0;
+  let reviewAttempts = 0;
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const generation = generateAssistantAnswer({
+    artifactType: "thin_reading",
+    importedChunksByPaperId: {
+      "paper-answerability-oscillation": [{
+        page: 3,
+        paperId: "paper-answerability-oscillation",
+        paperTitle: "Oscillating Boundary",
+        snippet: "The paper explains the mechanism inside its evaluated deployment.",
+        summary: "论文解释了已评估部署内的机制。",
+        tags: ["mechanism", "deployment"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      if (prompt.includes("薄读的证据复核 Agent")) {
+        reviewAttempts += 1;
+        const status = reviewAttempts === 2 ? "complete" : "partial";
+        return {
+          json: async () => ({
+            answer: JSON.stringify(semanticAnswerabilityReview(prompt, status)),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      bodyAttempts += 1;
+      const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
+      const answer = prompt.includes("来源结构目标：paper_and_external")
+        ? {
+            claims: [{ evidenceIds: [evidenceId], status: "grounded", text: "论文解释了已评估部署内的机制。" }],
+            externalKnowledge: ["openalex:W424242"],
+            omittedSections: [],
+            paperEvidence: [evidenceId],
+            paperType: "systems",
+            summary: "论文解释了已评估部署内的机制。外部研究补充了其他部署条件下的适用边界。",
+            summarySentences: [{
+              evidenceIds: [evidenceId],
+              externalKnowledge: [],
+              status: "grounded",
+              text: "论文解释了已评估部署内的机制。"
+            }, {
+              evidenceIds: [],
+              externalKnowledge: ["openalex:W424242"],
+              status: "weak",
+              text: "外部研究补充了其他部署条件下的适用边界。"
+            }],
+            withinPaperClosure: false
+          }
+        : paperInterpretationAnswer(
+            "论文解释了已评估部署内部的排序机制以及该机制成立时所需的适用边界。",
+            evidenceId
+          );
+      return {
+        json: async () => ({
+          answer: JSON.stringify(answer),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "为什么这一机制在不同部署条件下会有不同边界？",
+    selectedPapers: [{ id: "paper-answerability-oscillation", title: "Oscillating Boundary" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-answerability-oscillation",
+      depth: 2,
+      paperIds: ["paper-answerability-oscillation"],
+      primaryPaperId: "paper-answerability-oscillation",
+      primaryPaperTitle: "Oscillating Boundary",
+      prompt: "为什么这一机制在不同部署条件下会有不同边界？",
+      source: { excerpt: "部署边界", kind: "selected_text" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async () => ({
+      json: async () => semanticBoundaryExternalResponse(),
+      ok: true,
+      status: 200
+    })
+  });
+
+  await expect(generation).rejects.toThrow("薄读论文回答能力审阅不稳定");
+  expect(bodyAttempts).toBe(3);
+  expect(reviewAttempts).toBe(3);
 });
 
 test("uses AI interpretation after malformed retrieval at a semantic paper boundary", async () => {
