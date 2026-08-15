@@ -126,11 +126,13 @@ test("loads identity, policy, retrieval, audit, and forum data into task views",
   expect(grantSection).not.toBeNull();
   const grantForm = within(grantSection as HTMLElement);
   expect(grantForm.getByRole("textbox", { name: /用户标识/ })).toHaveValue("directory-user-id");
-  await user.type(grantForm.getByRole("textbox", { name: /原因/ }), "预发布管理账号授权");
+  expect(grantForm.getByRole("combobox", { name: /平台角色/ })).toHaveValue("platform_admin");
+  await user.selectOptions(grantForm.getByRole("combobox", { name: /平台角色/ }), "developer_diagnostics");
+  await user.type(grantForm.getByRole("textbox", { name: /原因/ }), "预发布开发诊断授权");
   await user.click(grantForm.getByRole("button", { name: "授予角色" }));
   await waitFor(() => expect(api.grantRole).toHaveBeenCalledWith({
-    reason: "预发布管理账号授权",
-    role: "platform_admin",
+    reason: "预发布开发诊断授权",
+    role: "developer_diagnostics",
     subjectId: "directory-user-id"
   }));
   const revokeSection = screen.getByRole("heading", { name: "撤销平台角色" }).closest("section");

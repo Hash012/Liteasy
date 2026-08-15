@@ -370,7 +370,7 @@ export class PostgresPlatformAdminRepository {
   }
 
   async grantRole(principal, input) {
-    this.#requirePlatformAdmin(principal);
+    this.#requireRoleAdministrator(principal);
     const subjectId = identifier(input.subjectId, "identity_subject_invalid");
     const grantedRole = role(input.role, this.environment);
     const reason = requiredText(input.reason, 8, 1000, "admin_reason_invalid");
@@ -1147,6 +1147,12 @@ export class PostgresPlatformAdminRepository {
 
   #requirePlatformAdmin(principal) {
     if (!principal?.roles?.includes("platform_admin")) {
+      throw new PlatformAdminError("platform_admin_required", 403);
+    }
+  }
+
+  #requireRoleAdministrator(principal) {
+    if (!principal?.roles?.some((item) => roles.has(item))) {
       throw new PlatformAdminError("platform_admin_required", 403);
     }
   }

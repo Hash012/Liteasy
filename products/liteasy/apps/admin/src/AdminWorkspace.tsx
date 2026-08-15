@@ -327,9 +327,13 @@ export function AdminWorkspace({
   async function submitRoleGrant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
+    const role = value(data, "role");
+    if (role !== "platform_admin" && role !== "developer_diagnostics") {
+      throw new Error("role_invalid");
+    }
     await execute("平台角色已授予。", () => api.grantRole({
       reason: value(data, "reason"),
-      role: "platform_admin",
+      role,
       subjectId: value(data, "subjectId")
     }), refresh);
   }
@@ -891,7 +895,12 @@ function AccountsView({ accountDirectory, busy, governance, identity, onAccountP
       <Section title="授予平台角色">
         <form className="admin-form" onSubmit={onRoleGrant}>
           <Field hint="可从上方账号目录选择，也可填写 Keycloak 用户 ID。" label="用户标识" required><Input name="subjectId" onChange={(_, data) => onSelectAccount(data.value)} required value={selectedAccountSubject} /></Field>
-          <Field label="平台角色"><Input readOnly value="平台管理员" /></Field>
+          <Field hint="开发诊断管理员仅用于受控环境故障诊断，可查看模型、端点及任务中间诊断信息。" label="平台角色" required>
+            <Select name="role" required>
+              <option value="platform_admin">平台管理员</option>
+              <option value="developer_diagnostics">开发诊断管理员</option>
+            </Select>
+          </Field>
           <ReasonField />
           <Button appearance="primary" disabled={busy} icon={<SaveRegular />} type="submit">授予角色</Button>
         </form>

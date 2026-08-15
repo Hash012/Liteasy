@@ -90,6 +90,40 @@ test("queries active developer diagnostics outside production and fails closed i
   assert.equal(queries.length, 1);
 });
 
+test("allows a developer diagnostics administrator to grant either admin role in staging", async () => {
+  const harness = transactionHarness(async (sql, values) => {
+    if (sql.includes("SELECT request_hash, response_body")) return { rows: [] };
+    if (sql.includes("SELECT * FROM platform_role_grants")) return { rows: [] };
+    if (sql.includes("INSERT INTO platform_role_grants")) {
+      return { rows: [roleRow({
+        activated_at: new Date("2026-08-06T01:00:00.000Z"),
+        bootstrap: false,
+        grant_id: values[0],
+        granted_by: values[3],
+        reason: values[4],
+        role: values[2],
+        state: "active",
+        subject_id: values[1]
+      })] };
+    }
+    return { rows: [] };
+  });
+  const repository = new PostgresPlatformAdminRepository(harness.pool, { environment: "staging" });
+
+  for (const requestedRole of ["platform_admin", "developer_diagnostics"]) {
+    const result = await repository.grantRole({
+      roles: ["developer_diagnostics"], subjectId: "developer_1"
+    }, {
+      idempotencyKey: `grant-${requestedRole}`,
+      reason: "Approved staging administrator access",
+      role: requestedRole,
+      subjectId: requestedRole === "platform_admin" ? "developer_1" : "developer_2",
+      traceId: `trace-${requestedRole}`
+    });
+    assert.equal(result.grant.role, requestedRole);
+  }
+});
+
 test("does not allow revoking the final active platform administrator", async () => {
   const harness = transactionHarness(async (sql) => {
     if (sql.includes("SELECT request_hash, response_body")) return { rows: [] };
