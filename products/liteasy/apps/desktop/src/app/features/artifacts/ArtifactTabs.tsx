@@ -15,6 +15,7 @@ import { ThinReadingTab } from "../thin-reading/ThinReadingTab";
 import type {
   ThinReadingBranchSource,
   ThinReadingDocument,
+  ThinReadingDocumentV2,
   ThinReadingExternalSource
 } from "../thin-reading/thinReading.types";
 import type { ThinReadingPaperRelationsTransport } from "../thin-reading/thinReadingPaperRelationsClient";
@@ -67,6 +68,11 @@ type ArtifactTabsProps = {
     request: ArtifactRegenerationRequest
   ) => string | void | Promise<string | void>;
   onRetryInterruptedThinReadingBranch?: (taskId: string) => Promise<void>;
+  onRetryThinReadingVisualization?: (input: {
+    artifactId: string;
+    document: ThinReadingDocumentV2;
+    node: ThinReadingDocumentV2["nodes"][string];
+  }) => Promise<unknown> | unknown;
   onUpdateThinReadingDocument?: (artifactId: string, nextDocument: ThinReadingDocument) => void;
   onToggleThinReadingVisualization?: (enabled: boolean) => void;
   onStartAnalysis: (artifactType: ArtifactType) => void;
@@ -219,6 +225,7 @@ export function ArtifactTabs({
   onSyncThinReadingAnnotations,
   onRegenerateArtifact,
   onRetryInterruptedThinReadingBranch,
+  onRetryThinReadingVisualization,
   onUpdateThinReadingDocument,
   onToggleThinReadingVisualization,
   onStartAnalysis,
@@ -331,6 +338,13 @@ export function ArtifactTabs({
         onRetryInterruptedBranch={activeThinReadingTask?.status === "failed" &&
           activeThinReadingTask.thinReadingBranchRecovery && onRetryInterruptedThinReadingBranch
           ? () => onRetryInterruptedThinReadingBranch(activeThinReadingTask.id)
+          : undefined}
+        onRetryVisualization={onRetryThinReadingVisualization && document.version === "liteasy.thin-reading/v2"
+          ? () => Promise.resolve(onRetryThinReadingVisualization({
+              artifactId: activeTab.artifactId,
+              document,
+              node: document.nodes[document.activeNodeId] ?? document.nodes[document.rootNodeId]
+            })).then(() => undefined)
           : undefined}
         onGenerateBranch={onGenerateThinReadingBranch}
         onOpenExternalFullText={onOpenExternalFullText}

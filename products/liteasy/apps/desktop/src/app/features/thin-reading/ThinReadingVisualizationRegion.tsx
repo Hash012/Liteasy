@@ -1,4 +1,7 @@
-import type { ThinReadingVisualizationStatus } from "../artifacts/artifact.types";
+import type {
+  ThinReadingVisualizationOmissionReason,
+  ThinReadingVisualizationStatus
+} from "../artifacts/artifact.types";
 import type { VisualizationArtifactV1 } from "../visualization/visualizationArtifact.types";
 import type { DeepDiveTargetV1 } from "../visualization/visualizationArtifact.types";
 import { VisualizationArtifactHost } from "../visualization/VisualizationArtifactHost";
@@ -12,7 +15,21 @@ type ThinReadingVisualizationRegionProps = {
 function statusCopy(status: ThinReadingVisualizationStatus | undefined) {
   if (!status || status.status === "idle") return artifactsEmptyCopy;
   if (status.status === "generating") return "生成中";
-  if (status.status === "omitted") return "已简化";
+  if (status.status === "omitted") {
+    const reasons: Record<ThinReadingVisualizationOmissionReason, string> = {
+      capability_unavailable: "当前账号未开通可视化",
+      explicit_request_unavailable: "当前账号不支持主动生成可视化",
+      generation_failed: "可视化生成失败",
+      intent_unavailable: "当前内容不需要可视化",
+      modality_unavailable: "所需可视化类型暂不可用",
+      preference_disabled: "多模态生成已关闭",
+      quota_unavailable: "可视化额度暂不可用",
+      result_invalid: "生成结果未通过校验",
+      service_unavailable: "可视化服务暂不可用",
+      stale_request: "内容已更新，请重新生成可视化"
+    };
+    return reasons[status.reasonCode];
+  }
   return artifactsEmptyCopy;
 }
 

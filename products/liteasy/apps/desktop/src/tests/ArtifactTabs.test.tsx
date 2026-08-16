@@ -106,6 +106,41 @@ describe("ArtifactTabs", () => {
     expect(onToggle).toHaveBeenCalledWith(false);
   });
 
+  test("offers a real retry when visualization generation did not complete", async () => {
+    const onRetry = vi.fn(async () => undefined);
+    const tab: ArtifactTab = {
+      artifactId: propsWithVisualAndFigure.artifactId,
+      papers: propsWithVisualAndFigure.papers,
+      thinReadingDocument: propsWithVisualAndFigure.document,
+      title: "薄读视觉 fixture",
+      type: "thin_reading"
+    };
+    render(
+      <ArtifactTabs
+        activeArtifactId={tab.artifactId}
+        analysisHint=""
+        canStartAnalysis
+        onRetryThinReadingVisualization={onRetry}
+        onStartAnalysis={vi.fn()}
+        selectedCount={1}
+        selectionLocked
+        tabs={[tab]}
+        tasks={[]}
+        thinReadingVisualizationCapability={propsWithVisualAndFigure.visualizationCapability}
+        thinReadingVisualizationStatuses={{
+          [tab.thinReadingDocument!.activeNodeId]: { reasonCode: "result_invalid", status: "omitted" }
+        }}
+      />
+    );
+
+    expect(screen.getByText("生成未完成")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "重试生成可视化" }));
+    await waitFor(() => expect(onRetry).toHaveBeenCalledWith(expect.objectContaining({
+      artifactId: tab.artifactId,
+      document: tab.thinReadingDocument
+    })));
+  });
+
   test("keeps the unauthorized multimodal switch disabled", () => {
     const tab: ArtifactTab = {
       artifactId: unauthorizedProps.artifactId,

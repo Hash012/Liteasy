@@ -34,6 +34,7 @@ import type { MultimodalVisualizationCapability } from "../features/account/acco
 import type {
   ThinReadingBranchSource,
   ThinReadingDocument,
+  ThinReadingDocumentV2,
   ThinReadingExternalSource
 } from "../features/thin-reading/thinReading.types";
 import type { ThinReadingPaperRelationsTransport } from "../features/thin-reading/thinReadingPaperRelationsClient";
@@ -88,6 +89,11 @@ type ReaderPaneProps = {
     source: ThinReadingBranchSource;
   }) => Promise<void>;
   onSyncThinReadingAnnotations?: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
+  onRetryThinReadingVisualization?: (input: {
+    artifactId: string;
+    document: ThinReadingDocumentV2;
+    node: ThinReadingDocumentV2["nodes"][string];
+  }) => Promise<unknown> | unknown;
   onAddReaderContextToConversation?: (context: ReaderConversationContext) => void;
   intuechoEndpoint?: string;
   intuechoSessionId?: string;
@@ -148,6 +154,7 @@ export function ReaderPane({
   onShareAnnotationToOrganization,
   onUpdateOrganizationAnnotation,
   onGenerateThinReadingBranch,
+  onRetryThinReadingVisualization,
   onSyncThinReadingAnnotations,
   onAddReaderContextToConversation,
   intuechoEndpoint,
@@ -288,6 +295,7 @@ export function ReaderPane({
                 mineruFiguresByPaperId={mineruFiguresByPaperId}
                 onDynamicAction={onArtifactDynamicAction}
                 onGenerateThinReadingBranch={onGenerateThinReadingBranch}
+                onRetryThinReadingVisualization={onRetryThinReadingVisualization}
                 onOpenExternalFullText={onOpenExternalFullText}
                 onSyncThinReadingAnnotations={onSyncThinReadingAnnotations}
                 onOpenEvidence={onOpenEvidence}

@@ -310,6 +310,32 @@ test("rolls back compiler rejection before failing the request", async () => {
   assert.equal(instance.calls.some(([name]) => name === "submit"), false);
 });
 
+test("retries one structured generation after compiler validation rejects the first proposal", async () => {
+  let compileAttempts = 0;
+  const instance = harness({
+    compile: async (input) => {
+      compileAttempts += 1;
+      if (compileAttempts === 1) throw coded("visualization_hard_validation_failed");
+      return artifact(input.reservation);
+    }
+  });
+
+  const result = await instance.worker.drainOne();
+
+  assert.equal(result.status, "succeeded");
+  assert.equal(compileAttempts, 2);
+  assert.equal(instance.calls.filter(([name]) => name === "generate").length, 2);
+  assert.deepEqual(instance.calls.find(([name]) => name === "rollbackMany").slice(1), [
+    ["reservation-1"],
+    "visualization_validation_failed"
+  ]);
+  assert.equal(
+    instance.calls.filter(([name]) => name === "generate")[1][1].reservation.idempotencyKey,
+    "request-1:artifact:0:repair:1"
+  );
+  assert.equal(instance.calls.find(([name]) => name === "submit")[1].reservationId, "reservation-2");
+});
+
 test("cancellation wins before provider, during provider, and after provider before publication", async (t) => {
   await t.test("before provider", async () => {
     let resolutions = 0;

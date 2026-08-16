@@ -139,7 +139,7 @@ export class VisualizationOrchestrationWorker {
     if (modalities.length === 0) throw failure("modality_unavailable");
     const modality = modalities[index % modalities.length];
     await this.#requestIsRunning(claim);
-    const generation = await this.visualizationService.generate(claim.subjectId, {
+    let generation = await this.visualizationService.generate(claim.subjectId, {
       providerRequest: {
         dataClass: "paper",
         input: source.providerInput,
@@ -155,7 +155,7 @@ export class VisualizationOrchestrationWorker {
     const reservationIds = [generation.reservation.reservationId];
     let submissionStarted = false;
     try {
-      const proposal = modality === "raster_illustration"
+      let proposal = modality === "raster_illustration"
         ? this.compilerRegistry.prepareProposal({
             modality,
             nodeId: source.nodeId,
@@ -189,7 +189,7 @@ export class VisualizationOrchestrationWorker {
           spec: proposal.spec.payload
         }, { signal, traceId: claim.traceId });
       }
-      const artifact = await this.compilerRegistry.compile({
+      const compile = () => this.compilerRegistry.compile({
         locale: source.locale,
         modality,
         nodeId: source.nodeId,
@@ -198,6 +198,40 @@ export class VisualizationOrchestrationWorker {
         reservation: primaryGeneration.reservation,
         source
       });
+      let artifact;
+      try {
+        artifact = await compile();
+      } catch (error) {
+        if (modality === "raster_illustration" || visualizationOrchestrationReason(error) !== "validation_failed") {
+          throw error;
+        }
+        await this.#rollbackAll(claim.subjectId, [...reservationIds], error, claim.traceId);
+        reservationIds.length = 0;
+        const repairPayload = this.compilerRegistry.providerPayload(modality, source);
+        generation = await this.visualizationService.generate(claim.subjectId, {
+          providerRequest: {
+            dataClass: "paper",
+            input: source.providerInput,
+            operation: "structured_generation",
+            payload: {
+              ...repairPayload,
+              prompt: [
+                repairPayload.prompt,
+                "This is a validation repair attempt. Recheck every schema field, evidence binding, reference, uniqueness constraint, and acyclic graph constraint before returning JSON."
+              ].join("\n")
+            }
+          },
+          reservation: {
+            idempotencyKey: `${claim.requestId}:artifact:${index}:repair:1`,
+            modality,
+            requestedBy: source.intent.requestedBy === "automatic" ? "automatic" : "explicit"
+          }
+        }, { signal, traceId: claim.traceId });
+        reservationIds.push(generation.reservation.reservationId);
+        primaryGeneration = generation;
+        proposal = generation.result.text;
+        artifact = await compile();
+      }
       await this.#requestIsRunning(claim);
       const current = await this.#currentSource(claim);
       submissionStarted = true;

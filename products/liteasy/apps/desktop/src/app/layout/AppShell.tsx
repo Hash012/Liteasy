@@ -1699,6 +1699,7 @@ export function AppShell({
             artifactWorkflow.actions.regenerateArtifact(request);
           }}
           onGenerateThinReadingBranch={artifactWorkflow.actions.generateThinReadingBranch}
+          onRetryThinReadingVisualization={artifactWorkflow.actions.startThinReadingVisualization}
           onRetryInterruptedThinReadingBranch={artifactWorkflow.actions.retryInterruptedThinReadingBranch}
           onSyncThinReadingAnnotations={artifactWorkflow.actions.syncThinReadingAnnotations}
           onToggleThinReadingVisualization={artifactWorkflow.actions.setThinReadingVisualizationEnabled}
@@ -1842,6 +1843,7 @@ export function AppShell({
         }}
         onOpenEvidence={openEvidenceInReader}
         onOpenVisualization={openVisualization}
+        onRetryThinReadingVisualization={artifactWorkflow.actions.startThinReadingVisualization}
         onGenerateThinReadingBranch={artifactWorkflow.actions.generateThinReadingBranch}
         onSyncThinReadingAnnotations={artifactWorkflow.actions.syncThinReadingAnnotations}
         intuechoEndpoint={resolveIntuechoEndpoint()}

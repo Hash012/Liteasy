@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { Button, Switch, Tooltip } from "@fluentui/react-components";
 import {
+  ArrowClockwiseRegular,
   ArrowLeftRegular,
   ArrowRightRegular,
   BranchForkRegular,
@@ -106,6 +107,7 @@ export type ThinReadingTabProps = {
   onOpenVisualization?: (data: VisualizationTabData) => void;
   onPromoteExternalPaperToLibrary?: (source: ThinReadingExternalSource) => Promise<void>;
   onRetryInterruptedBranch?: () => Promise<void>;
+  onRetryVisualization?: () => Promise<void> | void;
   onSyncIntuecho?: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
   onToggleVisualization?: (enabled: boolean) => void;
   onUpdateDocument: (artifactId: string, nextDocument: ThinReadingDocument) => void;
@@ -300,6 +302,7 @@ export function ThinReadingTab({
   onOpenVisualization,
   onPromoteExternalPaperToLibrary,
   onRetryInterruptedBranch,
+  onRetryVisualization,
   onSyncIntuecho,
   onToggleVisualization,
   onUpdateDocument,
@@ -1048,7 +1051,19 @@ export function ThinReadingTab({
               {!visualizationCapability?.allowed ? <small>暂不可用</small> : null}
               {visualizationCapability?.allowed && visualizationStatus?.status === "generating" ? <small>生成中</small> : null}
               {visualizationCapability?.allowed && visualizationStatus?.status === "omitted" && visualizationStatus.reasonCode !== "intent_unavailable"
-                ? <small>已简化</small>
+                ? <>
+                    <small>生成未完成</small>
+                    {onRetryVisualization ? (
+                      <Button
+                        appearance="subtle"
+                        aria-label="重试生成可视化"
+                        icon={<ArrowClockwiseRegular />}
+                        onClick={() => void onRetryVisualization()}
+                        size="small"
+                        title="重试生成可视化"
+                      />
+                    ) : null}
+                  </>
                 : null}
               {visualizationCapability?.allowed && visualizationStatus?.status === "idle" ? <small>未生成</small> : null}
             </span>
@@ -1420,7 +1435,11 @@ export function ThinReadingTab({
                     <p>{annotation.body}</p>
                     {annotation.visibility === "pending_public" ? <span className="thin-reading__pending">{labels.pendingSync}</span> : null}
                     {annotation.syncState?.status === "synced" ? <span className="thin-reading__pending">{labels.synced}</span> : null}
-                    {annotation.syncState?.status === "failed" ? <span className="thin-reading__pending">{labels.syncFailed}</span> : null}
+                    {annotation.syncState?.status === "failed" ? (
+                      <span className="thin-reading__error" role="alert">
+                        {labels.syncFailed}：{annotation.syncState.error}
+                      </span>
+                    ) : null}
                     <div className="thin-reading__annotation-actions">
                       <label>
                         <input
@@ -1565,10 +1584,12 @@ export function ThinReadingTab({
           activeSource={activeSource}
           anchorCount={graphAnchorViews.length}
           anchored="viewport"
+          error={anchorRecommendations.error && graphSourceCount === 0
+            ? `关联文献检索失败：${anchorRecommendations.error}`
+            : undefined}
           emptyAnchorsMessage="这一节的正文没有可展开的概念。"
-          emptySourcesMessage={anchorRecommendations.loading
-            ? "正在检索可验证的关联文献..."
-            : "这些概念还没有检索到可验证的关联文献。"}
+          emptySourcesMessage="这些概念暂未检索到可验证的关联文献。"
+          loading={anchorRecommendations.loading}
           onAddToLibrary={onPromoteExternalPaperToLibrary
             ? (source) => void runAnchorPaperAction(source, onPromoteExternalPaperToLibrary)
             : undefined}
@@ -1576,6 +1597,7 @@ export function ThinReadingTab({
           onOpenFullText={onOpenExternalFullText
             ? (source) => void runAnchorPaperAction(source, onOpenExternalFullText)
             : undefined}
+          onRetry={anchorRecommendations.error ? anchorRecommendations.retry : undefined}
           onSelectSource={selectAssociationSource}
           sourceCount={graphSourceCount}
         />

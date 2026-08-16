@@ -223,6 +223,17 @@ describe("ThinReadingTab", () => {
     expect(screen.getByTestId("thin-reading-visuals")).toHaveTextContent("未生成");
   });
 
+  test("explains a rejected visualization result instead of calling it simplified", () => {
+    render(
+      <ThinReadingVisualizationRegion
+        artifacts={[]}
+        status={{ reasonCode: "result_invalid", status: "omitted" }}
+      />
+    );
+    expect(screen.getByTestId("thin-reading-visuals")).toHaveTextContent("生成结果未通过校验");
+    expect(screen.queryByText("已简化")).not.toBeInTheDocument();
+  });
+
   test("hides the visualization stage when the current node does not need one", () => {
     const document = makeDocument();
     render(

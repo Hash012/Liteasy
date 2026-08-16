@@ -1551,7 +1551,20 @@ export function useArtifactActions({
     if (!endpoint) {
       throw new Error("尚未配置 Intuecho HTTPS 同步端点；批注仍保留在本地等待同步队列。");
     }
-    const pending = listThinReadingPendingPublicAnnotations(input.document);
+    const confirmedLiterature = Object.fromEntries(input.document.paperIds.flatMap((paperId) => {
+      const literature = getPaperById?.(paperId)?.literature;
+      return literature?.status === "confirmed" ? [[paperId, literature] as const] : [];
+    }));
+    const documentForSync: ThinReadingDocument = Object.keys(confirmedLiterature).length > 0
+      ? {
+          ...input.document,
+          literatureRecords: {
+            ...input.document.literatureRecords,
+            ...confirmedLiterature
+          }
+        }
+      : input.document;
+    const pending = listThinReadingPendingPublicAnnotations(documentForSync);
     if (pending.length === 0) {
       return;
     }
@@ -1565,8 +1578,17 @@ export function useArtifactActions({
       return;
     }
     const expectedUpdatedAtByAnnotationId = new Map(pending.map((item) => [item.annotationId, item.updatedAt]));
+    const currentDocumentForSync: ThinReadingDocument = Object.keys(confirmedLiterature).length > 0
+      ? {
+          ...current.thinReadingDocument,
+          literatureRecords: {
+            ...current.thinReadingDocument.literatureRecords,
+            ...confirmedLiterature
+          }
+        }
+      : current.thinReadingDocument;
     const nextDocument = applyThinReadingAnnotationSyncResults(
-      current.thinReadingDocument,
+      currentDocumentForSync,
       results,
       new Date().toISOString(),
       expectedUpdatedAtByAnnotationId

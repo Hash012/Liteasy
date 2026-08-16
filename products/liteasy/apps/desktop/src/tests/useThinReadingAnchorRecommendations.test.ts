@@ -85,3 +85,26 @@ test("adds a provider fallback query without a product-specific CamelCase name",
     "multi-agent scientific workflow"
   ]);
 });
+
+test("reports retrieval failures without persisting them as verified empty results", async () => {
+  const onAnchor = vi.fn();
+  const onError = vi.fn();
+  const result = await retrieveThinReadingAnchorRecommendations({
+    anchors: [anchor(1)],
+    artifactId: "artifact-1",
+    endpoint: "https://api.example",
+    existingSources: [],
+    onAnchor,
+    onError,
+    signal: new AbortController().signal,
+    transport: async () => {
+      throw new Error("network unavailable");
+    }
+  });
+
+  expect(result.has("anchor-1")).toBe(false);
+  expect(onAnchor).not.toHaveBeenCalled();
+  expect(onError).toHaveBeenCalledWith("anchor-1", expect.objectContaining({
+    message: "network unavailable"
+  }));
+});

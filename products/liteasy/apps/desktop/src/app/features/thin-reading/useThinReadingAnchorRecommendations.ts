@@ -19,6 +19,7 @@ type RetrievalInput = {
   endpoint: string;
   existingSources: readonly ThinReadingExternalSource[];
   onAnchor: (anchorId: string, sources: readonly ThinReadingExternalSource[]) => void;
+  onError?: (anchorId: string, error: Error) => void;
   signal: AbortSignal;
   targetPaper?: TargetPaper;
   transport?: ThinReadingExternalKnowledgeTransport;
@@ -63,24 +64,33 @@ export async function retrieveThinReadingAnchorRecommendations(input: RetrievalI
       cursor += 1;
       if (!anchor) return;
       try {
-        const result = await search({
+        const request = {
           anchorReferences: [],
           artifactId: input.artifactId,
-          intent: "context",
+          intent: "context" as const,
           limit: 12,
           query: anchor.searchQuery,
           queryVariants: queryVariants(anchor.searchQuery),
           signal: input.signal,
           targetPaperIdentity: targetIdentity(input.targetPaper),
           targetPaperTitle: input.targetPaper?.title
-        });
+        };
+        let result;
+        try {
+          result = await search(request);
+        } catch (error) {
+          if (input.signal.aborted) throw error;
+          result = await search(request);
+        }
         const selected = selectSources(result.sources);
         results.set(anchor.id, selected);
         input.onAnchor(anchor.id, selected);
       } catch (error) {
         if (input.signal.aborted) throw error;
-        results.set(anchor.id, []);
-        input.onAnchor(anchor.id, []);
+        input.onError?.(
+          anchor.id,
+          error instanceof Error ? error : new Error(String(error))
+        );
       }
     }
   };
@@ -101,6 +111,8 @@ export function useThinReadingAnchorRecommendations(input: {
 }) {
   const [loadedByAnchor, setLoadedByAnchor] = useState<Record<string, readonly ThinReadingExternalSource[]>>({});
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [retryNonce, setRetryNonce] = useState(0);
   const onPersistRef = useRef(input.onPersist);
   onPersistRef.current = input.onPersist;
   const endpoint = input.endpoint.trim().replace(/\/+$/u, "");
@@ -111,12 +123,20 @@ export function useThinReadingAnchorRecommendations(input: {
     endpoint
   ]);
 
-  useEffect(() => setLoadedByAnchor({}), [input.artifactId, input.nodeId]);
+  useEffect(() => {
+    setLoadedByAnchor({});
+    setError("");
+  }, [input.artifactId, input.nodeId]);
 
   useEffect(() => {
-    if (!input.enabled || !endpoint || input.anchors.length === 0) return undefined;
+    if (!input.enabled || input.anchors.length === 0) return undefined;
+    if (!endpoint) {
+      setError("云端关联文献检索端点未配置");
+      return undefined;
+    }
     const controller = new AbortController();
     const collected = new Map<string, readonly ThinReadingExternalSource[]>();
+    setError("");
     setLoading(true);
     void retrieveThinReadingAnchorRecommendations({
       anchors: input.anchors,
@@ -127,6 +147,7 @@ export function useThinReadingAnchorRecommendations(input: {
         collected.set(anchorId, sources);
         setLoadedByAnchor((current) => ({ ...current, [anchorId]: sources }));
       },
+      onError: (_anchorId, retrievalError) => setError(retrievalError.message),
       signal: controller.signal,
       targetPaper: input.targetPaper,
       transport: input.transport
@@ -150,7 +171,7 @@ export function useThinReadingAnchorRecommendations(input: {
       if (!controller.signal.aborted) setLoading(false);
     });
     return () => controller.abort();
-  }, [input.enabled, requestKey]);
+  }, [input.enabled, requestKey, retryNonce]);
 
   const externalSources = useMemo(() => {
     const merged = new Map((input.evidence.externalSources ?? []).map((source) => [source.id, source]));
@@ -162,5 +183,11 @@ export function useThinReadingAnchorRecommendations(input: {
       ? { ...anchor, externalSourceIds: loadedByAnchor[anchor.id].map((source) => source.id) }
       : anchor
   )), [input.anchors, loadedByAnchor]);
-  return { anchors, externalSources, loading };
+  return {
+    anchors,
+    error,
+    externalSources,
+    loading,
+    retry: () => setRetryNonce((current) => current + 1)
+  };
 }

@@ -1,5 +1,5 @@
 import { Button } from "@fluentui/react-components";
-import { AddRegular, DismissRegular, OpenRegular } from "@fluentui/react-icons";
+import { AddRegular, ArrowClockwiseRegular, DismissRegular, OpenRegular } from "@fluentui/react-icons";
 import {
   useEffect,
   useId,
@@ -667,6 +667,7 @@ type AssociationReadingOverlayProps = {
   onAddToLibrary?: (source: ThinReadingExternalSource) => void;
   onClose: () => void;
   onOpenFullText?: (source: ThinReadingExternalSource) => void;
+  onRetry?: () => void;
   onSelectSource: (sourceId: string) => void;
   /** Copy for the empty states, which differ between a PDF page and a generated article. */
   emptyAnchorsMessage?: string;
@@ -691,6 +692,7 @@ export function AssociationReadingOverlay({
   onAddToLibrary,
   onClose,
   onOpenFullText,
+  onRetry,
   onSelectSource,
   sourceCount,
   warning
@@ -703,7 +705,19 @@ export function AssociationReadingOverlay({
       {loading ? (
         <div className="association-message" role="status">正在整理关联文献…</div>
       ) : error ? (
-        <div className="association-message is-error" role="alert">{error}</div>
+        <div className="association-message is-error" role="alert">
+          <span>{error}</span>
+          {onRetry ? (
+            <Button
+              appearance="subtle"
+              aria-label="重试检索关联文献"
+              icon={<ArrowClockwiseRegular />}
+              onClick={onRetry}
+              size="small"
+              title="重试检索关联文献"
+            />
+          ) : null}
+        </div>
       ) : warning ? (
         <div className="association-message" role="status">{warning}</div>
       ) : anchorCount === 0 ? (
