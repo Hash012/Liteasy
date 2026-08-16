@@ -81,6 +81,29 @@ test("accepts released desktop OpenAI model aliases while the deployment selects
   assert.deepEqual(observedModels, ["gpt-5-mini", "gpt-5-mini-auditor"]);
 });
 
+test("accepts released DeepSeek client labels while the deployment selects the upstream model", async () => {
+  let calls = 0;
+  let observedModel;
+  const instance = service({
+    loadPolicy: async () => ({ defaultProvider: "deepseek" }),
+    providers: {
+      deepseek: {
+        async generate(input) { calls += 1; observedModel = input.model; return "Real answer"; },
+        model: "deepseek-v4-pro",
+        async *stream() { calls += 1; yield "Real answer"; }
+      }
+    }
+  }).instance;
+
+  const result = await instance.generate(body({
+    model: "deepseek-v4-flash",
+    provider: "deepseek"
+  }), context());
+  assert.equal(result.answer, "Real answer");
+  assert.equal(calls, 1);
+  assert.equal(observedModel, "deepseek-v4-pro");
+});
+
 test("rejects unknown fields, oversized prompts, and loose structured-output contracts", async () => {
   const { instance } = service();
   await assert.rejects(

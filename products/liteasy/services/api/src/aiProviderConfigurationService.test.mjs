@@ -4,7 +4,19 @@ import test from "node:test";
 import { AiProviderConfigurationService } from "./aiProviderConfigurationService.mjs";
 
 function fakePool() {
-  const state = { auditDetails: [], idempotency: new Map(), row: null };
+  const state = {
+    auditDetails: [],
+    idempotency: new Map(),
+    row: null,
+    structuredRoute: {
+      endpoint: "https://api.deepseek.com/chat/completions",
+      model: "deepseek-chat",
+      providerId: "deepseek",
+      revision: 1,
+      secretRef: "viz-secret:platform-deepseek",
+      updatedBy: "system"
+    }
+  };
   const client = {
     async query(sql, params = []) {
       if (sql.includes("pg_advisory_xact_lock")) return { rows: [] };
@@ -40,6 +52,23 @@ function fakePool() {
           updated_by: params[4]
         };
         return { rows: [state.row] };
+      }
+      if (sql.includes("UPDATE visualization_provider_configs")) {
+        const changed = state.structuredRoute.endpoint !== params[0] ||
+          state.structuredRoute.model !== params[1] ||
+          state.structuredRoute.providerId !== "deepseek" ||
+          state.structuredRoute.secretRef !== "viz-secret:platform-deepseek";
+        if (changed) {
+          state.structuredRoute = {
+            endpoint: params[0],
+            model: params[1],
+            providerId: "deepseek",
+            revision: state.structuredRoute.revision + 1,
+            secretRef: "viz-secret:platform-deepseek",
+            updatedBy: params[2]
+          };
+        }
+        return { rows: [] };
       }
       if (sql.includes("INSERT INTO audit_events")) {
         state.auditDetails.push(params[4]);
@@ -81,7 +110,7 @@ function legacyEncryptedRow(key, payload) {
   };
 }
 
-test("encrypts provider credentials and returns status only", async () => {
+test("encrypts provider credentials and returns only non-secret provider metadata", async () => {
   const pool = fakePool();
   const reconfigured = { mineru: null, providers: null };
   const service = new AiProviderConfigurationService({
@@ -96,7 +125,7 @@ test("encrypts provider credentials and returns status only", async () => {
     mineruToken: "mineru-token-private",
     textApiKey: "deepseek-api-key-private",
     textBaseUrl: "https://api.deepseek.com",
-    textModel: "deepseek-chat",
+    textModel: "deepseek-v4-flash",
     textProvider: "deepseek",
     visionApiKey: "vision-api-key-private",
     visionBaseUrl: "https://models.example/v1",
@@ -114,6 +143,9 @@ test("encrypts provider credentials and returns status only", async () => {
     mineruConfigured: true,
     modelProviderConfigured: true,
     revision: 1,
+    textBaseUrl: "https://api.deepseek.com",
+    textModel: "deepseek-v4-flash",
+    textProvider: "deepseek",
     updatedAt: "2026-08-13T08:00:00.000Z",
     updatedBy: "admin-1",
     writable: true
@@ -130,6 +162,14 @@ test("encrypts provider credentials and returns status only", async () => {
   assert.equal(reconfigured.providers.deepseek.model, secrets.textModel);
   assert.equal(reconfigured.mineru.model.model, secrets.visionModel);
   assert.deepEqual(await service.status({ roles: ["platform_admin"] }), response.configuration);
+  assert.deepEqual(pool.state.structuredRoute, {
+    endpoint: "https://api.deepseek.com/chat/completions",
+    model: "deepseek-v4-flash",
+    providerId: "deepseek",
+    revision: 2,
+    secretRef: "viz-secret:platform-deepseek",
+    updatedBy: "admin-1"
+  });
 });
 
 test("loads encrypted configuration after restart without exposing it in status", async () => {
@@ -143,7 +183,7 @@ test("loads encrypted configuration after restart without exposing it in status"
     reason: "Enable staging AI providers",
     textApiKey: "deepseek-api-key-private",
     textBaseUrl: "https://api.deepseek.com",
-    textModel: "deepseek-chat",
+    textModel: "deepseek-v4-flash",
     textProvider: "deepseek",
     traceId: "trace-2",
     visionApiKey: "vision-api-key-private",
@@ -203,7 +243,7 @@ test("switches text generation to DeepSeek while preserving legacy vision and Mi
     reason: "Move text generation to DeepSeek",
     textApiKey: "new-deepseek-api-key",
     textBaseUrl: "https://api.deepseek.com",
-    textModel: "deepseek-chat",
+    textModel: "deepseek-v4-flash",
     textProvider: "deepseek",
     traceId: "trace-deepseek",
     visionApiKey: "",
@@ -212,7 +252,7 @@ test("switches text generation to DeepSeek while preserving legacy vision and Mi
   });
 
   assert.equal(result.configuration.revision, 2);
-  assert.equal(reconfigured.providers.deepseek.model, "deepseek-chat");
+  assert.equal(reconfigured.providers.deepseek.model, "deepseek-v4-flash");
   assert.equal(reconfigured.providers.openai, undefined);
   assert.equal(reconfigured.mineru.model.model, "gpt-5.6-sol");
   assert.equal(reconfigured.mineru.model.baseUrl, "https://vip.auto-code.example/v1");
@@ -221,7 +261,7 @@ test("switches text generation to DeepSeek while preserving legacy vision and Mi
   assert.equal(reconfigured.secrets.get("viz-secret:platform-openai"), "existing-vision-api-key");
 });
 
-test("accepts only the official DeepSeek endpoint for new text configuration", async () => {
+test("accepts administrator-selected models and only deployment-allowed text endpoints", async () => {
   const service = new AiProviderConfigurationService({
     encryptionKey: Buffer.alloc(32, 8),
     environment: "staging",
@@ -237,27 +277,29 @@ test("accepts only the official DeepSeek endpoint for new text configuration", a
     reason: "Reject a non-official DeepSeek endpoint",
     textApiKey: "new-deepseek-api-key",
     textBaseUrl: "https://deepseek-compatible.example/v1",
-    textModel: "deepseek-chat",
+    textModel: "deepseek-v4-flash",
     textProvider: "deepseek",
     traceId: "trace-deepseek",
     visionApiKey: "existing-vision-api-key",
     visionBaseUrl: "https://vip.auto-code.example/v1",
     visionModel: "gpt-5.6-sol"
   }), { message: "ai_provider_text_base_url_invalid" });
-  await assert.rejects(() => service.save({ roles: ["platform_admin"], subjectId: "admin-1" }, {
+  const configured = await service.save({ roles: ["platform_admin"], subjectId: "admin-1" }, {
     expectedRevision: 0,
     idempotencyKey: "configure-ai-model",
     mineruToken: "existing-mineru-token",
-    reason: "Reject a different DeepSeek model",
+    reason: "Select the current DeepSeek model",
     textApiKey: "new-deepseek-api-key",
     textBaseUrl: "https://api.deepseek.com",
-    textModel: "deepseek-reasoner",
+    textModel: "deepseek-v4-pro",
     textProvider: "deepseek",
     traceId: "trace-deepseek-model",
     visionApiKey: "existing-vision-api-key",
     visionBaseUrl: "https://vip.auto-code.example/v1",
     visionModel: "gpt-5.6-sol"
-  }), { message: "ai_provider_text_model_invalid" });
+  });
+  assert.equal(configured.configuration.textModel, "deepseek-v4-pro");
+  assert.equal(configured.configuration.textBaseUrl, "https://api.deepseek.com");
   await assert.rejects(() => service.save({ roles: ["platform_admin"], subjectId: "admin-1" }, {
     apiKey: "legacy-model-key",
     baseUrl: "https://models.example/v1",
@@ -268,4 +310,57 @@ test("accepts only the official DeepSeek endpoint for new text configuration", a
     reason: "Reject the retired write contract",
     traceId: "trace-legacy"
   }), { message: "ai_provider_configuration_invalid" });
+});
+
+test("preserves the text API key while changing an allowlisted endpoint and model", async () => {
+  const pool = fakePool();
+  const reconfigured = { providers: null };
+  const service = new AiProviderConfigurationService({
+    encryptionKey: Buffer.alloc(32, 6),
+    environment: "staging",
+    fallbackConfig: {
+      mineru: {},
+      models: {},
+      platform: { textProviderEgressHostnames: ["api.deepseek.com", "deepseek-gateway.example"] }
+    },
+    mineruPdfService: { reconfigure() {} },
+    modelProxyService: { reconfigure(providers) { reconfigured.providers = providers; } },
+    pool
+  });
+  const common = {
+    mineruToken: "existing-mineru-token",
+    textProvider: "deepseek",
+    visionApiKey: "existing-vision-api-key",
+    visionBaseUrl: "https://vision.example/v1",
+    visionModel: "gpt-5.6-sol"
+  };
+  await service.save({ roles: ["platform_admin"], subjectId: "admin-1" }, {
+    ...common,
+    expectedRevision: 0,
+    idempotencyKey: "configure-custom-0001",
+    reason: "Initialize the text provider",
+    textApiKey: "existing-deepseek-api-key",
+    textBaseUrl: "https://api.deepseek.com",
+    textModel: "deepseek-v4-flash",
+    traceId: "trace-custom-1"
+  });
+  const changed = await service.save({ roles: ["platform_admin"], subjectId: "admin-1" }, {
+    ...common,
+    expectedRevision: 1,
+    idempotencyKey: "configure-custom-0002",
+    reason: "Switch the allowlisted text deployment",
+    textApiKey: "",
+    textBaseUrl: "https://deepseek-gateway.example/v1",
+    textModel: "deepseek-v4-pro",
+    traceId: "trace-custom-2",
+    visionApiKey: "",
+    visionBaseUrl: "",
+    visionModel: "",
+    mineruToken: ""
+  });
+  assert.equal(changed.configuration.textBaseUrl, "https://deepseek-gateway.example/v1");
+  assert.equal(changed.configuration.textModel, "deepseek-v4-pro");
+  assert.equal(reconfigured.providers.deepseek.model, "deepseek-v4-pro");
+  assert.equal(pool.state.structuredRoute.endpoint, "https://deepseek-gateway.example/v1/chat/completions");
+  assert.equal(pool.state.structuredRoute.model, "deepseek-v4-pro");
 });

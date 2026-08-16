@@ -121,6 +121,9 @@ export type AiProviderConfigurationStatus = {
   mineruConfigured: boolean;
   modelProviderConfigured: boolean;
   revision: number;
+  textBaseUrl: string | null;
+  textModel: string | null;
+  textProvider: string | null;
   updatedAt: string | null;
   updatedBy: string | null;
   writable: boolean;

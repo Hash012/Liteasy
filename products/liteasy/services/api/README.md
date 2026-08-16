@@ -131,7 +131,7 @@ Intuecho 的组织可见性和组织邀请使用独立内部边界。服务 toke
 
 配额读取通过 `POST /v1/admin/quotas/get` 执行，设置通过 `POST /v1/admin/quotas/set` 执行。设置要求新鲜 MFA、原因、幂等键和 `expectedRevision`，与更新者、已用字节和追加写审计事件在同一 PostgreSQL 事务中返回。组织目标必须是真实 active 组织，已删除的用户不能重新配置配额。
 
-桌面模型策略通过 `GET /v1/model-policy` 读取，只返回 Liteasy 代理端点、默认 provider、策略版本和修订号，不返回上游地址、实际部署模型或凭据。`POST /v1/model/generate` 与流式路由先校验 `liteasy-desktop` Bearer token，再校验严格字段、240,000 字符输入上限、结构化输出和当前策略；实际模型固定为部署配置，客户端请求其他模型或 provider 会被拒绝。文本生成使用 DeepSeek 官方 Chat Completions，固定入口为 `https://api.deepseek.com`，默认模型为 `deepseek-chat`；流式输出转换为桌面消费的 NDJSON。上游错误正文既不回传也不记录，带 traceId 的服务日志只记录主体、provider、状态类别、错误正文大小、输入/输出长度和耗时，不记录 prompt 或文献正文；未配置或不可用时返回稳定 503，不生成假回答。
+桌面模型策略通过 `GET /v1/model-policy` 读取，只返回 Liteasy 代理端点、默认 provider、策略版本和修订号，不返回上游地址、实际部署模型或凭据。`POST /v1/model/generate` 与流式路由先校验 `liteasy-desktop` Bearer token，再校验严格字段、240,000 字符输入上限、结构化输出和当前策略；DeepSeek 的实际上游模型固定为管理员保存的部署配置，已发布客户端携带的兼容模型标签不会覆盖该选择。文本生成使用 DeepSeek Chat Completions，管理员可在部署白名单 `LITEASY_TEXT_PROVIDER_EGRESS_HOSTNAMES` 范围内设置 HTTPS API 地址和模型；默认白名单为 `api.deepseek.com`，当前桌面默认标签为 `deepseek-v4-flash`。流式输出转换为桌面消费的 NDJSON。上游错误正文既不回传也不记录，带 traceId 的服务日志只记录主体、provider、状态类别、错误正文大小、输入/输出长度和耗时，不记录 prompt 或文献正文；未配置或不可用时返回稳定 503，不生成假回答。
 
 正式 AI 调用分为三条独立边界：薄读、AI 助手、翻译、Agent 和结构化可视化使用 DeepSeek `deepseek-chat`；生成图片继续使用现有 OpenAI-compatible 图片路由的 `gpt-image-2`；MinerU 提取不变，其中图片理解继续使用现有视觉路由的 `gpt-5.6-sol`。DeepSeek 文本 Key、视觉/图片 Key 和 MinerU Token 不得相互复用。平台管理员通过管理端“模型服务”写入加密配置时，DeepSeek 三项必填；视觉三项和 MinerU Token 留空表示保留当前加密值。旧的单供应商加密记录可读取并迁移，但服务不会把旧视觉 Key 注入 DeepSeek secret 引用。
 

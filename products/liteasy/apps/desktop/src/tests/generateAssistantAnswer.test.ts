@@ -1165,7 +1165,7 @@ test("uses the DeepSeek default model for assistant generation when provider is 
 
   expect(requests[0].url).toBe("https://liteasy.example.com/model-proxy/v1/model/generate");
   expect(JSON.parse(requests[0].body)).toMatchObject({
-    model: "deepseek-chat",
+    model: "deepseek-v4-flash",
     provider: "deepseek",
     source: "cloud_proxy"
   });
@@ -2666,7 +2666,7 @@ test("runs thin-reading through the DeepSeek provider without downgrading to moc
   });
 
   expect(JSON.parse(requests[0].body)).toMatchObject({
-    model: "deepseek-chat",
+    model: "deepseek-v4-flash",
     provider: "deepseek",
     requireLive: true,
     source: "cloud_proxy"
@@ -4335,7 +4335,7 @@ test("accepts a DeepSeek mechanism anchor without entering structured-output rep
           status: 200
         };
       }
-      expect(body).toMatchObject({ model: "deepseek-chat", provider: "deepseek" });
+      expect(body).toMatchObject({ model: "deepseek-v4-flash", provider: "deepseek" });
       prompts.push(String(body.prompt));
       if (body.outputFormat?.schema) {
         outputSchemas.push(body.outputFormat.schema);

@@ -92,7 +92,9 @@ function providerForRequest(providers, policy, input) {
   }
   const provider = providers[input.provider];
   if (!provider) throw new ModelProxyError("model_provider_unavailable", 503);
-  if (input.model !== provider.model && !compatibleClientModels[input.provider]?.has(input.model)) {
+  const serverSelectsModel = input.provider === "deepseek";
+  if (!serverSelectsModel && input.model !== provider.model &&
+    !compatibleClientModels[input.provider]?.has(input.model)) {
     throw new ModelProxyError("model_not_allowed", 403);
   }
   return provider;
@@ -120,7 +122,10 @@ export class ModelProxyService {
     const input = generationInput(body);
     const policy = await this.loadPolicy();
     const provider = providerForRequest(this.providers, policy, input);
-    return { input, provider };
+    return {
+      input: input.provider === "deepseek" ? { ...input, model: provider.model } : input,
+      provider
+    };
   }
 
   #log(level, event) {

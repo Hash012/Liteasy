@@ -1063,9 +1063,9 @@ sudo docker compose \
 迁移 `032_deepseek_text_provider.sql` 只负责把默认文本策略和结构化可视化路由切到 DeepSeek，并复制该路由已有的版本化计费策略；它不会创建或猜测 DeepSeek API Key。完成以下全部步骤后才算切换成功：
 
 1. 从已评审提交构建并推送新的 `liteasy-api` 镜像和包含管理端的新 `gateway` 镜像，把仓库 digest 写入 `deployment/staging/config.env`。桌面端默认模型也已改为 `deepseek-chat`，对外发版时需要另行生成并验收新的桌面安装包。
-2. 在 root-only `/etc/liteasy/staging/liteasy-api.env` 中设置 `LITEASY_VISUALIZATION_EGRESS_HOSTNAMES=api.deepseek.com,vip.auto-code.net`。这里仅填写主机名，不填写任何 API Key。
+2. 在 root-only `/etc/liteasy/staging/liteasy-api.env` 中设置 `LITEASY_TEXT_PROVIDER_EGRESS_HOSTNAMES=api.deepseek.com` 和 `LITEASY_VISUALIZATION_EGRESS_HOSTNAMES=api.deepseek.com,vip.auto-code.net`。这里仅填写允许出站的主机名，不填写任何 API Key。
 3. 执行第 11.3 节 Liteasy 迁移并确认第二次运行输出 `{"applied":[]}`，再启动新容器。迁移完成而 DeepSeek Key 尚未保存的短暂窗口内，文本和结构化生成应失败关闭；不要把这种 503 当作部署完成。
-4. 用具名 `platform_admin` 账号和新鲜 MFA 打开管理端“模型服务”。文本 API 地址保持 `https://api.deepseek.com`，文本模型保持 `deepseek-chat`，由操作者直接填写 DeepSeek Key。已有视觉和 MinerU 配置时，将视觉地址、视觉模型、视觉 Key、MinerU Token 留空以保留旧值；首次配置则必须完整填写三类凭据。
+4. 用具名 `platform_admin` 账号和新鲜 MFA 打开管理端“模型服务”。按 DeepSeek 当前官方文档填写文本 API 地址和模型；地址主机必须在 `LITEASY_TEXT_PROVIDER_EGRESS_HOSTNAMES` 中。更新地址或模型时可将文本 Key 留空以保留加密旧值；已有视觉和 MinerU 配置时，也可将视觉地址、视觉模型、视觉 Key、MinerU Token 留空以保留旧值。首次配置则必须完整填写三类凭据。
 5. 验证薄读、AI 助手、翻译、Agent 和结构化可视化都走 DeepSeek；验证 MinerU 图片理解仍使用 `gpt-5.6-sol`，图片生成仍使用 `gpt-image-2`。同时检查日志只含稳定错误和元数据，不含 prompt、Key 或上游错误正文。
 
 DeepSeek Key、现有视觉/图片 Key 和 MinerU Token 是三类独立秘密。不得通过聊天传递，不得写入 Git、命令行参数或 shell 历史；只能由授权操作者在管理端密码框中录入，并保存在批准的加密离线备份中。

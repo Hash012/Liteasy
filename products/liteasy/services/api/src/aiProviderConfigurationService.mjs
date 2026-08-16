@@ -58,15 +58,23 @@ function validateEndpoint(value, environment) {
   return parsed.toString().replace(/\/$/, "");
 }
 
-function validateTextEndpoint(value, provider, environment) {
+function hostnameAllowed(hostname, allowedHostnames) {
+  const normalized = hostname.toLowerCase();
+  return allowedHostnames.some((allowed) =>
+    allowed === normalized || (allowed.startsWith("*.") && normalized.endsWith(allowed.slice(1)))
+  );
+}
+
+function validateTextEndpoint(value, provider, environment, allowedHostnames) {
   const endpoint = validateEndpoint(value, environment);
-  if (provider === "deepseek" && endpoint !== "https://api.deepseek.com") {
+  const hostname = new URL(endpoint).hostname.toLowerCase();
+  if (provider === "deepseek" && !hostnameAllowed(hostname, allowedHostnames)) {
     throw new PlatformAdminError("ai_provider_text_base_url_invalid");
   }
   return endpoint;
 }
 
-function validateInput(input, environment) {
+function validateInput(input, environment, allowedHostnames) {
   if (!input || typeof input !== "object" || Array.isArray(input) ||
     Object.keys(input).some((field) => !allowedFields.has(field))) {
     throw new PlatformAdminError("ai_provider_configuration_invalid");
@@ -79,14 +87,13 @@ function validateInput(input, environment) {
   const textProvider = requiredText(input.textProvider, 1, 80, "ai_provider_text_provider_invalid").toLowerCase();
   if (!supportedTextProviders.has(textProvider)) throw new PlatformAdminError("ai_provider_text_provider_invalid");
   const textModel = modelIdentifier(input.textModel, "ai_provider_text_model_invalid");
-  if (textModel !== "deepseek-chat") throw new PlatformAdminError("ai_provider_text_model_invalid");
   return {
     expectedRevision: input.expectedRevision,
     idempotencyKey,
     mineruToken: optionalText(input.mineruToken, 8, 4096, "ai_provider_mineru_token_invalid"),
     reason: requiredText(input.reason, 8, 1000, "admin_reason_invalid"),
-    textApiKey: requiredText(input.textApiKey, 8, 4096, "ai_provider_text_api_key_invalid"),
-    textBaseUrl: validateTextEndpoint(input.textBaseUrl, textProvider, environment),
+    textApiKey: optionalText(input.textApiKey, 8, 4096, "ai_provider_text_api_key_invalid"),
+    textBaseUrl: validateTextEndpoint(input.textBaseUrl, textProvider, environment, allowedHostnames),
     textModel,
     textProvider,
     traceId: requiredText(input.traceId, 1, 300, "trace_id_invalid"),
@@ -99,7 +106,7 @@ function validateInput(input, environment) {
 function storedPayload(input, current) {
   const payload = {
     mineruToken: input.mineruToken ?? current?.mineruToken,
-    textApiKey: input.textApiKey,
+    textApiKey: input.textApiKey ?? current?.textApiKey,
     textBaseUrl: input.textBaseUrl,
     textModel: input.textModel,
     textProvider: input.textProvider,
@@ -108,6 +115,7 @@ function storedPayload(input, current) {
     visionModel: input.visionModel ?? current?.visionModel
   };
   if (!payload.mineruToken) throw new PlatformAdminError("ai_provider_mineru_token_invalid");
+  if (!payload.textApiKey) throw new PlatformAdminError("ai_provider_text_api_key_invalid");
   if (!payload.visionApiKey) throw new PlatformAdminError("ai_provider_vision_api_key_invalid");
   if (!payload.visionBaseUrl) throw new PlatformAdminError("ai_provider_vision_base_url_invalid");
   if (!payload.visionModel) throw new PlatformAdminError("ai_provider_vision_model_invalid");
@@ -142,7 +150,7 @@ function encrypt(payload, key) {
   };
 }
 
-function decrypt(row, key) {
+function decrypt(row, key, allowedHostnames = ["api.deepseek.com"]) {
   if (row.algorithm !== algorithm) throw new Error("ai_provider_configuration_algorithm_unsupported");
   const decipher = createDecipheriv("aes-256-gcm", key, row.initialization_vector);
   decipher.setAAD(aad);
@@ -163,14 +171,11 @@ function decrypt(row, key) {
       throw new PlatformAdminError("ai_provider_text_provider_invalid");
     }
     const textModel = modelIdentifier(payload.textModel, "ai_provider_text_model_invalid");
-    if (textProvider === "deepseek" && textModel !== "deepseek-chat") {
-      throw new PlatformAdminError("ai_provider_text_model_invalid");
-    }
     return {
       mineruToken: requiredText(payload.mineruToken, 8, 4096, "ai_provider_mineru_token_invalid"),
       textApiKey: requiredText(payload.textApiKey, 8, 4096, "ai_provider_text_api_key_invalid"),
       textBaseUrl: textProvider === "deepseek"
-        ? validateTextEndpoint(payload.textBaseUrl, textProvider, "production")
+        ? validateTextEndpoint(payload.textBaseUrl, textProvider, "production", allowedHostnames)
         : validateEndpoint(payload.textBaseUrl, "production"),
       textModel,
       textProvider,
@@ -182,16 +187,38 @@ function decrypt(row, key) {
   return legacyStoredPayload(payload);
 }
 
-function publicStatus(row, writable) {
+function publicStatus(row, writable, payload) {
   return {
     configured: Boolean(row),
     mineruConfigured: Boolean(row),
     modelProviderConfigured: Boolean(row),
     revision: row ? Number(row.revision) : 0,
+    textBaseUrl: payload?.textBaseUrl ?? null,
+    textModel: payload?.textModel ?? null,
+    textProvider: payload?.textProvider ?? null,
     updatedAt: row?.updated_at?.toISOString() ?? null,
     updatedBy: row?.updated_by ?? null,
     writable
   };
+}
+
+function structuredGenerationEndpoint(baseUrl) {
+  return `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
+}
+
+async function synchronizeStructuredRoute(client, payload, actorId) {
+  if (payload.textProvider !== "deepseek") return;
+  await client.query(`
+    UPDATE visualization_provider_configs
+       SET provider_id = 'deepseek', endpoint = $1, model = $2,
+           secret_ref = 'viz-secret:platform-deepseek', revision = revision + 1,
+           updated_by = $3, updated_at = now()
+     WHERE route_id = 'platform-openai-structured'
+       AND (
+         provider_id <> 'deepseek' OR endpoint <> $1 OR model <> $2 OR
+         secret_ref <> 'viz-secret:platform-deepseek'
+       )
+  `, [structuredGenerationEndpoint(payload.textBaseUrl), payload.textModel, actorId]);
 }
 
 async function appendAudit(client, input) {
@@ -236,6 +263,8 @@ export class AiProviderConfigurationService {
     this.encryptionKey = encryptionKey;
     this.environment = environment;
     this.fallbackConfig = fallbackConfig;
+    this.textProviderEgressHostnames = fallbackConfig.platform?.textProviderEgressHostnames ??
+      ["api.deepseek.com"];
     this.fetchImpl = fetchImpl;
     this.mineruPdfService = mineruPdfService;
     this.modelProxyService = modelProxyService;
@@ -286,7 +315,7 @@ export class AiProviderConfigurationService {
     const row = await this.#row();
     if (row) {
       if (!this.encryptionKey) throw new Error("ai_provider_configuration_encryption_key_missing");
-      this.#apply(decrypt(row, this.encryptionKey));
+      this.#apply(decrypt(row, this.encryptionKey, this.textProviderEgressHostnames));
       return publicStatus(row, true);
     }
     return publicStatus(undefined, Boolean(this.encryptionKey));
@@ -294,13 +323,17 @@ export class AiProviderConfigurationService {
 
   async status(principal) {
     requirePlatformAdmin(principal);
-    return publicStatus(await this.#row(), Boolean(this.encryptionKey));
+    const row = await this.#row();
+    const payload = row && this.encryptionKey
+      ? decrypt(row, this.encryptionKey, this.textProviderEgressHostnames)
+      : undefined;
+    return publicStatus(row, Boolean(this.encryptionKey), payload);
   }
 
   async save(principal, rawInput) {
     requirePlatformAdmin(principal);
     if (!this.encryptionKey) throw new PlatformAdminError("ai_provider_configuration_write_unavailable", 503);
-    const input = validateInput(rawInput, this.environment);
+    const input = validateInput(rawInput, this.environment, this.textProviderEgressHostnames);
     const requestHash = createHash("sha256")
       .update(JSON.stringify(input))
       .digest("hex");
@@ -323,7 +356,11 @@ export class AiProviderConfigurationService {
         `);
         return {
           response: prior.rows[0].response_body,
-          secretPayload: decrypt(configured.rows[0], this.encryptionKey)
+          secretPayload: decrypt(
+            configured.rows[0],
+            this.encryptionKey,
+            this.textProviderEgressHostnames
+          )
         };
       }
       const currentResult = await client.query(`
@@ -337,7 +374,7 @@ export class AiProviderConfigurationService {
       }
       const secretPayload = storedPayload(
         input,
-        current ? decrypt(current, this.encryptionKey) : undefined
+        current ? decrypt(current, this.encryptionKey, this.textProviderEgressHostnames) : undefined
       );
       const encrypted = encrypt(secretPayload, this.encryptionKey);
       const changed = current
@@ -359,7 +396,8 @@ export class AiProviderConfigurationService {
           `, [algorithm, encrypted.initializationVector, encrypted.authenticationTag,
             encrypted.encryptedPayload, principal.subjectId]);
       if (!changed.rows[0]) throw new PlatformAdminError("ai_provider_configuration_revision_conflict", 409);
-      const status = publicStatus(changed.rows[0], true);
+      await synchronizeStructuredRoute(client, secretPayload, principal.subjectId);
+      const status = publicStatus(changed.rows[0], true, secretPayload);
       await appendAudit(client, {
         actorId: principal.subjectId,
         previousRevision: currentRevision,

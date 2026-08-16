@@ -81,7 +81,7 @@ test("loads deployment-scoped model providers without exposing credentials", () 
   const config = loadCloudConfig(validEnv({
     LITEASY_MODEL_DEEPSEEK_API_KEY: "deepseek-deployment-secret",
     LITEASY_MODEL_DEEPSEEK_BASE_URL: "https://api.deepseek.com",
-    LITEASY_MODEL_DEEPSEEK_MODEL: "deepseek-chat",
+    LITEASY_MODEL_DEEPSEEK_MODEL: "deepseek-v4-flash",
     LITEASY_MODEL_OPENAI_API_KEY: "openai-deployment-secret",
     LITEASY_MODEL_OPENAI_BASE_URL: "https://api.openai.com/v1",
     LITEASY_MODEL_OPENAI_MODEL: "gpt-5-mini"
@@ -89,6 +89,8 @@ test("loads deployment-scoped model providers without exposing credentials", () 
 
   assert.equal(config.models.providers.openai.model, "gpt-5-mini");
   assert.equal(config.models.providers.deepseek.apiKey, "deepseek-deployment-secret");
+  assert.equal(config.models.providers.deepseek.model, "deepseek-v4-flash");
+  assert.deepEqual(config.platform.textProviderEgressHostnames, ["api.deepseek.com"]);
   assert.equal(config.models.timeoutMs, 300_000);
   assert.equal(publicCloudConfig(config).modelProxy, "configured");
   assert.equal(JSON.stringify(publicCloudConfig(config)).includes("openai"), false);
@@ -133,12 +135,30 @@ test("loads visualization secret references from the deployment-owned JSON varia
     })
   }));
 
-  assert.deepEqual(config.visualization.egressHostnames, ["backup.example", "provider.example"]);
+  assert.deepEqual(config.visualization.egressHostnames, [
+    "api.deepseek.com",
+    "backup.example",
+    "provider.example"
+  ]);
   assert.equal(config.visualization.secrets["viz-secret:provider-1"], "deployment-managed-value");
   assert.equal(JSON.stringify(publicCloudConfig(config)).includes("deployment-managed-value"), false);
   assert.throws(
     () => loadCloudConfig(validEnv({ LITEASY_VISUALIZATION_SECRETS_JSON: "not-json" })),
     /LITEASY_VISUALIZATION_SECRETS_JSON/
+  );
+});
+
+test("loads a deployment-owned text provider hostname allowlist", () => {
+  const config = loadCloudConfig(validEnv({
+    LITEASY_TEXT_PROVIDER_EGRESS_HOSTNAMES: "api.deepseek.com, deepseek-gateway.example"
+  }));
+  assert.deepEqual(config.platform.textProviderEgressHostnames, [
+    "api.deepseek.com",
+    "deepseek-gateway.example"
+  ]);
+  assert.throws(
+    () => loadCloudConfig(validEnv({ LITEASY_TEXT_PROVIDER_EGRESS_HOSTNAMES: "https://api.deepseek.com" })),
+    /LITEASY_TEXT_PROVIDER_EGRESS_HOSTNAMES/
   );
 });
 

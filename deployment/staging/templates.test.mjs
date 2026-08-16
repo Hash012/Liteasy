@@ -30,6 +30,7 @@ test("service templates satisfy the production configuration parsers", () => {
     liteasy.LITEASY_VISUALIZATION_EGRESS_HOSTNAMES,
     "api.deepseek.com,vip.auto-code.net"
   );
+  assert.equal(liteasy.LITEASY_TEXT_PROVIDER_EGRESS_HOSTNAMES, "api.deepseek.com");
 });
 
 test("the staging realm has three PKCE clients and separated service identities", () => {

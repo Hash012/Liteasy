@@ -71,6 +71,9 @@ test("loads identity, policy, retrieval, audit, and forum data into task views",
       mineruConfigured: true,
       modelProviderConfigured: true,
       revision: 2,
+      textBaseUrl: "https://api.deepseek.com/v1",
+      textModel: "deepseek-v4-pro",
+      textProvider: "deepseek",
       updatedAt: "2026-08-07T00:00:00.000Z",
       updatedBy: "admin-1",
       writable: true
@@ -150,6 +153,8 @@ test("loads identity, policy, retrieval, audit, and forum data into task views",
   expect(await screen.findByText("Research Team")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "模型与检索" }));
   expect(await screen.findByDisplayValue("https://models.liteasy.example")).toBeInTheDocument();
+  expect(screen.getByDisplayValue("https://api.deepseek.com/v1")).not.toHaveAttribute("readonly");
+  expect(screen.getByDisplayValue("deepseek-v4-pro")).not.toHaveAttribute("readonly");
   expect(screen.getAllByText("已配置")).toHaveLength(2);
   expect(screen.queryByText(/provider-secret|mineru-secret/)).not.toBeInTheDocument();
   expect(screen.getByText("Public Search")).toBeInTheDocument();

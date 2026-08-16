@@ -5,13 +5,26 @@ const allowedEnvironments = new Set(["production", "staging", "test"]);
 const allowedS3SecurityProfiles = new Set(["aws-s3", "aliyun-oss"]);
 const allowedSslModes = new Set(["require", "verify-ca", "verify-full"]);
 
-function parseVisualizationEgressHostnames(value) {
+function parseEgressHostnames(value, name) {
   if (value === undefined || value === "") return Object.freeze([]);
   const hostnames = [...new Set(value.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean))].sort();
   if (hostnames.some((hostname) => !/^(?:\*\.)?[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$/.test(hostname))) {
-    throw new Error("cloud_config_invalid: LITEASY_VISUALIZATION_EGRESS_HOSTNAMES contains an invalid hostname");
+    throw new Error(`cloud_config_invalid: ${name} contains an invalid hostname`);
   }
   return Object.freeze(hostnames);
+}
+
+function parseVisualizationEgressHostnames(value) {
+  return parseEgressHostnames(value, "LITEASY_VISUALIZATION_EGRESS_HOSTNAMES");
+}
+
+function parseTextProviderEgressHostnames(value) {
+  const configured = value === undefined || value === "" ? "api.deepseek.com" : value;
+  const hostnames = parseEgressHostnames(configured, "LITEASY_TEXT_PROVIDER_EGRESS_HOSTNAMES");
+  if (hostnames.length === 0) {
+    throw new Error("cloud_config_invalid: LITEASY_TEXT_PROVIDER_EGRESS_HOSTNAMES must not be empty");
+  }
+  return hostnames;
 }
 
 function required(env, name) {
@@ -332,6 +345,13 @@ export function loadCloudConfig(env = process.env) {
     env.LITEASY_MINERU_TOKEN ?? env.MINERU_TOKEN,
     "LITEASY_MINERU_TOKEN"
   );
+  const textProviderEgressHostnames = parseTextProviderEgressHostnames(
+    env.LITEASY_TEXT_PROVIDER_EGRESS_HOSTNAMES
+  );
+  const visualizationEgressHostnames = Object.freeze([...new Set([
+    ...parseVisualizationEgressHostnames(env.LITEASY_VISUALIZATION_EGRESS_HOSTNAMES),
+    ...textProviderEgressHostnames
+  ])].sort());
   return Object.freeze({
     allowedOrigins: Object.freeze(parseAllowedOrigins(required(env, "LITEASY_ALLOWED_ORIGINS"), environment)),
     database: Object.freeze({
@@ -411,7 +431,8 @@ export function loadCloudConfig(env = process.env) {
       token: mineruToken
     }),
     platform: Object.freeze({
-      configurationEncryptionKey: optionalEncryptionKey(env.LITEASY_PLATFORM_CONFIG_ENCRYPTION_KEY)
+      configurationEncryptionKey: optionalEncryptionKey(env.LITEASY_PLATFORM_CONFIG_ENCRYPTION_KEY),
+      textProviderEgressHostnames
     }),
     port: parsePort(env.LITEASY_CLOUD_PORT),
     pdfSecurity: Object.freeze({
@@ -469,7 +490,7 @@ export function loadCloudConfig(env = process.env) {
       securityProfile: s3SecurityProfile
     }),
     visualization: Object.freeze({
-      egressHostnames: parseVisualizationEgressHostnames(env.LITEASY_VISUALIZATION_EGRESS_HOSTNAMES),
+      egressHostnames: visualizationEgressHostnames,
       secrets: parseVisualizationSecrets(env.LITEASY_VISUALIZATION_SECRETS_JSON)
     })
   });

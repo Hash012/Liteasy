@@ -189,6 +189,9 @@ export function AdminWorkspace({
     mineruConfigured: false,
     modelProviderConfigured: false,
     revision: 0,
+    textBaseUrl: null,
+    textModel: null,
+    textProvider: null,
     updatedAt: null,
     updatedBy: null,
     writable: false
@@ -1087,10 +1090,10 @@ function ModelsView({
           <div><dt>修订号</dt><dd>{aiProviderConfiguration.revision}</dd></div>
           <div><dt>更新时间</dt><dd>{formatDate(aiProviderConfiguration.updatedAt)}</dd></div>
         </dl>
-        <form className="admin-form admin-form-horizontal" onSubmit={onSaveAiProviderConfiguration}>
-          <Field label="文本 API 地址" required><Input autoComplete="off" defaultValue="https://api.deepseek.com" name="textBaseUrl" readOnly required type="url" /></Field>
-          <Field label="文本模型" required><Input autoComplete="off" defaultValue="deepseek-chat" name="textModel" readOnly required /></Field>
-          <Field label="文本 API Key" required><Input autoComplete="new-password" name="textApiKey" required type="password" /></Field>
+        <form className="admin-form admin-form-horizontal" key={aiProviderConfiguration.revision} onSubmit={onSaveAiProviderConfiguration}>
+          <Field label="文本 API 地址" required><Input autoComplete="off" defaultValue={aiProviderConfiguration.textBaseUrl ?? "https://api.deepseek.com"} name="textBaseUrl" required type="url" /></Field>
+          <Field label="文本模型" required><Input autoComplete="off" defaultValue={aiProviderConfiguration.textModel ?? "deepseek-v4-flash"} name="textModel" required /></Field>
+          <Field label="文本 API Key（留空保留）"><Input autoComplete="new-password" name="textApiKey" type="password" /></Field>
           <Field label="视觉 API 地址（留空保留）"><Input autoComplete="off" name="visionBaseUrl" placeholder="https://vip.auto-code.net/v1" type="url" /></Field>
           <Field label="视觉模型（留空保留）"><Input autoComplete="off" name="visionModel" placeholder="gpt-5.6-sol" /></Field>
           <Field label="视觉 API Key（留空保留）"><Input autoComplete="new-password" name="visionApiKey" type="password" /></Field>
