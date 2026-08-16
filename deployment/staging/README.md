@@ -18,8 +18,8 @@
 | OSS 作为现有 S3 客户端后端 | 已有显式 `aliyun-oss` 安全模式，仍须用真实 bucket 运行探针 | 探针通过后才能继续 Liteasy |
 | PDF 安全扫描 | 已有私有 HTTPS ClamAV 部署 | EICAR、鉴权、哈希绑定和故障关闭验收通过后可以继续 |
 | Keycloak 邮件、MFA、恢复 | 需要真实 SMTP 和人工 E2E | 验收通过前不能邀请用户 |
-| Windows Authenticode 签名 | 没有组织签名证书和已确认的签名服务 | 当前是发布阻塞项 |
-| 官网安装包下载 | 仓库没有不可变下载存储和发布流水线 | 当前是发布阻塞项 |
+| Windows Authenticode 签名 | `0.1.11` 已按负责人批准作为未签名受控 staging 例外发布 | 生产和不受控公开发布仍是阻塞项 |
+| 官网安装包下载 | 受控 staging 已通过短时令牌和 root-only 不可变版本目录提供 | 生产级制品服务、签名和完整 E2E 仍是阻塞项 |
 | RDS 恢复、监控和告警 | 本文给出配置与演练步骤，但必须在你的阿里云账号中实际完成 | 没有证据前不能宣称已完成 |
 
 ### 受控 10 人预发布边界
@@ -1425,7 +1425,7 @@ sudo systemctl restart liteasy-staging-maintenance.timer
 
 ## 12. Windows 客户端和网站下载
 
-当前状态：**本节尚不能在本项目内完整执行到公开下载。** 原因不是缺少一条构建命令，而是尚未提供组织 Authenticode 证书、签名服务、不可变安装包存储和营销站下载发布实现。下面把已能执行的构建步骤和必须停止的位置分开写清楚。
+当前状态：**受控 staging 已能通过体验申请后的短时令牌下载 `0.1.11`，但仍不能提升为生产或不受控公开下载。** 当前没有组织 Authenticode 证书和签名服务，也没有完成干净 Windows 11 环境的签名安装 E2E。下面把已能执行的构建步骤、当前受控例外和必须停止的位置分开写清楚。
 
 ### 12.1 准备受控 Windows 构建机
 
@@ -1486,7 +1486,7 @@ $installer | Format-List FullName,Length,LastWriteTime
 
 ### 12.3 Authenticode 与受控 staging 例外
 
-生产发布和不受控公开发布必须使用受信任的 Authenticode 签名。`0.1.0` 可在负责人明确批准后作为受控 staging 例外发布未签名的 Windows x64 安装包；该例外不得沿用到其他版本或环境，发布元数据必须记录 `signed: false`，测试用户必须提前知晓 Windows 会显示“未知发布者”。
+生产发布和不受控公开发布必须使用受信任的 Authenticode 签名；**Authenticode 是当前强制停止点**。`0.1.11` 已在负责人明确批准后作为受控 staging 例外发布未签名的 Windows x64 安装包；该批准仅适用于版本 `0.1.11`、仓库提交 `dbdfa59723bb9a0619d92fbefc3e4f5b0b6df711` 和 staging 环境，不得沿用到其他版本或环境。发布元数据必须记录 `signed: false`，测试用户必须提前知晓 Windows 会显示“未知发布者”。
 
 不得使用自签名证书发布给测试用户。继续前必须由组织完成以下输入：
 
@@ -1529,7 +1529,9 @@ $hash | Format-List Algorithm,Hash,Path
 
 ### 12.5 受控下载路径
 
-营销站通过体验申请签发短时下载令牌，安装包由与用户 PDF bucket 分离的 waitlist 制品目录提供。GitHub Actions 使用短时 OIDC 身份把固定版本安装包原子发布到该目录；服务端校验仓库、工作流、提交 SHA、版本、文件名和 SHA-256，不保存长期 GitHub 凭据。
+营销站通过体验申请签发短时下载令牌，安装包由与用户 PDF bucket 分离的 waitlist 制品目录提供。自动发布正常情况下由 GitHub Actions 使用短时 OIDC 身份完成；`0.1.11` 因 Actions 账户计费限制未能启动，改由可信 Windows 构建机生成，并经服务器端字节数和 SHA-256 双重核验后原子发布。制品位于 root-only 版本目录 `/var/lib/liteasy/waitlist/releases/0.1.11/`，相邻 JSON 记录提交、哈希、大小、签名状态和发布方式。
+
+`0.1.11` 当前审计基线：文件名 `Liteasy_0.1.11_x64-setup.exe`，大小 `16542411` 字节，SHA-256 `d3a115dbb4e0f412b0de01091319f5e965994c31f3e66db03970992925205564`，`signed: false`。生产和不受控公开发布不能复用这一手工例外；**公开下载路径是当前强制停止点**。
 
 发布前必须另行评审并实现：
 

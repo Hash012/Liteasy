@@ -80,6 +80,14 @@ test("the staging realm has three PKCE clients and separated service identities"
   assert.equal(realm.users[0].serviceAccountClientId, "liteasy-keycloak-admin");
 
   const configured = environment("keycloak");
+  assert.equal(
+    configured.LITEASY_DESKTOP_LOOPBACK_REDIRECT_URI,
+    "http://127.0.0.1/oauth/callback"
+  );
+  assert.equal(
+    configured.LITEASY_DESKTOP_LOCALHOST_REDIRECT_URI,
+    "http://localhost/oauth/callback"
+  );
   const referencedVariables = [...source.matchAll(/\$\{([A-Z0-9_]+)\}/g)].map((match) => match[1]);
   assert.equal(referencedVariables.every((name) => configured[name]), true);
 });
