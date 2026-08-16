@@ -1167,7 +1167,7 @@ https://auth.staging.liteasyclaw.com/admin/
 1. 选择 `liteasy` realm。
 2. 进入 `Realm settings -> Email`，填写真实 SMTP 主机、端口、发件人和加密方式。SMTP 密码使用邮箱或邮件服务商提供的应用专用密码，由授权运维人员直接填入 Keycloak 页面，并在服务器外的加密离线备份中保存；不要发送到聊天。然后点击测试连接/发送测试邮件，测试邮件未收到就停止。
 3. 进入 `Realm settings -> Login` 打开 `Verify email`；再到 `Authentication -> Required actions` 确认 `Verify Email` 已启用。用一个新测试账号完成邮箱验证。
-4. 在 `Authentication -> Policies` 配置组织认可的 OTP 或 WebAuthn 策略；在 `Required actions` 启用对应注册动作。若选择 OTP，应把 `Configure OTP` 设为默认动作，使新用户首次登录必须配置；再用测试账号完成第二因素注册和重新登录。仅在界面中打开开关但未实际登录不算验收。
+4. 在 `Authentication -> Policies` 配置组织认可的 OTP 策略，并在 `Required actions` 启用 `Configure OTP`，但**不得设为默认动作**。普通桌面端和论坛客户端绑定 `liteasy-user-browser`，只使用 SSO Cookie 或密码，不要求 OTP；只有 `liteasy-admin-public` 绑定 `liteasy-admin-browser`，每次管理端认证都要求密码和 OTP。为每个被授予 `platform_admin` 的账号单独加入 `Configure OTP`，让本人完成注册后再进入管理端。仅在界面中打开开关但未实际登录不算验收。
 5. 启用并实际测试忘记密码、恢复代码或组织选定的账号恢复流程，确认恢复过程不会绕过 MFA。
 6. 为每一位实际运维人员分别创建具名、可审计的长期 Keycloak 管理员，只授予所需 realm 管理权限，并强制该账号使用 MFA；需要多个管理员就重复这一步，不要多人共用一个管理员用户名。
 7. 在另一个浏览器会话验证长期管理员可以完成所需管理操作后，移除或禁用临时 bootstrap 管理员。
@@ -1520,7 +1520,7 @@ $hash | Format-List Algorithm,Hash,Path
 
 1. 右键查看安装包数字签名，确认发布者和时间戳正确。
 2. 安装，确认 Windows 不显示“未知发布者”。
-3. 启动并通过系统浏览器完成 Keycloak 登录、邮箱验证和 MFA。
+3. 启动并通过系统浏览器完成 Keycloak 登录和邮箱验证；桌面客户端不得要求 OTP。另在管理端使用已绑定 OTP 的平台管理员完成密码加动态验证码登录。
 4. 验证 Liteasy API、论坛 Web/API 和本地文献库关键路径。
 5. 安装同产品 ID 的下一候选版本，验证升级后本地库和登录状态符合设计。
 6. 从 Windows 设置卸载，再确认程序文件移除且用户文献库没有被误删。

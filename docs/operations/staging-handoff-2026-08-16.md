@@ -22,6 +22,16 @@
 
 这与桌面 Rust 宿主的固定 `CALLBACK_PATH` 一致。交接时已确认 `/etc/liteasy/staging/keycloak.env` 和运行中 Keycloak 数据库的 `liteasy-desktop-public` 客户端均使用这两个精确 URI。
 
+## 登录与 OTP 边界
+
+- 普通桌面端 `liteasy-desktop-public` 和论坛 `intuecho-web` 使用 `liteasy-user-browser`，允许 SSO Cookie 或密码登录，不要求 OTP。
+- 管理端 `liteasy-admin-public` 独立绑定 `liteasy-admin-browser`，该流程每次要求密码和 OTP，不复用普通客户端的无 OTP 认证流。
+- `Configure OTP` 在 realm 中启用但不是全局默认 Required Action；只对 `platform_admin` 账号逐个分配。新建普通用户不得被要求配置 OTP。
+- 邮箱验证与 OTP 是两个独立门禁：realm 继续启用邮箱验证，但完成邮箱验证不等于完成管理员 MFA。
+- 2026-08-16 已在运行 realm 应用上述策略：桌面/论坛的 Conditional 2FA 为 `DISABLED`，管理 flow 的 Password/OTP 均为 `REQUIRED`，非管理员的 `Configure OTP` 待办为 `0`。4 个活跃平台管理员中 2 个已绑定 OTP，另 2 个保留首次配置动作；后两位需先通过普通登录完成 OTP 注册，再进入管理端。
+- 变更前快照为 `/var/lib/liteasy-staging/releases/20260816T074208Z.keycloak-auth-policy.json`，SHA-256 为 `85b31426e85e135ce33334bad52718b84f9a6bc711c47015b24287600db81863`。变更后证据为 `/var/lib/liteasy-staging/releases/20260816T075654Z.keycloak-auth-policy-applied.json`，SHA-256 为 `1b1a58b0e189ae648fcaee78f1b74e1490301106cf9d91c340c0456d6e0a5076`；两者均为 `root:root`、`0600`。
+- 为避免中断所有 staging 用户，本次没有执行 realm-wide logout。旧管理 access token 最长存活 `300` 秒；之后的新管理认证必须经过管理端 OTP flow。配置、OIDC discovery、Liteasy API readiness 和 waitlist health 已验证，仍需用真实普通账号和管理员账号分别完成一次交互式 E2E。
+
 ## 运行镜像基线
 
 应用镜像均按 digest 固定。它们不强制共享同一个 Git revision；是否需要重建以对应服务源码差异为准。

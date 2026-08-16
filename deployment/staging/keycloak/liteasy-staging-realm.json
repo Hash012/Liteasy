@@ -8,7 +8,8 @@
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": true,
   "bruteForceProtected": true,
-  "verifyEmail": false,
+  "verifyEmail": true,
+  "browserFlow": "liteasy-user-browser",
   "passwordPolicy": "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)",
   "accessTokenLifespan": 300,
   "ssoSessionIdleTimeout": 1800,
@@ -16,6 +17,52 @@
   "offlineSessionMaxLifespanEnabled": true,
   "offlineSessionMaxLifespan": 2592000,
   "authenticationFlows": [
+    {
+      "alias": "liteasy-user-browser",
+      "description": "Desktop and community browser flow using SSO or password without OTP",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "authenticatorFlow": false
+        },
+        {
+          "authenticator": "identity-provider-redirector",
+          "requirement": "ALTERNATIVE",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "authenticatorFlow": false
+        },
+        {
+          "requirement": "ALTERNATIVE",
+          "priority": 30,
+          "userSetupAllowed": false,
+          "authenticatorFlow": true,
+          "flowAlias": "liteasy-user-forms"
+        }
+      ]
+    },
+    {
+      "alias": "liteasy-user-forms",
+      "description": "Password form for non-administrative clients",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-username-password-form",
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "authenticatorFlow": false
+        }
+      ]
+    },
     {
       "alias": "liteasy-admin-browser",
       "description": "Dedicated administrator flow requiring password and OTP on every login",
@@ -182,6 +229,7 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "defaultClientScopes": ["basic", "profile", "email"],
+      "authenticationFlowBindingOverrides": { "browser": "liteasy-user-browser" },
       "redirectUris": [
         "${LITEASY_DESKTOP_LOOPBACK_REDIRECT_URI}",
         "${LITEASY_DESKTOP_LOCALHOST_REDIRECT_URI}"
@@ -216,6 +264,7 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "defaultClientScopes": ["basic", "profile", "email"],
+      "authenticationFlowBindingOverrides": { "browser": "liteasy-user-browser" },
       "redirectUris": ["${INTUECHO_WEB_REDIRECT_URI}"],
       "webOrigins": ["${INTUECHO_WEB_ORIGIN}"],
       "attributes": {

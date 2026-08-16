@@ -63,6 +63,21 @@ test("the staging realm has three PKCE clients and separated service identities"
     mapper.config?.["claim.name"] === "email"
   ), true);
   assert.equal(new Set(realm.clients.map((client) => client.clientId)).size, realm.clients.length);
+  assert.equal(realm.verifyEmail, true);
+  assert.equal(realm.browserFlow, "liteasy-user-browser");
+  for (const clientId of ["liteasy-desktop-public", "intuecho-web"]) {
+    const client = realm.clients.find((candidate) => candidate.clientId === clientId);
+    assert.equal(client.authenticationFlowBindingOverrides?.browser, "liteasy-user-browser");
+  }
+  const userFlow = realm.authenticationFlows.find((flow) => flow.alias === "liteasy-user-browser");
+  const userForms = realm.authenticationFlows.find((flow) => flow.alias === "liteasy-user-forms");
+  assert.equal(userFlow.authenticationExecutions.some((execution) => execution.authenticator === "auth-cookie"), true);
+  assert.deepEqual(userForms.authenticationExecutions.map((execution) => [execution.authenticator, execution.requirement]), [
+    ["auth-username-password-form", "REQUIRED"]
+  ]);
+  assert.equal([userFlow, userForms].some((flow) => flow.authenticationExecutions.some((execution) =>
+    execution.authenticator === "auth-otp-form"
+  )), false);
   const adminClient = realm.clients.find((client) => client.clientId === "liteasy-admin-public");
   assert.equal(adminClient.authenticationFlowBindingOverrides?.browser, "liteasy-admin-browser");
   assert.equal(adminClient.protocolMappers.some((mapper) =>
