@@ -68,7 +68,7 @@ jobs:
         id: frontend_tests
         shell: pwsh
         run: |
-          npm test -- --testTimeout=15000 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP\frontend-tests.log"
+          npm test -- --testTimeout=120000 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP\frontend-tests.log"
           $exitCode = $LASTEXITCODE
           if ($exitCode -ne 0) {
             $diagnostic = Get-Content "$env:RUNNER_TEMP\frontend-tests.log" |

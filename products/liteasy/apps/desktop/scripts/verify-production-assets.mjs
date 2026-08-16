@@ -23,7 +23,13 @@ function walk(directory) {
   });
 }
 
-export function verifyProductionAssets(directory = buildDirectory) {
+const requiredReleaseEndpoints = [
+  "VITE_LITEASY_CLOUD_URL",
+  "VITE_FORUM_API_URL",
+  "VITE_FORUM_WEB_URL"
+];
+
+export function verifyProductionAssets(directory = buildDirectory, env = process.env) {
   if (!fs.statSync(directory, { throwIfNoEntry: false })?.isDirectory()) {
     throw new Error(`production_asset_boundary: build directory does not exist: ${directory}`);
   }
@@ -47,17 +53,19 @@ export function verifyProductionAssets(directory = buildDirectory) {
       }
     }
   }
-  const expectedCloudEndpoint = process.env.VITE_LITEASY_CLOUD_URL?.trim();
-  if (expectedCloudEndpoint) {
+  for (const name of requiredReleaseEndpoints) {
+    const expectedEndpoint = env[name]?.trim();
+    if (!expectedEndpoint) {
+      violations.push(`${name} is required for production builds`);
+      continue;
+    }
     const endpointBundled = walk(directory).some((filePath) => (
       /\.(?:html|js|json|mjs)$/i.test(filePath) &&
-      fs.readFileSync(filePath, "utf8").includes(expectedCloudEndpoint)
+      fs.readFileSync(filePath, "utf8").includes(expectedEndpoint)
     ));
     if (!endpointBundled) {
-      violations.push("configured cloud endpoint is missing from production assets");
+      violations.push(`${name} is missing from production assets`);
     }
-  } else if (process.env.CI === "true") {
-    violations.push("VITE_LITEASY_CLOUD_URL is required for CI production builds");
   }
   if (violations.length > 0) {
     throw new Error(`production_asset_boundary:\n${violations.join("\n")}`);
