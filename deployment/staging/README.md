@@ -1062,7 +1062,7 @@ sudo docker compose \
 
 迁移 `032_deepseek_text_provider.sql` 只负责把默认文本策略和结构化可视化路由切到 DeepSeek，并复制该路由已有的版本化计费策略；它不会创建或猜测 DeepSeek API Key。完成以下全部步骤后才算切换成功：
 
-1. 从已评审提交构建并推送新的 `liteasy-api` 镜像和包含管理端的新 `gateway` 镜像，把仓库 digest 写入 `deployment/staging/config.env`。桌面端默认模型也已改为 `deepseek-chat`，对外发版时需要另行生成并验收新的桌面安装包。
+1. 从已评审提交构建并推送新的 `liteasy-api` 镜像和包含管理端的新 `gateway` 镜像，把仓库 digest 写入 `deployment/staging/config.env`。桌面端源码使用 DeepSeek 当前官方默认标签 `deepseek-v4-flash`；服务端会把已发布客户端携带的 DeepSeek 标签规范化为管理员配置的实际上游模型，因此本次服务器修复不要求立即发布新安装包，后续桌面正式版本仍须走独立 Windows 构建与验收流程。
 2. 在 root-only `/etc/liteasy/staging/liteasy-api.env` 中设置 `LITEASY_TEXT_PROVIDER_EGRESS_HOSTNAMES=api.deepseek.com` 和 `LITEASY_VISUALIZATION_EGRESS_HOSTNAMES=api.deepseek.com,vip.auto-code.net`。这里仅填写允许出站的主机名，不填写任何 API Key。
 3. 执行第 11.3 节 Liteasy 迁移并确认第二次运行输出 `{"applied":[]}`，再启动新容器。迁移完成而 DeepSeek Key 尚未保存的短暂窗口内，文本和结构化生成应失败关闭；不要把这种 503 当作部署完成。
 4. 用具名 `platform_admin` 账号和新鲜 MFA 打开管理端“模型服务”。按 DeepSeek 当前官方文档填写文本 API 地址和模型；地址主机必须在 `LITEASY_TEXT_PROVIDER_EGRESS_HOSTNAMES` 中。更新地址或模型时可将文本 Key 留空以保留加密旧值；已有视觉和 MinerU 配置时，也可将视觉地址、视觉模型、视觉 Key、MinerU Token 留空以保留旧值。首次配置则必须完整填写三类凭据。
