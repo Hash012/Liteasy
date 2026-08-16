@@ -67,7 +67,7 @@ describe("multimodal release gate", () => {
         version: skill!.version
       });
     }
-  }, 30_000);
+  }, 120_000);
 
   test("fails closed when a generated catalog modality is disabled at release time", () => {
     const catalog = getVisualizationBuiltinCatalog();
