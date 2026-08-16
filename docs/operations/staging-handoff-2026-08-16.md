@@ -77,6 +77,7 @@ curl -fsSL https://staging.liteasyclaw.com/healthz/waitlist
 
 ## 尚未对齐与停止点
 
+- DeepSeek 文本供应商改造目前仅存在于未部署的工作树：薄读、AI 助手、翻译、Agent 和结构化可视化计划使用 `deepseek-chat`，图片生成继续使用 `gpt-image-2`，MinerU 图片理解继续使用 `gpt-5.6-sol`。在新 API/gateway 镜像和桌面制品发布、digest 更新、迁移 `032` 执行、root-only 出站主机名更新、管理员录入 DeepSeek Key 及五条调用链验收全部完成前，不得描述为 staging 已切换。
 - Windows 构建目录可继续保留在安装包提交 `be7dd67`，用于重复制品证据；它不应伪装成部署分支最新 checkout。新开发工作应重新检出远程分支。
 - `0.1.12` 未签名。生产或不受控公开发布必须获得受信任的 Authenticode 签名并完成干净 Windows 11 安装、升级和卸载 E2E。
 - GitHub Actions 账户计费问题仍需由仓库/组织管理员处理。解决前不要降低 OIDC 上传校验，也不要向服务器保存长期 GitHub 凭据。

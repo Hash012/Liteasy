@@ -131,13 +131,15 @@ Intuecho 的组织可见性和组织邀请使用独立内部边界。服务 toke
 
 配额读取通过 `POST /v1/admin/quotas/get` 执行，设置通过 `POST /v1/admin/quotas/set` 执行。设置要求新鲜 MFA、原因、幂等键和 `expectedRevision`，与更新者、已用字节和追加写审计事件在同一 PostgreSQL 事务中返回。组织目标必须是真实 active 组织，已删除的用户不能重新配置配额。
 
-桌面模型策略通过 `GET /v1/model-policy` 读取，只返回 Liteasy 代理端点、默认 provider、策略版本和修订号，不返回上游地址、实际部署模型或凭据。`POST /v1/model/generate` 与流式路由先校验 `liteasy-desktop` Bearer token，再校验严格字段、240,000 字符输入上限、结构化输出和当前策略；实际模型固定为部署配置，客户端请求其他模型或 provider 会被拒绝。OpenAI 使用 Responses API，DeepSeek 使用 Chat Completions；流式输出转换为桌面消费的 NDJSON。上游错误正文既不回传也不记录，带 traceId 的服务日志只记录主体、provider、状态类别、错误正文大小、输入/输出长度和耗时，不记录 prompt 或文献正文；未配置或不可用时返回稳定 503，不生成假回答。
+桌面模型策略通过 `GET /v1/model-policy` 读取，只返回 Liteasy 代理端点、默认 provider、策略版本和修订号，不返回上游地址、实际部署模型或凭据。`POST /v1/model/generate` 与流式路由先校验 `liteasy-desktop` Bearer token，再校验严格字段、240,000 字符输入上限、结构化输出和当前策略；实际模型固定为部署配置，客户端请求其他模型或 provider 会被拒绝。文本生成使用 DeepSeek 官方 Chat Completions，固定入口为 `https://api.deepseek.com`，默认模型为 `deepseek-chat`；流式输出转换为桌面消费的 NDJSON。上游错误正文既不回传也不记录，带 traceId 的服务日志只记录主体、provider、状态类别、错误正文大小、输入/输出长度和耗时，不记录 prompt 或文献正文；未配置或不可用时返回稳定 503，不生成假回答。
+
+正式 AI 调用分为三条独立边界：薄读、AI 助手、翻译、Agent 和结构化可视化使用 DeepSeek `deepseek-chat`；生成图片继续使用现有 OpenAI-compatible 图片路由的 `gpt-image-2`；MinerU 提取不变，其中图片理解继续使用现有视觉路由的 `gpt-5.6-sol`。DeepSeek 文本 Key、视觉/图片 Key 和 MinerU Token 不得相互复用。平台管理员通过管理端“模型服务”写入加密配置时，DeepSeek 三项必填；视觉三项和 MinerU Token 留空表示保留当前加密值。旧的单供应商加密记录可读取并迁移，但服务不会把旧视觉 Key 注入 DeepSeek secret 引用。
 
 外部文献检索通过 `POST /v1/research/external-knowledge` 执行，只接受 `liteasy-desktop` Bearer token。管理员只能启用固定协议的 `crossref`、`openalex` 和 `semantic_scholar` connector；每类 connector 的官方 HTTPS API 地址由服务端白名单固定，不提供任意 JSON 抓取器。Crossref/OpenAlex 使用 `LITEASY_RETRIEVAL_CONTACT_EMAIL`，Semantic Scholar 可通过部署 secret 注入可选 API key；请求超时和 PDF 大小上限分别由 `LITEASY_RETRIEVAL_TIMEOUT_MS`、`LITEASY_RETRIEVAL_MAX_PDF_BYTES` 限制。
 
 检索结果按 `subject_id + 请求指纹` 缓存一小时，来源 revision 或固定端点变化会自然失效，不能跨用户命中。每个 subject 最多保留 100 个结果集；命中会更新淘汰访问时间但不延长 TTL，写入超额时在 subject 级事务锁内删除最久未访问项，不会挤占其他用户容量。含 PDF 候选时服务端签发绑定当前 subject 和 source 的 15 分钟 `fullTextGrantId`；缓存命中也会重新签发，不缓存授权。`POST /v1/research/external-pdf` 只接受 grant 和 source ID，不接受客户端 URL。下载器逐跳要求 HTTPS，重新解析并固定公网 DNS，拒绝 loopback、私有、链路本地和保留地址，限制重定向、超时和字节数，并同时校验 MIME、`%PDF-` 文件头和 SHA-256，从而不形成通用 URL 抓取器。
 
-管理员模型策略及检索源写入要求 `liteasy-admin`、数据库 `platform_admin`、新鲜 MFA、原因、幂等键和乐观修订号，并与审计事件处于同一事务。模型代理端点不得直接指向已知上游模型 API；检索源只接受不含查询参数、片段或凭据的公开 HTTPS 元数据，并拒绝 loopback、私有、链路本地及保留地址。任意层级的 `apiKey`、token、password、secret、credential 等字段都会被拒绝；普通 PostgreSQL 配置表不承担密钥存储职责。模型 key 只能通过 `LITEASY_MODEL_*_API_KEY` 对应的部署 secret 注入，每个 provider 的 key、HTTPS base URL 和固定 model 必须成组存在。
+管理员模型策略及检索源写入要求 `liteasy-admin`、数据库 `platform_admin`、新鲜 MFA、原因、幂等键和乐观修订号，并与审计事件处于同一事务。模型代理端点不得直接指向已知上游模型 API；检索源只接受不含查询参数、片段或凭据的公开 HTTPS 元数据，并拒绝 loopback、私有、链路本地及保留地址。任意层级的 `apiKey`、token、password、secret、credential 等字段都会被拒绝；普通控制面配置表不承担密钥存储职责。启动时可通过 `LITEASY_MODEL_*` 部署 secret 提供回退配置；管理端保存的正式 AI 凭据使用 `LITEASY_PLATFORM_CONFIG_ENCRYPTION_KEY` 加密后写入专用表，API 和状态响应只返回配置状态，不返回明文。
 
 IdP 管理边界使用独立 confidential client，通过 `LITEASY_IDP_TOKEN_URL` 的 client credentials 获取仅含 `accounts:write sessions:revoke` 的管理 token，再调用 `LITEASY_IDP_MANAGEMENT_URL/v1/accounts/:subjectId/status`。该管理 client 必须不同于桌面 public client 和 token introspection client。IdP 响应必须返回匹配的 `subjectId`、`status`、`updatedAt`、`allSessionsRevoked: true` 及精确的三个 `revokedAudiences`；少报或多报 audience 都失败关闭。Intuecho 管理地址由 `LITEASY_INTUECHO_ADMIN_API_URL` 配置，Liteasy 只向该内部 HTTPS 边界转交当前已验证的管理员 Bearer token，不共享数据库会话或服务凭据。
 

@@ -3,7 +3,7 @@ import type { ModelPolicy } from "./modelGateway";
 
 export function getDefaultModelForProvider(provider: string) {
   if (provider === "deepseek") {
-    return "deepseek-v4-flash";
+    return "deepseek-chat";
   }
   const injectedModel = import.meta.env.VITE_LITEASY_OPENAI_MODEL?.trim();
   return injectedModel || "gpt-5-mini";

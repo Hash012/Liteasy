@@ -26,6 +26,10 @@ test("service templates satisfy the production configuration parsers", () => {
   loadIntuechoProductionConfig(intuecho);
   loadIntuechoMigrationConfig(intuecho);
   loadIdentityManagementConfig(environment("identity-management"));
+  assert.equal(
+    liteasy.LITEASY_VISUALIZATION_EGRESS_HOSTNAMES,
+    "api.deepseek.com,vip.auto-code.net"
+  );
 });
 
 test("the staging realm has three PKCE clients and separated service identities", () => {

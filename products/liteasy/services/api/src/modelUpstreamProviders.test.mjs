@@ -132,7 +132,7 @@ test("parses fragmented DeepSeek SSE without returning reasoning fields", async 
     deepseek: {
       apiKey: "deployment-deepseek-secret",
       baseUrl: "https://api.deepseek.example",
-      model: "deepseek-v4-flash",
+      model: "deepseek-chat",
       provider: "deepseek"
     }
   }), {
@@ -144,6 +144,38 @@ test("parses fragmented DeepSeek SSE without returning reasoning fields", async 
     deltas.push(delta);
   }
   assert.deepEqual(deltas, ["Hel", "lo"]);
+});
+
+test("sends structured DeepSeek requests with an explicit JSON schema", async () => {
+  let observed;
+  const providers = createModelUpstreamProviders(config({
+    deepseek: {
+      apiKey: "deployment-deepseek-secret",
+      baseUrl: "https://api.deepseek.com",
+      model: "deepseek-chat",
+      provider: "deepseek"
+    }
+  }), {
+    fetchImpl: async (url, init) => {
+      observed = { body: JSON.parse(init.body), url };
+      return new Response(JSON.stringify({ choices: [{ message: { content: "{\"summary\":\"ok\"}" } }] }), { status: 200 });
+    }
+  });
+  const answer = await providers.deepseek.generate({
+    outputFormat: {
+      name: "thin_reading",
+      schema: { properties: { summary: { type: "string" } }, required: ["summary"], type: "object" },
+      strict: true
+    },
+    prompt: "Summarize the paper",
+    provider: "deepseek"
+  });
+  assert.equal(answer, "{\"summary\":\"ok\"}");
+  assert.equal(observed.url, "https://api.deepseek.com/chat/completions");
+  assert.equal(observed.body.model, "deepseek-chat");
+  assert.deepEqual(observed.body.response_format, { type: "json_object" });
+  assert.match(observed.body.messages[0].content, /thin_reading/);
+  assert.match(observed.body.messages[0].content, /\"summary\"/);
 });
 
 test("reports an upstream timeout that occurs while reading the streaming response body", async () => {

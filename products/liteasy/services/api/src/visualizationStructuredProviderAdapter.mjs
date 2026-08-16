@@ -18,6 +18,11 @@ function responseText(body) {
   return null;
 }
 
+function deepSeekResponseText(body) {
+  const content = Array.isArray(body?.choices) ? body.choices[0]?.message?.content : undefined;
+  return typeof content === "string" && content.trim() ? content : null;
+}
+
 function usageUnits(value) {
   const usage = object(value);
   if (!usage) return null;
@@ -109,6 +114,45 @@ async function generateStructured({ payload: payloadInput, request, route }) {
   return { ...(cost ? { cost } : {}), text };
 }
 
+async function requestDeepSeekResponse({ prompt, request, route, schema, schemaName }) {
+  return request(route.endpoint, {
+    body: JSON.stringify({
+      messages: [{
+        content: [
+          prompt,
+          "Return exactly one JSON object and no Markdown or code fences.",
+          `The JSON object must conform to schema ${schemaName}:`,
+          JSON.stringify(schema)
+        ].join("\n"),
+        role: "user"
+      }],
+      model: route.model,
+      response_format: { type: "json_object" },
+      stream: false
+    }),
+    headers: { "content-type": "application/json" },
+    method: "POST"
+  });
+}
+
+async function generateDeepSeekStructured({ payload: payloadInput, request, route }) {
+  if (typeof request !== "function" || !object(route) || typeof route.model !== "string") {
+    throw new VisualizationProviderError("visualization_provider_request_invalid");
+  }
+  const payload = structuredPayload(payloadInput);
+  const body = await jsonResponse(await requestDeepSeekResponse({
+    prompt: payload.prompt,
+    request,
+    route,
+    schema: payload.schema,
+    schemaName: payload.schemaName
+  }));
+  const text = deepSeekResponseText(body);
+  if (!text) throw new VisualizationProviderError("visualization_provider_response_invalid");
+  const cost = explicitCost(body);
+  return { ...(cost ? { cost } : {}), text };
+}
+
 function imagePayload(payload) {
   if (!object(payload) || typeof payload.prompt !== "string" || !payload.prompt.trim() || payload.prompt.length > 32_000 ||
     !Number.isSafeInteger(payload.width) || !Number.isSafeInteger(payload.height) || payload.width < 1 || payload.height < 1 ||
@@ -169,13 +213,38 @@ async function probe({ request, route }) {
   };
 }
 
+async function probeDeepSeek({ request, route }) {
+  if (typeof request !== "function" || !object(route) || typeof route.model !== "string") {
+    throw new VisualizationProviderError("visualization_provider_request_invalid");
+  }
+  const body = await jsonResponse(await requestDeepSeekResponse({
+    prompt: "Return an empty JSON object.",
+    request,
+    route,
+    schema: { additionalProperties: false, properties: {}, required: [], type: "object" },
+    schemaName: "liteasy_visualization_probe"
+  }));
+  if (!deepSeekResponseText(body)) throw new VisualizationProviderError("visualization_provider_response_invalid");
+  return {
+    authenticated: true,
+    capabilities: ["structured_generation", "validation"],
+    reachable: true
+  };
+}
+
 export const openAiCompatibleVisualizationAdapter = Object.freeze({
   generateImage,
   generateStructured,
   probe
 });
 
+export const deepSeekVisualizationAdapter = Object.freeze({
+  generateStructured: generateDeepSeekStructured,
+  probe: probeDeepSeek
+});
+
 export const productionVisualizationProviderAdapters = Object.freeze({
+  deepseek: deepSeekVisualizationAdapter,
   openai: openAiCompatibleVisualizationAdapter,
   "openai-compatible": openAiCompatibleVisualizationAdapter
 });

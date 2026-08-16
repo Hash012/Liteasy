@@ -453,12 +453,16 @@ export function AdminWorkspace({
     const data = new FormData(form);
     await execute("AI 服务配置已加密保存并生效。", async () => {
       const result = await api.saveAiProviderConfiguration({
-        apiKey: value(data, "apiKey"),
-        baseUrl: value(data, "baseUrl"),
         expectedRevision: aiProviderConfiguration.revision,
         mineruToken: value(data, "mineruToken"),
-        model: value(data, "model"),
-        reason: value(data, "reason")
+        reason: value(data, "reason"),
+        textApiKey: value(data, "textApiKey"),
+        textBaseUrl: value(data, "textBaseUrl"),
+        textModel: value(data, "textModel"),
+        textProvider: "deepseek",
+        visionApiKey: value(data, "visionApiKey"),
+        visionBaseUrl: value(data, "visionBaseUrl"),
+        visionModel: value(data, "visionModel")
       });
       setAiProviderConfiguration(result.configuration);
       form.reset();
@@ -1084,10 +1088,13 @@ function ModelsView({
           <div><dt>更新时间</dt><dd>{formatDate(aiProviderConfiguration.updatedAt)}</dd></div>
         </dl>
         <form className="admin-form admin-form-horizontal" onSubmit={onSaveAiProviderConfiguration}>
-          <Field label="Responses API 地址" required><Input autoComplete="off" name="baseUrl" placeholder="https://provider.example/v1" required type="url" /></Field>
-          <Field label="模型标识" required><Input autoComplete="off" name="model" required /></Field>
-          <Field label="模型 API Key" required><Input autoComplete="new-password" name="apiKey" required type="password" /></Field>
-          <Field label="MinerU Token" required><Input autoComplete="new-password" name="mineruToken" required type="password" /></Field>
+          <Field label="文本 API 地址" required><Input autoComplete="off" defaultValue="https://api.deepseek.com" name="textBaseUrl" readOnly required type="url" /></Field>
+          <Field label="文本模型" required><Input autoComplete="off" defaultValue="deepseek-chat" name="textModel" readOnly required /></Field>
+          <Field label="文本 API Key" required><Input autoComplete="new-password" name="textApiKey" required type="password" /></Field>
+          <Field label="视觉 API 地址（留空保留）"><Input autoComplete="off" name="visionBaseUrl" placeholder="https://vip.auto-code.net/v1" type="url" /></Field>
+          <Field label="视觉模型（留空保留）"><Input autoComplete="off" name="visionModel" placeholder="gpt-5.6-sol" /></Field>
+          <Field label="视觉 API Key（留空保留）"><Input autoComplete="new-password" name="visionApiKey" type="password" /></Field>
+          <Field label="MinerU Token（留空保留）"><Input autoComplete="new-password" name="mineruToken" type="password" /></Field>
           <ReasonField />
           <Button appearance="primary" disabled={busy || !aiProviderConfiguration.writable} icon={<ShieldLockRegular />} type="submit">加密保存并应用</Button>
         </form>

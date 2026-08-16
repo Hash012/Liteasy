@@ -229,12 +229,16 @@ export function createAdminApiClient({
       });
     },
     saveAiProviderConfiguration(input: {
-      apiKey: string;
-      baseUrl: string;
       expectedRevision: number;
       mineruToken: string;
-      model: string;
       reason: string;
+      textApiKey: string;
+      textBaseUrl: string;
+      textModel: string;
+      textProvider: "deepseek";
+      visionApiKey: string;
+      visionBaseUrl: string;
+      visionModel: string;
     }) {
       return cloudPost<{ configuration: AiProviderConfigurationStatus }>(
         "/v1/admin/ai-provider-configuration",

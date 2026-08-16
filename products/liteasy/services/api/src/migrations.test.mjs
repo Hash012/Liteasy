@@ -141,11 +141,16 @@ test("production migration set includes visualization and literature projections
     "028_marketing_experience_applications.sql",
     "029_encrypted_ai_provider_configuration.sql",
     "030_visualization_provider_timeout.sql",
-    "031_grobid_parse_cache.sql"
+    "031_grobid_parse_cache.sql",
+    "032_deepseek_text_provider.sql"
   ]);
   const normalization = migrations.find(({ name }) => name === "026_normalize_library_literature_references.sql")?.sql;
   assert.ok(normalization);
   assert.match(normalization, /FOREIGN KEY \(literature_id, literature_revision\)/);
   assert.match(normalization, /AND CASE[\s\S]+THEN \(entry\.metadata -> 'literature' ->> 'revision'\)::bigint/);
   assert.match(normalization, /metadata = entry\.metadata - 'literature'/);
+  const deepSeekMigration = migrations.find(({ name }) => name === "032_deepseek_text_provider.sql")?.sql;
+  assert.match(deepSeekMigration, /INSERT INTO visualization_cost_policies/i);
+  assert.match(deepSeekMigration, /provider_id = 'deepseek'/i);
+  assert.match(deepSeekMigration, /endpoint = 'https:\/\/api\.deepseek\.com\/chat\/completions'/i);
 });

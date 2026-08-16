@@ -4,8 +4,8 @@ import {
 } from "../app/features/models/modelPolicy";
 import { createSettingsStore } from "../app/features/settings/settings.store";
 
-test("selects the DeepSeek flash model for the DeepSeek provider", () => {
-  expect(getDefaultModelForProvider("deepseek")).toBe("deepseek-v4-flash");
+test("selects the official DeepSeek chat model for the DeepSeek provider", () => {
+  expect(getDefaultModelForProvider("deepseek")).toBe("deepseek-chat");
 });
 
 test("allows the active provider default model in desktop policy", () => {
@@ -15,7 +15,7 @@ test("allows the active provider default model in desktop policy", () => {
   };
 
   expect(getModelPolicyFromSettings(settings)).toEqual({
-    allowedModels: ["deepseek-v4-flash"],
+    allowedModels: ["deepseek-chat"],
     allowedProviders: ["deepseek"]
   });
 });

@@ -187,8 +187,14 @@ function openAiBody(input, model, stream) {
 }
 
 function deepSeekBody(input, model, stream) {
+  const prompt = input.outputFormat ? [
+    input.prompt,
+    "Return exactly one JSON object and no Markdown or code fences.",
+    `The JSON object must conform to schema ${input.outputFormat.name}:`,
+    JSON.stringify(input.outputFormat.schema)
+  ].join("\n") : input.prompt;
   return {
-    messages: [{ content: input.prompt, role: "user" }],
+    messages: [{ content: prompt, role: "user" }],
     model,
     ...(input.outputFormat ? { response_format: { type: "json_object" } } : {}),
     stream

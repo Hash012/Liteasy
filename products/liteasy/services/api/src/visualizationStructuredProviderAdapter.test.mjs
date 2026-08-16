@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { openAiCompatibleVisualizationAdapter } from "./visualizationStructuredProviderAdapter.mjs";
+import {
+  deepSeekVisualizationAdapter,
+  openAiCompatibleVisualizationAdapter
+} from "./visualizationStructuredProviderAdapter.mjs";
 
 const route = {
   endpoint: "https://provider.example/v1/responses",
@@ -34,6 +37,25 @@ test("sends the exact strict Responses schema through the gateway request", asyn
     text: { format: { name: payload.schemaName, schema: payload.schema, strict: true, type: "json_schema" } }
   });
   assert.deepEqual(calls[0].init.headers, { "content-type": "application/json" });
+});
+
+test("sends structured visualization schemas through DeepSeek chat completions", async () => {
+  let observed;
+  const result = await deepSeekVisualizationAdapter.generateStructured({
+    payload,
+    request: async (url, init) => {
+      observed = { body: JSON.parse(init.body), url };
+      return new Response(JSON.stringify({ choices: [{ message: { content: "{\"nodes\":[]}" } }] }), { status: 200 });
+    },
+    route: { ...route, endpoint: "https://api.deepseek.com/chat/completions", model: "deepseek-chat" }
+  });
+  assert.deepEqual(result, { text: "{\"nodes\":[]}" });
+  assert.equal(observed.url, "https://api.deepseek.com/chat/completions");
+  assert.equal(observed.body.model, "deepseek-chat");
+  assert.deepEqual(observed.body.response_format, { type: "json_object" });
+  assert.equal(observed.body.stream, false);
+  assert.match(observed.body.messages[0].content, /semantic_graph_proposal/);
+  assert.match(observed.body.messages[0].content, /\"nodes\"/);
 });
 
 test("retries structured generation without text.format only for compatibility statuses", async (t) => {

@@ -974,7 +974,7 @@ test("uses the DeepSeek default model when the active provider is deepseek", asy
   );
 
   expect(JSON.parse(requestBody ?? "{}")).toMatchObject({
-    model: "deepseek-v4-flash",
+    model: "deepseek-chat",
     provider: "deepseek"
   });
   expect(JSON.parse(requestBody ?? "{}").prompt).toContain("actions[].input");

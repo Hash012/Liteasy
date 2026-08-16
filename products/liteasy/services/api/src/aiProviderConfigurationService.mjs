@@ -6,9 +6,12 @@ import { withPostgresTransaction } from "./postgres.mjs";
 const algorithm = "aes-256-gcm-v1";
 const aad = Buffer.from("liteasy:platform-ai-provider-configuration:v1", "utf8");
 const allowedFields = new Set([
-  "apiKey", "baseUrl", "expectedRevision", "idempotencyKey", "mineruToken",
-  "model", "reason", "traceId"
+  "expectedRevision", "idempotencyKey", "mineruToken", "reason",
+  "textApiKey", "textBaseUrl", "textModel", "textProvider",
+  "traceId", "visionApiKey", "visionBaseUrl", "visionModel"
 ]);
+const supportedTextProviders = new Set(["deepseek"]);
+const supportedStoredTextProviders = new Set(["deepseek", "openai"]);
 
 function requirePlatformAdmin(principal) {
   if (!principal?.roles?.includes("platform_admin")) {
@@ -23,6 +26,19 @@ function requiredText(value, minimum, maximum, code) {
     throw new PlatformAdminError(code);
   }
   return normalized;
+}
+
+function optionalText(value, minimum, maximum, code) {
+  if (value === undefined || value === "") return undefined;
+  return requiredText(value, minimum, maximum, code);
+}
+
+function modelIdentifier(value, code) {
+  const model = requiredText(value, 1, 200, code);
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/.test(model)) {
+    throw new PlatformAdminError(code);
+  }
+  return model;
 }
 
 function validateEndpoint(value, environment) {
@@ -42,6 +58,14 @@ function validateEndpoint(value, environment) {
   return parsed.toString().replace(/\/$/, "");
 }
 
+function validateTextEndpoint(value, provider, environment) {
+  const endpoint = validateEndpoint(value, environment);
+  if (provider === "deepseek" && endpoint !== "https://api.deepseek.com") {
+    throw new PlatformAdminError("ai_provider_text_base_url_invalid");
+  }
+  return endpoint;
+}
+
 function validateInput(input, environment) {
   if (!input || typeof input !== "object" || Array.isArray(input) ||
     Object.keys(input).some((field) => !allowedFields.has(field))) {
@@ -52,19 +76,54 @@ function validateInput(input, environment) {
   }
   const idempotencyKey = requiredText(input.idempotencyKey, 8, 200, "idempotency_key_invalid");
   if (!/^[A-Za-z0-9._:-]+$/.test(idempotencyKey)) throw new PlatformAdminError("idempotency_key_invalid");
-  const model = requiredText(input.model, 1, 200, "ai_provider_model_invalid");
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/.test(model)) {
-    throw new PlatformAdminError("ai_provider_model_invalid");
-  }
+  const textProvider = requiredText(input.textProvider, 1, 80, "ai_provider_text_provider_invalid").toLowerCase();
+  if (!supportedTextProviders.has(textProvider)) throw new PlatformAdminError("ai_provider_text_provider_invalid");
+  const textModel = modelIdentifier(input.textModel, "ai_provider_text_model_invalid");
+  if (textModel !== "deepseek-chat") throw new PlatformAdminError("ai_provider_text_model_invalid");
   return {
-    apiKey: requiredText(input.apiKey, 8, 4096, "ai_provider_api_key_invalid"),
-    baseUrl: validateEndpoint(input.baseUrl, environment),
     expectedRevision: input.expectedRevision,
     idempotencyKey,
-    mineruToken: requiredText(input.mineruToken, 8, 4096, "ai_provider_mineru_token_invalid"),
-    model,
+    mineruToken: optionalText(input.mineruToken, 8, 4096, "ai_provider_mineru_token_invalid"),
     reason: requiredText(input.reason, 8, 1000, "admin_reason_invalid"),
-    traceId: requiredText(input.traceId, 1, 300, "trace_id_invalid")
+    textApiKey: requiredText(input.textApiKey, 8, 4096, "ai_provider_text_api_key_invalid"),
+    textBaseUrl: validateTextEndpoint(input.textBaseUrl, textProvider, environment),
+    textModel,
+    textProvider,
+    traceId: requiredText(input.traceId, 1, 300, "trace_id_invalid"),
+    visionApiKey: optionalText(input.visionApiKey, 8, 4096, "ai_provider_vision_api_key_invalid"),
+    visionBaseUrl: input.visionBaseUrl ? validateEndpoint(input.visionBaseUrl, environment) : undefined,
+    visionModel: input.visionModel ? modelIdentifier(input.visionModel, "ai_provider_vision_model_invalid") : undefined
+  };
+}
+
+function storedPayload(input, current) {
+  const payload = {
+    mineruToken: input.mineruToken ?? current?.mineruToken,
+    textApiKey: input.textApiKey,
+    textBaseUrl: input.textBaseUrl,
+    textModel: input.textModel,
+    textProvider: input.textProvider,
+    visionApiKey: input.visionApiKey ?? current?.visionApiKey,
+    visionBaseUrl: input.visionBaseUrl ?? current?.visionBaseUrl,
+    visionModel: input.visionModel ?? current?.visionModel
+  };
+  if (!payload.mineruToken) throw new PlatformAdminError("ai_provider_mineru_token_invalid");
+  if (!payload.visionApiKey) throw new PlatformAdminError("ai_provider_vision_api_key_invalid");
+  if (!payload.visionBaseUrl) throw new PlatformAdminError("ai_provider_vision_base_url_invalid");
+  if (!payload.visionModel) throw new PlatformAdminError("ai_provider_vision_model_invalid");
+  return payload;
+}
+
+function legacyStoredPayload(payload) {
+  return {
+    mineruToken: requiredText(payload.mineruToken, 8, 4096, "ai_provider_mineru_token_invalid"),
+    textApiKey: requiredText(payload.apiKey, 8, 4096, "ai_provider_api_key_invalid"),
+    textBaseUrl: validateEndpoint(payload.baseUrl, "production"),
+    textModel: modelIdentifier(payload.model, "ai_provider_model_invalid"),
+    textProvider: "openai",
+    visionApiKey: requiredText(payload.apiKey, 8, 4096, "ai_provider_api_key_invalid"),
+    visionBaseUrl: validateEndpoint(payload.baseUrl, "production"),
+    visionModel: modelIdentifier(payload.model, "ai_provider_model_invalid")
   };
 }
 
@@ -93,13 +152,34 @@ function decrypt(row, key) {
     decipher.final()
   ]).toString("utf8");
   const payload = JSON.parse(plaintext);
-  return validateInput({
-    ...payload,
-    expectedRevision: 0,
-    idempotencyKey: "decrypted-config",
-    reason: "decrypt stored provider configuration",
-    traceId: "stored-configuration"
-  }, "production");
+  if (payload.textProvider) {
+    const textProvider = requiredText(
+      payload.textProvider,
+      1,
+      80,
+      "ai_provider_text_provider_invalid"
+    ).toLowerCase();
+    if (!supportedStoredTextProviders.has(textProvider)) {
+      throw new PlatformAdminError("ai_provider_text_provider_invalid");
+    }
+    const textModel = modelIdentifier(payload.textModel, "ai_provider_text_model_invalid");
+    if (textProvider === "deepseek" && textModel !== "deepseek-chat") {
+      throw new PlatformAdminError("ai_provider_text_model_invalid");
+    }
+    return {
+      mineruToken: requiredText(payload.mineruToken, 8, 4096, "ai_provider_mineru_token_invalid"),
+      textApiKey: requiredText(payload.textApiKey, 8, 4096, "ai_provider_text_api_key_invalid"),
+      textBaseUrl: textProvider === "deepseek"
+        ? validateTextEndpoint(payload.textBaseUrl, textProvider, "production")
+        : validateEndpoint(payload.textBaseUrl, "production"),
+      textModel,
+      textProvider,
+      visionApiKey: requiredText(payload.visionApiKey, 8, 4096, "ai_provider_vision_api_key_invalid"),
+      visionBaseUrl: validateEndpoint(payload.visionBaseUrl, "production"),
+      visionModel: modelIdentifier(payload.visionModel, "ai_provider_vision_model_invalid")
+    };
+  }
+  return legacyStoredPayload(payload);
 }
 
 function publicStatus(row, writable) {
@@ -171,25 +251,35 @@ export class AiProviderConfigurationService {
   }
 
   #apply(payload) {
+    const textProvider = {
+      apiKey: payload.textApiKey,
+      baseUrl: payload.textBaseUrl,
+      model: payload.textModel,
+      provider: payload.textProvider
+    };
+    const visionProvider = {
+      apiKey: payload.visionApiKey,
+      baseUrl: payload.visionBaseUrl,
+      model: payload.visionModel,
+      provider: "openai"
+    };
     const models = {
       providers: {
-        openai: {
-          apiKey: payload.apiKey,
-          baseUrl: payload.baseUrl,
-          model: payload.model,
-          provider: "openai"
-        }
+        [payload.textProvider]: textProvider
       },
       timeoutMs: this.fallbackConfig.models?.timeoutMs ?? 300_000
     };
     this.modelProxyService.reconfigure(createModelUpstreamProviders(models, { fetchImpl: this.fetchImpl }));
     this.mineruPdfService.reconfigure({
       ...this.fallbackConfig.mineru,
-      model: models.providers.openai,
+      model: visionProvider,
       modelFetch: this.fetchImpl,
       token: payload.mineruToken
     });
-    this.visualizationSecretStore?.set("viz-secret:platform-openai", payload.apiKey);
+    if (payload.textProvider === "deepseek") {
+      this.visualizationSecretStore?.set("viz-secret:platform-deepseek", payload.textApiKey);
+    }
+    this.visualizationSecretStore?.set("viz-secret:platform-openai", payload.visionApiKey);
   }
 
   async initialize() {
@@ -211,14 +301,8 @@ export class AiProviderConfigurationService {
     requirePlatformAdmin(principal);
     if (!this.encryptionKey) throw new PlatformAdminError("ai_provider_configuration_write_unavailable", 503);
     const input = validateInput(rawInput, this.environment);
-    const secretPayload = {
-      apiKey: input.apiKey,
-      baseUrl: input.baseUrl,
-      mineruToken: input.mineruToken,
-      model: input.model
-    };
     const requestHash = createHash("sha256")
-      .update(JSON.stringify({ ...secretPayload, expectedRevision: input.expectedRevision, reason: input.reason }))
+      .update(JSON.stringify(input))
       .digest("hex");
     const result = await withPostgresTransaction(this.pool, async (client) => {
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
@@ -233,7 +317,14 @@ export class AiProviderConfigurationService {
         if (prior.rows[0].request_hash !== requestHash) {
           throw new PlatformAdminError("idempotency_key_reused", 409);
         }
-        return prior.rows[0].response_body;
+        const configured = await client.query(`
+          SELECT * FROM platform_ai_provider_configuration
+           WHERE configuration_id = 'active'
+        `);
+        return {
+          response: prior.rows[0].response_body,
+          secretPayload: decrypt(configured.rows[0], this.encryptionKey)
+        };
       }
       const currentResult = await client.query(`
         SELECT * FROM platform_ai_provider_configuration
@@ -244,6 +335,10 @@ export class AiProviderConfigurationService {
       if (currentRevision !== input.expectedRevision) {
         throw new PlatformAdminError("ai_provider_configuration_revision_conflict", 409);
       }
+      const secretPayload = storedPayload(
+        input,
+        current ? decrypt(current, this.encryptionKey) : undefined
+      );
       const encrypted = encrypt(secretPayload, this.encryptionKey);
       const changed = current
         ? await client.query(`
@@ -279,9 +374,9 @@ export class AiProviderConfigurationService {
           response_body, expires_at
         ) VALUES ($1, 'set_ai_provider_configuration', $2, $3, 200, $4::jsonb, now() + interval '24 hours')
       `, [principal.subjectId, input.idempotencyKey, requestHash, JSON.stringify(response)]);
-      return response;
+      return { response, secretPayload };
     });
-    this.#apply(secretPayload);
-    return result;
+    this.#apply(result.secretPayload);
+    return result.response;
   }
 }

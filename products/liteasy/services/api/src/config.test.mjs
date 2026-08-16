@@ -81,7 +81,7 @@ test("loads deployment-scoped model providers without exposing credentials", () 
   const config = loadCloudConfig(validEnv({
     LITEASY_MODEL_DEEPSEEK_API_KEY: "deepseek-deployment-secret",
     LITEASY_MODEL_DEEPSEEK_BASE_URL: "https://api.deepseek.com",
-    LITEASY_MODEL_DEEPSEEK_MODEL: "deepseek-v4-flash",
+    LITEASY_MODEL_DEEPSEEK_MODEL: "deepseek-chat",
     LITEASY_MODEL_OPENAI_API_KEY: "openai-deployment-secret",
     LITEASY_MODEL_OPENAI_BASE_URL: "https://api.openai.com/v1",
     LITEASY_MODEL_OPENAI_MODEL: "gpt-5-mini"
