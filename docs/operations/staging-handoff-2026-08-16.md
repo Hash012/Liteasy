@@ -48,6 +48,7 @@
 - 所有核心容器为 running，带健康检查的核心容器为 healthy。
 - `liteasy-waitlist.service` 为 active。
 - `https://staging.liteasyclaw.com/healthz/waitlist` 返回 `installerReady: true`。
+- Liteasy API `/readyz` 返回 `status: "ready"`，其中 `modelProxy: "configured"`。这是薄读具名测试所需的受控能力，不代表允许匿名访问、公开推广或提高并发。
 
 下一位维护者开始工作时先执行：
 
@@ -69,4 +70,5 @@ curl -fsSL https://staging.liteasyclaw.com/healthz/waitlist
 - Windows 构建目录可继续保留在安装包提交 `dbdfa597`，用于重复制品证据；它不应伪装成部署分支最新 checkout。新开发工作应重新检出远程分支。
 - `0.1.11` 未签名。生产或不受控公开发布必须获得受信任的 Authenticode 签名并完成干净 Windows 11 安装、升级和卸载 E2E。
 - GitHub Actions 账户计费问题仍需由仓库/组织管理员处理。解决前不要降低 OIDC 上传校验，也不要向服务器保存长期 GitHub 凭据。
+- 模型代理当前为受控 staging 测试启用状态；部署密钥必须继续保持 root-only。扩大账号、并发、供应商范围或公开访问前需要单独容量与安全评审。
 - Keycloak、ClamAV 和各独立服务镜像按自身版本与 digest 管理，不与桌面发布 SHA 强制统一；升级必须单独完成兼容性、迁移、健康和回滚验证。
