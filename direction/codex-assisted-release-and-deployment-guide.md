@@ -1,6 +1,6 @@
 # 在 Codex 协助下完成 Liteasy 开发、构建与上线
 
-本文是 [`developer-release-and-deployment-guide.md`](./developer-release-and-deployment-guide.md) 的 Codex 协作版本。前者定义技术事实、命令、门禁和回滚规则；本文定义开发者如何把工作分阶段交给不同机器上的 Codex，如何授权，如何验收输出，以及如何把一台机器的可靠证据交给下一台机器。
+本文是 [`developer-release-and-deployment-guide.md`](./developer-release-and-deployment-guide.md) 的 Codex 协作版本。前者定义技术事实、命令、门禁和回滚规则；本文定义当前服务器上的同一个 Codex 如何把源码检查、镜像构建、staging 部署和安装包发布拆成可授权阶段，以及只有 Windows 构建仍跨机器时如何交接可靠证据。
 
 不要只把“帮我发布最新版”发给 Codex。这样的指令没有说明仓库、目标提交、环境、允许改变的外部状态和停止条件，容易把源码修改、镜像部署和安装包发布混成一次不可审计操作。
 
@@ -12,7 +12,7 @@
   本地测试
   判断哪些组件需要重新构建
     ↓
-  在构建机/CI 构建镜像
+  在当前服务器上由同一个 Codex 构建镜像
     ↓
   把镜像推送到阿里云 ACR，记录 digest
     ↓
@@ -52,15 +52,48 @@
 
 ## 1. 基本协作模型
 
-一次发布通常涉及三个独立的 Codex 会话：
+当前发布路径只有两个 Codex 角色，其中源码、镜像和服务器角色由同一个会话、同一台机器承担：
 
 | 会话 | 建议位置 | 主要职责 |
 | --- | --- | --- |
-| 源码/服务器 Codex | `/opt/liteasy/repository` 或开发者本地仓库 | 检查、修改、测试、提交、推送、判断镜像影响、服务器部署 |
-| 镜像构建 Codex | 受控 Linux 构建机或 CI checkout | 测试、构建受影响镜像、推送 ACR、返回 digest |
+| 源码/镜像/服务器 Codex | 当前服务器 `/opt/liteasy/repository` | 检查、修改、测试、提交、推送、判断镜像影响、构建/推送受影响镜像、服务器部署 |
 | Windows Codex | 可信 Windows x64，发布目录如 `D:\packing` | 固定 SHA、全量测试、MSVC/Tauri/NSIS 构建、实机验证、输出制品证据 |
 
-不同会话不共享可靠状态。不要对 Windows Codex 说“继续服务器上刚才那个版本”，应提供完整 Git SHA、版本、目标环境、已通过证据和允许执行的动作。
+源码、镜像和服务器阶段共享当前会话与文件系统，但仍必须按阶段停下并取得下一步授权；阶段边界不是把任务交给另一台 Linux 构建机。Windows Codex 不共享服务器状态，不要说“继续服务器上刚才那个版本”，应提供完整 Git SHA、版本、目标环境、已通过证据和允许执行的动作。
+
+当前服务器是 2 vCPU、约 4 GiB 内存并启用 2 GiB swap 的 staging ECS。它确实是本流程的源码、镜像和部署机器，但镜像构建前必须检查可用内存、Docker daemon 和磁盘空间；资源不足、Docker 不可用或门禁失败时停止，不临时猜测或切换到不存在的构建机。构建只允许使用候选 SHA 的干净检出；不要在含有开发者未提交改动的工作树中构建。
+
+这条同机路径是当前已确认的实际角色修正，覆盖通用手册中“构建机与 ECS 分开”的部署分工描述；它不放宽资源、干净 SHA、测试、签名、迁移或 digest 门禁。
+
+### 1.1 第一次访问这台服务器（阿里云新手）
+
+这里的“服务器”是阿里云 ECS，不是 GitHub，也不是 Liteasy 的网站登录页。你需要两套彼此独立的身份：阿里云账号或受邀的 RAM 子账号用于打开 ECS 控制台；Linux 账号和密码/SSH 密钥用于进入服务器终端。两者都不应发送给 Codex。没有阿里云权限时，请让资源所有者邀请你的 RAM 子账号并授予查看和使用该 ECS Workbench 的最小权限，不要共用阿里云主账号。
+
+首次登录优先使用阿里云 Workbench，因为它不依赖你先配置好 SSH 白名单：
+
+1. 在浏览器打开 [阿里云控制台](https://home.console.aliyun.com/)，登录自己的阿里云账号。进入“云服务器 ECS” -> “实例”，把地域切换到实例实际所在地域（当前 staging 是中国香港）。
+2. 找到 Liteasy staging 实例。当前文档记录的公网 IPv4 是 `8.217.186.73`，但公网地址可能变化，必须以 ECS 实例详情页当前显示的地址、实例名称和实例 ID 为准；不要只凭 IP 猜测目标机器。
+3. 确认实例状态为“运行中”，点击“连接”或“远程连接”，选择“Workbench”。按实例所有者提供的 Linux 用户名和已批准的密码或密钥登录。Ubuntu 用户名不能凭经验猜测；密码失败时停止，不要反复尝试、打开 root 远程登录或重置密码。
+4. 进入终端后先做只读确认：
+
+   ```bash
+   whoami
+   hostname
+   cd /opt/liteasy/repository
+   pwd
+   git status --short --branch
+   ```
+
+   `pwd` 应为 `/opt/liteasy/repository`。如果目录不存在、主机名不符、Git 状态包含不认识的改动，先停下核对实例，不要创建新仓库或清理文件。
+5. 需要管理员权限时使用已授权账号的 `sudo`，例如 `sudo docker ...`；不要把自己加入 `docker` 组、启用 root SSH 或把密码写入命令。完成操作后在终端执行 `exit`，再关闭 Workbench 标签页。
+
+Workbench 登录不了时，先检查实例是否运行、RAM 账号是否有 ECS 权限以及登录用户名/凭据是否正确。不要因为 SSH 失败就开放 `22/tcp` 到全网。SSH 只是备用方式，必须先由运维人员把安全组限制为你的当前公网 IP 的 `/32`，再使用已核验的私钥连接：
+
+```text
+ssh -i <本机私钥路径> <Linux用户名>@<ECS当前公网IPv4>
+```
+
+第一次看到主机指纹时，通过阿里云/运维记录核对后再接受；指纹不符、出现 `Permission denied` 或连接超时就停止。当前交付记录显示 Windows 到服务器的 SSH 不通，因此上传安装包和首次运维默认走 Workbench，不猜测账号、不接受未知主机密钥。
 
 ### 人和 Codex 的责任边界
 
@@ -82,7 +115,7 @@ Codex 适合执行：
 - 在阿里云/GitHub 控制台完成账单、安全组、RDS 备份、签名授权等需要账号所有权的动作。
 - 对未签名 staging 例外、迁移恢复和生产发布作负责人审批。
 
-## 2. 每个 Codex 会话的标准开场
+## 2. 当前 Codex 会话的标准开场
 
 首次发任务时把以下内容写清楚：
 
@@ -110,7 +143,7 @@ Codex 适合执行：
 执行超过一分钟时持续汇报当前阶段、已确认事实和下一步。
 未得到本任务明确授权时，不提交、不推送、不上传、不部署、不迁移、不重启服务。
 遇到失败不要修改测试或降低安全门禁来换取通过。
-最终回答必须能脱离会话上下文交给下一位操作者。
+最终回答必须能脱离会话上下文交给下一阶段操作者；若下一阶段仍由本机同一 Codex 执行，也必须保留这份证据。
 ```
 
 ## 3. Codex 的分阶段执行纪律
@@ -153,7 +186,7 @@ stop_reason:
 next_authorized_action:
 ```
 
-把这一段原样交给下一个 Codex。交接时不得包含密码、cookie、AccessKey、client secret、OIDC token、SSH 私钥或下载签名 secret。
+把这一段原样交给下一个阶段；只有 Windows 阶段需要交给另一台机器上的 Codex。交接时不得包含密码、cookie、AccessKey、client secret、OIDC token、SSH 私钥或下载签名 secret。
 
 ## 4. 阶段一：让 Codex 检查并修复源码
 
@@ -237,27 +270,27 @@ next_authorized_action:
 
 开发者审阅结论。若只有桌面变化，应明确接受“服务器镜像无需变化”。
 
-## 7. 阶段四：让 Linux 构建机 Codex 构建镜像
+## 7. 阶段四：让当前服务器 Codex 构建镜像
 
-这是新的 Codex 会话。不要只发分支名，应固定完整 SHA：
+这是当前服务器 Codex 的独立授权阶段，不是新的 Linux 构建机 Codex 会话。不要只发分支名，应固定完整 SHA：
 
 ```text
-工作目录：<linux-build-repo>
+工作目录：/opt/liteasy/repository
 仓库：<owner/repository>
 候选 SHA：<candidate-sha>
 允许重建的镜像：<explicit image list>
 目标 ACR：registry.cn-hongkong.aliyuncs.com/<namespace>
 
-请读取 AGENTS.md、direction/developer-release-and-deployment-guide.md 和 deployment/staging/README.md 第 9.2 节。检出候选 SHA，确认 tracked 工作树干净。先运行受影响门禁，再只构建允许列表中的镜像，执行镜像导入/Caddy 配置验证。构建失败立即停止。
+请读取 AGENTS.md、direction/developer-release-and-deployment-guide.md 和 deployment/staging/README.md 第 9.2 节。先检查本机 CPU、可用内存、磁盘空间和 Docker daemon；任一资源或 Docker 前提不满足立即停止。不要覆盖当前工作树中的未知改动；如工作树不干净，使用候选 SHA 的临时干净 worktree 或先停下等待明确处理，不要 reset/clean。检出候选 SHA，确认 tracked 工作树干净。先运行受影响门禁，再只构建允许列表中的镜像，执行镜像导入/Caddy 配置验证。构建失败立即停止。
 
-登录 ACR 时使用已有安全登录状态或交互式凭据，不显示密码。测试和镜像验证全部通过后，允许推送这些镜像。记录完整 tag 和 registry 返回的 @sha256 digest，并与远端仓库核对。禁止 latest，禁止在 staging ECS 构建。
+登录 ACR 时使用已有安全登录状态或交互式凭据，不显示密码。测试和镜像验证全部通过后，允许推送这些镜像。记录完整 tag 和 registry 返回的 @sha256 digest，并与远端仓库核对。禁止 latest。由于本机就是 staging ECS，若资源检查不通过必须停止，不能通过降低测试或门禁强行构建。
 
-最终按标准证据包汇报，不部署服务器。
+最终按标准证据包汇报；即使下一阶段仍由本机会话执行，也先停在部署前，不改变服务器运行状态。
 ```
 
-如果构建机没有 ACR 登录状态，Codex 应停在登录步骤，由开发者在终端安全交互登录，然后再回复“已登录，可以继续”。不要把密码粘贴进会话。
+如果本机没有 ACR 登录状态，Codex 应停在登录步骤，由开发者在终端安全交互登录，然后再回复“已登录，可以继续”。不要把密码粘贴进会话。
 
-## 8. 阶段五：让服务器 Codex 部署镜像
+## 8. 阶段五：让同一服务器 Codex 部署镜像
 
 部署提示词必须列出要变更和保持不变的 digest：
 
@@ -271,7 +304,7 @@ next_authorized_action:
 - <image>=<existing digest>
 数据库迁移影响：yes/no，依据：<summary>
 
-请读取 AGENTS.md、direction/developer-release-and-deployment-guide.md 和 deployment/staging/README.md 的后续更新/回滚章节。先只读检查当前 Git、Compose、容器、waitlist 和公网 readiness，并保存当前 config/Git/images 回退快照。
+请读取 AGENTS.md、direction/developer-release-and-deployment-guide.md 和 deployment/staging/README.md 的后续更新/回滚章节。你仍在同一台服务器和同一 Codex 会话中，但必须把本阶段当作新的授权边界。先只读检查当前 Git、Compose、容器、waitlist 和公网 readiness，并保存当前 config/Git/images 回退快照。
 
 在改变运行状态前向我汇报：当前基线、候选 SHA、将修改的 digest、是否需要 RDS 备份/迁移、精确部署步骤和回滚条件。本阶段先停在该报告，不要部署。
 ```
@@ -398,7 +431,7 @@ Windows 验收摘要：<evidence>
 
 ## 12. 阶段九：最终对齐与交接
 
-“对齐”不是把所有 revision 改成同一个值。让服务器 Codex 进行只读盘点：
+“对齐”不是把所有 revision 改成同一个值。让同一服务器 Codex 进行只读盘点：
 
 ```text
 请为下一位开发者生成最终交接报告，不改变任何状态。对照：
@@ -459,9 +492,9 @@ Windows 验收摘要：<evidence>
 
 不要让 Codex 扩大 timeout 到无限、删除失败测试、关闭 production asset boundary、放宽 OIDC、改 migration checksum 或忽略签名。先区分环境问题、偶发超时和真实回归，然后按原门禁完整复跑。
 
-### 在不同机器之间使用隐含上下文
+### 在跨 Windows 机器时使用隐含上下文
 
-每台机器上的 Codex 只信显式证据包。重新提供完整输入，不依赖“你应该知道上一台电脑做了什么”。
+当前服务器的源码、镜像和部署阶段共享文件系统，但 Windows Codex 不共享服务器状态。跨机器时只信显式证据包，重新提供完整输入，不依赖“你应该知道上一台电脑做了什么”。
 
 ## 14. 一次完整发布的最短提示词索引
 
