@@ -83,8 +83,8 @@ test("retries structured generation without text.format only for compatibility s
   }
 });
 
-test("does not retry structured generation on authentication or rate-limit failures", async (t) => {
-  for (const status of [401, 403, 429]) {
+test("does not retry structured generation on authentication failures", async (t) => {
+  for (const status of [401, 403]) {
     await t.test(String(status), async () => {
       let calls = 0;
       await assert.rejects(() => openAiCompatibleVisualizationAdapter.generateStructured({
@@ -98,6 +98,43 @@ test("does not retry structured generation on authentication or rate-limit failu
       assert.equal(calls, 1);
     });
   }
+});
+
+test("recovers structured generation from temporary rate limits without dropping the schema", async () => {
+  const bodies = [];
+  const result = await openAiCompatibleVisualizationAdapter.generateStructured({
+    payload,
+    request: async (_url, init) => {
+      bodies.push(JSON.parse(init.body));
+      return bodies.length < 3
+        ? new Response("busy", { headers: { "retry-after": "0" }, status: 429 })
+        : new Response(JSON.stringify({ output_text: "{\"nodes\":[]}" }), { status: 200 });
+    },
+    route
+  });
+
+  assert.deepEqual(result, { text: "{\"nodes\":[]}" });
+  assert.equal(bodies.length, 3);
+  assert.equal(bodies.every((body) => body.text?.format?.type === "json_schema"), true);
+});
+
+test("recovers image generation from a temporary provider outage", async () => {
+  let calls = 0;
+  const bytes = Buffer.from("png bytes");
+  const imageRoute = { ...route, endpoint: "https://provider.example/v1/images/generations", operations: ["image_generation"] };
+  const result = await openAiCompatibleVisualizationAdapter.generateImage({
+    payload: { height: 1024, prompt: "A typed scientific diagram", width: 1024 },
+    request: async () => {
+      calls += 1;
+      return calls === 1
+        ? new Response("unavailable", { headers: { "retry-after": "0" }, status: 503 })
+        : new Response(JSON.stringify({ data: [{ b64_json: bytes.toString("base64") }] }), { status: 200 });
+    },
+    route: imageRoute
+  });
+
+  assert.deepEqual(result, { bytes, mimeType: "image/png" });
+  assert.equal(calls, 2);
 });
 
 test("normalizes explicit price metadata but never fabricates price from token usage", async () => {

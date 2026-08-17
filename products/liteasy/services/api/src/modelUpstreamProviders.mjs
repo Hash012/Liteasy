@@ -2,12 +2,13 @@ const maximumUpstreamBodyBytes = 4 * 1024 * 1024;
 const structuredOutputFallbackStatuses = new Set([400, 422, 500, 502]);
 
 export class ModelUpstreamError extends Error {
-  constructor(code, status, internalDetail) {
+  constructor(code, status, internalDetail, retryable = false) {
     super(code);
     this.name = "ModelUpstreamError";
     this.code = code;
     this.status = status;
     this.internalDetail = internalDetail;
+    this.retryable = retryable;
   }
 }
 
@@ -28,9 +29,9 @@ async function readChunk(reader, signal) {
       throw new ModelUpstreamError("model_request_aborted", 499, "client request aborted");
     }
     if (error?.name === "TimeoutError" || error?.name === "AbortError") {
-      throw new ModelUpstreamError("model_provider_timeout", 504, String(error));
+      throw new ModelUpstreamError("model_provider_timeout", 504, String(error), true);
     }
-    throw new ModelUpstreamError("model_provider_unavailable", 503, String(error));
+    throw new ModelUpstreamError("model_provider_unavailable", 503, String(error), true);
   }
 }
 
@@ -60,16 +61,26 @@ async function readBody(response, maximumBytes = maximumUpstreamBodyBytes, signa
 function statusError(response, detail) {
   const status = response.status;
   const diagnostic = `upstream status=${status} errorBodyBytes=${Buffer.byteLength(detail, "utf8")}`;
+  let error;
   if (status === 429) {
-    return new ModelUpstreamError("model_provider_rate_limited", 503, diagnostic);
+    error = new ModelUpstreamError("model_provider_rate_limited", 503, diagnostic, true);
+  } else if (status === 408 || status === 504) {
+    error = new ModelUpstreamError("model_provider_timeout", 504, diagnostic, true);
+  } else if (status === 400 || status === 404 || status === 409 || status === 422) {
+    error = new ModelUpstreamError("model_provider_rejected", 502, diagnostic);
+  } else {
+    error = new ModelUpstreamError(
+      "model_provider_unavailable",
+      503,
+      diagnostic,
+      new Set([500, 502, 503]).has(status)
+    );
   }
-  if (status === 408 || status === 504) {
-    return new ModelUpstreamError("model_provider_timeout", 504, diagnostic);
+  const retryAfter = response.headers?.get?.("retry-after")?.trim();
+  if (error.retryable && retryAfter && /^\d+$/.test(retryAfter)) {
+    error.retryAfterMs = Math.min(2_000, Number(retryAfter) * 1_000);
   }
-  if (status === 400 || status === 404 || status === 409 || status === 422) {
-    return new ModelUpstreamError("model_provider_rejected", 502, diagnostic);
-  }
-  return new ModelUpstreamError("model_provider_unavailable", 503, diagnostic);
+  return error;
 }
 
 async function fetchUpstream(fetchImpl, url, init, signal, timeoutMs, allowedFailureStatuses) {
@@ -84,9 +95,9 @@ async function fetchUpstream(fetchImpl, url, init, signal, timeoutMs, allowedFai
       throw new ModelUpstreamError("model_request_aborted", 499, "client request aborted");
     }
     if (error?.name === "TimeoutError" || error?.name === "AbortError") {
-      throw new ModelUpstreamError("model_provider_timeout", 504, String(error));
+      throw new ModelUpstreamError("model_provider_timeout", 504, String(error), true);
     }
-    throw new ModelUpstreamError("model_provider_unavailable", 503, String(error));
+    throw new ModelUpstreamError("model_provider_unavailable", 503, String(error), true);
   }
   if (!response.ok && !allowedFailureStatuses?.has(response.status)) {
     const detail = (await readBody(response, 16 * 1024, signal)).replace(/\s+/g, " ").slice(0, 16 * 1024);
@@ -95,14 +106,32 @@ async function fetchUpstream(fetchImpl, url, init, signal, timeoutMs, allowedFai
   return response;
 }
 
-async function retryInitialTimeout(request) {
-  try {
-    return await request();
-  } catch (error) {
-    if (!(error instanceof ModelUpstreamError) || error.code !== "model_provider_timeout") {
-      throw error;
+function waitForRetry(milliseconds, signal) {
+  if (signal?.aborted) return Promise.reject(new ModelUpstreamError("model_request_aborted", 499, "client request aborted"));
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new ModelUpstreamError("model_request_aborted", 499, "client request aborted"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, milliseconds);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+async function retryTransientFailure(request, { signal, waitImpl = waitForRetry } = {}) {
+  const delays = [250, 750];
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await request();
+    } catch (error) {
+      if (!(error instanceof ModelUpstreamError) || !error.retryable || attempt >= delays.length) {
+        throw error;
+      }
+      await waitImpl(error.retryAfterMs ?? delays[attempt], signal);
     }
-    return request();
   }
 }
 
@@ -265,33 +294,36 @@ function providerHeaders(apiKey) {
 
 function createOpenAiProvider(config, options) {
   const fetchImpl = options.fetchImpl ?? fetch;
+  const waitImpl = options.waitImpl;
   const timeoutMs = options.timeoutMs;
   return Object.freeze({
     model: config.model,
     async generate(input) {
-      const response = await retryInitialTimeout(() => fetchOpenAiResponse(
-        fetchImpl,
-        upstreamUrl(config.baseUrl, "responses"),
-        { ...input, apiKey: config.apiKey },
-        config.model,
-        false,
-        timeoutMs
-      ));
-      const answer = outputTextFromOpenAi(await jsonPayload(response, input.signal));
-      if (!answer) {
-        throw new ModelUpstreamError("model_provider_response_invalid", 502, "OpenAI response has no output text");
-      }
-      return answer;
+      return retryTransientFailure(async () => {
+        const response = await fetchOpenAiResponse(
+          fetchImpl,
+          upstreamUrl(config.baseUrl, "responses"),
+          { ...input, apiKey: config.apiKey },
+          config.model,
+          false,
+          timeoutMs
+        );
+        const answer = outputTextFromOpenAi(await jsonPayload(response, input.signal));
+        if (!answer) {
+          throw new ModelUpstreamError("model_provider_response_invalid", 502, "OpenAI response has no output text");
+        }
+        return answer;
+      }, { signal: input.signal, waitImpl });
     },
     async *stream(input) {
-      const response = await retryInitialTimeout(() => fetchOpenAiResponse(
+      const response = await retryTransientFailure(() => fetchOpenAiResponse(
         fetchImpl,
         upstreamUrl(config.baseUrl, "responses"),
         { ...input, apiKey: config.apiKey },
         config.model,
         true,
         timeoutMs
-      ));
+      ), { signal: input.signal, waitImpl });
       for await (const payload of ssePayloads(response, input.signal)) {
         if (payload?.type === "response.output_text.delta" && typeof payload.delta === "string") {
           yield payload.delta;
@@ -303,27 +335,30 @@ function createOpenAiProvider(config, options) {
 
 function createDeepSeekProvider(config, options) {
   const fetchImpl = options.fetchImpl ?? fetch;
+  const waitImpl = options.waitImpl;
   const timeoutMs = options.timeoutMs;
   return Object.freeze({
     model: config.model,
     async generate(input) {
-      const response = await retryInitialTimeout(() => fetchUpstream(fetchImpl, upstreamUrl(config.baseUrl, "chat/completions"), {
-        body: JSON.stringify(deepSeekBody(input, config.model, false)),
-        headers: providerHeaders(config.apiKey),
-        method: "POST"
-      }, input.signal, timeoutMs));
-      const answer = outputTextFromDeepSeek(await jsonPayload(response, input.signal));
-      if (!answer) {
-        throw new ModelUpstreamError("model_provider_response_invalid", 502, "DeepSeek response has no assistant content");
-      }
-      return answer;
+      return retryTransientFailure(async () => {
+        const response = await fetchUpstream(fetchImpl, upstreamUrl(config.baseUrl, "chat/completions"), {
+          body: JSON.stringify(deepSeekBody(input, config.model, false)),
+          headers: providerHeaders(config.apiKey),
+          method: "POST"
+        }, input.signal, timeoutMs);
+        const answer = outputTextFromDeepSeek(await jsonPayload(response, input.signal));
+        if (!answer) {
+          throw new ModelUpstreamError("model_provider_response_invalid", 502, "DeepSeek response has no assistant content");
+        }
+        return answer;
+      }, { signal: input.signal, waitImpl });
     },
     async *stream(input) {
-      const response = await retryInitialTimeout(() => fetchUpstream(fetchImpl, upstreamUrl(config.baseUrl, "chat/completions"), {
+      const response = await retryTransientFailure(() => fetchUpstream(fetchImpl, upstreamUrl(config.baseUrl, "chat/completions"), {
         body: JSON.stringify(deepSeekBody(input, config.model, true)),
         headers: providerHeaders(config.apiKey),
         method: "POST"
-      }, input.signal, timeoutMs));
+      }, input.signal, timeoutMs), { signal: input.signal, waitImpl });
       for await (const payload of ssePayloads(response, input.signal)) {
         const delta = Array.isArray(payload?.choices) ? payload.choices[0]?.delta?.content : undefined;
         if (typeof delta === "string" && delta.length > 0) yield delta;

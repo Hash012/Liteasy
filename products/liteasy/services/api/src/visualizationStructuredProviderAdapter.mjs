@@ -1,6 +1,41 @@
 import { VisualizationProviderError } from "./visualizationProviderGateway.mjs";
 
 const structuredOutputFallbackStatuses = new Set([400, 422, 500, 502]);
+const transientProviderStatuses = new Set([408, 429, 500, 502, 503, 504]);
+
+function retryDelay(response, fallback) {
+  const value = response?.headers?.get?.("retry-after")?.trim();
+  if (value && /^\d+$/.test(value)) return Math.min(2_000, Number(value) * 1_000);
+  return fallback;
+}
+
+function waitForRetry(milliseconds, signal) {
+  if (signal?.aborted) return Promise.reject(signal.reason ?? new DOMException("aborted", "AbortError"));
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal.reason ?? new DOMException("aborted", "AbortError"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, milliseconds);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+async function retryTransientResponse(send, signal, initialResponse) {
+  const delays = [250, 750];
+  let response = initialResponse ?? await send();
+  for (const delay of delays) {
+    if (!transientProviderStatuses.has(response?.status)) return response;
+    const waitMs = retryDelay(response, delay);
+    await response.body?.cancel?.().catch(() => {});
+    await waitForRetry(waitMs, signal);
+    response = await send();
+  }
+  return response;
+}
 
 function object(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : null;
@@ -67,7 +102,7 @@ async function jsonResponse(response) {
   }
 }
 
-async function requestStructuredResponse({ input, model, request, schema, schemaName, url }) {
+async function requestStructuredResponse({ input, model, request, schema, schemaName, signal, url }) {
   const send = (includeFormat) => request(url, {
     body: JSON.stringify({
       input: includeFormat ? input : [
@@ -89,12 +124,14 @@ async function requestStructuredResponse({ input, model, request, schema, schema
   let response = await send(true);
   if (structuredOutputFallbackStatuses.has(response?.status)) {
     await response.body?.cancel?.().catch(() => {});
-    response = await send(false);
+    response = await retryTransientResponse(() => send(false), signal);
+  } else {
+    response = await retryTransientResponse(() => send(true), signal, response);
   }
   return response;
 }
 
-async function generateStructured({ payload: payloadInput, request, route }) {
+async function generateStructured({ payload: payloadInput, request, route, signal }) {
   if (typeof request !== "function" || !object(route) || typeof route.model !== "string") {
     throw new VisualizationProviderError("visualization_provider_request_invalid");
   }
@@ -105,6 +142,7 @@ async function generateStructured({ payload: payloadInput, request, route }) {
     request,
     schema: payload.schema,
     schemaName: payload.schemaName,
+    signal,
     url: route.endpoint
   });
   const body = await jsonResponse(response);
@@ -135,18 +173,18 @@ async function requestDeepSeekResponse({ prompt, request, route, schema, schemaN
   });
 }
 
-async function generateDeepSeekStructured({ payload: payloadInput, request, route }) {
+async function generateDeepSeekStructured({ payload: payloadInput, request, route, signal }) {
   if (typeof request !== "function" || !object(route) || typeof route.model !== "string") {
     throw new VisualizationProviderError("visualization_provider_request_invalid");
   }
   const payload = structuredPayload(payloadInput);
-  const body = await jsonResponse(await requestDeepSeekResponse({
+  const body = await jsonResponse(await retryTransientResponse(() => requestDeepSeekResponse({
     prompt: payload.prompt,
     request,
     route,
     schema: payload.schema,
     schemaName: payload.schemaName
-  }));
+  }), signal));
   const text = deepSeekResponseText(body);
   if (!text) throw new VisualizationProviderError("visualization_provider_response_invalid");
   const cost = explicitCost(body);
@@ -162,12 +200,12 @@ function imagePayload(payload) {
   return payload;
 }
 
-async function generateImage({ payload: payloadInput, request, route }) {
+async function generateImage({ payload: payloadInput, request, route, signal }) {
   if (typeof request !== "function" || !object(route) || typeof route.model !== "string") {
     throw new VisualizationProviderError("visualization_provider_request_invalid");
   }
   const payload = imagePayload(payloadInput);
-  const response = await request(route.endpoint, {
+  const response = await retryTransientResponse(() => request(route.endpoint, {
     body: JSON.stringify({
       model: route.model,
       output_format: "png",
@@ -178,7 +216,7 @@ async function generateImage({ payload: payloadInput, request, route }) {
     headers: { "content-type": "application/json" },
     method: "POST",
     responseMaxBytes: 16 * 1024 * 1024
-  });
+  }), signal);
   const body = await jsonResponse(response);
   const encoded = body?.data?.[0]?.b64_json;
   if (typeof encoded !== "string" || encoded.length === 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) {
@@ -192,7 +230,7 @@ async function generateImage({ payload: payloadInput, request, route }) {
   return { bytes, ...(cost ? { cost } : {}), mimeType: "image/png" };
 }
 
-async function probe({ request, route }) {
+async function probe({ request, route, signal }) {
   if (typeof request !== "function" || !object(route) || typeof route.model !== "string") {
     throw new VisualizationProviderError("visualization_provider_request_invalid");
   }
@@ -202,6 +240,7 @@ async function probe({ request, route }) {
     request,
     schema: { additionalProperties: false, properties: {}, required: [], type: "object" },
     schemaName: "liteasy_visualization_probe",
+    signal,
     url: route.endpoint
   });
   const body = await jsonResponse(response);
@@ -213,17 +252,17 @@ async function probe({ request, route }) {
   };
 }
 
-async function probeDeepSeek({ request, route }) {
+async function probeDeepSeek({ request, route, signal }) {
   if (typeof request !== "function" || !object(route) || typeof route.model !== "string") {
     throw new VisualizationProviderError("visualization_provider_request_invalid");
   }
-  const body = await jsonResponse(await requestDeepSeekResponse({
+  const body = await jsonResponse(await retryTransientResponse(() => requestDeepSeekResponse({
     prompt: "Return an empty JSON object.",
     request,
     route,
     schema: { additionalProperties: false, properties: {}, required: [], type: "object" },
     schemaName: "liteasy_visualization_probe"
-  }));
+  }), signal));
   if (!deepSeekResponseText(body)) throw new VisualizationProviderError("visualization_provider_response_invalid");
   return {
     authenticated: true,

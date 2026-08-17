@@ -78,22 +78,26 @@ test("retries structured OpenAI Responses once without text.format on compatible
   }
 });
 
-test("does not remove structured output on authentication or rate-limit failures", async (t) => {
+test("does not remove structured output while retrying only transient failures", async (t) => {
   for (const status of [401, 403, 429]) {
     await t.test(String(status), async () => {
       let calls = 0;
+      const bodies = [];
       const providers = createModelUpstreamProviders(config(), {
-        fetchImpl: async () => {
+        fetchImpl: async (_url, init) => {
           calls += 1;
+          bodies.push(JSON.parse(init.body));
           return new Response("denied", { status });
-        }
+        },
+        waitImpl: async () => {}
       });
       await assert.rejects(() => providers.openai.generate({
         outputFormat: { name: "result", schema: { type: "object" }, strict: true },
         prompt: "Return JSON",
         provider: "openai"
       }), ModelUpstreamError);
-      assert.equal(calls, 1);
+      assert.equal(calls, status === 429 ? 3 : 1);
+      assert.equal(bodies.every((body) => body.text?.format?.type === "json_schema"), true);
     });
   }
 });
@@ -106,7 +110,8 @@ test("retries once when the provider times out before returning a response", asy
       return calls === 1
         ? new Response("gateway timeout", { status: 504 })
         : new Response(JSON.stringify({ output_text: "Recovered answer" }), { status: 200 });
-    }
+    },
+    waitImpl: async () => {}
   });
 
   const answer = await providers.openai.generate({
@@ -116,6 +121,43 @@ test("retries once when the provider times out before returning a response", asy
 
   assert.equal(answer, "Recovered answer");
   assert.equal(calls, 2);
+});
+
+test("recovers from temporary unavailable responses within the bounded retry budget", async () => {
+  let calls = 0;
+  const delays = [];
+  const providers = createModelUpstreamProviders(config(), {
+    fetchImpl: async () => {
+      calls += 1;
+      return calls < 3
+        ? new Response("temporarily unavailable", { status: 503 })
+        : new Response(JSON.stringify({ output_text: "Recovered answer" }), { status: 200 });
+    },
+    waitImpl: async (milliseconds) => delays.push(milliseconds)
+  });
+
+  const answer = await providers.openai.generate({ prompt: "Explain", provider: "openai" });
+
+  assert.equal(answer, "Recovered answer");
+  assert.equal(calls, 3);
+  assert.deepEqual(delays, [250, 750]);
+});
+
+test("honors a bounded Retry-After hint while recovering from rate limits", async () => {
+  let calls = 0;
+  const delays = [];
+  const providers = createModelUpstreamProviders(config(), {
+    fetchImpl: async () => {
+      calls += 1;
+      return calls === 1
+        ? new Response("busy", { headers: { "retry-after": "9" }, status: 429 })
+        : new Response(JSON.stringify({ output_text: "Recovered answer" }), { status: 200 });
+    },
+    waitImpl: async (milliseconds) => delays.push(milliseconds)
+  });
+
+  assert.equal(await providers.openai.generate({ prompt: "Explain", provider: "openai" }), "Recovered answer");
+  assert.deepEqual(delays, [2_000]);
 });
 
 test("parses fragmented DeepSeek SSE without returning reasoning fields", async () => {
