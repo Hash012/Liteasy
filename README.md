@@ -1,5 +1,7 @@
 # Liteasy workspace
 
+首次接手开发请先阅读 [Liteasy 开发接手指南](DEVELOPER_HANDOFF.md)。它说明当前产品主线、下一阶段优先级，以及通过 Codex 迭代时建议使用的前提提示词。
+
 本仓库包含三个并列产品主体，以及它们依赖的服务、部署和开发支持代码：
 
 ```text
