@@ -3,12 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Liteasy 技术报告：证据驱动的科研阅读与知识协作系统</title>
+  <title>Liteasy“薄读”技术报告：从认知全景到证据深处</title>
   <style>
+    @font-face {
+      font-family: "Liteasy Noto Sans SC";
+      font-style: normal;
+      font-weight: 100 900;
+      src: url("./LiteasyReport-NotoSansSC.woff2") format("woff2");
+    }
     @page { size: A4; margin: 17mm 15mm 18mm; }
     @page :first { margin: 0; }
     * { box-sizing: border-box; }
-    html { color: #17212b; font-family: "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif; font-size: 10.4pt; line-height: 1.65; }
+    html { color: #17212b; font-family: "Liteasy Noto Sans SC", "Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif; font-size: 10.4pt; line-height: 1.65; }
     body { margin: 0; }
     h1, h2, h3, h4 { color: #102a43; font-weight: 650; line-height: 1.32; page-break-after: avoid; }
     h1 { border-bottom: 2px solid #0b7285; font-size: 23pt; margin: 0 0 7mm; padding-bottom: 3mm; }
@@ -105,19 +111,19 @@
   <section class="cover">
     <div class="brand">LITEASY TECHNICAL REPORT</div>
     <h1>证据驱动的科研阅读<br>与知识协作系统</h1>
-    <div class="subtitle">Liteasy 问题分析、技术路线、系统设计与工程说明</div>
-    <div class="principle">让每一次理解都能回到来源，让每一次智能操作都经过受控边界，让个人阅读自然沉淀为可复用的知识。</div>
+    <div class="subtitle">Liteasy“薄读”技术报告：从认知全景到证据深处</div>
+    <div class="principle">先帮助读者真正走入知识的森林，再看见全景、找到想追寻的树与叶子；让每一步理解都能回到来源。</div>
     <div class="meta">Liteasy 项目组<br>仓库基线：<code>54cc18a</code><br>报告日期：2026 年 8 月 17 日</div>
-    <div class="version">技术报告 v1.0<br>桌面优先 · 本地与云端协同</div>
+    <div class="version">技术报告 v1.1<br>“薄读”核心叙事版</div>
   </section>
 
   <section class="front">
     <h1>摘要</h1>
     <div class="abstract">
-      <p>科研阅读的困难并不只在“读懂一篇论文”，而在于把分散的文件、来源证据、解释过程、跨文献关系、个体认知和协作讨论组织成一个可持续的工作系统。Liteasy 以桌面端为主要入口，围绕“建立工作区、锁定文献、导入解析、证据检索、渐进式薄读、生成学习产物、沉淀知识与社区协作”构建闭环。系统采用 Tauri + React + TypeScript 的桌面工作台、Rust 本地能力层、Node.js 云服务、PostgreSQL、S3 API 对象存储、Keycloak 统一身份和受控模型网关，并以 IntuEcho 承担学术内容协作与文献身份权威。</p>
-      <p>技术设计的核心不是把大模型直接接入界面，而是建立三条可验证边界：其一，模型只能通过已注册的技能与动作修改系统状态；其二，论文解释必须按来源模式组织证据，并对句子、数值和图表关系逐级校验；其三，本地文件、个人云端数据、组织共享数据、平台配置与临时缓存拥有不同真源、权限和生命周期。本文给出问题分析、技术路线、系统上下文、模块与数据设计、关键流程、安全可靠性、部署与测试体系，并在附录中集中说明能力边界及后续完善项。</p>
+      <p>Liteasy 的核心功能是“薄读”。它不是把论文压缩成更短的摘要，而是把科研者长期形成方向感的过程，转化为一条可交互的阅读路径：先用有重点的根级总述帮助读者真正进入问题域并看见论文全景，再让读者沿自己的好奇心寻找具体的概念、机制、实验或证据；当探索越出单篇论文的解释边界时，系统继续提供外部知识与社区直觉，同时明确改变来源状态。其目标是同时避免两种失败：用户在论文外围读到不痛不痒的解释，以及用户钻进局部细节却失去全局坐标。</p>
+      <p>围绕“薄读”，Liteasy 以桌面端为主要入口，把分散的文件、来源证据、解释过程、跨文献关系、个体认知和协作讨论组织成可持续的知识工作系统。技术设计建立三条可验证边界：模型只能通过已注册的技能与动作修改状态；论文解释按来源模式组织证据，并对句子、数值和图表关系逐级校验；本地文件、个人云端数据、组织共享数据、平台配置与临时缓存拥有不同真源、权限和生命周期。系统采用 Tauri + React + TypeScript、Rust 本地能力层、Node.js 云服务、PostgreSQL、S3 API 对象存储、Keycloak 统一身份和受控模型网关，并以 IntuEcho 承担学术内容协作与文献身份权威。本文从“薄读”的设计哲学出发，说明支撑它的问题分析、技术路线、系统设计、安全可靠性、部署与测试体系。</p>
     </div>
-    <p class="keywords"><strong>关键词：</strong>科研阅读；检索增强生成；证据可追溯；智能代理；生成式界面；本地优先；文献身份；多模态可视化</p>
+    <p class="keywords"><strong>关键词：</strong>“薄读”；科研阅读；认知全景；检索增强生成；证据可追溯；智能代理；生成式界面；文献身份；多模态可视化</p>
 
     <h2>阅读指南</h2>
     <div class="grid-3">
@@ -144,10 +150,14 @@
       <li class="part">5. 智能代理与安全执行</li>
       <li>5.1 受控动作链</li>
       <li>5.2 生成式界面</li>
-      <li class="part">6. 薄读、证据与多模态</li>
-      <li>6.1 渐进认知图</li>
-      <li>6.2 四档来源模式</li>
-      <li>6.3 数值与图表保真</li>
+      <li class="part">6. “薄读”：从走入森林到在全景中创造</li>
+      <li>6.1 设计原点与哲学</li>
+      <li>6.2 “薄而不浅”</li>
+      <li>6.3 渐进认知图</li>
+      <li>6.4 四档来源模式</li>
+      <li>6.5 生成与质量门</li>
+      <li>6.6 数值与图表保真</li>
+      <li>6.7 多模态与社区</li>
       <li class="part">7. 文献身份与数据设计</li>
       <li>7.1 多层身份模型</li>
       <li>7.2 本地与云端存储</li>
@@ -164,11 +174,11 @@
   <section class="chapter">
     <div class="kicker">CHAPTER 01</div>
     <h1>问题分析</h1>
-    <p class="lead">Liteasy 面向的不是一次性的“论文问答”，而是科研用户长期处理文献、证据、理解、产物和协作关系时形成的系统性摩擦。</p>
+    <p class="lead">Liteasy 面向的不是一次性的“论文问答”，而是如何用“薄读”帮助读者真正进入知识问题、获得全局方向，并沿自己的好奇心抵达可核验细节。</p>
 
     <h2>1.1 科研阅读的系统性矛盾</h2>
     <div class="grid-2">
-      <div class="card"><h4>资料存在于文件，理解存在于上下文</h4><p>PDF、收藏、推荐和组织资料分散在不同位置。用户真正关心的是“当前工作区、当前选中文献、当前问题和已有认知”组成的上下文，而不是单个文件本身。</p></div>
+      <div class="card"><h4>读到文字，不等于走进问题</h4><p>平均压缩章节或生成泛化常识，可能让用户读完仍停留在问题域之外。“薄读”首先要给出论文真正解决什么、为何重要以及它在知识全景中的位置。</p></div>
       <div class="card accent"><h4>生成速度快，证据核验慢</h4><p>大模型可以快速生成流畅解释，但论文结论、实验数字和图表关系必须回到可定位来源；否则“读起来像对的”无法转化为可引用的科研知识。</p></div>
       <div class="card green"><h4>自然语言灵活，软件状态要求确定</h4><p>“帮我整理工作区”可能涉及移动、覆盖、上传或删除。自然语言具有歧义，而软件状态变更需要权限、参数、确认、幂等和恢复机制。</p></div>
       <div class="card purple"><h4>个性化有价值，数据边界必须清晰</h4><p>解释深度、领域偏好和阅读轨迹能提升体验，但本地绝对路径、原文、批注和组织资料不应被无差别收集或跨作用域混用。</p></div>
@@ -184,7 +194,7 @@
           <div class="node"><b>生成不可证</b><small>解释、数字和图表缺少来源绑定</small></div><div class="arrow">→</div>
           <div class="node"><b>知识难沉淀</b><small>结果无法复用、比较、协作和追踪</small></div>
         </div>
-        <div class="callout" style="margin-bottom:0"><strong>系统解法</strong>用“受控上下文 + 可追溯证据 + 类型化产物 + 分域存储”把阅读过程变成可审计、可恢复、可复用的知识生产链。</div>
+        <div class="callout" style="margin-bottom:0"><strong>“薄读”解法</strong>先建立方向与全景，再开放通往局部的探索入口；用受控上下文、可追溯证据、类型化产物和分域存储，使每次深入都可审计、可恢复、可复用。</div>
       </div>
       <div class="figure-title">图 1　问题链与系统解法</div>
     </div>
@@ -205,7 +215,7 @@
   <section class="chapter">
     <div class="kicker">CHAPTER 02</div>
     <h1>产品闭环与设计思想</h1>
-    <p class="lead">产品主线从“打开文件”升级为“建立可追溯认知资产”。每个环节都保留显式状态，使用户知道系统掌握了什么、正在做什么、结果从哪里来。</p>
+    <p class="lead">“薄读”是产品闭环的中心：文献库、解析、检索、智能代理、可视化、社区与画像都服务于一件事，即让读者从看见全景开始，逐步抵达自己真正关心的证据深处。</p>
 
     <h2>2.1 从文件到认知资产</h2>
     <div class="figure">
@@ -214,14 +224,14 @@
           <div class="node"><b>建立工作区</b><small>打开本地库或组织共享资料区</small></div><div class="arrow">→</div>
           <div class="node"><b>勾选并锁定</b><small>形成稳定的选中文献集快照</small></div><div class="arrow">→</div>
           <div class="node"><b>导入与解析</b><small>校验、提取、切块、索引、引用定位</small></div><div class="arrow">→</div>
-          <div class="node"><b>薄读与问答</b><small>按证据模式解释并逐层展开</small></div><div class="arrow">→</div>
+          <div class="node"><b>“薄读”探索</b><small>先建全景，再按证据逐层深入</small></div><div class="arrow">→</div>
           <div class="node"><b>生成产物</b><small>认知图、导图、表格、可视化</small></div><div class="arrow">→</div>
           <div class="node"><b>沉淀与协作</b><small>版本、记忆、批注、社区与画像</small></div>
         </div>
       </div>
       <div class="figure-title">图 2　Liteasy 核心用户闭环</div>
     </div>
-    <p>工作区是“当前可见的目录视图”，选中文献集是“用户勾选并锁定、准备交给智能能力处理的文件快照”。二者刻意分离：目录可以继续变化，而一次分析必须基于稳定输入。导入不是简单上传，而是对文献执行安全校验、文本与结构提取、切块、索引和定位准备。分析结果以产物及版本保存，能够被再次打开、继续下钻或与社区内容关联。</p>
+    <p>工作区和导入链路为“薄读”准备可信材料：工作区是当前可见的目录视图，选中文献集是用户锁定、准备交给智能能力处理的文件快照；导入负责安全校验、文本与结构提取、切块、索引和定位。根级“薄读”产物建立论文方向与全景，后续下钻形成版本化认知路径，能够再次打开、继续探索或与社区直觉关联。</p>
 
     <h2>2.2 五项架构原则</h2>
     <div class="grid-3">
@@ -239,13 +249,13 @@
   <section class="chapter">
     <div class="kicker">CHAPTER 03</div>
     <h1>技术路线</h1>
-    <p class="lead">Liteasy 采用“桌面重交互 + 本地文件能力 + 云端业务与任务 + 外部模型能力”的混合路线，在隐私、体验、可扩展性和模型迭代速度之间取得工程平衡。</p>
+    <p class="lead">技术路线以“薄读”体验为牵引：桌面端承载连续阅读与选择，本地能力守住原文和定位，云端服务承担身份、协作与任务，模型负责解释生成，确定性质量门守住证据边界。</p>
 
     <h2>3.1 分层技术栈</h2>
     <div class="figure">
       <div class="diagram layers">
         <div class="layer"><div class="layer-label">用户交互层<small>看得见、可操作</small></div><div class="layer-items"><div class="chip"><b>桌面工作台</b><span>Tauri 2 / React</span></div><div class="chip"><b>三栏与标签页</b><span>Fluent 2 / Dock</span></div><div class="chip"><b>PDF 阅读器</b><span>PDF.js / 批注</span></div><div class="chip"><b>可视化产物</b><span>图、表、公式、动画</span></div></div></div>
-        <div class="layer"><div class="layer-label">智能工作流层<small>理解、规划、校验</small></div><div class="layer-items"><div class="chip"><b>上下文装配</b><span>工作区与选择快照</span></div><div class="chip"><b>技能与动作</b><span>注册、策略、确认</span></div><div class="chip"><b>证据与薄读</b><span>检索、生成、复核</span></div><div class="chip"><b>生成式界面</b><span>受约束界面描述</span></div></div></div>
+        <div class="layer"><div class="layer-label">智能工作流层<small>理解、规划、校验</small></div><div class="layer-items"><div class="chip"><b>上下文装配</b><span>工作区与选择快照</span></div><div class="chip"><b>“薄读”编排</b><span>定向总述、下钻与闭包</span></div><div class="chip"><b>证据质量门</b><span>检索、生成、复核</span></div><div class="chip"><b>生成式界面</b><span>受约束界面描述</span></div></div></div>
         <div class="layer"><div class="layer-label">本地能力层<small>文件、索引、隐私</small></div><div class="layer-items"><div class="chip"><b>文件系统</b><span>Rust / 监听 / 原子写</span></div><div class="chip"><b>本地文献库</b><span>真实目录与回收站</span></div><div class="chip"><b>解析与检索</b><span>文本、锚点、本地索引</span></div><div class="chip"><b>安全凭据</b><span>系统密钥环 / OAuth</span></div></div></div>
         <div class="layer"><div class="layer-label">云端服务层<small>协作、治理、计算</small></div><div class="layer-items"><div class="chip"><b>Liteasy 业务服务</b><span>Node.js / PostgreSQL</span></div><div class="chip"><b>对象存储</b><span>S3 API / 内容寻址</span></div><div class="chip"><b>IntuEcho 社区</b><span>文献身份与内容协作</span></div><div class="chip"><b>统一身份</b><span>Keycloak / OIDC</span></div></div></div>
         <div class="layer"><div class="layer-label">外部能力层<small>按契约调用</small></div><div class="layer-items"><div class="chip"><b>模型服务</b><span>文本与多模态生成</span></div><div class="chip"><b>学术元数据</b><span>Crossref / OpenAlex</span></div><div class="chip"><b>全文与解析</b><span>GROBID / MinerU</span></div><div class="chip"><b>安全扫描</b><span>ClamAV 私有服务</span></div></div></div>
@@ -273,7 +283,7 @@
   <section class="chapter">
     <div class="kicker">CHAPTER 04</div>
     <h1>系统总体设计</h1>
-    <p class="lead">总体设计以资源所有权和执行权限为边界：桌面端拥有本地交互与文件入口，Liteasy 云服务拥有个人与组织业务数据，IntuEcho 拥有文献身份和社区内容，身份平台提供统一主体。</p>
+    <p class="lead">总体架构是“薄读”的支撑系统：桌面端维持连续阅读与选择，Liteasy 云服务组织证据、任务和产物，IntuEcho 提供文献身份与社区直觉，身份平台和存储边界保证这些能力在正确作用域内运行。</p>
 
     <h2>4.1 系统上下文</h2>
     <div class="figure">
@@ -284,7 +294,7 @@
           <div class="card purple"><h4>平台运营人员</h4><p>通过独立管理端配置模型、配额、审计和账号生命周期。</p></div>
         </div>
         <div style="text-align:center;color:#0b7285;font-size:18pt;line-height:1.2">↓</div>
-        <div class="boundary"><div class="boundary-title">Liteasy 产品体系</div><div class="grid-3"><div class="chip"><b>桌面科研工作台</b><span>本地文献与智能阅读主入口</span></div><div class="chip"><b>云端业务平台</b><span>同步、组织、推荐、任务与产物</span></div><div class="chip"><b>IntuEcho 学术社区</b><span>文献身份、批注、讨论与传播</span></div></div></div>
+        <div class="boundary"><div class="boundary-title">以“薄读”为核心的 Liteasy 产品体系</div><div class="grid-3"><div class="chip"><b>桌面“薄读”工作台</b><span>本地文献与渐进阅读主入口</span></div><div class="chip"><b>云端业务平台</b><span>证据、组织、推荐、任务与产物</span></div><div class="chip"><b>IntuEcho 学术社区</b><span>文献身份、直觉批注与知识交流</span></div></div></div>
         <div style="text-align:center;color:#0b7285;font-size:18pt;line-height:1.2">↓</div>
         <div class="grid-3"><div class="card green"><h4>统一身份平台</h4><p>登录、令牌、受众、管理员多因素认证与账号生命周期。</p></div><div class="card"><h4>学术与模型提供方</h4><p>元数据、全文解析、文本生成和多模态生成。</p></div><div class="card red"><h4>基础设施</h4><p>事务数据库、对象存储、反向代理、安全扫描与备份。</p></div></div>
       </div>
@@ -306,8 +316,8 @@
     <h2>4.3 桌面端模块边界</h2>
     <div class="figure">
       <div class="diagram">
-        <div class="flow"><div class="node"><b>界面壳层</b><small>三栏、活动栏、标签区、全局对话框</small></div><div class="arrow">→</div><div class="node"><b>跨模块控制器</b><small>把用户操作编排为领域动作</small></div><div class="arrow">→</div><div class="node"><b>领域功能模块</b><small>工作区、选择、导入、薄读、组织等</small></div><div class="arrow">→</div><div class="node"><b>共享类型与客户端</b><small>协议、数据模型和窄接口</small></div></div>
-        <div class="grid-3" style="margin-top:3mm"><div class="chip"><b>资源与阅读</b><span>工作区、文献库、选择、PDF、批注</span></div><div class="chip"><b>智能与产物</b><span>代理运行时、技能、薄读、生成式界面</span></div><div class="chip"><b>云端与治理</b><span>账号、组织、推荐、画像、设置</span></div></div>
+        <div class="flow"><div class="node"><b>界面壳层</b><small>三栏、活动栏、标签区、全局对话框</small></div><div class="arrow">→</div><div class="node"><b>跨模块控制器</b><small>把用户操作编排为领域动作</small></div><div class="arrow">→</div><div class="node"><b>领域功能模块</b><small>工作区、选择、导入、“薄读”、组织等</small></div><div class="arrow">→</div><div class="node"><b>共享类型与客户端</b><small>协议、数据模型和窄接口</small></div></div>
+        <div class="grid-3" style="margin-top:3mm"><div class="chip"><b>“薄读”输入</b><span>工作区、文献库、选择、PDF、批注</span></div><div class="chip"><b>“薄读”运行时</b><span>代理、证据、下钻、产物与界面</span></div><div class="chip"><b>“薄读”延展</b><span>组织、推荐、画像、社区与设置</span></div></div>
       </div>
       <div class="figure-title">图 6　桌面端依赖方向与功能分组</div>
     </div>
@@ -319,7 +329,7 @@
   <section class="chapter">
     <div class="kicker">CHAPTER 05</div>
     <h1>智能代理与安全执行</h1>
-    <p class="lead">Liteasy 的智能代理是工作台的统一交互入口，但不是绕过应用规则的超级权限。它把自然语言目标转换为可校验计划，再通过受控动作执行。</p>
+    <p class="lead">智能代理为“薄读”选择证据、规划总述与下钻、生成结构化节点并组织外部探索，但它不是可以绕过应用规则的超级权限：每一步都必须进入可校验计划和受控动作边界。</p>
 
     <h2>5.1 受控动作链</h2>
     <div class="figure">
@@ -359,47 +369,79 @@
 
   <section class="chapter">
     <div class="kicker">CHAPTER 06</div>
-    <h1>薄读、证据与多模态</h1>
-    <p class="lead">“薄读”不是把论文压缩成更短的摘要，而是先构建低认知成本的全景，再允许用户沿概念、机制、实验或疑问逐层加深，同时持续维护来源与证明关系。</p>
+    <h1>“薄读”：从走入森林到在全景中创造</h1>
+    <p class="lead">“薄读”是 Liteasy 的核心故事。它要缩短的是读者建立方向感所需的距离，而不是削薄知识、证据或思考：先确保读者真正走进问题的森林，再帮助他看见森林、找到想追寻的树与叶子，并在可靠来源之上形成自己的理解。</p>
 
-    <h2>6.1 渐进认知图</h2>
-    <p>认知结构采用有向多重图。只有“从略到详”的展开关系要求无环，解释、支持、反驳、先修、比较、来源和直觉关系可以交叉连接。领域事实保存在规范化认知图中，界面描述只是对图的投影；用户每次展开只提交带基础版本号的局部补丁，避免整图覆盖和并发丢失。</p>
+    <h2>6.1 设计原点与哲学</h2>
+    <div class="callout">
+      <strong>来自团队内部设计分享的启发</strong>
+      团队分享用一个富有张力的时间尺度描述科研成长：先花约五年 <em>walk into the forest</em>，慢慢看见森林全景；再花约五年，在全景中创造新的美。“薄读”把这条漫长认知路径映射到一次可交互的文献阅读中。这里的“五年”是设计隐喻而非经验定律；产品提供的是方向、选择权和证据，不声称替代研究者真正的长期积累。
+    </div>
+    <p>这项设计首先反对“徘徊在森林外”的 AI 解释：文本可能流畅、完整、四平八稳，却没有指出论文真正面对的问题、核心判断和知识坐标，用户读过之后仍无法进入讨论。根级“薄读”因此采用 <strong>orientation（建立方向）</strong> 模式，不按章节平均压缩，而是根据论文类型取舍内容，优先回答三个问题：这篇论文最重要的思想或结论是什么；它通过什么关键思路成立；它在已有知识与问题谱系中处于什么位置。</p>
+    <p>设计的第二层是“既看见森林，也能找到一片叶子”。全局总述不是终点，而是一张可操作的认知地图。用户可以选中总述中的词句继续深入，也可以打开系统识别出的未覆盖板块；下钻围绕当前选区、父层认识和证据连续展开，不重新生成一篇失去上下文的摘要。前后导航、分支记录和稳定节点使读者可以回到全景，再选择另一条路径。</p>
+    <p>设计的第三层是“不把一篇论文误当作整个森林”。单篇论文有自己的证据闭包；当读者追问历史背景、替代解释、后续工作或跨文献关系时，“薄读”允许继续向外探索，但必须把论文内事实、可信外部知识、社区直觉和 AI 独立理解分开表达。由此，全局视角不会被单篇论文限制，论文作者的主张也不会被外部常识悄悄改写。</p>
+
+    <div class="figure">
+      <div class="diagram flow">
+        <div class="node"><b>真正走入森林</b><small>直指研究问题、核心思想与关键思路<br>避免不痛不痒的泛化讲解</small></div><div class="arrow">→</div>
+        <div class="node"><b>看见森林全景</b><small>建立论文结构、历史坐标与知识位置<br>初学者先获得方向感</small></div><div class="arrow">→</div>
+        <div class="node"><b>找到树与叶子</b><small>按选区、疑问和遗漏板块逐层下钻<br>用户决定探索路线</small></div><div class="arrow">→</div>
+        <div class="node"><b>走出单篇边界</b><small>连接外部文献、社区直觉与新问题<br>在清晰来源上形成创造</small></div>
+      </div>
+      <div class="figure-title">图 9　“薄读”的森林认知路径</div>
+    </div>
+
+    <h2>6.2 “薄而不浅”：产品设计的四个取舍</h2>
+    <div class="grid-2">
+      <div class="card"><h4>呈现要薄，证据要厚</h4><p>首屏只保留最能建立方向的内容，但每个内容性句子都连接论文证据或明确标注的外部来源。薄的是进入界面的认知负担，不是论证基础。</p></div>
+      <div class="card green"><h4>入口要薄，探索要深</h4><p>首次阅读不给用户一堵信息墙；一旦用户选择概念、机制、实验或限制，系统可以持续下钻，并继承父层主张、证据和祖先路径。</p></div>
+      <div class="card accent"><h4>全景要先，路径由用户决定</h4><p>系统先提供方向和可追问入口，不预先替用户展开所有分支。个人好奇心决定接下来寻找哪棵树、哪片叶子。</p></div>
+      <div class="card purple"><h4>论文是起点，不是世界边界</h4><p>论文闭包保证“作者说了什么”不被污染；外部探索保证初学者能获得更大知识坐标。跨界时改变状态，而不是禁止追问。</p></div>
+    </div>
+    <div class="callout"><strong>“薄读”不等于摘要、速读或浅读</strong>摘要通常给出固定压缩结果；“薄读”给出可追踪、可选择、可继续生长的认知入口。它评价的不是“删掉了多少字”，而是读者是否建立方向、能否提出下一步问题，以及每一步理解能否回到来源。</div>
+
+    <h2>6.3 渐进认知图：让全景能够生长</h2>
+    <p>认知结构采用有向多重图，而不是把论文永久压成一棵固定目录树。只有“从略到详”的展开关系要求无环；解释、支持、反驳、先修、比较、来源和直觉关系可以交叉连接。领域事实保存在规范化认知图中，界面只是对图的当前投影；用户每次展开提交带基础版本号的局部补丁，避免整图覆盖和并发丢失。</p>
+    <p>层级也是当前阅读视图的属性，而不是对知识难度的永久分类。同一个概念对初学者可能需要直觉和先修解释，对领域专家则只需作为定位节点。系统同时考虑内容的基础深度、当前用户需要看到的呈现深度和这次交互的明确问题；点击次数只是信号，不能机械地等同于理解深度。</p>
     <div class="figure">
       <div class="diagram">
         <div class="state-row"><div class="state active"><b>第 0 层：一句话全景</b><small>核心结论与历史坐标</small></div><div class="state"><b>第 1 层：问题骨架</b><small>问题、机制、主要结果</small></div><div class="state"><b>第 2 层：概念解释</b><small>直觉、先修与关键关系</small></div><div class="state"><b>第 3 层：证据细节</b><small>实验、推导、限制</small></div><div class="state"><b>第 4 层：深度拓展</b><small>跨文献比较与开放问题</small></div></div>
-        <div class="callout" style="margin-bottom:0"><strong>双深度控制</strong>系统同时考虑“内容本身的基础深度”和“当前用户需要看到的呈现深度”。点击次数只是信号，不能机械地等同于知识层级。</div>
+        <div class="callout" style="margin-bottom:0"><strong>两种连续性</strong>认知连续性保证下钻回答仍承接父层方向；证据连续性保证上一层主张和定位进入下一轮上下文，但不能冒充下一轮的新证据。</div>
       </div>
-      <div class="figure-title">图 9　渐进式认知投影</div>
+      <div class="figure-title">图 10　“薄读”的渐进式认知投影</div>
     </div>
 
-    <h2>6.2 四档来源模式</h2>
+    <h2>6.4 四档来源模式：探索可以扩展，来源不能混淆</h2>
     <table>
       <thead><tr><th>模式</th><th>正文可以使用的依据</th><th>适用问题</th><th>界面表达</th></tr></thead>
       <tbody>
         <tr><td><strong>论文内证据</strong><br><code>paper</code></td><td>目标论文中可定位的文本、表格、图和结构</td><td>“作者做了什么”“实验结果如何”</td><td>显示论文来源和锚点</td></tr>
         <tr><td><strong>论文 + 外部证据</strong><br><code>paper_and_external</code></td><td>论文内证据与经验证的外部学术来源</td><td>背景补充、支持/挑战、跨文献比较</td><td>分别标注论文内外来源</td></tr>
         <tr><td><strong>仅外部证据</strong><br><code>external_only</code></td><td>经验证的论文外来源；本地索引只恢复任务范围</td><td>论文未覆盖但可从外部文献回答的问题</td><td>明确“不依据目标论文正文”</td></tr>
-        <tr><td><strong>AI 独立理解</strong><br><code>ai_interpretation</code></td><td>不声称具有文献依据的模型理解</td><td>可信外部来源耗尽后的通用解释</td><td>显著标注无文献依据</td></tr>
+        <tr><td><strong>AI 独立理解</strong><br><code>ai_interpretation</code></td><td>不声称具有文献依据的模型理解</td><td>可信外部来源耗尽后的通用解释</td><td>固定声明并显著标注无文献依据</td></tr>
       </tbody>
     </table>
+    <p>来源模式和“位于论文闭包内、临近边界或闭包外”是两个独立状态轴。接近闭包边界时，界面先提醒用户；跨出边界后，“薄读”仍然可以继续，但正文背景、来源标签和引用集合必须同步变化。社区中的直觉表达贴近当前论文或句段呈现，用于提供另一种认知编码，永远不能冒充论文事实。</p>
 
-    <h2>6.3 统一生成与质量门</h2>
+    <h2>6.5 从方向建立到原子保存</h2>
     <div class="figure">
-      <div class="diagram flow"><div class="node"><b>固定任务范围</b><small>论文、父节点、选区、深度、语言</small></div><div class="arrow">→</div><div class="node"><b>规划解释</b><small>全景或下钻；what / why / how</small></div><div class="arrow">→</div><div class="node"><b>准备证据</b><small>小证据集直达，大集合有界检索</small></div><div class="arrow">→</div><div class="node"><b>并发外部检索</b><small>支持、挑战、背景路线分别验证</small></div><div class="arrow">→</div><div class="node"><b>结构化生成</b><small>摘要、句子、主张、锚点、视觉意图</small></div><div class="arrow">→</div><div class="node"><b>校验与原子保存</b><small>结构、来源、句子、数值、图表、版本</small></div></div>
-      <div class="figure-title">图 10　薄读统一生成流水线</div>
+      <div class="diagram flow"><div class="node"><b>固定任务范围</b><small>论文、父节点、选区、深度、语言</small></div><div class="arrow">→</div><div class="node"><b>规划阅读方向</b><small>根级全景或局部探索</small></div><div class="arrow">→</div><div class="node"><b>准备论文证据</b><small>小集合直达，大集合有界读取</small></div><div class="arrow">→</div><div class="node"><b>并发外部检索</b><small>支持、挑战、背景分别验证</small></div><div class="arrow">→</div><div class="node"><b>结构化生成</b><small>正文、句子、主张、锚点、视觉意图</small></div><div class="arrow">→</div><div class="node"><b>质量门与保存</b><small>来源、数值、图表、语义、版本</small></div></div>
+      <div class="figure-title">图 11　“薄读”统一生成流水线</div>
     </div>
-    <p>生成前固定目标论文和上下文；证据准备阶段对大集合采用“轻量目录规划 → 白名单工具读取 → 最多一轮补充”的有界循环；外部来源按支持、挑战和背景路线并发检索，单路失败不拖垮其他可信来源。正文以严格结构化对象返回，流式内容只作为草稿展示。只有结构、来源模式、句级覆盖、定量命题和语义复核全部通过后，节点与产物版本才会原子保存。</p>
+    <p>生成前固定目标论文和阅读上下文。根级计划固定为 <strong>orientation</strong>，以核心思想、论文全景和有证据的领域位置为完成标准；下钻计划固定为 <strong>exploration</strong>，以回答用户选择并保持父层认知连续性为完成标准。证据准备阶段对大集合采用“轻量目录规划、白名单工具读取、最多一轮补充”的有界循环；外部来源按支持、挑战和背景路线并发检索，单路失败不拖垮其他可信来源。</p>
+    <p>正文以严格结构化对象返回，流式内容只作为草稿。校验顺序覆盖结构、目标语言、来源 ID 白名单、句级正文覆盖、来源模式、定量命题、外部关系、图表边界和命题级复核。只有正文、来源模式和审计全部通过后，节点与产物版本才会原子保存；失败分支不改变父节点和已经成立的认知路径。</p>
 
-    <h2>6.4 数值与图表保真</h2>
+    <h2>6.6 数值与图表保真</h2>
     <div class="grid-3">
       <div class="card"><h4>数值保真门</h4><p>每个正文定量主张都要有合法证明路径，逐项匹配主体、指标、关系、值、单位、比较对象、限定词、不确定性与实验条件。</p></div>
       <div class="card accent"><h4>数值完整性门</h4><p>仅在用户要求“列全结果”或任务定义必需事实集合时启用，避免把合理省略误判为错误。</p></div>
       <div class="card purple"><h4>图表结构门</h4><p>仅在存在结构化图表证据时验证行列、图例、坐标和区域关系；数字相邻不能被推断为表格关系。</p></div>
     </div>
-    <p>数值证明坚持原子性：默认由同一来源、同一实验范围内的事实支持一个经验主张，禁止跨论文、跨硬件、跨数据集或跨统计口径拼接新比较。失败修复遵循“确定性规范化 → 删除非正文可选字段 → 只改失败句 → 隔离不合格句 → 定向换源 → 合法切换来源模式”的顺序，已经通过的句子和来源映射保持冻结。</p>
+    <p>数值证明坚持原子性：默认由同一来源、同一实验范围内的事实支持一个经验主张，禁止跨论文、跨硬件、跨数据集或跨统计口径拼接新比较。失败修复遵循“确定性规范化、删除非正文可选字段、只改失败句、隔离不合格句、定向换源、合法切换来源模式”的顺序，已经通过的句子和来源映射保持冻结。</p>
 
-    <h2>6.5 多模态产物</h2>
-    <p>系统把多模态生成拆为“意图、证据、产物协议、编译器、渲染器、校验器”六个角色。语义图、电路与物理图、生物结构、函数与几何、过程动画、栅格插图分别使用专用编译器；界面根据设备能力和产物状态选择 SVG、Canvas、WebGL、图片或无障碍文本降级。自动视觉增强与正文拥有独立预算，因此附属图像失败不会破坏已经合格的正文。</p>
+    <h2>6.7 多模态与社区：用适合人的方式理解</h2>
+    <p>“薄读”的认知入口不局限于文字。系统把多模态生成拆为意图、证据、产物协议、编译器、渲染器和校验器六个角色；语义图、电路与物理图、生物结构、函数与几何、过程动画、栅格插图分别使用专用编译器。界面根据设备能力和产物状态选择 SVG、Canvas、WebGL、图片或无障碍文本降级。自动视觉增强与正文拥有独立预算，因此附属图像失败不会破坏已经合格的正文。</p>
+    <p>IntuEcho 社区补充的是“人如何理解这里”，而不是替论文作证。用户可以对整篇论文、原文句段或“薄读”内容与其对应论文证据发表直觉性批注；推荐系统把与当前认知位置、语言偏好和社会关系更匹配的表达带回阅读界面。论文事实、社区直觉、用户私有笔记和 AI 重述始终保留不同来源与授权。</p>
   </section>
 
   <section class="chapter">
@@ -413,7 +455,7 @@
         <div class="flow"><div class="node"><b>文件副本标识</b><small><code>documentId</code><br>目录、权限、批注、回收站</small></div><div class="arrow">≠</div><div class="node"><b>内容指纹</b><small><code>contentHash</code><br>字节完整性、对象去重、缓存</small></div><div class="arrow">≠</div><div class="node"><b>文献版本标识</b><small><code>literatureId</code><br>经来源确认的具体学术版本</small></div><div class="arrow">↔</div><div class="node"><b>外部来源别名</b><small>DOI、arXiv、OpenAlex 等可验证标识</small></div></div>
         <div class="callout" style="margin-bottom:0"><strong>版本关系不等于身份合并</strong>预印本、会议版、期刊版和勘误可以建立有向关系，但各自保留独立文献版本标识与修订历史。</div>
       </div>
-      <div class="figure-title">图 11　文献身份分层</div>
+      <div class="figure-title">图 12　文献身份分层</div>
     </div>
     <p>IntuEcho 的独立文献模块是来源解析、分级裁决和确认记录的权威。原始注册来源（如 Crossref DOI、arXiv）可按其稳定标识精确回查；聚合来源（如 OpenAlex、Semantic Scholar）需要两个独立来源一致，或由用户选择后服务端重新抓取验证。状态从“未解析 → 候选 → 已确认”演进，歧义和冲突进入独立分支。只有已确认记录才能作为公开批注、社区同步和跨用户精确推荐的文献范围。</p>
 
@@ -423,7 +465,7 @@
         <div class="boundary"><div class="boundary-title">用户设备：本地真源</div><div class="grid-2"><div class="chip"><b>本地文献库</b><span>真实目录、PDF、文件监听</span></div><div class="chip"><b>伴生数据</b><span>索引、批注、锚点、阅读状态</span></div><div class="chip"><b>本地回收站</b><span>清单、恢复、30 天保留</span></div><div class="chip"><b>私有细节</b><span>绝对路径与原始阅读事件</span></div></div></div>
         <div class="boundary"><div class="boundary-title">云端平台：业务真源</div><div class="grid-2"><div class="chip"><b>个人收藏</b><span>长期数据、目录、配额与备份</span></div><div class="chip"><b>组织文献库</b><span>共享目录、角色与导入导出策略</span></div><div class="chip"><b>推荐与检索缓存</b><span>有期限的虚拟结果集</span></div><div class="chip"><b>对象存储</b><span>内容寻址 PDF 与引用计数</span></div></div></div>
       </div>
-      <div class="figure-title">图 12　本地与云端数据边界</div>
+      <div class="figure-title">图 13　本地与云端数据边界</div>
     </div>
     <p>本地库属于当前操作系统用户，不随 Liteasy 登录账号切换；同一时刻启用一个库根目录，文件系统是存在性的真源。云端使用 <code>scope_type + scope_id + folder_id</code> 表达个人或组织归属和目录层级。PDF 写入临时对象时由服务端计算 SHA-256、执行安全扫描，再在数据库事务中创建逻辑文献条目和对象引用；相同字节可以复用对象，但配额仍按逻辑文献正文计算。</p>
 
@@ -464,7 +506,7 @@
         <div style="text-align:center;color:#0b7285;font-size:18pt;line-height:1.2">↓ 私网 / 容器网络</div>
         <div class="grid-3"><div class="chip"><b>RDS PostgreSQL</b><span>独立业务数据库与迁移</span></div><div class="chip"><b>OSS / S3 对象存储</b><span>私有 PDF 与版本化对象</span></div><div class="chip"><b>PDF 扫描服务</b><span>ClamAV、鉴权与故障关闭</span></div></div>
       </div>
-      <div class="figure-title">图 13　预发布部署视图</div>
+      <div class="figure-title">图 14　预发布部署视图</div>
     </div>
     <p>公网只开放 HTTP/HTTPS，应用内部端口不映射到互联网。服务在监听端口前检查数据库迁移、对象存储公共访问阻断、加密和版本化等条件；迁移由独立账号执行并使用 advisory lock，已执行迁移的内容哈希变化会阻止启动。存活检查回答“进程是否运行”，就绪检查回答“数据库、身份和存储是否满足接流量条件”，两者分开设计。</p>
 
@@ -494,7 +536,7 @@
         <div class="layer"><div class="layer-label">集成测试<small>真实边界</small></div><div class="layer-items"><div class="chip"><b>PostgreSQL</b><span>迁移、事务、隔离</span></div><div class="chip"><b>S3</b><span>加密、版本、去重</span></div><div class="chip"><b>OIDC</b><span>JWKS、受众、活跃状态</span></div><div class="chip"><b>扫描与模型</b><span>故障关闭、提供方冒烟</span></div></div></div>
         <div class="layer"><div class="layer-label">发布验证<small>用户路径</small></div><div class="layer-items"><div class="chip"><b>桌面构建</b><span>TypeScript、Vite、Tauri</span></div><div class="chip"><b>多模态门禁</b><span>静态科学、数学、过程</span></div><div class="chip"><b>安装升级</b><span>启动、重启、OAuth、保留数据</span></div><div class="chip"><b>运行证据</b><span>健康、容量、备份恢复</span></div></div></div>
       </div>
-      <div class="figure-title">图 14　质量工程金字塔</div>
+      <div class="figure-title">图 15　质量工程金字塔</div>
     </div>
 
     <h2>9.2 关键观测对象</h2>
@@ -528,7 +570,7 @@
         <tr><td>桌面工作台</td><td><span class="status-ok">已形成可运行骨架</span>：三栏、Dock、工作区、锁定选择、PDF、助手、产物、组织、设置</td><td>持续收敛跨模块控制器，扩大真实设备端到端验证与可访问性回归</td></tr>
         <tr><td>本地文献库</td><td><span class="status-ok">真实文件链已实现</span>：目录扫描、监听、分块导入、原子写、回收站、恢复与备份</td><td>面向更多 Windows 文件系统差异、超大库容量和长期迁移开展压力与恢复演练</td></tr>
         <tr><td>智能代理</td><td><span class="status-ok">运行时与安全边界已建立</span>：上下文、计划校验、策略、确认、技能、动作、任务事件</td><td>扩充跨技能评测、持久记忆治理、正式插件权限与 MCP 注册生命周期</td></tr>
-        <tr><td>薄读与多模态</td><td><span class="status-ok">协议和多类渲染链存在</span>：四档来源、数值保真、静态科学、数学、过程栅格与发布门</td><td>继续扩大真实论文金集、跨学科图表语义评测、提供方容量和成本基线</td></tr>
+        <tr><td>“薄读”与多模态</td><td><span class="status-ok">协议和多类渲染链存在</span>：四档来源、数值保真、静态科学、数学、过程栅格与发布门</td><td>继续扩大真实论文金集、跨学科图表语义评测、提供方容量和成本基线</td></tr>
         <tr><td>正式云服务</td><td><span class="status-ok">生产边界代码已建立</span>：PostgreSQL/S3、OIDC、扫描、组织、推荐、模型代理、账号生命周期</td><td>补齐目标环境的托管密钥、备份恢复、容量、监控告警和完整上线证据</td></tr>
         <tr><td>身份与社区</td><td><span class="status-ok">独立服务边界已建立</span>：来源确认文献身份、社区内容、批注、关系、服务间授权</td><td>持续验证外部来源波动、审核申诉、删除传播与社区规模下的排序质量</td></tr>
         <tr><td>发布与运维</td><td><span class="status-ok">受控预发布链可用</span>：Caddy、Compose、Keycloak、扫描器、Windows 安装包交接</td><td>生产签名、公开发布、扩容、RDS 恢复、真实告警和无人值守故障演练</td></tr>
@@ -565,7 +607,7 @@
         <tr><td>项目总览与实现边界</td><td><code>docs/项目上下文与设计总览.md</code>；<code>docs/qa/2026-08-08-repository-structure-and-capability-audit.md</code></td></tr>
         <tr><td>产品蓝图与 SaaS 定位</td><td><code>docs/superpowers/specs/2026-05-10-liteasyclaw-product-blueprint-design.md</code>；<code>docs/saas/LiteasyClaw_SaaS纠偏设计与调整方案.md</code></td></tr>
         <tr><td>桌面模块与代理</td><td><code>docs/engineering/module-boundaries.md</code>；<code>docs/agent-dev/liteasy-agent-core-design.md</code>；<code>products/liteasy/apps/desktop/src/app/features/</code></td></tr>
-        <tr><td>薄读与多模态</td><td><code>docs/design/薄读-四档支持架构与生成成功边界.md</code>；<code>docs/design/薄读-数值与定量命题保真门.md</code>；<code>docs/superpowers/specs/2026-08-08-thin-reading-multimodal-visualization-design.md</code></td></tr>
+        <tr><td>“薄读”与多模态</td><td><code>docs/design/薄读-四档支持架构与生成成功边界.md</code>；<code>docs/design/薄读-数值与定量命题保真门.md</code>；<code>docs/superpowers/specs/2026-08-08-thin-reading-multimodal-visualization-design.md</code></td></tr>
         <tr><td>文献身份与存储</td><td><code>docs/design/文献身份标识实现报告.md</code>；<code>docs/design/Liteasy-文件系统与存储边界设计.md</code></td></tr>
         <tr><td>正式服务与部署</td><td><code>products/liteasy/services/api/README.md</code>；<code>deployment/staging/README.md</code>；<code>docs/operations/staging-handoff-2026-08-16.md</code></td></tr>
       </tbody>
@@ -585,7 +627,7 @@
         <tr><td>技能</td><td>完成一类用户任务的受控流程，可以组合检索、生成和动作。</td></tr>
         <tr><td>动作</td><td>一个可以确定性执行的状态变更，带类型化参数、资源作用域、风险与权限。</td></tr>
         <tr><td>证据锚点</td><td>连接解释与来源的定位信息，可包含页码、文本范围、结构区、坐标或内容哈希。</td></tr>
-        <tr><td>薄读</td><td>先建立低认知成本全景，再沿用户关注点逐层展开的证据约束阅读方式。</td></tr>
+        <tr><td>“薄读”</td><td>先建立低认知成本的方向与全景，再沿用户关注点逐层深入，并在越出单篇论文时显式切换来源状态的证据约束阅读方式。</td></tr>
       </tbody>
     </table>
 
@@ -610,7 +652,7 @@
       <li>Fielding, R. T. <em>Architectural Styles and the Design of Network-based Software Architectures</em> [D]. University of California, Irvine, 2000.</li>
       <li>ISO/IEC/IEEE. <em>ISO/IEC/IEEE 42010:2022 Software, systems and enterprise — Architecture description</em> [S]. Geneva: ISO, 2022.</li>
     </ol>
-    <div class="footer-note">Liteasy 技术报告 v1.0 · 生成日期 2026-08-17 · 仓库基线 54cc18a</div>
+    <div class="footer-note">Liteasy“薄读”技术报告 v1.1 · 生成日期 2026-08-17 · 仓库基线 54cc18a</div>
   </section>
 </body>
 </html>
