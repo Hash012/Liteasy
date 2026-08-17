@@ -1,0 +1,616 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Liteasy 技术报告：证据驱动的科研阅读与知识协作系统</title>
+  <style>
+    @page { size: A4; margin: 17mm 15mm 18mm; }
+    @page :first { margin: 0; }
+    * { box-sizing: border-box; }
+    html { color: #17212b; font-family: "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif; font-size: 10.4pt; line-height: 1.65; }
+    body { margin: 0; }
+    h1, h2, h3, h4 { color: #102a43; font-weight: 650; line-height: 1.32; page-break-after: avoid; }
+    h1 { border-bottom: 2px solid #0b7285; font-size: 23pt; margin: 0 0 7mm; padding-bottom: 3mm; }
+    h2 { border-bottom: 1px solid #bcccdc; font-size: 17pt; margin: 9mm 0 4mm; padding-bottom: 2mm; }
+    h3 { font-size: 13pt; margin: 6mm 0 2mm; }
+    h4 { font-size: 11pt; margin: 4mm 0 1.5mm; }
+    p { margin: 0 0 3mm; text-align: justify; }
+    a { color: #0b7285; text-decoration: none; }
+    strong { color: #102a43; }
+    code { background: #edf2f7; border-radius: 2px; font-family: "Noto Sans Mono CJK SC", monospace; font-size: 8.7pt; padding: 0.2mm 1mm; }
+    .cover { background: #0b2435; color: white; height: 297mm; overflow: hidden; padding: 24mm 20mm; position: relative; page-break-after: always; }
+    .cover::before { background: #12b886; content: ""; height: 8mm; left: 0; position: absolute; right: 0; top: 0; }
+    .cover::after { border: 1px solid rgba(255,255,255,.18); content: ""; height: 112mm; position: absolute; right: -32mm; top: 22mm; transform: rotate(28deg); width: 112mm; }
+    .cover .brand { color: #66d9c0; font-size: 13pt; font-weight: 650; letter-spacing: 2px; margin-top: 6mm; }
+    .cover h1 { border: 0; color: white; font-size: 31pt; line-height: 1.2; margin: 33mm 0 6mm; max-width: 150mm; padding: 0; }
+    .cover .subtitle { color: #d9e2ec; font-size: 15pt; line-height: 1.55; max-width: 142mm; }
+    .cover .principle { border-left: 4px solid #12b886; color: #f0f4f8; font-size: 12pt; margin-top: 28mm; max-width: 145mm; padding: 2mm 0 2mm 5mm; }
+    .cover .meta { bottom: 22mm; color: #bcccdc; font-size: 10pt; left: 20mm; line-height: 1.8; position: absolute; }
+    .cover .version { bottom: 22mm; color: #66d9c0; font-size: 10pt; position: absolute; right: 20mm; text-align: right; }
+    .front { page-break-after: always; }
+    .abstract { background: #f0f7f7; border-left: 4px solid #0b7285; padding: 5mm 6mm 3mm; }
+    .keywords { color: #486581; margin-top: 4mm; }
+    .toc { column-count: 2; column-gap: 12mm; list-style: none; padding: 0; }
+    .toc li { border-bottom: 1px dotted #bcccdc; break-inside: avoid; margin: 0 0 2mm; padding-bottom: 1mm; }
+    .toc .part { color: #0b7285; font-weight: 700; margin-top: 3mm; }
+    .chapter { break-before: page; }
+    .kicker { color: #0b7285; font-size: 9pt; font-weight: 700; letter-spacing: 1px; margin-bottom: 1mm; text-transform: uppercase; }
+    .lead { color: #334e68; font-size: 11.5pt; line-height: 1.7; margin-bottom: 5mm; }
+    .figure, .table-wrap { break-inside: avoid; margin: 5mm 0 6mm; }
+    .figure-title, .table-title { color: #334e68; font-size: 8.8pt; margin-top: 2mm; text-align: center; }
+    .source-note { color: #627d98; font-size: 8pt; margin-top: 1mm; text-align: center; }
+    .diagram { background: #f8fafc; border: 1px solid #bcccdc; border-radius: 4px; padding: 4mm; }
+    .flow { align-items: stretch; display: flex; gap: 2mm; justify-content: space-between; }
+    .flow .node { align-items: center; background: white; border: 1px solid #9fb3c8; border-top: 3px solid #0b7285; display: flex; flex: 1; flex-direction: column; justify-content: center; min-height: 22mm; padding: 2.5mm; text-align: center; }
+    .flow .arrow { align-items: center; color: #0b7285; display: flex; font-size: 17pt; font-weight: 700; }
+    .node b { color: #102a43; font-size: 9.3pt; }
+    .node small { color: #627d98; display: block; font-size: 7.6pt; line-height: 1.35; margin-top: 1mm; }
+    .layers { display: grid; gap: 2mm; }
+    .layer { align-items: center; border: 1px solid #9fb3c8; display: grid; grid-template-columns: 34mm 1fr; min-height: 18mm; }
+    .layer-label { align-self: stretch; background: #0b7285; color: white; display: flex; flex-direction: column; font-weight: 700; justify-content: center; padding: 3mm; }
+    .layer-label small { color: #c5f6ec; font-size: 7.5pt; font-weight: 400; }
+    .layer-items { display: grid; gap: 2mm; grid-template-columns: repeat(4, 1fr); padding: 2mm; }
+    .chip { background: white; border: 1px solid #d9e2ec; min-height: 12mm; padding: 2mm; text-align: center; }
+    .chip b { display: block; font-size: 8.4pt; }
+    .chip span { color: #627d98; display: block; font-size: 7pt; line-height: 1.3; }
+    .grid-2 { display: grid; gap: 4mm; grid-template-columns: repeat(2, 1fr); }
+    .grid-3 { display: grid; gap: 3mm; grid-template-columns: repeat(3, 1fr); }
+    .card { background: white; border: 1px solid #bcccdc; border-top: 3px solid #0b7285; padding: 3.5mm; }
+    .card h4 { margin-top: 0; }
+    .card p { color: #486581; font-size: 8.8pt; margin-bottom: 0; }
+    .accent { border-top-color: #e67700; }
+    .green { border-top-color: #2f9e44; }
+    .red { border-top-color: #c92a2a; }
+    .purple { border-top-color: #7048e8; }
+    .callout { background: #f0f7f7; border-left: 4px solid #0b7285; margin: 4mm 0; padding: 3mm 4mm; }
+    .callout strong { display: block; margin-bottom: 1mm; }
+    .callout.warn { background: #fff8e6; border-left-color: #e67700; }
+    .metric-row { display: grid; gap: 3mm; grid-template-columns: repeat(4, 1fr); margin: 4mm 0; }
+    .metric { background: #102a43; color: white; min-height: 24mm; padding: 3mm; text-align: center; }
+    .metric b { color: #66d9c0; display: block; font-size: 16pt; }
+    .metric span { color: #d9e2ec; font-size: 7.8pt; }
+    table { border-collapse: collapse; font-size: 8.5pt; line-height: 1.45; width: 100%; }
+    th, td { border: 1px solid #bcccdc; padding: 2.2mm 2.5mm; text-align: left; vertical-align: top; }
+    th { background: #e8f2f3; color: #102a43; font-weight: 700; }
+    tr:nth-child(even) td { background: #fbfcfd; }
+    ul, ol { margin: 1mm 0 3mm; padding-left: 6mm; }
+    li { margin-bottom: 1mm; }
+    .sequence { border-left: 2px solid #0b7285; margin-left: 5mm; padding-left: 6mm; }
+    .sequence .step { margin: 0 0 3mm; position: relative; }
+    .sequence .step::before { background: #12b886; border: 2px solid white; border-radius: 50%; content: ""; height: 4mm; left: -8.2mm; position: absolute; top: 1mm; width: 4mm; }
+    .sequence b { display: block; }
+    .sequence span { color: #486581; font-size: 8.7pt; }
+    .state-row { display: grid; gap: 2mm; grid-template-columns: repeat(5, 1fr); }
+    .state { background: white; border: 1px solid #9fb3c8; padding: 2.5mm 1.5mm; text-align: center; }
+    .state.active { background: #d3f9d8; border-color: #2f9e44; }
+    .state.review { background: #fff3bf; border-color: #e67700; }
+    .state.blocked { background: #ffe3e3; border-color: #c92a2a; }
+    .state b { display: block; font-size: 8.3pt; }
+    .state small { color: #627d98; font-size: 7pt; }
+    .boundary { background: #eef2f7; border: 1px dashed #829ab1; padding: 3mm; }
+    .boundary-title { color: #486581; font-size: 8.2pt; font-weight: 700; margin-bottom: 2mm; }
+    .footer-note { border-top: 1px solid #bcccdc; color: #627d98; font-size: 7.8pt; margin-top: 6mm; padding-top: 2mm; }
+    .refs { font-size: 8.5pt; }
+    .refs li { margin-bottom: 2mm; }
+    .small { color: #627d98; font-size: 8pt; }
+    .avoid { break-inside: avoid; }
+    .page-break { break-before: page; }
+    .status-ok { color: #2b8a3e; font-weight: 700; }
+    .status-plan { color: #b35c00; font-weight: 700; }
+    @media print { a { color: inherit; } .cover { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  </style>
+</head>
+<body>
+  <section class="cover">
+    <div class="brand">LITEASY TECHNICAL REPORT</div>
+    <h1>证据驱动的科研阅读<br>与知识协作系统</h1>
+    <div class="subtitle">Liteasy 问题分析、技术路线、系统设计与工程说明</div>
+    <div class="principle">让每一次理解都能回到来源，让每一次智能操作都经过受控边界，让个人阅读自然沉淀为可复用的知识。</div>
+    <div class="meta">Liteasy 项目组<br>仓库基线：<code>54cc18a</code><br>报告日期：2026 年 8 月 17 日</div>
+    <div class="version">技术报告 v1.0<br>桌面优先 · 本地与云端协同</div>
+  </section>
+
+  <section class="front">
+    <h1>摘要</h1>
+    <div class="abstract">
+      <p>科研阅读的困难并不只在“读懂一篇论文”，而在于把分散的文件、来源证据、解释过程、跨文献关系、个体认知和协作讨论组织成一个可持续的工作系统。Liteasy 以桌面端为主要入口，围绕“建立工作区、锁定文献、导入解析、证据检索、渐进式薄读、生成学习产物、沉淀知识与社区协作”构建闭环。系统采用 Tauri + React + TypeScript 的桌面工作台、Rust 本地能力层、Node.js 云服务、PostgreSQL、S3 API 对象存储、Keycloak 统一身份和受控模型网关，并以 IntuEcho 承担学术内容协作与文献身份权威。</p>
+      <p>技术设计的核心不是把大模型直接接入界面，而是建立三条可验证边界：其一，模型只能通过已注册的技能与动作修改系统状态；其二，论文解释必须按来源模式组织证据，并对句子、数值和图表关系逐级校验；其三，本地文件、个人云端数据、组织共享数据、平台配置与临时缓存拥有不同真源、权限和生命周期。本文给出问题分析、技术路线、系统上下文、模块与数据设计、关键流程、安全可靠性、部署与测试体系，并在附录中集中说明能力边界及后续完善项。</p>
+    </div>
+    <p class="keywords"><strong>关键词：</strong>科研阅读；检索增强生成；证据可追溯；智能代理；生成式界面；本地优先；文献身份；多模态可视化</p>
+
+    <h2>阅读指南</h2>
+    <div class="grid-3">
+      <div class="card"><h4>产品与业务读者</h4><p>重点阅读第 1、2、3 章，理解问题、闭环和差异化价值。</p></div>
+      <div class="card green"><h4>研发与架构读者</h4><p>重点阅读第 4 至 8 章，理解模块、契约、数据与部署边界。</p></div>
+      <div class="card accent"><h4>评审与运维读者</h4><p>重点阅读第 9 章和附录，核对质量体系、能力边界与证据依据。</p></div>
+    </div>
+
+    <h2>目录</h2>
+    <ol class="toc">
+      <li class="part">1. 问题分析</li>
+      <li>1.1 科研阅读的系统性矛盾</li>
+      <li>1.2 设计目标与关键约束</li>
+      <li class="part">2. 产品闭环与设计思想</li>
+      <li>2.1 从文件到认知资产</li>
+      <li>2.2 五项架构原则</li>
+      <li class="part">3. 技术路线</li>
+      <li>3.1 混合计算与分层技术栈</li>
+      <li>3.2 方案选择说明</li>
+      <li class="part">4. 系统总体设计</li>
+      <li>4.1 系统上下文</li>
+      <li>4.2 容器与服务架构</li>
+      <li>4.3 桌面端模块边界</li>
+      <li class="part">5. 智能代理与安全执行</li>
+      <li>5.1 受控动作链</li>
+      <li>5.2 生成式界面</li>
+      <li class="part">6. 薄读、证据与多模态</li>
+      <li>6.1 渐进认知图</li>
+      <li>6.2 四档来源模式</li>
+      <li>6.3 数值与图表保真</li>
+      <li class="part">7. 文献身份与数据设计</li>
+      <li>7.1 多层身份模型</li>
+      <li>7.2 本地与云端存储</li>
+      <li class="part">8. 安全、部署与运行</li>
+      <li>8.1 身份、授权与隔离</li>
+      <li>8.2 预发布部署拓扑</li>
+      <li class="part">9. 质量工程与可观测性</li>
+      <li class="part">附录 A. 能力边界与后续完善事项</li>
+      <li class="part">附录 B. 仓库证据与术语</li>
+      <li class="part">参考文献</li>
+    </ol>
+  </section>
+
+  <section class="chapter">
+    <div class="kicker">CHAPTER 01</div>
+    <h1>问题分析</h1>
+    <p class="lead">Liteasy 面向的不是一次性的“论文问答”，而是科研用户长期处理文献、证据、理解、产物和协作关系时形成的系统性摩擦。</p>
+
+    <h2>1.1 科研阅读的系统性矛盾</h2>
+    <div class="grid-2">
+      <div class="card"><h4>资料存在于文件，理解存在于上下文</h4><p>PDF、收藏、推荐和组织资料分散在不同位置。用户真正关心的是“当前工作区、当前选中文献、当前问题和已有认知”组成的上下文，而不是单个文件本身。</p></div>
+      <div class="card accent"><h4>生成速度快，证据核验慢</h4><p>大模型可以快速生成流畅解释，但论文结论、实验数字和图表关系必须回到可定位来源；否则“读起来像对的”无法转化为可引用的科研知识。</p></div>
+      <div class="card green"><h4>自然语言灵活，软件状态要求确定</h4><p>“帮我整理工作区”可能涉及移动、覆盖、上传或删除。自然语言具有歧义，而软件状态变更需要权限、参数、确认、幂等和恢复机制。</p></div>
+      <div class="card purple"><h4>个性化有价值，数据边界必须清晰</h4><p>解释深度、领域偏好和阅读轨迹能提升体验，但本地绝对路径、原文、批注和组织资料不应被无差别收集或跨作用域混用。</p></div>
+      <div class="card red"><h4>单篇阅读容易，跨版本协作困难</h4><p>DOI、预印本、会议版、期刊版、文件副本和内容哈希代表不同身份。错误合并会把用户私有批注、社区内容与学术版本混为一谈。</p></div>
+      <div class="card"><h4>多模态直观，但任意渲染不可控</h4><p>图、表、公式、动画和三维表达能降低认知负担，却同时引入脚本安全、布局稳定、语义正确、设备性能和降级路径等工程问题。</p></div>
+    </div>
+
+    <div class="figure">
+      <div class="diagram">
+        <div class="flow">
+          <div class="node"><b>输入分散</b><small>本地 PDF、收藏、推荐、组织资料</small></div><div class="arrow">→</div>
+          <div class="node"><b>上下文不稳</b><small>文件选择、导入状态和问题范围易错位</small></div><div class="arrow">→</div>
+          <div class="node"><b>生成不可证</b><small>解释、数字和图表缺少来源绑定</small></div><div class="arrow">→</div>
+          <div class="node"><b>知识难沉淀</b><small>结果无法复用、比较、协作和追踪</small></div>
+        </div>
+        <div class="callout" style="margin-bottom:0"><strong>系统解法</strong>用“受控上下文 + 可追溯证据 + 类型化产物 + 分域存储”把阅读过程变成可审计、可恢复、可复用的知识生产链。</div>
+      </div>
+      <div class="figure-title">图 1　问题链与系统解法</div>
+    </div>
+
+    <h2>1.2 设计目标与关键约束</h2>
+    <table>
+      <thead><tr><th>目标</th><th>可观察结果</th><th>工程约束</th></tr></thead>
+      <tbody>
+        <tr><td>降低进入论文的认知门槛</td><td>先给全景，再允许按兴趣逐层深入</td><td>认知图按需展开；层级是视图属性，不是永久标签</td></tr>
+        <tr><td>让结论可回到来源</td><td>解释句、定量主张和图表均能显示依据</td><td>来源白名单、句级覆盖、数值证明、身份确认</td></tr>
+        <tr><td>让 AI 能操作但不能越权</td><td>用户能用自然语言控制工作台，并看到确认与结果</td><td>模型只提计划；策略层只放行已注册动作</td></tr>
+        <tr><td>同时支持个人与组织</td><td>本地库不随账号变化，组织资源按角色访问</td><td>资源作用域、数据库和业务会话隔离</td></tr>
+        <tr><td>稳定呈现多模态产物</td><td>图、公式、图片与交互结果可显示、可降级</td><td>结构化协议、渲染器注册表、质量门与资源预算</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter">
+    <div class="kicker">CHAPTER 02</div>
+    <h1>产品闭环与设计思想</h1>
+    <p class="lead">产品主线从“打开文件”升级为“建立可追溯认知资产”。每个环节都保留显式状态，使用户知道系统掌握了什么、正在做什么、结果从哪里来。</p>
+
+    <h2>2.1 从文件到认知资产</h2>
+    <div class="figure">
+      <div class="diagram">
+        <div class="flow">
+          <div class="node"><b>建立工作区</b><small>打开本地库或组织共享资料区</small></div><div class="arrow">→</div>
+          <div class="node"><b>勾选并锁定</b><small>形成稳定的选中文献集快照</small></div><div class="arrow">→</div>
+          <div class="node"><b>导入与解析</b><small>校验、提取、切块、索引、引用定位</small></div><div class="arrow">→</div>
+          <div class="node"><b>薄读与问答</b><small>按证据模式解释并逐层展开</small></div><div class="arrow">→</div>
+          <div class="node"><b>生成产物</b><small>认知图、导图、表格、可视化</small></div><div class="arrow">→</div>
+          <div class="node"><b>沉淀与协作</b><small>版本、记忆、批注、社区与画像</small></div>
+        </div>
+      </div>
+      <div class="figure-title">图 2　Liteasy 核心用户闭环</div>
+    </div>
+    <p>工作区是“当前可见的目录视图”，选中文献集是“用户勾选并锁定、准备交给智能能力处理的文件快照”。二者刻意分离：目录可以继续变化，而一次分析必须基于稳定输入。导入不是简单上传，而是对文献执行安全校验、文本与结构提取、切块、索引和定位准备。分析结果以产物及版本保存，能够被再次打开、继续下钻或与社区内容关联。</p>
+
+    <h2>2.2 五项架构原则</h2>
+    <div class="grid-3">
+      <div class="card"><h4>证据优先</h4><p>论文事实、外部知识、社区表达、用户笔记与 AI 独立理解分别标注，不能用流畅措辞掩盖来源差异。</p></div>
+      <div class="card green"><h4>动作受控</h4><p>按钮、自然语言和快捷入口复用同一动作注册表；权限、风险和确认在执行前统一处理。</p></div>
+      <div class="card accent"><h4>本地优先</h4><p>本地文件与私有阅读细节以设备为权威；云端承担协作、同步、推荐、任务与治理。</p></div>
+      <div class="card purple"><h4>协议驱动</h4><p>模型输出进入类型化协议和校验管线，界面不执行任意模型代码，数据也不依赖自由文本猜测。</p></div>
+      <div class="card red"><h4>失败可恢复</h4><p>长任务有状态，写入具备幂等键和版本检查，文件操作使用原子提交或可恢复事务。</p></div>
+      <div class="card"><h4>渐进展开</h4><p>先呈现少量核心节点，再随用户兴趣加载细节，以认知负担和证据密度共同决定深度。</p></div>
+    </div>
+
+    <div class="callout"><strong>一句话架构思想</strong>大模型负责提出解释和计划，确定性系统负责决定“能不能做、依据是否成立、结果能否保存”。</div>
+  </section>
+
+  <section class="chapter">
+    <div class="kicker">CHAPTER 03</div>
+    <h1>技术路线</h1>
+    <p class="lead">Liteasy 采用“桌面重交互 + 本地文件能力 + 云端业务与任务 + 外部模型能力”的混合路线，在隐私、体验、可扩展性和模型迭代速度之间取得工程平衡。</p>
+
+    <h2>3.1 分层技术栈</h2>
+    <div class="figure">
+      <div class="diagram layers">
+        <div class="layer"><div class="layer-label">用户交互层<small>看得见、可操作</small></div><div class="layer-items"><div class="chip"><b>桌面工作台</b><span>Tauri 2 / React</span></div><div class="chip"><b>三栏与标签页</b><span>Fluent 2 / Dock</span></div><div class="chip"><b>PDF 阅读器</b><span>PDF.js / 批注</span></div><div class="chip"><b>可视化产物</b><span>图、表、公式、动画</span></div></div></div>
+        <div class="layer"><div class="layer-label">智能工作流层<small>理解、规划、校验</small></div><div class="layer-items"><div class="chip"><b>上下文装配</b><span>工作区与选择快照</span></div><div class="chip"><b>技能与动作</b><span>注册、策略、确认</span></div><div class="chip"><b>证据与薄读</b><span>检索、生成、复核</span></div><div class="chip"><b>生成式界面</b><span>受约束界面描述</span></div></div></div>
+        <div class="layer"><div class="layer-label">本地能力层<small>文件、索引、隐私</small></div><div class="layer-items"><div class="chip"><b>文件系统</b><span>Rust / 监听 / 原子写</span></div><div class="chip"><b>本地文献库</b><span>真实目录与回收站</span></div><div class="chip"><b>解析与检索</b><span>文本、锚点、本地索引</span></div><div class="chip"><b>安全凭据</b><span>系统密钥环 / OAuth</span></div></div></div>
+        <div class="layer"><div class="layer-label">云端服务层<small>协作、治理、计算</small></div><div class="layer-items"><div class="chip"><b>Liteasy 业务服务</b><span>Node.js / PostgreSQL</span></div><div class="chip"><b>对象存储</b><span>S3 API / 内容寻址</span></div><div class="chip"><b>IntuEcho 社区</b><span>文献身份与内容协作</span></div><div class="chip"><b>统一身份</b><span>Keycloak / OIDC</span></div></div></div>
+        <div class="layer"><div class="layer-label">外部能力层<small>按契约调用</small></div><div class="layer-items"><div class="chip"><b>模型服务</b><span>文本与多模态生成</span></div><div class="chip"><b>学术元数据</b><span>Crossref / OpenAlex</span></div><div class="chip"><b>全文与解析</b><span>GROBID / MinerU</span></div><div class="chip"><b>安全扫描</b><span>ClamAV 私有服务</span></div></div></div>
+      </div>
+      <div class="figure-title">图 3　技术路线分层图</div>
+    </div>
+
+    <h2>3.2 关键选型说明</h2>
+    <table>
+      <thead><tr><th>领域</th><th>主要技术</th><th>选择依据</th><th>设计收益</th></tr></thead>
+      <tbody>
+        <tr><td>桌面宿主</td><td>Tauri 2 + Rust</td><td>需要安全访问文件系统、系统密钥环、OAuth 回调和原生窗口</td><td>安装体积与运行开销较低；文件能力与 Web 界面解耦</td></tr>
+        <tr><td>工作台界面</td><td>React + TypeScript + Fluent 2</td><td>复杂三栏布局、标签页、可访问控件与高频状态反馈</td><td>组件生态成熟，类型契约可贯穿界面与运行时</td></tr>
+        <tr><td>文献解析</td><td>PDF.js、GROBID、MinerU、Tesseract</td><td>文本层、学术结构、图像与 OCR 需要多路径互补</td><td>按文献质量选择路径，并保留降级方案</td></tr>
+        <tr><td>可视化</td><td>Mermaid、KaTeX、XYFlow、D3、Three.js</td><td>流程、公式、认知图与三维对象具有不同渲染语义</td><td>统一产物协议下按类型选择专用渲染器</td></tr>
+        <tr><td>正式数据</td><td>PostgreSQL 15+ + S3 API</td><td>需要事务化逻辑树、权限、版本、对象去重和备份</td><td>元数据与大对象分离；逻辑归属与物理内容解耦</td></tr>
+        <tr><td>身份与服务</td><td>Keycloak、OIDC/JWKS、Node.js 20+</td><td>桌面、论坛、管理端和服务间调用具有不同受众</td><td>共享身份源而不共享业务会话、数据库或凭据</td></tr>
+      </tbody>
+    </table>
+
+    <h2>3.3 架构报告方法</h2>
+    <p>本文借鉴 C4 Model 的分层视图方法，以“系统上下文、容器、组件、动态流程、部署”逐步展开架构，使业务读者和研发人员共享同一套图形语义 [1]。质量属性参考 Google Cloud、AWS 与 Microsoft 的良好架构框架，将安全、可靠性、性能效率、成本与运维卓越作为横切关注点 [2–4]；运行质量参考 Google SRE 对服务目标、监控、数据完整性、发布工程和简洁性的组织方式 [5]。这些资料用于报告结构与评审维度，不替代项目自身的代码和设计事实。</p>
+  </section>
+
+  <section class="chapter">
+    <div class="kicker">CHAPTER 04</div>
+    <h1>系统总体设计</h1>
+    <p class="lead">总体设计以资源所有权和执行权限为边界：桌面端拥有本地交互与文件入口，Liteasy 云服务拥有个人与组织业务数据，IntuEcho 拥有文献身份和社区内容，身份平台提供统一主体。</p>
+
+    <h2>4.1 系统上下文</h2>
+    <div class="figure">
+      <div class="diagram">
+        <div class="grid-3">
+          <div class="card"><h4>科研用户</h4><p>管理本地文献、阅读、提问、生成产物、加入组织并选择是否启用个性化。</p></div>
+          <div class="card accent"><h4>组织成员与管理员</h4><p>共享文献、批注、通知与治理；权限由组织角色和存储策略共同决定。</p></div>
+          <div class="card purple"><h4>平台运营人员</h4><p>通过独立管理端配置模型、配额、审计和账号生命周期。</p></div>
+        </div>
+        <div style="text-align:center;color:#0b7285;font-size:18pt;line-height:1.2">↓</div>
+        <div class="boundary"><div class="boundary-title">Liteasy 产品体系</div><div class="grid-3"><div class="chip"><b>桌面科研工作台</b><span>本地文献与智能阅读主入口</span></div><div class="chip"><b>云端业务平台</b><span>同步、组织、推荐、任务与产物</span></div><div class="chip"><b>IntuEcho 学术社区</b><span>文献身份、批注、讨论与传播</span></div></div></div>
+        <div style="text-align:center;color:#0b7285;font-size:18pt;line-height:1.2">↓</div>
+        <div class="grid-3"><div class="card green"><h4>统一身份平台</h4><p>登录、令牌、受众、管理员多因素认证与账号生命周期。</p></div><div class="card"><h4>学术与模型提供方</h4><p>元数据、全文解析、文本生成和多模态生成。</p></div><div class="card red"><h4>基础设施</h4><p>事务数据库、对象存储、反向代理、安全扫描与备份。</p></div></div>
+      </div>
+      <div class="figure-title">图 4　系统上下文图</div>
+    </div>
+
+    <h2>4.2 容器与服务架构</h2>
+    <div class="figure">
+      <div class="diagram layers">
+        <div class="layer"><div class="layer-label">客户端<small>用户设备</small></div><div class="layer-items"><div class="chip"><b>React 工作台</b><span>界面、控制器、功能模块</span></div><div class="chip"><b>Rust 桌面宿主</b><span>文件、监听、OAuth、密钥</span></div><div class="chip"><b>本地文献库</b><span>PDF、索引、伴生数据</span></div><div class="chip"><b>本地缓存</b><span>离线视图与待同步事件</span></div></div></div>
+        <div class="layer"><div class="layer-label">公网入口<small>HTTPS</small></div><div class="layer-items"><div class="chip"><b>Caddy 网关</b><span>TLS 与域名路由</span></div><div class="chip"><b>静态站点</b><span>官网、社区、管理端</span></div><div class="chip"><b>短时下载</b><span>受控安装包交付</span></div><div class="chip"><b>健康检查</b><span>存活与就绪分离</span></div></div></div>
+        <div class="layer"><div class="layer-label">业务服务<small>独立信任域</small></div><div class="layer-items"><div class="chip"><b>Liteasy 服务</b><span>文献树、模型、推荐、组织</span></div><div class="chip"><b>IntuEcho 服务</b><span>文献身份、社区与内容</span></div><div class="chip"><b>身份管理适配器</b><span>跨产品账号生命周期</span></div><div class="chip"><b>Keycloak</b><span>统一身份与令牌签发</span></div></div></div>
+        <div class="layer"><div class="layer-label">数据与安全<small>非公网</small></div><div class="layer-items"><div class="chip"><b>Liteasy 数据库</b><span>独立 PostgreSQL 业务库</span></div><div class="chip"><b>IntuEcho 数据库</b><span>独立 PostgreSQL 业务库</span></div><div class="chip"><b>对象存储</b><span>PDF 与可再生大对象</span></div><div class="chip"><b>PDF 安全扫描</b><span>鉴权、哈希绑定、故障关闭</span></div></div></div>
+      </div>
+      <div class="figure-title">图 5　容器与服务边界</div>
+    </div>
+    <p>两个业务产品共享身份主体，但不共享数据库、连接池、凭据或用户会话。Liteasy 需要文献身份时，以固定服务身份调用 IntuEcho 的内部接口，并保存已核验的只读投影。对象存储中的 PDF 字节可以按内容哈希去重，但任何下载都先验证调用者对逻辑文献条目的权限，不能凭哈希直接获取对象。</p>
+
+    <h2>4.3 桌面端模块边界</h2>
+    <div class="figure">
+      <div class="diagram">
+        <div class="flow"><div class="node"><b>界面壳层</b><small>三栏、活动栏、标签区、全局对话框</small></div><div class="arrow">→</div><div class="node"><b>跨模块控制器</b><small>把用户操作编排为领域动作</small></div><div class="arrow">→</div><div class="node"><b>领域功能模块</b><small>工作区、选择、导入、薄读、组织等</small></div><div class="arrow">→</div><div class="node"><b>共享类型与客户端</b><small>协议、数据模型和窄接口</small></div></div>
+        <div class="grid-3" style="margin-top:3mm"><div class="chip"><b>资源与阅读</b><span>工作区、文献库、选择、PDF、批注</span></div><div class="chip"><b>智能与产物</b><span>代理运行时、技能、薄读、生成式界面</span></div><div class="chip"><b>云端与治理</b><span>账号、组织、推荐、画像、设置</span></div></div>
+      </div>
+      <div class="figure-title">图 6　桌面端依赖方向与功能分组</div>
+    </div>
+    <p>依赖方向固定为“界面壳层 → 控制器 → 功能模块 → 共享类型/客户端”。界面壳层只组合区域，不承担跨区域复制、权限判定或文件事务；功能模块也不得反向依赖壳层。标签页由 Dock 子系统管理展示位置和布局树，关闭或移动标签只改变视图，不删除领域数据。这个边界减少了大型工作台常见的全局组件膨胀和状态耦合。</p>
+
+    <p class="small">仓库规模统计与可复现口径见附录 B；相关数字仅用于说明工程规模，不代表覆盖率、性能或生产成熟度。</p>
+  </section>
+
+  <section class="chapter">
+    <div class="kicker">CHAPTER 05</div>
+    <h1>智能代理与安全执行</h1>
+    <p class="lead">Liteasy 的智能代理是工作台的统一交互入口，但不是绕过应用规则的超级权限。它把自然语言目标转换为可校验计划，再通过受控动作执行。</p>
+
+    <h2>5.1 受控动作链</h2>
+    <div class="figure">
+      <div class="diagram">
+        <div class="sequence">
+          <div class="step"><b>1. 准备本轮上下文</b><span>读取当前工作区、锁定文献集、导入状态、组织作用域、用户设置、预算和可用能力。</span></div>
+          <div class="step"><b>2. 识别目标并形成结构化计划</b><span>模型或确定性路由只提出意图、参数和动作序列，不直接触碰应用状态。</span></div>
+          <div class="step"><b>3. 校验计划与资源作用域</b><span>检查动作是否注册、参数是否符合契约、文献是否已锁定/导入、目标资源是否属于当前作用域。</span></div>
+          <div class="step"><b>4. 策略裁决与用户确认</b><span>低风险视图操作可即时执行；删除、覆盖、上传、组织写入、画像采样和付费资源必须确认。</span></div>
+          <div class="step"><b>5. 执行动作并发布事件</b><span>按钮、命令和快捷入口复用同一动作实现，长任务产生排队、运行、进度、成功或失败事件。</span></div>
+          <div class="step"><b>6. 观察结果并呈现恢复路径</b><span>记录执行结果、预算与失败原因；界面显示产物、审计信息或可执行的下一步。</span></div>
+        </div>
+      </div>
+      <div class="figure-title">图 7　一次智能操作的动态流程</div>
+    </div>
+
+    <table>
+      <thead><tr><th>风险等级</th><th>典型动作</th><th>执行方式</th><th>必须记录</th></tr></thead>
+      <tbody>
+        <tr><td>低</td><td>切换标签、调整面板、打开设置</td><td>即时或乐观执行</td><td>动作名、参数、结果</td></tr>
+        <tr><td>中</td><td>生成产物、同步元数据、启动外部检索</td><td>显示任务状态，可取消或重试</td><td>任务、来源、成本、产物版本</td></tr>
+        <tr><td>高</td><td>删除、覆盖、上传、组织写入、画像采样</td><td>执行前明确确认，服务端再次授权</td><td>主体、作用域、确认、幂等键、审计事件</td></tr>
+      </tbody>
+    </table>
+
+    <h2>5.2 技能、动作与插件边界</h2>
+    <p><strong>技能</strong>描述“如何完成一类任务”，可以组合检索、生成和动作；<strong>动作</strong>描述“系统允许改变的一个确定状态”，具有类型化参数、风险、作用域和执行器。插件只能通过公开能力注册点扩展技能、界面项或受控动作，不能获得任意 DOM、文件系统或服务凭据访问。由此形成一条清晰的权限路径：</p>
+    <div class="callout"><strong>用户目标 → 技能选择 → 动作计划 → 契约校验 → 策略与确认 → 确定性执行器</strong>任何模型输出在进入执行器前都不是事实，也不是授权。</div>
+
+    <h2>5.3 生成式界面</h2>
+    <p>生成式界面不让模型返回 React、CSS 或脚本。模型或规则只能生成受约束的界面描述文档，指定已注册组件、已注册数据源、允许的动作和设计令牌。动态画布负责解释该文档；结构校验器保证协议正确，体验校验器检查布局、可访问性与操作风险，执行日志记录用户真正触发的动作。</p>
+    <div class="figure">
+      <div class="diagram flow"><div class="node"><b>用户意图</b><small>比较、解释、重排或生成主题</small></div><div class="arrow">→</div><div class="node"><b>界面描述生成</b><small>只选择注册组件与数据投影</small></div><div class="arrow">→</div><div class="node"><b>结构与体验校验</b><small>协议、安全、布局、可访问性</small></div><div class="arrow">→</div><div class="node"><b>动态画布渲染</b><small>确定性组件，不执行任意代码</small></div><div class="arrow">→</div><div class="node"><b>执行日志</b><small>动作、结果与回退可追踪</small></div></div>
+      <div class="figure-title">图 8　受约束生成式界面链路</div>
+    </div>
+  </section>
+
+  <section class="chapter">
+    <div class="kicker">CHAPTER 06</div>
+    <h1>薄读、证据与多模态</h1>
+    <p class="lead">“薄读”不是把论文压缩成更短的摘要，而是先构建低认知成本的全景，再允许用户沿概念、机制、实验或疑问逐层加深，同时持续维护来源与证明关系。</p>
+
+    <h2>6.1 渐进认知图</h2>
+    <p>认知结构采用有向多重图。只有“从略到详”的展开关系要求无环，解释、支持、反驳、先修、比较、来源和直觉关系可以交叉连接。领域事实保存在规范化认知图中，界面描述只是对图的投影；用户每次展开只提交带基础版本号的局部补丁，避免整图覆盖和并发丢失。</p>
+    <div class="figure">
+      <div class="diagram">
+        <div class="state-row"><div class="state active"><b>第 0 层：一句话全景</b><small>核心结论与历史坐标</small></div><div class="state"><b>第 1 层：问题骨架</b><small>问题、机制、主要结果</small></div><div class="state"><b>第 2 层：概念解释</b><small>直觉、先修与关键关系</small></div><div class="state"><b>第 3 层：证据细节</b><small>实验、推导、限制</small></div><div class="state"><b>第 4 层：深度拓展</b><small>跨文献比较与开放问题</small></div></div>
+        <div class="callout" style="margin-bottom:0"><strong>双深度控制</strong>系统同时考虑“内容本身的基础深度”和“当前用户需要看到的呈现深度”。点击次数只是信号，不能机械地等同于知识层级。</div>
+      </div>
+      <div class="figure-title">图 9　渐进式认知投影</div>
+    </div>
+
+    <h2>6.2 四档来源模式</h2>
+    <table>
+      <thead><tr><th>模式</th><th>正文可以使用的依据</th><th>适用问题</th><th>界面表达</th></tr></thead>
+      <tbody>
+        <tr><td><strong>论文内证据</strong><br><code>paper</code></td><td>目标论文中可定位的文本、表格、图和结构</td><td>“作者做了什么”“实验结果如何”</td><td>显示论文来源和锚点</td></tr>
+        <tr><td><strong>论文 + 外部证据</strong><br><code>paper_and_external</code></td><td>论文内证据与经验证的外部学术来源</td><td>背景补充、支持/挑战、跨文献比较</td><td>分别标注论文内外来源</td></tr>
+        <tr><td><strong>仅外部证据</strong><br><code>external_only</code></td><td>经验证的论文外来源；本地索引只恢复任务范围</td><td>论文未覆盖但可从外部文献回答的问题</td><td>明确“不依据目标论文正文”</td></tr>
+        <tr><td><strong>AI 独立理解</strong><br><code>ai_interpretation</code></td><td>不声称具有文献依据的模型理解</td><td>可信外部来源耗尽后的通用解释</td><td>显著标注无文献依据</td></tr>
+      </tbody>
+    </table>
+
+    <h2>6.3 统一生成与质量门</h2>
+    <div class="figure">
+      <div class="diagram flow"><div class="node"><b>固定任务范围</b><small>论文、父节点、选区、深度、语言</small></div><div class="arrow">→</div><div class="node"><b>规划解释</b><small>全景或下钻；what / why / how</small></div><div class="arrow">→</div><div class="node"><b>准备证据</b><small>小证据集直达，大集合有界检索</small></div><div class="arrow">→</div><div class="node"><b>并发外部检索</b><small>支持、挑战、背景路线分别验证</small></div><div class="arrow">→</div><div class="node"><b>结构化生成</b><small>摘要、句子、主张、锚点、视觉意图</small></div><div class="arrow">→</div><div class="node"><b>校验与原子保存</b><small>结构、来源、句子、数值、图表、版本</small></div></div>
+      <div class="figure-title">图 10　薄读统一生成流水线</div>
+    </div>
+    <p>生成前固定目标论文和上下文；证据准备阶段对大集合采用“轻量目录规划 → 白名单工具读取 → 最多一轮补充”的有界循环；外部来源按支持、挑战和背景路线并发检索，单路失败不拖垮其他可信来源。正文以严格结构化对象返回，流式内容只作为草稿展示。只有结构、来源模式、句级覆盖、定量命题和语义复核全部通过后，节点与产物版本才会原子保存。</p>
+
+    <h2>6.4 数值与图表保真</h2>
+    <div class="grid-3">
+      <div class="card"><h4>数值保真门</h4><p>每个正文定量主张都要有合法证明路径，逐项匹配主体、指标、关系、值、单位、比较对象、限定词、不确定性与实验条件。</p></div>
+      <div class="card accent"><h4>数值完整性门</h4><p>仅在用户要求“列全结果”或任务定义必需事实集合时启用，避免把合理省略误判为错误。</p></div>
+      <div class="card purple"><h4>图表结构门</h4><p>仅在存在结构化图表证据时验证行列、图例、坐标和区域关系；数字相邻不能被推断为表格关系。</p></div>
+    </div>
+    <p>数值证明坚持原子性：默认由同一来源、同一实验范围内的事实支持一个经验主张，禁止跨论文、跨硬件、跨数据集或跨统计口径拼接新比较。失败修复遵循“确定性规范化 → 删除非正文可选字段 → 只改失败句 → 隔离不合格句 → 定向换源 → 合法切换来源模式”的顺序，已经通过的句子和来源映射保持冻结。</p>
+
+    <h2>6.5 多模态产物</h2>
+    <p>系统把多模态生成拆为“意图、证据、产物协议、编译器、渲染器、校验器”六个角色。语义图、电路与物理图、生物结构、函数与几何、过程动画、栅格插图分别使用专用编译器；界面根据设备能力和产物状态选择 SVG、Canvas、WebGL、图片或无障碍文本降级。自动视觉增强与正文拥有独立预算，因此附属图像失败不会破坏已经合格的正文。</p>
+  </section>
+
+  <section class="chapter">
+    <div class="kicker">CHAPTER 07</div>
+    <h1>文献身份与数据设计</h1>
+    <p class="lead">科研系统必须同时回答“这是哪个文件副本”“字节是否相同”“它对应哪个已确认学术版本”“版本之间是什么关系”。Liteasy 为这些问题分配不同标识和权威服务。</p>
+
+    <h2>7.1 多层文献身份</h2>
+    <div class="figure">
+      <div class="diagram">
+        <div class="flow"><div class="node"><b>文件副本标识</b><small><code>documentId</code><br>目录、权限、批注、回收站</small></div><div class="arrow">≠</div><div class="node"><b>内容指纹</b><small><code>contentHash</code><br>字节完整性、对象去重、缓存</small></div><div class="arrow">≠</div><div class="node"><b>文献版本标识</b><small><code>literatureId</code><br>经来源确认的具体学术版本</small></div><div class="arrow">↔</div><div class="node"><b>外部来源别名</b><small>DOI、arXiv、OpenAlex 等可验证标识</small></div></div>
+        <div class="callout" style="margin-bottom:0"><strong>版本关系不等于身份合并</strong>预印本、会议版、期刊版和勘误可以建立有向关系，但各自保留独立文献版本标识与修订历史。</div>
+      </div>
+      <div class="figure-title">图 11　文献身份分层</div>
+    </div>
+    <p>IntuEcho 的独立文献模块是来源解析、分级裁决和确认记录的权威。原始注册来源（如 Crossref DOI、arXiv）可按其稳定标识精确回查；聚合来源（如 OpenAlex、Semantic Scholar）需要两个独立来源一致，或由用户选择后服务端重新抓取验证。状态从“未解析 → 候选 → 已确认”演进，歧义和冲突进入独立分支。只有已确认记录才能作为公开批注、社区同步和跨用户精确推荐的文献范围。</p>
+
+    <h2>7.2 本地与云端存储边界</h2>
+    <div class="figure">
+      <div class="diagram grid-2">
+        <div class="boundary"><div class="boundary-title">用户设备：本地真源</div><div class="grid-2"><div class="chip"><b>本地文献库</b><span>真实目录、PDF、文件监听</span></div><div class="chip"><b>伴生数据</b><span>索引、批注、锚点、阅读状态</span></div><div class="chip"><b>本地回收站</b><span>清单、恢复、30 天保留</span></div><div class="chip"><b>私有细节</b><span>绝对路径与原始阅读事件</span></div></div></div>
+        <div class="boundary"><div class="boundary-title">云端平台：业务真源</div><div class="grid-2"><div class="chip"><b>个人收藏</b><span>长期数据、目录、配额与备份</span></div><div class="chip"><b>组织文献库</b><span>共享目录、角色与导入导出策略</span></div><div class="chip"><b>推荐与检索缓存</b><span>有期限的虚拟结果集</span></div><div class="chip"><b>对象存储</b><span>内容寻址 PDF 与引用计数</span></div></div></div>
+      </div>
+      <div class="figure-title">图 12　本地与云端数据边界</div>
+    </div>
+    <p>本地库属于当前操作系统用户，不随 Liteasy 登录账号切换；同一时刻启用一个库根目录，文件系统是存在性的真源。云端使用 <code>scope_type + scope_id + folder_id</code> 表达个人或组织归属和目录层级。PDF 写入临时对象时由服务端计算 SHA-256、执行安全扫描，再在数据库事务中创建逻辑文献条目和对象引用；相同字节可以复用对象，但配额仍按逻辑文献正文计算。</p>
+
+    <h2>7.3 资源操作语义</h2>
+    <table>
+      <thead><tr><th>资源区</th><th>真源与生命周期</th><th>跨区域拖拽语义</th><th>权限要点</th></tr></thead>
+      <tbody>
+        <tr><td>本地文献库</td><td>设备真实目录；用户负责备份</td><td>向云端上传副本，来源不删除</td><td>路径必须限制在库根目录内；默认不跟随符号链接</td></tr>
+        <tr><td>个人收藏</td><td>云端长期数据；进入配额、备份与账号生命周期</td><td>下载到本地或复制到有权限的组织</td><td>仅用户本人或明确授权流程可修改</td></tr>
+        <tr><td>关联推荐</td><td>带期限的虚拟结果；不是永久目录</td><td>保存 PDF 或仅元数据条目</td><td>个性化关闭后仍可按显式文献/检索词推荐</td></tr>
+        <tr><td>组织文献库</td><td>组织作用域长期数据</td><td>导入与导出均受组织策略控制</td><td>拖拽开始和提交时都重新校验角色与策略</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter">
+    <div class="kicker">CHAPTER 08</div>
+    <h1>安全、部署与运行</h1>
+    <p class="lead">安全设计贯穿身份、文件、模型、对象和界面五个面向。预发布环境采用单一 HTTPS 入口与内部网络隔离，并把数据库、对象存储和扫描服务作为就绪条件。</p>
+
+    <h2>8.1 身份、授权与隔离</h2>
+    <div class="grid-2">
+      <div class="card"><h4>统一身份，不共享业务会话</h4><p>桌面、社区和管理端使用不同 OIDC 客户端与令牌受众。管理登录具有独立认证流和多因素要求。</p></div>
+      <div class="card green"><h4>服务端是最终授权点</h4><p>前端禁用控件只改善体验；用户作用域来自签名令牌，组织成员与存储策略由数据库重新判断。</p></div>
+      <div class="card accent"><h4>上传链路故障关闭</h4><p>PDF 限制大小和类型，经私有 HTTPS 扫描并绑定内容哈希；扫描不可用时拒绝上传。</p></div>
+      <div class="card purple"><h4>模型密钥与路由固定</h4><p>上游模型、密钥和能力由部署配置决定，桌面客户端不能覆盖；输出仍要经过协议与质量门。</p></div>
+      <div class="card red"><h4>路径与对象防越界</h4><p>本地命令拒绝路径穿越和危险重解析点；云端下载先验证逻辑条目权限，再解析对象引用。</p></div>
+      <div class="card"><h4>最小化个性化数据</h4><p>允许上传必要题录和显式行为，不上传绝对路径、用户名、无关目录、私密批注或任意文件内容。</p></div>
+    </div>
+    <p>上述控制与 NIST AI 风险管理框架的“治理、映射、测量、管理”循环一致 [6]，并针对 OWASP 大模型应用风险中的提示注入、不安全输出处理、敏感信息泄露、过度代理权限和无界消耗设置确定性边界 [7]。</p>
+
+    <h2>8.2 预发布部署拓扑</h2>
+    <div class="figure">
+      <div class="diagram">
+        <div class="flow"><div class="node"><b>桌面端 / 浏览器</b><small>只访问 HTTPS 域名</small></div><div class="arrow">→</div><div class="node"><b>DNS 与公网地址</b><small>域名解析到预发布主机</small></div><div class="arrow">→</div><div class="node"><b>Caddy 网关</b><small>TLS、域名路由、唯一公网入口</small></div></div>
+        <div style="text-align:center;color:#0b7285;font-size:18pt;line-height:1.2">↓</div>
+        <div class="grid-3"><div class="chip"><b>Liteasy API</b><span>文献、组织、模型与可视化</span></div><div class="chip"><b>IntuEcho API</b><span>身份、批注与社区</span></div><div class="chip"><b>Keycloak / 身份适配</b><span>登录与账号生命周期</span></div></div>
+        <div style="text-align:center;color:#0b7285;font-size:18pt;line-height:1.2">↓ 私网 / 容器网络</div>
+        <div class="grid-3"><div class="chip"><b>RDS PostgreSQL</b><span>独立业务数据库与迁移</span></div><div class="chip"><b>OSS / S3 对象存储</b><span>私有 PDF 与版本化对象</span></div><div class="chip"><b>PDF 扫描服务</b><span>ClamAV、鉴权与故障关闭</span></div></div>
+      </div>
+      <div class="figure-title">图 13　预发布部署视图</div>
+    </div>
+    <p>公网只开放 HTTP/HTTPS，应用内部端口不映射到互联网。服务在监听端口前检查数据库迁移、对象存储公共访问阻断、加密和版本化等条件；迁移由独立账号执行并使用 advisory lock，已执行迁移的内容哈希变化会阻止启动。存活检查回答“进程是否运行”，就绪检查回答“数据库、身份和存储是否满足接流量条件”，两者分开设计。</p>
+
+    <h2>8.3 事务、幂等与恢复</h2>
+    <table>
+      <thead><tr><th>场景</th><th>一致性机制</th><th>恢复策略</th></tr></thead>
+      <tbody>
+        <tr><td>本地文件导入/移动/删除</td><td>分块写入、原子发布、操作标记、索引修订</td><td>重启时识别已准备/已提交事务并回滚或完成</td></tr>
+        <tr><td>云端 PDF 上传</td><td>临时对象 + 服务端哈希 + 扫描 + 数据库事务</td><td>失败清理临时对象；周期回收无引用对象</td></tr>
+        <tr><td>认知图局部扩展</td><td>基础版本号、幂等键、事务化产物版本</td><td>版本冲突时重新装载和变基，不使用最后写入覆盖</td></tr>
+        <tr><td>账号删除与画像清除</td><td>幂等工作流、作用域删除与版本失效</td><td>记录阶段状态，重复调用继续未完成步骤</td></tr>
+        <tr><td>长时生成任务</td><td>任务状态机、预算、超时、断路器</td><td>保留已通过正文；附属增强独立重试或降级</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter">
+    <div class="kicker">CHAPTER 09</div>
+    <h1>质量工程与可观测性</h1>
+    <p class="lead">系统质量不是单次模型得分，而是从确定性契约、领域校验、模型评测、集成验证到发布门禁构成的证据链。</p>
+
+    <h2>9.1 分层质量体系</h2>
+    <div class="figure">
+      <div class="diagram layers">
+        <div class="layer"><div class="layer-label">协议测试<small>快、确定</small></div><div class="layer-items"><div class="chip"><b>Schema</b><span>字段、枚举、未知字段</span></div><div class="chip"><b>解析器</b><span>CGL、公式、图描述</span></div><div class="chip"><b>不变量</b><span>作用域、版本、关系</span></div><div class="chip"><b>权限矩阵</b><span>角色、上传、导出</span></div></div></div>
+        <div class="layer"><div class="layer-label">领域测试<small>事实与恢复</small></div><div class="layer-items"><div class="chip"><b>证据覆盖</b><span>句子与来源白名单</span></div><div class="chip"><b>数值保真</b><span>事实、单位、条件</span></div><div class="chip"><b>文件事务</b><span>崩溃与原子恢复</span></div><div class="chip"><b>身份解析</b><span>候选、确认、冲突</span></div></div></div>
+        <div class="layer"><div class="layer-label">集成测试<small>真实边界</small></div><div class="layer-items"><div class="chip"><b>PostgreSQL</b><span>迁移、事务、隔离</span></div><div class="chip"><b>S3</b><span>加密、版本、去重</span></div><div class="chip"><b>OIDC</b><span>JWKS、受众、活跃状态</span></div><div class="chip"><b>扫描与模型</b><span>故障关闭、提供方冒烟</span></div></div></div>
+        <div class="layer"><div class="layer-label">发布验证<small>用户路径</small></div><div class="layer-items"><div class="chip"><b>桌面构建</b><span>TypeScript、Vite、Tauri</span></div><div class="chip"><b>多模态门禁</b><span>静态科学、数学、过程</span></div><div class="chip"><b>安装升级</b><span>启动、重启、OAuth、保留数据</span></div><div class="chip"><b>运行证据</b><span>健康、容量、备份恢复</span></div></div></div>
+      </div>
+      <div class="figure-title">图 14　质量工程金字塔</div>
+    </div>
+
+    <h2>9.2 关键观测对象</h2>
+    <table>
+      <thead><tr><th>观测域</th><th>关键事件/指标</th><th>回答的问题</th></tr></thead>
+      <tbody>
+        <tr><td>交互与运行时</td><td>路由耗时、上下文装配、确认率、动作成功率、恢复率</td><td>用户目标是否被快速、正确地转为受控操作？</td></tr>
+        <tr><td>检索与证据</td><td>首结果时间、来源覆盖、验证失败、换源次数、句级支持率</td><td>回答是否建立在足够且合法的来源上？</td></tr>
+        <tr><td>生成与产物</td><td>首状态、首屏、完成耗时、修复次数、降级类型、版本冲突</td><td>长任务是否及时反馈并稳定交付？</td></tr>
+        <tr><td>数据与存储</td><td>事务失败、孤立对象、垃圾回收、备份与恢复演练</td><td>读取的数据是否等于已确认写入的数据？</td></tr>
+        <tr><td>安全与身份</td><td>受众拒绝、授权拒绝、扫描失败、管理员 MFA、支持访问审计</td><td>主体是否只在被授权的作用域内行动？</td></tr>
+        <tr><td>成本与容量</td><td>模型调用、证据数量、视觉计算单元、队列、内存与并发</td><td>体验、质量和成本是否处在可解释预算内？</td></tr>
+      </tbody>
+    </table>
+
+    <h2>9.3 服务目标方法</h2>
+    <p>在冻结端到端毫秒级承诺前，系统先建立可重复基线：将本地命令、上下文装配、检索首结果、任务首状态、产物首屏和模型完成分别测量；把模型质量与基础设施可用性分开；以真实用户路径和固定评测集观察变化。该方法符合 SRE 对服务级目标、监控、测试可靠性、发布工程和数据完整性的强调 [5]。任何性能数字都应同时给出数据集、硬件、网络、并发和版本条件。</p>
+
+    <div class="callout"><strong>工程完成定义</strong>代码存在不是完成；必须同时具备契约、测试、失败恢复、可观测事件、部署配置和可复现验收证据。</div>
+  </section>
+
+  <section class="chapter">
+    <div class="kicker">APPENDIX A</div>
+    <h1>能力边界与后续完善事项</h1>
+    <p class="lead">本附录集中说明仓库快照中的能力状态与后续工程事项，避免在正文架构叙事中混淆“设计成立”和“目标环境已经验收”。</p>
+
+    <h2>A.1 能力成熟度说明</h2>
+    <table>
+      <thead><tr><th>领域</th><th>仓库快照中的基础</th><th>后续完善重点</th></tr></thead>
+      <tbody>
+        <tr><td>桌面工作台</td><td><span class="status-ok">已形成可运行骨架</span>：三栏、Dock、工作区、锁定选择、PDF、助手、产物、组织、设置</td><td>持续收敛跨模块控制器，扩大真实设备端到端验证与可访问性回归</td></tr>
+        <tr><td>本地文献库</td><td><span class="status-ok">真实文件链已实现</span>：目录扫描、监听、分块导入、原子写、回收站、恢复与备份</td><td>面向更多 Windows 文件系统差异、超大库容量和长期迁移开展压力与恢复演练</td></tr>
+        <tr><td>智能代理</td><td><span class="status-ok">运行时与安全边界已建立</span>：上下文、计划校验、策略、确认、技能、动作、任务事件</td><td>扩充跨技能评测、持久记忆治理、正式插件权限与 MCP 注册生命周期</td></tr>
+        <tr><td>薄读与多模态</td><td><span class="status-ok">协议和多类渲染链存在</span>：四档来源、数值保真、静态科学、数学、过程栅格与发布门</td><td>继续扩大真实论文金集、跨学科图表语义评测、提供方容量和成本基线</td></tr>
+        <tr><td>正式云服务</td><td><span class="status-ok">生产边界代码已建立</span>：PostgreSQL/S3、OIDC、扫描、组织、推荐、模型代理、账号生命周期</td><td>补齐目标环境的托管密钥、备份恢复、容量、监控告警和完整上线证据</td></tr>
+        <tr><td>身份与社区</td><td><span class="status-ok">独立服务边界已建立</span>：来源确认文献身份、社区内容、批注、关系、服务间授权</td><td>持续验证外部来源波动、审核申诉、删除传播与社区规模下的排序质量</td></tr>
+        <tr><td>发布与运维</td><td><span class="status-ok">受控预发布链可用</span>：Caddy、Compose、Keycloak、扫描器、Windows 安装包交接</td><td>生产签名、公开发布、扩容、RDS 恢复、真实告警和无人值守故障演练</td></tr>
+      </tbody>
+    </table>
+
+    <h2>A.2 当前预发布边界</h2>
+    <ul>
+      <li>当前部署资料定义的是最多 10 个具名受邀账号、低并发的受控预发布，不等同于公开生产服务。</li>
+      <li>现有 Windows 安装包在负责人批准下用于受控预发布，Authenticode 未签名；生产和不受控公开分发需要完成代码签名。</li>
+      <li>预发布主机基线为 2 vCPU / 4 GiB；扩大账号、PDF 上限、模型并发或公开测试前需要扩容并重新验收。</li>
+      <li><code>development/dev-cloud</code> 是本地真实联调服务，使用 SQLite 与本地对象目录，并在 staging/production 环境拒绝运行；它不应被描述为正式云平台。</li>
+      <li>完整生产能力的声明必须以目标环境中的数据库、对象存储、密钥、扫描、备份、恢复、监控、告警和端到端证据为准。</li>
+    </ul>
+
+    <h2>A.3 建议优先级</h2>
+    <div class="sequence">
+      <div class="step"><b>P0：发布可信链</b><span>完成安装包签名、目标环境托管密钥、备份恢复与监控告警，以证据关闭生产门禁。</span></div>
+      <div class="step"><b>P0：评测可信链</b><span>固定跨学科论文金集、证据/数值/图表指标和回归阈值，形成模型与渲染器版本对比。</span></div>
+      <div class="step"><b>P1：长期记忆治理</b><span>本地持久化、命名空间隔离、用户预览/删除/导出、写入过滤、命中解释与污染评测。</span></div>
+      <div class="step"><b>P1：规模与成本基线</b><span>在真实并发、超大文献库和多模态任务下测量延迟、队列、内存、存储与模型计算单元。</span></div>
+      <div class="step"><b>P2：生态扩展</b><span>在动作、权限、审计和生命周期协议稳定后开放插件与 MCP，避免扩展先于治理。</span></div>
+    </div>
+  </section>
+
+  <section class="chapter">
+    <div class="kicker">APPENDIX B</div>
+    <h1>仓库证据、术语与编制说明</h1>
+
+    <h2>B.1 主要内部事实源</h2>
+    <table>
+      <thead><tr><th>主题</th><th>主要文档或代码位置</th></tr></thead>
+      <tbody>
+        <tr><td>项目总览与实现边界</td><td><code>docs/项目上下文与设计总览.md</code>；<code>docs/qa/2026-08-08-repository-structure-and-capability-audit.md</code></td></tr>
+        <tr><td>产品蓝图与 SaaS 定位</td><td><code>docs/superpowers/specs/2026-05-10-liteasyclaw-product-blueprint-design.md</code>；<code>docs/saas/LiteasyClaw_SaaS纠偏设计与调整方案.md</code></td></tr>
+        <tr><td>桌面模块与代理</td><td><code>docs/engineering/module-boundaries.md</code>；<code>docs/agent-dev/liteasy-agent-core-design.md</code>；<code>products/liteasy/apps/desktop/src/app/features/</code></td></tr>
+        <tr><td>薄读与多模态</td><td><code>docs/design/薄读-四档支持架构与生成成功边界.md</code>；<code>docs/design/薄读-数值与定量命题保真门.md</code>；<code>docs/superpowers/specs/2026-08-08-thin-reading-multimodal-visualization-design.md</code></td></tr>
+        <tr><td>文献身份与存储</td><td><code>docs/design/文献身份标识实现报告.md</code>；<code>docs/design/Liteasy-文件系统与存储边界设计.md</code></td></tr>
+        <tr><td>正式服务与部署</td><td><code>products/liteasy/services/api/README.md</code>；<code>deployment/staging/README.md</code>；<code>docs/operations/staging-handoff-2026-08-16.md</code></td></tr>
+      </tbody>
+    </table>
+
+    <h2>B.2 仓库快照统计口径</h2>
+    <p>统计基于 Git 提交 <code>54cc18a</code>。桌面功能文件为 <code>products/liteasy/apps/desktop/src/app/features</code> 下全部普通文件；桌面测试文件为 <code>src/tests</code> 下匹配 <code>*.test.*</code> 的文件；Tauri 命令为 Rust 源码中 <code>#[tauri::command]</code> 标记数量；源码行数统计桌面 TypeScript/TSX、Rust 宿主、Liteasy API、IntuEcho API 和身份服务中的 TypeScript/TSX/Rust/MJS 文件。统计未排除空行或注释，因此仅表示可复现的仓库规模快照。</p>
+
+    <h2>B.3 术语表</h2>
+    <table>
+      <thead><tr><th>术语</th><th>本文含义</th></tr></thead>
+      <tbody>
+        <tr><td>工作区</td><td>当前可见的本地或组织文献目录视图；切换工作区不是合并资源。</td></tr>
+        <tr><td>选中文献集</td><td>用户在当前工作区勾选并锁定、准备交给智能能力处理的文件快照。</td></tr>
+        <tr><td>导入</td><td>对选中文献执行校验、解析、切块、索引和引用定位准备。</td></tr>
+        <tr><td>产物</td><td>具有类型、来源、版本和生命周期的分析结果，如认知图、导图、表格或可视化。</td></tr>
+        <tr><td>技能</td><td>完成一类用户任务的受控流程，可以组合检索、生成和动作。</td></tr>
+        <tr><td>动作</td><td>一个可以确定性执行的状态变更，带类型化参数、资源作用域、风险与权限。</td></tr>
+        <tr><td>证据锚点</td><td>连接解释与来源的定位信息，可包含页码、文本范围、结构区、坐标或内容哈希。</td></tr>
+        <tr><td>薄读</td><td>先建立低认知成本全景，再沿用户关注点逐层展开的证据约束阅读方式。</td></tr>
+      </tbody>
+    </table>
+
+    <h2>B.4 编制与学术规范</h2>
+    <p>本报告以项目仓库的设计文档、实现代码、测试结构、部署手册和交接证据为内部事实源；以公开的官方架构框架、安全规范和学术基础文献为外部参考。正文没有把规划、代码存在或确定性规则测试等同于生产环境验收或真实模型质量；相关边界集中列于附录 A。图表均为基于仓库事实重新绘制的中文解释图，不复制外部厂商图形资产。</p>
+  </section>
+
+  <section class="chapter refs">
+    <div class="kicker">REFERENCES</div>
+    <h1>参考文献</h1>
+    <ol>
+      <li>Brown, S. <em>The C4 model for visualising software architecture</em> [EB/OL]. https://c4model.com/ (访问日期：2026-08-17).</li>
+      <li>Google Cloud. <em>Google Cloud Well-Architected Framework</em> [EB/OL]. https://cloud.google.com/architecture/framework (访问日期：2026-08-17).</li>
+      <li>Amazon Web Services. <em>AWS Well-Architected Framework</em> [EB/OL]. https://docs.aws.amazon.com/wellarchitected/latest/framework/welcome.html (访问日期：2026-08-17).</li>
+      <li>Microsoft. <em>Azure Well-Architected Framework</em> [EB/OL]. https://learn.microsoft.com/azure/well-architected/ (访问日期：2026-08-17).</li>
+      <li>Beyer, B., Jones, C., Petoff, J., Murphy, N. R., eds. <em>Site Reliability Engineering: How Google Runs Production Systems</em> [M/OL]. O'Reilly Media, 2016. https://sre.google/sre-book/table-of-contents/ (访问日期：2026-08-17).</li>
+      <li>National Institute of Standards and Technology. <em>Artificial Intelligence Risk Management Framework (AI RMF 1.0)</em> [R]. NIST AI 100-1, 2023. doi:10.6028/NIST.AI.100-1.</li>
+      <li>OWASP Foundation. <em>OWASP Top 10 for Large Language Model Applications</em> [EB/OL]. https://owasp.org/www-project-top-10-for-large-language-model-applications/ (访问日期：2026-08-17).</li>
+      <li>Lewis, P., Perez, E., Piktus, A., et al. Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks [C]//<em>Advances in Neural Information Processing Systems</em>. 2020, 33: 9459-9474.</li>
+      <li>Crossref. <em>Relationships: Markup guides for metadata segments</em> [EB/OL]. https://www.crossref.org/documentation/schema-library/markup-guide-metadata-segments/relationships/ (访问日期：2026-08-17).</li>
+      <li>W3C. <em>PROV-O: The PROV Ontology</em> [EB/OL]. W3C Recommendation, 2013. https://www.w3.org/TR/prov-o/ (访问日期：2026-08-17).</li>
+      <li>Fielding, R. T. <em>Architectural Styles and the Design of Network-based Software Architectures</em> [D]. University of California, Irvine, 2000.</li>
+      <li>ISO/IEC/IEEE. <em>ISO/IEC/IEEE 42010:2022 Software, systems and enterprise — Architecture description</em> [S]. Geneva: ISO, 2022.</li>
+    </ol>
+    <div class="footer-note">Liteasy 技术报告 v1.0 · 生成日期 2026-08-17 · 仓库基线 54cc18a</div>
+  </section>
+</body>
+</html>
