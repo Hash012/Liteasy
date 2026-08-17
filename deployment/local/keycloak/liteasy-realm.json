@@ -13,8 +13,6 @@
   "accessTokenLifespan": 300,
   "ssoSessionIdleTimeout": 1800,
   "ssoSessionMaxLifespan": 28800,
-  "revokeRefreshToken": true,
-  "refreshTokenMaxReuse": 0,
   "offlineSessionIdleTimeout": 31536000,
   "offlineSessionMaxLifespanEnabled": true,
   "offlineSessionMaxLifespan": 31536000,
@@ -52,6 +50,8 @@
       "redirectUris": ["${LITEASY_DESKTOP_LOOPBACK_REDIRECT_URI}", "${LITEASY_DESKTOP_LOCALHOST_REDIRECT_URI}"],
       "webOrigins": ["${LITEASY_DESKTOP_WEB_ORIGIN}"],
       "attributes": {
+        "client.offline.session.idle.timeout": "31536000",
+        "client.offline.session.max.lifespan": "31536000",
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "${LITEASY_DESKTOP_LOOPBACK_REDIRECT_URI}##${LITEASY_DESKTOP_LOCALHOST_REDIRECT_URI}"
       },
@@ -82,6 +82,8 @@
       "redirectUris": ["${INTUECHO_WEB_LOOPBACK_REDIRECT_URI}", "${INTUECHO_WEB_REDIRECT_URI}"],
       "webOrigins": ["${INTUECHO_WEB_LOOPBACK_ORIGIN}", "${INTUECHO_WEB_ORIGIN}"],
       "attributes": {
+        "client.offline.session.idle.timeout": "2592000",
+        "client.offline.session.max.lifespan": "2592000",
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "${INTUECHO_WEB_LOOPBACK_REDIRECT_URI}##${INTUECHO_WEB_REDIRECT_URI}"
       },
@@ -112,6 +114,8 @@
       "redirectUris": ["${LITEASY_ADMIN_LOOPBACK_REDIRECT_URI}", "${LITEASY_ADMIN_REDIRECT_URI}"],
       "webOrigins": ["${LITEASY_ADMIN_LOOPBACK_ORIGIN}", "${LITEASY_ADMIN_WEB_ORIGIN}"],
       "attributes": {
+        "client.offline.session.idle.timeout": "2592000",
+        "client.offline.session.max.lifespan": "2592000",
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "${LITEASY_ADMIN_LOOPBACK_REDIRECT_URI}##${LITEASY_ADMIN_REDIRECT_URI}"
       },

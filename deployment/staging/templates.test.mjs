@@ -70,11 +70,16 @@ test("the staging realm has three PKCE clients and separated service identities"
   assert.equal(new Set(realm.clients.map((client) => client.clientId)).size, realm.clients.length);
   assert.equal(realm.verifyEmail, true);
   assert.equal(realm.accessTokenLifespan, 300);
-  assert.equal(realm.revokeRefreshToken, true);
-  assert.equal(realm.refreshTokenMaxReuse, 0);
   assert.equal(realm.offlineSessionIdleTimeout, 365 * 24 * 60 * 60);
   assert.equal(realm.offlineSessionMaxLifespanEnabled, true);
   assert.equal(realm.offlineSessionMaxLifespan, 365 * 24 * 60 * 60);
+  for (const client of publicClients) {
+    const expectedLifespan = client.clientId === "liteasy-desktop-public"
+      ? 365 * 24 * 60 * 60
+      : 30 * 24 * 60 * 60;
+    assert.equal(client.attributes?.["client.offline.session.idle.timeout"], String(expectedLifespan));
+    assert.equal(client.attributes?.["client.offline.session.max.lifespan"], String(expectedLifespan));
+  }
   assert.equal(realm.browserFlow, "liteasy-user-browser");
   for (const clientId of ["liteasy-desktop-public", "intuecho-web"]) {
     const client = realm.clients.find((candidate) => candidate.clientId === clientId);
