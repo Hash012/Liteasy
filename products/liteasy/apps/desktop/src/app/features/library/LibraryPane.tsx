@@ -328,6 +328,16 @@ function filterTree(tree: ExplorerTree, query: string): ExplorerTree {
   };
 }
 
+function findFolderById(folders: ExplorerFolder[], id: string | null): ExplorerFolder | undefined {
+  if (!id) return undefined;
+  for (const folder of folders) {
+    if (folder.id === id) return folder;
+    const child = findFolderById(folder.children, id);
+    if (child) return child;
+  }
+  return undefined;
+}
+
 function readTransfer(event: ReactDragEvent): LibraryResourceTransferSource | null {
   const serialized = event.dataTransfer.getData(resourceTransferMimeType);
   if (!serialized) return null;
@@ -470,9 +480,13 @@ export function LibraryPane({
     string | null
   >>({ collection: null, local: null, organization: null });
   const query = search.trim().toLocaleLowerCase();
+  const localUnfilteredTree = useMemo(
+    () => localExplorerTree(localLibrarySnapshot),
+    [localLibrarySnapshot]
+  );
   const localTree = useMemo(
-    () => filterTree(localExplorerTree(localLibrarySnapshot), query),
-    [localLibrarySnapshot, query]
+    () => filterTree(localUnfilteredTree, query),
+    [localUnfilteredTree, query]
   );
   const collectionTree = useMemo(
     () => filterTree(cloudExplorerTree("collection", collectionScope, collection.tree), query),
@@ -532,23 +546,36 @@ export function LibraryPane({
       : [...current, area]);
   }
 
+  function expandFolder(area: LibraryResourceArea, folderId: string) {
+    if (expandedFolders[area].includes(folderId)) return;
+    const next = [...expandedFolders[area], folderId];
+    setExpandedFolders((current) => ({ ...current, [area]: next }));
+    const storageKey = expandedStorageKey(area);
+    if (storageKey) window.localStorage.setItem(storageKey, JSON.stringify(next));
+  }
+
   function selectFolder(
     area: "local" | "collection" | "organization",
     folderId: string | null
   ) {
     setSelectedFolderIds((current) => ({
       ...current,
-      [area]: current[area] === folderId ? null : folderId
+      [area]: folderId
     }));
+    if (area === "local" && folderId) expandFolder(area, folderId);
   }
 
   function openLocalPdfPicker() {
     const selectedPath = selectedFolderIds.local;
-    localImportTargetPathRef.current = selectedPath && localLibrarySnapshot?.folders.some(
+    const targetPath = selectedPath && localLibrarySnapshot?.folders.some(
       (folder) => folder.path === selectedPath
     )
       ? selectedPath
       : localLibrarySnapshot?.rootPath;
+    localImportTargetPathRef.current = targetPath;
+    if (targetPath && targetPath !== localLibrarySnapshot?.rootPath) {
+      expandFolder("local", targetPath);
+    }
     fileInputRef.current?.click();
   }
 
@@ -983,6 +1010,7 @@ export function LibraryPane({
     area: "local" | "collection" | "organization",
     parent?: ExplorerFolder
   ) {
+    if (area === "local" && parent) expandFolder(area, parent.id);
     setFolderName("");
     setFolderDialogError("");
     setCreateFolderTarget({ area, parent });
@@ -1048,12 +1076,19 @@ export function LibraryPane({
     }
   }
 
-  function iconAction(label: string, icon: ReactElement, action: () => void, disabled = false) {
+  function iconAction(
+    label: string,
+    icon: ReactElement,
+    action: () => void,
+    disabled = false,
+    pressed?: boolean
+  ) {
     return (
       <Tooltip content={label} relationship="label">
         <Button
-          appearance="subtle"
+          appearance={pressed ? "secondary" : "subtle"}
           aria-label={label}
+          aria-pressed={pressed}
           disabled={disabled}
           icon={icon}
           onClick={action}
@@ -1093,7 +1128,22 @@ export function LibraryPane({
       <section aria-label="本地文献库" className="library-section">
         <SectionHeader
           actions={<>
-            {iconAction("新建本地目录", <FolderAddRegular />, () => openCreateFolderDialog("local"), !localLibrarySnapshot)}
+            {iconAction(
+              "选择本地文献库根目录",
+              <FolderRegular />,
+              () => selectFolder("local", null),
+              !localLibrarySnapshot,
+              selectedFolderIds.local === null
+            )}
+            {iconAction(
+              "新建本地目录",
+              <FolderAddRegular />,
+              () => openCreateFolderDialog(
+                "local",
+                findFolderById(localUnfilteredTree.folders, selectedFolderIds.local)
+              ),
+              !localLibrarySnapshot
+            )}
             {iconAction("导入 PDF", <AddRegular />, openLocalPdfPicker, !localLibrarySnapshot)}
             {iconAction("从 Zotero 导出目录导入 PDF", <FolderOpenRegular />, () => zoteroDirectoryInputRef.current?.click(), !localLibrarySnapshot)}
             {iconAction("刷新本地文献库", <ArrowClockwiseRegular />, () => void onRefreshLocalLibrary?.())}

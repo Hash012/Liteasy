@@ -29,6 +29,15 @@ vi.mock("../app/features/library/useCloudLibraryTree", () => ({
     cloudTrees[input.scopeType]
 }));
 
+const localLibraryClient = vi.hoisted(() => ({
+  createFolder: vi.fn(async () => undefined)
+}));
+
+vi.mock("../app/features/library/libraryFileSystemClient", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../app/features/library/libraryFileSystemClient")>(),
+  createLocalLibraryFolder: localLibraryClient.createFolder
+}));
+
 function organizationSummary(overrides: Partial<OrganizationSummary> = {}): OrganizationSummary {
   return {
     auditEvents: [],
@@ -156,6 +165,7 @@ beforeEach(() => {
   cloudTrees.organization.tree = null;
   cloudTrees.user.refresh.mockClear();
   cloudTrees.organization.refresh.mockClear();
+  localLibraryClient.createFolder.mockClear();
 });
 
 describe("LeftPane", () => {
@@ -310,19 +320,20 @@ describe("LeftPane", () => {
     expect(onOpenPaper).toHaveBeenCalledWith("paper-menu");
   });
 
-  test("imports PDFs into the local folder selected before opening the picker", async () => {
+  test("imports PDFs into the selected local folder and keeps its contents visible", async () => {
     const onAddDroppedPdfFiles = vi.fn(async () => {});
     const onRefreshLocalLibrary = vi.fn(async () => {});
-    const { container } = render(<LeftPane {...createProps({
+    const initialSnapshot = {
+      entries: [],
+      folders: [{ name: "课程", parentPath: null, path: "/library/课程" }],
+      libraryId: "library-1",
+      revision: 2,
+      rootPath: "/library",
+      trashEntries: []
+    };
+    const { container, rerender } = render(<LeftPane {...createProps({
       leftRailView: "library",
-      localLibrarySnapshot: {
-        entries: [],
-        folders: [{ name: "课程", parentPath: null, path: "/library/课程" }],
-        libraryId: "library-1",
-        revision: 2,
-        rootPath: "/library",
-        trashEntries: []
-      },
+      localLibrarySnapshot: initialSnapshot,
       onAddDroppedPdfFiles,
       onRefreshLocalLibrary
     })} />);
@@ -330,7 +341,12 @@ describe("LeftPane", () => {
     const folderButton = screen.getByRole("button", { name: "课程" });
     await userEvent.click(folderButton);
     expect(folderButton).toHaveAttribute("aria-pressed", "true");
+    const disclosure = screen.getByRole("button", { name: "收起课程" });
+    expect(disclosure).toHaveAttribute("aria-expanded", "true");
+    await userEvent.click(disclosure);
+    expect(screen.getByRole("button", { name: "展开课程" })).toHaveAttribute("aria-expanded", "false");
     await userEvent.click(screen.getByRole("button", { name: "导入 PDF" }));
+    expect(screen.getByRole("button", { name: "收起课程" })).toHaveAttribute("aria-expanded", "true");
 
     const input = container.querySelector<HTMLInputElement>(
       'section[aria-label="本地文献库"] input[type="file"][multiple]:not([webkitdirectory])'
@@ -341,6 +357,54 @@ describe("LeftPane", () => {
 
     await waitFor(() => {
       expect(onAddDroppedPdfFiles).toHaveBeenCalledWith([file], "/library/课程");
+    });
+
+    rerender(<LeftPane {...createProps({
+      leftRailView: "library",
+      localLibrarySnapshot: {
+        ...initialSnapshot,
+        entries: [{
+          contentHash: "d".repeat(64),
+          id: "paper-imported",
+          path: "/library/课程/paper.pdf",
+          relativePath: "课程/paper.pdf",
+          title: "paper"
+        }],
+        revision: 3
+      },
+      onAddDroppedPdfFiles,
+      onRefreshLocalLibrary
+    })} />);
+    expect(screen.getByRole("button", { name: "paper" })).toBeVisible();
+  });
+
+  test("creates a toolbar folder under the selected local folder", async () => {
+    render(<LeftPane {...createProps({
+      leftRailView: "library",
+      localLibrarySnapshot: {
+        entries: [],
+        folders: [{ name: "课程", parentPath: null, path: "/library/课程" }],
+        libraryId: "library-1",
+        revision: 2,
+        rootPath: "/library",
+        trashEntries: []
+      }
+    })} />);
+
+    const folderButton = screen.getByRole("button", { name: "课程" });
+    fireEvent.click(folderButton);
+    fireEvent.click(folderButton);
+    expect(folderButton).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "新建本地目录" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "新建目录" });
+    expect(dialog).toHaveTextContent("新建子目录");
+    const nameInput = within(dialog).getByRole("textbox", { name: "目录名称" });
+    fireEvent.change(nameInput, { target: { value: "子目录" } });
+    fireEvent.submit(nameInput.closest("form")!);
+
+    await waitFor(() => {
+      expect(localLibraryClient.createFolder).toHaveBeenCalledWith("子目录", "/library/课程");
     });
   });
 
@@ -361,6 +425,39 @@ describe("LeftPane", () => {
 
     await waitFor(() => {
       expect(onAddDroppedPdfFiles).toHaveBeenCalledWith([file], "/home/test/LiteasyLibrary");
+    });
+  });
+
+  test("lets the user explicitly restore the local library root as the import target", async () => {
+    const onAddDroppedPdfFiles = vi.fn(async () => {});
+    const { container } = render(<LeftPane {...createProps({
+      leftRailView: "library",
+      localLibrarySnapshot: {
+        entries: [],
+        folders: [{ name: "课程", parentPath: null, path: "/library/课程" }],
+        libraryId: "library-1",
+        revision: 2,
+        rootPath: "/library",
+        trashEntries: []
+      },
+      onAddDroppedPdfFiles,
+      onRefreshLocalLibrary: vi.fn(async () => undefined)
+    })} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "课程" }));
+    const rootButton = screen.getByRole("button", { name: "选择本地文献库根目录" });
+    await userEvent.click(rootButton);
+    expect(rootButton).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(screen.getByRole("button", { name: "导入 PDF" }));
+
+    const input = container.querySelector<HTMLInputElement>(
+      'section[aria-label="本地文献库"] input[type="file"][multiple]:not([webkitdirectory])'
+    );
+    const file = new File(["%PDF-1.7\nbody"], "root-paper.pdf", { type: "application/pdf" });
+    fireEvent.change(input!, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(onAddDroppedPdfFiles).toHaveBeenCalledWith([file], "/library");
     });
   });
 
