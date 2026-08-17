@@ -1681,14 +1681,18 @@ export function AppShell({
             workspaceState.selectedPaperIds.length > 0 && workspaceState.selectionLocked
           }
           developerDiagnostics={cloudAccount.model.developerDiagnostics}
+          externalKnowledgeEndpoint={externalKnowledgeEndpoint}
           intuechoEndpoint={resolveIntuechoEndpoint()}
           intuechoSessionId={accountSession?.sessionId}
+          mineruFiguresByPaperId={mineruFiguresByPaperId}
           onLoadForumFeed={forum.loadFeed}
           onDynamicAction={(action) => {
             void handleArtifactCanvasAction(action);
           }}
+          onOpenExternalFullText={externalPapers.openExternalFullTextInReader}
           onOpenEvidence={openEvidenceInReader}
           onOpenVisualization={openVisualization}
+          onPromoteExternalPaperToLibrary={externalPapers.promoteExternalPaperToLibrary}
           onDeleteArtifact={async (artifactId) => {
             const outcome = await deleteArtifact(artifactId);
             return outcome.message;
@@ -1707,6 +1711,8 @@ export function AppShell({
             void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
           }}
           onUpdateThinReadingDocument={artifactWorkflow.actions.updateThinReadingDocument}
+          paperRelationsTransport={effectiveModelTransport}
+          recommendationTransport={effectiveModelTransport}
           selectedCount={workspaceState.selectedPaperIds.length}
           selectionLocked={workspaceState.selectionLocked}
           tabs={tabs}
