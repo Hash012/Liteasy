@@ -206,8 +206,12 @@ export function personalLibraryScopeId(accountScopeId?: string) {
   return accountScopeId.startsWith("user:") ? accountScopeId : `user:${accountScopeId}`;
 }
 
+function normalizedExplorerPath(value: string) {
+  return value.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
 function dirname(value: string) {
-  const normalized = value.replace(/\\/g, "/").replace(/\/+$/, "");
+  const normalized = normalizedExplorerPath(value);
   const separator = normalized.lastIndexOf("/");
   return separator <= 0 ? "" : normalized.slice(0, separator);
 }
@@ -216,7 +220,7 @@ function localExplorerTree(snapshot: LocalLibrarySnapshot | null): ExplorerTree 
   if (!snapshot) return { entries: [], folders: [] };
   const byPath = new Map<string, ExplorerFolder>();
   for (const folder of snapshot.folders) {
-    byPath.set(folder.path, {
+    byPath.set(normalizedExplorerPath(folder.path), {
       children: [],
       entries: [],
       id: folder.path,
@@ -227,8 +231,10 @@ function localExplorerTree(snapshot: LocalLibrarySnapshot | null): ExplorerTree 
   }
   const roots: ExplorerFolder[] = [];
   for (const folder of snapshot.folders) {
-    const node = byPath.get(folder.path)!;
-    const parent = folder.parentPath ? byPath.get(folder.parentPath) : undefined;
+    const node = byPath.get(normalizedExplorerPath(folder.path))!;
+    const parent = folder.parentPath
+      ? byPath.get(normalizedExplorerPath(folder.parentPath))
+      : undefined;
     if (parent) parent.children.push(node);
     else roots.push(node);
   }
@@ -816,6 +822,7 @@ export function LibraryPane({
       <div
         aria-busy={pending}
         className="library-paper-row"
+        data-depth={depth}
         draggable={!pending && canStartResourceDrag(entry.source)}
         onDragStart={(event) => {
           if (!canStartResourceDrag(entry.source)) {
@@ -826,7 +833,6 @@ export function LibraryPane({
           event.dataTransfer.effectAllowed = "copyMove";
           event.dataTransfer.setData(resourceTransferMimeType, JSON.stringify(entry.source));
         }}
-        style={{ paddingLeft: `${depth * 12 + 6}px` }}
       >
         {area === "local" ? (
           <input
@@ -909,6 +915,7 @@ export function LibraryPane({
       <div
         aria-busy={pending}
         className={`library-folder-row${selected ? " is-selected" : ""}`}
+        data-depth={depth}
         draggable={Boolean(
           !pending && !folder.virtual && folderSource && canStartResourceDrag(folderSource)
         )}
@@ -925,7 +932,6 @@ export function LibraryPane({
         } : undefined}
         onDragOver={folder.virtual ? undefined : (event) => event.preventDefault()}
         onDrop={folder.virtual ? undefined : (event) => dropOnTarget(event, area, folder)}
-        style={{ paddingLeft: `${depth * 12}px` }}
       >
         <button
           aria-expanded={expanded}
@@ -947,6 +953,9 @@ export function LibraryPane({
           <FolderRegular aria-hidden="true" />
           <span>{folder.label}</span>
         </button>
+        <span aria-label={`${folder.children.length + folder.entries.length} 项`} className="library-folder-count">
+          {folder.children.length + folder.entries.length}
+        </span>
       </div>
     );
     return (

@@ -424,6 +424,25 @@
   padding: 0;
 }
 
+.library-tree-children {
+  border-left: 1px solid #c8d8e5;
+  margin-left: 10px;
+  padding-left: 9px;
+}
+
+.library-tree-children > li {
+  position: relative;
+}
+
+.library-tree-children > li::before {
+  border-top: 1px solid #c8d8e5;
+  content: "";
+  left: -9px;
+  position: absolute;
+  top: 15px;
+  width: 8px;
+}
+
 .library-folder-row,
 .paper-row {
   align-items: center;
@@ -441,7 +460,7 @@
   min-height: 30px;
   min-width: 0;
   overflow: hidden;
-  padding: 1px 4px 1px 0;
+  padding: 1px 4px 1px 6px;
 }
 
 .library-paper-row:hover {

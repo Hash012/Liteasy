@@ -375,7 +375,12 @@ describe("LeftPane", () => {
       onAddDroppedPdfFiles,
       onRefreshLocalLibrary
     })} />);
-    expect(screen.getByRole("button", { name: "paper" })).toBeVisible();
+    const importedPaper = screen.getByRole("button", { name: "paper" });
+    expect(importedPaper).toBeVisible();
+    expect(importedPaper.closest(".library-paper-row")).toHaveAttribute("data-depth", "1");
+    const childList = importedPaper.closest(".library-tree-children");
+    expect(childList).not.toBeNull();
+    expect(within(childList!.parentElement!).getByRole("button", { name: "课程" })).toBeVisible();
   });
 
   test("creates a toolbar folder under the selected local folder", async () => {
@@ -406,6 +411,41 @@ describe("LeftPane", () => {
     await waitFor(() => {
       expect(localLibraryClient.createFolder).toHaveBeenCalledWith("子目录", "/library/课程");
     });
+  });
+
+  test("nests Windows extended-path PDFs under their actual folders", async () => {
+    const rootPath = "\\\\?\\C:\\Users\\reader\\library";
+    const parentPath = `${rootPath}\\课程`;
+    const childPath = `${parentPath}\\第一章`;
+    render(<LeftPane {...createProps({
+      leftRailView: "library",
+      localLibrarySnapshot: {
+        entries: [{
+          contentHash: "e".repeat(64),
+          id: "paper-in-child",
+          path: `${childPath}\\paper.pdf`,
+          relativePath: "课程/第一章/paper.pdf",
+          title: "paper-in-child"
+        }],
+        folders: [
+          { name: "课程", parentPath: null, path: parentPath },
+          { name: "第一章", parentPath, path: childPath }
+        ],
+        libraryId: "windows-library",
+        revision: 1,
+        rootPath,
+        trashEntries: []
+      }
+    })} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "展开课程" }));
+    await userEvent.click(screen.getByRole("button", { name: "展开第一章" }));
+
+    const paper = screen.getByRole("button", { name: "paper-in-child" });
+    expect(paper.closest(".library-paper-row")).toHaveAttribute("data-depth", "2");
+    expect(paper.closest(".library-tree-children")?.parentElement).toContainElement(
+      screen.getByRole("button", { name: "第一章" })
+    );
   });
 
   test("imports PDFs into the local library root when no folder is selected", async () => {
