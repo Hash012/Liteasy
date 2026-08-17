@@ -13,8 +13,11 @@
   "accessTokenLifespan": 300,
   "ssoSessionIdleTimeout": 1800,
   "ssoSessionMaxLifespan": 28800,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "offlineSessionIdleTimeout": 31536000,
   "offlineSessionMaxLifespanEnabled": true,
-  "offlineSessionMaxLifespan": 2592000,
+  "offlineSessionMaxLifespan": 31536000,
   "clientScopes": [
     {
       "name": "accounts:write",
