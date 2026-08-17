@@ -220,6 +220,68 @@ test("sends structured DeepSeek requests with an explicit JSON schema", async ()
   assert.match(observed.body.messages[0].content, /\"summary\"/);
 });
 
+test("retries a DeepSeek success response that has no assistant content", async () => {
+  let calls = 0;
+  const delays = [];
+  const providers = createModelUpstreamProviders(config({
+    deepseek: {
+      apiKey: "deployment-deepseek-secret",
+      baseUrl: "https://api.deepseek.com",
+      model: "deepseek-chat",
+      provider: "deepseek"
+    }
+  }), {
+    fetchImpl: async () => {
+      calls += 1;
+      return new Response(JSON.stringify(calls === 1
+        ? { choices: [{ finish_reason: "length", message: { content: "", reasoning_content: "hidden" } }] }
+        : { choices: [{ finish_reason: "stop", message: { content: "{\"summary\":\"recovered\"}" } }] }), { status: 200 });
+    },
+    waitImpl: async (milliseconds) => delays.push(milliseconds)
+  });
+
+  const answer = await providers.deepseek.generate({ prompt: "Return JSON", provider: "deepseek" });
+
+  assert.equal(answer, "{\"summary\":\"recovered\"}");
+  assert.equal(calls, 2);
+  assert.deepEqual(delays, [250]);
+});
+
+test("does not expose DeepSeek reasoning content when bounded empty-response retries are exhausted", async () => {
+  let calls = 0;
+  const delays = [];
+  const providers = createModelUpstreamProviders(config({
+    deepseek: {
+      apiKey: "deployment-deepseek-secret",
+      baseUrl: "https://api.deepseek.com",
+      model: "deepseek-chat",
+      provider: "deepseek"
+    }
+  }), {
+    fetchImpl: async () => {
+      calls += 1;
+      return new Response(JSON.stringify({
+        choices: [{ finish_reason: "length", message: { content: "", reasoning_content: "private reasoning" } }]
+      }), { status: 200 });
+    },
+    waitImpl: async (milliseconds) => delays.push(milliseconds)
+  });
+
+  await assert.rejects(
+    () => providers.deepseek.generate({ prompt: "Return JSON", provider: "deepseek" }),
+    (error) => {
+      assert.equal(error instanceof ModelUpstreamError, true);
+      assert.equal(error.code, "model_provider_response_invalid");
+      assert.equal(error.retryable, true);
+      assert.equal(error.internalDetail, "DeepSeek response has no assistant content finishReason=length hasReasoningContent=true");
+      assert.doesNotMatch(error.internalDetail, /private reasoning/);
+      return true;
+    }
+  );
+  assert.equal(calls, 3);
+  assert.deepEqual(delays, [250, 750]);
+});
+
 test("reports an upstream timeout that occurs while reading the streaming response body", async () => {
   const providers = createModelUpstreamProviders(config(), {
     fetchImpl: async () => new Response(new ReadableStream({

@@ -197,6 +197,14 @@ function outputTextFromDeepSeek(payload) {
   return typeof content === "string" && content.length > 0 ? content : null;
 }
 
+function emptyDeepSeekResponseDetail(payload) {
+  const choice = Array.isArray(payload?.choices) ? payload.choices[0] : undefined;
+  const reasoningContent = choice?.message?.reasoning_content;
+  const finishReason = typeof choice?.finish_reason === "string" ? choice.finish_reason : "missing";
+  const hasReasoningContent = typeof reasoningContent === "string" && reasoningContent.length > 0;
+  return `DeepSeek response has no assistant content finishReason=${finishReason} hasReasoningContent=${hasReasoningContent}`;
+}
+
 function openAiBody(input, model, stream) {
   return {
     input: input.prompt,
@@ -346,9 +354,15 @@ function createDeepSeekProvider(config, options) {
           headers: providerHeaders(config.apiKey),
           method: "POST"
         }, input.signal, timeoutMs);
-        const answer = outputTextFromDeepSeek(await jsonPayload(response, input.signal));
+        const payload = await jsonPayload(response, input.signal);
+        const answer = outputTextFromDeepSeek(payload);
         if (!answer) {
-          throw new ModelUpstreamError("model_provider_response_invalid", 502, "DeepSeek response has no assistant content");
+          throw new ModelUpstreamError(
+            "model_provider_response_invalid",
+            502,
+            emptyDeepSeekResponseDetail(payload),
+            true
+          );
         }
         return answer;
       }, { signal: input.signal, waitImpl });
