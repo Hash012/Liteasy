@@ -239,6 +239,17 @@ describe("LeftPane", () => {
       "aria-expanded",
       "true"
     );
+    expect(screen.getByRole("button", { name: "展开关联推荐" })).toHaveAttribute(
+      "aria-expanded",
+      "false"
+    );
+    expect(within(screen.getByRole("region", { name: "关联推荐" })).queryByText("暂无关联推荐")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "展开关联推荐" }));
+    expect(screen.getByRole("button", { name: "收起关联推荐" })).toHaveAttribute(
+      "aria-expanded",
+      "true"
+    );
   });
 
   test("does not expose a standalone selected-paper import action", () => {
@@ -608,6 +619,7 @@ describe("LeftPane", () => {
     const recommendation = screen.getByRole("region", { name: "关联推荐" });
     const organization = screen.getByRole("region", { name: "组织文献库" });
     expect(within(collection).getByRole("button", { name: "登录" })).toBeInTheDocument();
+    await user.click(within(recommendation).getByRole("button", { name: "展开关联推荐" }));
     expect(within(recommendation).getByRole("button", { name: "登录" })).toBeInTheDocument();
     expect(within(organization).getByRole("button", { name: "登录" })).toBeInTheDocument();
     await user.click(within(collection).getByRole("button", { name: "登录" }));
@@ -653,6 +665,7 @@ describe("LeftPane", () => {
       recommendationItems: [recommendation]
     })} />);
 
+    await user.click(screen.getByRole("button", { name: "展开关联推荐" }));
     await user.click(screen.getByRole("button", { name: "收藏 Recommended paper" }));
 
     expect(onResourceTransfer).toHaveBeenCalledWith(
@@ -751,6 +764,7 @@ describe("LeftPane", () => {
       recommendationStatus: "ready"
     })} />);
 
+    await user.click(screen.getByRole("button", { name: "展开关联推荐" }));
     await user.click(screen.getByRole("button", { name: "忽略 Candidate Paper" }));
     expect(onDismissRecommendation).toHaveBeenCalledWith(recommendation);
   });

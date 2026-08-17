@@ -458,7 +458,7 @@ export function LibraryPane({
     scopeId: organizationScope?.scopeId,
     scopeType: "organization"
   });
-  const [collapsedSections, setCollapsedSections] = useState<LibraryResourceArea[]>([]);
+  const [collapsedSections, setCollapsedSections] = useState<LibraryResourceArea[]>(["recommendation"]);
   const [expandedFolders, setExpandedFolders] = useState<Record<LibraryResourceArea, string[]>>({
     collection: [],
     local: [],
