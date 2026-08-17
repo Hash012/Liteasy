@@ -215,6 +215,7 @@ test("sends structured DeepSeek requests with an explicit JSON schema", async ()
   assert.equal(answer, "{\"summary\":\"ok\"}");
   assert.equal(observed.url, "https://api.deepseek.com/chat/completions");
   assert.equal(observed.body.model, "deepseek-chat");
+  assert.equal(observed.body.max_tokens, 8_192);
   assert.deepEqual(observed.body.response_format, { type: "json_object" });
   assert.match(observed.body.messages[0].content, /thin_reading/);
   assert.match(observed.body.messages[0].content, /\"summary\"/);
@@ -280,6 +281,120 @@ test("does not expose DeepSeek reasoning content when bounded empty-response ret
   );
   assert.equal(calls, 3);
   assert.deepEqual(delays, [250, 750]);
+});
+
+test("retries an empty DeepSeek stream before exposing any response to the client", async () => {
+  let calls = 0;
+  const delays = [];
+  const encoder = new TextEncoder();
+  const providers = createModelUpstreamProviders(config({
+    deepseek: {
+      apiKey: "deployment-deepseek-secret",
+      baseUrl: "https://api.deepseek.com",
+      model: "deepseek-chat",
+      provider: "deepseek"
+    }
+  }), {
+    fetchImpl: async (_url, init) => {
+      calls += 1;
+      assert.equal(JSON.parse(init.body).max_tokens, 8_192);
+      const payload = calls === 1
+        ? 'data: {"choices":[{"delta":{"reasoning_content":"private reasoning"},"finish_reason":"length"}]}\n\ndata: [DONE]\n\n'
+        : 'data: {"choices":[{"delta":{"content":"Recovered"}}]}\n\ndata: [DONE]\n\n';
+      return new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(payload));
+          controller.close();
+        }
+      }), { status: 200 });
+    },
+    waitImpl: async (milliseconds) => delays.push(milliseconds)
+  });
+
+  const deltas = [];
+  for await (const delta of providers.deepseek.stream({ prompt: "Summarize", provider: "deepseek" })) {
+    deltas.push(delta);
+  }
+
+  assert.deepEqual(deltas, ["Recovered"]);
+  assert.equal(calls, 2);
+  assert.deepEqual(delays, [250]);
+});
+
+test("does not retry a DeepSeek stream after visible content has been emitted", async () => {
+  let calls = 0;
+  const encoder = new TextEncoder();
+  const providers = createModelUpstreamProviders(config({
+    deepseek: {
+      apiKey: "deployment-deepseek-secret",
+      baseUrl: "https://api.deepseek.com",
+      model: "deepseek-chat",
+      provider: "deepseek"
+    }
+  }), {
+    fetchImpl: async () => {
+      calls += 1;
+      let pulls = 0;
+      return new Response(new ReadableStream({
+        pull(controller) {
+          pulls += 1;
+          if (pulls === 1) {
+            controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"Partial"}}]}\n\n'));
+            return;
+          }
+          controller.error(new DOMException("timed out", "AbortError"));
+        }
+      }), { status: 200 });
+    },
+    waitImpl: async () => assert.fail("a partially emitted stream must not be retried")
+  });
+
+  const deltas = [];
+  await assert.rejects(async () => {
+    for await (const delta of providers.deepseek.stream({ prompt: "Summarize", provider: "deepseek" })) {
+      deltas.push(delta);
+    }
+  }, (error) => error instanceof ModelUpstreamError && error.code === "model_provider_timeout");
+  assert.deepEqual(deltas, ["Partial"]);
+  assert.equal(calls, 1);
+});
+
+test("keeps empty DeepSeek stream diagnostics content-free after retries are exhausted", async () => {
+  let calls = 0;
+  const encoder = new TextEncoder();
+  const providers = createModelUpstreamProviders(config({
+    deepseek: {
+      apiKey: "deployment-deepseek-secret",
+      baseUrl: "https://api.deepseek.com",
+      model: "deepseek-chat",
+      provider: "deepseek"
+    }
+  }), {
+    fetchImpl: async () => {
+      calls += 1;
+      return new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(
+            'data: {"choices":[{"delta":{"reasoning_content":"private stream reasoning"},"finish_reason":"length"}]}\n\n'
+          ));
+          controller.close();
+        }
+      }), { status: 200 });
+    },
+    waitImpl: async () => {}
+  });
+
+  await assert.rejects(async () => {
+    for await (const _delta of providers.deepseek.stream({ prompt: "Summarize", provider: "deepseek" })) {
+      // Consume the stream so empty-response validation runs.
+    }
+  }, (error) => {
+    assert.equal(error instanceof ModelUpstreamError, true);
+    assert.equal(error.internalDetail, "DeepSeek stream has no assistant content finishReason=length hasReasoningContent=true");
+    assert.doesNotMatch(error.internalDetail, /private stream reasoning/);
+    return true;
+  });
+  assert.equal(calls, 3);
 });
 
 test("reports an upstream timeout that occurs while reading the streaming response body", async () => {

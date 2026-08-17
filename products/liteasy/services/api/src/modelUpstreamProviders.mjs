@@ -1,4 +1,5 @@
 const maximumUpstreamBodyBytes = 4 * 1024 * 1024;
+const maximumDeepSeekCompletionTokens = 8_192;
 const structuredOutputFallbackStatuses = new Set([400, 422, 500, 502]);
 
 export class ModelUpstreamError extends Error {
@@ -231,6 +232,7 @@ function deepSeekBody(input, model, stream) {
     JSON.stringify(input.outputFormat.schema)
   ].join("\n") : input.prompt;
   return {
+    max_tokens: maximumDeepSeekCompletionTokens,
     messages: [{ content: prompt, role: "user" }],
     model,
     ...(input.outputFormat ? { response_format: { type: "json_object" } } : {}),
@@ -368,14 +370,45 @@ function createDeepSeekProvider(config, options) {
       }, { signal: input.signal, waitImpl });
     },
     async *stream(input) {
-      const response = await retryTransientFailure(() => fetchUpstream(fetchImpl, upstreamUrl(config.baseUrl, "chat/completions"), {
-        body: JSON.stringify(deepSeekBody(input, config.model, true)),
-        headers: providerHeaders(config.apiKey),
-        method: "POST"
-      }, input.signal, timeoutMs), { signal: input.signal, waitImpl });
-      for await (const payload of ssePayloads(response, input.signal)) {
-        const delta = Array.isArray(payload?.choices) ? payload.choices[0]?.delta?.content : undefined;
-        if (typeof delta === "string" && delta.length > 0) yield delta;
+      const delays = [250, 750];
+      for (let attempt = 0; ; attempt += 1) {
+        let emittedContent = false;
+        let finishReason = "missing";
+        let hasReasoningContent = false;
+        try {
+          const response = await fetchUpstream(fetchImpl, upstreamUrl(config.baseUrl, "chat/completions"), {
+            body: JSON.stringify(deepSeekBody(input, config.model, true)),
+            headers: providerHeaders(config.apiKey),
+            method: "POST"
+          }, input.signal, timeoutMs);
+          for await (const payload of ssePayloads(response, input.signal)) {
+            const choice = Array.isArray(payload?.choices) ? payload.choices[0] : undefined;
+            if (typeof choice?.finish_reason === "string") finishReason = choice.finish_reason;
+            if (typeof choice?.delta?.reasoning_content === "string" && choice.delta.reasoning_content.length > 0) {
+              hasReasoningContent = true;
+            }
+            const delta = choice?.delta?.content;
+            if (typeof delta === "string" && delta.length > 0) {
+              emittedContent = true;
+              yield delta;
+            }
+          }
+          if (!emittedContent) {
+            throw new ModelUpstreamError(
+              "model_provider_response_invalid",
+              502,
+              `DeepSeek stream has no assistant content finishReason=${finishReason} hasReasoningContent=${hasReasoningContent}`,
+              true
+            );
+          }
+          return;
+        } catch (error) {
+          if (emittedContent || !(error instanceof ModelUpstreamError) ||
+            !error.retryable || attempt >= delays.length) {
+            throw error;
+          }
+          await (waitImpl ?? waitForRetry)(error.retryAfterMs ?? delays[attempt], input.signal);
+        }
       }
     }
   });
