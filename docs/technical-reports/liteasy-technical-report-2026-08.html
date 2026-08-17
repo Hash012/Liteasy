@@ -3,25 +3,32 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Liteasy 技术报告：证据驱动的科研阅读与知识协作系统</title>
+  <title>Liteasy 技术报告：证据驱动的科研阅读与知识协作系统——面向认知负荷调节与注意连续性的设计</title>
   <style>
     @font-face {
       font-family: "Liteasy Noto Sans SC";
       font-style: normal;
-      font-weight: 100 900;
+      font-weight: 400;
       src: url("./LiteasyReport-NotoSansSC.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Liteasy Noto Sans SC";
+      font-style: normal;
+      font-weight: 650;
+      src: url("./LiteasyReport-NotoSansSC-Semibold.woff2") format("woff2");
     }
     @page { size: A4; margin: 17mm 15mm 18mm; }
     @page :first { margin: 0; }
     * { box-sizing: border-box; }
-    html { color: #17212b; font-family: "Liteasy Noto Sans SC", "Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif; font-size: 10.4pt; line-height: 1.65; }
+    html { color: #17212b; font-family: "Liteasy Noto Sans SC", "Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif; font-size: 10.4pt; font-synthesis: none; line-height: 1.65; }
     body { margin: 0; }
     h1, h2, h3, h4 { color: #102a43; font-weight: 650; line-height: 1.32; page-break-after: avoid; }
     h1 { border-bottom: 2px solid #0b7285; font-size: 23pt; margin: 0 0 7mm; padding-bottom: 3mm; }
+    .chapter h1.long-title { font-size: 20.5pt; }
     h2 { border-bottom: 1px solid #bcccdc; font-size: 17pt; margin: 9mm 0 4mm; padding-bottom: 2mm; }
     h3 { font-size: 13pt; margin: 6mm 0 2mm; }
     h4 { font-size: 11pt; margin: 4mm 0 1.5mm; }
-    p { margin: 0 0 3mm; text-align: justify; }
+    p { margin: 0 0 3mm; orphans: 3; text-align: justify; widows: 3; }
     a { color: #0b7285; text-decoration: none; }
     strong { color: #102a43; }
     code { background: #edf2f7; border-radius: 2px; font-family: "Noto Sans Mono CJK SC", monospace; font-size: 8.7pt; padding: 0.2mm 1mm; }
@@ -29,7 +36,8 @@
     .cover::before { background: #12b886; content: ""; height: 8mm; left: 0; position: absolute; right: 0; top: 0; }
     .cover::after { border: 1px solid rgba(255,255,255,.18); content: ""; height: 112mm; position: absolute; right: -32mm; top: 22mm; transform: rotate(28deg); width: 112mm; }
     .cover .brand { color: #66d9c0; font-size: 13pt; font-weight: 650; letter-spacing: 2px; margin-top: 6mm; }
-    .cover h1 { border: 0; color: white; font-size: 31pt; line-height: 1.2; margin: 33mm 0 6mm; max-width: 150mm; padding: 0; }
+    .cover h1 { border: 0; color: white; font-size: 31pt; line-height: 1.2; margin: 27mm 0 6mm; max-width: 155mm; padding: 0; }
+    .cover h1 .title-extension { color: #66d9c0; display: block; font-size: 19pt; line-height: 1.35; margin-top: 5mm; }
     .cover .subtitle { color: #d9e2ec; font-size: 15pt; line-height: 1.55; max-width: 142mm; }
     .cover .principle { border-left: 4px solid #12b886; color: #f0f4f8; font-size: 12pt; margin-top: 28mm; max-width: 145mm; padding: 2mm 0 2mm 5mm; }
     .cover .meta { bottom: 22mm; color: #bcccdc; font-size: 10pt; left: 20mm; line-height: 1.8; position: absolute; }
@@ -62,7 +70,7 @@
     .chip span { color: #627d98; display: block; font-size: 7pt; line-height: 1.3; }
     .grid-2 { display: grid; gap: 4mm; grid-template-columns: repeat(2, 1fr); }
     .grid-3 { display: grid; gap: 3mm; grid-template-columns: repeat(3, 1fr); }
-    .card { background: white; border: 1px solid #bcccdc; border-top: 3px solid #0b7285; padding: 3.5mm; }
+    .card { background: white; border: 1px solid #bcccdc; border-top: 3px solid #0b7285; break-inside: avoid; padding: 3.5mm; }
     .card h4 { margin-top: 0; }
     .card p { color: #486581; font-size: 8.8pt; margin-bottom: 0; }
     .accent { border-top-color: #e67700; }
@@ -79,6 +87,7 @@
     table { border-collapse: collapse; font-size: 8.5pt; line-height: 1.45; width: 100%; }
     th, td { border: 1px solid #bcccdc; padding: 2.2mm 2.5mm; text-align: left; vertical-align: top; }
     th { background: #e8f2f3; color: #102a43; font-weight: 700; }
+    tr { break-inside: avoid; }
     tr:nth-child(even) td { background: #fbfcfd; }
     ul, ol { margin: 1mm 0 3mm; padding-left: 6mm; }
     li { margin-bottom: 1mm; }
@@ -110,20 +119,20 @@
 <body>
   <section class="cover">
     <div class="brand">LITEASY TECHNICAL REPORT</div>
-    <h1>证据驱动的科研阅读<br>与知识协作系统</h1>
-    <div class="subtitle">以“薄读”为核心阅读能力，让每一次理解都能回到来源，让每一次智能操作都经过受控边界，让个人阅读自然沉淀为可复用的知识</div>
+    <h1>证据驱动的科研阅读<br>与知识协作系统<span class="title-extension">面向认知负荷调节与注意连续性的设计</span></h1>
+    <div class="subtitle">以“薄读”把长篇文献组织为有界、完整、可主动衔接的理解过程，让每一次深入都承接全局认识并回到可靠来源</div>
     <div class="principle">问题分析、技术路线、系统设计与工程说明</div>
     <div class="meta">Liteasy 项目组<br>仓库基线：<code>54cc18a</code><br>报告日期：2026 年 8 月 17 日</div>
-    <div class="version">技术报告 v1.2<br>完整叙事修订版</div>
+    <div class="version">技术报告 v1.3<br>认知负荷与注意连续性增补版</div>
   </section>
 
   <section class="front">
     <h1>摘要</h1>
     <div class="abstract">
-      <p>科研阅读的困难并不只在“读懂一篇论文”，而在于把分散的文件、来源证据、解释过程、跨文献关系、个体认知和协作讨论组织成一个可持续的工作系统。Liteasy 以桌面端为主要入口，围绕建立工作区、锁定文献、导入解析、证据检索、“薄读”探索、生成学习产物、沉淀知识与社区协作构建闭环。其中，“薄读”是核心阅读能力：它不是把论文压缩成更短的摘要，而是先用有重点的总述帮助读者明确研究问题、核心结论、关键方法和论文的知识位置，再允许读者根据自己的关注点深入具体概念、机制、实验或证据；当问题超出单篇论文的解释范围时，系统继续提供外部知识与社区观点，同时明确区分来源。</p>
+      <p>科研阅读的困难并不只在“读懂一篇论文”，还在于人的持续注意会随任务难度、目标、动机和疲劳而波动，工作记忆与即时加工容量也始终有限。长篇、强关联的学术文本通常跨越多个注意区间；一旦注意漂移或阅读中断，读者不仅会遗漏局部信息，还需要重新建立指代关系、论证链和阅读目标，因而常以回读补偿理解连续性的损失。Liteasy 以桌面端为主要入口，围绕建立工作区、锁定文献、导入解析、证据检索、“薄读”探索、生成学习产物、沉淀知识与社区协作构建闭环。其中，“薄读”不是把论文压缩成更短的摘要，而是先建立研究问题、核心结论、关键方法和知识位置的全局框架，再把深入过程组织为有界且语义完整的阅读单元。读者依照当前问题、好奇心和研究目标主动选择下一次下钻，使不同注意区间由清晰的认知路径衔接，而不是被长篇线性呈现被动切断。</p>
       <p>技术设计建立三条可验证边界：模型只能通过已注册的技能与动作修改系统状态；论文解释必须按来源模式组织证据，并对句子、数值和图表关系逐级校验；本地文件、个人云端数据、组织共享数据、平台配置与临时缓存拥有不同真源、权限和生命周期。系统采用 Tauri + React + TypeScript 的桌面工作台、Rust 本地能力层、Node.js 云服务、PostgreSQL、S3 API 对象存储、Keycloak 统一身份和受控模型网关，并以 IntuEcho 承担学术内容协作与文献身份权威。本文给出问题分析、技术路线、系统上下文、模块与数据设计、关键流程、安全可靠性、部署与测试体系，并在第六章集中说明“薄读”的设计理念与技术实现。</p>
     </div>
-    <p class="keywords"><strong>关键词：</strong>“薄读”；科研阅读；全局理解；检索增强生成；证据可追溯；智能代理；生成式界面；文献身份；多模态可视化</p>
+    <p class="keywords"><strong>关键词：</strong>“薄读”；科研阅读；持续注意；认知负荷；渐进式学习；全局理解；证据可追溯；检索增强生成；智能代理；多模态可视化</p>
 
     <h2>阅读指南</h2>
     <div class="grid-3">
@@ -139,7 +148,7 @@
       <li>1.2 设计目标与关键约束</li>
       <li class="part">2. 产品闭环与设计思想</li>
       <li>2.1 从文件到认知资产</li>
-      <li>2.2 五项架构原则</li>
+      <li>2.2 六项架构原则</li>
       <li class="part">3. 技术路线</li>
       <li>3.1 混合计算与分层技术栈</li>
       <li>3.2 方案选择说明</li>
@@ -150,8 +159,8 @@
       <li class="part">5. 智能代理与安全执行</li>
       <li>5.1 受控动作链</li>
       <li>5.2 生成式界面</li>
-      <li class="part">6. “薄读”：先建立全局理解，再逐步深入证据</li>
-      <li>6.1 设计理念：先建立方向，再逐步深入</li>
+      <li class="part">6. “薄读”：面向认知负荷与注意连续性的证据阅读设计</li>
+      <li>6.1 设计理念：从注意断裂到主动衔接</li>
       <li>6.2 “薄而不浅”</li>
       <li>6.3 渐进认知图</li>
       <li>6.4 四档来源模式</li>
@@ -174,11 +183,11 @@
   <section class="chapter">
     <div class="kicker">CHAPTER 01</div>
     <h1>问题分析</h1>
-    <p class="lead">Liteasy 面向的不是一次性的“论文问答”，而是科研用户长期处理文献、证据、理解、产物和协作关系时形成的系统性摩擦。“薄读”针对其中最关键的阅读入口问题：先帮助读者形成可靠的全局理解，再支持按关注点深入。</p>
+    <p class="lead">Liteasy 面向的不是一次性的“论文问答”，而是科研用户长期处理文献、证据、理解、产物和协作关系时形成的系统性摩擦。“薄读”同时处理阅读入口与理解连续性问题：先建立可靠的全局框架，再以语义完整的单元承载每次专注阅读，并支持读者按当前问题主动深入。</p>
 
     <h2>1.1 科研阅读的系统性矛盾</h2>
     <div class="grid-2">
-      <div class="card"><h4>读到文字，不等于理解问题</h4><p>平均压缩章节或生成泛化常识，可能让用户读完仍不清楚论文真正解决什么、为何重要以及它在相关研究中的位置。“薄读”首先建立这些基本认识。</p></div>
+      <div class="card"><h4>文本连续，不等于理解连续</h4><p>长篇学术文本跨越多个注意区间，前后内容却保持强关联。注意漂移或中断会同时损伤局部理解与全局关系，读者往往需要回读来重建上下文。“薄读”先建立全局框架，再把深入内容组织为完整、可衔接的理解单元。</p></div>
       <div class="card accent"><h4>生成速度快，证据核验慢</h4><p>大模型可以快速生成流畅解释，但论文结论、实验数字和图表关系必须回到可定位来源；否则“读起来像对的”无法转化为可引用的科研知识。</p></div>
       <div class="card green"><h4>自然语言灵活，软件状态要求确定</h4><p>“帮我整理工作区”可能涉及移动、覆盖、上传或删除。自然语言具有歧义，而软件状态变更需要权限、参数、确认、幂等和恢复机制。</p></div>
       <div class="card purple"><h4>个性化有价值，数据边界必须清晰</h4><p>解释深度、领域偏好和阅读轨迹能提升体验，但本地绝对路径、原文、批注和组织资料不应被无差别收集或跨作用域混用。</p></div>
@@ -204,6 +213,7 @@
       <thead><tr><th>目标</th><th>可观察结果</th><th>工程约束</th></tr></thead>
       <tbody>
         <tr><td>降低进入论文的认知门槛</td><td>先建立全局理解，再允许按兴趣逐层深入</td><td>认知图按需展开；层级是视图属性，不是永久标签</td></tr>
+        <tr><td>维持跨注意区间的理解连续性</td><td>每次呈现形成有界、语义完整且承接父层问题的阅读单元</td><td>不设统一固定篇幅；依据任务、内容结构和交互信号调节信息密度</td></tr>
         <tr><td>让结论可回到来源</td><td>解释句、定量主张和图表均能显示依据</td><td>来源白名单、句级覆盖、数值证明、身份确认</td></tr>
         <tr><td>让 AI 能操作但不能越权</td><td>用户能用自然语言控制工作台，并看到确认与结果</td><td>模型只提计划；策略层只放行已注册动作</td></tr>
         <tr><td>同时支持个人与组织</td><td>本地库不随账号变化，组织资源按角色访问</td><td>资源作用域、数据库和业务会话隔离</td></tr>
@@ -233,14 +243,14 @@
     </div>
     <p>工作区和导入链路为“薄读”准备可信材料：工作区是当前可见的目录视图，选中文献集是用户锁定、准备交给智能能力处理的文件快照；导入负责安全校验、文本与结构提取、切块、索引和定位。首次“薄读”建立对论文的全局理解，后续下钻形成版本化认知路径，能够再次打开、继续探索或与社区内容关联。分析结果还可保存为可复用产物，进入个人知识和协作流程。</p>
 
-    <h2>2.2 五项架构原则</h2>
+    <h2>2.2 六项架构原则</h2>
     <div class="grid-3">
       <div class="card"><h4>证据优先</h4><p>论文事实、外部知识、社区表达、用户笔记与 AI 独立理解分别标注，不能用流畅措辞掩盖来源差异。</p></div>
       <div class="card green"><h4>动作受控</h4><p>按钮、自然语言和快捷入口复用同一动作注册表；权限、风险和确认在执行前统一处理。</p></div>
       <div class="card accent"><h4>本地优先</h4><p>本地文件与私有阅读细节以设备为权威；云端承担协作、同步、推荐、任务与治理。</p></div>
       <div class="card purple"><h4>协议驱动</h4><p>模型输出进入类型化协议和校验管线，界面不执行任意模型代码，数据也不依赖自由文本猜测。</p></div>
       <div class="card red"><h4>失败可恢复</h4><p>长任务有状态，写入具备幂等键和版本检查，文件操作使用原子提交或可恢复事务。</p></div>
-      <div class="card"><h4>渐进展开</h4><p>先呈现少量核心节点，再随用户兴趣加载细节，以认知负担和证据密度共同决定深度。</p></div>
+      <div class="card"><h4>认知适配与渐进展开</h4><p>以有界、语义完整的单元适配有限加工容量；先呈现核心节点，再随用户问题和兴趣加载细节，以认知负担、内容结构和证据密度共同决定深度。</p></div>
     </div>
 
     <div class="callout"><strong>一句话架构思想</strong>大模型负责提出解释和计划，确定性系统负责决定“能不能做、依据是否成立、结果能否保存”。</div>
@@ -369,23 +379,26 @@
 
   <section class="chapter">
     <div class="kicker">CHAPTER 06</div>
-    <h1>“薄读”：先建立全局理解，再逐步深入证据</h1>
-    <p class="lead">“薄读”是 Liteasy 的核心阅读能力。它要降低的是读者建立方向感所需的认知成本，而不是削减必要的知识、证据或思考：先明确论文研究什么、为何重要、核心结论如何成立以及它在相关研究中的位置，再由用户选择需要深入的概念、机制、实验和证据。</p>
+    <h1 class="long-title">“薄读”：面向认知负荷与注意连续性的证据阅读设计</h1>
+    <p class="lead">“薄读”是 Liteasy 的核心阅读能力。它同时回应两项科研阅读约束：人的即时加工容量有限，持续注意也会在长篇阅读中自然波动。系统先建立论文的全局认识，再把每次深入组织为有界、语义完整且证据可定位的阅读单元，使有限的专注过程获得完整上下文，并由读者主动选择把相邻理解阶段衔接起来。</p>
 
-    <h2>6.1 设计理念：先建立方向，再逐步深入</h2>
+    <h2>6.1 设计理念：从注意断裂到主动衔接</h2>
     <div class="callout">
       <strong>核心设计判断</strong>
-      有效的科研阅读包含两个相互依赖的阶段：读者首先需要理解研究问题、核心结论、关键方法及其知识背景，形成能够判断重点的全局认识；随后才适合根据自己的问题深入到具体概念、机制、实验、限制和原始证据。“薄读”把这两个阶段组织为一条可交互、可回溯的阅读路径，但不声称替代研究者的长期学习与判断。
+      长篇文本在版面上是连续的，人的注意与即时加工过程却不是无限连续的。有效的科研阅读需要先形成能够判断重点的全局认识，再将具体概念、机制、实验、限制和原始证据分配到若干语义完整的深入过程。“薄读”用用户主动提出的问题连接这些过程，使每一次新的专注都承接前一阶段已经建立的方向，而不是在被动线性阅读中反复丢失上下文。
     </div>
-    <h3>为什么必须先建立全局理解</h3>
-    <p>全局理解不是放在正文前面的装饰性概述，而是后续选择、解释和记忆细节的组织条件。认知科学研究并不直接证明某个具体产品有效，但为“先建立方向、再按问题深入”的设计次序提供了相互支持的理论依据：</p>
+    <h3>为什么必须同时保护全局认识与局部专注</h3>
+    <p>全局理解不是正文前的装饰性概述，而是后续选择、解释和记忆细节的组织条件。持续注意、工作记忆、认知负荷、先行组织与生成式学习等研究共同支持一条清晰的设计路线：先让读者获得可用的整体框架，再以主动选择、语义闭合和来源定位维持跨注意区间的理解连续性。</p>
     <div class="grid-2">
       <div class="card"><h4>有限工作记忆：先减少无关负荷</h4><p>工作记忆能够同时处理的信息有限。若初学者一开始就面对平均铺开的章节、术语和实验细节，认知资源容易消耗在辨别“什么重要”上。认知负荷研究提示，应先突出研究问题、核心关系和必要背景，再逐步增加细节 [14]。</p></div>
       <div class="card green"><h4>先行组织框架：让新信息有位置可放</h4><p>先行组织者研究强调，学习者在接触复杂材料前获得较高层次、可理解的组织框架，有助于把后续信息与已有知识建立联系 [13]。“薄读”的首次总览承担这一功能，但保持可追问、可回源，而不是给出固定结论。</p></div>
       <div class="card accent"><h4>专家与初学者差异：先呈现深层结构</h4><p>专家更倾向于按基本原理和深层关系组织问题，初学者则容易依赖表面特征 [15]。因此系统不能只摘取高频句或按章节等量摘要，而要显式呈现研究问题、因果或论证结构、关键方法及结论之间的关系。</p></div>
       <div class="card purple"><h4>生成式学习：让读者主动选择和解释</h4><p>学习者对材料进行选择、组织、解释和联系时，更可能形成可迁移的理解 [16]。“薄读”用围绕选中内容继续深入（下钻）、追问、分支和返回全局视图支持这种主动加工，避免用户只被动接收一次性摘要。</p></div>
+      <div class="card red"><h4>持续注意会波动：避免把长文等同于一次认知过程</h4><p>阅读中的走神可能发生在读者尚未即时觉察时，并会降低对文本的理解 [17][18]；执行注意与工作记忆差异也会通过走神影响阅读理解 [19]。因此系统不假设一个适用于所有人的固定“注意时长”，而是将内容按问题与语义关系组织为可完成、可恢复的单元。</p></div>
+      <div class="card"><h4>语义完整与主动衔接：让新的专注接续既有理解</h4><p>单次呈现保留当前问题所需的完整局部上下文，并明确它与全局框架、父层结论和来源证据的关系。读者基于疑问、好奇心和研究目标选择下一步，主动选择本身成为相邻注意区间之间的认知线索，并通过生成式加工强化组织与联系 [16]。</p></div>
     </div>
-    <div class="callout"><strong>对阅读学习的直接价值</strong>先建立全局理解，可以让读者更早判断论文是否相关、区分核心结论与支撑细节、知道新概念应连接到哪个问题，并带着明确问题继续阅读。对初学者，它提供理解复杂材料所需的基本组织框架；对专业读者，它减少重复浏览，使注意力更快集中到方法差异、证据强弱和开放问题。系统随后仍要求每个重要判断回到来源，避免“理解框架”替代原文证据。</div>
+    <div class="callout"><strong>对阅读学习的直接价值</strong>长文线性阅读把篇章连续性留在页面上，却要求读者自行承担跨中断的上下文恢复成本；“薄读”把连续性显式保存在全局框架、父子节点、问题路径和证据锚点中。读者在一个注意区间内获得完整的问题—解释—证据单元，在下一个注意区间中沿自己选择的方向深入。这样既减少为恢复论证链而进行的无效回读，又保留回到原文复核、比较和精读的能力。</div>
+    <p>“有界”不等于预设统一字数或固定阅读分钟数。单元长度应随论文类型、概念复杂度、证据密度、读者目标和交互反馈调整；稳定标准是当前问题得到语义完整的回答、关键前提没有因压缩而消失、重要主张能够回到来源、读者能够明确判断下一步是否以及向何处深入。</p>
     <p>第一，首次“薄读”必须帮助读者进入论文实际讨论的问题，而不是生成流畅却缺少重点的通用讲解。系统采用 <strong>orientation（建立方向）</strong> 模式，不按章节平均压缩，而是根据论文类型取舍内容，优先回答三个问题：这篇论文最重要的思想或结论是什么；它通过什么关键思路成立；它在已有知识与问题谱系中处于什么位置。</p>
     <p>第二，全局总述不是固定摘要，而是后续探索的起点。用户可以选中总述中的词句继续深入，也可以打开系统识别出的未覆盖板块；下钻围绕当前选区、父层认识和证据连续展开，不重新生成一篇失去上下文的摘要。前后导航、分支记录和稳定节点使读者可以返回全局视图，再选择另一条探索路径。</p>
     <p>第三，单篇论文不能覆盖一个研究问题的全部知识。当读者追问历史背景、替代解释、后续工作或跨文献关系时，“薄读”允许继续使用外部来源，但必须把论文内事实、可信外部知识、社区观点和 AI 独立理解分开表达。这样既能扩展初学者的知识范围，也不会把论文作者的主张与外部解释混为一谈。</p>
@@ -393,8 +406,8 @@
     <div class="figure">
       <div class="diagram flow">
         <div class="node"><b>明确研究问题</b><small>识别核心思想、关键结论与方法<br>避免缺少重点的通用讲解</small></div><div class="arrow">→</div>
-        <div class="node"><b>建立全局理解</b><small>说明论文结构、研究背景与知识位置<br>先让读者获得方向感</small></div><div class="arrow">→</div>
-        <div class="node"><b>按关注点深入</b><small>围绕选区、疑问和未覆盖内容下钻<br>由用户决定探索路径</small></div><div class="arrow">→</div>
+        <div class="node"><b>建立全局理解</b><small>说明论文结构、研究背景与知识位置<br>为局部阅读提供组织框架</small></div><div class="arrow">→</div>
+        <div class="node"><b>完成当前理解单元</b><small>围绕一个问题保持上下文与证据完整<br>适配当前专注过程</small></div><div class="arrow">→</div>
         <div class="node"><b>扩展到论文之外</b><small>连接外部文献、社区观点与新问题<br>明确区分每类信息来源</small></div>
       </div>
       <div class="figure-title">图 9　“薄读”的渐进阅读路径</div>
@@ -402,12 +415,12 @@
 
     <h2>6.2 “薄而不浅”：产品设计的四个取舍</h2>
     <div class="grid-2">
-      <div class="card"><h4>呈现要薄，证据要厚</h4><p>首屏只保留最能建立方向的内容，但每个内容性句子都连接论文证据或明确标注的外部来源。薄的是进入界面的认知负担，不是论证基础。</p></div>
+      <div class="card"><h4>呈现要薄，语义与证据要完整</h4><p>首屏只保留最能建立方向的内容，每次深入围绕明确问题形成完整上下文；每个内容性句子连接论文证据或明确标注的外部来源。薄的是单次呈现负担，不是语义和论证基础。</p></div>
       <div class="card green"><h4>入口要薄，探索要深</h4><p>首次阅读不给用户一堵信息墙；一旦用户选择概念、机制、实验或限制，系统可以持续下钻，并继承父层主张、证据和祖先路径。</p></div>
       <div class="card accent"><h4>全局理解优先，路径由用户决定</h4><p>系统先提供方向和可追问入口，不预先替用户展开所有分支。用户根据自己的研究目标和好奇心决定下一步深入什么内容。</p></div>
       <div class="card purple"><h4>论文是起点，不是世界边界</h4><p>论文闭包保证“作者说了什么”不被污染；外部探索帮助初学者理解更完整的知识背景与关系。超出论文范围时改变来源状态，而不是禁止追问。</p></div>
     </div>
-    <div class="callout"><strong>“薄读”不等于摘要、速读或浅读</strong>摘要通常给出固定压缩结果；“薄读”给出可追踪、可选择、可持续扩展的阅读入口。它评价的不是“删掉了多少字”，而是读者是否建立方向、能否提出下一步问题，以及每一步理解能否回到来源。</div>
+    <div class="callout"><strong>“薄读”不等于摘要、速读或浅读</strong>摘要通常给出固定压缩结果；“薄读”给出可追踪、可选择、可持续扩展的阅读入口。它评价的不是“删掉了多少字”，而是读者是否建立方向、单次呈现是否形成完整理解、能否主动提出下一步问题，以及每一步理解能否回到来源。</div>
 
     <h2>6.3 渐进认知图：让理解逐步扩展</h2>
     <p>认知结构采用有向多重图，而不是把论文永久固化为固定层级目录。只有“从略到详”的展开关系要求无环；解释、支持、反驳、先修、比较、来源和直觉关系可以交叉连接。领域事实保存在规范化认知图中，界面只是对图的当前投影；用户每次展开提交带基础版本号的局部补丁，避免整图覆盖和并发丢失。</p>
@@ -415,7 +428,7 @@
     <div class="figure">
       <div class="diagram">
         <div class="state-row"><div class="state active"><b>第 0 层：一句话总览</b><small>核心结论与研究位置</small></div><div class="state"><b>第 1 层：问题骨架</b><small>问题、机制、主要结果</small></div><div class="state"><b>第 2 层：概念解释</b><small>直觉、先修与关键关系</small></div><div class="state"><b>第 3 层：证据细节</b><small>实验、推导、限制</small></div><div class="state"><b>第 4 层：深度拓展</b><small>跨文献比较与开放问题</small></div></div>
-        <div class="callout" style="margin-bottom:0"><strong>两种连续性</strong>认知连续性保证下钻回答仍承接父层方向；证据连续性保证上一层主张和定位进入下一轮上下文，但不能冒充下一轮的新证据。</div>
+        <div class="callout" style="margin-bottom:0"><strong>三种连续性</strong>注意连续性用明确问题和主动选择衔接相邻阅读单元；认知连续性保证下钻回答仍承接父层方向；证据连续性保证上一层主张和定位进入下一轮上下文，但不能冒充下一轮的新证据。</div>
       </div>
       <div class="figure-title">图 10　“薄读”的渐进式认知投影</div>
     </div>
@@ -636,7 +649,7 @@
         <tr><td>技能</td><td>完成一类用户任务的受控流程，可以组合检索、生成和动作。</td></tr>
         <tr><td>动作</td><td>一个可以确定性执行的状态变更，带类型化参数、资源作用域、风险与权限。</td></tr>
         <tr><td>证据锚点</td><td>连接解释与来源的定位信息，可包含页码、文本范围、结构区、坐标或内容哈希。</td></tr>
-        <tr><td>“薄读”</td><td>先帮助读者明确研究问题、核心结论、关键方法和知识位置，建立低认知成本的全局理解；再沿用户关注点逐层深入，并在超出单篇论文范围时显式切换来源状态的证据约束阅读方式。</td></tr>
+        <tr><td>“薄读”</td><td>面向有限认知加工容量与持续注意波动特征的证据约束阅读方式：先建立研究问题、核心结论、关键方法和知识位置的全局框架，再以有界且语义完整的单元承载每次深入，由用户的问题、好奇心和研究目标主动衔接相邻理解过程；超出单篇论文范围时显式切换来源状态。</td></tr>
       </tbody>
     </table>
 
@@ -664,8 +677,11 @@
       <li>Sweller, J. Cognitive Load During Problem Solving: Effects on Learning [J]. <em>Cognitive Science</em>, 1988, 12(2): 257-285. doi:10.1207/s15516709cog1202_4.</li>
       <li>Chi, M. T. H., Feltovich, P. J., Glaser, R. Categorization and Representation of Physics Problems by Experts and Novices [J]. <em>Cognitive Science</em>, 1981, 5(2): 121-152. doi:10.1207/s15516709cog0502_2.</li>
       <li>Fiorella, L., Mayer, R. E. Eight Ways to Promote Generative Learning [J]. <em>Educational Psychology Review</em>, 2016, 28(4): 717-741. doi:10.1007/s10648-015-9348-9.</li>
+      <li>Schooler, J. W., Reichle, E. D., Halpern, D. V. Zoning out while reading: Evidence for dissociations between experience and metaconsciousness [J]. <em>Thinking and Seeing: Visual Metacognition in Adults and Children</em>, 2004: 203-226.</li>
+      <li>Smallwood, J., Schooler, J. W. The restless mind [J]. <em>Psychological Bulletin</em>, 2006, 132(6): 946-958. doi:10.1037/0033-2909.132.6.946.</li>
+      <li>McVay, J. C., Kane, M. J. Why does working memory capacity predict variation in reading comprehension? On the influence of mind wandering and executive attention [J]. <em>Journal of Experimental Psychology: General</em>, 2012, 141(2): 302-320. doi:10.1037/a0025250.</li>
     </ol>
-    <div class="footer-note">Liteasy 技术报告 v1.2 · 生成日期 2026-08-17 · 仓库基线 54cc18a</div>
+    <div class="footer-note">Liteasy 技术报告 v1.3 · 生成日期 2026-08-17 · 仓库基线 54cc18a</div>
   </section>
 </body>
 </html>
