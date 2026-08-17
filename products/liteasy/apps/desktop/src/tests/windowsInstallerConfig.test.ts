@@ -18,9 +18,13 @@ describe("Windows installer configuration", () => {
       "src-tauri/windows/installer-hooks.nsh"
     ), "utf8");
     expect(hooks).toContain("NSIS_HOOK_POSTINSTALL");
-    expect(hooks).toContain('$SMPROGRAMS\\${PRODUCTNAME}.lnk');
-    expect(hooks).toContain('$DESKTOP\\${PRODUCTNAME}.lnk');
-    expect(hooks.match(/\$INSTDIR\\\$\{MAINBINARYNAME\}\.exe/g)).toHaveLength(2);
+    expect(hooks).toContain(
+      'CreateShortcut "$SMPROGRAMS\\${PRODUCTNAME}.lnk" "$INSTDIR\\${MAINBINARYNAME}.exe"'
+    );
+    expect(hooks).toContain(
+      'CreateShortcut "$DESKTOP\\${PRODUCTNAME}.lnk" "$INSTDIR\\${MAINBINARYNAME}.exe"'
+    );
+    expect(hooks.match(/IfFileExists/g)).toHaveLength(2);
     expect(hooks).not.toMatch(/[A-Z]:\\Users\\/i);
   });
 });
