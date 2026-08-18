@@ -166,6 +166,7 @@ async function requestDeepSeekResponse({ prompt, request, route, schema, schemaN
       }],
       model: route.model,
       response_format: { type: "json_object" },
+      ...(route.model.startsWith("deepseek-v4-") ? { thinking: { type: "disabled" } } : {}),
       stream: false
     }),
     headers: { "content-type": "application/json" },

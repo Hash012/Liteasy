@@ -47,12 +47,13 @@ test("sends structured visualization schemas through DeepSeek chat completions",
       observed = { body: JSON.parse(init.body), url };
       return new Response(JSON.stringify({ choices: [{ message: { content: "{\"nodes\":[]}" } }] }), { status: 200 });
     },
-    route: { ...route, endpoint: "https://api.deepseek.com/chat/completions", model: "deepseek-chat" }
+    route: { ...route, endpoint: "https://api.deepseek.com/chat/completions", model: "deepseek-v4-flash" }
   });
   assert.deepEqual(result, { text: "{\"nodes\":[]}" });
   assert.equal(observed.url, "https://api.deepseek.com/chat/completions");
-  assert.equal(observed.body.model, "deepseek-chat");
+  assert.equal(observed.body.model, "deepseek-v4-flash");
   assert.deepEqual(observed.body.response_format, { type: "json_object" });
+  assert.deepEqual(observed.body.thinking, { type: "disabled" });
   assert.equal(observed.body.stream, false);
   assert.match(observed.body.messages[0].content, /semantic_graph_proposal/);
   assert.match(observed.body.messages[0].content, /\"nodes\"/);

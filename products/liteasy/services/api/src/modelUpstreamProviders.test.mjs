@@ -217,8 +217,44 @@ test("sends structured DeepSeek requests with an explicit JSON schema", async ()
   assert.equal(observed.body.model, "deepseek-chat");
   assert.equal(observed.body.max_tokens, 8_192);
   assert.deepEqual(observed.body.response_format, { type: "json_object" });
+  assert.equal("thinking" in observed.body, false);
   assert.match(observed.body.messages[0].content, /thin_reading/);
   assert.match(observed.body.messages[0].content, /\"summary\"/);
+});
+
+test("disables default thinking mode for DeepSeek V4 text responses", async () => {
+  const bodies = [];
+  const encoder = new TextEncoder();
+  const providers = createModelUpstreamProviders(config({
+    deepseek: {
+      apiKey: "deployment-deepseek-secret",
+      baseUrl: "https://api.deepseek.com",
+      model: "deepseek-v4-flash",
+      provider: "deepseek"
+    }
+  }), {
+    fetchImpl: async (_url, init) => {
+      bodies.push(JSON.parse(init.body));
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"Final answer"}}]}\n\n'));
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        }
+      });
+      return new Response(stream, { status: 200 });
+    }
+  });
+
+  const deltas = [];
+  for await (const delta of providers.deepseek.stream({ prompt: "Plan thin reading", provider: "deepseek" })) {
+    deltas.push(delta);
+  }
+
+  assert.deepEqual(deltas, ["Final answer"]);
+  assert.deepEqual(bodies[0].thinking, { type: "disabled" });
+  assert.equal(bodies[0].model, "deepseek-v4-flash");
+  assert.equal(bodies[0].stream, true);
 });
 
 test("retries a DeepSeek success response that has no assistant content", async () => {

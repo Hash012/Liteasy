@@ -236,6 +236,7 @@ function deepSeekBody(input, model, stream) {
     messages: [{ content: prompt, role: "user" }],
     model,
     ...(input.outputFormat ? { response_format: { type: "json_object" } } : {}),
+    ...(model.startsWith("deepseek-v4-") ? { thinking: { type: "disabled" } } : {}),
     stream
   };
 }
