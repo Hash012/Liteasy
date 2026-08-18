@@ -103,6 +103,25 @@ test("polls active requests with server delay clamped to 250..2000", async () =>
   expect(delays).toEqual([250, 2_000]);
 });
 
+test("keeps valid candidates when one returned artifact is malformed", async () => {
+  const valid = artifact();
+  const client = createVisualizationOrchestrationClient({
+    endpoint: "https://api.example",
+    fetchImpl: async () => response({
+      artifacts: [{ artifactId: "broken" }, valid],
+      requestId: "request-1",
+      resultArtifactIds: ["broken", valid.artifactId],
+      status: "succeeded"
+    }),
+    getAccessToken: () => "token-1",
+    getCapability: () => ({ ...capability, availableModalities: ["semantic_graph", "physics_diagram"] }),
+    storage: window.localStorage,
+    subjectId: "user-1"
+  });
+
+  await expect(client.startAndWait({ ...generation(), requestedArtifactCount: 2 })).resolves.toEqual([valid]);
+});
+
 test("refreshes an expired token and retries the visualization request once", async () => {
   const authorizations: string[] = [];
   const refreshAccessToken = vi.fn(async () => "token-2");

@@ -3387,6 +3387,7 @@ async function generateThinReadingWithQualityRepair(input: {
           externalSources: generationContext.externalSources,
           invalidAnchorPolicy: "drop",
           invalidOptionalEnhancementPolicy: "drop",
+          invalidVisualizationIntentPolicy: "drop",
           onInvalidAnchor: recordInvalidAnchors
             ? (reason) => invalidAnchorReasons.push(reason)
             : undefined,

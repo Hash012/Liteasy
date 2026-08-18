@@ -305,19 +305,18 @@ export function useThinReadingVisualizationController({
       }
 
       const limit = intent.requestedBy === "automatic" ? 1 : 2;
-      let artifacts: VisualizationArtifactV1[];
-      try {
-        artifacts = rawArtifacts
-          .map(parseVisualizationArtifact)
-          .filter((artifact) => (
-            artifact.nodeId === input.node.id &&
+      const artifacts = rawArtifacts.flatMap((value) => {
+        try {
+          const artifact = parseVisualizationArtifact(value);
+          return artifact.nodeId === input.node.id &&
             artifact.modality !== "source_figure" &&
             intent.candidateModalities.includes(artifact.modality)
-          ))
-          .slice(0, limit);
-      } catch {
-        artifacts = [];
-      }
+            ? [artifact]
+            : [];
+        } catch {
+          return [];
+        }
+      }).slice(0, limit);
       if (artifacts.length === 0 || !latestDocument || !latestNode) {
         activeRequestsRef.current.delete(key);
         const status = { reasonCode: "result_invalid", status: "omitted" } as const;

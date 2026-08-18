@@ -826,6 +826,8 @@ type ParseThinReadingModelSeedOptions = {
   externalSources?: readonly ThinReadingExternalSource[];
   invalidAnchorPolicy?: "drop" | "reject";
   invalidOptionalEnhancementPolicy?: "drop" | "reject";
+  /** Optional visualization intent may fail closed without discarding the grounded body. */
+  invalidVisualizationIntentPolicy?: "drop" | "reject";
   onInvalidAnchor?: (reason: string) => void;
   onOptionalEnhancementDropped?: (reason: string) => void;
   requireExternalKnowledge?: boolean;
@@ -950,6 +952,7 @@ function normalizeOptionalVisualOutput(input: {
   policy: "drop" | "reject";
   requestedOutput?: ThinReadingRequestedOutput;
   source?: ThinReadingNodeSource;
+  invalidVisualizationIntentPolicy?: "drop" | "reject";
 }) {
   if (input.policy === "reject") return input.parsed;
   const allowedEvidenceIds = new Set(input.allowedEvidenceIds);
@@ -989,7 +992,7 @@ function normalizeOptionalVisualOutput(input: {
           modality === requested.candidateModalities[index]
         ))
       ));
-    if (!valid && !isExplicit) {
+    if (!valid && (input.invalidVisualizationIntentPolicy === "drop" || !isExplicit)) {
       input.onDropped?.("自动 visualization intent 未通过来源或模态契约，已省略。");
       visualizationIntent = null;
     }
@@ -1005,6 +1008,7 @@ function normalizeOptionalVisualOutput(input: {
 function normalizeStructurallyOptionalModelOutput(input: {
   onDropped?: (reason: string) => void;
   record: Record<string, unknown>;
+  invalidVisualizationIntentPolicy?: "drop" | "reject";
   requestedOutput?: ThinReadingRequestedOutput;
   source?: ThinReadingNodeSource;
 }) {
@@ -1050,7 +1054,7 @@ function normalizeStructurallyOptionalModelOutput(input: {
     const explicitlyRequested = input.source
       ? resolveThinReadingVisualizationIntentRequest(input.source)?.explicit === true
       : false;
-    if (!parsed.success && !explicitlyRequested) {
+    if (!parsed.success && (input.invalidVisualizationIntentPolicy === "drop" || !explicitlyRequested)) {
       input.onDropped?.("自动 visualization intent 结构无效，已省略。");
       normalized.visualizationIntent = null;
     }
@@ -2320,6 +2324,7 @@ export function parseThinReadingModelSeed(
       options.supportMode !== "ai_interpretation"
     ) {
       normalizedRecord = normalizeStructurallyOptionalModelOutput({
+        invalidVisualizationIntentPolicy: options.invalidVisualizationIntentPolicy,
         onDropped: options.onOptionalEnhancementDropped,
         record: normalizedRecord,
         requestedOutput: options.requestedOutput,
@@ -2356,6 +2361,7 @@ export function parseThinReadingModelSeed(
       onDropped: options.onOptionalEnhancementDropped,
       parsed,
       policy: options.invalidOptionalEnhancementPolicy ?? "reject",
+      invalidVisualizationIntentPolicy: options.invalidVisualizationIntentPolicy,
       requestedOutput: options.requestedOutput,
       source: options.source
     });

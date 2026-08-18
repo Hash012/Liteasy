@@ -208,6 +208,8 @@ export class VisualizationOrchestrationWorker {
         await this.#rollbackAll(claim.subjectId, [...reservationIds], error, claim.traceId);
         reservationIds.length = 0;
         const repairPayload = this.compilerRegistry.providerPayload(modality, source);
+        const repairReason = String(error?.code ?? error?.message ?? "visualization_validation_failed").slice(0, 500);
+        const invalidProposal = String(generation.result.text ?? "").slice(0, 24_000);
         generation = await this.visualizationService.generate(claim.subjectId, {
           providerRequest: {
             dataClass: "paper",
@@ -217,7 +219,10 @@ export class VisualizationOrchestrationWorker {
               ...repairPayload,
               prompt: [
                 repairPayload.prompt,
-                "This is a validation repair attempt. Recheck every schema field, evidence binding, reference, uniqueness constraint, and acyclic graph constraint before returning JSON."
+                "This is a validation repair attempt. Recheck every schema field, evidence binding, reference, uniqueness constraint, and acyclic graph constraint before returning JSON.",
+                `Validation error: ${repairReason}`,
+                `<invalid-proposal>${invalidProposal}</invalid-proposal>`,
+                "Return a complete corrected proposal, not a patch."
               ].join("\n")
             }
           },

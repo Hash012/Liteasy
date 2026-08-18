@@ -270,6 +270,36 @@ describe("thinReadingAgent", () => {
     }).visualizationIntent?.requestedBy).toBe("explicit_user_request");
   });
 
+  test("can fail closed on an invalid explicit intent while preserving the grounded body", () => {
+    const source = {
+      excerpt: "解释这里。",
+      kind: "selected_text" as const,
+      prompt: "请生成结构可视化。",
+      requestedOutput: "visualization_intent" as const,
+      quickCommand: "visualize_structure" as const
+    };
+    const dropped: string[] = [];
+    const seed = parseThinReadingModelSeed(JSON.stringify({
+      ...v2ModelOutput,
+      visualizationIntent: {
+        ...v2ModelOutput.visualizationIntent,
+        evidenceIds: ["evidence-not-adopted"]
+      }
+    }), {
+      allowedEvidenceIds: ["evidence-survey-taxonomy"],
+      invalidOptionalEnhancementPolicy: "drop",
+      invalidVisualizationIntentPolicy: "drop",
+      onOptionalEnhancementDropped: (reason) => dropped.push(reason),
+      source
+    });
+
+    expect(seed.summary).toBe(v2ModelOutput.summary);
+    expect(seed.visualizationIntent).toBeUndefined();
+    expect(dropped).toEqual(expect.arrayContaining([
+      expect.stringContaining("visualization intent")
+    ]));
+  });
+
   test("rejects explicit visualization intent for an automatic root request", () => {
     expect(() => parseThinReadingModelSeed(JSON.stringify({
       ...v2ModelOutput,

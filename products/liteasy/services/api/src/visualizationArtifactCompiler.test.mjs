@@ -107,6 +107,23 @@ test("compiles provider JSON text with server-owned identity, versions, usage, a
   }]);
 });
 
+test("recovers one bounded JSON object from common provider prose and Markdown fences", async () => {
+  for (const wrapped of [
+    `\`\`\`json\n${JSON.stringify(proposal())}\n\`\`\``,
+    `Here is the requested proposal:\n${JSON.stringify(proposal())}\nEnd of response.`
+  ]) {
+    const result = await registry().compile({
+      locale: "zh-CN",
+      modality: "semantic_graph",
+      nodeId: "node-1",
+      proposal: wrapped,
+      reservation,
+      source
+    });
+    assert.equal(result.artifactId, reservation.artifactId);
+  }
+});
+
 test("derives a stable artifact identifier when the production reservation view has no artifactId", async () => {
   const productionReservation = { ...reservation };
   delete productionReservation.artifactId;

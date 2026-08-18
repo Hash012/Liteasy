@@ -43,6 +43,32 @@ function canonical(value) {
   return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));
 }
 
+function extractJsonObject(value) {
+  const trimmed = value.trim()
+    .replace(/^```(?:json)?\s*/iu, "")
+    .replace(/\s*```$/u, "")
+    .trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) return trimmed;
+  const start = trimmed.indexOf("{");
+  if (start < 0) return trimmed;
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  for (let index = start; index < trimmed.length; index += 1) {
+    const character = trimmed[index];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') quoted = false;
+      continue;
+    }
+    if (character === '"') quoted = true;
+    else if (character === "{") depth += 1;
+    else if (character === "}" && --depth === 0) return trimmed.slice(start, index + 1);
+  }
+  return trimmed;
+}
+
 function deepFreeze(value) {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
   Object.values(value).forEach(deepFreeze);
@@ -120,7 +146,7 @@ function normalizedProposal(value, modality, evidenceIds, validateProposal) {
   if (typeof value === "string") {
     if (!value.trim() || Buffer.byteLength(value) > maximumProposalBytes) fail("visualization_proposal_invalid");
     try {
-      parsed = JSON.parse(value);
+      parsed = JSON.parse(extractJsonObject(value));
     } catch {
       fail("visualization_proposal_invalid");
     }

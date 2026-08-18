@@ -492,11 +492,25 @@ export function ThinReadingTab({
     [figures]
   );
   const inlineFigures = useMemo(() => {
+    const evidenceSpans = activeNode.evidence.paperEvidenceSpans ?? [];
+    const evidencePageById = new Map(evidenceSpans.map((span) => [span.id, span.page]));
+    const contextTerms = `${activeNode.title} ${activeNode.summary}`
+      .toLocaleLowerCase()
+      .match(/[a-z][a-z0-9-]{2,}|[\u4e00-\u9fff]{2,}/g) ?? [];
+    const hasSharedTerm = (figure: MineruFigure) => {
+      const description = `${figure.analysis?.title ?? ""} ${figure.analysis?.description ?? ""}`.toLocaleLowerCase();
+      return contextTerms.some((term) => description.includes(term));
+    };
+    const isSemanticallyRelevant = (figure: MineruFigure, evidenceIds: readonly string[]) => (
+      evidenceIds.some((evidenceId) => evidencePageById.get(evidenceId) === figure.page) ||
+      hasSharedTerm(figure)
+    );
     const recommendedFigures = activeNode.evidence.recommendedFigures ?? [];
     if (recommendedFigures.length > 0) {
       return recommendedFigures.flatMap((recommendation) => {
         const figure = figureById.get(recommendation.figureId);
-        if (!figure) {
+        if (!figure || figure.analysis?.importance === "reference" ||
+          !isSemanticallyRelevant(figure, recommendation.evidenceIds)) {
           return [];
         }
         return [{
@@ -508,17 +522,10 @@ export function ThinReadingTab({
       });
     }
     const evidencePages = new Set(
-      (activeNode.evidence.paperEvidenceSpans ?? [])
+      evidenceSpans
         .map((span) => span.page)
         .filter((page): page is number => typeof page === "number" && Number.isFinite(page))
     );
-    const contextTerms = `${activeNode.title} ${activeNode.summary}`
-      .toLocaleLowerCase()
-      .match(/[a-z][a-z0-9-]{2,}|[\u4e00-\u9fff]{2,}/g) ?? [];
-    const hasSharedTerm = (figure: MineruFigure) => {
-      const description = `${figure.analysis?.title ?? ""} ${figure.analysis?.description ?? ""}`.toLocaleLowerCase();
-      return contextTerms.some((term) => description.includes(term));
-    };
     const ranked = [...figures].sort((left, right) => {
       const rank = (importance: NonNullable<MineruFigure["analysis"]>["importance"] | undefined) => (
         importance === "primary" ? 0 : importance === "supporting" ? 1 : 2

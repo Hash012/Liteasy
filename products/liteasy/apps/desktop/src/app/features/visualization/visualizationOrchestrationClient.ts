@@ -152,15 +152,19 @@ export function createVisualizationOrchestrationClient({
       throw new VisualizationOrchestrationClientError("result_invalid");
     }
     const resultArtifactIds = payload.resultArtifactIds as string[];
-    let artifacts: VisualizationArtifactV1[];
-    try {
-      artifacts = payload.artifacts.map(parseVisualizationArtifact);
-    } catch {
-      throw new VisualizationOrchestrationClientError("result_invalid");
-    }
-    if (artifacts.some((artifact, index) => (
-      artifact.artifactId !== resultArtifactIds[index] || artifact.nodeId !== pending.nodeId
-    ))) {
+    const artifacts: VisualizationArtifactV1[] = [];
+    payload.artifacts.forEach((value, index) => {
+      try {
+        const artifact = parseVisualizationArtifact(value);
+        if (artifact.artifactId === resultArtifactIds[index] && artifact.nodeId === pending.nodeId) {
+          artifacts.push(artifact);
+        }
+      } catch {
+        // A multi-artifact request is best-effort: one malformed candidate must not
+        // discard another candidate that independently passed the artifact contract.
+      }
+    });
+    if (artifacts.length === 0) {
       throw new VisualizationOrchestrationClientError("result_invalid");
     }
     return artifacts;

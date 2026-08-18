@@ -1379,7 +1379,7 @@ describe("ThinReadingTab", () => {
         alt: "Figure B",
         dataUrl: "data:image/png;base64,bbb",
         id: "figure-b",
-        page: 3,
+        page: 2,
         sourcePath: "/tmp/figure-b.png",
         analysis: {
           description: "整体流程。",

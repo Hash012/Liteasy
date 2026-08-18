@@ -333,6 +333,10 @@ test("retries one structured generation after compiler validation rejects the fi
     instance.calls.filter(([name]) => name === "generate")[1][1].reservation.idempotencyKey,
     "request-1:artifact:0:repair:1"
   );
+  const repairPrompt = instance.calls.filter(([name]) => name === "generate")[1][1]
+    .providerRequest.payload.prompt;
+  assert.match(repairPrompt, /Validation error: visualization_hard_validation_failed/);
+  assert.match(repairPrompt, /<invalid-proposal>/);
   assert.equal(instance.calls.find(([name]) => name === "submit")[1].reservationId, "reservation-2");
 });
 
