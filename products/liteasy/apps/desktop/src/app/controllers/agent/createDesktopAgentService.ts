@@ -7,8 +7,13 @@ import { runAgentRuntime } from "../../features/agent-runtime/runtimeOrchestrato
 import { executeConfirmedSemanticPlan } from "../../features/agent-runtime/planExecutor";
 import type { AgentRuntimeExecutionContext } from "../../features/agent-runtime/agentRuntime.types";
 import { generateAssistantAnswer } from "../../features/assistant/generateAssistantAnswer";
+import { createAgentsRunner, type LiteasyAgentsRunner } from "../../features/agent-runtime/openai-agents/agentsRunner";
+import { createLiteasyModelProvider } from "../../features/agent-runtime/openai-agents/modelProvider";
+import { createModelGatewayFromSettings } from "../../features/models/modelRuntime";
+import { getDefaultModelForProvider } from "../../features/models/modelPolicy";
 import {
   createAgentApplicationService,
+  type AgentBackend,
   type AgentApplicationPorts
 } from "./agentApplicationService";
 
@@ -31,6 +36,8 @@ export type DesktopAgentServiceOptions = Pick<
   | "onPersistenceError"
   | "stateStore"
 > & {
+  agentBackend?: AgentBackend;
+  createOpenAIAgentsRunner?: (environment: DesktopAgentEnvironment) => LiteasyAgentsRunner;
   getEnvironment: (input?: {
     request?: SubmitAgentTurnRequest;
     session?: AgentSession;
@@ -45,7 +52,27 @@ export type DesktopAgentServiceOptions = Pick<
 export function createDesktopAgentService(
   options: DesktopAgentServiceOptions
 ): AgentPublicApi {
+  const getAgentsRunner = (environment: DesktopAgentEnvironment) => {
+    if (options.createOpenAIAgentsRunner) {
+      return options.createOpenAIAgentsRunner(environment);
+    }
+    const settings = environment.knowledge.settings;
+    const provider = settings["models.default_provider"];
+    const model = getDefaultModelForProvider(provider);
+    return createAgentsRunner({
+      model,
+      modelProvider: createLiteasyModelProvider({
+        gateway: createModelGatewayFromSettings(settings, {
+          cloudTransport: environment.knowledge.modelTransport
+        }),
+        model,
+        provider
+      })
+    });
+  };
+
   return createAgentApplicationService({
+    agentBackend: options.agentBackend,
     createCoreSession: options.createCoreSession,
     createId: options.createId,
     async executeCommand({ context, coreTurn, request }) {
@@ -66,11 +93,29 @@ export function createDesktopAgentService(
       });
       return result;
     },
-    async executeConfirmation({ confirmation }) {
+    async executeOpenAIAgentsCommand({ context, coreTurn, request, runId, signal }) {
+      const environment = context.value as DesktopAgentEnvironment;
+      return getAgentsRunner(environment).run({
+        actionContext: environment.runtime,
+        coreInstructions: coreTurn.runtimeContext.promptText,
+        message: request.input.message,
+        runId,
+        signal
+      });
+    },
+    async executeConfirmation({ confirmation, request, runId, signal }) {
       // 确认可能在原计划生成很久后发生，执行前重新读取最新 UI/权限上下文。
       // plan 与 action 参数仍来自服务端保存的 confirmation，调用方无法修改。
       const environment = options.getEnvironment();
-      const result = await executeConfirmedSemanticPlan(confirmation, environment.runtime);
+      const result = confirmation.openaiAgents
+        ? await getAgentsRunner(environment).resume({
+            actionContext: environment.runtime,
+            confirmation,
+            decision: request.decision,
+            runId,
+            signal
+          })
+        : await executeConfirmedSemanticPlan(confirmation, environment.runtime);
       options.onConfirmationResult?.(result);
       return result;
     },

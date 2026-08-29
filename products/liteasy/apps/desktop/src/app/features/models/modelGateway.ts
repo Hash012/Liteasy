@@ -46,3 +46,5 @@ export function createModelGateway(deps: ModelGatewayDeps) {
     }
   };
 }
+
+export type ReturnTypeOfModelGateway = ReturnType<typeof createModelGateway>;

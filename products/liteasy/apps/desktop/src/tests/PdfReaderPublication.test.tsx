@@ -109,6 +109,16 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
+test("copies the reader-owned selection through the clipboard bridge", () => {
+  render(<PdfReader selectedPapers={[paper]} zoom={100} />);
+  selectPdfText("precise clipboard evidence");
+  const setData = vi.fn();
+  fireEvent.copy(screen.getByLabelText("PDF 页面滚动区"), {
+    clipboardData: { setData }
+  });
+  expect(setData).toHaveBeenCalledWith("text/plain", "precise clipboard evidence");
+});
+
 test.each(["高亮", "划线", "注释"])("creates %s privately by default", async (command) => {
   const onChangeAnnotationPublication = vi.fn();
   render(

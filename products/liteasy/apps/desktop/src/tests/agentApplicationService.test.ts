@@ -239,3 +239,106 @@ test("cancellation wins over a late knowledge executor result", async () => {
     expect(submitted.data.events.at(-1)?.type).toBe("run.cancelled");
   }
 });
+
+test("selects the OpenAI Agents backend only for command turns", async () => {
+  const legacyCommand = vi.fn((): RuntimeExecutionResult => ({
+    events: [{ message: "legacy", type: "assistant_reply" }],
+    settingsChanged: false
+  }));
+  const agentsCommand = vi.fn((): RuntimeExecutionResult => ({
+    events: [{ message: "agents", type: "assistant_reply" }],
+    settingsChanged: false
+  }));
+  const executeKnowledge = vi.fn(() => ({ message: "knowledge" }));
+  const api = createAgentApplicationService({
+    agentBackend: "openai-agents",
+    executeCommand: legacyCommand,
+    executeKnowledge,
+    executeOpenAIAgentsCommand: agentsCommand
+  });
+  const session = await api.createSession({ consumer: "frontend" });
+  if (!session.ok) {
+    throw new Error(session.error.message);
+  }
+
+  await api.submitTurn({
+    idempotencyKey: "agents-command",
+    input: { message: "打开设置", mode: "command" },
+    sessionId: session.data.sessionId
+  });
+  await api.submitTurn({
+    idempotencyKey: "agents-qa",
+    input: { message: "解释论文", mode: "qa" },
+    sessionId: session.data.sessionId
+  });
+
+  expect(agentsCommand).toHaveBeenCalledTimes(1);
+  expect(legacyCommand).not.toHaveBeenCalled();
+  expect(executeKnowledge).toHaveBeenCalledTimes(1);
+});
+
+test("resumes an SDK rejection instead of executing the legacy rejection shortcut", async () => {
+  const sdkConfirmation: HumanConfirmationRequest = {
+    action: {
+      actionId: "workspace.delete_documents",
+      payload: { scope: "selected_document_set" }
+    },
+    confirmationId: "confirmation-sdk-reject",
+    openaiAgents: {
+      callId: "call-delete",
+      serializedRunState: "serialized",
+      toolName: "workspace_delete_documents",
+      version: "liteasy.openai-agents-state/v1"
+    },
+    plan: {
+      actions: [{
+        actionId: "workspace.delete_documents",
+        input: { scope: "selected_document_set" }
+      }],
+      confidence: "high",
+      intentId: "workspace.delete_documents",
+      planId: "sdk-delete-plan",
+      requiredContext: ["selected_document_set"],
+      requiresConfirmation: true,
+      riskLevel: "high",
+      summary: "删除选中文献"
+    },
+    summary: "删除选中文献",
+    traceId: "trace-sdk-delete-plan",
+    type: "confirmation_request"
+  };
+  const executeConfirmation = vi.fn(({ request }: {
+    request: { decision: "approve" | "reject" };
+  }): RuntimeExecutionResult => ({
+    events: [{ message: `SDK ${request.decision}`, type: "assistant_reply" }],
+    settingsChanged: false
+  }));
+  const api = createAgentApplicationService({
+    executeCommand: () => ({ events: [sdkConfirmation], settingsChanged: false }),
+    executeConfirmation,
+    executeKnowledge: () => ({ message: "knowledge" })
+  });
+  const session = await api.createSession({ consumer: "frontend" });
+  if (!session.ok) {
+    throw new Error(session.error.message);
+  }
+  await api.submitTurn({
+    idempotencyKey: "sdk-reject",
+    input: { message: "删除", mode: "command" },
+    sessionId: session.data.sessionId
+  });
+
+  const rejected = await api.resolveConfirmation({
+    confirmationId: sdkConfirmation.confirmationId,
+    decision: "reject",
+    sessionId: session.data.sessionId
+  });
+
+  expect(executeConfirmation).toHaveBeenCalledTimes(1);
+  expect(rejected).toMatchObject({ data: { status: "completed" }, ok: true });
+  if (rejected.ok) {
+    expect(rejected.data.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ message: "SDK reject", type: "assistant.message" })
+    ]));
+  }
+});

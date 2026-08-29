@@ -24,10 +24,17 @@ import {
   resolveAgentKnowledgeScope
 } from "./agentRequestScope";
 import { createDesktopAgentService } from "./createDesktopAgentService";
+import type { AgentBackend } from "./agentApplicationService";
 import { createTauriAgentStateStore } from "./tauriAgentStateStore";
 import { useTauriAgentHostBridge } from "./useTauriAgentHostBridge";
 
 type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
+
+function getDevelopmentAgentBackend(): AgentBackend {
+  return import.meta.env.DEV && import.meta.env.VITE_LITEASY_AGENT_BACKEND === "openai-agents"
+    ? "openai-agents"
+    : "legacy";
+}
 
 export type AssistantAgentControllerInput = {
   academicProfile?: AcademicProfile;
@@ -72,6 +79,7 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
 
   if (!apiRef.current) {
     apiRef.current = createDesktopAgentService({
+      agentBackend: getDevelopmentAgentBackend(),
       createCoreSession() {
         return createAgentCoreSession(undefined, {
           getMemories: () =>

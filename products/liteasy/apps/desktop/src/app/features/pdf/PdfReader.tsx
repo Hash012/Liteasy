@@ -1,4 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ClipboardEvent as ReactClipboardEvent,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent
+} from "react";
 import { Button } from "@fluentui/react-components";
 import {
   CommentRegular,
@@ -44,6 +55,15 @@ import {
 } from "../library/userPaperArtifactClient";
 import type { PdfPageText } from "./citationAttribution";
 import { resolvePdfSelectionMenuPosition } from "./pdfSelectionPosition";
+import {
+  buildPdfPageCharModel,
+  expandPdfOffsetToWord,
+  hitTestPdfCharOffset,
+  resolveLogicalPdfSelection,
+  type LogicalPdfSelection,
+  type PdfPageCharModel,
+  type ResolvedPdfSelection
+} from "./pdfSelectionEngine";
 import { usePdfCitationParsing } from "./usePdfCitationParsing";
 import { usePdfFulltextStore } from "./usePdfFulltextStore";
 import type { TeamAnnotation } from "../organization/teamAnnotationClient";
@@ -68,6 +88,7 @@ type PdfSelection = {
   normalizedStart?: number;
   page: number;
   rects: PdfAnnotationRect[];
+  logical?: LogicalPdfSelection;
 };
 
 type TextLayerPosition = {
@@ -556,6 +577,15 @@ function buildSelectionFromRange(stageElement: HTMLElement, selection: Selection
   };
 }
 
+function resolvedSelectionToAnnotationRects(selection: ResolvedPdfSelection): PdfAnnotationRect[] {
+  return selection.rects.map(([left, top, right, bottom]) => ({
+    height: Math.max(0, (bottom - top) * 100),
+    left: clampPercent(left * 100, 0),
+    top: clampPercent(top * 100, 0),
+    width: Math.max(0, (right - left) * 100)
+  }));
+}
+
 function collectTextLayerNodes(textLayer: HTMLElement): Text[] {
   const nodes: Text[] = [];
   const walker = document.createTreeWalker(textLayer, NodeFilter.SHOW_TEXT);
@@ -801,10 +831,12 @@ type PdfPageViewProps = {
   /** This page rendered but yielded no text, so nothing on it can be located by character. */
   noTextLayer?: boolean;
   onEvidenceHighlightResolved?: (matched: boolean) => void;
+  onPageCharModelRendered?: (model: PdfPageCharModel) => void;
   onPageTextRendered?: (input: PdfPageText) => void;
   pageNumber: number;
   pdfDocument: PDFDocumentProxy | null;
   stageWidth: number;
+  selectionRects?: PdfAnnotationRect[];
   targetEvidence?: PdfEvidenceTarget | null;
   zoom: number;
 };
@@ -815,10 +847,12 @@ function PdfPageView({
   focused,
   noTextLayer = false,
   onEvidenceHighlightResolved,
+  onPageCharModelRendered,
   onPageTextRendered,
   pageNumber,
   pdfDocument,
   stageWidth,
+  selectionRects = [],
   targetEvidence,
   zoom
 }: PdfPageViewProps) {
@@ -923,6 +957,11 @@ function PdfPageView({
         });
         await layer.render();
         if (!cancelled) {
+          if (pageShellRef.current) {
+            onPageCharModelRendered?.(
+              buildPdfPageCharModel(textLayer, pageShellRef.current, pageNumber - 1)
+            );
+          }
           onPageTextRendered?.({
             page: pageNumber,
             text: normalizePdfPageText(joinPdfTextItems(textContent.items))
@@ -951,7 +990,7 @@ function PdfPageView({
       cancelled = true;
       renderTask?.cancel();
     };
-  }, [activePaper?.id, focused, onEvidenceHighlightResolved, onPageTextRendered, pageNumber, pdfDocument, stageWidth, targetEvidence?.pageTextStart, targetEvidence?.quote, targetEvidence?.requestId, zoom]);
+  }, [activePaper?.id, focused, onEvidenceHighlightResolved, onPageCharModelRendered, onPageTextRendered, pageNumber, pdfDocument, stageWidth, targetEvidence?.pageTextStart, targetEvidence?.quote, targetEvidence?.requestId, zoom]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(updateTargetHighlightRects);
@@ -1002,6 +1041,15 @@ function PdfPageView({
             key={`target-evidence-${targetEvidence?.requestId ?? pageNumber}-${index}`}
             style={getOverlayStyle("highlight", rect, "blue")}
             title={`Agent 引用证据：${targetEvidence?.quote ?? ""}`}
+          />
+        ))}
+        {selectionRects.map((rect, index) => (
+          <div
+            aria-hidden="true"
+            className="pdf-overlay-mark pdf-active-selection"
+            data-selection-rect={index}
+            key={`active-selection-${pageNumber}-${index}`}
+            style={getOverlayStyle("highlight", rect, "blue")}
           />
         ))}
       </div>
@@ -1110,6 +1158,18 @@ export function PdfReader({
   const [stageWidth, setStageWidth] = useState(960);
   const [status, setStatus] = useState("选择文段后可添加高亮、划线，或把选中文段交给 AI。");
   const [selection, setSelection] = useState<PdfSelection | null>(null);
+  const [selectionMenuOpen, setSelectionMenuOpen] = useState(false);
+  const pageCharModelsRef = useRef(new Map<number, PdfPageCharModel>());
+  const pointerSelectionRef = useRef<{
+    anchorOffset: number;
+    headOffset: number;
+    pageElement: HTMLElement;
+    pageIndex: number;
+    pointerId: number;
+  } | null>(null);
+  const pendingPointerFrameRef = useRef<number | null>(null);
+  const pendingPointerPointRef = useRef<{ clientX: number; clientY: number } | null>(null);
+  const ignoreNextMouseUpRef = useRef(false);
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
   const [annotationNoteDraft, setAnnotationNoteDraft] = useState("");
   const publicationIntentsRef = useRef(new Map<string, "private" | "public">());
@@ -1157,6 +1217,9 @@ export function PdfReader({
   }, [activePaper?.id, targetEvidence]);
 
   const handlePageTextRendered = fulltext.onPageTextRendered;
+  const handlePageCharModelRendered = useCallback((model: PdfPageCharModel) => {
+    pageCharModelsRef.current.set(model.pageIndex, model);
+  }, []);
 
   useEffect(() => {
     setTeamAnnotations([]);
@@ -1269,6 +1332,14 @@ export function PdfReader({
 
   useEffect(() => {
     setSelection(null);
+    setSelectionMenuOpen(false);
+    pageCharModelsRef.current.clear();
+    pointerSelectionRef.current = null;
+    if (pendingPointerFrameRef.current !== null) {
+      window.cancelAnimationFrame(pendingPointerFrameRef.current);
+      pendingPointerFrameRef.current = null;
+    }
+    pendingPointerPointRef.current = null;
     setActiveAnnotationId(null);
     setPageCount(1);
     setFocusedPage(1);
@@ -1405,7 +1476,191 @@ export function PdfReader({
     window.getSelection()?.removeAllRanges();
   }
 
+  function resolvePointerSelection(
+    logical: LogicalPdfSelection,
+    pageElement: HTMLElement,
+    clientX: number,
+    clientY: number,
+    openMenu: boolean
+  ) {
+    const model = pageCharModelsRef.current.get(logical.pageIndex);
+    const stageElement = stageRef.current;
+    if (!model || !stageElement) return null;
+    const resolved = resolveLogicalPdfSelection(model, logical);
+    if (!resolved) {
+      setSelection(null);
+      setSelectionMenuOpen(false);
+      return null;
+    }
+
+    const pageRect = getElementContentRect(pageElement);
+    const headRect = logical.headOffset >= logical.anchorOffset
+      ? resolved.rects[resolved.rects.length - 1]
+      : resolved.rects[0];
+    const anchorRect = {
+      bottom: pageRect.top + headRect[3] * pageRect.height,
+      left: pageRect.left + headRect[0] * pageRect.width,
+      top: pageRect.top + headRect[1] * pageRect.height,
+      width: (headRect[2] - headRect[0]) * pageRect.width
+    };
+    const stageRect = stageElement.getBoundingClientRect();
+    const menuPosition = resolvePdfSelectionMenuPosition({
+      contentWidth: stageElement.scrollWidth,
+      rect: openMenu ? anchorRect : {
+        bottom: clientY,
+        left: clientX,
+        top: clientY,
+        width: 0
+      },
+      scrollLeft: stageElement.scrollLeft,
+      scrollTop: stageElement.scrollTop,
+      stageRect: {
+        left: stageRect.left + stageElement.clientLeft,
+        top: stageRect.top + stageElement.clientTop
+      }
+    });
+    const nextSelection: PdfSelection = {
+      excerpt: resolved.text,
+      logical,
+      menuLeft: menuPosition.left,
+      menuPlacement: menuPosition.placement,
+      menuTop: menuPosition.top,
+      normalizedStart: Math.min(logical.anchorOffset, logical.headOffset),
+      page: logical.pageIndex + 1,
+      rects: resolvedSelectionToAnnotationRects(resolved)
+    };
+    setSelection(nextSelection);
+    setSelectionMenuOpen(openMenu);
+    return nextSelection;
+  }
+
+  function updatePointerSelection(clientX: number, clientY: number, openMenu: boolean) {
+    const drag = pointerSelectionRef.current;
+    if (!drag) return;
+    const model = pageCharModelsRef.current.get(drag.pageIndex);
+    if (!model) return;
+    const pageRect = getElementContentRect(drag.pageElement);
+    const point = [
+      (clientX - pageRect.left) / Math.max(1, pageRect.width),
+      (clientY - pageRect.top) / Math.max(1, pageRect.height)
+    ] as const;
+    const headOffset = hitTestPdfCharOffset({
+      chars: model.chars,
+      hysteresis: 3 / Math.max(1, Math.min(pageRect.width, pageRect.height)),
+      point,
+      previousOffset: drag.headOffset
+    });
+    drag.headOffset = headOffset;
+    resolvePointerSelection({
+      anchorOffset: drag.anchorOffset,
+      headOffset,
+      pageIndex: drag.pageIndex
+    }, drag.pageElement, clientX, clientY, openMenu);
+  }
+
+  function handleSelectionPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.button !== 0 || !(event.target instanceof Element)) return;
+    const textLayer = event.target.closest<HTMLElement>(".pdf-text-layer");
+    const pageElement = textLayer?.closest<HTMLElement>(".pdf-page-shell");
+    const pageNumber = Number(pageElement?.dataset.page);
+    const pageIndex = pageNumber - 1;
+    const model = pageCharModelsRef.current.get(pageIndex);
+    if (!textLayer || !pageElement || !model || model.chars.length === 0) return;
+
+    event.preventDefault();
+    event.currentTarget.focus({ preventScroll: true });
+    clearBrowserSelection();
+    ignoreNextMouseUpRef.current = true;
+    const pageRect = getElementContentRect(pageElement);
+    const offset = hitTestPdfCharOffset({
+      chars: model.chars,
+      point: [
+        (event.clientX - pageRect.left) / Math.max(1, pageRect.width),
+        (event.clientY - pageRect.top) / Math.max(1, pageRect.height)
+      ]
+    });
+
+    if (event.detail >= 2) {
+      const word = expandPdfOffsetToWord(model.chars, offset);
+      pointerSelectionRef.current = null;
+      resolvePointerSelection({
+        anchorOffset: word.start,
+        headOffset: word.end,
+        pageIndex
+      }, pageElement, event.clientX, event.clientY, true);
+      return;
+    }
+
+    pointerSelectionRef.current = {
+      anchorOffset: offset,
+      headOffset: offset,
+      pageElement,
+      pageIndex,
+      pointerId: event.pointerId
+    };
+    setSelection(null);
+    setSelectionMenuOpen(false);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function handleSelectionPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = pointerSelectionRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    pendingPointerPointRef.current = { clientX: event.clientX, clientY: event.clientY };
+    if (pendingPointerFrameRef.current !== null) return;
+    pendingPointerFrameRef.current = window.requestAnimationFrame(() => {
+      pendingPointerFrameRef.current = null;
+      const point = pendingPointerPointRef.current;
+      if (point) updatePointerSelection(point.clientX, point.clientY, false);
+    });
+  }
+
+  function handleSelectionPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = pointerSelectionRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    if (pendingPointerFrameRef.current !== null) {
+      window.cancelAnimationFrame(pendingPointerFrameRef.current);
+      pendingPointerFrameRef.current = null;
+    }
+    pendingPointerPointRef.current = null;
+    updatePointerSelection(event.clientX, event.clientY, true);
+    pointerSelectionRef.current = null;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  }
+
+  function handleSelectionPointerCancel(event: ReactPointerEvent<HTMLDivElement>) {
+    if (pointerSelectionRef.current?.pointerId !== event.pointerId) return;
+    if (pendingPointerFrameRef.current !== null) {
+      window.cancelAnimationFrame(pendingPointerFrameRef.current);
+      pendingPointerFrameRef.current = null;
+    }
+    pendingPointerPointRef.current = null;
+    pointerSelectionRef.current = null;
+    ignoreNextMouseUpRef.current = false;
+    setSelection(null);
+    setSelectionMenuOpen(false);
+  }
+
+  function handleSelectionCopy(event: ReactClipboardEvent<HTMLDivElement>) {
+    if (!selection?.excerpt) return;
+    event.preventDefault();
+    event.clipboardData.setData("text/plain", selection.excerpt);
+  }
+
+  function handleSelectionKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "Escape" || !selection) return;
+    event.preventDefault();
+    setSelection(null);
+    setSelectionMenuOpen(false);
+  }
+
   function handleTextSelection(event: ReactMouseEvent<HTMLDivElement>) {
+    if (ignoreNextMouseUpRef.current) {
+      ignoreNextMouseUpRef.current = false;
+      return;
+    }
     const target = event.target instanceof Element ? event.target : null;
     if (target?.closest(".pdf-selection-menu")) {
       return;
@@ -1419,6 +1674,7 @@ export function PdfReader({
 
     const nextSelection = buildSelectionFromRange(stageElement, browserSelection);
     setSelection(nextSelection);
+    setSelectionMenuOpen(Boolean(nextSelection));
   }
 
   function handleSelectionContextMenu(event: ReactMouseEvent<HTMLDivElement>) {
@@ -1462,8 +1718,10 @@ export function PdfReader({
         menuPlacement: menuPosition.placement,
         menuTop: menuPosition.top
       });
+      setSelectionMenuOpen(true);
     } else {
       setSelection(selection);
+      setSelectionMenuOpen(Boolean(selection));
     }
   }
 
@@ -1665,6 +1923,7 @@ export function PdfReader({
     setSidebarMode("annotations");
     setSidebarCollapsed(false);
     setSelection(null);
+    setSelectionMenuOpen(false);
     clearBrowserSelection();
   }
 
@@ -1681,6 +1940,7 @@ export function PdfReader({
 
     onAddSelectionToConversation?.(context);
     setSelection(null);
+    setSelectionMenuOpen(false);
     clearBrowserSelection();
     setStatus("已将选中文段添加到对话。");
   }
@@ -2225,9 +2485,16 @@ export function PdfReader({
           <div
             aria-label="PDF 页面滚动区"
             className="pdf-stage"
+            onCopy={handleSelectionCopy}
             onContextMenu={handleSelectionContextMenu}
+            onKeyDown={handleSelectionKeyDown}
             onMouseUp={handleTextSelection}
+            onPointerCancel={handleSelectionPointerCancel}
+            onPointerDown={handleSelectionPointerDown}
+            onPointerMove={handleSelectionPointerMove}
+            onPointerUp={handleSelectionPointerUp}
             ref={stageRef}
+            tabIndex={0}
           >
             {documentHasNoTextLayer ? (
               <p className="pdf-page-text-unavailable" role="note">
@@ -2244,17 +2511,19 @@ export function PdfReader({
                     key={pageNumber}
                     noTextLayer={scannedPages.has(pageNumber)}
                     onEvidenceHighlightResolved={handleEvidenceHighlightResolved}
+                    onPageCharModelRendered={handlePageCharModelRendered}
                     onPageTextRendered={handlePageTextRendered}
                     pageNumber={pageNumber}
                     pdfDocument={pdfDocument}
                     stageWidth={stageWidth}
+                    selectionRects={selection?.page === pageNumber ? selection.rects : undefined}
                     targetEvidence={targetEvidence}
                     zoom={zoom}
                   />
                 ))}
               </div>
             </div>
-            {selection ? (
+            {selection && selectionMenuOpen ? (
               <div
                 aria-label="选中文本批注菜单"
                 className={`pdf-selection-menu is-${selection.menuPlacement}`}

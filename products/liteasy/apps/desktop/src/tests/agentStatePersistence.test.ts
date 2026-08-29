@@ -75,6 +75,12 @@ const confirmation: HumanConfirmationRequest = {
     payload: { scope: "selected_document_set" }
   },
   confirmationId: "confirmation-persisted",
+  openaiAgents: {
+    callId: "call-persisted",
+    serializedRunState: "serialized-sdk-run-state",
+    toolName: "workspace_delete_documents",
+    version: "liteasy.openai-agents-state/v1"
+  },
   plan: {
     actions: [{
       actionId: "workspace.delete_documents",
@@ -441,6 +447,13 @@ test("restores pending confirmation without executing it automatically", async (
   expect(submitted).toMatchObject({
     data: { status: "waiting_confirmation" },
     ok: true
+  });
+  expect((memory.snapshot as AgentStateSnapshot).pendingConfirmations[0]).toMatchObject({
+    confirmation: {
+      openaiAgents: {
+        serializedRunState: "serialized-sdk-run-state"
+      }
+    }
   });
 
   const executeConfirmation = vi.fn((): RuntimeExecutionResult => ({

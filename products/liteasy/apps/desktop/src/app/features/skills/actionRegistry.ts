@@ -25,6 +25,12 @@ export type DockMoveItemId = "assistant" | "library" | "organization" | "profile
 export type DockMoveTargetRegion = "bottom" | "left" | "right";
 
 export type ActionContext = {
+  actionHandlers?: Partial<
+    Record<
+      ActionInvocation["actionId"],
+      (input: Record<string, unknown>) => string | Promise<string>
+    >
+  >;
   applyLayoutPreset?: (input: {
     preset?: "two_column" | "reading" | "focus";
   }) => string;
@@ -1563,10 +1569,75 @@ export function getRuntimeActionPolicy(invocation: ActionInvocation): Registered
   return cloneActionMetadata(metadata);
 }
 
-export async function executeAction(
+export function isActionHandlerAvailable(
+  actionId: ActionInvocation["actionId"],
+  context: ActionContext
+) {
+  if (context.actionHandlers?.[actionId]) {
+    return true;
+  }
+
+  if (actionId === "layout.split_two" || actionId === "layout.reset") {
+    return Boolean(context.applyLayoutPreset);
+  }
+  if (actionId === "layout.set_ratio") {
+    return Boolean(context.applyLayoutRatio);
+  }
+  if (actionId === "pane.focus") {
+    return Boolean(context.focusPane);
+  }
+  if (actionId === "dock.move_item") {
+    return Boolean(context.moveDockItem);
+  }
+  if (actionId === "theme.apply_generated") {
+    return Boolean(context.applyGeneratedTheme);
+  }
+  if (actionId === "theme.apply_preset" || actionId === "theme.reset") {
+    return Boolean(context.applyThemePreset);
+  }
+  if (actionId === "panel.open" || actionId === "panel.close" || actionId === "panel.toggle") {
+    return Boolean(context.applyPanelAction);
+  }
+  if (actionId === "settings.update") {
+    return Boolean(context.settingsStore);
+  }
+  if (actionId === "selected_set.import") {
+    return Boolean(context.importSelectedSet);
+  }
+  if (actionId === "organization.open_shared_library") {
+    return Boolean(context.openOrganizationSharedLibrary);
+  }
+  if (actionId === "artifact.generate" || actionId === "artifact.start_analysis") {
+    return Boolean(context.startArtifactAnalysis);
+  }
+  if (actionId === "artifact.open_tab") {
+    return Boolean(context.openArtifactTab);
+  }
+  if (actionId === "profile.open_academic_archive") {
+    return Boolean(context.openAcademicArchive);
+  }
+  if (actionId === "recommendation.refresh") {
+    return Boolean(context.refreshRecommendations);
+  }
+  if (actionId === "collection.add") {
+    return Boolean(context.addToCollection);
+  }
+
+  return false;
+}
+
+/** Internal side-effect dispatcher. Call invokeAction instead of importing this directly. */
+export async function executeRegisteredActionHandler(
   invocation: ActionInvocation,
   context: ActionContext
 ): Promise<ActionResult> {
+  const injectedHandler = context.actionHandlers?.[invocation.actionId];
+  if (injectedHandler) {
+    return {
+      message: await injectedHandler(invocation.input as Record<string, unknown>)
+    };
+  }
+
   if (invocation.actionId === "layout.split_two" || invocation.actionId === "layout.reset") {
     if (!context.applyLayoutPreset) {
       throw new Error(`${invocation.actionId} requires a layout handler`);
@@ -1756,15 +1827,21 @@ export async function executeAction(
     };
   }
 
-  if (
-    invocation.actionId === "workspace.delete_documents" ||
-    invocation.actionId === "workspace.overwrite_documents" ||
-    invocation.actionId === "workspace.batch_update_documents" ||
-    invocation.actionId === "cloud.upload_documents" ||
-    invocation.actionId === "cloud.sync_workspace"
-  ) {
-    throw new Error(`${invocation.actionId} requires an approved high-risk action handler`);
-  }
-
   throw new Error(`Unknown action: ${(invocation as { actionId: string }).actionId}`);
+}
+
+/** @deprecated Agent and skill callers must use invokeAction directly. */
+export async function executeAction(
+  invocation: ActionInvocation,
+  context: ActionContext
+): Promise<ActionResult> {
+  const { invokeAction } = await import("../agent-runtime/invokeAction");
+  const result = await invokeAction(invocation.actionId, invocation.input, {
+    ...context,
+    approvedActionIds: [invocation.actionId]
+  });
+  if (!result.ok) {
+    throw new Error(result.error.message);
+  }
+  return result.output;
 }

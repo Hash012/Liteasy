@@ -1,5 +1,5 @@
 import type { ArtifactType } from "../artifacts/artifact.types";
-import { executeAction } from "../skills/actionRegistry";
+import { invokeAction } from "../agent-runtime/invokeAction";
 
 type UseRegisteredWorkspaceActionsInput = {
   importSelectedSet: () => string;
@@ -13,36 +13,29 @@ export function useRegisteredWorkspaceActions({
   startArtifactAnalysis
 }: UseRegisteredWorkspaceActionsInput) {
   async function handleImportSelectedSet() {
-    const result = await executeAction(
-      {
-        actionId: "selected_set.import",
-        input: {
-          source: "selected_document_set"
-        }
-      },
-      {
-        importSelectedSet
-      }
+    const result = await invokeAction(
+      "selected_set.import",
+      { source: "selected_document_set" },
+      { importSelectedSet }
     );
-    onAnalysisHint(result.message);
-    return result.message;
+    if (!result.ok) {
+      throw new Error(result.error.message);
+    }
+    onAnalysisHint(result.output.message);
+    return result.output.message;
   }
 
   async function handleDirectAnalysis(artifactType: ArtifactType) {
-    const result = await executeAction(
-      {
-        actionId: "artifact.start_analysis",
-        input: {
-          artifactType,
-          source: "selected_document_set"
-        }
-      },
-      {
-        startArtifactAnalysis
-      }
+    const result = await invokeAction(
+      "artifact.start_analysis",
+      { artifactType, source: "selected_document_set" },
+      { startArtifactAnalysis }
     );
-    onAnalysisHint(result.message);
-    return result.message;
+    if (!result.ok) {
+      throw new Error(result.error.message);
+    }
+    onAnalysisHint(result.output.message);
+    return result.output.message;
   }
 
   return {

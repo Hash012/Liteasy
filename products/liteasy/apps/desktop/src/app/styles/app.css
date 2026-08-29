@@ -3954,6 +3954,8 @@ body {
   text-size-adjust: none;
   forced-color-adjust: none;
   transform-origin: 0 0;
+  touch-action: none;
+  user-select: none;
 }
 
 .pdf-text-layer span,
@@ -4479,6 +4481,13 @@ body {
   border: 1px solid rgba(27, 102, 179, 0.62);
   box-shadow: 0 0 0 2px rgba(27, 102, 179, 0.12);
   opacity: 0.82;
+}
+
+.pdf-overlay-mark.pdf-active-selection {
+  background: rgba(27, 102, 179, 0.28) !important;
+  border-radius: 1px;
+  margin: 0;
+  opacity: 1;
 }
 
 .pdf-overlay-mark.underline {

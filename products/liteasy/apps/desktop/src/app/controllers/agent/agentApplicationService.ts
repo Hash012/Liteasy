@@ -56,6 +56,8 @@ export type AgentCommandExecutionInput = {
   signal: AbortSignal;
 };
 
+export type AgentBackend = "legacy" | "openai-agents";
+
 export type AgentKnowledgeExecutionResult = {
   citations?: AgentCitation[];
   confidence?: number;
@@ -65,9 +67,13 @@ export type AgentKnowledgeExecutionResult = {
 };
 
 export type AgentApplicationPorts = {
+  agentBackend?: AgentBackend;
   createCoreSession?: () => AgentCoreSession;
   createId?: (prefix: "event" | "run" | "session") => string;
   executeCommand: (
+    input: AgentCommandExecutionInput
+  ) => Promise<RuntimeExecutionResult> | RuntimeExecutionResult;
+  executeOpenAIAgentsCommand?: (
     input: AgentCommandExecutionInput
   ) => Promise<RuntimeExecutionResult> | RuntimeExecutionResult;
   executeConfirmation?: (input: {
@@ -305,6 +311,7 @@ export function createAgentApplicationService(
   let fallbackId = 0;
   let hydrationPromise: Promise<void> | null = null;
   let persistenceQueue = Promise.resolve();
+  const agentBackend = ports.agentBackend ?? "legacy";
 
   const createId = (prefix: "event" | "run" | "session") => {
     if (ports.createId) {
@@ -725,7 +732,9 @@ export function createAgentApplicationService(
           signal: abortController.signal
         };
         if (request.input.mode === "command") {
-          const runtimeResult = await ports.executeCommand(executionInput);
+          const runtimeResult = agentBackend === "openai-agents"
+            ? await (ports.executeOpenAIAgentsCommand ?? ports.executeCommand)(executionInput)
+            : await ports.executeCommand(executionInput);
           if (isCancelled(run)) {
             await persistState();
             return { data: run, ok: true };
@@ -799,7 +808,7 @@ export function createAgentApplicationService(
         decision: request.decision,
         type: "confirmation.resolved"
       });
-      if (request.decision === "reject") {
+      if (request.decision === "reject" && !pending.confirmation.openaiAgents) {
         emit(stored, run, {
           message: `已取消：${pending.confirmation.plan.summary}`,
           type: "assistant.message"

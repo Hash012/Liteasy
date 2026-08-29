@@ -679,6 +679,59 @@ test("anchors the PDF selection menu to the real selected text", async ({ page }
   }
 });
 
+test("keeps real PDF pointer selection bounded with the geometry engine", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ height: 900, width: 1440 });
+  await mountReaderEvidenceBrowserFixture(page);
+  const textLayer = page.locator(".pdf-text-layer").first();
+  await expect.poll(async () => textLayer.evaluate((element) => element.textContent?.trim().length ?? 0), {
+    timeout: 90_000
+  }).toBeGreaterThan(20);
+
+  const drag = await textLayer.evaluate((element) => {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    while (node && (node.textContent?.trim().length ?? 0) < 6) node = walker.nextNode();
+    if (!node?.textContent) throw new Error("PDF text layer has no suitable text run.");
+    const pointForCharacter = (offset: number) => {
+      const range = document.createRange();
+      range.setStart(node!, offset);
+      range.setEnd(node!, Math.min(offset + 1, node!.textContent!.length));
+      const rect = range.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    };
+    return {
+      end: pointForCharacter(Math.min(5, node.textContent.length - 1)),
+      start: pointForCharacter(0)
+    };
+  });
+
+  await page.mouse.move(drag.start.x, drag.start.y);
+  await page.mouse.down();
+  await page.mouse.move(drag.end.x - 1, drag.end.y, { steps: 5 });
+  await page.mouse.move(drag.end.x + 1, drag.end.y);
+  await page.mouse.move(drag.end.x, drag.end.y);
+  await page.mouse.up();
+
+  await expect(page.getByLabel("选中文本批注菜单")).toBeVisible();
+  const result = await page.evaluate(() => {
+    const pageElement = document.querySelector<HTMLElement>(".pdf-page-shell")!;
+    const pageRect = pageElement.getBoundingClientRect();
+    const selectionRects = [...document.querySelectorAll<HTMLElement>(".pdf-active-selection")]
+      .map((element) => element.getBoundingClientRect());
+    return {
+      nativeSelection: window.getSelection()?.toString() ?? "",
+      rectCount: selectionRects.length,
+      selectedArea: selectionRects.reduce((sum, rect) => sum + rect.width * rect.height, 0),
+      pageArea: pageRect.width * pageRect.height
+    };
+  });
+  expect(result.nativeSelection).toBe("");
+  expect(result.rectCount).toBeGreaterThan(0);
+  expect(result.rectCount).toBeLessThanOrEqual(2);
+  expect(result.selectedArea / result.pageArea).toBeLessThan(0.08);
+});
+
 test.describe("page recommendation graph", () => {
   test("cycles through marks and a verified page-wide ink graph with keyboard return", async ({ page }, testInfo) => {
     await page.setViewportSize({ height: 900, width: 1440 });

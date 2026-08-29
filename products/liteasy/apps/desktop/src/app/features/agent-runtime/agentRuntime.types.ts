@@ -335,6 +335,12 @@ export type HumanConfirmationRequest = {
   summary: string;
   traceId: string;
   type: "confirmation_request";
+  openaiAgents?: {
+    callId: string;
+    serializedRunState: string;
+    toolName: string;
+    version: "liteasy.openai-agents-state/v1";
+  };
 };
 
 export type AgentRuntimeEvent =

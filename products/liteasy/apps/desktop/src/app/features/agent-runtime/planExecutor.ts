@@ -15,7 +15,8 @@ import {
   evaluateSmoothExecutionPolicy,
   shouldCreateAssistantFeedbackUi
 } from "./smoothPolicy";
-import { executeAction, getRegisteredActionMetadata } from "../skills/actionRegistry";
+import { getRegisteredActionMetadata } from "../skills/actionRegistry";
+import { invokeAction } from "./invokeAction";
 import { createFallbackUIDslDocument } from "../generative-ui/fallbackUi";
 import { generateUIDslFromSemanticPlan } from "../generative-ui/uiDslGenerator";
 
@@ -152,9 +153,19 @@ function isUiAction(action: RuntimeActionInvocation) {
 
 async function executeRegisteredAction(
   action: RuntimeActionInvocation,
-  context: AgentRuntimeExecutionContext
+  context: AgentRuntimeExecutionContext,
+  plan: SemanticActionPlan,
+  confirmedActionIds: string[] = []
 ) {
-  return (await executeAction(action, context)).message;
+  const result = await invokeAction(action.actionId, action.input, {
+    ...context,
+    approvedActionIds: confirmedActionIds,
+    plan
+  });
+  if (!result.ok) {
+    throw new Error(result.error.message);
+  }
+  return result.output.message;
 }
 
 function getInverseAction(action: RuntimeActionInvocation): RuntimeActionInvocation | null {
@@ -195,7 +206,21 @@ async function rollbackExecutedActions(
         traceId,
         type: "policy"
       });
-      const message = await executeRegisteredAction(inverseAction, context);
+      const message = await executeRegisteredAction(
+        inverseAction,
+        context,
+        {
+          actions: [inverseAction],
+          confidence: "high",
+          intentId: "unknown",
+          planId: `rollback-${traceId}`,
+          requiredContext: [],
+          requiresConfirmation: false,
+          riskLevel: "low",
+          summary: `回滚 ${executedAction.actionId}`
+        },
+        [inverseAction.actionId]
+      );
       rolledBackCount += 1;
       context.journal?.record({
         actionId: inverseAction.actionId,
@@ -500,7 +525,12 @@ async function executeSemanticPlanWithOptions(
         traceId: getTraceId(plan),
         type: "policy"
       });
-      message = await executeRegisteredAction(artifactAction, context);
+      message = await executeRegisteredAction(
+        artifactAction,
+        context,
+        plan,
+        options.confirmedActionIds
+      );
       context.journal?.record({
         actionId: artifactAction.actionId,
         message,
@@ -609,7 +639,12 @@ async function executeSemanticPlanWithOptions(
         traceId,
         type: "policy"
       });
-      message = await executeRegisteredAction(action, context);
+      message = await executeRegisteredAction(
+        action,
+        context,
+        plan,
+        options.confirmedActionIds
+      );
       executedActions.push(action);
     } catch (error) {
       const fallbackFailure = isUiAction(action)

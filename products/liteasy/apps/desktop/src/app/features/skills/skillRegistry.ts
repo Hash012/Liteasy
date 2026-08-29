@@ -1,6 +1,6 @@
 import type { ArtifactType } from "../artifacts/artifact.types";
-import { executeAction } from "./actionRegistry";
 import type { ActionContext, ActionResult } from "./actionRegistry";
+import { invokeAction } from "../agent-runtime/invokeAction";
 import type { UpdateSettingCommand } from "../settings/settings.types";
 
 export {
@@ -33,31 +33,21 @@ export async function executeSkill(
   invocation: SkillInvocation,
   context: ActionContext
 ): Promise<ActionResult> {
+  const execute = async (actionId: string, actionInput: unknown) => {
+    const result = await invokeAction(actionId, actionInput, context);
+    if (!result.ok) {
+      throw new Error(result.error.message);
+    }
+    return result.output;
+  };
+
   if (invocation.skillId === "settings.adjust") {
-    return executeAction(
-      {
-        actionId: "settings.update",
-        input: invocation.input
-      },
-      context
-    );
+    return execute("settings.update", invocation.input);
   }
 
   if (invocation.skillId === "organization.open_shared_library") {
-    return executeAction(
-      {
-        actionId: "organization.open_shared_library",
-        input: invocation.input
-      },
-      context
-    );
+    return execute("organization.open_shared_library", invocation.input);
   }
 
-  return executeAction(
-    {
-      actionId: "artifact.generate",
-      input: invocation.input
-    },
-    context
-  );
+  return execute("artifact.generate", invocation.input);
 }

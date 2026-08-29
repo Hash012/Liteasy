@@ -30,6 +30,7 @@
   "dependencies": {
     "@fluentui/react-components": "^9.74.4",
     "@fluentui/react-icons": "^2.0.333",
+    "@openai/agents": "^0.17.0",
     "@tauri-apps/api": "^2.5.0",
     "@xyflow/react": "^12.11.2",
     "chevrotain": "^11.2.0",

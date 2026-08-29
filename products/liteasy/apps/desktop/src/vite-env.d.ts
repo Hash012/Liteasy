@@ -6,6 +6,7 @@ interface ImportMetaEnv {
   readonly VITE_LITEASY_CLOUD_URL?: string;
   readonly VITE_LITEASY_DEV_CLOUD_PORT?: string;
   readonly VITE_LITEASY_OPENAI_MODEL?: string;
+  readonly VITE_LITEASY_AGENT_BACKEND?: "legacy" | "openai-agents";
 }
 
 declare module "*.jpg" {
