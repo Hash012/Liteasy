@@ -1537,6 +1537,12 @@ body {
   opacity: 0.78;
 }
 
+.assistant-agent-activity-summary {
+  flex-basis: 100%;
+  font-size: 11px !important;
+  opacity: 0.68 !important;
+}
+
 .assistant-agent-activity-status {
   border-radius: 999px;
   background: currentColor;
@@ -1576,6 +1582,54 @@ body {
   margin: 0;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+.assistant-agent-activity-disclosure,
+.assistant-agent-activity-log li details {
+  min-width: 0;
+}
+
+.assistant-agent-activity-disclosure summary,
+.assistant-agent-activity-log li details summary {
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.assistant-agent-activity-disclosure summary::marker,
+.assistant-agent-activity-log li details summary::marker {
+  color: currentColor;
+}
+
+.assistant-agent-activity-disclosure summary > p {
+  display: inline;
+}
+
+.assistant-agent-activity-more {
+  color: inherit;
+  display: block;
+  font-size: 11px;
+  margin-top: 5px;
+  opacity: 0.78;
+}
+
+.assistant-agent-activity-entry-preview {
+  color: #536d7c;
+  display: block;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  margin-top: 4px;
+  max-height: 5.2em;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.assistant-agent-activity-full-output {
+  border-top: 1px solid rgba(75, 112, 140, 0.16);
+  margin-top: 7px;
+  padding-top: 6px;
 }
 
 .assistant-agent-activity-stream p {

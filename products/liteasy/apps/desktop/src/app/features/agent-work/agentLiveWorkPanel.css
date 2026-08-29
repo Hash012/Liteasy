@@ -15,6 +15,10 @@
 .agent-live-work__body code { background: #e5eeea; border-radius: 3px; font-family: "Cascadia Code", Consolas, monospace; padding: 1px 3px; }
 .agent-live-work__body pre { background: #e8f0ed; border-radius: 5px; overflow: auto; padding: 8px; }
 .agent-live-work__body small { border-top: 1px solid #dce7e3; color: #70817e; display: block; font-size: 10px; margin-top: 8px; padding-top: 6px; }
+.agent-live-work__compact-preview { background: #f4f8f6; border-radius: 7px; color: #435c59; font-size: 12px; line-height: 1.5; max-height: 150px; overflow: hidden; overflow-wrap: anywhere; padding: 8px 10px; }
+.agent-live-work__compact-preview > :first-child { margin-top: 0; }
+.agent-live-work__compact-preview > :last-child { margin-bottom: 0; }
+.agent-live-work__compact-preview span { border-top: 1px solid #dce7e3; color: #70817e; display: block; font-size: 10px; margin-top: 6px; padding-top: 5px; }
 @keyframes agent-live-work-pulse { 50% { opacity: .45; transform: scale(.82); } }
 @media (max-width: 720px) { .agent-live-work.is-floating { bottom: 12px; left: 12px; max-width: none; right: 12px; width: auto; } }
 @media (prefers-reduced-motion: reduce) { .agent-live-work__pulse { animation: none; } }

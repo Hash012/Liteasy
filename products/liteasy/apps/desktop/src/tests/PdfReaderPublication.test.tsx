@@ -141,6 +141,19 @@ test.each(["高亮", "划线", "注释"])("creates %s privately by default", asy
     .toContain('"desiredVisibility":"private"'));
 });
 
+test("adds new annotations at the top of the annotation sidebar", async () => {
+  const user = userEvent.setup();
+  render(<PdfReader selectedPapers={[paper]} zoom={100} />);
+
+  selectPdfText("first annotation");
+  await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "高亮" }));
+  selectPdfText("second annotation");
+  await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "划线" }));
+
+  expect(screen.getAllByRole("button", { name: /编辑批注：/u }).map((button) => button.getAttribute("aria-label")))
+    .toEqual(["编辑批注：second annotation", "编辑批注：first annotation"]);
+});
+
 test("does not auto-publish a duplicate selection that was not saved locally", async () => {
   const user = userEvent.setup();
   const onChange = vi.fn(async () => ({

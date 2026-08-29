@@ -26,4 +26,20 @@ describe("AgentLiveWorkPanel", () => {
   test("hides raw structured payloads instead of exposing protocol fields", () => {
     expect(toUserVisibleAgentWorkMarkdown('{"runId":"run-secret","evidenceId":"evidence-secret"}')).toBe("");
   });
+
+  test("keeps a compact preview available while the live panel is collapsed", () => {
+    render(
+      <AgentLiveWorkPanel
+        markdown={"首段\n第二段\n第三段\n第四段\n第五段\n尾段"}
+        message="正在生成"
+        runKey="preview-run"
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "收起实时生成内容" }));
+
+    expect(screen.getByLabelText("实时生成内容摘要")).toHaveTextContent("首段");
+    expect(screen.getByLabelText("实时生成内容摘要")).toHaveTextContent("尾段");
+    expect(screen.getByLabelText("实时生成内容摘要")).toHaveTextContent("展开查看全部");
+  });
 });

@@ -187,3 +187,23 @@ test("wires the PDF reader to direct per-annotation publication controls", async
   expect(screen.queryByRole("button", { name: "发到论坛" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "立即同步" })).not.toBeInTheDocument();
 });
+
+test("opens an empty bottom dock as a page destination", async () => {
+  const user = userEvent.setup();
+  render(
+    <AppShell
+      initialPapers={[]}
+      localLibraryLoader={async () => localLibrarySnapshot}
+    />
+  );
+  await enterLocalWorkbench(user);
+  const library = screen.getByRole("region", { name: "本地文献库" });
+  await user.click(within(library).getByRole("button", { name: "展开Research" }));
+  await user.click(within(library).getByRole("button", { name: "Paper" }));
+  await user.click(await screen.findByRole("menuitem", { name: "打开" }));
+
+  await user.click(await screen.findByRole("button", { name: "展开下栏" }));
+
+  expect(screen.getByLabelText("下栏 Dock 区域")).toBeInTheDocument();
+  expect(screen.getByLabelText("空 Dock 区域")).toBeInTheDocument();
+});

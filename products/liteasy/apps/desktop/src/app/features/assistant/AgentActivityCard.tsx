@@ -1,10 +1,11 @@
 import { Button } from "@fluentui/react-components";
 import { ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toUserVisibleAgentActivityText } from "./agentActivity";
-import type { AgentActivity } from "./assistant.types";
+import { isHighSalienceAgentEntry, previewAgentWorkText, summarizeAgentActivity } from "./agentActivityPresentation";
+import type { AgentActivity, AgentActivityEntry } from "./assistant.types";
 
 type AgentActivityCardProps = {
   activity: AgentActivity;
@@ -26,6 +27,7 @@ export function AgentActivityCard({ activity }: AgentActivityCardProps) {
     label: toUserVisibleAgentActivityText(entry.label) || entryKindLabels[entry.kind]
   }));
   const hasDetails = Boolean(generatedContent || entries.length);
+  const activitySummary = summarizeAgentActivity(activity);
 
   useEffect(() => {
     if (activity.status !== "working") {
@@ -40,12 +42,15 @@ export function AgentActivityCard({ activity }: AgentActivityCardProps) {
         <div>
           <strong>{activity.statusText}</strong>
           {typeof activity.progress === "number" ? <span>{Math.round(activity.progress)}%</span> : null}
+          <span className="assistant-agent-activity-summary">{activitySummary}</span>
         </div>
         {hasDetails ? (
           <Button
             appearance="subtle"
             aria-controls={detailId}
             aria-expanded={expanded}
+            aria-label={expanded ? "收起工作详情" : "查看工作详情"}
+            title={activitySummary}
             className="assistant-agent-activity-toggle"
             icon={expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}
             onClick={() => setExpanded((current) => !current)}
@@ -61,7 +66,7 @@ export function AgentActivityCard({ activity }: AgentActivityCardProps) {
           {generatedContent ? (
             <section aria-label="实时生成内容" className="assistant-agent-activity-stream">
               <h4>实时生成内容</h4>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{generatedContent}</ReactMarkdown>
+              <AgentActivityDisclosure content={generatedContent} />
             </section>
           ) : null}
           {entries.length ? (
@@ -71,8 +76,9 @@ export function AgentActivityCard({ activity }: AgentActivityCardProps) {
                 {entries.map((entry) => (
                   <li className={`${entry.kind} ${entry.status}`} key={entry.id}>
                     <span>{entryKindLabels[entry.kind]}</span>
-                    <strong>{entry.label}</strong>
-                    {entry.content ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.content}</ReactMarkdown> : null}
+                    {entry.content ? (
+                      <AgentEntryDisclosure entry={entry} />
+                    ) : <strong>{entry.label}</strong>}
                   </li>
                 ))}
               </ol>
@@ -81,5 +87,44 @@ export function AgentActivityCard({ activity }: AgentActivityCardProps) {
         </div>
       ) : null}
     </section>
+  );
+}
+
+function AgentActivityDisclosure({ content }: { content: string }) {
+  const preview = previewAgentWorkText(content);
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (detailsRef.current) detailsRef.current.open = !preview.omittedLines;
+  }, []);
+  return (
+    <details className="assistant-agent-activity-disclosure" ref={detailsRef}>
+      <summary>
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{preview.text}</ReactMarkdown>
+        {preview.omittedLines ? <span className="assistant-agent-activity-more">展开全部（省略 {preview.omittedLines} 行）</span> : null}
+      </summary>
+      {preview.omittedLines ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown> : null}
+    </details>
+  );
+}
+
+function AgentEntryDisclosure({ entry }: { entry: AgentActivityEntry }) {
+  const content = entry.content ?? "";
+  const preview = previewAgentWorkText(content);
+  const open = isHighSalienceAgentEntry(entry) || !preview.omittedLines;
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (detailsRef.current) detailsRef.current.open = open;
+  }, []);
+  return (
+    <details ref={detailsRef}>
+      <summary>
+        <strong>{entry.label}</strong>
+        {preview.omittedLines ? (
+          <span className="assistant-agent-activity-entry-preview">{preview.text}</span>
+        ) : null}
+      </summary>
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+      {preview.omittedLines ? <span className="assistant-agent-activity-more">已展开全部内容（原先省略 {preview.omittedLines} 行）</span> : null}
+    </details>
   );
 }

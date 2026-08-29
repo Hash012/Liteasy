@@ -1144,8 +1144,8 @@ export function AppShell({
     ? "0px"
     : `minmax(220px, ${paneLayout.layout.right}fr)`;
   const rightPaneUtilitySize = paneLayout.collapsed.right ? "0px" : "18px";
-  const bottomPaneVisible =
-    !paneLayout.collapsed.bottom && dock.layout.regions.bottom.itemIds.length > 0;
+  // An empty bottom dock is still a usable destination for pages dragged from the other regions.
+  const bottomPaneVisible = !paneLayout.collapsed.bottom;
   const readerArtifactRowSize = "0px";
   const bottomPaneSize = bottomPaneVisible
     ? `minmax(180px, ${paneLayout.layout.bottom}fr)`

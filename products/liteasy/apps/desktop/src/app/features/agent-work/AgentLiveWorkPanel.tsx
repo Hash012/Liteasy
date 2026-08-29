@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toUserVisibleAgentWorkMarkdown } from "../agent-runtime/agentWorkPresentation";
+import { previewAgentWorkText } from "../assistant/agentActivityPresentation";
 import "./agentLiveWorkPanel.css";
 
 type AgentLiveWorkPanelProps = {
@@ -30,6 +31,7 @@ export function AgentLiveWorkPanel({
   const [open, setOpen] = useState(true);
   const detailId = useId();
   const visibleMarkdown = toUserVisibleAgentWorkMarkdown(markdown);
+  const preview = previewAgentWorkText(visibleMarkdown, 5);
 
   useEffect(() => setOpen(true), [runKey]);
 
@@ -82,6 +84,11 @@ export function AgentLiveWorkPanel({
             <p>模型正在整理上下文和结构化内容，新的可读片段会显示在这里。</p>
           )}
           <small>仅展示模型主动返回的工作草稿；内部标识、原始结构化载荷与敏感字段已隐藏。</small>
+        </div>
+      ) : visibleMarkdown ? (
+        <div aria-label="实时生成内容摘要" className="agent-live-work__compact-preview">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{preview.text}</ReactMarkdown>
+          {preview.omittedLines ? <span>… 省略 {preview.omittedLines} 行，展开查看全部</span> : null}
         </div>
       ) : null}
     </aside>

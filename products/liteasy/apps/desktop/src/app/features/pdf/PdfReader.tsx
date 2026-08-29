@@ -1910,7 +1910,7 @@ export function PdfReader({
         item.excerpt === annotation.excerpt
     );
     if (!duplicate) {
-      setCurrentAnnotations((current) => [...current, annotation]);
+      setCurrentAnnotations((current) => [annotation, ...current]);
       if (autoPublicAnnotations) {
         queueMicrotask(() => requestPublication(annotation, "publish"));
       }
