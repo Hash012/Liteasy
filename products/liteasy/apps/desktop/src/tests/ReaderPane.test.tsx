@@ -461,7 +461,7 @@ describe("ReaderPane", () => {
     const selectionMenu = screen.getByLabelText("选中文本批注菜单");
     expect(within(selectionMenu).getByRole("button", { name: "高亮" })).toHaveAttribute("title", "高亮选中文段");
     expect(within(selectionMenu).getByRole("button", { name: "划线" })).toHaveAttribute("title", "给选中文段添加下划线");
-    expect(within(selectionMenu).getByRole("button", { name: "注释" })).toHaveAttribute("title", "给选中文段添加旁注");
+    expect(within(selectionMenu).queryByRole("button", { name: "注释" })).not.toBeInTheDocument();
     expect(within(selectionMenu).getByRole("button", { name: "加入对话" })).toHaveAttribute(
       "title",
       "把选中文段加入右侧对话上下文"
@@ -480,9 +480,9 @@ describe("ReaderPane", () => {
       text: "vector database systems"
     });
     fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
-    await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "注释" }));
-    expect(screen.getByText("注释")).toBeInTheDocument();
-    expect(within(screen.getByLabelText("PDF 批注覆盖层")).getByLabelText(/旁注/)).toBeInTheDocument();
+    await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "划线" }));
+    expect(screen.getByText("划线")).toBeInTheDocument();
+    expect(within(screen.getByLabelText("PDF 批注覆盖层")).getByLabelText(/划线标注/)).toBeInTheDocument();
   });
 
   test("keeps a cached-paper promotion failure visible after saving the annotation", async () => {
@@ -585,7 +585,7 @@ describe("ReaderPane", () => {
       text: "a publicly queued PDF annotation"
     });
     fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
-    await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "注释" }));
+    await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "高亮" }));
 
     await waitFor(() => expect(onChangeAnnotationPublication).toHaveBeenCalledWith(
       expect.objectContaining({ operation: "publish" })
@@ -622,9 +622,9 @@ describe("ReaderPane", () => {
       text: "a forum draft annotation"
     });
     fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
-    await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "注释" }));
+    await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "高亮" }));
     await user.click(screen.getByRole("checkbox", {
-      name: "将第 1 页注释批注公开到论坛：a forum draft annotation"
+      name: "将第 1 页高亮批注公开到论坛：a forum draft annotation"
     }));
 
     expect(onChangeAnnotationPublication).toHaveBeenCalledWith(expect.objectContaining({ operation: "publish" }));
@@ -764,9 +764,7 @@ describe("ReaderPane", () => {
     expect(screen.getByText("该文段已经有高亮批注。")).toBeInTheDocument();
   });
 
-  test("renders note annotations as compact side markers instead of text-height overlays", async () => {
-    const user = userEvent.setup();
-
+  test("does not expose a standalone note annotation action", () => {
     render(
       <ReaderPane
         analysisHint="可以启动中栏分析。"
@@ -787,12 +785,8 @@ describe("ReaderPane", () => {
     });
 
     fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
-    await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "注释" }));
-
-    const noteMark = document.querySelector<HTMLElement>(".pdf-overlay-mark.note");
-    expect(noteMark).toBeInTheDocument();
-    expect(Number.parseFloat(noteMark?.style.height ?? "100")).toBeLessThanOrEqual(3);
-    expect(Number.parseFloat(noteMark?.style.width ?? "100")).toBeLessThanOrEqual(3);
+    expect(within(screen.getByLabelText("选中文本批注菜单"))
+      .queryByRole("button", { name: "注释" })).not.toBeInTheDocument();
   });
 
   test("ignores text selections that do not originate from the PDF text layer", () => {
@@ -846,7 +840,7 @@ describe("ReaderPane", () => {
     await user.type(screen.getByLabelText("补充批注笔记"), "这里要联系实验设置。");
     await user.click(screen.getByRole("button", { name: "保存笔记" }));
 
-    expect(screen.getByText("补充：这里要联系实验设置。")).toBeInTheDocument();
+    expect(screen.getByText("这里要联系实验设置。")).toBeInTheDocument();
   });
 
   test("does not expose bundled fixture paths as readable production PDF URLs", () => {

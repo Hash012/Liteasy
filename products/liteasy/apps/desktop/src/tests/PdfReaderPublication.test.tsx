@@ -109,7 +109,7 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-test.each(["高亮", "划线", "注释"])("creates %s privately by default", async (command) => {
+test.each(["高亮", "划线"])("creates %s privately by default", async (command) => {
   const onChangeAnnotationPublication = vi.fn();
   render(
     <PdfReader
@@ -148,10 +148,10 @@ test("does not auto-publish a duplicate selection that was not saved locally", a
   );
   await user.click(screen.getByRole("checkbox", { name: "新批注自动公开到论坛" }));
   selectPdfText("first duplicate candidate");
-  await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "注释" }));
+  await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "高亮" }));
   await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
   selectPdfText("first duplicate candidate");
-  await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "注释" }));
+  await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "高亮" }));
 
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(onChange).toHaveBeenCalledTimes(1);

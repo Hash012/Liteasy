@@ -3240,10 +3240,11 @@ body {
 }
 
 .pdf-sidebar-annotations {
-  display: grid;
-  grid-template-rows: auto 1fr;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .pdf-main-stage {
@@ -3907,6 +3908,8 @@ body {
   line-height: 1;
   text-align: initial;
   text-size-adjust: none;
+  user-select: none;
+  -webkit-user-select: none;
   forced-color-adjust: none;
   transform-origin: 0 0;
 }
@@ -4001,6 +4004,12 @@ body {
   scrollbar-color: var(--line-1) transparent;
   width: 100%;
   box-sizing: border-box;
+}
+
+.pdf-sidebar-annotations .pdf-annotation-list {
+  flex: 0 0 auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .pdf-annotation-list::-webkit-scrollbar {
@@ -4202,6 +4211,12 @@ body {
   overflow: hidden;
 }
 
+.pdf-annotation-item.expanded .pdf-annotation-excerpt {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+}
+
 .pdf-annotation-public-toggle,
 .pdf-annotation-auto-public-toggle {
   align-items: center;
@@ -4284,7 +4299,6 @@ body {
 .annotation-note-preview {
   font-size: 12px;
   color: var(--ink-2);
-  font-style: italic;
   margin-left: 4px;
   display: block;
   margin-top: 2px;
@@ -4421,6 +4435,18 @@ body {
   pointer-events: none;
 }
 
+button.pdf-overlay-mark {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+button.pdf-overlay-mark:focus-visible {
+  outline: 2px solid var(--accent-1);
+  outline-offset: 2px;
+}
+
 .pdf-overlay-mark.highlight {
   mix-blend-mode: normal;
   opacity: 0.5;
@@ -4434,6 +4460,13 @@ body {
   border: 1px solid rgba(27, 102, 179, 0.62);
   box-shadow: 0 0 0 2px rgba(27, 102, 179, 0.12);
   opacity: 0.82;
+}
+
+.pdf-overlay-mark.selection-preview {
+  background: rgba(27, 102, 179, 0.28) !important;
+  border-radius: 1px;
+  box-shadow: inset 0 0 0 1px rgba(27, 102, 179, 0.12);
+  opacity: 1;
 }
 
 .pdf-overlay-mark.underline {
@@ -4524,6 +4557,205 @@ body {
 .pdf-selection-menu .add-to-forum:hover {
   background: #e9f3ff;
   color: var(--accent-1);
+}
+
+.pdf-annotation-popover {
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(24, 34, 47, 0.14);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(24, 34, 47, 0.2);
+  box-sizing: border-box;
+  display: grid;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  padding: 10px;
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 12px));
+  width: min(320px, calc(100% - 24px));
+  z-index: 9;
+}
+
+.pdf-annotation-popover.is-below {
+  transform: translate(-50%, 12px);
+}
+
+.pdf-annotation-popover > header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.pdf-annotation-popover > header strong {
+  color: var(--ink-1);
+  font-size: 12px;
+}
+
+.pdf-annotation-popover > header button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--ink-2);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 18px;
+  height: 24px;
+  justify-content: center;
+  padding: 0;
+  width: 24px;
+}
+
+.pdf-annotation-popover > header button:hover {
+  background: #eef3f8;
+}
+
+.pdf-annotation-popover-excerpt {
+  color: var(--ink-2);
+  display: -webkit-box;
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.pdf-annotation-popover textarea {
+  background: #ffffff;
+  border: 1px solid var(--line-1);
+  border-radius: 6px;
+  color: var(--ink-1);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  min-height: 86px;
+  padding: 8px;
+  resize: vertical;
+}
+
+.pdf-annotation-markdown {
+  color: var(--ink-1);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.pdf-annotation-popover .pdf-annotation-markdown,
+.note-editor .pdf-annotation-markdown {
+  background: #f7f9fb;
+  border: 1px solid var(--line-1);
+  border-radius: 6px;
+  max-height: 180px;
+  overflow: auto;
+  padding: 8px;
+}
+
+.pdf-annotation-markdown.is-empty {
+  color: var(--ink-3);
+  margin: 0;
+}
+
+.pdf-annotation-markdown > :first-child {
+  margin-top: 0;
+}
+
+.pdf-annotation-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.pdf-annotation-markdown p,
+.pdf-annotation-markdown ul,
+.pdf-annotation-markdown ol,
+.pdf-annotation-markdown blockquote,
+.pdf-annotation-markdown pre,
+.pdf-annotation-markdown table,
+.pdf-annotation-markdown h1,
+.pdf-annotation-markdown h2,
+.pdf-annotation-markdown h3,
+.pdf-annotation-markdown h4,
+.pdf-annotation-markdown h5,
+.pdf-annotation-markdown h6 {
+  margin: 6px 0;
+}
+
+.pdf-annotation-markdown h1,
+.pdf-annotation-markdown h2,
+.pdf-annotation-markdown h3,
+.pdf-annotation-markdown h4,
+.pdf-annotation-markdown h5,
+.pdf-annotation-markdown h6 {
+  line-height: 1.3;
+}
+
+.pdf-annotation-markdown h1 {
+  font-size: 16px;
+}
+
+.pdf-annotation-markdown h2 {
+  font-size: 15px;
+}
+
+.pdf-annotation-markdown h3,
+.pdf-annotation-markdown h4,
+.pdf-annotation-markdown h5,
+.pdf-annotation-markdown h6 {
+  font-size: 13px;
+}
+
+.pdf-annotation-markdown ul,
+.pdf-annotation-markdown ol {
+  padding-left: 20px;
+}
+
+.pdf-annotation-markdown blockquote {
+  border-left: 3px solid #8bb9df;
+  color: var(--ink-2);
+  padding-left: 8px;
+}
+
+.pdf-annotation-markdown code {
+  background: #edf1f5;
+  border-radius: 3px;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 0.92em;
+  padding: 1px 3px;
+}
+
+.pdf-annotation-markdown pre {
+  background: #edf1f5;
+  border-radius: 5px;
+  overflow: auto;
+  padding: 7px;
+}
+
+.pdf-annotation-markdown pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.pdf-annotation-markdown a {
+  color: var(--accent-1);
+  text-decoration: underline;
+}
+
+.pdf-annotation-markdown table {
+  border-collapse: collapse;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.pdf-annotation-markdown th,
+.pdf-annotation-markdown td {
+  border: 1px solid var(--line-1);
+  padding: 3px 6px;
+  text-align: left;
+}
+
+.pdf-annotation-markdown th {
+  background: #edf1f5;
+  font-weight: 600;
 }
 
 @media (max-width: 1080px) {

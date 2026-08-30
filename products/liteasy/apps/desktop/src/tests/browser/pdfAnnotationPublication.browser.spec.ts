@@ -65,7 +65,7 @@ for (const viewport of [
     await page.setViewportSize(viewport);
     await mountFixture(page);
     await selectFixtureText(page, "Late interaction evidence");
-    await page.getByRole("button", { name: "注释" }).click();
+    await page.getByRole("button", { name: "高亮" }).click();
     await page.getByRole("checkbox", { name: /Late interaction evidence/u }).click();
     await expect(page.getByRole("dialog", { name: "确认文献身份" })).toBeVisible();
     await page.getByRole("button", { name: "选择 ColBERT" }).click();

@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent
+} from "react";
 import { Button } from "@fluentui/react-components";
 import {
   CommentRegular,
@@ -44,6 +53,16 @@ import {
 } from "../library/userPaperArtifactClient";
 import type { PdfPageText } from "./citationAttribution";
 import { resolvePdfSelectionMenuPosition } from "./pdfSelectionPosition";
+import {
+  buildPageCharModelFromTextLayer,
+  buildPdfSelectionRange,
+  buildPdfSelectionText,
+  clientPointToPdfPoint,
+  hitTestPdfInsertion,
+  type PageCharModel
+} from "./pdfSelectionEngine";
+import { sortPdfAnnotationsByReadingOrder } from "./pdfAnnotationReadingOrder";
+import { PdfAnnotationMarkdown } from "./PdfAnnotationMarkdown";
 import { usePdfCitationParsing } from "./usePdfCitationParsing";
 import { usePdfFulltextStore } from "./usePdfFulltextStore";
 import type { TeamAnnotation } from "../organization/teamAnnotationClient";
@@ -68,6 +87,26 @@ type PdfSelection = {
   normalizedStart?: number;
   page: number;
   rects: PdfAnnotationRect[];
+};
+
+type PdfSelectionPreview = {
+  page: number;
+  rects: PdfAnnotationRect[];
+};
+
+type PdfDragSelection = {
+  anchorOffset: number;
+  headCharacterIndex: number;
+  headOffset: number;
+  page: number;
+  pointerId: number;
+};
+
+type PdfAnnotationPopup = {
+  annotationId: string;
+  left: number;
+  placement: "above" | "below";
+  top: number;
 };
 
 type TextLayerPosition = {
@@ -346,6 +385,37 @@ function getElementContentRect(element: HTMLElement) {
   } as DOMRect;
 }
 
+function getPdfPageSurfaceRect(pageElement: HTMLElement) {
+  const textLayerRect = pageElement.querySelector<HTMLElement>(".pdf-text-layer")?.getBoundingClientRect();
+  return textLayerRect && textLayerRect.width > 0 && textLayerRect.height > 0
+    ? textLayerRect
+    : getElementContentRect(pageElement);
+}
+
+function getAnnotationClientBounds(pageElement: HTMLElement, rects: PdfAnnotationRect[]) {
+  if (rects.length === 0) return null;
+  const pageRect = getPdfPageSurfaceRect(pageElement);
+  const left = Math.min(...rects.map((rect) => pageRect.left + pageRect.width * rect.left / 100));
+  const right = Math.max(...rects.map((rect) =>
+    pageRect.left + pageRect.width * (rect.left + rect.width) / 100
+  ));
+  const top = Math.min(...rects.map((rect) => pageRect.top + pageRect.height * rect.top / 100));
+  const bottom = Math.max(...rects.map((rect) =>
+    pageRect.top + pageRect.height * (rect.top + rect.height) / 100
+  ));
+  return {
+    bottom,
+    height: bottom - top,
+    left,
+    right,
+    top,
+    width: right - left,
+    x: left,
+    y: top,
+    toJSON: () => ({})
+  } as DOMRect;
+}
+
 function getRangeClientRects(range: Range) {
   const rects = Array.from(range.getClientRects()).filter(
     (rect) => rect.width > 1 && rect.height > 1
@@ -457,52 +527,14 @@ function buildAnnotationRects(range: Range, pageRect: DOMRect | undefined) {
     }));
 }
 
-function isWordBoundaryCharacter(character: string) {
-  return /[A-Za-z0-9_\u00c0-\u024f'’-]/.test(character);
-}
-
-/*
- * 浏览器在 PDF text layer 的字形边缘落点常会停在单词中间，视觉上却像完整选中。
- * 只在同一文本节点内向外补齐词边界，避免跨列、跨行或跨 text span 扩大选择。
- */
-function expandRangeToWordBoundaries(range: Range) {
-  // 测试环境与少数嵌入式 WebView 可能提供精简 Range；此时保留原选区。
-  if (typeof range.cloneRange !== "function") {
-    return range;
-  }
-  const expanded = range.cloneRange();
-
-  if (expanded.startContainer.nodeType === Node.TEXT_NODE) {
-    const text = expanded.startContainer.textContent ?? "";
-    let offset = expanded.startOffset;
-    while (offset > 0 && isWordBoundaryCharacter(text.charAt(offset - 1))) {
-      offset -= 1;
-    }
-    expanded.setStart(expanded.startContainer, offset);
-  }
-
-  if (expanded.endContainer.nodeType === Node.TEXT_NODE) {
-    const text = expanded.endContainer.textContent ?? "";
-    let offset = expanded.endOffset;
-    while (offset < text.length && isWordBoundaryCharacter(text.charAt(offset))) {
-      offset += 1;
-    }
-    expanded.setEnd(expanded.endContainer, offset);
-  }
-
-  return expanded;
-}
-
 function buildSelectionFromRange(stageElement: HTMLElement, selection: Selection): PdfSelection | null {
   if (selection.rangeCount === 0) {
     return null;
   }
 
   const originalRange = selection.getRangeAt(0);
-  const range = expandRangeToWordBoundaries(originalRange);
-  const selectionText = typeof originalRange.cloneRange === "function"
-    ? range.toString()
-    : selection.toString();
+  const range = originalRange;
+  const selectionText = selection.toString();
   const excerpt = selectionText.trim().replace(/\s+/g, " ");
   if (!excerpt) {
     return null;
@@ -776,7 +808,7 @@ function getOverlayStyle(kind: AnnotationKind, rect: PdfAnnotationRect, color?: 
       background: "none",
       height: `${rect.height}%`,
       left: `${rect.left}%`,
-      top: `${rect.top + rect.height - 0.3}%`,
+      top: `${rect.top}%`,
       width: `${rect.width}%`,
       borderBottom: "2px solid rgba(27, 102, 179, 0.8)"
     };
@@ -794,15 +826,22 @@ function getOverlayStyle(kind: AnnotationKind, rect: PdfAnnotationRect, color?: 
 }
 
 type PdfPageViewProps = {
-  annotations: PdfAnnotation[];
+  annotations: PdfAnnotationV2[];
   activePaper: Paper | null;
   focused: boolean;
   /** This page rendered but yielded no text, so nothing on it can be located by character. */
   noTextLayer?: boolean;
+  onAnnotationActivate?: (
+    annotation: PdfAnnotationV2,
+    pageElement: HTMLElement,
+    anchorElement: HTMLElement
+  ) => void;
   onEvidenceHighlightResolved?: (matched: boolean) => void;
+  onPageCharModelRendered?: (pageNumber: number, model: PageCharModel | null) => void;
   onPageTextRendered?: (input: PdfPageText) => void;
   pageNumber: number;
   pdfDocument: PDFDocumentProxy | null;
+  selectionPreviewRects?: PdfAnnotationRect[];
   stageWidth: number;
   targetEvidence?: PdfEvidenceTarget | null;
   zoom: number;
@@ -813,10 +852,13 @@ function PdfPageView({
   annotations,
   focused,
   noTextLayer = false,
+  onAnnotationActivate,
   onEvidenceHighlightResolved,
+  onPageCharModelRendered,
   onPageTextRendered,
   pageNumber,
   pdfDocument,
+  selectionPreviewRects = [],
   stageWidth,
   targetEvidence,
   zoom
@@ -870,6 +912,7 @@ function PdfPageView({
           textLayerRef.current.replaceChildren();
         }
         setTargetHighlightRects([]);
+        onPageCharModelRendered?.(pageNumber, null);
         if (focused && targetEvidence?.paperId === activePaper?.id) {
           onEvidenceHighlightResolved?.(false);
         }
@@ -922,6 +965,14 @@ function PdfPageView({
         });
         await layer.render();
         if (!cancelled) {
+          const pageElement = pageShellRef.current;
+          if (pageElement) {
+            onPageCharModelRendered?.(pageNumber, buildPageCharModelFromTextLayer({
+              pageElement,
+              pageIndex: pageNumber,
+              textLayer
+            }));
+          }
           onPageTextRendered?.({
             page: pageNumber,
             text: normalizePdfPageText(joinPdfTextItems(textContent.items))
@@ -938,6 +989,7 @@ function PdfPageView({
         clearPdfCanvas(canvasRef.current);
         textLayerRef.current?.replaceChildren();
         setTargetHighlightRects([]);
+        onPageCharModelRendered?.(pageNumber, null);
         if (focused && targetEvidence?.paperId === activePaper?.id) {
           onEvidenceHighlightResolved?.(false);
         }
@@ -949,8 +1001,9 @@ function PdfPageView({
     return () => {
       cancelled = true;
       renderTask?.cancel();
+      onPageCharModelRendered?.(pageNumber, null);
     };
-  }, [activePaper?.id, focused, onEvidenceHighlightResolved, onPageTextRendered, pageNumber, pdfDocument, stageWidth, targetEvidence?.pageTextStart, targetEvidence?.quote, targetEvidence?.requestId, zoom]);
+  }, [activePaper?.id, focused, onEvidenceHighlightResolved, onPageCharModelRendered, onPageTextRendered, pageNumber, pdfDocument, stageWidth, targetEvidence?.pageTextStart, targetEvidence?.quote, targetEvidence?.requestId, zoom]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(updateTargetHighlightRects);
@@ -981,19 +1034,35 @@ function PdfPageView({
       <div aria-label={pageNumber === 1 ? "PDF 批注覆盖层" : undefined} className="pdf-annotation-overlay">
         {pageAnnotations.map((annotation) =>
           annotation.rects.map((rect, index) => (
-            <div
+            <button
               aria-label={`${getOverlayLabel(annotation.kind)}：第 ${annotation.page} 页：${annotation.excerpt}`}
               className={`pdf-overlay-mark ${annotation.kind}`}
               key={`${annotation.id}-${index}`}
+              onClick={(event) => {
+                const pageElement = pageShellRef.current;
+                if (pageElement) {
+                  onAnnotationActivate?.(annotation, pageElement, event.currentTarget);
+                }
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
               style={getOverlayStyle(
                 annotation.kind,
                 rect,
                 annotation.kind === "highlight" ? annotation.color : undefined
               )}
               title={`第 ${annotation.page} 页：${annotation.excerpt}`}
+              type="button"
             />
           ))
         )}
+        {selectionPreviewRects.map((rect, index) => (
+          <div
+            aria-hidden="true"
+            className="pdf-overlay-mark selection-preview"
+            key={`selection-preview-${pageNumber}-${index}`}
+            style={getOverlayStyle("highlight", rect, "blue")}
+          />
+        ))}
         {targetHighlightRects.map((rect, index) => (
           <div
             aria-label={`Agent 引用证据高亮：第 ${pageNumber} 页：${targetEvidence?.quote ?? ""}`}
@@ -1095,6 +1164,8 @@ export function PdfReader({
   const activePaper = selectedPapers[0] ?? null;
   const stageRef = useRef<HTMLDivElement | null>(null);
   const documentFrameRef = useRef<HTMLDivElement | null>(null);
+  const pageCharModelsRef = useRef(new Map<number, PageCharModel>());
+  const dragSelectionRef = useRef<PdfDragSelection | null>(null);
   const [documentFrameWidth, setDocumentFrameWidth] = useState(0);
   const [annotations, setAnnotations] = useState<PdfAnnotationV2[]>([]);
   const annotationsRef = useRef<PdfAnnotationV2[]>([]);
@@ -1108,8 +1179,10 @@ export function PdfReader({
   const [stageWidth, setStageWidth] = useState(960);
   const [status, setStatus] = useState("选择文段后可添加高亮、划线，或把选中文段交给 AI。");
   const [selection, setSelection] = useState<PdfSelection | null>(null);
+  const [selectionPreview, setSelectionPreview] = useState<PdfSelectionPreview | null>(null);
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
   const [annotationNoteDraft, setAnnotationNoteDraft] = useState("");
+  const [annotationPopup, setAnnotationPopup] = useState<PdfAnnotationPopup | null>(null);
   const publicationIntentsRef = useRef(new Map<string, "private" | "public">());
   const publicationTransportsRef = useRef(new Map<string, PublicationTransport>());
   const replayedPublicationKeysRef = useRef(new Set<string>());
@@ -1127,6 +1200,14 @@ export function PdfReader({
   const fulltext = usePdfFulltextStore(activePaper?.id);
   const { documentHasNoTextLayer, pageTexts, scannedPages } = fulltext;
   const pageNumbers = useMemo(() => getPageNumbers(pageCount), [pageCount]);
+  const annotationsInReadingOrder = useMemo(
+    () => sortPdfAnnotationsByReadingOrder(annotations),
+    [annotations]
+  );
+  const popupAnnotation = useMemo(
+    () => annotations.find((annotation) => annotation.id === annotationPopup?.annotationId) ?? null,
+    [annotationPopup?.annotationId, annotations]
+  );
   /*
    * Structured citation parsing, kept in the reader because this is where the PDF bytes are.
    * Its snapshot is stored as the paper's `citations` artifact; thin reading reads it back when
@@ -1154,6 +1235,13 @@ export function PdfReader({
   }, [activePaper?.id, targetEvidence]);
 
   const handlePageTextRendered = fulltext.onPageTextRendered;
+  const handlePageCharModelRendered = useCallback((pageNumber: number, model: PageCharModel | null) => {
+    if (model) {
+      pageCharModelsRef.current.set(pageNumber, model);
+    } else {
+      pageCharModelsRef.current.delete(pageNumber);
+    }
+  }, []);
 
   useEffect(() => {
     setTeamAnnotations([]);
@@ -1266,7 +1354,11 @@ export function PdfReader({
 
   useEffect(() => {
     setSelection(null);
+    setSelectionPreview(null);
+    dragSelectionRef.current = null;
+    pageCharModelsRef.current.clear();
     setActiveAnnotationId(null);
+    setAnnotationPopup(null);
     setPageCount(1);
     setFocusedPage(1);
 
@@ -1402,11 +1494,149 @@ export function PdfReader({
     window.getSelection()?.removeAllRanges();
   }
 
+  function buildSelectionFromLogicalRange(
+    drag: PdfDragSelection,
+    model: PageCharModel,
+    pageElement: HTMLElement
+  ): PdfSelection | null {
+    const stageElement = stageRef.current;
+    if (!stageElement) return null;
+    const range = buildPdfSelectionRange(model, {
+      anchorOffset: drag.anchorOffset,
+      headOffset: drag.headOffset,
+      pageIndex: drag.page
+    });
+    const clientBounds = getAnnotationClientBounds(pageElement, range.rects);
+    if (!range.text || range.rects.length === 0 || !clientBounds) return null;
+    const stageRect = stageElement.getBoundingClientRect();
+    const menuPosition = resolvePdfSelectionMenuPosition({
+      contentWidth: stageElement.scrollWidth,
+      rect: clientBounds,
+      scrollLeft: stageElement.scrollLeft,
+      scrollTop: stageElement.scrollTop,
+      stageRect: {
+        left: stageRect.left + stageElement.clientLeft,
+        top: stageRect.top + stageElement.clientTop
+      }
+    });
+    return {
+      excerpt: range.text,
+      menuLeft: menuPosition.left,
+      menuPlacement: menuPosition.placement,
+      menuTop: menuPosition.top,
+      normalizedStart: normalizeQuoteForSearch(
+        buildPdfSelectionText(model.chars.slice(0, range.startOffset))
+      ).length,
+      page: drag.page,
+      rects: range.rects
+    };
+  }
+
+  function handleSelectionPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.button !== 0 || event.isPrimary === false) return;
+    const target = event.target instanceof Element ? event.target : null;
+    const textLayer = target?.closest<HTMLElement>(".pdf-text-layer");
+    const pageElement = textLayer?.closest<HTMLElement>(".pdf-page-shell");
+    const page = Number(pageElement?.dataset.page);
+    const model = pageCharModelsRef.current.get(page);
+    if (!pageElement || !model || model.chars.length === 0) return;
+    const point = clientPointToPdfPoint(pageElement, event.clientX, event.clientY);
+    if (!point) return;
+
+    event.preventDefault();
+    clearBrowserSelection();
+    const sourceIndexValue = target?.closest<HTMLElement>("[data-pdf-source-index]")
+      ?.dataset.pdfSourceIndex;
+    const sourceIndex = sourceIndexValue === undefined ? undefined : Number(sourceIndexValue);
+    const hit = hitTestPdfInsertion(model, point, {
+      sourceIndex: Number.isInteger(sourceIndex) ? sourceIndex : undefined
+    });
+    dragSelectionRef.current = {
+      anchorOffset: hit.offset,
+      headCharacterIndex: hit.characterIndex,
+      headOffset: hit.offset,
+      page,
+      pointerId: event.pointerId
+    };
+    setSelection(null);
+    setSelectionPreview(null);
+    setAnnotationPopup(null);
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture is a stability enhancement; selection still works without it.
+    }
+  }
+
+  function updateSelectionPointer(event: ReactPointerEvent<HTMLDivElement>, finish: boolean) {
+    const drag = dragSelectionRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const model = pageCharModelsRef.current.get(drag.page);
+    const pageElement = stageRef.current?.querySelector<HTMLElement>(`[data-page="${drag.page}"]`);
+    if (!model || !pageElement) {
+      dragSelectionRef.current = null;
+      setSelectionPreview(null);
+      return;
+    }
+    const point = clientPointToPdfPoint(pageElement, event.clientX, event.clientY);
+    if (!point) return;
+    event.preventDefault();
+    const hitElement = typeof document.elementFromPoint === "function"
+      ? document.elementFromPoint(event.clientX, event.clientY)
+      : null;
+    const sourceIndexValue = hitElement
+      ?.closest<HTMLElement>("[data-pdf-source-index]")
+      ?.dataset.pdfSourceIndex;
+    const sourceIndex = sourceIndexValue === undefined ? undefined : Number(sourceIndexValue);
+    const hit = hitTestPdfInsertion(model, point, {
+      previousCharacterIndex: drag.headCharacterIndex,
+      selectionAnchorOffset: drag.anchorOffset,
+      sourceIndex: Number.isInteger(sourceIndex) ? sourceIndex : undefined
+    });
+    drag.headCharacterIndex = hit.characterIndex;
+    drag.headOffset = hit.offset;
+    const range = buildPdfSelectionRange(model, {
+      anchorOffset: drag.anchorOffset,
+      headOffset: drag.headOffset,
+      pageIndex: drag.page
+    });
+    setSelectionPreview(range.rects.length > 0 ? { page: drag.page, rects: range.rects } : null);
+
+    if (!finish) return;
+    setSelection(buildSelectionFromLogicalRange(drag, model, pageElement));
+    dragSelectionRef.current = null;
+    try {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+    } catch {
+      // The WebView may already have released capture as part of pointerup.
+    }
+  }
+
+  function handleSelectionPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    updateSelectionPointer(event, false);
+  }
+
+  function handleSelectionPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    updateSelectionPointer(event, true);
+  }
+
+  function handleSelectionPointerCancel(event: ReactPointerEvent<HTMLDivElement>) {
+    if (dragSelectionRef.current?.pointerId !== event.pointerId) return;
+    dragSelectionRef.current = null;
+    setSelection(null);
+    setSelectionPreview(null);
+  }
+
   function handleTextSelection(event: ReactMouseEvent<HTMLDivElement>) {
     const target = event.target instanceof Element ? event.target : null;
     if (target?.closest(".pdf-selection-menu")) {
       return;
     }
+    // Real pages use the character-geometry engine. This fallback keeps reduced WebViews and the
+    // DOM-only test harness usable when no page model could be constructed.
+    if (pageCharModelsRef.current.size > 0) return;
 
     const stageElement = stageRef.current;
     const browserSelection = window.getSelection();
@@ -1425,6 +1655,33 @@ export function PdfReader({
     }
 
     const stageElement = stageRef.current;
+    if (stageElement && pageCharModelsRef.current.size > 0) {
+      if (!selection) return;
+      event.preventDefault();
+      const stageRect = stageElement.getBoundingClientRect();
+      const menuPosition = resolvePdfSelectionMenuPosition({
+        contentWidth: stageElement.scrollWidth,
+        rect: {
+          bottom: event.clientY,
+          left: event.clientX,
+          top: event.clientY,
+          width: 0
+        },
+        scrollLeft: stageElement.scrollLeft,
+        scrollTop: stageElement.scrollTop,
+        stageRect: {
+          left: stageRect.left + stageElement.clientLeft,
+          top: stageRect.top + stageElement.clientTop
+        }
+      });
+      setSelection({
+        ...selection,
+        menuLeft: menuPosition.left,
+        menuPlacement: menuPosition.placement,
+        menuTop: menuPosition.top
+      });
+      return;
+    }
     const browserSelection = window.getSelection();
     if (!stageElement || !browserSelection) {
       return;
@@ -1621,7 +1878,7 @@ export function PdfReader({
     queueMicrotask(() => void applyPublication(pending, operation));
   }
 
-  function addAnnotation(kind: AnnotationKind) {
+  function addAnnotation(kind: Exclude<AnnotationKind, "note">) {
     if (!selection || !activePaper) {
       setStatus("请先在真实 PDF 文本层中选择文段。");
       return;
@@ -1634,6 +1891,7 @@ export function PdfReader({
       excerpt: activeSelection.excerpt,
       id: `${kind}-${Date.now()}-${annotations.length}`,
       kind,
+      normalizedStart: activeSelection.normalizedStart,
       page: activeSelection.page,
       paperIdentity: resolvePaperIdentity(activePaper),
       publication: { desiredVisibility: "private", state: "not_published" },
@@ -1662,6 +1920,7 @@ export function PdfReader({
     setSidebarMode("annotations");
     setSidebarCollapsed(false);
     setSelection(null);
+    setSelectionPreview(null);
     clearBrowserSelection();
   }
 
@@ -1678,6 +1937,7 @@ export function PdfReader({
 
     onAddSelectionToConversation?.(context);
     setSelection(null);
+    setSelectionPreview(null);
     clearBrowserSelection();
     setStatus("已将选中文段添加到对话。");
   }
@@ -1685,10 +1945,73 @@ export function PdfReader({
   function openAnnotationEditor(annotation: PdfAnnotationV2) {
     setActiveAnnotationId(annotation.id);
     setAnnotationNoteDraft(annotation.note || "");
+    setAnnotationPopup(null);
     // 如果是高亮，打开颜色选择器
     if (annotation.kind === "highlight" && annotation.color) {
       setSelectedColor(annotation.color);
     }
+  }
+
+  function openPageAnnotationEditor(
+    annotation: PdfAnnotationV2,
+    _pageElement: HTMLElement,
+    anchorElement: HTMLElement
+  ) {
+    const stageElement = stageRef.current;
+    if (!stageElement) return;
+    const stageRect = stageElement.getBoundingClientRect();
+    const position = resolvePdfSelectionMenuPosition({
+      contentWidth: stageElement.scrollWidth,
+      rect: anchorElement.getBoundingClientRect(),
+      scrollLeft: stageElement.scrollLeft,
+      scrollTop: stageElement.scrollTop,
+      stageRect: {
+        left: stageRect.left + stageElement.clientLeft,
+        top: stageRect.top + stageElement.clientTop
+      }
+    });
+    setActiveAnnotationId(annotation.id);
+    setAnnotationNoteDraft(annotation.note || "");
+    setAnnotationPopup({
+      annotationId: annotation.id,
+      left: position.left,
+      placement: position.placement,
+      top: position.top
+    });
+    setSelection(null);
+    setSelectionPreview(null);
+    setStatus(`正在编辑第 ${annotation.page} 页${getAnnotationLabel(annotation.kind)}的注释。`);
+  }
+
+  function cancelAnnotationEditing() {
+    setActiveAnnotationId(null);
+    setAnnotationNoteDraft("");
+    setAnnotationPopup(null);
+  }
+
+  function locateAnnotation(annotation: PdfAnnotationV2) {
+    setFocusedPage(annotation.page);
+    setStatus(`已定位到第 ${annotation.page} 页的${getAnnotationLabel(annotation.kind)}。`);
+    window.requestAnimationFrame(() => {
+      const stageElement = stageRef.current;
+      const pageElement = stageElement?.querySelector<HTMLElement>(`[data-page="${annotation.page}"]`);
+      if (!stageElement || !pageElement) return;
+      const stageRect = getElementContentRect(stageElement);
+      const pageRect = getPdfPageSurfaceRect(pageElement);
+      const firstRectTop = annotation.rects.length > 0
+        ? Math.min(...annotation.rects.map((rect) => rect.top))
+        : 0;
+      const annotationClientTop = pageRect.top + pageRect.height * firstRectTop / 100;
+      const top = Math.max(
+        0,
+        stageElement.scrollTop + annotationClientTop - stageRect.top - stageElement.clientHeight * 0.28
+      );
+      if (typeof stageElement.scrollTo === "function") {
+        stageElement.scrollTo({ behavior: "smooth", top });
+      } else if (typeof pageElement.scrollIntoView === "function") {
+        pageElement.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
   }
 
   function saveAnnotationNote() {
@@ -1709,6 +2032,8 @@ export function PdfReader({
     }
     setStatus("已保存批注。");
     setActiveAnnotationId(null);
+    setAnnotationNoteDraft("");
+    setAnnotationPopup(null);
   }
 
   function updateHighlightColor(annotationId: string, color: HighlightColor) {
@@ -1724,6 +2049,7 @@ export function PdfReader({
     );
     setStatus("已更新高亮颜色。");
     setActiveAnnotationId(null);
+    setAnnotationPopup(null);
   }
 
   function setAnnotationPublic(annotationId: string, isPublic: boolean) {
@@ -1751,6 +2077,7 @@ export function PdfReader({
     const remove = () => {
       setCurrentAnnotations((current) => current.filter((item) => item.id !== annotation.id));
       setActiveAnnotationId(null);
+      setAnnotationPopup(null);
       setStatus("已删除批注。");
     };
     const pendingCreate = annotation.publication.state === "pending_create" &&
@@ -1764,6 +2091,7 @@ export function PdfReader({
     }
     if (transport || annotation.publication.state === "pending_retract") {
       setActiveAnnotationId(null);
+      setAnnotationPopup(null);
       let settledPublication: PdfAnnotationPublication | undefined;
       try {
         settledPublication = await transport?.promise;
@@ -1833,6 +2161,7 @@ export function PdfReader({
     });
     setCurrentAnnotations((current) => current.map((item) => item.id === annotation.id ? pending : item));
     setActiveAnnotationId(null);
+    setAnnotationPopup(null);
     await Promise.resolve();
     const retracted = await applyPublication(pending, "retract");
     if (retracted?.state === "not_published") remove();
@@ -2002,8 +2331,13 @@ export function PdfReader({
                   </label>
                   {annotations.length > 0 ? (
                     <ul className="pdf-annotation-list">
-                      {annotations.map((annotation) => (
-                        <li className={`pdf-annotation-item ${annotation.kind}`} key={annotation.id}>
+                      {annotationsInReadingOrder.map((annotation) => (
+                        <li
+                          className={`pdf-annotation-item ${annotation.kind} ${
+                            activeAnnotationId === annotation.id ? "expanded" : ""
+                          }`}
+                          key={annotation.id}
+                        >
                           {annotation.kind === "highlight" && annotation.color && (
                             <div
                               className="annotation-color-indicator"
@@ -2011,10 +2345,16 @@ export function PdfReader({
                             />
                           )}
                           <button
+                            aria-expanded={activeAnnotationId === annotation.id}
                             aria-label={`编辑批注：${annotation.excerpt}`}
                             className="pdf-annotation-summary"
                             onClick={() => openAnnotationEditor(annotation)}
-                            title="打开此批注的补充笔记"
+                            onDoubleClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              locateAnnotation(annotation);
+                            }}
+                            title="展开完整内容；双击定位到 PDF 原文"
                             type="button"
                           >
                             <span className="pdf-annotation-kind">{annotation.text}</span>
@@ -2028,16 +2368,23 @@ export function PdfReader({
                               <div className="note-editor">
                                 <textarea
                                   aria-label="补充批注笔记"
+                                  maxLength={10_000}
                                   onChange={(e) => setAnnotationNoteDraft(e.target.value)}
-                                  placeholder="添加批注..."
+                                  placeholder="添加注释，支持 Markdown..."
                                   rows={3}
                                   value={annotationNoteDraft}
                                 />
+                                <div aria-label="批注 Markdown 实时预览" aria-live="polite">
+                                  <PdfAnnotationMarkdown
+                                    emptyLabel="输入后将在这里实时显示排版效果。"
+                                    value={annotationNoteDraft}
+                                  />
+                                </div>
                                 <div className="editor-actions">
                                   <button onClick={saveAnnotationNote} type="button" className="save-button">
                                     保存笔记
                                   </button>
-                                  <button onClick={() => setActiveAnnotationId(null)} type="button" className="cancel-button">
+                                  <button onClick={cancelAnnotationEditing} type="button" className="cancel-button">
                                     取消
                                   </button>
                                 </div>
@@ -2068,11 +2415,10 @@ export function PdfReader({
                               </button>
                             </div>
                           ) : annotation.note ? (
-                            <div className="annotation-note-preview">
-                              补充：{annotation.note.length > 50
-                                ? `${annotation.note.substring(0, 50)}...`
-                                : annotation.note}
-                            </div>
+                            <PdfAnnotationMarkdown
+                              className="annotation-note-preview pdf-annotation-markdown"
+                              value={annotation.note}
+                            />
                           ) : null}
                           <label className="pdf-annotation-public-toggle">
                             <input
@@ -2224,6 +2570,10 @@ export function PdfReader({
             className="pdf-stage"
             onContextMenu={handleSelectionContextMenu}
             onMouseUp={handleTextSelection}
+            onPointerCancel={handleSelectionPointerCancel}
+            onPointerDown={handleSelectionPointerDown}
+            onPointerMove={handleSelectionPointerMove}
+            onPointerUp={handleSelectionPointerUp}
             ref={stageRef}
           >
             {documentHasNoTextLayer ? (
@@ -2241,9 +2591,14 @@ export function PdfReader({
                     key={pageNumber}
                     noTextLayer={scannedPages.has(pageNumber)}
                     onEvidenceHighlightResolved={handleEvidenceHighlightResolved}
+                    onAnnotationActivate={openPageAnnotationEditor}
+                    onPageCharModelRendered={handlePageCharModelRendered}
                     onPageTextRendered={handlePageTextRendered}
                     pageNumber={pageNumber}
                     pdfDocument={pdfDocument}
+                    selectionPreviewRects={selectionPreview?.page === pageNumber
+                      ? selectionPreview.rects
+                      : undefined}
                     stageWidth={stageWidth}
                     targetEvidence={targetEvidence}
                     zoom={zoom}
@@ -2280,16 +2635,46 @@ export function PdfReader({
                   </button>
                 </div>
                 <div className="selection-menu-row">
-                  <button onClick={() => addAnnotation("note")} title="给选中文段添加旁注" type="button">
-                    注释
-                  </button>
-                </div>
-                <div className="selection-menu-row">
                   <button onClick={addSelectionToConversation} title="把选中文段加入右侧对话上下文" type="button" className="add-to-conversation">
                     加入对话
                   </button>
                 </div>
               </div>
+            ) : null}
+            {annotationPopup && popupAnnotation ? (
+              <aside
+                aria-label={`${getAnnotationLabel(popupAnnotation.kind)}注释编辑器：${popupAnnotation.excerpt}`}
+                className={`pdf-annotation-popover is-${annotationPopup.placement}`}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") cancelAnnotationEditing();
+                }}
+                style={{ left: annotationPopup.left, top: annotationPopup.top }}
+              >
+                <header>
+                  <strong>{getAnnotationLabel(popupAnnotation.kind)} · 第 {popupAnnotation.page} 页</strong>
+                  <button aria-label="关闭注释编辑器" onClick={cancelAnnotationEditing} type="button">×</button>
+                </header>
+                <p className="pdf-annotation-popover-excerpt">{popupAnnotation.excerpt}</p>
+                <textarea
+                  aria-label="页内批注内容"
+                  autoFocus
+                  maxLength={10_000}
+                  onChange={(event) => setAnnotationNoteDraft(event.currentTarget.value)}
+                  placeholder="添加注释，支持 Markdown..."
+                  rows={4}
+                  value={annotationNoteDraft}
+                />
+                <div aria-label="页内批注 Markdown 实时预览" aria-live="polite">
+                  <PdfAnnotationMarkdown
+                    emptyLabel="输入后将在这里实时显示排版效果。"
+                    value={annotationNoteDraft}
+                  />
+                </div>
+                <div className="editor-actions">
+                  <button className="save-button" onClick={saveAnnotationNote} type="button">保存注释</button>
+                  <button className="cancel-button" onClick={cancelAnnotationEditing} type="button">取消</button>
+                </div>
+              </aside>
             ) : null}
           </div>
         </section>

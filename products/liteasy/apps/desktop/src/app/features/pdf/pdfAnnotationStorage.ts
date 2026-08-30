@@ -42,6 +42,7 @@ type PdfAnnotationBase = {
   id: string;
   kind: PdfAnnotationKind;
   note?: string;
+  normalizedStart?: number;
   page: number;
   paperIdentity: PaperIdentity;
   rects: PdfAnnotationRect[];
@@ -86,7 +87,7 @@ export type PdfAnnotationRestartRecovery = PdfAnnotationPrivateState & {
 
 type PdfAnnotationEdit = Partial<Pick<
   PdfAnnotation,
-  "color" | "excerpt" | "kind" | "note" | "page" | "publication" | "rects" | "text"
+  "color" | "excerpt" | "kind" | "normalizedStart" | "note" | "page" | "publication" | "rects" | "text"
 >> & { updatedAt: string };
 
 type PdfAnnotationPublicationReceipt = {
@@ -222,6 +223,8 @@ function hasAnnotationFields(value: unknown) {
     typeof candidate.page === "number" && Number.isInteger(candidate.page) && candidate.page > 0 &&
     Array.isArray(candidate.rects) && candidate.rects.every(isAnnotationRect) &&
     (candidate.note === undefined || typeof candidate.note === "string") &&
+    (candidate.normalizedStart === undefined ||
+      (isFiniteNumber(candidate.normalizedStart) && candidate.normalizedStart >= 0)) &&
     (candidate.color === undefined || highlightColors.has(candidate.color as PdfHighlightColor)) &&
     typeof candidate.createdAt === "string" && Number.isFinite(Date.parse(candidate.createdAt)) &&
     typeof candidate.updatedAt === "string" && Number.isFinite(Date.parse(candidate.updatedAt)) &&
