@@ -63,6 +63,7 @@ export type AgentRuntimeExecutionContext = ActionContext & {
   agentCore?: RuntimeAgentCoreContext;
   clarifySemanticPlan?: SemanticPlanClarifier;
   contextView?: AgentRuntimeContextView;
+  executionSource?: "manager_tool" | "semantic_command" | "ui_action";
   generateUIDsl?: (input: {
     plan: SemanticActionPlan;
     statusText: string;
@@ -248,6 +249,18 @@ export type RuntimeActionInvocation =
       input: {
         scope: "current_workspace";
       };
+    }
+  | {
+      actionId: "workflow.install_draft";
+      input: {
+        draftId: string;
+      };
+    }
+  | {
+      actionId: "plugin.install_build";
+      input: {
+        buildId: string;
+      };
     };
 
 export type SemanticFallbackExplanation = {
@@ -282,6 +295,7 @@ export type SemanticActionPlan = {
     | "pane.focus"
     | "theme.apply"
     | "panel.change"
+    | "plugin.install_build"
     | "profile.open_academic_archive"
     | "selected_set.import"
     | "recommendation.refresh"
@@ -291,6 +305,7 @@ export type SemanticActionPlan = {
     | "workspace.batch_update_documents"
     | "workspace.delete_documents"
     | "workspace.overwrite_documents"
+    | "workflow.install_draft"
     | "unknown";
   planId: string;
   plannerSource?: SemanticPlannerSource;

@@ -65,6 +65,9 @@ export type ActionContext = {
   }) => string | Promise<string>;
   settingsStore?: SettingsStoreLike;
   startArtifactAnalysis?: (artifactType: ArtifactType) => string;
+  installWorkflowDraft?: (input: { draftId: string }) => string | Promise<string>;
+  describePluginBuildForApproval?: (buildId: string) => string | Promise<string>;
+  installPluginBuild?: (input: { buildId: string }) => string | Promise<string>;
 };
 
 export type ActionResult = {
@@ -212,11 +215,24 @@ export type ActionInvocation =
       input: {
         scope: "current_workspace";
       };
+    }
+  | {
+      actionId: "workflow.install_draft";
+      input: {
+        draftId: string;
+      };
+    }
+  | {
+      actionId: "plugin.install_build";
+      input: {
+        buildId: string;
+      };
     };
 
 export type JsonSchemaType = "array" | "boolean" | "number" | "object" | "string";
 
 export type JsonSchema = {
+  additionalProperties?: boolean;
   enum?: readonly unknown[];
   items?: JsonSchema;
   properties?: Record<string, JsonSchema>;
@@ -238,6 +254,7 @@ export type CapabilityFamily =
   | "selection"
   | "settings"
   | "theme"
+  | "workflow"
   | "workspace";
 
 export type CapabilityCost = "none" | "local_compute" | "cloud_tokens" | "paid_resource";
@@ -698,6 +715,48 @@ const registeredActionMetadata: RegisteredActionMetadata[] = [
     requiresConfirmation: false,
     reversible: true,
     riskLevel: "low"
+  }),
+  capability({
+    actionId: "plugin.install_build",
+    estimatedCost: "none",
+    estimatedLatencyMs: 500,
+    failureRecovery: "插件不会部分安装；请重新构建并检查 capability audit，或联系管理员检查沙箱宿主。",
+    family: "plugin",
+    inputSchema: {
+      additionalProperties: false,
+      properties: {
+        buildId: { type: "string" }
+      },
+      required: ["buildId"],
+      type: "object"
+    },
+    label: "安装已通过审计的沙箱插件",
+    outputSchema: actionResultSchema,
+    requiredContext: [],
+    requiresConfirmation: true,
+    reversible: true,
+    riskLevel: "high"
+  }),
+  capability({
+    actionId: "workflow.install_draft",
+    estimatedCost: "none",
+    estimatedLatencyMs: 150,
+    failureRecovery: "请重新生成工作流草案，或检查该草案是否仍然存在。",
+    family: "workflow",
+    inputSchema: {
+      additionalProperties: false,
+      properties: {
+        draftId: { type: "string" }
+      },
+      required: ["draftId"],
+      type: "object"
+    },
+    label: "安装用户工作流草案",
+    outputSchema: actionResultSchema,
+    requiredContext: [],
+    requiresConfirmation: true,
+    reversible: false,
+    riskLevel: "medium"
   }),
   capability({
     actionId: "layout.split_two",
@@ -1703,6 +1762,26 @@ export async function executeAction(
 
     return {
       message: await context.openOrganizationSharedLibrary()
+    };
+  }
+
+  if (invocation.actionId === "workflow.install_draft") {
+    if (!context.installWorkflowDraft) {
+      throw new Error("workflow.install_draft requires a workflow draft handler");
+    }
+
+    return {
+      message: await context.installWorkflowDraft(invocation.input)
+    };
+  }
+
+  if (invocation.actionId === "plugin.install_build") {
+    if (!context.installPluginBuild) {
+      throw new Error("plugin.install_build requires a plugin build handler");
+    }
+
+    return {
+      message: await context.installPluginBuild(invocation.input)
     };
   }
 

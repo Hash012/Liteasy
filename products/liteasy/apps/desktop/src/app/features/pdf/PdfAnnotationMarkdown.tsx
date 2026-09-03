@@ -1,5 +1,8 @@
 import ReactMarkdown from "react-markdown";
+import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import "katex/dist/katex.min.css";
 
 type PdfAnnotationMarkdownProps = {
   className?: string;
@@ -29,7 +32,8 @@ export function PdfAnnotationMarkdown({
             <a {...props} rel="noreferrer" target="_blank">{children}</a>
           )
         }}
-        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeKatex]}
+        remarkPlugins={[remarkGfm, remarkMath]}
       >
         {markdown}
       </ReactMarkdown>

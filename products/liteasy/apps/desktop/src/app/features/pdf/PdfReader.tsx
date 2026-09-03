@@ -5,18 +5,23 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ClipboardEvent as ReactClipboardEvent,
+  type DragEvent as ReactDragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent
 } from "react";
 import { Button } from "@fluentui/react-components";
 import {
   CommentRegular,
+  CopyRegular,
   DeleteRegular,
   DocumentRegular,
   EditRegular,
   PanelLeftContractRegular,
   PanelLeftExpandRegular,
-  ShareRegular
+  ShareRegular,
+  WhiteboardRegular
 } from "@fluentui/react-icons";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
@@ -63,6 +68,7 @@ import {
 } from "./pdfSelectionEngine";
 import { sortPdfAnnotationsByReadingOrder } from "./pdfAnnotationReadingOrder";
 import { PdfAnnotationMarkdown } from "./PdfAnnotationMarkdown";
+import { PdfMarkdownTextBox } from "./PdfMarkdownTextBox";
 import { usePdfCitationParsing } from "./usePdfCitationParsing";
 import { usePdfFulltextStore } from "./usePdfFulltextStore";
 import type { TeamAnnotation } from "../organization/teamAnnotationClient";
@@ -72,6 +78,32 @@ import type {
   LiteratureRelation,
   LiteratureRelationsResult
 } from "../paper-identity/literature.types";
+import {
+  PdfReaderToolbar,
+  type PdfPageLayoutMode
+} from "./PdfReaderToolbar";
+import {
+  findPdfReaderSearchMatches,
+  type PdfReaderSearchMatch
+} from "./pdfReaderSearch";
+import {
+  PdfWhiteboard,
+  pdfWhiteboardDragMime,
+  type PdfWhiteboardDraggedExcerpt
+} from "./pdf-whiteboard/PdfWhiteboard";
+import {
+  appendPdfWhiteboardNode,
+  createEmptyPdfWhiteboard,
+  createPdfWhiteboardNode,
+  nextPdfWhiteboardNodePosition
+} from "./pdf-whiteboard/pdfWhiteboardModel";
+import {
+  loadPdfWhiteboard,
+  normalizePdfWhiteboardDocument,
+  pdfWhiteboardStorageKey,
+  savePdfWhiteboard
+} from "./pdf-whiteboard/pdfWhiteboardStorage";
+import type { PdfWhiteboardDocument } from "./pdf-whiteboard/pdfWhiteboard.types";
 
 ensureReadableStreamAsyncIterator();
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -88,6 +120,29 @@ type PdfSelection = {
   page: number;
   rects: PdfAnnotationRect[];
 };
+
+export type PdfReaderSelectionSnapshot = {
+  excerpt: string;
+  page: number;
+  paperId: string;
+  paperTitle: string;
+  rects: PdfAnnotationRect[];
+  selectionId: string;
+};
+
+function createPdfReaderSelectionId(
+  paperId: string,
+  page: number,
+  normalizedStart: number | undefined,
+  excerpt: string
+) {
+  let hash = 2166136261;
+  for (let index = 0; index < excerpt.length; index += 1) {
+    hash ^= excerpt.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${paperId}:${page}:${normalizedStart ?? "unknown"}:${excerpt.length}:${(hash >>> 0).toString(16)}`;
+}
 
 type PdfSelectionPreview = {
   page: number;
@@ -122,6 +177,11 @@ type PublicationTransport = {
 
 type PdfSidebarMode = "thumbnails" | "annotations";
 
+const pdfPageLayoutStorageKey = "liteasy:pdf-reader:page-layout";
+const pdfMarginCommentsStorageKey = "liteasy:pdf-reader:margin-comments";
+const pdfMarginCommentConnectorsStorageKey = "liteasy:pdf-reader:margin-comment-connectors";
+const pdfWhiteboardVisibleStorageKey = "liteasy:pdf-reader:whiteboard-visible";
+
 export type PdfAnnotationPublicationChange = {
   annotation: PdfAnnotationV2;
   literatureHints?: ReturnType<typeof createPdfLiteratureHints>;
@@ -147,7 +207,9 @@ type PdfReaderProps = {
   selectedPapers: Paper[];
   targetEvidence?: PdfEvidenceTarget | null;
   zoom: number;
+  onZoomChange?: (zoom: number) => void;
   onAddSelectionToConversation?: (context: ReaderConversationContext) => void;
+  onSelectionChanged?: (selection: PdfReaderSelectionSnapshot | null) => void;
   onChangeAnnotationPublication?: (input: PdfAnnotationPublicationChange) => Promise<PdfAnnotationPublication>;
   loadOrganizationAnnotations?: (paper: Paper) => Promise<TeamAnnotation[]>;
   organizationAnnotationActorId?: string;
@@ -286,6 +348,10 @@ function getAnnotationLabel(kind: AnnotationKind) {
     return "划线";
   }
 
+  if (kind === "text") {
+    return "Markdown 文本框";
+  }
+
   return "注释";
 }
 
@@ -330,6 +396,10 @@ function getOverlayLabel(kind: AnnotationKind) {
 
   if (kind === "underline") {
     return "划线标注";
+  }
+
+  if (kind === "text") {
+    return "Markdown 文本框";
   }
 
   return "旁注";
@@ -764,9 +834,64 @@ function getPageNumbers(pageCount: number) {
   return Array.from({ length: Math.max(1, pageCount) }, (_, index) => index + 1);
 }
 
+function loadPdfPageLayoutMode(): PdfPageLayoutMode {
+  try {
+    const stored = window.localStorage.getItem(pdfPageLayoutStorageKey);
+    return stored === "single" || stored === "spread" || stored === "continuous"
+      ? stored
+      : "continuous";
+  } catch {
+    return "continuous";
+  }
+}
+
+function loadPdfMarginCommentsVisible() {
+  try {
+    return window.localStorage.getItem(pdfMarginCommentsStorageKey) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function loadPdfMarginCommentConnectorsVisible() {
+  try {
+    return window.localStorage.getItem(pdfMarginCommentConnectorsStorageKey) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+function loadPdfWhiteboardVisible() {
+  try {
+    return window.localStorage.getItem(pdfWhiteboardVisibleStorageKey) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function getVisiblePageNumbers(
+  layoutMode: PdfPageLayoutMode,
+  focusedPage: number,
+  pageCount: number
+) {
+  if (layoutMode === "continuous") return new Set(getPageNumbers(pageCount));
+  if (layoutMode === "single") return new Set([focusedPage]);
+  const firstPage = focusedPage % 2 === 0 ? focusedPage - 1 : focusedPage;
+  return new Set([firstPage, Math.min(pageCount, firstPage + 1)]);
+}
+
+export function resolvePdfPageStageWidth(
+  stageWidth: number,
+  layoutMode: PdfPageLayoutMode,
+  marginCommentsVisible: boolean
+) {
+  const layoutColumnWidth = layoutMode === "spread" ? stageWidth / 2 : stageWidth;
+  return Math.max(360, layoutColumnWidth - (marginCommentsVisible ? 236 : 0));
+}
+
 function getScaleForStage(baseViewport: PageViewport, stageWidth: number, zoom: number) {
-  const availableWidth = Math.max(420, stageWidth - 72);
-  return Math.max(0.6, Math.min(2.8, (availableWidth / baseViewport.width) * (zoom / 100)));
+  const availableWidth = Math.max(300, stageWidth - 72);
+  return Math.max(0.5, Math.min(2.8, (availableWidth / baseViewport.width) * (zoom / 100)));
 }
 
 function isJsdomRuntime() {
@@ -815,20 +940,80 @@ function getOverlayStyle(kind: AnnotationKind, rect: PdfAnnotationRect, color?: 
   }
 
   const highlightColor = color ? getHighlightColor(color) : getHighlightColor("yellow");
+  const verticalInset = rect.height * 0.05;
 
   return {
     backgroundColor: highlightColor,
-    height: `${rect.height}%`,
+    height: `${rect.height - verticalInset * 2}%`,
     left: `${rect.left - 0.1}%`,
-    top: `${rect.top - 0.05}%`,
+    top: `${rect.top + verticalInset}%`,
     width: `${rect.width + 0.2}%`
   };
 }
 
+export function buildPdfTextBoxRect(input: {
+  clientX: number;
+  clientY: number;
+  pageRect: Pick<DOMRect, "height" | "left" | "top" | "width">;
+}): PdfAnnotationRect | null {
+  if (input.pageRect.width <= 0 || input.pageRect.height <= 0) return null;
+  const width = 10;
+  const height = 4;
+  const left = (input.clientX - input.pageRect.left) / input.pageRect.width * 100;
+  const top = (input.clientY - input.pageRect.top) / input.pageRect.height * 100;
+  return {
+    height,
+    left: Math.max(0, Math.min(100 - width, left)),
+    top: Math.max(0, Math.min(100 - height, top)),
+    width
+  };
+}
+
+export function layoutPdfMarginComments(annotations: readonly PdfAnnotationV2[]) {
+  let nextTop = 2;
+  return annotations
+    .filter((annotation) =>
+      (annotation.kind === "highlight" || annotation.kind === "underline") &&
+      Boolean(annotation.note?.trim()) && annotation.rects.length > 0
+    )
+    .sort((left, right) =>
+      Math.min(...left.rects.map((rect) => rect.top)) -
+      Math.min(...right.rects.map((rect) => rect.top))
+    )
+    .map((annotation) => {
+      const anchorTop = Math.min(...annotation.rects.map((rect) => rect.top));
+      const anchorRect = annotation.rects.reduce((rightmost, rect) =>
+        rect.left + rect.width > rightmost.left + rightmost.width ? rect : rightmost
+      );
+      const top = Math.min(86, Math.max(anchorTop, nextTop));
+      nextTop = top + 13;
+      return { anchorRect, annotation, top };
+    });
+}
+
+export function buildPdfMarginConnectorGeometry(input: {
+  anchorRect: PdfAnnotationRect;
+  pageHeight: number;
+  pageWidth: number;
+}) {
+  const startX = input.pageWidth * Math.min(100, input.anchorRect.left + input.anchorRect.width) / 100;
+  const startY = input.pageHeight * (
+    input.anchorRect.top + input.anchorRect.height / 2
+  ) / 100;
+  const endX = input.pageWidth + 14;
+  return {
+    left: startX,
+    length: Math.max(0, endX - startX),
+    top: startY
+  };
+}
+
 type PdfPageViewProps = {
+  activeSearchMatch?: PdfReaderSearchMatch;
   annotations: PdfAnnotationV2[];
   activePaper: Paper | null;
   focused: boolean;
+  layoutVisible: boolean;
   /** This page rendered but yielded no text, so nothing on it can be located by character. */
   noTextLayer?: boolean;
   onAnnotationActivate?: (
@@ -836,11 +1021,25 @@ type PdfPageViewProps = {
     pageElement: HTMLElement,
     anchorElement: HTMLElement
   ) => void;
+  activeTextAnnotationId?: string | null;
+  onTextAnnotationActivate?: (annotationId: string) => void;
+  onTextAnnotationCommit?: (
+    annotationId: string,
+    markdown: string,
+    rect: PdfAnnotationRect
+  ) => void;
+  onTextAnnotationDelete?: (annotation: PdfAnnotationV2) => void;
+  onTextAnnotationMove?: (annotationId: string, rect: PdfAnnotationRect) => void;
+  onTextAnnotationOpacityChange?: (annotationId: string, opacity: number) => void;
+  marginCommentConnectorsVisible?: boolean;
+  marginCommentsVisible?: boolean;
   onEvidenceHighlightResolved?: (matched: boolean) => void;
   onPageCharModelRendered?: (pageNumber: number, model: PageCharModel | null) => void;
   onPageTextRendered?: (input: PdfPageText) => void;
   pageNumber: number;
   pdfDocument: PDFDocumentProxy | null;
+  searchMatches?: PdfReaderSearchMatch[];
+  searchQuery?: string;
   selectionPreviewRects?: PdfAnnotationRect[];
   stageWidth: number;
   targetEvidence?: PdfEvidenceTarget | null;
@@ -848,16 +1047,28 @@ type PdfPageViewProps = {
 };
 
 function PdfPageView({
+  activeSearchMatch,
+  activeTextAnnotationId,
   activePaper,
   annotations,
   focused,
+  layoutVisible,
+  marginCommentConnectorsVisible = true,
+  marginCommentsVisible = false,
   noTextLayer = false,
   onAnnotationActivate,
   onEvidenceHighlightResolved,
   onPageCharModelRendered,
   onPageTextRendered,
+  onTextAnnotationActivate,
+  onTextAnnotationCommit,
+  onTextAnnotationDelete,
+  onTextAnnotationMove,
+  onTextAnnotationOpacityChange,
   pageNumber,
   pdfDocument,
+  searchMatches = [],
+  searchQuery = "",
   selectionPreviewRects = [],
   stageWidth,
   targetEvidence,
@@ -867,6 +1078,10 @@ function PdfPageView({
   const pageShellRef = useRef<HTMLElement | null>(null);
   const textLayerRef = useRef<HTMLDivElement | null>(null);
   const [pageSize, setPageSize] = useState({ height: 980, width: 760 });
+  const [searchHighlightRects, setSearchHighlightRects] = useState<Array<{
+    active: boolean;
+    rect: PdfAnnotationRect;
+  }>>([]);
   const [targetHighlightRects, setTargetHighlightRects] = useState<PdfAnnotationRect[]>([]);
 
   function updateTargetHighlightRects() {
@@ -901,6 +1116,25 @@ function PdfPageView({
     onEvidenceHighlightResolved?.(rects.length > 0);
   }
 
+  function updateSearchHighlightRects() {
+    const textLayer = textLayerRef.current;
+    const pageElement = pageShellRef.current;
+    if (!textLayer || !pageElement || !searchQuery || searchMatches.length === 0) {
+      setSearchHighlightRects([]);
+      return;
+    }
+    const rects = searchMatches.flatMap((match) => {
+      const range = findQuoteRangeInTextLayer(textLayer, searchQuery, match.start);
+      if (!range) return [];
+      const active = match === activeSearchMatch;
+      return buildAnnotationRects(range, getElementContentRect(pageElement)).map((rect) => ({
+        active,
+        rect
+      }));
+    });
+    setSearchHighlightRects(rects);
+  }
+
   useEffect(() => {
     let cancelled = false;
     let renderTask: { cancel: () => void; promise: Promise<unknown> } | null = null;
@@ -911,6 +1145,7 @@ function PdfPageView({
         if (textLayerRef.current) {
           textLayerRef.current.replaceChildren();
         }
+        setSearchHighlightRects([]);
         setTargetHighlightRects([]);
         onPageCharModelRendered?.(pageNumber, null);
         if (focused && targetEvidence?.paperId === activePaper?.id) {
@@ -977,6 +1212,7 @@ function PdfPageView({
             page: pageNumber,
             text: normalizePdfPageText(joinPdfTextItems(textContent.items))
           });
+          updateSearchHighlightRects();
           updateTargetHighlightRects();
         }
       } catch (error) {
@@ -1010,30 +1246,78 @@ function PdfPageView({
     return () => window.cancelAnimationFrame(frame);
   }, [activePaper?.id, focused, pageNumber, pageSize.height, pageSize.width, targetEvidence?.pageTextStart, targetEvidence?.quote, targetEvidence?.requestId]);
 
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(updateSearchHighlightRects);
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeSearchMatch, pageNumber, pageSize.height, pageSize.width, searchMatches, searchQuery]);
+
   const pageAnnotations = annotations.filter((annotation) => annotation.page === pageNumber);
+  const marginComments = marginCommentsVisible ? layoutPdfMarginComments(pageAnnotations) : [];
 
   return (
-    <article
-      aria-label={`PDF.js 页面 ${pageNumber}`}
-      className={`pdf-page-shell ${focused ? "evidence-target" : ""}`}
-      data-page={pageNumber}
-      ref={pageShellRef}
-      style={{ minHeight: pageSize.height, width: pageSize.width }}
+    <div
+      className={`pdf-page-row ${layoutVisible ? "layout-visible" : ""} ${
+        marginComments.length > 0 ? "has-margin-comments" : ""
+      }`}
+      style={{ minHeight: pageSize.height }}
     >
-      <canvas aria-label={`PDF.js 页面画布 ${pageNumber}`} className="pdf-page-canvas" ref={canvasRef} />
+      {marginCommentConnectorsVisible ? marginComments.map(({ anchorRect, annotation }) => {
+        const connector = buildPdfMarginConnectorGeometry({
+          anchorRect,
+          pageHeight: pageSize.height,
+          pageWidth: pageSize.width
+        });
+        return (
+          <span
+            aria-hidden="true"
+            className="pdf-margin-comment-connector"
+            data-annotation-id={annotation.id}
+            key={`margin-connector-${annotation.id}`}
+            style={{
+              left: connector.left,
+              top: connector.top,
+              width: connector.length
+            }}
+          />
+        );
+      }) : null}
+      <article
+        aria-label={`PDF.js 页面 ${pageNumber}`}
+        className={`pdf-page-shell ${focused ? "evidence-target focused-page" : ""} ${
+          layoutVisible ? "layout-visible" : ""
+        }`}
+        data-page={pageNumber}
+        ref={pageShellRef}
+        style={{ minHeight: pageSize.height, width: pageSize.width }}
+      >
+        <canvas aria-label={`PDF.js 页面画布 ${pageNumber}`} className="pdf-page-canvas" ref={canvasRef} />
       {/* Degrading in the open, as the plan requires. A page with no text layer can carry no
           character-level marks at all, and saying nothing leaves the reader believing the layer
           found nothing worth marking rather than that it could not look. */}
-      {noTextLayer ? (
-        <p className="pdf-page-scanned-notice" role="note">
-          该页为扫描件，没有文本层，锚点只能页级定位
-        </p>
-      ) : null}
-      <div aria-hidden="true" className="pdf-page-shadow" />
-      <div className="textLayer pdf-text-layer" ref={textLayerRef} />
-      <div aria-label={pageNumber === 1 ? "PDF 批注覆盖层" : undefined} className="pdf-annotation-overlay">
-        {pageAnnotations.map((annotation) =>
-          annotation.rects.map((rect, index) => (
+        {noTextLayer ? (
+          <p className="pdf-page-scanned-notice" role="note">
+            该页为扫描件，没有文本层，锚点只能页级定位
+          </p>
+        ) : null}
+        <div aria-hidden="true" className="pdf-page-shadow" />
+        <div className="textLayer pdf-text-layer" ref={textLayerRef} />
+        <div aria-label={pageNumber === 1 ? "PDF 批注覆盖层" : undefined} className="pdf-annotation-overlay">
+        {pageAnnotations.map((annotation) => annotation.kind === "text" ? (
+          annotation.rects[0] && onTextAnnotationActivate && onTextAnnotationCommit &&
+          onTextAnnotationDelete && onTextAnnotationMove && onTextAnnotationOpacityChange ? (
+            <PdfMarkdownTextBox
+              active={activeTextAnnotationId === annotation.id}
+              annotation={annotation}
+              key={annotation.id}
+              onActivate={onTextAnnotationActivate}
+              onCommit={onTextAnnotationCommit}
+              onDelete={onTextAnnotationDelete}
+              onMove={onTextAnnotationMove}
+              onOpacityChange={onTextAnnotationOpacityChange}
+              rect={annotation.rects[0]}
+            />
+          ) : null
+        ) : annotation.rects.map((rect, index) => (
             <button
               aria-label={`${getOverlayLabel(annotation.kind)}：第 ${annotation.page} 页：${annotation.excerpt}`}
               className={`pdf-overlay-mark ${annotation.kind}`}
@@ -1063,6 +1347,15 @@ function PdfPageView({
             style={getOverlayStyle("highlight", rect, "blue")}
           />
         ))}
+        {searchHighlightRects.map((item, index) => (
+          <div
+            aria-label={item.active ? `当前搜索结果：第 ${pageNumber} 页` : undefined}
+            aria-hidden={item.active ? undefined : true}
+            className={`pdf-overlay-mark search-result ${item.active ? "current" : ""}`}
+            key={`search-result-${pageNumber}-${index}`}
+            style={getOverlayStyle("highlight", item.rect, item.active ? "blue" : "yellow")}
+          />
+        ))}
         {targetHighlightRects.map((rect, index) => (
           <div
             aria-label={`Agent 引用证据高亮：第 ${pageNumber} 页：${targetEvidence?.quote ?? ""}`}
@@ -1072,19 +1365,54 @@ function PdfPageView({
             title={`Agent 引用证据：${targetEvidence?.quote ?? ""}`}
           />
         ))}
-      </div>
-    </article>
+        </div>
+      </article>
+      {marginComments.length > 0 ? (
+        <aside
+          aria-label={`第 ${pageNumber} 页页外批注栏`}
+          className="pdf-margin-comment-rail"
+          style={{ height: pageSize.height }}
+        >
+          {marginComments.map(({ annotation, top }) => (
+          <section
+            aria-label={`第 ${annotation.page} 页${getAnnotationLabel(annotation.kind)}批注：${annotation.note}`}
+            className="pdf-margin-comment"
+            key={`margin-comment-${annotation.id}`}
+            onPointerDown={(event) => event.stopPropagation()}
+            style={{ top: `${top}%` }}
+          >
+            <header>
+              <span>{getAnnotationLabel(annotation.kind)}</span>
+              <Button
+                aria-label={`编辑页边批注：${annotation.excerpt}`}
+                appearance="subtle"
+                icon={<EditRegular />}
+                onClick={(event) => {
+                  const pageElement = pageShellRef.current;
+                  if (pageElement) onAnnotationActivate?.(annotation, pageElement, event.currentTarget);
+                }}
+                size="small"
+                title="编辑批注"
+              />
+            </header>
+            <PdfAnnotationMarkdown value={annotation.note ?? ""} />
+          </section>
+          ))}
+        </aside>
+      ) : null}
+    </div>
   );
 }
 
 type PdfThumbnailProps = {
   active: boolean;
   activePaper: Paper | null;
+  onNavigate: (page: number) => void;
   pageNumber: number;
   pdfDocument: PDFDocumentProxy | null;
 };
 
-function PdfThumbnail({ active, activePaper, pageNumber, pdfDocument }: PdfThumbnailProps) {
+function PdfThumbnail({ active, activePaper, onNavigate, pageNumber, pdfDocument }: PdfThumbnailProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -1133,8 +1461,16 @@ function PdfThumbnail({ active, activePaper, pageNumber, pdfDocument }: PdfThumb
 
   return (
     <li className={active ? "active" : ""}>
-      <canvas aria-label={`PDF.js 缩略图 ${pageNumber}`} className="pdf-thumbnail-canvas" ref={canvasRef} />
-      <span className="pdf-thumbnail-number">{pageNumber}</span>
+      <button
+        aria-current={active ? "page" : undefined}
+        aria-label={`转到第 ${pageNumber} 页`}
+        onClick={() => onNavigate(pageNumber)}
+        title={`转到第 ${pageNumber} 页`}
+        type="button"
+      >
+        <canvas aria-label={`PDF.js 缩略图 ${pageNumber}`} className="pdf-thumbnail-canvas" ref={canvasRef} />
+        <span className="pdf-thumbnail-number">{pageNumber}</span>
+      </button>
     </li>
   );
 }
@@ -1152,7 +1488,9 @@ export function PdfReader({
   selectedPapers,
   targetEvidence,
   zoom,
+  onZoomChange,
   onAddSelectionToConversation,
+  onSelectionChanged,
   canModerateOrganizationAnnotations = false,
   loadOrganizationAnnotations,
   organizationAnnotationActorId,
@@ -1174,6 +1512,17 @@ export function PdfReader({
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
   const [pageCount, setPageCount] = useState(1);
   const [focusedPage, setFocusedPage] = useState(1);
+  const [layoutMode, setLayoutMode] = useState<PdfPageLayoutMode>(loadPdfPageLayoutMode);
+  const [marginCommentsVisible, setMarginCommentsVisible] = useState(loadPdfMarginCommentsVisible);
+  const [marginCommentConnectorsVisible, setMarginCommentConnectorsVisible] = useState(
+    loadPdfMarginCommentConnectorsVisible
+  );
+  const [whiteboardOpen, setWhiteboardOpen] = useState(loadPdfWhiteboardVisible);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchMatchCase, setSearchMatchCase] = useState(false);
+  const [searchWholeWords, setSearchWholeWords] = useState(false);
+  const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarMode, setSidebarMode] = useState<PdfSidebarMode>("annotations");
   const [stageWidth, setStageWidth] = useState(960);
@@ -1181,6 +1530,8 @@ export function PdfReader({
   const [selection, setSelection] = useState<PdfSelection | null>(null);
   const [selectionPreview, setSelectionPreview] = useState<PdfSelectionPreview | null>(null);
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
+  const [activeTextAnnotationId, setActiveTextAnnotationId] = useState<string | null>(null);
+  const [textBoxToolActive, setTextBoxToolActive] = useState(false);
   const [annotationNoteDraft, setAnnotationNoteDraft] = useState("");
   const [annotationPopup, setAnnotationPopup] = useState<PdfAnnotationPopup | null>(null);
   const publicationIntentsRef = useRef(new Map<string, "private" | "public">());
@@ -1195,11 +1546,57 @@ export function PdfReader({
   const pdfDisplaySource = resolvePdfDisplaySource(activePaper?.sourcePath);
   const annotationStorageKey = pdfAnnotationStorageKey(activePaper);
   const autoPublicStorageKey = pdfAnnotationAutoPublicStorageKey(activePaper);
+  const whiteboardStorageKey = pdfWhiteboardStorageKey(activePaper);
+  const [whiteboardState, setWhiteboardState] = useState<{
+    document: PdfWhiteboardDocument;
+    storageKey: string | null;
+  }>(() => ({
+    document: createEmptyPdfWhiteboard(activePaper?.id ?? ""),
+    storageKey: null
+  }));
+  const [hydratedWhiteboardStorageKey, setHydratedWhiteboardStorageKey] = useState<string | null>(null);
   const [autoPublicAnnotations, setAutoPublicAnnotations] = useState(false);
   const [hydratedAnnotationStorageKey, setHydratedAnnotationStorageKey] = useState<string | null>(null);
   const fulltext = usePdfFulltextStore(activePaper?.id);
+
+  useEffect(() => {
+    if (!selection || !activePaper) {
+      onSelectionChanged?.(null);
+      return;
+    }
+    onSelectionChanged?.({
+      excerpt: selection.excerpt,
+      page: selection.page,
+      paperId: activePaper.id,
+      paperTitle: activePaper.title,
+      rects: selection.rects.map((rect) => ({ ...rect })),
+      selectionId: createPdfReaderSelectionId(
+        activePaper.id,
+        selection.page,
+        selection.normalizedStart,
+        selection.excerpt
+      )
+    });
+  }, [activePaper, onSelectionChanged, selection]);
   const { documentHasNoTextLayer, pageTexts, scannedPages } = fulltext;
   const pageNumbers = useMemo(() => getPageNumbers(pageCount), [pageCount]);
+  const visiblePageNumbers = useMemo(
+    () => getVisiblePageNumbers(layoutMode, focusedPage, pageCount),
+    [focusedPage, layoutMode, pageCount]
+  );
+  const hasVisibleMarginComments = marginCommentsVisible && annotations.some((annotation) =>
+    (annotation.kind === "highlight" || annotation.kind === "underline") &&
+    Boolean(annotation.note?.trim()) &&
+    annotation.rects.length > 0
+  );
+  const searchMatches = useMemo(
+    () => findPdfReaderSearchMatches(pageTexts, searchQuery, {
+      matchCase: searchMatchCase,
+      wholeWords: searchWholeWords
+    }),
+    [pageTexts, searchMatchCase, searchQuery, searchWholeWords]
+  );
+  const activeSearchMatch = activeSearchIndex >= 0 ? searchMatches[activeSearchIndex] : undefined;
   const annotationsInReadingOrder = useMemo(
     () => sortPdfAnnotationsByReadingOrder(annotations),
     [annotations]
@@ -1242,6 +1639,207 @@ export function PdfReader({
       pageCharModelsRef.current.delete(pageNumber);
     }
   }, []);
+
+  function navigateToPage(page: number, behavior: ScrollBehavior = "smooth") {
+    const nextPage = Math.min(Math.max(1, Math.trunc(page || 1)), Math.max(1, pageCount));
+    setFocusedPage(nextPage);
+    setStatus(`已转到第 ${nextPage} 页。`);
+    window.requestAnimationFrame(() => {
+      const stageElement = stageRef.current;
+      const pageElement = stageElement?.querySelector<HTMLElement>(`[data-page="${nextPage}"]`);
+      if (!stageElement || !pageElement) return;
+      if (layoutMode === "continuous" && typeof pageElement.scrollIntoView === "function") {
+        pageElement.scrollIntoView({ behavior, block: "start" });
+      } else if (typeof stageElement.scrollTo === "function") {
+        stageElement.scrollTo({ behavior, left: 0, top: 0 });
+      } else {
+        stageElement.scrollTop = 0;
+      }
+    });
+  }
+
+  function moveSearchMatch(delta: number) {
+    if (searchMatches.length === 0) return;
+    const currentIndex = activeSearchIndex < 0 ? (delta > 0 ? -1 : 0) : activeSearchIndex;
+    const nextIndex = (currentIndex + delta + searchMatches.length) % searchMatches.length;
+    setActiveSearchIndex(nextIndex);
+    navigateToPage(searchMatches[nextIndex].page);
+  }
+
+  function openSearch() {
+    setSearchOpen(true);
+    if (activeSearchIndex < 0 && searchMatches.length > 0) {
+      setActiveSearchIndex(0);
+      navigateToPage(searchMatches[0].page);
+    }
+  }
+
+  function closeSearch() {
+    setSearchOpen(false);
+    setActiveSearchIndex(-1);
+  }
+
+  function changeLayoutMode(mode: PdfPageLayoutMode) {
+    setLayoutMode(mode);
+    window.requestAnimationFrame(() => {
+      const stageElement = stageRef.current;
+      if (stageElement) stageElement.scrollTop = 0;
+    });
+  }
+
+  function handleStageScroll() {
+    if (layoutMode !== "continuous") return;
+    const stageElement = stageRef.current;
+    if (!stageElement) return;
+    const stageTop = stageElement.getBoundingClientRect().top;
+    let nearestPage = focusedPage;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const pageElement of stageElement.querySelectorAll<HTMLElement>(".pdf-page-shell")) {
+      const page = Number(pageElement.dataset.page);
+      const distance = Math.abs(pageElement.getBoundingClientRect().top - stageTop - 18);
+      if (Number.isFinite(page) && distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestPage = page;
+      }
+    }
+    if (nearestPage !== focusedPage) setFocusedPage(nearestPage);
+  }
+
+  function handleStageKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.target instanceof HTMLElement && event.target.matches("input, textarea, [contenteditable=true]")) {
+      return;
+    }
+    if (event.key === "PageUp") {
+      navigateToPage(focusedPage - 1);
+      event.preventDefault();
+    } else if (event.key === "PageDown") {
+      navigateToPage(focusedPage + 1);
+      event.preventDefault();
+    }
+  }
+
+  function handleStageCopy(event: ReactClipboardEvent<HTMLDivElement>) {
+    if (!selection?.excerpt) return;
+    event.clipboardData.setData("text/plain", selection.excerpt);
+    event.preventDefault();
+    setStatus("已复制选中的 PDF 内容。");
+  }
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(pdfPageLayoutStorageKey, layoutMode);
+    } catch {
+      // The selected mode remains active for this session when storage is unavailable.
+    }
+  }, [layoutMode]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(pdfMarginCommentsStorageKey, String(marginCommentsVisible));
+    } catch {
+      // The selected visibility remains active for this session when storage is unavailable.
+    }
+  }, [marginCommentsVisible]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        pdfMarginCommentConnectorsStorageKey,
+        String(marginCommentConnectorsVisible)
+      );
+    } catch {
+      // The selected visibility remains active for this session when storage is unavailable.
+    }
+  }, [marginCommentConnectorsVisible]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(pdfWhiteboardVisibleStorageKey, String(whiteboardOpen));
+    } catch {
+      // The selected visibility remains active for this session when storage is unavailable.
+    }
+  }, [whiteboardOpen]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const paperId = activePaper?.id ?? "";
+    const browserDocument = loadPdfWhiteboard(whiteboardStorageKey, paperId);
+    setHydratedWhiteboardStorageKey(null);
+    setWhiteboardState({
+      document: browserDocument,
+      storageKey: whiteboardStorageKey
+    });
+    if (!whiteboardStorageKey || !paperId || !isUserPaperArtifactStoreAvailable()) {
+      setHydratedWhiteboardStorageKey(whiteboardStorageKey);
+      return () => {
+        cancelled = true;
+      };
+    }
+    void loadUserPaperArtifact<unknown>({ artifactKind: "whiteboard", paperId })
+      .then((snapshot) => {
+        if (cancelled) return;
+        setWhiteboardState({
+          document: snapshot === undefined
+            ? browserDocument
+            : normalizePdfWhiteboardDocument(snapshot, paperId),
+          storageKey: whiteboardStorageKey
+        });
+        setHydratedWhiteboardStorageKey(whiteboardStorageKey);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setHydratedWhiteboardStorageKey(whiteboardStorageKey);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activePaper?.id, whiteboardStorageKey]);
+
+  useEffect(() => {
+    if (whiteboardState.storageKey !== whiteboardStorageKey ||
+      hydratedWhiteboardStorageKey !== whiteboardStorageKey) return;
+    const timer = window.setTimeout(() => {
+      if (isUserPaperArtifactStoreAvailable() && activePaper?.id) {
+        void saveUserPaperArtifact({
+          artifactKind: "whiteboard",
+          paperId: activePaper.id,
+          snapshot: whiteboardState.document
+        }).catch((error) => {
+          const detail = error instanceof Error ? error.message : "未知错误";
+          setStatus(`白板保存失败：${detail}`);
+        });
+      } else {
+        savePdfWhiteboard(whiteboardStorageKey, whiteboardState.document);
+      }
+    }, 240);
+    return () => window.clearTimeout(timer);
+  }, [activePaper?.id, hydratedWhiteboardStorageKey, whiteboardState, whiteboardStorageKey]);
+
+  useEffect(() => {
+    function handleFindShortcut(event: KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        openSearch();
+      }
+    }
+    window.addEventListener("keydown", handleFindShortcut);
+    return () => window.removeEventListener("keydown", handleFindShortcut);
+  });
+
+  const searchSignature = `${searchQuery}\u0000${searchMatchCase}\u0000${searchWholeWords}`;
+  const searchSignatureRef = useRef(searchSignature);
+  useEffect(() => {
+    const queryChanged = searchSignatureRef.current !== searchSignature;
+    searchSignatureRef.current = searchSignature;
+    if (!searchOpen || !searchQuery.trim() || searchMatches.length === 0) {
+      setActiveSearchIndex(-1);
+      return;
+    }
+    if (queryChanged || activeSearchIndex < 0 || activeSearchIndex >= searchMatches.length) {
+      setActiveSearchIndex(0);
+      navigateToPage(searchMatches[0].page, "auto");
+    }
+  }, [searchMatches, searchOpen, searchSignature]);
 
   useEffect(() => {
     setTeamAnnotations([]);
@@ -1358,9 +1956,14 @@ export function PdfReader({
     dragSelectionRef.current = null;
     pageCharModelsRef.current.clear();
     setActiveAnnotationId(null);
+    setActiveTextAnnotationId(null);
+    setTextBoxToolActive(false);
     setAnnotationPopup(null);
     setPageCount(1);
     setFocusedPage(1);
+    setSearchOpen(false);
+    setSearchQuery("");
+    setActiveSearchIndex(-1);
 
     const localSourcePath = loadPdfSource && shouldLoadPdfFromLocalBytes(activePaper?.sourcePath)
       ? activePaper!.sourcePath
@@ -1535,6 +2138,41 @@ export function PdfReader({
   function handleSelectionPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0 || event.isPrimary === false) return;
     const target = event.target instanceof Element ? event.target : null;
+    if (textBoxToolActive) {
+      const pageElement = target?.closest<HTMLElement>(".pdf-page-shell");
+      const page = Number(pageElement?.dataset.page);
+      if (!pageElement || !Number.isInteger(page) || page < 1 || !activePaper) return;
+      const rect = buildPdfTextBoxRect({
+        clientX: event.clientX,
+        clientY: event.clientY,
+        pageRect: getPdfPageSurfaceRect(pageElement)
+      });
+      if (!rect) return;
+      const now = new Date().toISOString();
+      const annotation: PdfAnnotationV2 = {
+        createdAt: now,
+        excerpt: "Markdown 文本框",
+        id: `text-${Date.now()}-${annotationsRef.current.length}`,
+        kind: "text",
+        note: "",
+        opacity: 0.96,
+        page,
+        paperIdentity: resolvePaperIdentity(activePaper),
+        publication: { desiredVisibility: "private", state: "not_published" },
+        rects: [rect],
+        revision: 1,
+        text: "Markdown 文本框",
+        updatedAt: now
+      };
+      event.preventDefault();
+      clearBrowserSelection();
+      setCurrentAnnotations((current) => [...current, annotation]);
+      setActiveTextAnnotationId(annotation.id);
+      setTextBoxToolActive(false);
+      setSidebarMode("annotations");
+      setStatus(`已在第 ${page} 页添加 Markdown 文本框。`);
+      return;
+    }
     const textLayer = target?.closest<HTMLElement>(".pdf-text-layer");
     const pageElement = textLayer?.closest<HTMLElement>(".pdf-page-shell");
     const page = Number(pageElement?.dataset.page);
@@ -1604,6 +2242,7 @@ export function PdfReader({
 
     if (!finish) return;
     setSelection(buildSelectionFromLogicalRange(drag, model, pageElement));
+    stageRef.current?.focus({ preventScroll: true });
     dragSelectionRef.current = null;
     try {
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -1719,6 +2358,71 @@ export function PdfReader({
     } else {
       setSelection(selection);
     }
+  }
+
+  async function copySelectedText() {
+    if (!selection?.excerpt) return;
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error("当前环境无法写入剪贴板。");
+      }
+      await navigator.clipboard.writeText(selection.excerpt);
+      setStatus("已复制选中的 PDF 内容。");
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "未知错误";
+      setStatus(`复制失败：${detail}`);
+    }
+  }
+
+  function resolvedWhiteboardDocument() {
+    if (whiteboardState.storageKey === whiteboardStorageKey) return whiteboardState.document;
+    return loadPdfWhiteboard(whiteboardStorageKey, activePaper?.id ?? "");
+  }
+
+  function updateWhiteboardDocument(document: PdfWhiteboardDocument) {
+    setWhiteboardState({ document, storageKey: whiteboardStorageKey });
+  }
+
+  function addSelectionToWhiteboard() {
+    if (!selection || !activePaper) return;
+    const document = resolvedWhiteboardDocument();
+    const node = createPdfWhiteboardNode({
+      kind: "markdown",
+      markdown: selection.excerpt,
+      source: {
+        excerpt: selection.excerpt,
+        page: selection.page,
+        paperId: activePaper.id,
+        sourcePath: activePaper.sourcePath,
+        type: "pdf"
+      }
+    }, nextPdfWhiteboardNodePosition(document.nodes.length));
+    updateWhiteboardDocument(appendPdfWhiteboardNode(document, node));
+    setWhiteboardOpen(true);
+    setSelection(null);
+    setSelectionPreview(null);
+    clearBrowserSelection();
+    setStatus("已将选中文段加入白板。");
+  }
+
+  function handleSelectionWhiteboardDragStart(event: ReactDragEvent<HTMLButtonElement>) {
+    if (!selection || !activePaper) return;
+    const payload: PdfWhiteboardDraggedExcerpt = {
+      kind: "markdown",
+      markdown: selection.excerpt,
+      source: {
+        excerpt: selection.excerpt,
+        page: selection.page,
+        paperId: activePaper.id,
+        sourcePath: activePaper.sourcePath,
+        type: "pdf"
+      }
+    };
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData(pdfWhiteboardDragMime, JSON.stringify(payload));
+    event.dataTransfer.setData("text/plain", selection.excerpt);
+    setWhiteboardOpen(true);
+    setStatus("把摘录拖到右侧白板的指定位置。点击按钮也可以直接加入。");
   }
 
   function setCurrentAnnotations(update: (current: PdfAnnotationV2[]) => PdfAnnotationV2[]) {
@@ -1878,7 +2582,7 @@ export function PdfReader({
     queueMicrotask(() => void applyPublication(pending, operation));
   }
 
-  function addAnnotation(kind: Exclude<AnnotationKind, "note">) {
+  function addAnnotation(kind: Exclude<AnnotationKind, "note" | "text">) {
     if (!selection || !activePaper) {
       setStatus("请先在真实 PDF 文本层中选择文段。");
       return;
@@ -1943,6 +2647,13 @@ export function PdfReader({
   }
 
   function openAnnotationEditor(annotation: PdfAnnotationV2) {
+    if (annotation.kind === "text") {
+      setActiveAnnotationId(null);
+      setAnnotationPopup(null);
+      setActiveTextAnnotationId(annotation.id);
+      locateAnnotation(annotation);
+      return;
+    }
     setActiveAnnotationId(annotation.id);
     setAnnotationNoteDraft(annotation.note || "");
     setAnnotationPopup(null);
@@ -2036,6 +2747,60 @@ export function PdfReader({
     setAnnotationPopup(null);
   }
 
+  function commitTextAnnotation(
+    annotationId: string,
+    markdown: string,
+    rect: PdfAnnotationRect
+  ) {
+    const annotation = annotationsRef.current.find((item) => item.id === annotationId);
+    setActiveTextAnnotationId(null);
+    if (!annotation || annotation.kind !== "text") return;
+    const previousRect = annotation.rects[0];
+    const rectChanged = !previousRect ||
+      previousRect.height !== rect.height ||
+      previousRect.left !== rect.left ||
+      previousRect.top !== rect.top ||
+      previousRect.width !== rect.width;
+    if (annotation.note === markdown && !rectChanged) return;
+    const updated = revisePdfAnnotation(annotation, {
+      note: markdown,
+      rects: [rect],
+      updatedAt: new Date().toISOString()
+    });
+    setCurrentAnnotations((current) => current.map((item) => item.id === annotationId ? updated : item));
+    setStatus("已保存 Markdown 文本框。");
+  }
+
+  function moveTextAnnotation(annotationId: string, rect: PdfAnnotationRect) {
+    const annotation = annotationsRef.current.find((item) => item.id === annotationId);
+    const previousRect = annotation?.rects[0];
+    if (!annotation || annotation.kind !== "text" || !previousRect || (
+      previousRect.height === rect.height &&
+      previousRect.left === rect.left &&
+      previousRect.top === rect.top &&
+      previousRect.width === rect.width
+    )) return;
+    const updated = revisePdfAnnotation(annotation, {
+      rects: [rect],
+      updatedAt: new Date().toISOString()
+    });
+    setCurrentAnnotations((current) => current.map((item) => item.id === annotationId ? updated : item));
+    setStatus("已移动 Markdown 文本框。");
+  }
+
+  function changeTextAnnotationOpacity(annotationId: string, opacity: number) {
+    const annotation = annotationsRef.current.find((item) => item.id === annotationId);
+    if (!annotation || annotation.kind !== "text") return;
+    const normalizedOpacity = Math.min(1, Math.max(0, opacity));
+    if ((annotation.opacity ?? 0.96) === normalizedOpacity) return;
+    const updated = revisePdfAnnotation(annotation, {
+      opacity: normalizedOpacity,
+      updatedAt: new Date().toISOString()
+    });
+    setCurrentAnnotations((current) => current.map((item) => item.id === annotationId ? updated : item));
+    setStatus(`Markdown 文本框透明度已调整为 ${Math.round(normalizedOpacity * 100)}%。`);
+  }
+
   function updateHighlightColor(annotationId: string, color: HighlightColor) {
     setCurrentAnnotations((current) =>
       current.map((annotation) =>
@@ -2077,6 +2842,7 @@ export function PdfReader({
     const remove = () => {
       setCurrentAnnotations((current) => current.filter((item) => item.id !== annotation.id));
       setActiveAnnotationId(null);
+      setActiveTextAnnotationId(null);
       setAnnotationPopup(null);
       setStatus("已删除批注。");
     };
@@ -2239,7 +3005,9 @@ export function PdfReader({
     >
       <div
         aria-label="PDF 阅读工作区"
-        className={`pdf-workspace ${sidebarCollapsed ? "sidebar-collapsed" : "sidebar-open"}`}
+        className={`pdf-workspace ${sidebarCollapsed ? "sidebar-collapsed" : "sidebar-open"} ${
+          whiteboardOpen ? "whiteboard-open" : ""
+        }`}
       >
         <aside
           aria-label="PDF 左侧批注栏"
@@ -2294,6 +3062,7 @@ export function PdfReader({
                       active={pageNumber === focusedPage}
                       activePaper={activePaper}
                       key={pageNumber}
+                      onNavigate={navigateToPage}
                       pageNumber={pageNumber}
                       pdfDocument={pdfDocument}
                     />
@@ -2360,7 +3129,7 @@ export function PdfReader({
                             <span className="pdf-annotation-kind">{annotation.text}</span>
                             <span className="pdf-annotation-excerpt">{annotation.excerpt}</span>
                           </button>
-                          {annotation.note && (
+                          {annotation.kind !== "text" && annotation.note && (
                             <div className="annotation-divider" />
                           )}
                           {activeAnnotationId === annotation.id ? (
@@ -2414,25 +3183,31 @@ export function PdfReader({
                                 删除
                               </button>
                             </div>
-                          ) : annotation.note ? (
+                          ) : annotation.kind !== "text" && annotation.note ? (
                             <PdfAnnotationMarkdown
                               className="annotation-note-preview pdf-annotation-markdown"
                               value={annotation.note}
                             />
                           ) : null}
-                          <label className="pdf-annotation-public-toggle">
-                            <input
-                              aria-label={`将第 ${annotation.page} 页${getAnnotationLabel(annotation.kind)}批注公开到论坛：${annotation.excerpt}`}
-                              checked={annotation.publication.desiredVisibility === "public"}
-                              onChange={(event) => setAnnotationPublic(annotation.id, event.currentTarget.checked)}
-                              type="checkbox"
-                            />
-                            公开到论坛
-                          </label>
-                          <small aria-live="polite" role="status">
-                            {publicationStatus(annotation.publication)}
-                          </small>
-                          {onShareAnnotationToOrganization ? (
+                          {annotation.kind === "text" ? (
+                            <small role="note">文本框保存在当前本地 PDF 批注中</small>
+                          ) : (
+                            <>
+                              <label className="pdf-annotation-public-toggle">
+                                <input
+                                  aria-label={`将第 ${annotation.page} 页${getAnnotationLabel(annotation.kind)}批注公开到论坛：${annotation.excerpt}`}
+                                  checked={annotation.publication.desiredVisibility === "public"}
+                                  onChange={(event) => setAnnotationPublic(annotation.id, event.currentTarget.checked)}
+                                  type="checkbox"
+                                />
+                                公开到论坛
+                              </label>
+                              <small aria-live="polite" role="status">
+                                {publicationStatus(annotation.publication)}
+                              </small>
+                            </>
+                          )}
+                          {annotation.kind !== "text" && onShareAnnotationToOrganization ? (
                             <Button
                               appearance="subtle"
                               aria-label={`共享批注到组织：${annotation.excerpt}`}
@@ -2550,31 +3325,77 @@ export function PdfReader({
           aria-label="PDF 页面预览"
           className="pdf-main-stage"
         >
-          {/* Only the parser's own state lives up here now: whether the reader could produce a
-              structured citation snapshot for the paper it is showing. */}
-          <div aria-label="PDF 解析状态" className="pdf-parser-status">
-            {citationParsing.loading ? (
-              <span role="status">正在提取结构化引用…</span>
-            ) : citationParsing.parser === "grobid" ? (
-              <span role="note">结构化引用已就绪</span>
+          <div className="pdf-reader-top">
+            <PdfReaderToolbar
+              activeSearchIndex={activeSearchIndex}
+              currentPage={focusedPage}
+              layoutMode={layoutMode}
+              matchCase={searchMatchCase}
+              marginCommentConnectorsVisible={marginCommentConnectorsVisible}
+              marginCommentsVisible={marginCommentsVisible}
+              whiteboardOpen={whiteboardOpen}
+              onChangeLayoutMode={changeLayoutMode}
+              onChangeMatchCase={setSearchMatchCase}
+              onChangePage={navigateToPage}
+              onChangeSearchQuery={setSearchQuery}
+              onChangeWholeWords={setSearchWholeWords}
+              onCloseSearch={closeSearch}
+              onFindNext={() => moveSearchMatch(1)}
+              onFindPrevious={() => moveSearchMatch(-1)}
+              onNavigateNext={() => navigateToPage(focusedPage + 1)}
+              onNavigatePrevious={() => navigateToPage(focusedPage - 1)}
+              onOpenSearch={openSearch}
+              onToggleMarginCommentConnectors={() => {
+                setMarginCommentConnectorsVisible((current) => !current);
+              }}
+              onToggleMarginComments={() => setMarginCommentsVisible((current) => !current)}
+              onToggleTextBoxTool={() => {
+                setTextBoxToolActive((current) => !current);
+                setActiveTextAnnotationId(null);
+                setSelection(null);
+                setSelectionPreview(null);
+              }}
+              onToggleWhiteboard={() => setWhiteboardOpen((current) => !current)}
+              onZoomIn={() => onZoomChange?.(Math.min(180, zoom + 5))}
+              onZoomOut={() => onZoomChange?.(Math.max(70, zoom - 5))}
+              pageCount={pageCount}
+              parserStatus={(
+                <>
+                  {citationParsing.loading ? (
+                    <span role="status">正在提取结构化引用…</span>
+                  ) : citationParsing.parser === "grobid" ? (
+                    <span role="note">结构化引用已就绪</span>
+                  ) : null}
+                  {citationParsing.warning ? <span role="status">{citationParsing.warning}</span> : null}
+                </>
+              )}
+              searchOpen={searchOpen}
+              searchQuery={searchQuery}
+              searchResultCount={searchMatches.length}
+              textBoxToolActive={textBoxToolActive}
+              wholeWords={searchWholeWords}
+              zoom={zoom}
+            />
+            {targetEvidence?.paperId === activePaper?.id ? (
+              <div aria-live="polite" className="pdf-evidence-status" role="status">
+                {status}
+              </div>
             ) : null}
-            {citationParsing.warning ? <span role="status">{citationParsing.warning}</span> : null}
           </div>
-          {targetEvidence?.paperId === activePaper?.id ? (
-            <div aria-live="polite" className="pdf-evidence-status" role="status">
-              {status}
-            </div>
-          ) : null}
           <div
             aria-label="PDF 页面滚动区"
-            className="pdf-stage"
+            className={`pdf-stage ${textBoxToolActive ? "text-box-tool-active" : ""}`}
             onContextMenu={handleSelectionContextMenu}
+            onCopy={handleStageCopy}
             onMouseUp={handleTextSelection}
             onPointerCancel={handleSelectionPointerCancel}
             onPointerDown={handleSelectionPointerDown}
             onPointerMove={handleSelectionPointerMove}
             onPointerUp={handleSelectionPointerUp}
+            onKeyDown={handleStageKeyDown}
+            onScroll={handleStageScroll}
             ref={stageRef}
+            tabIndex={0}
           >
             {documentHasNoTextLayer ? (
               <p className="pdf-page-text-unavailable" role="note">
@@ -2582,24 +3403,47 @@ export function PdfReader({
               </p>
             ) : null}
             <div className="pdf-document-frame" ref={documentFrameRef}>
-              <div aria-label="PDF.js 页面列表" className="pdf-page-list responsive">
+              <div
+                aria-label="PDF.js 页面列表"
+                className={`pdf-page-list responsive layout-${layoutMode} ${
+                  hasVisibleMarginComments ? "with-margin-comments" : ""
+                }`}
+              >
                 {pageNumbers.map((pageNumber) => (
                   <PdfPageView
+                    activeSearchMatch={activeSearchMatch}
+                    activeTextAnnotationId={activeTextAnnotationId}
                     activePaper={activePaper}
                     annotations={annotations}
                     focused={pageNumber === focusedPage}
                     key={pageNumber}
+                    layoutVisible={visiblePageNumbers.has(pageNumber)}
+                    marginCommentConnectorsVisible={marginCommentConnectorsVisible}
+                    marginCommentsVisible={marginCommentsVisible}
                     noTextLayer={scannedPages.has(pageNumber)}
                     onEvidenceHighlightResolved={handleEvidenceHighlightResolved}
                     onAnnotationActivate={openPageAnnotationEditor}
                     onPageCharModelRendered={handlePageCharModelRendered}
                     onPageTextRendered={handlePageTextRendered}
+                    onTextAnnotationActivate={setActiveTextAnnotationId}
+                    onTextAnnotationCommit={commitTextAnnotation}
+                    onTextAnnotationDelete={(annotation) => void deleteAnnotation(annotation)}
+                    onTextAnnotationMove={moveTextAnnotation}
+                    onTextAnnotationOpacityChange={changeTextAnnotationOpacity}
                     pageNumber={pageNumber}
                     pdfDocument={pdfDocument}
+                    searchMatches={searchOpen
+                      ? searchMatches.filter((match) => match.page === pageNumber)
+                      : undefined}
+                    searchQuery={searchOpen ? searchQuery : undefined}
                     selectionPreviewRects={selectionPreview?.page === pageNumber
                       ? selectionPreview.rects
                       : undefined}
-                    stageWidth={stageWidth}
+                    stageWidth={resolvePdfPageStageWidth(
+                      stageWidth,
+                      layoutMode,
+                      hasVisibleMarginComments
+                    )}
                     targetEvidence={targetEvidence}
                     zoom={zoom}
                   />
@@ -2628,6 +3472,24 @@ export function PdfReader({
                       />
                     ))}
                   </div>
+                </div>
+                <div className="selection-menu-row">
+                  <button onClick={() => void copySelectedText()} title="复制选中的 PDF 内容" type="button">
+                    <CopyRegular aria-hidden="true" />
+                    复制
+                  </button>
+                </div>
+                <div className="selection-menu-row">
+                  <button
+                    draggable
+                    onClick={addSelectionToWhiteboard}
+                    onDragStart={handleSelectionWhiteboardDragStart}
+                    title="点击直接加入，或拖到右侧白板的指定位置"
+                    type="button"
+                  >
+                    <WhiteboardRegular aria-hidden="true" />
+                    加入白板
+                  </button>
                 </div>
                 <div className="selection-menu-row">
                   <button onClick={() => addAnnotation("underline")} title="给选中文段添加下划线" type="button">
@@ -2678,6 +3540,17 @@ export function PdfReader({
             ) : null}
           </div>
         </section>
+        {whiteboardOpen && activePaper ? (
+          <PdfWhiteboard
+            document={whiteboardState.storageKey === whiteboardStorageKey
+              ? whiteboardState.document
+              : createEmptyPdfWhiteboard(activePaper.id)}
+            key={whiteboardStorageKey ?? activePaper.id}
+            onChange={updateWhiteboardDocument}
+            onClose={() => setWhiteboardOpen(false)}
+            paperTitle={activePaper.title}
+          />
+        ) : null}
       </div>
     </section>
   );

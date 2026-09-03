@@ -71,6 +71,24 @@ afterEach(() => {
   setTauriRuntime(false);
 });
 
+test("preserves local Markdown text boxes during annotation migration", () => {
+  const [normalized] = normalizePdfAnnotations([legacyAnnotation({
+    excerpt: "Markdown 文本框",
+    kind: "text",
+    note: "$E=mc^2$",
+    opacity: 0,
+    rects: [{ height: 18, left: 12, top: 16, width: 34 }],
+    text: "Markdown 文本框"
+  })], fallbackIdentity);
+
+  expect(normalized).toMatchObject({
+    kind: "text",
+    note: "$E=mc^2$",
+    opacity: 0,
+    publication: { desiredVisibility: "private", state: "not_published" }
+  });
+});
+
 test("migrates a synced v1 annotation to confirmed published state", () => {
   const [normalized] = normalizePdfAnnotations([legacyAnnotation({
     syncState: {

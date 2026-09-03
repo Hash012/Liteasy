@@ -50,7 +50,47 @@ test("falls through tera, luna, then sol after explicitly retryable upstream fai
     return "sol recovered the request";
   });
 
-  assert.equal(await provider({ model: "ignored-by-reliability-policy", prompt: "test" }), "sol recovered the request");
+  assert.equal(await provider({ model: "gpt-5.6-terra", prompt: "test" }), "sol recovered the request");
+  assert.deepEqual(attemptedModels, openAIModelFailoverOrder);
+});
+
+test("honors the configured model before bounded fallback candidates", async () => {
+  const attemptedModels = [];
+  const provider = createOpenAIModelFailoverProvider(async ({ model }) => {
+    attemptedModels.push(model);
+    return "configured model answer";
+  });
+
+  assert.equal(
+    await provider({ model: "gpt-5.4-mini", prompt: "test" }),
+    "configured model answer"
+  );
+  assert.deepEqual(attemptedModels, ["gpt-5.4-mini"]);
+});
+
+test("skips an unavailable fallback model and continues to the next candidate", async () => {
+  const attemptedModels = [];
+  const provider = createOpenAIModelFailoverProvider(async ({ model }) => {
+    attemptedModels.push(model);
+    if (model === "gpt-5.6-terra") {
+      const error = new Error("upstream temporarily unavailable");
+      error.status = 503;
+      error.retryable = true;
+      throw error;
+    }
+    if (model === "gpt-5.6-luna") {
+      const error = new Error('Model "gpt-5.6-luna" is not supported');
+      error.status = 404;
+      error.retryable = false;
+      throw error;
+    }
+    return "sol recovered the request";
+  });
+
+  assert.equal(
+    await provider({ model: "gpt-5.6-terra", prompt: "test" }),
+    "sol recovered the request"
+  );
   assert.deepEqual(attemptedModels, openAIModelFailoverOrder);
 });
 
@@ -88,4 +128,32 @@ test("switches stream models before any output but never mixes streamed answers"
 
   assert.deepEqual(chunks, ["recovered stream"]);
   assert.deepEqual(attemptedModels, ["gpt-5.6-terra", "gpt-5.6-luna"]);
+});
+
+test("stream failover skips an unavailable model before emitting output", async () => {
+  const attemptedModels = [];
+  const provider = createOpenAIModelFailoverStreamProvider(async function* ({ model }) {
+    attemptedModels.push(model);
+    if (model === "gpt-5.6-terra") {
+      const error = new Error("gateway unavailable");
+      error.status = 503;
+      error.retryable = true;
+      throw error;
+    }
+    if (model === "gpt-5.6-luna") {
+      const error = new Error('Model "gpt-5.6-luna" is not supported');
+      error.status = 404;
+      error.retryable = false;
+      throw error;
+    }
+    yield "sol recovered stream";
+  });
+
+  const chunks = [];
+  for await (const chunk of provider({ model: "gpt-5.6-terra", prompt: "test" })) {
+    chunks.push(chunk);
+  }
+
+  assert.deepEqual(chunks, ["sol recovered stream"]);
+  assert.deepEqual(attemptedModels, openAIModelFailoverOrder);
 });

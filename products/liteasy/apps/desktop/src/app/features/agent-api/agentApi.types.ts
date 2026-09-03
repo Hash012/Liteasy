@@ -1,3 +1,5 @@
+import type { AgentRuntimeError } from "../agent-runtime/runtimeObservability";
+
 export const AGENT_API_VERSION = "liteasy.agent/v1" as const;
 
 export type AgentApiVersion = typeof AGENT_API_VERSION;
@@ -5,6 +7,20 @@ export type AgentApiVersion = typeof AGENT_API_VERSION;
 export type AgentConsumer = "cli" | "frontend" | "mcp";
 
 export type AgentMode = "command" | "explain" | "qa";
+
+export type AgentExecutionRuntime =
+  | "custom_manager"
+  | "liteasy_command_workflow"
+  | "liteasy_knowledge_workflow"
+  | "openai_agents_sdk";
+
+export type AgentManagerActivity = {
+  activityId: string;
+  detail?: string;
+  kind: "handoff" | "reasoning_summary" | "tool_call" | "tool_result";
+  label: string;
+  status: "completed" | "failed" | "running";
+};
 
 export type AgentArtifactType = "comparison_table" | "layered_graph" | "mindmap" | "ppt" | "thin_reading" | "tree";
 
@@ -101,6 +117,13 @@ export type AgentConfirmationRequest = {
 export type AgentEventPayload =
   | { idempotencyKey: string; inputMode: AgentMode; message: string; type: "run.started" }
   | { type: "context.prepared" }
+  | {
+      detail: string;
+      label: string;
+      runtime: AgentExecutionRuntime;
+      type: "execution.route";
+    }
+  | (AgentManagerActivity & { type: "manager.activity" })
   | { delta: string; type: "assistant.delta" }
   | {
       delta: string;
@@ -144,6 +167,7 @@ export type AgentEventPayload =
     }
   | {
       actionId: string;
+      error?: AgentRuntimeError;
       message: string;
       recovery?: string;
       type: "action.failed";
@@ -151,7 +175,12 @@ export type AgentEventPayload =
   | { task: AgentJsonValue; type: "task.requested" }
   | { task: AgentJsonValue; type: "task.created" }
   | { artifact: AgentJsonValue; type: "artifact.requested" }
-  | { message: string; recovery?: string; type: "run.failed" }
+  | {
+      error?: AgentRuntimeError;
+      message: string;
+      recovery?: string;
+      type: "run.failed";
+    }
   | { reason?: string; type: "run.cancelled" }
   | { type: "run.completed" };
 

@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import type { ArtifactType } from "../../features/artifacts/artifact.types";
+import type { ArtifactTask, ArtifactType } from "../../features/artifacts/artifact.types";
 import { createFrontendAgentClient } from "../../features/agent-api/frontendAgentClient";
 import type { AgentPublicApi } from "../../features/agent-api/agentApi.types";
 import { defaultAgentCoreConfig, type AgentMemoryEntry } from "../../features/agent-core/agentCoreConfig";
@@ -18,6 +18,18 @@ import type { RetrievalChunk } from "../../features/retrieval/retrieval.types";
 import type { SettingsState } from "../../features/settings/settings.types";
 import type { createSettingsStore } from "../../features/settings/settings.store";
 import type { ActionContext } from "../../features/skills/actionRegistry";
+import type { ExtensionRuntime } from "../../features/extensions/extensionApi";
+import {
+  createBrowserPluginBuilderStore,
+  createPluginBuilderRuntime,
+  type PluginBuilderRuntime,
+  type PluginSandboxTransport
+} from "../../features/extensions/pluginBuilder";
+import {
+  createBrowserUserWorkflowStore,
+  createWorkflowDesignerRuntime,
+  type WorkflowDesignerRuntime
+} from "../../features/skills/workflowDesigner";
 import type { Paper, WorkspaceSource } from "../../features/workspace/workspace.types";
 import {
   getAgentRequestThinReadingContext,
@@ -33,13 +45,16 @@ export type AssistantAgentControllerInput = {
   academicProfile?: AcademicProfile;
   getAgentMemories?: () => AgentMemoryEntry[];
   getAllPapers?: () => Paper[];
+  getArtifactTasks?: () => readonly ArtifactTask[];
   getImportedChunksByPaperId?: () => Record<string, RetrievalChunk[]>;
   getImportedChunksForPaperId?: (paperId: string) => RetrievalChunk[];
   getSelectedPapers?: () => Paper[];
   getUserStateSummary?: () => string;
   importedChunksByPaperId: Record<string, RetrievalChunk[]>;
   importedSelectedCount: number;
+  extensionRuntime: ExtensionRuntime;
   modelTransport?: ModelTransport;
+  pluginSandboxTransport?: PluginSandboxTransport;
   thinReadingExternalKnowledgeTransport?: ThinReadingExternalKnowledgeTransport;
   thinReadingExternalPdfTransport?: ThinReadingExternalPdfTransport;
   onApplyGeneratedTheme?: ActionContext["applyGeneratedTheme"];
@@ -69,6 +84,32 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
   const pendingClarificationRef = useRef<PendingCommandClarification>();
   const apiRef = useRef<AgentPublicApi | null>(null);
   const stateStoreRef = useRef(createTauriAgentStateStore());
+  const pluginBuilderRef = useRef<PluginBuilderRuntime | null>(null);
+  const workflowDesignerRef = useRef<WorkflowDesignerRuntime | null>(null);
+
+  if (!pluginBuilderRef.current && input.pluginSandboxTransport) {
+    pluginBuilderRef.current = createPluginBuilderRuntime({
+      extensionRuntime: input.extensionRuntime,
+      store: createBrowserPluginBuilderStore(),
+      transport: input.pluginSandboxTransport
+    });
+    void pluginBuilderRef.current.restore().then(({ issues }) => {
+      if (issues.length > 0) {
+        console.warn("Liteasy plugin restoration completed with issues", issues);
+      }
+    }).catch((error) => {
+      console.warn("Liteasy plugin restoration failed", error);
+    });
+  }
+
+  if (!workflowDesignerRef.current) {
+    workflowDesignerRef.current = createWorkflowDesignerRuntime({
+      store: createBrowserUserWorkflowStore()
+    });
+    void workflowDesignerRef.current.restore().catch((error) => {
+      console.warn("Liteasy user workflow restoration failed", error);
+    });
+  }
 
   if (!apiRef.current) {
     apiRef.current = createDesktopAgentService({
@@ -102,6 +143,9 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
         });
 
         return {
+          activity: {
+            artifactTasks: current.getArtifactTasks?.() ?? []
+          },
           knowledge: {
             importedChunksByPaperId: knowledgeScope.importedChunksByPaperId,
             modelTransport: current.modelTransport,
@@ -111,6 +155,7 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
             thinReadingExternalKnowledgeTransport: current.thinReadingExternalKnowledgeTransport,
             thinReadingExternalPdfTransport: current.thinReadingExternalPdfTransport
           },
+          pluginBuilder: pluginBuilderRef.current ?? undefined,
           runtime: {
             applyGeneratedTheme: current.onApplyGeneratedTheme,
             applyLayoutPreset: current.onApplyLayoutPreset,
@@ -138,7 +183,8 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
             }),
             settingsStore: current.settingsStore,
             startArtifactAnalysis: current.onGenerateArtifact
-          }
+          },
+          workflowDesigner: workflowDesignerRef.current ?? undefined
         };
       },
       onCommandResult({ message, result }) {

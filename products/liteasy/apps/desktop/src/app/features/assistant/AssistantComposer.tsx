@@ -94,7 +94,11 @@ export function AssistantComposer({
 
   return (
     <div className="assistant-input-wrap">
-      {pending ? <div className="assistant-command-feedback">AI 正在整理回答...</div> : null}
+      {pending ? (
+        <div className="assistant-command-feedback">
+          当前回复仍在执行；发送的新消息会先暂存，可随后选择执行时机。
+        </div>
+      ) : null}
       {editing ? (
         <div className="assistant-editing-banner">
           <span>正在重新编辑上一条输入</span>
@@ -177,9 +181,7 @@ export function AssistantComposer({
           }
 
           event.preventDefault();
-          if (!pending) {
-            onSend();
-          }
+          onSend();
         }}
         placeholder="输入你的问题或命令"
         rows={4}
@@ -202,7 +204,6 @@ export function AssistantComposer({
           <button
             aria-label={editing ? "更新并发送" : "发送"}
             className="assistant-send assistant-icon-button"
-            disabled={pending}
             onClick={onSend}
             title={editing ? "更新并发送" : "发送"}
             type="button"

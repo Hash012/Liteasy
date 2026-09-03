@@ -1,8 +1,11 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
 import { afterEach, vi } from "vitest";
-import { AssistantPane as RuntimeAssistantPane } from "../app/features/assistant/AssistantPane";
+import {
+  AssistantPane as RuntimeAssistantPane,
+  hasPaperGroundedAuditScope
+} from "../app/features/assistant/AssistantPane";
 import { createSettingsStore } from "../app/features/settings/settings.store";
 import type { FrontendAgentClient } from "../app/features/agent-api/frontendAgentClient";
 import type { AgentEvent } from "../app/features/agent-api/agentApi.types";
@@ -34,6 +37,25 @@ function AssistantPane(props: ComponentProps<typeof RuntimeAssistantPane>) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+test("limits paper evidence audits to runs with paper grounding", () => {
+  const baseRun = {
+    apiVersion: "liteasy.agent/v1" as const,
+    createdAt: "2026-09-02T00:00:00.000Z",
+    events: [],
+    idempotencyKey: "audit-scope",
+    input: { message: "你好", mode: "qa" as const },
+    runId: "run-audit-scope",
+    sessionId: "session-audit-scope",
+    status: "completed" as const
+  };
+
+  expect(hasPaperGroundedAuditScope(baseRun)).toBe(false);
+  expect(hasPaperGroundedAuditScope({
+    ...baseRun,
+    attachments: [{ source: "paper", uri: "liteasy://paper/paper-1" }]
+  })).toBe(true);
 });
 
 async function selectInitialAssistantMode(user: ReturnType<typeof userEvent.setup>, mode: "名词解释" | "命令" | "问答") {
@@ -234,6 +256,7 @@ test("shows public workflow audit summaries after a public Agent run when enable
     send: vi.fn(async () => ({
       data: {
         apiVersion: "liteasy.agent/v1",
+        attachments: [{ source: "paper" as const, uri: "liteasy://paper/paper-1" }],
         createdAt: "2026-07-26T00:00:00.000Z",
         events: [
           {
@@ -314,33 +337,54 @@ test("projects public Agent streaming events into the expandable work status car
         { ...base, eventId: "stream-context", sequence: 2, type: "context.prepared" as const },
         {
           ...base,
-          delta: "正在整理方法与证据。",
-          eventId: "stream-answer",
+          detail: "本轮由已注入的 OpenAI Agents SDK Manager 负责执行。",
+          eventId: "stream-route",
+          label: "OpenAI Agents SDK Manager",
+          runtime: "openai_agents_sdk" as const,
           sequence: 3,
-          type: "assistant.delta" as const
+          type: "execution.route" as const
         },
         {
           ...base,
-          action: { actionId: "artifact.generate", arguments: { apiKey: "never-render" } },
-          eventId: "stream-tool",
+          activityId: "reasoning-1",
+          detail: "先理解用户问题，再决定是否调用工具。",
+          eventId: "stream-reasoning",
+          kind: "reasoning_summary" as const,
+          label: "理解用户问题",
           sequence: 4,
-          type: "action.requested" as const
+          status: "completed" as const,
+          type: "manager.activity" as const
         },
         {
           ...base,
-          artifact: { artifactType: "mindmap" },
-          eventId: "stream-output",
+          activityId: "tool-1",
+          detail: "调用结构生成工具。",
+          eventId: "stream-tool",
+          kind: "tool_call" as const,
+          label: "生成结构",
           sequence: 5,
-          type: "artifact.requested" as const
+          status: "running" as const,
+          type: "manager.activity" as const
+        },
+        {
+          ...base,
+          activityId: "tool-1",
+          detail: "结构生成工具已返回。",
+          eventId: "stream-output",
+          kind: "tool_result" as const,
+          label: "结构生成完成",
+          sequence: 6,
+          status: "completed" as const,
+          type: "manager.activity" as const
         },
         {
           ...base,
           eventId: "stream-message",
           message: "已生成结构化说明。",
-          sequence: 6,
+          sequence: 7,
           type: "assistant.message" as const
         },
-        { ...base, eventId: "stream-complete", sequence: 7, type: "run.completed" as const }
+        { ...base, eventId: "stream-complete", sequence: 8, type: "run.completed" as const }
       ] as AgentEvent[];
       events.forEach((event) => listeners.forEach((listener) => listener(event)));
       return {
@@ -372,13 +416,181 @@ test("projects public Agent streaming events into the expandable work status car
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "解释方法");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(await screen.findByText("Agent 已完成本次工作")).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "查看工作详情" }));
-  expect(screen.getByLabelText("实时生成内容")).toHaveTextContent("正在整理方法与证据。");
-  expect(screen.getByText("工具调用：artifact.generate")).toBeInTheDocument();
-  expect(screen.getByText("产物已请求")).toBeInTheDocument();
-  expect(screen.getByText("调用参数已隐藏。")).toBeInTheDocument();
-  expect(screen.queryByText("never-render")).not.toBeInTheDocument();
+  expect(await screen.findByText("Manager 已完成本次运行")).toBeInTheDocument();
+  expect(screen.getAllByLabelText("AI 回复")).toHaveLength(1);
+  expect(screen.getByRole("status")).toHaveTextContent("SDK Manager 连接已结束");
+  const streamStep = screen.getByRole("button", { name: "分析 理解用户问题" });
+  expect(streamStep).toHaveAttribute("aria-expanded", "false");
+  await user.click(streamStep);
+  expect(streamStep).toHaveAttribute("aria-expanded", "true");
+  expect(screen.getByText("先理解用户问题，再决定是否调用工具。")).toBeInTheDocument();
+  expect(screen.getByText("结构生成完成")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "输出 结构生成完成" }));
+  expect(screen.getByText("结构生成工具已返回。")).toBeInTheDocument();
+  const favorite = screen.getByRole("button", { name: "收藏回复" });
+  await user.click(favorite);
+  expect(screen.getByRole("button", { name: "取消收藏回复" })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  );
+});
+
+test("queues a follow-up and interrupts at the next SDK tool boundary", async () => {
+  const user = userEvent.setup();
+  const listeners = new Set<(event: AgentEvent) => void>();
+  const sessionId = "session-queued-follow-up";
+  const runId = "run-queued-follow-up";
+  let firstIdempotencyKey = "";
+  let resolveFirst: ((result: Awaited<ReturnType<FrontendAgentClient["send"]>>) => void) | undefined;
+  let emitToolResult: (() => void) | undefined;
+  const firstResult = new Promise<Awaited<ReturnType<FrontendAgentClient["send"]>>>(
+    (resolve) => {
+      resolveFirst = resolve;
+    }
+  );
+  const baseEvent = {
+    apiVersion: "liteasy.agent/v1" as const,
+    emittedAt: "2026-09-02T00:00:00.000Z",
+    runId,
+    sessionId
+  };
+  const cancel = vi.fn(async () => {
+    const cancelledEvent = {
+      ...baseEvent,
+      eventId: "queued-run-cancelled",
+      reason: "后续消息在工具边界生效",
+      sequence: 4,
+      type: "run.cancelled" as const
+    };
+    const run = {
+      apiVersion: "liteasy.agent/v1" as const,
+      createdAt: "2026-09-02T00:00:00.000Z",
+      events: [cancelledEvent],
+      idempotencyKey: firstIdempotencyKey,
+      input: { message: "第一条消息", mode: "qa" as const },
+      runId,
+      sessionId,
+      status: "cancelled" as const
+    };
+    const result = { data: run, ok: true as const };
+    resolveFirst?.(result);
+    return result;
+  });
+  let sendCount = 0;
+  const send = vi.fn((input, options) => {
+    sendCount += 1;
+    if (sendCount === 1) {
+      firstIdempotencyKey = options?.idempotencyKey ?? "first-turn";
+      const started = {
+        ...baseEvent,
+        eventId: "queued-run-started",
+        idempotencyKey: firstIdempotencyKey,
+        inputMode: "qa" as const,
+        message: input.message,
+        sequence: 1,
+        type: "run.started" as const
+      };
+      const toolCall = {
+        ...baseEvent,
+        activityId: "queued-tool",
+        detail: "正在调用工具",
+        eventId: "queued-tool-call",
+        kind: "tool_call" as const,
+        label: "读取资料",
+        sequence: 2,
+        status: "running" as const,
+        type: "manager.activity" as const
+      };
+      listeners.forEach((listener) => {
+        listener(started);
+        listener(toolCall);
+      });
+      emitToolResult = () => listeners.forEach((listener) => listener({
+        ...baseEvent,
+        activityId: "queued-tool",
+        detail: "工具调用已经安全结束",
+        eventId: "queued-tool-result",
+        kind: "tool_result",
+        label: "资料读取完成",
+        sequence: 3,
+        status: "completed",
+        type: "manager.activity"
+      }));
+      return firstResult;
+    }
+
+    return Promise.resolve({
+      data: {
+        apiVersion: "liteasy.agent/v1" as const,
+        createdAt: "2026-09-02T00:00:01.000Z",
+        events: [{
+          ...baseEvent,
+          eventId: "queued-follow-up-answer",
+          message: "第二条消息已经执行",
+          runId: "run-queued-second",
+          sequence: 1,
+          type: "assistant.message" as const
+        }],
+        idempotencyKey: options?.idempotencyKey ?? "second-turn",
+        input,
+        runId: "run-queued-second",
+        sessionId,
+        status: "completed" as const
+      },
+      ok: true as const
+    });
+  });
+  const agentClient = {
+    cancel,
+    close: vi.fn(),
+    connect: vi.fn(),
+    confirm: vi.fn(),
+    getSession: () => ({ sessionId, status: "active" as const }),
+    listPublicWorkflowAuditSummaries: vi.fn(),
+    send,
+    subscribe: vi.fn((listener: (event: AgentEvent) => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    })
+  } as FrontendAgentClient;
+
+  render(
+    <AssistantPane
+      agentClient={agentClient}
+      onGenerateArtifact={() => "unused"}
+      selectedSetStatus={{ importedCount: 0, selectedCount: 0, selectionLocked: false }}
+    />
+  );
+
+  const composer = screen.getByPlaceholderText("输入你的问题或命令");
+  await user.type(composer, "第一条消息");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+  expect(composer).toHaveValue("");
+  await user.type(composer, "第二条消息");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(composer).toHaveValue("");
+  expect(screen.getByText("已暂存 · 当前工具调用结束后生效")).toBeInTheDocument();
+  expect(send).toHaveBeenCalledTimes(1);
+
+  await user.type(composer, "准备撤回的第三条消息");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+  const thirdMessage = screen.getByText("准备撤回的第三条消息").closest("article");
+  if (!thirdMessage) throw new Error("queued user message article not found");
+  await user.click(within(thirdMessage).getByRole("button", { name: "撤回" }));
+  expect(composer).toHaveValue("准备撤回的第三条消息");
+  expect(thirdMessage).not.toBeInTheDocument();
+  await user.clear(composer);
+
+  act(() => emitToolResult?.());
+
+  await waitFor(() => expect(cancel).toHaveBeenCalledWith(
+    runId,
+    "用户终止了 AI 对话"
+  ));
+  await waitFor(() => expect(send).toHaveBeenCalledTimes(2));
+  expect(await screen.findByText("第二条消息已经执行")).toBeInTheDocument();
+  expect(screen.queryByText("已暂存 · 当前工具调用结束后生效")).not.toBeInTheDocument();
 });
 
 
@@ -980,7 +1192,7 @@ test("regenerates the latest model answer from the previous user prompt", async 
   expect(await screen.findByText(/第二次模型回答/)).toBeInTheDocument();
 });
 
-test("does not submit duplicate prompts while a model answer is pending", async () => {
+test("clears the composer immediately after sending a model request", async () => {
   const user = userEvent.setup();
   const settingsStore = createSettingsStore();
   vi.stubGlobal(
@@ -1045,6 +1257,7 @@ test("does not submit duplicate prompts while a model answer is pending", async 
   await selectInitialAssistantMode(user, "问答");
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "总结这篇论文的核心方法");
   await user.click(screen.getByRole("button", { name: "发送" }));
+  expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveValue("");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(modelTransport).toHaveBeenCalledTimes(1);
@@ -1104,9 +1317,9 @@ test("shows a readable assistant error when the model backend is unavailable", a
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   await waitFor(() => {
-    expect(screen.getByText(/AI 服务暂时不可用/)).toBeInTheDocument();
+    expect(screen.getByText("暂时无法回复，请稍后重试。")).toBeInTheDocument();
   });
-  expect(screen.getByText(/错误编号：assistant_service_unavailable/)).toBeInTheDocument();
+  expect(screen.queryByText(/错误编号|追踪编号|诊断编号/)).not.toBeInTheDocument();
   expect(screen.queryByText(/network down/)).not.toBeInTheDocument();
 });
 

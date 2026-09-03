@@ -2,7 +2,7 @@ import type { PaperIdentity } from "../paper-identity/paperIdentity";
 import { resolveLocalAccountKey } from "../library/localAccountKey";
 import type { ForumAnnotationPublicationOperation } from "../forum/forum.types";
 
-export type PdfAnnotationKind = "highlight" | "underline" | "note";
+export type PdfAnnotationKind = "highlight" | "underline" | "note" | "text";
 export type PdfHighlightColor = "yellow" | "red" | "blue" | "green" | "pink";
 export type PdfAnnotationVisibility = "private" | "pending_public";
 export type PdfAnnotationSyncState =
@@ -43,6 +43,7 @@ type PdfAnnotationBase = {
   kind: PdfAnnotationKind;
   note?: string;
   normalizedStart?: number;
+  opacity?: number;
   page: number;
   paperIdentity: PaperIdentity;
   rects: PdfAnnotationRect[];
@@ -87,7 +88,7 @@ export type PdfAnnotationRestartRecovery = PdfAnnotationPrivateState & {
 
 type PdfAnnotationEdit = Partial<Pick<
   PdfAnnotation,
-  "color" | "excerpt" | "kind" | "normalizedStart" | "note" | "page" | "publication" | "rects" | "text"
+  "color" | "excerpt" | "kind" | "normalizedStart" | "note" | "opacity" | "page" | "publication" | "rects" | "text"
 >> & { updatedAt: string };
 
 type PdfAnnotationPublicationReceipt = {
@@ -102,7 +103,7 @@ type PdfAnnotationPublicationReceipt = {
 
 const storagePrefix = "liteasy.pdf-annotations/v1";
 const autoPublicStoragePrefix = "liteasy.pdf-annotations-auto-public/v1";
-const annotationKinds = new Set<PdfAnnotationKind>(["highlight", "underline", "note"]);
+const annotationKinds = new Set<PdfAnnotationKind>(["highlight", "underline", "note", "text"]);
 const highlightColors = new Set<PdfHighlightColor>(["yellow", "red", "blue", "green", "pink"]);
 
 function canUseTauriArtifactStore() {
@@ -225,6 +226,8 @@ function hasAnnotationFields(value: unknown) {
     (candidate.note === undefined || typeof candidate.note === "string") &&
     (candidate.normalizedStart === undefined ||
       (isFiniteNumber(candidate.normalizedStart) && candidate.normalizedStart >= 0)) &&
+    (candidate.opacity === undefined ||
+      (isFiniteNumber(candidate.opacity) && candidate.opacity >= 0 && candidate.opacity <= 1)) &&
     (candidate.color === undefined || highlightColors.has(candidate.color as PdfHighlightColor)) &&
     typeof candidate.createdAt === "string" && Number.isFinite(Date.parse(candidate.createdAt)) &&
     typeof candidate.updatedAt === "string" && Number.isFinite(Date.parse(candidate.updatedAt)) &&
@@ -263,6 +266,8 @@ function isLegacyAnnotation(value: unknown): value is Omit<
     typeof candidate.page === "number" && Number.isInteger(candidate.page) && candidate.page > 0 &&
     Array.isArray(candidate.rects) && candidate.rects.every(isAnnotationRect) &&
     (candidate.note === undefined || typeof candidate.note === "string") &&
+    (candidate.opacity === undefined ||
+      (isFiniteNumber(candidate.opacity) && candidate.opacity >= 0 && candidate.opacity <= 1)) &&
     (candidate.color === undefined || highlightColors.has(candidate.color as PdfHighlightColor));
 }
 

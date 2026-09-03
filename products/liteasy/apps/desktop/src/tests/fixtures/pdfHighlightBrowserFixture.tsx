@@ -1,4 +1,4 @@
-import { PdfReader } from "../../app/features/pdf/PdfReader";
+import { AppShell } from "../../app/layout/AppShell";
 import type { Paper } from "../../app/features/workspace/workspace.types";
 
 const previewPaper: Paper = {
@@ -8,9 +8,5 @@ const previewPaper: Paper = {
 };
 
 export default function PdfHighlightBrowserFixture() {
-  return (
-    <main style={{ height: "100vh", minWidth: 0, overflow: "hidden" }}>
-      <PdfReader selectedPapers={[previewPaper]} zoom={100} />
-    </main>
-  );
+  return <AppShell initialOpenReaderPaperIds={[previewPaper.id]} initialPapers={[previewPaper]} />;
 }

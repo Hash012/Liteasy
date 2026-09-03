@@ -16,6 +16,7 @@ const allowedFamilies = new Set([
   "selection",
   "settings",
   "theme",
+  "workflow",
   "workspace"
 ]);
 

@@ -7,8 +7,10 @@ export type UserPaperArtifactKind =
   | "bibliographic-identity"
   | "citations"
   | "fulltext"
+  | "file-metadata"
   | "literature-resolution"
-  | "reader-state";
+  | "reader-state"
+  | "whiteboard";
 
 export function isUserPaperArtifactStoreAvailable() {
   return typeof window !== "undefined" &&

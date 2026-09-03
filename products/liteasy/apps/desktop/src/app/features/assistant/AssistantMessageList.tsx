@@ -8,7 +8,66 @@ import { getAuditVerdictLabel } from "./assistantPresentation";
 import { DynamicCanvas } from "../generative-ui/DynamicCanvas";
 import type { UIDslActionRef } from "../generative-ui/generativeUi.types";
 import { AgentActivityCard } from "./AgentActivityCard";
-import { ArrowClockwiseRegular, CopyRegular, EditRegular } from "@fluentui/react-icons";
+import { AssistantMarkdown } from "./AssistantMarkdown";
+import {
+  ArrowClockwiseRegular,
+  ChevronDownRegular,
+  ChevronUpRegular,
+  ClockRegular,
+  CopyRegular,
+  DismissRegular,
+  EditRegular,
+  FlashRegular,
+  StarFilled,
+  StarRegular
+} from "@fluentui/react-icons";
+import { Button, Tooltip } from "@fluentui/react-components";
+import { useEffect, useRef, useState } from "react";
+
+function ExpandableUserMessage({ value }: { value: string }) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [foldable, setFoldable] = useState(
+    () => value.split(/\r?\n/).length > 5 || value.length > 260
+  );
+
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+    const updateFoldable = () => {
+      const textIsLong = value.split(/\r?\n/).length > 5 || value.length > 260;
+      setFoldable(textIsLong || content.scrollHeight > content.clientHeight + 1);
+    };
+    updateFoldable();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(updateFoldable);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [value]);
+
+  return (
+    <div className="assistant-user-message">
+      <div
+        className={`assistant-answer-text assistant-user-message-content${foldable && !expanded ? " collapsed" : ""}`}
+        ref={contentRef}
+      >
+        {value}
+      </div>
+      {foldable ? (
+        <Button
+          appearance="subtle"
+          aria-expanded={expanded}
+          className="assistant-user-message-toggle"
+          icon={expanded ? <ChevronUpRegular /> : <ChevronDownRegular />}
+          onClick={() => setExpanded((current) => !current)}
+          size="small"
+        >
+          {expanded ? "收起" : "展开完整消息"}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
 
 function getPublicAuditStatusLabel(status: "blocked" | "passed" | "warning") {
   if (status === "passed") return "通过";
@@ -22,10 +81,14 @@ type AssistantMessageListProps = {
   onConfirmRequest?: (confirmation: AssistantConfirmationRequest) => void;
   onDynamicAction?: (action: UIDslActionRef, traceId: string) => void;
   onEditMessage?: (messageId: string) => void;
+  onInterruptForQueuedMessage?: (messageId: string) => void;
   onModeChange: (mode: AssistantMode) => void;
   onRegenerateMessage?: (messageId: string) => void;
   onRejectRequest?: (confirmation: AssistantConfirmationRequest) => void;
   onRetryUserMessage?: (messageId: string) => void;
+  onWaitForRunForQueuedMessage?: (messageId: string) => void;
+  onWithdrawQueuedMessage?: (messageId: string) => void;
+  onToggleFavoriteMessage?: (messageId: string) => void;
 };
 
 export function AssistantMessageList({
@@ -34,10 +97,14 @@ export function AssistantMessageList({
   onConfirmRequest,
   onDynamicAction,
   onEditMessage,
+  onInterruptForQueuedMessage,
   onModeChange,
   onRegenerateMessage,
   onRejectRequest,
-  onRetryUserMessage
+  onRetryUserMessage,
+  onWaitForRunForQueuedMessage,
+  onWithdrawQueuedMessage,
+  onToggleFavoriteMessage
 }: AssistantMessageListProps) {
   if (messages.length === 0) {
     return (
@@ -55,9 +122,6 @@ export function AssistantMessageList({
             key={message.id}
           >
             <div className={`assistant-message ${message.role}`}>
-              <div className="assistant-message-heading" aria-hidden="true">
-                {message.role === "user" ? "你" : "AI"}
-              </div>
               {message.contextTokens?.length ? (
                 <div className="assistant-message-token-row">
                   {message.contextTokens.map((token) => (
@@ -71,7 +135,51 @@ export function AssistantMessageList({
               {message.agentActivity ? <AgentActivityCard activity={message.agentActivity} /> : null}
               {message.content &&
               (!message.uiDsl || message.citations?.length || message.audit || message.executionTrace) ? (
-                <div className="assistant-answer-text">{message.content}</div>
+                message.role === "assistant" ? (
+                  <AssistantMarkdown className="assistant-answer-text assistant-markdown" value={message.content} />
+                ) : (
+                  <ExpandableUserMessage value={message.content} />
+                )
+              ) : null}
+              {message.role === "user" && message.queuedDelivery ? (
+                <div className={`assistant-queued-message ${message.queuedDelivery.policy}`}>
+                  <span>
+                    {message.queuedDelivery.policy === "interrupt"
+                      ? "正在中断当前运行，随后执行这条消息"
+                      : message.queuedDelivery.policy === "after_run"
+                        ? "已暂存 · 当前回复完成后执行"
+                        : "已暂存 · 当前工具调用结束后生效"}
+                  </span>
+                  <div aria-label="暂存消息操作" className="assistant-queued-message-actions">
+                    <Button
+                      appearance="subtle"
+                      disabled={message.queuedDelivery.policy === "interrupt"}
+                      icon={<DismissRegular />}
+                      onClick={() => onWithdrawQueuedMessage?.(message.id)}
+                      size="small"
+                    >
+                      撤回
+                    </Button>
+                    <Button
+                      appearance="subtle"
+                      disabled={message.queuedDelivery.policy === "interrupt"}
+                      icon={<FlashRegular />}
+                      onClick={() => onInterruptForQueuedMessage?.(message.id)}
+                      size="small"
+                    >
+                      立即中断并执行
+                    </Button>
+                    <Button
+                      appearance="subtle"
+                      disabled={message.queuedDelivery.policy === "after_run"}
+                      icon={<ClockRegular />}
+                      onClick={() => onWaitForRunForQueuedMessage?.(message.id)}
+                      size="small"
+                    >
+                      本轮完成后执行
+                    </Button>
+                  </div>
+                </div>
               ) : null}
               {message.uiDsl ? (
                 <DynamicCanvas
@@ -167,7 +275,7 @@ export function AssistantMessageList({
                   >
                     <CopyRegular aria-hidden="true" />
                   </button>
-                  <button
+                  {!message.queuedDelivery ? <button
                     aria-label={`编辑：${message.content}`}
                     className="assistant-message-action"
                     onClick={() => onEditMessage?.(message.id)}
@@ -175,8 +283,8 @@ export function AssistantMessageList({
                     type="button"
                   >
                     <EditRegular aria-hidden="true" />
-                  </button>
-                  <button
+                  </button> : null}
+                  {!message.queuedDelivery ? <button
                     aria-label={`重试：${message.content}`}
                     className="assistant-message-action"
                     onClick={() => onRetryUserMessage?.(message.id)}
@@ -184,19 +292,53 @@ export function AssistantMessageList({
                     type="button"
                   >
                     <ArrowClockwiseRegular aria-hidden="true" />
-                  </button>
+                  </button> : null}
                 </>
               ) : null}
-              {message.role === "assistant" && onRegenerateMessage ? (
-                <button
-                  aria-label="重新生成回复"
-                  className="assistant-message-action"
-                  onClick={() => onRegenerateMessage(message.id)}
-                  title="重新生成"
-                  type="button"
-                >
-                    <ArrowClockwiseRegular aria-hidden="true" />
-                </button>
+              {message.role === "assistant" ? (
+                <>
+                  <Tooltip content="复制回复" relationship="description">
+                    <button
+                      aria-label="复制回复"
+                      className="assistant-message-action"
+                      onClick={() => void navigator.clipboard?.writeText(message.content)}
+                      title="复制回复"
+                      type="button"
+                    >
+                      <CopyRegular aria-hidden="true" />
+                    </button>
+                  </Tooltip>
+                  <Tooltip
+                    content={message.favorite ? "取消收藏回复" : "收藏回复"}
+                    relationship="description"
+                  >
+                    <button
+                      aria-label={message.favorite ? "取消收藏回复" : "收藏回复"}
+                      aria-pressed={Boolean(message.favorite)}
+                      className={`assistant-message-action${message.favorite ? " active" : ""}`}
+                      onClick={() => onToggleFavoriteMessage?.(message.id)}
+                      title={message.favorite ? "取消收藏回复" : "收藏回复"}
+                      type="button"
+                    >
+                      {message.favorite
+                        ? <StarFilled aria-hidden="true" />
+                        : <StarRegular aria-hidden="true" />}
+                    </button>
+                  </Tooltip>
+                  {onRegenerateMessage ? (
+                    <Tooltip content="重新生成回复" relationship="description">
+                      <button
+                        aria-label="重新生成回复"
+                        className="assistant-message-action"
+                        onClick={() => onRegenerateMessage(message.id)}
+                        title="重新生成回复"
+                        type="button"
+                      >
+                        <ArrowClockwiseRegular aria-hidden="true" />
+                      </button>
+                    </Tooltip>
+                  ) : null}
+                </>
               ) : null}
             </div>
           </article>

@@ -60,10 +60,38 @@ export function buildChildEnv({ baseEnv = process.env, host, port, publicHost })
     LITEASY_DEV_CLOUD_HOST: host,
     LITEASY_DEV_CLOUD_PORT: String(port),
     LITEASY_DEV_CLOUD_PUBLIC_ORIGIN: `http://${resolvedPublicHost}:${port}`,
-    VITE_LITEASY_DEV_CLOUD_PORT: String(port)
+    VITE_LITEASY_DEV_CLOUD_PORT: String(port),
+    ...(typeof baseEnv.LITEASY_MODEL_PROVIDER === "string"
+      ? { VITE_LITEASY_MODEL_PROVIDER: baseEnv.LITEASY_MODEL_PROVIDER }
+      : {})
   };
 }
 
 export function buildDesktopViteArgs({ host, port }) {
   return ["vite", "--host", host, "--port", String(port)];
+}
+
+function appendNoProxyHost(value, hostname) {
+  return [...new Set([
+    ...(typeof value === "string" ? value.split(",") : []),
+    hostname
+  ].map((entry) => entry.trim()).filter(Boolean))].join(",");
+}
+
+export function applyOpenAIProxyBypass(env = process.env) {
+  if (env.OPENAI_BYPASS_PROXY !== "true" || !env.OPENAI_BASE_URL) {
+    return env;
+  }
+
+  try {
+    const hostname = new URL(env.OPENAI_BASE_URL).hostname;
+    const noProxy = appendNoProxyHost(env.NO_PROXY ?? env.no_proxy, hostname);
+    return {
+      ...env,
+      NO_PROXY: noProxy,
+      no_proxy: noProxy
+    };
+  } catch {
+    return env;
+  }
 }

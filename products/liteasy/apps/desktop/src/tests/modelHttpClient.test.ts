@@ -47,6 +47,32 @@ test("refuses an anonymous cloud model request before network access", async () 
   expect(fetchImpl).not.toHaveBeenCalled();
 });
 
+test("allows an anonymous request only when local development explicitly opts in", async () => {
+  const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ answer: "ok" }), {
+    headers: { "Content-Type": "application/json" },
+    status: 200
+  }));
+  const transport = createBearerModelTransport({
+    allowUnauthenticatedLocalDev: true,
+    fetchImpl,
+    getAccessToken: () => null
+  });
+
+  await transport({
+    body: "{}",
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+    url: "http://127.0.0.1:8787/v1/model/generate"
+  });
+
+  expect(fetchImpl).toHaveBeenCalledWith(
+    "http://127.0.0.1:8787/v1/model/generate",
+    expect.objectContaining({
+      headers: { "Content-Type": "application/json" }
+    })
+  );
+});
+
 test("posts a typed model request to the backend endpoint", async () => {
   const requests: Array<{ body: string; url: string }> = [];
   const client = createHttpModelClient({

@@ -19,6 +19,14 @@ test("uses release HTTPS endpoints injected by the desktop build", () => {
   expect(store.getState()["thin_reading.intuecho_endpoint"]).toBe("https://community.staging.liteasyclaw.com");
 });
 
+test("uses an explicitly injected local DeepSeek provider", () => {
+  const store = createSettingsStore({
+    VITE_LITEASY_MODEL_PROVIDER: "deepseek"
+  });
+
+  expect(store.getState()["models.default_provider"]).toBe("deepseek");
+});
+
 test("rejects non-HTTPS remote release endpoints", () => {
   expect(() => createSettingsStore({
     VITE_LITEASY_CLOUD_URL: "http://api.staging.liteasyclaw.com"

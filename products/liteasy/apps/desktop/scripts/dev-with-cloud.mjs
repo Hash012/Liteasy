@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { loadSecretEnvFile } from "../../../../../development/dev-cloud/config.mjs";
 import {
+  applyOpenAIProxyBypass,
   buildChildEnv,
   buildDesktopViteArgs,
   findAvailablePort,
@@ -22,6 +23,7 @@ const cloudPort = await findAvailablePort(requestedCloudPort, cloudHost);
 const desktopHost = resolveRequestedDesktopHost();
 const desktopPort = resolveRequestedDesktopPort();
 const childEnv = buildChildEnv({
+  baseEnv: applyOpenAIProxyBypass(process.env),
   host: cloudHost,
   port: cloudPort
 });

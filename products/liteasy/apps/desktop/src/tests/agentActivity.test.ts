@@ -9,7 +9,7 @@ import {
 function event(payload: Record<string, unknown>) {
   return {
     apiVersion: "liteasy.agent/v1",
-    emittedAt: "2026-07-31T00:00:00.000Z",
+    emittedAt: "2026-09-02T00:00:00.000Z",
     eventId: `event-${payload.type}`,
     runId: "run-1",
     sequence: 1,
@@ -19,66 +19,111 @@ function event(payload: Record<string, unknown>) {
 }
 
 describe("agent activity projection", () => {
-  test("projects streaming generation, tool calls and outputs without exposing sensitive values", () => {
-    let activity = createAgentActivity();
-    activity = applyAgentActivityEvent(activity, event({ type: "run.started" }));
-    activity = applyAgentActivityEvent(activity, event({
-      delta: "正在生成。api_key: sk-this-must-not-be-visible-123456",
-      type: "assistant.delta"
+  test("projects real SDK Manager summaries and tool events without exposing credentials", () => {
+    let activity = applyAgentActivityEvent(createAgentActivity(), event({
+      detail: "本轮由已注入的 OpenAI Agents SDK Manager 负责执行。",
+      label: "OpenAI Agents SDK Manager",
+      runtime: "openai_agents_sdk",
+      type: "execution.route"
     }));
     activity = applyAgentActivityEvent(activity, event({
-      action: {
-        actionId: "artifact.generate",
-        arguments: { apiKey: "do-not-render", artifactType: "mindmap" }
-      },
-      type: "action.requested"
+      activityId: "reasoning-1",
+      detail: "需要查询当前布局。 api_key: sk-this-must-not-be-visible-123456",
+      kind: "reasoning_summary",
+      label: "判断所需操作",
+      status: "completed",
+      type: "manager.activity"
     }));
     activity = applyAgentActivityEvent(activity, event({
-      artifact: { artifactType: "mindmap" },
-      type: "artifact.requested"
+      activityId: "tool-1",
+      detail: "读取布局状态",
+      kind: "tool_call",
+      label: "调用布局工具",
+      status: "running",
+      type: "manager.activity"
     }));
 
-    expect(activity.statusText).toBe("产物已请求");
-    expect(activity.generatedContent).toContain("[已隐藏]");
-    expect(activity.generatedContent).not.toContain("sk-this-must-not-be-visible-123456");
+    expect(activity.connectionText).toBe("OpenAI Agents SDK Manager");
+    expect(activity.statusText).toBe("调用布局工具");
     expect(activity.entries).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        content: "调用参数已隐藏。",
-        kind: "tool",
-        label: "工具调用：artifact.generate",
-        status: "running"
-      }),
-      expect.objectContaining({ kind: "output", label: "产物已请求", status: "completed" })
+      expect.objectContaining({ kind: "analysis", label: "判断所需操作", status: "completed" }),
+      expect.objectContaining({ kind: "tool", label: "调用布局工具", status: "running" })
     ]));
+    expect(activity.entries[0]?.content).toContain("[已隐藏]");
+    expect(activity.entries[0]?.content).not.toContain("sk-this-must-not-be-visible-123456");
   });
 
-  test("accumulates streamed subtask content under its readable label", () => {
+  test("updates an SDK activity by its stable activity id", () => {
     let activity = createAgentActivity();
     activity = applyAgentActivityEvent(activity, event({
-      delta: "正在读取方法部分。",
-      label: "方法证据",
-      subtaskId: "methods",
-      type: "analysis.subtask.delta"
+      activityId: "tool-1",
+      detail: "正在调用",
+      kind: "tool_call",
+      label: "查询资料",
+      status: "running",
+      type: "manager.activity"
     }));
     activity = applyAgentActivityEvent(activity, event({
-      delta: " 已定位关键算法。",
-      label: "方法证据",
-      subtaskId: "methods",
-      type: "analysis.subtask.delta"
+      activityId: "tool-1",
+      detail: "返回 3 条结果",
+      kind: "tool_result",
+      label: "资料查询完成",
+      status: "completed",
+      type: "manager.activity"
     }));
 
     expect(activity.entries).toHaveLength(1);
     expect(activity.entries[0]).toMatchObject({
-      content: "正在读取方法部分。 已定位关键算法。",
-      label: "并行分析：方法证据",
-      status: "running"
+      content: "返回 3 条结果",
+      kind: "output",
+      label: "资料查询完成",
+      status: "completed"
     });
   });
 
-  test("omits protocol JSON from the user-facing activity projection", () => {
+  test("ignores non-Manager workflow progress and plans", () => {
+    const initial = createAgentActivity();
+    const projected = applyAgentActivityEvent(initial, event({
+      phase: "retrieval",
+      planId: "plan-1",
+      progress: 70,
+      summary: "核对引用与证据覆盖",
+      traceId: "trace-1",
+      type: "progress.started"
+    }));
+
+    expect(projected).toEqual(initial);
+    expect(projected.entries).toHaveLength(0);
+  });
+
+  test("omits protocol JSON from user-facing details", () => {
     expect(toUserVisibleAgentActivityText('{"runId":"internal-run","status":"working"}')).toBe("");
     expect(toUserVisibleAgentActivityText("```json\n{\"tool\":\"artifact.generate\"}\n```"))
       .toBe("");
-    expect(toUserVisibleAgentActivityText("正在定位论文证据。")).toBe("正在定位论文证据。");
+    expect(toUserVisibleAgentActivityText("正在定位相关信息。")).toBe("正在定位相关信息。");
+  });
+
+  test("prefers the safe structured error over raw runtime diagnostics", () => {
+    const activity = applyAgentActivityEvent(createAgentActivity(), event({
+      error: {
+        category: "network",
+        code: "SERVICE_UNAVAILABLE",
+        diagnosticsRef: "trace_safe-1",
+        recoveryActions: [{
+          actionId: "retry_service",
+          label: "检查网络后重试",
+          requiresConfirmation: false
+        }],
+        retryable: true,
+        userImpact: "暂时无法回复，请稍后重试。"
+      },
+      message: "https://internal.example api_key=secret",
+      type: "run.failed"
+    }));
+
+    expect(activity.entries[0]?.content).toBe("暂时无法回复，请稍后重试。");
+    expect(activity.entries[0]?.content).not.toContain("检查网络后重试");
+    expect(activity.entries[0]?.content).not.toContain("trace_safe-1");
+    expect(activity.entries[0]?.content).not.toContain("internal.example");
   });
 });

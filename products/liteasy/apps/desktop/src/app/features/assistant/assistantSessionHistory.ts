@@ -185,14 +185,12 @@ export function createArtifactTaskSession(
 ): AssistantSessionHistoryItem {
   const sessionId = getArtifactTaskSessionId(task.id, task);
   const title = `生成：${artifactTypeLabels[task.type]}`;
-  const progress = Math.max(0, Math.min(100, Math.round(task.progress)));
   const failurePresentation = task.failure
     ? presentArtifactFailure(task.failure, options.developerDiagnostics)
     : undefined;
   const progressMessage = [
     failurePresentation?.message ?? task.message,
     `阶段：${artifactStageLabels[task.stage]}`,
-    `进度：${progress}%`,
     task.failure
       ? [
           "\n错误信息：",

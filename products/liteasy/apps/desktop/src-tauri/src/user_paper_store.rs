@@ -20,9 +20,11 @@ fn artifact_kind_is_allowed(kind: &str) -> bool {
             | "anchors"
             | "bibliographic-identity"
             | "citations"
+            | "file-metadata"
             | "fulltext"
             | "literature-resolution"
             | "reader-state"
+            | "whiteboard"
     )
 }
 
@@ -214,6 +216,8 @@ mod tests {
         assert!(artifact_kind_is_allowed("bibliographic-identity"));
         assert!(artifact_kind_is_allowed("literature-resolution"));
         assert!(artifact_kind_is_allowed("citations"));
+        assert!(artifact_kind_is_allowed("file-metadata"));
+        assert!(artifact_kind_is_allowed("whiteboard"));
         assert!(!artifact_kind_is_allowed("../../outside"));
     }
 

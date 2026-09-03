@@ -27,6 +27,7 @@ type UseCloudAccountControllerInput = {
   getSettings: () => SettingsState;
   isOnline: boolean;
   onRegistered?: () => void;
+  suppressAutomaticLoginPrompt?: boolean;
   visualizationFetch?: typeof fetch;
   visualizationStorage?: Storage;
 };
@@ -64,6 +65,7 @@ export function useCloudAccountController({
   getSettings,
   isOnline,
   onRegistered,
+  suppressAutomaticLoginPrompt = false,
   visualizationFetch,
   visualizationStorage
 }: UseCloudAccountControllerInput): {
@@ -130,11 +132,18 @@ export function useCloudAccountController({
       accountSession === null &&
       accountPending === false &&
       shouldShowLoginReminder &&
+      !suppressAutomaticLoginPrompt &&
       loginDialogDismissedThisSession === false
     ) {
       setLoginDialogOpen(true);
     }
-  }, [accountPending, accountSession, loginDialogDismissedThisSession, shouldShowLoginReminder]);
+  }, [
+    accountPending,
+    accountSession,
+    loginDialogDismissedThisSession,
+    shouldShowLoginReminder,
+    suppressAutomaticLoginPrompt
+  ]);
 
   useEffect(() => {
     if (accountSession !== null) {

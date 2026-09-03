@@ -10,6 +10,7 @@ import {
 } from "../app/features/pdf/pdfAnnotationStorage";
 import { resolvePaperIdentity } from "../app/features/paper-identity/paperIdentity";
 import type { Paper } from "../app/features/workspace/workspace.types";
+import { pdfWhiteboardStorageKey } from "../app/features/pdf/pdf-whiteboard/pdfWhiteboardStorage";
 
 const paper: Paper = {
   id: "pdf-reader-interaction",
@@ -115,6 +116,17 @@ test("draws an underline at the glyph rectangle baseline instead of one line bel
   expect(mark).toHaveStyle("border-bottom: 2px solid rgba(27, 102, 179, 0.8)");
 });
 
+test("insets a highlight band by five percent above and below the selected glyphs", async () => {
+  renderAnnotation(annotation());
+
+  const mark = await screen.findByLabelText(/高亮标注/u);
+  expect(mark).toHaveStyle({
+    height: "1.8%",
+    top: "40.1%",
+    width: "35.2%"
+  });
+});
+
 test("clicking a page highlight opens its comment editor with a live Markdown preview", async () => {
   const user = userEvent.setup();
   renderAnnotation(annotation({ note: "" }));
@@ -136,4 +148,65 @@ test("clicking a page highlight opens its comment editor with a live Markdown pr
   expect(screen.queryByLabelText(/高亮注释编辑器/u)).not.toBeInTheDocument();
   const sidebarPreview = screen.getByText("核心结论").closest(".annotation-note-preview");
   expect(sidebarPreview?.querySelector("strong")).toHaveTextContent("核心结论");
+});
+
+test("shows highlighted comments beside the PDF only when the margin layer is enabled", async () => {
+  const user = userEvent.setup();
+  renderAnnotation(annotation({ note: "**页边结论**\n\n$E=mc^2$" }));
+
+  expect(screen.queryByLabelText(/comment：/u)).not.toBeInTheDocument();
+  const toggle = screen.getByRole("button", { name: "显示页边批注" });
+  expect(toggle).toHaveAttribute("aria-pressed", "false");
+
+  await user.click(toggle);
+
+  const comment = screen.getByLabelText(/^第 1 页高亮批注：/u);
+  const page = screen.getByLabelText("PDF.js 页面 1");
+  const rail = screen.getByLabelText("第 1 页页外批注栏");
+  expect(page).not.toContainElement(comment);
+  expect(page.parentElement).toContainElement(rail);
+  const connector = page.parentElement?.querySelector<HTMLElement>(".pdf-margin-comment-connector");
+  expect(connector).not.toBeNull();
+  expect(Number.parseFloat(connector?.style.width ?? "0")).toBeGreaterThan(0);
+  expect(connector?.style.transform).toBe("");
+  expect(screen.getByLabelText("PDF.js 页面列表")).toHaveClass("with-margin-comments");
+  expect(within(comment).getByText("页边结论").tagName).toBe("STRONG");
+  expect(comment.querySelector(".katex")).not.toBeNull();
+  expect(toggle).toHaveAttribute("aria-pressed", "true");
+  expect(window.localStorage.getItem("liteasy:pdf-reader:margin-comments")).toBe("true");
+
+  const connectorToggle = screen.getByRole("button", { name: "显示批注关联线" });
+  expect(connectorToggle).toHaveAttribute("aria-pressed", "true");
+  await user.click(connectorToggle);
+  expect(page.parentElement?.querySelector(".pdf-margin-comment-connector")).toBeNull();
+  expect(window.localStorage.getItem("liteasy:pdf-reader:margin-comment-connectors")).toBe("false");
+  expect(comment).toBeInTheDocument();
+
+  await user.click(toggle);
+  expect(screen.queryByLabelText(/comment：/u)).not.toBeInTheDocument();
+});
+
+test("opens a persistent whiteboard beside the PDF reader", async () => {
+  const user = userEvent.setup();
+  render(<PdfReader selectedPapers={[paper]} zoom={100} />);
+  const toggle = screen.getByRole("button", { name: "打开 PDF 白板" });
+
+  expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await user.click(toggle);
+
+  const whiteboard = screen.getByLabelText("PDF 思考白板");
+  expect(toggle).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByLabelText("PDF 阅读工作区")).toHaveClass("whiteboard-open");
+  await user.click(within(whiteboard).getByRole("button", { name: "文字" }));
+
+  const storageKey = pdfWhiteboardStorageKey(paper)!;
+  await waitFor(() => {
+    const stored = JSON.parse(window.localStorage.getItem(storageKey) ?? "null");
+    expect(stored?.nodes).toHaveLength(1);
+    expect(stored.nodes[0].kind).toBe("markdown");
+  });
+
+  await user.click(within(whiteboard).getByRole("button", { name: "收起 PDF 白板" }));
+  expect(screen.queryByLabelText("PDF 思考白板")).not.toBeInTheDocument();
+  expect(toggle).toHaveAttribute("aria-pressed", "false");
 });

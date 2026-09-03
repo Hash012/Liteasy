@@ -1,0 +1,234 @@
+.pdf-whiteboard {
+  position: relative;
+  z-index: 12;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--line-1);
+  background: #f7fafc;
+  box-shadow: -5px 0 18px rgba(24, 34, 47, 0.08);
+  outline: none;
+}
+
+.pdf-whiteboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  min-height: 42px;
+  padding: 6px 8px 6px 12px;
+  border-bottom: 1px solid var(--line-1);
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.pdf-whiteboard-header > div {
+  display: grid;
+  min-width: 0;
+}
+
+.pdf-whiteboard-header strong {
+  color: var(--ink-1);
+  font-size: 13px;
+}
+
+.pdf-whiteboard-header small {
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pdf-whiteboard-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(24, 34, 47, 0.08);
+  background: rgba(250, 252, 254, 0.96);
+}
+
+.pdf-whiteboard-toolbar > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  color: var(--ink-2);
+  font-size: 10px;
+}
+
+.pdf-whiteboard-canvas {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 80% 10%, rgba(92, 153, 205, 0.09), transparent 34%),
+    #f5f8fb;
+}
+
+.pdf-whiteboard-empty {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  width: min(260px, 80%);
+  gap: 6px;
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1.5;
+  pointer-events: none;
+  text-align: center;
+  transform: translate(-50%, -50%);
+}
+
+.pdf-whiteboard-empty strong {
+  color: var(--ink-1);
+  font-size: 14px;
+}
+
+.pdf-whiteboard-node {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid rgba(85, 111, 136, 0.34);
+  border-radius: 7px;
+  background: rgba(255, 255, 250, 0.98);
+  box-shadow: 0 5px 16px rgba(24, 34, 47, 0.13);
+  color: var(--ink-1);
+}
+
+.pdf-whiteboard-node.is-selected {
+  border-color: var(--accent-1);
+  box-shadow: 0 0 0 2px rgba(27, 102, 179, 0.14), 0 7px 20px rgba(24, 34, 47, 0.16);
+}
+
+.pdf-whiteboard-node-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 26px;
+  padding: 2px 4px 2px 8px;
+  border-bottom: 1px solid rgba(24, 34, 47, 0.08);
+  background: rgba(240, 245, 249, 0.94);
+  color: var(--ink-2);
+  cursor: grab;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.pdf-whiteboard-node-header button {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.pdf-whiteboard-node-header button:hover {
+  background: rgba(190, 46, 46, 0.1);
+  color: #a4262c;
+}
+
+.pdf-whiteboard-node textarea {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  resize: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink-1);
+  font: inherit;
+  line-height: 1.45;
+  padding: 8px;
+}
+
+.pdf-whiteboard-markdown {
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: text;
+  padding: 7px 9px;
+  text-align: left;
+}
+
+.pdf-whiteboard-markdown .pdf-annotation-markdown {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.pdf-whiteboard-markdown .pdf-annotation-markdown > :first-child {
+  margin-top: 0;
+}
+
+.pdf-whiteboard-markdown .pdf-annotation-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.pdf-whiteboard-node.is-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+  background: #ffffff;
+}
+
+.pdf-whiteboard-literature-card,
+.pdf-whiteboard-extension-card {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  padding: 10px;
+}
+
+.pdf-whiteboard-literature-card small,
+.pdf-whiteboard-extension-card small {
+  color: var(--ink-2);
+}
+
+.pdf-whiteboard-node .react-flow__handle {
+  width: 9px;
+  height: 9px;
+  border: 2px solid #ffffff;
+  background: var(--accent-1);
+}
+
+.pdf-whiteboard .react-flow__edge-path {
+  stroke: rgba(49, 91, 126, 0.75);
+  stroke-width: 1.6;
+}
+
+.pdf-whiteboard .react-flow__minimap {
+  overflow: hidden;
+  border: 1px solid rgba(24, 34, 47, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.pdf-whiteboard-status {
+  min-height: 25px;
+  overflow: hidden;
+  padding: 5px 8px;
+  border-top: 1px solid rgba(24, 34, 47, 0.08);
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--ink-2);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

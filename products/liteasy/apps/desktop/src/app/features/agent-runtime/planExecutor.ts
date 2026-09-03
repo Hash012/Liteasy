@@ -341,7 +341,10 @@ async function executeSemanticPlanWithOptions(
 
   const runtimeContexts = buildIntentRuntimeContexts(context);
   const validation = validateSemanticActionPlan(plan, {
-    mode: context.runtimeInput?.mode ?? "command",
+    mode:
+      context.executionSource === "manager_tool"
+        ? "command"
+        : context.runtimeInput?.mode ?? "command",
     registeredActions: runtimeContexts.policyContext.registeredActions
   });
   if (!validation.valid) {

@@ -5,6 +5,7 @@ const viewSettingsStorageKey = "liteasy.view-settings.v1";
 type DesktopRuntimeEnv = {
   VITE_FORUM_API_URL?: string;
   VITE_LITEASY_CLOUD_URL?: string;
+  VITE_LITEASY_MODEL_PROVIDER?: string;
 };
 
 function releaseEndpoint(value: string | undefined, fallback: string) {
@@ -74,7 +75,9 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
     "assistant.language": "zh-CN",
     "import.ocr_language": "eng",
     "thin_reading.intuecho_endpoint": forumEndpoint,
-    "models.default_provider": "openai",
+    "models.default_provider": runtimeEnv.VITE_LITEASY_MODEL_PROVIDER === "deepseek"
+      ? "deepseek"
+      : "openai",
     "models.cloud_proxy_endpoint": cloudEndpoint,
     "models.control_plane_endpoint": cloudEndpoint,
     "view.font_family": '"Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", sans-serif',

@@ -3,6 +3,7 @@ import { createServer, type Server } from "node:net";
 import { resolve } from "node:path";
 import { describe, expect, test } from "vitest";
 import {
+  applyOpenAIProxyBypass,
   buildChildEnv,
   buildDesktopViteArgs,
   findAvailablePort,
@@ -57,7 +58,7 @@ describe("desktop dev script", () => {
 
       const port = await findAvailablePort(address.port, "127.0.0.1");
       const env = buildChildEnv({
-        baseEnv: {},
+        baseEnv: { LITEASY_MODEL_PROVIDER: "deepseek" },
         host: "127.0.0.1",
         port
       });
@@ -67,6 +68,7 @@ describe("desktop dev script", () => {
       expect(env.LITEASY_DEV_CLOUD_PORT).toBe(String(port));
       expect(env.LITEASY_DEV_CLOUD_PUBLIC_ORIGIN).toBe(`http://127.0.0.1:${port}`);
       expect(env.VITE_LITEASY_DEV_CLOUD_PORT).toBe(String(port));
+      expect(env.VITE_LITEASY_MODEL_PROVIDER).toBe("deepseek");
     } finally {
       await close(blocker);
     }
@@ -90,6 +92,21 @@ describe("desktop dev script", () => {
     expect(envWithExplicitSecretFile.LITEASY_DEV_CLOUD_ENV_FILE).toBe(
       "/tmp/liteasy-dev-cloud.env"
     );
+  });
+
+  test("only bypasses the proxy for an explicitly opted-in OpenAI gateway", () => {
+    const unchanged = {
+      NO_PROXY: "localhost",
+      OPENAI_BASE_URL: "https://gateway.example/v1"
+    };
+    const bypassed = applyOpenAIProxyBypass({
+      ...unchanged,
+      OPENAI_BYPASS_PROXY: "true"
+    });
+
+    expect(applyOpenAIProxyBypass(unchanged)).toBe(unchanged);
+    expect(bypassed.NO_PROXY).toBe("localhost,gateway.example");
+    expect(bypassed.no_proxy).toBe("localhost,gateway.example");
   });
 
   test("loads the service env file before choosing the cloud port", () => {

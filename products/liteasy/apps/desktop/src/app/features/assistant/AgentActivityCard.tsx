@@ -1,10 +1,16 @@
-import { Button } from "@fluentui/react-components";
-import { ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
-import { useEffect, useId, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { Button, Tooltip } from "@fluentui/react-components";
+import {
+  CheckmarkCircleRegular,
+  ChevronDownRegular,
+  ChevronRightRegular,
+  CircleRegular,
+  ErrorCircleRegular,
+  PlugConnectedRegular
+} from "@fluentui/react-icons";
+import { useEffect, useId, useMemo, useState } from "react";
 import { toUserVisibleAgentActivityText } from "./agentActivity";
 import type { AgentActivity } from "./assistant.types";
+import { AssistantMarkdown } from "./AssistantMarkdown";
 
 type AgentActivityCardProps = {
   activity: AgentActivity;
@@ -12,73 +18,102 @@ type AgentActivityCardProps = {
 
 const entryKindLabels = {
   analysis: "分析",
+  connection: "连接",
   output: "输出",
+  runtime: "链路",
   tool: "工具"
 } as const;
 
+function EntryStatusIcon({ status }: { status: AgentActivity["entries"][number]["status"] }) {
+  if (status === "completed") return <CheckmarkCircleRegular aria-hidden="true" />;
+  if (status === "failed") return <ErrorCircleRegular aria-hidden="true" />;
+  return <CircleRegular aria-hidden="true" />;
+}
+
 export function AgentActivityCard({ activity }: AgentActivityCardProps) {
-  const [expanded, setExpanded] = useState(activity.status === "working");
-  const detailId = useId();
-  const generatedContent = toUserVisibleAgentActivityText(activity.generatedContent);
+  const regionId = useId();
+  const runningIds = useMemo(
+    () => activity.entries.filter((entry) => entry.status === "running").map((entry) => entry.id),
+    [activity.entries]
+  );
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(
+    () => new Set(activity.status === "working" ? runningIds : [])
+  );
   const entries = activity.entries.map((entry) => ({
     ...entry,
     content: entry.content ? toUserVisibleAgentActivityText(entry.content) : undefined,
     label: toUserVisibleAgentActivityText(entry.label) || entryKindLabels[entry.kind]
   }));
-  const hasDetails = Boolean(generatedContent || entries.length);
 
   useEffect(() => {
     if (activity.status !== "working") {
-      setExpanded(false);
+      setExpandedIds(new Set());
+      return;
     }
-  }, [activity.status]);
+    setExpandedIds(new Set(runningIds));
+  }, [activity.status, runningIds.join("|")]);
+
+  function toggleEntry(entryId: string) {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(entryId)) next.delete(entryId);
+      else next.add(entryId);
+      return next;
+    });
+  }
 
   return (
     <section aria-label="Agent 工作状态" className={`assistant-agent-activity ${activity.status}`}>
+      <div className="assistant-agent-connection" role="status">
+        <PlugConnectedRegular aria-hidden="true" />
+        <span>{activity.connectionText ?? (
+          activity.status === "working" ? "已连接 · 正在接收 Agent 事件" : "连接已结束"
+        )}</span>
+      </div>
       <div className="assistant-agent-activity-header">
         <span aria-hidden="true" className="assistant-agent-activity-status" />
         <div>
           <strong>{activity.statusText}</strong>
-          {typeof activity.progress === "number" ? <span>{Math.round(activity.progress)}%</span> : null}
         </div>
-        {hasDetails ? (
-          <Button
-            appearance="subtle"
-            aria-controls={detailId}
-            aria-expanded={expanded}
-            className="assistant-agent-activity-toggle"
-            icon={expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}
-            onClick={() => setExpanded((current) => !current)}
-            size="small"
-          >
-            {expanded ? "收起工作详情" : "查看工作详情"}
-          </Button>
-        ) : null}
       </div>
 
-      {hasDetails && expanded ? (
-        <div className="assistant-agent-activity-details" id={detailId}>
-          {generatedContent ? (
-            <section aria-label="实时生成内容" className="assistant-agent-activity-stream">
-              <h4>实时生成内容</h4>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{generatedContent}</ReactMarkdown>
-            </section>
-          ) : null}
-          {entries.length ? (
-            <section aria-label="工具调用和输出" className="assistant-agent-activity-log">
-              <h4>工具调用和输出</h4>
-              <ol>
-                {entries.map((entry) => (
-                  <li className={`${entry.kind} ${entry.status}`} key={entry.id}>
-                    <span>{entryKindLabels[entry.kind]}</span>
+      {entries.length ? (
+        <ol aria-label="Agent 执行步骤" className="assistant-agent-step-list" id={regionId}>
+          {entries.map((entry) => {
+            const expanded = expandedIds.has(entry.id);
+            const detailId = `${regionId}-${entry.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+            return (
+              <li className={`${entry.kind} ${entry.status}`} key={entry.id}>
+                <Button
+                  appearance="subtle"
+                  aria-controls={entry.content ? detailId : undefined}
+                  aria-expanded={entry.content ? expanded : undefined}
+                  className="assistant-agent-step-toggle"
+                  icon={entry.content
+                    ? expanded ? <ChevronDownRegular /> : <ChevronRightRegular />
+                    : <EntryStatusIcon status={entry.status} />}
+                  onClick={() => entry.content && toggleEntry(entry.id)}
+                  size="small"
+                >
+                  <span className="assistant-agent-step-label">
+                    <small>{entryKindLabels[entry.kind]}</small>
                     <strong>{entry.label}</strong>
-                    {entry.content ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.content}</ReactMarkdown> : null}
-                  </li>
-                ))}
-              </ol>
-            </section>
-          ) : null}
-        </div>
+                  </span>
+                </Button>
+                {entry.status === "running" ? (
+                  <Tooltip content="当前正在执行" relationship="label">
+                    <span aria-label="当前正在执行" className="assistant-agent-step-running" />
+                  </Tooltip>
+                ) : null}
+                {entry.content && expanded ? (
+                  <div className="assistant-agent-step-detail" id={detailId}>
+                    <AssistantMarkdown value={entry.content} />
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ol>
       ) : null}
     </section>
   );

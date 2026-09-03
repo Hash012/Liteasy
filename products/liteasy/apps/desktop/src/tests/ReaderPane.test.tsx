@@ -2,10 +2,14 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
+  buildPdfTextBoxRect,
+  buildPdfMarginConnectorGeometry,
   buildTargetEvidenceRects,
   findQuoteRangeInTextLayer,
+  resolvePdfPageStageWidth,
   shouldLoadPdfFromLocalBytes
 } from "../app/features/pdf/PdfReader";
+import { resizePdfTextBoxRect } from "../app/features/pdf/PdfMarkdownTextBox";
 import { normalizePdfTextForSearch } from "../app/features/pdf/pdfTextSearch";
 import {
   pdfAnnotationAutoPublicStorageKey,
@@ -43,6 +47,53 @@ test("distinguishes managed desktop paths from browser PDF sources", () => {
   expect(shouldLoadPdfFromLocalBytes("C:\\Users\\reader\\LiteasyLibrary\\paper.pdf")).toBe(true);
   expect(shouldLoadPdfFromLocalBytes("/papers/fixture.pdf")).toBe(true);
   expect(shouldLoadPdfFromLocalBytes("blob:http://localhost/paper")).toBe(false);
+});
+
+test("places a PDF Markdown text box inside page bounds", () => {
+  expect(buildPdfTextBoxRect({
+    clientX: 990,
+    clientY: 990,
+    pageRect: makeRect({ height: 1000, left: 100, top: 50, width: 900 })
+  })).toEqual({ height: 4, left: 90, top: 94, width: 10 });
+});
+
+test("grows PDF Markdown text boxes with their content", () => {
+  const initial = resizePdfTextBoxRect(
+    { height: 6, left: 72, top: 80, width: 18 },
+    "短注释"
+  );
+  const expanded = resizePdfTextBoxRect(
+    initial,
+    "第一行包含较长的 Markdown 内容，需要文本框随输入扩展。\n第二行\n第三行\n第四行"
+  );
+
+  expect(initial.width).toBeLessThan(18);
+  expect(initial.height).toBeLessThan(6);
+  expect(initial.left).toBe(72);
+  expect(initial.top).toBe(80);
+  expect(expanded.width).toBeGreaterThan(initial.width);
+  expect(expanded.height).toBeGreaterThan(initial.height);
+  expect(expanded.left + expanded.width).toBeLessThanOrEqual(100);
+  expect(expanded.top + expanded.height).toBeLessThanOrEqual(100);
+});
+
+test("connects a page annotation to its outside comment rail", () => {
+  const connector = buildPdfMarginConnectorGeometry({
+    anchorRect: { height: 3, left: 20, top: 40, width: 30 },
+    pageHeight: 1000,
+    pageWidth: 800
+  });
+
+  expect(connector.left).toBe(400);
+  expect(connector.top).toBe(415);
+  expect(connector.length).toBe(414);
+  expect(connector).not.toHaveProperty("angle");
+});
+
+test("reserves an outside rail by reducing the PDF page stage width", () => {
+  expect(resolvePdfPageStageWidth(960, "continuous", false)).toBe(960);
+  expect(resolvePdfPageStageWidth(960, "continuous", true)).toBe(724);
+  expect(resolvePdfPageStageWidth(960, "spread", true)).toBe(360);
 });
 
 function makeRectList(rects: DOMRect[]) {
@@ -299,7 +350,8 @@ describe("ReaderPane", () => {
     expect(within(readerHeader).queryByText("云端模型能力")).not.toBeInTheDocument();
     expect(within(readerHeader).getByRole("toolbar", { name: "PDF 阅读批注工具栏" })).toBeInTheDocument();
     expect(within(readerHeader).getByText(readerTestPaper.title)).toBeInTheDocument();
-    expect(within(readerHeader).getByText("显示比例 100%")).toBeInTheDocument();
+    expect(within(readerHeader).queryByText("显示比例 100%")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("PDF 显示比例 100%")).toBeInTheDocument();
     expect(document.querySelector(".pdf-toolbar")).not.toBeInTheDocument();
     expect(screen.getByText("选择分析类型以生成产物")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "思维导图" })).not.toBeInTheDocument();
@@ -364,7 +416,7 @@ describe("ReaderPane", () => {
       "折叠右侧栏"
     );
     expect(within(readerHeader).getByText("ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data")).toBeInTheDocument();
-    expect(within(readerHeader).getByText("显示比例 100%")).toBeInTheDocument();
+    expect(screen.getByLabelText("PDF 显示比例 100%")).toBeInTheDocument();
     expect(screen.getByLabelText("多模态产物区域")).toBeInTheDocument();
 
     await user.click(within(layoutControls).getByRole("button", { name: "折叠下栏" }));
@@ -459,6 +511,15 @@ describe("ReaderPane", () => {
     fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
 
     const selectionMenu = screen.getByLabelText("选中文本批注菜单");
+    const clipboardWrite = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
+    await user.click(within(selectionMenu).getByRole("button", { name: "复制" }));
+    expect(clipboardWrite).toHaveBeenCalledWith("vector database systems");
+    expect(screen.getByText("已复制选中的 PDF 内容。")).toBeInTheDocument();
+    const setClipboardData = vi.fn();
+    fireEvent.copy(screen.getByLabelText("PDF 页面滚动区"), {
+      clipboardData: { setData: setClipboardData }
+    });
+    expect(setClipboardData).toHaveBeenCalledWith("text/plain", "vector database systems");
     expect(within(selectionMenu).getByRole("button", { name: "高亮" })).toHaveAttribute("title", "高亮选中文段");
     expect(within(selectionMenu).getByRole("button", { name: "划线" })).toHaveAttribute("title", "给选中文段添加下划线");
     expect(within(selectionMenu).queryByRole("button", { name: "注释" })).not.toBeInTheDocument();
@@ -886,6 +947,108 @@ describe("ReaderPane", () => {
     expect(screen.getByLabelText("PDF 页面滚动区")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "缩略图" })).toHaveAttribute("title", "显示页面缩略图");
     expect(screen.getByRole("button", { name: "批注" })).toHaveAttribute("title", "显示当前文档批注");
+  });
+
+  test("provides document search, page navigation, and persisted page layout controls", async () => {
+    const user = userEvent.setup();
+    render(
+      <ReaderPane
+        analysisHint="可以启动中栏分析。"
+        artifactTabs={[]}
+        artifactTasks={[]}
+        onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
+        selectedPaperIds={[readerTestPaper.id]}
+        selectionLocked={true}
+      />
+    );
+
+    expect(screen.getByRole("toolbar", { name: "PDF 导航工具栏" })).toBeInTheDocument();
+    expect(screen.getByRole("spinbutton", { name: "当前页码" })).toHaveValue(1);
+    expect(screen.getByLabelText("共 1 页")).toBeInTheDocument();
+    expect(screen.getByLabelText("PDF 显示比例 100%")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "按比例放大 PDF" }));
+    expect(screen.getByLabelText("PDF 显示比例 105%")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "按比例缩小 PDF" }));
+    expect(screen.getByLabelText("PDF 显示比例 100%")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "在文档中搜索" }));
+    expect(screen.getByRole("search", { name: "文档搜索栏" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "搜索文档内容" })).toHaveFocus();
+    expect(screen.getByRole("checkbox", { name: "区分大小写" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "全字匹配" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "关闭文档搜索" }));
+    expect(screen.queryByRole("search", { name: "文档搜索栏" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "页面布局设置" }));
+    await user.click(screen.getByRole("button", { name: "双页" }));
+    expect(screen.getByLabelText("PDF.js 页面列表")).toHaveClass("layout-spread");
+    expect(window.localStorage.getItem("liteasy:pdf-reader:page-layout")).toBe("spread");
+  });
+
+  test("adds and edits a rendered Markdown text box directly on a PDF page", async () => {
+    const user = userEvent.setup();
+    render(
+      <ReaderPane
+        analysisHint="可以启动中栏分析。"
+        artifactTabs={[]}
+        artifactTasks={[]}
+        onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
+        selectedPaperIds={[readerTestPaper.id]}
+        selectionLocked={true}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "在 PDF 中添加 Markdown 文本框" }));
+    expect(screen.getByRole("button", { name: "在 PDF 中添加 Markdown 文本框" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+
+    const page = screen.getByLabelText("PDF.js 页面 1");
+    vi.spyOn(page, "getBoundingClientRect").mockReturnValue(
+      makeRect({ height: 1000, left: 100, top: 50, width: 800 })
+    );
+    const placementEvent = new MouseEvent("pointerdown", {
+      bubbles: true,
+      button: 0,
+      clientX: 220,
+      clientY: 180
+    });
+    Object.defineProperties(placementEvent, {
+      isPrimary: { value: true },
+      pointerId: { value: 1 }
+    });
+    fireEvent(page, placementEvent);
+
+    const editor = screen.getByRole("textbox", { name: "编辑第 1 页 Markdown 文本框" });
+    await user.type(editor, "$E=mc^2${enter}{enter}```ts{enter}const answer = 42;{enter}```");
+    fireEvent.blur(editor);
+
+    const textBox = screen.getByLabelText("Markdown 文本框：第 1 页");
+    expect(textBox.querySelector(".katex")).not.toBeNull();
+    expect(within(textBox).getByText("const answer = 42;")).toBeInTheDocument();
+    await user.click(within(textBox).getByRole("button", { name: "调整 Markdown 文本框透明度" }));
+    fireEvent.change(screen.getByRole("slider", { name: "Markdown 文本框透明度" }), {
+      target: { value: "0" }
+    });
+    await waitFor(() => expect(textBox.style.getPropertyValue("--pdf-text-box-opacity")).toBe("0"));
+    expect(textBox).toHaveClass("is-transparent");
+    const initialLeft = Number.parseFloat(textBox.style.left);
+    fireEvent(
+      within(textBox).getByRole("button", { name: "拖动 Markdown 文本框" }),
+      new MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 220, clientY: 180 })
+    );
+    fireEvent(window, new MouseEvent("pointermove", { bubbles: true, clientX: 300, clientY: 280 }));
+    fireEvent(window, new MouseEvent("pointerup", { bubbles: true, clientX: 300, clientY: 280 }));
+    await waitFor(() => expect(Number.parseFloat(textBox.style.left)).toBeGreaterThan(initialLeft));
+    expect(screen.getByRole("button", { name: "在 PDF 中添加 Markdown 文本框" })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
   });
 
   test("renders non-empty PDF.js thumbnail surfaces instead of blank Page labels", async () => {

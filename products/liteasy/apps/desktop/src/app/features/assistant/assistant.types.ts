@@ -15,6 +15,7 @@ export type AssistantConfirmationRequest = HumanConfirmationRequest | AgentConfi
 
 export type AssistantMessage = {
   agentActivity?: AgentActivity;
+  favorite?: boolean;
   id: string;
   role: "user" | "assistant";
   content: string;
@@ -25,6 +26,9 @@ export type AssistantMessage = {
   confirmation?: AssistantConfirmationRequest;
   executionTrace?: ModelExecutionTrace;
   publicWorkflowAudits?: PublicWorkflowAuditSummary[];
+  queuedDelivery?: {
+    policy: "after_run" | "after_tool" | "interrupt";
+  };
   uiDsl?: UIDslDocument;
 };
 
@@ -38,7 +42,7 @@ export type AgentActivityStatus =
 export type AgentActivityEntry = {
   content?: string;
   id: string;
-  kind: "analysis" | "output" | "tool";
+  kind: "analysis" | "connection" | "output" | "runtime" | "tool";
   label: string;
   status: "completed" | "failed" | "running" | "waiting";
 };
@@ -49,9 +53,9 @@ export type AgentActivityEntry = {
  * without exposing implementation details or credentials.
  */
 export type AgentActivity = {
+  connectionText?: string;
   entries: AgentActivityEntry[];
   generatedContent: string;
-  progress?: number;
   status: AgentActivityStatus;
   statusText: string;
 };

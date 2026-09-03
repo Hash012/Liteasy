@@ -64,13 +64,20 @@ test("runs a knowledge turn through one session and deduplicates retries", async
   }
   expect(first.data.runId).toBe(retry.data.runId);
   expect(first.data.status).toBe("completed");
-  expect(first.data.events.map((event) => event.sequence)).toEqual([1, 2, 3, 4]);
+  expect(first.data.events.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5]);
   expect(observedTypes).toEqual([
     "run.started",
     "context.prepared",
+    "execution.route",
     "assistant.message",
     "run.completed"
   ]);
+  expect(first.data.events).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      runtime: "liteasy_knowledge_workflow",
+      type: "execution.route"
+    })
+  ]));
   expect(executionCount).toBe(1);
 
   const conflict = await api.submitTurn({
@@ -238,4 +245,50 @@ test("cancellation wins over a late knowledge executor result", async () => {
     expect(submitted.data.events.map((event) => event.type)).not.toContain("run.completed");
     expect(submitted.data.events.at(-1)?.type).toBe("run.cancelled");
   }
+});
+
+test("publishes structured safe errors for failed runtime actions", async () => {
+  const api = createTestService({
+    executeCommand: () => ({
+      events: [{
+        action: {
+          actionId: "artifact.generate",
+          payload: { artifactType: "mindmap" }
+        },
+        message: "cloud_proxy 503 https://internal.example trace_action-1",
+        recovery: "检查网络后重试",
+        type: "action_failed"
+      }],
+      settingsChanged: false
+    })
+  });
+  const session = await createSession(api);
+  const result = await api.submitTurn({
+    idempotencyKey: "failed-action-1",
+    input: { message: "生成思维导图", mode: "command" },
+    sessionId: session.sessionId
+  });
+
+  expect(result).toMatchObject({ data: { status: "failed" }, ok: true });
+  if (!result.ok) {
+    throw new Error(result.error.message);
+  }
+  expect(result.data.events).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      actionId: "artifact.generate",
+      error: {
+        category: "network",
+        code: "ACTION_EXECUTION_FAILED",
+        diagnosticsRef: "trace_action-1",
+        recoveryActions: [{
+          actionId: "follow_recovery_guidance",
+          label: "检查网络后重试",
+          requiresConfirmation: false
+        }],
+        retryable: true,
+        userImpact: "暂时无法回复，请稍后重试。"
+      },
+      type: "action.failed"
+    })
+  ]));
 });

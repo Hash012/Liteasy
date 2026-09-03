@@ -1184,6 +1184,46 @@ test("injects agent core context into qa generation prompts", async () => {
   expect(prompt).toContain("Skills");
 });
 
+test("injects bounded prior conversation turns before the current question", async () => {
+  const store = createSettingsStore();
+  const prompts: string[] = [];
+
+  await generateAssistantAnswer({
+    auditTransport: async () => ({
+      json: async () => ({
+        audit: { model: "audit", rationale: "ok", score: 0.9, verdict: "pass" }
+      }),
+      ok: true,
+      status: 200
+    }),
+    conversationHistory: [{
+      assistant: "你让我记住的数字是 17。",
+      user: "请记住数字 17。"
+    }],
+    importedChunksByPaperId: {},
+    mode: "qa",
+    modelTransport: async (request) => {
+      prompts.push(String(JSON.parse(request.body).prompt));
+      return {
+        json: async () => ({
+          answer: "你刚才说的是 17。",
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "我刚才说的数字是什么？",
+    selectedPapers: [],
+    settings: store.getState()
+  });
+
+  expect(prompts[0]).toContain("近期对话上下文");
+  expect(prompts[0]).toContain("用户：请记住数字 17。");
+  expect(prompts[0]).toContain("助手：你让我记住的数字是 17。");
+  expect(prompts[0]).toContain("问题：我刚才说的数字是什么？");
+});
+
 test("rejects non-http model endpoints before thin-reading generation", async () => {
   const store = createSettingsStore();
   store.apply({

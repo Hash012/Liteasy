@@ -21,6 +21,8 @@ import {
   MenuList,
   MenuPopover,
   MenuTrigger,
+  Select,
+  Textarea,
   Tooltip
 } from "@fluentui/react-components";
 import {
@@ -44,7 +46,8 @@ import {
   OrganizationRegular,
   OpenRegular,
   DocumentArrowUpRegular,
-  SearchRegular
+  SearchRegular,
+  TagRegular
 } from "@fluentui/react-icons";
 import type { ImportJob } from "../import/import.types";
 import type { PaperResourceKind } from "../import/paperResource.types";
@@ -94,6 +97,12 @@ import {
 import { useCloudLibraryTree } from "./useCloudLibraryTree";
 import "./library.css";
 import type { LiteratureHydrationState } from "../paper-identity/literature.types";
+import {
+  loadPaperFileMetadata,
+  normalizePaperFileMetadata,
+  savePaperFileMetadata,
+  type PaperFileMetadata
+} from "./paperFileMetadata";
 
 export type LibraryPaperChildItem = {
   id: string;
@@ -174,6 +183,7 @@ type ExplorerEntry = {
   bodyAvailable: boolean;
   id: string;
   label: string;
+  metadata?: PaperFileMetadata;
   source: LibraryResourceEntrySource;
 };
 
@@ -212,7 +222,10 @@ function dirname(value: string) {
   return separator <= 0 ? "" : normalized.slice(0, separator);
 }
 
-function localExplorerTree(snapshot: LocalLibrarySnapshot | null): ExplorerTree {
+function localExplorerTree(
+  snapshot: LocalLibrarySnapshot | null,
+  metadataByPaperId: Record<string, PaperFileMetadata> = {}
+): ExplorerTree {
   if (!snapshot) return { entries: [], folders: [] };
   const byPath = new Map<string, ExplorerFolder>();
   for (const folder of snapshot.folders) {
@@ -239,6 +252,7 @@ function localExplorerTree(snapshot: LocalLibrarySnapshot | null): ExplorerTree 
       bodyAvailable: entry.path !== null,
       id: entry.id,
       label: entry.title,
+      metadata: metadataByPaperId[entry.id],
       source: { area: "local", entry }
     };
     if (!entry.path) {
@@ -313,17 +327,24 @@ function sortTree(tree: ExplorerTree): ExplorerTree {
   };
 }
 
-function filterTree(tree: ExplorerTree, query: string): ExplorerTree {
-  if (!query) return tree;
+function filterTree(tree: ExplorerTree, query: string, category = ""): ExplorerTree {
+  const entryMatches = (entry: ExplorerEntry) => {
+    const categoryMatches = !category || entry.metadata?.category === category;
+    if (!categoryMatches) return false;
+    if (!query) return true;
+    return [entry.label, entry.metadata?.category, ...(entry.metadata?.tags ?? [])]
+      .some((value) => value?.toLocaleLowerCase().includes(query));
+  };
+  if (!query && !category) return tree;
   const filterFolders = (folders: ExplorerFolder[]): ExplorerFolder[] => folders.flatMap((folder) => {
     const children = filterFolders(folder.children);
-    const entries = folder.entries.filter((entry) => entry.label.toLocaleLowerCase().includes(query));
-    return folder.label.toLocaleLowerCase().includes(query) || children.length > 0 || entries.length > 0
+    const entries = folder.entries.filter(entryMatches);
+    return (!category && folder.label.toLocaleLowerCase().includes(query)) || children.length > 0 || entries.length > 0
       ? [{ ...folder, children, entries, unfilteredFolder: folder }]
       : [];
   });
   return {
-    entries: tree.entries.filter((entry) => entry.label.toLocaleLowerCase().includes(query)),
+    entries: tree.entries.filter(entryMatches),
     folders: filterFolders(tree.folders)
   };
 }
@@ -450,6 +471,13 @@ export function LibraryPane({
     recommendation: []
   });
   const [search, setSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [paperMetadataById, setPaperMetadataById] = useState<Record<string, PaperFileMetadata>>({});
+  const [metadataEditorEntry, setMetadataEditorEntry] = useState<ExplorerEntry | null>(null);
+  const [metadataCategoryDraft, setMetadataCategoryDraft] = useState("");
+  const [metadataTagsDraft, setMetadataTagsDraft] = useState("");
+  const [metadataEditorError, setMetadataEditorError] = useState("");
+  const [metadataEditorPending, setMetadataEditorPending] = useState(false);
   const [message, setMessage] = useState("");
   const [createFolderTarget, setCreateFolderTarget] = useState<CreateFolderTarget | null>(null);
   const [folderName, setFolderName] = useState("");
@@ -470,9 +498,14 @@ export function LibraryPane({
     string | null
   >>({ collection: null, local: null, organization: null });
   const query = search.trim().toLocaleLowerCase();
+  const categories = useMemo(() => Array.from(new Set(
+    Object.values(paperMetadataById)
+      .map((metadata) => metadata.category)
+      .filter(Boolean)
+  )).sort((left, right) => left.localeCompare(right)), [paperMetadataById]);
   const localTree = useMemo(
-    () => filterTree(localExplorerTree(localLibrarySnapshot), query),
-    [localLibrarySnapshot, query]
+    () => filterTree(localExplorerTree(localLibrarySnapshot, paperMetadataById), query, selectedCategory),
+    [localLibrarySnapshot, paperMetadataById, query, selectedCategory]
   );
   const collectionTree = useMemo(
     () => filterTree(cloudExplorerTree("collection", collectionScope, collection.tree), query),
@@ -502,6 +535,51 @@ export function LibraryPane({
     }));
     setSelectedFolderIds({ collection: null, local: null, organization: null });
   }, [accountScopeId, localLibrarySnapshot?.libraryId, organizationId]);
+
+  useEffect(() => {
+    const paperIds = localLibrarySnapshot?.entries.map((entry) => entry.id) ?? [];
+    let cancelled = false;
+    void Promise.all(paperIds.map(async (paperId) => [
+      paperId,
+      await loadPaperFileMetadata(paperId)
+    ] as const)).then((entries) => {
+      if (!cancelled) setPaperMetadataById(Object.fromEntries(entries));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [localLibrarySnapshot?.libraryId, localLibrarySnapshot?.revision]);
+
+  function openMetadataEditor(entry: ExplorerEntry) {
+    const metadata = entry.metadata ?? normalizePaperFileMetadata(undefined);
+    setMetadataEditorEntry(entry);
+    setMetadataCategoryDraft(metadata.category);
+    setMetadataTagsDraft(metadata.tags.join(", "));
+    setMetadataEditorError("");
+  }
+
+  async function submitMetadataEditor() {
+    if (!metadataEditorEntry || metadataEditorPending) return;
+    const previousCategory = paperMetadataById[metadataEditorEntry.id]?.category
+      ?? metadataEditorEntry.metadata?.category
+      ?? "";
+    setMetadataEditorPending(true);
+    setMetadataEditorError("");
+    try {
+      const metadata = await savePaperFileMetadata(metadataEditorEntry.id, {
+        category: metadataCategoryDraft,
+        tags: metadataTagsDraft.split(/[,，\n]/u)
+      });
+      setPaperMetadataById((current) => ({ ...current, [metadataEditorEntry.id]: metadata }));
+      setSelectedCategory((current) => current === previousCategory ? metadata.category : current);
+      setMessage("论文分类与标签已保存。");
+      setMetadataEditorEntry(null);
+    } catch (error) {
+      setMetadataEditorError(error instanceof Error ? error.message : "论文分类与标签保存失败。");
+    } finally {
+      setMetadataEditorPending(false);
+    }
+  }
 
   function expandedStorageKey(area: LibraryResourceArea) {
     if (area === "local") {
@@ -813,49 +891,68 @@ export function LibraryPane({
         <span aria-hidden="true" className="library-paper-icon">
           {entry.bodyAvailable ? <DocumentPdfRegular /> : <DocumentTextRegular />}
         </span>
-        <Menu>
-          <MenuTrigger disableButtonEnhancement>
-            <button
-              className="library-paper-title"
-              disabled={pending}
-              title={entry.bodyAvailable ? entry.label : `${entry.label}（仅元数据）`}
-              type="button"
-            >
-              {entry.label}
-            </button>
-          </MenuTrigger>
-          <MenuPopover>
-            <MenuList>
-              <MenuItem
-                disabled={!entry.bodyAvailable || pending}
-                icon={<OpenRegular />}
-                onClick={openEntry}
-              >打开</MenuItem>
-              <MenuItem
-                disabled={pending || !canManageEntry}
-                icon={<EditRegular />}
-                onClick={() => void runNodeAction(entry.id, "正在重命名文献...", () => renameEntry(area, entry))}
-              >重命名</MenuItem>
-              {canAttachPdf ? (
+        <div className="library-paper-content">
+          <Menu>
+            <MenuTrigger disableButtonEnhancement>
+              <button
+                className="library-paper-title"
+                disabled={pending}
+                title={entry.bodyAvailable ? entry.label : `${entry.label}（仅元数据）`}
+                type="button"
+              >
+                {entry.label}
+              </button>
+            </MenuTrigger>
+            <MenuPopover>
+              <MenuList>
                 <MenuItem
-                  disabled={pending}
-                  icon={<DocumentArrowUpRegular />}
-                  onClick={() => {
-                    if (entry.source.area === "collection" || entry.source.area === "organization") {
-                      setAttachTarget({ area: entry.source.area, entry: entry.source.entry, scope: entry.source.scope });
-                      attachPdfInputRef.current?.click();
-                    }
-                  }}
-                >补充正文</MenuItem>
+                  disabled={!entry.bodyAvailable || pending}
+                  icon={<OpenRegular />}
+                  onClick={openEntry}
+                >打开</MenuItem>
+                <MenuItem
+                  disabled={pending || !canManageEntry}
+                  icon={<EditRegular />}
+                  onClick={() => void runNodeAction(entry.id, "正在重命名文献...", () => renameEntry(area, entry))}
+                >重命名</MenuItem>
+                {area === "local" ? (
+                  <MenuItem
+                    disabled={pending}
+                    icon={<TagRegular />}
+                    onClick={() => openMetadataEditor(entry)}
+                  >编辑分类与标签</MenuItem>
+                ) : null}
+                {canAttachPdf ? (
+                  <MenuItem
+                    disabled={pending}
+                    icon={<DocumentArrowUpRegular />}
+                    onClick={() => {
+                      if (entry.source.area === "collection" || entry.source.area === "organization") {
+                        setAttachTarget({ area: entry.source.area, entry: entry.source.entry, scope: entry.source.scope });
+                        attachPdfInputRef.current?.click();
+                      }
+                    }}
+                  >补充正文</MenuItem>
+                ) : null}
+                <MenuItem
+                  disabled={pending || !canManageEntry}
+                  icon={<DeleteRegular />}
+                  onClick={() => void runNodeAction(entry.id, "正在移到回收站...", () => trashEntry(area, entry))}
+                >移到回收站</MenuItem>
+              </MenuList>
+            </MenuPopover>
+          </Menu>
+          {entry.metadata?.category || entry.metadata?.tags.length ? (
+            <div aria-label={`${entry.label} 的分类与标签`} className="library-paper-metadata">
+              {entry.metadata.category ? (
+                <span className="library-paper-category">{entry.metadata.category}</span>
               ) : null}
-              <MenuItem
-                disabled={pending || !canManageEntry}
-                icon={<DeleteRegular />}
-                onClick={() => void runNodeAction(entry.id, "正在移到回收站...", () => trashEntry(area, entry))}
-              >移到回收站</MenuItem>
-            </MenuList>
-          </MenuPopover>
-        </Menu>
+              {entry.metadata.tags.map((tag) => (
+                <span className="library-paper-tag" key={tag}>{tag}</span>
+              ))}
+            </div>
+          ) : null}
+        </div>
         {!entry.bodyAvailable ? <span className="library-entry-status">仅元数据</span> : null}
       </div>
     );
@@ -1082,6 +1179,20 @@ export function LibraryPane({
           size="small"
           value={search}
         />
+        {categories.length > 0 ? (
+          <Select
+            aria-label="按论文分类筛选"
+            className="library-category-filter"
+            onChange={(event) => setSelectedCategory(event.currentTarget.value)}
+            size="small"
+            value={selectedCategory}
+          >
+            <option value="">全部分类</option>
+            {categories.map((category) => (
+              <option key={category} value={category}>{category}</option>
+            ))}
+          </Select>
+        ) : null}
         {iconAction(
           selectionLocked ? "解除选中文献集锁定" : "锁定选中文献集",
           selectionLocked ? <LockClosedRegular /> : <LockOpenRegular />,
@@ -1365,6 +1476,64 @@ export function LibraryPane({
                   disabled={folderDialogPending || folderName.trim().length === 0}
                   type="submit"
                 >创建</Button>
+              </DialogActions>
+            </DialogBody>
+          </form>
+        </DialogSurface>
+      </Dialog>
+      <Dialog
+        modalType="modal"
+        onOpenChange={(_, data) => {
+          if (!data.open && !metadataEditorPending) setMetadataEditorEntry(null);
+        }}
+        open={metadataEditorEntry !== null}
+      >
+        <DialogSurface aria-label="编辑论文分类与标签">
+          <form onSubmit={(event) => {
+            event.preventDefault();
+            void submitMetadataEditor();
+          }}>
+            <DialogBody>
+              <DialogTitle>分类与标签</DialogTitle>
+              <DialogContent className="library-metadata-editor">
+                <strong>{metadataEditorEntry?.label}</strong>
+                <label>
+                  <span>分类</span>
+                  <Input
+                    aria-label="论文分类"
+                    autoFocus
+                    disabled={metadataEditorPending}
+                    maxLength={80}
+                    onChange={(_, data) => setMetadataCategoryDraft(data.value)}
+                    placeholder="例如：机器学习 / 待读"
+                    value={metadataCategoryDraft}
+                  />
+                </label>
+                <label>
+                  <span>标签</span>
+                  <Textarea
+                    aria-label="论文标签"
+                    disabled={metadataEditorPending}
+                    maxLength={900}
+                    onChange={(_, data) => setMetadataTagsDraft(data.value)}
+                    placeholder="用逗号或换行分隔，例如：RAG, 向量检索"
+                    resize="vertical"
+                    value={metadataTagsDraft}
+                  />
+                </label>
+                <small>最多保存 20 个标签；搜索框可直接按分类或标签查找论文。</small>
+                {metadataEditorError ? (
+                  <div className="library-error-state" role="alert">{metadataEditorError}</div>
+                ) : null}
+              </DialogContent>
+              <DialogActions>
+                <Button
+                  appearance="secondary"
+                  disabled={metadataEditorPending}
+                  onClick={() => setMetadataEditorEntry(null)}
+                  type="button"
+                >取消</Button>
+                <Button appearance="primary" disabled={metadataEditorPending} type="submit">保存</Button>
               </DialogActions>
             </DialogBody>
           </form>

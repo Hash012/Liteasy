@@ -23,6 +23,11 @@ export type ModelTransport = (
 ) => Promise<ModelTransportResponse>;
 
 type BearerModelTransportInput = {
+  /**
+   * Development-only escape hatch for a loopback dev-cloud whose upstream key
+   * stays on the server. Never enable this for a remote endpoint.
+   */
+  allowUnauthenticatedLocalDev?: boolean;
   fetchImpl?: typeof fetch;
   getAccessToken: () => string | null | undefined;
 };
@@ -108,19 +113,20 @@ async function defaultTransport(request: ModelTransportRequest): Promise<ModelTr
 }
 
 export function createBearerModelTransport({
+  allowUnauthenticatedLocalDev = false,
   fetchImpl = fetch,
   getAccessToken
 }: BearerModelTransportInput): ModelTransport {
   return async (request) => {
     const accessToken = getAccessToken()?.trim();
-    if (!accessToken) {
+    if (!accessToken && !allowUnauthenticatedLocalDev) {
       throw new Error("请先登录 Liteasy 账号，再使用云端模型服务。");
     }
     return fetchImpl(request.url, {
       body: request.body,
       headers: {
         ...request.headers,
-        Authorization: `Bearer ${accessToken}`
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
       },
       method: request.method,
       signal: request.signal

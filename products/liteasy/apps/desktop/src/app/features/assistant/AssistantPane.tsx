@@ -19,6 +19,7 @@ import {
   completeAgentActivity,
   createAgentActivity
 } from "./agentActivity";
+import { formatAgentRuntimeError } from "../agent-runtime/runtimeObservability";
 import type { FrontendAgentClient } from "../agent-api/frontendAgentClient";
 import type {
   AgentConfirmationRequest,
@@ -81,6 +82,28 @@ import type { ReaderConversationContext } from "./assistantContext.types";
 import { generateAssistantAnswer } from "./generateAssistantAnswer";
 
 type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
+
+type QueuedAssistantTurn = {
+  attachedContextPrompt: string;
+  contextTokens: AssistantContextToken[];
+  message: string;
+  mode: AssistantMode;
+  policy: "after_run" | "after_tool" | "interrupt";
+  readerContexts: ReaderConversationContext[];
+  referencedPaperIds: string[];
+  userContent: string;
+  userMessageId: string;
+};
+
+export function hasPaperGroundedAuditScope(run: AgentRun) {
+  return Boolean(
+    run.attachments?.some(
+      (attachment) => attachment.source === "paper" || attachment.source === "selection"
+    ) || run.events.some(
+      (event) => event.type === "assistant.message" && Boolean(event.citations?.length)
+    )
+  );
+}
 
 type AssistantPaneProps = {
   /**
@@ -283,6 +306,7 @@ export function AssistantPane({
   const executionJournalRef = useRef(executionJournal ?? createExecutionJournal());
   const processedAgentRunSequencesRef = useRef(new Map<string, number>());
   const processedAgentActivityEventIdsRef = useRef(new Set<string>());
+  const processedAgentMessageEventIdsRef = useRef(new Set<string>());
   const agentActivityMessageIdsByRunRef = useRef(new Map<string, string>());
   const activeConversationRunRef = useRef<{
     cancelRequested: boolean;
@@ -292,6 +316,7 @@ export function AssistantPane({
     message: string;
     runId?: string;
   } | null>(null);
+  const queuedAssistantTurnsRef = useRef<QueuedAssistantTurn[]>([]);
   const publicAgentClientsRef = useRef(new Map<string, FrontendAgentClient>());
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const lastReaderContextKeyRef = useRef<string | null>(null);
@@ -527,6 +552,7 @@ export function AssistantPane({
   function clearReaderConversationContexts() {
     lastReaderContextKeyRef.current = null;
     pendingCommandClarificationRef.current = undefined;
+    queuedAssistantTurnsRef.current = [];
     setReaderContexts([]);
     setComposerContextTokens([]);
   }
@@ -692,6 +718,8 @@ export function AssistantPane({
     setSessionHistory([...nextSessions]);
     setActiveSessionId(session.id);
     processedAgentRunSequencesRef.current.clear();
+    processedAgentActivityEventIdsRef.current.clear();
+    processedAgentMessageEventIdsRef.current.clear();
     clearReaderConversationContexts();
     assistantStoreRef.current.restoreSession(session.mode, session.messages);
     setHistoryOpen(false);
@@ -713,6 +741,8 @@ export function AssistantPane({
     }
 
     processedAgentRunSequencesRef.current.clear();
+    processedAgentActivityEventIdsRef.current.clear();
+    processedAgentMessageEventIdsRef.current.clear();
     clearReaderConversationContexts();
     activeSessionIdRef.current = session.id;
     setActiveSessionId(session.id);
@@ -794,9 +824,8 @@ export function AssistantPane({
     });
   }
 
-  function startAgentActivity(statusText = "Agent 正在准备任务") {
+  function startAgentActivity() {
     const activityMessage = createMessage("assistant", "");
-    activityMessage.agentActivity = createAgentActivity(statusText);
     assistantStoreRef.current.addMessage(activityMessage);
     return activityMessage.id;
   }
@@ -815,6 +844,16 @@ export function AssistantPane({
     );
   }
 
+  function updateAgentMessage(
+    messageId: string,
+    update: (message: AssistantMessage) => AssistantMessage
+  ) {
+    const currentMessages = assistantStoreRef.current.getState().messages;
+    assistantStoreRef.current.replaceMessages(
+      currentMessages.map((message) => message.id === messageId ? update(message) : message)
+    );
+  }
+
   function appendPublicAgentActivityEvent(event: AgentEvent) {
     if (processedAgentActivityEventIdsRef.current.has(event.eventId)) {
       return;
@@ -824,7 +863,40 @@ export function AssistantPane({
       return;
     }
     processedAgentActivityEventIdsRef.current.add(event.eventId);
+    if (event.type === "execution.route" && event.runtime === "openai_agents_sdk") {
+      updateAgentMessage(activityMessageId, (message) => ({
+        ...message,
+        agentActivity: applyAgentActivityEvent(createAgentActivity(), event)
+      }));
+      return;
+    }
     updateAgentActivity(activityMessageId, (activity) => applyAgentActivityEvent(activity, event));
+  }
+
+  function updateQueuedMessagePolicy(
+    messageId: string,
+    policy: QueuedAssistantTurn["policy"] | undefined
+  ) {
+    updateAgentMessage(messageId, (message) => ({
+      ...message,
+      queuedDelivery: policy ? { policy } : undefined
+    }));
+  }
+
+  function releaseQueuedTurnAfterToolBoundary(event: AgentEvent) {
+    const isToolBoundary =
+      (event.type === "manager.activity" && event.kind === "tool_result") ||
+      event.type === "action.failed" ||
+      event.type === "task.created" ||
+      event.type === "artifact.requested" ||
+      event.type === "ui.render";
+    if (!isToolBoundary) return;
+    const nextTurn = queuedAssistantTurnsRef.current[0];
+    if (!nextTurn || nextTurn.policy !== "after_tool") return;
+    nextTurn.policy = "interrupt";
+    updateQueuedMessagePolicy(nextTurn.userMessageId, "interrupt");
+    syncAssistant();
+    void cancelActiveSession();
   }
 
   function finalizePublicAgentActivity(run: AgentRun) {
@@ -868,81 +940,87 @@ export function AssistantPane({
   }
 
   function appendPublicAgentEvent(event: AgentEvent) {
+    if (processedAgentMessageEventIdsRef.current.has(event.eventId)) {
+      return;
+    }
+    const activityMessageId = agentActivityMessageIdsByRunRef.current.get(event.runId);
+    if (!activityMessageId) {
+      return;
+    }
+    processedAgentMessageEventIdsRef.current.add(event.eventId);
+
     if (event.type === "ui.render") {
       const document = event.document as unknown as UIDslDocument;
       const validation = validateUIDslDocument(document);
       if (!validation.valid) {
-        assistantStoreRef.current.addMessage(
-          createMessage("assistant", `Agent 返回的界面数据无效：${validation.errors.join("；")}`)
-        );
+        updateAgentMessage(activityMessageId, (message) => ({
+          ...message,
+          content: `Agent 返回的界面数据无效：${validation.errors.join("；")}`
+        }));
         return;
       }
-
-      const currentMessages = assistantStoreRef.current.getState().messages;
-      const lastMessage = currentMessages[currentMessages.length - 1];
-      if (lastMessage?.role === "assistant") {
-        assistantStoreRef.current.replaceMessages([
-          ...currentMessages.slice(0, -1),
-          {
-            ...lastMessage,
-            uiDsl: document
-          }
-        ]);
-        return;
-      }
-      const assistantMessage = createMessage("assistant", "动态界面已准备。");
-      assistantMessage.uiDsl = document;
-      assistantStoreRef.current.addMessage(assistantMessage);
+      updateAgentMessage(activityMessageId, (message) => ({ ...message, uiDsl: document }));
       return;
     }
 
     if (event.type === "assistant.message") {
-      const assistantMessage = createMessage("assistant", event.message);
-      assistantMessage.citations = event.citations;
-      assistantMessage.confidence = event.confidence;
+      let audit: AnswerAuditResult | undefined;
+      let executionTrace: ModelExecutionTrace | undefined;
       if (event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)) {
         const metadata = event.metadata as {
           audit?: AnswerAuditResult;
           executionTrace?: ModelExecutionTrace;
         };
-        assistantMessage.audit = metadata.audit;
-        assistantMessage.executionTrace = metadata.executionTrace;
+        audit = metadata.audit;
+        executionTrace = metadata.executionTrace;
       }
-      assistantStoreRef.current.addMessage(assistantMessage);
+      updateAgentMessage(activityMessageId, (message) => ({
+        ...message,
+        audit: event.citations?.length ? audit : undefined,
+        citations: event.citations,
+        confidence: event.confidence,
+        content: event.message,
+        executionTrace
+      }));
       return;
     }
 
-    let message: string | null = null;
-    if (event.type === "plan.preview") {
-      message = `计划：${event.plan.summary}`;
-    } else if (event.type === "progress.started") {
-      message = `开始执行：${event.summary}`;
-    } else if (event.type === "clarification.required") {
-      message = event.question;
-    } else if (event.type === "confirmation.required") {
-      message = event.summary;
-    } else if (event.type === "action.requested") {
-      message = `准备执行受控动作：${event.action.actionId}`;
-    } else if (event.type === "action.failed" || event.type === "run.failed") {
-      message = event.message;
-    } else if (event.type === "task.requested") {
-      message = "后台任务已请求。";
-    } else if (event.type === "task.created") {
-      message = "后台任务已创建。";
-    } else if (event.type === "artifact.requested") {
-      message = "产物创建已请求。";
-    } else if (event.type === "run.cancelled") {
-      message = event.reason ? `运行已取消：${event.reason}` : "运行已取消。";
-    }
-
-    if (!message) {
+    if (event.type === "assistant.delta") {
+      updateAgentMessage(activityMessageId, (message) => ({
+        ...message,
+        content: `${message.content}${event.delta}`
+      }));
       return;
     }
-    const assistantMessage = createMessage("assistant", message);
+
+    if (event.type === "clarification.required") {
+      updateAgentMessage(activityMessageId, (message) => ({ ...message, content: event.question }));
+      return;
+    }
+
     if (event.type === "confirmation.required") {
-      assistantMessage.confirmation = event;
+      updateAgentMessage(activityMessageId, (message) => ({
+        ...message,
+        confirmation: event,
+        content: event.summary
+      }));
+      return;
     }
-    assistantStoreRef.current.addMessage(assistantMessage);
+
+    if (event.type === "action.failed" || event.type === "run.failed") {
+      updateAgentMessage(activityMessageId, (message) => ({
+        ...message,
+        content: event.error ? formatAgentRuntimeError(event.error) : event.message
+      }));
+      return;
+    }
+
+    if (event.type === "run.cancelled") {
+      updateAgentMessage(activityMessageId, (message) => ({
+        ...message,
+        content: event.reason ? `运行已取消：${event.reason}` : "运行已取消。"
+      }));
+    }
   }
 
   function consumePublicAgentRun(run: AgentRun) {
@@ -952,6 +1030,7 @@ export function AssistantPane({
       .forEach((event) => {
         appendPublicAgentActivityEvent(event);
         appendPublicAgentEvent(event);
+        releaseQueuedTurnAfterToolBoundary(event);
       });
     const latestSequence = run.events[run.events.length - 1]?.sequence ?? lastSequence;
     processedAgentRunSequencesRef.current.set(run.runId, latestSequence);
@@ -992,6 +1071,9 @@ export function AssistantPane({
     if (!settingsStoreRef.current.getState()["assistant.public_audit.enabled"]) {
       return;
     }
+    if (!hasPaperGroundedAuditScope(run)) {
+      return;
+    }
 
     const result = await client.listPublicWorkflowAuditSummaries({
       runId: run.runId,
@@ -1024,7 +1106,7 @@ export function AssistantPane({
     }
 
     const idempotencyKey = createConversationIdempotencyKey(mode);
-    const activityMessageId = startAgentActivity("Agent 正在连接服务");
+    const activityMessageId = startAgentActivity();
     const trackedRun = {
       activityMessageId,
       cancelRequested: false,
@@ -1080,6 +1162,7 @@ export function AssistantPane({
         trackedRun.runId = event.runId;
         agentActivityMessageIdsByRunRef.current.set(event.runId, trackedRun.activityMessageId);
         appendPublicAgentActivityEvent(event);
+        appendPublicAgentEvent(event);
         syncAssistant();
         if (trackedRun.cancelRequested) {
           void cancelTrackedRun();
@@ -1088,6 +1171,8 @@ export function AssistantPane({
       }
       if (trackedRun.runId === event.runId && activeConversationRunRef.current === trackedRun) {
         appendPublicAgentActivityEvent(event);
+        appendPublicAgentEvent(event);
+        releaseQueuedTurnAfterToolBoundary(event);
         syncAssistant();
       }
     });
@@ -1097,10 +1182,10 @@ export function AssistantPane({
       const result = await sessionAgentClient.send({ message, mode }, { idempotencyKey });
       if (!result.ok) {
         updateAgentActivity(activityMessageId, (activity) => completeAgentActivity(activity, "failed"));
-        assistantStoreRef.current.addMessage(createMessage(
-          "assistant",
-          getAssistantErrorMessage(result.error, { developerDiagnostics })
-        ));
+        updateAgentMessage(activityMessageId, (current) => ({
+          ...current,
+          content: getAssistantErrorMessage(result.error, { developerDiagnostics })
+        }));
         return;
       }
       agentActivityMessageIdsByRunRef.current.set(result.data.runId, activityMessageId);
@@ -1129,9 +1214,10 @@ export function AssistantPane({
       setEditingMessageId(null);
     } catch (error) {
       updateAgentActivity(activityMessageId, (activity) => completeAgentActivity(activity, "failed"));
-      assistantStoreRef.current.addMessage(
-        createMessage("assistant", getAssistantErrorMessage(error, { developerDiagnostics }))
-      );
+      updateAgentMessage(activityMessageId, (current) => ({
+        ...current,
+        content: getAssistantErrorMessage(error, { developerDiagnostics })
+      }));
     } finally {
       unsubscribe();
       if (activeConversationRunRef.current === trackedRun) {
@@ -1140,6 +1226,7 @@ export function AssistantPane({
       setCancellingSession(false);
       assistantStoreRef.current.setPending(false);
       syncAssistant();
+      void executeNextQueuedTurn();
     }
   }
 
@@ -1178,7 +1265,7 @@ export function AssistantPane({
           thinReadingExternalPdfTransport: modelTransport
         });
         const assistantMessage = createMessage("assistant", answer.content);
-        assistantMessage.audit = answer.audit;
+        assistantMessage.audit = answer.citations.length ? answer.audit : undefined;
         assistantMessage.citations = answer.citations;
         assistantMessage.confidence = answer.confidence;
         assistantMessage.executionTrace = answer.executionTrace;
@@ -1194,6 +1281,7 @@ export function AssistantPane({
     } finally {
       assistantStoreRef.current.setPending(false);
       syncAssistant();
+      void executeNextQueuedTurn();
     }
   }
 
@@ -1331,6 +1419,7 @@ export function AssistantPane({
       assistantStoreRef.current.setPending(false);
       syncAssistant();
       inputRef.current?.focus();
+      void executeNextQueuedTurn();
     }
   }
 
@@ -1456,13 +1545,88 @@ export function AssistantPane({
     await runPublicAgentMessage(publicQuestion, mode);
   }
 
+  async function executePreparedTurn(turn: QueuedAssistantTurn) {
+    assistantStoreRef.current.setMode(turn.mode);
+    updateQueuedMessagePolicy(turn.userMessageId, undefined);
+    syncAssistant();
+
+    if (turn.mode === "command") {
+      commandPaperIdsRef.current = turn.referencedPaperIds;
+      try {
+        const artifactType = getArtifactTypeFromCommand(turn.message);
+        if (artifactType && turn.referencedPaperIds.length > 0) {
+          const message = onGenerateArtifact(artifactType, turn.referencedPaperIds);
+          assistantStoreRef.current.addMessage(createMessage("assistant", message));
+          syncAssistant();
+          void executeNextQueuedTurn();
+          return;
+        }
+        await runCommandMessage(turn.message);
+      } finally {
+        commandPaperIdsRef.current = undefined;
+      }
+      return;
+    }
+
+    await runKnowledgeMessage(turn.message, turn.mode, {
+      attachedContextPrompt: turn.attachedContextPrompt
+    });
+  }
+
+  async function executeNextQueuedTurn() {
+    if (assistantStoreRef.current.getState().pending) return;
+    const nextTurn = queuedAssistantTurnsRef.current.shift();
+    if (!nextTurn) return;
+    await executePreparedTurn(nextTurn);
+  }
+
+  function changeQueuedTurnPolicy(
+    messageId: string,
+    policy: QueuedAssistantTurn["policy"]
+  ) {
+    const turnIndex = queuedAssistantTurnsRef.current.findIndex(
+      (turn) => turn.userMessageId === messageId
+    );
+    if (turnIndex < 0) return;
+    const [turn] = queuedAssistantTurnsRef.current.splice(turnIndex, 1);
+    turn.policy = policy;
+    if (policy === "interrupt") {
+      queuedAssistantTurnsRef.current = [turn, ...queuedAssistantTurnsRef.current];
+    } else {
+      queuedAssistantTurnsRef.current.splice(turnIndex, 0, turn);
+    }
+    updateQueuedMessagePolicy(messageId, policy);
+    syncAssistant();
+    if (policy === "interrupt") {
+      void cancelActiveSession();
+    }
+  }
+
+  function withdrawQueuedTurn(messageId: string) {
+    const turnIndex = queuedAssistantTurnsRef.current.findIndex(
+      (turn) => turn.userMessageId === messageId
+    );
+    if (turnIndex < 0) return;
+    const [turn] = queuedAssistantTurnsRef.current.splice(turnIndex, 1);
+    const messages = assistantStoreRef.current.getState().messages.filter(
+      (message) => message.id !== messageId
+    );
+    assistantStoreRef.current.replaceMessages(messages);
+    setInput(turn.userContent);
+    setComposerContextTokens(turn.contextTokens);
+    setReaderContexts(turn.readerContexts);
+    syncAssistant();
+    inputRef.current?.focus();
+  }
+
   async function handleSend() {
     const currentState = assistantStoreRef.current.getState();
     const contextTokensForTurn = [...composerContextTokens];
     const referencedPaperIds = contextTokensForTurn
       .filter((token) => token.kind === "paper")
       .map((token) => token.id.replace(/^paper-/, ""));
-    const attachedContextPrompt = buildComposerTokenPrompt(contextTokensForTurn);
+    const attachedContextPrompt = buildComposerTokenPrompt(contextTokensForTurn) ||
+      buildReaderContextPrompt();
     const adapted = adaptTextIntent({
       activeMode: "qa",
       parseSlashCommand: true,
@@ -1473,11 +1637,8 @@ export function AssistantPane({
       return;
     }
 
-    if (currentState.pending) {
-      return;
-    }
-
     if (editingMessageId) {
+      if (currentState.pending) return;
       const messageIndex = currentState.messages.findIndex(
         (message) => message.id === editingMessageId && message.role === "user"
       );
@@ -1490,6 +1651,9 @@ export function AssistantPane({
     assistantStoreRef.current.setMode(activeMode);
     const userMessage = createMessage("user", adapted.userMessageContent);
     userMessage.contextTokens = contextTokensForTurn;
+    if (currentState.pending) {
+      userMessage.queuedDelivery = { policy: "after_tool" };
+    }
     assistantStoreRef.current.addMessage(userMessage);
     if (referencedPaperIds.length > 0) {
       // @ 引用和左栏“选择并锁定”是同一个任务上下文，而非仅拼进提示词的装饰。
@@ -1498,32 +1662,34 @@ export function AssistantPane({
     setComposerContextTokens([]);
     setReaderContexts([]);
     lastReaderContextKeyRef.current = null;
+    setInput("");
+    setEditingMessageId(null);
+    setVoiceInputMessage(undefined);
 
-    if (adapted.runtimeInput.mode === "command") {
-      commandPaperIdsRef.current = referencedPaperIds;
-      try {
-        const artifactType = getArtifactTypeFromCommand(adapted.runtimeInput.message);
-        if (artifactType && commandPaperIdsRef.current.length > 0) {
-          const message = onGenerateArtifact(artifactType, commandPaperIdsRef.current);
-          assistantStoreRef.current.addMessage(createMessage("assistant", message));
-          setInput("");
-          setEditingMessageId(null);
-          syncAssistant();
-          return;
-        }
-        await runCommandMessage(adapted.runtimeInput.message);
-      } finally {
-        commandPaperIdsRef.current = undefined;
-      }
+    const preparedTurn: QueuedAssistantTurn = {
+      attachedContextPrompt,
+      contextTokens: contextTokensForTurn,
+      message: adapted.runtimeInput.message,
+      mode: activeMode,
+      policy: currentState.pending ? "after_tool" : "interrupt",
+      readerContexts: [...readerContexts],
+      referencedPaperIds,
+      userContent: adapted.userMessageContent,
+      userMessageId: userMessage.id
+    };
+    if (currentState.pending) {
+      queuedAssistantTurnsRef.current.push(preparedTurn);
+      syncAssistant();
       return;
     }
-
-    await runKnowledgeMessage(adapted.runtimeInput.message, adapted.runtimeInput.mode, {
-      attachedContextPrompt
-    });
+    syncAssistant();
+    await executePreparedTurn(preparedTurn);
   }
 
   function handleEditMessage(messageId: string) {
+    if (assistantStoreRef.current.getState().pending) {
+      return;
+    }
     const message = assistantStoreRef.current
       .getState()
       .messages.find((candidate) => candidate.id === messageId && candidate.role === "user");
@@ -1619,6 +1785,18 @@ export function AssistantPane({
     await runKnowledgeMessage(adapted.runtimeInput.message, activeMode, {
       attachedContextPrompt
     });
+  }
+
+  function handleToggleFavoriteMessage(messageId: string) {
+    const currentState = assistantStoreRef.current.getState();
+    assistantStoreRef.current.replaceMessages(
+      currentState.messages.map((message) =>
+        message.id === messageId && message.role === "assistant"
+          ? { ...message, favorite: !message.favorite }
+          : message
+      )
+    );
+    syncAssistant();
   }
 
   const conversationStarted = assistantState.messages.length > 0;
@@ -1718,12 +1896,20 @@ export function AssistantPane({
           void handleUIDslAction(action, traceId);
         }}
         onEditMessage={handleEditMessage}
+        onInterruptForQueuedMessage={(messageId) => {
+          changeQueuedTurnPolicy(messageId, "interrupt");
+        }}
         onModeChange={switchModeAsNewSession}
         onRegenerateMessage={handleRegenerateMessage}
         onRejectRequest={handleRejectRequest}
         onRetryUserMessage={(messageId) => {
           void handleRetryUserMessage(messageId);
         }}
+        onToggleFavoriteMessage={handleToggleFavoriteMessage}
+        onWaitForRunForQueuedMessage={(messageId) => {
+          changeQueuedTurnPolicy(messageId, "after_run");
+        }}
+        onWithdrawQueuedMessage={withdrawQueuedTurn}
       />
 
       <AssistantComposer

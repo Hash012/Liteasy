@@ -1,9 +1,7 @@
 import { Button } from "@fluentui/react-components";
 import {
-  AddRegular,
   CheckmarkCircleRegular,
   DocumentSearchRegular,
-  SubtractRegular,
   WarningRegular
 } from "@fluentui/react-icons";
 import { useMemo, useState } from "react";
@@ -14,7 +12,8 @@ import type { UIDslActionRef } from "../features/generative-ui/generativeUi.type
 import {
   PdfReader,
   type PdfAnnotationPublicationChange,
-  type PdfEvidenceTarget
+  type PdfEvidenceTarget,
+  type PdfReaderSelectionSnapshot
 } from "../features/pdf/PdfReader";
 import type { PdfAnnotation, PdfAnnotationPublication } from "../features/pdf/pdfAnnotationStorage";
 import type { ReaderConversationContext } from "../features/assistant/assistantContext.types";
@@ -87,6 +86,7 @@ type ReaderPaneProps = {
   }) => Promise<void>;
   onSyncThinReadingAnnotations?: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
   onAddReaderContextToConversation?: (context: ReaderConversationContext) => void;
+  onReaderSelectionChanged?: (selection: PdfReaderSelectionSnapshot | null) => void;
   intuechoEndpoint?: string;
   intuechoSessionId?: string;
   mineruFiguresByPaperId?: Record<string, MineruFigure[]>;
@@ -146,6 +146,7 @@ export function ReaderPane({
   onGenerateThinReadingBranch,
   onSyncThinReadingAnnotations,
   onAddReaderContextToConversation,
+  onReaderSelectionChanged,
   intuechoEndpoint,
   intuechoSessionId,
   mineruFiguresByPaperId,
@@ -194,25 +195,6 @@ export function ReaderPane({
               {activePaper.title}
             </span>
             <Button
-              aria-label="缩小 PDF 页面"
-              appearance="subtle"
-              icon={<SubtractRegular />}
-              onClick={() => setZoom((current) => Math.max(70, current - 10))}
-              size="small"
-              title="缩小 PDF 页面"
-              type="button"
-            />
-            <span className="reader-display-scale">显示比例 {zoom}%</span>
-            <Button
-              aria-label="放大 PDF 页面"
-              appearance="subtle"
-              icon={<AddRegular />}
-              onClick={() => setZoom((current) => Math.min(180, current + 10))}
-              size="small"
-              title="放大 PDF 页面"
-              type="button"
-            />
-            <Button
               aria-label={identityLabel}
               appearance="subtle"
               disabled={Boolean(activePaper.literature) || !onResolveLiteratureIdentity}
@@ -260,10 +242,12 @@ export function ReaderPane({
             pdfBackground={pdfBackground}
             onPaperAnnotated={onPaperAnnotated}
             onAddSelectionToConversation={onAddReaderContextToConversation}
+            onSelectionChanged={onReaderSelectionChanged}
             onChangeAnnotationPublication={onChangeAnnotationPublication}
             onDeleteOrganizationAnnotation={onDeleteOrganizationAnnotation}
             onShareAnnotationToOrganization={onShareAnnotationToOrganization}
             onUpdateOrganizationAnnotation={onUpdateOrganizationAnnotation}
+            onZoomChange={setZoom}
             selectedPapers={selectedPapers}
             targetEvidence={targetEvidence}
             zoom={zoom}

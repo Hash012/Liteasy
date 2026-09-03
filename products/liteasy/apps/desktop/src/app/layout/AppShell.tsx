@@ -29,6 +29,7 @@ import { usePolicySync } from "../features/models/usePolicySync";
 import { useModelSettingsActions } from "../features/models/useModelSettingsActions";
 import {
   resolveLocalDevCloudEndpoint,
+  shouldApplyLocalDevCloudDefaults,
   type DevCloudEnvLike
 } from "../features/models/localDevCloudEndpoint";
 import { ArtifactTabs } from "../features/artifacts/ArtifactTabs";
@@ -130,6 +131,8 @@ import {
 import { useAssistantAgentController } from "../controllers/agent/useAssistantAgentController";
 import { runAgentArtifactAnalysis } from "../controllers/agent/runAgentArtifactAnalysis";
 import { usePaperTranslationController } from "../controllers/usePaperTranslationController";
+import { useExtensionRuntimeController } from "../controllers/useExtensionRuntimeController";
+import type { PluginSandboxTransport } from "../features/extensions/pluginBuilder";
 import { getDefaultModelForProvider } from "../features/models/modelPolicy";
 import type { AcademicProfileTransport } from "../features/profile/academicProfileClient";
 
@@ -139,6 +142,7 @@ type AppShellProps = {
   academicProfileTransport?: AcademicProfileTransport;
   controlPlaneTransport?: ControlPlaneTransport;
   documentMetadataTransport?: DocumentMetadataTransport;
+  initialOpenReaderPaperIds?: string[];
   initialSettings?: Partial<SettingsState>;
   initialPapers?: Paper[];
   localDevCloudEnv?: DevCloudEnvLike;
@@ -147,6 +151,7 @@ type AppShellProps = {
   organizationTransport?: OrganizationSummaryTransport;
   localLibraryLoader?: () => Promise<LocalLibrarySnapshot>;
   modelTransport?: ModelTransport;
+  pluginSandboxTransport?: PluginSandboxTransport;
   recommendationTransport?: RecommendationTransport;
 };
 
@@ -175,6 +180,7 @@ export function AppShell({
   academicProfileTransport,
   controlPlaneTransport,
   documentMetadataTransport,
+  initialOpenReaderPaperIds = [],
   initialPapers,
   initialSettings,
   localDevCloudEnv,
@@ -183,12 +189,18 @@ export function AppShell({
   organizationTransport,
   localLibraryLoader,
   modelTransport,
+  pluginSandboxTransport,
   recommendationTransport
 }: AppShellProps = {}) {
   const { artifactStore, importStoreRef, settingsStoreRef, workspaceStoreRef } = useAppShellStores(
     initialSettings,
     initialPapers
   );
+  const extensionRuntime = useExtensionRuntimeController(pluginSandboxTransport
+    ? {
+        invokeHandler: (request) => pluginSandboxTransport.invokeHandler(request)
+      }
+    : undefined);
   const agentArtifactRunnerRef = useRef<(
     artifactType: ArtifactType,
     onProgress: (input: {
@@ -240,8 +252,10 @@ export function AppShell({
   const [activeSideArtifactIds, setActiveSideArtifactIds] = useState<
     Partial<Record<DockRegionId, string>>
   >({});
-  const [openReaderPaperIds, setOpenReaderPaperIds] = useState<string[]>([]);
-  const [activeReaderPaperId, setActiveReaderPaperId] = useState<string | null>(null);
+  const [openReaderPaperIds, setOpenReaderPaperIds] = useState<string[]>(initialOpenReaderPaperIds);
+  const [activeReaderPaperId, setActiveReaderPaperId] = useState<string | null>(
+    initialOpenReaderPaperIds[0] ?? null
+  );
   const [openPaperResources, setOpenPaperResources] = useState<OpenPaperResource[]>([]);
   const [activePaperResourceId, setActivePaperResourceId] = useState<string | null>(null);
   const [openVisualizations, setOpenVisualizations] = useState<VisualizationTabData[]>([]);
@@ -255,9 +269,12 @@ export function AppShell({
   const latestArtifactTaskIdRef = useRef<string | null>(null);
   const cloudAccessTokenRef = useRef<string | undefined>(undefined);
   const forum = useForumController({ getSessionId: () => cloudAccessTokenRef.current });
+  const allowUnauthenticatedLocalDevModel = import.meta.env.DEV &&
+    shouldApplyLocalDevCloudDefaults(undefined, localDevCloudEnv);
   const effectiveModelTransport = useMemo(() => modelTransport ?? createBearerModelTransport({
+    allowUnauthenticatedLocalDev: allowUnauthenticatedLocalDevModel,
     getAccessToken: () => cloudAccessTokenRef.current
-  }), [modelTransport]);
+  }), [allowUnauthenticatedLocalDevModel, modelTransport]);
   const resolveIntuechoEndpoint = () =>
     settingsStoreRef.current.getState()["thin_reading.intuecho_endpoint"].trim() ||
     (import.meta.env.VITE_FORUM_API_URL ?? "http://127.0.0.1:4040");
@@ -684,6 +701,7 @@ export function AppShell({
     getSettings: () => settingsStoreRef.current.getState(),
     applyLocalDevCloudDefaults: modelSettings.applyLocalDevCloudDefaults,
     isOnline,
+    suppressAutomaticLoginPrompt: allowUnauthenticatedLocalDevModel,
     onRegistered: () => {
       openDockedLeftRailView("profile");
       setRegistrationWelcomeMessageId((current) => current + 1);
@@ -972,14 +990,17 @@ export function AppShell({
     academicProfile: profileActions.academicProfile,
     getAgentMemories: () => profileActions.agentMemories,
     getAllPapers: () => workspaceStoreRef.current.getState().papers,
+    getArtifactTasks: () => artifactTasks,
     getImportedChunksByPaperId: workspaceActions.getImportedChunksByPaperId,
     getImportedChunksForPaperId: (paperId) =>
       importStoreRef.current.getParsedChunksByDocumentId(paperId),
     getSelectedPapers: workspaceActions.getSelectedPapers,
     getUserStateSummary: () => agentRecentState,
+    extensionRuntime: extensionRuntime.runtime,
     importedChunksByPaperId,
     importedSelectedCount,
     modelTransport: effectiveModelTransport,
+    pluginSandboxTransport,
     thinReadingExternalKnowledgeTransport: effectiveModelTransport,
     thinReadingExternalPdfTransport: effectiveModelTransport,
     onApplyGeneratedTheme: runtimeActionContext.applyGeneratedTheme,
@@ -1842,6 +1863,7 @@ export function AppShell({
         onChangeAnnotationPublication={pdfAnnotationPublication.actions.changePublication}
         onStartAnalysis={startReaderScopedAnalysis}
         onAddReaderContextToConversation={addReaderContextToConversation}
+        onReaderSelectionChanged={extensionRuntime.actions.publishReaderSelection}
         onUpdateThinReadingDocument={artifactWorkflow.actions.updateThinReadingDocument}
         onToggleThinReadingVisualization={artifactWorkflow.actions.setThinReadingVisualizationEnabled}
         thinReadingVisualizationCapability={cloudAccount.model.multimodalVisualization}

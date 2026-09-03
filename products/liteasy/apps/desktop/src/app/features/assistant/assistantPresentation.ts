@@ -16,15 +16,6 @@ function isAgentApiErrorCode(value: unknown): value is AgentApiErrorCode {
   return typeof value === "string" && value in assistantErrorMessages;
 }
 
-function assistantErrorDetail(error: unknown) {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-  if (error && typeof error === "object" && "message" in error) {
-    return typeof error.message === "string" ? error.message : "";
-  }
-  return "";
-}
-
 function assistantErrorCode(error: unknown): AgentApiErrorCode | "assistant_service_unavailable" {
   if (
     error &&
@@ -77,20 +68,12 @@ export function getSelectedSetReadyMessage(selectedSetStatus: SelectedSetStatus)
 
 export function getAssistantErrorMessage(
   error: unknown,
-  options: { developerDiagnostics?: boolean } = {}
+  _options: { developerDiagnostics?: boolean } = {}
 ) {
   const code = assistantErrorCode(error);
-  const detail = assistantErrorDetail(error);
-  const traceId = detail.match(/\btrace_[A-Za-z0-9._:-]+\b/)?.[0];
-  const message = code === "assistant_service_unavailable"
-    ? "AI 服务暂时不可用，请检查网络后重试。"
+  return code === "assistant_service_unavailable"
+    ? "暂时无法回复，请稍后重试。"
     : assistantErrorMessages[code];
-  return [
-    message,
-    `错误编号：${code}`,
-    ...(traceId ? [`追踪编号：${traceId}`] : []),
-    ...(options.developerDiagnostics && detail ? [`内部信息：${detail}`] : [])
-  ].join("\n");
 }
 
 export function getAuditVerdictLabel(verdict: "pass" | "review" | "fail") {

@@ -132,7 +132,7 @@ test("projects artifact progress into a stable generation session", () => {
   expect(completed.createdAt).toBe(running.createdAt);
   expect(completed.kind).toBe("artifact_generation");
   expect(completed.status).toBe("completed");
-  expect(completed.messages[1].content).toContain("进度：100%");
+  expect(completed.messages[1].content).not.toContain("进度：");
   expect(completed.messages[1].content).toContain("完整结果");
 });
 

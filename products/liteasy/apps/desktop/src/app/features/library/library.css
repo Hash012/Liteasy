@@ -17,6 +17,15 @@
   min-width: 0;
 }
 
+.library-category-filter {
+  min-width: 92px;
+  max-width: 132px;
+}
+
+.library-category-filter select {
+  font-size: 12px;
+}
+
 .library-button {
   border: 1px solid #bdd2e3;
   border-radius: 999px;
@@ -453,6 +462,67 @@
   display: inline-flex;
   flex: 0 0 16px;
   font-size: 16px;
+}
+
+.library-paper-content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  padding: 2px 0;
+}
+
+.library-paper-content .library-paper-title {
+  width: 100%;
+  padding-block: 2px;
+}
+
+.library-paper-metadata {
+  display: flex;
+  gap: 3px;
+  min-width: 0;
+  overflow: hidden;
+  padding-bottom: 2px;
+}
+
+.library-paper-category,
+.library-paper-tag {
+  max-width: 92px;
+  overflow: hidden;
+  border-radius: 999px;
+  font-size: 9px;
+  line-height: 1.5;
+  padding: 0 5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-paper-category {
+  background: #dcecf9;
+  color: #275f8b;
+  font-weight: 700;
+}
+
+.library-paper-tag {
+  background: #edf1f5;
+  color: #64798d;
+}
+
+.library-metadata-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.library-metadata-editor label {
+  display: grid;
+  gap: 5px;
+  color: #49657d;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.library-metadata-editor small {
+  color: #71869a;
 }
 
 .library-folder-row:hover,

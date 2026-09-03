@@ -93,11 +93,16 @@ import {
   ThinReadingNumericFidelityError,
   type ThinReadingNumericFidelityDiagnostic
 } from "../thin-reading/thinReadingNumericFidelity";
+import {
+  formatAssistantConversationContext,
+  type AssistantConversationTurn
+} from "./assistantConversationContext";
 
 type GenerateAssistantAnswerInput = {
   agentCoreContext?: AgentCorePromptContext;
   artifactType?: AgentArtifactType;
   auditTransport?: ModelAuditTransport;
+  conversationHistory?: readonly AssistantConversationTurn[];
   enableVisualizationDecisionPlanner?: boolean;
   importedChunksByPaperId: Record<string, RetrievalChunk[]>;
   mode: Exclude<AssistantMode, "command">;
@@ -4404,6 +4409,7 @@ export async function generateAssistantAnswer({
   agentCoreContext,
   artifactType,
   auditTransport,
+  conversationHistory,
   enableVisualizationDecisionPlanner,
   importedChunksByPaperId,
   mode,
@@ -4688,6 +4694,7 @@ export async function generateAssistantAnswer({
      * 这里仍然把文献片段作为明确“参考片段”传入，避免 memory 抢过证据优先级。
      */
     agentCoreContext ? `Agent核心上下文：\n${formatAgentCorePromptContext(agentCoreContext)}` : "",
+    formatAssistantConversationContext(conversationHistory),
     `问题：${question}`,
     `参考文献：${selectedPapers.map((paper) => paper.title).join("；")}`,
     artifactType ? `目标产物模态：${artifactType}` : "",

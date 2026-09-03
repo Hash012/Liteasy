@@ -36,6 +36,7 @@ test("frontend client creates a session and forwards stable events", async () =>
   expect(eventTypes).toEqual([
     "run.started",
     "context.prepared",
+    "execution.route",
     "assistant.message",
     "run.completed"
   ]);
@@ -80,6 +81,7 @@ test("CLI adapter emits JSONL events followed by the run snapshot", async () => 
   expect(result.lines.map((value) => JSON.parse(value).type).filter(Boolean)).toEqual([
     "run.started",
     "context.prepared",
+    "execution.route",
     "assistant.message",
     "run.completed"
   ]);

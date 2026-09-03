@@ -5,53 +5,75 @@ import {
   isRetryableOpenAIResponsesError
 } from "../providers/openaiResponses.mjs";
 
-// This compatible gateway currently exposes these three GPT-5.6 variants.
-// Keep the order explicit: it is the product's reliability policy, rather
-// than a silent preference inferred from a stale user-selected model.
+// These are bounded fallbacks for compatible gateways. The configured/requested
+// model is still tried first so OPENAI_MODEL remains authoritative.
 export const openAIModelFailoverOrder = [
   "gpt-5.6-terra",
   "gpt-5.6-luna",
   "gpt-5.6-sol"
 ];
 
+function resolveModelCandidates(model) {
+  const preferredModel = typeof model === "string" ? model.trim() : "";
+  return [...new Set([
+    ...(preferredModel ? [preferredModel] : []),
+    ...openAIModelFailoverOrder
+  ])];
+}
+
+function isUnavailableModelError(error) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const message = error instanceof Error ? error.message : "";
+  const hasUnavailableModelMessage =
+    /\bmodel\b[\s\S]*(?:not supported|not found|does not exist|unavailable)/i.test(message) ||
+    /模型[\s\S]*(?:不支持|不存在|不可用)/.test(message);
+  if ((error.status === 400 || error.status === 404) && hasUnavailableModelMessage) {
+    return true;
+  }
+  return isUnavailableModelError(error.cause);
+}
+
 function modelLabel(model) {
   return model.replace(/^gpt-/i, "GPT ").replace(/-/g, " ");
 }
 
-function createAllModelsUnavailableError(lastError) {
-  const attempted = openAIModelFailoverOrder.map(modelLabel).join(" → ");
+function createAllModelsUnavailableError(lastError, candidates) {
+  const attempted = candidates.map(modelLabel).join(" → ");
   return new Error(
-    `模型服务暂时不可用：已依次尝试 ${attempted}，均遇到可重试的上游服务错误。请稍后重试。`,
+    `模型服务暂时不可用：已依次尝试 ${attempted}，候选模型不可用或上游服务暂时异常。请稍后重试。`,
     lastError ? { cause: lastError } : undefined
   );
 }
 
 /**
- * Retry with another model only for errors explicitly marked as transient by
- * the Responses provider (502/503/timeouts etc.). Permanent request/auth
- * failures deliberately stop here so the user receives the real problem.
+ * Retry another candidate for transient upstream failures or an explicitly
+ * unavailable model. Other permanent request/auth failures remain visible.
  */
 export function createOpenAIModelFailoverProvider(provider) {
   return async (input) => {
     let lastError;
-    for (const model of openAIModelFailoverOrder) {
+    const candidates = resolveModelCandidates(input.model);
+    for (const model of candidates) {
       try {
         return await provider({ ...input, model });
       } catch (error) {
-        if (!isRetryableOpenAIResponsesError(error)) {
+        if (!isRetryableOpenAIResponsesError(error) && !isUnavailableModelError(error)) {
           throw error;
         }
         lastError = error;
       }
     }
-    throw createAllModelsUnavailableError(lastError);
+    throw createAllModelsUnavailableError(lastError, candidates);
   };
 }
 
 export function createOpenAIModelFailoverStreamProvider(provider) {
   return async function* streamWithModelFailover(input) {
     let lastError;
-    for (const model of openAIModelFailoverOrder) {
+    const candidates = resolveModelCandidates(input.model);
+    for (const model of candidates) {
       let emittedOutput = false;
       try {
         for await (const delta of provider({ ...input, model })) {
@@ -62,13 +84,16 @@ export function createOpenAIModelFailoverStreamProvider(provider) {
       } catch (error) {
         // Never splice two answers together: after any visible delta, surface
         // the original stream error instead of changing models mid-answer.
-        if (emittedOutput || !isRetryableOpenAIResponsesError(error)) {
+        if (
+          emittedOutput ||
+          (!isRetryableOpenAIResponsesError(error) && !isUnavailableModelError(error))
+        ) {
           throw error;
         }
         lastError = error;
       }
     }
-    throw createAllModelsUnavailableError(lastError);
+    throw createAllModelsUnavailableError(lastError, candidates);
   };
 }
 

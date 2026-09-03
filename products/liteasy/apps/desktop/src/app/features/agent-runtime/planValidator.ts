@@ -32,7 +32,7 @@ function getAllowedTypes(schema: JsonSchema): readonly JsonSchemaType[] {
   return [schema.type as JsonSchemaType];
 }
 
-function validateJsonSchema(
+function collectJsonSchemaErrors(
   value: unknown,
   schema: JsonSchema,
   path: string,
@@ -53,7 +53,7 @@ function validateJsonSchema(
   if (allowedTypes.includes("array")) {
     if (schema.items && Array.isArray(value)) {
       value.forEach((item, index) => {
-        validateJsonSchema(item, schema.items as JsonSchema, `${path}[${index}]`, errors);
+        collectJsonSchemaErrors(item, schema.items as JsonSchema, `${path}[${index}]`, errors);
       });
     }
     return;
@@ -73,12 +73,27 @@ function validateJsonSchema(
   for (const [key, childValue] of Object.entries(objectValue)) {
     const childSchema = schema.properties?.[key];
     if (!childSchema) {
-      errors.push(`${path}.${key} is not allowed`);
+      if (schema.additionalProperties !== true) {
+        errors.push(`${path}.${key} is not allowed`);
+      }
       continue;
     }
 
-    validateJsonSchema(childValue, childSchema, `${path}.${key}`, errors);
+    collectJsonSchemaErrors(childValue, childSchema, `${path}.${key}`, errors);
   }
+}
+
+export function validateJsonSchemaValue(
+  value: unknown,
+  schema: JsonSchema,
+  path = "value"
+): SemanticPlanValidationResult {
+  const errors: string[] = [];
+  collectJsonSchemaErrors(value, schema, path, errors);
+  return {
+    errors,
+    valid: errors.length === 0
+  };
 }
 
 export function validateSemanticActionPlan(
@@ -101,7 +116,7 @@ export function validateSemanticActionPlan(
       continue;
     }
 
-    validateJsonSchema(action.input, metadata.inputSchema, action.actionId, errors);
+    collectJsonSchemaErrors(action.input, metadata.inputSchema, action.actionId, errors);
   }
 
   for (const candidate of plan.clarification?.candidates ?? []) {
@@ -111,7 +126,7 @@ export function validateSemanticActionPlan(
       continue;
     }
 
-    validateJsonSchema(
+    collectJsonSchemaErrors(
       candidate.input,
       metadata.inputSchema,
       `clarification.${candidate.actionId}`,

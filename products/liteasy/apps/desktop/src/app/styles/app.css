@@ -1224,28 +1224,67 @@ body {
   width: 100%;
 }
 
-.assistant-message-heading {
-  color: #63788b;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  line-height: 1.2;
-}
-
-.assistant-message.user .assistant-message-heading {
-  color: #3473a8;
-}
-
 .assistant-answer-text {
   max-width: 100%;
-  white-space: pre-line;
   line-height: 1.8;
   overflow-wrap: anywhere;
+  width: 100%;
 }
 
 .assistant-message.user .assistant-answer-text {
   max-width: min(100%, 48rem);
   text-align: right;
+}
+
+.assistant-user-message {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  max-width: min(100%, 48rem);
+  width: 100%;
+}
+
+.assistant-user-message-content {
+  white-space: pre-wrap;
+}
+
+.assistant-user-message-content.collapsed {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+
+.assistant-user-message-toggle {
+  color: #3473a8;
+  margin-top: 2px;
+}
+
+.assistant-queued-message {
+  align-items: flex-end;
+  color: #5b7184;
+  display: grid;
+  font-size: 12px;
+  gap: 5px;
+  justify-items: end;
+  max-width: min(100%, 48rem);
+  width: 100%;
+}
+
+.assistant-queued-message.interrupt {
+  color: #9a4b42;
+}
+
+.assistant-queued-message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.assistant-queued-message-actions button {
+  color: inherit;
+  font-size: 11px;
 }
 
 .assistant-message-token-row,
@@ -1441,29 +1480,24 @@ body {
 .assistant-agent-activity {
   display: grid;
   gap: 8px;
-  border: 1px solid #c9dce9;
-  border-radius: 8px;
-  background: #f7fbff;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: #315d82;
-  padding: 10px 12px;
+  padding: 0 0 8px;
+  width: 100%;
 }
 
 .assistant-agent-activity.completed {
-  border-color: #cbe1d3;
-  background: #f5fbf7;
   color: #35684a;
 }
 
 .assistant-agent-activity.waiting {
-  border-color: #ead8b8;
-  background: #fffaf0;
   color: #7a612c;
 }
 
 .assistant-agent-activity.failed,
 .assistant-agent-activity.cancelled {
-  border-color: #e7c7c3;
-  background: #fff6f5;
   color: #824840;
 }
 
@@ -1471,7 +1505,20 @@ body {
   align-items: center;
   display: grid;
   gap: 8px;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.assistant-agent-connection {
+  align-items: center;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  display: flex;
+  font-size: 11px;
+  gap: 6px;
+  padding-bottom: 7px;
+}
+
+.assistant-agent-connection svg {
+  font-size: 14px;
 }
 
 .assistant-agent-activity-header > div {
@@ -1508,6 +1555,224 @@ body {
   color: inherit;
   font-size: 12px;
   justify-self: end;
+}
+
+.assistant-agent-step-list {
+  display: grid;
+  gap: 5px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.assistant-agent-step-list > li {
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.66);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.assistant-agent-step-list > li.running {
+  border-color: color-mix(in srgb, currentColor 34%, transparent);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.assistant-agent-step-toggle {
+  color: inherit;
+  justify-content: flex-start;
+  min-height: 34px;
+  min-width: 0;
+  padding: 4px 7px;
+}
+
+.assistant-agent-step-toggle > span:last-child {
+  min-width: 0;
+  width: 100%;
+}
+
+.assistant-agent-step-label {
+  align-items: baseline;
+  display: flex;
+  gap: 7px;
+  min-width: 0;
+  text-align: left;
+}
+
+.assistant-agent-step-label small {
+  border-radius: 4px;
+  background: #e8f2fb;
+  color: #396989;
+  flex: 0 0 auto;
+  font-size: 10px;
+  padding: 1px 5px;
+}
+
+.assistant-agent-step-label strong {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-agent-step-running {
+  align-self: center;
+  animation: assistant-agent-working 1.3s ease-in-out infinite;
+  border-radius: 999px;
+  background: currentColor;
+  height: 6px;
+  margin-right: 10px;
+  width: 6px;
+}
+
+.assistant-agent-step-detail {
+  border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  color: #486475;
+  font-size: 12px;
+  grid-column: 1 / -1;
+  line-height: 1.55;
+  max-height: 240px;
+  overflow: auto;
+  padding: 8px 10px 9px 34px;
+}
+
+.assistant-agent-step-detail .assistant-markdown > :first-child {
+  margin-top: 0;
+}
+
+.assistant-agent-step-detail .assistant-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.assistant-markdown {
+  min-width: 0;
+  width: 100%;
+}
+
+.assistant-markdown > :first-child {
+  margin-top: 0;
+}
+
+.assistant-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.assistant-markdown p,
+.assistant-markdown ul,
+.assistant-markdown ol,
+.assistant-markdown blockquote,
+.assistant-markdown table,
+.assistant-markdown .assistant-markdown-code-block {
+  margin: 0 0 12px;
+}
+
+.assistant-markdown ul,
+.assistant-markdown ol {
+  padding-left: 22px;
+}
+
+.assistant-markdown blockquote {
+  border-left: 3px solid #8db6d5;
+  color: #526d80;
+  padding: 3px 0 3px 12px;
+}
+
+.assistant-markdown table {
+  border-collapse: collapse;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.assistant-markdown .katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 0;
+}
+
+.assistant-markdown th,
+.assistant-markdown td {
+  border: 1px solid #d4e0e8;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.assistant-markdown th {
+  background: #f1f6fa;
+}
+
+.assistant-markdown :not(pre) > code {
+  border: 1px solid #d8e2e9;
+  border-radius: 4px;
+  background: #f2f5f7;
+  color: #284c63;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.9em;
+  padding: 1px 4px;
+}
+
+.assistant-markdown-code-block {
+  border: 1px solid #cad7e0;
+  border-radius: 7px;
+  background: #18232c;
+  color: #edf5fa;
+  overflow: hidden;
+}
+
+.assistant-markdown-code-language {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  color: #b8cbd8;
+  display: block;
+  font: 11px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace;
+  padding: 5px 9px;
+  text-transform: lowercase;
+}
+
+.assistant-markdown-code-block pre {
+  margin: 0;
+  overflow: auto;
+  padding: 10px 12px;
+}
+
+.assistant-markdown-code-block code {
+  font: 12px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: pre;
+}
+
+.assistant-markdown a {
+  color: #0f67a8;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.assistant-markdown-image {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0;
+  max-width: 100%;
+}
+
+.assistant-markdown-image img {
+  border: 1px solid #d6e0e7;
+  border-radius: 7px;
+  height: auto;
+  max-height: 420px;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.assistant-markdown-image > span,
+.assistant-markdown-image-unavailable {
+  color: #62798a;
+  font-size: 11px;
+}
+
+.assistant-markdown .mermaid-preview {
+  margin: 10px 0 14px;
+  max-width: 100%;
 }
 
 .assistant-agent-activity-details {
@@ -3043,6 +3308,11 @@ body {
   color: var(--accent-1);
 }
 
+.assistant-message-action.active {
+  color: #a86408;
+  opacity: 1;
+}
+
 .pdf-reader {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
@@ -3136,6 +3406,14 @@ body {
 
 .pdf-workspace.sidebar-collapsed {
   grid-template-columns: 44px minmax(0, 1fr);
+}
+
+.pdf-workspace.whiteboard-open {
+  grid-template-columns: 180px minmax(0, 1fr) clamp(340px, 36vw, 520px);
+}
+
+.pdf-workspace.sidebar-collapsed.whiteboard-open {
+  grid-template-columns: 44px minmax(0, 1fr) clamp(340px, 36vw, 520px);
 }
 
 .pdf-left-sidebar {
@@ -3233,6 +3511,24 @@ body {
   padding: 8px;
 }
 
+.pdf-thumbnail-list li > button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.pdf-thumbnail-list li > button:focus-visible {
+  outline: 2px solid var(--accent-1);
+  outline-offset: 2px;
+}
+
 .pdf-thumbnail-list li.active {
   border-color: rgba(27, 102, 179, 0.32);
   background: #eef4fa;
@@ -3248,16 +3544,18 @@ body {
 }
 
 .pdf-main-stage {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   background: var(--pdf-reading-background, #e8eef5);
-  overflow: auto;
+  overflow: hidden;
 }
 
 .pdf-stage {
   position: relative;
   min-height: 0;
-  height: 100%;
+  height: auto;
   overflow: auto;
   padding: 18px clamp(14px, 3vw, 34px);
   background:
@@ -3269,6 +3567,97 @@ body {
   position: relative;
 }
 
+.pdf-reader-toolbar-wrap {
+  position: relative;
+  z-index: 18;
+  border-bottom: 1px solid var(--line-1);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 2px 8px rgba(24, 34, 47, 0.05);
+}
+
+.pdf-reader-top {
+  min-width: 0;
+}
+
+.pdf-reader-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding: 5px 10px;
+}
+
+.pdf-reader-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pdf-reader-toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+.pdf-page-number-input {
+  width: 58px;
+}
+
+.pdf-page-number-input input {
+  text-align: center;
+}
+
+.pdf-page-count,
+.pdf-find-result-count,
+.pdf-zoom-value {
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pdf-zoom-value {
+  min-width: 42px;
+  text-align: center;
+}
+
+.pdf-find-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 10px 8px;
+  border-top: 1px solid rgba(24, 34, 47, 0.07);
+}
+
+.pdf-find-input {
+  width: min(320px, 42vw);
+}
+
+.pdf-find-result-count {
+  min-width: 58px;
+  text-align: center;
+}
+
+.pdf-layout-popover {
+  display: grid;
+  gap: 10px;
+  width: 300px;
+}
+
+.pdf-layout-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.pdf-layout-options button {
+  min-width: 0;
+}
+
+.pdf-layout-popover small {
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+
 /*
  * The mode bar. Two switches and one line of state, because those are the only two things a
  * reader chooses here: whether the concepts are marked, and whether the graph is open. Everything
@@ -3276,13 +3665,10 @@ body {
  * and lives behind the one button at the end rather than as four lines of standing text.
  */
 .pdf-parser-status {
-  position: absolute;
-  z-index: 16;
-  top: 10px;
-  right: 18px;
   display: flex;
   gap: 10px;
-  max-width: min(560px, calc(100% - 36px));
+  max-width: min(420px, 36vw);
+  overflow: hidden;
   color: var(--ink-2);
   font-size: 11px;
 }
@@ -3865,6 +4251,40 @@ body {
   max-width: none;
 }
 
+.pdf-page-list.layout-single .pdf-page-row:not(.layout-visible),
+.pdf-page-list.layout-spread .pdf-page-row:not(.layout-visible) {
+  display: none;
+}
+
+.pdf-page-list.layout-single {
+  min-height: 100%;
+  align-content: start;
+}
+
+.pdf-page-list.layout-spread {
+  grid-template-columns: repeat(2, max-content);
+  align-items: start;
+  justify-content: center;
+}
+
+.pdf-page-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: max-content;
+  align-items: start;
+  justify-content: center;
+  max-width: 100%;
+}
+
+.pdf-page-row.has-margin-comments {
+  grid-template-columns: max-content clamp(168px, 18vw, 220px);
+  gap: 14px;
+}
+
+.pdf-page-list.with-margin-comments {
+  justify-items: center;
+}
+
 .pdf-page-shell {
   position: relative;
   max-width: 100%;
@@ -3880,6 +4300,19 @@ body {
   box-shadow:
     0 0 0 4px rgba(27, 102, 179, 0.16),
     0 22px 52px rgba(24, 34, 47, 0.15);
+}
+
+.pdf-overlay-mark.search-result {
+  z-index: 4;
+  border: 1px solid rgba(134, 94, 0, 0.35);
+  mix-blend-mode: multiply;
+  opacity: 0.58;
+  pointer-events: none;
+}
+
+.pdf-overlay-mark.search-result.current {
+  border: 2px solid rgba(0, 74, 173, 0.82);
+  opacity: 0.72;
 }
 
 .pdf-page-canvas {
@@ -4478,6 +4911,188 @@ button.pdf-overlay-mark:focus-visible {
   text-underline-offset: 2px;
   border: none;
   box-shadow: none;
+}
+
+.pdf-stage.text-box-tool-active .pdf-page-shell {
+  cursor: crosshair;
+}
+
+.pdf-markdown-text-box {
+  position: absolute;
+  z-index: 8;
+  min-width: 64px;
+  min-height: 30px;
+  border: 1px solid rgba(83, 103, 126, 0.48);
+  border-radius: 6px;
+  background: rgba(255, 255, 248, var(--pdf-text-box-opacity, 0.96));
+  box-shadow: 0 3px 12px rgba(24, 34, 47, 0.16);
+  color: var(--ink-1);
+  overflow: auto;
+  pointer-events: auto;
+  user-select: text;
+  transition: width 120ms ease, height 120ms ease, border-color 100ms ease, box-shadow 100ms ease;
+}
+
+.pdf-markdown-text-box.is-dragging {
+  transition: none;
+}
+
+.pdf-markdown-text-box:hover,
+.pdf-markdown-text-box:focus-within,
+.pdf-markdown-text-box.is-editing {
+  border-color: var(--accent-1);
+  box-shadow: 0 0 0 2px rgba(27, 102, 179, 0.13), 0 4px 14px rgba(24, 34, 47, 0.17);
+}
+
+.pdf-markdown-text-box.is-transparent:not(:hover):not(:focus-within):not(.is-editing):not(.is-dragging) {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.pdf-markdown-text-box-surface {
+  display: block;
+  width: 100%;
+  min-height: 100%;
+  background: transparent;
+  color: inherit;
+  cursor: text;
+  padding: 6px 7px;
+  text-align: left;
+}
+
+.pdf-markdown-text-box textarea {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 28px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-1);
+  font: 12px/1.55 "Cascadia Code", Consolas, monospace;
+  outline: 0;
+  padding: 6px 7px 30px;
+  resize: none;
+}
+
+.pdf-markdown-text-box .pdf-annotation-markdown {
+  font-size: 12px;
+}
+
+.pdf-markdown-text-box .katex-display,
+.pdf-markdown-text-box pre {
+  max-width: 100%;
+  overflow: auto hidden;
+}
+
+.pdf-markdown-text-box-actions {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.9);
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+
+.pdf-markdown-text-box-drag-handle {
+  cursor: grab;
+  touch-action: none;
+}
+
+.pdf-markdown-text-box-drag-handle:active,
+.pdf-markdown-text-box.is-dragging .pdf-markdown-text-box-drag-handle {
+  cursor: grabbing;
+}
+
+.pdf-markdown-text-box-opacity-popover label {
+  display: grid;
+  gap: 6px;
+  min-width: 180px;
+  color: var(--ink-1);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pdf-markdown-text-box:hover .pdf-markdown-text-box-actions,
+.pdf-markdown-text-box:focus-within .pdf-markdown-text-box-actions {
+  opacity: 1;
+}
+
+.pdf-margin-comment-rail {
+  position: relative;
+  width: clamp(168px, 18vw, 220px);
+  min-width: 0;
+  overflow: visible;
+}
+
+.pdf-margin-comment {
+  position: absolute;
+  z-index: 9;
+  left: 0;
+  width: 100%;
+  max-height: 12%;
+  overflow: auto;
+  border: 1px solid rgba(76, 107, 136, 0.34);
+  border-left: 3px solid var(--accent-1);
+  border-radius: 5px;
+  background: rgba(250, 253, 255, 0.95);
+  box-shadow: 0 3px 10px rgba(24, 34, 47, 0.14);
+  color: var(--ink-1);
+  padding: 5px 7px 7px;
+  pointer-events: auto;
+  user-select: text;
+}
+
+.pdf-margin-comment-connector {
+  position: absolute;
+  z-index: 7;
+  height: 0;
+  border-top: 1.5px dashed rgba(27, 102, 179, 0.72);
+  pointer-events: none;
+}
+
+.pdf-margin-comment-connector::before {
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid rgba(27, 102, 179, 0.82);
+  border-radius: 999px;
+  background: #ffffff;
+  content: "";
+}
+
+.pdf-margin-comment > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  color: var(--accent-1);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.pdf-margin-comment > header button {
+  min-width: 24px;
+  width: 24px;
+  height: 24px;
+}
+
+.pdf-margin-comment .pdf-annotation-markdown {
+  font-size: 12px;
+  line-height: 1.48;
+}
+
+.pdf-margin-comment .pdf-annotation-markdown p,
+.pdf-margin-comment .pdf-annotation-markdown ul,
+.pdf-margin-comment .pdf-annotation-markdown ol,
+.pdf-margin-comment .pdf-annotation-markdown pre {
+  margin: 3px 0;
 }
 
 /* 注释提示框样式 */

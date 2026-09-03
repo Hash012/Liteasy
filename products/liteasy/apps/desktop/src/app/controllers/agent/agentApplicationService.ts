@@ -18,7 +18,9 @@ import {
   type AgentEvent,
   type AgentEventListener,
   type AgentEventPayload,
+  type AgentExecutionRuntime,
   type AgentJsonValue,
+  type AgentManagerActivity,
   type AgentPublicApi,
   type AgentRun,
   type AgentSession,
@@ -27,6 +29,7 @@ import {
   type ResolveAgentConfirmationRequest,
   type SubmitAgentTurnRequest
 } from "../../features/agent-api/agentApi.types";
+import { createAgentErrorEnvelope } from "../../features/agent-runtime/runtimeObservability";
 import { getRegisteredActionMetadata } from "../../features/skills/actionRegistry";
 import {
   projectPublicWorkflowAuditSummary,
@@ -39,6 +42,10 @@ import {
   type AgentStateSnapshot,
   type AgentStateStore
 } from "./agentStatePersistence";
+import {
+  compactAssistantConversationHistory,
+  type AssistantConversationTurn
+} from "../../features/assistant/assistantConversationContext";
 
 export type ResolvedAgentContext = {
   runtimeContext?: AgentRuntimeContextView;
@@ -46,15 +53,35 @@ export type ResolvedAgentContext = {
 };
 
 export type AgentCommandExecutionInput = {
+  conversationHistory: AssistantConversationTurn[];
   context: ResolvedAgentContext;
   coreTurn: AgentCorePreparedTurn;
   request: SubmitAgentTurnRequest;
   reportProgress: (input: { phase: string; progress: number; summary: string }) => void;
   reportDelta: (delta: string) => void;
+  reportManagerActivity: (input: AgentManagerActivity) => void;
   reportSubtaskDelta: (input: { delta: string; label: string; subtaskId: string }) => void;
   runId: string;
   signal: AbortSignal;
 };
+
+export function collectAgentConversationHistory(
+  runs: Iterable<AgentRun>,
+  currentRunId?: string
+) {
+  const turns: AssistantConversationTurn[] = [];
+  for (const run of runs) {
+    if (run.runId === currentRunId || run.status !== "completed") continue;
+    let assistant = "";
+    for (const event of run.events) {
+      if (event.type === "assistant.message") assistant = event.message;
+    }
+    if (assistant.trim() && run.input.message.trim()) {
+      turns.push({ assistant, user: run.input.message });
+    }
+  }
+  return compactAssistantConversationHistory(turns);
+}
 
 export type AgentKnowledgeExecutionResult = {
   citations?: AgentCitation[];
@@ -63,6 +90,16 @@ export type AgentKnowledgeExecutionResult = {
   metadata?: AgentJsonValue;
   ui?: AgentJsonValue;
 };
+
+export type AgentManagerExecutionResult =
+  | {
+      kind: "knowledge";
+      result: AgentKnowledgeExecutionResult;
+    }
+  | {
+      kind: "runtime";
+      result: RuntimeExecutionResult;
+    };
 
 export type AgentApplicationPorts = {
   createCoreSession?: () => AgentCoreSession;
@@ -80,6 +117,10 @@ export type AgentApplicationPorts = {
   executeKnowledge: (input: AgentCommandExecutionInput) =>
     | AgentKnowledgeExecutionResult
     | Promise<AgentKnowledgeExecutionResult>;
+  executeManagerTurn?: (
+    input: AgentCommandExecutionInput
+  ) => AgentManagerExecutionResult | Promise<AgentManagerExecutionResult>;
+  managerRuntime?: AgentExecutionRuntime;
   listCapabilities?: () => AgentCapability[];
   now?: () => Date;
   onPersistenceError?: (error: Error) => void;
@@ -128,6 +169,15 @@ function asJsonValue(value: unknown): AgentJsonValue {
 
 function asJsonRecord(value: Record<string, unknown>): Record<string, AgentJsonValue> {
   return asJsonValue(value) as Record<string, AgentJsonValue>;
+}
+
+function createRunFailureEvent(message: string, recovery?: string): AgentEventPayload {
+  return {
+    error: createAgentErrorEnvelope({ message, recovery }).error,
+    message,
+    recovery,
+    type: "run.failed"
+  };
 }
 
 function cloneAttachments(
@@ -258,6 +308,11 @@ function mapRuntimeEvent(event: AgentRuntimeEvent): AgentEventPayload[] {
       return [
         {
           actionId: event.action.actionId,
+          error: createAgentErrorEnvelope({
+            code: "ACTION_EXECUTION_FAILED",
+            message: event.message,
+            recovery: event.recovery
+          }).error,
           message: event.message,
           recovery: event.recovery,
           type: "action.failed"
@@ -270,13 +325,7 @@ function mapRuntimeEvent(event: AgentRuntimeEvent): AgentEventPayload[] {
     case "artifact_request":
       return [{ artifact: asJsonValue(event.artifact), type: "artifact.requested" }];
     case "runtime_error":
-      return [
-        {
-          message: event.message,
-          recovery: event.recovery,
-          type: "run.failed"
-        }
-      ];
+      return [createRunFailureEvent(event.message, event.recovery)];
   }
 }
 
@@ -425,11 +474,10 @@ export function createAgentApplicationService(
           repairedInterruptedRun = true;
           run.status = "failed";
           run.completedAt = now().toISOString();
-          emit(stored, run, {
-            message: "Agent 运行因应用重启而中断。",
-            recovery: "请重新提交该请求；原幂等键仍指向这次已中断运行。",
-            type: "run.failed"
-          });
+          emit(stored, run, createRunFailureEvent(
+            "Agent 运行因应用重启而中断。",
+            "请重新提交该请求；原幂等键仍指向这次已中断运行。"
+          ));
         }
       });
       sessions.set(stored.session.sessionId, stored);
@@ -702,6 +750,7 @@ export function createAgentApplicationService(
         emit(stored, run, { type: "context.prepared" });
 
         const executionInput: AgentCommandExecutionInput = {
+          conversationHistory: collectAgentConversationHistory(stored.runs.values(), runId),
           context,
           coreTurn: prepared.turn,
           reportProgress(progress) {
@@ -717,6 +766,12 @@ export function createAgentApplicationService(
           reportDelta(delta) {
             emit(stored, run, { delta, type: "assistant.delta" });
           },
+          reportManagerActivity(input) {
+            if (ports.managerRuntime !== "openai_agents_sdk") {
+              return;
+            }
+            emit(stored, run, { ...input, type: "manager.activity" });
+          },
           reportSubtaskDelta(input) {
             emit(stored, run, { ...input, type: "analysis.subtask.delta" });
           },
@@ -724,8 +779,42 @@ export function createAgentApplicationService(
           runId,
           signal: abortController.signal
         };
-        if (request.input.mode === "command") {
-          const runtimeResult = await ports.executeCommand(executionInput);
+        const runtime = ports.executeManagerTurn
+          ? ports.managerRuntime ?? "custom_manager"
+          : request.input.mode === "command"
+            ? "liteasy_command_workflow"
+            : "liteasy_knowledge_workflow";
+        const runtimePresentation = runtime === "openai_agents_sdk"
+          ? {
+              detail: "本轮由已注入的 OpenAI Agents SDK Manager 负责循环、工具选择与最终输出。",
+              label: "OpenAI Agents SDK Manager"
+            }
+          : runtime === "custom_manager"
+            ? {
+                detail: "本轮由已注入的自定义 Manager 负责工具选择与最终输出。",
+                label: "自定义 Manager Agent"
+              }
+            : runtime === "liteasy_command_workflow"
+              ? {
+                  detail: "本轮未经过 Manager Agent，直接进入 Liteasy 语义命令与受控动作工作流。",
+                  label: "Liteasy 命令工作流"
+                }
+              : {
+                  detail: "本轮未经过 Manager Agent，直接进入 Liteasy 文献检索与模型回答工作流。",
+                  label: "Liteasy 知识工作流"
+                };
+        emit(stored, run, {
+          ...runtimePresentation,
+          runtime,
+          type: "execution.route"
+        });
+        const managerResult = ports.executeManagerTurn
+          ? await ports.executeManagerTurn(executionInput)
+          : undefined;
+        if (managerResult?.kind === "runtime" || (!managerResult && request.input.mode === "command")) {
+          const runtimeResult = managerResult?.kind === "runtime"
+            ? managerResult.result
+            : await ports.executeCommand(executionInput);
           if (isCancelled(run)) {
             await persistState();
             return { data: run, ok: true };
@@ -736,7 +825,9 @@ export function createAgentApplicationService(
           });
           applyRuntimeResult(stored, run, context, runtimeResult);
         } else {
-          const knowledgeResult = await ports.executeKnowledge(executionInput);
+          const knowledgeResult = managerResult?.kind === "knowledge"
+            ? managerResult.result
+            : await ports.executeKnowledge(executionInput);
           if (isCancelled(run)) {
             await persistState();
             return { data: run, ok: true };
@@ -764,7 +855,7 @@ export function createAgentApplicationService(
       } catch (error) {
         if (!isCancelled(run)) {
           const message = error instanceof Error ? error.message : "Unknown agent execution error";
-          emit(stored, run, { message, type: "run.failed" });
+          emit(stored, run, createRunFailureEvent(message));
           finishRun(stored, run, "failed");
         }
       }
@@ -809,10 +900,9 @@ export function createAgentApplicationService(
         return { data: run, ok: true };
       }
       if (!ports.executeConfirmation) {
-        emit(stored, run, {
-          message: "This Agent host does not provide confirmation execution.",
-          type: "run.failed"
-        });
+        emit(stored, run, createRunFailureEvent(
+          "This Agent host does not provide confirmation execution."
+        ));
         finishRun(stored, run, "failed");
         await persistState();
         return { data: run, ok: true };
@@ -835,10 +925,9 @@ export function createAgentApplicationService(
         }
       } catch (error) {
         if (!isCancelled(run)) {
-          emit(stored, run, {
-            message: error instanceof Error ? error.message : "Confirmation execution failed",
-            type: "run.failed"
-          });
+          emit(stored, run, createRunFailureEvent(
+            error instanceof Error ? error.message : "Confirmation execution failed"
+          ));
           finishRun(stored, run, "failed");
         }
       }

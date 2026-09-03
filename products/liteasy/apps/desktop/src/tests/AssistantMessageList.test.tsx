@@ -48,7 +48,7 @@ describe("AssistantMessageList", () => {
     expect(screen.getByText(/模型链路：/)).toBeInTheDocument();
   });
 
-  test("uses direct, labelled conversation rows and keeps message actions outside their content", () => {
+  test("uses compact unlabelled conversation rows and keeps message actions outside their content", () => {
     const messages: AssistantMessage[] = [
       { content: "这是我的问题", id: "user-message", role: "user" },
       { content: "这是直接排版的回复", id: "assistant-message", role: "assistant" }
@@ -60,10 +60,96 @@ describe("AssistantMessageList", () => {
 
     expect(screen.getByLabelText("你的消息")).toHaveClass("assistant-message-wrap", "user");
     expect(screen.getByLabelText("AI 回复")).toHaveClass("assistant-message-wrap", "assistant");
-    expect(screen.getByText("你")).toBeInTheDocument();
-    expect(screen.getByText("AI")).toBeInTheDocument();
+    expect(screen.queryByText("你")).not.toBeInTheDocument();
+    expect(screen.queryByText("AI")).not.toBeInTheDocument();
     expect(container.querySelector(".assistant-message-actions")?.parentElement)
       .toHaveClass("assistant-message-wrap");
+  });
+
+  test("offers copy, favorite and regenerate actions for an assistant reply", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn(async () => undefined);
+    const onRegenerateMessage = vi.fn();
+    const onToggleFavoriteMessage = vi.fn();
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
+
+    render(
+      <AssistantMessageList
+        messages={[{
+          content: "可复制的回答",
+          id: "assistant-actions",
+          role: "assistant"
+        }]}
+        mode="qa"
+        onModeChange={vi.fn()}
+        onRegenerateMessage={onRegenerateMessage}
+        onToggleFavoriteMessage={onToggleFavoriteMessage}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "复制回复" }));
+    await user.click(screen.getByRole("button", { name: "收藏回复" }));
+    await user.click(screen.getByRole("button", { name: "重新生成回复" }));
+
+    expect(writeText).toHaveBeenCalledWith("可复制的回答");
+    expect(onToggleFavoriteMessage).toHaveBeenCalledWith("assistant-actions");
+    expect(onRegenerateMessage).toHaveBeenCalledWith("assistant-actions");
+  });
+
+  test("folds a long user message to five lines and lets the user expand it", async () => {
+    const user = userEvent.setup();
+    render(
+      <AssistantMessageList
+        messages={[{
+          content: "第一行\n第二行\n第三行\n第四行\n第五行\n第六行",
+          id: "long-user-message",
+          role: "user"
+        }]}
+        mode="qa"
+        onModeChange={vi.fn()}
+      />
+    );
+
+    const content = screen.getByText(/第一行/);
+    expect(content).toHaveClass("collapsed");
+    const toggle = screen.getByRole("button", { name: "展开完整消息" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await user.click(toggle);
+    expect(content).not.toHaveClass("collapsed");
+    expect(screen.getByRole("button", { name: "收起" })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  test("offers delivery controls for a message queued behind an active run", async () => {
+    const user = userEvent.setup();
+    const onInterrupt = vi.fn();
+    const onWait = vi.fn();
+    const onWithdraw = vi.fn();
+    render(
+      <AssistantMessageList
+        messages={[{
+          content: "补充检查第三个实验",
+          id: "queued-user-message",
+          queuedDelivery: { policy: "after_tool" },
+          role: "user"
+        }]}
+        mode="qa"
+        onInterruptForQueuedMessage={onInterrupt}
+        onModeChange={vi.fn()}
+        onWaitForRunForQueuedMessage={onWait}
+        onWithdrawQueuedMessage={onWithdraw}
+      />
+    );
+
+    expect(screen.getByText("已暂存 · 当前工具调用结束后生效")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "撤回" }));
+    await user.click(screen.getByRole("button", { name: "立即中断并执行" }));
+    await user.click(screen.getByRole("button", { name: "本轮完成后执行" }));
+    expect(onWithdraw).toHaveBeenCalledWith("queued-user-message");
+    expect(onInterrupt).toHaveBeenCalledWith("queued-user-message");
+    expect(onWait).toHaveBeenCalledWith("queued-user-message");
   });
 
   test("renders user-safe public workflow audit summaries without internal identifiers", () => {
@@ -106,6 +192,7 @@ describe("AssistantMessageList", () => {
     const messages: AssistantMessage[] = [
       {
         agentActivity: {
+          connectionText: "连接已结束 · 已收到完整结果",
           entries: [
             {
               content: "调用参数已隐藏。",
@@ -126,7 +213,7 @@ describe("AssistantMessageList", () => {
           status: "completed",
           statusText: "Agent 已完成本次工作"
         },
-        content: "",
+        content: "正在组织可追溯的分析结论。",
         id: "assistant-activity",
         role: "assistant"
       }
@@ -135,20 +222,17 @@ describe("AssistantMessageList", () => {
     render(<AssistantMessageList messages={messages} mode="qa" onModeChange={vi.fn()} />);
 
     expect(screen.getByLabelText("Agent 工作状态")).toBeInTheDocument();
-    expect(screen.queryByLabelText("实时生成内容")).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "查看工作详情" }));
-
-    expect(screen.getByLabelText("实时生成内容")).toHaveTextContent("正在组织可追溯的分析结论。");
+    expect(screen.getByText("正在组织可追溯的分析结论。")).toBeInTheDocument();
     expect(screen.getByText("工具调用：artifact.generate")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "输出 产物已请求" }));
     expect(screen.getByText("已创建可查看的产物。")).toBeInTheDocument();
   });
 
-  test("does not display structured Agent metadata as realtime content", async () => {
-    const user = userEvent.setup();
+  test("does not display structured Agent metadata as realtime content", () => {
     const messages: AssistantMessage[] = [
       {
         agentActivity: {
+          connectionText: "连接已结束 · 已收到完整结果",
           entries: [
             {
               content: '{"internalToolArguments":{"paperId":"secret-paper"}}',
@@ -169,11 +253,11 @@ describe("AssistantMessageList", () => {
     ];
 
     render(<AssistantMessageList messages={messages} mode="qa" onModeChange={vi.fn()} />);
-    await user.click(screen.getByRole("button", { name: "查看工作详情" }));
 
     expect(screen.getByText("工具调用：检索论文")).toBeInTheDocument();
     expect(screen.queryByText(/internal-run|internalToolArguments|secret-paper/)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("实时生成内容")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "工具 工具调用：检索论文" }))
+      .not.toHaveAttribute("aria-expanded");
   });
 
   test("forwards dynamic action refs with their DSL trace id", async () => {
