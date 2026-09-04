@@ -22,6 +22,7 @@ import {
 import { formatAgentRuntimeError } from "../agent-runtime/runtimeObservability";
 import type { FrontendAgentClient } from "../agent-api/frontendAgentClient";
 import type {
+  AgentAttachment,
   AgentConfirmationRequest,
   AgentEvent,
   AgentRun,
@@ -125,7 +126,7 @@ type AssistantPaneProps = {
   onCancelArtifactTask?: (taskId: string) => string | Promise<string>;
   onGenerateArtifact: (artifactType: ArtifactType, paperIds?: string[]) => string;
   onImportSelectedSet?: ActionContext["importSelectedSet"];
-  onLockPapersForTask?: (paperIds: string[]) => void;
+  onPreparePapersForContext?: (paperIds: string[]) => Promise<void>;
   onMoveDockItem?: ActionContext["moveDockItem"];
   onOpenAcademicArchive?: ActionContext["openAcademicArchive"];
   onOpenArtifact?: (artifactId: string) => void;
@@ -167,6 +168,7 @@ function createMessage(role: AssistantMessage["role"], content: string): Assista
 }
 
 function getArtifactTypeFromCommand(message: string): ArtifactType | null {
+  if (/薄读|thin[ -]?read(?:ing)?/i.test(message)) return "thin_reading";
   if (/分层关系图|分层图|obsidian|星图|关系网络/i.test(message)) return "layered_graph";
   if (/思维导图|脑图|mindmap/i.test(message)) return "mindmap";
   if (/树状图|树形图|树形展开/i.test(message)) return "tree";
@@ -273,7 +275,7 @@ export function AssistantPane({
   onCancelArtifactTask,
   onGenerateArtifact,
   onImportSelectedSet,
-  onLockPapersForTask,
+  onPreparePapersForContext,
   onMoveDockItem,
   onOpenAcademicArchive,
   onOpenArtifact,
@@ -603,6 +605,7 @@ export function AssistantPane({
 
   function buildComposerSuggestions(): AssistantComposerSuggestion[] {
     const commandSuggestions: AssistantComposerSuggestion[] = [
+      "生成薄读",
       "打开设置面板",
       "打开组织共享文献库",
       "关闭联网推荐",
@@ -1098,10 +1101,25 @@ export function AssistantPane({
     return plan?.type === "plan.preview" ? `trace-${plan.plan.planId}` : undefined;
   }
 
-  async function runPublicAgentMessage(message: string, mode: AssistantMode) {
+  async function runPublicAgentMessage(
+    message: string,
+    mode: AssistantMode,
+    attachments?: AgentAttachment[]
+  ) {
     const sessionAgentClient = getActivePublicAgentClient();
     if (!sessionAgentClient) {
-      await runEmbeddedAgentMessage(message, mode);
+      const attachedPaperIds = (attachments ?? []).flatMap((attachment) => {
+        const match = attachment.source === "paper"
+          ? /^liteasy:\/\/paper\/(.+)$/.exec(attachment.uri)
+          : null;
+        if (!match) return [];
+        try {
+          return [decodeURIComponent(match[1])];
+        } catch {
+          return [];
+        }
+      });
+      await runEmbeddedAgentMessage(message, mode, attachedPaperIds);
       return;
     }
 
@@ -1179,7 +1197,10 @@ export function AssistantPane({
     assistantStoreRef.current.setPending(true);
     syncAssistant();
     try {
-      const result = await sessionAgentClient.send({ message, mode }, { idempotencyKey });
+      const result = await sessionAgentClient.send(
+        { message, mode },
+        { attachments, idempotencyKey }
+      );
       if (!result.ok) {
         updateAgentActivity(activityMessageId, (activity) => completeAgentActivity(activity, "failed"));
         updateAgentMessage(activityMessageId, (current) => ({
@@ -1236,7 +1257,11 @@ export function AssistantPane({
    * configured model gateway, so a greeting exercises the configured service
    * rather than falling back to a static instruction message.
    */
-  async function runEmbeddedAgentMessage(message: string, mode: AssistantMode) {
+  async function runEmbeddedAgentMessage(
+    message: string,
+    mode: AssistantMode,
+    referencedPaperIds: string[] = []
+  ) {
     assistantStoreRef.current.setPending(true);
     syncAssistant();
 
@@ -1253,13 +1278,23 @@ export function AssistantPane({
           onSettingsChanged?.({ ...settingsStoreRef.current.getState() });
         }
       } else {
+        const scopedPaperIds = new Set(referencedPaperIds);
+        const scopedPapers = scopedPaperIds.size > 0
+          ? availablePapers.filter((paper) => scopedPaperIds.has(paper.id))
+          : selectedPapers;
+        const scopedChunks = scopedPaperIds.size > 0
+          ? Object.fromEntries([...scopedPaperIds].map((paperId) => [
+              paperId,
+              importedChunksByPaperId[paperId] ?? []
+            ]))
+          : importedChunksByPaperId;
         const answer = await generateAssistantAnswer({
           enableVisualizationDecisionPlanner: true,
-          importedChunksByPaperId,
+          importedChunksByPaperId: scopedChunks,
           mode,
           modelTransport,
           question: message,
-          selectedPapers,
+          selectedPapers: scopedPapers,
           settings: settingsStoreRef.current.getState(),
           thinReadingExternalKnowledgeTransport: modelTransport,
           thinReadingExternalPdfTransport: modelTransport
@@ -1527,8 +1562,12 @@ export function AssistantPane({
   async function runKnowledgeMessage(
     question: string,
     mode: Exclude<AssistantMode, "command">,
-    options: { attachedContextPrompt?: string } = {}
+    options: { attachedContextPrompt?: string; referencedPaperIds?: string[] } = {}
   ) {
+    const referencedPaperIds = [...new Set(options.referencedPaperIds ?? [])];
+    if (referencedPaperIds.length > 0) {
+      await onPreparePapersForContext?.(referencedPaperIds);
+    }
     const readerContextPrompt = buildReaderContextPrompt();
     const attachedContextPrompt = options.attachedContextPrompt ?? "";
     const combinedContextPrompt =
@@ -1542,7 +1581,23 @@ export function AssistantPane({
         : readyMessage
           ? `${question}\n\n系统上下文：当前尚未准备论文任务。请自然、友好地先回答用户，不要复述系统上下文或错误提示。回答末尾简短提醒：可在左栏勾选并锁定一些论文，或使用 @ 添加论文后开始分析。`
           : question;
-    await runPublicAgentMessage(publicQuestion, mode);
+    const paperById = new Map(availablePapers.map((paper) => [paper.id, paper]));
+    const attachments: AgentAttachment[] = [
+      ...(selectedSetStatus.selectionLocked && selectedPapers.length > 0
+        ? [{
+            metadata: { paperIds: selectedPapers.map((paper) => paper.id) },
+            name: "当前锁定文献集",
+            source: "selection" as const,
+            uri: "liteasy://selection/current"
+          }]
+        : []),
+      ...referencedPaperIds.map((paperId) => ({
+        name: paperById.get(paperId)?.title,
+        source: "paper" as const,
+        uri: `liteasy://paper/${encodeURIComponent(paperId)}`
+      }))
+    ];
+    await runPublicAgentMessage(publicQuestion, mode, attachments);
   }
 
   async function executePreparedTurn(turn: QueuedAssistantTurn) {
@@ -1568,9 +1623,19 @@ export function AssistantPane({
       return;
     }
 
-    await runKnowledgeMessage(turn.message, turn.mode, {
-      attachedContextPrompt: turn.attachedContextPrompt
-    });
+    try {
+      await runKnowledgeMessage(turn.message, turn.mode, {
+        attachedContextPrompt: turn.attachedContextPrompt,
+        referencedPaperIds: turn.referencedPaperIds
+      });
+    } catch (error) {
+      assistantStoreRef.current.addMessage(createMessage(
+        "assistant",
+        getAssistantErrorMessage(error, { developerDiagnostics })
+      ));
+      syncAssistant();
+      void executeNextQueuedTurn();
+    }
   }
 
   async function executeNextQueuedTurn() {
@@ -1655,10 +1720,6 @@ export function AssistantPane({
       userMessage.queuedDelivery = { policy: "after_tool" };
     }
     assistantStoreRef.current.addMessage(userMessage);
-    if (referencedPaperIds.length > 0) {
-      // @ 引用和左栏“选择并锁定”是同一个任务上下文，而非仅拼进提示词的装饰。
-      onLockPapersForTask?.([...new Set(referencedPaperIds)]);
-    }
     setComposerContextTokens([]);
     setReaderContexts([]);
     lastReaderContextKeyRef.current = null;
@@ -1737,10 +1798,17 @@ export function AssistantPane({
     }
 
     const previousUserMessage = currentState.messages[previousUserIndex];
+    const contextTokens = previousUserMessage.contextTokens ?? [];
+    const referencedPaperIds = contextTokens
+      .filter((token) => token.kind === "paper")
+      .map((token) => token.id.replace(/^paper-/, ""));
     assistantStoreRef.current.replaceMessages(currentState.messages.slice(0, assistantIndex));
     setEditingMessageId(null);
     setInput("");
-    await runKnowledgeMessage(previousUserMessage.content, currentState.mode);
+    await runKnowledgeMessage(previousUserMessage.content, currentState.mode, {
+      attachedContextPrompt: buildComposerTokenPrompt(contextTokens),
+      referencedPaperIds
+    });
   }
 
   async function handleRetryUserMessage(messageId: string) {
@@ -1767,7 +1835,11 @@ export function AssistantPane({
       return;
     }
     const activeMode = adapted.runtimeInput.mode;
-    const attachedContextPrompt = buildComposerTokenPrompt(message.contextTokens ?? []);
+    const contextTokens = message.contextTokens ?? [];
+    const attachedContextPrompt = buildComposerTokenPrompt(contextTokens);
+    const referencedPaperIds = contextTokens
+      .filter((token) => token.kind === "paper")
+      .map((token) => token.id.replace(/^paper-/, ""));
     const retriedMessage = createMessage("user", adapted.userMessageContent);
     retriedMessage.contextTokens = message.contextTokens;
     assistantStoreRef.current.setMode(activeMode);
@@ -1783,7 +1855,8 @@ export function AssistantPane({
     }
 
     await runKnowledgeMessage(adapted.runtimeInput.message, activeMode, {
-      attachedContextPrompt
+      attachedContextPrompt,
+      referencedPaperIds
     });
   }
 

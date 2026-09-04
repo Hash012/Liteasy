@@ -32,7 +32,7 @@ type AssistantSidebarProps = {
   onCancelArtifactTask?: (taskId: string) => string | Promise<string>;
   onGenerateArtifact: (artifactType: ArtifactType, paperIds?: string[]) => string;
   onImportSelectedSet?: ActionContext["importSelectedSet"];
-  onLockPapersForTask?: (paperIds: string[]) => void;
+  onPreparePapersForContext?: (paperIds: string[]) => Promise<void>;
   onMoveDockItem?: ActionContext["moveDockItem"];
   onOpenAcademicArchive?: ActionContext["openAcademicArchive"];
   onOpenArtifact?: (artifactId: string) => void;
@@ -69,7 +69,7 @@ export function AssistantSidebar({
   onCancelArtifactTask,
   onGenerateArtifact,
   onImportSelectedSet,
-  onLockPapersForTask,
+  onPreparePapersForContext,
   onMoveDockItem,
   onOpenAcademicArchive,
   onOpenArtifact,
@@ -111,7 +111,7 @@ export function AssistantSidebar({
           onCancelArtifactTask={onCancelArtifactTask}
           onGenerateArtifact={onGenerateArtifact}
           onImportSelectedSet={onImportSelectedSet}
-          onLockPapersForTask={onLockPapersForTask}
+          onPreparePapersForContext={onPreparePapersForContext}
           onMoveDockItem={onMoveDockItem}
           onOpenAcademicArchive={onOpenAcademicArchive}
           onOpenArtifact={onOpenArtifact}
