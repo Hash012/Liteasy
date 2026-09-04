@@ -1,5 +1,9 @@
 import { lazy, Suspense } from "react";
 import { AppShell } from "./app/layout/AppShell";
+import {
+  fileWorkflowTestPaper,
+  loadFileWorkflowTestLibrary
+} from "./tests/fixtures/fileWorkflowTestFixture";
 
 const ArtifactExportBrowserFixture = import.meta.env.DEV
   ? lazy(() => import("./tests/fixtures/artifactExportBrowserFixture"))
@@ -122,6 +126,15 @@ export default function App() {
       <Suspense fallback={null}>
         <PdfHighlightBrowserFixture />
       </Suspense>
+    );
+  }
+  if (import.meta.env.DEV && fixture !== "?plain-app") {
+    return (
+      <AppShell
+        initialOpenReaderPaperIds={[fileWorkflowTestPaper.id]}
+        initialPapers={[]}
+        localLibraryLoader={loadFileWorkflowTestLibrary}
+      />
     );
   }
   return <AppShell />;
