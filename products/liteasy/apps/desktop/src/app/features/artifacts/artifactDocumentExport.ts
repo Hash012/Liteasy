@@ -20,6 +20,7 @@ const artifactTypeLabels: Record<ArtifactType, string> = {
 };
 
 const internalEvidenceIdPattern = /\[?\bevidence-[a-z0-9][a-z0-9-]*\b\]?/gi;
+const maximumMarkdownEvidenceQuoteCharacters = 600;
 
 function cleanExportText(value: string) {
   return value
@@ -43,6 +44,14 @@ function safeMarkdownText(value: string) {
     .replace(/>/g, "&gt;")
     .replace(/([\\`[\]!()*])/g, "\\$1")
     .replace(/\|/g, "\\|");
+}
+
+function compactMarkdownEvidenceQuote(value: string) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maximumMarkdownEvidenceQuoteCharacters) {
+    return normalized;
+  }
+  return `${normalized.slice(0, maximumMarkdownEvidenceQuoteCharacters)}…（完整证据见原始产物 JSON）`;
 }
 
 function exportedEvidenceIds(ids: readonly string[]) {
@@ -158,6 +167,7 @@ function thinReadingToMarkdown(tab: ArtifactTab) {
   if (!document) return { markdown: "薄读内容缺失。", isV2: false };
   const lines: string[] = [];
   const visited = new Set<string>();
+  const exportedEvidenceSpanIds = new Set<string>();
   const visit = (nodeId: string) => {
     if (visited.has(nodeId)) return;
     const node = document.nodes[nodeId];
@@ -175,10 +185,15 @@ function thinReadingToMarkdown(tab: ArtifactTab) {
     if (legacyEvidence?.interactiveDemo) {
       lines.push(`#### ${legacyEvidence.interactiveDemo.title}`, "", legacyEvidence.interactiveDemo.description, "", "```html", legacyEvidence.interactiveDemo.html.trim(), "```", "");
     }
-    if (node.evidence.paperEvidenceSpans?.length) {
+    const unexportedEvidence = (node.evidence.paperEvidenceSpans ?? []).filter((evidence) => {
+      if (exportedEvidenceSpanIds.has(evidence.id)) return false;
+      exportedEvidenceSpanIds.add(evidence.id);
+      return true;
+    });
+    if (unexportedEvidence.length) {
       lines.push("**论文证据**", "");
-      node.evidence.paperEvidenceSpans.forEach((evidence) => {
-        lines.push(`> 第 ${evidence.page ?? "?"} 页：${safeText(evidence.quote)}`, "");
+      unexportedEvidence.forEach((evidence) => {
+        lines.push(`> 第 ${evidence.page ?? "?"} 页：${safeText(compactMarkdownEvidenceQuote(evidence.quote))}`, "");
       });
     }
     node.childIds.forEach(visit);
@@ -227,7 +242,7 @@ export function createArtifactMarkdown(tab: ArtifactTab) {
     }
   }
 
-  if (tab.analysis?.evidence.length) {
+  if (tab.analysis?.evidence.length && !isV2ThinReading) {
     lines.push("## 证据索引", "");
     tab.analysis.evidence.forEach((evidence, index) => {
       lines.push(`${index + 1}. **${safeMarkdownText(evidence.paperTitle)} · 第 ${evidence.page} 页**`, `   > ${safeMarkdownText(evidence.quote)}`, "");
