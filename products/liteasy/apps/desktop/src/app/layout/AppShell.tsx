@@ -141,6 +141,7 @@ type AppShellProps = {
   accountTransport?: AccountTransport;
   academicProfileTransport?: AcademicProfileTransport;
   controlPlaneTransport?: ControlPlaneTransport;
+  ensureAssistantVisible?: boolean;
   documentMetadataTransport?: DocumentMetadataTransport;
   initialOpenReaderPaperIds?: string[];
   initialSettings?: Partial<SettingsState>;
@@ -153,6 +154,7 @@ type AppShellProps = {
   modelTransport?: ModelTransport;
   pluginSandboxTransport?: PluginSandboxTransport;
   recommendationTransport?: RecommendationTransport;
+  showAgentDiagnostics?: boolean;
 };
 
 type RuntimeTheme =
@@ -179,6 +181,7 @@ export function AppShell({
   accountTransport,
   academicProfileTransport,
   controlPlaneTransport,
+  ensureAssistantVisible = false,
   documentMetadataTransport,
   initialOpenReaderPaperIds = [],
   initialPapers,
@@ -190,7 +193,8 @@ export function AppShell({
   localLibraryLoader,
   modelTransport,
   pluginSandboxTransport,
-  recommendationTransport
+  recommendationTransport,
+  showAgentDiagnostics = false
 }: AppShellProps = {}) {
   const { artifactStore, importStoreRef, settingsStoreRef, workspaceStoreRef } = useAppShellStores(
     initialSettings,
@@ -245,6 +249,21 @@ export function AppShell({
   } = useLocalLibrary(localLibraryLoader);
   const paneLayout = usePaneLayout();
   const dock = useDockLayout();
+  const assistantVisibilityInitializedRef = useRef(false);
+  useEffect(() => {
+    if (!ensureAssistantVisible || assistantVisibilityInitializedRef.current) {
+      return;
+    }
+    assistantVisibilityInitializedRef.current = true;
+    dock.moveItem("assistant", "right");
+    paneLayout.setLayout({
+      ...paneLayout.layout,
+      center: 52,
+      left: 24,
+      right: 24
+    });
+    paneLayout.setCollapsed("right", false);
+  }, [ensureAssistantVisible]);
   const { isOnline } = useConnectivity();
   const [runtimeTheme, setRuntimeTheme] = useState<RuntimeTheme>({ kind: "default" });
   const [workbenchOverlay, setWorkbenchOverlay] = useState<UIDslDocument | null>(null);
@@ -711,6 +730,8 @@ export function AppShell({
     accountSession,
     loginDialogOpen
   } = cloudAccount.model;
+  const developerDiagnostics =
+    showAgentDiagnostics || cloudAccount.model.developerDiagnostics;
   multimodalVisualizationCapabilityRef.current = cloudAccount.model.multimodalVisualization;
   updateMultimodalVisualizationCapabilityRef.current =
     cloudAccount.actions.setMultimodalVisualizationCapability;
@@ -1698,7 +1719,7 @@ export function AppShell({
           canStartAnalysis={
             workspaceState.selectedPaperIds.length > 0 && workspaceState.selectionLocked
           }
-          developerDiagnostics={cloudAccount.model.developerDiagnostics}
+          developerDiagnostics={developerDiagnostics}
           intuechoEndpoint={resolveIntuechoEndpoint()}
           intuechoSessionId={accountSession?.sessionId}
           onLoadForumFeed={forum.loadFeed}
@@ -1756,7 +1777,7 @@ export function AppShell({
           agentClient={assistantAgent.agentClient}
           academicProfile={profileActions.academicProfile}
           artifactTasks={artifactTasks}
-          developerDiagnostics={cloudAccount.model.developerDiagnostics}
+          developerDiagnostics={developerDiagnostics}
           executionJournal={assistantAgent.executionJournal}
           importedChunksByPaperId={importedChunksByPaperId}
           importedSelectedCount={importedSelectedCount}
@@ -1841,7 +1862,7 @@ export function AppShell({
         analysisHint={analysisHint}
         artifactTabs={artifactTabs}
         artifactTasks={artifactTasks}
-        developerDiagnostics={cloudAccount.model.developerDiagnostics}
+        developerDiagnostics={developerDiagnostics}
         externalKnowledgeEndpoint={externalKnowledgeEndpoint}
         layoutCollapsed={paneLayout.collapsed}
         loadPdfSource={externalPapers.loadPdfSource}

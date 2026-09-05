@@ -131,9 +131,11 @@ export default function App() {
   if (import.meta.env.DEV && fixture !== "?plain-app") {
     return (
       <AppShell
+        ensureAssistantVisible
         initialOpenReaderPaperIds={[fileWorkflowTestPaper.id]}
         initialPapers={[]}
         localLibraryLoader={loadFileWorkflowTestLibrary}
+        showAgentDiagnostics
       />
     );
   }

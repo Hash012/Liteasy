@@ -54,6 +54,45 @@ test("starts behind the real account boundary and keeps the local workbench avai
   expect(screen.getByRole("button", { name: "个人中心" })).toBeEnabled();
 });
 
+test("restores the right Agent pane for a diagnostic preview despite persisted layout", async () => {
+  window.localStorage.setItem("liteasy.ui.pane-layout.v1", JSON.stringify({
+    collapsed: { bottom: true, left: false, right: true },
+    layout: { bottom: 32, center: 74, left: 24, right: 2 }
+  }));
+  window.localStorage.setItem("liteasy.ui.dock-layout.v1", JSON.stringify({
+    regions: {
+      bottom: { activeItemId: "assistant", itemIds: ["assistant"] },
+      left: { activeItemId: "library", itemIds: ["library"] },
+      main: { activeItemId: null, itemIds: [] },
+      right: { activeItemId: null, itemIds: [] }
+    },
+    version: 1
+  }));
+
+  render(
+    <AppShell
+      ensureAssistantVisible
+      initialPapers={[]}
+      localLibraryLoader={async () => localLibrarySnapshot}
+      showAgentDiagnostics
+    />
+  );
+
+  expect(await screen.findByRole("region", { name: "右栏AI助手" })).toBeInTheDocument();
+  await waitFor(() => {
+    const panePreference = JSON.parse(
+      window.localStorage.getItem("liteasy.ui.pane-layout.v1") ?? "null"
+    );
+    const dockPreference = JSON.parse(
+      window.localStorage.getItem("liteasy.ui.dock-layout.v1") ?? "null"
+    );
+    expect(panePreference.collapsed.right).toBe(false);
+    expect(panePreference.layout.right).toBe(24);
+    expect(dockPreference.regions.right.activeItemId).toBe("assistant");
+    expect(dockPreference.regions.right.itemIds).toContain("assistant");
+  });
+});
+
 test("composes the four independent resource regions in their designed order", async () => {
   const user = userEvent.setup();
   render(
