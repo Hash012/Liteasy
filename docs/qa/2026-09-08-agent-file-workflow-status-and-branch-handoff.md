@@ -184,3 +184,36 @@ main @ e459269e
 - 为两个新远端实验分支建立 upstream 跟踪关系。
 - 推送后再次核对四个本地分支与同名远端的 ahead/behind 均为 `0/0`。
 
+## 8. 2026-09-08 推送执行记录
+
+文档首次提交为 `17dcd49c docs: record Agent PDF workflow status`。随后执行了：
+
+```bash
+git push --all origin
+```
+
+推送在 GitHub 身份验证阶段失败，错误为：
+
+```text
+fatal: could not read Username for 'https://github.com': No such device or address
+```
+
+检查结果：
+
+- 当前服务器未安装 `gh`。
+- Git 没有配置 credential helper。
+- 环境中没有 `GITHUB_TOKEN` 或 `GH_TOKEN`。
+- 使用 `git@github.com:Hash012/Liteasy.git` 的只读 SSH 探测也被 `Permission denied (publickey)` 拒绝。
+- 失败发生在远端接收任何 ref 之前，没有出现部分推送。
+- `main` 与 `tim-pdf-im` 仍和已有同名远端分支一致。
+- `agent-test-unsafe` 与 `file-workflow-test` 仍只存在于本地。
+
+取得 GitHub 写入认证后，在仓库根目录执行以下命令即可完成剩余交付：
+
+```bash
+git push --all origin
+git branch --set-upstream-to=origin/agent-test-unsafe agent-test-unsafe
+git branch --set-upstream-to=origin/file-workflow-test file-workflow-test
+```
+
+不要把个人访问 token 写入仓库、`.env.local`、命令历史或本文档。应通过系统凭据助手、已授权的 GitHub CLI，或受保护的 SSH key 提供认证。
