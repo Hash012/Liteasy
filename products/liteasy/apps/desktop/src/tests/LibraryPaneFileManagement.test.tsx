@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import { LibraryPane } from "../app/features/library/LibraryPane";
@@ -77,12 +77,14 @@ test("edits, displays and filters local papers by category and tags", async () =
   await user.clear(screen.getByRole("textbox", { name: "搜索文献资源" }));
   await user.click(screen.getByRole("button", { name: paper.title }));
   await user.click(await screen.findByRole("menuitem", { name: "编辑分类与标签" }));
-  const dialog = screen.getByRole("dialog", { name: "编辑论文分类与标签" });
-  await user.clear(within(dialog).getByRole("textbox", { name: "论文分类" }));
-  await user.type(within(dialog).getByRole("textbox", { name: "论文分类" }), "已精读");
-  await user.clear(within(dialog).getByRole("textbox", { name: "论文标签" }));
-  await user.type(within(dialog).getByRole("textbox", { name: "论文标签" }), "检索, 必读");
-  await user.click(within(dialog).getByRole("button", { name: "保存" }));
+  await screen.findByRole("dialog", { name: "编辑论文分类与标签" });
+  fireEvent.change(screen.getByRole("textbox", { name: "论文分类" }), {
+    target: { value: "已精读" }
+  });
+  fireEvent.change(screen.getByRole("textbox", { name: "论文标签" }), {
+    target: { value: "检索, 必读" }
+  });
+  await user.click(screen.getByRole("button", { name: "保存" }));
 
   await waitFor(() => expect(screen.queryByRole("dialog", { name: "编辑论文分类与标签" })).not.toBeInTheDocument());
   const updatedMetadata = await screen.findByLabelText(`${paper.title} 的分类与标签`);

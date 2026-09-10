@@ -13,6 +13,9 @@ export default defineConfig({
     },
     exclude: [...configDefaults.exclude, "src/tests/browser/**"],
     globals: true,
+    // jsdom and renderer imports are memory/CPU intensive; excessive parallelism
+    // makes dialog transitions and release-gate imports miss their test deadlines.
+    maxWorkers: 2,
     setupFiles: "./src/tests/setup.ts"
   }
 });
