@@ -767,9 +767,6 @@ export function createAgentApplicationService(
             emit(stored, run, { delta, type: "assistant.delta" });
           },
           reportManagerActivity(input) {
-            if (ports.managerRuntime !== "openai_agents_sdk") {
-              return;
-            }
             emit(stored, run, { ...input, type: "manager.activity" });
           },
           reportSubtaskDelta(input) {
@@ -786,13 +783,13 @@ export function createAgentApplicationService(
             : "liteasy_knowledge_workflow";
         const runtimePresentation = runtime === "openai_agents_sdk"
           ? {
-              detail: "本轮由已注入的 OpenAI Agents SDK Manager 负责循环、工具选择与最终输出。",
-              label: "OpenAI Agents SDK Manager"
+              detail: "本轮由主 Agent 负责调度能力、子任务与最终输出。",
+              label: "主 Agent"
             }
           : runtime === "custom_manager"
             ? {
-                detail: "本轮由已注入的自定义 Manager 负责工具选择与最终输出。",
-                label: "自定义 Manager Agent"
+                detail: "本轮由主 Agent 负责选择受控工作流并传递结果。",
+                label: "主 Agent"
               }
             : runtime === "liteasy_command_workflow"
               ? {

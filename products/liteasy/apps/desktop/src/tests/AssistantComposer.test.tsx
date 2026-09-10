@@ -44,7 +44,7 @@ describe("AssistantComposer", () => {
       />
     );
 
-    expect(screen.getByText("AI 正在整理回答...")).toBeInTheDocument();
+    expect(screen.getByText(/当前回复仍在执行；发送的新消息会先暂存/)).toBeInTheDocument();
     expect(screen.getByText("语音输入接口已预留，当前版本请先使用文本输入。")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "语音输入（预留）" }));

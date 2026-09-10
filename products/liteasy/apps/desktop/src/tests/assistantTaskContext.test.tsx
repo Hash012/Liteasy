@@ -72,10 +72,9 @@ test("sends a friendly no-selection greeting to the Agent API instead of renderi
   );
 });
 
-test("uses @ papers as the locked task context for a slash artifact command", async () => {
+test("uses @ papers as the task scope for a thin-reading slash command", async () => {
   const user = userEvent.setup();
-  const onGenerateArtifact = vi.fn(() => "已开始生成分层关系图。");
-  const onLockPapersForTask = vi.fn();
+  const onGenerateArtifact = vi.fn(() => "已开始生成薄读。");
 
   render(
     <AssistantPane
@@ -85,7 +84,6 @@ test("uses @ papers as the locked task context for a slash artifact command", as
         { id: "paper-b", title: "Paper Beta" }
       ]}
       onGenerateArtifact={onGenerateArtifact}
-      onLockPapersForTask={onLockPapersForTask}
       selectedSetStatus={{
         importedCount: 0,
         selectedCount: 0,
@@ -95,15 +93,55 @@ test("uses @ papers as the locked task context for a slash artifact command", as
   );
 
   const input = screen.getByPlaceholderText("输入你的问题或命令");
-  await user.type(input, "/生成分层关系图 @");
+  await user.type(input, "/生成薄读 @");
   await user.click(screen.getAllByRole("button", { name: /Paper Alpha/ })[0]);
   await user.type(input, "@");
   await user.click(screen.getByRole("button", { name: /Paper Beta/ }));
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(onLockPapersForTask).toHaveBeenCalledWith(["paper-a", "paper-b"]);
-  expect(onGenerateArtifact).toHaveBeenCalledWith("layered_graph", ["paper-a", "paper-b"]);
-  expect(screen.getByText("已开始生成分层关系图。")).toBeInTheDocument();
+  expect(onGenerateArtifact).toHaveBeenCalledWith("thin_reading", ["paper-a", "paper-b"]);
+  expect(screen.getByText("已开始生成薄读。")).toBeInTheDocument();
+});
+
+test("sends @ papers as one-turn attachments without changing the locked selection", async () => {
+  const user = userEvent.setup();
+  const agentClient = createAgentClient();
+  const onPreparePapersForContext = vi.fn(async () => undefined);
+
+  render(
+    <AssistantPane
+      agentClient={agentClient}
+      availablePapers={[{ id: "paper-a", title: "Paper Alpha" }]}
+      onGenerateArtifact={() => "unused"}
+      onPreparePapersForContext={onPreparePapersForContext}
+      selectedSetStatus={{
+        importedCount: 0,
+        selectedCount: 0,
+        selectionLocked: false
+      }}
+    />
+  );
+
+  const input = screen.getByPlaceholderText("输入你的问题或命令");
+  await user.type(input, "@Alpha");
+  await user.click(screen.getByRole("button", { name: /Paper Alpha.*整篇论文/ }));
+  await user.type(input, "补充说明它的记忆写入机制");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(onPreparePapersForContext).toHaveBeenCalledWith(["paper-a"]);
+  expect(agentClient.send).toHaveBeenCalledWith(
+    expect.objectContaining({
+      message: expect.stringContaining("补充说明它的记忆写入机制"),
+      mode: "qa"
+    }),
+    expect.objectContaining({
+      attachments: [{
+        name: "Paper Alpha",
+        source: "paper",
+        uri: "liteasy://paper/paper-a"
+      }]
+    })
+  );
 });
 
 test("starts thin reading directly from the central button", async () => {

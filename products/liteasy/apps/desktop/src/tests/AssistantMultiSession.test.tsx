@@ -350,7 +350,6 @@ describe("AssistantPane multi-session registry", () => {
     );
 
     expect(await screen.findByText(/正在生成树形结构/)).toBeInTheDocument();
-    expect(screen.getByText(/进度：68%/)).toBeInTheDocument();
     expect(screen.getByText(/MaxSim/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "新建" }));

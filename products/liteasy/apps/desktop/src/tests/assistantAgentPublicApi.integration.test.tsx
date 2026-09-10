@@ -72,7 +72,8 @@ test("product AssistantSidebar executes chat commands through the injected publi
 
   await waitFor(() => expect(applyTheme).toHaveBeenCalledTimes(1));
   expect(await screen.findByLabelText("动态界面：已应用卡通风格。")).toBeInTheDocument();
-  expect(screen.queryByLabelText("Agent 工作状态")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Agent 工作状态")).toBeInTheDocument();
+  expect(screen.getByText("主 Agent 连接已结束")).toBeInTheDocument();
 
   await user.type(
     screen.getByPlaceholderText("输入你的问题或命令"),

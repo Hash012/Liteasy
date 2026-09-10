@@ -24,9 +24,23 @@ export function getAgentRequestSelectionPaperIds(request?: SubmitAgentTurnReques
     (attachment) => attachment.source === "selection" && attachment.uri === "liteasy://selection/current"
   );
   const paperIds = selectionAttachment?.metadata?.paperIds;
-  return Array.isArray(paperIds) && paperIds.every((paperId) => typeof paperId === "string")
+  const selectedPaperIds = Array.isArray(paperIds) &&
+    paperIds.every((paperId) => typeof paperId === "string")
     ? paperIds
-    : null;
+    : [];
+  const attachedPaperIds = (request?.attachments ?? []).flatMap((attachment) => {
+    if (attachment.source !== "paper") return [];
+    const match = /^liteasy:\/\/paper\/(.+)$/.exec(attachment.uri);
+    if (!match) return [];
+    try {
+      const paperId = decodeURIComponent(match[1]).trim();
+      return paperId ? [paperId] : [];
+    } catch {
+      return [];
+    }
+  });
+  const scopedPaperIds = [...new Set([...selectedPaperIds, ...attachedPaperIds])];
+  return scopedPaperIds.length > 0 ? scopedPaperIds : null;
 }
 
 function normalizeThinReadingSource(value: unknown): ThinReadingNodeSource | undefined {

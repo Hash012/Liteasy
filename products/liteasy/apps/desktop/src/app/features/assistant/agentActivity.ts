@@ -65,7 +65,7 @@ function statusTextFor(status: AgentActivityStatus) {
 
 export function createAgentActivity(statusText = statusTextFor("working")): AgentActivity {
   return {
-    connectionText: "已连接 OpenAI Agents SDK Manager",
+    connectionText: "已连接主 Agent",
     entries: [],
     generatedContent: "",
     status: "working",
@@ -80,8 +80,8 @@ export function completeAgentActivity(
   return {
     ...activity,
     connectionText: status === "waiting"
-      ? "SDK Manager 连接保持中"
-      : "SDK Manager 连接已结束",
+      ? "主 Agent 连接保持中"
+      : "主 Agent 连接已结束",
     entries: activity.entries.map((entry) =>
       status === "completed" && entry.status === "running"
         ? { ...entry, status: "completed" as const }
@@ -92,9 +92,12 @@ export function completeAgentActivity(
   };
 }
 
-/** Projects only events emitted by the injected OpenAI Agents SDK Manager. */
+/** Projects the stable public activity events emitted by the active Manager. */
 export function applyAgentActivityEvent(activity: AgentActivity, event: AgentEvent): AgentActivity {
-  if (event.type === "execution.route" && event.runtime === "openai_agents_sdk") {
+  if (
+    event.type === "execution.route" &&
+    (event.runtime === "custom_manager" || event.runtime === "openai_agents_sdk")
+  ) {
     return {
       ...activity,
       connectionText: event.label,

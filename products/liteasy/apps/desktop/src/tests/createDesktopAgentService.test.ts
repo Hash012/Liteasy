@@ -1,4 +1,5 @@
 import { createDesktopAgentService } from "../app/controllers/agent/createDesktopAgentService";
+import { createOpenAIAgentsSdkManager } from "../app/controllers/agent/createOpenAIAgentsSdkManager";
 import { buildImportedChunksForPaper } from "./fixtures/retrievalFixtures";
 import { createSettingsStore } from "../app/features/settings/settings.store";
 import { createWorkflowDesignerRuntime } from "../app/features/skills/workflowDesigner";
@@ -67,6 +68,7 @@ test("preserves mindmap artifact workflow metadata on assistant messages", async
       } as never
     }),
     listCapabilities: () => [],
+    managerAgent: createOpenAIAgentsSdkManager(),
     now: () => new Date("2026-07-26T00:00:00.000Z")
   });
   const session = await api.createSession({ consumer: "frontend" });
@@ -106,9 +108,39 @@ test("preserves mindmap artifact workflow metadata on assistant messages", async
             })
           ])
         }
+      },
+      specialist: {
+        artifactType: "mindmap",
+        specialistId: "multimodal"
+      },
+      workflow: {
+        skillId: "liteasy.multimodal-artifact",
+        skillVersion: "1.0.0"
+      },
+      agentSdk: {
+        mainAgent: "Liteasy Manager Agent",
+        mainItems: expect.arrayContaining(["function_call", "function_call_result"]),
+        mainTool: "liteasy_multimodal_agent",
+        resultDestination: "artifact_surface",
+        specialistAgent: "Liteasy Multimodal Agent",
+        specialistItems: expect.arrayContaining(["function_call", "function_call_result"])
       }
     }
   });
+  expect(run.data.events).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      kind: "handoff",
+      label: "思维导图子任务已返回",
+      status: "completed",
+      type: "manager.activity"
+    }),
+    expect.objectContaining({
+      kind: "tool_result",
+      label: "思维导图结果已传回",
+      status: "completed",
+      type: "manager.activity"
+    })
+  ]));
 });
 
 test("carries completed turns into the next model request within one Agent session", async () => {
@@ -149,7 +181,8 @@ test("carries completed turns into the next model request within one Agent sessi
       },
       runtime: {} as never
     }),
-    listCapabilities: () => []
+    listCapabilities: () => [],
+    managerAgent: createOpenAIAgentsSdkManager()
   });
   const session = await api.createSession({ consumer: "frontend" });
   if (!session.ok) throw new Error(session.error.message);

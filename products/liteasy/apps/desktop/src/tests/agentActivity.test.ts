@@ -19,6 +19,18 @@ function event(payload: Record<string, unknown>) {
 }
 
 describe("agent activity projection", () => {
+  test("starts the activity surface for the product built-in Manager", () => {
+    const activity = applyAgentActivityEvent(createAgentActivity(), event({
+      detail: "本轮由主 Agent 负责选择受控工作流并传递结果。",
+      label: "主 Agent",
+      runtime: "custom_manager",
+      type: "execution.route"
+    }));
+
+    expect(activity.connectionText).toBe("主 Agent");
+    expect(activity.statusText).toBe("主 Agent");
+  });
+
   test("projects real SDK Manager summaries and tool events without exposing credentials", () => {
     let activity = applyAgentActivityEvent(createAgentActivity(), event({
       detail: "本轮由已注入的 OpenAI Agents SDK Manager 负责执行。",

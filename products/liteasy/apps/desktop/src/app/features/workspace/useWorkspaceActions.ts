@@ -552,6 +552,49 @@ export function useWorkspaceActions({
     return "idle";
   }
 
+  function ensurePapersImported(papers: Paper[]) {
+    if (papers.length === 0) {
+      return Promise.resolve();
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      const deadline = Date.now() + 120_000;
+      let settled = false;
+      const finishWithError = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      };
+      const check = () => {
+        if (settled) return;
+        const jobs = papers.map((paper) => ({
+          job: importStore.getLatestJobByDocumentId(paper.id),
+          paper
+        }));
+        const failed = jobs.find(({ job }) => job?.status === "failed");
+        if (failed) {
+          finishWithError(new Error(
+            `《${failed.paper.title}》解析失败：${failed.job?.error ?? "未知错误"}`
+          ));
+          return;
+        }
+        if (jobs.every(({ job }) => job?.status === "parsed")) {
+          settled = true;
+          resolve();
+          return;
+        }
+        if (Date.now() >= deadline) {
+          finishWithError(new Error("等待 @ 文献解析超时，请稍后重试。"));
+          return;
+        }
+        window.setTimeout(check, 50);
+      };
+
+      queueImportForPapers(papers, check, ({ error }) => finishWithError(error));
+      check();
+    });
+  }
+
   function importSelectedSet() {
     const selectedPapers = getSelectedPapers();
 
@@ -585,6 +628,7 @@ export function useWorkspaceActions({
   return {
     addDroppedPdfFiles,
     addExternalPdfToLibrary,
+    ensurePapersImported,
     getImportedChunksByPaperId,
     getImportedSelectedCount,
     getSelectedPapers,

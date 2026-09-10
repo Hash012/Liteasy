@@ -147,6 +147,50 @@ describe("artifact document export", () => {
     expect(markdown).not.toContain("<script>");
   });
 
+  test("keeps v2 Markdown compact while raw evidence remains in the artifact", () => {
+    const fixture = createThinReadingFixture();
+    const longQuote = `quote-start ${"detail ".repeat(200)} quote-end`;
+    const document = createThinReadingDocument({
+      ...fixture,
+      rootSeed: {
+        ...fixture.rootSeed,
+        evidence: {
+          ...fixture.rootSeed.evidence,
+          paperEvidenceSpans: [{
+            confidence: 1,
+            id: "evidence-long",
+            page: 4,
+            paperId: "paper-attention",
+            quote: longQuote
+          }]
+        }
+      }
+    });
+    const markdown = createArtifactMarkdown({
+      analysis: {
+        claims: [],
+        evidence: [{
+          id: "analysis-evidence-long",
+          page: 4,
+          paperId: "paper-attention",
+          paperTitle: "Attention Is All You Need",
+          quote: longQuote
+        }],
+        runId: "run-compact-markdown"
+      },
+      artifactId: document.artifactId,
+      thinReadingDocument: document,
+      title: "Compact V2 thin reading",
+      type: "thin_reading"
+    });
+
+    expect(markdown).toContain("quote-start");
+    expect(markdown).toContain("完整证据见原始产物 JSON");
+    expect(markdown).not.toContain("quote-end");
+    expect(markdown.match(/quote-start/g)).toHaveLength(1);
+    expect(markdown.length).toBeLessThan(2_000);
+  });
+
   test("exports v2 visual semantics and source attribution without executable markup", () => {
     const base = createThinReadingFixture();
     const document = createThinReadingDocument({

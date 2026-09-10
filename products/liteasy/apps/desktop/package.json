@@ -30,6 +30,8 @@
   "dependencies": {
     "@fluentui/react-components": "^9.74.4",
     "@fluentui/react-icons": "^2.0.333",
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@openai/agents-core": "0.14.0",
     "@tauri-apps/api": "^2.5.0",
     "@xyflow/react": "^12.11.2",
     "chevrotain": "^11.2.0",

@@ -47,6 +47,51 @@ test("resolves request-scoped papers and chunks from selection attachments", () 
   expect(scope.importedChunksByPaperId["paper-c"][0].text).toBe("paper-c");
 });
 
+test("resolves one-turn paper attachments without requiring a locked selection", () => {
+  const scope = resolveAgentKnowledgeScope({
+    allPapers: papers,
+    fallbackImportedChunksByPaperId: {
+      "paper-a": [{ chunkId: "chunk-a", page: 1, paperId: "paper-a", text: "A" }]
+    },
+    fallbackSelectedPapers: [papers[0]],
+    getImportedChunksForPaperId: (paperId) => [
+      { chunkId: `chunk-${paperId}`, page: 1, paperId, text: paperId }
+    ],
+    request: {
+      attachments: [{ source: "paper", uri: "liteasy://paper/paper-b" }],
+      idempotencyKey: "conversation:qa:paper-b",
+      input: { message: "explain this paper", mode: "qa" },
+      sessionId: "session-paper-attachment"
+    }
+  });
+
+  expect(scope.selectedPapers).toEqual([papers[1]]);
+  expect(scope.importedChunksByPaperId["paper-b"][0].text).toBe("paper-b");
+});
+
+test("adds one-turn paper attachments to the current locked selection", () => {
+  const scope = resolveAgentKnowledgeScope({
+    allPapers: papers,
+    fallbackImportedChunksByPaperId: {},
+    fallbackSelectedPapers: [papers[0]],
+    request: {
+      attachments: [
+        {
+          metadata: { paperIds: ["paper-a"] },
+          source: "selection",
+          uri: "liteasy://selection/current"
+        },
+        { source: "paper", uri: "liteasy://paper/paper-c" }
+      ],
+      idempotencyKey: "conversation:qa:locked-plus-paper",
+      input: { message: "compare with this supplementary paper", mode: "qa" },
+      sessionId: "session-supplementary-paper"
+    }
+  });
+
+  expect(scope.selectedPapers.map((paper) => paper.id)).toEqual(["paper-a", "paper-c"]);
+});
+
 test("preserves reader-prioritized paper order and thin-reading context", () => {
   const request = {
     attachments: [

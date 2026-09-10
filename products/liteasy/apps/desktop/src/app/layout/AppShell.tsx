@@ -790,7 +790,12 @@ export function AppShell({
       current && availablePaperIds.has(current) ? current : null
     );
   }, [cachedReaderPapers, workspaceState.papers]);
-  const importedChunksByPaperId = workspaceActions.getImportedChunksByPaperId();
+  const importedChunksByPaperId = Object.fromEntries(
+    workspaceState.papers.map((paper) => [
+      paper.id,
+      importStoreRef.current.getParsedChunksByDocumentId(paper.id)
+    ])
+  );
   const importedSelectedCount = workspaceActions.getImportedSelectedCount();
   const applyRuntimeLayoutPreset: ActionContext["applyLayoutPreset"] = (input) => {
     let message: string;
@@ -1771,9 +1776,17 @@ export function AppShell({
             return artifactWorkflow.actions.handleAssistantArtifact(artifactType);
           }}
           onImportSelectedSet={runtimeActionContext.importSelectedSet}
-          onLockPapersForTask={(paperIds) => {
-            workspaceStoreRef.current.setSelectedDocumentSet(paperIds, true);
-            workspaceActions.syncWorkspace();
+          onPreparePapersForContext={async (paperIds) => {
+            const paperIdSet = new Set(paperIds);
+            const papers = workspaceStoreRef.current.getState().papers.filter((paper) =>
+              paperIdSet.has(paper.id)
+            );
+            if (papers.length !== paperIdSet.size) {
+              throw new Error("@ 引用中包含当前文献库里不存在的文件。");
+            }
+            setAnalysisHint(`正在为本轮对话解析 ${papers.length} 篇 @ 文献…`);
+            await workspaceActions.ensurePapersImported(papers);
+            setAnalysisHint(`已将 ${papers.length} 篇 @ 文献加入本轮上下文，未改变锁定集合。`);
           }}
           onMoveDockItem={runtimeActionContext.moveDockItem}
           onOpenAcademicArchive={runtimeActionContext.openAcademicArchive}

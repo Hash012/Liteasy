@@ -45,3 +45,29 @@ test("keeps the running step expanded and collapses all steps when the result co
   expect(runningStep).toHaveAttribute("aria-expanded", "true");
   expect(screen.getByText("先判断用户意图，再选择工具。")).toBeInTheDocument();
 });
+
+test("shows where a specialist result is handed back and visualized", () => {
+  let activity = applyAgentActivityEvent(createAgentActivity(), event({
+    activityId: "specialist-multimodal",
+    detail: "Multimodal Agent 已返回受控工作流结果。",
+    kind: "handoff",
+    label: "思维导图子任务已返回",
+    status: "completed",
+    type: "manager.activity"
+  }));
+  activity = applyAgentActivityEvent(activity, event({
+    activityId: "result-multimodal",
+    detail: "结果将由产物工作流校验并保存；完成后可在中心产物页查看。",
+    kind: "tool_result",
+    label: "思维导图结果已传回",
+    status: "completed",
+    type: "manager.activity"
+  }));
+
+  render(<AgentActivityCard activity={activity} />);
+
+  expect(screen.getByRole("button", { name: "链路 思维导图子任务已返回" }))
+    .toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "输出 思维导图结果已传回" }))
+    .toBeInTheDocument();
+});

@@ -35,6 +35,7 @@ import {
   getAgentRequestThinReadingContext,
   resolveAgentKnowledgeScope
 } from "./agentRequestScope";
+import { createOpenAIAgentsSdkManager } from "./createOpenAIAgentsSdkManager";
 import { createDesktopAgentService } from "./createDesktopAgentService";
 import { createTauriAgentStateStore } from "./tauriAgentStateStore";
 import { useTauriAgentHostBridge } from "./useTauriAgentHostBridge";
@@ -147,6 +148,7 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
             artifactTasks: current.getArtifactTasks?.() ?? []
           },
           knowledge: {
+            auditTransport: current.modelTransport,
             importedChunksByPaperId: knowledgeScope.importedChunksByPaperId,
             modelTransport: current.modelTransport,
             selectedPapers: knowledgeScope.selectedPapers,
@@ -187,6 +189,7 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
           workflowDesigner: workflowDesignerRef.current ?? undefined
         };
       },
+      managerAgent: createOpenAIAgentsSdkManager(),
       onCommandResult({ message, result }) {
         const clarification = result.events.find(
           (event) =>

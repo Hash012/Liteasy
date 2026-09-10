@@ -10,6 +10,7 @@ import { createSettingsStore } from "../app/features/settings/settings.store";
 import type { FrontendAgentClient } from "../app/features/agent-api/frontendAgentClient";
 import type { AgentEvent } from "../app/features/agent-api/agentApi.types";
 import type { ModelTransport } from "../app/features/models/modelHttpClient";
+import type { ModelAuditTransport } from "../app/features/models/modelAuditClient";
 
 const testQuestions = [
   "总结这篇论文的核心方法",
@@ -31,8 +32,27 @@ const testModelTransport: ModelTransport = async ({ body }) => {
   };
 };
 
+const testAuditTransport: ModelAuditTransport = async () => ({
+  json: async () => ({
+    audit: {
+      model: "gpt-5-mini-auditor",
+      rationale: "测试审计通过。",
+      score: 0.84,
+      verdict: "pass"
+    }
+  }),
+  ok: true,
+  status: 200
+});
+
 function AssistantPane(props: ComponentProps<typeof RuntimeAssistantPane>) {
-  return <RuntimeAssistantPane modelTransport={testModelTransport} {...props} />;
+  return (
+    <RuntimeAssistantPane
+      auditTransport={testAuditTransport}
+      modelTransport={testModelTransport}
+      {...props}
+    />
+  );
 }
 
 afterEach(() => {
@@ -418,7 +438,7 @@ test("projects public Agent streaming events into the expandable work status car
 
   expect(await screen.findByText("Manager 已完成本次运行")).toBeInTheDocument();
   expect(screen.getAllByLabelText("AI 回复")).toHaveLength(1);
-  expect(screen.getByRole("status")).toHaveTextContent("SDK Manager 连接已结束");
+  expect(screen.getByRole("status")).toHaveTextContent("主 Agent 连接已结束");
   const streamStep = screen.getByRole("button", { name: "分析 理解用户问题" });
   expect(streamStep).toHaveAttribute("aria-expanded", "false");
   await user.click(streamStep);

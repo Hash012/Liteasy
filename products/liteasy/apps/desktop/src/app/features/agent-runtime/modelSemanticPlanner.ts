@@ -286,6 +286,16 @@ export function createModelSemanticPlanner({
       return deterministicPlan;
     }
 
+    // Desktop cloud calls must use the authenticated transport supplied by the
+    // application shell. Without it, keep the deterministic result instead of
+    // falling through to an unauthenticated network request.
+    if (!modelTransport) {
+      return {
+        ...deterministicPlan,
+        plannerSource: "fallback"
+      };
+    }
+
     if (deterministicPlan.clarification?.kind === "ambiguous_action") {
       return createModelAssistedClarification({
         modelTransport,
