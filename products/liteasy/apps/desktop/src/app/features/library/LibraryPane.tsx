@@ -473,6 +473,8 @@ export function LibraryPane({
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [paperMetadataById, setPaperMetadataById] = useState<Record<string, PaperFileMetadata>>({});
+  const [openPaperMenuKey, setOpenPaperMenuKey] = useState<string | null>(null);
+  const [pendingMetadataEditorEntry, setPendingMetadataEditorEntry] = useState<ExplorerEntry | null>(null);
   const [metadataEditorEntry, setMetadataEditorEntry] = useState<ExplorerEntry | null>(null);
   const [metadataCategoryDraft, setMetadataCategoryDraft] = useState("");
   const [metadataTagsDraft, setMetadataTagsDraft] = useState("");
@@ -556,6 +558,20 @@ export function LibraryPane({
     setMetadataCategoryDraft(metadata.category);
     setMetadataTagsDraft(metadata.tags.join(", "));
     setMetadataEditorError("");
+  }
+
+  useEffect(() => {
+    // A Fluent Menu's closing click can also dismiss a synchronously mounted
+    // sibling Dialog on Windows, so run the pending action only after closure.
+    if (openPaperMenuKey !== null || pendingMetadataEditorEntry === null) return;
+    const entry = pendingMetadataEditorEntry;
+    setPendingMetadataEditorEntry(null);
+    openMetadataEditor(entry);
+  }, [openPaperMenuKey, pendingMetadataEditorEntry]);
+
+  function scheduleMetadataEditor(entry: ExplorerEntry) {
+    setPendingMetadataEditorEntry(entry);
+    setOpenPaperMenuKey(null);
   }
 
   async function submitMetadataEditor() {
@@ -849,6 +865,7 @@ export function LibraryPane({
   }
 
   function renderEntry(area: "local" | "collection" | "organization", entry: ExplorerEntry, depth: number) {
+    const menuKey = `${area}:${entry.id}`;
     const selected = area === "local" && selectedPaperIds.includes(entry.id);
     const pending = pendingNodeIds.includes(entry.id);
     const canAttachPdf = entry.source.area !== "local" &&
@@ -892,7 +909,10 @@ export function LibraryPane({
           {entry.bodyAvailable ? <DocumentPdfRegular /> : <DocumentTextRegular />}
         </span>
         <div className="library-paper-content">
-          <Menu>
+          <Menu
+            onOpenChange={(_, data) => setOpenPaperMenuKey(data.open ? menuKey : null)}
+            open={openPaperMenuKey === menuKey}
+          >
             <MenuTrigger disableButtonEnhancement>
               <button
                 className="library-paper-title"
@@ -919,7 +939,7 @@ export function LibraryPane({
                   <MenuItem
                     disabled={pending}
                     icon={<TagRegular />}
-                    onClick={() => openMetadataEditor(entry)}
+                    onClick={() => scheduleMetadataEditor(entry)}
                   >编辑分类与标签</MenuItem>
                 ) : null}
                 {canAttachPdf ? (
