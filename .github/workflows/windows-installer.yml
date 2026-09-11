@@ -3,11 +3,18 @@ name: Build Windows installer
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
+      - fallback
     tags:
       - "v*"
 
 permissions:
   contents: read
+
+concurrency:
+  group: windows-installer-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test-desktop:
@@ -23,7 +30,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version-file: products/liteasy/apps/desktop/.nvmrc
           cache: npm
           cache-dependency-path: products/liteasy/apps/desktop/package-lock.json
 
@@ -36,6 +43,14 @@ jobs:
   build-windows:
     needs: test-desktop
     runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_PROFILE_TEST_DEBUG: 0
+      # Keep both frontend builds (including Tauri's beforeBuildCommand) identical.
+      VITE_FORUM_API_URL: https://community.staging.liteasyclaw.com
+      VITE_FORUM_WEB_URL: https://community.staging.liteasyclaw.com
+      VITE_LITEASY_CLOUD_URL: https://api.staging.liteasyclaw.com
     defaults:
       run:
         working-directory: products/liteasy/apps/desktop
@@ -47,7 +62,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version-file: products/liteasy/apps/desktop/.nvmrc
           cache: npm
           cache-dependency-path: products/liteasy/apps/desktop/package-lock.json
 
@@ -65,14 +80,19 @@ jobs:
       - name: Verify Tauri resource paths
         run: npm run verify:tauri-resources -- --require-git-tracked
 
-      - name: Test Tauri host
-        run: cargo test --manifest-path src-tauri/Cargo.toml
-
+      # generate_context! embeds frontendDist even during cargo test. A clean
+      # checkout has no dist; direct Cargo commands do not run beforeBuildCommand.
       - name: Build and verify production assets
         run: npm run build
 
+      - name: Verify release service endpoints
+        run: npm run verify:production-assets -- --require-release-endpoints
+
+      - name: Test Tauri host
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+
       - name: Build NSIS installer
-        run: npm run tauri -- build --bundles nsis
+        run: npm run tauri -- build --bundles nsis -- --locked
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4

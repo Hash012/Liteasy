@@ -23,7 +23,10 @@ function walk(directory) {
   });
 }
 
-export function verifyProductionAssets(directory = buildDirectory) {
+export function verifyProductionAssets(directory = buildDirectory, {
+  requireReleaseEndpoints = false,
+  env = process.env
+} = {}) {
   if (!fs.statSync(directory, { throwIfNoEntry: false })?.isDirectory()) {
     throw new Error(`production_asset_boundary: build directory does not exist: ${directory}`);
   }
@@ -47,6 +50,19 @@ export function verifyProductionAssets(directory = buildDirectory) {
       }
     }
   }
+  if (requireReleaseEndpoints) {
+    const bundledScripts = walk(directory)
+      .filter((filePath) => /\.(?:html|js|json|mjs)$/i.test(filePath))
+      .map((filePath) => fs.readFileSync(filePath, "utf8"));
+    for (const name of ["VITE_LITEASY_CLOUD_URL", "VITE_FORUM_API_URL", "VITE_FORUM_WEB_URL"]) {
+      const endpoint = env[name]?.trim();
+      if (!endpoint) {
+        violations.push(`${name} is required for installer builds`);
+      } else if (!bundledScripts.some((content) => content.includes(endpoint))) {
+        violations.push(`${name} is missing from production assets`);
+      }
+    }
+  }
   if (violations.length > 0) {
     throw new Error(`production_asset_boundary:\n${violations.join("\n")}`);
   }
@@ -54,5 +70,7 @@ export function verifyProductionAssets(directory = buildDirectory) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  process.stdout.write(`${JSON.stringify(verifyProductionAssets())}\n`);
+  process.stdout.write(`${JSON.stringify(verifyProductionAssets(buildDirectory, {
+    requireReleaseEndpoints: process.argv.includes("--require-release-endpoints")
+  }))}\n`);
 }

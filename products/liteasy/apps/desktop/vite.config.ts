@@ -13,6 +13,9 @@ export default defineConfig({
     },
     exclude: [...configDefaults.exclude, "src/tests/browser/**"],
     globals: true,
+    // Match the successful Windows CI budget for jsdom interactions and cold
+    // renderer imports, including when running the same suite locally in WSL.
+    testTimeout: 120_000,
     // jsdom and renderer imports are memory/CPU intensive; excessive parallelism
     // makes dialog transitions and release-gate imports miss their test deadlines.
     maxWorkers: 2,
