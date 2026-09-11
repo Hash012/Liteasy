@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import type { ModelTransport } from "../features/models/modelHttpClient";
-import { getDefaultModelForProvider } from "../features/models/modelPolicy";
+import { getActiveModelProvider, getModelForSettings } from "../features/models/modelPolicy";
 import { createModelGatewayFromSettings } from "../features/models/modelRuntime";
 import type { createSettingsStore } from "../features/settings/settings.store";
 import type { Paper } from "../features/workspace/workspace.types";
@@ -50,8 +50,8 @@ export function usePaperTranslationController({
     options: TranslationRequestOptions
   ) {
     const settings = settingsStore.getState();
-    const provider = settings["models.default_provider"];
-    const model = getDefaultModelForProvider(provider);
+    const provider = getActiveModelProvider(settings);
+    const model = getModelForSettings(settings);
     const gateway = createModelGatewayFromSettings(settings, { cloudTransport: modelTransport });
     const controller = createPaperTranslationController({
       cache: cacheRef.current!,

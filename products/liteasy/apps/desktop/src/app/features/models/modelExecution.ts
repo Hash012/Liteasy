@@ -1,7 +1,7 @@
-export type ModelExecutionSource = "cloud_proxy";
+export type ModelExecutionSource = "cloud_proxy" | "direct_api";
 
 export type ModelExecutionTrace = {
-  backend: "dev_cloud" | "http_service";
+  backend: "dev_cloud" | "http_service" | "direct_api";
   endpoint: string;
   mode: "live" | "unknown";
   provider: string;
@@ -24,5 +24,6 @@ function getBackendLabel(trace: ModelExecutionTrace) {
 }
 
 export function formatModelExecutionLabel(trace: ModelExecutionTrace) {
+  if (trace.source === "direct_api") return `自备 API → ${trace.provider}`;
   return `${getSourceLabel(trace.source)} -> ${getBackendLabel(trace)}`;
 }

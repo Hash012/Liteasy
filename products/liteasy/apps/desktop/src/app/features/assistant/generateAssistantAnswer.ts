@@ -1,6 +1,6 @@
 import { formatAnswer } from "./answerFormatter";
 import type { AssistantMode } from "./assistant.types";
-import { getDefaultModelForProvider } from "../models/modelPolicy";
+import { getActiveModelEndpoint, getActiveModelProvider, getModelForSettings } from "../models/modelPolicy";
 import { createModelGatewayFromSettings } from "../models/modelRuntime";
 import { createHttpModelAuditClient, type ModelAuditTransport } from "../models/modelAuditClient";
 import type { ModelTransport, ModelTransportResponse } from "../models/modelHttpClient";
@@ -120,9 +120,6 @@ type GenerateAssistantAnswerInput = {
   thinReadingExternalPdfTransport?: ThinReadingExternalPdfTransport;
 };
 
-function getActiveModelEndpoint(settings: SettingsState) {
-  return settings["models.cloud_proxy_endpoint"];
-}
 
 function extractRequiredChineseTerminology(
   context: ThinReadingGenerationContext
@@ -4462,8 +4459,8 @@ export async function generateAssistantAnswer({
     cloudTransport: modelTransport
   });
   const activeEndpoint = getActiveModelEndpoint(settings);
-  const provider = settings["models.default_provider"];
-  const model = getDefaultModelForProvider(provider);
+  const provider = getActiveModelProvider(settings);
+  const model = getModelForSettings(settings);
   if (artifactType === "thin_reading") {
     if (analysisInputPapers.length === 0 || !preparedAnalysis) {
       throw new Error("薄读需要至少一篇已选论文。");
@@ -4738,7 +4735,7 @@ export async function generateAssistantAnswer({
     citations: groundedAnswer.citations,
     retrievalConfidence: groundedAnswer.confidence
   });
-  const audit = await createHttpModelAuditClient({
+  const audit = settings["models.connection_mode"] === "direct" ? localAudit : await createHttpModelAuditClient({
     endpoint: activeEndpoint,
     source: "cloud_proxy",
     transport: auditTransport
@@ -4746,7 +4743,7 @@ export async function generateAssistantAnswer({
     answer: generatedAnswerText,
     citations: groundedAnswer.citations,
     model: "gpt-5-mini-auditor",
-    provider: settings["models.default_provider"],
+    provider: getActiveModelProvider(settings),
     question,
     retrievalConfidence: groundedAnswer.confidence
   }).catch(() => localAudit);

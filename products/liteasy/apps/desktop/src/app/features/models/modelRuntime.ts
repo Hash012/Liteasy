@@ -3,9 +3,13 @@ import { createModelGateway } from "./modelGateway";
 import { createHttpModelClient, type ModelTransport } from "./modelHttpClient";
 import { getModelPolicyFromSettings } from "./modelPolicy";
 import { isTrustedRemoteModelProxyEndpoint } from "./modelProxyTrust";
+import { createDirectModelClient } from "./directModelClient";
+import type { DirectModelTransport } from "./directModelTransport";
+import { getDirectModelConfig, isDirectModelMode } from "./modelProviders";
 
 type ModelRuntimeDeps = {
   cloudTransport?: ModelTransport;
+  directTransport?: DirectModelTransport;
 };
 
 const directModelUpstreamHosts = [
@@ -54,6 +58,12 @@ export function createModelGatewayFromSettings(
   settings: SettingsState,
   deps: ModelRuntimeDeps = {}
 ) {
+  if (isDirectModelMode(settings)) {
+    return createModelGateway({
+      cloudModel: createDirectModelClient(getDirectModelConfig(settings), deps.directTransport),
+      policy: getModelPolicyFromSettings(settings)
+    });
+  }
   const endpoint = settings["models.cloud_proxy_endpoint"];
   return createModelGateway({
     cloudModel: createHttpModelClient({

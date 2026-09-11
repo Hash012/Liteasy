@@ -1,5 +1,18 @@
 import type { SettingsState } from "../settings/settings.types";
 import type { ModelPolicy } from "./modelGateway";
+import { getDirectModelConfig, isDirectModelMode } from "./modelProviders";
+
+export function getActiveModelProvider(settings: SettingsState) {
+  return isDirectModelMode(settings) ? getDirectModelConfig(settings).provider : settings["models.default_provider"];
+}
+
+export function getModelForSettings(settings: SettingsState) {
+  return isDirectModelMode(settings) ? getDirectModelConfig(settings).model : getDefaultModelForProvider(settings["models.default_provider"]);
+}
+
+export function getActiveModelEndpoint(settings: SettingsState) {
+  return isDirectModelMode(settings) ? getDirectModelConfig(settings).endpoint : settings["models.cloud_proxy_endpoint"];
+}
 
 export function getDefaultModelForProvider(provider: string) {
   if (provider === "deepseek") {
@@ -10,10 +23,10 @@ export function getDefaultModelForProvider(provider: string) {
 }
 
 export function getModelPolicyFromSettings(settings: SettingsState): ModelPolicy {
-  const provider = settings["models.default_provider"];
+  const provider = getActiveModelProvider(settings);
 
   return {
-    allowedModels: [getDefaultModelForProvider(provider)],
+    allowedModels: [getModelForSettings(settings)],
     allowedProviders: [provider]
   };
 }

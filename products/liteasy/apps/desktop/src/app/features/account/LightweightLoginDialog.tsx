@@ -61,6 +61,7 @@ export function LightweightLoginDialog({
       >
         <div className="organization-dialog-kicker">账号</div>
         <div className="organization-dialog-title">登录 LiteasyClaw</div>
+        <div className="organization-dialog-empty">也可以暂不登录，在设置 → AI 接入中配置自己的 API key。</div>
         <div className="organization-dialog-empty">
           {showDevelopmentLogin
             ? "当前连接本机开发账号服务。"

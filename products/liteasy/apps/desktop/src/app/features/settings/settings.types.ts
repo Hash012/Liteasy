@@ -8,6 +8,12 @@ export type SettingKey =
   | "import.ocr_language"
   | "thin_reading.intuecho_endpoint"
   | "models.default_provider"
+  | "models.connection_mode"
+  | "models.direct_provider"
+  | "models.direct_endpoint"
+  | "models.direct_model"
+  | "models.direct_protocol"
+  | "models.direct_output_format"
   | "models.cloud_proxy_endpoint"
   | "models.control_plane_endpoint"
   | "view.font_family"
@@ -25,6 +31,12 @@ export type SettingsState = {
   "import.ocr_language": "chi_sim" | "eng" | "eng+chi_sim";
   "thin_reading.intuecho_endpoint": string;
   "models.default_provider": string;
+  "models.connection_mode": "cloud" | "direct";
+  "models.direct_provider": string;
+  "models.direct_endpoint": string;
+  "models.direct_model": string;
+  "models.direct_protocol": "openai" | "anthropic";
+  "models.direct_output_format": "json_schema" | "json_object" | "prompt";
   "models.cloud_proxy_endpoint": string;
   "models.control_plane_endpoint": string;
   "view.font_family": string;

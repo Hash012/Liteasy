@@ -504,7 +504,7 @@ export function useArtifactActions({
   queueImportForPapers,
   runAgentAnalysis
 }: UseArtifactActionsInput) {
-  const modelLoginRequiredMessage = "请先登录 Liteasy 账号，再使用 AI 文献分析。";
+  const modelLoginRequiredMessage = "请在设置 → AI 接入中配置自己的 API key，或登录 Liteasy 使用云端模型。";
 
   function modelAccessFailureMessage() {
     return isAgentModelAccessAvailable?.() === false

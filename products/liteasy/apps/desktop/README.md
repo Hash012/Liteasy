@@ -70,6 +70,35 @@ dev-cloud 默认读取 `development/dev-cloud/.env.local` 作为本地密钥配�
 
 ## 测试与构建
 
+### 不登录，使用自己的 API key
+
+1. 启动后可跳过登录，打开活动栏的「设置」→「AI 接入」。
+2. 选择「自备 API key」，选择服务商，填写已开通的模型 ID 和 API key。
+3. 核对 API 基础地址（包括服务商的版本路径，不要追加 `/chat/completions` 或 `/messages`），点击「保存并测试」。测试会向所选服务商发送一条短请求并展示响应，按其规则使用额度。
+4. 连接成功后，可在普通对话中生成回答；论文分析和翻译使用同一配置。分析论文前仍需先导入并选择论文。
+
+预设覆盖 OpenAI、Anthropic/Claude、Google Gemini、DeepSeek、通义千问、Kimi、GLM、MiniMax、豆包、硅基流动、OpenRouter、Groq、Mistral、xAI、Together AI、Azure OpenAI、Ollama，以及自定义兼容服务。
+模型 ID 可以手动填写；预设是建议值，实际可用模型、地域地址、部署名和额度以服务商账号为准。
+百炼新业务空间请填写控制台提供的专属域名；Azure 使用 `/openai/v1` 地址与部署名；方舟可填写 `ep-…` 接入点；本机 Ollama 无需密钥。
+
+高级设置支持 OpenAI Chat Completions / Anthropic Messages，以及 JSON Schema、JSON 模式和按提示生成 JSON。服务商拒绝 `response_format` 时，可切换为「按提示生成 JSON」。协议和参考文档集中在 [`modelProviders.ts`](src/app/features/models/modelProviders.ts)。
+
+桌面版通过 Rust 宿主直接请求所选 API，密钥保存在系统凭据库（Windows Credential Manager / macOS Keychain / Linux Secret Service），按服务商与 API 地址隔离。密钥不写入普通设置、对话状态或仓库，不上传到 Liteasy。更换 API 地址需要为新地址保存密钥；已有密钥留空保留，也可以删除。
+浏览器预览仅在当前页面会话保留密钥，刷新后需要重新填写，且受服务商 CORS 限制；安装版不受 WebView CORS 限制。系统凭据库不可用时会明确报错，不降级为明文持久化。
+
+自备密钥模式无需 Liteasy 账号，也不发送 Liteasy 云端审计请求；本地引用核对仍执行。社区、云同步和云端多模态服务继续使用各自的账号权限。已有云端模型模式保持可用。
+
+验证入口：
+
+```bash
+npm test -- src/tests/directModelClient.test.ts src/tests/directModelTransport.test.ts src/tests/directModelAssistant.test.ts src/tests/ModelConnectionPanel.test.tsx
+npx playwright test src/tests/browser/modelConnection.browser.spec.ts
+```
+
+自动测试使用受控传输/本机 HTTP 服务，不消耗真实服务商额度；实际账号接入请用安装版的「保存并测试」验证。
+
+### 常规检查
+
 ```bash
 cd products/liteasy/apps/desktop
 nvm install

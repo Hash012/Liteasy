@@ -5,6 +5,7 @@ mod agent_state;
 mod artifact_catalog_state;
 mod artifact_export;
 mod desktop_identity;
+mod direct_model;
 mod local_library;
 mod paper_cache;
 mod user_paper_store;
@@ -16,6 +17,7 @@ fn main() {
 
     let app = tauri::Builder::default()
         .manage(agent_host::AgentHostState::default())
+        .manage(direct_model::DirectModelState::default())
         .manage(local_library::LocalLibraryWatchState::default())
         .setup(|app| {
             if let Err(error) = agent_host::start(app.handle().clone()) {
@@ -25,6 +27,11 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            direct_model::has_direct_model_key,
+            direct_model::save_direct_model_key,
+            direct_model::delete_direct_model_key,
+            direct_model::request_direct_model,
+            direct_model::cancel_direct_model_request,
             agent_host::agent_host_reply,
             agent_state::load_agent_state,
             agent_state::save_agent_state,

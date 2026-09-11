@@ -1,6 +1,15 @@
 import type { SettingsState, UpdateSettingCommand } from "./settings.types";
 
 const viewSettingsStorageKey = "liteasy.view-settings.v1";
+const modelSettingsStorageKey = "liteasy.model-connection.v1";
+const modelSettingKeys = ["models.connection_mode", "models.direct_provider", "models.direct_endpoint", "models.direct_model", "models.direct_protocol", "models.direct_output_format"] as const;
+
+function loadPersistedModelSettings(): Partial<SettingsState> {
+  try {
+    const parsed = JSON.parse(globalThis.localStorage?.getItem(modelSettingsStorageKey) ?? "{}");
+    return Object.fromEntries(modelSettingKeys.filter((key) => typeof parsed?.[key] === "string").map((key) => [key, parsed[key]]));
+  } catch { return {}; }
+}
 
 type DesktopRuntimeEnv = {
   VITE_FORUM_API_URL?: string;
@@ -80,6 +89,13 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
       : "openai",
     "models.cloud_proxy_endpoint": cloudEndpoint,
     "models.control_plane_endpoint": cloudEndpoint,
+    "models.connection_mode": "cloud",
+    "models.direct_provider": "openai",
+    "models.direct_endpoint": "https://api.openai.com/v1",
+    "models.direct_model": "gpt-5-mini",
+    "models.direct_protocol": "openai",
+    "models.direct_output_format": "json_schema",
+    ...loadPersistedModelSettings(),
     "view.font_family": '"Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", sans-serif',
     "view.font_size": "14",
     "view.pdf_background": "paper",
@@ -93,7 +109,12 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
       if (command.target.startsWith("view.")) {
         persistViewSettings(state);
       }
-      return state[command.target];
+      if (modelSettingKeys.includes(command.target as typeof modelSettingKeys[number])) {
+        try {
+          globalThis.localStorage?.setItem(modelSettingsStorageKey, JSON.stringify(Object.fromEntries(modelSettingKeys.map((key) => [key, state[key]]))));
+        } catch { /* Settings remain active for this session when storage is unavailable. */ }
+      }
+      return state[command.target]!;
     },
     getState() {
       return state;

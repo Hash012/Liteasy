@@ -120,7 +120,7 @@ export function createBearerModelTransport({
   return async (request) => {
     const accessToken = getAccessToken()?.trim();
     if (!accessToken && !allowUnauthenticatedLocalDev) {
-      throw new Error("请先登录 Liteasy 账号，再使用云端模型服务。");
+      throw new Error("请先登录 Liteasy 账号使用云端模型，或在设置 → AI 接入中配置自己的 API key。");
     }
     return fetchImpl(request.url, {
       body: request.body,

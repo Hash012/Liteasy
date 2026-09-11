@@ -1,3 +1,4 @@
+import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
@@ -17,41 +18,43 @@ afterEach(() => {
 
 function renderLibraryPane() {
   return render(
-    <LibraryPane
-      accountSessionAvailable={false}
-      canOpenOrganizationWorkspace={false}
-      cloudEndpoint=""
-      importJobs={{}}
-      localLibrarySnapshot={{
-        entries: [{
-          contentHash: "hash",
-          id: paper.id,
-          path: paper.sourcePath,
-          relativePath: "paper.pdf",
-          title: paper.title
-        }],
-        folders: [],
-        libraryId: "library-1",
-        revision: 1,
-        rootPath: "/library",
-        trashEntries: []
-      }}
-      onClearRecommendations={vi.fn()}
-      onDismissRecommendation={vi.fn()}
-      onOpenOrganizationWorkspace={vi.fn()}
-      onReturnToLocalWorkspace={vi.fn()}
-      onToggleLock={vi.fn()}
-      onToggleSelection={vi.fn()}
-      papers={[paper]}
-      recommendationItems={[]}
-      recommendationMessage=""
-      recommendationPending={false}
-      recommendationStatus="ready"
-      selectedPaperIds={[]}
-      selectionLocked={false}
-      workspaceLabel="本地文献库"
-      workspaceSourceType="local_library"
-    />
+    <FluentProvider theme={webLightTheme}>
+      <LibraryPane
+        accountSessionAvailable={false}
+        canOpenOrganizationWorkspace={false}
+        cloudEndpoint=""
+        importJobs={{}}
+        localLibrarySnapshot={{
+          entries: [{
+            contentHash: "hash",
+            id: paper.id,
+            path: paper.sourcePath,
+            relativePath: "paper.pdf",
+            title: paper.title
+          }],
+          folders: [],
+          libraryId: "library-1",
+          revision: 1,
+          rootPath: "/library",
+          trashEntries: []
+        }}
+        onClearRecommendations={vi.fn()}
+        onDismissRecommendation={vi.fn()}
+        onOpenOrganizationWorkspace={vi.fn()}
+        onReturnToLocalWorkspace={vi.fn()}
+        onToggleLock={vi.fn()}
+        onToggleSelection={vi.fn()}
+        papers={[paper]}
+        recommendationItems={[]}
+        recommendationMessage=""
+        recommendationPending={false}
+        recommendationStatus="ready"
+        selectedPaperIds={[]}
+        selectionLocked={false}
+        workspaceLabel="本地文献库"
+        workspaceSourceType="local_library"
+      />
+    </FluentProvider>
   );
 }
 

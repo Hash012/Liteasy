@@ -354,7 +354,7 @@ describe("useArtifactActions", () => {
       message = unauthenticated.result.current.startAnalysis("thin_reading");
     });
 
-    expect(message).toBe("请先登录 Liteasy 账号，再使用 AI 文献分析。");
+    expect(message).toBe("请在设置 → AI 接入中配置自己的 API key，或登录 Liteasy 使用云端模型。");
     expect(unauthenticated.onAnalysisHint).toHaveBeenLastCalledWith(message);
     expect(unauthenticated.queueImportForPapers).not.toHaveBeenCalled();
     expect(unauthenticated.runAgentAnalysis).not.toHaveBeenCalled();

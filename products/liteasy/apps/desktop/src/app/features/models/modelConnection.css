@@ -1,0 +1,19 @@
+.model-connection-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 8px 0;
+}
+.model-connection-description,
+.model-connection-message {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.model-connection-description { color: var(--colorNeutralForeground2, #616161); }
+.model-connection-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.model-connection-panel details > summary { cursor: pointer; margin-bottom: 8px; }
+.model-connection-panel details > div + div { margin-top: 8px; }
+.model-connection-panel input { min-width: 0; }

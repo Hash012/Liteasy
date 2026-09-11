@@ -2,7 +2,7 @@ import type { ExecutionJournalEntry } from "./executionJournal";
 import type { UIDslDocument, UIDslNode } from "./generativeUi.types";
 import { validateUIDslDocument } from "./uiDslValidator";
 import { validateUIDslUx } from "./uxValidator";
-import { getDefaultModelForProvider } from "../models/modelPolicy";
+import { getActiveModelProvider, getModelForSettings } from "../models/modelPolicy";
 import type { ModelTransport } from "../models/modelHttpClient";
 import { createModelGatewayFromSettings } from "../models/modelRuntime";
 import type { SettingsState } from "../settings/settings.types";
@@ -199,8 +199,8 @@ export function createModelAssistedJournalAuditModel(input: {
   return async (request: ModelAssistedJournalAuditInput) => {
     return generateJournalAuditWithModelFallback(request.trace, {
       generateModelAudit: async ({ fallbackDocument, trace }) => {
-        const provider = input.settings["models.default_provider"];
-        const model = getDefaultModelForProvider(provider);
+        const provider = getActiveModelProvider(input.settings);
+        const model = getModelForSettings(input.settings);
         const gateway = createModelGatewayFromSettings(input.settings, {
           cloudTransport: input.modelTransport
         });
@@ -215,7 +215,7 @@ export function createModelAssistedJournalAuditModel(input: {
 
         return generation.answer;
       },
-      model: getDefaultModelForProvider(input.settings["models.default_provider"]),
+      model: getModelForSettings(input.settings),
       traceId: request.traceId
     });
   };

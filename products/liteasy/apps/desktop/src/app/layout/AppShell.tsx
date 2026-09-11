@@ -133,7 +133,7 @@ import { runAgentArtifactAnalysis } from "../controllers/agent/runAgentArtifactA
 import { usePaperTranslationController } from "../controllers/usePaperTranslationController";
 import { useExtensionRuntimeController } from "../controllers/useExtensionRuntimeController";
 import type { PluginSandboxTransport } from "../features/extensions/pluginBuilder";
-import { getDefaultModelForProvider } from "../features/models/modelPolicy";
+import { getActiveModelEndpoint, getActiveModelProvider, getModelForSettings } from "../features/models/modelPolicy";
 import type { AcademicProfileTransport } from "../features/profile/academicProfileClient";
 
 type AppShellProps = {
@@ -433,10 +433,11 @@ export function AppShell({
     getIntuechoEndpoint: resolveIntuechoEndpoint,
     getIntuechoSessionId: () => cloudAccessTokenRef.current,
     getModelDiagnosticContext: () => {
-      const provider = settingsStoreRef.current.getState()["models.default_provider"];
+      const settings = settingsStoreRef.current.getState();
+      const provider = getActiveModelProvider(settings);
       return {
-        endpoint: settingsStoreRef.current.getState()["models.cloud_proxy_endpoint"],
-        model: getDefaultModelForProvider(provider),
+        endpoint: getActiveModelEndpoint(settings),
+        model: getModelForSettings(settings),
         provider
       };
     },
@@ -444,7 +445,7 @@ export function AppShell({
       workspaceStoreRef.current.getState().papers.find((paper) => paper.id === paperId),
     getSelectedDocumentSet: () => workspaceStoreRef.current.getSelectedDocumentSet(),
     getSelectedPapers: workspaceActions.getSelectedPapers,
-    isAgentModelAccessAvailable: () => Boolean(modelTransport || cloudAccessTokenRef.current),
+    isAgentModelAccessAvailable: () => Boolean(settingsStoreRef.current.getState()["models.connection_mode"] === "direct" || modelTransport || cloudAccessTokenRef.current),
     onAnalysisHint: setAnalysisHint,
     pendingThinReadingVisualizations: () => pendingVisualizationRequestsRef.current(),
     queueImportForPapers: workspaceActions.queueImportForPapers,
@@ -701,7 +702,7 @@ export function AppShell({
     getSettings: () => settingsStoreRef.current.getState(),
     applyLocalDevCloudDefaults: modelSettings.applyLocalDevCloudDefaults,
     isOnline,
-    suppressAutomaticLoginPrompt: allowUnauthenticatedLocalDevModel,
+    suppressAutomaticLoginPrompt: allowUnauthenticatedLocalDevModel || settingsState["models.connection_mode"] === "direct",
     onRegistered: () => {
       openDockedLeftRailView("profile");
       setRegistrationWelcomeMessageId((current) => current + 1);

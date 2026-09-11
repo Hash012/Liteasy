@@ -1,5 +1,5 @@
 import type { ModelTransport } from "../models/modelHttpClient";
-import { getDefaultModelForProvider } from "../models/modelPolicy";
+import { getActiveModelProvider, getModelForSettings } from "../models/modelPolicy";
 import { createModelGatewayFromSettings } from "../models/modelRuntime";
 import type { SettingsState } from "../settings/settings.types";
 import type {
@@ -310,13 +310,13 @@ export function createModelSemanticPlanner({
     const gateway = createModelGatewayFromSettings(settings, {
       cloudTransport: modelTransport
     });
-    const provider = settings["models.default_provider"];
+    const provider = getActiveModelProvider(settings);
     let retryReason: string | undefined;
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         const generation = await gateway.generateAnswer({
-          model: getDefaultModelForProvider(provider),
+          model: getModelForSettings(settings),
           prompt: createPlannerPrompt(input, context, retryReason),
           provider
         });

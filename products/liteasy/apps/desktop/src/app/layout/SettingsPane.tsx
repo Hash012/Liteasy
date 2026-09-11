@@ -2,6 +2,7 @@ import { useState } from "react";
 import { BotRegular, ChevronDownRegular, ChevronRightRegular, DatabaseRegular, EyeRegular, FolderRegular, SettingsRegular } from "@fluentui/react-icons";
 import { AgentSettingsPanel } from "../features/agent-core/AgentSettingsPanel";
 import { ViewSettingsPanel } from "../features/settings/ViewSettingsPanel";
+import { ModelConnectionPanel } from "../features/models/ModelConnectionPanel";
 import type { AgentCoreCatalogEntry } from "../features/agent-core/agentCoreConfig";
 import { LibraryLocationPanel } from "../features/library/LibraryLocationPanel";
 import { DocumentMetadataSyncPanel } from "../features/metadata/DocumentMetadataSyncPanel";
@@ -40,12 +41,21 @@ export function SettingsPane({
   settings
 }: SettingsPaneProps) {
   const [viewExpanded, setViewExpanded] = useState(true);
+  const [modelExpanded, setModelExpanded] = useState(true);
   const [agentExpanded, setAgentExpanded] = useState(false);
   const [syncExpanded, setSyncExpanded] = useState(true);
   const [libraryExpanded, setLibraryExpanded] = useState(libraryRootPath == null);
   return (
     <section aria-label="左边栏设置" className="settings-panel">
       <div aria-hidden="true" className="settings-panel-icon"><SettingsRegular /></div>
+      <section className="sidebar-section settings-model-section">
+        <button aria-expanded={modelExpanded} aria-label={`${modelExpanded ? "收起" : "展开"} AI 接入`} className="sidebar-section-header" onClick={() => setModelExpanded((current) => !current)} type="button">
+          <span aria-hidden="true" className="sidebar-section-disclosure">{modelExpanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
+          <BotRegular />
+          <span>AI 接入</span>
+        </button>
+        {modelExpanded ? <div className="sidebar-section-content"><ModelConnectionPanel settings={settings} onUpdateSetting={onUpdateSetting} /></div> : null}
+      </section>
       <section className="sidebar-section settings-view-section">
         <button aria-expanded={viewExpanded} aria-label={`${viewExpanded ? "收起" : "展开"} View 设置`} className="sidebar-section-header" onClick={() => setViewExpanded((current) => !current)} type="button">
           <span aria-hidden="true" className="sidebar-section-disclosure">{viewExpanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>

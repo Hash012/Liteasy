@@ -7,7 +7,7 @@ import type { Citation } from "../retrieval/retrieval.types";
 import type { ArtifactOutlineNode, ArtifactType } from "../artifacts/artifact.types";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { Paper } from "../workspace/workspace.types";
-import { getDefaultModelForProvider } from "../models/modelPolicy";
+import { getActiveModelProvider, getModelForSettings } from "../models/modelPolicy";
 import { createModelGatewayFromSettings } from "../models/modelRuntime";
 import type { ModelTransport } from "../models/modelHttpClient";
 import type { SettingsState } from "../settings/settings.types";
@@ -387,11 +387,11 @@ export function createModelAssistedUIDslGenerator(input: {
     plan: UIDslPlanProjection;
     statusText: string;
   }) => {
-    const provider = input.settings["models.default_provider"];
+    const provider = getActiveModelProvider(input.settings);
     const gateway = createModelGatewayFromSettings(input.settings, {
       cloudTransport: input.modelTransport
     });
-    const model = getDefaultModelForProvider(provider);
+    const model = getModelForSettings(input.settings);
 
     return generateUIDslWithModelFallback(request.plan, {
       generateModelDsl: async ({ fallbackDocument, plan, statusText }) => {
