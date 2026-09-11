@@ -80,6 +80,8 @@ function getPublicAuditStatusLabel(status: "blocked" | "passed" | "warning") {
 
 type AssistantMessageListProps = {
   papers?: Paper[];
+  onOpenArtifact?: (artifactId: string) => void;
+  onCancelArtifactTask?: (taskId: string) => void;
   onOpenCitation?: (citation: Citation) => void;
   messages: AssistantMessage[];
   mode: AssistantMode;
@@ -98,6 +100,8 @@ type AssistantMessageListProps = {
 
 export function AssistantMessageList({
   papers = [],
+  onOpenArtifact,
+  onCancelArtifactTask,
   onOpenCitation,
   messages,
   mode,
@@ -140,6 +144,11 @@ export function AssistantMessageList({
                 </div>
               ) : null}
               {message.agentActivity ? <AgentActivityCard activity={message.agentActivity} /> : null}
+              {message.artifactTask?.artifactId && message.artifactTask.status === "completed" ? (
+                <Button onClick={() => onOpenArtifact?.(message.artifactTask!.artifactId!)} size="small">打开薄读</Button>
+              ) : message.artifactTask && ["queued", "running"].includes(message.artifactTask.status) ? (
+                <Button onClick={() => onCancelArtifactTask?.(message.artifactTask!.id)} size="small">取消薄读</Button>
+              ) : null}
               {message.content &&
               (!message.uiDsl || message.citations?.length || message.audit || message.executionTrace) ? (
                 message.role === "assistant" ? (

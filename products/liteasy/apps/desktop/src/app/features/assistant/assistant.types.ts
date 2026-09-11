@@ -15,6 +15,7 @@ export type AssistantConfirmationRequest = HumanConfirmationRequest | AgentConfi
 
 export type AssistantMessage = {
   agentActivity?: AgentActivity;
+  artifactTask?: { id: string; artifactId?: string; status: "queued" | "running" | "completed" | "failed" | "cancelled" };
   favorite?: boolean;
   id: string;
   role: "user" | "assistant";

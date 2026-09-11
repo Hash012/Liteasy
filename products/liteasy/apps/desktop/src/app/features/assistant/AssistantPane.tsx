@@ -83,6 +83,10 @@ import {
 import type { ReaderConversationContext } from "./assistantContext.types";
 import { generateAssistantAnswer } from "./generateAssistantAnswer";
 
+import { requestedArtifactType } from "../artifacts/artifactInvocation";
+import { projectArtifactTaskMessage } from "./assistantArtifactActivity";
+import type { AssistantHistoryPersistence, AssistantHistorySnapshot } from "./assistantHistoryPersistence";
+
 type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 
 type QueuedAssistantTurn = {
@@ -114,6 +118,7 @@ type AssistantPaneProps = {
    * fallback for legacy embeds while the Agent host is being initialized.
    */
   agentClient?: FrontendAgentClient;
+  historyPersistence?: AssistantHistoryPersistence;
   academicProfile?: AcademicProfile;
   artifactTasks?: ArtifactTask[];
   developerDiagnostics?: boolean;
@@ -126,7 +131,7 @@ type AssistantPaneProps = {
   onApplyPanelAction?: ActionContext["applyPanelAction"];
   onApplyThemePreset?: ActionContext["applyThemePreset"];
   onCancelArtifactTask?: (taskId: string) => string | Promise<string>;
-  onGenerateArtifact: (artifactType: ArtifactType, paperIds?: string[]) => string;
+  onGenerateArtifact: (artifactType: ArtifactType, paperIds?: string[], context?: string) => string;
   onImportSelectedSet?: ActionContext["importSelectedSet"];
   onPreparePapersForContext?: (paperIds: string[]) => Promise<void>;
   onMoveDockItem?: ActionContext["moveDockItem"];
@@ -265,6 +270,7 @@ function createConversationIdempotencyKey(mode: AssistantMode) {
 
 export function AssistantPane({
   agentClient,
+  historyPersistence,
   academicProfile,
   artifactTasks = [],
   auditTransport,
@@ -344,6 +350,75 @@ export function AssistantPane({
   const [composerContextTokens, setComposerContextTokens] = useState<AssistantContextToken[]>([]);
   const [readerContexts, setReaderContexts] = useState<ReaderConversationContext[]>([]);
   const [cancellingSession, setCancellingSession] = useState(false);
+  const [historyReady, setHistoryReady] = useState(!historyPersistence);
+  const historyReadyRef = useRef(!historyPersistence);
+  const mountedRef = useRef(true);
+  const [historyError, setHistoryError] = useState<string>();
+  const [historyLoadAttempt, setHistoryLoadAttempt] = useState(0);
+  const draftRef = useRef({ input, tokens: composerContextTokens, readerContexts });
+  draftRef.current = { input, tokens: composerContextTokens, readerContexts };
+
+  function persistConversation() {
+    if (!historyPersistence || !historyReadyRef.current || !mountedRef.current) return;
+    const snapshot: AssistantHistorySnapshot = {
+      version: "liteasy.assistant-history/v1", activeSessionId: activeSessionIdRef.current,
+      sessions: sessionRegistryRef.current, draft: draftRef.current
+    };
+    void historyPersistence.save(snapshot).then(() => {
+      if (mountedRef.current) setHistoryError(undefined);
+    }).catch((error) => {
+      if (mountedRef.current) setHistoryError(`对话保存失败：${error instanceof Error ? error.message : String(error)}`);
+    });
+  }
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      persistConversation();
+      mountedRef.current = false;
+      const run = activeConversationRunRef.current;
+      if (run?.runId) void run.client.cancel(run.runId, "对话面板已关闭，保留已有消息").catch(() => {});
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!historyPersistence) return;
+    let cancelled = false;
+    void historyPersistence.load().then((snapshot) => {
+      if (cancelled) return;
+      if (snapshot?.sessions.length) {
+        const session = snapshot.sessions.find((item) => item.id === snapshot.activeSessionId) ?? snapshot.sessions[0];
+        sessionRegistryRef.current = snapshot.sessions;
+        activeSessionIdRef.current = session.id;
+        assistantStoreRef.current.restoreSession(session.mode, session.messages);
+        setAssistantState(cloneAssistantState(assistantStoreRef.current.getState()));
+        setSessionHistory(snapshot.sessions);
+        setActiveSessionId(session.id);
+        setInput(snapshot.draft.input);
+        setComposerContextTokens(snapshot.draft.tokens);
+        setReaderContexts(snapshot.draft.readerContexts);
+      }
+      historyReadyRef.current = true;
+      setHistoryReady(true);
+      setHistoryError(undefined);
+    }).catch((error) => {
+      if (!cancelled) setHistoryError(`对话读取失败：${error instanceof Error ? error.message : String(error)}`);
+    });
+    return () => { cancelled = true; };
+  }, [historyPersistence, historyLoadAttempt]);
+
+  useEffect(() => { persistConversation(); }, [historyReady, sessionHistory, activeSessionId, input, composerContextTokens, readerContexts]);
+  useEffect(() => {
+    const flush = () => persistConversation();
+    window.addEventListener("blur", flush);
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", flush);
+    return () => {
+      window.removeEventListener("blur", flush);
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", flush);
+    };
+  }, [historyPersistence]);
   const runtimeContext = buildAgentRuntimeContextView({
     academicProfile,
     importedCount: selectedSetStatus.importedCount,
@@ -407,7 +482,7 @@ export function AssistantPane({
   }, [readerConversationContext]);
 
   useEffect(() => {
-    if (artifactTasks.length === 0) {
+    if (!historyReady || artifactTasks.length === 0) {
       return;
     }
 
@@ -495,7 +570,31 @@ export function AssistantPane({
         setEditingMessageId(null);
       }
     }
-  }, [artifactTasks, developerDiagnostics]);
+  }, [artifactTasks, developerDiagnostics, historyReady]);
+
+  useEffect(() => {
+    if (!historyReady || developerDiagnostics) return;
+    const tasks = artifactTasks.filter((task) => task.type === "thin_reading");
+    if (!tasks.length) return;
+    let sessions = sessionRegistryRef.current;
+    for (const task of tasks) {
+      const owner = sessions.find((session) => session.messages.some((message) => message.artifactTask?.id === task.id)) ??
+        sessions.find((session) => session.id === activeSessionIdRef.current);
+      if (!owner) continue;
+      const previous = owner.messages.find((message) => message.artifactTask?.id === task.id);
+      const message = projectArtifactTaskMessage(task, previous);
+      sessions = upsertAssistantSession(sessions, { ...owner,
+        messages: previous ? owner.messages.map((item) => item.id === previous.id ? message : item) : [...owner.messages, message]
+      });
+    }
+    sessionRegistryRef.current = sessions;
+    const active = sessions.find((session) => session.id === activeSessionIdRef.current);
+    if (active) {
+      assistantStoreRef.current.replaceMessages(active.messages);
+      setAssistantState(cloneAssistantState(assistantStoreRef.current.getState()));
+    }
+    setSessionHistory([...sessions]);
+  }, [artifactTasks, historyReady, developerDiagnostics]);
 
   useEffect(() => {
     const activeSession = sessionRegistryRef.current.find(
@@ -526,7 +625,7 @@ export function AssistantPane({
 
   useEffect(() => {
     if (
-      !registrationWelcomeMessage ||
+      !historyReady || !registrationWelcomeMessage ||
       deliveredRegistrationWelcomeMessageIdsRef.current.has(registrationWelcomeMessage.id)
     ) {
       return;
@@ -537,7 +636,7 @@ export function AssistantPane({
       createMessage("assistant", registrationWelcomeMessage.content)
     );
     syncAssistant();
-  }, [registrationWelcomeMessage]);
+  }, [registrationWelcomeMessage, historyReady]);
 
   function saveActiveConversation() {
     const activeSession = sessionRegistryRef.current.find(
@@ -715,6 +814,7 @@ export function AssistantPane({
   }
 
   function startNewSession(mode: AssistantMode = "qa") {
+    if (!historyReadyRef.current) return;
     if (assistantStoreRef.current.getState().pending) {
       return;
     }
@@ -739,6 +839,7 @@ export function AssistantPane({
   }
 
   function openSession(sessionId: string) {
+    if (!historyReadyRef.current) return;
     if (assistantStoreRef.current.getState().pending) {
       return;
     }
@@ -1614,6 +1715,27 @@ export function AssistantPane({
     updateQueuedMessagePolicy(turn.userMessageId, undefined);
     syncAssistant();
 
+    const artifactType = requestedArtifactType(turn.message);
+    if (artifactType === "thin_reading") {
+      const previousPaperIds = assistantStoreRef.current.getState().messages.slice(0, -1).reverse()
+        .find((message) => message.role === "user" && message.contextTokens?.some((token) => token.kind === "paper"))
+        ?.contextTokens?.filter((token) => token.kind === "paper").map((token) => token.id.replace(/^paper-/, ""));
+      const paperIds = turn.referencedPaperIds.length ? turn.referencedPaperIds
+        : selectedSetStatus.selectionLocked ? selectedPapers.map((paper) => paper.id) : previousPaperIds;
+      const recentContext = assistantStoreRef.current.getState().messages.filter((message) => !message.artifactTask && !message.agentActivity)
+        .slice(-6).map((message) => `${message.role === "user" ? "用户" : "助手"}：${message.content}`).join("\n").slice(-8_000);
+      const context = [turn.message, turn.attachedContextPrompt, recentContext].filter(Boolean).join("\n\n");
+      try {
+        const result = onGenerateArtifact(artifactType, paperIds, context);
+        assistantStoreRef.current.addMessage(createMessage("assistant", result));
+      } catch (error) {
+        assistantStoreRef.current.addMessage(createMessage("assistant", getAssistantErrorMessage(error, { developerDiagnostics })));
+      }
+      syncAssistant();
+      void executeNextQueuedTurn();
+      return;
+    }
+
     if (turn.mode === "command") {
       commandPaperIdsRef.current = turn.referencedPaperIds;
       try {
@@ -1694,6 +1816,7 @@ export function AssistantPane({
   }
 
   async function handleSend() {
+    if (!historyReadyRef.current) return;
     const currentState = assistantStoreRef.current.getState();
     const contextTokensForTurn = [...composerContextTokens];
     const referencedPaperIds = contextTokensForTurn
@@ -1966,9 +2089,13 @@ export function AssistantPane({
         />
       ) : null}
 
+      {!historyReady && !historyError ? <p role="status">正在恢复对话…</p> : null}
+      {historyError ? <div role="alert">{historyError}<button type="button" onClick={() => historyReady ? persistConversation() : setHistoryLoadAttempt((value) => value + 1)}>重试</button></div> : null}
       <AssistantContextPanel context={runtimeContext} />
 
       <AssistantMessageList
+        onOpenArtifact={onOpenArtifact}
+        onCancelArtifactTask={(id) => { void onCancelArtifactTask?.(id); }}
         papers={availablePapers}
         onOpenCitation={onOpenCitation}
         messages={assistantState.messages}
@@ -2008,7 +2135,7 @@ export function AssistantPane({
         onRemoveContextToken={removeComposerContextToken}
         onSend={handleSend}
         onVoiceInput={showVoiceInputPlaceholder}
-        pending={assistantState.pending}
+        pending={assistantState.pending || !historyReady}
         suggestions={buildComposerSuggestions()}
         voiceInputMessage={voiceInputMessage}
       />

@@ -1,9 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod agent_artifacts;
 mod agent_host;
 mod agent_state;
 mod artifact_catalog_state;
 mod artifact_export;
+mod assistant_history;
 mod desktop_identity;
 mod direct_model;
 mod local_library;
@@ -33,6 +35,11 @@ fn main() {
             direct_model::request_direct_model,
             direct_model::cancel_direct_model_request,
             agent_host::agent_host_reply,
+            assistant_history::load_assistant_history,
+            assistant_history::save_assistant_history,
+            agent_artifacts::list_local_agent_artifacts,
+            agent_artifacts::save_local_agent_artifact,
+            agent_artifacts::delete_local_agent_artifact,
             agent_state::load_agent_state,
             agent_state::save_agent_state,
             artifact_catalog_state::load_artifact_catalog_state,

@@ -5,7 +5,7 @@ import type {
   ArtifactType
 } from "./artifact.types";
 
-export function createArtifactStore() {
+export function createArtifactStore(taskNamespace = "") {
   const tasks = new Map<string, ArtifactTask>();
   const tabs: ArtifactTab[] = [];
   const catalog = new Map<string, ArtifactTab>();
@@ -24,7 +24,7 @@ export function createArtifactStore() {
     createTask(type: ArtifactType) {
       sequence += 1;
       const task: ArtifactTask = {
-        id: `artifact-task-${sequence}`,
+        id: `artifact-task-${taskNamespace ? `${taskNamespace}-` : ""}${sequence}`,
         message: type === "thin_reading" ? "正在解析论文文本与证据位置" : "等待 PDF 解析与索引",
         progress: 5,
         stage: type === "thin_reading" ? "thin_reading_parsing_document" : "waiting_for_import",

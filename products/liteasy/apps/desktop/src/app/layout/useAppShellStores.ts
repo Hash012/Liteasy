@@ -10,7 +10,7 @@ export function useAppShellStores(initialSettings?: Partial<SettingsState>, init
   const workspaceStoreRef = useRef(createWorkspaceStore(initialPapers));
   const importStoreRef = useRef(createImportStore());
   const settingsStoreRef = useRef(createSeededSettingsStore(initialSettings));
-  const artifactStore = useMemo(() => createArtifactStore(), []);
+  const artifactStore = useMemo(() => createArtifactStore(crypto.randomUUID()), []);
 
   return {
     artifactStore,

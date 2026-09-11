@@ -4,8 +4,11 @@ import type { ImportJob, MineruFigure } from "./import.types";
 export function createImportStore() {
   const jobs = new Map<string, ImportJob>();
   let sequence = 0;
+  const listeners = new Set<() => void>();
+  const notify = () => listeners.forEach((listener) => listener());
 
   return {
+    subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     startImport(input: string | { documentId: string; sourcePath: string }) {
       const documentId = typeof input === "string" ? input : input.documentId;
       const sourcePath = typeof input === "string" ? input : input.sourcePath;
@@ -17,6 +20,7 @@ export function createImportStore() {
         status: "queued"
       };
       jobs.set(job.id, job);
+      notify();
       return job.id;
     },
     markParsing(id: string) {
@@ -24,6 +28,7 @@ export function createImportStore() {
       if (!job) return;
       job.status = "parsing";
       job.error = undefined;
+      notify();
     },
     markParsed(id: string, payload: { paperId: string; chunks?: RetrievalChunk[]; mineruFigures?: MineruFigure[] }) {
       const job = jobs.get(id);
@@ -33,12 +38,14 @@ export function createImportStore() {
       job.paperId = payload.paperId;
       job.parsedChunks = payload.chunks ?? [];
       job.mineruFigures = payload.mineruFigures ?? [];
+      notify();
     },
     markFailed(id: string, error?: string) {
       const job = jobs.get(id);
       if (!job) return;
       job.status = "failed";
       job.error = error;
+      notify();
     },
     getJob(id: string) {
       return jobs.get(id);

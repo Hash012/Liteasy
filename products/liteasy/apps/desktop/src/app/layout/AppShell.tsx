@@ -42,6 +42,8 @@ import type {
 } from "../features/artifacts/artifact.types";
 import type { PendingVisualizationRequest } from "../features/visualization/visualizationPendingRequestStore";
 import type { VisualizationArtifactV1 } from "../features/visualization/visualizationArtifact.types";
+import { createAssistantHistoryPersistence } from "../features/assistant/assistantHistoryPersistence";
+import { createLocalArtifactResultClient } from "../features/artifacts/localArtifactResultClient";
 import { createArtifactResultClient } from "../features/artifacts/artifactResultClient";
 import { createArtifactExportClient } from "../features/artifacts/artifactExportClient";
 import type { AgentArtifactGenerationOptions } from "../features/artifacts/useArtifactActions";
@@ -222,9 +224,11 @@ export function AppShell({
       throw new Error("Agent cancel runner is not ready");
     }
   );
+  const assistantHistoryRef = useRef(createAssistantHistoryPersistence());
+  const localArtifactResultClientRef = useRef(createLocalArtifactResultClient());
   const artifactResultClientRef = useRef<ReturnType<typeof createArtifactResultClient> | null>(null);
   if (!artifactResultClientRef.current) {
-    artifactResultClientRef.current = createArtifactResultClient({
+    const cloud = createArtifactResultClient({
       getBaseEndpoint() {
         const configured = settingsStoreRef.current.getState()["models.cloud_proxy_endpoint"];
         return configured.startsWith("http://") || configured.startsWith("https://")
@@ -232,6 +236,12 @@ export function AppShell({
           : resolveLocalDevCloudEndpoint();
       }
     });
+    const local = localArtifactResultClientRef.current;
+    const client = () => settingsStoreRef.current.getState()["models.connection_mode"] === "direct" || !loadStoredAccountSession()?.sessionId ? local : cloud;
+    artifactResultClientRef.current = {
+      list: () => client().list(), save: (document, signal) => client().save(document, signal),
+      delete: (id) => client().delete(id), rename: (id, title) => client().rename(id, title)
+    };
   }
   const artifactExportClientRef = useRef<ReturnType<typeof createArtifactExportClient> | null>(null);
   if (!artifactExportClientRef.current) {
@@ -347,6 +357,7 @@ export function AppShell({
         });
       }
       return extractPdfResourcesWithMineruFallback({
+        preferLocal: settingsState["models.connection_mode"] === "direct" || !loadStoredAccountSession()?.sessionId,
         endpoint: settingsState["models.cloud_proxy_endpoint"].startsWith("http")
           ? settingsState["models.cloud_proxy_endpoint"]
           : resolveLocalDevCloudEndpoint(undefined, localDevCloudEnv),
@@ -412,7 +423,8 @@ export function AppShell({
   const artifactWorkflow = useArtifactWorkflowController({
     artifactStore,
     artifactResultClient: artifactResultClientRef.current,
-    artifactResultScopeKey: artifactAccountId
+    loadLocalArtifactResults: () => localArtifactResultClientRef.current.list(),
+    artifactResultScopeKey: artifactAccountId && settingsState["models.connection_mode"] !== "direct"
       ? `${settingsState["models.cloud_proxy_endpoint"]}:${artifactAccountId}`
       : undefined,
     cancelAgentRun: (runId, reason) => agentCancelRunnerRef.current(runId, reason),
@@ -1203,11 +1215,6 @@ export function AppShell({
       .filter(
         (tab) =>
           tab.papers?.some((sourcePaper) => sourcePaper.id === paper.id) ||
-          tab.papers?.some((sourcePaper) =>
-            sourcePaper.title === paper.title ||
-            sourcePaper.title.startsWith(`${paper.title}：`) ||
-            paper.title.startsWith(`${sourcePaper.title}：`)
-          ) ||
           tab.analysis?.run.coverage.selectedPaperIds.includes(paper.id)
       )
       .map((tab) => ({
@@ -1754,6 +1761,7 @@ export function AppShell({
     if (itemId === "assistant") {
       return (
         <AssistantSidebar
+          historyPersistence={assistantHistoryRef.current}
           onOpenCitation={(citation) => openEvidenceInReader({ evidenceId: `citation-${citation.paperId}-${citation.page}`, paperId: citation.paperId, page: citation.page, quote: citation.snippet })}
           agentClient={assistantAgent.agentClient}
           academicProfile={profileActions.academicProfile}
@@ -1769,13 +1777,16 @@ export function AppShell({
           onApplyPanelAction={runtimeActionContext.applyPanelAction}
           onApplyThemePreset={runtimeActionContext.applyThemePreset}
           onCancelArtifactTask={artifactWorkflow.actions.cancelArtifactTask}
-          onGenerateArtifact={(artifactType, paperIds) => {
-            if (paperIds && paperIds.length > 0) {
-              workspaceStoreRef.current.setSelectedDocumentSet(paperIds, true);
-              workspaceActions.syncWorkspace();
-              return artifactWorkflow.actions.startAnalysis(artifactType);
-            }
-            return artifactWorkflow.actions.handleAssistantArtifact(artifactType);
+          onGenerateArtifact={(artifactType, paperIds, context) => {
+            const ids = paperIds?.length ? paperIds : workspaceStoreRef.current.getSelectedDocumentSet().locked
+              ? workspaceStoreRef.current.getSelectedDocumentSet().documentIds : [];
+            const papers = ids.map((id) => workspaceStoreRef.current.getState().papers.find((paper) => paper.id === id));
+            if (!papers.length || papers.some((paper) => !paper)) return "请通过 @ 指定论文，或勾选并锁定论文后再生成。";
+            const sources = papers.filter((paper): paper is Paper => Boolean(paper));
+            const options = context ? { supplementalContext: context } : undefined;
+            return artifactType === "thin_reading"
+              ? sources.map((paper) => artifactWorkflow.actions.startAnalysisForPapers(artifactType, [paper], options)).join("\n")
+              : artifactWorkflow.actions.startAnalysisForPapers(artifactType, sources, options);
           }}
           onImportSelectedSet={runtimeActionContext.importSelectedSet}
           onPreparePapersForContext={async (paperIds) => {

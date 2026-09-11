@@ -37,35 +37,42 @@ export async function extractMineruPdfResources(input: {
     throw new Error("该文献没有可供 MinerU 解析的本地 PDF。");
   }
   const bytes = await input.loadPdfSource(input.paper.sourcePath);
-  const response = await fetch(endpoint(input.endpoint), {
-    body: JSON.stringify({
-      bytesBase64: base64(bytes),
-      filename: `${input.paper.title.slice(0, 100) || input.paper.id}.pdf`
-    }),
-    headers: { "Content-Type": "application/json" },
-    method: "POST"
-  });
-  const payload = await response.json() as MineruResponse & { message?: string };
-  if (!response.ok) throw new Error(payload.message ?? "MinerU PDF 解析失败。");
-  const pages: ExtractedPdfPage[] = payload.pages.map((page) => ({
-    page: page.page,
-    text: page.text,
-    textExtraction: "mineru"
-  }));
-  const chunks = buildPdfChunksFromPages(input.paper, pages);
-  const sourceMarkdown = payload.markdown?.trim();
-  if (sourceMarkdown && chunks[0]) {
-    chunks[0] = { ...chunks[0], sourceMarkdown };
-  }
-  return { chunks, figures: payload.figures };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(new Error("云解析超时，切换到本地解析。")), 15_000);
+  try {
+    const response = await fetch(endpoint(input.endpoint), {
+      signal: controller.signal,
+      body: JSON.stringify({
+        bytesBase64: base64(bytes),
+        filename: `${input.paper.title.slice(0, 100) || input.paper.id}.pdf`
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST"
+    });
+    const payload = await response.json() as MineruResponse & { message?: string };
+    if (!response.ok) throw new Error(payload.message ?? "MinerU PDF 解析失败。");
+    const pages: ExtractedPdfPage[] = payload.pages.map((page) => ({
+      page: page.page,
+      text: page.text,
+      textExtraction: "mineru"
+    }));
+    const chunks = buildPdfChunksFromPages(input.paper, pages);
+    const sourceMarkdown = payload.markdown?.trim();
+    if (sourceMarkdown && chunks[0]) {
+      chunks[0] = { ...chunks[0], sourceMarkdown };
+    }
+    return { chunks, figures: payload.figures };
+  } finally { clearTimeout(timeout); }
 }
 
 export async function extractPdfResourcesWithMineruFallback(input: {
   endpoint: string;
   extractFallback: () => Promise<RetrievalChunk[]>;
+  preferLocal?: boolean;
   loadPdfSource: (sourcePath: string) => Promise<Uint8Array>;
   paper: Paper;
 }): Promise<{ chunks: RetrievalChunk[]; figures: MineruFigure[] }> {
+  if (input.preferLocal) return { chunks: await input.extractFallback(), figures: [] };
   try {
     return await extractMineruPdfResources(input);
   } catch {

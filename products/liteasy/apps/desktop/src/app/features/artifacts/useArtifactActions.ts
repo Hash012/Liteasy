@@ -431,6 +431,7 @@ function createThinReadingResultDocument(input: {
   mineruTextChunks?: RetrievalChunk[];
   papers: Array<{ id: string; title: string }>;
   uiDsl?: ArtifactTab["uiDsl"];
+  supplementalContext?: string;
 }) {
   const activeNode = input.document.nodes[input.document.activeNodeId] ??
     input.document.nodes[input.document.rootNodeId];
@@ -441,6 +442,7 @@ function createThinReadingResultDocument(input: {
       sessionId: input.agentRun?.sessionId ?? "thin-reading-local",
       status: "completed" as const
     },
+    supplementalContext: input.supplementalContext ?? input.existing?.supplementalContext,
     analysis: input.analysis ?? input.existing?.analysis,
     answer: input.answer ?? input.existing?.answer ?? activeNode.summary,
     artifactId: input.document.artifactId,
@@ -717,6 +719,7 @@ export function useArtifactActions({
           citations: answerEvent.citations,
           createdAt,
           document: thinReadingDocument,
+          supplementalContext: generationOptions?.supplementalContext,
           figures: scopedPapers.flatMap((paper) => getMineruFiguresForPaperId?.(paper.id) ?? []),
           mineruTextChunks: scopedPapers.flatMap((paper) =>
             getImportedChunksForPaperId?.(paper.id) ?? importedChunksByPaperId[paper.id] ?? []
@@ -735,6 +738,7 @@ export function useArtifactActions({
           mineruTextChunks: document.mineruTextChunks,
           papers: document.papers,
           resultPath,
+          supplementalContext: document.supplementalContext,
           thinReadingDocument,
           title: "薄读",
           type: "thin_reading"
@@ -745,7 +749,7 @@ export function useArtifactActions({
           document: thinReadingDocument,
           nodeId: thinReadingDocument.activeNodeId
         });
-        onAnalysisHint("薄读 Agent 生成完成并已保存到当前账号。");
+        onAnalysisHint("薄读已生成并保存，可在论文下的薄读条目中重新打开。");
         return;
       }
       const evidenceOutlineNodes = buildArtifactOutline({
@@ -896,7 +900,7 @@ export function useArtifactActions({
     return message;
   }
 
-  function startAnalysisForPapers(artifactType: ArtifactType, selectedPapers: Paper[]) {
+  function startAnalysisForPapers(artifactType: ArtifactType, selectedPapers: Paper[], generationOptions?: AgentArtifactGenerationOptions) {
     const scopedPapers = papersForArtifactScope(artifactType, selectedPapers, getActiveReaderPaper?.());
     if (scopedPapers.length === 0) {
       const message = "请通过 @ 指定论文，或在左栏勾选并锁定文献后再生成产物。";
@@ -907,6 +911,15 @@ export function useArtifactActions({
     if (accessFailure) {
       onAnalysisHint(accessFailure);
       return accessFailure;
+    }
+    const sourcePaperIds = scopedPapers.map((paper) => paper.id);
+    const pendingTask = artifactStore.getTasks().find((task) => task.type === artifactType &&
+      (task.status === "queued" || task.status === "running") &&
+      task.sourcePaperIds?.length === sourcePaperIds.length && sourcePaperIds.every((id) => task.sourcePaperIds?.includes(id)));
+    if (pendingTask) {
+      const message = "该论文的同类产物正在生成，可在对话中查看进度。";
+      onAnalysisHint(message);
+      return message;
     }
     if (artifactType !== "skill_doc") {
       const existingArtifacts = findDuplicateArtifacts(
@@ -927,60 +940,35 @@ export function useArtifactActions({
         return message;
       }
     }
-    const importedChunksByPaperId = getImportedChunksByPaperId();
-    let queuedTaskId: string | undefined;
-    const importStatus = queueImportForPapers(
-      scopedPapers,
-      () => {
-        const taskId = queuedTaskId ?? artifactStore.createTask(artifactType);
-        void startArtifactTask(
-          artifactType,
-          scopedPapers,
-          getImportedChunksByPaperId(),
-          taskId
-        );
-        onAnalysisHint("导入完成，已按指定 AI 分析启动主工作流。");
-      },
-      ({ error, paper }) => {
-        const taskId = queuedTaskId ?? artifactStore.createTask(artifactType);
-        const failedStage = artifactType === "thin_reading"
-          ? "thin_reading_parsing_document"
-          : "waiting_for_import";
-        const message = `《${paper.title}》PDF 导入失败：${error.message}`;
-        artifactStore.failTask(taskId, {
-          code: resolveArtifactFailureCode(message, failedStage),
-          failedStage,
-          message,
-          occurredAt: new Date().toISOString(),
-          recovery: [
-            "完全重启 Tauri 以加载最新的本地 PDF 读取命令",
-            "确认文件位于 LiteasyLibrary 内且未损坏后重试"
-          ]
-        });
-        syncArtifacts(taskId);
-      }
-    );
-
-    if (importStatus === "already_imported") {
-      queuedTaskId = artifactStore.createTask(artifactType);
-      syncArtifacts(queuedTaskId);
-      void startArtifactTask(artifactType, scopedPapers, importedChunksByPaperId, queuedTaskId);
-      const message = "当前选中文献集已导入，正在按指定 AI 分析启动。";
-      onAnalysisHint(message);
-      return message;
+    const taskId = artifactStore.createTask(artifactType);
+    artifactStore.updateTask(taskId, { sourcePaperIds, message: "正在准备论文，解析完成后自动开始生成。", stage: "waiting_for_import", progress: 5 });
+    syncArtifacts(taskId);
+    const begin = () => {
+      if (artifactStore.getTask(taskId)?.status === "cancelled") return;
+      void startArtifactTask(artifactType, scopedPapers, getImportedChunksByPaperId(), taskId, {
+        ...generationOptions, sourcePaperIds: scopedPapers.map((paper) => paper.id)
+      });
+    };
+    const importStatus = queueImportForPapers(scopedPapers, begin, ({ error, paper }) => {
+      const failedStage = artifactType === "thin_reading" ? "thin_reading_parsing_document" : "waiting_for_import";
+      const message = `《${paper.title}》PDF 导入失败：${error.message}`;
+      artifactStore.failTask(taskId, {
+        code: resolveArtifactFailureCode(message, failedStage), failedStage, message,
+        occurredAt: new Date().toISOString(), recovery: ["确认论文文件可读取且包含正文后重试。"]
+      });
+      syncArtifacts(taskId);
+    });
+    if (importStatus === "already_imported") begin();
+    if (importStatus === "idle") {
+      artifactStore.failTask(taskId, {
+        code: "document_processing_failed", failedStage: "waiting_for_import", message: "无法启动论文解析。",
+        occurredAt: new Date().toISOString(), recovery: ["检查论文来源后重试。"]
+      });
+      syncArtifacts(taskId);
     }
-
-    if (importStatus === "importing") {
-      const message = "当前选中文献集正在导入，请稍后再开始分析。";
-      onAnalysisHint(message);
-      return message;
-    }
-
-    if (importStatus === "started") {
-      queuedTaskId = artifactStore.createTask(artifactType);
-      syncArtifacts(queuedTaskId);
-    }
-    const message = "当前选中文献集尚未全部导入，系统会先导入，再自动启动该 AI 分析。";
+    const message = artifactStore.getTask(taskId)?.status === "failed"
+      ? artifactStore.getTask(taskId)!.message
+      : importStatus === "already_imported" ? "论文已准备好，正在生成产物。" : "正在解析论文，完成后将自动生成产物。";
     onAnalysisHint(message);
     return message;
   }
@@ -1357,6 +1345,7 @@ export function useArtifactActions({
     };
     try {
       const agentRun = await runAgentAnalysis("thin_reading", onProgress, {
+        supplementalContext: existing.supplementalContext,
         sourcePaperIds: [primaryPaperId],
         thinReadingContext: context
       });

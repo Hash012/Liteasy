@@ -526,7 +526,7 @@ describe("useArtifactWorkflowController", () => {
     expect(result.current.model.artifactTasks).toEqual([
       expect.objectContaining({ status: "running", type: "mindmap" })
     ]);
-    expect(onAnalysisHint).toHaveBeenLastCalledWith("当前选中文献集已导入，正在按指定 AI 分析启动。");
+    expect(onAnalysisHint).toHaveBeenLastCalledWith("论文已准备好，正在生成产物。");
 
     await act(async () => {
       await Promise.resolve();

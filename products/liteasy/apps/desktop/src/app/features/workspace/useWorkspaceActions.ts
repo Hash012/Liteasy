@@ -446,40 +446,40 @@ export function useWorkspaceActions({
       return "idle";
     }
 
-    let pending = 0;
-    let importing = false;
-    let alreadyImported = 0;
-    let failed = false;
-
-    papers.forEach((paper) => {
-      const latestJob = importStore.getLatestJobByDocumentId(paper.id);
-      if (latestJob?.status === "parsed") {
-        alreadyImported += 1;
-        return;
+    const needed = papers.filter((paper) => importStore.getLatestJobByDocumentId(paper.id)?.status !== "parsed");
+    if (needed.length === 0) return "already_imported";
+    let started = false;
+    let scheduling = true;
+    let settled = false;
+    let unsubscribe = () => {};
+    const check = () => {
+      if (settled || scheduling) return;
+      const states = papers.map((paper) => ({ paper, job: importStore.getLatestJobByDocumentId(paper.id) }));
+      const failed = states.find(({ job }) => job?.status === "failed");
+      if (failed) {
+        settled = true;
+        unsubscribe();
+        onFailure?.({ error: new Error(failed.job?.error ?? "PDF 解析失败"), paper: failed.paper });
+      } else if (states.every(({ job }) => job?.status === "parsed")) {
+        settled = true;
+        unsubscribe();
+        onComplete?.();
       }
-
-      if (latestJob?.status === "queued" || latestJob?.status === "parsing") {
-        importing = true;
-        return;
-      }
-
-      pending += 1;
-      const sourcePath = paper.sourcePath;
-      if (!sourcePath) {
-        failed = true;
-        onFailure?.({ error: new Error("文献没有可读取的 PDF 正文。"), paper });
-        return;
-      }
-      const jobId = importStore.startImport({
-        documentId: paper.id,
-        sourcePath
-      });
+    };
+    unsubscribe = importStore.subscribe(check);
+    needed.forEach((paper) => {
+      const existing = importStore.getLatestJobByDocumentId(paper.id);
+      if (existing?.status === "queued" || existing?.status === "parsing") return;
+      started = true;
+      const sourcePath = paper.sourcePath ?? "";
+      const jobId = importStore.startImport({ documentId: paper.id, sourcePath });
       syncImportJobs();
-
-      void importDocument?.(sourcePath).catch(() => {
-        // Keeps browser-only preview usable outside the Tauri shell.
-      });
-
+      if (!sourcePath) {
+        importStore.markFailed(jobId, "文献没有可读取的 PDF 正文。");
+        syncImportJobs();
+        return;
+      }
+      void importDocument?.(sourcePath).catch(() => {});
       window.setTimeout(() => {
         importStore.markParsing(jobId);
         syncImportJobs();
@@ -520,36 +520,16 @@ export function useWorkspaceActions({
             });
           })
           .catch((error) => {
-            failed = true;
-            const normalizedError = error instanceof Error ? error : new Error(String(error));
-            const reason = normalizedError.message;
+            const reason = error instanceof Error ? error.message : String(error);
             importStore.markFailed(jobId, reason);
             onAnalysisHint(`《${paper.title}》解析失败：${reason}`);
-            onFailure?.({ error: normalizedError, paper });
           })
-          .finally(() => {
-            syncImportJobs();
-            pending -= 1;
-            if (pending === 0 && !failed) {
-              onComplete?.();
-            }
-          });
+          .finally(syncImportJobs);
       }, 0);
     });
-
-    if (pending > 0) {
-      return "started";
-    }
-
-    if (importing) {
-      return "importing";
-    }
-
-    if (alreadyImported === papers.length) {
-      return "already_imported";
-    }
-
-    return "idle";
+    scheduling = false;
+    check();
+    return started ? "started" : "importing";
   }
 
   function ensurePapersImported(papers: Paper[]) {

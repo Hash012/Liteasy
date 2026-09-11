@@ -126,3 +126,9 @@ test("keeps generated artifact history after a tab is closed and can reopen it",
     "artifact-1"
   ]);
 });
+
+test("separates task identifiers across application restarts", () => {
+  const before = createArtifactStore("launch-before");
+  const after = createArtifactStore("launch-after");
+  expect(before.createTask("thin_reading")).not.toBe(after.createTask("thin_reading"));
+});

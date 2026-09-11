@@ -73,6 +73,7 @@ export type ArtifactOutlineNode = {
 };
 
 export type ArtifactTask = {
+  sourcePaperIds?: string[];
   agentRunId?: string;
   artifactId?: string;
   failure?: ArtifactTaskFailure;

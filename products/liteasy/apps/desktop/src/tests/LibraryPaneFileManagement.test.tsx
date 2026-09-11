@@ -16,10 +16,11 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function renderLibraryPane() {
+function renderLibraryPane(childProps: Partial<React.ComponentProps<typeof LibraryPane>> = {}) {
   return render(
     <FluentProvider theme={webLightTheme}>
       <LibraryPane
+        {...childProps}
         accountSessionAvailable={false}
         canOpenOrganizationWorkspace={false}
         cloudEndpoint=""
@@ -93,4 +94,13 @@ test("edits, displays and filters local papers by category and tags", async () =
   const updatedMetadata = await screen.findByLabelText(`${paper.title} 的分类与标签`);
   expect(within(updatedMetadata).getByText("已精读")).toBeInTheDocument();
   expect(within(updatedMetadata).getByText("必读")).toBeInTheDocument();
+});
+
+test("opens a saved multimodal document under its source paper", async () => {
+  const open = vi.fn();
+  const child = { id: "thin-1", kind: "artifact" as const, label: "薄读：方法" };
+  renderLibraryPane({ paperChildren: { [paper.id]: [child] }, onOpenPaperChild: open });
+  await userEvent.click(screen.getByText("论文文件（1）"));
+  await userEvent.click(screen.getByRole("button", { name: "打开论文文件：薄读：方法" }));
+  expect(open).toHaveBeenCalledWith(child, paper);
 });

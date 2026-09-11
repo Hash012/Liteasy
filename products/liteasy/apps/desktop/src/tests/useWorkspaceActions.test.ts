@@ -112,6 +112,34 @@ describe("useWorkspaceActions", () => {
     vi.useRealTimers();
   });
 
+  test("notifies every caller waiting on the same ongoing PDF import", async () => {
+    const paper = { id: "ongoing", sourcePath: "fixtures/ongoing.pdf", title: "Ongoing" };
+    const extract = vi.fn(async () => buildTestChunks(paper));
+    const { result } = renderWorkspaceActions([paper], { extractPaperChunks: extract });
+    const first = vi.fn();
+    const second = vi.fn();
+    act(() => {
+      expect(result.current.queueImportForPapers([paper], first)).toBe("started");
+      expect(result.current.queueImportForPapers([paper], second)).toBe("importing");
+    });
+    await act(async () => { await vi.runAllTimersAsync(); });
+    expect(extract).toHaveBeenCalledTimes(1);
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+
+  test("retries multiple failed imports without treating an old failure as the new attempt", async () => {
+    const papers = ["a", "b"].map((id) => ({ id, sourcePath: `fixtures/${id}.pdf`, title: id }));
+    const { importStore, result } = renderWorkspaceActions(papers);
+    papers.forEach((paper) => importStore.markFailed(importStore.startImport({ documentId: paper.id, sourcePath: paper.sourcePath }), "old failure"));
+    const complete = vi.fn();
+    const failure = vi.fn();
+    act(() => { result.current.queueImportForPapers(papers, complete, failure); });
+    await act(async () => { await vi.runAllTimersAsync(); });
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(failure).not.toHaveBeenCalled();
+  });
+
   test("toggles selection lock and syncs workspace state", () => {
     const paper = { id: "demo-1", sourcePath: "fixtures/demo-1.pdf", title: "Demo Paper" };
     const { onAnalysisHint, onWorkspaceChanged, result, workspaceStore } = renderWorkspaceActions([paper]);

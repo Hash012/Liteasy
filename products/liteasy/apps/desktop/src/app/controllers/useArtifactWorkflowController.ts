@@ -44,6 +44,7 @@ type ArtifactStore = ReturnType<typeof createArtifactStore>;
 type UseArtifactWorkflowControllerInput = {
   artifactStore: ArtifactStore;
   artifactResultClient: ArtifactResultClient;
+  loadLocalArtifactResults?: ArtifactResultClient["list"];
   artifactResultScopeKey?: string;
   artifactLocalRepository?: ArtifactLocalRepository;
   confirmDuplicateGeneration?: (
@@ -142,7 +143,7 @@ type ArtifactWorkflowActions = {
   regenerateArtifact: (request: ArtifactRegenerationRequest) => string;
   retryInterruptedThinReadingBranch: (taskId: string) => Promise<void>;
   startAnalysis: (artifactType: ArtifactType) => string;
-  startAnalysisForPapers: (artifactType: ArtifactType, papers: Paper[]) => string;
+  startAnalysisForPapers: (artifactType: ArtifactType, papers: Paper[], options?: AgentArtifactGenerationOptions) => string;
   startThinReadingVisualization: (
     input: ThinReadingVisualizationNodeInput
   ) => ReturnType<ReturnType<typeof useThinReadingVisualizationController>["startVisualization"]>;
@@ -154,6 +155,7 @@ type ArtifactWorkflowActions = {
 export function useArtifactWorkflowController({
   artifactStore,
   artifactResultClient,
+  loadLocalArtifactResults,
   artifactResultScopeKey,
   artifactLocalRepository,
   confirmDuplicateGeneration,
@@ -320,6 +322,9 @@ export function useArtifactWorkflowController({
           return;
         }
         cachedArtifacts.forEach(artifactStore.upsertCatalogEntry);
+        const localResults = await loadLocalArtifactResults?.() ?? [];
+        if (requestId !== catalogRequestRef.current) return;
+        localResults.forEach(artifactActions.restoreArtifactResult);
         persistenceReadyRef.current = true;
       }
       artifactActions.syncArtifacts();

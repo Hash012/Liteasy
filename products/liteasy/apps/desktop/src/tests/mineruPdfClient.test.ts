@@ -79,3 +79,32 @@ test("does not run fallback extraction after MinerU succeeds", async () => {
   expect(result.chunks[0]).toMatchObject({ snippet: "MinerU text", textExtraction: "mineru" });
   expect(extractFallback).not.toHaveBeenCalled();
 });
+
+test("uses local parsing without any cloud request for personal API mode", async () => {
+  const fetchMock = vi.fn();
+  vi.stubGlobal("fetch", fetchMock);
+  const fallback = vi.fn(async () => []);
+  await extractPdfResourcesWithMineruFallback({
+    endpoint: "https://unavailable.invalid", preferLocal: true, extractFallback: fallback,
+    loadPdfSource: async () => new Uint8Array(), paper: { id: "local", sourcePath: "C:\\论文.pdf", title: "论文" }
+  });
+  expect(fetchMock).not.toHaveBeenCalled();
+  expect(fallback).toHaveBeenCalledOnce();
+});
+
+test("aborts stalled cloud extraction and continues with the local PDF", async () => {
+  vi.useFakeTimers();
+  try {
+    vi.stubGlobal("fetch", vi.fn((_url, { signal }) => new Promise((_resolve, reject) => {
+      signal.addEventListener("abort", () => reject(signal.reason));
+    })));
+    const fallback = vi.fn(async () => []);
+    const result = extractPdfResourcesWithMineruFallback({
+      endpoint: "https://unavailable.invalid", extractFallback: fallback,
+      loadPdfSource: async () => new Uint8Array(), paper: { id: "local", sourcePath: "paper.pdf", title: "论文" }
+    });
+    await vi.advanceTimersByTimeAsync(15_001);
+    await expect(result).resolves.toEqual({ chunks: [], figures: [] });
+    expect(fallback).toHaveBeenCalledOnce();
+  } finally { vi.useRealTimers(); }
+});

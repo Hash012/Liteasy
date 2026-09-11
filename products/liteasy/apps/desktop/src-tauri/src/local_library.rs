@@ -1323,7 +1323,7 @@ fn migrate_index_metadata_entries(
     read_metadata_entries(root)
 }
 
-fn write_bytes_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
+pub(crate) fn write_bytes_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
     write_bytes_atomically_with_publisher(path, bytes, publish_atomic_file)
 }
 

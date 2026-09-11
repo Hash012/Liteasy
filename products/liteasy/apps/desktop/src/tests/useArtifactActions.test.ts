@@ -1,3 +1,4 @@
+import { createLocalArtifactResultClient } from "../app/features/artifacts/localArtifactResultClient";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createArtifactStore } from "../app/features/artifacts/artifact.store";
@@ -369,7 +370,7 @@ describe("useArtifactActions", () => {
       message = result.current.startAnalysis("mindmap");
     });
 
-    expect(message).toBe("当前选中文献集尚未全部导入，系统会先导入，再自动启动该 AI 分析。");
+    expect(message).toBe("正在解析论文，完成后将自动生成产物。");
     expect(queueImportForPapers).toHaveBeenCalledWith(
       [paper],
       expect.any(Function),
@@ -377,7 +378,7 @@ describe("useArtifactActions", () => {
     );
     expect(onArtifactTasksChanged).toHaveBeenLastCalledWith([
       expect.objectContaining({
-        message: "等待 PDF 解析与索引",
+        message: "正在准备论文，解析完成后自动开始生成。",
         progress: 5,
         stage: "waiting_for_import",
         status: "queued",
@@ -414,8 +415,8 @@ describe("useArtifactActions", () => {
       message = result.current.startAnalysis("ppt");
     });
 
-    expect(message).toBe("当前选中文献集已导入，正在按指定 AI 分析启动。");
-    expect(onAnalysisHint).toHaveBeenLastCalledWith("当前选中文献集已导入，正在按指定 AI 分析启动。");
+    expect(message).toBe("论文已准备好，正在生成产物。");
+    expect(onAnalysisHint).toHaveBeenLastCalledWith("论文已准备好，正在生成产物。");
     expect(onArtifactTasksChanged).toHaveBeenCalledWith([
       expect.objectContaining({ status: "running", type: "ppt" })
     ]);
@@ -427,7 +428,7 @@ describe("useArtifactActions", () => {
     expect(onArtifactTabsChanged).toHaveBeenLastCalledWith([
       expect.objectContaining({ title: "Literature PPT Outline", type: "ppt" })
     ]);
-    expect(runAgentAnalysis).toHaveBeenCalledWith("ppt", expect.any(Function));
+    expect(runAgentAnalysis).toHaveBeenCalledWith("ppt", expect.any(Function), { sourcePaperIds: ["demo-1"] });
     expect(saveArtifactResult).toHaveBeenCalledWith(
       expect.objectContaining({
         agent: expect.objectContaining({ runId: "run-artifact-1" }),
@@ -546,6 +547,24 @@ describe("useArtifactActions", () => {
     expect(onArtifactTabsChanged).toHaveBeenLastCalledWith([
       expect.objectContaining({ papers: [{ id: secondPaper.id, title: secondPaper.title }] })
     ]);
+  });
+
+  test("saves generated thin reading and its request context to a reopenable local document", async () => {
+    const local = createLocalArtifactResultClient();
+    const { result, runAgentAnalysis, artifactStore } = renderArtifactActions({ imported: true, saveArtifactResult: local.save });
+    runAgentAnalysis.mockResolvedValueOnce(createCompletedThinReadingRun());
+    await act(async () => {
+      result.current.startAnalysisForPapers("thin_reading", [paper], { supplementalContext: "请用薄读解释方法与动机" });
+      await vi.runAllTimersAsync();
+    });
+    const saved = (await createLocalArtifactResultClient().list()).find((item) => item.artifactId === artifactStore.getTasks()[0].artifactId);
+    expect(saved).toMatchObject({
+      artifactType: "thin_reading", supplementalContext: "请用薄读解释方法与动机",
+      papers: [{ id: paper.id, title: paper.title }],
+      thinReadingDocument: { version: "liteasy.thin-reading/v2", nodes: expect.any(Object) }
+    });
+    expect(runAgentAnalysis).toHaveBeenCalledWith("thin_reading", expect.any(Function), expect.objectContaining({ supplementalContext: "请用薄读解释方法与动机" }));
+    await local.delete(saved!.artifactId);
   });
 
   test("passes parent claims and evidence spans when generating a thin-reading branch", async () => {
@@ -1576,7 +1595,7 @@ describe("useArtifactActions", () => {
     );
   });
 
-  test("does not start duplicate analysis while selected papers are still importing", () => {
+  test("queues analysis to continue when an existing PDF import completes", () => {
     const artifactStore = createArtifactStore();
     const onAnalysisHint = vi.fn();
     const onArtifactCatalogChanged = vi.fn<(catalog: ArtifactTab[]) => void>();
@@ -1608,10 +1627,12 @@ describe("useArtifactActions", () => {
       message = hook.result.current.startAnalysis("tree");
     });
 
-    expect(message).toBe("当前选中文献集正在导入，请稍后再开始分析。");
-    expect(onArtifactTasksChanged).not.toHaveBeenCalled();
-    expect(onArtifactTabsChanged).not.toHaveBeenCalled();
-    expect(onAnalysisHint).toHaveBeenLastCalledWith("当前选中文献集正在导入，请稍后再开始分析。");
+    expect(message).toBe("正在解析论文，完成后将自动生成产物。");
+    expect(artifactStore.getTasks()).toHaveLength(1);
+    expect(artifactStore.getTasks()[0].stage).toBe("waiting_for_import");
+    act(() => { hook.result.current.startAnalysis("tree"); });
+    expect(artifactStore.getTasks()).toHaveLength(1);
+    expect(queueImportForPapers).toHaveBeenCalledTimes(1);
   });
 
   test("assistant artifact command delegates to the selected-set analysis flow", () => {
@@ -1622,7 +1643,7 @@ describe("useArtifactActions", () => {
       message = result.current.handleAssistantArtifact("tree");
     });
 
-    expect(message).toBe("当前选中文献集尚未全部导入，系统会先导入，再自动启动该 AI 分析。");
+    expect(message).toBe("正在解析论文，完成后将自动生成产物。");
   });
 
   test("asks before generating the same modality for the exact persisted paper set", () => {

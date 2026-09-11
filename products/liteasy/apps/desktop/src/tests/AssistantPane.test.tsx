@@ -115,7 +115,7 @@ test("shows the unified composer before a conversation starts", async () => {
   expect(await screen.findByText(/云端回答：总结这篇论文的核心方法/)).toBeInTheDocument();
 });
 
-test("keeps thin-reading generation out of the assistant for regular accounts", async () => {
+test("shows thin-reading progress in the current conversation for regular accounts", async () => {
   const baseProps = {
     onGenerateArtifact: () => "unused",
     selectedSetStatus: {
@@ -142,7 +142,8 @@ test("keeps thin-reading generation out of the assistant for regular accounts", 
   await waitFor(() => {
     expect(screen.getByLabelText("当前会话")).toHaveTextContent("普通对话新对话");
   });
-  expect(screen.queryByText(/正在规划薄读路径与证据范围/)).not.toBeInTheDocument();
+  expect(screen.getAllByText(/正在规划薄读路径与证据范围/).length).toBeGreaterThan(0);
+  expect(screen.getByRole("button", { name: "取消薄读" })).toBeInTheDocument();
   expect(screen.queryByText(/尚未审计的薄读正文/)).not.toBeInTheDocument();
 
   await userEvent.setup().click(screen.getByRole("button", { name: "历史" }));
@@ -193,7 +194,7 @@ test("shows thin-reading generation sessions to server-authorized developer acco
   );
 
   await waitFor(() => {
-    expect(screen.getByText(/正在核验薄读证据/)).toBeInTheDocument();
+    expect(screen.getAllByText(/正在核验薄读证据/).length).toBeGreaterThan(0);
   });
 
   rerender(
@@ -214,7 +215,7 @@ test("shows thin-reading generation sessions to server-authorized developer acco
   await waitFor(() => {
     expect(screen.getByLabelText("当前会话")).toHaveTextContent("普通对话新对话");
   });
-  expect(screen.queryByText(/正在核验薄读证据/)).not.toBeInTheDocument();
+  expect(screen.getAllByText(/正在核验薄读证据/).length).toBeGreaterThan(0);
 });
 
 test("keeps thin-reading branch progress on the active reading page", async () => {

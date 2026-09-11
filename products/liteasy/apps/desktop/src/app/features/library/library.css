@@ -1111,3 +1111,12 @@
   min-width: 30px;
   height: 30px;
 }
+
+.library-paper-children {
+  color: var(--colorNeutralForeground2);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.library-paper-children summary { cursor: pointer; padding: 3px 0; }
+.library-paper-children ul { list-style: none; margin: 0; padding: 0; }
+.library-paper-children button { max-width: 100%; text-align: left; overflow-wrap: anywhere; }

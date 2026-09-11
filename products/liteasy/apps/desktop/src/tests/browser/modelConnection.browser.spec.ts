@@ -39,9 +39,16 @@ test("configures a personal API and generates a chat answer without signing in",
   expect(modelRequests.length).toBeGreaterThanOrEqual(2);
   expect(cloudRequests).toEqual([]);
   expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain("browser-test-only-key");
+  const requestCount = modelRequests.length;
+  await page.getByPlaceholder("输入你的问题或命令").fill("请继续解释论文方法");
+  await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+  await expect(page.getByRole("article", { name: "AI 回复" }).getByText("这是未登录直连生成的浏览器测试回答。", { exact: false })).toBeVisible();
   // Non-secret configuration survives refresh; browser-only keys intentionally do not.
   await page.evaluate(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "false"));
   await page.reload();
+  await expect(page.getByRole("article", { name: "AI 回复" }).getByText("这是未登录直连生成的浏览器测试回答。", { exact: false })).toBeVisible();
+  await expect(page.getByPlaceholder("输入你的问题或命令")).toHaveValue("请继续解释论文方法");
+  expect(modelRequests).toHaveLength(requestCount);
   await page.getByRole("button", { name: "设置", exact: true }).click();
   await expect(page.getByLabel("AI 接入方式")).toHaveValue("direct");
   await expect(page.getByRole("dialog", { name: "轻量登录面板" })).toHaveCount(0);

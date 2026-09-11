@@ -13,10 +13,13 @@ import type { FrontendAgentClient } from "../features/agent-api/frontendAgentCli
 import type { ExecutionJournal } from "../features/generative-ui/executionJournal";
 import type { AcademicProfile } from "../features/profile/profile.types";
 
+import type { AssistantHistoryPersistence } from "../features/assistant/assistantHistoryPersistence";
+
 type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 
 type AssistantSidebarProps = {
   agentClient: FrontendAgentClient;
+  historyPersistence?: AssistantHistoryPersistence;
   academicProfile?: AcademicProfile;
   artifactTasks?: ArtifactTask[];
   developerDiagnostics?: boolean;
@@ -30,7 +33,7 @@ type AssistantSidebarProps = {
   onApplyPanelAction?: ActionContext["applyPanelAction"];
   onApplyThemePreset?: ActionContext["applyThemePreset"];
   onCancelArtifactTask?: (taskId: string) => string | Promise<string>;
-  onGenerateArtifact: (artifactType: ArtifactType, paperIds?: string[]) => string;
+  onGenerateArtifact: (artifactType: ArtifactType, paperIds?: string[], context?: string) => string;
   onImportSelectedSet?: ActionContext["importSelectedSet"];
   onPreparePapersForContext?: (paperIds: string[]) => Promise<void>;
   onMoveDockItem?: ActionContext["moveDockItem"];
@@ -56,6 +59,7 @@ type AssistantSidebarProps = {
 
 export function AssistantSidebar({
   agentClient,
+  historyPersistence,
   academicProfile,
   artifactTasks = [],
   developerDiagnostics = false,
@@ -100,6 +104,7 @@ export function AssistantSidebar({
       <div className="pane-body">
         <AssistantPane
           agentClient={agentClient}
+          historyPersistence={historyPersistence}
           academicProfile={academicProfile}
           artifactTasks={artifactTasks}
           developerDiagnostics={developerDiagnostics}

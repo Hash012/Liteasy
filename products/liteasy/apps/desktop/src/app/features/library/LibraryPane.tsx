@@ -426,6 +426,9 @@ export function LibraryPane({
   onMovePaper,
   onOpenCloudEntry,
   onOpenPaper,
+  onOpenPaperChild,
+  paperChildren = {},
+  papers,
   onRefreshLocalLibrary,
   onRenameFolder,
   onRenamePaper,
@@ -850,6 +853,8 @@ export function LibraryPane({
 
   function renderEntry(area: "local" | "collection" | "organization", entry: ExplorerEntry, depth: number) {
     const selected = area === "local" && selectedPaperIds.includes(entry.id);
+    const sourcePaper = papers.find((paper) => paper.id === entry.id);
+    const children = sourcePaper ? paperChildren[sourcePaper.id] ?? [] : [];
     const pending = pendingNodeIds.includes(entry.id);
     const canAttachPdf = entry.source.area !== "local" &&
       entry.source.entry.entryKind === "metadata_only" &&
@@ -959,6 +964,25 @@ export function LibraryPane({
     return (
       <li className={`library-paper-node${activePaperId === entry.id ? " active" : ""}`} key={entry.id}>
         {row}
+        {sourcePaper && children.length > 0 ? (
+          <details className="library-paper-children" style={{ marginLeft: `${depth * 12 + 30}px` }} open={activePaperId === entry.id || undefined}>
+            <summary>{`论文文件（${children.length}）`}</summary>
+            <ul aria-label={`${entry.label} 的论文文件`}>
+              {children.map((child) => (
+                <li key={child.id}>
+                  <Button
+                    appearance="subtle"
+                    size="small"
+                    icon={<DocumentTextRegular />}
+                    title={child.meta ? `${child.label} · ${child.meta}` : child.label}
+                    aria-label={`打开论文文件：${child.label}`}
+                    onClick={() => onOpenPaperChild?.(child, sourcePaper)}
+                  >{child.label}</Button>
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
       </li>
     );
   }

@@ -99,7 +99,7 @@ test("uses @ papers as the task scope for a thin-reading slash command", async (
   await user.click(screen.getByRole("button", { name: /Paper Beta/ }));
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(onGenerateArtifact).toHaveBeenCalledWith("thin_reading", ["paper-a", "paper-b"]);
+  expect(onGenerateArtifact).toHaveBeenCalledWith("thin_reading", ["paper-a", "paper-b"], expect.stringContaining("薄读"));
   expect(screen.getByText("已开始生成薄读。")).toBeInTheDocument();
 });
 
@@ -194,4 +194,23 @@ test("shows thin-reading progress around the central thin-reading button only wh
   );
 
   expect(screen.queryByRole("progressbar", { name: "薄读生成进度" })).not.toBeInTheDocument();
+});
+
+test("natural thin-reading requests prefer an explicit paper and retain the user's explanation requirements", async () => {
+  const user = userEvent.setup();
+  const generate = vi.fn(() => "已开始生成薄读。");
+  const client = createAgentClient();
+  render(<AssistantPane
+    agentClient={client}
+    availablePapers={[{ id: "paper-a", title: "Paper Alpha" }, { id: "paper-b", title: "Paper Beta" }]}
+    selectedPapers={[{ id: "paper-b", title: "Paper Beta" }]}
+    selectedSetStatus={{ importedCount: 1, selectedCount: 1, selectionLocked: true }}
+    onGenerateArtifact={generate}
+  />);
+  const input = screen.getByPlaceholderText("输入你的问题或命令");
+  await user.type(input, "请用薄读风格解释方法和动机 @");
+  await user.click(screen.getAllByRole("button", { name: /Paper Alpha/ })[0]);
+  await user.click(screen.getByRole("button", { name: "发送" }));
+  expect(generate).toHaveBeenCalledWith("thin_reading", ["paper-a"], expect.stringContaining("解释方法和动机"));
+  expect(client.send).not.toHaveBeenCalled();
 });
