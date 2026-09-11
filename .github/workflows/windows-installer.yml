@@ -10,7 +10,31 @@ permissions:
   contents: read
 
 jobs:
+  test-desktop:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: products/liteasy/apps/desktop
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: products/liteasy/apps/desktop/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Test desktop frontend
+        run: npm test
+
   build-windows:
+    needs: test-desktop
     runs-on: windows-latest
     defaults:
       run:
@@ -18,10 +42,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
@@ -38,8 +62,8 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Test desktop frontend
-        run: npm test
+      - name: Verify Tauri resource paths
+        run: npm run verify:tauri-resources -- --require-git-tracked
 
       - name: Test Tauri host
         run: cargo test --manifest-path src-tauri/Cargo.toml
