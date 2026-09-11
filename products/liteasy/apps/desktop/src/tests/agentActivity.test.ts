@@ -140,3 +140,15 @@ describe("agent activity projection", () => {
     expect(activity.entries[0]?.content).not.toContain("internal.example");
   });
 });
+
+test("keeps fragmented subtask working payloads out of public activity details", () => {
+  let activity = createAgentActivity();
+  for (const delta of ['{"', 'paperId":"local-private-reference","evidence":"raw"}']) {
+    activity = applyAgentActivityEvent(activity, event({
+      type: "analysis.subtask.delta", subtaskId: "subtask-1", label: "分析论文", delta
+    }));
+  }
+  expect(activity.entries).toHaveLength(1);
+  expect(activity.entries[0].content).toBe("正在分析论文区段，结果将汇总到回答或产物中。");
+  expect(JSON.stringify(activity)).not.toContain("local-private-reference");
+});

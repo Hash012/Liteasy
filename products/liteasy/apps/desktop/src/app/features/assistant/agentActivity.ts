@@ -97,10 +97,11 @@ export function applyAgentActivityEvent(activity: AgentActivity, event: AgentEve
   if (event.type === "context.prepared" || event.type === "progress.started" || event.type === "analysis.subtask.delta") {
     const id = event.type === "analysis.subtask.delta" ? event.subtaskId
       : event.type === "progress.started" ? `${event.planId}-${event.phase ?? "progress"}` : `${event.runId}-context`;
-    const previous = activity.entries.find((entry) => entry.id === id);
     const label = event.type === "context.prepared" ? "已准备论文与对话上下文"
       : event.type === "progress.started" ? event.summary : event.label;
-    const detail = event.type === "analysis.subtask.delta" ? `${previous?.content ?? ""}${event.delta}`
+    // Subtask streams contain evidence IDs and partially serialized working data.
+    // Only manager.activity reasoning_summary is a public narrative summary.
+    const detail = event.type === "analysis.subtask.delta" ? "正在分析论文区段，结果将汇总到回答或产物中。"
       : event.type === "progress.started" ? event.summary : "本轮使用的上下文已准备完成。";
     return {
       ...activity,
