@@ -4807,9 +4807,7 @@ export async function generateAssistantAnswer({
     }),
     content:
       mode === "explain"
-        ? `概念解释：${generatedAnswerText}\n引用: ${groundedAnswer.citations
-            .map((citation) => `${citation.paperId} p.${citation.page}`)
-            .join(", ")}\n可信度: ${groundedAnswer.confidence.toFixed(2)}`
+        ? `概念解释：${generatedAnswerText}`
         : formatAnswer({
             ...groundedAnswer,
             answer: generatedAnswerText

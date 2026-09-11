@@ -1,9 +1,10 @@
 import type { AnswerPayload } from "../retrieval/retrieval.types";
 
 export function formatAnswer(payload: AnswerPayload) {
-  const citationText = payload.citations
-    .map((citation) => `${citation.paperId} p.${citation.page}`)
-    .join(", ");
+  return payload.answer;
+}
 
-  return `${payload.answer}\n引用: ${citationText}\n可信度: ${payload.confidence.toFixed(2)}`;
+/** Remove the legacy machine-generated footer when reopening older conversations. */
+export function getAnswerDisplayText(content: string) {
+  return content.replace(/\n引用[:：][^\n]*\n(?:可信度|置信度)[:：]\s*\d+(?:\.\d+)?\s*$/u, "");
 }

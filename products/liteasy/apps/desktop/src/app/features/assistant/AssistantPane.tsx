@@ -69,7 +69,7 @@ import type { AcademicProfile } from "../profile/profile.types";
 import type { ActionContext } from "../skills/actionRegistry";
 import type { Paper, WorkspaceSource } from "../workspace/workspace.types";
 import type { SettingsState } from "../settings/settings.types";
-import type { RetrievalChunk } from "../retrieval/retrieval.types";
+import type { Citation, RetrievalChunk } from "../retrieval/retrieval.types";
 import { defaultAgentCoreConfig } from "../agent-core/agentCoreConfig";
 import type { AnswerAuditResult } from "./answerAuditor";
 import type { ModelExecutionTrace } from "../models/modelExecution";
@@ -132,6 +132,7 @@ type AssistantPaneProps = {
   onMoveDockItem?: ActionContext["moveDockItem"];
   onOpenAcademicArchive?: ActionContext["openAcademicArchive"];
   onOpenArtifact?: (artifactId: string) => void;
+  onOpenCitation?: (citation: Citation) => void;
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onActiveSessionChange?: (session: AssistantSessionHistoryItem) => void;
   onSettingsChanged?: (settings: SettingsState) => void;
@@ -282,6 +283,7 @@ export function AssistantPane({
   onMoveDockItem,
   onOpenAcademicArchive,
   onOpenArtifact,
+  onOpenCitation,
   onOpenOrganizationSharedLibrary,
   onActiveSessionChange,
   onSettingsChanged,
@@ -1967,6 +1969,8 @@ export function AssistantPane({
       <AssistantContextPanel context={runtimeContext} />
 
       <AssistantMessageList
+        papers={availablePapers}
+        onOpenCitation={onOpenCitation}
         messages={assistantState.messages}
         mode={assistantState.mode}
         onConfirmRequest={(confirmation) => {

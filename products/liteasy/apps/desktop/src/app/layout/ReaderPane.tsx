@@ -189,11 +189,14 @@ export function ReaderPane({
   return (
     <main className="pane center">
       <div aria-label="PDF 标题栏" className="pane-header reader-pane-header">
+        <DockLayoutControls
+          collapsed={layoutCollapsed}
+          onToggleBottom={onToggleBottomPane}
+          onToggleLeft={onToggleLeftPane}
+          onToggleRight={onToggleRightPane}
+        />
         {activePaper ? (
           <div aria-label="PDF 阅读批注工具栏" className="reader-pdf-toolbar" role="toolbar">
-            <span className="reader-file-title" title={activePaper.sourcePath ?? "当前使用 PDF.js 阅读面板"}>
-              {activePaper.title}
-            </span>
             <Button
               aria-label={identityLabel}
               appearance="subtle"
@@ -212,12 +215,6 @@ export function ReaderPane({
             </Button>
           </div>
         ) : null}
-        <DockLayoutControls
-          collapsed={layoutCollapsed}
-          onToggleBottom={onToggleBottomPane}
-          onToggleLeft={onToggleLeftPane}
-          onToggleRight={onToggleRightPane}
-        />
       </div>
       {activePaper ? (
         <div

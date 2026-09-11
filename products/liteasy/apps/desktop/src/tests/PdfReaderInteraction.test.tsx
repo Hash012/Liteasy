@@ -46,6 +46,17 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
+test("shows the same colored highlights in thumbnails and the page", async () => {
+  renderAnnotation(annotation({ color: "green" }));
+  await userEvent.setup().click(screen.getByRole("button", { name: "缩略图", exact: true }));
+  await waitFor(() => expect(document.querySelector(".pdf-thumbnail-mark.highlight")).not.toBeNull());
+  const thumbnail = document.querySelector<HTMLElement>(".pdf-thumbnail-mark.highlight")!;
+  const page = document.querySelector<HTMLElement>("button.pdf-overlay-mark.highlight")!;
+  expect(thumbnail.style.backgroundColor).toBe(page.style.backgroundColor);
+  expect(thumbnail.style.left).toBe(page.style.left);
+  expect(thumbnail.style.top).toBe(page.style.top);
+});
+
 test("expands a sidebar annotation entry so its complete excerpt is available", async () => {
   const user = userEvent.setup();
   renderAnnotation(annotation());

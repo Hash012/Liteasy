@@ -16,7 +16,9 @@ describe("AssistantMessageList", () => {
     expect(onModeChange).not.toHaveBeenCalled();
   });
 
-  test("renders assistant message citations, audit, and execution trace", () => {
+  test("renders readable citations without internal IDs and opens their source", async () => {
+    const user = userEvent.setup();
+    const onOpenCitation = vi.fn();
     const messages: AssistantMessage[] = [
       {
         audit: {
@@ -39,11 +41,13 @@ describe("AssistantMessageList", () => {
       }
     ];
 
-    render(<AssistantMessageList messages={messages} mode="qa" onModeChange={vi.fn()} />);
+    render(<AssistantMessageList messages={messages} mode="qa" onModeChange={vi.fn()} papers={[{ id: "paper-1", title: "Attention Paper" }]} onOpenCitation={onOpenCitation} />);
 
     expect(screen.getByText("回答内容")).toBeInTheDocument();
-    expect(screen.getByText("paper-1 · 第 3 页")).toBeInTheDocument();
-    expect(screen.getByText("可信度 0.87")).toBeInTheDocument();
+    await user.click(screen.getByText("查看引用原文"));
+    await user.click(screen.getByRole("button", { name: "Attention Paper · 第 3 页" }));
+    expect(onOpenCitation).toHaveBeenCalledWith(messages[0].citations![0]);
+    expect(screen.queryByText(/paper-1/)).not.toBeInTheDocument();
     expect(screen.getByText("审计评分 0.91 · 通过")).toBeInTheDocument();
     expect(screen.getByText(/模型链路：/)).toBeInTheDocument();
   });

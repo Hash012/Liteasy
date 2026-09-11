@@ -633,18 +633,19 @@ body {
 .reader-pane-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 52px;
-  padding: 8px 12px;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 36px;
+  padding: 3px 8px;
 }
 
 .reader-pdf-toolbar {
   display: flex;
   align-items: center;
-  justify-content: center;
-  flex: 1 1 auto;
-  min-width: 180px;
+  justify-content: flex-start;
+  flex: 0 1 auto;
+  min-width: 0;
   gap: 8px;
 }
 
@@ -666,7 +667,6 @@ body {
   white-space: nowrap;
 }
 
-.reader-pdf-toolbar button,
 .reader-layout-button {
   display: inline-flex;
   align-items: center;
@@ -682,6 +682,13 @@ body {
   font-size: 13px;
   font-weight: 900;
   padding: 0;
+}
+
+.reader-pdf-toolbar button {
+  width: auto;
+  min-height: 28px;
+  padding: 2px 8px;
+  white-space: nowrap;
 }
 
 .reader-pdf-toolbar button:hover,
@@ -3492,6 +3499,8 @@ body {
 
 .pdf-thumbnail-list {
   display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
   gap: 8px;
   overflow: auto;
 }
@@ -3581,6 +3590,7 @@ body {
 
 .pdf-reader-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   min-height: 40px;
@@ -3589,6 +3599,7 @@ body {
 
 .pdf-reader-toolbar-group {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 4px;
 }
@@ -4397,11 +4408,24 @@ body {
 }
 
 .pdf-thumbnail-canvas {
+  display: block;
   width: 100%;
   aspect-ratio: 0.74;
   border: 1px solid rgba(27, 102, 179, 0.1);
   border-radius: 6px;
   background: #ffffff;
+}
+
+.pdf-thumbnail-page {
+  display: block;
+  position: relative;
+  overflow: hidden;
+}
+
+.pdf-thumbnail-mark {
+  position: absolute;
+  pointer-events: none;
+  mix-blend-mode: multiply;
 }
 
 .pdf-thumbnail-number {

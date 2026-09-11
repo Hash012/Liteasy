@@ -2,7 +2,7 @@ import { AssistantPane } from "../features/assistant/AssistantPane";
 import type { ArtifactTask, ArtifactType } from "../features/artifacts/artifact.types";
 import type { AssistantSessionHistoryItem } from "../features/assistant/assistantSessionHistory";
 import type { ModelTransport } from "../features/models/modelHttpClient";
-import type { RetrievalChunk } from "../features/retrieval/retrieval.types";
+import type { Citation, RetrievalChunk } from "../features/retrieval/retrieval.types";
 import type { SettingsState } from "../features/settings/settings.types";
 import type { createSettingsStore } from "../features/settings/settings.store";
 import type { ActionContext } from "../features/skills/actionRegistry";
@@ -35,6 +35,7 @@ type AssistantSidebarProps = {
   onPreparePapersForContext?: (paperIds: string[]) => Promise<void>;
   onMoveDockItem?: ActionContext["moveDockItem"];
   onOpenAcademicArchive?: ActionContext["openAcademicArchive"];
+  onOpenCitation?: (citation: Citation) => void;
   onOpenArtifact?: (artifactId: string) => void;
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onActiveSessionChange?: (session: AssistantSessionHistoryItem) => void;
@@ -73,6 +74,7 @@ export function AssistantSidebar({
   onMoveDockItem,
   onOpenAcademicArchive,
   onOpenArtifact,
+  onOpenCitation,
   onOpenOrganizationSharedLibrary,
   onActiveSessionChange,
   onSettingsChanged,
@@ -115,6 +117,7 @@ export function AssistantSidebar({
           onMoveDockItem={onMoveDockItem}
           onOpenAcademicArchive={onOpenAcademicArchive}
           onOpenArtifact={onOpenArtifact}
+          onOpenCitation={onOpenCitation}
           onOpenOrganizationSharedLibrary={onOpenOrganizationSharedLibrary}
           onActiveSessionChange={onActiveSessionChange}
           onSettingsChanged={onSettingsChanged}

@@ -864,7 +864,9 @@ test("adds grounded user and assistant messages in qa mode when selected set is 
 
   expect(screen.getAllByText("总结这篇论文的核心方法").length).toBeGreaterThan(0);
   expect(await screen.findByText(/云端回答：总结这篇论文的核心方法/)).toBeInTheDocument();
-  expect(screen.getAllByText(/demo-1 p\.2/).length).toBeGreaterThan(0);
+  await user.click(screen.getByText("查看引用原文"));
+  expect(screen.getAllByText(/第 2 页/).length).toBeGreaterThan(0);
+  expect(screen.queryByText(/demo-1 p\.2/)).not.toBeInTheDocument();
   expect(screen.getByText("审计模型 gpt-5-mini-auditor")).toBeInTheDocument();
   expect(screen.getByText("审计评分 0.84 · 通过")).toBeInTheDocument();
 });
@@ -1060,7 +1062,8 @@ test("uses the user question to retrieve a different cited chunk", async () => {
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(await screen.findByText(/云端回答：这篇综述如何定义向量数据库系统？/)).toBeInTheDocument();
-  expect(screen.getAllByText(/demo-2 · 第 4 页/).length).toBeGreaterThan(0);
+  await user.click(screen.getByText("查看引用原文"));
+  expect(screen.getAllByText(/第 4 页/).length).toBeGreaterThan(0);
   expect(screen.getAllByText(/vector database management systems/).length).toBeGreaterThan(0);
 });
 

@@ -23,6 +23,9 @@ import {
 } from "@fluentui/react-icons";
 import { Button, Tooltip } from "@fluentui/react-components";
 import { useEffect, useRef, useState } from "react";
+import { getAnswerDisplayText } from "./answerFormatter";
+import type { Paper } from "../workspace/workspace.types";
+import type { Citation } from "../retrieval/retrieval.types";
 
 function ExpandableUserMessage({ value }: { value: string }) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -76,6 +79,8 @@ function getPublicAuditStatusLabel(status: "blocked" | "passed" | "warning") {
 }
 
 type AssistantMessageListProps = {
+  papers?: Paper[];
+  onOpenCitation?: (citation: Citation) => void;
   messages: AssistantMessage[];
   mode: AssistantMode;
   onConfirmRequest?: (confirmation: AssistantConfirmationRequest) => void;
@@ -92,6 +97,8 @@ type AssistantMessageListProps = {
 };
 
 export function AssistantMessageList({
+  papers = [],
+  onOpenCitation,
   messages,
   mode,
   onConfirmRequest,
@@ -136,7 +143,7 @@ export function AssistantMessageList({
               {message.content &&
               (!message.uiDsl || message.citations?.length || message.audit || message.executionTrace) ? (
                 message.role === "assistant" ? (
-                  <AssistantMarkdown className="assistant-answer-text assistant-markdown" value={message.content} />
+                  <AssistantMarkdown className="assistant-answer-text assistant-markdown" value={getAnswerDisplayText(message.content)} />
                 ) : (
                   <ExpandableUserMessage value={message.content} />
                 )
@@ -181,21 +188,26 @@ export function AssistantMessageList({
                   </div>
                 </div>
               ) : null}
-              {message.uiDsl ? (
+              {message.uiDsl && !message.uiDsl.id.startsWith("ui-answer-") ? (
                 <DynamicCanvas
                   document={message.uiDsl}
                   onAction={(action) => onDynamicAction?.(action, message.uiDsl?.audit.traceId ?? "")}
                 />
               ) : null}
               {message.citations?.length ? (
-                <div className="assistant-citation-card">
-                  <strong>原文定位</strong>
-                  <span>
-                    {message.citations[0].paperId} · 第 {message.citations[0].page} 页
-                  </span>
-                  <span>{message.citations[0].snippet}</span>
-                  <span>可信度 {message.confidence?.toFixed(2)}</span>
-                </div>
+                <details className="assistant-citation-card">
+                  <summary>查看引用原文</summary>
+                  {message.citations.filter((citation, index, citations) => citations.findIndex((other) =>
+                    other.paperId === citation.paperId && other.page === citation.page && other.snippet === citation.snippet
+                  ) === index).map((citation, citationIndex) => (
+                    <div key={`${citation.paperId}-${citation.page}-${citationIndex}`}>
+                      <Button appearance="subtle" disabled={!onOpenCitation} onClick={() => onOpenCitation?.(citation)} size="small">
+                        {papers.find((paper) => paper.id === citation.paperId)?.title ?? "引用文献"} · 第 {citation.page} 页
+                      </Button>
+                      <blockquote>{citation.snippet}</blockquote>
+                    </div>
+                  ))}
+                </details>
               ) : null}
               {message.audit ? (
                 <div className={`assistant-audit-card ${message.audit.verdict}`}>
@@ -301,7 +313,7 @@ export function AssistantMessageList({
                     <button
                       aria-label="复制回复"
                       className="assistant-message-action"
-                      onClick={() => void navigator.clipboard?.writeText(message.content)}
+                      onClick={() => void navigator.clipboard?.writeText(getAnswerDisplayText(message.content))}
                       title="复制回复"
                       type="button"
                     >

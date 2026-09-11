@@ -93,7 +93,7 @@ describe("agent activity projection", () => {
     });
   });
 
-  test("ignores non-Manager workflow progress and plans", () => {
+  test("projects workflow progress into the expandable public activity log", () => {
     const initial = createAgentActivity();
     const projected = applyAgentActivityEvent(initial, event({
       phase: "retrieval",
@@ -104,8 +104,9 @@ describe("agent activity projection", () => {
       type: "progress.started"
     }));
 
-    expect(projected).toEqual(initial);
-    expect(projected.entries).toHaveLength(0);
+    expect(projected.entries).toEqual([expect.objectContaining({
+      content: "核对引用与证据覆盖", label: "核对引用与证据覆盖", kind: "runtime", status: "running"
+    })]);
   });
 
   test("omits protocol JSON from user-facing details", () => {

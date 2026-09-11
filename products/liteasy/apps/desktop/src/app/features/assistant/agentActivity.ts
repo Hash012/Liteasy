@@ -94,6 +94,23 @@ export function completeAgentActivity(
 
 /** Projects the stable public activity events emitted by the active Manager. */
 export function applyAgentActivityEvent(activity: AgentActivity, event: AgentEvent): AgentActivity {
+  if (event.type === "context.prepared" || event.type === "progress.started" || event.type === "analysis.subtask.delta") {
+    const id = event.type === "analysis.subtask.delta" ? event.subtaskId
+      : event.type === "progress.started" ? `${event.planId}-${event.phase ?? "progress"}` : `${event.runId}-context`;
+    const previous = activity.entries.find((entry) => entry.id === id);
+    const label = event.type === "context.prepared" ? "已准备论文与对话上下文"
+      : event.type === "progress.started" ? event.summary : event.label;
+    const detail = event.type === "analysis.subtask.delta" ? `${previous?.content ?? ""}${event.delta}`
+      : event.type === "progress.started" ? event.summary : "本轮使用的上下文已准备完成。";
+    return {
+      ...activity,
+      entries: replaceEntry(activity.entries, {
+        id, label: toUserVisibleAgentActivityText(label), content: safeDetail(detail),
+        kind: event.type === "analysis.subtask.delta" ? "analysis" : "runtime",
+        status: event.type === "context.prepared" ? "completed" : "running"
+      })
+    };
+  }
   if (
     event.type === "execution.route" &&
     (event.runtime === "custom_manager" || event.runtime === "openai_agents_sdk")

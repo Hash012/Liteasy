@@ -1406,13 +1406,13 @@ function PdfPageView({
 
 type PdfThumbnailProps = {
   active: boolean;
-  activePaper: Paper | null;
+  annotations: PdfAnnotationV2[];
   onNavigate: (page: number) => void;
   pageNumber: number;
   pdfDocument: PDFDocumentProxy | null;
 };
 
-function PdfThumbnail({ active, activePaper, onNavigate, pageNumber, pdfDocument }: PdfThumbnailProps) {
+function PdfThumbnail({ active, annotations, onNavigate, pageNumber, pdfDocument }: PdfThumbnailProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -1468,7 +1468,19 @@ function PdfThumbnail({ active, activePaper, onNavigate, pageNumber, pdfDocument
         title={`转到第 ${pageNumber} 页`}
         type="button"
       >
-        <canvas aria-label={`PDF.js 缩略图 ${pageNumber}`} className="pdf-thumbnail-canvas" ref={canvasRef} />
+        <span className="pdf-thumbnail-page">
+          <canvas aria-label={`PDF.js 缩略图 ${pageNumber}`} className="pdf-thumbnail-canvas" ref={canvasRef} />
+          {annotations.filter((annotation) => annotation.page === pageNumber &&
+            (annotation.kind === "highlight" || annotation.kind === "underline"))
+            .flatMap((annotation) => annotation.rects.map((rect, index) => (
+              <span
+                aria-hidden="true"
+                className={`pdf-thumbnail-mark ${annotation.kind}`}
+                key={`${annotation.id}-${index}`}
+                style={getOverlayStyle(annotation.kind, rect, annotation.kind === "highlight" ? annotation.color : undefined)}
+              />
+            )))}
+        </span>
         <span className="pdf-thumbnail-number">{pageNumber}</span>
       </button>
     </li>
@@ -3060,7 +3072,7 @@ export function PdfReader({
                   {pageNumbers.map((pageNumber) => (
                     <PdfThumbnail
                       active={pageNumber === focusedPage}
-                      activePaper={activePaper}
+                      annotations={annotations}
                       key={pageNumber}
                       onNavigate={navigateToPage}
                       pageNumber={pageNumber}

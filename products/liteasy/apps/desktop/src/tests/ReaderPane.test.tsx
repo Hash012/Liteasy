@@ -349,7 +349,7 @@ describe("ReaderPane", () => {
     expect(within(readerHeader).queryByText("AI-driven paper-assisted reading platform")).not.toBeInTheDocument();
     expect(within(readerHeader).queryByText("云端模型能力")).not.toBeInTheDocument();
     expect(within(readerHeader).getByRole("toolbar", { name: "PDF 阅读批注工具栏" })).toBeInTheDocument();
-    expect(within(readerHeader).getByText(readerTestPaper.title)).toBeInTheDocument();
+    expect(within(readerHeader).queryByText(readerTestPaper.title)).not.toBeInTheDocument();
     expect(within(readerHeader).queryByText("显示比例 100%")).not.toBeInTheDocument();
     expect(screen.getByLabelText("PDF 显示比例 100%")).toBeInTheDocument();
     expect(document.querySelector(".pdf-toolbar")).not.toBeInTheDocument();
@@ -415,7 +415,8 @@ describe("ReaderPane", () => {
       "title",
       "折叠右侧栏"
     );
-    expect(within(readerHeader).getByText("ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data")).toBeInTheDocument();
+    expect(readerHeader.firstElementChild).toBe(layoutControls);
+    expect(within(readerHeader).getByRole("button", { name: "确认文献身份" })).toHaveTextContent("确认文献身份");
     expect(screen.getByLabelText("PDF 显示比例 100%")).toBeInTheDocument();
     expect(screen.getByLabelText("多模态产物区域")).toBeInTheDocument();
 

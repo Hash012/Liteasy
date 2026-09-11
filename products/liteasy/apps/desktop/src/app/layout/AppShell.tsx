@@ -1754,6 +1754,7 @@ export function AppShell({
     if (itemId === "assistant") {
       return (
         <AssistantSidebar
+          onOpenCitation={(citation) => openEvidenceInReader({ evidenceId: `citation-${citation.paperId}-${citation.page}`, paperId: citation.paperId, page: citation.page, quote: citation.snippet })}
           agentClient={assistantAgent.agentClient}
           academicProfile={profileActions.academicProfile}
           artifactTasks={artifactTasks}

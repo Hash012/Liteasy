@@ -71,3 +71,13 @@ test("shows where a specialist result is handed back and visualized", () => {
   expect(screen.getByRole("button", { name: "输出 思维导图结果已传回" }))
     .toBeInTheDocument();
 });
+
+test("expands the completed run header even when the provider supplies no summary", async () => {
+  const user = userEvent.setup();
+  render(<AgentActivityCard activity={completeAgentActivity(createAgentActivity(), "completed")} />);
+  const toggle = screen.getByRole("button", { name: "查看 Agent 执行过程" });
+  await user.click(toggle);
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await user.click(toggle);
+  expect(screen.getByText("本次运行未返回可展示的过程摘要。")).toBeVisible();
+});
