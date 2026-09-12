@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { useRef, type RefObject } from "react";
 import { Tooltip } from "@fluentui/react-components";
 import { MicRegular, SendRegular } from "@fluentui/react-icons";
 import type { AssistantComposerSuggestion, AssistantContextToken } from "./assistant.types";
@@ -64,12 +64,27 @@ export function AssistantComposer({
   suggestions = [],
   voiceInputMessage
 }: AssistantComposerProps) {
+  const highlightRef = useRef<HTMLDivElement>(null);
+  const commands = suggestions.filter((item) => item.trigger === "/")
+    .map((item) => item.insertText ?? `/${item.label}`).sort((a, b) => b.length - a.length);
+  const highlightedInput = [];
+  let offset = 0;
+  while (offset < input.length) {
+    const command = commands.find((value) => input.startsWith(value, offset) &&
+      (offset === 0 || /\s/.test(input[offset - 1])));
+    if (command) {
+      highlightedInput.push(<mark className="assistant-command-chip" key={offset}>{command}</mark>);
+      offset += command.length;
+    } else {
+      highlightedInput.push(input[offset++]);
+    }
+  }
   const activeTrigger = getActiveTrigger(input);
   const visibleSuggestions = activeTrigger
     ? suggestions
         .filter((suggestion) => suggestion.trigger === activeTrigger.trigger)
         .filter((suggestion) => matchesSuggestion(suggestion, activeTrigger.query))
-        .slice(0, 8)
+        .slice(0, activeTrigger.trigger === "/" ? undefined : 8)
     : [];
 
   function selectSuggestion(suggestion: AssistantComposerSuggestion) {
@@ -86,7 +101,7 @@ export function AssistantComposer({
       return;
     }
 
-    onInputChange(`${beforeTrigger}${suggestion.insertText ?? suggestion.label}${afterTrigger}`);
+    onInputChange(`${beforeTrigger}${suggestion.insertText ?? suggestion.label}${suggestion.trigger === "/" ? " " : ""}${afterTrigger}`);
     inputRef?.current?.focus();
   }
 
@@ -149,8 +164,16 @@ export function AssistantComposer({
           ))}
         </div>
       ) : null}
+      <div className="assistant-input-editor">
+      <div aria-hidden="true" className="assistant-input-highlight" ref={highlightRef}>{highlightedInput}{"\n"}</div>
       <textarea
         className="assistant-input"
+        onScroll={(event) => {
+          if (highlightRef.current) {
+            highlightRef.current.scrollTop = event.currentTarget.scrollTop;
+            highlightRef.current.scrollLeft = event.currentTarget.scrollLeft;
+          }
+        }}
         ref={inputRef}
         onChange={(event) => onInputChange(event.target.value)}
         onKeyDown={(event) => {
@@ -188,6 +211,7 @@ export function AssistantComposer({
         title={modeHint}
         value={input}
       />
+      </div>
       <div className="assistant-composer-actions">
         <Tooltip content="语音输入（预留）" positioning="above" relationship="description">
           <button

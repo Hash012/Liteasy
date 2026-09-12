@@ -3405,7 +3405,7 @@ body {
 
 .pdf-workspace {
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
+  grid-template-columns: var(--pdf-sidebar-width, 180px) minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   position: relative;
@@ -3416,7 +3416,7 @@ body {
 }
 
 .pdf-workspace.whiteboard-open {
-  grid-template-columns: 180px minmax(0, 1fr) clamp(340px, 36vw, 520px);
+  grid-template-columns: var(--pdf-sidebar-width, 180px) minmax(0, 1fr) clamp(340px, 36vw, 520px);
 }
 
 .pdf-workspace.sidebar-collapsed.whiteboard-open {
@@ -3424,9 +3424,10 @@ body {
 }
 
 .pdf-left-sidebar {
+  position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  width: 180px;
+  width: 100%;
   min-width: 0;
   border-right: 1px solid var(--line-1);
   background: rgba(248, 251, 253, 0.88);
@@ -3444,6 +3445,7 @@ body {
 }
 
 .pdf-workspace.sidebar-collapsed .pdf-left-sidebar {
+  position: relative;
   display: block;
   padding: 8px 6px;
   width: 44px;
@@ -6704,3 +6706,85 @@ button.pdf-overlay-mark:focus-visible {
   font-size: 12px;
   line-height: 1.4;
 }
+
+/* Text and decoration share metrics so command capsules follow wrapping and scrolling. */
+.assistant-input-editor { position: relative; }
+.assistant-input-editor .assistant-input,
+.assistant-input-highlight {
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.8;
+  letter-spacing: normal;
+  padding: 2px;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  box-sizing: border-box;
+}
+.assistant-input-editor .assistant-input {
+  display: block;
+  position: relative;
+  color: transparent;
+  caret-color: var(--ink-1);
+}
+.assistant-input-highlight {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  color: var(--ink-1);
+}
+.assistant-command-chip {
+  background: #e6f0fa;
+  color: #185a97;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px #aac9e6;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.assistant-pane.accepting-reader-context .assistant-input-wrap {
+  outline: 2px solid var(--accent-1);
+  background: #edf5ff;
+}
+.pdf-sidebar-resizer {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 5;
+}
+.pdf-sidebar-resizer:hover, .pdf-sidebar-resizer:focus-visible { background: var(--accent-1); }
+.pdf-annotation-options { font-size: 12px; padding: 4px 0; }
+.pdf-annotation-item:not(.expanded) { padding: 5px 7px; }
+.pdf-annotation-item:not(.expanded) .pdf-annotation-summary { gap: 2px; }
+.pdf-overlay-mark.underline.quick-ask { border-bottom: 2px dashed var(--accent-1); }
+.pdf-overlay-mark[draggable="true"] { cursor: grab; }
+.pdf-overlay-mark[draggable="true"]:active { cursor: grabbing; }
+.pdf-quick-ask-panel {
+  position: sticky;
+  bottom: 12px;
+  margin: 12px auto;
+  width: min(420px, calc(100% - 24px));
+  padding: 12px;
+  border: 1px solid var(--line-1);
+  border-radius: 8px;
+  background: var(--paper-1, white);
+  box-shadow: 0 2px 8px #0002;
+  z-index: 30;
+}
+.pdf-quick-ask-panel form { display: grid; gap: 8px; }
+.pdf-quick-ask-panel textarea { width: 100%; box-sizing: border-box; resize: vertical; }
+.pdf-annotation-popover { max-height: min(600px, 75vh); overflow-y: auto; }
+
+.pdf-annotation-item:not(.expanded) .pdf-annotation-summary {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  font-size: 12px;
+}
+.pdf-annotation-item:not(.expanded) .pdf-annotation-kind { margin-right: 6px; }
+.pdf-annotation-item:not(.expanded) .pdf-annotation-excerpt { display: inline; }
+.pdf-annotation-summary-note { color: var(--ink-2); }

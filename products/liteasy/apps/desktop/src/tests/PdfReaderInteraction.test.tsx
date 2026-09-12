@@ -157,8 +157,9 @@ test("clicking a page highlight opens its comment editor with a live Markdown pr
 
   await user.click(within(editor).getByRole("button", { name: "保存注释" }));
   expect(screen.queryByLabelText(/高亮注释编辑器/u)).not.toBeInTheDocument();
-  const sidebarPreview = screen.getByText("核心结论").closest(".annotation-note-preview");
-  expect(sidebarPreview?.querySelector("strong")).toHaveTextContent("核心结论");
+  await user.click(screen.getByRole("button", { name: /编辑批注/u }));
+  const sidebarPreview = screen.getByLabelText("批注 Markdown 实时预览");
+  expect(sidebarPreview.querySelector("strong")).toHaveTextContent("核心结论");
 });
 
 test("shows highlighted comments beside the PDF only when the margin layer is enabled", async () => {

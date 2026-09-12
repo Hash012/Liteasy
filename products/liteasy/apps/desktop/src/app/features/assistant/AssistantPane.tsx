@@ -1,3 +1,4 @@
+import { readerContextDragMime, readDraggedReaderContext } from "./readerContextDrag";
 import { useEffect, useRef, useState } from "react";
 import { Tooltip } from "@fluentui/react-components";
 import { AddRegular, DismissRegular, HistoryRegular } from "@fluentui/react-icons";
@@ -83,7 +84,7 @@ import {
 import type { ReaderConversationContext } from "./assistantContext.types";
 import { generateAssistantAnswer } from "./generateAssistantAnswer";
 
-import { requestedArtifactType } from "../artifacts/artifactInvocation";
+import { artifactSlashSuggestions, requestedArtifactType } from "../artifacts/artifactInvocation";
 import { projectArtifactTaskMessage } from "./assistantArtifactActivity";
 import type { AssistantHistoryPersistence, AssistantHistorySnapshot } from "./assistantHistoryPersistence";
 
@@ -176,15 +177,6 @@ function createMessage(role: AssistantMessage["role"], content: string): Assista
   };
 }
 
-function getArtifactTypeFromCommand(message: string): ArtifactType | null {
-  if (/薄读|thin[ -]?read(?:ing)?/i.test(message)) return "thin_reading";
-  if (/分层关系图|分层图|obsidian|星图|关系网络/i.test(message)) return "layered_graph";
-  if (/思维导图|脑图|mindmap/i.test(message)) return "mindmap";
-  if (/树状图|树形图|树形展开/i.test(message)) return "tree";
-  if (/对比表|对比矩阵|comparison table/i.test(message)) return "comparison_table";
-  if (/\bppt\b|演示文稿|幻灯片/i.test(message)) return "ppt";
-  return null;
-}
 
 function formatRuntimeEvent(event: AgentRuntimeEvent): string {
   if (event.type === "plan_preview") {
@@ -433,7 +425,7 @@ export function AssistantPane({
     workspace: runtimeWorkspace
   });
 
-  useEffect(() => {
+  function addReaderContext(readerConversationContext: ReaderConversationContext | null | undefined) {
     if (!readerConversationContext) {
       return;
     }
@@ -481,7 +473,9 @@ export function AssistantPane({
       }
     ]);
     inputRef.current?.focus();
-  }, [readerConversationContext]);
+  }
+
+  useEffect(() => { addReaderContext(readerConversationContext); }, [readerConversationContext]);
 
   useEffect(() => {
     if (!historyReady || artifactTasks.length === 0) {
@@ -704,6 +698,10 @@ export function AssistantPane({
   }
 
   function removeComposerContextToken(tokenId: string) {
+    setReaderContexts((contexts) => contexts.filter((context) =>
+      `pdf-selection-${[context.paperId ?? "unknown-paper", context.page, context.excerpt].join("::")}` !== tokenId
+    ));
+    lastReaderContextKeyRef.current = null;
     setComposerContextTokens((currentTokens) =>
       currentTokens.filter((token) => token.id !== tokenId)
     );
@@ -711,12 +709,10 @@ export function AssistantPane({
 
   function buildComposerSuggestions(): AssistantComposerSuggestion[] {
     const commandSuggestions: AssistantComposerSuggestion[] = [
-      "生成薄读",
       "打开设置面板",
       "打开组织共享文献库",
       "关闭联网推荐",
       "开启用户画像",
-      "生成思维导图",
       "把窗口切分成两个",
       "把 AI 助手放到下栏"
     ].map((command) => ({
@@ -776,7 +772,7 @@ export function AssistantPane({
       trigger: "$"
     }));
 
-    return [...commandSuggestions, ...paperSuggestions, ...pageSuggestions, ...skillSuggestions];
+    return [...artifactSlashSuggestions, ...commandSuggestions, ...paperSuggestions, ...pageSuggestions, ...skillSuggestions];
   }
 
   function setMode(mode: AssistantMode) {
@@ -1718,7 +1714,10 @@ export function AssistantPane({
     syncAssistant();
 
     const artifactType = requestedArtifactType(turn.message);
-    if (artifactType === "thin_reading") {
+    // The artifact workflow creates a task, submits its artifactType to the main Agent,
+    // and saves the specialist result. Keep slash shortcuts on that complete path.
+    if (artifactType && (artifactType === "thin_reading" ||
+      (turn.mode === "command" && getActivePublicAgentClient()))) {
       const previousPaperIds = assistantStoreRef.current.getState().messages.slice(0, -1).reverse()
         .find((message) => message.role === "user" && message.contextTokens?.some((token) => token.kind === "paper"))
         ?.contextTokens?.filter((token) => token.kind === "paper").map((token) => token.id.replace(/^paper-/, ""));
@@ -1741,9 +1740,9 @@ export function AssistantPane({
     if (turn.mode === "command") {
       commandPaperIdsRef.current = turn.referencedPaperIds;
       try {
-        const artifactType = getArtifactTypeFromCommand(turn.message);
+        const artifactType = requestedArtifactType(turn.message);
         if (artifactType && turn.referencedPaperIds.length > 0) {
-          const message = onGenerateArtifact(artifactType, turn.referencedPaperIds);
+          const message = onGenerateArtifact(artifactType, turn.referencedPaperIds, [turn.message, turn.attachedContextPrompt].filter(Boolean).join("\n\n"));
           assistantStoreRef.current.addMessage(createMessage("assistant", message));
           syncAssistant();
           void executeNextQueuedTurn();
@@ -1983,14 +1982,16 @@ export function AssistantPane({
     setComposerContextTokens([]);
     syncAssistant();
 
-    if (activeMode === "command") {
-      await runCommandMessage(adapted.runtimeInput.message);
-      return;
-    }
-
-    await runKnowledgeMessage(adapted.runtimeInput.message, activeMode, {
+    await executePreparedTurn({
       attachedContextPrompt,
-      referencedPaperIds
+      contextTokens,
+      message: adapted.runtimeInput.message,
+      mode: activeMode,
+      policy: "interrupt",
+      readerContexts: [],
+      referencedPaperIds,
+      userContent: adapted.userMessageContent,
+      userMessageId: retriedMessage.id
     });
   }
 
@@ -2020,7 +2021,28 @@ export function AssistantPane({
     : assistantState.pending;
 
   return (
-    <div className={conversationStarted ? "assistant-pane in-conversation" : "assistant-pane initial-session"}>
+    <div className={conversationStarted ? "assistant-pane in-conversation" : "assistant-pane initial-session"}
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes(readerContextDragMime)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.dataTransfer.dropEffect = "copy";
+        event.currentTarget.classList.add("accepting-reader-context");
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          event.currentTarget.classList.remove("accepting-reader-context");
+        }
+      }}
+      onDrop={(event) => {
+        event.currentTarget.classList.remove("accepting-reader-context");
+        if (!event.dataTransfer.types.includes(readerContextDragMime)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const context = readDraggedReaderContext(event.dataTransfer.getData(readerContextDragMime));
+        if (context) addReaderContext(context);
+      }}
+    >
       <div className="assistant-session-toolbar">
         <div className="assistant-active-session" aria-label="当前会话">
           <span className="assistant-active-session-kind">

@@ -269,7 +269,7 @@ export function createAgentErrorEnvelope(input: {
       retryable: false,
       userImpact: "生成结果未通过结构、证据或安全校验，因此没有交付该结果。"
     };
-  } else if (/failed to fetch|econnrefused|408|500|502|503|504|连接失败|服务不可用/.test(normalized)) {
+  } else if (/failed to fetch|econnrefused|econnreset|etimedout|timeout|timed out|408|500|502|503|504|连接失败|网络连接中断|服务不可用/.test(normalized)) {
     error = {
       category: "network",
       code: input.code ?? "SERVICE_UNAVAILABLE",
