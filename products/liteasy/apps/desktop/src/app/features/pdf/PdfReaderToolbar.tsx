@@ -28,6 +28,7 @@ import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
 export type PdfPageLayoutMode = "continuous" | "single" | "spread";
 
 type PdfReaderToolbarProps = {
+  readingControls?: ReactNode;
   activeSearchIndex: number;
   currentPage: number;
   layoutMode: PdfPageLayoutMode;
@@ -63,6 +64,7 @@ type PdfReaderToolbarProps = {
 };
 
 export function PdfReaderToolbar({
+  readingControls,
   activeSearchIndex,
   currentPage,
   layoutMode,
@@ -132,6 +134,7 @@ export function PdfReaderToolbar({
   return (
     <div className="pdf-reader-toolbar-wrap">
       <div aria-label="PDF 导航工具栏" className="pdf-reader-toolbar" role="toolbar">
+        {readingControls}
         <div aria-label="页面导航" className="pdf-reader-toolbar-group" role="group">
           <Button
             aria-label="上一页"

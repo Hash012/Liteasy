@@ -131,6 +131,11 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
           getImportedChunksForPaperId: current.getImportedChunksForPaperId,
           request
         });
+        const savedScope = request?.attachments?.find((attachment) => attachment.source === "selection")?.metadata?.knowledgeSnapshot as unknown as {
+          papers?: import("../../features/workspace/workspace.types").Paper[];
+          chunks?: typeof knowledgeScope.importedChunksByPaperId;
+          settings?: import("../../features/settings/settings.types").SettingsState;
+        } | undefined;
         const runtimeContext = buildAgentRuntimeContextView({
           academicProfile: current.academicProfile,
           importedCount: current.importedSelectedCount,
@@ -149,10 +154,10 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
           },
           knowledge: {
             auditTransport: current.modelTransport,
-            importedChunksByPaperId: knowledgeScope.importedChunksByPaperId,
+            importedChunksByPaperId: savedScope?.chunks ?? knowledgeScope.importedChunksByPaperId,
             modelTransport: current.modelTransport,
-            selectedPapers: knowledgeScope.selectedPapers,
-            settings: current.settingsStore.getState(),
+            selectedPapers: savedScope?.papers ?? knowledgeScope.selectedPapers,
+            settings: savedScope?.settings ?? current.settingsStore.getState(),
             thinReadingContext: getAgentRequestThinReadingContext(request),
             thinReadingExternalKnowledgeTransport: current.thinReadingExternalKnowledgeTransport,
             thinReadingExternalPdfTransport: current.thinReadingExternalPdfTransport

@@ -77,3 +77,13 @@ test("runs Thin Reading as an Agents SDK nested agent and returns its result", a
     })
   ]));
 });
+
+test("preserves the specialist failure instead of replacing it with result_missing", async () => {
+  const manager = createOpenAIAgentsSdkManager();
+  await expect(manager.run({
+    answerNormally: vi.fn(), reportManagerActivity: vi.fn(),
+    invokeSpecialist: async () => { throw new Error("网络连接中断，请继续薄读"); },
+    request: { input: { artifactType: "thin_reading", message: "生成薄读", mode: "qa" } },
+    runId: "failed-run", signal: new AbortController().signal, specialistTools: createSpecialistAgentToolCatalog()
+  } as never)).rejects.toThrow("网络连接中断，请继续薄读");
+});

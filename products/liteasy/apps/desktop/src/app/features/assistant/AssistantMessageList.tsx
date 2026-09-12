@@ -81,6 +81,7 @@ function getPublicAuditStatusLabel(status: "blocked" | "passed" | "warning") {
 type AssistantMessageListProps = {
   papers?: Paper[];
   onOpenArtifact?: (artifactId: string) => void;
+  onResumeArtifactTask?: (taskId: string) => Promise<void>;
   onCancelArtifactTask?: (taskId: string) => void;
   onOpenCitation?: (citation: Citation) => void;
   messages: AssistantMessage[];
@@ -101,6 +102,7 @@ type AssistantMessageListProps = {
 export function AssistantMessageList({
   papers = [],
   onOpenArtifact,
+  onResumeArtifactTask,
   onCancelArtifactTask,
   onOpenCitation,
   messages,
@@ -147,7 +149,9 @@ export function AssistantMessageList({
               {message.artifactTask?.artifactId && message.artifactTask.status === "completed" ? (
                 <Button onClick={() => onOpenArtifact?.(message.artifactTask!.artifactId!)} size="small">打开薄读</Button>
               ) : message.artifactTask && ["queued", "running"].includes(message.artifactTask.status) ? (
-                <Button onClick={() => onCancelArtifactTask?.(message.artifactTask!.id)} size="small">取消薄读</Button>
+                <Button onClick={() => onCancelArtifactTask?.(message.artifactTask!.id)} size="small">中断薄读</Button>
+              ) : message.artifactTask && ["failed", "cancelled"].includes(message.artifactTask.status) && onResumeArtifactTask ? (
+                <ResumeReadingButton onResume={() => onResumeArtifactTask(message.artifactTask!.id)} />
               ) : null}
               {message.content &&
               (!message.uiDsl || message.citations?.length || message.audit || message.executionTrace) ? (
@@ -367,4 +371,13 @@ export function AssistantMessageList({
       })}
     </div>
   );
+}
+
+function ResumeReadingButton({ onResume }: { onResume: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  return <div><Button disabled={busy} size="small" onClick={() => {
+    setBusy(true); setError("");
+    void onResume().catch((reason) => setError(reason instanceof Error ? reason.message : String(reason))).finally(() => setBusy(false));
+  }}>继续薄读</Button>{error ? <p role="alert">{error}</p> : null}</div>;
 }

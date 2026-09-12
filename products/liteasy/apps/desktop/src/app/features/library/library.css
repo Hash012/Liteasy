@@ -1120,3 +1120,12 @@
 .library-paper-children summary { cursor: pointer; padding: 3px 0; }
 .library-paper-children ul { list-style: none; margin: 0; padding: 0; }
 .library-paper-children button { max-width: 100%; text-align: left; overflow-wrap: anywhere; }
+
+.activity-bar .reader-layout-controls { flex-direction: column; margin-top: auto; padding: 8px 0; }
+
+.reader-pdf-surface { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.reader-pdf-surface[hidden] { display: none; }
+.reader-pdf-surface > .pdf-reader { flex: 1; min-height: 0; }
+.reader-reading-surface { min-width: 0; min-height: 0; overflow: auto; }
+.reader-service-error { padding: 8px; margin: 0; }
+.settings-service-actions { display: flex; flex-wrap: wrap; gap: 4px; }

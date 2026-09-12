@@ -52,7 +52,7 @@ test("generates thin reading from a real PDF without login and reopens the saved
   await expect(page.getByRole("button", { name: "打开薄读", exact: true })).toBeVisible({ timeout: 60_000 });
   await expect(page.locator(".thin-reading").getByText(summary, { exact: true }).first()).toBeVisible();
   expect(formats).toContain("liteasy_thin_reading");
-  expect(formats).toContain("liteasy_thin_reading_evidence_review");
+  expect(formats).not.toContain("liteasy_thin_reading_evidence_review");
   const requestCount = formats.length;
   await page.reload();
   await expect(page.getByRole("button", { name: "打开薄读", exact: true })).toBeVisible();

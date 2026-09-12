@@ -1,3 +1,11 @@
+vi.mock("../app/features/persistence/durableJsonStore", () => ({
+  loadDurableEntries: async (scope: string) => JSON.parse(localStorage.getItem(`liteasy.checkpoints.v1:${scope}`) ?? "{}"),
+  putDurableEntry: async (scope: string, key: string, value: unknown) => {
+    const entries = JSON.parse(localStorage.getItem(`liteasy.checkpoints.v1:${scope}`) ?? "{}");
+    entries[key] = value;
+    localStorage.setItem(`liteasy.checkpoints.v1:${scope}`, JSON.stringify(entries));
+  }
+}));
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { useArtifactWorkflowController } from "../app/controllers/useArtifactWorkflowController";
@@ -394,7 +402,7 @@ describe("useArtifactWorkflowController", () => {
         type: "thin_reading"
       })
     ]);
-    expect(onAnalysisHint).toHaveBeenCalledWith(expect.stringContaining("未完成的生成任务"));
+    expect(onAnalysisHint).toHaveBeenCalledWith(expect.stringContaining("未完成的薄读任务"));
     expect(window.localStorage.getItem("liteasy.artifact-task-recovery/v1")).toBeNull();
   });
 

@@ -1,3 +1,4 @@
+import { extractThinReadingDraft } from "../../features/thin-reading/thinReadingDraft";
 import type {
   ArtifactTaskStage,
   ArtifactType
@@ -73,6 +74,7 @@ function createArtifactIdempotencyKey(artifactType: ArtifactType) {
 
 function buildSelectionAttachment(options?: AgentArtifactGenerationOptions): AgentAttachment {
   const metadata = {
+    ...(options?.knowledgeSnapshot ? { knowledgeSnapshot: JSON.parse(JSON.stringify(options.knowledgeSnapshot)) } : {}),
     ...(options?.sourcePaperIds?.length ? { paperIds: [...options.sourcePaperIds] } : {}),
     ...(options?.thinReadingContext
       ? { thinReadingContext: JSON.parse(JSON.stringify(options.thinReadingContext)) }
@@ -112,6 +114,7 @@ export async function runAgentArtifactAnalysis(
   onProgress?: (input: {
     agentRunId?: string;
     message: string;
+    publicReasoning?: string;
     partialAnswer?: string;
     partialOutlineNodes?: ReturnType<typeof parseStreamingOutlineMarkdown>;
     progress: number;
@@ -168,7 +171,12 @@ export async function runAgentArtifactAnalysis(
       });
       return;
     }
+    if (event.type === "manager.activity" && event.kind === "reasoning_summary") {
+      onProgress?.({ publicReasoning: event.detail, message: "模型正在推理", progress: 60, stage: "generating_answer" });
+      return;
+    }
     if (event.type === "progress.started") {
+      if (artifactType === "thin_reading" && event.phase === "generating_answer") partialAnswer = "";
       onProgress?.({
         message: event.summary,
         progress: Math.max(25, Math.min(90, event.progress ?? 50)),
@@ -204,7 +212,7 @@ export async function runAgentArtifactAnalysis(
         : undefined;
       onProgress?.({
         message: "正在接收模型流式输出",
-        partialAnswer: partialAnswer.slice(-1600),
+        partialAnswer: artifactType === "thin_reading" ? extractThinReadingDraft(partialAnswer) : partialAnswer.slice(-1600),
         partialOutlineNodes,
         progress: 68,
         stage: artifactType === "thin_reading"

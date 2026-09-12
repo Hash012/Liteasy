@@ -2,7 +2,7 @@ import type { SettingsState, UpdateSettingCommand } from "./settings.types";
 
 const viewSettingsStorageKey = "liteasy.view-settings.v1";
 const modelSettingsStorageKey = "liteasy.model-connection.v1";
-const modelSettingKeys = ["models.connection_mode", "models.direct_provider", "models.direct_endpoint", "models.direct_model", "models.direct_protocol", "models.direct_output_format"] as const;
+const modelSettingKeys = ["thin_reading.mode", "papers.metadata_provider", "papers.metadata_endpoint", "papers.mineru_mode", "papers.mineru_endpoint", "models.connection_mode", "models.direct_provider", "models.direct_endpoint", "models.direct_model", "models.direct_protocol", "models.direct_output_format"] as const;
 
 function loadPersistedModelSettings(): Partial<SettingsState> {
   try {
@@ -76,6 +76,11 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
   const cloudEndpoint = releaseEndpoint(runtimeEnv.VITE_LITEASY_CLOUD_URL, "http://127.0.0.1:8787");
   const forumEndpoint = releaseEndpoint(runtimeEnv.VITE_FORUM_API_URL, "");
   const state: SettingsState = {
+    "thin_reading.mode": "fast",
+    "papers.metadata_provider": "crossref",
+    "papers.metadata_endpoint": "https://api.crossref.org",
+    "papers.mineru_mode": "local",
+    "papers.mineru_endpoint": "https://mineru.net",
     "network.recommendation.enabled": true,
     "network.recommendation.sort_mode": "relevance",
     "assistant.public_audit.enabled": false,

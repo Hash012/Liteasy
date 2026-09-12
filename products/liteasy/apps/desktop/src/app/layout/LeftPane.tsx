@@ -94,6 +94,7 @@ export type LeftPaneProps = {
   onOpenOrganizationDialog: () => void;
   onOpenCloudEntry?: (scope: CloudLibraryScope, entry: CloudLibraryEntry) => void | Promise<void>;
   onOpenPaper?: (paperId: string) => void;
+  onResolvePaperIdentity?: (paper: Paper) => void;
   onOpenPaperChild?: (item: LibraryPaperChildItem, paper: Paper) => void;
   onRenamePaperChild?: (item: LibraryPaperChildItem, paper: Paper, requestedName: string) => Promise<string>;
   onRefreshLocalLibrary?: () => Promise<void>;
@@ -220,6 +221,7 @@ export function LeftPane({
   onOpenCloudEntry,
   onOpenOrganizationDialog,
   onOpenPaper,
+  onResolvePaperIdentity,
   onOpenPaperChild,
   onRenamePaperChild,
   onRefreshLocalLibrary,
@@ -406,6 +408,7 @@ export function LeftPane({
             }}
             onOpenCloudEntry={onOpenCloudEntry}
             onOpenPaper={onOpenPaper}
+            onResolvePaperIdentity={onResolvePaperIdentity}
             onOpenPaperChild={onOpenPaperChild}
             onRefreshLocalLibrary={onRefreshLocalLibrary}
             onSelectLegacyLibraryRoot={onSelectLegacyLibraryRoot}

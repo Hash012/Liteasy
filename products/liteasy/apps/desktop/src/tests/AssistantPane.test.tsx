@@ -143,8 +143,9 @@ test("shows thin-reading progress in the current conversation for regular accoun
     expect(screen.getByLabelText("当前会话")).toHaveTextContent("普通对话新对话");
   });
   expect(screen.getAllByText(/正在规划薄读路径与证据范围/).length).toBeGreaterThan(0);
-  expect(screen.getByRole("button", { name: "取消薄读" })).toBeInTheDocument();
-  expect(screen.queryByText(/尚未审计的薄读正文/)).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "中断薄读" })).toBeInTheDocument();
+  expect(screen.getByText(/尚未审计的薄读正文/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "分析 正文草稿" })).toBeInTheDocument();
 
   await userEvent.setup().click(screen.getByRole("button", { name: "历史" }));
   expect(screen.queryByRole("button", { name: "打开会话：生成：薄读" })).not.toBeInTheDocument();

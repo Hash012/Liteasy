@@ -437,7 +437,7 @@ describe("useArtifactActions", () => {
       })
     );
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
-      "Agent 分析完成并已保存到当前账号。"
+      "Agent 分析完成并已保存。"
     );
   });
 
@@ -1913,4 +1913,30 @@ describe("useArtifactActions", () => {
       expect.objectContaining({ artifactId: "artifact-original" })
     ]);
   });
+});
+
+test("waits for an interrupted run to settle before resuming the same task", async () => {
+  const store = createArtifactStore();
+  let finishOld!: (run: AgentRun) => void;
+  const run = vi.fn().mockImplementationOnce(() => new Promise<AgentRun>((resolve) => { finishOld = resolve; })).mockResolvedValueOnce(createCompletedThinReadingRun());
+  const save = vi.fn(async () => "saved.json");
+  const actions = useArtifactActions({
+    artifactStore: store, artifactResultClient: { save, delete: vi.fn(), list: async () => [] },
+    getImportedChunksByPaperId: () => ({ [paper.id]: buildImportedChunksForPaper(paper) }),
+    getSelectedDocumentSet: () => ({ documentIds: [paper.id], locked: true }), getSelectedPapers: () => [paper],
+    onAnalysisHint: vi.fn(), onArtifactCatalogChanged: vi.fn(), onArtifactTabsChanged: vi.fn(), onArtifactTasksChanged: vi.fn(),
+    queueImportForPapers: () => "already_imported", runAgentAnalysis: run
+  });
+  actions.startAnalysis("thin_reading");
+  const taskId = store.getTasks()[0].id;
+  await actions.cancelArtifactTask(taskId);
+  const resume = actions.resumeArtifactTask(taskId);
+  await Promise.resolve();
+  expect(run).toHaveBeenCalledOnce();
+  finishOld({ ...createCompletedThinReadingRun(), status: "cancelled" });
+  await resume;
+  await vi.waitFor(() => expect(store.getTask(taskId)?.status).toBe("completed"));
+  expect(run).toHaveBeenCalledTimes(2);
+  expect(save).toHaveBeenCalledOnce();
+  expect(store.getTasks()).toHaveLength(1);
 });

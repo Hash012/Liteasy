@@ -79,8 +79,10 @@ test("edits, displays and filters local papers by category and tags", async () =
   expect(screen.getByRole("button", { name: paper.title })).toBeInTheDocument();
 
   await user.clear(screen.getByRole("textbox", { name: "搜索文献资源" }));
-  await user.click(screen.getByRole("button", { name: paper.title }));
-  await user.click(await screen.findByRole("menuitem", { name: "编辑分类与标签" }));
+  await userEvent.pointer({ keys: "[MouseRight]", target: screen.getByRole("button", { name: paper.title }) });
+  // Pointer movement across the context menu is covered by the browser test;
+  // dispatch the action directly here to isolate metadata editing from jsdom motion.
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑分类与标签" }));
   await screen.findByRole("dialog", { name: "编辑论文分类与标签" });
   fireEvent.change(screen.getByRole("textbox", { name: "论文分类" }), {
     target: { value: "已精读" }
@@ -103,4 +105,15 @@ test("opens a saved multimodal document under its source paper", async () => {
   await userEvent.click(screen.getByText("论文文件（1）"));
   await userEvent.click(screen.getByRole("button", { name: "打开论文文件：薄读：方法" }));
   expect(open).toHaveBeenCalledWith(child, paper);
+});
+
+test("left-click opens a paper and right-click exposes identity confirmation", async () => {
+  const open = vi.fn(); const resolve = vi.fn();
+  renderLibraryPane({ onOpenPaper: open, onResolvePaperIdentity: resolve });
+  await userEvent.click(screen.getByRole("button", { name: paper.title }));
+  expect(open).toHaveBeenCalled();
+  expect(screen.queryByRole("menuitem", { name: "确认文献身份" })).not.toBeInTheDocument();
+  await userEvent.pointer({ keys: "[MouseRight]", target: screen.getByRole("button", { name: paper.title }) });
+  await userEvent.click(await screen.findByRole("menuitem", { name: "确认文献身份" }));
+  expect(resolve).toHaveBeenCalledWith(paper);
 });

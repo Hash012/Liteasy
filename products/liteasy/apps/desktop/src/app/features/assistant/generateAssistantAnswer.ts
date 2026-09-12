@@ -1,3 +1,4 @@
+import { generateAdaptiveThinReading } from "../thin-reading/adaptiveThinReading";
 import { formatAnswer } from "./answerFormatter";
 import type { AssistantMode } from "./assistant.types";
 import { getActiveModelEndpoint, getActiveModelProvider, getModelForSettings } from "../models/modelPolicy";
@@ -107,6 +108,7 @@ type GenerateAssistantAnswerInput = {
   importedChunksByPaperId: Record<string, RetrievalChunk[]>;
   mode: Exclude<AssistantMode, "command">;
   modelTransport?: ModelTransport;
+  onReasoningDelta?: (delta: string, accumulated: string) => void;
   onDelta?: (delta: string, accumulated: string) => void;
   onProgress?: (input: { phase: string; progress: number; summary: string }) => void;
   onSubtaskDelta?: (input: { delta: string; label: string; subtaskId: string }) => void;
@@ -4412,6 +4414,7 @@ export async function generateAssistantAnswer({
   mode,
   modelTransport,
   onDelta,
+  onReasoningDelta,
   onProgress,
   onSubtaskDelta,
   question,
@@ -4455,9 +4458,20 @@ export async function generateAssistantAnswer({
         citations: [],
         confidence: 0
       };
-  const gateway = createModelGatewayFromSettings(settings, {
+  const baseGateway = createModelGatewayFromSettings(settings, {
     cloudTransport: modelTransport
   });
+  const publicReasoning: string[] = [];
+  const gateway = { generateAnswer: (request: import("../models/modelGateway").GenerateAnswerInput) => {
+    const index = publicReasoning.length;
+    publicReasoning.push("");
+    return baseGateway.generateAnswer({ ...request, onReasoningDelta: (delta, accumulated) => {
+      request.onReasoningDelta?.(delta, accumulated);
+      publicReasoning[index] = accumulated;
+      onReasoningDelta?.(delta, publicReasoning.filter(Boolean).join("\n\n"));
+    } });
+  } };
+
   const activeEndpoint = getActiveModelEndpoint(settings);
   const provider = getActiveModelProvider(settings);
   const model = getModelForSettings(settings);
@@ -4477,7 +4491,7 @@ export async function generateAssistantAnswer({
       selectedPapers: analysisInputPapers,
       settings
     });
-    const userPrompt = context.prompt ?? (thinReadingContext ? undefined : question);
+    const userPrompt = context.prompt ?? (context.generationMode || !thinReadingContext ? question : undefined);
     context = {
       ...context,
       ...(userPrompt ? { prompt: userPrompt } : {}),
@@ -4491,7 +4505,7 @@ export async function generateAssistantAnswer({
       context.externalSources,
       context.selectedExternalSources
     );
-    const shouldRetrieveExternalKnowledge = shouldRetrieveThinReadingExternalKnowledge(
+    const shouldRetrieveExternalKnowledge = !context.generationMode && shouldRetrieveThinReadingExternalKnowledge(
       context,
       thinReadingClosurePolicy
     );
@@ -4570,9 +4584,11 @@ export async function generateAssistantAnswer({
     onProgress?.({
       phase: "generating_answer",
       progress: 55,
-      summary: "正在并行准备本地证据与外部来源"
+      summary: context.generationMode ? "正在根据论文与阅读上下文生成讲解" : "正在并行准备本地证据与外部来源"
     });
-    const thinReadingGeneration = await generateThinReadingWithQualityRepair({
+    const thinReadingGeneration = context.generationMode
+      ? await generateAdaptiveThinReading({ context, gateway, model, provider, prepared: preparedAnalysis, onDelta, onProgress, signal })
+      : await generateThinReadingWithQualityRepair({
       context,
       enableVisualizationDecisionPlanner,
       gateway,
@@ -4599,7 +4615,7 @@ export async function generateAssistantAnswer({
     if (signal?.aborted) {
       throw new Error("Assistant answer generation was cancelled");
     }
-    const rootSeed = await attachThinReadingAnchorSources({
+    const rootSeed = context.generationMode ? generatedRootSeed : await attachThinReadingAnchorSources({
       context,
       endpoint: activeEndpoint,
       importedChunksByPaperId,
@@ -4619,9 +4635,8 @@ export async function generateAssistantAnswer({
       citations: groundedAnswer.citations,
       retrievalConfidence: groundedAnswer.confidence
     });
-    // Thin reading already passed sentence-level allowlists and an independent
-    // proposition review. The generic remote answer audit did not gate output and
-    // only repeated latency, so retain its deterministic local metadata here.
+    // Local audit metadata is advisory. Fast/rigorous reading does not block a
+    // usable result on sentence-level confidence or a second remote audit.
     const audit = localAudit;
     if (signal?.aborted) {
       throw new Error("Assistant answer generation was cancelled");

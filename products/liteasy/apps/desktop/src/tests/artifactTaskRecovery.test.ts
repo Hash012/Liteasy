@@ -132,7 +132,7 @@ describe("artifactTaskRecovery", () => {
       artifactId: "artifact-thin-7",
       failure: expect.objectContaining({
         message: expect.stringContaining("应用在生成期间重启"),
-        recovery: ["重新发起生成"]
+        recovery: ["继续薄读"]
       }),
       stage: "failed",
       status: "failed"

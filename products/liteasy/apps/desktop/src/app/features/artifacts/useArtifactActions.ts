@@ -1,3 +1,4 @@
+import { removeThinReadingCheckpoint } from "../thin-reading/adaptiveThinReading";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { AgentCoreCatalogEntry } from "../agent-core/agentCoreConfig";
 import type { Paper, SelectedDocumentSet } from "../workspace/workspace.types";
@@ -62,6 +63,18 @@ import type { DeepDiveTargetV1 } from "../visualization/visualizationArtifact.ty
 
 type ArtifactStore = ReturnType<typeof createArtifactStore>;
 
+// Survives controller rerenders, but never serializes runtime promises.
+const activeExecutions = new WeakMap<ArtifactStore, Map<string, Promise<void>>>();
+function trackExecution(store: ArtifactStore, taskId: string) {
+  const tasks = activeExecutions.get(store) ?? new Map<string, Promise<void>>();
+  activeExecutions.set(store, tasks);
+  let finish!: () => void;
+  const pending = new Promise<void>((resolve) => { finish = resolve; });
+  tasks.set(taskId, pending);
+  return () => { if (tasks.get(taskId) === pending) tasks.delete(taskId); finish(); };
+}
+
+
 type AgentArtifactMetadata = {
   analysis?: CompletedMultiPaperAnalysis;
   artifactWorkflow?: MindmapArtifactWorkflowMetadata;
@@ -77,6 +90,11 @@ type VerifiedMindmapMetadata = {
 };
 
 export type AgentArtifactGenerationOptions = {
+  knowledgeSnapshot?: {
+    papers: Paper[];
+    chunks: Record<string, RetrievalChunk[]>;
+    settings?: import("../settings/settings.types").SettingsState;
+  };
   regeneratedFromArtifactId?: string;
   sourcePaperIds?: string[];
   supplementalContext?: string;
@@ -87,6 +105,7 @@ export type GenerateThinReadingBranchInput = {
   artifactId: string;
   document: ThinReadingDocument;
   source: ThinReadingBranchSource;
+  resumeTaskId?: string;
 };
 
 export type DuplicateArtifactGenerationConfirmation = {
@@ -107,6 +126,7 @@ type UseArtifactActionsInput = {
   getMineruFiguresForPaperId?: (paperId: string) => MineruFigure[];
   getIntuechoEndpoint?: () => string;
   getIntuechoSessionId?: () => string | undefined;
+  getGenerationSettings?: () => import("../settings/settings.types").SettingsState;
   getAssistantLanguage?: () => string;
   getActiveReaderPaper?: () => Paper | null;
   getModelDiagnosticContext?: () => {
@@ -491,6 +511,7 @@ export function useArtifactActions({
   getMineruFiguresForPaperId,
   getIntuechoEndpoint,
   getIntuechoSessionId,
+  getGenerationSettings,
   getAssistantLanguage,
   getActiveReaderPaper,
   getModelDiagnosticContext,
@@ -602,9 +623,15 @@ export function useArtifactActions({
     if (artifactStore.getTask(taskId)?.status === "cancelled") {
       return;
     }
+    if (artifactType === "thin_reading") generationOptions = { ...generationOptions, knowledgeSnapshot: generationOptions?.knowledgeSnapshot ?? {
+      papers: structuredClone(scopedPapers), chunks: structuredClone(importedChunksByPaperId),
+      settings: getGenerationSettings?.() ? structuredClone(getGenerationSettings!()) : undefined
+    } };
+    artifactStore.updateTask(taskId, { recovery: { papers: scopedPapers, chunks: importedChunksByPaperId, options: generationOptions } });
     artifactStore.startTask(taskId);
     syncArtifacts(taskId);
 
+    const finishExecution = trackExecution(artifactStore, taskId);
     try {
       if (artifactType === "skill_doc") {
         throw new Error("Skill 文档不是论文分析模态");
@@ -612,6 +639,7 @@ export function useArtifactActions({
       const onProgress = (progress: {
         agentRunId?: string;
         message: string;
+        publicReasoning?: string;
         partialAnswer?: string;
         partialOutlineNodes?: ArtifactTask["partialOutlineNodes"];
         progress: number;
@@ -637,7 +665,7 @@ export function useArtifactActions({
         ? createArtifactId(taskId)
         : undefined;
       const thinReadingTargetLanguage = resolveThinReadingTargetLanguage(getAssistantLanguage?.());
-      const thinReadingContext = artifactType === "thin_reading"
+      let thinReadingContext = artifactType === "thin_reading"
           ? generationOptions?.thinReadingContext ?? createRootThinReadingContext({
             artifactId: thinReadingArtifactId!,
             figures: scopedPapers.flatMap((paper) => getMineruFiguresForPaperId?.(paper.id) ?? []),
@@ -645,6 +673,9 @@ export function useArtifactActions({
             targetLanguage: thinReadingTargetLanguage
           })
         : undefined;
+      if (thinReadingContext) thinReadingContext = { ...thinReadingContext,
+        generationMode: thinReadingContext.generationMode ?? generationOptions?.knowledgeSnapshot?.settings?.["thin_reading.mode"] ?? "fast"
+      };
       const rootThinReadingPaperId = thinReadingContext?.source.kind === "root_overview"
         ? thinReadingContext.primaryPaperId
         : undefined;
@@ -661,6 +692,8 @@ export function useArtifactActions({
               thinReadingContext
             }
           : generationOptions;
+      artifactStore.updateTask(taskId, { recovery: { papers: scopedPapers, chunks: importedChunksByPaperId, options: effectiveGenerationOptions } });
+      syncArtifacts(taskId);
       const agentRun = effectiveGenerationOptions
         ? await runAgentAnalysis(artifactType, onProgress, effectiveGenerationOptions)
         : await runAgentAnalysis(artifactType, onProgress);
@@ -849,7 +882,8 @@ export function useArtifactActions({
         uiDsl
       });
       syncArtifacts(taskId);
-      onAnalysisHint("Agent 分析完成并已保存到当前账号。");
+      if (thinReadingContext) void removeThinReadingCheckpoint(thinReadingContext).catch((error) => onAnalysisHint(`薄读已保存，但临时草稿清理失败：${String(error)}`));
+      onAnalysisHint("Agent 分析完成并已保存。");
     } catch (error) {
       if (artifactStore.getTask(taskId)?.status === "cancelled") {
         syncArtifacts(taskId);
@@ -872,6 +906,8 @@ export function useArtifactActions({
       artifactStore.failTask(taskId, failure);
       syncArtifacts(taskId);
       onAnalysisHint(`Agent 分析失败：${presentArtifactFailure(failure).message}`);
+    } finally {
+      finishExecution();
     }
   }
 
@@ -894,8 +930,8 @@ export function useArtifactActions({
       }
     }
     const message = task.agentRunId
-      ? "已终止多模态产物生成；未完成结果不会保存。"
-      : "已取消等待中的多模态产物任务；不会启动生成或保存结果。";
+      ? "已中断生成；薄读草稿与上下文已保留，可以继续。"
+      : "已中断等待中的任务；可以继续薄读。";
     onAnalysisHint(message);
     return message;
   }
@@ -941,7 +977,7 @@ export function useArtifactActions({
       }
     }
     const taskId = artifactStore.createTask(artifactType);
-    artifactStore.updateTask(taskId, { sourcePaperIds, message: "正在准备论文，解析完成后自动开始生成。", stage: "waiting_for_import", progress: 5 });
+    artifactStore.updateTask(taskId, { recovery: { papers: scopedPapers, chunks: {}, options: generationOptions }, sourcePaperIds, message: "正在准备论文，解析完成后自动开始生成。", stage: "waiting_for_import", progress: 5 });
     syncArtifacts(taskId);
     const begin = () => {
       if (artifactStore.getTask(taskId)?.status === "cancelled") return;
@@ -1162,7 +1198,8 @@ export function useArtifactActions({
   async function generateThinReadingBranch({
     artifactId,
     document,
-    source
+    source,
+    resumeTaskId
   }: GenerateThinReadingBranchInput) {
     if (document.version === "liteasy.thin-reading/v1") {
       const cloneArtifactId = `${artifactId}-v2-${Date.now().toString(36)}`;
@@ -1253,7 +1290,8 @@ export function useArtifactActions({
       throw new Error("该薄读产物缺少来源论文，无法继续生成下一层。");
     }
     const activeReaderPaper = getActiveReaderPaper?.();
-    const primaryPaper = getPaperById?.(primaryPaperId) ??
+    const restoredRecovery = resumeTaskId ? artifactStore.getTask(resumeTaskId)?.recovery : undefined;
+    const primaryPaper = restoredRecovery?.papers.find((paper) => paper.id === primaryPaperId) ?? getPaperById?.(primaryPaperId) ??
       getSelectedPapers().find((paper) => paper.id === primaryPaperId) ??
       (activeReaderPaper?.id === primaryPaperId ? activeReaderPaper : undefined);
     if (!primaryPaper) {
@@ -1267,177 +1305,195 @@ export function useArtifactActions({
         source.externalSourceIds?.includes(externalSource.id)
       ))
       : undefined;
-    const taskId = artifactStore.createTask("thin_reading");
-    let recoverySnapshot;
+    const taskId = resumeTaskId ?? artifactStore.createTask("thin_reading");
+    const finishExecution = trackExecution(artifactStore, taskId);
     try {
-      recoverySnapshot = createThinReadingBranchRecoverySnapshot({
-        artifactId,
-        document: scopedDocument,
-        parentNodeId: activeNode.id,
-        primaryPaperId,
-        source
-      });
-    } catch {
-      // A normal branch may still run; only bounded, auditable inputs are restart-recoverable.
-    }
-    artifactStore.updateTask(taskId, {
-      artifactId,
-      ...(recoverySnapshot ? { thinReadingBranchRecovery: recoverySnapshot } : {})
-    });
-    syncArtifacts(taskId);
-    try {
-      await ensureThinReadingPaperImported(primaryPaper);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const failedStage = "thin_reading_parsing_document";
-      artifactStore.failTask(taskId, {
-        code: resolveArtifactFailureCode(message, failedStage),
-        failedStage,
-        message,
-        occurredAt: new Date().toISOString(),
-        recovery: buildFailureRecovery(message, "thin_reading_parsing_document")
-      });
-      syncArtifacts(taskId);
-      throw error;
-    }
-    artifactStore.startTask(taskId);
-    syncArtifacts(taskId);
-    const context: ThinReadingGenerationContext = {
-      ancestorSummaries: thinReadingAncestorSummaries(scopedDocument, activeNode.id),
-      availableFigures: toThinReadingFigureCandidates(
-        getMineruFiguresForPaperId?.(primaryPaperId)
-      ),
-      artifactId,
-      depth: activeNode.depth + 1,
-      paperIds: [primaryPaperId],
-      primaryPaperId,
-      primaryPaperIdentity: scopedDocument.paperIdentities?.[primaryPaperId]
-        ? scopedDocument.paperIdentities[primaryPaperId].primary
-        : undefined,
-      primaryPaperTitle: primaryPaper.title,
-      parentClaims: activeNode.evidence.claims ? [...activeNode.evidence.claims] : undefined,
-      parentEvidenceSpans: activeNode.evidence.paperEvidenceSpans
-        ? [...activeNode.evidence.paperEvidenceSpans]
-        : undefined,
-      parentNodeId: activeNode.id,
-      parentWithinPaperClosure: activeNode.withinPaperClosure,
-      parentSummary: activeNode.summary,
-      parentTitle: activeNode.title,
-      prompt: source.kind === "selected_text"
-        ? source.prompt
-        : source.kind === "visualization_target"
-          ? `请围绕 ${describeDeepDiveTarget(source.target)} 进行深入解读，严格绑定该对象的证据。`
-          : undefined,
-      selectedExternalSources,
-      source,
-      targetLanguage: document.targetLanguage
-    };
-    const onProgress = (progress: {
-      agentRunId?: string;
-      message: string;
-      partialAnswer?: string;
-      partialOutlineNodes?: ArtifactTask["partialOutlineNodes"];
-      progress: number;
-      stage: ArtifactTaskStage;
-    }) => {
-      artifactStore.updateTask(taskId, progress);
-      syncArtifacts(taskId);
-    };
-    try {
-      const agentRun = await runAgentAnalysis("thin_reading", onProgress, {
-        supplementalContext: existing.supplementalContext,
-        sourcePaperIds: [primaryPaperId],
-        thinReadingContext: context
-      });
-      if (agentRun.status !== "completed") {
-        throw new Error(`薄读 Agent run 未完成：${agentRun.status}`);
-      }
-      const answerEvent = [...agentRun.events]
-        .reverse()
-        .find((event) => event.type === "assistant.message");
-      if (!answerEvent || answerEvent.type !== "assistant.message") {
-        throw new Error("薄读 Agent run 没有返回下一层结果。");
-      }
-      const metadata =
-        answerEvent.metadata &&
-        typeof answerEvent.metadata === "object" &&
-        !Array.isArray(answerEvent.metadata)
-          ? answerEvent.metadata as AgentArtifactMetadata
-          : {};
-      if (!metadata.analysis) {
-        throw new Error("薄读 Agent run 缺少可持久化的 AnalysisRun/Evidence/Claim");
-      }
-      const thinReading = requireThinReadingSeed(metadata, context);
-      const nextDocument = advanceThinReadingDocument(scopedDocument, {
-        parentNodeId: activeNode.id,
-        seed: thinReading.rootSeed,
-        source,
-        title: thinReadingTitleForSource(source, document.targetLanguage)
-      });
-      if (nextDocument.version !== "liteasy.thin-reading/v2") {
-        throw new Error("thin_reading_v1_read_only");
+      let recoverySnapshot;
+      try {
+        recoverySnapshot = createThinReadingBranchRecoverySnapshot({
+          artifactId,
+          document: scopedDocument,
+          parentNodeId: activeNode.id,
+          primaryPaperId,
+          source
+        });
+      } catch {
+        // A normal branch may still run; only bounded, auditable inputs are restart-recoverable.
       }
       artifactStore.updateTask(taskId, {
-        message: "正在保存薄读下一层",
-        progress: 95,
-        stage: "thin_reading_saving"
+        artifactId, status: "queued", failure: undefined, agentRunId: undefined,
+        ...(recoverySnapshot ? { thinReadingBranchRecovery: recoverySnapshot } : {})
       });
       syncArtifacts(taskId);
-      const createdAt = existing.createdAt ?? new Date().toISOString();
-      const resultPath = await artifactResultClient.save(createThinReadingResultDocument({
-        agentRun,
-        analysis: metadata.analysis,
-        answer: answerEvent.message,
-        citations: answerEvent.citations,
-        createdAt,
-        document: nextDocument,
-        existing,
-        figures: existing.figures,
-        papers,
-        uiDsl: existing.uiDsl
-      }));
-      artifactStore.completeTask(taskId, {
-        ...existing,
-        agentRunId: agentRun.runId,
-        analysis: metadata.analysis,
-        answer: answerEvent.message,
-        citations: answerEvent.citations,
-        papers,
-        resultPath,
-        thinReadingDocument: nextDocument
-      });
+      try {
+        if (!restoredRecovery?.chunks[primaryPaperId]?.length) await ensureThinReadingPaperImported(primaryPaper);
+      } catch (error) {
+        if (artifactStore.getTask(taskId)?.status === "cancelled") return;
+        const message = error instanceof Error ? error.message : String(error);
+        const failedStage = "thin_reading_parsing_document";
+        artifactStore.failTask(taskId, {
+          code: resolveArtifactFailureCode(message, failedStage),
+          failedStage,
+          message,
+          occurredAt: new Date().toISOString(),
+          recovery: buildFailureRecovery(message, "thin_reading_parsing_document")
+        });
+        syncArtifacts(taskId);
+        throw error;
+      }
+      if (artifactStore.getTask(taskId)?.status === "cancelled") return;
+      artifactStore.startTask(taskId);
       syncArtifacts(taskId);
-      onThinReadingDocumentPersisted?.({
+      const context: ThinReadingGenerationContext = restoredRecovery?.options?.thinReadingContext ?? {
+        generationMode: getGenerationSettings?.()["thin_reading.mode"] ?? "fast",
+        ancestorSummaries: thinReadingAncestorSummaries(scopedDocument, activeNode.id),
+        availableFigures: toThinReadingFigureCandidates(
+          getMineruFiguresForPaperId?.(primaryPaperId)
+        ),
         artifactId,
-        document: nextDocument,
-        nodeId: nextDocument.activeNodeId
-      });
-      onAnalysisHint("薄读下一层已由 Agent 生成并已保存到当前账号。");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const modelContext = getModelDiagnosticContext?.() ?? {};
-      const failedStage = artifactStore.getTask(taskId)?.stage ?? "generating_answer";
-      const traceId = extractArtifactTraceId(message);
-      const failure = {
-        ...modelContext,
-        code: resolveArtifactFailureCode(message, failedStage),
-        failedStage,
-        message,
-        occurredAt: new Date().toISOString(),
-        recovery: buildFailureRecovery(message, failedStage),
-        ...(traceId ? { traceId } : {})
+        depth: activeNode.depth + 1,
+        paperIds: [primaryPaperId],
+        primaryPaperId,
+        primaryPaperIdentity: scopedDocument.paperIdentities?.[primaryPaperId]
+          ? scopedDocument.paperIdentities[primaryPaperId].primary
+          : undefined,
+        primaryPaperTitle: primaryPaper.title,
+        parentClaims: activeNode.evidence.claims ? [...activeNode.evidence.claims] : undefined,
+        parentEvidenceSpans: activeNode.evidence.paperEvidenceSpans
+          ? [...activeNode.evidence.paperEvidenceSpans]
+          : undefined,
+        parentNodeId: activeNode.id,
+        parentWithinPaperClosure: activeNode.withinPaperClosure,
+        parentSummary: activeNode.summary,
+        parentTitle: activeNode.title,
+        prompt: source.kind === "selected_text"
+          ? source.prompt
+          : source.kind === "visualization_target"
+            ? `请围绕 ${describeDeepDiveTarget(source.target)} 进行深入解读，严格绑定该对象的证据。`
+            : undefined,
+        selectedExternalSources,
+        source,
+        targetLanguage: document.targetLanguage
       };
-      artifactStore.failTask(taskId, failure);
+      const generationOptions: AgentArtifactGenerationOptions = restoredRecovery?.options ?? {
+        supplementalContext: existing.supplementalContext, sourcePaperIds: [primaryPaperId], thinReadingContext: context,
+        knowledgeSnapshot: { papers: [structuredClone(primaryPaper)], chunks: structuredClone(getImportedChunksByPaperId()), settings: getGenerationSettings?.() ? structuredClone(getGenerationSettings!()) : undefined }
+      };
+      artifactStore.updateTask(taskId, { recovery: { papers: [primaryPaper], chunks: generationOptions.knowledgeSnapshot?.chunks ?? {}, options: generationOptions } });
       syncArtifacts(taskId);
-      onAnalysisHint(`薄读下一层生成失败：${presentArtifactFailure(failure).message}`);
-      throw new Error(presentArtifactFailure(failure).message);
+      const onProgress = (progress: {
+        agentRunId?: string;
+        message: string;
+        partialAnswer?: string;
+        partialOutlineNodes?: ArtifactTask["partialOutlineNodes"];
+        progress: number;
+        stage: ArtifactTaskStage;
+      }) => {
+        if (artifactStore.getTask(taskId)?.status === "cancelled") {
+          if (progress.agentRunId) void cancelAgentRun?.(progress.agentRunId, "用户中断薄读").catch(() => {});
+          return;
+        }
+        artifactStore.updateTask(taskId, progress);
+        syncArtifacts(taskId);
+      };
+      try {
+        const agentRun = await runAgentAnalysis("thin_reading", onProgress, generationOptions);
+        if (artifactStore.getTask(taskId)?.status === "cancelled") return;
+        if (agentRun.status !== "completed") {
+          throw new Error(`薄读 Agent run 未完成：${agentRun.status}`);
+        }
+        const answerEvent = [...agentRun.events]
+          .reverse()
+          .find((event) => event.type === "assistant.message");
+        if (!answerEvent || answerEvent.type !== "assistant.message") {
+          throw new Error("薄读 Agent run 没有返回下一层结果。");
+        }
+        const metadata =
+          answerEvent.metadata &&
+          typeof answerEvent.metadata === "object" &&
+          !Array.isArray(answerEvent.metadata)
+            ? answerEvent.metadata as AgentArtifactMetadata
+            : {};
+        if (!metadata.analysis) {
+          throw new Error("薄读 Agent run 缺少可持久化的 AnalysisRun/Evidence/Claim");
+        }
+        const thinReading = requireThinReadingSeed(metadata, context);
+        const nextDocument = advanceThinReadingDocument(scopedDocument, {
+          parentNodeId: activeNode.id,
+          seed: thinReading.rootSeed,
+          source,
+          title: thinReadingTitleForSource(source, document.targetLanguage)
+        });
+        if (nextDocument.version !== "liteasy.thin-reading/v2") {
+          throw new Error("thin_reading_v1_read_only");
+        }
+        artifactStore.updateTask(taskId, {
+          message: "正在保存薄读下一层",
+          progress: 95,
+          stage: "thin_reading_saving"
+        });
+        syncArtifacts(taskId);
+        const createdAt = existing.createdAt ?? new Date().toISOString();
+        const resultPath = await artifactResultClient.save(createThinReadingResultDocument({
+          agentRun,
+          analysis: metadata.analysis,
+          answer: answerEvent.message,
+          citations: answerEvent.citations,
+          createdAt,
+          document: nextDocument,
+          existing,
+          figures: existing.figures,
+          papers,
+          uiDsl: existing.uiDsl
+        }));
+        artifactStore.completeTask(taskId, {
+          ...existing,
+          agentRunId: agentRun.runId,
+          analysis: metadata.analysis,
+          answer: answerEvent.message,
+          citations: answerEvent.citations,
+          papers,
+          resultPath,
+          thinReadingDocument: nextDocument
+        });
+        syncArtifacts(taskId);
+        onThinReadingDocumentPersisted?.({
+          artifactId,
+          document: nextDocument,
+          nodeId: nextDocument.activeNodeId
+        });
+        void removeThinReadingCheckpoint(context).catch((error) => onAnalysisHint(`薄读已保存，但临时草稿清理失败：${String(error)}`));
+        onAnalysisHint("薄读下一层已由 Agent 生成并已保存。");
+      } catch (error) {
+        if (artifactStore.getTask(taskId)?.status === "cancelled") return;
+        const message = error instanceof Error ? error.message : String(error);
+        const modelContext = getModelDiagnosticContext?.() ?? {};
+        const failedStage = artifactStore.getTask(taskId)?.stage ?? "generating_answer";
+        const traceId = extractArtifactTraceId(message);
+        const failure = {
+          ...modelContext,
+          code: resolveArtifactFailureCode(message, failedStage),
+          failedStage,
+          message,
+          occurredAt: new Date().toISOString(),
+          recovery: buildFailureRecovery(message, failedStage),
+          ...(traceId ? { traceId } : {})
+        };
+        artifactStore.failTask(taskId, failure);
+        syncArtifacts(taskId);
+        onAnalysisHint(`薄读下一层生成失败：${presentArtifactFailure(failure).message}`);
+        throw new Error(presentArtifactFailure(failure).message);
+      }
+    } finally {
+      finishExecution();
     }
   }
 
   async function retryInterruptedThinReadingBranch(taskId: string) {
+    await activeExecutions.get(artifactStore)?.get(taskId);
     const task = artifactStore.getTask(taskId);
     const snapshot = task?.thinReadingBranchRecovery;
-    if (!task || task.status !== "failed" || !snapshot) {
+    if (!task || !["failed", "cancelled"].includes(task.status) || !snapshot) {
       throw new Error("该失败任务缺少可验证的薄读分支输入，不能重新提交。");
     }
     const existing = artifactStore.getOpenTabs().find((tab) => tab.artifactId === snapshot.artifactId) ??
@@ -1453,7 +1509,8 @@ export function useArtifactActions({
     onAnalysisHint("正在使用已核验的同一薄读输入创建新的模型请求。");
     await generateThinReadingBranch({
       artifactId: snapshot.artifactId,
-      document,
+      document: { ...document, activeNodeId: snapshot.parentNodeId },
+      resumeTaskId: taskId,
       source: snapshot.source
     });
   }
@@ -1569,6 +1626,27 @@ export function useArtifactActions({
     );
   }
 
+  async function resumeArtifactTask(taskId: string) {
+    await activeExecutions.get(artifactStore)?.get(taskId);
+    const task = artifactStore.getTask(taskId);
+    if (!task || !["failed", "cancelled"].includes(task.status)) return;
+    if (task.thinReadingBranchRecovery) return retryInterruptedThinReadingBranch(taskId);
+    if (!task.recovery) throw new Error("此旧任务没有恢复快照，请重新指定论文生成。");
+    const snapshot = task.recovery;
+    artifactStore.updateTask(taskId, { status: "queued", failure: undefined, agentRunId: undefined, message: "正在恢复原论文与对话上下文" });
+    syncArtifacts(taskId);
+    const begin = () => { void startArtifactTask(task.type, snapshot.papers,
+      Object.keys(snapshot.chunks).length ? snapshot.chunks : getImportedChunksByPaperId(), taskId, snapshot.options); };
+    if (snapshot.papers.every((paper) => snapshot.chunks[paper.id]?.length)) begin();
+    else {
+      const status = queueImportForPapers(snapshot.papers, begin, ({ error }) => {
+        artifactStore.failTask(taskId, { failedStage: "waiting_for_import", message: error.message, occurredAt: new Date().toISOString(), recovery: ["检查文件后继续"] });
+        syncArtifacts(taskId);
+      });
+      if (status === "already_imported") begin();
+    }
+  }
+
   return {
     cancelArtifactTask,
     closeArtifactTab,
@@ -1579,6 +1657,7 @@ export function useArtifactActions({
     applyThinReadingDocument,
     persistThinReadingDocument,
     regenerateArtifact,
+    resumeArtifactTask,
     retryInterruptedThinReadingBranch,
     generateThinReadingBranch,
     restoreArtifactResult,

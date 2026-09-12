@@ -1,4 +1,9 @@
 export type SettingKey =
+  | "thin_reading.mode"
+  | "papers.metadata_provider"
+  | "papers.metadata_endpoint"
+  | "papers.mineru_mode"
+  | "papers.mineru_endpoint"
   | "network.recommendation.enabled"
   | "network.recommendation.sort_mode"
   | "assistant.public_audit.enabled"
@@ -22,6 +27,11 @@ export type SettingKey =
   | "view.pdf_custom_background";
 
 export type SettingsState = {
+  "thin_reading.mode": "fast" | "rigorous";
+  "papers.metadata_provider": "crossref" | "openalex" | "semantic-scholar" | "cloud";
+  "papers.metadata_endpoint": string;
+  "papers.mineru_mode": "local" | "official" | "custom";
+  "papers.mineru_endpoint": string;
   "network.recommendation.enabled": boolean;
   "network.recommendation.sort_mode": "relevance" | "retrieved_at";
   "assistant.public_audit.enabled": boolean;

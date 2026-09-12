@@ -4,7 +4,7 @@ import {
   DocumentSearchRegular,
   WarningRegular
 } from "@fluentui/react-icons";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import liteasyLogoUrl from "../../assets/liteasyclaw-logo.jpg";
 import { ArtifactTabs } from "../features/artifacts/ArtifactTabs";
 import type { ArtifactTask, ArtifactTab, ArtifactType } from "../features/artifacts/artifact.types";
@@ -41,6 +41,9 @@ import type { PaneCollapseState } from "./paneLayout.types";
 import type { ThinReadingVisualizationStatus } from "../features/artifacts/artifact.types";
 
 type ReaderPaneProps = {
+  readingContent?: ReactNode;
+  extractingPaper?: boolean;
+  onExtractPaper?: () => Promise<void>;
   allowServerPdfParsing?: boolean;
   analysisHint: string;
   artifactTabs: ArtifactTab[];
@@ -115,6 +118,7 @@ const defaultLayoutCollapsed: PaneCollapseState = {
 };
 
 export function ReaderPane({
+  readingContent, extractingPaper, onExtractPaper,
   allowServerPdfParsing = false,
   analysisHint,
   artifactTabs,
@@ -168,54 +172,19 @@ export function ReaderPane({
   targetEvidence
 }: ReaderPaneProps) {
   const [zoom, setZoom] = useState(100);
+  const [readingMode, setReadingMode] = useState(false);
+  const [extractionError, setExtractionError] = useState("");
+  useEffect(() => { setReadingMode(false); }, [selectedPapers[0]?.id, targetEvidence?.requestId]);
+  const readingVisible = readingMode && Boolean(readingContent);
   const activePaper = selectedPapers[0] ?? null;
   const analysisPapers = useMemo(() => {
     const selectedPaperIdSet = new Set(selectedPaperIds);
     return selectedPapers.filter((paper) => selectedPaperIdSet.has(paper.id));
   }, [selectedPaperIds, selectedPapers]);
   const artifactRegionVisible = showArtifactRegion && !layoutCollapsed.bottom;
-  const identityLabel = activePaper?.literature
-    ? "身份已确认"
-    : literatureResolution?.status === "candidate" || literatureResolution?.status === "ambiguous"
-      ? "选择身份候选"
-      : literatureResolution?.status === "confirmed"
-        ? "恢复身份快照"
-      : literatureResolution?.status === "conflict"
-          ? "处理身份冲突"
-          : literatureResolution?.status === "unavailable" || literatureResolution?.status === "resolving"
-            ? "重试身份确认"
-            : "确认文献身份";
 
   return (
     <main className="pane center">
-      <div aria-label="PDF 标题栏" className="pane-header reader-pane-header">
-        <DockLayoutControls
-          collapsed={layoutCollapsed}
-          onToggleBottom={onToggleBottomPane}
-          onToggleLeft={onToggleLeftPane}
-          onToggleRight={onToggleRightPane}
-        />
-        {activePaper ? (
-          <div aria-label="PDF 阅读批注工具栏" className="reader-pdf-toolbar" role="toolbar">
-            <Button
-              aria-label={identityLabel}
-              appearance="subtle"
-              disabled={Boolean(activePaper.literature) || !onResolveLiteratureIdentity}
-              icon={activePaper.literature
-                ? <CheckmarkCircleRegular />
-                : literatureResolution?.status === "conflict" || literatureResolution?.status === "unavailable"
-                  ? <WarningRegular />
-                  : <DocumentSearchRegular />}
-              onClick={onResolveLiteratureIdentity}
-              size="small"
-              title={identityLabel}
-              type="button"
-            >
-              {identityLabel}
-            </Button>
-          </div>
-        ) : null}
-      </div>
       {activePaper ? (
         <div
           className={`pane-body reader-content-grid ${
@@ -226,7 +195,14 @@ export function ReaderPane({
               : "artifacts-detached"
           }`}
         >
+          <div className="reader-pdf-surface" hidden={readingVisible}>
           <PdfReader
+            readingControls={readingContent
+              ? <Button size="small" onClick={() => setReadingMode(true)}>阅读模式</Button>
+              : onExtractPaper ? <Button size="small" disabled={extractingPaper} onClick={() => {
+                setExtractionError("");
+                void onExtractPaper().catch((error) => setExtractionError(error instanceof Error ? error.message : String(error)));
+              }}>{extractingPaper ? "正在解析…" : "MinerU 解析"}</Button> : null}
             allowServerPdfParsing={allowServerPdfParsing}
             externalKnowledgeEndpoint={externalKnowledgeEndpoint}
             loadPdfSource={loadPdfSource}
@@ -249,6 +225,12 @@ export function ReaderPane({
             targetEvidence={targetEvidence}
             zoom={zoom}
           />
+          {extractionError ? <p role="alert" className="reader-service-error">{extractionError}</p> : null}
+          </div>
+          {readingVisible ? <section aria-label="论文阅读模式" className="reader-reading-surface">
+            <Button size="small" onClick={() => setReadingMode(false)}>PDF 模式</Button>
+            {readingContent}
+          </section> : null}
           {artifactRegionVisible ? (
             <section aria-label="多模态产物区域" className="reader-artifact-region">
               <ArtifactTabs

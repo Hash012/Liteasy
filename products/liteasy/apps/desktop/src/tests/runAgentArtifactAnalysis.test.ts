@@ -622,3 +622,18 @@ test("surfaces the underlying public Agent run failure", async () => {
     runAgentArtifactAnalysis(createClient(send), "mindmap")
   ).rejects.toThrow("模型服务请求失败（cloud_proxy 502）");
 });
+
+test("starts a fresh visible draft after reconnecting instead of concatenating JSON attempts", async () => {
+  let listener: Parameters<FrontendAgentClient["subscribe"]>[0] | undefined;
+  const progress = vi.fn();
+  const client = createClient(async (_input, options) => {
+    const base = { apiVersion: "liteasy.agent/v1", emittedAt: new Date().toISOString(), runId: "retry-draft", sessionId: "session", eventId: "test", sequence: 1 };
+    listener?.({ ...base, type: "run.started", idempotencyKey: options?.idempotencyKey, message: "thin", inputMode: "qa" } as never);
+    listener?.({ ...base, type: "assistant.delta", delta: '{"summary":"第一次草稿' } as never);
+    listener?.({ ...base, type: "progress.started", phase: "generating_answer", progress: 58, summary: "重新连接" } as never);
+    listener?.({ ...base, type: "assistant.delta", delta: '{"summary":"继续后的正文' } as never);
+    return { ok: true, data: { status: "completed" } } as never;
+  }, (next) => { listener = next; return () => {}; });
+  await runAgentArtifactAnalysis(client, "thin_reading", progress);
+  expect(progress.mock.calls.at(-1)?.[0].partialAnswer).toBe("继续后的正文");
+});

@@ -1,6 +1,11 @@
 import type { SettingKey } from "./settings.types";
 
 export const settingsRegistry: Record<SettingKey, { label: string }> = {
+  "thin_reading.mode": { label: "薄读模式" },
+  "papers.metadata_provider": { label: "文献元信息服务" },
+  "papers.metadata_endpoint": { label: "元信息 API 地址" },
+  "papers.mineru_mode": { label: "论文解析服务" },
+  "papers.mineru_endpoint": { label: "MinerU API 地址" },
   "network.recommendation.enabled": { label: "联网推荐" },
   "network.recommendation.sort_mode": { label: "推荐排序" },
   "assistant.public_audit.enabled": { label: "公开审计过程" },

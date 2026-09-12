@@ -271,7 +271,7 @@ describe("LeftPane", () => {
     await user.click(screen.getByRole("button", { name: "展开课程" }));
     expect(screen.getByRole("button", { name: "Paper" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "展开仅元数据" }));
-    await user.click(screen.getByRole("button", { name: "Metadata Paper" }));
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Metadata Paper" }));
     expect(await screen.findByRole("menuitem", { name: "打开" })).toHaveAttribute(
       "aria-disabled",
       "true"
@@ -279,7 +279,7 @@ describe("LeftPane", () => {
     expect(screen.getByText("仅元数据", { selector: ".library-entry-status" })).toBeInTheDocument();
   });
 
-  test("opens document actions on left click without a persistent trash button", async () => {
+  test("opens document actions on right click without a persistent trash button", async () => {
     const onOpenPaper = vi.fn();
     render(<LeftPane {...createProps({
       leftRailView: "library",
@@ -301,7 +301,7 @@ describe("LeftPane", () => {
     })} />);
 
     expect(screen.queryByRole("button", { name: "删除 Paper menu" })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Paper menu" }));
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Paper menu" }));
     expect(await screen.findByRole("menuitem", { name: "移到回收站" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "打开" })).toBeInTheDocument();
     expect(onOpenPaper).not.toHaveBeenCalled();
@@ -421,7 +421,6 @@ describe("LeftPane", () => {
 
     expect(screen.getByRole("checkbox", { name: "选择 Paper" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Paper" }));
-    await user.click(await screen.findByRole("menuitem", { name: "打开" }));
     expect(onOpenPaper).toHaveBeenCalledWith("paper-1");
     expect(onToggleSelection).not.toHaveBeenCalled();
   });

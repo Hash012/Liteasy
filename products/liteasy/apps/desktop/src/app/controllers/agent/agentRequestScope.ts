@@ -376,6 +376,7 @@ export function getAgentRequestThinReadingContext(
     }
   }
   return {
+    generationMode: candidate.generationMode === "fast" || candidate.generationMode === "rigorous" ? candidate.generationMode : undefined,
     ancestorSummaries: normalizeAncestorSummaries(candidate.ancestorSummaries),
     availableFigures: normalizeAvailableFigures(candidate.availableFigures),
     artifactId: candidate.artifactId,

@@ -101,6 +101,7 @@ type SdkTrace = {
 type SdkManagerContext = {
   input: DesktopManagerAgentInput;
   result?: AgentManagerExecutionResult;
+  failure?: unknown;
   trace: SdkTrace;
 };
 
@@ -203,6 +204,7 @@ function createSpecialistAgent(input: {
         });
         return `已生成${artifactLabel}结果，并传回主 Agent。`;
       } catch (error) {
+        context.failure = error;
         const envelope = context.input.toErrorEnvelope(
           error,
           `请检查当前文献范围和${artifactLabel}任务要求后重试。`
@@ -217,6 +219,7 @@ function createSpecialistAgent(input: {
         throw error;
       }
     },
+    errorFunction: (_context, error) => { throw error; },
     name: workflowToolName,
     parameters: workflowParameters
   });
@@ -338,7 +341,7 @@ export function createOpenAIAgentsSdkManager(): DesktopManagerAgent {
       });
       sdkContext.trace.mainItems = collectItemTypes(sdkResult);
       if (!sdkContext.result) {
-        throw new Error("openai_agents_sdk_result_missing");
+        throw sdkContext.failure ?? new Error("子任务未返回结果。已保留上下文，可恢复任务后继续。");
       }
       if (sdkContext.result.kind === "knowledge") {
         return {

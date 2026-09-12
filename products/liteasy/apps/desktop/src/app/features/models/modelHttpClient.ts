@@ -44,6 +44,7 @@ function buildModelServiceUrl(endpoint: string, stream = false) {
 
 type AnswerPayload = {
   answer: string;
+  reasoning_content?: string;
   execution?: {
     backend?: string;
     mode?: string;
@@ -146,6 +147,7 @@ async function readStreamingAnswer(input: {
   const reader = input.response.body.getReader();
   const decoder = new TextDecoder();
   let answer = "";
+  let reasoning = "";
   let buffer = "";
   let completedPayload: AnswerPayload | null = null;
 
@@ -188,6 +190,10 @@ async function readStreamingAnswer(input: {
       ) {
         answer += event.delta;
         input.generateInput.onDelta?.(event.delta, answer);
+      }
+      if ("type" in event && event.type === "reasoning_delta" && "delta" in event && typeof event.delta === "string") {
+        reasoning += event.delta;
+        input.generateInput.onReasoningDelta?.(event.delta, reasoning);
       }
       if ("type" in event && event.type === "completed" && isAnswerPayload(event)) {
         completedPayload = event;
@@ -256,6 +262,7 @@ export function createHttpModelClient({
       throw new Error(`模型服务返回格式无效（${source}）`);
     }
 
+    if (typeof payload.reasoning_content === "string") input.onReasoningDelta?.(payload.reasoning_content, payload.reasoning_content);
     return {
       answer: payload.answer,
       trace: buildExecutionTrace(payload, endpoint, source)

@@ -32,6 +32,7 @@ type AssistantSidebarProps = {
   onApplyLayoutPreset?: ActionContext["applyLayoutPreset"];
   onApplyPanelAction?: ActionContext["applyPanelAction"];
   onApplyThemePreset?: ActionContext["applyThemePreset"];
+  onResumeArtifactTask?: (taskId: string) => Promise<void>;
   onCancelArtifactTask?: (taskId: string) => string | Promise<string>;
   onGenerateArtifact: (artifactType: ArtifactType, paperIds?: string[], context?: string) => string;
   onImportSelectedSet?: ActionContext["importSelectedSet"];
@@ -71,6 +72,7 @@ export function AssistantSidebar({
   onApplyLayoutPreset,
   onApplyPanelAction,
   onApplyThemePreset,
+  onResumeArtifactTask,
   onCancelArtifactTask,
   onGenerateArtifact,
   onImportSelectedSet,
@@ -115,6 +117,7 @@ export function AssistantSidebar({
           onApplyLayoutPreset={onApplyLayoutPreset}
           onApplyPanelAction={onApplyPanelAction}
           onApplyThemePreset={onApplyThemePreset}
+          onResumeArtifactTask={onResumeArtifactTask}
           onCancelArtifactTask={onCancelArtifactTask}
           onGenerateArtifact={onGenerateArtifact}
           onImportSelectedSet={onImportSelectedSet}

@@ -99,3 +99,32 @@ test("reads a non-streaming Anthropic response", async () => {
   }))(input);
   expect(result.answer).toBe("实际回答");
 });
+
+test("exposes public reasoning separately from the streamed answer", () => {
+  const reasoning = vi.fn();
+  const delta = vi.fn();
+  const stream = createDirectModelStream("openai", delta, reasoning);
+  stream.push(new TextEncoder().encode([
+    { choices: [{ delta: { reasoning_content: "核对" } }] },
+    { choices: [{ delta: { reasoning_content: "原文" } }] },
+    { choices: [{ delta: { content: "回答" } }] }
+  ].map((event) => `data: ${JSON.stringify(event)}\n\n`).join("") + "data: [DONE]\n\n"));
+  expect(stream.finish()).toBe("回答");
+  expect(reasoning).toHaveBeenLastCalledWith("原文", "核对原文");
+  expect(delta).toHaveBeenCalledOnce();
+});
+
+test("shows Anthropic public thinking and ignores redacted blocks and signatures", () => {
+  const reasoning = vi.fn();
+  const stream = createDirectModelStream("anthropic", vi.fn(), reasoning);
+  const events = [
+    { type: "content_block_start", content_block: { type: "redacted_thinking", data: "encrypted" } },
+    { type: "content_block_delta", delta: { type: "signature_delta", signature: "signature" } },
+    { type: "content_block_delta", delta: { type: "thinking_delta", thinking: "公开推理" } },
+    { type: "content_block_delta", delta: { type: "text_delta", text: "正文" } },
+    { type: "message_stop" }
+  ];
+  stream.push(new TextEncoder().encode(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("")));
+  expect(stream.finish()).toBe("正文");
+  expect(reasoning).toHaveBeenCalledExactlyOnceWith("公开推理", "公开推理");
+});

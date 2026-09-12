@@ -1,3 +1,4 @@
+import { usePaperServicesController } from "../controllers/usePaperServicesController";
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspaceActions } from "../features/workspace/useWorkspaceActions";
@@ -334,6 +335,11 @@ export function AppShell({
       tauriAvailable: hasTauriInvoke
     });
   }, [localDevCloudEnv, settingsState]);
+  const paperServices = usePaperServicesController({
+    settings: settingsState, papers: workspaceState.papers, cloudEndpoint: externalKnowledgeEndpoint,
+    getSessionId: () => cloudAccessTokenRef.current ?? null,
+    loadPdfSource: loadPaperPdfBytes, onProgress: setAnalysisHint
+  });
   const leftRail = useLeftRailNavigation();
   const stageImportedPaperIdentityRef = useRef<((input: {
     firstPageText: string;
@@ -356,6 +362,7 @@ export function AppShell({
           figures: savedMaterial.figures
         });
       }
+      if (settingsState["papers.mineru_mode"] !== "local") return paperServices.extract(paper);
       return extractPdfResourcesWithMineruFallback({
         preferLocal: settingsState["models.connection_mode"] === "direct" || !loadStoredAccountSession()?.sessionId,
         endpoint: settingsState["models.cloud_proxy_endpoint"].startsWith("http")
@@ -430,6 +437,7 @@ export function AppShell({
     cancelAgentRun: (runId, reason) => agentCancelRunnerRef.current(runId, reason),
     cancelThinReadingVisualization: (input) => cancelVisualizationGenerationRef.current(input),
     generateThinReadingVisualization: (request) => generateVisualizationRef.current(request),
+    getGenerationSettings: () => settingsStoreRef.current.getState(),
     getAssistantLanguage: () => settingsStoreRef.current.getState()["assistant.language"],
     getActiveReaderPaper: () => {
       const paperId = activeReaderPaperId;
@@ -502,13 +510,10 @@ export function AppShell({
         const hasMineruMaterial = (candidate.figures?.length ?? 0) > 0 ||
           (candidate.mineruTextChunks?.length ?? 0) > 0;
         return hasMineruMaterial && candidate.papers?.some((sourcePaper) => (
-          sourcePaper.id === paper.id ||
-          sourcePaper.title === paper.title ||
-          sourcePaper.title.startsWith(`${paper.title}：`) ||
-          paper.title.startsWith(`${sourcePaper.title}：`)
+          sourcePaper.id === paper.id
         ));
       });
-      if (artifact) {
+      if (artifact && !resources[paper.id]) {
         resources[paper.id] = {
           figures: artifact.figures ?? [],
           textChunks: artifact.mineruTextChunks ?? []
@@ -516,7 +521,7 @@ export function AppShell({
       }
       return resources;
     },
-    {}
+    { ...paperServices.resources }
   );
   savedMineruResourcesRef.current = savedMineruResourcesByPaperId;
 
@@ -543,7 +548,7 @@ export function AppShell({
     };
   }
 
-  const savedMineruResourceSignature = artifactCatalog
+  const savedMineruResourceSignature = Object.keys(paperServices.resources).sort().join("|") + artifactCatalog
     .map((artifact) => `${artifact.artifactId}:${artifact.figures?.length ?? 0}:${artifact.mineruTextChunks?.length ?? 0}`)
     .sort()
     .join("|");
@@ -553,7 +558,7 @@ export function AppShell({
     for (const paper of workspaceState.papers) {
       const material = savedMineruResourcesByPaperId[paper.id];
       const latestJob = importStoreRef.current.getLatestJobByDocumentId(paper.id);
-      if (!material || latestJob?.status === "parsed" || !paper.sourcePath) {
+      if (!material || latestJob?.parsedChunks?.some((chunk) => chunk.textExtraction === "mineru") || !paper.sourcePath) {
         continue;
       }
       // A persisted artifact is an authoritative MinerU result. Rehydrate it into
@@ -1139,10 +1144,7 @@ export function AppShell({
     cloudLibraryClient: pdfPublicationCloudClient,
     literatureMetadataRepository
   }), [organizationSummary?.myRole, organizationSummary?.organizationId, pdfPublicationCloudClient]);
-  const literatureAuthorityClient = useMemo(() => createLiteratureAuthorityClient({
-    endpoint: externalKnowledgeEndpoint,
-    getSessionId: () => cloudAccessTokenRef.current
-  }), [externalKnowledgeEndpoint]);
+  const literatureAuthorityClient = paperServices.literatureClient;
   const pdfAnnotationPublication = usePdfAnnotationPublicationController({
     forumClient: forum.client,
     literatureClient: literatureAuthorityClient,
@@ -1559,6 +1561,9 @@ export function AppShell({
     },
     onMoveLibraryFolder: workspaceActions.moveFolder,
     onMoveLibraryPaper: workspaceActions.movePaper,
+    onResolvePaperIdentity: (paper: Paper) => {
+      void pdfAnnotationPublication.actions.resolvePaperIdentity(paper, createPdfLiteratureHints(paper, {}));
+    },
     onOpenPaperChild: (item, paper) => {
       if (item.kind === "artifact") {
         artifactWorkflow.actions.openArtifact(item.id);
@@ -1776,6 +1781,7 @@ export function AppShell({
           onApplyGeneratedTheme={runtimeActionContext.applyGeneratedTheme}
           onApplyPanelAction={runtimeActionContext.applyPanelAction}
           onApplyThemePreset={runtimeActionContext.applyThemePreset}
+          onResumeArtifactTask={artifactWorkflow.actions.resumeArtifactTask}
           onCancelArtifactTask={artifactWorkflow.actions.cancelArtifactTask}
           onGenerateArtifact={(artifactType, paperIds, context) => {
             const ids = paperIds?.length ? paperIds : workspaceStoreRef.current.getSelectedDocumentSet().locked
@@ -1851,6 +1857,10 @@ export function AppShell({
       <ReaderPane
         {...teamAnnotations.readerBindings(paper)}
         allowServerPdfParsing={false}
+        readingContent={getPaperMineruResources(paper.id)?.textChunks.some((chunk) => chunk.textExtraction === "mineru")
+          ? renderPaperResource({ paperId: paper.id, kind: "multimodal" }) : undefined}
+        extractingPaper={paperServices.running.includes(paper.id)}
+        onExtractPaper={async () => { await paperServices.extract(paper); }}
         analysisHint={analysisHint}
         artifactTabs={artifactTabs}
         artifactTasks={artifactTasks}
@@ -2018,22 +2028,6 @@ export function AppShell({
           ) : undefined
         }
         regionId={regionId}
-        regionActions={
-          showDetachedLayoutControls ? (
-            <DockLayoutControls
-              collapsed={paneLayout.collapsed}
-              onToggleBottom={() =>
-                paneLayout.setCollapsed("bottom", !paneLayout.collapsed.bottom)
-              }
-              onToggleLeft={() =>
-                paneLayout.setCollapsed("left", !paneLayout.collapsed.left)
-              }
-              onToggleRight={() =>
-                paneLayout.setCollapsed("right", !paneLayout.collapsed.right)
-              }
-            />
-          ) : undefined
-        }
         renderItem={renderDockItem}
       />
     );
@@ -2071,6 +2065,12 @@ export function AppShell({
         }
       >
         <ActivityBar
+          layoutControls={<DockLayoutControls
+            collapsed={paneLayout.collapsed}
+            onToggleBottom={() => paneLayout.setCollapsed("bottom", !paneLayout.collapsed.bottom)}
+            onToggleLeft={() => paneLayout.setCollapsed("left", !paneLayout.collapsed.left)}
+            onToggleRight={() => paneLayout.setCollapsed("right", !paneLayout.collapsed.right)}
+          />}
           activeView={leftRail.leftRailView}
           accountSessionAvailable={accountSession !== null}
           onSelectView={(view) => {

@@ -148,6 +148,7 @@ type LibraryPaneProps = {
   onOpenCloudEntry?: (scope: CloudLibraryScope, entry: CloudLibraryEntry) => void | Promise<void>;
   onOpenOrganizationWorkspace: () => void;
   onOpenPaper?: (paperId: string) => void;
+  onResolvePaperIdentity?: (paper: Paper) => void;
   onOpenPaperChild?: (item: LibraryPaperChildItem, paper: Paper) => void;
   onRefreshLocalLibrary?: () => Promise<void>;
   onRenameFolder?: (folderPath: string, requestedName: string) => Promise<string>;
@@ -426,6 +427,7 @@ export function LibraryPane({
   onMovePaper,
   onOpenCloudEntry,
   onOpenPaper,
+  onResolvePaperIdentity,
   onOpenPaperChild,
   paperChildren = {},
   papers,
@@ -897,9 +899,10 @@ export function LibraryPane({
           {entry.bodyAvailable ? <DocumentPdfRegular /> : <DocumentTextRegular />}
         </span>
         <div className="library-paper-content">
-          <Menu>
+          <Menu openOnContext>
             <MenuTrigger disableButtonEnhancement>
               <button
+                onClick={openEntry}
                 className="library-paper-title"
                 disabled={pending}
                 title={entry.bodyAvailable ? entry.label : `${entry.label}（仅元数据）`}
@@ -915,6 +918,7 @@ export function LibraryPane({
                   icon={<OpenRegular />}
                   onClick={openEntry}
                 >打开</MenuItem>
+                {sourcePaper ? <MenuItem icon={<DocumentTextRegular />} onClick={() => onResolvePaperIdentity?.(sourcePaper)}>确认文献身份</MenuItem> : null}
                 <MenuItem
                   disabled={pending || !canManageEntry}
                   icon={<EditRegular />}

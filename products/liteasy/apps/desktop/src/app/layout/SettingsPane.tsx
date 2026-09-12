@@ -1,3 +1,4 @@
+import { PaperServicesSettingsPanel } from "../features/paper-services/PaperServicesSettingsPanel";
 import { useState } from "react";
 import { BotRegular, ChevronDownRegular, ChevronRightRegular, DatabaseRegular, EyeRegular, FolderRegular, SettingsRegular } from "@fluentui/react-icons";
 import { AgentSettingsPanel } from "../features/agent-core/AgentSettingsPanel";
@@ -56,6 +57,7 @@ export function SettingsPane({
         </button>
         {modelExpanded ? <div className="sidebar-section-content"><ModelConnectionPanel settings={settings} onUpdateSetting={onUpdateSetting} /></div> : null}
       </section>
+      <section className="sidebar-section settings-paper-services"><div className="sidebar-section-header"><DatabaseRegular /><span>论文与薄读</span></div><div className="sidebar-section-content"><PaperServicesSettingsPanel settings={settings} onUpdateSetting={onUpdateSetting} /></div></section>
       <section className="sidebar-section settings-view-section">
         <button aria-expanded={viewExpanded} aria-label={`${viewExpanded ? "收起" : "展开"} View 设置`} className="sidebar-section-header" onClick={() => setViewExpanded((current) => !current)} type="button">
           <span aria-hidden="true" className="sidebar-section-disclosure">{viewExpanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>

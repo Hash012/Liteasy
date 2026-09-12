@@ -1177,6 +1177,7 @@ export function ThinReadingTab({
             status={visualizationStatus}
           />
           <section data-testid="thin-reading-prose">
+            {activeNode.evidence.readingReview ? <p role="note" className="thin-reading__review-note">{activeNode.evidence.readingReview.note}</p> : null}
             <div
               className="thin-reading__summary"
               data-thin-reading-annotation-target="node_summary"

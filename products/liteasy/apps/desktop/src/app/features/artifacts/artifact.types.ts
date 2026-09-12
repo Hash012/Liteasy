@@ -73,6 +73,12 @@ export type ArtifactOutlineNode = {
 };
 
 export type ArtifactTask = {
+  recovery?: {
+    papers: import("../workspace/workspace.types").Paper[];
+    chunks: Record<string, import("../retrieval/retrieval.types").RetrievalChunk[]>;
+    options?: import("./useArtifactActions").AgentArtifactGenerationOptions;
+  };
+  publicReasoning?: string;
   sourcePaperIds?: string[];
   agentRunId?: string;
   artifactId?: string;

@@ -4,19 +4,22 @@ import type { Paper } from "../../app/features/workspace/workspace.types";
 
 function ImportablePdfBrowserFixture() {
   const [sourcePath, setSourcePath] = useState<string>();
+  const [contentHash, setContentHash] = useState<string>();
   useEffect(() => {
     let cancelled = false;
     let url: string | undefined;
-    void fetch("/manual-preview/das24a.pdf").then((response) => response.blob()).then((blob) => {
+    void fetch("/manual-preview/das24a.pdf").then((response) => response.blob()).then(async (blob) => {
+      const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
       if (cancelled) return;
       url = URL.createObjectURL(blob);
+      setContentHash(Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join(""));
       setSourcePath(url);
     });
     return () => { cancelled = true; if (url) URL.revokeObjectURL(url); };
   }, []);
-  const paper = useMemo<Paper>(() => ({ id: "manual-das24a-preview", sourcePath, title: "das24a.pdf" }), [sourcePath]);
+  const paper = useMemo<Paper>(() => ({ id: "manual-das24a-preview", sourcePath, contentHash, title: "das24a.pdf" }), [sourcePath, contentHash]);
   const loader = useMemo(() => async () => ({
-    entries: [{ contentHash: null, id: paper.id, path: paper.sourcePath!, relativePath: "das24a.pdf", title: paper.title }],
+    entries: [{ contentHash: paper.contentHash ?? null, id: paper.id, path: paper.sourcePath!, relativePath: "das24a.pdf", title: paper.title }],
     folders: [], libraryId: "pdf-preview-library", revision: 1,
     rootPath: "/preview-library", trashEntries: []
   }), [paper]);

@@ -130,6 +130,7 @@ type AssistantPaneProps = {
   onApplyLayoutPreset?: ActionContext["applyLayoutPreset"];
   onApplyPanelAction?: ActionContext["applyPanelAction"];
   onApplyThemePreset?: ActionContext["applyThemePreset"];
+  onResumeArtifactTask?: (taskId: string) => Promise<void>;
   onCancelArtifactTask?: (taskId: string) => string | Promise<string>;
   onGenerateArtifact: (artifactType: ArtifactType, paperIds?: string[], context?: string) => string;
   onImportSelectedSet?: ActionContext["importSelectedSet"];
@@ -282,6 +283,7 @@ export function AssistantPane({
   onApplyLayoutPreset,
   onApplyPanelAction,
   onApplyThemePreset,
+  onResumeArtifactTask,
   onCancelArtifactTask,
   onGenerateArtifact,
   onImportSelectedSet,
@@ -2095,6 +2097,7 @@ export function AssistantPane({
 
       <AssistantMessageList
         onOpenArtifact={onOpenArtifact}
+        onResumeArtifactTask={onResumeArtifactTask}
         onCancelArtifactTask={(id) => { void onCancelArtifactTask?.(id); }}
         papers={availablePapers}
         onOpenCitation={onOpenCitation}

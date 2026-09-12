@@ -546,6 +546,7 @@ export type ThinReadingGenerationAudit = {
 };
 
 export type ThinReadingNodeEvidenceV1 = {
+  readingReview?: { mode: "fast" | "rigorous"; note: string; status: "unverified" | "advisory" };
   anchors?: readonly ThinReadingAnchor[];
   claims?: readonly ThinReadingClaim[];
   externalKnowledge: readonly string[];
@@ -586,6 +587,7 @@ export type ThinReadingAncestorSummary = {
 };
 
 export type ThinReadingGenerationContext = {
+  generationMode?: "fast" | "rigorous";
   ancestorSummaries?: readonly ThinReadingAncestorSummary[];
   availableFigures?: readonly ThinReadingFigureCandidate[];
   artifactId: string;

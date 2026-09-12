@@ -13,6 +13,7 @@ export type ModelOutputFormat = {
 
 export type GenerateAnswerInput = {
   model: string;
+  onReasoningDelta?: (delta: string, accumulated: string) => void;
   onDelta?: (delta: string, accumulated: string) => void;
   outputFormat?: ModelOutputFormat;
   prompt: string;

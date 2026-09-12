@@ -10,7 +10,9 @@ mod desktop_identity;
 mod direct_model;
 mod local_library;
 mod paper_cache;
+mod paper_services;
 mod user_paper_store;
+mod workflow_checkpoints;
 
 fn main() {
     if let Some(exit_code) = agent_host::run_external_mode() {
@@ -37,6 +39,12 @@ fn main() {
             agent_host::agent_host_reply,
             assistant_history::load_assistant_history,
             assistant_history::save_assistant_history,
+            paper_services::request_paper_service,
+            paper_services::save_paper_service_key,
+            paper_services::has_paper_service_key,
+            paper_services::delete_paper_service_key,
+            workflow_checkpoints::load_workflow_checkpoints,
+            workflow_checkpoints::save_workflow_checkpoints,
             agent_artifacts::list_local_agent_artifacts,
             agent_artifacts::save_local_agent_artifact,
             agent_artifacts::delete_local_agent_artifact,

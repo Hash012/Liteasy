@@ -8,14 +8,9 @@ test("keeps reader controls compact, colored annotations visible and activity in
     const fixture = await import("/src/tests/fixtures/readerPresentationBrowserFixture.tsx");
     fixture.mountReaderPresentationFixture(document.getElementById("reader-presentation")!);
   });
-  const titlebar = page.getByLabel("PDF 标题栏");
-  await expect(titlebar.getByText("A paper with a long title already shown in its tab")).toHaveCount(0);
-  const header = await titlebar.boundingBox();
-  const identity = await page.getByRole("button", { name: "确认文献身份", exact: true }).boundingBox();
-  const layout = await page.getByRole("toolbar", { name: "阅读区布局控制" }).boundingBox();
-  expect(header!.height).toBeLessThan(45);
-  expect(identity!.width).toBeGreaterThan(80);
-  expect(layout!.x).toBeLessThan(identity!.x);
+  await expect(page.getByLabel("PDF 标题栏")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "确认文献身份", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("toolbar", { name: "阅读区布局控制" })).toHaveCount(0);
   await page.getByRole("button", { name: "缩略图", exact: true }).click();
   await expect(page.locator(".pdf-thumbnail-mark.highlight")).toHaveCount(1);
   const thumbnailColor = await page.locator(".pdf-thumbnail-mark.highlight").evaluate((element) => getComputedStyle(element).backgroundColor);

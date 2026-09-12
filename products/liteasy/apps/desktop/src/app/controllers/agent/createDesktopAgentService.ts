@@ -157,6 +157,10 @@ async function executeKnowledgeTurn(
     onDelta: artifactType
       ? (delta) => reportDelta(delta)
       : undefined,
+    onReasoningDelta: (_delta, accumulated) => input.reportManagerActivity({
+      activityId: `${input.runId}:model-reasoning`, kind: "reasoning_summary", label: "模型公开推理",
+      detail: accumulated, status: "running"
+    }),
     onProgress: reportProgress,
     onSubtaskDelta: artifactType
       ? reportSubtaskDelta

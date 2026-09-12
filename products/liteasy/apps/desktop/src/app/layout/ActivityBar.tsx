@@ -6,10 +6,11 @@ import {
   PersonRegular,
   SettingsRegular
 } from "@fluentui/react-icons";
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import type { LeftRailView } from "./useLeftRailNavigation";
 
 type ActivityBarProps = {
+  layoutControls?: ReactNode;
   activeView: LeftRailView;
   accountSessionAvailable?: boolean;
   onToggleActiveView?: (view: LeftRailView) => void;
@@ -25,6 +26,7 @@ const activityItems: Array<{ icon: ReactElement; label: string; view: LeftRailVi
 ];
 
 export function ActivityBar({
+  layoutControls,
   activeView,
   accountSessionAvailable = true,
   onToggleActiveView,
@@ -52,6 +54,7 @@ export function ActivityBar({
           </Button>
         </Tooltip>
       ))}
+      {layoutControls}
     </nav>
   );
 }

@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
   type CSSProperties,
   type ClipboardEvent as ReactClipboardEvent,
   type DragEvent as ReactDragEvent,
@@ -191,6 +192,7 @@ export type PdfAnnotationPublicationChange = {
 };
 
 type PdfReaderProps = {
+  readingControls?: ReactNode;
   allowServerPdfParsing?: boolean;
   /** Where the structured citation parser lives; its snapshot is what thin reading reads back. */
   externalKnowledgeEndpoint?: string;
@@ -1488,6 +1490,7 @@ function PdfThumbnail({ active, annotations, onNavigate, pageNumber, pdfDocument
 }
 
 export function PdfReader({
+  readingControls,
   allowServerPdfParsing = false,
   externalKnowledgeEndpoint = "",
   loadLiteratureHints = collectPdfLiteratureHints,
@@ -3339,6 +3342,7 @@ export function PdfReader({
         >
           <div className="pdf-reader-top">
             <PdfReaderToolbar
+              readingControls={readingControls}
               activeSearchIndex={activeSearchIndex}
               currentPage={focusedPage}
               layoutMode={layoutMode}

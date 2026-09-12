@@ -1,3 +1,4 @@
+import { loadDurableEntries, putDurableEntry } from "../features/persistence/durableJsonStore";
 import { useEffect, useRef, useState } from "react";
 import { useArtifactActions } from "../features/artifacts/useArtifactActions";
 import {
@@ -71,6 +72,7 @@ type UseArtifactWorkflowControllerInput = {
   getMineruFiguresForPaperId?: (paperId: string) => MineruFigure[];
   getIntuechoEndpoint?: () => string;
   getIntuechoSessionId?: () => string | undefined;
+  getGenerationSettings?: () => import("../features/settings/settings.types").SettingsState;
   getAssistantLanguage?: () => string;
   getActiveReaderPaper?: () => Paper | null;
   getModelDiagnosticContext?: () => {
@@ -141,6 +143,7 @@ type ArtifactWorkflowActions = {
     requestedName: string
   ) => Promise<ArtifactMutationOutcome>;
   regenerateArtifact: (request: ArtifactRegenerationRequest) => string;
+  resumeArtifactTask: (taskId: string) => Promise<void>;
   retryInterruptedThinReadingBranch: (taskId: string) => Promise<void>;
   startAnalysis: (artifactType: ArtifactType) => string;
   startAnalysisForPapers: (artifactType: ArtifactType, papers: Paper[], options?: AgentArtifactGenerationOptions) => string;
@@ -168,6 +171,7 @@ export function useArtifactWorkflowController({
   getMineruFiguresForPaperId,
   getIntuechoEndpoint,
   getIntuechoSessionId,
+  getGenerationSettings,
   getAssistantLanguage,
   getActiveReaderPaper,
   getModelDiagnosticContext,
@@ -221,7 +225,11 @@ export function useArtifactWorkflowController({
     persistCatalog(catalog);
   }
 
+  const taskPersistenceReady = useRef(false);
   function handleArtifactTasksChanged(tasks: ArtifactTask[]) {
+    if (taskPersistenceReady.current) void putDurableEntry("artifact-tasks", artifactResultScopeKey ?? "device",
+      tasks.filter((task) => task.type === "thin_reading" && task.status !== "completed")
+    ).catch((error) => onAnalysisHint(`恢复快照保存失败：${String(error)}`));
     persistInterruptedArtifactTasks(tasks, artifactResultScopeKey);
     setArtifactTasks(tasks);
   }
@@ -278,6 +286,7 @@ export function useArtifactWorkflowController({
     getMineruFiguresForPaperId,
     getIntuechoEndpoint,
     getIntuechoSessionId,
+    getGenerationSettings,
     getAssistantLanguage,
     getActiveReaderPaper,
     getModelDiagnosticContext,
@@ -356,13 +365,18 @@ export function useArtifactWorkflowController({
     let active = true;
 
     async function restoreArtifacts() {
-      await reloadArtifactCatalog();
+      taskPersistenceReady.current = false;
+      const [durable] = await Promise.all([loadDurableEntries("artifact-tasks"), reloadArtifactCatalog()]);
+      const saved = durable[artifactResultScopeKey ?? "device"];
       if (!active) {
         return;
       }
-      const interruptedTasks = takeInterruptedArtifactTasks(artifactResultScopeKey);
+      const legacyTasks = takeInterruptedArtifactTasks(artifactResultScopeKey);
+      const interruptedTasks = [...new Map([...legacyTasks, ...(Array.isArray(saved) ? saved as ArtifactTask[] : [])].map((task) => [task.id, task])).values()];
+      taskPersistenceReady.current = true;
       let recoverableBranchCount = 0;
       interruptedTasks.forEach((task) => {
+        if (artifactStore.getTask(task.id)) return;
         const tab = task.artifactId
           ? artifactStore.getCatalog().find((candidate) => candidate.artifactId === task.artifactId)
           : undefined;
@@ -384,15 +398,13 @@ export function useArtifactWorkflowController({
         onAnalysisHint(
           recoverableBranchCount > 0
             ? "检测到应用重启前未完成的生成任务，已标记为中断；可核验的薄读分支可重新提交同一输入。"
-            : "检测到应用重启前未完成的生成任务，已标记为中断；请重新发起生成。"
+            : "检测到未完成的薄读任务，已恢复上下文；在对话中点击“继续薄读”。"
         );
       }
-      if (interruptedTasks.length > 0) {
-        artifactActions.syncArtifacts();
-      }
+      artifactActions.syncArtifacts();
     }
 
-    void restoreArtifacts();
+    void restoreArtifacts().catch((error) => { if (active) onAnalysisHint(`读取任务恢复快照失败：${String(error)}`); });
     return () => {
       active = false;
       catalogRequestRef.current += 1;
@@ -439,6 +451,7 @@ export function useArtifactWorkflowController({
       },
       openSkillDocument: artifactActions.openSkillDocument,
       regenerateArtifact: artifactActions.regenerateArtifact,
+      resumeArtifactTask: artifactActions.resumeArtifactTask,
       retryInterruptedThinReadingBranch: artifactActions.retryInterruptedThinReadingBranch,
       startAnalysis: artifactActions.startAnalysis,
       startAnalysisForPapers: artifactActions.startAnalysisForPapers,

@@ -145,7 +145,7 @@ describe("ReaderPane", () => {
     ["conflict", "处理身份冲突"],
     ["unavailable", "重试身份确认"],
     ["unresolved", "确认文献身份"]
-  ] as const)("shows the %s literature identity state as a recoverable action", (status, label) => {
+  ] as const)("does not reintroduce the identity strip for %s", (status, label) => {
     const onResolveLiteratureIdentity = vi.fn();
     const request = { purpose: "liteasy_pdf_annotation" as const, query: "State paper" };
     const literatureResolution = status === "ambiguous"
@@ -180,8 +180,8 @@ describe("ReaderPane", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: label }));
-    expect(onResolveLiteratureIdentity).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: label })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("PDF 标题栏")).not.toBeInTheDocument();
   });
 
   test("matches Agent evidence quotes across PDF text-layer spans", () => {
@@ -330,7 +330,7 @@ describe("ReaderPane", () => {
     }
   });
 
-  test("renders the reader header and leaves artifact generation to the floating launcher", () => {
+  test("keeps PDF navigation without a redundant title strip", () => {
     const onStartAnalysis = vi.fn();
 
     render(
@@ -345,12 +345,8 @@ describe("ReaderPane", () => {
       />
     );
 
-    const readerHeader = screen.getByLabelText("PDF 标题栏");
-    expect(within(readerHeader).queryByText("AI-driven paper-assisted reading platform")).not.toBeInTheDocument();
-    expect(within(readerHeader).queryByText("云端模型能力")).not.toBeInTheDocument();
-    expect(within(readerHeader).getByRole("toolbar", { name: "PDF 阅读批注工具栏" })).toBeInTheDocument();
-    expect(within(readerHeader).queryByText(readerTestPaper.title)).not.toBeInTheDocument();
-    expect(within(readerHeader).queryByText("显示比例 100%")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("PDF 标题栏")).not.toBeInTheDocument();
+    expect(screen.getByRole("toolbar", { name: "PDF 导航工具栏" })).toBeInTheDocument();
     expect(screen.getByLabelText("PDF 显示比例 100%")).toBeInTheDocument();
     expect(document.querySelector(".pdf-toolbar")).not.toBeInTheDocument();
     expect(screen.getByText("选择分析类型以生成产物")).toBeInTheDocument();
@@ -378,7 +374,7 @@ describe("ReaderPane", () => {
     expect(screen.queryByLabelText("多模态产物区域")).not.toBeInTheDocument();
   });
 
-  test("keeps file controls in the reader title row and collapses the artifact area", async () => {
+  test("leaves layout controls to the activity bar and honors collapsed artifacts", async () => {
     const user = userEvent.setup();
     const onToggleBottomPane = vi.fn();
 
@@ -404,24 +400,12 @@ describe("ReaderPane", () => {
       />
     );
 
-    const readerHeader = screen.getByLabelText("PDF 标题栏");
-    const layoutControls = within(readerHeader).getByRole("toolbar", { name: "阅读区布局控制" });
-    expect(within(layoutControls).getByRole("button", { name: "折叠左侧栏" })).toHaveAttribute(
-      "title",
-      "折叠左侧栏"
-    );
-    expect(within(layoutControls).getByRole("button", { name: "折叠下栏" })).toHaveAttribute("title", "折叠下栏");
-    expect(within(layoutControls).getByRole("button", { name: "折叠右侧栏" })).toHaveAttribute(
-      "title",
-      "折叠右侧栏"
-    );
-    expect(readerHeader.firstElementChild).toBe(layoutControls);
-    expect(within(readerHeader).getByRole("button", { name: "确认文献身份" })).toHaveTextContent("确认文献身份");
+    expect(screen.queryByLabelText("PDF 标题栏")).not.toBeInTheDocument();
+    expect(screen.queryByRole("toolbar", { name: "阅读区布局控制" })).not.toBeInTheDocument();
     expect(screen.getByLabelText("PDF 显示比例 100%")).toBeInTheDocument();
     expect(screen.getByLabelText("多模态产物区域")).toBeInTheDocument();
 
-    await user.click(within(layoutControls).getByRole("button", { name: "折叠下栏" }));
-    expect(onToggleBottomPane).toHaveBeenCalledTimes(1);
+    expect(onToggleBottomPane).not.toHaveBeenCalled();
 
     rerender(
       <ReaderPane
@@ -445,7 +429,7 @@ describe("ReaderPane", () => {
       />
     );
 
-    expect(screen.getByRole("button", { name: "展开下栏" })).toHaveAttribute("title", "展开下栏");
+    expect(screen.queryByRole("button", { name: "展开下栏" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("多模态产物区域")).not.toBeInTheDocument();
     expect(screen.getByLabelText("PDF 阅读器").closest(".reader-content-grid")).toHaveClass("artifacts-collapsed");
   });
@@ -1203,4 +1187,18 @@ describe("ReaderPane", () => {
     });
     expect(screen.queryByLabelText(/Agent 引用证据高亮/)).not.toBeInTheDocument();
   });
+});
+
+test("only offers reading mode after MinerU material exists and preserves PDF on return", async () => {
+  const props = { analysisHint: "", artifactTabs: [], artifactTasks: [], onStartAnalysis: vi.fn(), selectedPapers: [readerTestPaper], selectedPaperIds: [readerTestPaper.id], selectionLocked: true };
+  const { rerender } = render(<ReaderPane {...props} onExtractPaper={async () => { throw new Error("请配置 MinerU"); }} />);
+  expect(screen.queryByRole("button", { name: "阅读模式" })).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "MinerU 解析" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("请配置 MinerU");
+  rerender(<ReaderPane {...props} readingContent={<p>MinerU 图文正文</p>} />);
+  await userEvent.click(screen.getByRole("button", { name: "阅读模式" }));
+  expect(screen.getByLabelText("论文阅读模式")).toHaveTextContent("MinerU 图文正文");
+  expect(screen.queryByRole("toolbar", { name: "PDF 导航工具栏" })).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "PDF 模式" }));
+  expect(screen.getByRole("toolbar", { name: "PDF 导航工具栏" })).toBeInTheDocument();
 });
