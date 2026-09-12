@@ -4908,7 +4908,7 @@ button.pdf-overlay-mark:focus-visible {
   mix-blend-mode: normal;
   opacity: 0.5;
   border-radius: 1px;
-  margin: -0.5px;
+  margin: 0;
   box-shadow: none;
 }
 

@@ -134,7 +134,7 @@ test("insets a highlight band by five percent above and below the selected glyph
   expect(mark).toHaveStyle({
     height: "1.8%",
     top: "40.1%",
-    width: "35.2%"
+    width: "35%"
   });
 });
 
@@ -157,7 +157,7 @@ test("clicking a page highlight opens its comment editor with a live Markdown pr
 
   await user.click(within(editor).getByRole("button", { name: "保存注释" }));
   expect(screen.queryByLabelText(/高亮注释编辑器/u)).not.toBeInTheDocument();
-  const sidebarPreview = screen.getByText("核心结论").closest(".annotation-note-preview");
+  const sidebarPreview = (await screen.findByText("核心结论")).closest(".annotation-note-preview");
   expect(sidebarPreview?.querySelector("strong")).toHaveTextContent("核心结论");
 });
 

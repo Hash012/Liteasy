@@ -25,6 +25,7 @@ import {
   WhiteboardRegular
 } from "@fluentui/react-icons";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
+import { loadPdfGlyphGeometry } from "./pdfGlyphGeometry";
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
 import { compactPdfTextForSearch, normalizePdfTextForSearch } from "./pdfTextSearch";
@@ -947,9 +948,9 @@ function getOverlayStyle(kind: AnnotationKind, rect: PdfAnnotationRect, color?: 
   return {
     backgroundColor: highlightColor,
     height: `${rect.height - verticalInset * 2}%`,
-    left: `${rect.left - 0.1}%`,
+    left: `${rect.left}%`,
     top: `${rect.top + verticalInset}%`,
-    width: `${rect.width + 0.2}%`
+    width: `${rect.width}%`
   };
 }
 
@@ -1080,6 +1081,7 @@ function PdfPageView({
   const pageShellRef = useRef<HTMLElement | null>(null);
   const textLayerRef = useRef<HTMLDivElement | null>(null);
   const [pageSize, setPageSize] = useState({ height: 980, width: 760 });
+  const [textLayerRevision, setTextLayerRevision] = useState(0);
   const [searchHighlightRects, setSearchHighlightRects] = useState<Array<{
     active: boolean;
     rect: PdfAnnotationRect;
@@ -1195,6 +1197,8 @@ function PdfPageView({
 
         textLayer.innerHTML = "";
         const textContent = await page.getTextContent();
+        const glyphs = await loadPdfGlyphGeometry(page);
+        if (cancelled) return;
         const layer = new pdfjsLib.TextLayer({
           container: textLayer,
           textContentSource: textContent,
@@ -1205,6 +1209,7 @@ function PdfPageView({
           const pageElement = pageShellRef.current;
           if (pageElement) {
             onPageCharModelRendered?.(pageNumber, buildPageCharModelFromTextLayer({
+              glyphs,
               pageElement,
               pageIndex: pageNumber,
               textLayer
@@ -1214,8 +1219,9 @@ function PdfPageView({
             page: pageNumber,
             text: normalizePdfPageText(joinPdfTextItems(textContent.items))
           });
-          updateSearchHighlightRects();
-          updateTargetHighlightRects();
+          // Re-evaluate overlays with the latest search/evidence props, even if they changed
+          // while this render was awaiting PDF.js. They need no new canvas or character model.
+          setTextLayerRevision((revision) => revision + 1);
         }
       } catch (error) {
         // Swallowing this silently hid a total failure of the text layer, and with it every
@@ -1241,17 +1247,19 @@ function PdfPageView({
       renderTask?.cancel();
       onPageCharModelRendered?.(pageNumber, null);
     };
-  }, [activePaper?.id, focused, onEvidenceHighlightResolved, onPageCharModelRendered, onPageTextRendered, pageNumber, pdfDocument, stageWidth, targetEvidence?.pageTextStart, targetEvidence?.quote, targetEvidence?.requestId, zoom]);
+  // Focus changes while scrolling must not tear down the text layer in the middle of a drag.
+  // Evidence/search overlays have their own effects below and do not require repainting the PDF.
+  }, [activePaper?.id, onPageCharModelRendered, onPageTextRendered, pageNumber, pdfDocument, stageWidth, zoom]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(updateTargetHighlightRects);
     return () => window.cancelAnimationFrame(frame);
-  }, [activePaper?.id, focused, pageNumber, pageSize.height, pageSize.width, targetEvidence?.pageTextStart, targetEvidence?.quote, targetEvidence?.requestId]);
+  }, [activePaper?.id, focused, pageNumber, pageSize.height, pageSize.width, targetEvidence?.pageTextStart, targetEvidence?.quote, targetEvidence?.requestId, textLayerRevision]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(updateSearchHighlightRects);
     return () => window.cancelAnimationFrame(frame);
-  }, [activeSearchMatch, pageNumber, pageSize.height, pageSize.width, searchMatches, searchQuery]);
+  }, [activeSearchMatch, pageNumber, pageSize.height, pageSize.width, searchMatches, searchQuery, textLayerRevision]);
 
   const pageAnnotations = annotations.filter((annotation) => annotation.page === pageNumber);
   const marginComments = marginCommentsVisible ? layoutPdfMarginComments(pageAnnotations) : [];
