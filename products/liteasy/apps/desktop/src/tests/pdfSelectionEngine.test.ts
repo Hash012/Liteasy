@@ -54,7 +54,7 @@ test("keeps pointer selection inside the exact anchor and head character boundar
   expect(selection.rects).toEqual([{ height: 2, left: 10, top: 10, width: 3 }]);
 });
 
-test("includes a trailing glyph once a forward drag visibly enters it", () => {
+test("does not expand a word ending before the drag crosses its midpoint", () => {
   const page = model([
     character("A", 10, 10),
     character("B", 11, 10),
@@ -71,7 +71,7 @@ test("includes a trailing glyph once a forward drag visibly enters it", () => {
     selectionAnchorOffset: 0
   });
 
-  expect(trailingHit.offset).toBe(3);
+  expect(trailingHit.offset).toBe(2);
   expect(nextWordEdge.offset).toBe(3);
   expect(buildPdfSelectionRange(page, {
     anchorOffset: 0,
@@ -275,6 +275,54 @@ test("uses the character rotation when choosing the before or after insertion bo
 
   expect(hitTestPdfInsertionOffset(page, { x: 10.5, y: 10.1 })).toBe(0);
   expect(hitTestPdfInsertionOffset(page, { x: 10.5, y: 11.9 })).toBe(1);
+});
+
+test("replaces substitute-font advances and keeps ligature text with its single painted glyph", () => {
+  const pageElement = document.createElement("article");
+  const textLayer = document.createElement("div");
+  const span = document.createElement("span");
+  span.textContent = "WWi";
+  textLayer.append(span);
+  pageElement.append(textLayer);
+  document.body.append(pageElement);
+  const pageRect = new DOMRect(0, 0, 100, 100);
+  vi.spyOn(textLayer, "getBoundingClientRect").mockReturnValue(pageRect);
+  const createRange = vi.spyOn(document, "createRange").mockImplementation(() => {
+    let start = 0;
+    let end = 0;
+    return {
+      setStart: (_node: Node, offset: number) => { start = offset; },
+      setEnd: (_node: Node, offset: number) => { end = offset; },
+      getClientRects: () => [new DOMRect(10 + start * 7 / 3, 10, (end - start) * 7 / 3, 2)]
+    } as unknown as Range;
+  });
+  try {
+    const rect = (left: number, right: number) => ({ left, right, top: 10, bottom: 12 });
+    const fallback = buildPageCharModelFromTextLayer({ pageElement, pageIndex: 1, textLayer });
+    const native = buildPageCharModelFromTextLayer({
+      pageElement, pageIndex: 1, textLayer,
+      glyphs: [{ text: "W", rect: rect(10, 13) }, { text: "W", rect: rect(13, 16) }, { text: "i", rect: rect(16, 17) }]
+    });
+    // At x=14 the substitute font has already crossed the second W's midpoint. The PDF has not.
+    expect(hitTestPdfInsertionOffset(fallback, { x: 14, y: 11 })).toBe(2);
+    expect(hitTestPdfInsertionOffset(native, { x: 14, y: 11 })).toBe(1);
+    expect(buildPdfSelectionRange(native, { anchorOffset: 0, headOffset: 1, pageIndex: 1 })).toMatchObject({
+      text: "W", rects: [{ left: 10, top: 10, width: 3, height: 2 }]
+    });
+
+    span.textContent = "fit";
+    const ligature = buildPageCharModelFromTextLayer({
+      pageElement, pageIndex: 1, textLayer,
+      glyphs: [{ text: "ﬁ", rect: rect(10, 15) }, { text: "t", rect: rect(15, 17) }]
+    });
+    expect(ligature.chars.map((char) => char.c)).toEqual(["fi", "t"]);
+    expect(buildPdfSelectionRange(ligature, { anchorOffset: 0, headOffset: 1, pageIndex: 1 })).toMatchObject({
+      text: "fi", rects: [{ left: 10, top: 10, width: 5, height: 2 }]
+    });
+  } finally {
+    createRange.mockRestore();
+    pageElement.remove();
+  }
 });
 
 function annotation(input: {

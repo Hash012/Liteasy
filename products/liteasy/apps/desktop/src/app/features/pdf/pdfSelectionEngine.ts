@@ -1,4 +1,5 @@
 import type { PdfAnnotationRect } from "./pdfAnnotationStorage";
+import { createPdfGlyphMatcher, type PdfGlyphGeometry } from "./pdfGlyphGeometry";
 
 export type PdfPoint = {
   x: number;
@@ -208,8 +209,7 @@ export function hitTestPdfInsertion(
         offset: insertionOffsetForCharacter(
           model.chars,
           bestIndex,
-          point,
-          options.selectionAnchorOffset
+          point
         )
       };
     }
@@ -277,8 +277,7 @@ export function hitTestPdfInsertion(
     offset: insertionOffsetForCharacter(
       model.chars,
       bestIndex,
-      point,
-      options.selectionAnchorOffset
+      point
     )
   };
 }
@@ -286,50 +285,24 @@ export function hitTestPdfInsertion(
 function insertionOffsetForCharacter(
   chars: StructuredPdfChar[],
   index: number,
-  point: PdfPoint,
-  selectionAnchorOffset?: number
+  point: PdfPoint
 ) {
   const character = chars[index];
   const rotation = ((character.rotation ?? 0) % 360 + 360) % 360;
-  const forwardSelection = selectionAnchorOffset === undefined
-    ? undefined
-    : index >= selectionAnchorOffset;
-  // A DOM Range glyph box often contains side bearings that extend beyond the visible ink.
-  // Apply the smaller entry threshold only to an alphanumeric word ending during a forward
-  // drag. Every other glyph, including punctuation and reverse-drag heads, keeps the exact
-  // midpoint rule so a small overlap cannot pull in a preceding character.
-  const tolerantWordEnd = forwardSelection === true &&
-    character.wordBreakAfter === true &&
-    /[\p{L}\p{N}]/u.test(character.c);
-  const entryRatio = tolerantWordEnd ? 0.2 : 0.5;
+  // Like Zotero's character selection, both endpoints use the same glyph midpoint.
+  // Word-end expansion makes the stored text depend on the direction of the drag.
   let after: boolean;
   if (rotation >= 45 && rotation < 135) {
-    const threshold = forwardSelection === undefined
-      ? (character.rect.top + character.rect.bottom) / 2
-      : forwardSelection
-        ? character.rect.top + rectHeight(character.rect) * entryRatio
-        : character.rect.bottom - rectHeight(character.rect) * entryRatio;
+    const threshold = (character.rect.top + character.rect.bottom) / 2;
     after = point.y > threshold;
   } else if (rotation >= 135 && rotation < 225) {
-    const threshold = forwardSelection === undefined
-      ? (character.rect.left + character.rect.right) / 2
-      : forwardSelection
-        ? character.rect.right - rectWidth(character.rect) * entryRatio
-        : character.rect.left + rectWidth(character.rect) * entryRatio;
+    const threshold = (character.rect.left + character.rect.right) / 2;
     after = point.x < threshold;
   } else if (rotation >= 225 && rotation < 315) {
-    const threshold = forwardSelection === undefined
-      ? (character.rect.top + character.rect.bottom) / 2
-      : forwardSelection
-        ? character.rect.bottom - rectHeight(character.rect) * entryRatio
-        : character.rect.top + rectHeight(character.rect) * entryRatio;
+    const threshold = (character.rect.top + character.rect.bottom) / 2;
     after = point.y < threshold;
   } else {
-    const threshold = forwardSelection === undefined
-      ? (character.rect.left + character.rect.right) / 2
-      : forwardSelection
-        ? character.rect.left + rectWidth(character.rect) * entryRatio
-        : character.rect.right - rectWidth(character.rect) * entryRatio;
+    const threshold = (character.rect.left + character.rect.right) / 2;
     after = point.x > threshold;
   }
 
@@ -500,6 +473,7 @@ function segmentGraphemes(value: string) {
  * Selection or Range state.
  */
 export function buildPageCharModelFromTextLayer(input: {
+  glyphs?: PdfGlyphGeometry[];
   pageElement: HTMLElement;
   pageIndex: number;
   textLayer: HTMLElement;
@@ -522,7 +496,7 @@ export function buildPageCharModelFromTextLayer(input: {
     node = walker.nextNode();
   }
 
-  const measured: MeasuredPdfChar[] = [];
+  let measured: MeasuredPdfChar[] = [];
   const measuredGeometry = new Set<string>();
   nodes.forEach((textNode, sourceIndex) => {
     if (textNode.parentElement) {
@@ -580,6 +554,46 @@ export function buildPageCharModelFromTextLayer(input: {
       }
     }
   });
+
+  if (input.glyphs?.length) {
+    const matchGlyphs = createPdfGlyphMatcher(input.glyphs);
+    const corrected: MeasuredPdfChar[] = [];
+    for (let start = 0; start < measured.length;) {
+      let end = start + 1;
+      while (end < measured.length && measured[end].sourceIndex === measured[start].sourceIndex) end++;
+      const chars = measured.slice(start, end);
+      const rects = matchGlyphs(chars);
+      chars.forEach((char, index) => {
+        const rect = rects?.[index];
+        if (rect) {
+          const previous = corrected.at(-1);
+          // A PDF ligature can be several Unicode characters but only one selectable glyph.
+          // Keep its text and geometry together instead of highlighting 'fi' while copying 'f'.
+          if (index > 0 && previous?.sourceIndex === char.sourceIndex && rects?.[index - 1] &&
+            Object.keys(rect).every((key) => rect[key as keyof PdfCharRect] === previous.rect[key as keyof PdfCharRect])) {
+            previous.c += char.c;
+            return;
+          }
+          char.rect = char.inlineRect = rect;
+        }
+        corrected.push(char);
+      });
+      start = end;
+    }
+    measured = corrected;
+    // Synthetic spaces come from TextLayer, not necessarily a painted PDF glyph. Fit them to
+    // the corrected neighbours so a wide substitute-font space cannot capture the next word.
+    for (let index = 1; index < measured.length - 1; index++) {
+      const char = measured[index];
+      const previous = measured[index - 1];
+      const next = measured[index + 1];
+      if (/^\s+$/u.test(char.c) && !char.rotation && isSameVisualLine(previous, next) &&
+        previous.rect.right <= next.rect.left &&
+        next.rect.left - previous.rect.right < Math.max(4, rectHeight(previous.rect) * 4)) {
+        char.rect = char.inlineRect = { ...previous.rect, left: previous.rect.right, right: next.rect.left };
+      }
+    }
+  }
 
   for (let index = 0; index < measured.length; index += 1) {
     const current = measured[index];

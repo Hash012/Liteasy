@@ -134,7 +134,7 @@ test("insets a highlight band by five percent above and below the selected glyph
   expect(mark).toHaveStyle({
     height: "1.8%",
     top: "40.1%",
-    width: "35.2%"
+    width: "35%"
   });
 });
 
