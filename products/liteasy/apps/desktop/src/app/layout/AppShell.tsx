@@ -1,3 +1,4 @@
+import { usePdfQuickAskController } from "../controllers/usePdfQuickAskController";
 import { usePaperServicesController } from "../controllers/usePaperServicesController";
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -743,6 +744,7 @@ export function AppShell({
     getSettings: () => settingsStoreRef.current.getState(),
     sessionId: accountSession?.sessionId
   });
+  const askPdfQuestion = usePdfQuickAskController({ modelTransport: effectiveModelTransport, settingsStore: settingsStoreRef.current });
   const paperTranslation = usePaperTranslationController({
     modelTransport: effectiveModelTransport,
     settingsStore: settingsStoreRef.current
@@ -1855,6 +1857,7 @@ export function AppShell({
     ];
     return (
       <ReaderPane
+        onQuickAsk={askPdfQuestion}
         {...teamAnnotations.readerBindings(paper)}
         allowServerPdfParsing={false}
         readingContent={getPaperMineruResources(paper.id)?.textChunks.some((chunk) => chunk.textExtraction === "mineru")

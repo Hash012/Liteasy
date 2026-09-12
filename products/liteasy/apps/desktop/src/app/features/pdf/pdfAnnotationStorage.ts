@@ -42,6 +42,7 @@ type PdfAnnotationBase = {
   id: string;
   kind: PdfAnnotationKind;
   note?: string;
+  quickAsk?: { question: string; answer: string; pageText: string; abstractText: string };
   normalizedStart?: number;
   opacity?: number;
   page: number;
@@ -224,6 +225,9 @@ function hasAnnotationFields(value: unknown) {
     typeof candidate.page === "number" && Number.isInteger(candidate.page) && candidate.page > 0 &&
     Array.isArray(candidate.rects) && candidate.rects.every(isAnnotationRect) &&
     (candidate.note === undefined || typeof candidate.note === "string") &&
+    (candidate.quickAsk === undefined || (candidate.quickAsk !== null &&
+      typeof candidate.quickAsk.question === "string" && typeof candidate.quickAsk.answer === "string" &&
+      typeof candidate.quickAsk.pageText === "string" && typeof candidate.quickAsk.abstractText === "string")) &&
     (candidate.normalizedStart === undefined ||
       (isFiniteNumber(candidate.normalizedStart) && candidate.normalizedStart >= 0)) &&
     (candidate.opacity === undefined ||
@@ -266,6 +270,9 @@ function isLegacyAnnotation(value: unknown): value is Omit<
     typeof candidate.page === "number" && Number.isInteger(candidate.page) && candidate.page > 0 &&
     Array.isArray(candidate.rects) && candidate.rects.every(isAnnotationRect) &&
     (candidate.note === undefined || typeof candidate.note === "string") &&
+    (candidate.quickAsk === undefined || (candidate.quickAsk !== null &&
+      typeof candidate.quickAsk.question === "string" && typeof candidate.quickAsk.answer === "string" &&
+      typeof candidate.quickAsk.pageText === "string" && typeof candidate.quickAsk.abstractText === "string")) &&
     (candidate.opacity === undefined ||
       (isFiniteNumber(candidate.opacity) && candidate.opacity >= 0 && candidate.opacity <= 1)) &&
     (candidate.color === undefined || highlightColors.has(candidate.color as PdfHighlightColor));

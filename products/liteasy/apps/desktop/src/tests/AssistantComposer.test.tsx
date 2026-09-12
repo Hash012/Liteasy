@@ -82,3 +82,23 @@ describe("AssistantComposer", () => {
     expect(onSend).toHaveBeenCalledTimes(1);
   });
 });
+
+
+test("renders a selected slash command as a capsule and sends after dismissing suggestions", async () => {
+  const user = userEvent.setup();
+  const send = vi.fn();
+  function Composer() {
+    const [input, setInput] = useState("");
+    return <AssistantComposer input={input} modeHint="命令" onInputChange={setInput}
+      onSend={() => send(input)} onVoiceInput={vi.fn()}
+      suggestions={[{ id: "thin", label: "生成薄读", trigger: "/", insertText: "/生成薄读" }]} />;
+  }
+  render(<Composer />);
+  const input = screen.getByPlaceholderText("输入你的问题或命令");
+  await user.type(input, "/{Enter}");
+  expect(input).toHaveValue("/生成薄读 ");
+  expect(document.querySelector(".assistant-command-chip")).toHaveTextContent("/生成薄读");
+  expect(screen.queryByLabelText("输入候选")).not.toBeInTheDocument();
+  await user.keyboard("{Enter}");
+  expect(send).toHaveBeenCalledWith("/生成薄读 ");
+});

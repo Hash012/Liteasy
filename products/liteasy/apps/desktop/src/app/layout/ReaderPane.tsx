@@ -1,3 +1,4 @@
+import type { PdfQuickAskRequest } from "../features/pdf/pdfQuickAsk";
 import { Button } from "@fluentui/react-components";
 import {
   CheckmarkCircleRegular,
@@ -41,6 +42,7 @@ import type { PaneCollapseState } from "./paneLayout.types";
 import type { ThinReadingVisualizationStatus } from "../features/artifacts/artifact.types";
 
 type ReaderPaneProps = {
+  onQuickAsk?: (request: PdfQuickAskRequest) => Promise<string>;
   readingContent?: ReactNode;
   extractingPaper?: boolean;
   onExtractPaper?: () => Promise<void>;
@@ -118,6 +120,7 @@ const defaultLayoutCollapsed: PaneCollapseState = {
 };
 
 export function ReaderPane({
+  onQuickAsk,
   readingContent, extractingPaper, onExtractPaper,
   allowServerPdfParsing = false,
   analysisHint,
@@ -197,6 +200,7 @@ export function ReaderPane({
         >
           <div className="reader-pdf-surface" hidden={readingVisible}>
           <PdfReader
+            onQuickAsk={onQuickAsk}
             readingControls={readingContent
               ? <Button size="small" onClick={() => setReadingMode(true)}>阅读模式</Button>
               : onExtractPaper ? <Button size="small" disabled={extractingPaper} onClick={() => {

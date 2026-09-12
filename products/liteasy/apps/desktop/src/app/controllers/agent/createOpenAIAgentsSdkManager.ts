@@ -1,3 +1,4 @@
+import { createAgentErrorEnvelope } from "../../features/agent-runtime/runtimeObservability";
 import {
   Agent,
   Runner,
@@ -90,6 +91,7 @@ class ExplicitRouteModel implements Model {
 }
 
 type SdkTrace = {
+  retryCount?: number;
   mainAgent: string;
   mainItems: string[];
   mainTool: string;
@@ -102,6 +104,7 @@ type SdkManagerContext = {
   input: DesktopManagerAgentInput;
   result?: AgentManagerExecutionResult;
   failure?: unknown;
+  attempt?: number;
   trace: SdkTrace;
 };
 
@@ -182,7 +185,7 @@ function createSpecialistAgent(input: {
             ? { instruction }
             : { artifactType: input.artifactType, instruction },
           specialistId,
-          toolCallId: `${context.input.runId}:tool-${specialistId}`
+          toolCallId: `${context.input.runId}:tool-${specialistId}${context.attempt ? `:retry-${context.attempt}` : ""}`
         });
         context.result = {
           kind: "knowledge",
@@ -334,15 +337,51 @@ export function createOpenAIAgentsSdkManager(): DesktopManagerAgent {
         }
       };
       const managerAgent = createMainAgent(sdkContext);
-      const sdkResult = await runner.run(managerAgent, input.request.input.message, {
-        context: sdkContext,
-        maxTurns: 4,
-        signal: input.signal
-      });
-      sdkContext.trace.mainItems = collectItemTypes(sdkResult);
-      if (!sdkContext.result) {
-        throw sdkContext.failure ?? new Error("子任务未返回结果。已保留上下文，可恢复任务后继续。");
+      for (let attempt = 0; ; attempt += 1) {
+        sdkContext.attempt = attempt;
+        sdkContext.failure = undefined;
+        try {
+          const sdkResult = await runner.run(managerAgent, input.request.input.message, {
+            context: sdkContext,
+            maxTurns: 4,
+            signal: input.signal
+          });
+          sdkContext.trace.mainItems.push(...collectItemTypes(sdkResult));
+          if (!sdkContext.result) {
+            throw sdkContext.failure ?? new Error("子任务未返回结果。已保留上下文，可恢复任务后继续。");
+          }
+          if (attempt > 0) input.reportManagerActivity({
+            activityId: `${input.runId}:retry-${attempt}`,
+            detail: "重新生成的结果已返回，继续校验并保存。",
+            kind: "tool_result", label: "重新生成成功", status: "completed"
+          });
+          break;
+        } catch (error) {
+          const failure = sdkContext.failure ?? error;
+          const envelope = createAgentErrorEnvelope({
+            message: failure instanceof Error ? failure.message : String(failure)
+          });
+          if (attempt > 0) input.reportManagerActivity({
+            activityId: `${input.runId}:retry-${attempt}`,
+            detail: envelope.error.userImpact,
+            kind: "tool_result", label: "重新生成未完成", status: "failed"
+          });
+          // Retry only a failed generation, before any result has been handed to storage.
+          // Context/authentication errors need user action; cancellation must stop immediately.
+          if (!artifactType || attempt >= 1 || sdkContext.result || !sdkContext.failure ||
+            input.signal.aborted || (failure instanceof Error && failure.name === "AbortError") ||
+            (!envelope.error.retryable && envelope.error.category !== "validation")) throw failure;
+          sdkContext.trace.retryCount = attempt + 1;
+          input.reportManagerActivity({
+            activityId: `${input.runId}:retry-${attempt + 1}`,
+            detail: `${envelope.error.userImpact}正在保留原有论文和要求重新生成；若仍失败，将保留任务供继续处理。`,
+            kind: "tool_result",
+            label: `正在重试${artifactLabels[artifactType]}`,
+            status: "running"
+          });
+        }
       }
+      if (!sdkContext.result) throw new Error("子任务未返回结果。");
       if (sdkContext.result.kind === "knowledge") {
         return {
           kind: "knowledge",

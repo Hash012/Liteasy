@@ -70,6 +70,7 @@ test("loads team annotations and explicitly shares a local annotation", async ()
   );
 
   await waitFor(() => expect(loadOrganizationAnnotations).toHaveBeenCalledWith(organizationPaper));
+  fireEvent.click(await screen.findByRole("button", { name: "编辑批注：Evidence excerpt" }));
   const share = await screen.findByRole("button", {
     name: "共享批注到组织：Evidence excerpt"
   });

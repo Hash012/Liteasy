@@ -621,6 +621,7 @@ describe("ReaderPane", () => {
       />
     );
 
+    await user.click(screen.getByText("批注选项"));
     const autoPublic = screen.getByRole("checkbox", { name: "新批注自动公开到论坛" });
     expect(autoPublic).not.toBeChecked();
     await user.click(autoPublic);
@@ -636,6 +637,7 @@ describe("ReaderPane", () => {
     await waitFor(() => expect(onChangeAnnotationPublication).toHaveBeenCalledWith(
       expect.objectContaining({ operation: "publish" })
     ));
+    await user.click(screen.getByRole("button", { name: "编辑批注：a publicly queued PDF annotation" }));
     expect(await screen.findByText("已公开到论坛")).toBeInTheDocument();
     expect(window.localStorage.getItem(pdfAnnotationStorageKey(readerTestPaper)!)).toContain('"state":"published"');
     expect(window.localStorage.getItem(pdfAnnotationAutoPublicStorageKey(readerTestPaper)!)).toBe("true");
@@ -669,6 +671,7 @@ describe("ReaderPane", () => {
     });
     fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
     await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "高亮" }));
+    await user.click(screen.getByRole("button", { name: "编辑批注：a forum draft annotation" }));
     await user.click(screen.getByRole("checkbox", {
       name: "将第 1 页高亮批注公开到论坛：a forum draft annotation"
     }));
@@ -886,7 +889,7 @@ describe("ReaderPane", () => {
     await user.type(screen.getByLabelText("补充批注笔记"), "这里要联系实验设置。");
     await user.click(screen.getByRole("button", { name: "保存笔记" }));
 
-    expect(screen.getByText("这里要联系实验设置。")).toBeInTheDocument();
+    expect(screen.getByText(/这里要联系实验设置。/)).toBeInTheDocument();
   });
 
   test("does not expose bundled fixture paths as readable production PDF URLs", () => {

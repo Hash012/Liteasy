@@ -625,7 +625,7 @@ const registeredActionMetadata: RegisteredActionMetadata[] = [
           requiredContext: ["selected_document_set"],
           signals: [
             semanticSignal("create", ["生成", "制作", "做", "展开"], 1),
-            semanticSignal("tree", ["树状图", "树图", "tree"], 4, true),
+            semanticSignal("tree", ["树状图", "树图", "tree", "提纲", "学习大纲", "outline"], 4, true),
             semanticSignal("selected_document_set", ["当前选中文献集", "当前论文", "选中文献", "这组论文"], 1)
           ],
           summary: "生成树状图"

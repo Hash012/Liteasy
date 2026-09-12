@@ -33,5 +33,16 @@ export default function PdfHighlightBrowserFixture() {
     sourcePath: new URL("/manual-preview/das24a.pdf", window.location.origin).href,
     title: "das24a.pdf"
   };
-  return <AppShell initialOpenReaderPaperIds={[previewPaper.id]} initialPapers={[previewPaper]} />;
+  return <AppShell initialOpenReaderPaperIds={[previewPaper.id]} initialPapers={[previewPaper]}
+    modelTransport={window.location.hash === "#ui-improvements" ? async ({ body }) => {
+      const request = JSON.parse(body) as { prompt: string };
+      if (!request.prompt.includes("第 1 页全文") || !request.prompt.includes("摘要")) {
+        throw new Error("Missing quick-ask context in browser test");
+      }
+      return { ok: true, status: 200, json: async () => ({
+        answer: "**紧凑表示**保留了任务所需的信息，同时减少存储与计算开销。",
+        execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+      }) };
+    } : undefined}
+  />;
 }

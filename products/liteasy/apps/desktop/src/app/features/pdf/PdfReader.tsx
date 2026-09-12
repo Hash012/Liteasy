@@ -1,3 +1,5 @@
+import { extractQuickAskAbstract, type PdfQuickAskRequest } from "./pdfQuickAsk";
+import { readerContextDragMime } from "../assistant/readerContextDrag";
 import {
   useCallback,
   useEffect,
@@ -192,6 +194,7 @@ export type PdfAnnotationPublicationChange = {
 };
 
 type PdfReaderProps = {
+  onQuickAsk?: (request: PdfQuickAskRequest) => Promise<string>;
   readingControls?: ReactNode;
   allowServerPdfParsing?: boolean;
   /** Where the structured citation parser lives; its snapshot is what thin reading reads back. */
@@ -1321,8 +1324,19 @@ function PdfPageView({
           ) : null
         ) : annotation.rects.map((rect, index) => (
             <button
-              aria-label={`${getOverlayLabel(annotation.kind)}：第 ${annotation.page} 页：${annotation.excerpt}`}
-              className={`pdf-overlay-mark ${annotation.kind}`}
+              aria-label={`${(annotation.quickAsk ? "速问" : getOverlayLabel(annotation.kind))}：第 ${annotation.page} 页：${annotation.excerpt}`}
+              className={`pdf-overlay-mark ${annotation.kind} ${annotation.quickAsk ? "quick-ask" : ""}`}
+              draggable={annotation.kind === "highlight" || annotation.kind === "underline"}
+              onDragStart={(event) => {
+                if (!activePaper) { event.preventDefault(); return; }
+                event.stopPropagation();
+                event.dataTransfer.effectAllowed = "copy";
+                event.dataTransfer.setData(readerContextDragMime, JSON.stringify({
+                  excerpt: annotation.excerpt, page: annotation.page,
+                  paperId: activePaper.id, paperTitle: activePaper.title, source: "pdf_selection"
+                } satisfies ReaderConversationContext));
+                event.dataTransfer.setData("text/plain", annotation.excerpt);
+              }}
               key={`${annotation.id}-${index}`}
               onClick={(event) => {
                 const pageElement = pageShellRef.current;
@@ -1331,11 +1345,11 @@ function PdfPageView({
                 }
               }}
               onPointerDown={(event) => event.stopPropagation()}
-              style={getOverlayStyle(
+              style={{ ...getOverlayStyle(
                 annotation.kind,
                 rect,
                 annotation.kind === "highlight" ? annotation.color : undefined
-              )}
+              ), ...(annotation.quickAsk ? { borderBottomStyle: "dashed" } : {}) }}
               title={`第 ${annotation.page} 页：${annotation.excerpt}`}
               type="button"
             />
@@ -1504,6 +1518,7 @@ export function PdfReader({
   targetEvidence,
   zoom,
   onZoomChange,
+  onQuickAsk,
   onAddSelectionToConversation,
   onSelectionChanged,
   canModerateOrganizationAnnotations = false,
@@ -1539,10 +1554,24 @@ export function PdfReader({
   const [searchWholeWords, setSearchWholeWords] = useState(false);
   const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try { return Math.max(160, Math.min(480, Number(localStorage.getItem("liteasy.pdf-sidebar-width")) || 180)); }
+    catch { return 180; }
+  });
+  const sidebarResizeRef = useRef<{ x: number; width: number } | null>(null);
+  useEffect(() => {
+    try { localStorage.setItem("liteasy.pdf-sidebar-width", String(sidebarWidth)); } catch { /* Width remains usable. */ }
+  }, [sidebarWidth]);
   const [sidebarMode, setSidebarMode] = useState<PdfSidebarMode>("annotations");
   const [stageWidth, setStageWidth] = useState(960);
   const [status, setStatus] = useState("选择文段后可添加高亮、划线，或把选中文段交给 AI。");
   const [selection, setSelection] = useState<PdfSelection | null>(null);
+  const [quickAskSelection, setQuickAskSelection] = useState<PdfSelection | null>(null);
+  const [quickAskQuestion, setQuickAskQuestion] = useState("");
+  const [quickAskPending, setQuickAskPending] = useState(false);
+  const [quickAskError, setQuickAskError] = useState("");
+  const quickAskAbortRef = useRef<AbortController | null>(null);
+
   const [selectionPreview, setSelectionPreview] = useState<PdfSelectionPreview | null>(null);
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
   const [activeTextAnnotationId, setActiveTextAnnotationId] = useState<string | null>(null);
@@ -1560,6 +1589,12 @@ export function PdfReader({
   const [mutatingTeamAnnotationId, setMutatingTeamAnnotationId] = useState<string | null>(null);
   const pdfDisplaySource = resolvePdfDisplaySource(activePaper?.sourcePath);
   const annotationStorageKey = pdfAnnotationStorageKey(activePaper);
+  useEffect(() => {
+    setQuickAskSelection(null);
+    setQuickAskPending(false);
+    setQuickAskError("");
+    return () => { quickAskAbortRef.current?.abort(); quickAskAbortRef.current = null; };
+  }, [annotationStorageKey]);
   const autoPublicStorageKey = pdfAnnotationAutoPublicStorageKey(activePaper);
   const whiteboardStorageKey = pdfWhiteboardStorageKey(activePaper);
   const [whiteboardState, setWhiteboardState] = useState<{
@@ -2643,6 +2678,59 @@ export function PdfReader({
     clearBrowserSelection();
   }
 
+  async function submitQuickAsk() {
+    if (!quickAskSelection || !activePaper || !onQuickAsk || quickAskAbortRef.current ||
+      !quickAskQuestion.trim() || hydratedAnnotationStorageKey !== annotationStorageKey) return;
+    const abort = new AbortController();
+    quickAskAbortRef.current = abort;
+    setQuickAskPending(true);
+    setQuickAskError("");
+    const anchor = quickAskSelection;
+    const paper = activePaper;
+    const question = quickAskQuestion.trim();
+    try {
+      async function readPage(page: number) {
+        if (pageTexts[page]?.trim()) return pageTexts[page];
+        if (!pdfDocument) return "";
+        const pdfPage = await pdfDocument.getPage(page);
+        return normalizePdfPageText(joinPdfTextItems((await pdfPage.getTextContent()).items));
+      }
+      const [pageText, ...openingPages] = await Promise.all([
+        readPage(anchor.page),
+        ...Array.from({ length: Math.min(pdfDocument?.numPages ?? pageCount, 3) }, (_, index) => readPage(index + 1))
+      ]);
+      if (abort.signal.aborted) return;
+      const abstractText = extractQuickAskAbstract(openingPages.join("\n\n"));
+      if (!pageText.trim() || !abstractText.trim()) throw new Error("页面或摘要文本尚未就绪，请先完成论文解析后重试。");
+      const answer = await onQuickAsk({ paper, page: anchor.page, excerpt: anchor.excerpt,
+        question, pageText, abstractText, signal: abort.signal });
+      if (abort.signal.aborted) return;
+      if (!answer.trim()) throw new Error("未收到回答，请重试。");
+      const now = new Date().toISOString();
+      const annotation: PdfAnnotationV2 = {
+        id: `quick-ask-${crypto.randomUUID()}`, kind: "underline", page: anchor.page,
+        excerpt: anchor.excerpt, rects: anchor.rects, normalizedStart: anchor.normalizedStart,
+        text: `速问 · 第 ${anchor.page} 页`, createdAt: now, updatedAt: now,
+        paperIdentity: resolvePaperIdentity(paper), revision: 1,
+        publication: { desiredVisibility: "private", state: "not_published" },
+        quickAsk: { question, answer, pageText, abstractText }
+      };
+      setCurrentAnnotations((current) => [...current, annotation]);
+      setQuickAskSelection(null);
+      setActiveAnnotationId(annotation.id);
+      setAnnotationPopup({ annotationId: annotation.id, left: anchor.menuLeft,
+        top: anchor.menuTop, placement: anchor.menuPlacement });
+      setStatus("");
+    } catch (error) {
+      if (!abort.signal.aborted) setQuickAskError(error instanceof Error ? error.message : "速问失败，请重试。");
+    } finally {
+      if (quickAskAbortRef.current === abort) {
+        quickAskAbortRef.current = null;
+        setQuickAskPending(false);
+      }
+    }
+  }
+
   function addSelectionToConversation() {
     if (!selection) return;
 
@@ -2658,7 +2746,7 @@ export function PdfReader({
     setSelection(null);
     setSelectionPreview(null);
     clearBrowserSelection();
-    setStatus("已将选中文段添加到对话。");
+    setStatus("");
   }
 
   function openAnnotationEditor(annotation: PdfAnnotationV2) {
@@ -2706,7 +2794,7 @@ export function PdfReader({
     });
     setSelection(null);
     setSelectionPreview(null);
-    setStatus(`正在编辑第 ${annotation.page} 页${getAnnotationLabel(annotation.kind)}的注释。`);
+    setStatus(annotation.quickAsk ? "" : `正在编辑第 ${annotation.page} 页${getAnnotationLabel(annotation.kind)}的注释。`);
   }
 
   function cancelAnnotationEditing() {
@@ -3020,6 +3108,7 @@ export function PdfReader({
     >
       <div
         aria-label="PDF 阅读工作区"
+        style={{ "--pdf-sidebar-width": `${sidebarWidth}px` } as CSSProperties}
         className={`pdf-workspace ${sidebarCollapsed ? "sidebar-collapsed" : "sidebar-open"} ${
           whiteboardOpen ? "whiteboard-open" : ""
         }`}
@@ -3028,6 +3117,30 @@ export function PdfReader({
           aria-label="PDF 左侧批注栏"
           className="pdf-left-sidebar"
         >
+          {!sidebarCollapsed ? <div
+            aria-label="调整批注栏宽度" aria-orientation="vertical" role="separator" tabIndex={0}
+            aria-valuemin={160} aria-valuemax={480} aria-valuenow={sidebarWidth}
+            className="pdf-sidebar-resizer"
+            onPointerDown={(event) => {
+              if (event.button !== 0) return;
+              sidebarResizeRef.current = { x: event.clientX, width: sidebarWidth };
+              event.currentTarget.setPointerCapture(event.pointerId);
+              event.preventDefault();
+            }}
+            onPointerMove={(event) => {
+              const drag = sidebarResizeRef.current;
+              if (drag) setSidebarWidth(Math.max(160, Math.min(480, drag.width + event.clientX - drag.x)));
+            }}
+            onPointerUp={() => { sidebarResizeRef.current = null; }}
+            onPointerCancel={() => { sidebarResizeRef.current = null; }}
+            onLostPointerCapture={() => { sidebarResizeRef.current = null; }}
+            onKeyDown={(event) => {
+              if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+              event.preventDefault();
+              setSidebarWidth((width) => event.key === "Home" ? 160 : event.key === "End" ? 480 :
+                Math.max(160, Math.min(480, width + (event.key === "ArrowLeft" ? -16 : 16))));
+            }}
+          /> : null}
           {sidebarCollapsed ? (
             <button
               aria-label="展开 PDF 左侧栏"
@@ -3085,9 +3198,9 @@ export function PdfReader({
                 </ol>
               ) : (
                 <div className="pdf-sidebar-annotations">
-                  <div aria-live="polite" className="pdf-status">
+                  {status ? <div aria-live="polite" className="pdf-status">
                     {status}
-                  </div>
+                  </div> : null}
                   {activePaper?.literature ? (
                     <>
                       <div
@@ -3105,6 +3218,7 @@ export function PdfReader({
                       />
                     </>
                   ) : null}
+                  <details className="pdf-annotation-options"><summary>批注选项</summary>
                   <label className="pdf-annotation-auto-public-toggle">
                     <input
                       checked={autoPublicAnnotations}
@@ -3112,7 +3226,7 @@ export function PdfReader({
                       type="checkbox"
                     />
                     新批注自动公开到论坛
-                  </label>
+                  </label></details>
                   {annotations.length > 0 ? (
                     <ul className="pdf-annotation-list">
                       {annotationsInReadingOrder.map((annotation) => (
@@ -3143,12 +3257,19 @@ export function PdfReader({
                           >
                             <span className="pdf-annotation-kind">{annotation.text}</span>
                             <span className="pdf-annotation-excerpt">{annotation.excerpt}</span>
+                            {activeAnnotationId !== annotation.id && (annotation.quickAsk?.question || annotation.note) ?
+                              <span className="pdf-annotation-summary-note"> · {annotation.quickAsk?.question ?? annotation.note}</span> : null}
                           </button>
-                          {annotation.kind !== "text" && annotation.note && (
+                          {activeAnnotationId === annotation.id && annotation.kind !== "text" && annotation.note && (
                             <div className="annotation-divider" />
                           )}
                           {activeAnnotationId === annotation.id ? (
                             <div className="pdf-annotation-editor">
+                              {annotation.quickAsk ? <>
+                                <strong>{annotation.quickAsk.question}</strong>
+                                <PdfAnnotationMarkdown value={annotation.quickAsk.answer} />
+                              </> : <>
+
                               <div className="note-editor">
                                 <textarea
                                   aria-label="补充批注笔记"
@@ -3160,7 +3281,6 @@ export function PdfReader({
                                 />
                                 <div aria-label="批注 Markdown 实时预览" aria-live="polite">
                                   <PdfAnnotationMarkdown
-                                    emptyLabel="输入后将在这里实时显示排版效果。"
                                     value={annotationNoteDraft}
                                   />
                                 </div>
@@ -3190,6 +3310,7 @@ export function PdfReader({
                                   ))}
                                 </div>
                               )}
+                              </>}
                               <button
                                 className="delete-button"
                                 onClick={() => void deleteAnnotation(annotation)}
@@ -3198,12 +3319,8 @@ export function PdfReader({
                                 删除
                               </button>
                             </div>
-                          ) : annotation.kind !== "text" && annotation.note ? (
-                            <PdfAnnotationMarkdown
-                              className="annotation-note-preview pdf-annotation-markdown"
-                              value={annotation.note}
-                            />
                           ) : null}
+                          {activeAnnotationId === annotation.id && !annotation.quickAsk ? <>
                           {annotation.kind === "text" ? (
                             <small role="note">文本框保存在当前本地 PDF 批注中</small>
                           ) : (
@@ -3235,6 +3352,7 @@ export function PdfReader({
                               {sharingAnnotationId === annotation.id ? "共享中" : "共享到组织"}
                             </Button>
                           ) : null}
+                          </> : null}
                         </li>
                       ))}
                     </ul>
@@ -3512,6 +3630,14 @@ export function PdfReader({
                     划线
                   </button>
                 </div>
+                {onQuickAsk ? <div className="selection-menu-row">
+                  <button type="button" title="结合当前页和摘要提问" onClick={() => {
+                    quickAskAbortRef.current?.abort(); quickAskAbortRef.current = null;
+                    setQuickAskPending(false); setQuickAskSelection(selection); setQuickAskQuestion("");
+                    setQuickAskError(""); setSelection(null); setSelectionPreview(null); clearBrowserSelection();
+                    setAnnotationPopup(null);
+                  }}>速问</button>
+                </div> : null}
                 <div className="selection-menu-row">
                   <button onClick={addSelectionToConversation} title="把选中文段加入右侧对话上下文" type="button" className="add-to-conversation">
                     加入对话
@@ -3519,9 +3645,31 @@ export function PdfReader({
                 </div>
               </div>
             ) : null}
+            {quickAskSelection ? (
+              <aside aria-label="速问" className="pdf-quick-ask-panel">
+                <form onSubmit={(event) => { event.preventDefault(); void submitQuickAsk(); }}>
+                  <header><strong>速问 · 第 {quickAskSelection.page} 页</strong></header>
+                  <p className="pdf-annotation-excerpt">{quickAskSelection.excerpt}</p>
+                  <textarea aria-label="速问问题" placeholder="想了解这段内容的什么？" autoFocus
+                    value={quickAskQuestion} onChange={(event) => setQuickAskQuestion(event.target.value)}
+                    disabled={quickAskPending} maxLength={4000} rows={3} />
+                  <small>上下文：当前页全文与论文摘要</small>
+                  {quickAskError ? <p role="alert">{quickAskError}</p> : null}
+                  <div className="editor-actions">
+                    <Button appearance="primary" type="submit" disabled={quickAskPending || !quickAskQuestion.trim() || hydratedAnnotationStorageKey !== annotationStorageKey}>
+                      {quickAskPending ? "正在回答…" : "提问"}
+                    </Button>
+                    <Button type="button" onClick={() => {
+                      quickAskAbortRef.current?.abort(); quickAskAbortRef.current = null;
+                      setQuickAskPending(false); setQuickAskSelection(null);
+                    }}>取消</Button>
+                  </div>
+                </form>
+              </aside>
+            ) : null}
             {annotationPopup && popupAnnotation ? (
               <aside
-                aria-label={`${getAnnotationLabel(popupAnnotation.kind)}注释编辑器：${popupAnnotation.excerpt}`}
+                aria-label={`${popupAnnotation.quickAsk ? "速问回答" : `${getAnnotationLabel(popupAnnotation.kind)}注释编辑器`}：${popupAnnotation.excerpt}`}
                 className={`pdf-annotation-popover is-${annotationPopup.placement}`}
                 onKeyDown={(event) => {
                   if (event.key === "Escape") cancelAnnotationEditing();
@@ -3529,10 +3677,14 @@ export function PdfReader({
                 style={{ left: annotationPopup.left, top: annotationPopup.top }}
               >
                 <header>
-                  <strong>{getAnnotationLabel(popupAnnotation.kind)} · 第 {popupAnnotation.page} 页</strong>
+                  <strong>{popupAnnotation.quickAsk ? "速问" : getAnnotationLabel(popupAnnotation.kind)} · 第 {popupAnnotation.page} 页</strong>
                   <button aria-label="关闭注释编辑器" onClick={cancelAnnotationEditing} type="button">×</button>
                 </header>
                 <p className="pdf-annotation-popover-excerpt">{popupAnnotation.excerpt}</p>
+                {popupAnnotation.quickAsk ? <>
+                  <strong>{popupAnnotation.quickAsk.question}</strong>
+                  <PdfAnnotationMarkdown value={popupAnnotation.quickAsk.answer} />
+                </> : <>
                 <textarea
                   aria-label="页内批注内容"
                   autoFocus
@@ -3544,7 +3696,6 @@ export function PdfReader({
                 />
                 <div aria-label="页内批注 Markdown 实时预览" aria-live="polite">
                   <PdfAnnotationMarkdown
-                    emptyLabel="输入后将在这里实时显示排版效果。"
                     value={annotationNoteDraft}
                   />
                 </div>
@@ -3552,6 +3703,7 @@ export function PdfReader({
                   <button className="save-button" onClick={saveAnnotationNote} type="button">保存注释</button>
                   <button className="cancel-button" onClick={cancelAnnotationEditing} type="button">取消</button>
                 </div>
+                </>}
               </aside>
             ) : null}
           </div>
