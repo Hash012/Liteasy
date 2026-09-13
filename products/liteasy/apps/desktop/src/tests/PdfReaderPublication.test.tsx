@@ -68,9 +68,10 @@ function renderStoredAnnotation(
 function publicationToggle(excerpt = "Publication evidence", kind = "注释", page = 1) {
   const name = `将第 ${page} 页${kind}批注公开到论坛：${excerpt}`;
   if (!screen.queryByRole("checkbox", { name })) {
-    const summary = screen.getAllByRole("button", { name: `编辑批注：${excerpt}` })
-      .find((button) => button.querySelector(".pdf-annotation-kind")?.textContent === kind)!;
-    fireEvent.click(summary);
+    const summaries = screen.getAllByRole("button", { name: `编辑批注：${excerpt}` })
+      .filter((button) => within(button).queryByRole("img", { name: kind }));
+    expect(summaries).toHaveLength(1);
+    fireEvent.click(summaries[0]);
   }
   return screen.getByRole("checkbox", {
     name: `将第 ${page} 页${kind}批注公开到论坛：${excerpt}`
