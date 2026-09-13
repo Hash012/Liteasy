@@ -1,3 +1,4 @@
+import type { ContextRef, ContextSnapshot } from "../context/objectContext";
 import type { AgentRuntimeError } from "../agent-runtime/runtimeObservability";
 
 export const AGENT_API_VERSION = "liteasy.agent/v1" as const;
@@ -83,6 +84,8 @@ export type AgentSession = {
 };
 
 export type SubmitAgentTurnRequest = {
+  contextRefs?: ContextRef[];
+  contextPurpose?: string;
   attachments?: AgentAttachment[];
   idempotencyKey: string;
   input: {
@@ -116,7 +119,7 @@ export type AgentConfirmationRequest = {
 
 export type AgentEventPayload =
   | { idempotencyKey: string; inputMode: AgentMode; message: string; type: "run.started" }
-  | { type: "context.prepared" }
+  | { type: "context.prepared"; snapshotId?: string }
   | {
       detail: string;
       label: string;
@@ -194,6 +197,10 @@ export type AgentEvent = AgentEventPayload & {
 };
 
 export type AgentRun = {
+  contextRefs?: ContextRef[];
+  contextPurpose?: string;
+  contextSnapshotId?: string;
+  contextSnapshot?: ContextSnapshot;
   apiVersion: AgentApiVersion;
   attachments?: AgentAttachment[];
   completedAt?: string;

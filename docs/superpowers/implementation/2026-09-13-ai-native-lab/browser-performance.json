@@ -1,0 +1,30 @@
+{
+  "environment": {
+    "cpu": "AMD Ryzen 9 7940HX with Radeon Graphics",
+    "logicalCpus": 32,
+    "memoryGiB": 23,
+    "platform": "linux",
+    "node": "v22.23.2",
+    "chromium": "151.0.7922.34",
+    "mode": "Vite dev; Chromium; synthetic DOM drop through real UI handlers"
+  },
+  "objectCount": 10000,
+  "cardCount": 100,
+  "milliseconds": {
+    "list": {
+      "samples": 20,
+      "p50": 34.70000000111759,
+      "p95": 45.09999999962747
+    },
+    "titleSearch": {
+      "samples": 20,
+      "p50": 65.59999999962747,
+      "p95": 76.09999999962747
+    },
+    "referenceDropThroughNextPaint": {
+      "samples": 20,
+      "p50": 82.29999999888241,
+      "p95": 108.79999999888241
+    }
+  }
+}

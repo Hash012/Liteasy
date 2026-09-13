@@ -1,3 +1,8 @@
+import { Button, Tooltip } from "@fluentui/react-components";
+import { WhiteboardRegular } from "@fluentui/react-icons";
+import { useObjectWorkbenchController } from "../controllers/useObjectWorkbenchController";
+import { ObjectWorkbenchContext } from "../features/objects/objectWorkbenchPort";
+import { ObjectWorkbench } from "../features/boards/ObjectWorkbench";
 import { usePdfQuickAskController } from "../controllers/usePdfQuickAskController";
 import { usePaperServicesController } from "../controllers/usePaperServicesController";
 import type { CSSProperties } from "react";
@@ -44,7 +49,7 @@ import type {
 } from "../features/artifacts/artifact.types";
 import type { PendingVisualizationRequest } from "../features/visualization/visualizationPendingRequestStore";
 import type { VisualizationArtifactV1 } from "../features/visualization/visualizationArtifact.types";
-import { createAssistantHistoryPersistence } from "../features/assistant/assistantHistoryPersistence";
+import { createAssistantHistoryPersistence, createScopedAssistantHistoryPersistence } from "../features/assistant/assistantHistoryPersistence";
 import { createLocalArtifactResultClient } from "../features/artifacts/localArtifactResultClient";
 import { createArtifactResultClient } from "../features/artifacts/artifactResultClient";
 import { createArtifactExportClient } from "../features/artifacts/artifactExportClient";
@@ -227,6 +232,7 @@ export function AppShell({
     }
   );
   const assistantHistoryRef = useRef(createAssistantHistoryPersistence());
+  const assistantHistoryScopeRef = useRef<string>();
   const localArtifactResultClientRef = useRef(createLocalArtifactResultClient());
   const artifactResultClientRef = useRef<ReturnType<typeof createArtifactResultClient> | null>(null);
   if (!artifactResultClientRef.current) {
@@ -737,6 +743,13 @@ export function AppShell({
   generateVisualizationRef.current = cloudAccount.actions.generateVisualization;
   pendingVisualizationRequestsRef.current = cloudAccount.actions.pendingVisualizationRequests;
   resumeVisualizationGenerationRef.current = cloudAccount.actions.resumeVisualizationGeneration;
+  const assistantScopeId = accountSession?.userId ? `user:${accountSession.userId}` : "local";
+  if (assistantHistoryScopeRef.current !== assistantScopeId) {
+    assistantHistoryScopeRef.current = assistantScopeId;
+    assistantHistoryRef.current = createScopedAssistantHistoryPersistence(
+      assistantScopeId, () => assistantHistoryScopeRef.current ?? "local"
+    );
+  }
   cloudAccessTokenRef.current = accountSession?.sessionId;
   usePolicySync({
     applyModelPolicySnapshot: modelSettings.applyModelPolicySnapshot,
@@ -744,7 +757,6 @@ export function AppShell({
     getSettings: () => settingsStoreRef.current.getState(),
     sessionId: accountSession?.sessionId
   });
-  const askPdfQuestion = usePdfQuickAskController({ modelTransport: effectiveModelTransport, settingsStore: settingsStoreRef.current });
   const paperTranslation = usePaperTranslationController({
     modelTransport: effectiveModelTransport,
     settingsStore: settingsStoreRef.current
@@ -1011,7 +1023,20 @@ export function AppShell({
       : ""
   ].filter(Boolean).join(" ");
   const agentRecentState = profileActions.agentRecentStateOverride.trim() || generatedAgentRecentState;
+  const objectAgentApiRef = useRef<import("../features/agent-api/agentApi.types").AgentPublicApi>();
+  const objectWorkbench = useObjectWorkbenchController({
+    scopeId: accountSession?.userId ? `user:${accountSession.userId}` : "local",
+    getApi: () => objectAgentApiRef.current!,
+    readPaperBytes: loadPaperPdfBytes,
+    listLegacyArtifacts: () => artifactResultClientRef.current!.list(),
+    openLegacyArtifact: (id) => artifactWorkflow.actions.openArtifact(id),
+    getPapers: () => workspaceStoreRef.current.getState().papers,
+    getSettings: () => settingsStoreRef.current.getState(),
+    openEvidence: openEvidenceInReader
+  });
   const assistantAgent = useAssistantAgentController({
+    principalId: objectWorkbench.repository.scopeId,
+    resolveObjectContext: objectWorkbench.resolveContext,
     academicProfile: profileActions.academicProfile,
     getAgentMemories: () => profileActions.agentMemories,
     getAllPapers: () => workspaceStoreRef.current.getState().papers,
@@ -1047,6 +1072,11 @@ export function AppShell({
     selectedPapers,
     selectionLocked: workspaceState.selectionLocked,
     settingsStore: settingsStoreRef.current
+  });
+  objectAgentApiRef.current = assistantAgent.publicApi;
+  const askPdfQuestion = usePdfQuickAskController({
+    capture: objectWorkbench.captureQuickAsk,
+    ask: objectWorkbench.ask
   });
   agentArtifactRunnerRef.current = async (artifactType, onProgress, options) => {
     return runAgentArtifactAnalysis(
@@ -1768,6 +1798,7 @@ export function AppShell({
     if (itemId === "assistant") {
       return (
         <AssistantSidebar
+          key={assistantScopeId}
           historyPersistence={assistantHistoryRef.current}
           onOpenCitation={(citation) => openEvidenceInReader({ evidenceId: `citation-${citation.paperId}-${citation.page}`, paperId: citation.paperId, page: citation.page, quote: citation.snippet })}
           agentClient={assistantAgent.agentClient}
@@ -2050,6 +2081,7 @@ export function AppShell({
     runtimeTheme.kind === "generated" ? runtimeTheme.theme.scope.join(" ") : undefined;
 
   return (
+    <ObjectWorkbenchContext.Provider value={objectWorkbench.port}>
     <div className={appFrameClassName} data-theme-scope={appFrameScope} style={appFrameStyle}>
       <div
         className="app-shell"
@@ -2068,12 +2100,12 @@ export function AppShell({
         }
       >
         <ActivityBar
-          layoutControls={<DockLayoutControls
+          layoutControls={<><Tooltip content="研究白板" relationship="description"><Button appearance="subtle" aria-label="研究白板" icon={<WhiteboardRegular />} onClick={objectWorkbench.port.open} /></Tooltip><DockLayoutControls
             collapsed={paneLayout.collapsed}
             onToggleBottom={() => paneLayout.setCollapsed("bottom", !paneLayout.collapsed.bottom)}
             onToggleLeft={() => paneLayout.setCollapsed("left", !paneLayout.collapsed.left)}
             onToggleRight={() => paneLayout.setCollapsed("right", !paneLayout.collapsed.right)}
-          />}
+          /></>}
           activeView={leftRail.leftRailView}
           accountSessionAvailable={accountSession !== null}
           onSelectView={(view) => {
@@ -2203,6 +2235,8 @@ export function AppShell({
           </section>
         ) : null}
       </div>
+      <ObjectWorkbench key={objectWorkbench.repository.scopeId} model={objectWorkbench} />
     </div>
+    </ObjectWorkbenchContext.Provider>
   );
 }

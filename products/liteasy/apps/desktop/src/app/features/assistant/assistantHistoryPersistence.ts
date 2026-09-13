@@ -1,3 +1,4 @@
+import { createObjectStorage } from "../objects/objectStorage";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { AssistantSessionHistoryItem } from "./assistantSessionHistory";
 import type { AssistantContextToken } from "./assistant.types";
@@ -96,3 +97,26 @@ export function createAssistantHistoryPersistence(transport?: Transport) {
   };
 }
 export type AssistantHistoryPersistence = ReturnType<typeof createAssistantHistoryPersistence>;
+
+
+/** Old unscoped history belongs only to this device's local workspace. */
+export function createScopedAssistantHistoryPersistence(scopeId: string, currentScope: () => string) {
+  const storage = createObjectStorage(scopeId, currentScope);
+  const key = "assistant-history/current";
+  const legacy = scopeId === "local" ? createAssistantHistoryPersistence() : undefined;
+  return createAssistantHistoryPersistence({
+    async load() {
+      const row = await storage.get(key);
+      if (row) return row.value;
+      const snapshot = await legacy?.load();
+      if (!snapshot) return null;
+      await storage.commit([{ key, expected: null, row: { key, version: crypto.randomUUID(), value: snapshot } }]);
+      return snapshot;
+    },
+    async save(snapshot) {
+      const previous = await storage.get(key);
+      await storage.commit([{ key, expected: previous?.version ?? null,
+        row: { key, version: crypto.randomUUID(), value: snapshot } }]);
+    }
+  });
+}

@@ -137,6 +137,6 @@ export function savePdfWhiteboard(
   try {
     window.localStorage.setItem(storageKey, JSON.stringify(document));
   } catch {
-    // The current canvas remains usable if browser storage is unavailable or full.
+    throw new Error("白板保存失败，请检查存储空间后重试。");
   }
 }

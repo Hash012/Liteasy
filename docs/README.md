@@ -18,6 +18,8 @@
 
 当前仓库结构、验证覆盖和生产缺口见 [仓库结构与能力审计](qa/2026-08-08-repository-structure-and-capability-audit.md)。
 
+下一步 Agent Native 产品提案见 [对象工作台规格](superpowers/specs/2026-09-13-agent-native-object-workbench-spec.md)，覆盖统一对象、来源与关系、跨页面上下文、白板组合和受控 Agent 操作。
+
 ## 使用与检查
 
 本目录是 Markdown/HTML/PDF 资料，不启动服务。Markdown 可直接在仓库浏览器或编辑器预览；需要生成 PDF 时从仓库根目录执行：

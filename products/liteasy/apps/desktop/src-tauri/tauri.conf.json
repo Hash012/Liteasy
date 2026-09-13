@@ -41,5 +41,14 @@
         ]
       }
     }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "liteasy"
+        ]
+      }
+    }
   }
 }

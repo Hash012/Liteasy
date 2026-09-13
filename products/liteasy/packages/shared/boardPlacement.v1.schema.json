@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "placementId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "revision": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "boardId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "ref": {
+      "type": "object",
+      "properties": {
+        "objectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "selectorId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "objectId",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "position": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "additionalProperties": false
+    },
+    "size": {
+      "type": "object",
+      "properties": {
+        "width": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "height": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ],
+      "additionalProperties": false
+    },
+    "viewId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "collapsed": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "placementId",
+    "revision",
+    "boardId",
+    "ref",
+    "position",
+    "size",
+    "viewId",
+    "collapsed"
+  ],
+  "additionalProperties": false,
+  "$id": "https://schemas.liteasy.app/boardPlacement.v1.schema.json"
+}

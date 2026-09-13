@@ -18,7 +18,8 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent
 } from "react";
-import { Button } from "@fluentui/react-components";
+import { Button, Tooltip } from "@fluentui/react-components";
+import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import {
   ChatHelpRegular,
   CommentRegular,
@@ -1577,6 +1578,7 @@ export function PdfReader({
   const activePaper = selectedPapers[0] ?? null;
   const stageRef = useRef<HTMLDivElement | null>(null);
   const documentFrameRef = useRef<HTMLDivElement | null>(null);
+  const objectWorkbench = useObjectWorkbench();
   const pageCharModelsRef = useRef(new Map<number, PageCharModel>());
   const dragSelectionRef = useRef<PdfDragSelection | null>(null);
   const [documentFrameWidth, setDocumentFrameWidth] = useState(0);
@@ -1592,6 +1594,7 @@ export function PdfReader({
   const [marginCommentConnectorsVisible, setMarginCommentConnectorsVisible] = useState(
     loadPdfMarginCommentConnectorsVisible
   );
+  const [legacyBoardPreview, setLegacyBoardPreview] = useState(false);
   const [whiteboardOpen, setWhiteboardOpen] = useState(loadPdfWhiteboardVisible);
   const [whiteboardWidth, setWhiteboardWidth] = useState(() => {
     try { return Math.max(220, Math.min(900, Number(localStorage.getItem("liteasy.pdf-whiteboard-width")) || 360)); }
@@ -1906,7 +1909,7 @@ export function PdfReader({
   }, [activePaper?.id, whiteboardStorageKey]);
 
   useEffect(() => {
-    if (whiteboardState.storageKey !== whiteboardStorageKey ||
+    if (objectWorkbench || whiteboardState.storageKey !== whiteboardStorageKey ||
       hydratedWhiteboardStorageKey !== whiteboardStorageKey) return;
     const timer = window.setTimeout(() => {
       if (isUserPaperArtifactStoreAvailable() && activePaper?.id) {
@@ -1919,7 +1922,7 @@ export function PdfReader({
           setStatus(`白板保存失败：${detail}`);
         });
       } else {
-        savePdfWhiteboard(whiteboardStorageKey, whiteboardState.document);
+        try { savePdfWhiteboard(whiteboardStorageKey, whiteboardState.document); } catch (e) { setStatus((e as Error).message); }
       }
     }, 240);
     return () => window.clearTimeout(timer);
@@ -2495,6 +2498,12 @@ export function PdfReader({
 
   function addSelectionToWhiteboard() {
     if (!selection || !activePaper) return;
+    if (objectWorkbench) {
+      void objectWorkbench.capturePdf({ paper: activePaper, ...selection }, "board").then(() => {
+        setSelection(null); setSelectionPreview(null); clearBrowserSelection(); setStatus("摘录已保存到研究白板。");
+      }).catch((error) => setStatus(error.message));
+      return;
+    }
     const document = resolvedWhiteboardDocument();
     const node = createPdfWhiteboardNode({
       kind: "markdown",
@@ -2517,6 +2526,7 @@ export function PdfReader({
 
   function handleSelectionWhiteboardDragStart(event: ReactDragEvent<HTMLButtonElement>) {
     if (!selection || !activePaper) return;
+    if (objectWorkbench) { objectWorkbench.dragPdf({ paper: activePaper, ...selection }, event.dataTransfer); return; }
     const payload: PdfWhiteboardDraggedExcerpt = {
       kind: "markdown",
       markdown: selection.excerpt,
@@ -3569,7 +3579,7 @@ export function PdfReader({
                 setSelection(null);
                 setSelectionPreview(null);
               }}
-              onToggleWhiteboard={() => setWhiteboardOpen((current) => !current)}
+              onToggleWhiteboard={() => { if (objectWorkbench && activePaper && whiteboardStorageKey) { void objectWorkbench.openLegacyBoard(activePaper,resolvedWhiteboardDocument(),whiteboardStorageKey).catch((e) => { setLegacyBoardPreview(true); setWhiteboardOpen(true); setStatus(`白板迁移失败，正在只读显示原快照：${e.message}`); }); } else setWhiteboardOpen((current) => !current); }}
               onZoomIn={() => onZoomChange?.(Math.min(180, zoom + 5))}
               onZoomOut={() => onZoomChange?.(Math.max(70, zoom - 5))}
               pageCount={pageCount}
@@ -3721,6 +3731,7 @@ export function PdfReader({
                     加入白板
                   </button>
                 </div>
+                {objectWorkbench ? <div className="selection-menu-row"><Tooltip content="将摘录加入所选内容对话" relationship="description"><Button size="small" onClick={() => { if (activePaper) void objectWorkbench.capturePdf({ paper: activePaper, ...selection }, "tray").catch((e) => setStatus(e.message)); }}>加入摘录对话</Button></Tooltip></div> : null}
                 <div className="selection-menu-row">
                   <button onClick={() => addAnnotation("underline")} title="给选中文段添加下划线" type="button">
                     划线
@@ -3804,7 +3815,7 @@ export function PdfReader({
             ) : null}
           </div>
         </section>
-        {whiteboardOpen && activePaper ? (
+        {whiteboardOpen && activePaper && (!objectWorkbench || legacyBoardPreview) ? (
           <div className="pdf-whiteboard-pane">
           <PdfPaneResizeHandle width={whiteboardWidth} onChange={setWhiteboardWidth} />
           <PdfWhiteboard
@@ -3812,7 +3823,7 @@ export function PdfReader({
               ? whiteboardState.document
               : createEmptyPdfWhiteboard(activePaper.id)}
             key={whiteboardStorageKey ?? activePaper.id}
-            onChange={updateWhiteboardDocument}
+            onChange={objectWorkbench ? () => setStatus("原快照仅供阅读，请重试迁移后编辑。") : updateWhiteboardDocument}
             onClose={() => setWhiteboardOpen(false)}
             paperTitle={activePaper.title}
           />

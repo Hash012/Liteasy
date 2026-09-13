@@ -37,12 +37,14 @@ import {
 } from "./agentRequestScope";
 import { createOpenAIAgentsSdkManager } from "./createOpenAIAgentsSdkManager";
 import { createDesktopAgentService } from "./createDesktopAgentService";
-import { createTauriAgentStateStore } from "./tauriAgentStateStore";
+import { createScopedAgentStateStore, createTauriAgentStateStore } from "./tauriAgentStateStore";
 import { useTauriAgentHostBridge } from "./useTauriAgentHostBridge";
 
 type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 
 export type AssistantAgentControllerInput = {
+  principalId?: string;
+  resolveObjectContext?: import("./createDesktopAgentService").DesktopAgentServiceOptions["resolveObjectContext"];
   academicProfile?: AcademicProfile;
   getAgentMemories?: () => AgentMemoryEntry[];
   getAllPapers?: () => Paper[];
@@ -83,8 +85,19 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
   inputRef.current = input;
   const journalRef = useRef(createExecutionJournal());
   const pendingClarificationRef = useRef<PendingCommandClarification>();
-  const apiRef = useRef<AgentPublicApi | null>(null);
-  const stateStoreRef = useRef(createTauriAgentStateStore());
+  const apiRef = useRef<(AgentPublicApi & { dispose(): void }) | null>(null);
+  const clientRef = useRef<ReturnType<typeof createFrontendAgentClient> | null>(null);
+  const stateStoreRef = useRef(input.principalId ? createScopedAgentStateStore(input.principalId, () => inputRef.current.principalId ?? "local") : createTauriAgentStateStore());
+  const scopeRef = useRef(input.principalId);
+  if (scopeRef.current !== input.principalId) {
+    apiRef.current?.dispose();
+    apiRef.current = null;
+    clientRef.current = null;
+    scopeRef.current = input.principalId;
+    stateStoreRef.current = createScopedAgentStateStore(
+      input.principalId ?? "local", () => inputRef.current.principalId ?? "local"
+    );
+  }
   const pluginBuilderRef = useRef<PluginBuilderRuntime | null>(null);
   const workflowDesignerRef = useRef<WorkflowDesignerRuntime | null>(null);
 
@@ -114,6 +127,8 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
 
   if (!apiRef.current) {
     apiRef.current = createDesktopAgentService({
+      getPrincipalId: () => inputRef.current.principalId ?? "local",
+      resolveObjectContext: input.resolveObjectContext ? (request) => inputRef.current.resolveObjectContext!(request) : undefined,
       createCoreSession() {
         return createAgentCoreSession(undefined, {
           getMemories: () =>
@@ -232,7 +247,6 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
     });
   }
 
-  const clientRef = useRef<ReturnType<typeof createFrontendAgentClient> | null>(null);
   if (!clientRef.current) {
     clientRef.current = createFrontendAgentClient(apiRef.current, {
       clientSessionId: "assistant-pane"
@@ -242,6 +256,7 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
   useTauriAgentHostBridge(apiRef.current);
 
   return {
+    publicApi: apiRef.current,
     agentClient: clientRef.current,
     executionJournal: journalRef.current
   };

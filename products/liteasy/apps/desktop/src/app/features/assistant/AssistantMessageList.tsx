@@ -1,3 +1,4 @@
+import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import { formatModelExecutionLabel } from "../models/modelExecution";
 import type {
   AssistantConfirmationRequest,
@@ -119,6 +120,17 @@ export function AssistantMessageList({
   onWithdrawQueuedMessage,
   onToggleFavoriteMessage
 }: AssistantMessageListProps) {
+  const workbench = useObjectWorkbench();
+  const [captureStatus, setCaptureStatus] = useState("");
+  const selectedText = useRef("");
+  const selectedMessageId = useRef("");
+  const captureInput = (message: AssistantMessage) => {
+    const text = getAnswerDisplayText(message.content || message.agentActivity?.generatedContent || "");
+    const excerpt = selectedMessageId.current === message.id && selectedText.current && text.includes(selectedText.current)
+      ? selectedText.current : text;
+    return { messageId: message.id, text, excerpt,
+      partial: !!message.agentActivity && message.agentActivity.status !== "completed" };
+  };
   if (messages.length === 0) {
     return (
       <div aria-label="AI助手初始消息区" className="assistant-messages assistant-messages-empty" />
@@ -126,13 +138,20 @@ export function AssistantMessageList({
   }
 
   return (
-    <div className="assistant-messages">
+    <div className="assistant-messages" onMouseUp={(event) => {
+      if ((event.target as Element).closest("button")) return;
+      const selection = window.getSelection();
+      selectedText.current = selection?.toString() ?? "";
+      selectedMessageId.current = selection?.anchorNode?.parentElement?.closest("[data-message-id]")?.getAttribute("data-message-id") ?? "";
+    }}>
+      {captureStatus ? <p role="status">{captureStatus}</p> : null}
       {messages.map((message, index) => {
         return (
           <article
             aria-label={message.role === "user" ? "你的消息" : "AI 回复"}
             className={`assistant-message-wrap ${message.role}`}
             key={message.id}
+            data-message-id={message.id}
           >
             <div className={`assistant-message ${message.role}`}>
               {message.contextTokens?.length ? (
@@ -322,6 +341,22 @@ export function AssistantMessageList({
               ) : null}
               {message.role === "assistant" ? (
                 <>
+                  {workbench ? <>
+                    <Tooltip content="保存所选文字；未选中时保存整段回答。也可以拖入白板。" relationship="description">
+                      <Button size="small" draggable
+                        onDragStart={(event) => workbench.dragMessage(captureInput(message), event.dataTransfer)}
+                        onClick={() => void workbench.captureMessage(captureInput(message), "board")
+                          .then(() => setCaptureStatus("回答摘录已保存到白板。"))
+                          .catch((e) => setCaptureStatus(e.message))}>
+                        加入白板
+                      </Button>
+                    </Tooltip>
+                    <Button size="small"
+                      onClick={() => void workbench.captureMessage(captureInput(message), "tray")
+                        .catch((e) => setCaptureStatus(e.message))}>
+                      加入摘录对话
+                    </Button>
+                  </> : null}
                   <Tooltip content="复制回复" relationship="description">
                     <button
                       aria-label="复制回复"

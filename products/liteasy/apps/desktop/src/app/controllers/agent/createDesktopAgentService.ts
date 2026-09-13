@@ -56,6 +56,10 @@ import {
   type AgentManagerExecutionResult
 } from "./agentApplicationService";
 
+import { contextSnapshotPrompt, type ContextSnapshot } from "../../features/context/objectContext";
+import { createModelGatewayFromSettings } from "../../features/models/modelRuntime";
+import { getActiveModelProvider, getModelForSettings } from "../../features/models/modelPolicy";
+
 type KnowledgeEnvironment = Omit<
   Parameters<typeof generateAssistantAnswer>[0],
   "agentCoreContext" | "mode" | "question"
@@ -106,6 +110,7 @@ export type DesktopManagerAgent = {
 
 export type DesktopAgentServiceOptions = Pick<
   AgentApplicationPorts,
+  | "getPrincipalId"
   | "createCoreSession"
   | "createId"
   | "listCapabilities"
@@ -113,6 +118,7 @@ export type DesktopAgentServiceOptions = Pick<
   | "onPersistenceError"
   | "stateStore"
 > & {
+  resolveObjectContext?: (request: SubmitAgentTurnRequest) => Promise<ContextSnapshot>;
   getEnvironment: (input?: {
     request?: SubmitAgentTurnRequest;
     session?: AgentSession;
@@ -144,6 +150,19 @@ async function executeKnowledgeTurn(
   } = input;
   if (request.input.mode === "command") {
     throw new Error("Command turns cannot use the knowledge executor");
+  }
+  if (input.context.objectSnapshot) {
+    const settings = environment.knowledge.settings;
+    const gateway = createModelGatewayFromSettings(settings, { cloudTransport: environment.knowledge.modelTransport });
+    const result = await gateway.generateAnswer({
+      model: getModelForSettings(settings),
+      provider: getActiveModelProvider(settings),
+      prompt: contextSnapshotPrompt(input.context.objectSnapshot, request.input.message),
+      requireLive: true,
+      signal
+    });
+    if (!result.answer.trim()) throw new Error("未收到回答，请重试。");
+    return { message: result.answer };
   }
   const artifactType = override?.artifactType ?? request.input.artifactType;
   const question = override?.question ?? request.input.message;
@@ -209,8 +228,10 @@ function createDesktopRuntimeContext(
 
 export function createDesktopAgentService(
   options: DesktopAgentServiceOptions
-): AgentPublicApi {
+): AgentPublicApi & { dispose(): void } {
   return createAgentApplicationService({
+    supportsObjectContext: !!options.resolveObjectContext,
+    getPrincipalId: options.getPrincipalId,
     createCoreSession: options.createCoreSession,
     createId: options.createId,
     async executeCommand({ context, coreTurn, request }) {
@@ -249,6 +270,7 @@ export function createDesktopAgentService(
     executeManagerTurn: options.managerAgent
       ? async (input) => {
           const environment = input.context.value as DesktopAgentEnvironment;
+          if (input.context.objectSnapshot) return { kind: "knowledge", result: await executeKnowledgeTurn(input, environment) };
           const runtimeContext = createDesktopRuntimeContext(environment, {
             agentCore: input.coreTurn.runtimeContext,
             runtimeInput: {
@@ -358,10 +380,11 @@ export function createDesktopAgentService(
     listCapabilities: options.listCapabilities,
     now: options.now,
     onPersistenceError: options.onPersistenceError,
-    resolveContext({ request, session }) {
+    async resolveContext({ request, session }) {
       const environment = options.getEnvironment({ request, session });
       return {
-        runtimeContext: environment.runtime.contextView,
+        objectSnapshot: request.contextRefs?.length ? await options.resolveObjectContext?.(request) : undefined,
+        runtimeContext: request.contextRefs?.length ? undefined : environment.runtime.contextView,
         value: environment
       };
     },

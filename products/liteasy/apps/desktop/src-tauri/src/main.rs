@@ -9,6 +9,7 @@ mod assistant_history;
 mod desktop_identity;
 mod direct_model;
 mod local_library;
+mod object_store;
 mod paper_cache;
 mod paper_services;
 mod user_paper_store;
@@ -20,10 +21,15 @@ fn main() {
     }
 
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|_app, _argv, _cwd| {}))
+        .plugin(tauri_plugin_deep_link::init())
         .manage(agent_host::AgentHostState::default())
         .manage(direct_model::DirectModelState::default())
         .manage(local_library::LocalLibraryWatchState::default())
         .setup(|app| {
+            if let Err(error) = object_store::recover(app.handle()) {
+                eprintln!("Local object recovery: {error}");
+            }
             if let Err(error) = agent_host::start(app.handle().clone()) {
                 eprintln!("Liteasy Agent host is unavailable: {error}");
             }
@@ -48,6 +54,9 @@ fn main() {
             agent_artifacts::list_local_agent_artifacts,
             agent_artifacts::save_local_agent_artifact,
             agent_artifacts::delete_local_agent_artifact,
+            object_store::object_store_get,
+            object_store::object_store_list,
+            object_store::object_store_commit,
             agent_state::load_agent_state,
             agent_state::save_agent_state,
             artifact_catalog_state::load_artifact_catalog_state,

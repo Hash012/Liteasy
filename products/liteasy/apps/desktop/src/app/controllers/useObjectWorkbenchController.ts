@@ -1,0 +1,1073 @@
+import { loadUserPaperArtifact } from "../features/library/userPaperArtifactClient";
+import { normalizePaperFulltext } from "../features/pdf/paperFulltextStore";
+import { isTauri } from "@tauri-apps/api/core";
+import {
+  createObjectResolver,
+  type ResolvedObject,
+} from "../features/objects/objectResolver";
+import {
+  assetDescriptor,
+  stageDataUrl,
+  stageImage,
+  type StagedObjectAsset,
+} from "../features/objects/objectAssets";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createObjectStorage } from "../features/objects/objectStorage";
+import {
+  createObjectRepository,
+  type ObjectDraft,
+} from "../features/objects/objectRepository";
+import {
+  objectText,
+  refOf,
+  type ObjectEnvelope,
+  type ObjectRef,
+  type Placement,
+} from "../features/objects/object.types";
+import type {
+  ObjectWorkbenchPort,
+  PdfCaptureInput,
+  MessageCaptureInput,
+} from "../features/objects/objectWorkbenchPort";
+import {
+  createCaptureTickets,
+  PENDING_CAPTURE_MIME,
+  readObjectTransfer,
+} from "../features/object-transfer/objectTransfer";
+import {
+  hashText,
+  resolveContextSnapshot,
+  type ContextRef,
+  type ContextSnapshot,
+} from "../features/context/objectContext";
+import type {
+  AgentPublicApi,
+  AgentRun,
+  SubmitAgentTurnRequest,
+} from "../features/agent-api/agentApi.types";
+import type { Paper } from "../features/workspace/workspace.types";
+import type { PdfEvidenceTarget } from "../features/pdf/PdfReader";
+import type { SettingsState } from "../features/settings/settings.types";
+import { describeObjectSetting } from "../features/settings/settingsRegistry";
+import { resolveObjectAnchor } from "../features/objects/objectAnchors";
+
+export function useObjectWorkbenchController(input: {
+  scopeId: string;
+  getApi: () => AgentPublicApi;
+  getPapers: () => Paper[];
+  getSettings: () => SettingsState;
+  readPaperBytes?: (sourcePath: string) => Promise<Uint8Array>;
+  listLegacyArtifacts?: () => Promise<
+    import("../features/artifacts/artifact.types").AgentArtifactResult[]
+  >;
+  openLegacyArtifact?: (artifactId: string) => void;
+  openEvidence: (target: Omit<PdfEvidenceTarget, "requestId">) => void;
+}) {
+  const latest = useRef(input);
+  latest.current = input;
+  const repository = useMemo(
+    () =>
+      createObjectRepository(
+        createObjectStorage(input.scopeId, () => latest.current.scopeId),
+        input.scopeId,
+      ),
+    [input.scopeId],
+  );
+  const [opened, setOpened] = useState<ResolvedObject>();
+  const [visible, setVisible] = useState(false);
+  const [objects, setObjects] = useState<ObjectEnvelope[]>([]);
+  const [board, setBoard] = useState<ObjectEnvelope>();
+  const [placements, setPlacements] = useState<Placement[]>([]);
+  const [tray, setTray] = useState<Array<{ ref: ContextRef; pinned: boolean }>>(
+    [],
+  );
+  const [preview, setPreview] = useState<ContextSnapshot>();
+  const [answer, setAnswer] = useState<{ text: string; run: AgentRun }>();
+  const [status, setStatus] = useState("");
+  const [busy, setBusy] = useState(false);
+  const pendingFragments = useMemo(
+    () => new Map<string, ObjectDraft & { kind: "content.fragment" }>(),
+    [repository],
+  );
+  const boardRef = useRef(board);
+  boardRef.current = board;
+  const pending = useRef(new Set<{ api: AgentPublicApi; sessionId: string }>());
+  const tickets = useMemo(createCaptureTickets, [input.scopeId]);
+  const mounted = useRef(true);
+  const active = () =>
+    mounted.current && latest.current.scopeId === repository.scopeId;
+  async function refresh() {
+    const all: ObjectEnvelope[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await repository.search("", cursor);
+      all.push(...page.objects);
+      cursor = page.cursor;
+    } while (cursor);
+    if (!active()) return;
+    const current = boardRef.current;
+    const next =
+      (current && all.find((o) => o.objectId === current.objectId)) ||
+      all.find((o) => o.kind === "workspace.board");
+    const nextPlacements = next
+      ? await repository.listPlacements(next.objectId)
+      : [];
+    if (!active()) return;
+    setObjects(all);
+    boardRef.current = next;
+    setBoard(next);
+    setPlacements((previous) => {
+      const cache = new Map(previous.map((p) => [p.placementId, p]));
+      return nextPlacements.map((p) =>
+        cache.get(p.placementId)?.revision === p.revision
+          ? cache.get(p.placementId)!
+          : p,
+      );
+    });
+  }
+  useEffect(() => {
+    mounted.current = true;
+    setOpened(undefined);
+    setObjects([]);
+    setBoard(undefined);
+    boardRef.current = undefined;
+    setPlacements([]);
+    setTray([]);
+    setPreview(undefined);
+    setAnswer(undefined);
+    setStatus("");
+    setBusy(false);
+    return () => {
+      mounted.current = false;
+      tickets.clear();
+      pendingFragments.clear();
+      for (const session of pending.current)
+        void session.api.closeSession(session.sessionId);
+      pending.current.clear();
+    };
+  }, [repository, tickets]);
+  useEffect(() => {
+    if (visible)
+      void refresh().catch((e) => {
+        if (active()) setStatus(String(e.message ?? e));
+      });
+  }, [visible, repository]);
+  async function openLink(link: string) {
+    if (link.startsWith("liteasy://agent-artifacts/")) {
+      const url = new URL(link);
+      latest.current.openLegacyArtifact?.(
+        decodeURIComponent(url.pathname.slice(1)),
+      );
+      return;
+    }
+    const result = await createObjectResolver(repository).open(link);
+    if (active()) {
+      setOpened(result);
+      setVisible(true);
+    }
+  }
+  const openLinkRef = useRef(openLink);
+  openLinkRef.current = openLink;
+  useEffect(() => {
+    const click = (event: MouseEvent) => {
+      const anchor = (event.target as Element)?.closest?.("a[href]");
+      const link = anchor?.getAttribute("href");
+      if (
+        link?.startsWith("liteasy://objects/") ||
+        link?.startsWith("liteasy://agent-artifacts/")
+      ) {
+        event.preventDefault();
+        void openLinkRef.current(link);
+      }
+    };
+    document.addEventListener("click", click);
+    let stop: (() => void) | undefined,
+      disposed = false;
+    if (isTauri())
+      void import("@tauri-apps/plugin-deep-link")
+        .then(async ({ getCurrent, onOpenUrl }) => {
+          const listener = await onOpenUrl((links) =>
+            links.forEach((link) => void openLinkRef.current(link)),
+          );
+          if (disposed) listener();
+          else stop = listener;
+          const links = await getCurrent();
+          if (!disposed)
+            links?.forEach((link) => void openLinkRef.current(link));
+        })
+        .catch(() => setStatus("内容链接监听不可用，可粘贴链接打开。"));
+    return () => {
+      disposed = true;
+      stop?.();
+      document.removeEventListener("click", click);
+    };
+  }, []);
+  async function perform<T>(action: () => Promise<T>): Promise<T | undefined> {
+    setStatus("保存中…");
+    try {
+      const result = await action();
+      await refresh();
+      if (active()) setStatus("已保存到本机");
+      return result;
+    } catch (e) {
+      if (active())
+        setStatus(e instanceof Error ? e.message : "保存失败，请重试。");
+      return undefined;
+    }
+  }
+  async function ensureBoard() {
+    if (boardRef.current)
+      return repository.resolveLatest(boardRef.current.objectId);
+    const existing = (await repository.search()).objects.find(
+      (o) => o.kind === "workspace.board",
+    );
+    const next =
+      existing ??
+      (await repository.create(
+        {
+          kind: "workspace.board",
+          title: "研究白板",
+          content: { schema: "liteasy.board/v1", payload: { description: "" } },
+        },
+        "default-research-board",
+      ));
+    boardRef.current = next;
+    if (active()) setBoard(next);
+    return next;
+  }
+  async function documentHash(paper: Paper) {
+    if (!paper.sourcePath || !latest.current.readPaperBytes)
+      return paper.contentHash;
+    if (/^https?:/i.test(paper.sourcePath)) return paper.contentHash;
+    const bytes = await latest.current.readPaperBytes(paper.sourcePath);
+    const digest = await crypto.subtle.digest("SHA-256", bytes.slice().buffer);
+    return Array.from(new Uint8Array(digest), (b) =>
+      b.toString(16).padStart(2, "0"),
+    ).join("");
+  }
+  async function pdfDraft(
+    selection: PdfCaptureInput,
+  ): Promise<ObjectDraft & { kind: "content.fragment" }> {
+    const paper = latest.current
+      .getPapers()
+      .find((p) => p.id === selection.paper.id);
+    if (!paper) throw new Error("来源文献在当前账号不可用。");
+    const hash = await documentHash(paper);
+    const source = await repository.projectLegacy(`paper-${paper.id}`, {
+      kind: "source.document",
+      title: paper.title,
+      content: {
+        schema: "liteasy.source-document/v1",
+        payload: {
+          paperId: paper.id,
+          literatureId: paper.literature?.literatureId,
+          documentHash: hash,
+          text: paper.title,
+          availability: "local",
+          legacyKey: paper.id,
+        },
+      },
+    });
+    return {
+      kind: "content.fragment",
+      title: `${paper.title} · 第 ${selection.page} 页`,
+      sourceRefs: [refOf(source)],
+      content: {
+        schema: "liteasy.fragment/v1",
+        payload: {
+          text: selection.excerpt,
+          partial: false,
+          anchors: [
+            {
+              type: "pdf",
+              sourceRef: refOf(source),
+              documentHash: hash,
+              page: selection.page,
+              quote: { exact: selection.excerpt, prefix: "", suffix: "" },
+              rects: selection.rects.map((rect) => ({
+                x: rect.left / 100,
+                y: rect.top / 100,
+                width: rect.width / 100,
+                height: rect.height / 100,
+              })),
+              extractor: "liteasy.pdf-text/v1",
+              normalization: "liteasy.whitespace/v1",
+              precision: hash ? "exact" : "page",
+              ...(selection.normalizedStart === undefined
+                ? {}
+                : {
+                    range: {
+                      start: selection.normalizedStart,
+                      end: selection.normalizedStart + selection.excerpt.length,
+                    },
+                  }),
+            },
+          ],
+        },
+      },
+    };
+  }
+  async function messageDraft(
+    message: MessageCaptureInput,
+  ): Promise<ObjectDraft & { kind: "content.fragment" }> {
+    if (!message.text.includes(message.excerpt) || !message.excerpt.trim())
+      throw new Error("请选择回答中的有效文字。");
+    const hash = await hashText(message.text);
+    const source = await repository.legacy(
+      `message-${message.messageId}-${hash}`,
+      {
+        kind: "conversation.message",
+        title: message.partial ? "回答（生成中快照）" : "回答",
+        content: {
+          schema: "liteasy.message/v1",
+          payload: {
+            messageId: message.messageId,
+            blockId: "body",
+            text: message.text,
+            partial: message.partial,
+          },
+        },
+      },
+    );
+    const start = message.text.indexOf(message.excerpt);
+    return {
+      kind: "content.fragment",
+      title: `${message.partial ? "未完成回答" : "回答"}摘录`,
+      sourceRefs: [refOf(source)],
+      content: {
+        schema: "liteasy.fragment/v1",
+        payload: {
+          text: message.excerpt,
+          partial: message.partial,
+          anchors: [
+            {
+              type: "text",
+              sourceRef: refOf(source),
+              blockId: "body",
+              quote: {
+                exact: message.excerpt,
+                prefix: message.text.slice(Math.max(0, start - 32), start),
+                suffix: message.text.slice(
+                  start + message.excerpt.length,
+                  start + message.excerpt.length + 32,
+                ),
+              },
+              range: { start, end: start + message.excerpt.length },
+            },
+          ],
+        },
+      },
+    };
+  }
+  async function capture(
+    draft: () => Promise<ObjectDraft & { kind: "content.fragment" }>,
+    target: "board" | "tray",
+    operationId: string = crypto.randomUUID(),
+  ) {
+    const captured = await draft();
+    if (!active()) throw new Error("账号已切换。");
+    if (target === "tray") {
+      const ref = { objectId: `pending-${operationId}`, revision: "pending" };
+      pendingFragments.set(ref.objectId, captured);
+      addToTray([ref]);
+      setStatus("已加入对话，提交提问时保存摘录。");
+      return [ref];
+    }
+    const refs = await repository.captureFragment({
+      draft: captured,
+      boardRef: target === "board" ? refOf(await ensureBoard()) : undefined,
+      operationId,
+    });
+    if (!active()) throw new Error("账号已切换。");
+    setVisible(true);
+    await refresh();
+    setStatus("已保存到本机");
+    return refs;
+  }
+  function addToTray(refs: ContextRef[]) {
+    setTray((current) => [
+      ...current,
+      ...refs
+        .filter(
+          (ref) =>
+            !current.some(
+              (item) => JSON.stringify(item.ref) === JSON.stringify(ref),
+            ),
+        )
+        .map((ref) => ({ ref, pinned: false })),
+    ]);
+    setPreview(undefined);
+    setVisible(true);
+  }
+  const port: ObjectWorkbenchPort = {
+    capturePdf: (selection, target) =>
+      capture(() => pdfDraft(selection), target),
+    captureMessage: (message, target) =>
+      capture(() => messageDraft(message), target),
+    dragPdf(selection, data) {
+      const operationId = crypto.randomUUID();
+      const ticket = tickets.register(() =>
+        capture(() => pdfDraft(selection), "board", operationId),
+      );
+      data.setData(PENDING_CAPTURE_MIME, ticket);
+      data.setData("text/plain", selection.excerpt);
+      // Let the host start its drag session before revealing an overlay above the source.
+      window.setTimeout(() => {
+        if (active()) setVisible(true);
+      }, 50);
+    },
+    dragMessage(message, data) {
+      const operationId = crypto.randomUUID();
+      const ticket = tickets.register(() =>
+        capture(() => messageDraft(message), "board", operationId),
+      );
+      data.setData(PENDING_CAPTURE_MIME, ticket);
+      data.setData("text/plain", message.excerpt);
+      // Let the host start its drag session before revealing an overlay above the source.
+      window.setTimeout(() => {
+        if (active()) setVisible(true);
+      }, 50);
+    },
+    explain(ref) {
+      setTray([{ ref, pinned: false }]);
+      setPreview(undefined);
+      setVisible(true);
+    },
+    async openLegacyBoard(paper, snapshot, key) {
+      if (
+        !latest.current
+          .getPapers()
+          .some((candidate) => candidate.id === paper.id)
+      )
+        throw new Error("来源文献在当前账号不可用。");
+      const assets = new Map<string, StagedObjectAsset>();
+      const nodes = await Promise.all(
+        snapshot.nodes.map(async (node) => {
+          let draft: ObjectDraft;
+          if (node.kind === "image") {
+            const asset = await stageDataUrl(node.content.dataUrl);
+            assets.set(asset.assetId, asset);
+            draft = {
+              kind: "content.note",
+              title: node.content.alt || "图片",
+              assets: [assetDescriptor(asset)],
+              content: {
+                schema: "liteasy.note/v1",
+                payload: {
+                  text: node.content.alt,
+                  origin: "external",
+                  assetIds: [asset.assetId],
+                },
+              },
+            };
+          } else if (
+            node.kind === "markdown" &&
+            node.source?.type === "pdf" &&
+            node.source.page &&
+            node.source.excerpt &&
+            node.source.excerpt === node.content.markdown
+          ) {
+            const sourcePaper = latest.current
+              .getPapers()
+              .find(
+                (p) => p.id === (node.source as { paperId: string }).paperId,
+              );
+            if (!sourcePaper)
+              throw new Error("旧摘录来源不可用，原白板快照保持不变。");
+            const fragment = await pdfDraft({
+              paper: sourcePaper,
+              page: node.source.page,
+              excerpt: node.source.excerpt,
+              rects: [],
+            });
+            for (const anchor of fragment.content.payload.anchors)
+              if (anchor.type === "pdf") anchor.precision = "page";
+            draft = fragment;
+          } else {
+            const text =
+              node.kind === "markdown"
+                ? node.content.markdown
+                : node.content.title;
+            draft = {
+              kind: "content.note",
+              title: text.slice(0, 80) || "旧白板内容",
+              content: {
+                schema: "liteasy.note/v1",
+                payload: { text, origin: "external" },
+              },
+            };
+          }
+          return {
+            legacyId: node.id,
+            draft,
+            position: node.position,
+            size: node.size,
+          };
+        }),
+      );
+      const next = await repository.migrateBoard({
+        key: await hashText(key),
+        snapshot: {
+          originalStorageKey: key,
+          sha256: await hashText(JSON.stringify(snapshot)),
+          schemaVersion: 1,
+        },
+        title: `${paper.title} · 白板`,
+        paperId: paper.id,
+        nodes,
+        edges: snapshot.edges,
+        assets: [...assets.values()],
+      });
+      boardRef.current = next;
+      setBoard(next);
+      setVisible(true);
+      await refresh();
+      setStatus("旧白板已迁移并保存；原快照保留。旧摘录仅定位到页。");
+    },
+    open() {
+      setVisible(true);
+    },
+  };
+  async function resolveContext(request: SubmitAgentTurnRequest) {
+    return resolveContextSnapshot({
+      repository,
+      refs: request.contextRefs ?? [],
+      pinnedRefs: tray
+        .filter((entry) => entry.pinned)
+        .map((entry) => entry.ref),
+      purpose: request.contextPurpose ?? "解释所选内容",
+      describeSetting: (key) =>
+        describeObjectSetting(key, latest.current.getSettings()),
+    });
+  }
+  async function ask(
+    question: string,
+    refs = tray.map((item) => item.ref),
+    signal?: AbortSignal,
+  ) {
+    if (!question.trim() || refs.length === 0)
+      throw new Error("请加入内容并输入问题。");
+    const api = latest.current.getApi();
+    const capability = await api.listCapabilities();
+    if (
+      !capability.ok ||
+      !capability.data.some((c) => c.actionId === "context.resolve")
+    )
+      throw new Error("当前服务不支持所选内容，请更新服务后重试。");
+    if (signal?.aborted || !active()) throw new Error("提问已取消。");
+    const materialized: ContextRef[] = [];
+    for (const ref of refs) {
+      const draft =
+        "objectId" in ref ? pendingFragments.get(ref.objectId) : undefined;
+      if (draft && "objectId" in ref) {
+        const [saved] = await repository.captureFragment({
+          draft,
+          operationId: ref.objectId,
+        });
+        materialized.push(saved);
+        setTray((current) =>
+          current.map((item) =>
+            "objectId" in item.ref && item.ref.objectId === ref.objectId
+              ? { ...item, ref: saved }
+              : item,
+          ),
+        );
+      } else materialized.push(ref);
+    }
+    refs = materialized;
+    if (signal?.aborted || !active()) throw new Error("提问已取消。");
+    const session = await api.createSession({
+      consumer: "frontend",
+      principalId: repository.scopeId,
+    });
+    if (!session.ok) throw new Error(session.error.message);
+    const pendingSession = { api, sessionId: session.data.sessionId };
+    pending.current.add(pendingSession);
+    const cancel = () => {
+      void api.closeSession(pendingSession.sessionId);
+    };
+    signal?.addEventListener("abort", cancel, { once: true });
+    try {
+      if (signal?.aborted || !active()) {
+        cancel();
+        throw new Error("提问已取消。");
+      }
+      const run = await api.submitTurn({
+        sessionId: session.data.sessionId,
+        idempotencyKey: crypto.randomUUID(),
+        input: { message: question, mode: "qa" },
+        contextRefs: refs,
+        contextPurpose: question,
+      });
+      if (!active() || signal?.aborted) throw new Error("提问已取消。");
+      if (!run.ok) throw new Error(run.error.message);
+      if (run.data.status !== "completed") {
+        const failure = run.data.events.find((e) => e.type === "run.failed");
+        throw new Error(
+          failure && "message" in failure
+            ? failure.message
+            : "提问已取消或未完成。",
+        );
+      }
+      const output = run.data.events
+        .filter((e) => e.type === "assistant.message")
+        .pop();
+      if (!output || output.type !== "assistant.message")
+        throw new Error("没有可保存的回答。");
+      await repository.saveRunRecord(run.data);
+      if (!active() || signal?.aborted) throw new Error("提问已取消。");
+      setAnswer({ text: output.message, run: run.data });
+      setPreview(run.data.contextSnapshot);
+      setTray((current) => current.filter((item) => item.pinned));
+      return output.message;
+    } finally {
+      signal?.removeEventListener("abort", cancel);
+      pending.current.delete(pendingSession);
+      await api.closeSession(session.data.sessionId);
+    }
+  }
+  const abortRef = useRef<AbortController>();
+  async function submit(question: string) {
+    const abort = new AbortController();
+    abortRef.current = abort;
+    setBusy(true);
+    setAnswer(undefined);
+    setStatus("正在回答…");
+    try {
+      await ask(question, undefined, abort.signal);
+      if (active()) setStatus("回答已完成，可保存为产物。");
+    } catch (e) {
+      if (active()) setStatus(String((e as Error).message));
+    } finally {
+      if (active()) setBusy(false);
+    }
+  }
+  async function openSource(object: ObjectEnvelope) {
+    if (object.kind !== "content.fragment") return;
+    const anchor = object.content.payload.anchors[0];
+    const source = await repository.get(anchor.sourceRef);
+    if (source.kind !== "source.document" || anchor.type !== "pdf") {
+      setStatus("来源回答已保留，可在来源详情中阅读。");
+      return source;
+    }
+    const paper = latest.current
+      .getPapers()
+      .find((p) => p.id === source.content.payload.paperId);
+    if (!paper) throw new Error("来源文献不可用，摘录已保留。");
+    const currentHash = await documentHash(paper);
+    if (anchor.documentHash && anchor.documentHash !== currentHash)
+      throw new Error("来源版本已变化，摘录已保留。");
+    const fulltext = normalizePaperFulltext(
+      await loadUserPaperArtifact({
+        artifactKind: "fulltext",
+        paperId: paper.id,
+      }),
+    );
+    const fullPage = fulltext?.pages.find(
+      (page) => page.page === anchor.page,
+    )?.text;
+    const resolution = resolveObjectAnchor(anchor, {
+      ref: anchor.sourceRef,
+      documentHash: currentHash,
+      page: anchor.page,
+      text: (fullPage ?? "").replace(/\s+/g, " ").trim(),
+    });
+    latest.current.openEvidence({
+      paperId: paper.id,
+      page: anchor.page,
+      evidenceId: object.objectId,
+      quote: resolution.status === "resolved" ? objectText(object) : "",
+    });
+    setStatus(
+      resolution.status === "resolved" ? "已打开来源。" : resolution.reason,
+    );
+    return source;
+  }
+  return {
+    repository,
+    port,
+    opened,
+    openLink,
+    closeOpened: () => setOpened(undefined),
+    captureQuickAsk: async (
+      request: import("../features/pdf/pdfQuickAsk").PdfQuickAskRequest,
+    ) => {
+      if (!request.pageText.trim() || !request.abstractText.trim())
+        throw new Error("当前页与摘要尚未就绪，请完成解析后重试。");
+      const paper = latest.current
+        .getPapers()
+        .find((p) => p.id === request.paper.id);
+      if (!paper || request.signal.aborted)
+        throw new Error("来源不可用或提问已取消。");
+      const hash = await documentHash(paper);
+      const source = await repository.projectLegacy(`paper-${paper.id}`, {
+        kind: "source.document",
+        title: paper.title,
+        content: {
+          schema: "liteasy.source-document/v1",
+          payload: {
+            paperId: paper.id,
+            literatureId: paper.literature?.literatureId,
+            documentHash: hash,
+            text: paper.title,
+            availability: "local",
+            legacyKey: paper.id,
+            pages: [{ page: request.page, text: request.pageText }],
+            abstractText: request.abstractText,
+          },
+        },
+      });
+      const sourceRef = refOf(source);
+      const refs = await repository.captureFragment({
+        operationId: crypto.randomUUID(),
+        draft: {
+          kind: "content.fragment",
+          title: `${paper.title} · 第 ${request.page} 页`,
+          sourceRefs: [sourceRef],
+          content: {
+            schema: "liteasy.fragment/v1",
+            payload: {
+              text: request.excerpt,
+              partial: false,
+              anchors: [
+                {
+                  type: "pdf",
+                  sourceRef,
+                  documentHash: hash,
+                  page: request.page,
+                  quote: { exact: request.excerpt, prefix: "", suffix: "" },
+                  rects: [],
+                  extractor: "liteasy.pdf-text/v1",
+                  normalization: "liteasy.whitespace/v1",
+                  precision: hash ? "exact" : "page",
+                },
+              ],
+            },
+          },
+        },
+      });
+      return [
+        ...refs,
+        { ...sourceRef, selectorId: `page:${request.page}` },
+        { ...sourceRef, selectorId: "abstract" },
+      ];
+    },
+    importLegacyArtifacts: () =>
+      perform(async () => {
+        const results = (await latest.current.listLegacyArtifacts?.()) ?? [];
+        for (const result of results) {
+          if (
+            result.version !== "liteasy.agent-artifact/v1" ||
+            result.agent.status !== "completed"
+          )
+            continue;
+          const sourceRefs: ObjectRef[] = [];
+          for (const reference of result.papers) {
+            const paper = latest.current
+              .getPapers()
+              .find((p) => p.id === reference.id);
+            const source = await repository.projectLegacy(
+              `paper-${reference.id}`,
+              {
+                kind: "source.document",
+                title: paper?.title ?? reference.title,
+                content: {
+                  schema: "liteasy.source-document/v1",
+                  payload: {
+                    paperId: reference.id,
+                    legacyKey: reference.id,
+                    literatureId: paper?.literature?.literatureId,
+                    documentHash: paper ? await documentHash(paper) : undefined,
+                    text: paper?.title ?? reference.title,
+                    availability: paper ? "local" : "unavailable",
+                  },
+                },
+              },
+            );
+            sourceRefs.push(refOf(source));
+          }
+          await repository.projectLegacy(`artifact-${result.artifactId}`, {
+            title: result.title,
+            kind: "artifact.document",
+            runId: result.agent.runId,
+            sourceRefs,
+            content: {
+              schema: "liteasy.document/v1",
+              payload: {
+                legacyArtifactId: result.artifactId,
+                blocks: [
+                  {
+                    blockId: `legacy-${result.artifactId}`,
+                    type: "markdown",
+                    text: result.answer,
+                    sourceRefs,
+                  },
+                ],
+              },
+            },
+          });
+        }
+      }),
+    visible,
+    setVisible,
+    objects,
+    board,
+    placements,
+    tray,
+    preview,
+    answer,
+    status,
+    busy,
+    setStatus,
+    refresh,
+    perform,
+    resolveContext,
+    ask,
+    submit,
+    addToTray,
+    cancel: () => abortRef.current?.abort(),
+    setTray: (
+      update: import("react").SetStateAction<
+        Array<{ ref: ContextRef; pinned: boolean }>
+      >,
+    ) => {
+      setTray(update);
+      setPreview(undefined);
+    },
+    contextTitle: (ref: ContextRef) =>
+      "objectId" in ref
+        ? (pendingFragments.get(ref.objectId)?.title ??
+          objects.find((object) => object.objectId === ref.objectId)?.title ??
+          "已保存内容")
+        : ref.type === "setting"
+          ? "设置说明"
+          : "错误说明",
+    previewContext: async () => {
+      try {
+        const snapshot: ContextSnapshot = {
+          snapshotId: crypto.randomUUID(),
+          scopeId: repository.scopeId,
+          purpose: "预览",
+          createdAt: new Date().toISOString(),
+          entries: [],
+          tokens: 0,
+        };
+        for (const item of tray) {
+          const draft =
+            "objectId" in item.ref
+              ? pendingFragments.get(item.ref.objectId)
+              : undefined;
+          if (draft) {
+            const text = draft.content.payload.text;
+            const tokens = Math.ceil(new TextEncoder().encode(text).length / 3);
+            snapshot.entries.push({
+              ref: item.ref,
+              title: draft.title,
+              text,
+              tokens,
+              sha256: await hashText(text),
+              origin: item.pinned ? "pinned" : "explicit",
+              trustLabel: draft.content.payload.anchors.some(
+                (anchor) => anchor.type === "text",
+              )
+                ? "derived"
+                : "source",
+              extractor: "liteasy.text/v1",
+            });
+            snapshot.tokens += tokens;
+          } else {
+            const resolved = await resolveContextSnapshot({
+              repository,
+              refs: [item.ref],
+              purpose: "预览",
+              persist: false,
+              describeSetting: (key) =>
+                describeObjectSetting(key, latest.current.getSettings()),
+            });
+            snapshot.entries.push(
+              ...resolved.entries.map((entry) => ({
+                ...entry,
+                origin: item.pinned
+                  ? ("pinned" as const)
+                  : ("explicit" as const),
+              })),
+            );
+            snapshot.tokens += resolved.tokens;
+          }
+        }
+        if (snapshot.tokens > 6000)
+          throw new Error("所选内容超出本轮预算，请移除部分内容或分段提问。");
+        if (active()) setPreview(snapshot);
+      } catch (e) {
+        if (active()) setStatus((e as Error).message);
+      }
+    },
+    selectBoard: async (object: ObjectEnvelope) => {
+      boardRef.current = object;
+      setBoard(object);
+      setPlacements(await repository.listPlacements(object.objectId));
+    },
+    createBoard: (title: string) =>
+      perform(async () => {
+        const object = await repository.create({
+          title,
+          kind: "workspace.board",
+          content: { schema: "liteasy.board/v1", payload: { description: "" } },
+        });
+        boardRef.current = object;
+      }),
+    createNote: (text: string) =>
+      perform(async () => {
+        const board = await ensureBoard();
+        return repository.createAndPlace({
+          operationId: crypto.randomUUID(),
+          boardRef: refOf(board),
+          draft: {
+            kind: "content.note",
+            title: text.slice(0, 40) || "笔记",
+            content: {
+              schema: "liteasy.note/v1",
+              payload: { text, origin: "user" },
+            },
+          },
+        });
+      }),
+    place: (refs: ObjectRef[]) =>
+      perform(async () => {
+        const board = await ensureBoard();
+        await repository.applyBoardPatch({
+          boardRef: refOf(board),
+          operationId: crypto.randomUUID(),
+          add: refs,
+        });
+      }),
+    removePlacement: (placementId: string) =>
+      perform(async () => {
+        const board = await ensureBoard();
+        await repository.applyBoardPatch({
+          boardRef: refOf(board),
+          operationId: crypto.randomUUID(),
+          remove: [placementId],
+        });
+      }),
+    move: (p: Placement, position: Placement["position"]) =>
+      perform(async () => {
+        const board = boardRef.current;
+        if (!board) return;
+        await repository.applyBoardPatch({
+          boardRef: refOf(board),
+          operationId: crypto.randomUUID(),
+          move: [
+            { placementId: p.placementId, revision: p.revision, position },
+          ],
+        });
+      }),
+    drop: async (data: DataTransfer) => {
+      const ticket = data.getData(PENDING_CAPTURE_MIME);
+      const transfer = readObjectTransfer(data);
+      const text = data.getData("text/plain");
+      const file = Array.from(data.files ?? []).find((file) =>
+        file.type.startsWith("image/"),
+      );
+      await perform(async () => {
+        if (ticket) {
+          await tickets.consume(ticket);
+          return;
+        }
+        const board = await ensureBoard();
+        if (transfer) {
+          const refs =
+            transfer.mode === "copy"
+              ? await Promise.all(
+                  transfer.refs.map(async (ref, index) =>
+                    refOf(
+                      await repository.copy(
+                        ref,
+                        `${transfer.transferId}-copy-${index}`,
+                      ),
+                    ),
+                  ),
+                )
+              : transfer.refs;
+          await repository.applyBoardPatch({
+            boardRef: refOf(board),
+            operationId: transfer.transferId,
+            add: refs,
+          });
+        } else if (file) {
+          const asset = await stageImage(
+            new Uint8Array(await file.arrayBuffer()),
+            file.type,
+          );
+          await repository.createAndPlace({
+            boardRef: refOf(board),
+            operationId: crypto.randomUUID(),
+            assets: [asset],
+            draft: {
+              kind: "content.note",
+              title: file.name || "粘贴的图片",
+              assets: [assetDescriptor(asset)],
+              content: {
+                schema: "liteasy.note/v1",
+                payload: {
+                  text: "",
+                  origin: "external",
+                  assetIds: [asset.assetId],
+                },
+              },
+            },
+          });
+        } else if (text.trim()) {
+          await repository.createAndPlace({
+            boardRef: refOf(board),
+            operationId: crypto.randomUUID(),
+            draft: {
+              kind: "content.note",
+              title: text.slice(0, 40),
+              content: {
+                schema: "liteasy.note/v1",
+                payload: { text, origin: "external" },
+              },
+            },
+          });
+        } else throw new Error("请拖入摘录或粘贴文字。");
+      });
+    },
+    saveAnswer: () =>
+      perform(async () => {
+        if (!answer || answer.run.status !== "completed")
+          throw new Error("回答尚未完成。");
+        const refs =
+          answer.run.contextRefs?.filter(
+            (ref): ref is ObjectRef => "objectId" in ref,
+          ) ?? [];
+        return repository.create(
+          {
+            title: answer.run.input.message.slice(0, 80),
+            kind: "artifact.document",
+            runId: answer.run.runId,
+            contextSnapshotId: answer.run.contextSnapshotId,
+            sourceRefs: refs,
+            content: {
+              schema: "liteasy.document/v1",
+              payload: {
+                blocks: [
+                  {
+                    blockId: `answer-${answer.run.runId}`,
+                    type: "markdown",
+                    text: answer.text,
+                    sourceRefs: refs,
+                  },
+                ],
+              },
+            },
+          },
+          `save-answer-${answer.run.runId}`,
+        );
+      }),
+    openSource,
+  };
+}
+export type ObjectWorkbenchController = ReturnType<
+  typeof useObjectWorkbenchController
+>;

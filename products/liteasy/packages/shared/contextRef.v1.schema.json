@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "anyOf": [
+    {
+      "type": "object",
+      "properties": {
+        "objectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "selectorId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "objectId",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "setting"
+            },
+            "key": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          "required": [
+            "type",
+            "key"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "diagnostic"
+            },
+            "code": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "stage": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "message": {
+              "type": "string",
+              "maxLength": 4000
+            }
+          },
+          "required": [
+            "type",
+            "code",
+            "stage",
+            "message"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  ],
+  "$id": "https://schemas.liteasy.app/contextRef.v1.schema.json"
+}

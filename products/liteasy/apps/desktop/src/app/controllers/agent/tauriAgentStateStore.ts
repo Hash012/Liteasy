@@ -1,7 +1,8 @@
+import { createObjectStorage } from "../../features/objects/objectStorage";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AgentStateSnapshot,
-  AgentStateStore
+  AgentStateStore,
 } from "./agentStatePersistence";
 
 const browserStorageKey = "liteasy.agent-state.v1";
@@ -32,19 +33,19 @@ function createBrowserStateStore(): AgentStateStore {
         return;
       }
       window.localStorage.setItem(browserStorageKey, JSON.stringify(snapshot));
-    }
+    },
   };
 }
 
 function createTauriTransport(): AgentStateTransport {
   return {
     load: () => invoke<unknown>("load_agent_state"),
-    save: (snapshot) => invoke<void>("save_agent_state", { snapshot })
+    save: (snapshot) => invoke<void>("save_agent_state", { snapshot }),
   };
 }
 
 export function createTauriAgentStateStore(
-  transport?: AgentStateTransport
+  transport?: AgentStateTransport,
 ): AgentStateStore {
   if (!transport && !isTauriRuntime()) {
     return createBrowserStateStore();
@@ -52,6 +53,28 @@ export function createTauriAgentStateStore(
   const activeTransport = transport ?? createTauriTransport();
   return {
     load: () => activeTransport.load(),
-    save: (snapshot) => activeTransport.save(snapshot)
+    save: (snapshot) => activeTransport.save(snapshot),
+  };
+}
+
+/** Object-aware sessions share the account-checked transaction boundary, not global browser state. */
+export function createScopedAgentStateStore(
+  scopeId: string,
+  currentScope: () => string,
+): AgentStateStore {
+  const storage = createObjectStorage(scopeId, currentScope);
+  return {
+    load: async () => (await storage.get("agent-state/public"))?.value ?? null,
+    save: async (snapshot) => {
+      const key = "agent-state/public";
+      const previous = await storage.get(key);
+      await storage.commit([
+        {
+          key,
+          expected: previous?.version ?? null,
+          row: { key, version: crypto.randomUUID(), value: snapshot },
+        },
+      ]);
+    },
   };
 }

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "objectId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "revision": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "selectorId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    }
+  },
+  "required": [
+    "objectId",
+    "revision"
+  ],
+  "additionalProperties": false,
+  "$id": "https://schemas.liteasy.app/objectRef.v1.schema.json"
+}

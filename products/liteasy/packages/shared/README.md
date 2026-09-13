@@ -16,3 +16,17 @@ cd ../../../../development/dev-cloud && npm test
 ## 开发测试账号
 
 读取或修改共享数据不需要账号。本目录不得存放用户清单、测试密码、token 或任何环境凭据。
+
+## 研究对象契约
+
+`object.v1.schema.json`、`objectRef.v1.schema.json`、`objectAnchor.v1.schema.json`、
+`objectRelation.v1.schema.json`、`boardPlacement.v1.schema.json`、`contextRef.v1.schema.json`
+和 `objectTransfer.v1.schema.json` 由桌面无 React 依赖的对象契约生成：
+
+```bash
+cd products/liteasy/apps/desktop && npm run schema:objects
+```
+
+桌面构建会重新生成并检查这些文件。六类对象使用严格的类型化内容，未知类型仅允许安全读取和导出。
+这些新增契约供本地对象仓库使用；旧 `/v1/agent-artifacts` 仍读写 `liteasy.agent-artifact/v1`，
+不能向旧端点提交 object envelope。P0 未新增云对象写入或同步端点。

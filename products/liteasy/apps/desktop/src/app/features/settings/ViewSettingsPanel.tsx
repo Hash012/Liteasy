@@ -1,4 +1,5 @@
-import { Field, Input, Option, Radio, RadioGroup, Dropdown } from "@fluentui/react-components";
+import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
+import { Button, Tooltip, Field, Input, Option, Radio, RadioGroup, Dropdown } from "@fluentui/react-components";
 import type { SettingsState, UpdateSettingCommand } from "./settings.types";
 import { isHexColor, pdfBackgroundPresets, viewFontOptions, viewFontSizeOptions } from "./viewSettings";
 
@@ -13,6 +14,7 @@ const defaultPdfBackground = "paper";
 const defaultCustomPdfBackground = "#ffffff";
 
 export function ViewSettingsPanel({ onUpdateSetting, settings }: ViewSettingsPanelProps) {
+  const workbench = useObjectWorkbench();
   const fontFamily = settings?.["view.font_family"] ?? defaultFont;
   const fontSize = settings?.["view.font_size"] ?? defaultFontSize;
   const pdfBackground = settings?.["view.pdf_background"] ?? defaultPdfBackground;
@@ -25,7 +27,7 @@ export function ViewSettingsPanel({ onUpdateSetting, settings }: ViewSettingsPan
 
   return (
     <div aria-label="View 显示设置" className="view-settings-panel">
-      <Field label="界面字体">
+      <Field label={<span>界面字体 {workbench ? <Tooltip content="解释此设置" relationship="description"><Button size="small" appearance="subtle" onClick={() => workbench.explain({ type: "setting", key: "view.font_family" })}>解释</Button></Tooltip> : null}</span>}>
         <Dropdown
           aria-label="界面字体"
           onOptionSelect={(_, data) => data.optionValue && update("view.font_family", data.optionValue)}
@@ -39,7 +41,7 @@ export function ViewSettingsPanel({ onUpdateSetting, settings }: ViewSettingsPan
         </Dropdown>
       </Field>
 
-      <Field label="界面字号">
+      <Field label={<span>界面字号 {workbench ? <Tooltip content="解释此设置" relationship="description"><Button size="small" appearance="subtle" onClick={() => workbench.explain({ type: "setting", key: "view.font_size" })}>解释</Button></Tooltip> : null}</span>}>
         <Dropdown
           aria-label="界面字号"
           onOptionSelect={(_, data) => data.optionValue && update("view.font_size", data.optionValue)}
@@ -53,7 +55,7 @@ export function ViewSettingsPanel({ onUpdateSetting, settings }: ViewSettingsPan
         </Dropdown>
       </Field>
 
-      <Field label="PDF 阅读底色">
+      <Field label={<span>PDF 阅读底色 {workbench ? <Tooltip content="解释此设置" relationship="description"><Button size="small" appearance="subtle" onClick={() => workbench.explain({ type: "setting", key: "view.pdf_background" })}>解释</Button></Tooltip> : null}</span>}>
         <RadioGroup
           aria-label="PDF 阅读底色"
           className="view-settings-backgrounds"

@@ -4,7 +4,8 @@
   "identifier": "main-event-listener",
   "permissions": [
     "core:event:allow-listen",
-    "core:event:allow-unlisten"
+    "core:event:allow-unlisten",
+    "deep-link:allow-get-current"
   ],
   "windows": [
     "main"

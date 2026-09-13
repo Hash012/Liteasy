@@ -1,21 +1,15 @@
-import type { ModelTransport } from "../features/models/modelHttpClient";
-import { getActiveModelProvider, getModelForSettings } from "../features/models/modelPolicy";
-import { createModelGatewayFromSettings } from "../features/models/modelRuntime";
-import type { createSettingsStore } from "../features/settings/settings.store";
-import { buildQuickAskPrompt, type PdfQuickAskRequest } from "../features/pdf/pdfQuickAsk";
+import type { PdfQuickAskRequest } from "../features/pdf/pdfQuickAsk";
+import type { ObjectRef } from "../features/objects/object.types";
+import type { ContextRef } from "../features/context/objectContext";
 
 export function usePdfQuickAskController(input: {
-  settingsStore: Pick<ReturnType<typeof createSettingsStore>, "getState">;
-  modelTransport?: ModelTransport;
+  capture(request: PdfQuickAskRequest): Promise<ObjectRef[]>;
+  ask(question: string, refs: ContextRef[], signal?: AbortSignal): Promise<string>;
 }) {
   return async (request: PdfQuickAskRequest): Promise<string> => {
-    const settings = input.settingsStore.getState();
-    const gateway = createModelGatewayFromSettings(settings, { cloudTransport: input.modelTransport });
-    const result = await gateway.generateAnswer({
-      model: getModelForSettings(settings), provider: getActiveModelProvider(settings),
-      prompt: buildQuickAskPrompt(request), requireLive: true, signal: request.signal
-    });
-    if (!result.answer.trim()) throw new Error("未收到回答，请重试。");
-    return result.answer;
+    if (request.signal.aborted) throw new Error("提问已取消。");
+    const refs = await input.capture(request);
+    if (request.signal.aborted) throw new Error("提问已取消。");
+    return input.ask(request.question, refs, request.signal);
   };
 }

@@ -15,6 +15,8 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::time::{Duration, Instant};
 use url::Url;
 
+static ACTIVE_OBJECT_PRINCIPAL: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
 const CREDENTIAL_SERVICE: &str = "com.liteasy.desktop.identity";
 const CREDENTIAL_USERNAME: &str = "primary-refresh-token";
 const EXPECTED_AUDIENCE: &str = "liteasy-desktop";
@@ -289,9 +291,13 @@ fn session_from_token(
     if access_token.is_empty() || access_token.len() > 16 * 1024 {
         return Err("oauth_access_token_invalid".to_string());
     }
+    let expires_at = expires_at(expires_in)?;
+    *ACTIVE_OBJECT_PRINCIPAL
+        .lock()
+        .map_err(|_| "object_forbidden")? = Some(subject.clone());
     Ok(DesktopOAuthSession {
         email,
-        expires_at: expires_at(expires_in)?,
+        expires_at,
         name,
         session_id: access_token,
         user_id: subject,
@@ -490,6 +496,9 @@ pub async fn revoke_desktop_oauth_session(
         Err(code) => return Err(code),
     };
     clear_refresh_credential()?;
+    *ACTIVE_OBJECT_PRINCIPAL
+        .lock()
+        .map_err(|_| "object_forbidden")? = None;
     if stored.issuer != configuration.issuer
         || stored.client_id != configuration.client_id
         || stored.audience != configuration.audience
@@ -606,4 +615,15 @@ mod tests {
             .unwrap()
             .ends_with('Z'));
     }
+}
+
+/// Ownership follows only sessions successfully verified by the native OAuth flow.
+/// Before login/restore, offline edits belong to the separate local partition.
+pub(crate) fn local_object_scope() -> Result<String, String> {
+    Ok(ACTIVE_OBJECT_PRINCIPAL
+        .lock()
+        .map_err(|_| "object_forbidden")?
+        .as_ref()
+        .map(|subject| format!("user:{subject}"))
+        .unwrap_or_else(|| "local".to_string()))
 }

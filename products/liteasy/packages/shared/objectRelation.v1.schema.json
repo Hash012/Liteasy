@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "relationId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "revision": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "from": {
+      "type": "object",
+      "properties": {
+        "objectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "selectorId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "objectId",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "to": {
+      "type": "object",
+      "properties": {
+        "objectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "selectorId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "objectId",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "predicate": {
+      "type": "string",
+      "enum": [
+        "references",
+        "derived_from",
+        "related_to",
+        "member_of"
+      ]
+    },
+    "scopeId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "assertedBy": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "user",
+            "agent",
+            "import"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+    },
+    "basis": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "user_judgment",
+            "model_inference",
+            "source_statement",
+            "operation"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "reviewStatus": {
+      "type": "string",
+      "enum": [
+        "proposed",
+        "accepted",
+        "rejected"
+      ]
+    }
+  },
+  "required": [
+    "relationId",
+    "revision",
+    "from",
+    "to",
+    "predicate",
+    "scopeId",
+    "assertedBy",
+    "createdAt",
+    "basis",
+    "reviewStatus"
+  ],
+  "additionalProperties": false,
+  "$id": "https://schemas.liteasy.app/objectRelation.v1.schema.json"
+}

@@ -1,3 +1,4 @@
+import { contextRefSchema, redactDiagnostic } from "../../features/context/objectContext";
 import {
   createAgentCoreSession,
   type AgentCorePreparedTurn,
@@ -48,6 +49,7 @@ import {
 } from "../../features/assistant/assistantConversationContext";
 
 export type ResolvedAgentContext = {
+  objectSnapshot?: import("../../features/context/objectContext").ContextSnapshot;
   runtimeContext?: AgentRuntimeContextView;
   value?: unknown;
 };
@@ -102,6 +104,8 @@ export type AgentManagerExecutionResult =
     };
 
 export type AgentApplicationPorts = {
+  supportsObjectContext?: boolean;
+  getPrincipalId?: () => string;
   createCoreSession?: () => AgentCoreSession;
   createId?: (prefix: "event" | "run" | "session") => string;
   executeCommand: (
@@ -345,7 +349,7 @@ function defaultCapabilities(): AgentCapability[] {
 
 export function createAgentApplicationService(
   ports: AgentApplicationPorts
-): AgentPublicApi {
+): AgentPublicApi & { dispose(): void } {
   const sessions = new Map<string, StoredSession>();
   const workflowTraces: AgentWorkflowTraceRecord[] = [];
   const pendingConfirmations = new Map<string, PendingConfirmation>();
@@ -368,6 +372,7 @@ export function createAgentApplicationService(
     if (!stored) {
       return apiError("session_not_found", `Agent session not found: ${sessionId}`);
     }
+    if (ports.getPrincipalId && stored.session.principalId !== ports.getPrincipalId()) return apiError("session_not_found", "Session is not available for this account");
     if (stored.session.status === "closed") {
       return apiError("session_closed", `Agent session is closed: ${sessionId}`);
     }
@@ -375,6 +380,7 @@ export function createAgentApplicationService(
   };
 
   const emit = (stored: StoredSession, run: AgentRun, payload: AgentEventPayload) => {
+    if (run.status === "cancelled" && payload.type !== "run.cancelled") return;
     const event = {
       ...payload,
       apiVersion: AGENT_API_VERSION,
@@ -605,8 +611,23 @@ export function createAgentApplicationService(
     );
 
   return {
+    dispose() {
+      for (const stored of sessions.values()) {
+        stored.listeners.clear();
+        for (const run of stored.runs.values()) {
+          if (!["completed", "failed", "cancelled"].includes(run.status)) {
+            abortControllers.get(run.runId)?.abort("account changed");
+            run.status = "cancelled";
+            run.completedAt = now().toISOString();
+          }
+        }
+      }
+      pendingConfirmations.clear();
+      abortControllers.clear();
+    },
     async createSession(input: CreateAgentSessionRequest) {
       await ensureHydrated();
+      if (ports.getPrincipalId) input = { ...input, principalId: ports.getPrincipalId() };
       if (!input.consumer) {
         return apiError("invalid_request", "consumer is required");
       }
@@ -683,6 +704,21 @@ export function createAgentApplicationService(
         );
       }
 
+      if (request.contextRefs) {
+        try {
+          request = { ...request, contextRefs: request.contextRefs.map((raw) => {
+            const ref = contextRefSchema.parse(raw);
+            return "type" in ref && ref.type === "diagnostic"
+              ? { ...ref, code: redactDiagnostic(ref.code), stage: redactDiagnostic(ref.stage), message: redactDiagnostic(ref.message) }
+              : ref;
+          }) };
+        } catch {
+          return apiError("invalid_request", "Invalid object context reference");
+        }
+      }
+      if (request.contextRefs?.length && (!ports.supportsObjectContext || request.input.mode === "command" || request.attachments?.length)) {
+        return apiError("unsupported_operation", "当前服务不支持此对象上下文请求；请勿混用旧附件或命令模式。");
+      }
       const stored = sessionResult.data;
       const existingRunId = stored.requestRuns.get(request.idempotencyKey);
       if (existingRunId) {
@@ -691,6 +727,8 @@ export function createAgentApplicationService(
           existingRun.input.message !== request.input.message ||
           existingRun.input.mode !== request.input.mode ||
           existingRun.input.artifactType !== request.input.artifactType ||
+          JSON.stringify(existingRun.contextRefs) !== JSON.stringify(request.contextRefs) ||
+          existingRun.contextPurpose !== request.contextPurpose ||
           !sameAttachments(existingRun.attachments, request.attachments)
         ) {
           return apiError(
@@ -704,6 +742,8 @@ export function createAgentApplicationService(
       const runId = createId("run");
       const run: AgentRun = {
         apiVersion: AGENT_API_VERSION,
+        contextRefs: request.contextRefs ? JSON.parse(JSON.stringify(request.contextRefs)) : undefined,
+        contextPurpose: request.contextPurpose,
         attachments: cloneAttachments(request.attachments),
         createdAt: now().toISOString(),
         events: [],
@@ -747,7 +787,11 @@ export function createAgentApplicationService(
           await persistState();
           return { data: run, ok: true };
         }
-        emit(stored, run, { type: "context.prepared" });
+        if (context.objectSnapshot) {
+          run.contextSnapshotId = context.objectSnapshot.snapshotId;
+          if (context.objectSnapshot.entries.every((entry) => "objectId" in entry.ref)) run.contextSnapshot = context.objectSnapshot;
+        }
+        emit(stored, run, { type: "context.prepared", snapshotId: run.contextSnapshotId });
 
         const executionInput: AgentCommandExecutionInput = {
           conversationHistory: collectAgentConversationHistory(stored.runs.values(), runId),
@@ -776,7 +820,7 @@ export function createAgentApplicationService(
           runId,
           signal: abortController.signal
         };
-        const runtime = ports.executeManagerTurn
+        const runtime = context.objectSnapshot ? "liteasy_knowledge_workflow" : ports.executeManagerTurn
           ? ports.managerRuntime ?? "custom_manager"
           : request.input.mode === "command"
             ? "liteasy_command_workflow"
@@ -805,7 +849,7 @@ export function createAgentApplicationService(
           runtime,
           type: "execution.route"
         });
-        const managerResult = ports.executeManagerTurn
+        const managerResult = !context.objectSnapshot && ports.executeManagerTurn
           ? await ports.executeManagerTurn(executionInput)
           : undefined;
         if (managerResult?.kind === "runtime" || (!managerResult && request.input.mode === "command")) {
@@ -1040,12 +1084,24 @@ export function createAgentApplicationService(
     },
 
     async listCapabilities() {
-      return { data: ports.listCapabilities?.() ?? defaultCapabilities(), ok: true };
+      const capabilities = [...(ports.listCapabilities?.() ?? defaultCapabilities())];
+      if (ports.supportsObjectContext) capabilities.push({
+        actionId: "context.resolve",
+        label: "询问所选内容",
+        estimatedCost: "cloud_tokens",
+        estimatedLatencyMs: 1000,
+        inputSchema: { type: "object", properties: { contextRefs: { type: "array" } } },
+        requiredContext: [],
+        requiresConfirmation: false,
+        reversible: false,
+        riskLevel: "low"
+      });
+      return { data: capabilities, ok: true };
     },
 
     subscribe(sessionId: string, listener: AgentEventListener) {
       const stored = sessions.get(sessionId);
-      if (!stored || stored.session.status === "closed") {
+      if (!stored || stored.session.status === "closed" || (ports.getPrincipalId && stored.session.principalId !== ports.getPrincipalId())) {
         return () => undefined;
       }
       stored.listeners.add(listener);

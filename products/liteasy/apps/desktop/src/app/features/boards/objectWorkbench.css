@@ -1,0 +1,110 @@
+.object-workbench {
+  position: fixed;
+  z-index: 35;
+  right: 16px;
+  top: 54px;
+  bottom: 16px;
+  width: min(850px, 58vw);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--colorNeutralBackground1, #fff);
+  color: var(--colorNeutralForeground1, #242424);
+  border: 1px solid var(--colorNeutralStroke1, #ddd);
+  border-radius: 8px;
+  box-shadow: 0 4px 18px #0002;
+  overflow: auto;
+}
+.object-workbench header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.object-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.object-board {
+  flex: 1 0 330px;
+  overflow: auto;
+  border: 1px solid var(--colorNeutralStroke2, #ddd);
+  border-radius: 4px;
+  background: var(--colorNeutralBackground2, #f7f7f7);
+}
+.object-board-canvas {
+  position: relative;
+}
+.object-placement {
+  position: absolute;
+  border: 1px solid var(--colorNeutralStroke1, #ddd);
+  border-radius: 6px;
+  background: var(--colorNeutralBackground1, white);
+  padding: 6px;
+  box-sizing: border-box;
+}
+.object-surface {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.object-meta {
+  font-size: 11px;
+  color: var(--colorNeutralForeground3, #666);
+}
+.object-body {
+  max-height: 115px;
+  overflow: auto;
+  font-size: 12px;
+}
+.object-body p {
+  margin: 4px 0;
+}
+.object-context {
+  border-top: 1px solid var(--colorNeutralStroke1, #ddd);
+  padding-top: 8px;
+}
+.object-context pre {
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow: auto;
+  font-size: 12px;
+}
+.object-context > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.object-context > div:has(.assistant-markdown) {
+  display: block;
+}
+.object-details {
+  position: absolute;
+  inset: 0;
+  background: var(--colorNeutralBackground1, white);
+  padding: 16px;
+  overflow: auto;
+  z-index: 2;
+}
+.object-library {
+  max-height: 180px;
+  overflow: auto;
+}
+.object-empty {
+  padding: 20px;
+  color: var(--colorNeutralForeground3, #666);
+}
+.object-workbench footer {
+  font-size: 12px;
+}
+.object-board-edges {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: var(--colorBrandForeground1, #0f6cbd);
+  overflow: visible;
+  font-size: 11px;
+}

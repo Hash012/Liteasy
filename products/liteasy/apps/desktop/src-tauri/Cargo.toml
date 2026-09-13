@@ -7,6 +7,9 @@ edition = "2021"
 tauri-build = { version = "2.5.1", features = [] }
 
 [dependencies]
+tauri-plugin-deep-link = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
 base64 = "0.22"
 chrono = "0.4.44"
 keyring = "4.1.6"
