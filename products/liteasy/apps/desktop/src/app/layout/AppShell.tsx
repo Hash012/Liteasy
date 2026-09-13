@@ -1174,18 +1174,18 @@ export function AppShell({
   const leftPaneSize = paneLayout.collapsed.left
     ? "0px"
     : `minmax(220px, ${paneLayout.layout.left}fr)`;
-  const leftPaneUtilitySize = paneLayout.collapsed.left ? "0px" : "18px";
+  const leftPaneUtilitySize = paneLayout.collapsed.left ? "0px" : "4px";
   const rightPaneSize = paneLayout.collapsed.right
     ? "0px"
     : `minmax(220px, ${paneLayout.layout.right}fr)`;
-  const rightPaneUtilitySize = paneLayout.collapsed.right ? "0px" : "18px";
+  const rightPaneUtilitySize = paneLayout.collapsed.right ? "0px" : "4px";
   const bottomPaneVisible =
     !paneLayout.collapsed.bottom && dock.layout.regions.bottom.itemIds.length > 0;
   const readerArtifactRowSize = "0px";
   const bottomPaneSize = bottomPaneVisible
     ? `minmax(180px, ${paneLayout.layout.bottom}fr)`
     : "0px";
-  const bottomPaneUtilitySize = bottomPaneVisible ? "12px" : "0px";
+  const bottomPaneUtilitySize = bottomPaneVisible ? "4px" : "0px";
   const topPaneSize = bottomPaneVisible
     ? `minmax(0, ${100 - paneLayout.layout.bottom}fr)`
     : "minmax(0, 1fr)";

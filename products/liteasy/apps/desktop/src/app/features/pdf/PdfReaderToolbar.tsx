@@ -14,6 +14,7 @@ import {
   CommentLinkRegular,
   CommentRegular,
   DismissRegular,
+  DrawShapeRegular,
   SearchRegular,
   SettingsRegular,
   TextFieldRegular,
@@ -29,6 +30,8 @@ export type PdfPageLayoutMode = "continuous" | "single" | "spread";
 
 type PdfReaderToolbarProps = {
   readingControls?: ReactNode;
+  inkActive?: boolean;
+  onToggleInk?: () => void;
   activeSearchIndex: number;
   currentPage: number;
   layoutMode: PdfPageLayoutMode;
@@ -65,6 +68,8 @@ type PdfReaderToolbarProps = {
 
 export function PdfReaderToolbar({
   readingControls,
+  inkActive,
+  onToggleInk,
   activeSearchIndex,
   currentPage,
   layoutMode,
@@ -202,6 +207,8 @@ export function PdfReaderToolbar({
           size="small"
           title={textBoxToolActive ? "文本框工具已启用；点击页面放置" : "添加 Markdown 文本框"}
         />
+        <Button aria-label="手绘涂鸦" title="手绘涂鸦" aria-pressed={Boolean(inkActive)}
+          appearance={inkActive ? "primary" : "subtle"} icon={<DrawShapeRegular />} size="small" onClick={onToggleInk} />
         <Button
           aria-label="打开 PDF 白板"
           appearance={whiteboardOpen ? "primary" : "subtle"}

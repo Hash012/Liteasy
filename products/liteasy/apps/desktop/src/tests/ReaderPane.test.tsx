@@ -86,13 +86,13 @@ test("connects a page annotation to its outside comment rail", () => {
 
   expect(connector.left).toBe(400);
   expect(connector.top).toBe(415);
-  expect(connector.length).toBe(414);
+  expect(connector.length).toBe(408);
   expect(connector).not.toHaveProperty("angle");
 });
 
 test("reserves an outside rail by reducing the PDF page stage width", () => {
   expect(resolvePdfPageStageWidth(960, "continuous", false)).toBe(960);
-  expect(resolvePdfPageStageWidth(960, "continuous", true)).toBe(724);
+  expect(resolvePdfPageStageWidth(960, "continuous", true)).toBe(732);
   expect(resolvePdfPageStageWidth(960, "spread", true)).toBe(360);
 });
 
@@ -527,7 +527,7 @@ describe("ReaderPane", () => {
     });
     fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
     await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "划线" }));
-    expect(screen.getByText("划线")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "划线" })).toBeInTheDocument();
     expect(within(screen.getByLabelText("PDF 批注覆盖层")).getByLabelText(/划线标注/)).toBeInTheDocument();
   });
 
@@ -1014,11 +1014,13 @@ describe("ReaderPane", () => {
 
     const editor = screen.getByRole("textbox", { name: "编辑第 1 页 Markdown 文本框" });
     await user.type(editor, "$E=mc^2${enter}{enter}```ts{enter}const answer = 42;{enter}```");
-    fireEvent.blur(editor);
+    await user.click(screen.getByRole("button", { name: "保存 Markdown 文本框" }));
 
     const textBox = screen.getByLabelText("Markdown 文本框：第 1 页");
-    expect(textBox.querySelector(".katex")).not.toBeNull();
-    expect(within(textBox).getByText("const answer = 42;")).toBeInTheDocument();
+    const surface = textBox.querySelector(".pdf-markdown-text-box-surface") as HTMLElement;
+    expect(surface.querySelector(".katex")).not.toBeNull();
+    expect(within(surface).getByText("const answer = 42;")).toBeInTheDocument();
+    await user.click(surface);
     await user.click(within(textBox).getByRole("button", { name: "调整 Markdown 文本框透明度" }));
     fireEvent.change(screen.getByRole("slider", { name: "Markdown 文本框透明度" }), {
       target: { value: "0" }

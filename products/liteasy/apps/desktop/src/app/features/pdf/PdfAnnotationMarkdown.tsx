@@ -1,4 +1,5 @@
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
+import type { PdfTextBoxImages } from "./pdfTextBoxImages";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -8,6 +9,7 @@ type PdfAnnotationMarkdownProps = {
   className?: string;
   emptyLabel?: string;
   value: string;
+  images?: PdfTextBoxImages;
 };
 
 /**
@@ -17,7 +19,8 @@ type PdfAnnotationMarkdownProps = {
 export function PdfAnnotationMarkdown({
   className = "pdf-annotation-markdown",
   emptyLabel,
-  value
+  value,
+  images
 }: PdfAnnotationMarkdownProps) {
   const markdown = value.trim();
   if (!markdown) {
@@ -27,6 +30,9 @@ export function PdfAnnotationMarkdown({
   return (
     <div className={className}>
       <ReactMarkdown
+        urlTransform={(url, key) => key === "src" && url.startsWith("attachment:")
+          ? images?.[url.slice("attachment:".length)] ?? ""
+          : defaultUrlTransform(url)}
         components={{
           a: ({ children, ...props }) => (
             <a {...props} rel="noreferrer" target="_blank">{children}</a>

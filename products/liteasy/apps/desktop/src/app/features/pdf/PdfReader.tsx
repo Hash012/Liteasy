@@ -1,3 +1,7 @@
+import { DrawShapeRegular, EraserRegular, ArrowUndoRegular } from "@fluentui/react-icons";
+import { PdfInkLayer } from "./PdfInkLayer";
+import { pdfInkBounds, type PdfInkMode, type PdfInkStroke } from "./pdfInk";
+import { PdfPaneResizeHandle } from "./PdfPaneResizeHandle";
 import { extractQuickAskAbstract, type PdfQuickAskRequest } from "./pdfQuickAsk";
 import { readerContextDragMime } from "../assistant/readerContextDrag";
 import {
@@ -16,14 +20,18 @@ import {
 } from "react";
 import { Button } from "@fluentui/react-components";
 import {
+  ChatHelpRegular,
   CommentRegular,
   CopyRegular,
   DeleteRegular,
   DocumentRegular,
   EditRegular,
+  HighlightRegular,
   PanelLeftContractRegular,
   PanelLeftExpandRegular,
   ShareRegular,
+  TextFieldRegular,
+  TextUnderlineRegular,
   WhiteboardRegular
 } from "@fluentui/react-icons";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
@@ -346,6 +354,7 @@ export function shouldLoadPdfFromLocalBytes(sourcePath: string | undefined) {
 }
 
 function getAnnotationLabel(kind: AnnotationKind) {
+  if (kind === "ink") return "手绘";
   if (kind === "highlight") {
     return "高亮";
   }
@@ -359,6 +368,24 @@ function getAnnotationLabel(kind: AnnotationKind) {
   }
 
   return "注释";
+}
+
+function getAnnotationIcon(annotation: PdfAnnotationV2) {
+  if (annotation.quickAsk) return <ChatHelpRegular />;
+  switch (annotation.kind) {
+    case "highlight": return <HighlightRegular />;
+    case "underline": return <TextUnderlineRegular />;
+    case "text": return <TextFieldRegular />;
+    case "ink": return <DrawShapeRegular />;
+    default: return <CommentRegular />;
+  }
+}
+
+function getAnnotationSummaryText(annotation: PdfAnnotationV2) {
+  if (annotation.kind !== "text" && annotation.kind !== "ink") return annotation.excerpt;
+  // These annotations have generated excerpts; show their content instead of repeating the type.
+  const note = annotation.note?.replace(/!\[[^\]]*\]\([^)]*\)/g, "").trim();
+  return note || `第 ${annotation.page} 页`;
 }
 
 function getHighlightColor(color: HighlightColor): string {
@@ -892,11 +919,11 @@ export function resolvePdfPageStageWidth(
   marginCommentsVisible: boolean
 ) {
   const layoutColumnWidth = layoutMode === "spread" ? stageWidth / 2 : stageWidth;
-  return Math.max(360, layoutColumnWidth - (marginCommentsVisible ? 236 : 0));
+  return Math.max(360, layoutColumnWidth - (marginCommentsVisible ? 228 : 0));
 }
 
 function getScaleForStage(baseViewport: PageViewport, stageWidth: number, zoom: number) {
-  const availableWidth = Math.max(300, stageWidth - 72);
+  const availableWidth = Math.max(300, stageWidth - 6);
   return Math.max(0.5, Math.min(2.8, (availableWidth / baseViewport.width) * (zoom / 100)));
 }
 
@@ -1006,7 +1033,7 @@ export function buildPdfMarginConnectorGeometry(input: {
   const startY = input.pageHeight * (
     input.anchorRect.top + input.anchorRect.height / 2
   ) / 100;
-  const endX = input.pageWidth + 14;
+  const endX = input.pageWidth + 8;
   return {
     left: startX,
     length: Math.max(0, endX - startX),
@@ -1027,12 +1054,17 @@ type PdfPageViewProps = {
     pageElement: HTMLElement,
     anchorElement: HTMLElement
   ) => void;
+  inkMode?: PdfInkMode;
+  inkColor?: string;
+  inkWidth?: number;
+  onInkCreate?: (page: number, stroke: PdfInkStroke) => void;
   activeTextAnnotationId?: string | null;
   onTextAnnotationActivate?: (annotationId: string) => void;
   onTextAnnotationCommit?: (
     annotationId: string,
     markdown: string,
-    rect: PdfAnnotationRect
+    rect: PdfAnnotationRect,
+    images?: PdfAnnotationV2["images"]
   ) => void;
   onTextAnnotationDelete?: (annotation: PdfAnnotationV2) => void;
   onTextAnnotationMove?: (annotationId: string, rect: PdfAnnotationRect) => void;
@@ -1054,6 +1086,7 @@ type PdfPageViewProps = {
 
 function PdfPageView({
   activeSearchMatch,
+  inkMode = null, inkColor = "#1b66b3", inkWidth = .3, onInkCreate,
   activeTextAnnotationId,
   activePaper,
   annotations,
@@ -1270,7 +1303,7 @@ function PdfPageView({
   return (
     <div
       className={`pdf-page-row ${layoutVisible ? "layout-visible" : ""} ${
-        marginComments.length > 0 ? "has-margin-comments" : ""
+        marginCommentsVisible ? "has-margin-comments" : ""
       }`}
       style={{ minHeight: pageSize.height }}
     >
@@ -1315,7 +1348,11 @@ function PdfPageView({
         <div aria-hidden="true" className="pdf-page-shadow" />
         <div className="textLayer pdf-text-layer" ref={textLayerRef} />
         <div aria-label={pageNumber === 1 ? "PDF 批注覆盖层" : undefined} className="pdf-annotation-overlay">
-        {pageAnnotations.map((annotation) => annotation.kind === "text" ? (
+        {onInkCreate && onTextAnnotationDelete ? <PdfInkLayer
+          annotations={pageAnnotations.filter((annotation) => annotation.kind === "ink")}
+          mode={inkMode} color={inkColor} width={inkWidth} aspectRatio={pageSize.height / pageSize.width}
+          onCreate={(stroke) => onInkCreate(pageNumber, stroke)} onDelete={onTextAnnotationDelete} /> : null}
+        {pageAnnotations.filter((annotation) => annotation.kind !== "ink").map((annotation) => annotation.kind === "text" ? (
           annotation.rects[0] && onTextAnnotationActivate && onTextAnnotationCommit &&
           onTextAnnotationDelete && onTextAnnotationMove && onTextAnnotationOpacityChange ? (
             <PdfMarkdownTextBox
@@ -1556,6 +1593,13 @@ export function PdfReader({
     loadPdfMarginCommentConnectorsVisible
   );
   const [whiteboardOpen, setWhiteboardOpen] = useState(loadPdfWhiteboardVisible);
+  const [whiteboardWidth, setWhiteboardWidth] = useState(() => {
+    try { return Math.max(220, Math.min(900, Number(localStorage.getItem("liteasy.pdf-whiteboard-width")) || 360)); }
+    catch { return 360; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("liteasy.pdf-whiteboard-width", String(whiteboardWidth)); } catch { /* Keep the current width. */ }
+  }, [whiteboardWidth]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchMatchCase, setSearchMatchCase] = useState(false);
@@ -1584,6 +1628,14 @@ export function PdfReader({
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
   const [activeTextAnnotationId, setActiveTextAnnotationId] = useState<string | null>(null);
   const [textBoxToolActive, setTextBoxToolActive] = useState(false);
+  const [inkMode, setInkMode] = useState<PdfInkMode>(null);
+  const [inkColor, setInkColor] = useState("#1b66b3");
+  const [inkWidth, setInkWidth] = useState(.3);
+  useEffect(() => {
+    const stop = (event: KeyboardEvent) => { if (event.key === "Escape") setInkMode(null); };
+    window.addEventListener("keydown", stop);
+    return () => window.removeEventListener("keydown", stop);
+  }, []);
   const [annotationNoteDraft, setAnnotationNoteDraft] = useState("");
   const [annotationPopup, setAnnotationPopup] = useState<PdfAnnotationPopup | null>(null);
   const publicationIntentsRef = useRef(new Map<string, "private" | "public">());
@@ -2640,7 +2692,7 @@ export function PdfReader({
     queueMicrotask(() => void applyPublication(pending, operation));
   }
 
-  function addAnnotation(kind: Exclude<AnnotationKind, "note" | "text">) {
+  function addAnnotation(kind: Exclude<AnnotationKind, "note" | "text" | "ink">) {
     if (!selection || !activePaper) {
       setStatus("请先在真实 PDF 文本层中选择文段。");
       return;
@@ -2858,10 +2910,24 @@ export function PdfReader({
     setAnnotationPopup(null);
   }
 
+  function createInkAnnotation(page: number, ink: PdfInkStroke) {
+    if (!activePaper || hydratedAnnotationStorageKey !== annotationStorageKey) return;
+    setFocusedPage(page);
+    const now = new Date().toISOString();
+    const annotation: PdfAnnotationV2 = {
+      id: `ink-${crypto.randomUUID()}`, kind: "ink", ink, page,
+      rects: [pdfInkBounds(ink)], paperIdentity: resolvePaperIdentity(activePaper),
+      text: "手绘", excerpt: "手绘笔迹", createdAt: now, updatedAt: now, revision: 1,
+      publication: { desiredVisibility: "private", state: "not_published" }
+    };
+    setCurrentAnnotations((current) => [...current, annotation]);
+  }
+
   function commitTextAnnotation(
     annotationId: string,
     markdown: string,
-    rect: PdfAnnotationRect
+    rect: PdfAnnotationRect,
+    images?: PdfAnnotationV2["images"]
   ) {
     const annotation = annotationsRef.current.find((item) => item.id === annotationId);
     setActiveTextAnnotationId(null);
@@ -2872,9 +2938,10 @@ export function PdfReader({
       previousRect.left !== rect.left ||
       previousRect.top !== rect.top ||
       previousRect.width !== rect.width;
-    if (annotation.note === markdown && !rectChanged) return;
+    if (annotation.note === markdown && !rectChanged && images === annotation.images) return;
     const updated = revisePdfAnnotation(annotation, {
       note: markdown,
+      images,
       rects: [rect],
       updatedAt: new Date().toISOString()
     });
@@ -3116,7 +3183,7 @@ export function PdfReader({
     >
       <div
         aria-label="PDF 阅读工作区"
-        style={{ "--pdf-sidebar-width": `${sidebarWidth}px` } as CSSProperties}
+        style={{ "--pdf-sidebar-width": `${sidebarWidth}px`, "--pdf-whiteboard-width": `${whiteboardWidth}px` } as CSSProperties}
         className={`pdf-workspace ${sidebarCollapsed ? "sidebar-collapsed" : "sidebar-open"} ${
           whiteboardOpen ? "whiteboard-open" : ""
         }`}
@@ -3260,12 +3327,16 @@ export function PdfReader({
                               event.stopPropagation();
                               locateAnnotation(annotation);
                             }}
-                            title="展开完整内容；双击定位到 PDF 原文"
+                            title={`${annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)} · 第 ${annotation.page} 页；展开完整内容；双击定位到 PDF 原文`}
                             type="button"
                           >
-                            <span className="pdf-annotation-kind">{annotation.text}</span>
-                            <span className="pdf-annotation-excerpt">{annotation.excerpt}</span>
-                            {activeAnnotationId !== annotation.id && (annotation.quickAsk?.question || annotation.note) ?
+                            <span
+                              aria-label={annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)}
+                              className="pdf-annotation-kind"
+                              role="img"
+                            >{getAnnotationIcon(annotation)}</span>
+                            <span className="pdf-annotation-excerpt">{getAnnotationSummaryText(annotation)}</span>
+                            {annotation.kind !== "text" && annotation.kind !== "ink" && activeAnnotationId !== annotation.id && (annotation.quickAsk?.question || annotation.note) ?
                               <span className="pdf-annotation-summary-note"> · {annotation.quickAsk?.question ?? annotation.note}</span> : null}
                           </button>
                           {activeAnnotationId === annotation.id && annotation.kind !== "text" && annotation.note && (
@@ -3329,8 +3400,8 @@ export function PdfReader({
                             </div>
                           ) : null}
                           {activeAnnotationId === annotation.id && !annotation.quickAsk ? <>
-                          {annotation.kind === "text" ? (
-                            <small role="note">文本框保存在当前本地 PDF 批注中</small>
+                          {annotation.kind === "text" || annotation.kind === "ink" ? (
+                            <small role="note">内容保存在当前论文的本地批注中</small>
                           ) : (
                             <>
                               <label className="pdf-annotation-public-toggle">
@@ -3347,7 +3418,7 @@ export function PdfReader({
                               </small>
                             </>
                           )}
-                          {annotation.kind !== "text" && onShareAnnotationToOrganization ? (
+                          {annotation.kind !== "text" && annotation.kind !== "ink" && onShareAnnotationToOrganization ? (
                             <Button
                               appearance="subtle"
                               aria-label={`共享批注到组织：${annotation.excerpt}`}
@@ -3492,6 +3563,7 @@ export function PdfReader({
               }}
               onToggleMarginComments={() => setMarginCommentsVisible((current) => !current)}
               onToggleTextBoxTool={() => {
+                setInkMode(null);
                 setTextBoxToolActive((current) => !current);
                 setActiveTextAnnotationId(null);
                 setSelection(null);
@@ -3514,10 +3586,25 @@ export function PdfReader({
               searchOpen={searchOpen}
               searchQuery={searchQuery}
               searchResultCount={searchMatches.length}
+              inkActive={inkMode !== null}
+              onToggleInk={() => {
+                setInkMode((current) => current ? null : "draw"); setTextBoxToolActive(false);
+                setSelection(null); setSelectionPreview(null); setActiveTextAnnotationId(null);
+              }}
               textBoxToolActive={textBoxToolActive}
               wholeWords={searchWholeWords}
               zoom={zoom}
             />
+            {inkMode ? <div className="pdf-ink-tools" role="toolbar" aria-label="手绘工具">
+              <Button size="small" appearance={inkMode === "draw" ? "primary" : "subtle"} icon={<DrawShapeRegular />} aria-label="画笔" title="画笔" onClick={() => setInkMode("draw")}>画笔</Button>
+              <Button size="small" appearance={inkMode === "erase" ? "primary" : "subtle"} icon={<EraserRegular />} aria-label="橡皮擦" title="点击删除一条笔迹" onClick={() => setInkMode("erase")}>橡皮擦</Button>
+              <label>颜色 <input type="color" aria-label="笔迹颜色" value={inkColor} onChange={(event) => setInkColor(event.target.value)} /></label>
+              <label>粗细 <input type="range" aria-label="画笔粗细" min={.1} max={1.2} step={.1} value={inkWidth} onChange={(event) => setInkWidth(Number(event.target.value))} /></label>
+              <Button size="small" appearance="subtle" icon={<ArrowUndoRegular />} aria-label="撤销本页最后笔迹" title="撤销本页最后笔迹"
+                disabled={!annotations.some((annotation) => annotation.kind === "ink" && annotation.page === focusedPage)}
+                onClick={() => { const last = annotations.filter((annotation) => annotation.kind === "ink" && annotation.page === focusedPage).at(-1); if (last) void deleteAnnotation(last); }} />
+              <Button size="small" appearance="subtle" onClick={() => setInkMode(null)}>完成手绘</Button>
+            </div> : null}
             {targetEvidence?.paperId === activePaper?.id ? (
               <div aria-live="polite" className="pdf-evidence-status" role="status">
                 {status}
@@ -3554,6 +3641,7 @@ export function PdfReader({
                 {pageNumbers.map((pageNumber) => (
                   <PdfPageView
                     activeSearchMatch={activeSearchMatch}
+                    inkMode={inkMode} inkColor={inkColor} inkWidth={inkWidth} onInkCreate={createInkAnnotation}
                     activeTextAnnotationId={activeTextAnnotationId}
                     activePaper={activePaper}
                     annotations={annotations}
@@ -3561,7 +3649,7 @@ export function PdfReader({
                     key={pageNumber}
                     layoutVisible={visiblePageNumbers.has(pageNumber)}
                     marginCommentConnectorsVisible={marginCommentConnectorsVisible}
-                    marginCommentsVisible={marginCommentsVisible}
+                    marginCommentsVisible={hasVisibleMarginComments}
                     noTextLayer={scannedPages.has(pageNumber)}
                     onEvidenceHighlightResolved={handleEvidenceHighlightResolved}
                     onAnnotationActivate={openPageAnnotationEditor}
@@ -3717,6 +3805,8 @@ export function PdfReader({
           </div>
         </section>
         {whiteboardOpen && activePaper ? (
+          <div className="pdf-whiteboard-pane">
+          <PdfPaneResizeHandle width={whiteboardWidth} onChange={setWhiteboardWidth} />
           <PdfWhiteboard
             document={whiteboardState.storageKey === whiteboardStorageKey
               ? whiteboardState.document
@@ -3726,6 +3816,7 @@ export function PdfReader({
             onClose={() => setWhiteboardOpen(false)}
             paperTitle={activePaper.title}
           />
+          </div>
         ) : null}
       </div>
     </section>

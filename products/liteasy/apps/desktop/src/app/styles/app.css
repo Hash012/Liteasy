@@ -64,7 +64,7 @@ body {
   display: grid;
   grid-template-rows: 1fr;
   height: 100vh;
-  padding: 8px;
+  padding: 2px;
   overflow: hidden;
 }
 
@@ -179,13 +179,13 @@ body {
   grid-template-columns:
     64px
     var(--left-pane-size, minmax(220px, 24fr))
-    var(--left-pane-utility-size, 18px)
+    var(--left-pane-utility-size, 4px)
     minmax(420px, 52fr)
-    var(--right-pane-utility-size, 18px)
+    var(--right-pane-utility-size, 4px)
     var(--right-pane-size, minmax(220px, 24fr));
   grid-template-rows:
     var(--top-pane-size, minmax(0, 68fr))
-    var(--bottom-pane-utility-size, 12px)
+    var(--bottom-pane-utility-size, 4px)
     var(--bottom-pane-size, minmax(180px, 32fr));
   gap: 0;
   min-height: 0;
@@ -3416,11 +3416,11 @@ body {
 }
 
 .pdf-workspace.whiteboard-open {
-  grid-template-columns: var(--pdf-sidebar-width, 180px) minmax(0, 1fr) clamp(340px, 36vw, 520px);
+  grid-template-columns: var(--pdf-sidebar-width, 180px) minmax(0, 1fr) min(var(--pdf-whiteboard-width, 360px), 55%);
 }
 
 .pdf-workspace.sidebar-collapsed.whiteboard-open {
-  grid-template-columns: 44px minmax(0, 1fr) clamp(340px, 36vw, 520px);
+  grid-template-columns: 44px minmax(0, 1fr) min(var(--pdf-whiteboard-width, 360px), 55%);
 }
 
 .pdf-left-sidebar {
@@ -3568,7 +3568,7 @@ body {
   min-height: 0;
   height: auto;
   overflow: auto;
-  padding: 18px clamp(14px, 3vw, 34px);
+  padding: 2px;
   background:
     linear-gradient(135deg, rgba(27, 102, 179, 0.05), transparent 42%),
     var(--pdf-reading-background, #e8eef5);
@@ -3595,8 +3595,8 @@ body {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  min-height: 40px;
-  padding: 5px 10px;
+  min-height: 34px;
+  padding: 3px 4px;
 }
 
 .pdf-reader-toolbar-group {
@@ -3678,6 +3678,9 @@ body {
  * and lives behind the one button at the end rather than as four lines of standing text.
  */
 .pdf-parser-status {
+  flex: 0 1 160px;
+  min-width: 0;
+  white-space: nowrap;
   display: flex;
   gap: 10px;
   max-width: min(420px, 36vw);
@@ -4255,7 +4258,7 @@ body {
 .pdf-page-list {
   display: grid;
   justify-items: center;
-  gap: 18px;
+  gap: 6px;
   width: 100%;
   margin: 0 auto;
 }
@@ -4290,8 +4293,8 @@ body {
 }
 
 .pdf-page-row.has-margin-comments {
-  grid-template-columns: max-content clamp(168px, 18vw, 220px);
-  gap: 14px;
+  grid-template-columns: max-content 220px;
+  gap: 8px;
 }
 
 .pdf-page-list.with-margin-comments {
@@ -4639,7 +4642,7 @@ body {
 }
 
 .pdf-annotation-summary {
-  display: grid;
+  display: block;
   width: 100%;
   gap: 6px;
   border: 0;
@@ -4652,9 +4655,15 @@ body {
 }
 
 .pdf-annotation-kind {
-  color: #875a28;
-  font-size: 12px;
-  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  vertical-align: -3px;
+  color: var(--ink-2);
+  font-size: 16px;
 }
 
 .pdf-empty-note {
@@ -4671,7 +4680,7 @@ body {
 }
 
 .pdf-annotation-item.expanded .pdf-annotation-excerpt {
-  display: block;
+  display: inline;
   overflow: visible;
   -webkit-line-clamp: unset;
 }
@@ -5050,7 +5059,7 @@ button.pdf-overlay-mark:focus-visible {
 
 .pdf-margin-comment-rail {
   position: relative;
-  width: clamp(168px, 18vw, 220px);
+  width: 220px;
   min-width: 0;
   overflow: visible;
 }
@@ -6788,3 +6797,39 @@ button.pdf-overlay-mark:focus-visible {
 .pdf-annotation-item:not(.expanded) .pdf-annotation-kind { margin-right: 6px; }
 .pdf-annotation-item:not(.expanded) .pdf-annotation-excerpt { display: inline; }
 .pdf-annotation-summary-note { color: var(--ink-2); }
+
+/* Keep document chrome outside the paper’s usable area. */
+.pane.center .pane-body.reader-content-grid { padding: 0; gap: 4px; }
+.pane.center .pane-body.reader-content-grid.artifacts-detached { gap: 0; }
+.pane-resizer { position: relative; width: 4px; border-radius: 0; }
+.pane-resizer::after { content: ""; position: absolute; inset: 0 -2px; }
+.pane-resizer.vertical { height: 4px; }
+.pdf-page-shell { border-radius: 4px; box-shadow: 0 1px 3px rgba(24,34,47,.12); }
+
+.pdf-whiteboard-pane { position: relative; display: grid; min-width: 0; min-height: 0; }
+.pdf-whiteboard-resizer { position: absolute; z-index: 30; left: -3px; top: 0; bottom: 0; width: 6px; cursor: col-resize; touch-action: none; }
+.pdf-whiteboard-resizer:hover, .pdf-whiteboard-resizer:focus-visible { background: var(--accent-1); }
+
+.pdf-markdown-text-box { min-width: 0; min-height: 0; overflow: visible; transition: border-color 100ms ease; font-size: var(--pdf-text-size, 12px); }
+.pdf-markdown-text-box.is-editing { z-index: 24; }
+.pdf-markdown-text-box-surface { min-height: 0; height: 100%; overflow: auto; padding: .5em .6em; }
+.pdf-markdown-text-box textarea { min-height: 0; padding: .5em .6em; font-size: var(--pdf-text-size, 12px); }
+.pdf-markdown-text-box .pdf-annotation-markdown { font-size: inherit; line-height: 1.55; }
+.pdf-markdown-text-box img { display: block; max-width: 100%; height: auto; }
+.pdf-text-box-measure { position: absolute; visibility: hidden; pointer-events: none; width: max-content; padding: .5em .6em; top: 0; left: 0; }
+.pdf-markdown-text-box-actions { bottom: calc(100% + 3px); top: auto; width: max-content; opacity: 1; border: 1px solid var(--line-1); box-shadow: 0 2px 5px #0002; }
+.pdf-text-box-error { position: absolute; top: 100%; left: 0; min-width: 200px; padding: 4px; background: white; color: #a4262c; }
+
+.pdf-ink-layer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; pointer-events: none; z-index: 10; }
+.pdf-ink-layer.is-drawing { pointer-events: auto; cursor: crosshair; touch-action: none; z-index: 30; }
+.pdf-ink-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 2px 4px; border-bottom: 1px solid var(--line-1); background: white; }
+.pdf-ink-tools label { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; }
+.pdf-ink-tools input[type=color] { width: 28px; height: 24px; padding: 0; }
+.pdf-ink-tools input[type=range] { width: 68px; }
+
+.pdf-text-box-source-measure {
+  font-family: "Cascadia Code", Consolas, monospace;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

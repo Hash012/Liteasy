@@ -1,8 +1,10 @@
 import type { PaperIdentity } from "../paper-identity/paperIdentity";
+import { isPdfInkStroke, type PdfInkStroke } from "./pdfInk";
+import { isPdfTextBoxImages, type PdfTextBoxImages } from "./pdfTextBoxImages";
 import { resolveLocalAccountKey } from "../library/localAccountKey";
 import type { ForumAnnotationPublicationOperation } from "../forum/forum.types";
 
-export type PdfAnnotationKind = "highlight" | "underline" | "note" | "text";
+export type PdfAnnotationKind = "highlight" | "underline" | "note" | "text" | "ink";
 export type PdfHighlightColor = "yellow" | "red" | "blue" | "green" | "pink";
 export type PdfAnnotationVisibility = "private" | "pending_public";
 export type PdfAnnotationSyncState =
@@ -42,6 +44,8 @@ type PdfAnnotationBase = {
   id: string;
   kind: PdfAnnotationKind;
   note?: string;
+  images?: PdfTextBoxImages;
+  ink?: PdfInkStroke;
   quickAsk?: { question: string; answer: string; pageText: string; abstractText: string };
   normalizedStart?: number;
   opacity?: number;
@@ -89,7 +93,7 @@ export type PdfAnnotationRestartRecovery = PdfAnnotationPrivateState & {
 
 type PdfAnnotationEdit = Partial<Pick<
   PdfAnnotation,
-  "color" | "excerpt" | "kind" | "normalizedStart" | "note" | "opacity" | "page" | "publication" | "rects" | "text"
+  "color" | "excerpt" | "kind" | "normalizedStart" | "note" | "images" | "opacity" | "page" | "publication" | "rects" | "text"
 >> & { updatedAt: string };
 
 type PdfAnnotationPublicationReceipt = {
@@ -104,7 +108,7 @@ type PdfAnnotationPublicationReceipt = {
 
 const storagePrefix = "liteasy.pdf-annotations/v1";
 const autoPublicStoragePrefix = "liteasy.pdf-annotations-auto-public/v1";
-const annotationKinds = new Set<PdfAnnotationKind>(["highlight", "underline", "note", "text"]);
+const annotationKinds = new Set<PdfAnnotationKind>(["highlight", "underline", "note", "text", "ink"]);
 const highlightColors = new Set<PdfHighlightColor>(["yellow", "red", "blue", "green", "pink"]);
 
 function canUseTauriArtifactStore() {
@@ -230,6 +234,8 @@ function hasAnnotationFields(value: unknown) {
       typeof candidate.quickAsk.pageText === "string" && typeof candidate.quickAsk.abstractText === "string")) &&
     (candidate.normalizedStart === undefined ||
       (isFiniteNumber(candidate.normalizedStart) && candidate.normalizedStart >= 0)) &&
+    (candidate.kind !== "ink" || isPdfInkStroke(candidate.ink)) &&
+    (candidate.images === undefined || isPdfTextBoxImages(candidate.images)) &&
     (candidate.opacity === undefined ||
       (isFiniteNumber(candidate.opacity) && candidate.opacity >= 0 && candidate.opacity <= 1)) &&
     (candidate.color === undefined || highlightColors.has(candidate.color as PdfHighlightColor)) &&
@@ -273,6 +279,8 @@ function isLegacyAnnotation(value: unknown): value is Omit<
     (candidate.quickAsk === undefined || (candidate.quickAsk !== null &&
       typeof candidate.quickAsk.question === "string" && typeof candidate.quickAsk.answer === "string" &&
       typeof candidate.quickAsk.pageText === "string" && typeof candidate.quickAsk.abstractText === "string")) &&
+    (candidate.kind !== "ink" || isPdfInkStroke(candidate.ink)) &&
+    (candidate.images === undefined || isPdfTextBoxImages(candidate.images)) &&
     (candidate.opacity === undefined ||
       (isFiniteNumber(candidate.opacity) && candidate.opacity >= 0 && candidate.opacity <= 1)) &&
     (candidate.color === undefined || highlightColors.has(candidate.color as PdfHighlightColor));

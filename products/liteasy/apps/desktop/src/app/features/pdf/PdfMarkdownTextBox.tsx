@@ -8,7 +8,8 @@ import {
 import {
   DeleteRegular,
   DragRegular,
-  EditRegular,
+  ImageAddRegular,
+  CheckmarkRegular,
   TransparencySquareRegular
 } from "@fluentui/react-icons";
 import {
@@ -18,6 +19,7 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent
 } from "react";
+import { readPdfTextBoxImage, type PdfTextBoxImages } from "./pdfTextBoxImages";
 import type { PdfAnnotationRect, PdfAnnotationV2 } from "./pdfAnnotationStorage";
 import { PdfAnnotationMarkdown } from "./PdfAnnotationMarkdown";
 
@@ -25,7 +27,7 @@ type PdfMarkdownTextBoxProps = {
   active: boolean;
   annotation: PdfAnnotationV2;
   onActivate: (annotationId: string) => void;
-  onCommit: (annotationId: string, markdown: string, rect: PdfAnnotationRect) => void;
+  onCommit: (annotationId: string, markdown: string, rect: PdfAnnotationRect, images?: PdfTextBoxImages) => void;
   onDelete: (annotation: PdfAnnotationV2) => void;
   onMove: (annotationId: string, rect: PdfAnnotationRect) => void;
   onOpacityChange: (annotationId: string, opacity: number) => void;
@@ -80,7 +82,45 @@ export function PdfMarkdownTextBox({
   const [draggedRect, setDraggedRect] = useState<PdfAnnotationRect | null>(null);
   const [dragging, setDragging] = useState(false);
   const dragCleanupRef = useRef<(() => void) | null>(null);
-  const boxRect = resizePdfTextBoxRect(draggedRect ?? rect, draft);
+  const rootRef = useRef<HTMLElement | null>(null);
+  const measureRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [images, setImages] = useState<PdfTextBoxImages>(annotation.images ?? {});
+  const [imageError, setImageError] = useState("");
+  const [imagePending, setImagePending] = useState(false);
+  const [surface, setSurface] = useState({ width: 760, height: 980 });
+  const [measured, setMeasured] = useState<{ width: number; height: number } | null>(null);
+  const fallback = resizePdfTextBoxRect(draggedRect ?? rect, draft);
+  const size = measured ?? { width: fallback.width, height: fallback.height };
+  const position = draggedRect ?? rect;
+  const boxRect = { ...size, left: clamp(position.left, 0, 100 - size.width), top: clamp(position.top, 0, 100 - size.height) };
+  useEffect(() => {
+    const page = rootRef.current?.closest(".pdf-page-shell")?.querySelector(".pdf-text-layer");
+    if (!page) return;
+    const update = () => {
+      const bounds = page.getBoundingClientRect();
+      if (bounds.width && bounds.height) setSurface({ width: bounds.width, height: bounds.height });
+    };
+    update();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(update); observer.observe(page);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    const element = measureRef.current;
+    if (!element) return;
+    const update = () => {
+      const bounds = element.getBoundingClientRect();
+      if (!bounds.width || !bounds.height) return;
+      const next = { width: Math.min(98, (bounds.width + 2) / surface.width * 100), height: Math.min(98, (bounds.height + 2) / surface.height * 100) };
+      setMeasured((previous) => previous && Math.abs(previous.width - next.width) < .01 && Math.abs(previous.height - next.height) < .01 ? previous : next);
+    };
+    update();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(update); observer.observe(element);
+    return () => observer.disconnect();
+  }, [active, draft, images, surface]);
   const opacity = annotation.opacity ?? 0.96;
   const boxRectRef = useRef(boxRect);
   boxRectRef.current = boxRect;
@@ -88,14 +128,44 @@ export function PdfMarkdownTextBox({
   useEffect(() => {
     if (!active) {
       setDraft(annotation.note ?? "");
+      setImages(annotation.images ?? {});
       setDraggedRect(null);
     }
-  }, [active, annotation.note, rect.left, rect.top]);
+  }, [active, annotation.note, annotation.images, rect.left, rect.top]);
 
   useEffect(() => () => dragCleanupRef.current?.(), []);
 
   function finishEditing() {
-    onCommit(annotation.id, draft, boxRectRef.current);
+    if (!imagePending) {
+      const retained = Object.fromEntries(Object.entries(images).filter(([id]) => draft.includes(`attachment:${id}`)));
+      onCommit(annotation.id, draft, boxRectRef.current, Object.keys(retained).length ? retained : undefined);
+    }
+  }
+
+  useEffect(() => {
+    if (!active) return;
+    const dismiss = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && !rootRef.current?.contains(target) &&
+        !(target instanceof Element && target.closest(".pdf-markdown-text-box-opacity-popover"))) finishEditing();
+    };
+    document.addEventListener("pointerdown", dismiss, true);
+    return () => document.removeEventListener("pointerdown", dismiss, true);
+  }, [active, draft, images, imagePending]);
+
+  async function insertImage(file: File) {
+    setImagePending(true); setImageError("");
+    try {
+      const data = await readPdfTextBoxImage(file);
+      if (Object.values(images).reduce((sum, value) => sum + value.length, 0) + data.length > 4_000_000 || Object.keys(images).length >= 16) {
+        throw new Error("此文本框中的图片总量已达上限，请先移除部分图片。");
+      }
+      const id = crypto.randomUUID();
+      const position = inputRef.current?.selectionStart ?? draft.length;
+      setImages((current) => ({ ...current, [id]: data }));
+      setDraft((current) => `${current.slice(0, position)}\n![图片](attachment:${id})\n${current.slice(position)}`);
+    } catch (error) { setImageError(error instanceof Error ? error.message : "图片读取失败"); }
+    finally { setImagePending(false); inputRef.current?.focus(); }
   }
 
   function startDragging(event: ReactPointerEvent<HTMLButtonElement>) {
@@ -148,27 +218,41 @@ export function PdfMarkdownTextBox({
 
   return (
     <section
+      ref={rootRef}
+      onBlur={(event) => {
+        if (event.relatedTarget instanceof Node && !event.currentTarget.contains(event.relatedTarget) && !(event.relatedTarget instanceof Element && event.relatedTarget.closest(".pdf-markdown-text-box-opacity-popover"))) finishEditing();
+      }}
       aria-label={`Markdown 文本框：第 ${annotation.page} 页`}
       className={`pdf-markdown-text-box ${active ? "is-editing" : ""} ${dragging ? "is-dragging" : ""} ${opacity === 0 ? "is-transparent" : ""}`}
       onPointerDown={(event) => event.stopPropagation()}
       style={{
         "--pdf-text-box-opacity": opacity,
+        "--pdf-text-size": `${12 * surface.width / 760}px`,
         height: `${boxRect.height}%`,
         left: `${boxRect.left}%`,
         top: `${boxRect.top}%`,
         width: `${boxRect.width}%`
       } as CSSProperties}
     >
+      <div aria-hidden="true" className="pdf-text-box-measure" ref={measureRef} style={{ maxWidth: surface.width * .52, minWidth: surface.width * .03 }}>
+        {active ? (
+          <div className="pdf-text-box-source-measure">{`${draft || "输入文字"}\u200b`}</div>
+        ) : <PdfAnnotationMarkdown emptyLabel="输入文字" value={draft} images={images} />}
+      </div>
       {active ? (
         <textarea
+          ref={inputRef}
           aria-label={`编辑第 ${annotation.page} 页 Markdown 文本框`}
           autoFocus
           maxLength={10_000}
-          onBlur={finishEditing}
           onChange={(event) => setDraft(event.currentTarget.value)}
+          onPaste={(event) => {
+            const file = Array.from(event.clipboardData.files).find((item) => item.type.startsWith("image/"));
+            if (file) { event.preventDefault(); void insertImage(file); }
+          }}
           onKeyDown={(event) => {
             if (event.key === "Escape" || (event.key === "Enter" && (event.ctrlKey || event.metaKey))) {
-              event.currentTarget.blur();
+              finishEditing();
               event.preventDefault();
             }
           }}
@@ -185,10 +269,16 @@ export function PdfMarkdownTextBox({
           }}
           title="点击直接编辑 Markdown"
         >
-          <PdfAnnotationMarkdown emptyLabel="点击输入 Markdown" value={annotation.note ?? ""} />
+          <PdfAnnotationMarkdown emptyLabel="点击输入 Markdown" value={annotation.note ?? ""} images={annotation.images} />
         </div>
       )}
-      <div className="pdf-markdown-text-box-actions">
+      {active ? <div className="pdf-markdown-text-box-actions" role="toolbar" aria-label="文本框操作"
+        style={{ ...(boxRect.top < 6 ? { top: "100%", bottom: "auto" } : {}), ...(boxRect.left > 70 ? { right: 0, left: "auto" } : { left: 0, right: "auto" }) }}
+        onPointerDown={(event) => { if (event.target instanceof Element && event.target.closest("button")) event.preventDefault(); }}>
+        <input ref={fileRef} type="file" aria-label="文本框图片文件" hidden accept="image/png,image/jpeg,image/gif,image/webp"
+          onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void insertImage(file); }} />
+        <Button aria-label="保存 Markdown 文本框" title="保存并收起工具" icon={<CheckmarkRegular />} appearance="subtle" size="small" disabled={imagePending} onClick={finishEditing} />
+        <Button aria-label="在文本框中插入图片" title="插入图片（也可粘贴）" icon={<ImageAddRegular />} appearance="subtle" size="small" disabled={imagePending} onClick={() => fileRef.current?.click()} />
         <Button
           aria-label="拖动 Markdown 文本框"
           appearance="subtle"
@@ -222,16 +312,6 @@ export function PdfMarkdownTextBox({
             </label>
           </PopoverSurface>
         </Popover>
-        {!active ? (
-          <Button
-            aria-label="编辑 Markdown 文本框"
-            appearance="subtle"
-            icon={<EditRegular />}
-            onClick={() => onActivate(annotation.id)}
-            size="small"
-            title="编辑 Markdown 文本框"
-          />
-        ) : null}
         <Button
           aria-label="删除 Markdown 文本框"
           appearance="subtle"
@@ -240,7 +320,8 @@ export function PdfMarkdownTextBox({
           size="small"
           title="删除 Markdown 文本框"
         />
-      </div>
+      </div> : null}
+      {active && imageError ? <div className="pdf-text-box-error" role="alert">{imageError}</div> : null}
     </section>
   );
 }
