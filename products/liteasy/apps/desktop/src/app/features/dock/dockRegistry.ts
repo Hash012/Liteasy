@@ -43,6 +43,12 @@ export const dockItemRegistry: Record<DockItemId, DockItemDescriptor> = {
     preferredRegion: "right",
     title: "Liteasy Chat"
   },
+  help: {
+    allowedRegions: ["main", "left", "right", "bottom"],
+    id: "help",
+    preferredRegion: "main",
+    title: "帮助"
+  },
   artifacts: {
     allowedRegions: ["main", "bottom"],
     id: "artifacts",

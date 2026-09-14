@@ -1,11 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
-  "description": "Allow the main window to receive host events without granting frontend event emission.",
+  "description": "Allow the main window to receive host events, read deep links and adjust its display zoom without granting frontend event emission.",
   "identifier": "main-event-listener",
   "permissions": [
     "core:event:allow-listen",
     "core:event:allow-unlisten",
-    "deep-link:allow-get-current"
+    "deep-link:allow-get-current",
+    "core:webview:allow-set-webview-zoom"
   ],
   "windows": [
     "main"

@@ -1,0 +1,121 @@
+.pdf-sidebar-annotations .pdf-annotation-item {
+  border-radius: 4px;
+  padding: 5px 6px;
+  line-height: 1.4;
+}
+.pdf-annotation-item .pdf-annotation-summary {
+  --pdf-annotation-icon-size: calc(16px * var(--app-font-ratio, 1));
+  display: grid;
+  grid-template-columns: var(--pdf-annotation-icon-size) minmax(0, 1fr) auto var(--pdf-annotation-icon-size);
+  align-items: start;
+  gap: 5px;
+  min-height: 20px;
+}
+.pdf-annotation-summary .pdf-annotation-kind {
+  margin: 1px 0 0;
+  font-size: var(--pdf-annotation-icon-size);
+  width: var(--pdf-annotation-icon-size);
+  height: var(--pdf-annotation-icon-size);
+}
+.pdf-annotation-summary-content {
+  min-width: 0;
+}
+.pdf-annotation-summary .pdf-annotation-summary-note {
+  display: flex;
+  gap: 3px;
+  margin-top: 2px;
+  color: var(--colorNeutralForeground3);
+  font-size: calc(11px * var(--app-font-ratio, 1));
+}
+.pdf-annotation-summary-note > svg {
+  flex: 0 0 calc(12px * var(--app-font-ratio, 1));
+  margin-top: 2px;
+}
+.pdf-annotation-summary-note > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pdf-annotation-summary .pdf-annotation-excerpt {
+  display: -webkit-box;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 2;
+  line-height: 1.45;
+  font-size: calc(12px * var(--app-font-ratio, 1));
+}
+.pdf-annotation-item.expanded .pdf-annotation-excerpt {
+  display: block;
+}
+.pdf-annotation-page {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  color: var(--colorNeutralForeground3);
+  font-size: calc(10px * var(--app-font-ratio, 1));
+  white-space: nowrap;
+  line-height: calc(18px * var(--app-font-ratio, 1));
+}
+.pdf-annotation-page svg {
+  width: calc(12px * var(--app-font-ratio, 1));
+  height: calc(12px * var(--app-font-ratio, 1));
+}
+.pdf-annotation-status-icon {
+  color: var(--colorNeutralForeground3);
+  display: inline-flex;
+  font-size: calc(15px * var(--app-font-ratio, 1));
+  height: calc(18px * var(--app-font-ratio, 1));
+  align-items: center;
+}
+.pdf-annotation-status-icon.is-failed {
+  color: var(--colorPaletteRedForeground1);
+}
+.pdf-annotation-status-icon.is-pending {
+  color: var(--colorBrandForeground1);
+}
+.pdf-annotation-accessible-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.pdf-annotation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  border-top: 1px solid var(--colorNeutralStroke2);
+  padding-top: 4px;
+  margin-top: 5px;
+}
+.pdf-annotation-actions > .fui-Button {
+  min-width: 24px;
+}
+.pdf-annotation-actions .fui-Checkbox {
+  margin: 0;
+}
+.pdf-annotation-actions .fui-Checkbox__input {
+  margin: 0;
+}
+.pdf-annotation-actions .fui-Checkbox__indicator {
+  margin: 4px;
+}
+.pdf-annotation-actions .fui-Checkbox__label {
+  padding: 4px 4px 4px 0;
+  display: inline-flex;
+}
+.pdf-annotation-item .annotation-divider {
+  display: none;
+}
+.pdf-annotation-item .pdf-annotation-editor,
+.pdf-annotation-item .pdf-annotation-note-editor,
+.pdf-annotation-item .fui-Textarea {
+  min-width: 0;
+  max-width: 100%;
+}
+.pdf-annotation-item .fui-Textarea textarea {
+  min-width: 0;
+  width: 100%;
+}

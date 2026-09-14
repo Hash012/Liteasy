@@ -5,8 +5,162 @@ import { beforeEach, expect, test, vi } from "vitest";
 import { useObjectWorkbenchController } from "../app/controllers/useObjectWorkbenchController";
 import { createAgentApplicationService } from "../app/controllers/agent/agentApplicationService";
 import { createSettingsStore } from "../app/features/settings/settings.store";
+import { resolvePaperIdentity } from "../app/features/paper-identity/paperIdentity";
+import type { PdfAnnotationV2 } from "../app/features/pdf/pdfAnnotationStorage";
 
 beforeEach(() => vi.stubGlobal("crypto", webcrypto));
+
+test("saved annotation capture preserves notes, source quote, attachment and identity", async () => {
+  const paper = {
+    id: "annotated-paper",
+    title: "Annotated paper",
+    contentHash: "pdf-hash",
+  };
+  const { result, unmount } = renderHook(() =>
+    useObjectWorkbenchController({
+      scopeId: "annotation-controller-test",
+      getApi: () => {
+        throw new Error("No model call expected");
+      },
+      getPapers: () => [paper],
+      getSettings: () => createSettingsStore().getState(),
+      openEvidence: vi.fn(),
+    }),
+  );
+  const annotation: PdfAnnotationV2 = {
+    id: "saved-annotation",
+    kind: "highlight",
+    page: 2,
+    paperIdentity: resolvePaperIdentity(paper),
+    excerpt: "原始引文",
+    text: "原始引文",
+    note: "我的批注\n\n![图](attachment:figure)\n\n![重复图片](attachment:duplicate)",
+    images: {
+      figure:
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6wSAAAAAASUVORK5CYII=",
+      duplicate:
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6wSAAAAAASUVORK5CYII=",
+    },
+    rects: [{ left: 5, top: 10, width: 30, height: 4 }],
+    revision: 1,
+    createdAt: "2026-09-13T00:00:00Z",
+    updatedAt: "2026-09-13T00:00:00Z",
+    publication: { desiredVisibility: "private", state: "not_published" },
+  };
+  let first: Awaited<
+    ReturnType<NonNullable<typeof result.current.port.captureAnnotation>>
+  >;
+  await act(async () => {
+    first = await result.current.port.captureAnnotation!(
+      { paper, annotation },
+      "board",
+    );
+  });
+  const captured = await result.current.repository.get(first![0]);
+  expect(captured.kind).toBe("content.fragment");
+  if (captured.kind !== "content.fragment")
+    throw new Error("Expected fragment");
+  expect(captured.content.payload.text).toContain("我的批注");
+  expect(captured.content.payload.anchors[0]).toMatchObject({
+    page: 2,
+    quote: { exact: "原始引文" },
+    documentHash: "pdf-hash",
+  });
+  expect(captured.assets).toHaveLength(1);
+  expect(
+    await result.current.repository.readAsset(captured.assets[0].assetId),
+  ).toBeTruthy();
+  const copy = await result.current.repository.copy(first![0]);
+  expect(copy.assets).toEqual(captured.assets);
+  await act(async () => {
+    const repeated = await result.current.port.captureAnnotation!(
+      { paper, annotation },
+      "board",
+    );
+    expect(repeated).toEqual(first);
+  });
+  expect(result.current.placements).toHaveLength(2);
+  await act(async () => {
+    await result.current.port.captureAnnotation!(
+      {
+        paper,
+        annotation: { ...annotation, note: "修订后的批注", revision: 2 },
+      },
+      "board",
+    );
+  });
+  expect(
+    result.current.objects.filter(
+      (object) => object.kind === "content.fragment",
+    ),
+  ).toHaveLength(1);
+  expect(
+    await result.current.repository.history(captured.objectId),
+  ).toHaveLength(2);
+  let pendingCapture: Promise<unknown>;
+  act(() => {
+    pendingCapture = result.current.port.captureAnnotation!(
+      {
+        paper,
+        annotation: {
+          ...annotation,
+          id: "text-box",
+          kind: "text",
+          excerpt: "",
+          text: "",
+          note: "区域文本笔记",
+          images: {},
+        },
+      },
+      "board",
+    );
+    result.current.port.close!();
+  });
+  await act(async () => {
+    await pendingCapture;
+  });
+  expect(result.current.visible).toBe(false);
+  expect(result.current.placements).toHaveLength(4);
+  const textBox = result.current.objects.find(
+    (object) =>
+      object.kind === "content.fragment" &&
+      object.content.payload.text === "区域文本笔记",
+  );
+  expect(
+    textBox?.kind === "content.fragment" && textBox.content.payload.anchors[0],
+  ).toMatchObject({
+    type: "pdf",
+    quote: { exact: "" },
+    rects: [{ x: 0.05, y: 0.1, width: 0.3, height: 0.04 }],
+  });
+  unmount();
+});
+
+test("closing the board cancels a pending reveal from a drag gesture", async () => {
+  vi.useFakeTimers();
+  const { result, unmount } = renderHook(() =>
+    useObjectWorkbenchController({
+      scopeId: "close-drag-test",
+      getApi: () => {
+        throw new Error("No model call expected");
+      },
+      getPapers: () => [],
+      getSettings: () => createSettingsStore().getState(),
+      openEvidence: vi.fn(),
+    }),
+  );
+  act(() => {
+    result.current.port.dragMessage(
+      { messageId: "message", text: "正文", excerpt: "正文", partial: false },
+      { setData: vi.fn() } as unknown as DataTransfer,
+    );
+    result.current.port.close!();
+    vi.advanceTimersByTime(100);
+  });
+  expect(result.current.visible).toBe(false);
+  unmount();
+  vi.useRealTimers();
+});
 test("tray selections remain temporary until submit, then produce a saved artifact with frozen sources", async () => {
   let current: ReturnType<typeof useObjectWorkbenchController>;
   const scopeId = crypto.randomUUID();

@@ -23,7 +23,7 @@
 }
 
 .library-category-filter select {
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
 }
 
 .library-button {
@@ -32,7 +32,7 @@
   background: linear-gradient(180deg, #ffffff 0%, #dcebf8 100%);
   color: #35536f;
   padding: 10px 14px;
-  font-size: 14px;
+  font-size: calc(14px * var(--app-font-ratio, 1));
   font-weight: 700;
   cursor: pointer;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
@@ -130,12 +130,12 @@
 
 .library-section-disclosure {
   color: #71869a;
-  font-size: 14px;
+  font-size: calc(14px * var(--app-font-ratio, 1));
 }
 
 .library-section-icon {
   color: #3978ac;
-  font-size: 16px;
+  font-size: calc(16px * var(--app-font-ratio, 1));
 }
 
 .library-section-title {
@@ -143,7 +143,7 @@
   min-width: 0;
   overflow: hidden;
   color: #3e5870;
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -152,7 +152,7 @@
 .library-section-count {
   flex: 0 0 auto;
   color: #7c91a3;
-  font-size: 11px;
+  font-size: calc(11px * var(--app-font-ratio, 1));
   font-weight: 700;
 }
 
@@ -175,7 +175,7 @@
   background: rgba(255, 255, 255, 0.78);
   color: #64798d;
   cursor: pointer;
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
   font-weight: 700;
   padding: 6px 10px;
 }
@@ -188,7 +188,7 @@
 .library-workspace-label {
   margin-bottom: 8px;
   color: #4f6578;
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
   letter-spacing: 0.01em;
 }
 
@@ -207,7 +207,7 @@
 .library-workspace-root {
   margin-bottom: 8px;
   color: #687d91;
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
 }
 
 .library-workspace-switcher {
@@ -227,7 +227,7 @@
   background: transparent;
   color: #667d91;
   cursor: pointer;
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
   font-weight: 800;
   line-height: 1;
   padding: 7px 10px;
@@ -246,7 +246,7 @@
 
 .library-selection-summary {
   margin-bottom: 12px;
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
   color: #6c8298;
 }
 
@@ -259,7 +259,7 @@
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.72);
   color: #5d7690;
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
   font-weight: 800;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -280,7 +280,7 @@
 }
 
 .library-file-drop-hint {
-  font-size: 11px;
+  font-size: calc(11px * var(--app-font-ratio, 1));
   color: #7b90a5;
   font-weight: 400;
   margin-top: 4px;
@@ -293,7 +293,7 @@
   gap: 8px;
   margin: -4px 0 12px;
   color: #5d7690;
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
   font-weight: 800;
 }
 
@@ -346,7 +346,7 @@
   cursor: pointer;
   display: flex;
   flex: 1 1 auto;
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
   font-weight: 800;
   gap: 6px;
   min-width: 0;
@@ -377,7 +377,7 @@
   background: transparent;
   color: #566b7f;
   cursor: pointer;
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
   font-weight: 800;
   padding: 6px 8px;
   text-align: left;
@@ -407,7 +407,7 @@
 
 .library-active-collection {
   color: #71869a;
-  font-size: 11px;
+  font-size: calc(11px * var(--app-font-ratio, 1));
   margin-bottom: 4px;
   padding: 0 2px;
 }
@@ -416,7 +416,7 @@
   border: 1px dashed #c9d7e4;
   border-radius: 8px;
   color: #6e8194;
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
   padding: 14px;
 }
 
@@ -461,7 +461,7 @@
   color: #a34f4f;
   display: inline-flex;
   flex: 0 0 16px;
-  font-size: 16px;
+  font-size: calc(16px * var(--app-font-ratio, 1));
 }
 
 .library-paper-content {
@@ -490,7 +490,7 @@
   max-width: 92px;
   overflow: hidden;
   border-radius: 999px;
-  font-size: 9px;
+  font-size: calc(9px * var(--app-font-ratio, 1));
   line-height: 1.5;
   padding: 0 5px;
   text-overflow: ellipsis;
@@ -517,7 +517,7 @@
   display: grid;
   gap: 5px;
   color: #49657d;
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
   font-weight: 700;
 }
 
@@ -559,7 +559,7 @@
   cursor: pointer;
   display: inline-flex;
   flex: 0 0 20px;
-  font-size: 13px;
+  font-size: calc(13px * var(--app-font-ratio, 1));
   justify-content: center;
   padding: 0;
 }
@@ -576,7 +576,7 @@
   cursor: pointer;
   display: flex;
   flex: 1 1 auto;
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
   font-weight: 800;
   gap: 6px;
   min-width: 0;
@@ -595,7 +595,7 @@
 .library-folder-count {
   color: #8092a3;
   flex: 0 0 auto;
-  font-size: 11px;
+  font-size: calc(11px * var(--app-font-ratio, 1));
   padding-right: 3px;
 }
 
@@ -633,7 +633,7 @@
   cursor: pointer;
   display: flex;
   flex: 1 1 auto;
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
   gap: 7px;
   min-width: 0;
   overflow: hidden;
@@ -647,7 +647,7 @@
 .library-entry-status {
   color: #708397;
   flex: 0 0 auto;
-  font-size: 10px;
+  font-size: calc(10px * var(--app-font-ratio, 1));
   white-space: nowrap;
 }
 
@@ -659,7 +659,7 @@
   color: #a34f4f;
   flex: 0 0 auto;
   display: grid;
-  font-size: 16px;
+  font-size: calc(16px * var(--app-font-ratio, 1));
   font-weight: 700;
   line-height: 1;
   margin-top: 1px;
@@ -723,12 +723,12 @@
 .library-child-meta {
   color: #8899a8;
   flex: 0 0 auto;
-  font-size: 10px;
+  font-size: calc(10px * var(--app-font-ratio, 1));
 }
 
 .library-paper-child-empty {
   color: #8a9aaa;
-  font-size: 11px;
+  font-size: calc(11px * var(--app-font-ratio, 1));
   padding: 6px;
 }
 
@@ -739,7 +739,7 @@
   border-radius: 7px;
   color: #426682;
   display: flex;
-  font-size: 11px;
+  font-size: calc(11px * var(--app-font-ratio, 1));
   gap: 6px;
   justify-content: space-between;
   line-height: 1.45;
@@ -766,7 +766,7 @@
 
 .library-resource-context-heading {
   color: #6d8193;
-  font-size: 10px;
+  font-size: calc(10px * var(--app-font-ratio, 1));
   font-weight: 800;
   max-width: 260px;
   overflow: hidden;
@@ -782,7 +782,7 @@
   color: #405a71;
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
   padding: 7px 9px;
   text-align: left;
 }
@@ -831,7 +831,7 @@
   color: #61778a;
   display: flex;
   flex-direction: column;
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
   gap: 6px;
 }
 
@@ -877,7 +877,7 @@
   min-width: 0;
   padding: 3px 7px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: calc(10px * var(--app-font-ratio, 1));
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -910,7 +910,7 @@
 
 .job-error-message {
   color: #9b4250;
-  font-size: 11px;
+  font-size: calc(11px * var(--app-font-ratio, 1));
   line-height: 1.4;
   margin-bottom: 4px;
   max-width: calc(100% - 58px);
@@ -942,7 +942,7 @@
 
 .collection-title {
   color: #496279;
-  font-size: 13px;
+  font-size: calc(13px * var(--app-font-ratio, 1));
   font-weight: 700;
   line-height: 1.4;
 }
@@ -950,19 +950,19 @@
 .collection-meta {
   margin-top: 4px;
   color: #72879a;
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
 }
 
 .collection-reason {
   margin-top: 6px;
   color: #62788d;
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
   line-height: 1.5;
 }
 
 .collection-status-message {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--app-font-ratio, 1));
   line-height: 1.5;
 }
 
@@ -980,7 +980,7 @@
 
 .library-recommendation-message {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--app-font-ratio, 1));
   line-height: 1.5;
 }
 
@@ -1019,7 +1019,7 @@
 
 .recommendation-title {
   color: #466079;
-  font-size: 13px;
+  font-size: calc(13px * var(--app-font-ratio, 1));
   font-weight: 700;
   line-height: 1.4;
 }
@@ -1031,7 +1031,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  font-size: 11px;
+  font-size: calc(11px * var(--app-font-ratio, 1));
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -1044,7 +1044,7 @@
   border: 1px solid #bfd0dd;
   border-radius: 999px;
   color: #49697f;
-  font-size: 10px;
+  font-size: calc(10px * var(--app-font-ratio, 1));
   font-weight: 700;
   line-height: 1;
   padding: 3px 6px;
@@ -1064,7 +1064,7 @@
 .recommendation-related {
   margin-top: 6px;
   color: #5f7890;
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
   line-height: 1.4;
 }
 
@@ -1074,7 +1074,7 @@
   margin-top: 8px;
   padding: 4px 8px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: calc(11px * var(--app-font-ratio, 1));
   font-weight: 700;
 }
 
@@ -1096,7 +1096,7 @@
 .recommendation-reason {
   margin-top: 6px;
   color: #61768a;
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
   line-height: 1.5;
 }
 
@@ -1114,7 +1114,7 @@
 
 .library-paper-children {
   color: var(--colorNeutralForeground2);
-  font-size: 12px;
+  font-size: calc(12px * var(--app-font-ratio, 1));
   margin-bottom: 4px;
 }
 .library-paper-children summary { cursor: pointer; padding: 3px 0; }

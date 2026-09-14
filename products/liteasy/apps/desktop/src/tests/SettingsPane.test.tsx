@@ -103,6 +103,18 @@ describe("SettingsPane", () => {
     const pane = screen.getByLabelText("左边栏设置");
     expect(within(pane).getByRole("button", { name: "收起 View 设置" })).toBeInTheDocument();
 
+    await user.click(within(pane).getByRole("combobox", { name: "显示比例" }));
+    await user.click(screen.getByRole("option", { name: "125%" }));
+    expect(onUpdateSetting).toHaveBeenLastCalledWith({
+      intent: "update_setting", target: "view.display_scale", value: "125"
+    });
+
+    await user.click(within(pane).getByRole("combobox", { name: "界面字号" }));
+    await user.click(screen.getByRole("option", { name: "舒适 · 16 px" }));
+    expect(onUpdateSetting).toHaveBeenLastCalledWith({
+      intent: "update_setting", target: "view.font_size", value: "16"
+    });
+
     await user.click(within(pane).getByText("暖黄护眼"));
     expect(onUpdateSetting).toHaveBeenLastCalledWith({
       intent: "update_setting",

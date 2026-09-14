@@ -3,9 +3,13 @@ import type { ObjectRepository } from "../objects/objectRepository";
 export function ObjectAssetImage({
   repository,
   assetId,
+  maxHeight = 240,
+  alt = "保存的图片",
 }: {
   repository: ObjectRepository;
   assetId: string;
+  maxHeight?: number;
+  alt?: string;
 }) {
   const [url, setUrl] = useState("");
   const [error, setError] = useState("");
@@ -35,9 +39,9 @@ export function ObjectAssetImage({
   return url ? (
     <img
       src={url}
-      alt="保存的图片"
+      alt={alt}
       loading="lazy"
-      style={{ maxWidth: "100%", maxHeight: 240 }}
+      style={{ maxWidth: "100%", maxHeight }}
     />
   ) : (
     <span>{error || "图片加载中…"}</span>

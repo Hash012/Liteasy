@@ -1,5 +1,6 @@
 import { loadUserPaperArtifact } from "../features/library/userPaperArtifactClient";
 import { normalizePaperFulltext } from "../features/pdf/paperFulltextStore";
+import { preparePdfAnnotationCapture } from "../features/pdf/pdfAnnotationCapture";
 import { isTauri } from "@tauri-apps/api/core";
 import {
   createObjectResolver,
@@ -28,6 +29,7 @@ import type {
   ObjectWorkbenchPort,
   PdfCaptureInput,
   MessageCaptureInput,
+  PdfAnnotationCaptureInput,
 } from "../features/objects/objectWorkbenchPort";
 import {
   createCaptureTickets,
@@ -75,6 +77,20 @@ export function useObjectWorkbenchController(input: {
   );
   const [opened, setOpened] = useState<ResolvedObject>();
   const [visible, setVisible] = useState(false);
+  const dragReveal = useRef<ReturnType<typeof setTimeout>>();
+  const closeGeneration = useRef(0);
+  function close() {
+    closeGeneration.current += 1;
+    clearTimeout(dragReveal.current);
+    setOpened(undefined);
+    setVisible(false);
+  }
+  function revealAfterDragStart() {
+    clearTimeout(dragReveal.current);
+    dragReveal.current = setTimeout(() => {
+      if (active()) setVisible(true);
+    }, 50);
+  }
   const [objects, setObjects] = useState<ObjectEnvelope[]>([]);
   const [board, setBoard] = useState<ObjectEnvelope>();
   const [placements, setPlacements] = useState<Placement[]>([]);
@@ -139,6 +155,7 @@ export function useObjectWorkbenchController(input: {
     setBusy(false);
     return () => {
       mounted.current = false;
+      clearTimeout(dragReveal.current);
       tickets.clear();
       pendingFragments.clear();
       for (const session of pending.current)
@@ -153,6 +170,7 @@ export function useObjectWorkbenchController(input: {
       });
   }, [visible, repository]);
   async function openLink(link: string) {
+    const generation = closeGeneration.current;
     if (link.startsWith("liteasy://agent-artifacts/")) {
       const url = new URL(link);
       latest.current.openLegacyArtifact?.(
@@ -161,7 +179,7 @@ export function useObjectWorkbenchController(input: {
       return;
     }
     const result = await createObjectResolver(repository).open(link);
-    if (active()) {
+    if (active() && generation === closeGeneration.current) {
       setOpened(result);
       setVisible(true);
     }
@@ -202,7 +220,10 @@ export function useObjectWorkbenchController(input: {
       document.removeEventListener("click", click);
     };
   }, []);
-  async function perform<T>(action: () => Promise<T>): Promise<T | undefined> {
+  async function perform<T>(
+    action: () => Promise<T>,
+    rethrow = false,
+  ): Promise<T | undefined> {
     setStatus("保存中…");
     try {
       const result = await action();
@@ -212,6 +233,7 @@ export function useObjectWorkbenchController(input: {
     } catch (e) {
       if (active())
         setStatus(e instanceof Error ? e.message : "保存失败，请重试。");
+      if (rethrow) throw e;
       return undefined;
     }
   }
@@ -364,12 +386,13 @@ export function useObjectWorkbenchController(input: {
     target: "board" | "tray",
     operationId: string = crypto.randomUUID(),
   ) {
+    const generation = closeGeneration.current;
     const captured = await draft();
     if (!active()) throw new Error("账号已切换。");
     if (target === "tray") {
       const ref = { objectId: `pending-${operationId}`, revision: "pending" };
       pendingFragments.set(ref.objectId, captured);
-      addToTray([ref]);
+      addToTray([ref], generation === closeGeneration.current);
       setStatus("已加入对话，提交提问时保存摘录。");
       return [ref];
     }
@@ -379,12 +402,12 @@ export function useObjectWorkbenchController(input: {
       operationId,
     });
     if (!active()) throw new Error("账号已切换。");
-    setVisible(true);
+    if (generation === closeGeneration.current) setVisible(true);
     await refresh();
     setStatus("已保存到本机");
     return refs;
   }
-  function addToTray(refs: ContextRef[]) {
+  function addToTray(refs: ContextRef[], reveal = true) {
     setTray((current) => [
       ...current,
       ...refs
@@ -397,9 +420,69 @@ export function useObjectWorkbenchController(input: {
         .map((ref) => ({ ref, pinned: false })),
     ]);
     setPreview(undefined);
-    setVisible(true);
+    if (reveal) setVisible(true);
+  }
+  async function captureAnnotation(
+    selection: PdfAnnotationCaptureInput,
+    target: "board" | "tray",
+    operationId: string = crypto.randomUUID(),
+  ) {
+    const generation = closeGeneration.current;
+    const material = await preparePdfAnnotationCapture(selection);
+    const draft = await pdfDraft({
+      paper: selection.paper,
+      page: selection.annotation.page,
+      excerpt: material.quote,
+      rects: material.rects,
+    });
+    const assets = await Promise.all(
+      Object.entries(material.images).map(async ([key, dataUrl]) => ({
+        key,
+        asset: await stageDataUrl(dataUrl),
+      })),
+    );
+    draft.title = `${selection.paper.title} · 第 ${selection.annotation.page} 页 · ${selection.annotation.kind === "ink" ? "手绘笔记" : "批注"}`;
+    draft.content.payload.text = material.text;
+    draft.assets = [
+      ...new Map(
+        assets.map(({ asset }) => [asset.assetId, assetDescriptor(asset)]),
+      ).values(),
+    ];
+    for (const { key, asset } of assets)
+      draft.content.payload.text = draft.content.payload.text
+        .split(`attachment:${key}`)
+        .join(`attachment:${asset.assetId}`);
+    if (!active()) throw new Error("账号已切换。");
+    const refs = await repository.captureFragment({
+      operationId,
+      legacyKey: `pdf-annotation-${selection.paper.id}-${selection.annotation.id}`,
+      draft,
+      assets: assets.map(({ asset }) => asset),
+      boardRef: target === "board" ? refOf(await ensureBoard()) : undefined,
+    });
+    if (!active()) throw new Error("账号已切换。");
+    if (target === "tray") addToTray(refs, false);
+    if (generation === closeGeneration.current) setVisible(true);
+    await refresh();
+    setStatus("已保存到本机");
+    return refs;
   }
   const port: ObjectWorkbenchPort = {
+    isOpen: visible,
+    close,
+    captureAnnotation,
+    dragAnnotation(selection, data) {
+      const operationId = crypto.randomUUID();
+      const ticket = tickets.register(() =>
+        captureAnnotation(selection, "board", operationId),
+      );
+      data.setData(PENDING_CAPTURE_MIME, ticket);
+      data.setData(
+        "text/plain",
+        selection.annotation.note || selection.annotation.excerpt || "手绘笔记",
+      );
+      revealAfterDragStart();
+    },
     capturePdf: (selection, target) =>
       capture(() => pdfDraft(selection), target),
     captureMessage: (message, target) =>
@@ -412,9 +495,7 @@ export function useObjectWorkbenchController(input: {
       data.setData(PENDING_CAPTURE_MIME, ticket);
       data.setData("text/plain", selection.excerpt);
       // Let the host start its drag session before revealing an overlay above the source.
-      window.setTimeout(() => {
-        if (active()) setVisible(true);
-      }, 50);
+      revealAfterDragStart();
     },
     dragMessage(message, data) {
       const operationId = crypto.randomUUID();
@@ -424,9 +505,7 @@ export function useObjectWorkbenchController(input: {
       data.setData(PENDING_CAPTURE_MIME, ticket);
       data.setData("text/plain", message.excerpt);
       // Let the host start its drag session before revealing an overlay above the source.
-      window.setTimeout(() => {
-        if (active()) setVisible(true);
-      }, 50);
+      revealAfterDragStart();
     },
     explain(ref) {
       setTray([{ ref, pinned: false }]);
@@ -434,6 +513,7 @@ export function useObjectWorkbenchController(input: {
       setVisible(true);
     },
     async openLegacyBoard(paper, snapshot, key) {
+      const generation = closeGeneration.current;
       if (
         !latest.current
           .getPapers()
@@ -520,7 +600,7 @@ export function useObjectWorkbenchController(input: {
       });
       boardRef.current = next;
       setBoard(next);
-      setVisible(true);
+      if (generation === closeGeneration.current) setVisible(true);
       await refresh();
       setStatus("旧白板已迁移并保存；原快照保留。旧摘录仅定位到页。");
     },
@@ -676,7 +756,7 @@ export function useObjectWorkbenchController(input: {
       paperId: paper.id,
       page: anchor.page,
       evidenceId: object.objectId,
-      quote: resolution.status === "resolved" ? objectText(object) : "",
+      quote: resolution.status === "resolved" ? anchor.quote.exact : "",
     });
     setStatus(
       resolution.status === "resolved" ? "已打开来源。" : resolution.reason,
@@ -809,7 +889,7 @@ export function useObjectWorkbenchController(input: {
         }
       }),
     visible,
-    setVisible,
+    setVisible: (next: boolean) => (next ? setVisible(true) : close()),
     objects,
     board,
     placements,
@@ -962,6 +1042,29 @@ export function useObjectWorkbenchController(input: {
           ],
         });
       }),
+    resize: (p: Placement, geometry: Pick<Placement, "position" | "size">) =>
+      perform(async () => {
+        const board = boardRef.current;
+        if (!board) throw new Error("白板已关闭或不可用。");
+        return repository.applyBoardPatch({
+          boardRef: refOf(board),
+          operationId: crypto.randomUUID(),
+          resize: [
+            { placementId: p.placementId, revision: p.revision, ...geometry },
+          ],
+        });
+      }, true),
+    editPlacement: (p: Placement, text: string) =>
+      perform(async () => {
+        const board = boardRef.current;
+        if (!board) throw new Error("白板已关闭或不可用。");
+        return repository.editPlacement({
+          boardRef: refOf(board),
+          placement: p,
+          text,
+          operationId: crypto.randomUUID(),
+        });
+      }, true),
     drop: async (data: DataTransfer) => {
       const ticket = data.getData(PENDING_CAPTURE_MIME);
       const transfer = readObjectTransfer(data);

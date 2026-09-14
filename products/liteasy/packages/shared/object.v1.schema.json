@@ -523,8 +523,7 @@
                             "type": "object",
                             "properties": {
                               "exact": {
-                                "type": "string",
-                                "minLength": 1
+                                "type": "string"
                               },
                               "prefix": {
                                 "type": "string"

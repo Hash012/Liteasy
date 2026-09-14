@@ -638,7 +638,7 @@ describe("ReaderPane", () => {
       expect.objectContaining({ operation: "publish" })
     ));
     await user.click(screen.getByRole("button", { name: "编辑批注：a publicly queued PDF annotation" }));
-    expect(await screen.findByText("已公开到论坛")).toBeInTheDocument();
+    expect(await screen.findByRole("status", { name: "已公开到论坛" })).toBeInTheDocument();
     expect(window.localStorage.getItem(pdfAnnotationStorageKey(readerTestPaper)!)).toContain('"state":"published"');
     expect(window.localStorage.getItem(pdfAnnotationAutoPublicStorageKey(readerTestPaper)!)).toBe("true");
   });
@@ -677,7 +677,7 @@ describe("ReaderPane", () => {
     }));
 
     expect(onChangeAnnotationPublication).toHaveBeenCalledWith(expect.objectContaining({ operation: "publish" }));
-    expect(await screen.findByText("已公开到论坛")).toBeInTheDocument();
+    expect(await screen.findByRole("status", { name: "已公开到论坛" })).toBeInTheDocument();
   });
 
   test("does not offer a forum handoff from the PDF selection menu", async () => {

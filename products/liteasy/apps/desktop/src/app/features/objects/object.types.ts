@@ -29,7 +29,8 @@ export const anchorSchema = z.discriminatedUnion("type", [
     documentHash: z.string().optional(),
     page: z.number().int().positive(),
     displayPage: z.string().optional(),
-    quote,
+    // Drawing and text-box anchors locate a page region without quoting PDF text.
+    quote: quote.extend({ exact: z.string() }),
     range: range.optional(),
     rects: z.array(rect),
     extractor: id,

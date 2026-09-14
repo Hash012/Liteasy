@@ -32,6 +32,10 @@ export function resolveObjectAnchor(
     return { status: "unresolved", reason: "来源位置不可用。" };
   if (anchor.type === "pdf" && anchor.precision === "page")
     return { status: "unresolved", reason: "旧摘录仅保存页码，无法精确高亮。" };
+  if (anchor.type === "pdf" && !anchor.quote.exact)
+    return anchor.rects.length
+      ? { status: "resolved", page: anchor.page }
+      : { status: "unresolved", reason: "未保存批注区域。" };
   const matches: number[] = [];
   let offset = 0;
   while (offset <= source.text.length) {

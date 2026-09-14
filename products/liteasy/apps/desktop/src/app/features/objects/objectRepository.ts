@@ -231,6 +231,12 @@ export function createObjectRepository(
       revision: string;
       position: Placement["position"];
     }>;
+    resize?: Array<{
+      placementId: string;
+      revision: string;
+      position: Placement["position"];
+      size: Placement["size"];
+    }>;
   }) {
     return commitOperation(
       input.operationId,
@@ -278,6 +284,44 @@ export function createObjectRepository(
             change(
               key,
               { ...p, position: move.position, revision: id() },
+              row!.version,
+            ),
+          );
+        }
+        for (const resize of input.resize ?? []) {
+          const key = `placement/${board.objectId}/${resize.placementId}`;
+          const row = await storage.get(key);
+          const p = row?.value as Placement | undefined;
+          if (!p || p.revision !== resize.revision)
+            throw new ObjectStoreError(
+              "revision_conflict",
+              "卡片大小已变化，请刷新后重试。",
+            );
+          if (
+            ![
+              resize.position.x,
+              resize.position.y,
+              resize.size.width,
+              resize.size.height,
+            ].every(Number.isFinite) ||
+            resize.position.x < 0 ||
+            resize.position.y < 0 ||
+            resize.size.width < 120 ||
+            resize.size.height < 80
+          )
+            throw new ObjectStoreError(
+              "capability_denied",
+              "卡片大小或位置无效。",
+            );
+          changes.push(
+            change(
+              key,
+              {
+                ...p,
+                position: resize.position,
+                size: resize.size,
+                revision: id(),
+              },
               row!.version,
             ),
           );
@@ -332,6 +376,7 @@ export function createObjectRepository(
     assets?: StagedObjectAsset[];
     boardRef?: ObjectRef;
     operationId: string;
+    legacyKey?: string;
   }) {
     return commitOperation(
       input.operationId,
@@ -341,9 +386,36 @@ export function createObjectRepository(
           for (const anchor of input.draft.content.payload.anchors)
             await get(anchor.sourceRef);
         for (const source of input.draft.sourceRefs ?? []) await get(source);
-        const object = make(input.draft);
-        const changes = objectChanges(object);
-        for (const asset of input.assets ?? [])
+        const mapping = input.legacyKey
+          ? await storage.get(`legacy/${input.legacyKey}`)
+          : null;
+        const mappedRef = mapping?.value as ObjectRef | undefined;
+        const mappedHead = mappedRef
+          ? await storage.get(headKey(mappedRef.objectId))
+          : null;
+        const previous = mappedHead ? readObject(mappedHead) : undefined;
+        if (previous?.lifecycle === "tombstoned")
+          throw new ObjectStoreError("object_not_found", "该批注内容已删除。");
+        const candidate = make(input.draft, previous);
+        const unchanged =
+          previous &&
+          previous.title === candidate.title &&
+          JSON.stringify(previous.content) ===
+            JSON.stringify(candidate.content) &&
+          JSON.stringify(previous.assets) === JSON.stringify(candidate.assets);
+        const object = unchanged ? previous : candidate;
+        const changes = unchanged ? [] : objectChanges(object, mappedHead);
+        if (input.legacyKey && !unchanged)
+          changes.push(
+            change(
+              `legacy/${input.legacyKey}`,
+              refOf(object),
+              mapping?.version ?? null,
+            ),
+          );
+        for (const asset of new Map(
+          (input.assets ?? []).map((asset) => [asset.assetId, asset]),
+        ).values())
           if (!(await storage.get(`asset/${asset.assetId}`)))
             changes.push(change(`asset/${asset.assetId}`, asset));
         if (input.boardRef) {
@@ -363,11 +435,14 @@ export function createObjectRepository(
             refOf(object),
             (await listPlacements(board.objectId)).length,
           );
+          const memberKey = membershipKey(board.objectId, object.objectId);
+          const member = await storage.get(memberKey);
           changes.push(
             change(`placement/${board.objectId}/${p.placementId}`, p),
             change(
-              membershipKey(board.objectId, object.objectId),
+              memberKey,
               membership(board, refOf(object)),
+              member?.version ?? null,
             ),
             ...objectChanges(
               make(
@@ -508,9 +583,14 @@ export function createObjectRepository(
       {
         title: `${source.title}（副本）`,
         kind: "content.note",
+        assets: source.assets,
         content: {
           schema: "liteasy.note/v1",
-          payload: { text: objectText(source), origin: "derived" },
+          payload: {
+            text: objectText(source),
+            origin: "derived",
+            assetIds: source.assets.map((asset) => asset.assetId),
+          },
         },
         sourceRefs: [ref],
         derivedFrom: [ref],
@@ -518,6 +598,126 @@ export function createObjectRepository(
       operationId,
     );
     return object;
+  }
+  async function editPlacement(input: {
+    boardRef: ObjectRef;
+    placement: Placement;
+    text: string;
+    operationId: string;
+  }) {
+    return commitOperation(input.operationId, input, async () => {
+      const boardHead = await storage.get(headKey(input.boardRef.objectId));
+      const board = readObject(boardHead);
+      const key = `placement/${board.objectId}/${input.placement.placementId}`;
+      const row = await storage.get(key);
+      const p = row?.value as Placement | undefined;
+      if (
+        board.kind !== "workspace.board" ||
+        board.lifecycle !== "active" ||
+        board.revision !== input.boardRef.revision ||
+        !p ||
+        p.revision !== input.placement.revision
+      )
+        throw new ObjectStoreError(
+          "revision_conflict",
+          "卡片已变化，请刷新后重试。",
+        );
+      const source = await get(p.ref);
+      if (source.kind !== "content.note" && source.kind !== "content.fragment")
+        throw new ObjectStoreError(
+          "capability_denied",
+          "此内容不支持直接编辑。",
+        );
+      const sourceHead = await storage.get(headKey(source.objectId));
+      if (
+        source.kind === "content.note" &&
+        readObject(sourceHead).revision !== source.revision
+      )
+        throw new ObjectStoreError(
+          "revision_conflict",
+          "笔记已有更新，请打开最新版本后编辑。",
+        );
+      const draft: ObjectDraft =
+        source.kind === "content.note"
+          ? {
+              ...source,
+              ...source.provenance,
+              title: input.text.slice(0, 80) || "笔记",
+              content: {
+                schema: "liteasy.note/v1",
+                payload: { ...source.content.payload, text: input.text },
+              },
+            }
+          : {
+              kind: "content.note",
+              title: input.text.slice(0, 80) || "笔记",
+              assets: source.assets,
+              sourceRefs: [p.ref],
+              derivedFrom: [p.ref],
+              content: {
+                schema: "liteasy.note/v1",
+                payload: {
+                  text: input.text,
+                  origin: "derived",
+                  assetIds: source.assets.map((asset) => asset.assetId),
+                },
+              },
+            };
+      const next = make(
+        draft,
+        source.kind === "content.note" ? source : undefined,
+      );
+      const nextBoard = make({ ...board, ...board.provenance }, board);
+      const changes = [
+        ...objectChanges(
+          next,
+          source.kind === "content.note" ? sourceHead : null,
+        ),
+        ...objectChanges(nextBoard, boardHead),
+        change(key, { ...p, ref: refOf(next), revision: id() }, row!.version),
+      ];
+      const memberKey = membershipKey(board.objectId, next.objectId);
+      const member = await storage.get(memberKey);
+      changes.push(
+        change(
+          memberKey,
+          membership(nextBoard, refOf(next)),
+          member?.version ?? null,
+        ),
+      );
+      if (source.kind === "content.fragment") {
+        const relation: ObjectRelation = {
+          relationId: id(),
+          revision: id(),
+          from: refOf(next),
+          to: p.ref,
+          predicate: "derived_from",
+          scopeId,
+          assertedBy: { type: "user", id: scopeId },
+          createdAt: next.createdAt,
+          basis: { type: "operation", reason: "从摘录编辑为笔记" },
+          reviewStatus: "accepted",
+        };
+        changes.push(
+          change(
+            `relation/derived_from/${next.objectId}/${source.objectId}`,
+            relation,
+          ),
+        );
+        const others = (await listPlacements(board.objectId)).filter(
+          (candidate) =>
+            candidate.placementId !== p.placementId &&
+            candidate.ref.objectId === source.objectId,
+        );
+        if (!others.length) {
+          const oldKey = membershipKey(board.objectId, source.objectId);
+          const old = await storage.get(oldKey);
+          if (old)
+            changes.push({ key: oldKey, expected: old.version, row: null });
+        }
+      }
+      return { changes, result: [refOf(next)] };
+    });
   }
   async function migrateBoard(input: {
     key: string;
@@ -735,6 +935,7 @@ export function createObjectRepository(
     listPlacements,
     commitOperation,
     editNote,
+    editPlacement,
     copy,
     history: async (objectId: string) => {
       await resolveLatest(objectId);
@@ -768,12 +969,13 @@ export function createObjectRepository(
       }
       const head = await storage.get(headKey(ref.objectId));
       const current = readObject(head);
+      const next = make(draft, current);
       if (
-        JSON.stringify(current.content) === JSON.stringify(draft.content) &&
-        current.title === draft.title
+        JSON.stringify(current.content) === JSON.stringify(next.content) &&
+        JSON.stringify(current.assets) === JSON.stringify(next.assets) &&
+        current.title === next.title
       )
         return current;
-      const next = make(draft, current);
       await storage.commit([
         ...objectChanges(next, head),
         change(`legacy/${key}`, refOf(next), mapping!.version),

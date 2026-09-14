@@ -1,6 +1,13 @@
 import { Button, Tooltip } from "@fluentui/react-components";
 import { WhiteboardRegular } from "@fluentui/react-icons";
 import { useObjectWorkbenchController } from "../controllers/useObjectWorkbenchController";
+import { useApplicationViewController } from "../controllers/useApplicationViewController";
+import { useWorkbenchNavigationController } from "../controllers/useWorkbenchNavigationController";
+import { useHelpController } from "../controllers/useHelpController";
+import { HelpPanel } from "../features/help/HelpPanel";
+import { HelpContext } from "../features/help/helpContext";
+import { builtinHelpProviders } from "../features/help/builtinHelpProvider";
+import type { HelpContentProvider } from "../features/help/help.types";
 import { ObjectWorkbenchContext } from "../features/objects/objectWorkbenchPort";
 import { ObjectWorkbench } from "../features/boards/ObjectWorkbench";
 import { usePdfQuickAskController } from "../controllers/usePdfQuickAskController";
@@ -146,6 +153,7 @@ import { getActiveModelEndpoint, getActiveModelProvider, getModelForSettings } f
 import type { AcademicProfileTransport } from "../features/profile/academicProfileClient";
 
 type AppShellProps = {
+  helpProviders?: readonly HelpContentProvider[];
   accountCapabilitiesTransport?: AccountCapabilitiesTransport;
   accountTransport?: AccountTransport;
   academicProfileTransport?: AcademicProfileTransport;
@@ -184,6 +192,7 @@ function paperResourceTabId(resource: OpenPaperResource) {
 }
 
 export function AppShell({
+  helpProviders = builtinHelpProviders,
   accountCapabilitiesTransport,
   accountTransport,
   academicProfileTransport,
@@ -309,6 +318,13 @@ export function AppShell({
   const [settingsState, setSettingsState] = useState<SettingsState>(() =>
     cloneSettingsState(settingsStoreRef.current.getState())
   );
+  useApplicationViewController({
+    settings: settingsState,
+    onUpdateSetting: (command) => {
+      settingsStoreRef.current.apply(command);
+      setSettingsState(cloneSettingsState(settingsStoreRef.current.getState()));
+    }
+  });
   const externalKnowledgeEndpoint =
     settingsState["models.cloud_proxy_endpoint"].startsWith("http://") ||
     settingsState["models.cloud_proxy_endpoint"].startsWith("https://")
@@ -1034,6 +1050,23 @@ export function AppShell({
     getSettings: () => settingsStoreRef.current.getState(),
     openEvidence: openEvidenceInReader
   });
+  const workbenchNavigation = useWorkbenchNavigationController({
+    dock,
+    collapsed: paneLayout.collapsed,
+    setCollapsed: paneLayout.setCollapsed,
+    boardVisible: objectWorkbench.visible,
+    closeBoard: () => objectWorkbench.setVisible(false),
+    activate: activateDockItem,
+    activeDynamicItems: {
+      ...activeSideArtifactIds,
+      main: activeCenterArtifactId ?? activeReaderPaperId ?? activeVisualizationId ?? activePaperResourceId
+    }
+  });
+  const help = useHelpController({
+    providers: helpProviders,
+    visible: workbenchNavigation.isVisible("help"),
+    onOpen: () => workbenchNavigation.open("help")
+  });
   const assistantAgent = useAssistantAgentController({
     principalId: objectWorkbench.repository.scopeId,
     resolveObjectContext: objectWorkbench.resolveContext,
@@ -1205,10 +1238,13 @@ export function AppShell({
     ? "0px"
     : `minmax(220px, ${paneLayout.layout.left}fr)`;
   const leftPaneUtilitySize = paneLayout.collapsed.left ? "0px" : "4px";
-  const rightPaneSize = paneLayout.collapsed.right
+  const [boardPaneWeight, setBoardPaneWeight] = useState(36);
+  const rightPaneSize = objectWorkbench.visible
+    ? `minmax(0, ${boardPaneWeight}fr)`
+    : paneLayout.collapsed.right
     ? "0px"
     : `minmax(220px, ${paneLayout.layout.right}fr)`;
-  const rightPaneUtilitySize = paneLayout.collapsed.right ? "0px" : "4px";
+  const rightPaneUtilitySize = objectWorkbench.visible || !paneLayout.collapsed.right ? "4px" : "0px";
   const bottomPaneVisible =
     !paneLayout.collapsed.bottom && dock.layout.regions.bottom.itemIds.length > 0;
   const readerArtifactRowSize = "0px";
@@ -1677,6 +1713,9 @@ export function AppShell({
   function activateDockItem(regionId: DockRegionId, itemId: DockItemId) {
     if (regionId === "main") {
       setActiveCenterArtifactId(null);
+      setActiveReaderPaperId(null);
+      setActiveVisualizationId(null);
+      setActivePaperResourceId(null);
     } else {
       setActiveSideArtifactIds((current) => {
         if (!current[regionId]) {
@@ -1791,6 +1830,7 @@ export function AppShell({
   }
 
   function renderDockItem(itemId: DockItemId, regionId: DockRegionId) {
+    if (itemId === "help") return <HelpPanel model={help.model} />;
     if (isLeftRailDockItem(itemId)) {
       return <LeftPane {...leftPaneProps} leftRailView={itemId} />;
     }
@@ -2048,7 +2088,7 @@ export function AppShell({
         onMoveDynamicTab={moveArtifactSurface}
         onMoveItem={moveDockItem}
         overlay={
-          regionId === "main" ? (
+          regionId === "main" && !(workbenchNavigation.isVisible("help") && dock.findItemRegion("help") === "main") ? (
             <FloatingModalityButton
               analysisHint={analysisHint}
               canStartAnalysis={
@@ -2081,10 +2121,11 @@ export function AppShell({
     runtimeTheme.kind === "generated" ? runtimeTheme.theme.scope.join(" ") : undefined;
 
   return (
+    <HelpContext.Provider value={help.port}>
     <ObjectWorkbenchContext.Provider value={objectWorkbench.port}>
     <div className={appFrameClassName} data-theme-scope={appFrameScope} style={appFrameStyle}>
       <div
-        className="app-shell"
+        className={`app-shell${objectWorkbench.visible ? " object-workbench-open" : ""}`}
         data-testid="workbench-layout"
         style={
           {
@@ -2100,7 +2141,11 @@ export function AppShell({
         }
       >
         <ActivityBar
-          layoutControls={<><Tooltip content="研究白板" relationship="description"><Button appearance="subtle" aria-label="研究白板" icon={<WhiteboardRegular />} onClick={objectWorkbench.port.open} /></Tooltip><DockLayoutControls
+          agentOpen={workbenchNavigation.isVisible("assistant")}
+          helpOpen={workbenchNavigation.isVisible("help")}
+          onOpenAgent={() => workbenchNavigation.open("assistant")}
+          onOpenHelp={() => help.port.open()}
+          layoutControls={<><Tooltip content={objectWorkbench.visible ? "关闭研究白板" : "研究白板"} relationship="description"><Button appearance="subtle" aria-label="研究白板" aria-pressed={objectWorkbench.visible} icon={<WhiteboardRegular />} onClick={() => objectWorkbench.setVisible(!objectWorkbench.visible)} /></Tooltip><DockLayoutControls
             collapsed={paneLayout.collapsed}
             onToggleBottom={() => paneLayout.setCollapsed("bottom", !paneLayout.collapsed.bottom)}
             onToggleLeft={() => paneLayout.setCollapsed("left", !paneLayout.collapsed.left)}
@@ -2201,17 +2246,22 @@ export function AppShell({
         />
         {renderDockRegion("main")}
         <div className="pane-utility-column right">
-          {!paneLayout.collapsed.right ? (
+          {objectWorkbench.visible || !paneLayout.collapsed.right ? (
             <PaneResizer
               ariaLabel="调整右栏宽度"
               onResize={(deltaPixels) => {
                 const shellWidth = window.innerWidth - 64 - 8 - 8;
-                paneLayout.adjustRight((deltaPixels / shellWidth) * 100);
+                if (objectWorkbench.visible) {
+                  setBoardPaneWeight((current) => Math.max(18, Math.min(100, current - (deltaPixels / shellWidth) * (76 + current))));
+                } else {
+                  paneLayout.adjustRight((deltaPixels / shellWidth) * 100);
+                }
               }}
             />
           ) : null}
         </div>
         {!paneLayout.collapsed.right ? renderDockRegion("right") : null}
+        <ObjectWorkbench key={objectWorkbench.repository.scopeId} model={objectWorkbench} />
         <div className="pane-utility-row bottom">
           {bottomPaneVisible ? (
             <PaneResizer
@@ -2235,8 +2285,8 @@ export function AppShell({
           </section>
         ) : null}
       </div>
-      <ObjectWorkbench key={objectWorkbench.repository.scopeId} model={objectWorkbench} />
     </div>
     </ObjectWorkbenchContext.Provider>
+    </HelpContext.Provider>
   );
 }

@@ -1,15 +1,21 @@
 import { Button, Tooltip } from "@fluentui/react-components";
 import {
   BookRegular,
+  BotRegular,
   FolderOpenRegular,
   PeopleRegular,
   PersonRegular,
+  QuestionCircleRegular,
   SettingsRegular
 } from "@fluentui/react-icons";
 import type { ReactElement, ReactNode } from "react";
 import type { LeftRailView } from "./useLeftRailNavigation";
 
 type ActivityBarProps = {
+  agentOpen?: boolean;
+  helpOpen?: boolean;
+  onOpenAgent?: () => void;
+  onOpenHelp?: () => void;
   layoutControls?: ReactNode;
   activeView: LeftRailView;
   accountSessionAvailable?: boolean;
@@ -26,6 +32,10 @@ const activityItems: Array<{ icon: ReactElement; label: string; view: LeftRailVi
 ];
 
 export function ActivityBar({
+  agentOpen = false,
+  helpOpen = false,
+  onOpenAgent,
+  onOpenHelp,
   layoutControls,
   activeView,
   accountSessionAvailable = true,
@@ -54,6 +64,12 @@ export function ActivityBar({
           </Button>
         </Tooltip>
       ))}
+      {onOpenAgent ? <Tooltip content="Agent" positioning="after" relationship="description">
+        <Button appearance="subtle" aria-label="Agent" aria-pressed={agentOpen} className={`activity-button${agentOpen ? " active" : ""}`} icon={<BotRegular />} onClick={onOpenAgent} />
+      </Tooltip> : null}
+      {onOpenHelp ? <Tooltip content="帮助 · F1" positioning="after" relationship="description">
+        <Button appearance="subtle" aria-label="帮助" aria-pressed={helpOpen} className={`activity-button${helpOpen ? " active" : ""}`} icon={<QuestionCircleRegular />} onClick={onOpenHelp} />
+      </Tooltip> : null}
       {layoutControls}
     </nav>
   );

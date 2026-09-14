@@ -24,7 +24,8 @@ test("allows the main window to receive host events without frontend emission", 
   expect(capability.permissions).toEqual([
     "core:event:allow-listen",
     "core:event:allow-unlisten",
-    "deep-link:allow-get-current"
+    "deep-link:allow-get-current",
+    "core:webview:allow-set-webview-zoom"
   ]);
   expect(capability.permissions).not.toContain("core:event:allow-emit");
 });

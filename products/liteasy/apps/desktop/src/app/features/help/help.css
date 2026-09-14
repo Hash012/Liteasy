@@ -1,0 +1,86 @@
+.help-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px;
+  color: var(--colorNeutralForeground1);
+  background: var(--colorNeutralBackground1);
+  container-type: inline-size;
+}
+.help-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.help-header strong {
+  flex: 1;
+}
+.help-workspace {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+.help-topics {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 0 0 160px;
+  overflow: auto;
+}
+.help-topics button {
+  justify-content: flex-start;
+}
+.help-content {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 4px;
+  overflow-wrap: anywhere;
+}
+.help-content h1 {
+  font-size: var(--fontSizeBase500, 20px);
+}
+.help-content img {
+  max-width: 100%;
+}
+.help-content pre {
+  overflow: auto;
+}
+.help-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.help-results li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--colorNeutralStroke2);
+}
+.help-results p {
+  margin: 4px 0;
+}
+.help-empty {
+  color: var(--colorNeutralForeground3);
+  text-align: center;
+  padding: 32px 8px;
+}
+.help-empty svg {
+  width: 32px;
+  height: 32px;
+}
+@container (max-width: 440px) {
+  .help-workspace {
+    flex-direction: column;
+  }
+  .help-topics {
+    flex: 0 0 auto;
+    flex-direction: row;
+    overflow-x: auto;
+  }
+  .help-topics button {
+    flex-shrink: 0;
+  }
+}

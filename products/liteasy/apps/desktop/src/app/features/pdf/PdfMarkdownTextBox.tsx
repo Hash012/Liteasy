@@ -3,14 +3,16 @@ import {
   Popover,
   PopoverSurface,
   PopoverTrigger,
-  Slider
+  Slider,
+  Tooltip
 } from "@fluentui/react-components";
 import {
   DeleteRegular,
   DragRegular,
   ImageAddRegular,
   CheckmarkRegular,
-  TransparencySquareRegular
+  TransparencySquareRegular,
+  WhiteboardRegular
 } from "@fluentui/react-icons";
 import {
   useEffect,
@@ -22,6 +24,7 @@ import {
 import { readPdfTextBoxImage, type PdfTextBoxImages } from "./pdfTextBoxImages";
 import type { PdfAnnotationRect, PdfAnnotationV2 } from "./pdfAnnotationStorage";
 import { PdfAnnotationMarkdown } from "./PdfAnnotationMarkdown";
+import "./pdfTextBoxResize.css";
 
 type PdfMarkdownTextBoxProps = {
   active: boolean;
@@ -29,13 +32,31 @@ type PdfMarkdownTextBoxProps = {
   onActivate: (annotationId: string) => void;
   onCommit: (annotationId: string, markdown: string, rect: PdfAnnotationRect, images?: PdfTextBoxImages) => void;
   onDelete: (annotation: PdfAnnotationV2) => void;
-  onMove: (annotationId: string, rect: PdfAnnotationRect) => void;
+  onMove: (annotationId: string, rect: PdfAnnotationRect, manualSize?: boolean) => void;
+  onDragToBoard?: (annotation: PdfAnnotationV2, data: DataTransfer) => void;
   onOpacityChange: (annotationId: string, opacity: number) => void;
   rect: PdfAnnotationRect;
 };
 
 const minimumTextBoxWidth = 8;
 const minimumTextBoxHeight = 3.8;
+const resizeHandles = [
+  ["nw", "左上角"], ["n", "上边"], ["ne", "右上角"], ["e", "右边"],
+  ["se", "右下角"], ["s", "下边"], ["sw", "左下角"], ["w", "左边"]
+] as const;
+export type PdfTextBoxResizeDirection = typeof resizeHandles[number][0];
+
+export function resizePdfTextBoxEdges(rect: PdfAnnotationRect, direction: PdfTextBoxResizeDirection, dx: number, dy: number): PdfAnnotationRect {
+  let left = rect.left;
+  let top = rect.top;
+  let right = rect.left + rect.width;
+  let bottom = rect.top + rect.height;
+  if (direction.includes("w")) left = clamp(left + dx, 0, right - minimumTextBoxWidth);
+  if (direction.includes("e")) right = clamp(right + dx, left + minimumTextBoxWidth, 100);
+  if (direction.includes("n")) top = clamp(top + dy, 0, bottom - minimumTextBoxHeight);
+  if (direction.includes("s")) bottom = clamp(bottom + dy, top + minimumTextBoxHeight, 100);
+  return { left, top, width: right - left, height: bottom - top };
+}
 
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value));
@@ -75,12 +96,14 @@ export function PdfMarkdownTextBox({
   onCommit,
   onDelete,
   onMove,
+  onDragToBoard,
   onOpacityChange,
   rect
 }: PdfMarkdownTextBoxProps) {
   const [draft, setDraft] = useState(annotation.note ?? "");
   const [draggedRect, setDraggedRect] = useState<PdfAnnotationRect | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [manualSize, setManualSize] = useState(annotation.manualSize ?? false);
   const dragCleanupRef = useRef<(() => void) | null>(null);
   const rootRef = useRef<HTMLElement | null>(null);
   const measureRef = useRef<HTMLDivElement | null>(null);
@@ -92,15 +115,17 @@ export function PdfMarkdownTextBox({
   const [surface, setSurface] = useState({ width: 760, height: 980 });
   const [measured, setMeasured] = useState<{ width: number; height: number } | null>(null);
   const fallback = resizePdfTextBoxRect(draggedRect ?? rect, draft);
-  const size = measured ?? { width: fallback.width, height: fallback.height };
   const position = draggedRect ?? rect;
+  const size = manualSize || annotation.manualSize
+    ? { width: position.width, height: position.height }
+    : measured ?? { width: fallback.width, height: fallback.height };
   const boxRect = { ...size, left: clamp(position.left, 0, 100 - size.width), top: clamp(position.top, 0, 100 - size.height) };
   useEffect(() => {
     const page = rootRef.current?.closest(".pdf-page-shell")?.querySelector(".pdf-text-layer");
     if (!page) return;
     const update = () => {
       const bounds = page.getBoundingClientRect();
-      if (bounds.width && bounds.height) setSurface({ width: bounds.width, height: bounds.height });
+      if (bounds.width && bounds.height) setSurface({ width: page.clientWidth || bounds.width, height: page.clientHeight || bounds.height });
     };
     update();
     if (typeof ResizeObserver === "undefined") return;
@@ -113,7 +138,7 @@ export function PdfMarkdownTextBox({
     const update = () => {
       const bounds = element.getBoundingClientRect();
       if (!bounds.width || !bounds.height) return;
-      const next = { width: Math.min(98, (bounds.width + 2) / surface.width * 100), height: Math.min(98, (bounds.height + 2) / surface.height * 100) };
+      const next = { width: Math.min(98, ((element.offsetWidth || bounds.width) + 2) / surface.width * 100), height: Math.min(98, ((element.offsetHeight || bounds.height) + 2) / surface.height * 100) };
       setMeasured((previous) => previous && Math.abs(previous.width - next.width) < .01 && Math.abs(previous.height - next.height) < .01 ? previous : next);
     };
     update();
@@ -168,7 +193,7 @@ export function PdfMarkdownTextBox({
     finally { setImagePending(false); inputRef.current?.focus(); }
   }
 
-  function startDragging(event: ReactPointerEvent<HTMLButtonElement>) {
+  function startDragging(event: ReactPointerEvent<HTMLButtonElement>, direction?: PdfTextBoxResizeDirection) {
     if (event.button !== 0) return;
     const pageElement = event.currentTarget.closest<HTMLElement>(".pdf-page-shell");
     if (!pageElement) return;
@@ -178,11 +203,14 @@ export function PdfMarkdownTextBox({
     const startY = event.clientY;
     const startRect = boxRectRef.current;
     setDragging(true);
+    if (direction) setManualSize(true);
     event.preventDefault();
     event.stopPropagation();
 
     const handlePointerMove = (pointerEvent: PointerEvent) => {
-      const nextRect = {
+      const dx = (pointerEvent.clientX - startX) / pageRect.width * 100;
+      const dy = (pointerEvent.clientY - startY) / pageRect.height * 100;
+      const nextRect = direction ? resizePdfTextBoxEdges(startRect, direction, dx, dy) : {
         ...startRect,
         left: clamp(
           startRect.left + (pointerEvent.clientX - startX) / pageRect.width * 100,
@@ -207,7 +235,7 @@ export function PdfMarkdownTextBox({
     const finishDragging = () => {
       cleanupDragging();
       setDragging(false);
-      onMove(annotation.id, boxRectRef.current);
+      onMove(annotation.id, boxRectRef.current, Boolean(direction));
     };
     dragCleanupRef.current?.();
     dragCleanupRef.current = cleanupDragging;
@@ -225,6 +253,9 @@ export function PdfMarkdownTextBox({
       aria-label={`Markdown 文本框：第 ${annotation.page} 页`}
       className={`pdf-markdown-text-box ${active ? "is-editing" : ""} ${dragging ? "is-dragging" : ""} ${opacity === 0 ? "is-transparent" : ""}`}
       onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        if (!active && !(event.target instanceof Element && event.target.closest("a, button"))) onActivate(annotation.id);
+      }}
       style={{
         "--pdf-text-box-opacity": opacity,
         "--pdf-text-size": `${12 * surface.width / 760}px`,
@@ -262,16 +293,28 @@ export function PdfMarkdownTextBox({
       ) : (
         <div
           className="pdf-markdown-text-box-surface"
-          onClick={(event) => {
-            if (!(event.target instanceof Element && event.target.closest("a"))) {
-              onActivate(annotation.id);
-            }
-          }}
           title="点击直接编辑 Markdown"
         >
           <PdfAnnotationMarkdown emptyLabel="点击输入 Markdown" value={annotation.note ?? ""} images={annotation.images} />
         </div>
       )}
+      {resizeHandles.map(([direction, label]) => <button
+        aria-label={`调整 Markdown 文本框${label}`}
+        className={`pdf-text-box-resize-handle is-${direction}`}
+        key={direction}
+        onPointerDown={(event) => startDragging(event, direction)}
+        onKeyDown={(event) => {
+          if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+          event.preventDefault(); event.stopPropagation(); setManualSize(true);
+          const step = event.shiftKey ? 2 : .5;
+          const next = resizePdfTextBoxEdges(boxRectRef.current, direction,
+            event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0,
+            event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0);
+          boxRectRef.current = next; setDraggedRect(next); onMove(annotation.id, next, true);
+        }}
+        title={`拖动调整${label}，方向键微调`}
+        type="button"
+      />)}
       {active ? <div className="pdf-markdown-text-box-actions" role="toolbar" aria-label="文本框操作"
         style={{ ...(boxRect.top < 6 ? { top: "100%", bottom: "auto" } : {}), ...(boxRect.left > 70 ? { right: 0, left: "auto" } : { left: 0, right: "auto" }) }}
         onPointerDown={(event) => { if (event.target instanceof Element && event.target.closest("button")) event.preventDefault(); }}>
@@ -279,6 +322,10 @@ export function PdfMarkdownTextBox({
           onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void insertImage(file); }} />
         <Button aria-label="保存 Markdown 文本框" title="保存并收起工具" icon={<CheckmarkRegular />} appearance="subtle" size="small" disabled={imagePending} onClick={finishEditing} />
         <Button aria-label="在文本框中插入图片" title="插入图片（也可粘贴）" icon={<ImageAddRegular />} appearance="subtle" size="small" disabled={imagePending} onClick={() => fileRef.current?.click()} />
+        {onDragToBoard ? <Tooltip content="拖动笔记到研究白板" relationship="description">
+          <Button aria-label="拖动 Markdown 笔记到研究白板" icon={<WhiteboardRegular />} appearance="subtle" size="small" draggable
+            onDragStart={(event) => onDragToBoard({ ...annotation, note: draft, images, rects: [boxRectRef.current] }, event.dataTransfer)} />
+        </Tooltip> : null}
         <Button
           aria-label="拖动 Markdown 文本框"
           appearance="subtle"

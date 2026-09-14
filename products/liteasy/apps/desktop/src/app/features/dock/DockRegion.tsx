@@ -2,6 +2,7 @@ import { Tooltip } from "@fluentui/react-components";
 import {
   BookRegular,
   ChatRegular,
+  QuestionCircleRegular,
   PeopleRegular,
   PersonRegular,
   SettingsRegular,
@@ -27,6 +28,8 @@ function getDockItemIcon(itemId: DockItemId) {
       return <SettingsRegular />;
     case "assistant":
       return <ChatRegular />;
+    case "help":
+      return <QuestionCircleRegular />;
     case "artifacts":
       return <SparkleRegular />;
   }

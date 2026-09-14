@@ -7,6 +7,7 @@ export type DockItemId =
   | "profile"
   | "settings"
   | "assistant"
+  | "help"
   | "artifacts";
 
 export type DockItemDescriptor = {

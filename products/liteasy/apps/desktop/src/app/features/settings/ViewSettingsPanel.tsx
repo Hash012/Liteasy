@@ -1,7 +1,7 @@
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import { Button, Tooltip, Field, Input, Option, Radio, RadioGroup, Dropdown } from "@fluentui/react-components";
 import type { SettingsState, UpdateSettingCommand } from "./settings.types";
-import { isHexColor, pdfBackgroundPresets, viewFontOptions, viewFontSizeOptions } from "./viewSettings";
+import { isHexColor, normalizeDisplayScale, pdfBackgroundPresets, viewDisplayScaleOptions, viewFontOptions, viewFontSizeOptions } from "./viewSettings";
 
 type ViewSettingsPanelProps = {
   onUpdateSetting?: (command: UpdateSettingCommand) => void;
@@ -17,6 +17,7 @@ export function ViewSettingsPanel({ onUpdateSetting, settings }: ViewSettingsPan
   const workbench = useObjectWorkbench();
   const fontFamily = settings?.["view.font_family"] ?? defaultFont;
   const fontSize = settings?.["view.font_size"] ?? defaultFontSize;
+  const displayScale = normalizeDisplayScale(settings?.["view.display_scale"]);
   const pdfBackground = settings?.["view.pdf_background"] ?? defaultPdfBackground;
   const customPdfBackground = settings?.["view.pdf_custom_background"] ?? defaultCustomPdfBackground;
   const colorPickerValue = isHexColor(customPdfBackground)
@@ -50,6 +51,23 @@ export function ViewSettingsPanel({ onUpdateSetting, settings }: ViewSettingsPan
           value={viewFontSizeOptions.find((option) => option.value === fontSize)?.label ?? `${fontSize} px`}
         >
           {viewFontSizeOptions.map((option) => (
+            <Option key={option.value} value={option.value}>{option.label}</Option>
+          ))}
+        </Dropdown>
+      </Field>
+
+      <Field
+        label={<span>显示比例 {workbench ? <Tooltip content="解释此设置" relationship="description"><Button size="small" appearance="subtle" onClick={() => workbench.explain({ type: "setting", key: "view.display_scale" })}>解释</Button></Tooltip> : null}</span>}
+        hint="Ctrl + 加号 / 减号缩放，Ctrl + 0 恢复默认"
+      >
+        <Dropdown
+          aria-label="显示比例"
+          onOptionSelect={(_, data) => data.optionValue && update("view.display_scale", data.optionValue)}
+          selectedOptions={[displayScale]}
+          size="small"
+          value={viewDisplayScaleOptions.find((option) => option.value === displayScale)?.label ?? `${displayScale}%`}
+        >
+          {viewDisplayScaleOptions.map((option) => (
             <Option key={option.value} value={option.value}>{option.label}</Option>
           ))}
         </Dropdown>

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import type { PdfAnnotationV2 } from "./pdfAnnotationStorage";
-import type { PdfInkMode, PdfInkPoint, PdfInkStroke } from "./pdfInk";
+import { pdfInkStrokes, type PdfInkMode, type PdfInkPoint, type PdfInkStroke } from "./pdfInk";
 
-export function PdfInkLayer({ annotations, mode, color, width, aspectRatio, onCreate, onDelete }: {
+export function PdfInkLayer({ annotations, mode, color, width, aspectRatio, onCreate, onDelete, onDeleteStroke }: {
   annotations: PdfAnnotationV2[]; mode: PdfInkMode; color: string; width: number; aspectRatio: number;
   onCreate: (stroke: PdfInkStroke) => void; onDelete: (annotation: PdfAnnotationV2) => void;
+  onDeleteStroke?: (annotation: PdfAnnotationV2, strokeIndex: number) => void;
 }) {
   const drag = useRef<{ pointerId: number; points: PdfInkPoint[] } | null>(null);
   const [preview, setPreview] = useState<PdfInkPoint[]>([]);
@@ -41,11 +42,14 @@ export function PdfInkLayer({ annotations, mode, color, width, aspectRatio, onCr
     }}
     onPointerCancel={() => { drag.current = null; setPreview([]); }}
   >
-    {annotations.map((annotation) => annotation.ink ? <path key={annotation.id} d={path(annotation.ink.points)}
-      aria-label="手绘笔迹" fill="none" stroke={annotation.ink.color} strokeWidth={annotation.ink.width}
+    {annotations.flatMap((annotation) => pdfInkStrokes(annotation).map((stroke, strokeIndex) => <path key={`${annotation.id}-${strokeIndex}`} d={path(stroke.points)}
+      aria-label="手绘笔迹" fill="none" stroke={stroke.color} strokeWidth={stroke.width}
       strokeLinecap="round" strokeLinejoin="round" style={{ pointerEvents: mode === "erase" ? "stroke" : "none", cursor: "crosshair" }}
-      onPointerDown={(event) => { if (mode === "erase") { event.stopPropagation(); event.preventDefault(); onDelete(annotation); } }}
-    /> : null)}
+      onPointerDown={(event) => { if (mode === "erase") {
+        event.stopPropagation(); event.preventDefault();
+        if (onDeleteStroke) onDeleteStroke(annotation, strokeIndex); else onDelete(annotation);
+      } }}
+    />))}
     {preview.length > 0 ? <path d={path(preview)} fill="none" stroke={color} strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" /> : null}
   </svg>;
 }

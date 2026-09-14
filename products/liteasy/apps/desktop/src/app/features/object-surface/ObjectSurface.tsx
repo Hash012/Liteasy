@@ -1,5 +1,5 @@
 import { ObjectAssetImage } from "./ObjectAssetImage";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Button, Tooltip } from "@fluentui/react-components";
 import {
   ChatAddRegular,
@@ -19,6 +19,18 @@ import {
   writeObjectTransfer,
 } from "../object-transfer/objectTransfer";
 import type { ObjectRepository } from "../objects/objectRepository";
+// Local assets are rendered by ObjectAssetImage after permission-checked loading.
+// Keep their captions in the text without handing attachment: URLs to Markdown.
+export function objectDisplayText(
+  object: ObjectEnvelope,
+  hideDrawingCaption = false,
+) {
+  return objectText(object).replace(
+    /!\[([^\]\n]*)\]\(\s*attachment:[^)]+\)/g,
+    (_, caption: string) =>
+      hideDrawingCaption && /^手绘笔记（\d+ 笔）$/.test(caption) ? "" : caption,
+  );
+}
 export type ObjectSurfaceState =
   | "loading"
   | "ready"
@@ -34,75 +46,125 @@ export function ObjectSurface({
   onDetails,
   onError,
   presentation = "card",
+  onEdit,
+  editor,
 }: {
   object: ObjectEnvelope;
-  presentation?: "full" | "card" | "inline";
+  presentation?: "full" | "card" | "inline" | "canvas";
   onAdd(ref: ObjectRef): void;
   onSource(): void;
   onDetails(): void;
   onError(message: string): void;
+  onEdit?(): void;
+  editor?: ReactNode;
 }) {
   const partial =
     (object.kind === "content.fragment" ||
       object.kind === "conversation.message") &&
     object.content.payload.partial;
-  const text = objectText(object);
+  const text = objectDisplayText(object, presentation === "canvas");
+  if (presentation === "canvas" && !text.trim() && !editor) return null;
   return (
     <article
-      className={`object-surface object-${presentation}`}
+      className={`object-surface object-${presentation}${editor ? " has-editor" : ""}`}
       aria-label={object.title}
     >
-      <strong>{object.title}</strong>
-      <span className="object-meta">
-        {partial ? "未完成快照 · " : ""}已保存到本机
-      </span>
-      <div className="object-body">
-        <AssistantMarkdown value={text} />
-      </div>
-      <div className="object-toolbar">
-        <Tooltip
-          content="拖入白板或对话；点击复制带来源链接的文字"
-          relationship="description"
+      {presentation !== "canvas" ? (
+        <>
+          <strong>{object.title}</strong>
+          <span className="object-meta">
+            {partial ? "未完成快照 · " : ""}已保存到本机
+          </span>
+        </>
+      ) : partial ? (
+        <span className="object-meta">未完成快照</span>
+      ) : null}
+      {editor ?? (
+        <div
+          className={`object-body${onEdit ? " is-editable" : ""}`}
+          role={onEdit ? "button" : undefined}
+          tabIndex={onEdit ? 0 : undefined}
+          aria-label={
+            onEdit
+              ? object.kind === "content.fragment"
+                ? "编辑摘录为笔记"
+                : "编辑笔记正文"
+              : undefined
+          }
+          onClick={
+            onEdit
+              ? (event) => {
+                  if (
+                    (event.target as Element).closest(
+                      "a, button, input, textarea",
+                    )
+                  )
+                    return;
+                  onEdit();
+                }
+              : undefined
+          }
+          onKeyDown={
+            onEdit
+              ? (event) => {
+                  if (event.target !== event.currentTarget) return;
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onEdit();
+                  }
+                }
+              : undefined
+          }
         >
-          <Button
-            size="small"
-            icon={<CopyRegular />}
-            aria-label="复制或拖动内容"
-            draggable
-            onDragStart={(event) =>
-              writeObjectTransfer(
-                event.dataTransfer,
-                makeObjectTransfer([refOf(object)], text),
-              )
-            }
-            onClick={() =>
-              void navigator.clipboard
-                .writeText(`${text}\n\n${objectLink(refOf(object))}`)
-                .catch(() => onError("复制失败，请重试。"))
-            }
-          />
-        </Tooltip>
-        <Tooltip content="加入对话" relationship="description">
-          <Button
-            size="small"
-            icon={<ChatAddRegular />}
-            aria-label="加入对话"
-            onClick={() => onAdd(refOf(object))}
-          />
-        </Tooltip>
-        <Tooltip content="查看来源" relationship="description">
-          <Button
-            size="small"
-            icon={<LinkRegular />}
-            aria-label="查看来源"
-            onClick={onSource}
-            disabled={object.provenance.sourceRefs.length === 0}
-          />
-        </Tooltip>
-        <Button size="small" onClick={onDetails}>
-          关联与历史
-        </Button>
-      </div>
+          <AssistantMarkdown value={text} />
+        </div>
+      )}
+      {presentation !== "canvas" ? (
+        <div className="object-toolbar">
+          <Tooltip
+            content="拖入白板或对话；点击复制带来源链接的文字"
+            relationship="description"
+          >
+            <Button
+              size="small"
+              icon={<CopyRegular />}
+              aria-label="复制或拖动内容"
+              draggable
+              onDragStart={(event) =>
+                writeObjectTransfer(
+                  event.dataTransfer,
+                  makeObjectTransfer([refOf(object)], text),
+                )
+              }
+              onClick={() =>
+                void navigator.clipboard
+                  .writeText(`${text}\n\n${objectLink(refOf(object))}`)
+                  .catch(() => onError("复制失败，请重试。"))
+              }
+            />
+          </Tooltip>
+          <Tooltip content="加入对话" relationship="description">
+            <Button
+              size="small"
+              icon={<ChatAddRegular />}
+              aria-label="加入对话"
+              onClick={() => onAdd(refOf(object))}
+            />
+          </Tooltip>
+          <Tooltip content="查看来源" relationship="description">
+            <Button
+              size="small"
+              icon={<LinkRegular />}
+              aria-label="查看来源"
+              onClick={onSource}
+              disabled={object.provenance.sourceRefs.length === 0}
+            />
+          </Tooltip>
+          <Button size="small" onClick={onDetails}>
+            关联与历史
+          </Button>
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -168,7 +230,7 @@ export function ObjectDetails({
     <section className="object-details" aria-label="内容详情">
       <Button onClick={onClose}>关闭详情</Button>
       <h3>{object.title}</h3>
-      <AssistantMarkdown value={objectText(object)} />
+      <AssistantMarkdown value={objectDisplayText(object)} />
       {object.assets.map((asset) => (
         <ObjectAssetImage
           key={asset.assetId}

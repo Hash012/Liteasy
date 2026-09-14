@@ -1,4 +1,5 @@
 import type { SettingsState, UpdateSettingCommand } from "./settings.types";
+import { normalizeDisplayScale, normalizeViewFontSize } from "./viewSettings";
 
 const viewSettingsStorageKey = "liteasy.view-settings.v1";
 const modelSettingsStorageKey = "liteasy.model-connection.v1";
@@ -41,16 +42,17 @@ function loadPersistedViewSettings(): Partial<SettingsState> {
     const value = globalThis.localStorage?.getItem(viewSettingsStorageKey);
     if (!value) return {};
     const parsed = JSON.parse(value) as Partial<SettingsState>;
-    return {
+    return Object.fromEntries(Object.entries({
       "view.font_family": typeof parsed["view.font_family"] === "string" ? parsed["view.font_family"] : undefined,
-      "view.font_size": typeof parsed["view.font_size"] === "string" ? parsed["view.font_size"] : undefined,
+      "view.font_size": normalizeViewFontSize(parsed["view.font_size"]),
+      "view.display_scale": normalizeDisplayScale(parsed["view.display_scale"]),
       "view.pdf_background": ["paper", "warm", "mint", "custom"].includes(String(parsed["view.pdf_background"]))
         ? parsed["view.pdf_background"]
         : undefined,
       "view.pdf_custom_background": typeof parsed["view.pdf_custom_background"] === "string"
         ? parsed["view.pdf_custom_background"]
         : undefined
-    };
+    }).filter(([, setting]) => setting !== undefined));
   } catch {
     return {};
   }
@@ -63,6 +65,7 @@ function persistViewSettings(state: SettingsState) {
       JSON.stringify({
         "view.font_family": state["view.font_family"],
         "view.font_size": state["view.font_size"],
+        "view.display_scale": state["view.display_scale"],
         "view.pdf_background": state["view.pdf_background"],
         "view.pdf_custom_background": state["view.pdf_custom_background"]
       })
@@ -103,6 +106,7 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
     ...loadPersistedModelSettings(),
     "view.font_family": '"Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", sans-serif',
     "view.font_size": "14",
+    "view.display_scale": "100",
     "view.pdf_background": "paper",
     "view.pdf_custom_background": "#ffffff",
     ...loadPersistedViewSettings()
@@ -110,7 +114,11 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
 
   return {
     apply(command: UpdateSettingCommand) {
-      state[command.target] = command.value as never;
+      state[command.target] = (command.target === "view.display_scale"
+        ? normalizeDisplayScale(command.value)
+        : command.target === "view.font_size"
+          ? normalizeViewFontSize(command.value)
+          : command.value) as never;
       if (command.target.startsWith("view.")) {
         persistViewSettings(state);
       }

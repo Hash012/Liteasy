@@ -64,6 +64,149 @@ const boardDraft: ObjectDraft = {
   content: { schema: "liteasy.board/v1", payload: { description: "" } },
 };
 
+test("resize and note edits persist atomically while preserving frozen placements", async () => {
+  const { repository, reopen } = fixture();
+  const source = await repository.create(note());
+  const board = await repository.create(boardDraft);
+  const [boardRef] = await repository.applyBoardPatch({
+    boardRef: refOf(board),
+    operationId: "place",
+    add: [refOf(source), refOf(source)],
+  });
+  const [p, other] = await repository.listPlacements(board.objectId);
+  const [resizedBoard] = await repository.applyBoardPatch({
+    boardRef,
+    operationId: "resize",
+    resize: [
+      {
+        placementId: p.placementId,
+        revision: p.revision,
+        position: { x: 20, y: 30 },
+        size: { width: 400, height: 310 },
+      },
+    ],
+  });
+  const resized = (await reopen().listPlacements(board.objectId)).find(
+    (item) => item.placementId === p.placementId,
+  )!;
+  expect(resized).toMatchObject({
+    position: { x: 20, y: 30 },
+    size: { width: 400, height: 310 },
+  });
+  await expect(
+    repository.editPlacement({
+      boardRef: resizedBoard,
+      placement: p,
+      text: "丢失修改",
+      operationId: "stale",
+    }),
+  ).rejects.toMatchObject({ code: "revision_conflict" });
+  expect(objectText(await repository.resolveLatest(source.objectId))).toBe(
+    "原始笔记",
+  );
+  const [edited] = await repository.editPlacement({
+    boardRef: resizedBoard,
+    placement: resized,
+    text: "新笔记正文",
+    operationId: "edit",
+  });
+  expect(edited.objectId).toBe(source.objectId);
+  expect(objectText(await reopen().get(edited))).toBe("新笔记正文");
+  const saved = await reopen().listPlacements(board.objectId);
+  expect(saved.find((item) => item.placementId === p.placementId)?.ref).toEqual(
+    edited,
+  );
+  expect(
+    saved.find((item) => item.placementId === other.placementId)?.ref,
+  ).toEqual(refOf(source));
+  expect(objectText(await repository.get(refOf(source)))).toBe("原始笔记");
+});
+
+test("editing a fragment creates a derived note and moves membership without changing the source", async () => {
+  const { repository } = fixture();
+  const source = await repository.create(note("文献原文"));
+  const fragment = await repository.create({
+    kind: "content.fragment",
+    title: "摘录",
+    sourceRefs: [refOf(source)],
+    content: {
+      schema: "liteasy.fragment/v1",
+      payload: {
+        text: "原文",
+        partial: false,
+        anchors: [
+          {
+            type: "text",
+            sourceRef: refOf(source),
+            blockId: "body",
+            quote: { exact: "原文", prefix: "", suffix: "" },
+          },
+        ],
+      },
+    },
+  });
+  const board = await repository.create(boardDraft);
+  const [boardRef] = await repository.applyBoardPatch({
+    boardRef: refOf(board),
+    operationId: "place",
+    add: [refOf(fragment)],
+  });
+  const [placement] = await repository.listPlacements(board.objectId);
+  const [edited] = await repository.editPlacement({
+    boardRef,
+    placement,
+    text: "我对摘录的理解",
+    operationId: "edit",
+  });
+  expect(edited.objectId).not.toBe(fragment.objectId);
+  expect((await repository.get(edited)).provenance.derivedFrom).toEqual([
+    refOf(fragment),
+  ]);
+  expect(objectText(await repository.get(refOf(fragment)))).toBe("原文");
+  expect(
+    await repository.listRelations(refOf(fragment), { predicate: "member_of" }),
+  ).toHaveLength(0);
+  expect(
+    await repository.listRelations(edited, { predicate: "derived_from" }),
+  ).toHaveLength(1);
+});
+
+test("saved annotations retain identity on repeated capture and roll back projection on board conflict", async () => {
+  const { repository } = fixture();
+  const board = await repository.create(boardDraft);
+  const first = {
+    operationId: "annotation-first",
+    legacyKey: "annotation-stable",
+    draft: note("批注"),
+    boardRef: refOf(board),
+  };
+  const [ref] = await repository.captureFragment(first);
+  const [same] = await repository.captureFragment({
+    ...first,
+    operationId: "annotation-second",
+    boardRef: refOf(await repository.resolveLatest(board.objectId)),
+  });
+  expect(same).toEqual(ref);
+  expect(await repository.listPlacements(board.objectId)).toHaveLength(2);
+  await expect(
+    repository.captureFragment({
+      ...first,
+      operationId: "annotation-conflict",
+      draft: note("修订批注"),
+    }),
+  ).rejects.toMatchObject({ code: "revision_conflict" });
+  expect(objectText(await repository.resolveLatest(ref.objectId))).toBe("批注");
+  const [edited] = await repository.captureFragment({
+    ...first,
+    operationId: "annotation-third",
+    draft: note("修订批注"),
+    boardRef: refOf(await repository.resolveLatest(board.objectId)),
+  });
+  expect(edited.objectId).toBe(ref.objectId);
+  expect(edited.revision).not.toBe(ref.revision);
+  expect(objectText(await repository.get(ref))).toBe("批注");
+});
+
 test("placements reuse content; removing a card preserves source; independent copies preserve history", async () => {
   const f = fixture();
   const source = await f.repository.create(note());

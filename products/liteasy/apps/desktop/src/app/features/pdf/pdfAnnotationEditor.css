@@ -1,0 +1,78 @@
+.pdf-annotation-note-editor {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pdf-annotation-note-editor .fui-Textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pdf-annotation-note-editor .fui-Textarea textarea {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-sizing: border-box;
+  color: inherit;
+  font: inherit;
+  min-height: 84px;
+  padding: 6px 8px;
+}
+
+.pdf-annotation-note-editor .pdf-annotation-markdown {
+  background: var(--colorNeutralBackground2);
+  border: 1px solid var(--colorNeutralStroke2);
+  border-radius: 4px;
+  color: var(--colorNeutralForeground1);
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+  padding: 8px;
+}
+
+.pdf-annotation-editor-actions,
+.pdf-annotation-transfer-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.pdf-annotation-editor-actions .fui-Button {
+  border: 1px solid var(--colorNeutralStroke1);
+  border-radius: 4px;
+  background: var(--colorNeutralBackground1);
+  color: var(--colorNeutralForeground1);
+  font-family: inherit;
+  font-size: var(--fontSizeBase200);
+  font-weight: var(--fontWeightSemibold);
+  padding: 3px 8px;
+}
+.pdf-annotation-editor-actions .fui-Button:first-child {
+  background: var(--colorBrandBackground);
+  border-color: transparent;
+  color: var(--colorNeutralForegroundOnBrand);
+}
+.pdf-annotation-editor-actions .fui-Button:first-child:hover {
+  background: var(--colorBrandBackgroundHover);
+}
+.pdf-annotation-editor-actions .fui-Button:last-child:hover {
+  background: var(--colorNeutralBackground1Hover);
+}
+
+.pdf-annotation-popover.pdf-annotation-fluent {
+  background: var(--colorNeutralBackground1);
+  border: 1px solid var(--colorNeutralStroke1);
+  border-radius: 6px;
+  box-shadow: var(--shadow8);
+  color: var(--colorNeutralForeground1);
+}
+
+.pdf-annotation-fluent > header strong {
+  color: inherit;
+  font-size: inherit;
+}
+
+.pdf-annotation-summary[draggable="true"] {
+  cursor: grab;
+}

@@ -23,6 +23,7 @@ export type SettingKey =
   | "models.control_plane_endpoint"
   | "view.font_family"
   | "view.font_size"
+  | "view.display_scale"
   | "view.pdf_background"
   | "view.pdf_custom_background";
 
@@ -51,6 +52,7 @@ export type SettingsState = {
   "models.control_plane_endpoint": string;
   "view.font_family": string;
   "view.font_size": string;
+  "view.display_scale": string;
   "view.pdf_background": "paper" | "warm" | "mint" | "custom";
   "view.pdf_custom_background": string;
 };

@@ -4,6 +4,18 @@ import { describe, expect, test, vi } from "vitest";
 import { ActivityBar } from "../app/layout/ActivityBar";
 
 describe("ActivityBar", () => {
+  test("offers independent Agent and help entries after their dock tabs are closed", async () => {
+    const user = userEvent.setup();
+    const onOpenAgent = vi.fn();
+    const onOpenHelp = vi.fn();
+    render(<ActivityBar activeView="library" onSelectView={vi.fn()} onOpenAgent={onOpenAgent} onOpenHelp={onOpenHelp} agentOpen={false} helpOpen={false} />);
+    const nav = screen.getByRole("navigation", { name: "左边栏导航" });
+    await user.click(within(nav).getByRole("button", { name: "Agent", exact: true }));
+    expect(onOpenAgent).toHaveBeenCalledOnce();
+    await user.click(within(nav).getByRole("button", { name: "帮助", exact: true }));
+    expect(onOpenHelp).toHaveBeenCalledOnce();
+    expect(within(nav).getByRole("button", { name: "Agent", exact: true })).toHaveAttribute("aria-pressed", "false");
+  });
   test("renders the VSCode-style left rail and activates the selected view", async () => {
     const onSelectView = vi.fn();
     const onToggleActiveView = vi.fn();

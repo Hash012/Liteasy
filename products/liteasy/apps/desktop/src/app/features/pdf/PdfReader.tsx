@@ -1,6 +1,6 @@
 import { DrawShapeRegular, EraserRegular, ArrowUndoRegular } from "@fluentui/react-icons";
 import { PdfInkLayer } from "./PdfInkLayer";
-import { pdfInkBounds, type PdfInkMode, type PdfInkStroke } from "./pdfInk";
+import { canGroupPdfInkStroke, pdfInkGroupBounds, pdfInkStrokes, type PdfInkMode, type PdfInkStroke } from "./pdfInk";
 import { PdfPaneResizeHandle } from "./PdfPaneResizeHandle";
 import { extractQuickAskAbstract, type PdfQuickAskRequest } from "./pdfQuickAsk";
 import { readerContextDragMime } from "../assistant/readerContextDrag";
@@ -18,11 +18,16 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent
 } from "react";
-import { Button, Tooltip } from "@fluentui/react-components";
+import { Button, Checkbox, Tooltip } from "@fluentui/react-components";
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import {
   ChatHelpRegular,
+  GlobeRegular,
+  LocationRegular,
+  ChevronUpRegular,
   CommentRegular,
+  DismissRegular,
+  DragRegular,
   CopyRegular,
   DeleteRegular,
   DocumentRegular,
@@ -81,6 +86,9 @@ import {
 } from "./pdfSelectionEngine";
 import { sortPdfAnnotationsByReadingOrder } from "./pdfAnnotationReadingOrder";
 import { PdfAnnotationMarkdown } from "./PdfAnnotationMarkdown";
+import { PdfAnnotationEditor } from "./PdfAnnotationEditor";
+import { PdfAnnotationStatus } from "./PdfAnnotationStatus";
+import "./pdfAnnotationList.css";
 import { PdfMarkdownTextBox } from "./PdfMarkdownTextBox";
 import { usePdfCitationParsing } from "./usePdfCitationParsing";
 import { usePdfFulltextStore } from "./usePdfFulltextStore";
@@ -386,7 +394,9 @@ function getAnnotationSummaryText(annotation: PdfAnnotationV2) {
   if (annotation.kind !== "text" && annotation.kind !== "ink") return annotation.excerpt;
   // These annotations have generated excerpts; show their content instead of repeating the type.
   const note = annotation.note?.replace(/!\[[^\]]*\]\([^)]*\)/g, "").trim();
-  return note || `第 ${annotation.page} 页`;
+  return annotation.kind === "ink"
+    ? note || `${pdfInkStrokes(annotation).length} 笔`
+    : note || "空白笔记";
 }
 
 function getHighlightColor(color: HighlightColor): string {
@@ -1059,6 +1069,8 @@ type PdfPageViewProps = {
   inkColor?: string;
   inkWidth?: number;
   onInkCreate?: (page: number, stroke: PdfInkStroke) => void;
+  onInkDeleteStroke?: (annotation: PdfAnnotationV2, strokeIndex: number) => void;
+  onAnnotationDrag?: (annotation: PdfAnnotationV2, dataTransfer: DataTransfer) => void;
   activeTextAnnotationId?: string | null;
   onTextAnnotationActivate?: (annotationId: string) => void;
   onTextAnnotationCommit?: (
@@ -1068,7 +1080,7 @@ type PdfPageViewProps = {
     images?: PdfAnnotationV2["images"]
   ) => void;
   onTextAnnotationDelete?: (annotation: PdfAnnotationV2) => void;
-  onTextAnnotationMove?: (annotationId: string, rect: PdfAnnotationRect) => void;
+  onTextAnnotationMove?: (annotationId: string, rect: PdfAnnotationRect, manualSize?: boolean) => void;
   onTextAnnotationOpacityChange?: (annotationId: string, opacity: number) => void;
   marginCommentConnectorsVisible?: boolean;
   marginCommentsVisible?: boolean;
@@ -1087,7 +1099,7 @@ type PdfPageViewProps = {
 
 function PdfPageView({
   activeSearchMatch,
-  inkMode = null, inkColor = "#1b66b3", inkWidth = .3, onInkCreate,
+  inkMode = null, inkColor = "#1b66b3", inkWidth = .3, onInkCreate, onInkDeleteStroke, onAnnotationDrag,
   activeTextAnnotationId,
   activePaper,
   annotations,
@@ -1352,7 +1364,7 @@ function PdfPageView({
         {onInkCreate && onTextAnnotationDelete ? <PdfInkLayer
           annotations={pageAnnotations.filter((annotation) => annotation.kind === "ink")}
           mode={inkMode} color={inkColor} width={inkWidth} aspectRatio={pageSize.height / pageSize.width}
-          onCreate={(stroke) => onInkCreate(pageNumber, stroke)} onDelete={onTextAnnotationDelete} /> : null}
+          onCreate={(stroke) => onInkCreate(pageNumber, stroke)} onDelete={onTextAnnotationDelete} onDeleteStroke={onInkDeleteStroke} /> : null}
         {pageAnnotations.filter((annotation) => annotation.kind !== "ink").map((annotation) => annotation.kind === "text" ? (
           annotation.rects[0] && onTextAnnotationActivate && onTextAnnotationCommit &&
           onTextAnnotationDelete && onTextAnnotationMove && onTextAnnotationOpacityChange ? (
@@ -1365,6 +1377,7 @@ function PdfPageView({
               onDelete={onTextAnnotationDelete}
               onMove={onTextAnnotationMove}
               onOpacityChange={onTextAnnotationOpacityChange}
+              onDragToBoard={onAnnotationDrag ? (annotation, data) => onAnnotationDrag(annotation, data) : undefined}
               rect={annotation.rects[0]}
             />
           ) : null
@@ -1382,6 +1395,7 @@ function PdfPageView({
                   paperId: activePaper.id, paperTitle: activePaper.title, source: "pdf_selection"
                 } satisfies ReaderConversationContext));
                 event.dataTransfer.setData("text/plain", annotation.excerpt);
+                onAnnotationDrag?.(annotation, event.dataTransfer);
               }}
               key={`${annotation.id}-${index}`}
               onClick={(event) => {
@@ -2821,7 +2835,7 @@ export function PdfReader({
 
   function openAnnotationEditor(annotation: PdfAnnotationV2) {
     if (annotation.kind === "text") {
-      setActiveAnnotationId(null);
+      setActiveAnnotationId(annotation.id);
       setAnnotationPopup(null);
       setActiveTextAnnotationId(annotation.id);
       locateAnnotation(annotation);
@@ -2924,13 +2938,56 @@ export function PdfReader({
     if (!activePaper || hydratedAnnotationStorageKey !== annotationStorageKey) return;
     setFocusedPage(page);
     const now = new Date().toISOString();
-    const annotation: PdfAnnotationV2 = {
-      id: `ink-${crypto.randomUUID()}`, kind: "ink", ink, page,
-      rects: [pdfInkBounds(ink)], paperIdentity: resolvePaperIdentity(activePaper),
-      text: "手绘", excerpt: "手绘笔迹", createdAt: now, updatedAt: now, revision: 1,
-      publication: { desiredVisibility: "private", state: "not_published" }
-    };
-    setCurrentAnnotations((current) => [...current, annotation]);
+    setCurrentAnnotations((current) => {
+      const nearby = [...current].reverse().find((annotation) =>
+        canGroupPdfInkStroke(annotation, page, ink, Date.parse(now))
+      );
+      if (nearby) {
+        const strokes = [...pdfInkStrokes(nearby), ink];
+        const updated = revisePdfAnnotation(nearby, {
+          ink: strokes[0], inkStrokes: strokes, inkLastStrokeAt: now,
+          rects: [pdfInkGroupBounds(strokes)], updatedAt: now
+        });
+        return current.map((annotation) => annotation.id === nearby.id ? updated : annotation);
+      }
+      return [...current, {
+        id: `ink-${crypto.randomUUID()}`, kind: "ink", ink, inkStrokes: [ink], page,
+        inkLastStrokeAt: now, rects: [pdfInkGroupBounds([ink])], paperIdentity: resolvePaperIdentity(activePaper),
+        text: "手绘", excerpt: "手绘笔记", createdAt: now, updatedAt: now, revision: 1,
+        publication: { desiredVisibility: "private", state: "not_published" }
+      }];
+    });
+  }
+
+  function deleteInkStroke(annotation: PdfAnnotationV2, strokeIndex: number) {
+    const current = annotationsRef.current.find((item) => item.id === annotation.id);
+    if (!current) return;
+    const strokes = pdfInkStrokes(current).filter((_, index) => index !== strokeIndex);
+    if (!strokes.length) { void deleteAnnotation(current); return; }
+    const updated = revisePdfAnnotation(current, {
+      ink: strokes[0], inkStrokes: strokes, rects: [pdfInkGroupBounds(strokes)],
+      updatedAt: new Date().toISOString()
+    });
+    setCurrentAnnotations((items) => items.map((item) => item.id === current.id ? updated : item));
+    setStatus("已移除一笔，手绘笔记的其余笔迹已保留。");
+  }
+
+  function annotationCaptureInput(annotation: PdfAnnotationV2) {
+    const pageElement = stageRef.current?.querySelector<HTMLElement>(`[data-page="${annotation.page}"]`);
+    const pageRect = pageElement?.getBoundingClientRect();
+    const pageAspectRatio = pageRect && pageRect.width > 0 ? pageRect.height / pageRect.width : undefined;
+    return { paper: activePaper!, annotation, pageAspectRatio };
+  }
+
+  function dragAnnotation(annotation: PdfAnnotationV2, dataTransfer: DataTransfer) {
+    if (!activePaper || !objectWorkbench) return;
+    if (objectWorkbench.dragAnnotation) {
+      objectWorkbench.dragAnnotation(annotationCaptureInput(annotation), dataTransfer);
+    } else {
+      objectWorkbench.dragPdf({ paper: activePaper, page: annotation.page,
+        excerpt: annotation.excerpt, rects: annotation.rects, normalizedStart: annotation.normalizedStart
+      }, dataTransfer);
+    }
   }
 
   function commitTextAnnotation(
@@ -2959,21 +3016,23 @@ export function PdfReader({
     setStatus("已保存 Markdown 文本框。");
   }
 
-  function moveTextAnnotation(annotationId: string, rect: PdfAnnotationRect) {
+  function moveTextAnnotation(annotationId: string, rect: PdfAnnotationRect, manualSize?: boolean) {
     const annotation = annotationsRef.current.find((item) => item.id === annotationId);
     const previousRect = annotation?.rects[0];
     if (!annotation || annotation.kind !== "text" || !previousRect || (
       previousRect.height === rect.height &&
       previousRect.left === rect.left &&
       previousRect.top === rect.top &&
-      previousRect.width === rect.width
+      previousRect.width === rect.width &&
+      (!manualSize || annotation.manualSize)
     )) return;
     const updated = revisePdfAnnotation(annotation, {
       rects: [rect],
+      ...(manualSize ? { manualSize: true } : {}),
       updatedAt: new Date().toISOString()
     });
     setCurrentAnnotations((current) => current.map((item) => item.id === annotationId ? updated : item));
-    setStatus("已移动 Markdown 文本框。");
+    setStatus(manualSize ? "已调整 Markdown 文本框大小。" : "已移动 Markdown 文本框。");
   }
 
   function changeTextAnnotationOpacity(annotationId: string, opacity: number) {
@@ -3195,7 +3254,7 @@ export function PdfReader({
         aria-label="PDF 阅读工作区"
         style={{ "--pdf-sidebar-width": `${sidebarWidth}px`, "--pdf-whiteboard-width": `${whiteboardWidth}px` } as CSSProperties}
         className={`pdf-workspace ${sidebarCollapsed ? "sidebar-collapsed" : "sidebar-open"} ${
-          whiteboardOpen ? "whiteboard-open" : ""
+          whiteboardOpen && (!objectWorkbench || legacyBoardPreview) ? "whiteboard-open" : ""
         }`}
       >
         <aside
@@ -3330,7 +3389,10 @@ export function PdfReader({
                           <button
                             aria-expanded={activeAnnotationId === annotation.id}
                             aria-label={`编辑批注：${annotation.excerpt}`}
+                            aria-description={`${annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)}，第 ${annotation.page} 页，${annotation.kind === "text" || annotation.kind === "ink" || annotation.quickAsk ? "仅保存在本地" : publicationStatus(annotation.publication)}`}
                             className="pdf-annotation-summary"
+                            draggable={Boolean(objectWorkbench)}
+                            onDragStart={(event) => dragAnnotation(annotation, event.dataTransfer)}
                             onClick={() => openAnnotationEditor(annotation)}
                             onDoubleClick={(event) => {
                               event.preventDefault();
@@ -3340,48 +3402,71 @@ export function PdfReader({
                             title={`${annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)} · 第 ${annotation.page} 页；展开完整内容；双击定位到 PDF 原文`}
                             type="button"
                           >
-                            <span
-                              aria-label={annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)}
-                              className="pdf-annotation-kind"
-                              role="img"
-                            >{getAnnotationIcon(annotation)}</span>
-                            <span className="pdf-annotation-excerpt">{getAnnotationSummaryText(annotation)}</span>
-                            {annotation.kind !== "text" && annotation.kind !== "ink" && activeAnnotationId !== annotation.id && (annotation.quickAsk?.question || annotation.note) ?
-                              <span className="pdf-annotation-summary-note"> · {annotation.quickAsk?.question ?? annotation.note}</span> : null}
+                            <Tooltip content={annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)} relationship="description">
+                              <span aria-label={annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)}
+                                className="pdf-annotation-kind" role="img">{getAnnotationIcon(annotation)}</span>
+                            </Tooltip>
+                            <span className="pdf-annotation-summary-content">
+                              <span className="pdf-annotation-excerpt">{getAnnotationSummaryText(annotation)}</span>
+                              {annotation.kind !== "text" && annotation.kind !== "ink" && activeAnnotationId !== annotation.id && (annotation.quickAsk?.question || annotation.note) ?
+                                <span className="pdf-annotation-summary-note"><CommentRegular /><span>{annotation.quickAsk?.question ?? annotation.note}</span></span> : null}
+                            </span>
+                            <Tooltip content={`第 ${annotation.page} 页；双击条目定位原文`} relationship="description">
+                              <span className="pdf-annotation-page" aria-label={`第 ${annotation.page} 页`}><DocumentRegular />{annotation.page}</span>
+                            </Tooltip>
+                            <PdfAnnotationStatus
+                              label={annotation.kind === "text" || annotation.kind === "ink" || annotation.quickAsk ? "仅保存在本地" : publicationStatus(annotation.publication)}
+                              state={annotation.publication.state === "failed" ? "failed" : annotation.publication.state === "published" ? "public" :
+                                annotation.publication.state === "not_published" ? "private" : "pending"}
+                              live={activeAnnotationId === annotation.id}
+                            />
                           </button>
+                          {activeAnnotationId === annotation.id ? <div className="pdf-annotation-actions" role="toolbar" aria-label={`批注操作：${annotation.excerpt}`}>
+                            <Tooltip content="定位到 PDF 原文" relationship="description">
+                              <Button aria-label={`定位批注：${annotation.excerpt}`} appearance="subtle" size="small" icon={<LocationRegular />}
+                                onClick={() => locateAnnotation(annotation)} />
+                            </Tooltip>
+                            {objectWorkbench ? <>
+                              <Tooltip content="拖动批注到研究白板" relationship="description">
+                                <Button aria-label={`拖动批注到研究白板：${annotation.excerpt}`} appearance="subtle" size="small"
+                                  icon={<DragRegular />} draggable onDragStart={(event) => dragAnnotation(annotation, event.dataTransfer)} />
+                              </Tooltip>
+                              {objectWorkbench.captureAnnotation ? <Tooltip content="加入研究白板" relationship="description">
+                                <Button aria-label={`加入研究白板：${annotation.excerpt}`} appearance="subtle" size="small" icon={<WhiteboardRegular />}
+                                  onClick={() => { if (activePaper) void objectWorkbench.captureAnnotation?.(annotationCaptureInput(annotation), "board").catch((error) => setStatus(error.message)); }} />
+                              </Tooltip> : null}
+                            </> : null}
+                            {annotation.kind !== "text" && annotation.kind !== "ink" && !annotation.quickAsk ? <>
+                              <Tooltip content={annotation.publication.desiredVisibility === "public" ? "取消勾选以从论坛撤回" : "公开到论坛"} relationship="description">
+                                <Checkbox aria-label={`将第 ${annotation.page} 页${getAnnotationLabel(annotation.kind)}批注公开到论坛：${annotation.excerpt}`}
+                                  checked={annotation.publication.desiredVisibility === "public"}
+                                  onChange={(_, data) => setAnnotationPublic(annotation.id, data.checked === true)}
+                                  label={<GlobeRegular />} />
+                              </Tooltip>
+                              {onShareAnnotationToOrganization ? <Tooltip content={sharingAnnotationId === annotation.id ? "正在共享到组织" : "共享批注到组织"} relationship="description">
+                                <Button appearance="subtle" aria-label={`共享批注到组织：${annotation.excerpt}`} disabled={sharingAnnotationId !== null}
+                                  icon={<ShareRegular />} onClick={() => void shareAnnotationToOrganization(annotation)} size="small" />
+                              </Tooltip> : null}
+                            </> : null}
+                            <Tooltip content="删除批注" relationship="description">
+                              <Button aria-label="删除" appearance="subtle" size="small" icon={<DeleteRegular />} onClick={() => void deleteAnnotation(annotation)} />
+                            </Tooltip>
+                            <Tooltip content="收起批注操作" relationship="description">
+                              <Button aria-label="收起批注操作" appearance="subtle" size="small" icon={<ChevronUpRegular />} onClick={cancelAnnotationEditing} />
+                            </Tooltip>
+                          </div> : null}
                           {activeAnnotationId === annotation.id && annotation.kind !== "text" && annotation.note && (
                             <div className="annotation-divider" />
                           )}
-                          {activeAnnotationId === annotation.id ? (
+                          {activeAnnotationId === annotation.id && annotation.kind !== "text" ? (
                             <div className="pdf-annotation-editor">
                               {annotation.quickAsk ? <>
                                 <strong>{annotation.quickAsk.question}</strong>
                                 <PdfAnnotationMarkdown value={annotation.quickAsk.answer} />
                               </> : <>
 
-                              <div className="note-editor">
-                                <textarea
-                                  aria-label="补充批注笔记"
-                                  maxLength={10_000}
-                                  onChange={(e) => setAnnotationNoteDraft(e.target.value)}
-                                  placeholder="添加注释，支持 Markdown..."
-                                  rows={3}
-                                  value={annotationNoteDraft}
-                                />
-                                <div aria-label="批注 Markdown 实时预览" aria-live="polite">
-                                  <PdfAnnotationMarkdown
-                                    value={annotationNoteDraft}
-                                  />
-                                </div>
-                                <div className="editor-actions">
-                                  <button onClick={saveAnnotationNote} type="button" className="save-button">
-                                    保存笔记
-                                  </button>
-                                  <button onClick={cancelAnnotationEditing} type="button" className="cancel-button">
-                                    取消
-                                  </button>
-                                </div>
-                              </div>
+                              <PdfAnnotationEditor value={annotationNoteDraft} onChange={setAnnotationNoteDraft}
+                                onSave={saveAnnotationNote} onCancel={cancelAnnotationEditing} />
                               {annotation.kind === "highlight" && (
                                 <div className="color-selector">
                                   {(["yellow", "red", "blue", "green", "pink"] as HighlightColor[]).map((color) => (
@@ -3400,48 +3485,8 @@ export function PdfReader({
                                 </div>
                               )}
                               </>}
-                              <button
-                                className="delete-button"
-                                onClick={() => void deleteAnnotation(annotation)}
-                                type="button"
-                              >
-                                删除
-                              </button>
                             </div>
                           ) : null}
-                          {activeAnnotationId === annotation.id && !annotation.quickAsk ? <>
-                          {annotation.kind === "text" || annotation.kind === "ink" ? (
-                            <small role="note">内容保存在当前论文的本地批注中</small>
-                          ) : (
-                            <>
-                              <label className="pdf-annotation-public-toggle">
-                                <input
-                                  aria-label={`将第 ${annotation.page} 页${getAnnotationLabel(annotation.kind)}批注公开到论坛：${annotation.excerpt}`}
-                                  checked={annotation.publication.desiredVisibility === "public"}
-                                  onChange={(event) => setAnnotationPublic(annotation.id, event.currentTarget.checked)}
-                                  type="checkbox"
-                                />
-                                公开到论坛
-                              </label>
-                              <small aria-live="polite" role="status">
-                                {publicationStatus(annotation.publication)}
-                              </small>
-                            </>
-                          )}
-                          {annotation.kind !== "text" && annotation.kind !== "ink" && onShareAnnotationToOrganization ? (
-                            <Button
-                              appearance="subtle"
-                              aria-label={`共享批注到组织：${annotation.excerpt}`}
-                              disabled={sharingAnnotationId !== null}
-                              icon={<ShareRegular />}
-                              onClick={() => void shareAnnotationToOrganization(annotation)}
-                              size="small"
-                              type="button"
-                            >
-                              {sharingAnnotationId === annotation.id ? "共享中" : "共享到组织"}
-                            </Button>
-                          ) : null}
-                          </> : null}
                         </li>
                       ))}
                     </ul>
@@ -3556,7 +3601,7 @@ export function PdfReader({
               matchCase={searchMatchCase}
               marginCommentConnectorsVisible={marginCommentConnectorsVisible}
               marginCommentsVisible={marginCommentsVisible}
-              whiteboardOpen={whiteboardOpen}
+              whiteboardOpen={objectWorkbench?.isOpen || (whiteboardOpen && (!objectWorkbench || legacyBoardPreview))}
               onChangeLayoutMode={changeLayoutMode}
               onChangeMatchCase={setSearchMatchCase}
               onChangePage={navigateToPage}
@@ -3579,7 +3624,7 @@ export function PdfReader({
                 setSelection(null);
                 setSelectionPreview(null);
               }}
-              onToggleWhiteboard={() => { if (objectWorkbench && activePaper && whiteboardStorageKey) { void objectWorkbench.openLegacyBoard(activePaper,resolvedWhiteboardDocument(),whiteboardStorageKey).catch((e) => { setLegacyBoardPreview(true); setWhiteboardOpen(true); setStatus(`白板迁移失败，正在只读显示原快照：${e.message}`); }); } else setWhiteboardOpen((current) => !current); }}
+              onToggleWhiteboard={() => { if (legacyBoardPreview && whiteboardOpen) { setWhiteboardOpen(false); setLegacyBoardPreview(false); return; } if (objectWorkbench?.isOpen) { objectWorkbench.close?.(); return; } if (objectWorkbench && activePaper && whiteboardStorageKey) { void objectWorkbench.openLegacyBoard(activePaper,resolvedWhiteboardDocument(),whiteboardStorageKey).catch((e) => { setLegacyBoardPreview(true); setWhiteboardOpen(true); setStatus(`白板迁移失败，正在只读显示原快照：${e.message}`); }); } else setWhiteboardOpen((current) => !current); }}
               onZoomIn={() => onZoomChange?.(Math.min(180, zoom + 5))}
               onZoomOut={() => onZoomChange?.(Math.max(70, zoom - 5))}
               pageCount={pageCount}
@@ -3612,7 +3657,7 @@ export function PdfReader({
               <label>粗细 <input type="range" aria-label="画笔粗细" min={.1} max={1.2} step={.1} value={inkWidth} onChange={(event) => setInkWidth(Number(event.target.value))} /></label>
               <Button size="small" appearance="subtle" icon={<ArrowUndoRegular />} aria-label="撤销本页最后笔迹" title="撤销本页最后笔迹"
                 disabled={!annotations.some((annotation) => annotation.kind === "ink" && annotation.page === focusedPage)}
-                onClick={() => { const last = annotations.filter((annotation) => annotation.kind === "ink" && annotation.page === focusedPage).at(-1); if (last) void deleteAnnotation(last); }} />
+                onClick={() => { const last = annotations.filter((annotation) => annotation.kind === "ink" && annotation.page === focusedPage).sort((a, b) => Date.parse(a.inkLastStrokeAt ?? a.createdAt) - Date.parse(b.inkLastStrokeAt ?? b.createdAt)).at(-1); if (last) deleteInkStroke(last, pdfInkStrokes(last).length - 1); }} />
               <Button size="small" appearance="subtle" onClick={() => setInkMode(null)}>完成手绘</Button>
             </div> : null}
             {targetEvidence?.paperId === activePaper?.id ? (
@@ -3652,6 +3697,8 @@ export function PdfReader({
                   <PdfPageView
                     activeSearchMatch={activeSearchMatch}
                     inkMode={inkMode} inkColor={inkColor} inkWidth={inkWidth} onInkCreate={createInkAnnotation}
+                    onInkDeleteStroke={deleteInkStroke}
+                    onAnnotationDrag={objectWorkbench ? dragAnnotation : undefined}
                     activeTextAnnotationId={activeTextAnnotationId}
                     activePaper={activePaper}
                     annotations={annotations}
@@ -3777,7 +3824,7 @@ export function PdfReader({
             {annotationPopup && popupAnnotation ? (
               <aside
                 aria-label={`${popupAnnotation.quickAsk ? "速问回答" : `${getAnnotationLabel(popupAnnotation.kind)}注释编辑器`}：${popupAnnotation.excerpt}`}
-                className={`pdf-annotation-popover is-${annotationPopup.placement}`}
+                className={`pdf-annotation-popover pdf-annotation-fluent is-${annotationPopup.placement}`}
                 onKeyDown={(event) => {
                   if (event.key === "Escape") cancelAnnotationEditing();
                 }}
@@ -3785,31 +3832,15 @@ export function PdfReader({
               >
                 <header>
                   <strong>{popupAnnotation.quickAsk ? "速问" : getAnnotationLabel(popupAnnotation.kind)} · 第 {popupAnnotation.page} 页</strong>
-                  <button aria-label="关闭注释编辑器" onClick={cancelAnnotationEditing} type="button">×</button>
+                  <Tooltip content="关闭注释编辑器" relationship="description"><Button aria-label="关闭注释编辑器" appearance="subtle" size="small" icon={<DismissRegular />} onClick={cancelAnnotationEditing} /></Tooltip>
                 </header>
                 <p className="pdf-annotation-popover-excerpt">{popupAnnotation.excerpt}</p>
                 {popupAnnotation.quickAsk ? <>
                   <strong>{popupAnnotation.quickAsk.question}</strong>
                   <PdfAnnotationMarkdown value={popupAnnotation.quickAsk.answer} />
                 </> : <>
-                <textarea
-                  aria-label="页内批注内容"
-                  autoFocus
-                  maxLength={10_000}
-                  onChange={(event) => setAnnotationNoteDraft(event.currentTarget.value)}
-                  placeholder="添加注释，支持 Markdown..."
-                  rows={4}
-                  value={annotationNoteDraft}
-                />
-                <div aria-label="页内批注 Markdown 实时预览" aria-live="polite">
-                  <PdfAnnotationMarkdown
-                    value={annotationNoteDraft}
-                  />
-                </div>
-                <div className="editor-actions">
-                  <button className="save-button" onClick={saveAnnotationNote} type="button">保存注释</button>
-                  <button className="cancel-button" onClick={cancelAnnotationEditing} type="button">取消</button>
-                </div>
+                <PdfAnnotationEditor inline value={annotationNoteDraft} onChange={setAnnotationNoteDraft}
+                  onSave={saveAnnotationNote} onCancel={cancelAnnotationEditing} />
                 </>}
               </aside>
             ) : null}

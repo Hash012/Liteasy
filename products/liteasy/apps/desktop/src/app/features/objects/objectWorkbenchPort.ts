@@ -2,13 +2,18 @@ import { createContext, useContext } from "react";
 import type { Paper } from "../workspace/workspace.types";
 import type { ObjectRef } from "./object.types";
 import type { ContextRef } from "../context/objectContext";
-import type { PdfAnnotationRect } from "../pdf/pdfAnnotationStorage";
+import type { PdfAnnotationRect, PdfAnnotationV2 } from "../pdf/pdfAnnotationStorage";
 export type PdfCaptureInput = {
   paper: Paper;
   page: number;
   excerpt: string;
   rects: PdfAnnotationRect[];
   normalizedStart?: number;
+};
+export type PdfAnnotationCaptureInput = {
+  paper: Paper;
+  annotation: PdfAnnotationV2;
+  pageAspectRatio?: number;
 };
 export type MessageCaptureInput = {
   messageId: string;
@@ -17,6 +22,10 @@ export type MessageCaptureInput = {
   partial: boolean;
 };
 export type ObjectWorkbenchPort = {
+  readonly isOpen?: boolean;
+  close?(): void;
+  captureAnnotation?(input: PdfAnnotationCaptureInput, target: "board" | "tray"): Promise<ObjectRef[]>;
+  dragAnnotation?(input: PdfAnnotationCaptureInput, data: DataTransfer): void;
   capturePdf(
     input: PdfCaptureInput,
     target: "board" | "tray",

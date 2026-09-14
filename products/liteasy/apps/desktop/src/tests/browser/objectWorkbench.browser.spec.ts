@@ -6,8 +6,12 @@ test("offline board persists references, relations, keyboard movement and contex
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/");
   await page.getByRole("button", { name: "研究白板", exact: true }).click();
+  await page
+    .getByRole("button", { name: "切换或新建白板", exact: true })
+    .click();
   await page.getByLabel("新白板名称", { exact: true }).fill("方法与证据");
   await page.getByRole("button", { name: "新建白板", exact: true }).click();
+  await page.getByRole("button", { name: "添加笔记", exact: true }).click();
   for (const [index, text] of [
     "方法 A：稀疏表示减少存储成本，需要比较检索质量。",
     "方法 B：长尾查询需要额外的语义召回。",
@@ -18,15 +22,19 @@ test("offline board persists references, relations, keyboard movement and contex
     await expect(page.getByLabel("笔记内容", { exact: true })).toHaveValue("");
   }
   const cards = page.locator(".object-placement");
-  await cards.nth(0).getByRole("checkbox").check();
-  await cards.nth(1).getByRole("checkbox").check();
+  await page.getByRole("button", { name: "收起工具", exact: true }).click();
+  for (const card of [cards.nth(0), cards.nth(1)]) {
+    await card.click({ button: "right" });
+    await page.getByRole("menuitem", { name: "选择卡片", exact: true }).click();
+  }
+  await page.getByRole("button", { name: "连接内容", exact: true }).click();
   await page.getByRole("button", { name: "建立引用", exact: true }).click();
   await expect(page.locator(".object-board-edges text")).toHaveText("引用");
   const before = await cards.first().boundingBox();
-  await cards
-    .first()
-    .getByRole("button", { name: "移动卡片", exact: true })
-    .press("ArrowDown");
+  await cards.first().click({ button: "right" });
+  await page.getByRole("menuitem", { name: "移动卡片", exact: true }).click();
+  await cards.first().press("ArrowDown");
+  await cards.first().press("Escape");
   await expect
     .poll(async () => (await cards.first().boundingBox())!.y)
     .toBeGreaterThan(before!.y + 10);
@@ -43,12 +51,10 @@ test("offline board persists references, relations, keyboard movement and contex
   await page.getByRole("button", { name: "研究白板", exact: true }).click();
   await expect(cards).toHaveCount(2);
   await expect(page.locator(".object-board-edges text")).toHaveText("引用");
-  await cards
-    .first()
-    .getByRole("button", { name: "移除卡片", exact: true })
-    .click();
+  await cards.first().click({ button: "right" });
+  await page.getByRole("menuitem", { name: "移除卡片", exact: true }).click();
   await expect(cards).toHaveCount(1);
-  await page.getByText("已保存的内容", { exact: true }).click();
+  await page.getByRole("button", { name: "已保存的内容", exact: true }).click();
   await expect(page.locator(".object-library > div")).toHaveCount(2);
 });
 
@@ -90,14 +96,15 @@ test("PDF drag captures a real document fragment and preserves its source after 
   await expect(handle).toBeVisible();
   await handle.dragTo(page.getByLabel("白板卡片区域", { exact: true }));
   await expect(page.locator(".object-placement")).toHaveCount(1);
-  await expect(page.locator(".object-placement")).toContainText("第 1 页");
+  await expect(page.locator(".object-placement")).toHaveAttribute(
+    "aria-label",
+    /第 1 页/,
+  );
   await page.reload();
   await page.getByRole("button", { name: "研究白板", exact: true }).click();
   await expect(page.locator(".object-placement")).toHaveCount(1);
-  await page
-    .locator(".object-placement")
-    .getByRole("button", { name: "查看来源", exact: true })
-    .click();
+  await page.locator(".object-placement").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "查看来源", exact: true }).click();
   await expect(page.getByLabel("内容详情", { exact: true })).toContainText(
     "das24a.pdf",
   );

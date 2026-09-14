@@ -210,7 +210,7 @@ export function PdfReaderToolbar({
         <Button aria-label="手绘涂鸦" title="手绘涂鸦" aria-pressed={Boolean(inkActive)}
           appearance={inkActive ? "primary" : "subtle"} icon={<DrawShapeRegular />} size="small" onClick={onToggleInk} />
         <Button
-          aria-label="打开 PDF 白板"
+          aria-label={whiteboardOpen ? "关闭 PDF 白板" : "打开 PDF 白板"}
           appearance={whiteboardOpen ? "primary" : "subtle"}
           aria-pressed={whiteboardOpen}
           icon={<WhiteboardRegular />}

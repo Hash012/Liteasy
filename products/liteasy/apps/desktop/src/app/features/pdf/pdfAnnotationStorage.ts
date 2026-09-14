@@ -1,5 +1,5 @@
 import type { PaperIdentity } from "../paper-identity/paperIdentity";
-import { isPdfInkStroke, type PdfInkStroke } from "./pdfInk";
+import { isPdfInkStroke, isPdfInkStrokeGroup, type PdfInkStroke } from "./pdfInk";
 import { isPdfTextBoxImages, type PdfTextBoxImages } from "./pdfTextBoxImages";
 import { resolveLocalAccountKey } from "../library/localAccountKey";
 import type { ForumAnnotationPublicationOperation } from "../forum/forum.types";
@@ -46,9 +46,13 @@ type PdfAnnotationBase = {
   note?: string;
   images?: PdfTextBoxImages;
   ink?: PdfInkStroke;
+  /** Ordered strokes in one drawing note. `ink` remains the first stroke for old snapshots. */
+  inkStrokes?: PdfInkStroke[];
+  inkLastStrokeAt?: string;
   quickAsk?: { question: string; answer: string; pageText: string; abstractText: string };
   normalizedStart?: number;
   opacity?: number;
+  manualSize?: boolean;
   page: number;
   paperIdentity: PaperIdentity;
   rects: PdfAnnotationRect[];
@@ -93,7 +97,7 @@ export type PdfAnnotationRestartRecovery = PdfAnnotationPrivateState & {
 
 type PdfAnnotationEdit = Partial<Pick<
   PdfAnnotation,
-  "color" | "excerpt" | "kind" | "normalizedStart" | "note" | "images" | "opacity" | "page" | "publication" | "rects" | "text"
+  "color" | "excerpt" | "kind" | "ink" | "inkStrokes" | "inkLastStrokeAt" | "normalizedStart" | "note" | "images" | "manualSize" | "opacity" | "page" | "publication" | "rects" | "text"
 >> & { updatedAt: string };
 
 type PdfAnnotationPublicationReceipt = {
@@ -235,7 +239,11 @@ function hasAnnotationFields(value: unknown) {
     (candidate.normalizedStart === undefined ||
       (isFiniteNumber(candidate.normalizedStart) && candidate.normalizedStart >= 0)) &&
     (candidate.kind !== "ink" || isPdfInkStroke(candidate.ink)) &&
+    (candidate.inkStrokes === undefined || isPdfInkStrokeGroup(candidate.inkStrokes)) &&
+    (candidate.inkLastStrokeAt === undefined ||
+      (typeof candidate.inkLastStrokeAt === "string" && Number.isFinite(Date.parse(candidate.inkLastStrokeAt)))) &&
     (candidate.images === undefined || isPdfTextBoxImages(candidate.images)) &&
+    (candidate.manualSize === undefined || typeof candidate.manualSize === "boolean") &&
     (candidate.opacity === undefined ||
       (isFiniteNumber(candidate.opacity) && candidate.opacity >= 0 && candidate.opacity <= 1)) &&
     (candidate.color === undefined || highlightColors.has(candidate.color as PdfHighlightColor)) &&
@@ -280,20 +288,27 @@ function isLegacyAnnotation(value: unknown): value is Omit<
       typeof candidate.quickAsk.question === "string" && typeof candidate.quickAsk.answer === "string" &&
       typeof candidate.quickAsk.pageText === "string" && typeof candidate.quickAsk.abstractText === "string")) &&
     (candidate.kind !== "ink" || isPdfInkStroke(candidate.ink)) &&
+    (candidate.inkStrokes === undefined || isPdfInkStrokeGroup(candidate.inkStrokes)) &&
+    (candidate.inkLastStrokeAt === undefined ||
+      (typeof candidate.inkLastStrokeAt === "string" && Number.isFinite(Date.parse(candidate.inkLastStrokeAt)))) &&
     (candidate.images === undefined || isPdfTextBoxImages(candidate.images)) &&
+    (candidate.manualSize === undefined || typeof candidate.manualSize === "boolean") &&
     (candidate.opacity === undefined ||
       (isFiniteNumber(candidate.opacity) && candidate.opacity >= 0 && candidate.opacity <= 1)) &&
     (candidate.color === undefined || highlightColors.has(candidate.color as PdfHighlightColor));
 }
 
-export function pdfAnnotationStorageKey(paper: { id: string; sourcePath?: string } | null) {
+export function pdfAnnotationStorageKey(paper: { id: string; sourcePath?: string; contentHash?: string } | null) {
   if (!paper?.id) {
     return null;
   }
-  return `${storagePrefix}:${resolveLocalAccountKey()}:${paper.id}:${stableHash(paper.sourcePath ?? "")}`;
+  // Blob URLs are recreated on each browser launch; the file digest identifies the same bytes.
+  const sourceIdentity = paper.sourcePath?.startsWith("blob:") && paper.contentHash
+    ? `sha256:${paper.contentHash}` : paper.sourcePath ?? "";
+  return `${storagePrefix}:${resolveLocalAccountKey()}:${paper.id}:${stableHash(sourceIdentity)}`;
 }
 
-export function pdfAnnotationAutoPublicStorageKey(paper: { id: string; sourcePath?: string } | null) {
+export function pdfAnnotationAutoPublicStorageKey(paper: { id: string; sourcePath?: string; contentHash?: string } | null) {
   const annotationKey = pdfAnnotationStorageKey(paper);
   return annotationKey ? annotationKey.replace(storagePrefix, autoPublicStoragePrefix) : null;
 }

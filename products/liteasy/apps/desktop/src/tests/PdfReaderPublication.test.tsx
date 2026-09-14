@@ -179,7 +179,7 @@ test("publishes one annotation from its visibility checkbox and exposes pending 
   });
   await userEvent.click(toggle);
   expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ operation: "publish", paper }));
-  expect(screen.getByText("正在公开到论坛")).toBeInTheDocument();
+  expect(screen.getByRole("status", { name: "正在公开到论坛" })).toBeInTheDocument();
 
   finish({
     desiredVisibility: "public",
@@ -187,7 +187,7 @@ test("publishes one annotation from its visibility checkbox and exposes pending 
     remoteRevision: 2,
     state: "published"
   });
-  expect(await screen.findByText("已公开到论坛")).toBeInTheDocument();
+  expect(await screen.findByRole("status", { name: "已公开到论坛" })).toBeInTheDocument();
 });
 
 test("requeues a current publish revision when note editing races literature hint collection", async () => {
@@ -508,7 +508,7 @@ test("keeps the prior forum copy visible when a published note update fails", as
 
   await waitFor(() => expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ operation: "update" })));
   fireEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
-  expect(await screen.findByText(/更新失败，论坛仍保留上一版本.*network unavailable/u)).toBeInTheDocument();
+  expect(await screen.findByRole("status", { name: /更新失败，论坛仍保留上一版本.*network unavailable/u })).toBeInTheDocument();
 });
 
 test("shows failed retract truth and refuses to delete the linked local annotation", async () => {
@@ -531,7 +531,7 @@ test("shows failed retract truth and refuses to delete the linked local annotati
 
   await waitFor(() => expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ operation: "retract" })));
   fireEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
-  expect(await screen.findByText(/撤回失败，论坛仍公开/u)).toBeInTheDocument();
+  expect(await screen.findByRole("status", { name: /撤回失败，论坛仍公开/u })).toBeInTheDocument();
   expect(screen.getByText("Publication evidence")).toBeInTheDocument();
 });
 
@@ -586,7 +586,7 @@ test("recovers an unknown failed create before deleting the local annotation", a
   renderStoredAnnotation(publicationAnnotation(), onChange);
 
   await userEvent.click(publicationToggle());
-  expect(await screen.findByText(/create receipt missing/u)).toBeInTheDocument();
+  expect(await screen.findByRole("status", { name: /create receipt missing/u })).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
   await userEvent.click(screen.getByRole("button", { name: "删除" }));
 
@@ -634,14 +634,14 @@ test("retains an unknown failed create when deletion recovery cannot confirm ret
   renderStoredAnnotation(publicationAnnotation(), onChange);
 
   await userEvent.click(publicationToggle());
-  expect(await screen.findByText(/create receipt missing/u)).toBeInTheDocument();
+  expect(await screen.findByRole("status", { name: /create receipt missing/u })).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
   await userEvent.click(screen.getByRole("button", { name: "删除" }));
 
   await waitFor(() => expect(onChange).toHaveBeenCalledTimes(2));
   expect(screen.getByText("Publication evidence")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
-  expect(await screen.findByText(/recovery unavailable/u)).toBeInTheDocument();
+  expect(await screen.findByRole("status", { name: /recovery unavailable/u })).toBeInTheDocument();
   expect(onChange).toHaveBeenNthCalledWith(2, expect.objectContaining({
     annotation: expect.objectContaining({
       publication: expect.objectContaining({ pendingCreateOperation: durableCreate })
@@ -683,7 +683,7 @@ test("queues an exact retract when visibility is disabled after create starts", 
     remoteRevision: 2,
     state: "published"
   });
-  expect(await screen.findByText("未公开到论坛")).toBeInTheDocument();
+  expect(await screen.findByRole("status", { name: "未公开到论坛" })).toBeInTheDocument();
 });
 
 test("deletes a pending create before transport without publishing it", async () => {
@@ -764,7 +764,7 @@ test("retains local truth when create recovery cannot confirm the remote outcome
 
   expect(await screen.findByText("Publication evidence")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
-  expect(await screen.findByText(/create recovery failed/u)).toBeInTheDocument();
+  expect(await screen.findByRole("status", { name: /create recovery failed/u })).toBeInTheDocument();
   expect(onChange).toHaveBeenCalledTimes(2);
   expect(onChange).toHaveBeenNthCalledWith(2, expect.objectContaining({
     annotation: expect.objectContaining({ id: "annotation-1" }),
@@ -839,6 +839,6 @@ test("retains local truth when the queued retract outcome remains unknown", asyn
 
   expect(await screen.findByText("Publication evidence")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
-  expect(await screen.findByText(/recovery unavailable/u)).toBeInTheDocument();
+  expect(await screen.findByRole("status", { name: /recovery unavailable/u })).toBeInTheDocument();
   expect(onChange).toHaveBeenCalledTimes(2);
 });
