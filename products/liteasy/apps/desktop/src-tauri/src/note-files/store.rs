@@ -521,6 +521,8 @@ mod tests {
             .unwrap()
             .read(&mount.id, &saved.entry.path)
             .is_err());
+        // Windows cannot remove SQLite files while a connection is open.
+        drop(restored);
         fs::remove_dir_all(root).unwrap();
     }
     #[test]
@@ -535,6 +537,7 @@ mod tests {
                 .unwrap();
         }
         assert_eq!(store.entries(&mount.id).unwrap().len(), 4);
+        drop(store);
         fs::remove_dir_all(root).unwrap();
     }
     #[cfg(unix)]
@@ -553,6 +556,7 @@ mod tests {
         assert!(store.read(&mount.id, "note.md").is_err());
         assert!(store.write(&mount.id, "new.md", "wrong", None).is_err());
         assert!(store.entries(&mount.id).is_err());
+        drop(store);
         fs::remove_dir_all(root).unwrap();
     }
     #[test]
@@ -573,6 +577,7 @@ mod tests {
             "Obsidian edit"
         );
         assert_eq!(fs::read_dir(root.join("vault")).unwrap().count(), 1);
+        drop(store);
         fs::remove_dir_all(root).unwrap();
     }
     #[test]
@@ -595,6 +600,7 @@ mod tests {
         ] {
             assert!(store.read(&selected.entry.mount_id, path).is_err());
         }
+        drop(store);
         fs::remove_dir_all(root).unwrap();
     }
     #[test]
@@ -614,6 +620,7 @@ mod tests {
             mount.id
         );
         assert_eq!(store.entries(&mount.id).unwrap().len(), 1);
+        drop(store);
         fs::remove_dir_all(root).unwrap();
     }
     #[cfg(unix)]
@@ -627,6 +634,7 @@ mod tests {
         assert!(store.read(&mount.id, "link.md").is_err());
         assert!(store.write(&mount.id, "link.md", "bad", None).is_err());
         assert!(store.entries(&mount.id).unwrap().is_empty());
+        drop(store);
         fs::remove_dir_all(root).unwrap();
     }
 }
