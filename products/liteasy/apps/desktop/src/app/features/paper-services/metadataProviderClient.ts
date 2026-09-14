@@ -5,6 +5,7 @@ import { normalizeLiteratureIdentifier } from "../paper-identity/paperIdentity";
 import { paperServiceRequest, type PaperServiceConfig } from "./paperServiceTransport";
 import { loadDurableEntries, putDurableEntry } from "../persistence/durableJsonStore";
 import { readArxivMetadata } from "./arxivMetadata";
+import { readableBibliographicTitle } from "../metadata/pdfRecognition";
 
 export function createMetadataProviderClient(config: PaperServiceConfig): LiteratureAuthorityClient {
   const candidates = new Map<string, LiteratureCandidate>();
@@ -16,15 +17,16 @@ export function createMetadataProviderClient(config: PaperServiceConfig): Litera
   }
   return {
     async resolveLiterature(input): Promise<LiteratureResolveResult> {
-      const arxivId = normalizeLiteratureIdentifier("arxiv_id", input.hints?.identifiers?.find((id) => id.kind === "arxiv_id")?.value ?? "");
+      const doi = normalizeLiteratureIdentifier("doi", input.hints?.identifiers?.find((id) => id.kind === "doi")?.value ?? input.query);
+      const arxivId = normalizeLiteratureIdentifier("arxiv_id", input.hints?.identifiers?.find((id) => id.kind === "arxiv_id")?.value ??
+        (/^10\.48550\/arxiv\./i.test(doi) ? doi.replace(/^10\.48550\/arxiv\./i, "") : ""));
       if (arxivId) {
         const candidate = await readArxivMetadata(config, arxivId);
         if (!candidate) return { status: "not_found", candidates: [], unavailableProviders: [] };
         candidates.set(candidate.candidateKey, candidate);
         return { status: "exact", candidate, confirmationMode: "candidate", unavailableProviders: [] };
       }
-      const doi = normalizeLiteratureIdentifier("doi", input.hints?.identifiers?.find((id) => id.kind === "doi")?.value ?? input.query);
-      const query = doi || input.query || input.hints?.title || "";
+      const query = doi || input.hints?.title || input.query || "";
       if (!query.trim()) return { status: "not_found", candidates: [], unavailableProviders: [] };
       const exactPath = config.provider === "semantic-scholar" ? `/paper/DOI:${encodeURIComponent(doi)}`
         : config.provider === "openalex" ? `/works/doi:${encodeURIComponent(doi)}` : `/works/${encodeURIComponent(doi)}`;
@@ -39,7 +41,8 @@ export function createMetadataProviderClient(config: PaperServiceConfig): Litera
         : config.provider === "crossref" ? payload.message?.items : config.provider === "openalex" ? payload.results : payload.data;
       if (!Array.isArray(items)) throw new Error("元信息服务返回格式不正确。");
       const results: LiteratureCandidate[] = items.flatMap((item: any) => {
-        const title = config.provider === "crossref" ? item.title?.[0] : item.title ?? item.display_name;
+        const rawTitle = config.provider === "crossref" ? item.title?.[0] : item.title ?? item.display_name;
+        const title = typeof rawTitle === "string" ? readableBibliographicTitle(rawTitle) : "";
         const id = item.DOI ?? item.doi?.replace(/^https?:\/\/doi.org\//, "") ?? item.externalIds?.DOI;
         const identifiers: LiteratureCandidate["record"]["identifiers"] = id ? [{ kind: "doi", source: "public_registry", value: id.toLowerCase() }] : [];
         if (!id && config.provider === "openalex" && item.id) identifiers.push({ kind: "openalex_id", source: "public_registry", value: item.id.split("/").pop() });

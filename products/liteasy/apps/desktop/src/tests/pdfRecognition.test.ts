@@ -31,6 +31,26 @@ test("rejects cited DOIs, competing records, and conflicting results", () => {
   expect(selectPdfRecognitionCandidate({ status: "ambiguous", candidates: [candidate], unavailableProviders: [] }, { firstPageText: candidate.record.title })).toBeUndefined();
 });
 
+test("matches short titles, accent variants, formula markup and split small-cap abstract headings", () => {
+  const record = { ...candidate, record: { ...candidate.record, title: "Deep learning", authors: ["Yann LeCun"] } };
+  expect(selectPdfRecognitionCandidate({ ...exact, candidate: record }, { firstPageText: "Deep learning\nYann LeCun\nAbstract\nresults" })).toBe(record);
+  const formula = { ...candidate, record: { ...candidate.record, title: "Estimating $\\alpha$ in H<sub>2</sub>O with Rényi entropy", authors: ["Jose Garcia"] } };
+  const formulaEvidence = { firstPageText: "Estimating α in H₂O with Renyi entropy\nJosé García\nA BSTRACT\nSome other paper" };
+  expect(selectPdfRecognitionCandidate({ status: "ambiguous", candidates: [formula], unavailableProviders: [] }, formulaEvidence)).toBe(formula);
+  expect(selectPdfRecognitionCandidate(exact, { firstPageText: `A Different Paper\nA BSTRACT\n${evidence.firstPageText}` })).toBeUndefined();
+});
+
+test("requires author corroboration when an exact provider result does not share an extracted identifier", () => {
+  expect(selectPdfRecognitionCandidate(exact, { firstPageText: candidate.record.title })).toBeUndefined();
+  expect(selectPdfRecognitionCandidate(exact, { firstPageText: `${candidate.record.title}\nAshish Vaswani` })).toBe(candidate);
+});
+
+test("never substitutes a different arXiv version or a published DOI record for a preprint", () => {
+  const arxiv = { ...candidate, record: { ...candidate.record, identifiers: [{ kind: "arxiv_id" as const, value: "1706.03762v7", source: "public_registry" as const }] } };
+  expect(selectPdfRecognitionCandidate({ ...exact, candidate: arxiv }, { firstPageText: `${evidence.firstPageText}\narXiv:1706.03762v5` })).toBeUndefined();
+  expect(selectPdfRecognitionCandidate(exact, { firstPageText: `${evidence.firstPageText}\narXiv:1706.03762v5` })).toBeUndefined();
+});
+
 test("makes portable UTF-8 filenames while leaving the bibliographic title intact", () => {
   expect(buildMetadataPdfFileName(candidate.record)).toBe("Ashish Vaswani - 2017 - Attention Is All You Need.pdf");
   expect(buildMetadataPdfFileName({ title: "CON", authors: [] })).toBe("_CON.pdf");

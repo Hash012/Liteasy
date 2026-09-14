@@ -50,15 +50,18 @@ export function createPdfMetadataImportController(input: Input) {
       await input.stageIdentity(paper, request);
       let result = await input.literatureClient.resolveLiterature(request);
       let candidate = selectPdfRecognitionCandidate(result, evidence);
-      if (!candidate && unchanged() && (result.status === "not_found" || result.status === "exact") &&
+      if (!candidate && unchanged() && (result.status === "not_found" || result.status === "exact" || result.status === "ambiguous") &&
         request.hints?.identifiers?.some((id) => id.kind === "doi") &&
         !request.hints.identifiers.some((id) => id.kind === "arxiv_id")) {
-        result = await input.literatureClient.resolveLiterature({ ...request,
-          hints: { ...request.hints, identifiers: [] } });
+        const titleRequest = { ...request, hints: { ...request.hints, identifiers: [] } };
+        await input.stageIdentity(paper, titleRequest);
+        result = await input.literatureClient.resolveLiterature(titleRequest);
         candidate = selectPdfRecognitionCandidate(result, evidence);
       }
       if (!unchanged()) return;
-      if (!candidate) return "未找到能与 PDF 首页核对的唯一题录，请使用“确认文献身份”选择或补充线索。";
+      if (!candidate) return result.status === "not_found"
+        ? `未检索到${request.hints?.title ? `《${request.hints.title}》的` : "对应"}题录，已保留原文件名。可在“确认文献身份”中补充 DOI 或 arXiv 编号。`
+        : "检索结果的标题、作者或版本尚不能与 PDF 首页唯一对应，已保留原文件名。可在“确认文献身份”中查看候选。";
       const { literature } = await input.literatureClient.confirmLiterature({
         candidateKey: candidate.candidateKey,
         mode: result.status === "exact" ? result.confirmationMode : "candidate"

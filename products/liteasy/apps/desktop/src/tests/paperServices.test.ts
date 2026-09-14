@@ -26,6 +26,52 @@ test("resolves arXiv versions using Atom metadata without forwarding provider ke
   expect(confirmed.literature).toMatchObject({ title: "Attention Is All You Need", year: 2017, identifiers: [expect.objectContaining({ kind: "arxiv_id", value: "1706.03762v5" })] });
   await deletePaperServiceKey(config);
 });
+
+test("recovers arXiv rate limits from the same official version's citation metadata", async () => {
+  const config = { provider: "semantic-scholar" as const, endpoint: "https://api.semanticscholar.org/graph/v1" };
+  await savePaperServiceKey(config, "private-scholar-key");
+  const fetch = vi.fn(async (url: URL, init?: RequestInit) => {
+    expect(init?.headers).not.toHaveProperty("x-api-key");
+    if (url.hostname === "export.arxiv.org") return new Response("rate limited", { status: 429 });
+    expect(url.href).toBe("https://arxiv.org/abs/1706.03762v5");
+    return new Response(`<html><head><title>[1706.03762v5] Attention Is All You Need</title>
+      <meta property="og:url" content="https://arxiv.org/abs/1706.03762v5">
+      <meta name="citation_arxiv_id" content="1706.03762">
+      <meta name="citation_title" content="Attention Is All You Need">
+      <meta name="citation_author" content="Vaswani, Ashish">
+      <meta name="citation_date" content="2017/06/12"></head></html>`);
+  });
+  vi.stubGlobal("fetch", fetch);
+  const result = await createMetadataProviderClient(config).resolveLiterature({ purpose: "liteasy_pdf_annotation",
+    hints: { identifiers: [{ kind: "arxiv_id", value: "1706.03762v5" }] } });
+  expect(result).toMatchObject({ status: "exact", candidate: { record: { authors: ["Ashish Vaswani"],
+    title: "Attention Is All You Need", year: 2017, identifiers: [{ kind: "arxiv_id", value: "1706.03762v5" }] } } });
+  expect(fetch).toHaveBeenCalledTimes(2);
+  await deletePaperServiceKey(config);
+});
+
+test("rejects an arXiv fallback page that belongs to another version", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (url: URL) => url.hostname === "export.arxiv.org"
+    ? new Response("rate limited", { status: 429 })
+    : new Response(`<html><head><meta property="og:url" content="https://arxiv.org/abs/1706.03762v7">
+      <meta name="citation_arxiv_id" content="1706.03762"><meta name="citation_title" content="Attention Is All You Need">
+      <meta name="citation_author" content="Vaswani, Ashish"></head></html>`)));
+  await expect(createMetadataProviderClient({ provider: "crossref", endpoint: "https://api.crossref.org" }).resolveLiterature({
+    purpose: "liteasy_pdf_annotation", hints: { identifiers: [{ kind: "arxiv_id", value: "1706.03762v5" }] }
+  })).rejects.toThrow("429");
+});
+
+test("uses the extracted title as the registry query and removes title markup before saving", async () => {
+  const fetch = vi.fn(async (url: URL) => {
+    expect(url.searchParams.get("query.bibliographic")).toBe("Estimating entropy in H2O");
+    return Response.json({ message: { items: [{ title: ["Estimating <i>entropy</i> in H<sub>2</sub>O"], DOI: "10.1234/entropy", author: [{ given: "José", family: "García" }] }] } });
+  });
+  vi.stubGlobal("fetch", fetch);
+  const result = await createMetadataProviderClient({ provider: "crossref", endpoint: "https://api.crossref.org" }).resolveLiterature({
+    purpose: "liteasy_pdf_annotation", query: "Copyright journal banner and unrelated words", hints: { title: "Estimating entropy in H2O" }
+  });
+  expect(result).toMatchObject({ status: "ambiguous", candidates: [{ record: { title: "Estimating entropy in H2O", authors: ["José García"] } }] });
+});
 const paper = { id: "mineru-paper", title: "Paper", sourcePath: "C:\\Library\\paper.pdf" };
 function archive() {
   return zipSync({

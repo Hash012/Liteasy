@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import { createCanvas } from "@napi-rs/canvas";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import { vi } from "vitest";
+import { buildPdfRecognitionRequest, selectPdfRecognitionCandidate } from "../app/features/metadata/pdfRecognition";
 import {
   buildPdfChunksFromPages,
   extractPdfChunksForPaper,
@@ -22,6 +23,26 @@ test("reads real PDF title-page evidence without extracting the entire document"
   )));
   expect(evidence.firstPageText).toMatch(/Attention\s+Is\s+All\s+You\s+Need/i);
   expect(evidence.firstPageText).toContain("Vaswani");
+});
+
+test.each([
+  ["attention-is-all-you-need-arxiv.pdf", "Attention Is All You Need", "Ashish Vaswani", "1706.03762v7"],
+  ["bert-pretraining-arxiv.pdf", "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding", "Jacob Devlin", "1810.04805v2"],
+  ["glue-benchmark-arxiv.pdf", "GLUE: A Multi-Task Benchmark and Analysis Platform for Natural Language Understanding", "Alex Wang", "1804.07461v3"],
+  ["survey-vector-database-management-systems.pdf", "Survey of Vector Database Management Systems", "James Jie Pan", "2310.14021v1"],
+  ["colbert-late-interaction.pdf", "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT", "Omar Khattab", "2004.12832v2"],
+  ["acorn-vector-search.pdf", "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data", "Liana Patel", "2403.04871v1"],
+  ["squad-100k-questions-arxiv.pdf", "SQuAD: 100,000+ Questions for Machine Comprehension of Text", "Pranav Rajpurkar", "1606.05250v3"],
+  ["ancient-languages-semantic-corpus-analysis-arxiv.pdf", "From transcription to semantic corpus analysis: unsupervised learning of sentence representations for ancient languages", "Théotime de la Selle", "2607.24542v1"]
+])("extracts the title from %s without copyright banners, authors or affiliations", async (file, title, author, arxivId) => {
+  const evidence = await extractPdfRecognitionEvidence(new Uint8Array(readFileSync(resolve(process.cwd(), "src/tests/assets/papers", file))));
+  const request = buildPdfRecognitionRequest(evidence);
+  const normalize = (value: string) => value.normalize("NFKD").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+  expect(normalize(request?.query ?? "")).toBe(normalize(title));
+  expect(request?.hints?.title).toBeTruthy();
+  const candidate = { candidateKey: `arxiv:${arxivId}`, provider: "arxiv" as const,
+    record: { title, authors: [author], identifiers: [{ kind: "arxiv_id" as const, source: "public_registry" as const, value: arxivId }] } };
+  expect(selectPdfRecognitionCandidate({ status: "exact", candidate, confirmationMode: "candidate", unavailableProviders: [] }, evidence)).toBe(candidate);
 });
 
 test("turns every extracted PDF page into overlapping evidence chunks with technical terms", () => {

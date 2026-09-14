@@ -6,6 +6,7 @@ import { normalizePdfTextForSearch } from "../pdf/pdfTextSearch";
 import { ensureReadableStreamAsyncIterator } from "../pdf/pdfStreamCompatibility";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { Paper } from "../workspace/workspace.types";
+import { extractPdfTitleHint } from "../metadata/pdfTitleEvidence";
 
 ensureReadableStreamAsyncIterator();
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -268,6 +269,7 @@ export async function extractPdfRecognitionEvidence(source: string | Uint8Array)
     const xmpTitle = metadata?.metadata?.get("dc:title");
     return {
       firstPageText: normalizePdfPageText(joinPdfTextItems(content.items)),
+      titleText: extractPdfTitleHint(content.items, page.view[3] - page.view[1]),
       embeddedTitle: typeof xmpTitle === "string" ? xmpTitle : typeof info?.Title === "string" ? info.Title : undefined
     };
   } finally {
