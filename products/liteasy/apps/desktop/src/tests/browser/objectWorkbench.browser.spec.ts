@@ -48,7 +48,7 @@ test("offline board persists references, relations, keyboard movement and contex
     fullPage: true,
   });
   await page.reload();
-  await page.getByRole("button", { name: "研究白板", exact: true }).click();
+  await expect(page.locator("section.object-workbench")).toBeVisible();
   await expect(cards).toHaveCount(2);
   await expect(page.locator(".object-board-edges text")).toHaveText("引用");
   await cards.first().click({ button: "right" });
@@ -81,7 +81,18 @@ test("PDF drag captures a real document fragment and preserves its source after 
     .locator('.pdf-page-shell[data-page="1"] .pdf-text-layer span')
     .filter({ hasText: /\S{4}/ })
     .first();
-  const bounds = (await span.boundingBox())!;
+  await span.hover();
+  let bounds = await span.boundingBox();
+  await expect
+    .poll(async () => {
+      bounds = await span.boundingBox();
+      return bounds;
+    })
+    .not.toBeNull();
+  if (!bounds)
+    throw new Error(
+      "PDF text layer did not finish rendering after the dock resize.",
+    );
   await page.mouse.move(bounds.x + 2, bounds.y + bounds.height / 2);
   await page.mouse.down();
   await page.mouse.move(
@@ -101,7 +112,7 @@ test("PDF drag captures a real document fragment and preserves its source after 
     /第 1 页/,
   );
   await page.reload();
-  await page.getByRole("button", { name: "研究白板", exact: true }).click();
+  await expect(page.locator("section.object-workbench")).toBeVisible();
   await expect(page.locator(".object-placement")).toHaveCount(1);
   await page.locator(".object-placement").click({ button: "right" });
   await page.getByRole("menuitem", { name: "查看来源", exact: true }).click();
@@ -146,9 +157,10 @@ test("a saved answer can be dragged into the board without a new model call", as
   await answer.getByRole("button", { name: "加入白板", exact: true }).click();
   await expect(page.locator(".object-placement")).toHaveCount(1);
   await page.getByRole("button", { name: "关闭白板", exact: true }).click();
+  await page.getByRole("button", { name: "研究白板", exact: true }).click();
   await answer.hover();
   const drag = answer.getByRole("button", { name: "加入白板", exact: true });
-  // The drag adapter reveals the destination after the host has started the drag.
+  // Opening the board retains the chat; dragging chooses the destination explicitly.
   const box = (await drag.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();

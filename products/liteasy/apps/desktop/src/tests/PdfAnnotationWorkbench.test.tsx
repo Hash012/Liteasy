@@ -284,6 +284,11 @@ test("text boxes activate with one click and expose all eight resize handles plu
     rect: item.rects[0],
   };
   const rendered = render(<PdfMarkdownTextBox {...props} active={false} />);
+  const data = { setData: vi.fn() } as unknown as DataTransfer;
+  fireEvent.dragStart(screen.getByRole("region"), { dataTransfer: data });
+  expect(onDragToBoard).toHaveBeenCalledWith(expect.objectContaining({ note: item.note }), data);
+  expect(data.effectAllowed).toBe("copy");
+  onDragToBoard.mockClear();
   fireEvent.click(screen.getByRole("region"));
   expect(onActivate).toHaveBeenCalledTimes(1);
   expect(
@@ -301,7 +306,6 @@ test("text boxes activate with one click and expose all eight resize handles plu
     true,
   );
   rendered.rerender(<PdfMarkdownTextBox {...props} active />);
-  const data = { setData: vi.fn() } as unknown as DataTransfer;
   fireEvent.dragStart(
     screen.getByRole("button", { name: "拖动 Markdown 笔记到研究白板" }),
     { dataTransfer: data },

@@ -252,6 +252,13 @@ export function PdfMarkdownTextBox({
       }}
       aria-label={`Markdown 文本框：第 ${annotation.page} 页`}
       className={`pdf-markdown-text-box ${active ? "is-editing" : ""} ${dragging ? "is-dragging" : ""} ${opacity === 0 ? "is-transparent" : ""}`}
+      draggable={!active && Boolean(onDragToBoard)}
+      onDragStart={(event) => {
+        if (active || !onDragToBoard) return;
+        event.stopPropagation();
+        event.dataTransfer.effectAllowed = "copy";
+        onDragToBoard({ ...annotation, note: draft, images, rects: [boxRectRef.current] }, event.dataTransfer);
+      }}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         if (!active && !(event.target instanceof Element && event.target.closest("a, button"))) onActivate(annotation.id);
@@ -293,7 +300,7 @@ export function PdfMarkdownTextBox({
       ) : (
         <div
           className="pdf-markdown-text-box-surface"
-          title="点击直接编辑 Markdown"
+          title={onDragToBoard ? "单击编辑；拖到白板或对话添加引用" : "点击直接编辑 Markdown"}
         >
           <PdfAnnotationMarkdown emptyLabel="点击输入 Markdown" value={annotation.note ?? ""} images={annotation.images} />
         </div>
@@ -317,12 +324,12 @@ export function PdfMarkdownTextBox({
       />)}
       {active ? <div className="pdf-markdown-text-box-actions" role="toolbar" aria-label="文本框操作"
         style={{ ...(boxRect.top < 6 ? { top: "100%", bottom: "auto" } : {}), ...(boxRect.left > 70 ? { right: 0, left: "auto" } : { left: 0, right: "auto" }) }}
-        onPointerDown={(event) => { if (event.target instanceof Element && event.target.closest("button")) event.preventDefault(); }}>
+        onPointerDown={(event) => { if (event.target instanceof Element && event.target.closest("button:not([draggable=true])")) event.preventDefault(); }}>
         <input ref={fileRef} type="file" aria-label="文本框图片文件" hidden accept="image/png,image/jpeg,image/gif,image/webp"
           onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void insertImage(file); }} />
         <Button aria-label="保存 Markdown 文本框" title="保存并收起工具" icon={<CheckmarkRegular />} appearance="subtle" size="small" disabled={imagePending} onClick={finishEditing} />
         <Button aria-label="在文本框中插入图片" title="插入图片（也可粘贴）" icon={<ImageAddRegular />} appearance="subtle" size="small" disabled={imagePending} onClick={() => fileRef.current?.click()} />
-        {onDragToBoard ? <Tooltip content="拖动笔记到研究白板" relationship="description">
+        {onDragToBoard ? <Tooltip content="拖到白板或对话添加引用" relationship="description">
           <Button aria-label="拖动 Markdown 笔记到研究白板" icon={<WhiteboardRegular />} appearance="subtle" size="small" draggable
             onDragStart={(event) => onDragToBoard({ ...annotation, note: draft, images, rects: [boxRectRef.current] }, event.dataTransfer)} />
         </Tooltip> : null}

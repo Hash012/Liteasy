@@ -1,5 +1,6 @@
 import {
   memo,
+  useEffect,
   useRef,
   useState,
   type Dispatch,
@@ -44,6 +45,7 @@ import {
   type Placement,
 } from "../objects/object.types";
 import type { WorkbenchViewModel } from "./ObjectWorkbench";
+import { writePlacementDrag } from "./boardPlacementDrag";
 
 type Geometry = Pick<Placement, "position" | "size">;
 type ResizeDirection = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
@@ -57,7 +59,7 @@ const resizeLabels: Record<ResizeDirection, string> = {
   w: "左边",
   nw: "左上角",
 };
-const minimumSize = { width: 220, height: 180 };
+const minimumSize = { width: 120, height: 80 };
 
 export function resizeCardGeometry(
   geometry: Geometry,
@@ -113,6 +115,8 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
     current: Geometry;
   }>();
   const [preview, setPreview] = useState<Geometry>();
+  const [draggingOut, setDraggingOut] = useState(false);
+  const [sourceText, setSourceText] = useState("");
   const [editing, setEditing] = useState(false);
   const [moving, setMoving] = useState(false);
   const [adjusting, setAdjusting] = useState(false);
@@ -123,6 +127,41 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
   const error = (e: unknown) =>
     actions.current.setStatus(e instanceof Error ? e.message : String(e));
   const geometry = preview ?? p;
+  useEffect(() => {
+    let active = true;
+    const quote = (item: ObjectEnvelope) =>
+      item.kind === "content.fragment"
+        ? item.content.payload.anchors
+            .flatMap((anchor) =>
+              "quote" in anchor && anchor.quote.exact
+                ? [anchor.quote.exact]
+                : [],
+            )
+            .join("\n\n")
+        : "";
+    setSourceText(object ? quote(object) : "");
+    // An edited excerpt becomes a note. Keep its pinned source available without
+    // changing the source object or turning that quote into editable note text.
+    if (
+      object?.kind === "content.note" &&
+      object.provenance.sourceRefs.length
+    ) {
+      void Promise.all(
+        object.provenance.sourceRefs.map((ref) =>
+          actions.current.repository
+            .get(ref)
+            .then(quote)
+            .catch(() => ""),
+        ),
+      ).then((quotes) => {
+        if (active)
+          setSourceText([...new Set(quotes.filter(Boolean))].join("\n\n"));
+      });
+    }
+    return () => {
+      active = false;
+    };
+  }, [object?.objectId, object?.revision, actions.current.repository]);
   const assetCaptions = new Map(
     object
       ? Array.from(
@@ -263,28 +302,46 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
       <MenuTrigger disableButtonEnhancement>
         <div
           ref={cardRef}
-          className={`object-placement${editing ? " is-editing" : ""}${moving ? " is-moving" : ""}${selected ? " is-selected" : ""}${adjusting ? " is-adjusting" : ""}`}
+          className={`object-placement${editing ? " is-editing" : ""}${moving ? " is-moving" : ""}${draggingOut ? " is-dragging" : ""}${selected ? " is-selected" : ""}${adjusting ? " is-adjusting" : ""}`}
           data-placement-id={p.placementId}
           aria-label={`白板卡片：${object?.title ?? "正在读取"}`}
           aria-description={
             selected
               ? "已选择；右键或 Shift+F10 打开菜单"
-              : "右键或 Shift+F10 打开菜单"
+              : "拖动移动或加入对话；单击编辑；右键或 Shift+F10 打开菜单"
           }
           tabIndex={0}
           draggable={!editing && !moving && !!object}
           onDragStart={(event) => {
-            if (!object) return;
-            event.dataTransfer.effectAllowed = "copy";
+            if (
+              !object ||
+              (event.target as Element).closest(
+                "button,input,textarea,summary,a",
+              )
+            ) {
+              event.preventDefault();
+              return;
+            }
+            event.stopPropagation();
+            event.dataTransfer.effectAllowed = "copyMove";
             writeObjectTransfer(
               event.dataTransfer,
               makeObjectTransfer([refOf(object)], objectText(object)),
             );
+            writePlacementDrag(
+              event.dataTransfer,
+              p,
+              event.currentTarget.getBoundingClientRect(),
+              event.clientX,
+              event.clientY,
+            );
+            setDraggingOut(true);
           }}
+          onDragEnd={() => setDraggingOut(false)}
           onClick={(event) => {
             if (
               (event.target as Element).closest(
-                "a,button,input,textarea,.object-card-editor",
+                "a,button,input,textarea,summary,.object-card-editor",
               )
             )
               return;
@@ -363,6 +420,7 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
             <ObjectSurface
               object={object}
               presentation="canvas"
+              sourceText={sourceText}
               onEdit={canEdit && !moving ? startEditing : undefined}
               editor={
                 editing ? (
@@ -444,43 +502,40 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
               {object === null ? "内容不可用，引用仍保留。" : "正在读取内容…"}
             </p>
           )}
-          {(editing || adjusting) &&
-            (Object.keys(resizeLabels) as ResizeDirection[]).map(
-              (direction) => (
-                <Tooltip
-                  key={direction}
-                  content={`拖动${resizeLabels[direction]}调整大小；也可使用方向键`}
-                  relationship="description"
-                >
-                  <button
-                    type="button"
-                    className={`object-resize-handle object-resize-${direction}`}
-                    aria-label={`调整卡片大小：${resizeLabels[direction]}`}
-                    onPointerDown={(event) => begin(event, direction)}
-                    onPointerMove={drag}
-                    onPointerUp={finish}
-                    onPointerCancel={cancelGesture}
-                    onLostPointerCapture={() => {
-                      if (gesture.current) cancelGesture();
-                    }}
-                    onKeyDown={(event) => {
-                      const delta: Record<string, number[]> = {
-                        ArrowLeft: [-20, 0],
-                        ArrowRight: [20, 0],
-                        ArrowUp: [0, -20],
-                        ArrowDown: [0, 20],
-                      };
-                      const d = delta[event.key];
-                      if (!d) return;
-                      event.preventDefault();
-                      void actions.current
-                        .resize(p, resizeCardGeometry(p, direction, d[0], d[1]))
-                        .catch(error);
-                    }}
-                  />
-                </Tooltip>
-              ),
-            )}
+          {(Object.keys(resizeLabels) as ResizeDirection[]).map((direction) => (
+            <Tooltip
+              key={direction}
+              content={`拖动${resizeLabels[direction]}调整大小；也可使用方向键`}
+              relationship="description"
+            >
+              <button
+                type="button"
+                className={`object-resize-handle object-resize-${direction}`}
+                aria-label={`调整卡片大小：${resizeLabels[direction]}`}
+                onPointerDown={(event) => begin(event, direction)}
+                onPointerMove={drag}
+                onPointerUp={finish}
+                onPointerCancel={cancelGesture}
+                onLostPointerCapture={() => {
+                  if (gesture.current) cancelGesture();
+                }}
+                onKeyDown={(event) => {
+                  const delta: Record<string, number[]> = {
+                    ArrowLeft: [-20, 0],
+                    ArrowRight: [20, 0],
+                    ArrowUp: [0, -20],
+                    ArrowDown: [0, 20],
+                  };
+                  const d = delta[event.key];
+                  if (!d) return;
+                  event.preventDefault();
+                  void actions.current
+                    .resize(p, resizeCardGeometry(p, direction, d[0], d[1]))
+                    .catch(error);
+                }}
+              />
+            </Tooltip>
+          ))}
         </div>
       </MenuTrigger>
       <MenuPopover>

@@ -1,6 +1,101 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 
+test("PDF highlights, annotation rows and resting text boxes drag directly to a board with collapsible source text", async ({
+  page,
+}, testInfo) => {
+  const pdf = await readFile(
+    new URL(
+      "../../../../../../../development/test-data/pdf-selection/glyph-boundaries.pdf",
+      import.meta.url,
+    ),
+  );
+  await page.route("**/manual-preview/das24a.pdf", (route) =>
+    route.fulfill({ body: pdf, contentType: "application/pdf" }),
+  );
+  await page.setViewportSize({ width: 1920, height: 1100 });
+  await page.goto("/?pdf-highlight-fixture#importable");
+  const paper = page.locator('.pdf-page-shell[data-page="1"]');
+  await expect(paper.locator(".pdf-text-layer")).not.toBeEmpty({
+    timeout: 30_000,
+  });
+  const span = paper
+    .locator(".pdf-text-layer span")
+    .filter({ hasText: /\S{4}/ })
+    .first();
+  const bounds = (await span.boundingBox())!;
+  await page.mouse.move(bounds.x + 2, bounds.y + bounds.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    bounds.x + bounds.width - 2,
+    bounds.y + bounds.height / 2,
+    { steps: 10 },
+  );
+  await page.mouse.up();
+  await page
+    .getByLabel("选中文本批注菜单")
+    .getByRole("button", { name: "高亮", exact: true })
+    .click();
+  const row = page.locator(".pdf-annotation-item.highlight");
+  const summary = row.locator(".pdf-annotation-summary");
+  const quote = await summary.locator(".pdf-annotation-excerpt").innerText();
+  await summary.click();
+  await row.getByLabel("补充批注笔记").fill("这是我的批注，原文必须随附。");
+  await row.getByRole("button", { name: "保存笔记", exact: true }).click();
+  await page.getByRole("button", { name: "研究白板", exact: true }).click();
+  const board = page.getByLabel("白板卡片区域", { exact: true });
+  const cards = page.locator(".object-placement");
+  await summary.dragTo(board);
+  await expect(cards).toHaveCount(1);
+  await expect(cards.first().locator(".object-body")).toContainText(
+    "这是我的批注，原文必须随附。",
+  );
+  await expect(
+    cards.first().locator(".object-source-quote blockquote"),
+  ).toHaveText(quote);
+  await expect(
+    cards.first().locator(".object-source-quote blockquote"),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("annotation-source.png"),
+    fullPage: true,
+    animations: "disabled",
+  });
+  await cards.first().getByLabel("展开或收起原文").click();
+  await expect(
+    cards.first().locator(".object-source-quote blockquote"),
+  ).not.toBeVisible();
+  await expect(cards.first().getByRole("textbox")).toHaveCount(0);
+  await paper
+    .locator("button.pdf-overlay-mark.highlight")
+    .first()
+    .dragTo(board);
+  await expect(cards).toHaveCount(2);
+  // A resting PDF text box is itself a drag source, without first revealing its toolbar.
+  await page
+    .getByRole("button", { name: "在 PDF 中添加 Markdown 文本框", exact: true })
+    .click();
+  const paperBounds = (await paper.boundingBox())!;
+  await page.mouse.click(
+    paperBounds.x + paperBounds.width * 0.25,
+    paperBounds.y + paperBounds.height * 0.4,
+  );
+  await page
+    .getByRole("textbox", { name: "编辑第 1 页 Markdown 文本框" })
+    .fill("从 PDF 文本框直接拖动");
+  await page
+    .getByRole("button", { name: "保存 Markdown 文本框", exact: true })
+    .click();
+  const box = paper.getByRole("region", { name: "Markdown 文本框：第 1 页" });
+  await expect(box.getByRole("toolbar")).toHaveCount(0);
+  await box.dragTo(board);
+  await expect(cards).toHaveCount(3);
+  await expect(cards.filter({ hasText: "从 PDF 文本框直接拖动" })).toHaveCount(
+    1,
+  );
+  await expect(box).toContainText("从 PDF 文本框直接拖动");
+});
+
 test("PDF annotation rows use compact icon metadata and reveal labeled actions on selection", async ({
   page,
 }, testInfo) => {

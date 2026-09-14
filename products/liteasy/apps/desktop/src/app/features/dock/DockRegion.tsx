@@ -1,15 +1,42 @@
-import { Tooltip } from "@fluentui/react-components";
+import {
+  Button,
+  Menu,
+  MenuTrigger,
+  MenuPopover,
+  MenuList,
+  MenuItem,
+  Tooltip,
+} from "@fluentui/react-components";
 import {
   BookRegular,
+  MoreHorizontalRegular,
+  NoteRegular,
+  WhiteboardRegular,
+  FolderOpenRegular,
+  DismissRegular,
+  PanelLeftAddRegular,
+  PanelRightAddRegular,
   ChatRegular,
   QuestionCircleRegular,
   PeopleRegular,
   PersonRegular,
   SettingsRegular,
-  SparkleRegular
+  SparkleRegular,
 } from "@fluentui/react-icons";
-import { useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
-import { dockItemRegistry, dockRegionLabels, isDockItemId } from "./dockRegistry";
+import {
+  useState,
+  useEffect,
+  useRef,
+  type DragEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
+import {
+  dockItemRegistry,
+  dockRegionLabel,
+  isDockItemId,
+  canDockItemMoveTo,
+} from "./dockRegistry";
 import type { DockItemId, DockRegionId, DockRegionLayout } from "./dock.types";
 import { DockEmptyState } from "./DockEmptyState";
 
@@ -18,6 +45,12 @@ export const dockDynamicTabMimeType = "application/x-liteasy-dynamic-tab";
 
 function getDockItemIcon(itemId: DockItemId) {
   switch (itemId) {
+    case "board":
+      return <WhiteboardRegular />;
+    case "notes":
+      return <NoteRegular />;
+    case "artifact-library":
+      return <FolderOpenRegular />;
     case "library":
       return <BookRegular />;
     case "organization":
@@ -42,6 +75,7 @@ type DockRegionProps = {
     kind?: "document" | "artifact";
     id: string;
     onActivate: () => void;
+    onDragStart?: (event: DragEvent<HTMLButtonElement>) => void;
     onClose?: () => void;
     render: () => ReactNode;
     selected: boolean;
@@ -50,6 +84,12 @@ type DockRegionProps = {
   layout: DockRegionLayout;
   onActivateItem: (itemId: DockItemId) => void;
   onCloseItem: (itemId: DockItemId) => void;
+  onCloseRegion?: () => void;
+  onSplitRegion?: (side: "left" | "right") => void;
+  onItemDragStart?: (
+    itemId: DockItemId,
+    event: DragEvent<HTMLButtonElement>,
+  ) => void;
   onMoveDynamicTab?: (tabId: string, targetRegionId: DockRegionId) => void;
   onMoveItem: (itemId: DockItemId, targetRegionId: DockRegionId) => void;
   overlay?: ReactNode;
@@ -62,7 +102,7 @@ function hasDockPayload(event: DragEvent<HTMLElement>) {
   const types = event.dataTransfer?.types;
   return types
     ? Array.from(types).some(
-        (type) => type === dockItemMimeType || type === dockDynamicTabMimeType
+        (type) => type === dockItemMimeType || type === dockDynamicTabMimeType,
       )
     : false;
 }
@@ -70,7 +110,7 @@ function hasDockPayload(event: DragEvent<HTMLElement>) {
 function canAcceptDockPayload(
   event: DragEvent<HTMLElement>,
   regionId: DockRegionId,
-  onMoveDynamicTab?: (tabId: string, targetRegionId: DockRegionId) => void
+  onMoveDynamicTab?: (tabId: string, targetRegionId: DockRegionId) => void,
 ) {
   if (!hasDockPayload(event)) {
     return false;
@@ -87,7 +127,7 @@ function canAcceptDockPayload(
   const itemId = event.dataTransfer.getData(dockItemMimeType);
   return (
     itemId === "" ||
-    (isDockItemId(itemId) && dockItemRegistry[itemId].allowedRegions.includes(regionId))
+    (isDockItemId(itemId) && canDockItemMoveTo(itemId, regionId))
   );
 }
 
@@ -96,20 +136,80 @@ export function DockRegion({
   layout,
   onActivateItem,
   onCloseItem,
+  onCloseRegion,
+  onSplitRegion,
+  onItemDragStart,
   onMoveDynamicTab,
   onMoveItem,
   overlay,
   regionId,
   regionActions,
-  renderItem
+  renderItem,
 }: DockRegionProps) {
   const [dropActive, setDropActive] = useState(false);
-  const regionLabel = dockRegionLabels[regionId];
+  const regionElement = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const element = regionElement.current;
+    if (!element) return;
+    // Persistent portals retain their React parent. Handle plain tab drags through
+    // their DOM container; resource payloads remain owned by the surface itself.
+    const isPortalTabDrag = (event: globalThis.DragEvent) => {
+      if (
+        !(event.target instanceof Element) ||
+        !event.target.closest(".dock-persistent-surface") ||
+        !event.dataTransfer
+      )
+        return false;
+      const types = Array.from(event.dataTransfer.types);
+      return (
+        types.some(
+          (type) =>
+            type === dockItemMimeType || type === dockDynamicTabMimeType,
+        ) &&
+        types.every(
+          (type) =>
+            type === dockItemMimeType ||
+            type === dockDynamicTabMimeType ||
+            type === "text/plain",
+        )
+      );
+    };
+    const dragOver = (event: globalThis.DragEvent) => {
+      if (!isPortalTabDrag(event)) return;
+      event.preventDefault();
+      event.dataTransfer!.dropEffect = "move";
+      setDropActive(true);
+    };
+    const drop = (event: globalThis.DragEvent) => {
+      if (!isPortalTabDrag(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setDropActive(false);
+      const tabId = event.dataTransfer!.getData(dockDynamicTabMimeType);
+      if (tabId && onMoveDynamicTab) {
+        onMoveDynamicTab(tabId, regionId);
+        return;
+      }
+      const item = event.dataTransfer!.getData(dockItemMimeType);
+      if (isDockItemId(item) && canDockItemMoveTo(item, regionId))
+        onMoveItem(item, regionId);
+    };
+    element.addEventListener("dragover", dragOver);
+    element.addEventListener("drop", drop);
+    return () => {
+      element.removeEventListener("dragover", dragOver);
+      element.removeEventListener("drop", drop);
+    };
+  }, [regionId, onMoveItem, onMoveDynamicTab]);
+
+  const regionLabel = dockRegionLabel(regionId);
   const activeDynamicTab = dynamicTabs.find((tab) => tab.selected);
   const hasTabs = layout.itemIds.length > 0 || dynamicTabs.length > 0;
 
   function handleDrop(event: DragEvent<HTMLElement>) {
+    if (!hasDockPayload(event)) return;
     event.preventDefault();
+    event.stopPropagation();
     setDropActive(false);
     const dynamicTabId = event.dataTransfer.getData(dockDynamicTabMimeType);
     if (dynamicTabId && onMoveDynamicTab) {
@@ -121,13 +221,16 @@ export function DockRegion({
     if (!isDockItemId(itemId)) {
       return;
     }
-    if (!dockItemRegistry[itemId].allowedRegions.includes(regionId)) {
+    if (!canDockItemMoveTo(itemId, regionId)) {
       return;
     }
     onMoveItem(itemId, regionId);
   }
 
-  function handleDynamicTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, tabId: string) {
+  function handleDynamicTabKeyDown(
+    event: KeyboardEvent<HTMLButtonElement>,
+    tabId: string,
+  ) {
     if (!event.altKey || !event.shiftKey || !onMoveDynamicTab) {
       return;
     }
@@ -135,7 +238,7 @@ export function DockRegion({
       ArrowDown: "bottom",
       ArrowLeft: "left",
       ArrowRight: "right",
-      ArrowUp: "main"
+      ArrowUp: "main",
     };
     const targetRegionId = targetByKey[event.key];
     if (!targetRegionId) {
@@ -145,19 +248,19 @@ export function DockRegion({
     onMoveDynamicTab(tabId, targetRegionId);
   }
 
-  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, itemId: DockItemId) {
+  function handleTabKeyDown(
+    event: KeyboardEvent<HTMLButtonElement>,
+    itemId: DockItemId,
+  ) {
     if (event.altKey && event.shiftKey) {
       const targetByKey: Partial<Record<string, DockRegionId>> = {
         ArrowDown: "bottom",
         ArrowLeft: "left",
         ArrowRight: "right",
-        ArrowUp: "main"
+        ArrowUp: "main",
       };
       const targetRegionId = targetByKey[event.key];
-      if (
-        targetRegionId &&
-        dockItemRegistry[itemId].allowedRegions.includes(targetRegionId)
-      ) {
+      if (targetRegionId && canDockItemMoveTo(itemId, targetRegionId)) {
         event.preventDefault();
         onMoveItem(itemId, targetRegionId);
         return;
@@ -173,7 +276,8 @@ export function DockRegion({
     if (event.key === "ArrowRight") {
       nextIndex = (itemIndex + 1) % layout.itemIds.length;
     } else if (event.key === "ArrowLeft") {
-      nextIndex = (itemIndex - 1 + layout.itemIds.length) % layout.itemIds.length;
+      nextIndex =
+        (itemIndex - 1 + layout.itemIds.length) % layout.itemIds.length;
     } else if (event.key === "Home") {
       nextIndex = 0;
     } else if (event.key === "End") {
@@ -191,6 +295,7 @@ export function DockRegion({
       aria-label={`${regionLabel} Dock 区域`}
       className={`dock-region dock-region-${regionId} ${dropActive ? "drop-active" : ""}`}
       data-region={regionId}
+      ref={regionElement}
       onDragLeave={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
           setDropActive(false);
@@ -206,19 +311,29 @@ export function DockRegion({
       }}
       onDrop={handleDrop}
     >
-      {hasTabs || regionActions ? (
+      {hasTabs || regionActions || onSplitRegion || onCloseRegion ? (
         <div className="dock-region-tab-row">
           {hasTabs ? (
-            <div aria-label={`${regionLabel}标签页`} className="dock-tab-strip" role="tablist">
+            <div
+              aria-label={`${regionLabel}标签页`}
+              className="dock-tab-strip"
+              role="tablist"
+            >
               {layout.itemIds.map((itemId) => {
                 const descriptor = dockItemRegistry[itemId];
-                const active = !activeDynamicTab && layout.activeItemId === itemId;
-                const tooltipContent = descriptor.allowedRegions.length > 1
-                  ? `${descriptor.title} · 可拖动到其他区域`
-                  : descriptor.title;
+                const active =
+                  !activeDynamicTab && layout.activeItemId === itemId;
+                const tooltipContent =
+                  descriptor.allowedRegions.length > 1
+                    ? `${descriptor.title} · 可拖动到其他区域`
+                    : descriptor.title;
                 return (
                   <div className="dock-dynamic-tab" key={itemId}>
-                    <Tooltip content={tooltipContent} positioning="below" relationship="description">
+                    <Tooltip
+                      content={tooltipContent}
+                      positioning="below"
+                      relationship="description"
+                    >
                       <button
                         aria-label={descriptor.title}
                         aria-selected={active}
@@ -230,6 +345,7 @@ export function DockRegion({
                         onDragStart={(event) => {
                           event.dataTransfer.effectAllowed = "move";
                           event.dataTransfer.setData(dockItemMimeType, itemId);
+                          onItemDragStart?.(itemId, event);
                         }}
                         onKeyDown={(event) => handleTabKeyDown(event, itemId)}
                         role="tab"
@@ -267,9 +383,15 @@ export function DockRegion({
                     onDragEnd={() => setDropActive(false)}
                     onDragStart={(event) => {
                       event.dataTransfer.effectAllowed = "move";
-                      event.dataTransfer.setData(dockDynamicTabMimeType, tab.id);
+                      event.dataTransfer.setData(
+                        dockDynamicTabMimeType,
+                        tab.id,
+                      );
+                      tab.onDragStart?.(event);
                     }}
-                    onKeyDown={(event) => handleDynamicTabKeyDown(event, tab.id)}
+                    onKeyDown={(event) =>
+                      handleDynamicTabKeyDown(event, tab.id)
+                    }
                     role="tab"
                     tabIndex={tab.selected ? 0 : -1}
                     title={
@@ -279,7 +401,11 @@ export function DockRegion({
                     }
                     type="button"
                   >
-                    {tab.icon ? <span aria-hidden="true" className="dock-tab-icon">{tab.icon}</span> : null}
+                    {tab.icon ? (
+                      <span aria-hidden="true" className="dock-tab-icon">
+                        {tab.icon}
+                      </span>
+                    ) : null}
                     <span className="dock-tab-title">{tab.title}</span>
                   </button>
                   {tab.onClose ? (
@@ -300,7 +426,50 @@ export function DockRegion({
               ))}
             </div>
           ) : null}
-          {regionActions ? <div className="dock-region-actions">{regionActions}</div> : null}
+          <div className="dock-region-actions">
+            {regionActions}
+            {onSplitRegion || onCloseRegion ? (
+              <Menu>
+                <MenuTrigger disableButtonEnhancement>
+                  <Tooltip content="面板选项" relationship="description">
+                    <Button
+                      appearance="subtle"
+                      aria-label={`${regionLabel}面板选项`}
+                      icon={<MoreHorizontalRegular />}
+                    />
+                  </Tooltip>
+                </MenuTrigger>
+                <MenuPopover>
+                  <MenuList>
+                    {onSplitRegion ? (
+                      <>
+                        <MenuItem
+                          icon={<PanelLeftAddRegular />}
+                          onClick={() => onSplitRegion("left")}
+                        >
+                          在左边新建栏
+                        </MenuItem>
+                        <MenuItem
+                          icon={<PanelRightAddRegular />}
+                          onClick={() => onSplitRegion("right")}
+                        >
+                          在右边新建栏
+                        </MenuItem>
+                      </>
+                    ) : null}
+                    {onCloseRegion ? (
+                      <MenuItem
+                        icon={<DismissRegular />}
+                        onClick={onCloseRegion}
+                      >
+                        关闭面板
+                      </MenuItem>
+                    ) : null}
+                  </MenuList>
+                </MenuPopover>
+              </Menu>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
@@ -310,7 +479,8 @@ export function DockRegion({
         ) : (
           <>
             {layout.itemIds.map((itemId) => {
-              const active = !activeDynamicTab && layout.activeItemId === itemId;
+              const active =
+                !activeDynamicTab && layout.activeItemId === itemId;
               return (
                 <div
                   aria-labelledby={`dock-tab-${regionId}-${itemId}`}
@@ -338,7 +508,9 @@ export function DockRegion({
         )}
       </div>
       {overlay ? <div className="dock-region-overlay">{overlay}</div> : null}
-      {dropActive ? <div aria-hidden="true" className="dock-drop-overlay" /> : null}
+      {dropActive ? (
+        <div aria-hidden="true" className="dock-drop-overlay" />
+      ) : null}
     </section>
   );
 }

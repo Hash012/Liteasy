@@ -1,9 +1,15 @@
 import { createDefaultDockLayout, normalizeDockLayout } from "./dockLayout";
+import { isDockRegionId } from "./dockRegistry";
 import type { DockLayout, DockRegionId } from "./dock.types";
 
 const storageKey = "liteasy.ui.dock-layout.v1";
 const dynamicPlacementStorageKey = "liteasy.ui.dynamic-dock-placement.v1";
-const dockRegionIds = new Set<DockRegionId>(["bottom", "left", "main", "right"]);
+const dockRegionIds = new Set<DockRegionId>([
+  "bottom",
+  "left",
+  "main",
+  "right",
+]);
 
 export type DynamicDockPlacements = Record<string, DockRegionId>;
 
@@ -43,8 +49,8 @@ export function loadDynamicDockPlacements(): DynamicDockPlacements {
     return Object.fromEntries(
       Object.entries(parsed).filter(
         (entry): entry is [string, DockRegionId] =>
-          entry[0].length > 0 && dockRegionIds.has(entry[1] as DockRegionId)
-      )
+          entry[0].length > 0 && isDockRegionId(entry[1]),
+      ),
     );
   } catch {
     return {};
@@ -52,5 +58,8 @@ export function loadDynamicDockPlacements(): DynamicDockPlacements {
 }
 
 export function saveDynamicDockPlacements(placements: DynamicDockPlacements) {
-  window.localStorage.setItem(dynamicPlacementStorageKey, JSON.stringify(placements));
+  window.localStorage.setItem(
+    dynamicPlacementStorageKey,
+    JSON.stringify(placements),
+  );
 }

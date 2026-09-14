@@ -25,7 +25,7 @@ test("Agent and help remain reachable after closing, moving and reopening the wo
   ).toBeVisible();
   await expect(
     page.getByRole("region", { name: "研究白板", exact: true }),
-  ).toHaveCount(0);
+  ).toBeVisible();
   await expect(agent).toHaveAttribute("aria-pressed", "true");
   await page
     .getByRole("tab", { name: "Liteasy Chat", exact: true })

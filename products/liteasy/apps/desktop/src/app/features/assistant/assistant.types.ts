@@ -62,9 +62,10 @@ export type AgentActivity = {
 };
 
 export type AssistantContextToken = {
+  contextRefs?: import("../context/objectContext").ContextRef[];
   detail?: string;
   id: string;
-  kind: "paper" | "page" | "pdf_selection" | "skill";
+  kind: "paper" | "page" | "pdf_selection" | "skill" | "object";
   label: string;
   prompt: string;
 };

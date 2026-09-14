@@ -1,4 +1,5 @@
-export type DockRegionId = "left" | "main" | "right" | "bottom";
+export type DockBaseRegionId = "left" | "main" | "right" | "bottom";
+export type DockRegionId = DockBaseRegionId | `bar-${string}`;
 
 export type DockItemId =
   | "library"
@@ -8,6 +9,8 @@ export type DockItemId =
   | "settings"
   | "assistant"
   | "help"
+  | "notes"
+  | "board"
   | "artifacts";
 
 export type DockItemDescriptor = {
@@ -24,5 +27,8 @@ export type DockRegionLayout = {
 
 export type DockLayout = {
   regions: Record<DockRegionId, DockRegionLayout>;
-  version: 1;
+  horizontalOrder: DockRegionId[];
+  bottomOrder: DockRegionId[];
+  regionWidths: Partial<Record<DockRegionId, number>>;
+  version: 2;
 };

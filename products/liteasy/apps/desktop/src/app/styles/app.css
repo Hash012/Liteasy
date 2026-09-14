@@ -176,13 +176,7 @@ body {
 .app-shell {
   position: relative;
   display: grid;
-  grid-template-columns:
-    64px
-    var(--left-pane-size, minmax(220px, 24fr))
-    var(--left-pane-utility-size, 4px)
-    minmax(0, 52fr)
-    var(--right-pane-utility-size, 4px)
-    var(--right-pane-size, minmax(220px, 24fr));
+  grid-template-columns: 64px minmax(0, 1fr);
   grid-template-rows:
     var(--top-pane-size, minmax(0, 68fr))
     var(--bottom-pane-utility-size, 4px)
@@ -237,7 +231,7 @@ body {
   z-index: 4;
   display: flex;
   align-items: center;
-  grid-column: 2 / 7;
+  grid-column: 2;
   grid-row: 2;
 }
 
@@ -284,12 +278,9 @@ body {
   grid-row: 1;
 }
 
-.app-shell.object-workbench-open > .dock-region-right {
-  display: none;
-}
 
 .dock-region-bottom {
-  grid-column: 2 / 7;
+  grid-column: 2;
   grid-row: 3;
 }
 
@@ -6837,3 +6828,46 @@ button.pdf-overlay-mark:focus-visible {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* Every column owns an independent tab container; side tools share the same layout. */
+.dock-workspace-columns,
+.dock-bottom-columns {
+  display: grid;
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.dock-workspace-columns > .dock-region,
+.dock-bottom-columns > .dock-region {
+  grid-column: auto;
+  grid-row: 1;
+}
+.dock-workspace-columns > .pane-resizer,
+.dock-bottom-columns > .pane-resizer {
+  width: 4px;
+  grid-row: 1;
+}
+.dock-item-host > .object-workbench {
+  grid-column: auto;
+  grid-row: auto;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+}
+.dock-region-actions { margin-left: auto; }
+
+.dock-bottom-columns { grid-row: 3; }
+
+.dock-surface-slot,
+.dock-persistent-surface { min-width: 0; min-height: 0; height: 100%; width: 100%; }
+
+/* The bottom bar keeps the composer reachable at its default height. */
+.dock-bottom-columns .assistant-only-pane > .pane-header { display: none; }
+.dock-bottom-columns .assistant-only-pane .pane-body { padding: 8px; }
+.dock-bottom-columns .assistant-pane { gap: 8px; }
+.dock-bottom-columns .assistant-session-toolbar { display: flex; align-items: center; justify-content: space-between; }
+.dock-bottom-columns .assistant-active-session { flex: 1; }
+.dock-bottom-columns .assistant-input { height: 52px; min-height: 52px; }

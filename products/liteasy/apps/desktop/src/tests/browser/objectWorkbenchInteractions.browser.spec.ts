@@ -1,5 +1,65 @@
 import { expect, test } from "@playwright/test";
 
+test("resting cards drag by their content, resize from visible edges and keep their position after reopening", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1100 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "研究白板", exact: true }).click();
+  const board = page.locator("section.object-workbench");
+  await board.getByRole("button", { name: "添加笔记", exact: true }).click();
+  await board
+    .getByLabel("笔记内容", { exact: true })
+    .fill("直接拖动，无需打开菜单");
+  await board.getByRole("button", { name: "新建笔记", exact: true }).click();
+  await board.getByRole("button", { name: "收起工具", exact: true }).click();
+  const card = board.locator(".object-placement");
+  const content = card.locator(".object-body");
+  await expect(content).toContainText("直接拖动");
+  const before = (await card.boundingBox())!;
+  const start = (await content.boundingBox())!;
+  await page.mouse.move(start.x + 30, start.y + 12);
+  await page.mouse.down();
+  await page.mouse.move(start.x + 75, start.y + 70, { steps: 12 });
+  await page.mouse.up();
+  await expect
+    .poll(async () => (await card.boundingBox())!.x)
+    .toBeGreaterThan(before.x + 30);
+  await expect
+    .poll(async () => (await card.boundingBox())!.y)
+    .toBeGreaterThan(before.y + 40);
+  await expect(board.locator(".object-placement")).toHaveCount(1);
+  await expect(card.getByRole("textbox")).toHaveCount(0);
+  // Resize while resting, using actual pointer gestures, without a menu or edit mode.
+  const resized = (await card.boundingBox())!;
+  const handle = card.getByRole("button", {
+    name: "调整卡片大小：右下角",
+    exact: true,
+  });
+  const corner = (await handle.boundingBox())!;
+  await page.mouse.move(
+    corner.x + corner.width / 2,
+    corner.y + corner.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(corner.x - 100, corner.y - 100, { steps: 10 });
+  await page.mouse.up();
+  await expect
+    .poll(async () => (await card.boundingBox())!.width)
+    .toBeLessThan(resized.width - 85);
+  await expect
+    .poll(async () => (await card.boundingBox())!.height)
+    .toBeLessThan(resized.height - 85);
+  const saved = await card.getAttribute("style");
+  await page.reload();
+  await expect(board).toBeVisible();
+  await expect(card).toHaveAttribute("style", saved!);
+  await card.click();
+  await expect(
+    card.getByRole("textbox", { name: "编辑卡片正文", exact: true }),
+  ).toBeVisible();
+});
+
 test("board closes from details, notes edit in place, every resize handle works, and saved notes drag back", async ({
   page,
 }, testInfo) => {
@@ -25,7 +85,7 @@ test("board closes from details, notes edit in place, every resize handle works,
     "通过单击直接编辑后的笔记",
   );
   await expect(card.getByRole("button", { name: /^调整卡片大小/ })).toHaveCount(
-    0,
+    8,
   );
   await card.getByRole("button", { name: "编辑笔记正文", exact: true }).click();
   const original = (await card.boundingBox())!;
@@ -77,7 +137,7 @@ test("board closes from details, notes edit in place, every resize handle works,
   await page.getByRole("button", { name: "研究白板", exact: true }).click();
   await expect(board.getByLabel("内容详情", { exact: true })).not.toBeVisible();
   await page.reload();
-  await page.getByRole("button", { name: "研究白板", exact: true }).click();
+  await expect(board).toBeVisible();
   await expect(card.locator(".object-body")).toContainText(
     "通过单击直接编辑后的笔记",
   );

@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 
+test("lets WebView2 deliver HTML5 resource drags to board and chat", () => {
+  const config = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "src-tauri/tauri.conf.json"), "utf8"));
+  expect(config.app.windows.every((window: { dragDropEnabled?: boolean }) => window.dragDropEnabled === false)).toBe(true);
+});
+
 test("keeps the Tauri main window behind a restrictive CSP", () => {
   const config = JSON.parse(
     fs.readFileSync(path.resolve(process.cwd(), "src-tauri/tauri.conf.json"), "utf8")

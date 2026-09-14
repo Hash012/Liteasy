@@ -1,8 +1,17 @@
+import { createPortal } from "react-dom";
+import { createDockSurfaceHost, DockSurfaceSlot } from "../features/dock/DockSurfaceSlot";
 import { Button, Tooltip } from "@fluentui/react-components";
 import { WhiteboardRegular } from "@fluentui/react-icons";
 import { useObjectWorkbenchController } from "../controllers/useObjectWorkbenchController";
 import { useApplicationViewController } from "../controllers/useApplicationViewController";
 import { useWorkbenchNavigationController } from "../controllers/useWorkbenchNavigationController";
+import { useNotesController } from "../controllers/useNotesController";
+import { NotesPanel } from "../features/notes/NotesPanel";
+import { NotesContext } from "../features/notes/notesPort";
+import { refOf, objectLink } from "../features/objects/object.types";
+import { makeObjectTransfer, writeObjectTransfer } from "../features/object-transfer/objectTransfer";
+import { PAPER_CONTEXT_MIME } from "../features/object-transfer/contextTransfer";
+import { isBaseDockRegionId } from "../features/dock/dockRegistry";
 import { useHelpController } from "../controllers/useHelpController";
 import { HelpPanel } from "../features/help/HelpPanel";
 import { HelpContext } from "../features/help/helpContext";
@@ -13,7 +22,7 @@ import { ObjectWorkbench } from "../features/boards/ObjectWorkbench";
 import { usePdfQuickAskController } from "../controllers/usePdfQuickAskController";
 import { usePaperServicesController } from "../controllers/usePaperServicesController";
 import type { CSSProperties } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspaceActions } from "../features/workspace/useWorkspaceActions";
 import { useRegisteredWorkspaceActions } from "../features/workspace/useRegisteredWorkspaceActions";
 import type { ImportJob, MineruFigure } from "../features/import/import.types";
@@ -135,7 +144,7 @@ import { canManageOrganizationLibrary } from "../features/organization/organizat
 import { useForumController } from "../features/forum/useForumController";
 import type { UIDslActionRef, UIDslDocument } from "../features/generative-ui/generativeUi.types";
 import { generateWorkbenchOverlayUIDslDocument } from "../features/generative-ui/uiDslGenerator";
-import { DockRegion } from "../features/dock/DockRegion";
+import { DockRegion, dockItemMimeType } from "../features/dock/DockRegion";
 import { useDockLayout } from "../features/dock/useDockLayout";
 import type { DockItemId, DockRegionId } from "../features/dock/dock.types";
 import { DockLayoutControls } from "./DockLayoutControls";
@@ -272,6 +281,7 @@ export function AppShell({
   } = useLocalLibrary(localLibraryLoader);
   const paneLayout = usePaneLayout();
   const dock = useDockLayout();
+  const assistantSurfaceHost = useMemo(createDockSurfaceHost, []);
   const { isOnline } = useConnectivity();
   const [runtimeTheme, setRuntimeTheme] = useState<RuntimeTheme>({ kind: "default" });
   const [workbenchOverlay, setWorkbenchOverlay] = useState<UIDslDocument | null>(null);
@@ -368,12 +378,18 @@ export function AppShell({
     firstPageText: string;
     paper: Paper;
   }) => Promise<void>) | null>(null);
+  function revealDockRegion(regionId: DockRegionId) {
+    if (dock.layout.bottomOrder.includes(regionId)) paneLayout.setCollapsed("bottom", false);
+    else if (isBaseDockRegionId(regionId) && regionId !== "main") paneLayout.setCollapsed(regionId, false);
+  }
+
   function openDockedLeftRailView(view: LeftRailView) {
     leftRail.setLeftRailView(view);
     const regionId = dock.findItemRegion(view) ?? "left";
     dock.openItem(view);
+    activateDockItem(regionId, view);
     if (regionId !== "main") {
-      paneLayout.setCollapsed(regionId, false);
+      revealDockRegion(regionId);
     }
   }
   const workspaceActions = useWorkspaceActions({
@@ -623,7 +639,7 @@ export function AppShell({
       ...current,
       [regionId]: artifactId
     }));
-    paneLayout.setCollapsed(regionId, false);
+    revealDockRegion(regionId);
   }
 
   function selectFallbackArtifact(
@@ -691,7 +707,7 @@ export function AppShell({
         ...current,
         [targetRegionId]: artifactId
       }));
-      paneLayout.setCollapsed(targetRegionId, false);
+      revealDockRegion(targetRegionId);
     }
   }
 
@@ -704,7 +720,7 @@ export function AppShell({
     const assistantRegionId = dock.findItemRegion("assistant") ?? "right";
     dock.openItem("assistant");
     if (assistantRegionId !== "main") {
-      paneLayout.setCollapsed(assistantRegionId, false);
+      revealDockRegion(assistantRegionId);
     }
   }, [artifactTasks]);
 
@@ -1067,6 +1083,40 @@ export function AppShell({
     visible: workbenchNavigation.isVisible("help"),
     onOpen: () => workbenchNavigation.open("help")
   });
+  const notes = useNotesController({
+    scopeId: objectWorkbench.repository.scopeId,
+    repository: objectWorkbench.repository,
+    visible: workbenchNavigation.isVisible("notes"),
+    getPapers: () => workspaceState.papers,
+    onOpen: () => workbenchNavigation.open("notes"),
+    openObject: (ref) => objectWorkbench.openLink(objectLink(ref)),
+    openAnnotation: (paper, annotation) => openEvidenceInReader({ evidenceId: annotation.id, paperId: paper.id, page: annotation.page, quote: annotation.excerpt }),
+    dragAnnotation: (paper, annotation, data) => objectWorkbench.port.dragAnnotation?.({ paper, annotation }, data),
+    listArtifacts: () => artifactResultClientRef.current!.list(),
+    openArtifact: (id) => { artifactWorkflow.actions.openArtifact(id); activateArtifactSurface(id); }
+  });
+  const previousBoardVisibility = useRef<boolean>();
+  useEffect(() => {
+    const existing = dock.findItemRegion("board");
+    if (previousBoardVisibility.current === undefined && existing && !objectWorkbench.visible) {
+      objectWorkbench.setVisible(true);
+      previousBoardVisibility.current = false;
+      return;
+    }
+    if (objectWorkbench.visible && !existing) {
+      const region = dock.layout.regions["bar-board"] ? "bar-board" : dock.splitRegion("main", "right", "bar-board");
+      dock.moveItem("board", region);
+      activateDockItem(region, "board");
+    } else if (!objectWorkbench.visible && previousBoardVisibility.current) {
+      dock.closeItem("board");
+    }
+    previousBoardVisibility.current = objectWorkbench.visible;
+  }, [objectWorkbench.visible, dock.layout]);
+
+  useEffect(() => {
+    if (objectWorkbench.visible && dock.findItemRegion("board")) workbenchNavigation.open("board");
+  }, [objectWorkbench.board?.objectId, objectWorkbench.placements.length]);
+
   const assistantAgent = useAssistantAgentController({
     principalId: objectWorkbench.repository.scopeId,
     resolveObjectContext: objectWorkbench.resolveContext,
@@ -1238,15 +1288,13 @@ export function AppShell({
     ? "0px"
     : `minmax(220px, ${paneLayout.layout.left}fr)`;
   const leftPaneUtilitySize = paneLayout.collapsed.left ? "0px" : "4px";
-  const [boardPaneWeight, setBoardPaneWeight] = useState(36);
-  const rightPaneSize = objectWorkbench.visible
-    ? `minmax(0, ${boardPaneWeight}fr)`
-    : paneLayout.collapsed.right
-    ? "0px"
-    : `minmax(220px, ${paneLayout.layout.right}fr)`;
-  const rightPaneUtilitySize = objectWorkbench.visible || !paneLayout.collapsed.right ? "4px" : "0px";
-  const bottomPaneVisible =
-    !paneLayout.collapsed.bottom && dock.layout.regions.bottom.itemIds.length > 0;
+  const rightPaneSize = paneLayout.collapsed.right ? "0px" : `minmax(0, ${paneLayout.layout.right}fr)`;
+  const rightPaneUtilitySize = paneLayout.collapsed.right ? "0px" : "4px";
+  const bottomPaneVisible = !paneLayout.collapsed.bottom;
+  const visibleHorizontalRegions = dock.layout.horizontalOrder.filter((region) => !isBaseDockRegionId(region) || region === "main" || !paneLayout.collapsed[region]);
+  function regionWeight(region: DockRegionId) {
+    return dock.layout.regionWidths[region] ?? (region === "main" ? paneLayout.layout.center : region === "left" ? paneLayout.layout.left : region === "right" ? paneLayout.layout.right : 32);
+  }
   const readerArtifactRowSize = "0px";
   const bottomPaneSize = bottomPaneVisible
     ? `minmax(180px, ${paneLayout.layout.bottom}fr)`
@@ -1737,8 +1785,12 @@ export function AppShell({
       leftRail.setLeftRailView(itemId);
     }
     dock.moveItem(itemId, targetRegionId);
+    if (itemId === "board") objectWorkbench.setVisible(true);
     if (targetRegionId === "main") {
       setActiveCenterArtifactId(null);
+      setActiveReaderPaperId(null);
+      setActiveVisualizationId(null);
+      setActivePaperResourceId(null);
     } else {
       setActiveSideArtifactIds((current) => {
         if (!current[targetRegionId]) {
@@ -1748,7 +1800,7 @@ export function AppShell({
         delete next[targetRegionId];
         return next;
       });
-      paneLayout.setCollapsed(targetRegionId, false);
+      revealDockRegion(targetRegionId);
     }
   }
 
@@ -1825,7 +1877,7 @@ export function AppShell({
     const assistantRegionId = dock.findItemRegion("assistant") ?? "right";
     dock.openItem("assistant");
     if (assistantRegionId !== "main") {
-      paneLayout.setCollapsed(assistantRegionId, false);
+      revealDockRegion(assistantRegionId);
     }
   }
 
@@ -1835,7 +1887,14 @@ export function AppShell({
       return <LeftPane {...leftPaneProps} leftRailView={itemId} />;
     }
 
-    if (itemId === "assistant") {
+    if (itemId === "notes") return <NotesPanel model={notes.model} />;
+    if (itemId === "board") return <ObjectWorkbench key={objectWorkbench.repository.scopeId} model={objectWorkbench} />;
+    if (itemId === "assistant") return <DockSurfaceSlot host={assistantSurfaceHost} />;
+
+    return renderArtifactSurface();
+  }
+
+  function renderAssistantSurface(regionId: DockRegionId) {
       return (
         <AssistantSidebar
           key={assistantScopeId}
@@ -1902,7 +1961,7 @@ export function AppShell({
                 }
               : undefined
           }
-          regionId={regionId === "main" ? "right" : regionId}
+          regionId={isBaseDockRegionId(regionId) && regionId !== "main" ? regionId : "right"}
           runtimeOrganizationName={organizationSummary?.name}
           runtimeWorkspace={workspaceState.workspaceSource}
           availablePapers={workspaceState.papers}
@@ -1912,9 +1971,6 @@ export function AppShell({
           settingsStore={settingsStoreRef.current}
         />
       );
-    }
-
-    return renderArtifactSurface();
   }
 
   function renderReaderPaper(paperId: string) {
@@ -1997,35 +2053,79 @@ export function AppShell({
     );
   }
 
+  function closeDockRegion(regionId: DockRegionId) {
+    if (!isBaseDockRegionId(regionId)) {
+      const activeItem = dock.layout.regions[regionId].activeItemId;
+      const activeTab = activeSideArtifactIds[regionId];
+      dock.removeRegion(regionId);
+      if (activeTab) moveDynamicTab(activeTab, "main");
+      else if (activeItem) activateDockItem("main", activeItem);
+      setActiveSideArtifactIds((current) => { const next = { ...current }; delete next[regionId]; return next; });
+    } else if (regionId !== "main") {
+      paneLayout.setCollapsed(regionId, true);
+    } else {
+      for (const item of dock.layout.regions.main.itemIds) { dock.closeItem(item); if (item === "board") objectWorkbench.setVisible(false); }
+      setOpenReaderPaperIds((current) => current.filter((id) => (dock.findDynamicItemRegion(`pdf-${id}`) ?? "main") !== "main")); setActiveReaderPaperId(null);
+      setOpenPaperResources((current) => current.filter((resource) => (dock.findDynamicItemRegion(paperResourceTabId(resource)) ?? "main") !== "main")); setActivePaperResourceId(null);
+      setOpenVisualizations((current) => current.filter((item) => (dock.findDynamicItemRegion(item.id) ?? "main") !== "main")); setActiveVisualizationId(null);
+      for (const tab of artifactTabs.filter((tab) => getArtifactRegion(tab.artifactId) === "main")) artifactWorkflow.actions.closeArtifactTab(tab.artifactId);
+      setActiveCenterArtifactId(null);
+    }
+  }
+
+  function moveDynamicTab(tabId: string, targetRegionId: DockRegionId) {
+    if (artifactTabs.some((tab) => tab.artifactId === tabId)) { moveArtifactSurface(tabId, targetRegionId); return; }
+    const paper = openReaderPapers.find((paper) => `pdf-${paper.id}` === tabId);
+    const resource = openPaperResources.find((resource) => paperResourceTabId(resource) === tabId);
+    const visualization = openVisualizations.find((item) => item.id === tabId);
+    if (!paper && !resource && !visualization) return;
+    dock.moveDynamicItem(tabId, targetRegionId);
+    setActiveSideArtifactIds((current) => Object.fromEntries(Object.entries(current).filter(([, id]) => id !== tabId)));
+    if (targetRegionId === "main") {
+      setActiveReaderPaperId(paper?.id ?? null);
+      setActivePaperResourceId(resource ? tabId : null);
+      setActiveVisualizationId(visualization ? tabId : null);
+      setActiveCenterArtifactId(null);
+    } else {
+      if (paper && activeReaderPaperId === paper.id) setActiveReaderPaperId(null);
+      if (resource && activePaperResourceId === tabId) setActivePaperResourceId(null);
+      if (visualization && activeVisualizationId === tabId) setActiveVisualizationId(null);
+      setActiveSideArtifactIds((current) => ({ ...current, [targetRegionId]: tabId }));
+      revealDockRegion(targetRegionId);
+    }
+  }
+
   function renderDockRegion(regionId: DockRegionId) {
     const showDetachedLayoutControls =
       regionId === "main" &&
       activeCenterArtifactId !== null;
-    const dynamicReaderTabs = regionId === "main"
-      ? openReaderPapers.map((paper) => ({
+    const dynamicReaderTabs = openReaderPapers.filter((paper) => (dock.findDynamicItemRegion(`pdf-${paper.id}`) ?? "main") === regionId).map((paper) => ({
+          draggable: true,
+          onDragStart: (event: React.DragEvent<HTMLButtonElement>) => { event.dataTransfer.effectAllowed = "copyMove"; event.dataTransfer.setData(PAPER_CONTEXT_MIME, paper.id); },
           icon: <DocumentPdfRegular />,
           id: `pdf-${paper.id}`,
           kind: "document" as const,
           onActivate: () => {
+            if (regionId !== "main") { setActiveSideArtifactIds((current) => ({ ...current, [regionId]: `pdf-${paper.id}` })); return; }
             setActiveReaderPaperId(paper.id);
             setActiveCenterArtifactId(null);
             setActiveVisualizationId(null);
           },
           onClose: () => closeReaderPaper(paper.id),
           render: () => renderReaderPaper(paper.id),
-          selected: activeVisualizationId === null && activeCenterArtifactId === null && activePaperResourceId === null && activeReaderPaperId === paper.id,
+          selected: regionId === "main" ? activeVisualizationId === null && activeCenterArtifactId === null && activePaperResourceId === null && activeReaderPaperId === paper.id : activeSideArtifactIds[regionId] === `pdf-${paper.id}`,
           title: paper.title
-        }))
-      : [];
-    const dynamicPaperResourceTabs = regionId === "main"
-      ? openPaperResources.map((resource) => {
+        }));
+    const dynamicPaperResourceTabs = openPaperResources.filter((resource) => (dock.findDynamicItemRegion(paperResourceTabId(resource)) ?? "main") === regionId).map((resource) => {
           const paper = workspaceState.papers.find((candidate) => candidate.id === resource.paperId);
           const id = paperResourceTabId(resource);
           return {
             icon: resource.kind === "figures" || resource.kind === "multimodal" ? <ImageMultipleRegular /> : <DocumentTextRegular />,
             id,
+            draggable: true,
             kind: "document" as const,
             onActivate: () => {
+              if (regionId !== "main") { setActiveSideArtifactIds((current) => ({ ...current, [regionId]: id })); return; }
               setActivePaperResourceId(id);
               setActiveReaderPaperId(null);
               setActiveCenterArtifactId(null);
@@ -2033,17 +2133,17 @@ export function AppShell({
             },
             onClose: () => closePaperResource(id),
             render: () => renderPaperResource(resource),
-            selected: activeVisualizationId === null && activeCenterArtifactId === null && activePaperResourceId === id,
+            selected: regionId === "main" ? activeVisualizationId === null && activeCenterArtifactId === null && activePaperResourceId === id : activeSideArtifactIds[regionId] === id,
             title: `${paper?.title ?? "论文"} · ${resource.kind === "figures" ? "插图" : resource.kind === "multimodal" ? "图文版" : "提取文本"}`
           };
-        })
-      : [];
-    const dynamicVisualizationTabs = regionId === "main"
-      ? openVisualizations.map((visualization) => ({
+        });
+    const dynamicVisualizationTabs = openVisualizations.filter((item) => (dock.findDynamicItemRegion(item.id) ?? "main") === regionId).map((visualization) => ({
+          draggable: true,
           icon: <DocumentTextRegular />,
           id: visualization.id,
           kind: "document" as const,
           onActivate: () => {
+            if (regionId !== "main") { setActiveSideArtifactIds((current) => ({ ...current, [regionId]: visualization.id })); return; }
             setActiveVisualizationId(visualization.id);
             setActiveReaderPaperId(null);
             setActivePaperResourceId(null);
@@ -2051,10 +2151,9 @@ export function AppShell({
           },
           onClose: () => closeVisualization(visualization.id),
           render: () => <VisualizationTab data={visualization} />,
-          selected: activeCenterArtifactId === null && activePaperResourceId === null && activeReaderPaperId === null && activeVisualizationId === visualization.id,
+          selected: regionId === "main" ? activeCenterArtifactId === null && activePaperResourceId === null && activeReaderPaperId === null && activeVisualizationId === visualization.id : activeSideArtifactIds[regionId] === visualization.id,
           title: visualization.title
-        }))
-      : [];
+        }));
     const dynamicArtifactTabs = artifactTabs
       .filter((tab) => getArtifactRegion(tab.artifactId) === regionId)
       .map((tab) => {
@@ -2084,11 +2183,19 @@ export function AppShell({
         dynamicTabs={dynamicTabs}
         layout={dock.layout.regions[regionId]}
         onActivateItem={(itemId) => activateDockItem(regionId, itemId)}
-        onCloseItem={dock.closeItem}
-        onMoveDynamicTab={moveArtifactSurface}
+        onCloseItem={(item) => { dock.closeItem(item); if (item === "board") objectWorkbench.setVisible(false); }}
+        onCloseRegion={() => closeDockRegion(regionId)}
+        onSplitRegion={(side) => dock.splitRegion(regionId, side)}
+        onItemDragStart={(item, event) => {
+          if (item === "board" && objectWorkbench.board) {
+            event.dataTransfer.effectAllowed = "copyMove";
+            writeObjectTransfer(event.dataTransfer, makeObjectTransfer([refOf(objectWorkbench.board)], objectWorkbench.board.title));
+          }
+        }}
+        onMoveDynamicTab={moveDynamicTab}
         onMoveItem={moveDockItem}
         overlay={
-          regionId === "main" && !(workbenchNavigation.isVisible("help") && dock.findItemRegion("help") === "main") ? (
+          regionId === "main" && !["help", "notes", "board"].some((item) => dock.layout.regions.main.activeItemId === item && !dynamicTabs.some((tab) => tab.selected)) ? (
             <FloatingModalityButton
               analysisHint={analysisHint}
               canStartAnalysis={
@@ -2121,6 +2228,7 @@ export function AppShell({
     runtimeTheme.kind === "generated" ? runtimeTheme.theme.scope.join(" ") : undefined;
 
   return (
+    <NotesContext.Provider value={notes.port}>
     <HelpContext.Provider value={help.port}>
     <ObjectWorkbenchContext.Provider value={objectWorkbench.port}>
     <div className={appFrameClassName} data-theme-scope={appFrameScope} style={appFrameStyle}>
@@ -2141,11 +2249,13 @@ export function AppShell({
         }
       >
         <ActivityBar
+          notesOpen={workbenchNavigation.isVisible("notes")}
+          onOpenNotes={() => notes.port.open()}
           agentOpen={workbenchNavigation.isVisible("assistant")}
           helpOpen={workbenchNavigation.isVisible("help")}
           onOpenAgent={() => workbenchNavigation.open("assistant")}
           onOpenHelp={() => help.port.open()}
-          layoutControls={<><Tooltip content={objectWorkbench.visible ? "关闭研究白板" : "研究白板"} relationship="description"><Button appearance="subtle" aria-label="研究白板" aria-pressed={objectWorkbench.visible} icon={<WhiteboardRegular />} onClick={() => objectWorkbench.setVisible(!objectWorkbench.visible)} /></Tooltip><DockLayoutControls
+          layoutControls={<><Tooltip content={objectWorkbench.visible ? "关闭研究白板" : "研究白板"} relationship="description"><Button appearance="subtle" aria-label="研究白板" aria-pressed={objectWorkbench.visible} icon={<WhiteboardRegular />} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData(dockItemMimeType, "board"); }} onClick={() => { if (workbenchNavigation.isVisible("board")) objectWorkbench.setVisible(false); else { objectWorkbench.setVisible(true); if (dock.findItemRegion("board")) workbenchNavigation.open("board"); } }} /></Tooltip><DockLayoutControls
             collapsed={paneLayout.collapsed}
             onToggleBottom={() => paneLayout.setCollapsed("bottom", !paneLayout.collapsed.bottom)}
             onToggleLeft={() => paneLayout.setCollapsed("left", !paneLayout.collapsed.left)}
@@ -2162,27 +2272,15 @@ export function AppShell({
             if (region.activeItemId !== view) {
               activateDockItem(regionId, view);
               if (regionId !== "main") {
-                paneLayout.setCollapsed(regionId, false);
+                revealDockRegion(regionId);
               }
               return;
             }
-            if (regionId !== "main") {
+            if (isBaseDockRegionId(regionId) && regionId !== "main") {
               paneLayout.setCollapsed(regionId, !paneLayout.collapsed[regionId]);
             }
           }}
         />
-        {!paneLayout.collapsed.left ? renderDockRegion("left") : null}
-        <div className="pane-utility-column left">
-          {!paneLayout.collapsed.left ? (
-            <PaneResizer
-              ariaLabel="调整左栏宽度"
-              onResize={(deltaPixels) => {
-                const shellWidth = window.innerWidth - 64 - 8 - 8;
-                paneLayout.adjustLeft((deltaPixels / shellWidth) * 100);
-              }}
-            />
-          ) : null}
-        </div>
         <AppDialogs
           academicProfile={profileActions.academicProfile}
           accountMessage={cloudAccount.model.accountMessage}
@@ -2244,24 +2342,18 @@ export function AppShell({
           loginDialogOpen={loginDialogOpen}
           summary={organizationSummary}
         />
-        {renderDockRegion("main")}
-        <div className="pane-utility-column right">
-          {objectWorkbench.visible || !paneLayout.collapsed.right ? (
-            <PaneResizer
-              ariaLabel="调整右栏宽度"
-              onResize={(deltaPixels) => {
-                const shellWidth = window.innerWidth - 64 - 8 - 8;
-                if (objectWorkbench.visible) {
-                  setBoardPaneWeight((current) => Math.max(18, Math.min(100, current - (deltaPixels / shellWidth) * (76 + current))));
-                } else {
-                  paneLayout.adjustRight((deltaPixels / shellWidth) * 100);
-                }
-              }}
-            />
-          ) : null}
+        <div className="dock-workspace-columns" style={{ gridTemplateColumns: visibleHorizontalRegions.map((region) => `minmax(0, ${regionWeight(region)}fr)`).join(" 4px ") }}>
+          {visibleHorizontalRegions.map((region, index) => <Fragment key={region}>
+            {index > 0 ? <PaneResizer ariaLabel={`调整${region === "right" ? "右栏" : region === "left" ? "左栏" : "分栏"}宽度`} onResize={(pixels) => {
+              const total = visibleHorizontalRegions.reduce((sum, id) => sum + regionWeight(id), 0);
+              const delta = pixels / Math.max(1, window.innerWidth - 64) * total;
+              const previous = visibleHorizontalRegions[index - 1];
+              dock.resizeRegion(previous, regionWeight(previous) + delta);
+              dock.resizeRegion(region, regionWeight(region) - delta);
+            }} /> : null}
+            {renderDockRegion(region)}
+          </Fragment>)}
         </div>
-        {!paneLayout.collapsed.right ? renderDockRegion("right") : null}
-        <ObjectWorkbench key={objectWorkbench.repository.scopeId} model={objectWorkbench} />
         <div className="pane-utility-row bottom">
           {bottomPaneVisible ? (
             <PaneResizer
@@ -2273,7 +2365,18 @@ export function AppShell({
             />
           ) : null}
         </div>
-        {bottomPaneVisible ? renderDockRegion("bottom") : null}
+        {bottomPaneVisible ? <div className="dock-bottom-columns" style={{ gridTemplateColumns: dock.layout.bottomOrder.map((region) => `minmax(0, ${regionWeight(region)}fr)`).join(" 4px ") }}>
+          {dock.layout.bottomOrder.map((region, index) => <Fragment key={region}>
+            {index > 0 ? <PaneResizer ariaLabel="调整下栏分栏宽度" onResize={(pixels) => {
+              const total = dock.layout.bottomOrder.reduce((sum, id) => sum + regionWeight(id), 0);
+              const delta = pixels / Math.max(1, window.innerWidth - 64) * total;
+              const previous = dock.layout.bottomOrder[index - 1];
+              dock.resizeRegion(previous, regionWeight(previous) + delta);
+              dock.resizeRegion(region, regionWeight(region) - delta);
+            }} /> : null}
+            {renderDockRegion(region)}
+          </Fragment>)}
+        </div> : null}
         {workbenchOverlay ? (
           <section aria-label="工作台状态投影" className="workbench-overlay">
             <DynamicCanvas
@@ -2286,7 +2389,9 @@ export function AppShell({
         ) : null}
       </div>
     </div>
+    {createPortal(renderAssistantSurface(dock.findItemRegion("assistant") ?? "right"), assistantSurfaceHost)}
     </ObjectWorkbenchContext.Provider>
     </HelpContext.Provider>
+    </NotesContext.Provider>
   );
 }

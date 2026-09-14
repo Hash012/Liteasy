@@ -25,7 +25,7 @@ function useFixture() {
   });
   return { dock, collapsed, board, navigation };
 }
-test("Agent can reopen after close and reveal a collapsed right region behind the board", () => {
+test("Agent can reopen after close and reveal a collapsed right region alongside the board", () => {
   const { result } = renderHook(useFixture);
   act(() => result.current.dock.closeItem("assistant"));
   expect(result.current.navigation.isVisible("assistant")).toBe(false);
@@ -34,7 +34,7 @@ test("Agent can reopen after close and reveal a collapsed right region behind th
     "assistant",
   );
   expect(result.current.collapsed.right).toBe(false);
-  expect(result.current.board).toBe(false);
+  expect(result.current.board).toBe(true);
   expect(result.current.navigation.isVisible("assistant")).toBe(true);
 });
 test("tool entries preserve moved regions and open help in its independent workspace tab", () => {
@@ -48,4 +48,16 @@ test("tool entries preserve moved regions and open help in its independent works
   act(() => result.current.dock.closeItem("help"));
   act(() => result.current.navigation.open("help"));
   expect(result.current.navigation.isVisible("help")).toBe(true);
+});
+
+test("reopens a tool in a persisted split without touching other regions", () => {
+  const { result } = renderHook(useFixture);
+  act(() => {
+    result.current.dock.splitRegion("main", "right", "bar-notes");
+    result.current.dock.moveItem("notes", "bar-notes");
+  });
+  act(() => result.current.navigation.open("notes"));
+  expect(result.current.navigation.isVisible("notes")).toBe(true);
+  expect(result.current.collapsed.right).toBe(true);
+  expect(result.current.dock.findItemRegion("notes")).toBe("bar-notes");
 });

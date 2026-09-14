@@ -1,18 +1,22 @@
 import { Button, Tooltip } from "@fluentui/react-components";
 import {
   BookRegular,
+  NoteRegular,
   BotRegular,
   FolderOpenRegular,
   PeopleRegular,
   PersonRegular,
   QuestionCircleRegular,
-  SettingsRegular
+  SettingsRegular,
 } from "@fluentui/react-icons";
 import type { ReactElement, ReactNode } from "react";
+import { dockItemMimeType } from "../features/dock/DockRegion";
 import type { LeftRailView } from "./useLeftRailNavigation";
 
 type ActivityBarProps = {
   agentOpen?: boolean;
+  notesOpen?: boolean;
+  onOpenNotes?: () => void;
   helpOpen?: boolean;
   onOpenAgent?: () => void;
   onOpenHelp?: () => void;
@@ -23,16 +27,22 @@ type ActivityBarProps = {
   onSelectView: (view: LeftRailView) => void;
 };
 
-const activityItems: Array<{ icon: ReactElement; label: string; view: LeftRailView }> = [
+const activityItems: Array<{
+  icon: ReactElement;
+  label: string;
+  view: LeftRailView;
+}> = [
   { icon: <BookRegular />, label: "文献库", view: "library" },
   { icon: <FolderOpenRegular />, label: "产物库", view: "artifact-library" },
   { icon: <PeopleRegular />, label: "组织", view: "organization" },
   { icon: <PersonRegular />, label: "个人中心", view: "profile" },
-  { icon: <SettingsRegular />, label: "设置", view: "settings" }
+  { icon: <SettingsRegular />, label: "设置", view: "settings" },
 ];
 
 export function ActivityBar({
   agentOpen = false,
+  notesOpen = false,
+  onOpenNotes,
   helpOpen = false,
   onOpenAgent,
   onOpenHelp,
@@ -40,17 +50,31 @@ export function ActivityBar({
   activeView,
   accountSessionAvailable = true,
   onToggleActiveView,
-  onSelectView
+  onSelectView,
 }: ActivityBarProps) {
   return (
     <nav aria-label="左边栏导航" className="activity-bar">
       {activityItems.map((item) => (
-        <Tooltip content={item.label} key={item.view} positioning="after" relationship="description">
+        <Tooltip
+          content={item.label}
+          key={item.view}
+          positioning="after"
+          relationship="description"
+        >
           <Button
             appearance="subtle"
             aria-label={item.label}
-            className={activeView === item.view ? "activity-button active" : "activity-button"}
+            className={
+              activeView === item.view
+                ? "activity-button active"
+                : "activity-button"
+            }
             icon={item.icon}
+            draggable
+            onDragStart={(event) => {
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData(dockItemMimeType, item.view);
+            }}
             onClick={() =>
               activeView === item.view
                 ? onToggleActiveView?.(item.view)
@@ -64,12 +88,65 @@ export function ActivityBar({
           </Button>
         </Tooltip>
       ))}
-      {onOpenAgent ? <Tooltip content="Agent" positioning="after" relationship="description">
-        <Button appearance="subtle" aria-label="Agent" aria-pressed={agentOpen} className={`activity-button${agentOpen ? " active" : ""}`} icon={<BotRegular />} onClick={onOpenAgent} />
-      </Tooltip> : null}
-      {onOpenHelp ? <Tooltip content="帮助 · F1" positioning="after" relationship="description">
-        <Button appearance="subtle" aria-label="帮助" aria-pressed={helpOpen} className={`activity-button${helpOpen ? " active" : ""}`} icon={<QuestionCircleRegular />} onClick={onOpenHelp} />
-      </Tooltip> : null}
+      {onOpenNotes ? (
+        <Tooltip
+          content="笔记 / Notes"
+          positioning="after"
+          relationship="description"
+        >
+          <Button
+            appearance="subtle"
+            aria-label="笔记"
+            aria-pressed={notesOpen}
+            className={`activity-button${notesOpen ? " active" : ""}`}
+            icon={<NoteRegular />}
+            draggable
+            onDragStart={(event) => {
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData(dockItemMimeType, "notes");
+            }}
+            onClick={onOpenNotes}
+          />
+        </Tooltip>
+      ) : null}
+      {onOpenAgent ? (
+        <Tooltip content="Agent" positioning="after" relationship="description">
+          <Button
+            appearance="subtle"
+            aria-label="Agent"
+            aria-pressed={agentOpen}
+            className={`activity-button${agentOpen ? " active" : ""}`}
+            icon={<BotRegular />}
+            draggable
+            onDragStart={(event) => {
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData(dockItemMimeType, "assistant");
+            }}
+            onClick={onOpenAgent}
+          />
+        </Tooltip>
+      ) : null}
+      {onOpenHelp ? (
+        <Tooltip
+          content="帮助 · F1"
+          positioning="after"
+          relationship="description"
+        >
+          <Button
+            appearance="subtle"
+            aria-label="帮助"
+            aria-pressed={helpOpen}
+            className={`activity-button${helpOpen ? " active" : ""}`}
+            icon={<QuestionCircleRegular />}
+            draggable
+            onDragStart={(event) => {
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData(dockItemMimeType, "help");
+            }}
+            onClick={onOpenHelp}
+          />
+        </Tooltip>
+      ) : null}
       {layoutControls}
     </nav>
   );

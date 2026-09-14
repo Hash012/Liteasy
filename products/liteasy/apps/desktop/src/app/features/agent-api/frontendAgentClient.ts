@@ -27,6 +27,8 @@ export type FrontendAgentClient = {
     input: SubmitAgentTurnRequest["input"],
     options?: {
       attachments?: SubmitAgentTurnRequest["attachments"];
+      contextRefs?: SubmitAgentTurnRequest["contextRefs"];
+      contextPurpose?: string;
       idempotencyKey?: string;
     }
   ) => Promise<AgentApiResult<AgentRun>>;
@@ -161,6 +163,8 @@ export function createFrontendAgentClient(
       }
       return api.submitTurn({
         attachments: sendOptions.attachments,
+        contextRefs: sendOptions.contextRefs,
+        contextPurpose: sendOptions.contextPurpose,
         idempotencyKey:
           sendOptions.idempotencyKey ??
           createIdempotencyKey(activeSession.sessionId),

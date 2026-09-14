@@ -1385,7 +1385,7 @@ function PdfPageView({
             <button
               aria-label={`${(annotation.quickAsk ? "速问" : getOverlayLabel(annotation.kind))}：第 ${annotation.page} 页：${annotation.excerpt}`}
               className={`pdf-overlay-mark ${annotation.kind} ${annotation.quickAsk ? "quick-ask" : ""}`}
-              draggable={annotation.kind === "highlight" || annotation.kind === "underline"}
+              draggable={Boolean(onAnnotationDrag) || annotation.kind === "highlight" || annotation.kind === "underline"}
               onDragStart={(event) => {
                 if (!activePaper) { event.preventDefault(); return; }
                 event.stopPropagation();
@@ -2981,6 +2981,7 @@ export function PdfReader({
 
   function dragAnnotation(annotation: PdfAnnotationV2, dataTransfer: DataTransfer) {
     if (!activePaper || !objectWorkbench) return;
+    dataTransfer.effectAllowed = "copy";
     if (objectWorkbench.dragAnnotation) {
       objectWorkbench.dragAnnotation(annotationCaptureInput(annotation), dataTransfer);
     } else {
@@ -3399,7 +3400,7 @@ export function PdfReader({
                               event.stopPropagation();
                               locateAnnotation(annotation);
                             }}
-                            title={`${annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)} · 第 ${annotation.page} 页；展开完整内容；双击定位到 PDF 原文`}
+                            title={`${annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)} · 第 ${annotation.page} 页；展开完整内容；双击定位到 PDF 原文；拖到白板或对话添加引用`}
                             type="button"
                           >
                             <Tooltip content={annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)} relationship="description">

@@ -143,12 +143,17 @@ export async function resolveContextSnapshot(input: {
       }
       trustLabel =
         object.createdBy.type === "agent" ||
+        object.kind === "artifact.document" ||
         object.kind === "conversation.message" ||
         object.provenance.runId ||
         object.provenance.derivedFrom?.length
           ? "derived"
           : "source";
       if (object.kind === "content.fragment") {
+        const quotes = object.content.payload.anchors.flatMap((anchor) =>
+          "quote" in anchor && anchor.quote.exact.trim() && anchor.quote.exact.trim() !== text.trim()
+            ? [`${anchor.type === "pdf" ? `第 ${anchor.page} 页原文` : "来源原文"}：\n${anchor.quote.exact}`] : []);
+        if (quotes.length) text = `${text}\n\n${[...new Set(quotes)].join("\n\n")}`;
         for (const anchor of object.content.payload.anchors) {
           try {
             const source = await input.repository.get(anchor.sourceRef);

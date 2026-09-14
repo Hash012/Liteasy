@@ -147,6 +147,16 @@
   background: var(--colorNeutralBackground1, white);
   box-shadow: 0 1px 3px #0001;
   overflow: visible;
+  cursor: grab;
+  user-select: none;
+}
+.object-placement.is-dragging {
+  opacity: 0.45;
+  cursor: grabbing;
+}
+.object-placement.is-editing {
+  cursor: default;
+  user-select: text;
 }
 .object-placement.is-selected {
   outline: 2px dashed var(--colorBrandStroke1, #0f6cbd);
@@ -200,7 +210,7 @@
   min-height: 24px;
 }
 .object-body.is-editable {
-  cursor: text;
+  cursor: grab;
   border-radius: 4px;
 }
 .object-body.is-editable:focus-visible {
@@ -255,6 +265,30 @@
   border-radius: 2px;
   background: var(--colorBrandStroke1, #0f6cbd);
   touch-action: none;
+  opacity: 0;
+}
+.object-placement:hover > .object-resize-handle,
+.object-placement:focus-within > .object-resize-handle,
+.object-placement.is-editing > .object-resize-handle,
+.object-placement.is-adjusting > .object-resize-handle {
+  opacity: 1;
+}
+.object-source-quote {
+  min-height: 0;
+  flex: 0 1 auto;
+  overflow: auto;
+  font-size: calc(12px * var(--app-font-ratio, 1));
+}
+.object-source-quote > summary {
+  cursor: pointer;
+  color: var(--colorNeutralForeground3, #666);
+  font-size: calc(11px * var(--app-font-ratio, 1));
+}
+.object-source-quote > blockquote {
+  white-space: pre-wrap;
+  margin: 6px 0 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--colorNeutralStroke2, #ddd);
 }
 .object-resize-n,
 .object-resize-s {

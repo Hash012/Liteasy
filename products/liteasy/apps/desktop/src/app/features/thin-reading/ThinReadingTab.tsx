@@ -62,6 +62,8 @@ import { ThinReadingGraphView } from "./ThinReadingGraphView";
 import type { ThinReadingGraphMode } from "./ThinReadingGraphView";
 import { AgentLiveWorkPanel } from "../agent-work/AgentLiveWorkPanel";
 import "./thinReading.css";
+import { SaveArtifactPageButton } from "../notes/SaveArtifactPageButton";
+import { notifyNotesSourcesChanged } from "../notes/notesPort";
 
 export type ThinReadingEvidenceOpenRequest = {
   evidenceId: string;
@@ -547,6 +549,7 @@ export function ThinReadingTab({
   function update(nextDocument: ThinReadingDocument) {
     if (document.version === "liteasy.thin-reading/v1") return;
     onUpdateDocument(artifactId, nextDocument);
+    notifyNotesSourcesChanged();
   }
 
   function updateAndSyncPublic(nextDocument: ThinReadingDocument) {
@@ -1003,6 +1006,8 @@ export function ThinReadingTab({
           </span>
         </div>
         <div className="thin-reading__controls">
+          <SaveArtifactPageButton artifactId={artifactId} pageId={activeNode.id}
+            title={activeNode.title} text={activeNode.summary} paperIds={document.paperIds} />
           {headerAction}
           <span className="thin-reading__language">{labels.languageName}</span>
           <Tooltip content="控制生成可视化" positioning="below" relationship="description">

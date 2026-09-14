@@ -48,6 +48,7 @@ export function ObjectSurface({
   presentation = "card",
   onEdit,
   editor,
+  sourceText,
 }: {
   object: ObjectEnvelope;
   presentation?: "full" | "card" | "inline" | "canvas";
@@ -57,13 +58,16 @@ export function ObjectSurface({
   onError(message: string): void;
   onEdit?(): void;
   editor?: ReactNode;
+  sourceText?: string;
 }) {
   const partial =
     (object.kind === "content.fragment" ||
       object.kind === "conversation.message") &&
     object.content.payload.partial;
-  const text = objectDisplayText(object, presentation === "canvas");
-  if (presentation === "canvas" && !text.trim() && !editor) return null;
+  const displayText = objectDisplayText(object, presentation === "canvas");
+  const text = sourceText?.trim() === displayText.trim() ? "" : displayText;
+  if (presentation === "canvas" && !text.trim() && !editor && !sourceText)
+    return null;
   return (
     <article
       className={`object-surface object-${presentation}${editor ? " has-editor" : ""}`}
@@ -79,46 +83,58 @@ export function ObjectSurface({
       ) : partial ? (
         <span className="object-meta">未完成快照</span>
       ) : null}
-      {editor ?? (
-        <div
-          className={`object-body${onEdit ? " is-editable" : ""}`}
-          role={onEdit ? "button" : undefined}
-          tabIndex={onEdit ? 0 : undefined}
-          aria-label={
-            onEdit
-              ? object.kind === "content.fragment"
-                ? "编辑摘录为笔记"
-                : "编辑笔记正文"
-              : undefined
-          }
-          onClick={
-            onEdit
-              ? (event) => {
-                  if (
-                    (event.target as Element).closest(
-                      "a, button, input, textarea",
+      {editor ??
+        (text.trim() ? (
+          <div
+            className={`object-body${onEdit ? " is-editable" : ""}`}
+            role={onEdit ? "button" : undefined}
+            tabIndex={onEdit ? 0 : undefined}
+            aria-label={
+              onEdit
+                ? object.kind === "content.fragment"
+                  ? "编辑摘录为笔记"
+                  : "编辑笔记正文"
+                : undefined
+            }
+            onClick={
+              onEdit
+                ? (event) => {
+                    if (
+                      (event.target as Element).closest(
+                        "a, button, input, textarea",
+                      )
                     )
-                  )
-                    return;
-                  onEdit();
-                }
-              : undefined
-          }
-          onKeyDown={
-            onEdit
-              ? (event) => {
-                  if (event.target !== event.currentTarget) return;
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
+                      return;
                     onEdit();
                   }
-                }
-              : undefined
-          }
-        >
-          <AssistantMarkdown value={text} />
-        </div>
-      )}
+                : undefined
+            }
+            onKeyDown={
+              onEdit
+                ? (event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onEdit();
+                    }
+                  }
+                : undefined
+            }
+          >
+            <AssistantMarkdown value={text} />
+          </div>
+        ) : null)}
+      {sourceText ? (
+        <details className="object-source-quote" open>
+          <summary
+            aria-label="展开或收起原文"
+            onClick={(event) => event.stopPropagation()}
+          >
+            原文
+          </summary>
+          <blockquote>{sourceText}</blockquote>
+        </details>
+      ) : null}
       {presentation !== "canvas" ? (
         <div className="object-toolbar">
           <Tooltip

@@ -22,6 +22,9 @@ export type MessageCaptureInput = {
   partial: boolean;
 };
 export type ObjectWorkbenchPort = {
+  receiveContextDrop?(data: Pick<DataTransfer, "getData">): Promise<import("../object-transfer/contextTransfer").ResourceContextAttachment[]>;
+  capturePaperContext?(paperIds: string[]): Promise<ObjectRef[]>;
+  captureArtifactPage?(input: { artifactId: string; pageId: string; title: string; text: string; paperIds: string[] }): Promise<ObjectRef>;
   readonly isOpen?: boolean;
   close?(): void;
   captureAnnotation?(input: PdfAnnotationCaptureInput, target: "board" | "tray"): Promise<ObjectRef[]>;

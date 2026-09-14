@@ -178,7 +178,7 @@ test("all four corners and edges resize with actual screen scale, and cancelled 
   } as DOMRect);
   expect(
     screen.queryAllByRole("button", { name: /^调整卡片大小/ }),
-  ).toHaveLength(0);
+  ).toHaveLength(8);
   fireEvent.click(screen.getByRole("button", { name: "编辑笔记正文" }));
   expect(screen.getAllByRole("button", { name: /^调整卡片大小/ })).toHaveLength(
     8,
@@ -235,8 +235,8 @@ test("all four corners and edges resize with actual screen scale, and cancelled 
     size: { width: 290, height: 200 },
   });
   expect(resizeCardGeometry(f.placement, "nw", 1000, 1000)).toEqual({
-    position: { x: 150, y: 120 },
-    size: { width: 220, height: 180 },
+    position: { x: 250, y: 220 },
+    size: { width: 120, height: 80 },
   });
   expect(resizeCardGeometry(f.placement, "nw", -1000, -1000)).toEqual({
     position: { x: 0, y: 0 },
@@ -259,6 +259,94 @@ test("saved notes have an explicit drag handle carrying their existing reference
   expect(readObjectTransfer(data)?.refs).toEqual([refOf(f.note)]);
   fireEvent.drop(screen.getByLabelText("白板卡片区域"), { dataTransfer: data });
   expect(f.model.drop).toHaveBeenCalledWith(data);
+});
+
+test("a whole card drag moves its existing placement using canvas scale and retains its outward object reference", async () => {
+  const f = await fixture();
+  const { container } = render(
+    <ObjectWorkbench model={{ ...f.model, placements: [f.placement] }} />,
+  );
+  await screen.findByRole("button", { name: "编辑笔记正文" });
+  const card = container.querySelector<HTMLElement>(".object-placement")!;
+  const canvas = container.querySelector<HTMLElement>(".object-board-canvas")!;
+  vi.spyOn(card, "getBoundingClientRect").mockReturnValue({
+    left: 220,
+    top: 240,
+    width: 540,
+  } as DOMRect);
+  vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+    left: 20,
+    top: 40,
+    width: 820,
+  } as DOMRect);
+  const payload = new Map<string, string>();
+  const data = {
+    effectAllowed: "",
+    setData: (type: string, value: string) => payload.set(type, value),
+    getData: (type: string) => payload.get(type) ?? "",
+  };
+  // jsdom has no DragEvent constructor, so use MouseEvent for screen coordinates.
+  vi.stubGlobal("DragEvent", MouseEvent);
+  fireEvent.dragStart(card, { dataTransfer: data, clientX: 260, clientY: 280 });
+  expect(readObjectTransfer(data)?.refs).toEqual([refOf(f.note)]);
+  fireEvent.drop(screen.getByLabelText("白板卡片区域"), {
+    dataTransfer: data,
+    clientX: 420,
+    clientY: 540,
+  });
+  expect(f.model.move).toHaveBeenCalledWith(f.placement, { x: 180, y: 230 });
+  expect(f.model.drop).not.toHaveBeenCalled();
+  fireEvent.drop(screen.getByLabelText("白板卡片区域"), {
+    dataTransfer: data,
+    ctrlKey: true,
+  });
+  expect(f.model.drop).toHaveBeenCalledWith(data);
+});
+
+test("annotation cards show their original quote once, start expanded and keep source separate from editing", async () => {
+  const f = await fixture();
+  const fragment = await f.repository.create({
+    kind: "content.fragment",
+    title: "批注",
+    content: {
+      schema: "liteasy.fragment/v1",
+      payload: {
+        text: "我的理解",
+        partial: false,
+        anchors: [
+          {
+            type: "pdf",
+            sourceRef: refOf(f.note),
+            page: 1,
+            quote: { exact: "不可改动的论文原文", prefix: "", suffix: "" },
+            rects: [],
+            extractor: "test",
+            normalization: "test",
+            precision: "page",
+          },
+        ],
+      },
+    },
+  });
+  const { container } = render(
+    <ObjectPlacementCard
+      p={{ ...f.placement, ref: refOf(fragment) }}
+      object={fragment}
+      selected={false}
+      setSelected={vi.fn()}
+      setDetails={vi.fn()}
+      actions={{ current: f.model }}
+    />,
+  );
+  expect(screen.getByText("不可改动的论文原文")).toBeVisible();
+  expect(container.querySelector("details")).toHaveAttribute("open");
+  fireEvent.click(screen.getByLabelText("展开或收起原文"));
+  expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "编辑摘录为笔记" }));
+  expect(screen.getByRole("textbox", { name: "编辑卡片正文" })).toHaveValue(
+    "我的理解",
+  );
+  expect(screen.getAllByText("不可改动的论文原文")).toHaveLength(1);
 });
 
 test("editing a source excerpt explicitly creates a note and Escape keeps the original reference", async () => {

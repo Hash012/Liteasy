@@ -12,6 +12,17 @@ export interface ObjectStorage {
   list(prefix: string, after?: string, limit?: number): Promise<StorageRow[]>;
   commit(changes: StorageChange[]): Promise<void>;
 }
+const storageListeners = new Map<string, Set<() => void>>();
+/** Observe successful writes from other views using this account's shared store. */
+export function subscribeObjectStorage(scope: string, listener: () => void) {
+  const listeners = storageListeners.get(scope) ?? new Set<() => void>();
+  listeners.add(listener);
+  storageListeners.set(scope, listeners);
+  return () => {
+    listeners.delete(listener);
+    if (!listeners.size) storageListeners.delete(scope);
+  };
+}
 export function createObjectStorage(
   scope: string,
   currentScope: () => string,
@@ -23,11 +34,13 @@ export function createObjectStorage(
         "账号已切换，请重新打开。",
       );
   };
-  const wrap = async <T>(fn: () => Promise<T>): Promise<T> => {
+  const wrap = async <T>(fn: () => Promise<T>, changed = false): Promise<T> => {
     check();
     try {
       const result = await fn();
       check();
+      if (changed)
+        for (const listener of storageListeners.get(scope) ?? []) listener();
       return result;
     } catch (e) {
       if (e instanceof ObjectStoreError) throw e;
@@ -52,7 +65,7 @@ export function createObjectStorage(
           invoke("object_store_list", { scope, prefix, after, limit }),
         ),
       commit: (changes) =>
-        wrap(() => invoke("object_store_commit", { scope, changes })),
+        wrap(() => invoke("object_store_commit", { scope, changes }), true),
     };
   let dbPromise: Promise<IDBDatabase> | undefined;
   const db = () =>
@@ -157,6 +170,6 @@ export function createObjectStorage(
             reject(failure ?? tx.error ?? new Error("Transaction aborted"));
           tx.onerror = () => reject(failure ?? tx.error);
         });
-      }),
+      }, true),
   };
 }

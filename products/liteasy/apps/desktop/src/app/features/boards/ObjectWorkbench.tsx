@@ -28,6 +28,7 @@ import {
   ArrowExpandRegular,
 } from "@fluentui/react-icons";
 import { ObjectPlacementCard } from "./ObjectPlacementCard";
+import { BOARD_PLACEMENT_MIME, readPlacementDrag } from "./boardPlacementDrag";
 import { ObjectDetails } from "../object-surface/ObjectSurface";
 import {
   refOf,
@@ -104,6 +105,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
   const [zoom, setZoom] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
   const viewport = useRef<HTMLDivElement>(null);
+  const canvas = useRef<HTMLDivElement>(null);
   const actions = useRef(model);
   actions.current = {
     ...model,
@@ -311,9 +313,69 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
           )
             setSelected([]);
         }}
-        onDragOver={(e) => e.preventDefault()}
+        onDragOver={(event) => {
+          event.preventDefault();
+          event.dataTransfer.dropEffect =
+            event.dataTransfer.types.includes(BOARD_PLACEMENT_MIME) &&
+            !event.ctrlKey &&
+            !event.metaKey
+              ? "move"
+              : "copy";
+          const host = event.currentTarget;
+          const bounds = host.getBoundingClientRect();
+          // Continue dragging/resizing on the scrollable canvas, even outside its
+          // initially visible area. The canvas is not bounded by a dock panel.
+          const edge = 36;
+          host.scrollBy?.({
+            left:
+              event.clientX > bounds.right - edge
+                ? 18
+                : event.clientX < bounds.left + edge
+                  ? -18
+                  : 0,
+            top:
+              event.clientY > bounds.bottom - edge
+                ? 18
+                : event.clientY < bounds.top + edge
+                  ? -18
+                  : 0,
+          });
+        }}
         onDrop={(e) => {
           e.preventDefault();
+          e.stopPropagation();
+          const dragged = readPlacementDrag(e.dataTransfer);
+          const placement =
+            dragged?.boardId === model.board?.objectId
+              ? model.placements.find(
+                  (item) => item.placementId === dragged?.placementId,
+                )
+              : undefined;
+          const bounds = canvas.current?.getBoundingClientRect();
+          if (dragged && placement && bounds && !e.ctrlKey && !e.metaKey) {
+            const scale = bounds.width / canvasWidth || 1;
+            void model
+              .move(placement, {
+                x: Math.max(
+                  0,
+                  (e.clientX - bounds.left) / scale -
+                    Math.max(
+                      0,
+                      Math.min(placement.size.width, dragged.offsetX),
+                    ),
+                ),
+                y: Math.max(
+                  0,
+                  (e.clientY - bounds.top) / scale -
+                    Math.max(
+                      0,
+                      Math.min(placement.size.height, dragged.offsetY),
+                    ),
+                ),
+              })
+              .catch(error);
+            return;
+          }
           void model.drop(e.dataTransfer).catch(error);
         }}
         onPaste={(e) => {
@@ -336,6 +398,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
           }}
         >
           <div
+            ref={canvas}
             className="object-board-canvas"
             style={{
               width: canvasWidth,

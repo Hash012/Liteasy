@@ -1,4 +1,7 @@
 import { readerContextDragMime, readDraggedReaderContext } from "./readerContextDrag";
+import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
+import { hasResourceContextTransfer, readContextPaper } from "../object-transfer/contextTransfer";
+import { contextRefSchema, type ContextRef } from "../context/objectContext";
 import { useEffect, useRef, useState } from "react";
 import { Tooltip } from "@fluentui/react-components";
 import { AddRegular, DismissRegular, HistoryRegular } from "@fluentui/react-icons";
@@ -298,6 +301,9 @@ export function AssistantPane({
   selectedSetStatus,
   settingsStore
 }: AssistantPaneProps) {
+  const objectWorkbench = useObjectWorkbench();
+  const [contextDropCount, setContextDropCount] = useState(0);
+  const [contextDropMessage, setContextDropMessage] = useState("");
   const assistantStoreRef = useRef(createAssistantStore());
   const initialSessionRef = useRef(
     createAssistantSession({
@@ -695,6 +701,35 @@ export function AssistantPane({
       ...currentTokens.filter((currentToken) => currentToken.id !== token.id),
       token
     ]);
+  }
+
+  async function addDroppedResources(data: DataTransfer) {
+    const sessionId = activeSessionIdRef.current;
+    setContextDropCount((count) => count + 1);
+    setContextDropMessage("");
+    try {
+      const paper = readContextPaper(data, availablePapers);
+      const tokens: AssistantContextToken[] = paper ? [{
+        id: `paper-${paper.id}`, kind: "paper", label: paper.title,
+        detail: "论文", prompt: `用户指定论文上下文：${paper.title}（paperId=${paper.id}）`,
+      }] : (await objectWorkbench?.receiveContextDrop?.(data) ?? []).map((attachment) => ({
+        id: `object-${JSON.stringify(attachment.ref)}`, kind: "object", label: attachment.title,
+        detail: attachment.detail, prompt: "", contextRefs: attachment.refs,
+      }));
+      if (!tokens.length) throw new Error("当前内容不能加入对话。");
+      if (!mountedRef.current || activeSessionIdRef.current !== sessionId) return;
+      setComposerContextTokens((current) => {
+        const next = [...new Map([...current, ...tokens].map((token) => [token.id, token])).values()];
+        draftRef.current = { ...draftRef.current, tokens: next };
+        return next;
+      });
+      inputRef.current?.focus();
+    } catch (error) {
+      if (mountedRef.current && activeSessionIdRef.current === sessionId)
+        setContextDropMessage(error instanceof Error ? error.message : "添加上下文失败，请重试。");
+    } finally {
+      if (mountedRef.current) setContextDropCount((count) => count - 1);
+    }
   }
 
   function removeComposerContextToken(tokenId: string) {
@@ -1211,10 +1246,12 @@ export function AssistantPane({
   async function runPublicAgentMessage(
     message: string,
     mode: AssistantMode,
-    attachments?: AgentAttachment[]
+    attachments?: AgentAttachment[],
+    contextRefs?: ContextRef[]
   ) {
     const sessionAgentClient = getActivePublicAgentClient();
     if (!sessionAgentClient) {
+      if (contextRefs?.length) throw new Error("当前服务不支持对象上下文，请连接 Agent 后重试。");
       const attachedPaperIds = (attachments ?? []).flatMap((attachment) => {
         const match = attachment.source === "paper"
           ? /^liteasy:\/\/paper\/(.+)$/.exec(attachment.uri)
@@ -1306,7 +1343,7 @@ export function AssistantPane({
     try {
       const result = await sessionAgentClient.send(
         { message, mode },
-        { attachments, idempotencyKey }
+        { attachments, idempotencyKey, ...(contextRefs?.length ? { contextRefs, contextPurpose: message } : {}) }
       );
       if (!result.ok) {
         updateAgentActivity(activityMessageId, (activity) => completeAgentActivity(activity, "failed"));
@@ -1662,26 +1699,40 @@ export function AssistantPane({
       return "";
     }
 
-    return tokens
+    return tokens.filter((token) => !token.contextRefs?.length)
       .map((token, index) => [`上下文 ${index + 1} [${token.kind}]：${token.label}`, token.prompt].join("\n"))
       .join("\n\n");
+  }
+
+  function selectedContextRefs(tokens: AssistantContextToken[]): ContextRef[] {
+    const refs = tokens.flatMap((token) => token.contextRefs ?? []).map((ref) => contextRefSchema.parse(ref));
+    return [...new Map(refs.map((ref) => [JSON.stringify(ref), ref])).values()];
   }
 
   async function runKnowledgeMessage(
     question: string,
     mode: Exclude<AssistantMode, "command">,
-    options: { attachedContextPrompt?: string; referencedPaperIds?: string[] } = {}
+    options: { attachedContextPrompt?: string; referencedPaperIds?: string[]; contextRefs?: ContextRef[] } = {}
   ) {
-    const referencedPaperIds = [...new Set(options.referencedPaperIds ?? [])];
+    const referencedPaperIds = [...new Set([
+      ...(options.referencedPaperIds ?? []),
+      ...(options.contextRefs?.length && selectedSetStatus.selectionLocked
+        ? selectedPapers.map((paper) => paper.id) : []),
+    ])];
     if (referencedPaperIds.length > 0) {
       await onPreparePapersForContext?.(referencedPaperIds);
+    }
+    let contextRefs = options.contextRefs;
+    if (contextRefs?.length && referencedPaperIds.length) {
+      if (!objectWorkbench?.capturePaperContext) throw new Error("当前服务不支持组合论文与对象上下文。");
+      contextRefs = [...contextRefs, ...await objectWorkbench.capturePaperContext(referencedPaperIds)];
     }
     const readerContextPrompt = buildReaderContextPrompt();
     const attachedContextPrompt = options.attachedContextPrompt ?? "";
     const combinedContextPrompt =
       attachedContextPrompt.length > 0 ? attachedContextPrompt : readerContextPrompt;
     const readyMessage =
-      combinedContextPrompt.length > 0 ? null : getSelectedSetReadyMessage(selectedSetStatus);
+      combinedContextPrompt.length > 0 || options.contextRefs?.length ? null : getSelectedSetReadyMessage(selectedSetStatus);
 
     const publicQuestion =
       combinedContextPrompt.length > 0
@@ -1705,7 +1756,7 @@ export function AssistantPane({
         uri: `liteasy://paper/${encodeURIComponent(paperId)}`
       }))
     ];
-    await runPublicAgentMessage(publicQuestion, mode, attachments);
+    await runPublicAgentMessage(publicQuestion, mode, contextRefs?.length ? undefined : attachments, contextRefs);
   }
 
   async function executePreparedTurn(turn: QueuedAssistantTurn) {
@@ -1758,7 +1809,8 @@ export function AssistantPane({
     try {
       await runKnowledgeMessage(turn.message, turn.mode, {
         attachedContextPrompt: turn.attachedContextPrompt,
-        referencedPaperIds: turn.referencedPaperIds
+        referencedPaperIds: turn.referencedPaperIds,
+        contextRefs: selectedContextRefs(turn.contextTokens)
       });
     } catch (error) {
       assistantStoreRef.current.addMessage(createMessage(
@@ -1817,7 +1869,7 @@ export function AssistantPane({
   }
 
   async function handleSend() {
-    if (!historyReadyRef.current) return;
+    if (!historyReadyRef.current || contextDropCount > 0) return;
     const currentState = assistantStoreRef.current.getState();
     const contextTokensForTurn = [...composerContextTokens];
     const referencedPaperIds = contextTokensForTurn
@@ -1832,6 +1884,12 @@ export function AssistantPane({
     });
 
     if (adapted.kind === "idle") {
+      return;
+    }
+
+    if (composerContextTokens.some((token) => token.contextRefs?.length) &&
+      (adapted.runtimeInput.mode === "command" || requestedArtifactType(adapted.runtimeInput.message))) {
+      setContextDropMessage("已加入的内容可用于提问和审阅；当前产物生成或命令入口暂不支持这些对象，请使用普通问题或移除对象后重试。");
       return;
     }
 
@@ -1940,7 +1998,8 @@ export function AssistantPane({
     setInput("");
     await runKnowledgeMessage(previousUserMessage.content, currentState.mode, {
       attachedContextPrompt: buildComposerTokenPrompt(contextTokens),
-      referencedPaperIds
+      referencedPaperIds,
+      contextRefs: selectedContextRefs(contextTokens)
     });
   }
 
@@ -2023,7 +2082,7 @@ export function AssistantPane({
   return (
     <div className={conversationStarted ? "assistant-pane in-conversation" : "assistant-pane initial-session"}
       onDragOver={(event) => {
-        if (!event.dataTransfer.types.includes(readerContextDragMime)) return;
+        if (!event.dataTransfer.types.includes(readerContextDragMime) && !hasResourceContextTransfer(event.dataTransfer)) return;
         event.preventDefault();
         event.stopPropagation();
         event.dataTransfer.dropEffect = "copy";
@@ -2036,6 +2095,12 @@ export function AssistantPane({
       }}
       onDrop={(event) => {
         event.currentTarget.classList.remove("accepting-reader-context");
+        if (hasResourceContextTransfer(event.dataTransfer)) {
+          event.preventDefault();
+          event.stopPropagation();
+          void addDroppedResources(event.dataTransfer);
+          return;
+        }
         if (!event.dataTransfer.types.includes(readerContextDragMime)) return;
         event.preventDefault();
         event.stopPropagation();
@@ -2044,7 +2109,12 @@ export function AssistantPane({
       }}
     >
       <div className="assistant-session-toolbar">
-        <div className="assistant-active-session" aria-label="当前会话">
+        <div className="assistant-active-session" aria-label="当前会话" draggable
+          onDragStart={(event) => {
+            persistConversation();
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData("application/x-liteasy-dock-item", "assistant");
+          }}>
           <span className="assistant-active-session-kind">
             {activeSession?.kind === "artifact_generation"
               ? "产物生成"
@@ -2114,6 +2184,8 @@ export function AssistantPane({
       ) : null}
 
       {!historyReady && !historyError ? <p role="status">正在恢复对话…</p> : null}
+      {contextDropCount > 0 ? <p role="status">正在添加所选内容…</p> : null}
+      {contextDropMessage ? <p role="alert">{contextDropMessage}</p> : null}
       {historyError ? <div role="alert">{historyError}<button type="button" onClick={() => historyReady ? persistConversation() : setHistoryLoadAttempt((value) => value + 1)}>重试</button></div> : null}
       <AssistantContextPanel context={runtimeContext} />
 

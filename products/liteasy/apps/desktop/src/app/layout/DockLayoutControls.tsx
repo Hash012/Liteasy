@@ -1,3 +1,4 @@
+import { dockItemMimeType, dockDynamicTabMimeType } from "../features/dock/DockRegion";
 import type { PaneCollapseState } from "./paneLayout.types";
 
 function getToggleLabel(target: "bottom" | "left" | "right", collapsed: boolean) {
@@ -31,6 +32,9 @@ function LayoutToggleButton({
       aria-pressed={collapsed}
       className={collapsed ? "reader-layout-button collapsed" : "reader-layout-button"}
       onClick={onToggle}
+      onDragEnter={(event) => {
+        if (collapsed && Array.from(event.dataTransfer.types).some((type) => type === dockItemMimeType || type === dockDynamicTabMimeType)) onToggle?.();
+      }}
       title={label}
       type="button"
     >
