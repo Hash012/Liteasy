@@ -98,6 +98,25 @@ test("edits, displays and filters local papers by category and tags", async () =
   expect(within(updatedMetadata).getByText("必读")).toBeInTheDocument();
 });
 
+test("retrieves paper metadata from the context menu and shows the result", async () => {
+  let finish!: (message: string) => void;
+  const onRetrievePaperMetadata = vi.fn(() => new Promise<string>((resolve) => { finish = resolve; }));
+  renderLibraryPane({ onRetrievePaperMetadata });
+  fireEvent.contextMenu(await screen.findByRole("button", { name: paper.title }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "获取元数据" }));
+  expect(onRetrievePaperMetadata).toHaveBeenCalledWith(paper);
+  expect(await screen.findByText("正在获取元数据...")).toBeInTheDocument();
+  finish("已获取论文元数据。");
+  expect(await screen.findByText("已获取论文元数据。")).toBeInTheDocument();
+});
+
+test("shows metadata request failures in the library", async () => {
+  renderLibraryPane({ onRetrievePaperMetadata: vi.fn().mockRejectedValue(new Error("元数据服务暂时不可用")) });
+  fireEvent.contextMenu(await screen.findByRole("button", { name: paper.title }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "获取元数据" }));
+  expect(await screen.findByText("元数据服务暂时不可用")).toBeInTheDocument();
+});
+
 test("opens a saved multimodal document under its source paper", async () => {
   const open = vi.fn();
   const child = { id: "thin-1", kind: "artifact" as const, label: "薄读：方法" };

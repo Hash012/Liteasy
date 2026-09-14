@@ -8,12 +8,21 @@ import {
   buildPdfChunksFromPages,
   extractPdfChunksForPaper,
   extractPdfPages,
+  extractPdfRecognitionEvidence,
   pdfOcrWorkerOptions
 } from "../app/features/import/pdfTextExtractor";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pathToFileURL(
   resolve(process.cwd(), "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs")
 ).href;
+
+test("reads real PDF title-page evidence without extracting the entire document", async () => {
+  const evidence = await extractPdfRecognitionEvidence(new Uint8Array(readFileSync(
+    resolve(process.cwd(), "src/tests/assets/papers/attention-is-all-you-need-arxiv.pdf")
+  )));
+  expect(evidence.firstPageText).toMatch(/Attention\s+Is\s+All\s+You\s+Need/i);
+  expect(evidence.firstPageText).toContain("Vaswani");
+});
 
 test("turns every extracted PDF page into overlapping evidence chunks with technical terms", () => {
   const chunks = buildPdfChunksFromPages(

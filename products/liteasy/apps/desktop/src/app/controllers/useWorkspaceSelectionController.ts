@@ -112,7 +112,8 @@ export function useWorkspaceSelectionController({
       const literatureByPaperId = new Map(loaded.map((item) => [item.paperId, item.literature]));
       const matchingUpdates = current.papers.flatMap((paper) => {
         const literature = literatureByPaperId.get(paper.id);
-        return literature ? [{ ...paper, literature }] : [];
+        return literature ? [{ ...paper, literature, title: literature.title,
+          authors: literature.authors, year: literature.year }] : [];
       });
       workspaceStore.updatePapers(matchingUpdates);
       setWorkspaceState(cloneWorkspaceState(workspaceStore.getState()));

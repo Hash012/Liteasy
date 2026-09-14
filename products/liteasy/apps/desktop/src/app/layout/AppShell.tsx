@@ -1,3 +1,5 @@
+import { usePdfMetadataImportController } from "../controllers/usePdfMetadataImportController";
+import { extractPdfRecognitionEvidence } from "../features/import/pdfTextExtractor";
 import { createPortal } from "react-dom";
 import { createDockSurfaceHost, DockSurfaceSlot } from "../features/dock/DockSurfaceSlot";
 import { Button, Tooltip } from "@fluentui/react-components";
@@ -1274,13 +1276,18 @@ export function AppShell({
     persistPaperLiterature: persistPdfPaperLiterature,
     workspaceStore: workspaceStoreRef.current
   });
-  stageImportedPaperIdentityRef.current = async ({ firstPageText, paper }) => {
-    const hints = createPdfLiteratureHints(paper, { firstPageText });
-    const hasStableIdentifier = Boolean(hints.identifiers?.length);
-    const hasCompleteBibliography = Boolean(hints.title && hints.authors?.length && hints.year);
-    if (!hasStableIdentifier && !hasCompleteBibliography) return;
-    await pdfAnnotationPublication.actions.stagePaperIdentity(paper, hints);
-  };
+  const retrievePdfMetadata = usePdfMetadataImportController({
+    workspaceStore: workspaceStoreRef.current,
+    importStore: importStoreRef.current,
+    literatureClient: literatureAuthorityClient,
+    readEvidence: async (paper) => extractPdfRecognitionEvidence(await loadPaperPdfBytes(paper.sourcePath!)),
+    persistLiterature: persistPdfPaperLiterature,
+    moveResource: moveLocalLibraryResource,
+    onChanged: workspaceActions.syncWorkspace,
+    onHint: setAnalysisHint,
+    stageIdentity: (paper, request) => pdfAnnotationPublication.actions.stagePaperIdentity(paper, request.hints)
+  });
+  stageImportedPaperIdentityRef.current = async (input) => { await retrievePdfMetadata(input); };
   useEffect(() => {
     void pdfAnnotationPublication.actions.hydrateResolutionStates(workspaceStoreRef.current.getState().papers);
   }, [workspacePaperIdentityKey]);
@@ -1677,6 +1684,8 @@ export function AppShell({
     },
     onMoveLibraryFolder: workspaceActions.moveFolder,
     onMoveLibraryPaper: workspaceActions.movePaper,
+    onRetrievePaperMetadata: async (paper: Paper) => await retrievePdfMetadata({ paper, firstPageText: "", manual: true })
+      ?? "文献已发生变化，本次获取已取消，请重试。",
     onResolvePaperIdentity: (paper: Paper) => {
       void pdfAnnotationPublication.actions.resolvePaperIdentity(paper, createPdfLiteratureHints(paper, {}));
     },

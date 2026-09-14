@@ -122,6 +122,7 @@ test("hydrates matching paper literature without blocking missing records", asyn
 
   await waitFor(() => expect(workspaceStore.getState().papers[0].literature?.literatureId)
     .toBe("literature_1"));
+  expect(workspaceStore.getState().papers[0]).toMatchObject({ title: "Hydrated paper", authors: ["Ada Lovelace"], year: 2026 });
   expect(workspaceStore.getState().papers[1].literature).toBeUndefined();
   expect(result.current.model.literatureHydration).toEqual({ status: "ready" });
   expect(load).toHaveBeenCalledTimes(2);

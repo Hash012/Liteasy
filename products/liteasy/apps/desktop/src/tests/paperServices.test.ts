@@ -6,6 +6,26 @@ import { deletePaperServiceKey, paperServiceRequest, savePaperServiceKey } from 
 import { loadDurableEntries } from "../app/features/persistence/durableJsonStore";
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+test("resolves arXiv versions using Atom metadata without forwarding provider keys", async () => {
+  const fetch = vi.fn(async (url: URL, init?: RequestInit) => {
+    expect(url.hostname).toBe("export.arxiv.org");
+    expect(url.searchParams.get("id_list")).toBe("1706.03762v5");
+    expect(init?.headers).not.toHaveProperty("Authorization");
+    expect(init?.headers).not.toHaveProperty("Crossref-Plus-API-Token");
+    return new Response(`<feed xmlns="http://www.w3.org/2005/Atom"><entry><id>http://arxiv.org/abs/1706.03762v5</id><title>Attention Is All You Need</title><published>2017-06-12T00:00:00Z</published><author><name>Ashish Vaswani</name></author></entry></feed>`);
+  });
+  vi.stubGlobal("fetch", fetch);
+  const config = { provider: "crossref" as const, endpoint: "https://api.crossref.org" };
+  await savePaperServiceKey(config, "private-key");
+  const client = createMetadataProviderClient(config);
+  const result = await client.resolveLiterature({ purpose: "liteasy_pdf_annotation", hints: { identifiers: [{ kind: "arxiv_id", value: "1706.03762v5" }] } });
+  expect(result.status).toBe("exact");
+  if (result.status !== "exact") throw new Error("expected exact");
+  const confirmed = await client.confirmLiterature({ candidateKey: result.candidate.candidateKey, mode: "candidate" });
+  expect(confirmed.literature).toMatchObject({ title: "Attention Is All You Need", year: 2017, identifiers: [expect.objectContaining({ kind: "arxiv_id", value: "1706.03762v5" })] });
+  await deletePaperServiceKey(config);
+});
 const paper = { id: "mineru-paper", title: "Paper", sourcePath: "C:\\Library\\paper.pdf" };
 function archive() {
   return zipSync({

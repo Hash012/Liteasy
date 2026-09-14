@@ -4,6 +4,7 @@ import { normalizeLiteratureRecord } from "../paper-identity/literatureRecord";
 import { normalizeLiteratureIdentifier } from "../paper-identity/paperIdentity";
 import { paperServiceRequest, type PaperServiceConfig } from "./paperServiceTransport";
 import { loadDurableEntries, putDurableEntry } from "../persistence/durableJsonStore";
+import { readArxivMetadata } from "./arxivMetadata";
 
 export function createMetadataProviderClient(config: PaperServiceConfig): LiteratureAuthorityClient {
   const candidates = new Map<string, LiteratureCandidate>();
@@ -15,6 +16,13 @@ export function createMetadataProviderClient(config: PaperServiceConfig): Litera
   }
   return {
     async resolveLiterature(input): Promise<LiteratureResolveResult> {
+      const arxivId = normalizeLiteratureIdentifier("arxiv_id", input.hints?.identifiers?.find((id) => id.kind === "arxiv_id")?.value ?? "");
+      if (arxivId) {
+        const candidate = await readArxivMetadata(config, arxivId);
+        if (!candidate) return { status: "not_found", candidates: [], unavailableProviders: [] };
+        candidates.set(candidate.candidateKey, candidate);
+        return { status: "exact", candidate, confirmationMode: "candidate", unavailableProviders: [] };
+      }
       const doi = normalizeLiteratureIdentifier("doi", input.hints?.identifiers?.find((id) => id.kind === "doi")?.value ?? input.query);
       const query = doi || input.query || input.hints?.title || "";
       if (!query.trim()) return { status: "not_found", candidates: [], unavailableProviders: [] };

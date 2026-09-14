@@ -257,6 +257,24 @@ export async function extractPdfChunksForPaper(
   return (await extractPdfIndexForPaper(paper, options)).chunks;
 }
 
+/** Read only the title page for bibliographic recognition, without triggering OCR. */
+export async function extractPdfRecognitionEvidence(source: string | Uint8Array) {
+  const document = await pdfjsLib.getDocument(source).promise;
+  try {
+    const page = await document.getPage(1);
+    const content = await page.getTextContent();
+    const metadata = await document.getMetadata().catch(() => undefined);
+    const info = metadata?.info as { Title?: unknown } | undefined;
+    const xmpTitle = metadata?.metadata?.get("dc:title");
+    return {
+      firstPageText: normalizePdfPageText(joinPdfTextItems(content.items)),
+      embeddedTitle: typeof xmpTitle === "string" ? xmpTitle : typeof info?.Title === "string" ? info.Title : undefined
+    };
+  } finally {
+    await document.destroy();
+  }
+}
+
 /** Extracts once and exposes both retrieval chunks and the exact page text they were derived from. */
 export async function extractPdfIndexForPaper(
   paper: Paper,

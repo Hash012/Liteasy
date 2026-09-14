@@ -98,7 +98,7 @@ export function isWorkspacePathWithinRoot(path: string, rootPath: string) {
   const normalizedPath = normalizeWorkspacePath(path);
   const normalizedRoot = normalizeWorkspacePath(rootPath);
   return (
-    normalizedRoot.startsWith("/") &&
+    (normalizedRoot.startsWith("/") || /^[A-Za-z]:\//.test(normalizedRoot)) &&
     (normalizedPath === normalizedRoot || normalizedPath.startsWith(`${normalizedRoot}/`))
   );
 }

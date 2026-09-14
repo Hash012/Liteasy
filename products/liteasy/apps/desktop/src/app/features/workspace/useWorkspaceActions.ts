@@ -328,10 +328,11 @@ export function useWorkspaceActions({
         const previousPapersById = new Map(state.papers.map((paper) => [paper.id, paper]));
         const snapshot = await persistDroppedPdfFiles({ files: pdfFiles, targetFolderPath });
         const persistedPapers = snapshot.entries.map((entry) => ({
+          ...previousPapersById.get(entry.id),
           id: entry.id,
           // Bodyless entries carry no path; they stay listed but not openable.
           sourcePath: entry.path ?? undefined,
-          title: entry.title
+          title: previousPapersById.get(entry.id)?.title ?? entry.title
         }));
         workspaceStore.openWorkspace(persistedPapers, {
           rootPath: snapshot.rootPath,
@@ -497,18 +498,20 @@ export function useWorkspaceActions({
               .map((chunk) => chunk.snippet)
               .join("\n");
             const inferredIdentity = inferPaperIdentityMetadataFromPdfText(firstPageText);
-            const resolvedPaper = (inferredIdentity.doi && !paper.doi) || (inferredIdentity.arxivId && !paper.arxivId)
+            const currentPaper = workspaceStore.getState().papers.find((item) => item.id === paper.id);
+            const canRecognize = currentPaper?.title === paper.title && currentPaper?.sourcePath === paper.sourcePath;
+            const resolvedPaper = canRecognize && ((inferredIdentity.doi && !currentPaper.doi) || (inferredIdentity.arxivId && !currentPaper.arxivId))
               ? {
-                ...paper,
-                ...(paper.doi ? {} : inferredIdentity.doi ? { doi: inferredIdentity.doi } : {}),
-                ...(paper.arxivId ? {} : inferredIdentity.arxivId ? { arxivId: inferredIdentity.arxivId } : {})
+                ...currentPaper,
+                ...(currentPaper.doi ? {} : inferredIdentity.doi ? { doi: inferredIdentity.doi } : {}),
+                ...(currentPaper.arxivId ? {} : inferredIdentity.arxivId ? { arxivId: inferredIdentity.arxivId } : {})
               }
-              : paper;
-            if (resolvedPaper !== paper) {
+              : currentPaper ?? paper;
+            if (canRecognize && resolvedPaper !== currentPaper) {
               workspaceStore.updatePapers([resolvedPaper]);
               syncWorkspace();
             }
-            void Promise.resolve(onPaperIdentityReady?.({ firstPageText, paper: resolvedPaper }))
+            void Promise.resolve(canRecognize ? onPaperIdentityReady?.({ firstPageText, paper: resolvedPaper }) : undefined)
               .catch((error) => {
                 const reason = error instanceof Error ? error.message : String(error);
                 onAnalysisHint(`《${paper.title}》文献身份确认失败：${reason}`);

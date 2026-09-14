@@ -112,6 +112,26 @@ describe("useWorkspaceActions", () => {
     vi.useRealTimers();
   });
 
+  test("does not replace a manual title when PDF extraction finishes later", async () => {
+    const paper = { id: "edited", sourcePath: "/library/download.pdf", title: "download" };
+    const onPaperIdentityReady = vi.fn();
+    let finish!: (chunks: RetrievalChunk[]) => void;
+    const { result, workspaceStore, importStore } = renderWorkspaceActions([paper], {
+      workspaceRootPath: "/library", onPaperIdentityReady,
+      extractPaperChunks: () => new Promise((resolve) => { finish = resolve; })
+    });
+    act(() => { result.current.queueImportForPapers([paper]); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    workspaceStore.updatePapers([{ ...paper, title: "My chosen title" }]);
+    await act(async () => {
+      finish([{ ...buildTestChunks(paper)[0], snippet: "A paper doi:10.1234/example" }]);
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(workspaceStore.getState().papers[0].title).toBe("My chosen title");
+    expect(onPaperIdentityReady).not.toHaveBeenCalled();
+    expect(importStore.getLatestJobByDocumentId(paper.id)?.status).toBe("parsed");
+  });
+
   test("notifies every caller waiting on the same ongoing PDF import", async () => {
     const paper = { id: "ongoing", sourcePath: "fixtures/ongoing.pdf", title: "Ongoing" };
     const extract = vi.fn(async () => buildTestChunks(paper));

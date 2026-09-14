@@ -149,6 +149,7 @@ type LibraryPaneProps = {
   onOpenOrganizationWorkspace: () => void;
   onOpenPaper?: (paperId: string) => void;
   onResolvePaperIdentity?: (paper: Paper) => void;
+  onRetrievePaperMetadata?: (paper: Paper) => Promise<string>;
   onOpenPaperChild?: (item: LibraryPaperChildItem, paper: Paper) => void;
   onRefreshLocalLibrary?: () => Promise<void>;
   onRenameFolder?: (folderPath: string, requestedName: string) => Promise<string>;
@@ -428,6 +429,7 @@ export function LibraryPane({
   onOpenCloudEntry,
   onOpenPaper,
   onResolvePaperIdentity,
+  onRetrievePaperMetadata,
   onOpenPaperChild,
   paperChildren = {},
   papers,
@@ -655,13 +657,13 @@ export function LibraryPane({
     }
   }
 
-  async function runNodeAction(nodeId: string, pendingMessage: string, action: () => Promise<void>) {
+  async function runNodeAction(nodeId: string, pendingMessage: string, action: () => Promise<void | string>) {
     if (pendingNodeIds.includes(nodeId)) return;
     setPendingNodeIds((current) => [...current, nodeId]);
     setMessage(pendingMessage);
     try {
-      await action();
-      setMessage("操作已完成。");
+      const outcome = await action();
+      setMessage(outcome ?? "操作已完成。");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "资源操作失败，原有内容未改变。");
     } finally {
@@ -918,6 +920,11 @@ export function LibraryPane({
                   icon={<OpenRegular />}
                   onClick={openEntry}
                 >打开</MenuItem>
+                {sourcePaper && area === "local" ? <MenuItem
+                  disabled={pending || !entry.bodyAvailable || !onRetrievePaperMetadata}
+                  icon={<DocumentTextRegular />}
+                  onClick={() => void runNodeAction(entry.id, "正在获取元数据...", () => onRetrievePaperMetadata!(sourcePaper))}
+                >获取元数据</MenuItem> : null}
                 {sourcePaper ? <MenuItem icon={<DocumentTextRegular />} onClick={() => onResolvePaperIdentity?.(sourcePaper)}>确认文献身份</MenuItem> : null}
                 <MenuItem
                   disabled={pending || !canManageEntry}
