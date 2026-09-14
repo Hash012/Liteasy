@@ -4625,7 +4625,7 @@ export async function generateAssistantAnswer({
       signal,
       transport: thinReadingExternalKnowledgeTransport
     });
-    onProgress?.({
+    if (!context.generationMode) onProgress?.({
       phase: "auditing_answer",
       progress: 78,
       summary: "正在核对薄读证据边界"
@@ -4651,7 +4651,7 @@ export async function generateAssistantAnswer({
     onProgress?.({
       phase: "structuring_artifact",
       progress: 88,
-      summary: "正在构造薄读结构化产物"
+      summary: context.generationMode ? "正在保存本层薄读" : "正在构造薄读结构化产物"
     });
     return {
       analysis,

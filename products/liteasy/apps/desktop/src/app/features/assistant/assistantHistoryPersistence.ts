@@ -31,6 +31,9 @@ export function parseAssistantHistory(value: unknown): AssistantHistorySnapshot 
       ? snapshot.draft : { input: "", tokens: [], readerContexts: [] },
     sessions: snapshot.sessions.map((session) => ({
       ...session,
+      draft: session.draft && typeof session.draft.input === "string" &&
+        Array.isArray(session.draft.tokens) && Array.isArray(session.draft.readerContexts)
+        ? session.draft : undefined,
       status: session.status === "running" ? "cancelled" : session.status,
       messages: session.messages.map(({ queuedDelivery: _queued, confirmation: _confirmation, ...message }) => ({
         ...message,

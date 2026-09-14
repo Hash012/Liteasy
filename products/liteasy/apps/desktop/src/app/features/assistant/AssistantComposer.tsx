@@ -1,16 +1,21 @@
-import { useRef, type RefObject } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
 import { Tooltip } from "@fluentui/react-components";
 import { MicRegular, SendRegular } from "@fluentui/react-icons";
 import type { AssistantComposerSuggestion, AssistantContextToken } from "./assistant.types";
+import { createAssistantSuggestionIndex } from "./assistantSuggestionIndex";
+
+const emptySuggestions: AssistantComposerSuggestion[] = [];
 
 type ActiveTrigger = {
   query: string;
   start: number;
+  end: number;
   trigger: AssistantComposerSuggestion["trigger"];
 };
 
 type AssistantComposerProps = {
   contextTokens?: AssistantContextToken[];
+  contextLoading?: boolean;
   editing?: boolean;
   input: string;
   inputRef?: RefObject<HTMLTextAreaElement>;
@@ -18,6 +23,7 @@ type AssistantComposerProps = {
   onCancelEdit?: () => void;
   onAddContextToken?: (token: AssistantContextToken) => void;
   onInputChange: (value: string) => void;
+  onResolveContextToken?: (resolve: () => Promise<AssistantContextToken>) => void;
   onRemoveContextToken?: (tokenId: string) => void;
   onSend: () => void;
   onVoiceInput: () => void;
@@ -26,30 +32,21 @@ type AssistantComposerProps = {
   voiceInputMessage?: string;
 };
 
-function getActiveTrigger(input: string): ActiveTrigger | null {
-  const match = /(^|\s)([/@$])([^\s]*)$/.exec(input);
-  if (!match || match.index === undefined) {
-    return null;
-  }
-
-  return {
-    query: match[3] ?? "",
-    start: match.index + (match[1]?.length ?? 0),
-    trigger: match[2] as ActiveTrigger["trigger"]
-  };
+function getActiveTrigger(input: string, caret: number): ActiveTrigger | null {
+  const beforeCaret = input.slice(0, caret);
+  // Mentions may contain spaces and nested paths. Commands finish at a space.
+  const match = /(?:^|\s)([/\$][^\s]*)$|(@[^@\n]*)$/.exec(beforeCaret);
+  if (!match || match.index === undefined) return null;
+  const value = match[1] ?? match[2];
+  const suffix = /^[^\s@]*/.exec(input.slice(caret))?.[0] ?? "";
+  return { query: value.slice(1), start: caret - value.length, end: caret + suffix.length,
+    trigger: value[0] as ActiveTrigger["trigger"] };
 }
 
-function matchesSuggestion(suggestion: AssistantComposerSuggestion, query: string) {
-  const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery) {
-    return true;
-  }
-
-  return `${suggestion.label} ${suggestion.detail ?? ""}`.toLowerCase().includes(normalizedQuery);
-}
 
 export function AssistantComposer({
   contextTokens = [],
+  contextLoading = false,
   editing = false,
   input,
   inputRef,
@@ -57,35 +54,44 @@ export function AssistantComposer({
   onCancelEdit,
   onAddContextToken,
   onInputChange,
+  onResolveContextToken,
   onRemoveContextToken,
   onSend,
   onVoiceInput,
   pending = false,
-  suggestions = [],
+  suggestions = emptySuggestions,
   voiceInputMessage
 }: AssistantComposerProps) {
+  const localInputRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = inputRef ?? localInputRef;
+  const menuId = useId();
+  const [caret, setCaret] = useState(input.length);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [dismissed, setDismissed] = useState(false);
+  useEffect(() => { setDismissed(false); setActiveIndex(0); }, [input]);
+  useEffect(() => {
+    document.getElementById(`${menuId}-${activeIndex}`)?.scrollIntoView?.({ block: "nearest" });
+  }, [activeIndex, menuId]);
   const highlightRef = useRef<HTMLDivElement>(null);
-  const commands = suggestions.filter((item) => item.trigger === "/")
-    .map((item) => item.insertText ?? `/${item.label}`).sort((a, b) => b.length - a.length);
-  const highlightedInput = [];
-  let offset = 0;
-  while (offset < input.length) {
-    const command = commands.find((value) => input.startsWith(value, offset) &&
-      (offset === 0 || /\s/.test(input[offset - 1])));
-    if (command) {
-      highlightedInput.push(<mark className="assistant-command-chip" key={offset}>{command}</mark>);
-      offset += command.length;
-    } else {
-      highlightedInput.push(input[offset++]);
+  const suggestionIndex = useMemo(() => createAssistantSuggestionIndex(suggestions), [suggestions]);
+  const highlightedInput = useMemo(() => {
+    if (!input.includes("/")) return input;
+    const highlighted = [];
+    let offset = 0;
+    while (offset < input.length) {
+      const command = suggestionIndex.commands.find((value) => input.startsWith(value, offset) &&
+        (offset === 0 || /\s/.test(input[offset - 1])));
+      if (command) {
+        highlighted.push(<mark className="assistant-command-chip" key={offset}>{command}</mark>);
+        offset += command.length;
+      } else highlighted.push(input[offset++]);
     }
-  }
-  const activeTrigger = getActiveTrigger(input);
+    return highlighted;
+  }, [input, suggestionIndex]);
+  const activeTrigger = dismissed ? null : getActiveTrigger(input, Math.min(caret, input.length));
   const visibleSuggestions = activeTrigger
-    ? suggestions
-        .filter((suggestion) => suggestion.trigger === activeTrigger.trigger)
-        .filter((suggestion) => matchesSuggestion(suggestion, activeTrigger.query))
-        .slice(0, activeTrigger.trigger === "/" ? undefined : 8)
-    : [];
+    ? suggestionIndex.search(activeTrigger.trigger, activeTrigger.query)
+    : emptySuggestions;
 
   function selectSuggestion(suggestion: AssistantComposerSuggestion) {
     if (!activeTrigger) {
@@ -93,16 +99,17 @@ export function AssistantComposer({
     }
 
     const beforeTrigger = input.slice(0, activeTrigger.start);
-    const afterTrigger = input.slice(activeTrigger.start).replace(/^[/@$][^\s]*/, "");
-    if (suggestion.token) {
-      onAddContextToken?.(suggestion.token);
+    const afterTrigger = input.slice(activeTrigger.end);
+    if (suggestion.token || suggestion.resolveToken) {
+      if (suggestion.resolveToken) onResolveContextToken?.(suggestion.resolveToken);
+      else if (suggestion.token) onAddContextToken?.(suggestion.token);
       onInputChange(`${beforeTrigger}${afterTrigger}`.replace(/\s{2,}/g, " "));
-      inputRef?.current?.focus();
+      editorRef.current?.focus();
       return;
     }
 
     onInputChange(`${beforeTrigger}${suggestion.insertText ?? suggestion.label}${suggestion.trigger === "/" ? " " : ""}${afterTrigger}`);
-    inputRef?.current?.focus();
+    editorRef.current?.focus();
   }
 
   const lastToken = contextTokens[contextTokens.length - 1];
@@ -144,15 +151,17 @@ export function AssistantComposer({
         </div>
       ) : null}
       {visibleSuggestions.length > 0 ? (
-        <div aria-label="输入候选" className="assistant-suggestion-menu">
-          {visibleSuggestions.map((suggestion) => (
+        <div aria-label="输入候选" id={menuId} role="group" className={`assistant-suggestion-menu${activeTrigger?.trigger === "/" ? " commands" : ""}`}>
+          {visibleSuggestions.map((suggestion, index) => (
             <button
-              className="assistant-suggestion-item"
+              className={`assistant-suggestion-item${index === activeIndex ? " active" : ""}`}
+              id={`${menuId}-${index}`}
+              aria-current={index === activeIndex}
+              onMouseMove={() => setActiveIndex(index)}
               key={suggestion.id}
-              onMouseDown={(event) => {
-                event.preventDefault();
-                selectSuggestion(suggestion);
-              }}
+              title={`${suggestion.label}${suggestion.detail ? ` · ${suggestion.detail}` : ""}`}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => selectSuggestion(suggestion)}
               type="button"
             >
               <span className="assistant-suggestion-trigger">{suggestion.trigger}</span>
@@ -174,9 +183,29 @@ export function AssistantComposer({
             highlightRef.current.scrollLeft = event.currentTarget.scrollLeft;
           }
         }}
-        ref={inputRef}
-        onChange={(event) => onInputChange(event.target.value)}
+        ref={editorRef}
+        aria-controls={visibleSuggestions.length ? menuId : undefined}
+        aria-expanded={visibleSuggestions.length > 0}
+        aria-activedescendant={visibleSuggestions.length ? `${menuId}-${Math.min(activeIndex, visibleSuggestions.length - 1)}` : undefined}
+        onChange={(event) => {
+          setCaret(event.target.selectionStart);
+          onInputChange(event.target.value);
+        }}
+        onSelect={(event) => { setCaret(event.currentTarget.selectionStart); }}
         onKeyDown={(event) => {
+          if (visibleSuggestions.length && !event.nativeEvent.isComposing) {
+            if (event.key === "Escape") { event.preventDefault(); setDismissed(true); return; }
+            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+              event.preventDefault();
+              setActiveIndex((current) => (current + (event.key === "ArrowDown" ? 1 : -1) + visibleSuggestions.length) % visibleSuggestions.length);
+              return;
+            }
+            if (event.key === "Tab") {
+              event.preventDefault();
+              selectSuggestion(visibleSuggestions[Math.min(activeIndex, visibleSuggestions.length - 1)]);
+              return;
+            }
+          }
           if (
             event.key === "Backspace" &&
             input.length === 0 &&
@@ -195,7 +224,7 @@ export function AssistantComposer({
             visibleSuggestions.length > 0
           ) {
             event.preventDefault();
-            selectSuggestion(visibleSuggestions[0]);
+            selectSuggestion(visibleSuggestions[Math.min(activeIndex, visibleSuggestions.length - 1)]);
             return;
           }
 
@@ -204,7 +233,7 @@ export function AssistantComposer({
           }
 
           event.preventDefault();
-          onSend();
+          if (!contextLoading) onSend();
         }}
         placeholder="输入你的问题或命令"
         rows={4}
@@ -228,6 +257,7 @@ export function AssistantComposer({
           <button
             aria-label={editing ? "更新并发送" : "发送"}
             className="assistant-send assistant-icon-button"
+            disabled={contextLoading}
             onClick={onSend}
             title={editing ? "更新并发送" : "发送"}
             type="button"

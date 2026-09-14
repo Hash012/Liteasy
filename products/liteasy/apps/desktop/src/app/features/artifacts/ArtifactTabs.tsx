@@ -12,6 +12,7 @@ import { ObsidianLikeGraphCanvas } from "../layered-reading/ObsidianLikeGraphCan
 import { MermaidPreview } from "../mermaid/MermaidPreview";
 import { defaultGraphViewState } from "../layered-reading/layeredReading.types";
 import { ThinReadingTab } from "../thin-reading/ThinReadingTab";
+import { ThinReadingGenerationStatus } from "../thin-reading/ThinReadingGenerationStatus";
 import type {
   ThinReadingBranchSource,
   ThinReadingDocument,
@@ -37,6 +38,7 @@ type ArtifactTabsProps = {
   activeArtifactId?: string | null;
   analysisHint: string;
   canStartAnalysis: boolean;
+  canOpenTaskDetails?: (taskId: string) => boolean;
   developerDiagnostics?: boolean;
   externalKnowledgeEndpoint?: string;
   paperRelationsTransport?: ThinReadingPaperRelationsTransport;
@@ -52,6 +54,7 @@ type ArtifactTabsProps = {
     format: ArtifactDocumentFormat
   ) => Promise<ArtifactExportOutcome>;
   onOpenEvidence?: (request: ArtifactEvidenceOpenRequest) => void;
+  onOpenTaskDetails?: (taskId: string) => void;
   onOpenVisualization?: (data: VisualizationTabData) => void;
   onOpenExternalFullText?: (source: ThinReadingExternalSource) => Promise<void>;
   onPromoteExternalPaperToLibrary?: (source: ThinReadingExternalSource) => Promise<void>;
@@ -182,6 +185,7 @@ export function ArtifactTabs({
   activeArtifactId,
   analysisHint,
   canStartAnalysis,
+  canOpenTaskDetails,
   developerDiagnostics = false,
   externalKnowledgeEndpoint,
   paperRelationsTransport,
@@ -210,6 +214,7 @@ export function ArtifactTabs({
   },
   onGenerateThinReadingBranch,
   onOpenEvidence,
+  onOpenTaskDetails,
   onOpenVisualization,
   onOpenExternalFullText,
   onPromoteExternalPaperToLibrary,
@@ -238,13 +243,31 @@ export function ArtifactTabs({
   const activeTask = tasks[0] ?? null;
   const activeThinReadingTask = tasks.find((task) => (
     task.type === "thin_reading" && task.artifactId === activeTab?.artifactId &&
-    (task.status === "running" || task.status === "failed")
-  ));
+    (task.status === "running" || task.status === "queued")
+  )) ?? tasks.find((task) => task.type === "thin_reading" && task.artifactId === activeTab?.artifactId);
   const activeVerification = activeTab?.verification ?? activeTab?.mindmapArtifact?.verification;
   const activeMindmapSources = activeTab?.mindmapArtifact?.sources;
   const activeFailure = activeTask?.failure
     ? presentArtifactFailure(activeTask.failure, developerDiagnostics)
     : undefined;
+
+  function openDetailsFor(task: ArtifactTask | undefined | null) {
+    return task && onOpenTaskDetails && canOpenTaskDetails?.(task.id)
+      ? () => onOpenTaskDetails(task.id)
+      : undefined;
+  }
+
+  function thinReadingTaskStatus(task: ArtifactTask) {
+    return (
+      <ThinReadingGenerationStatus
+        failureMessage={task.failure
+          ? presentArtifactFailure(task.failure, false).message
+          : "生成任务未完成，请稍后重试。"}
+        onOpenDetails={openDetailsFor(task)}
+        status={task.status === "failed" || task.status === "cancelled" ? task.status : "running"}
+      />
+    );
+  }
 
   useEffect(() => {
     setRegenerationOpen(false);
@@ -296,7 +319,9 @@ export function ArtifactTabs({
 
   if (activeTab?.type === "thin_reading") {
     if (!activeTab.thinReadingDocument) {
-      return <div className="artifact-empty">薄读内容缺失</div>;
+      return activeThinReadingTask && activeThinReadingTask.status !== "completed"
+        ? <div className="artifact-layout">{thinReadingTaskStatus(activeThinReadingTask)}</div>
+        : <div className="artifact-empty">薄读内容缺失</div>;
     }
 
     const document = normalizeThinReadingDocument(activeTab.thinReadingDocument);
@@ -313,7 +338,7 @@ export function ArtifactTabs({
         )}
         intuechoEndpoint={intuechoEndpoint}
         intuechoSessionId={intuechoSessionId}
-        generationProgress={activeThinReadingTask?.status === "running" ? {
+        generationProgress={activeThinReadingTask && (activeThinReadingTask.status === "running" || activeThinReadingTask.status === "queued") ? {
           message: activeThinReadingTask.message,
           partialAnswer: activeThinReadingTask.partialAnswer,
           progress: activeThinReadingTask.progress,
@@ -330,6 +355,7 @@ export function ArtifactTabs({
           ? () => onRetryInterruptedThinReadingBranch(activeThinReadingTask.id)
           : undefined}
         onGenerateBranch={onGenerateThinReadingBranch}
+        onOpenGenerationDetails={openDetailsFor(activeThinReadingTask)}
         onOpenExternalFullText={onOpenExternalFullText}
         onOpenEvidence={onOpenEvidence}
         onPromoteExternalPaperToLibrary={onPromoteExternalPaperToLibrary}
@@ -353,6 +379,10 @@ export function ArtifactTabs({
         )) === index)}
       />
     );
+  }
+
+  if (!activeTab && activeTask?.type === "thin_reading" && activeTask.status !== "completed") {
+    return <div className="artifact-layout">{thinReadingTaskStatus(activeTask)}</div>;
   }
 
   return (
@@ -397,16 +427,8 @@ export function ArtifactTabs({
       ) : null}
 
       {activeTask && activeTask.status !== "completed" &&
-      activeTask.type === "thin_reading" && !developerDiagnostics ? (
-        <section aria-live="polite" className={`artifact-progress-panel ${activeTask.status}`}>
-          <strong>
-            {activeTask.status === "failed"
-              ? activeFailure?.message ?? "生成任务未完成，请稍后重试。"
-              : activeTask.status === "cancelled"
-                ? "薄读生成已取消。"
-                : "正在生成薄读正文，完成后将在当前页面显示。"}
-          </strong>
-        </section>
+      activeTask.type === "thin_reading" ? (
+        thinReadingTaskStatus(activeTask)
       ) : activeTask && activeTask.status !== "completed" ? (
         <section className={`artifact-progress-panel ${activeTask.status}`} aria-live="polite">
           <div className="artifact-progress-copy">

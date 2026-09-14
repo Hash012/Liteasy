@@ -22,6 +22,7 @@ export type MessageCaptureInput = {
   partial: boolean;
 };
 export type ObjectWorkbenchPort = {
+  resolveBoardFile?(file: import("../note-files/noteFileService").NoteFileSnapshot): Promise<ObjectRef>;
   receiveContextDrop?(data: Pick<DataTransfer, "getData">): Promise<import("../object-transfer/contextTransfer").ResourceContextAttachment[]>;
   capturePaperContext?(paperIds: string[]): Promise<ObjectRef[]>;
   captureArtifactPage?(input: { artifactId: string; pageId: string; title: string; text: string; paperIds: string[] }): Promise<ObjectRef>;

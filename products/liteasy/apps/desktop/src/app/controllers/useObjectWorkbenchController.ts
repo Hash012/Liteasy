@@ -1,3 +1,5 @@
+import { ARTIFACT_CONTEXT_MIME } from "../features/object-transfer/contextTransfer";
+import { artifactContextText } from "../features/artifacts/artifactContext";
 import { loadUserPaperArtifact } from "../features/library/userPaperArtifactClient";
 import { normalizePaperFulltext } from "../features/pdf/paperFulltextStore";
 import { preparePdfAnnotationCapture } from "../features/pdf/pdfAnnotationCapture";
@@ -492,7 +494,27 @@ export function useObjectWorkbenchController(input: {
       // Read drag data synchronously: browsers protect it once the drop handler returns.
       const ticket = data.getData(PENDING_CAPTURE_MIME);
       const transfer = readObjectTransfer(data);
-      const refs = ticket ? await tickets.consume(ticket) : transfer?.refs;
+      const artifactId = data.getData(ARTIFACT_CONTEXT_MIME);
+      let refs = ticket ? await tickets.consume(ticket) : transfer?.refs;
+      if (!refs?.length && artifactId) {
+        if (artifactId.length > 2048) throw new Error("产物标识无效。");
+        const artifact = (await latest.current.listLegacyArtifacts?.())
+          ?.find((item) => item.artifactId === artifactId);
+        if (!artifact) throw new Error("这份产物在当前账号不可用，请刷新文库后重试。");
+        if (!active()) throw new Error("账号已切换。");
+        const text = artifactContextText(artifact);
+        if (!text.trim()) throw new Error("这份产物尚未生成可添加的正文。");
+        const object = await repository.projectLegacy(`artifact-context-${artifactId}`, {
+          title: artifact.title,
+          kind: "artifact.document",
+          runId: artifact.agent.runId,
+          content: { schema: "liteasy.document/v1", payload: {
+            legacyArtifactId: artifactId,
+            blocks: [{ blockId: "document", type: "markdown", text, sourceRefs: [] }],
+          } },
+        });
+        refs = [refOf(object)];
+      }
       if (!refs?.length) throw new Error("没有可加入对话的内容。");
       const attachments: import("../features/object-transfer/contextTransfer").ResourceContextAttachment[] = [];
       for (const ref of refs) {
@@ -512,6 +534,8 @@ export function useObjectWorkbenchController(input: {
       }
       if (attachments.reduce((count, item) => count + item.refs.length, 0) > 100)
         throw new Error("所选内容超过 100 项，请选择部分白板元素。");
+      await resolveContextSnapshot({ repository, refs: attachments.flatMap((item) => item.refs),
+        purpose: "加入对话上下文", persist: false });
       if (!active()) throw new Error("账号已切换。");
       return attachments;
     },

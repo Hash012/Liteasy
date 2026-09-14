@@ -1,6 +1,7 @@
+import type { AssistantComposerSuggestion } from "../features/assistant/assistant.types";
 import { AssistantPane } from "../features/assistant/AssistantPane";
 import type { ArtifactTask, ArtifactType } from "../features/artifacts/artifact.types";
-import type { AssistantSessionHistoryItem } from "../features/assistant/assistantSessionHistory";
+import type { AssistantSessionHistoryItem, ArtifactSessionOpenRequest } from "../features/assistant/assistantSessionHistory";
 import type { ModelTransport } from "../features/models/modelHttpClient";
 import type { Citation, RetrievalChunk } from "../features/retrieval/retrieval.types";
 import type { SettingsState } from "../features/settings/settings.types";
@@ -22,6 +23,7 @@ type AssistantSidebarProps = {
   historyPersistence?: AssistantHistoryPersistence;
   academicProfile?: AcademicProfile;
   artifactTasks?: ArtifactTask[];
+  artifactSessionOpenRequest?: ArtifactSessionOpenRequest;
   developerDiagnostics?: boolean;
   executionJournal?: ExecutionJournal;
   /** @deprecated Agent context is supplied by the AppShell controller. */
@@ -53,6 +55,7 @@ type AssistantSidebarProps = {
   runtimeWorkspace?: Partial<WorkspaceSource>;
   selectedPaperCount: number;
   availablePapers?: Paper[];
+  contextSuggestions?: AssistantComposerSuggestion[];
   selectedPapers: Paper[];
   selectionLocked: boolean;
   settingsStore: SettingsStoreLike;
@@ -63,6 +66,7 @@ export function AssistantSidebar({
   historyPersistence,
   academicProfile,
   artifactTasks = [],
+  artifactSessionOpenRequest,
   developerDiagnostics = false,
   executionJournal,
   importedChunksByPaperId,
@@ -93,6 +97,7 @@ export function AssistantSidebar({
   runtimeWorkspace,
   selectedPaperCount,
   availablePapers,
+  contextSuggestions,
   selectedPapers,
   selectionLocked,
   settingsStore
@@ -109,6 +114,7 @@ export function AssistantSidebar({
           historyPersistence={historyPersistence}
           academicProfile={academicProfile}
           artifactTasks={artifactTasks}
+          artifactSessionOpenRequest={artifactSessionOpenRequest}
           developerDiagnostics={developerDiagnostics}
           executionJournal={executionJournal}
           importedChunksByPaperId={importedChunksByPaperId}
@@ -136,6 +142,7 @@ export function AssistantSidebar({
           runtimeOrganizationName={runtimeOrganizationName}
           runtimeWorkspace={runtimeWorkspace}
           availablePapers={availablePapers}
+          contextSuggestions={contextSuggestions}
           selectedPapers={selectedPapers}
           selectedSetStatus={{
             importedCount: importedSelectedCount,

@@ -6484,8 +6484,46 @@ button.pdf-overlay-mark:focus-visible {
   color: #7b8a99;
 }
 
+.assistant-only-pane {
+  height: 100%;
+  min-height: 0;
+}
+
 .assistant-only-pane .pane-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
   padding: 14px;
+}
+
+.assistant-pane {
+  min-width: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.assistant-pane > :not(.assistant-messages) {
+  flex-shrink: 0;
+}
+
+.assistant-messages {
+  flex: 1 1 160px;
+  min-height: 80px;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--colorNeutralStrokeAccessible, #8a929a) transparent;
+  overflow-y: scroll;
+  overflow-x: hidden;
+}
+
+.assistant-message-wrap {
+  flex-shrink: 0;
+}
+
+.assistant-messages-empty {
+  flex: 1 1 0;
+  min-height: 0;
 }
 
 .account-registration-form {
@@ -6871,3 +6909,56 @@ button.pdf-overlay-mark:focus-visible {
 .dock-bottom-columns .assistant-session-toolbar { display: flex; align-items: center; justify-content: space-between; }
 .dock-bottom-columns .assistant-active-session { flex: 1; }
 .dock-bottom-columns .assistant-input { height: 52px; min-height: 52px; }
+
+.assistant-suggestion-menu {
+  max-height: min(280px, 35vh);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.assistant-suggestion-item.active {
+  background: var(--colorSubtleBackgroundHover, #e8f0f6);
+}
+
+.assistant-suggestion-main {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.assistant-suggestion-menu.commands {
+  gap: 2px;
+  max-height: min(210px, 28vh);
+  padding: 4px;
+}
+
+.assistant-suggestion-menu.commands .assistant-suggestion-item {
+  border-radius: 4px;
+  flex: 0 0 30px;
+  gap: 6px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  min-height: 30px;
+  padding: 4px 6px;
+}
+
+.assistant-suggestion-menu.commands .assistant-suggestion-trigger {
+  border-radius: 4px;
+  min-height: 20px;
+  font-size: 12px;
+}
+
+.assistant-suggestion-menu.commands .assistant-suggestion-main {
+  align-items: baseline;
+  flex-direction: row;
+  gap: 8px;
+  line-height: 20px;
+}
+
+.assistant-suggestion-menu.commands .assistant-suggestion-main strong {
+  flex: 0 0 auto;
+  font-size: 12px;
+  max-width: 70%;
+}
+
+.assistant-suggestion-menu.commands .assistant-suggestion-main span {
+  flex: 1;
+}

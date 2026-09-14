@@ -2,7 +2,7 @@ import { readerContextDragMime, readDraggedReaderContext } from "./readerContext
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import { hasResourceContextTransfer, readContextPaper } from "../object-transfer/contextTransfer";
 import { contextRefSchema, type ContextRef } from "../context/objectContext";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Tooltip } from "@fluentui/react-components";
 import { AddRegular, DismissRegular, HistoryRegular } from "@fluentui/react-icons";
 import { AssistantComposer } from "./AssistantComposer";
@@ -42,7 +42,8 @@ import {
   resolveAssistantPublicAgentClientSessionId,
   snapshotAssistantSession,
   upsertAssistantSession,
-  type AssistantSessionHistoryItem
+  type AssistantSessionHistoryItem,
+  type ArtifactSessionOpenRequest
 } from "./assistantSessionHistory";
 import { buildAgentRuntimeContextView } from "../agent-runtime/contextView";
 import { executeUIDslActionRef } from "../agent-runtime/dynamicActionExecutor";
@@ -88,7 +89,6 @@ import type { ReaderConversationContext } from "./assistantContext.types";
 import { generateAssistantAnswer } from "./generateAssistantAnswer";
 
 import { artifactSlashSuggestions, requestedArtifactType } from "../artifacts/artifactInvocation";
-import { projectArtifactTaskMessage } from "./assistantArtifactActivity";
 import type { AssistantHistoryPersistence, AssistantHistorySnapshot } from "./assistantHistoryPersistence";
 
 type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
@@ -125,6 +125,7 @@ type AssistantPaneProps = {
   historyPersistence?: AssistantHistoryPersistence;
   academicProfile?: AcademicProfile;
   artifactTasks?: ArtifactTask[];
+  artifactSessionOpenRequest?: ArtifactSessionOpenRequest;
   developerDiagnostics?: boolean;
   executionJournal?: ExecutionJournal;
   importedChunksByPaperId?: Record<string, RetrievalChunk[]>;
@@ -152,6 +153,7 @@ type AssistantPaneProps = {
   readerConversationContext?: ReaderConversationContext | null;
   runtimeOrganizationName?: string;
   availablePapers?: Paper[];
+  contextSuggestions?: AssistantComposerSuggestion[];
   runtimeWorkspace?: Partial<WorkspaceSource>;
   selectedPapers?: Paper[];
   selectedSetStatus: SelectedSetStatus;
@@ -269,6 +271,7 @@ export function AssistantPane({
   historyPersistence,
   academicProfile,
   artifactTasks = [],
+  artifactSessionOpenRequest,
   auditTransport,
   developerDiagnostics = false,
   executionJournal,
@@ -298,6 +301,7 @@ export function AssistantPane({
   runtimeWorkspace,
   selectedPapers = [],
   availablePapers = selectedPapers,
+  contextSuggestions = [],
   selectedSetStatus,
   settingsStore
 }: AssistantPaneProps) {
@@ -315,6 +319,7 @@ export function AssistantPane({
     initialSessionRef.current
   ]);
   const knownArtifactTaskIdsRef = useRef(new Set<string>());
+  const openedArtifactRequestRef = useRef<string>();
   const deliveredRegistrationWelcomeMessageIdsRef = useRef(new Set<number>());
   const executionJournalRef = useRef(executionJournal ?? createExecutionJournal());
   const processedAgentRunSequencesRef = useRef(new Map<string, number>());
@@ -362,7 +367,8 @@ export function AssistantPane({
     if (!historyPersistence || !historyReadyRef.current || !mountedRef.current) return;
     const snapshot: AssistantHistorySnapshot = {
       version: "liteasy.assistant-history/v1", activeSessionId: activeSessionIdRef.current,
-      sessions: sessionRegistryRef.current, draft: draftRef.current
+      sessions: sessionRegistryRef.current.map((session) => session.id === activeSessionIdRef.current
+        ? { ...session, draft: draftRef.current } : session), draft: draftRef.current
     };
     void historyPersistence.save(snapshot).then(() => {
       if (mountedRef.current) setHistoryError(undefined);
@@ -484,119 +490,55 @@ export function AssistantPane({
   useEffect(() => { addReaderContext(readerConversationContext); }, [readerConversationContext]);
 
   useEffect(() => {
-    if (!historyReady || artifactTasks.length === 0) {
-      return;
+    if (!historyReady || artifactTasks.length === 0) return;
+    let nextSessions = sessionRegistryRef.current;
+    const currentSession = nextSessions.find((session) => session.id === activeSessionIdRef.current);
+    if (currentSession?.kind !== "artifact_generation") {
+      nextSessions = upsertAssistantSession(nextSessions, snapshotAssistantSession({
+        session: currentSession ?? initialSessionRef.current,
+        state: cloneAssistantState(assistantStoreRef.current.getState())
+      }));
     }
-
-    const activeSessionBeforeVisibilityFilter = sessionRegistryRef.current.find(
-      (session) => session.id === activeSessionIdRef.current
-    );
-    const hidActiveThinReadingSession = !developerDiagnostics &&
-      activeSessionBeforeVisibilityFilter?.kind === "artifact_generation" &&
-      activeSessionBeforeVisibilityFilter.artifactType === "thin_reading";
-    let nextSessions = developerDiagnostics
-      ? sessionRegistryRef.current
-      : sessionRegistryRef.current.filter((session) => (
-          session.kind !== "artifact_generation" || session.artifactType !== "thin_reading"
-        ));
-    const currentSession = nextSessions.find(
-      (session) => session.id === activeSessionIdRef.current
-    );
-    if (!hidActiveThinReadingSession && currentSession?.kind !== "artifact_generation") {
-      nextSessions = upsertAssistantSession(
-        nextSessions,
-        snapshotAssistantSession({
-          session: currentSession ?? initialSessionRef.current,
-          state: cloneAssistantState(assistantStoreRef.current.getState())
-        })
-      );
-    }
-
-    const newRunningTasks: ArtifactTask[] = [];
     let migratedActiveSessionId: string | undefined;
-    const visibleArtifactTasks = developerDiagnostics
-      ? artifactTasks
-      : artifactTasks.filter((task) => task.type !== "thin_reading");
-    visibleArtifactTasks.forEach((task) => {
+    let taskToOpen: ArtifactTask | undefined;
+    // Tasks arrive newest first. Apply older layers first so the reading session
+    // keeps its whole trail and its status comes from the most recent layer.
+    for (const task of [...artifactTasks].reverse()) {
       const sessionId = getArtifactTaskSessionId(task.id, task);
       const previousSession = nextSessions.find((session) => session.id === sessionId) ??
         nextSessions.find((session) => session.artifactTaskId === task.id);
-      const nextSession = createArtifactTaskSession(task, previousSession, Date.now, {
-        developerDiagnostics
-      });
+      const nextSession = createArtifactTaskSession(task, previousSession, Date.now, { developerDiagnostics });
       if (previousSession && previousSession.id !== nextSession.id) {
         nextSessions = nextSessions.filter((session) => session.id !== previousSession.id);
-        if (activeSessionIdRef.current === previousSession.id) {
-          migratedActiveSessionId = nextSession.id;
-        }
+        if (activeSessionIdRef.current === previousSession.id) migratedActiveSessionId = nextSession.id;
       }
-      nextSessions = upsertAssistantSession(
-        nextSessions,
-        nextSession
-      );
-      if (
-        !knownArtifactTaskIdsRef.current.has(task.id) &&
-        (task.status === "queued" || task.status === "running") &&
-        // Thin-reading pages update their paper-bound session quietly. Generating a
-        // lower level must never steal focus from the reader's active conversation.
-        (task.type !== "thin_reading" || !task.artifactId)
-      ) {
-        newRunningTasks.push(task);
-      }
+      nextSessions = upsertAssistantSession(nextSessions, nextSession);
+      if (!knownArtifactTaskIdsRef.current.has(task.id) && task.type !== "thin_reading" &&
+        (task.status === "queued" || task.status === "running")) taskToOpen = task;
       knownArtifactTaskIdsRef.current.add(task.id);
+    }
+    // A resumed older layer remains the active operation even if a newer layer completed.
+    nextSessions = nextSessions.map((session) => {
+      const running = artifactTasks.find((task) => task.type === "thin_reading" &&
+        (task.status === "running" || task.status === "queued") &&
+        getArtifactTaskSessionId(task.id, task) === session.id);
+      return running ? { ...session, status: "running", artifactTaskId: running.id } : session;
     });
-
-    const taskToOpen = newRunningTasks[newRunningTasks.length - 1];
-    const fallbackConversation = nextSessions.find((session) => session.kind !== "artifact_generation") ??
-      initialSessionRef.current;
     const nextActiveSessionId = taskToOpen
       ? getArtifactTaskSessionId(taskToOpen.id, taskToOpen)
-      : hidActiveThinReadingSession
-        ? fallbackConversation.id
-        : migratedActiveSessionId ?? activeSessionIdRef.current;
+      : migratedActiveSessionId ?? activeSessionIdRef.current;
     const sessionToRestore = nextSessions.find((session) => session.id === nextActiveSessionId);
-
     sessionRegistryRef.current = nextSessions;
     setSessionHistory([...nextSessions]);
-    if (sessionToRestore && (sessionToRestore.kind === "artifact_generation" || hidActiveThinReadingSession)) {
+    // Updating a background reading must leave the active conversation and its draft intact.
+    if (sessionToRestore?.kind === "artifact_generation") {
       activeSessionIdRef.current = sessionToRestore.id;
       setActiveSessionId(sessionToRestore.id);
-      assistantStoreRef.current.restoreSession(
-        sessionToRestore.mode,
-        sessionToRestore.messages
-      );
+      assistantStoreRef.current.restoreSession(sessionToRestore.mode, sessionToRestore.messages);
       setAssistantState(cloneAssistantState(assistantStoreRef.current.getState()));
-      if (taskToOpen) {
-        setHistoryOpen(false);
-        setInput("");
-        setEditingMessageId(null);
-      }
+      if (taskToOpen) { setHistoryOpen(false); setInput(""); setEditingMessageId(null); }
     }
   }, [artifactTasks, developerDiagnostics, historyReady]);
-
-  useEffect(() => {
-    if (!historyReady || developerDiagnostics) return;
-    const tasks = artifactTasks.filter((task) => task.type === "thin_reading");
-    if (!tasks.length) return;
-    let sessions = sessionRegistryRef.current;
-    for (const task of tasks) {
-      const owner = sessions.find((session) => session.messages.some((message) => message.artifactTask?.id === task.id)) ??
-        sessions.find((session) => session.id === activeSessionIdRef.current);
-      if (!owner) continue;
-      const previous = owner.messages.find((message) => message.artifactTask?.id === task.id);
-      const message = projectArtifactTaskMessage(task, previous);
-      sessions = upsertAssistantSession(sessions, { ...owner,
-        messages: previous ? owner.messages.map((item) => item.id === previous.id ? message : item) : [...owner.messages, message]
-      });
-    }
-    sessionRegistryRef.current = sessions;
-    const active = sessions.find((session) => session.id === activeSessionIdRef.current);
-    if (active) {
-      assistantStoreRef.current.replaceMessages(active.messages);
-      setAssistantState(cloneAssistantState(assistantStoreRef.current.getState()));
-    }
-    setSessionHistory([...sessions]);
-  }, [artifactTasks, historyReady, developerDiagnostics]);
 
   useEffect(() => {
     const activeSession = sessionRegistryRef.current.find(
@@ -644,14 +586,14 @@ export function AssistantPane({
     const activeSession = sessionRegistryRef.current.find(
       (session) => session.id === activeSessionIdRef.current
     );
-    if (!activeSession || activeSession.kind === "artifact_generation") {
+    if (!activeSession) {
       return;
     }
 
-    const nextSession = snapshotAssistantSession({
+    const nextSession = { ...(activeSession.kind === "artifact_generation" ? activeSession : snapshotAssistantSession({
       session: activeSession,
       state: cloneAssistantState(assistantStoreRef.current.getState())
-    });
+    })), draft: structuredClone(draftRef.current) };
     const nextSessions = upsertAssistantSession(sessionRegistryRef.current, nextSession);
     sessionRegistryRef.current = nextSessions;
     setSessionHistory([...nextSessions]);
@@ -701,6 +643,21 @@ export function AssistantPane({
       ...currentTokens.filter((currentToken) => currentToken.id !== token.id),
       token
     ]);
+  }
+
+  async function resolveComposerContextToken(resolve: () => Promise<AssistantContextToken>) {
+    const sessionId = activeSessionIdRef.current;
+    setContextDropCount((count) => count + 1);
+    setContextDropMessage("");
+    try {
+      const token = await resolve();
+      if (mountedRef.current && activeSessionIdRef.current === sessionId) addComposerContextToken(token);
+    } catch (error) {
+      if (mountedRef.current && activeSessionIdRef.current === sessionId)
+        setContextDropMessage(error instanceof Error ? error.message : "添加上下文失败，请重试。");
+    } finally {
+      if (mountedRef.current) setContextDropCount((count) => count - 1);
+    }
   }
 
   async function addDroppedResources(data: DataTransfer) {
@@ -760,14 +717,14 @@ export function AssistantPane({
 
     const paperSuggestions: AssistantComposerSuggestion[] = availablePapers.map((paper) => {
       const paperToken: AssistantContextToken = {
-        detail: "整篇论文",
+        detail: paper.sourcePath ?? "整篇论文",
         id: `paper-${paper.id}`,
         kind: "paper",
         label: paper.title,
         prompt: `用户指定论文上下文：${paper.title}（paperId=${paper.id}）`
       };
       return {
-        detail: "整篇论文",
+        detail: paper.sourcePath ?? "整篇论文",
         id: `paper-${paper.id}`,
         label: paper.title,
         token: paperToken,
@@ -807,8 +764,10 @@ export function AssistantPane({
       trigger: "$"
     }));
 
-    return [...artifactSlashSuggestions, ...commandSuggestions, ...paperSuggestions, ...pageSuggestions, ...skillSuggestions];
+    return [...artifactSlashSuggestions, ...commandSuggestions, ...paperSuggestions, ...contextSuggestions, ...pageSuggestions, ...skillSuggestions];
   }
+
+  const composerSuggestions = useMemo(buildComposerSuggestions, [availablePapers, contextSuggestions]);
 
   function setMode(mode: AssistantMode) {
     const adapted = adaptDefaultUiIntent({
@@ -890,11 +849,25 @@ export function AssistantPane({
     setActiveSessionId(session.id);
     assistantStoreRef.current.restoreSession(session.mode, session.messages);
     setHistoryOpen(false);
-    setInput("");
+    setInput(session.draft?.input ?? "");
+    setComposerContextTokens(session.draft?.tokens ?? []);
+    setReaderContexts(session.draft?.readerContexts ?? []);
     setEditingMessageId(null);
     connectPublicAgentSession(session);
     syncAssistant();
   }
+
+  useEffect(() => {
+    if (!historyReady || !artifactSessionOpenRequest || assistantState.pending ||
+      openedArtifactRequestRef.current === artifactSessionOpenRequest.requestId) return;
+    const task = artifactTasks.find((item) => item.id === artifactSessionOpenRequest.taskId);
+    const session = task
+      ? sessionRegistryRef.current.find((item) => item.id === getArtifactTaskSessionId(task.id, task))
+      : sessionRegistryRef.current.find((item) => item.artifactTaskId === artifactSessionOpenRequest.taskId);
+    if (!session) return;
+    openedArtifactRequestRef.current = artifactSessionOpenRequest.requestId;
+    openSession(session.id);
+  }, [artifactSessionOpenRequest, artifactTasks, historyReady, assistantState.pending, sessionHistory]);
 
   function showVoiceInputPlaceholder() {
     setVoiceInputMessage("语音输入接口已预留，当前版本请先使用文本输入。");
@@ -1870,12 +1843,12 @@ export function AssistantPane({
 
   async function handleSend() {
     if (!historyReadyRef.current || contextDropCount > 0) return;
-    const currentState = assistantStoreRef.current.getState();
+    let currentState = assistantStoreRef.current.getState();
     const contextTokensForTurn = [...composerContextTokens];
     const referencedPaperIds = contextTokensForTurn
       .filter((token) => token.kind === "paper")
       .map((token) => token.id.replace(/^paper-/, ""));
-    const attachedContextPrompt = buildComposerTokenPrompt(contextTokensForTurn) ||
+    let attachedContextPrompt = buildComposerTokenPrompt(contextTokensForTurn) ||
       buildReaderContextPrompt();
     const adapted = adaptTextIntent({
       activeMode: "qa",
@@ -1891,6 +1864,27 @@ export function AssistantPane({
       (adapted.runtimeInput.mode === "command" || requestedArtifactType(adapted.runtimeInput.message))) {
       setContextDropMessage("已加入的内容可用于提问和审阅；当前产物生成或命令入口暂不支持这些对象，请使用普通问题或移除对象后重试。");
       return;
+    }
+
+    const viewedSession = sessionRegistryRef.current.find((session) => session.id === activeSessionIdRef.current);
+    if (viewedSession?.kind === "artifact_generation") {
+      // Questions get their own durable conversation. Task progress must never
+      // overwrite a user's follow-up or an in-flight answer in the details view.
+      const task = artifactTasks.find((item) => item.id === viewedSession.artifactTaskId);
+      const paperIds = task?.sourcePaperIds ?? task?.recovery?.papers.map((paper) => paper.id) ?? [];
+      for (const paperId of paperIds) {
+        if (referencedPaperIds.includes(paperId)) continue;
+        const paper = availablePapers.find((item) => item.id === paperId);
+        if (!paper) continue;
+        referencedPaperIds.push(paperId);
+        contextTokensForTurn.push({ id: `paper-${paperId}`, kind: "paper", label: paper.title,
+          prompt: `用户指定论文上下文：${paper.title}（paperId=${paperId}）` });
+      }
+      attachedContextPrompt = buildComposerTokenPrompt(contextTokensForTurn) || attachedContextPrompt;
+      startNewSession("qa");
+      sessionRegistryRef.current = sessionRegistryRef.current.map((session) => session.id === viewedSession.id
+        ? { ...session, draft: { input: "", tokens: [], readerContexts: [] } } : session);
+      currentState = assistantStoreRef.current.getState();
     }
 
     if (editingMessageId) {
@@ -2227,13 +2221,15 @@ export function AssistantPane({
         contextTokens={composerContextTokens}
         modeHint={composerHint}
         onAddContextToken={addComposerContextToken}
+        onResolveContextToken={(resolve) => { void resolveComposerContextToken(resolve); }}
+        contextLoading={contextDropCount > 0}
         onCancelEdit={cancelEdit}
         onInputChange={setInput}
         onRemoveContextToken={removeComposerContextToken}
         onSend={handleSend}
         onVoiceInput={showVoiceInputPlaceholder}
         pending={assistantState.pending || !historyReady}
-        suggestions={buildComposerSuggestions()}
+        suggestions={composerSuggestions}
         voiceInputMessage={voiceInputMessage}
       />
     </div>

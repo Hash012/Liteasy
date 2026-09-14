@@ -2,6 +2,8 @@ import { OBJECT_TRANSFER_MIME, PENDING_CAPTURE_MIME } from "./objectTransfer";
 import type { ObjectRef } from "../objects/object.types";
 import type { Paper } from "../workspace/workspace.types";
 
+export const ARTIFACT_CONTEXT_MIME = "application/x-liteasy-artifact-context";
+
 export const PAPER_CONTEXT_MIME = "application/x-liteasy-paper-context";
 export const LIBRARY_RESOURCE_MIME = "application/x-liteasy-library-resource-v2";
 
@@ -14,7 +16,7 @@ export type ResourceContextAttachment = {
 };
 
 export function hasResourceContextTransfer(data: Pick<DataTransfer, "types">) {
-  return [OBJECT_TRANSFER_MIME, PENDING_CAPTURE_MIME, PAPER_CONTEXT_MIME, LIBRARY_RESOURCE_MIME]
+  return [OBJECT_TRANSFER_MIME, PENDING_CAPTURE_MIME, PAPER_CONTEXT_MIME, LIBRARY_RESOURCE_MIME, ARTIFACT_CONTEXT_MIME]
     .some((type) => data.types.includes(type));
 }
 

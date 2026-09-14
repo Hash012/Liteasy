@@ -1,3 +1,5 @@
+import { useAssistantContextCatalog } from "../controllers/useAssistantContextCatalog";
+import { useArtifactSessionNavigationController } from "../controllers/useArtifactSessionNavigationController";
 import { usePdfMetadataImportController } from "../controllers/usePdfMetadataImportController";
 import { extractPdfRecognitionEvidence } from "../features/import/pdfTextExtractor";
 import { createPortal } from "react-dom";
@@ -719,6 +721,7 @@ export function AppShell({
       return;
     }
     latestArtifactTaskIdRef.current = latestTask.id;
+    if (latestTask.type === "thin_reading") return;
     const assistantRegionId = dock.findItemRegion("assistant") ?? "right";
     dock.openItem("assistant");
     if (assistantRegionId !== "main") {
@@ -1096,6 +1099,16 @@ export function AppShell({
     dragAnnotation: (paper, annotation, data) => objectWorkbench.port.dragAnnotation?.({ paper, annotation }, data),
     listArtifacts: () => artifactResultClientRef.current!.list(),
     openArtifact: (id) => { artifactWorkflow.actions.openArtifact(id); activateArtifactSurface(id); }
+  });
+  const assistantContextSuggestions = useAssistantContextCatalog({
+    artifacts: artifactCatalog,
+    objects: objectWorkbench.objects,
+    port: objectWorkbench.port,
+    repository: objectWorkbench.repository
+  });
+  const artifactSessionNavigation = useArtifactSessionNavigationController({
+    tasks: artifactTasks, scopeId: assistantScopeId,
+    openAssistant: () => workbenchNavigation.open("assistant")
   });
   const previousBoardVisibility = useRef<boolean>();
   useEffect(() => {
@@ -1845,6 +1858,8 @@ export function AppShell({
           }
           developerDiagnostics={cloudAccount.model.developerDiagnostics}
           intuechoEndpoint={resolveIntuechoEndpoint()}
+          onOpenTaskDetails={artifactSessionNavigation.openTaskDetails}
+          canOpenTaskDetails={artifactSessionNavigation.canOpenTaskDetails}
           intuechoSessionId={accountSession?.sessionId}
           onLoadForumFeed={forum.loadFeed}
           onDynamicAction={(action) => {
@@ -1913,6 +1928,7 @@ export function AppShell({
           academicProfile={profileActions.academicProfile}
           artifactTasks={artifactTasks}
           developerDiagnostics={cloudAccount.model.developerDiagnostics}
+          artifactSessionOpenRequest={artifactSessionNavigation.request}
           executionJournal={assistantAgent.executionJournal}
           importedChunksByPaperId={importedChunksByPaperId}
           importedSelectedCount={importedSelectedCount}
@@ -1974,6 +1990,7 @@ export function AppShell({
           runtimeOrganizationName={organizationSummary?.name}
           runtimeWorkspace={workspaceState.workspaceSource}
           availablePapers={workspaceState.papers}
+          contextSuggestions={assistantContextSuggestions}
           selectedPaperCount={workspaceState.selectedPaperIds.length}
           selectedPapers={selectedPapers}
           selectionLocked={workspaceState.selectionLocked}

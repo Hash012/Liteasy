@@ -14,6 +14,30 @@ const original: AssistantHistorySnapshot = {
 };
 afterEach(() => localStorage.clear());
 
+test("keeps the previous conversation draft across a details visit and a reload", async () => {
+  let disk: unknown = structuredClone(original);
+  const transport = { load: async () => disk, save: async (snapshot: AssistantHistorySnapshot) => { disk = structuredClone(snapshot); } };
+  const persistence = createAssistantHistoryPersistence(transport);
+  const task = { id: "reading", artifactId: "reading-artifact", type: "thin_reading" as const,
+    status: "completed" as const, stage: "completed" as const, message: "薄读已保存", progress: 100 };
+  const props = { selectedSetStatus: { selectedCount: 0, importedCount: 0, selectionLocked: false },
+    onGenerateArtifact: () => "", artifactTasks: [task] };
+  const first = render(<AssistantPane {...props} historyPersistence={persistence} />);
+  await screen.findByText("已保存的回答");
+  first.rerender(<AssistantPane {...props} historyPersistence={persistence}
+    artifactSessionOpenRequest={{ requestId: "details", taskId: task.id }} />);
+  await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("生成：薄读"));
+  first.unmount();
+  await persistence.flush();
+  render(<AssistantPane {...props} historyPersistence={createAssistantHistoryPersistence(transport)} />);
+  await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("生成：薄读"));
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "历史" }));
+  await user.click(screen.getByRole("button", { name: "打开会话：已保存的问题" }));
+  expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveValue("未发出的草稿");
+  expect(screen.getByText("已保存的回答")).toBeInTheDocument();
+});
+
 test("restores messages, active session and draft after blur and remount without making a model request", async () => {
   let disk: unknown = structuredClone(original);
   const transport = { load: vi.fn(async () => disk), save: vi.fn(async (snapshot) => { disk = structuredClone(snapshot); }) };

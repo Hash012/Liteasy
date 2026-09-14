@@ -62,6 +62,10 @@ export function createArtifactStore(taskNamespace = "") {
       catalog.set(payload.artifactId, payload);
       upsertOpenTab(payload);
     },
+    openPreviewTab(payload: ArtifactTab) {
+      // Pending reading pages are visible without publishing an unfinished result.
+      upsertOpenTab(payload);
+    },
     upsertCatalogEntry(payload: ArtifactTab) {
       catalog.set(payload.artifactId, payload);
     },

@@ -71,6 +71,8 @@ export type AssistantContextToken = {
 };
 
 export type AssistantComposerSuggestion = {
+  /** Resolve a library locator only when the user selects it. */
+  resolveToken?: () => Promise<AssistantContextToken>;
   detail?: string;
   id: string;
   insertText?: string;

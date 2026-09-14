@@ -21,6 +21,8 @@ export function requestedArtifactType(message: string): ArtifactType | null {
   if (selectedCommand) return selectedCommand.artifactType;
   if (/(?:不要|不用|别|do not|don't).{0,12}(?:薄读|thin[ _-]?reading|生成)/i.test(text) ||
     /(?:薄读|thin[ _-]?reading).{0,4}(?:是什么|什么意思|怎么用|如何使用|的区别)/i.test(text)) return null;
+  if (/(?:这[个份篇]?|已有|所选|添加的|生成的|上面|刚才的)薄读|薄读(?:中|里|内)|薄读的(?!风格)/.test(text) &&
+    !/(?:重新|继续)?生成|再做|制作|create|generate/i.test(text.replace(/生成的/g, ""))) return null;
   const thin = /薄读|thin[ _-]?read(?:ing)?/i.test(text);
   if (thin) return "thin_reading";
   if (!/(生成|做|制作|画|绘制|create|generate|draw)/i.test(text)) return null;

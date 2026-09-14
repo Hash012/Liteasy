@@ -1,7 +1,12 @@
 import type { createAssistantStore } from "./assistant.store";
-import type { AssistantMessage, AssistantMode, AssistantState } from "./assistant.types";
+import type { AssistantContextToken, AssistantMessage, AssistantMode, AssistantState } from "./assistant.types";
+import type { ReaderConversationContext } from "./assistantContext.types";
 import type { ArtifactTask, ArtifactType } from "../artifacts/artifact.types";
 import { presentArtifactFailure } from "../artifacts/artifactFailurePresentation";
+import { projectArtifactTaskMessage } from "./assistantArtifactActivity";
+
+export type ArtifactSessionOpenRequest = { requestId: string; taskId: string };
+export type AssistantSessionDraft = { input: string; tokens: AssistantContextToken[]; readerContexts: ReaderConversationContext[] };
 
 export type AssistantSessionKind = "conversation" | "artifact_generation";
 export type AssistantSessionStatus = "idle" | "running" | "completed" | "failed" | "cancelled";
@@ -11,6 +16,7 @@ export type AssistantSessionHistoryItem = {
   artifactTaskId?: string;
   artifactType?: ArtifactType;
   createdAt?: string;
+  draft?: AssistantSessionDraft;
   id: string;
   kind?: AssistantSessionKind;
   messages: AssistantMessage[];
@@ -230,14 +236,29 @@ export function createArtifactTaskSession(
           ? "cancelled"
         : "running";
 
+  const thinReadingMessages = previous?.messages.filter((message) => message.artifactTask) ?? [];
+  if (task.type === "thin_reading") {
+    const index = thinReadingMessages.findIndex((message) => message.artifactTask?.id === task.id);
+    const message = projectArtifactTaskMessage(failurePresentation && task.failure
+      ? { ...task, failure: { ...task.failure, message: failurePresentation.message } }
+      : task, thinReadingMessages[index]);
+    if (task.failure) message.content = `薄读未完成。\n${progressMessage}`;
+    if (index >= 0) thinReadingMessages[index] = message;
+    else thinReadingMessages.push(message);
+  }
+
   return {
     artifactId: task.artifactId ?? previous?.artifactId,
     artifactTaskId: task.id,
     artifactType: task.type,
     createdAt: previous?.createdAt ?? timestamp,
+    draft: previous?.draft,
     id: sessionId,
     kind: "artifact_generation",
-    messages: [
+    messages: task.type === "thin_reading" ? [
+      { content: title, id: `${sessionId}:request`, role: "user" },
+      ...thinReadingMessages
+    ] : [
       {
         content: title,
         id: `${sessionId}:request`,

@@ -47,22 +47,24 @@ export function createDirectModelStream(protocol: DirectModelConfig["protocol"],
     if (event.error || event.type === "error") throw new Error("模型服务返回流式错误，请检查服务商状态及模型额度。");
     let delta = "";
     let reasoningDelta = "";
+    let limitReached = false;
     if (protocol === "anthropic") {
       if (event.type === "content_block_start" && event.content_block?.type === "text") delta = event.content_block.text ?? "";
       if (event.type === "content_block_delta" && event.delta?.type === "text_delta") delta = event.delta.text ?? "";
       if (event.type === "content_block_start" && event.content_block?.type === "thinking") reasoningDelta = event.content_block.thinking ?? "";
       if (event.type === "content_block_delta" && event.delta?.type === "thinking_delta") reasoningDelta = event.delta.thinking ?? "";
       if (event.type === "message_stop") completed = true;
-      if (event.type === "message_delta" && event.delta?.stop_reason === "max_tokens") throw new Error("模型输出达到长度上限，请缩小生成范围后重试。");
+      limitReached = event.type === "message_delta" && event.delta?.stop_reason === "max_tokens";
     } else {
       const choice = event.choices?.[0];
-      if (choice?.finish_reason === "length") throw new Error("模型输出达到长度上限，请缩小生成范围后重试。");
+      limitReached = choice?.finish_reason === "length";
       if (choice?.finish_reason === "content_filter") throw new Error("模型服务未能返回内容，请调整请求后重试。");
       delta = textContent(choice?.delta?.content);
       reasoningDelta = textContent(choice?.delta?.reasoning_content ?? choice?.delta?.reasoning);
     }
     if (reasoningDelta) { reasoning += reasoningDelta; onReasoningDelta?.(reasoningDelta, reasoning); }
     if (delta) { answer += delta; onDelta(delta, answer); }
+    if (limitReached) throw new Error("模型输出达到长度上限，请缩小生成范围后重试。");
   }
   function consume() {
     let match: RegExpExecArray | null;
@@ -102,12 +104,12 @@ export function createDirectModelClient(inputConfig: DirectModelConfig, transpor
     else {
       const result = parseResponseJson(raw);
       const stop = config.protocol === "anthropic" ? result.stop_reason : result.choices?.[0]?.finish_reason;
-      if (stop === "length" || stop === "max_tokens") throw new Error("模型输出达到长度上限，请缩小生成范围后重试。");
       answer = textContent(config.protocol === "anthropic" ? result.content : result.choices?.[0]?.message?.content);
       const reasoning = config.protocol === "anthropic"
         ? (result.content ?? []).filter((part: { type: string }) => part.type === "thinking").map((part: { thinking: string }) => part.thinking).join("\n")
         : textContent(result.choices?.[0]?.message?.reasoning_content ?? result.choices?.[0]?.message?.reasoning);
       if (reasoning) input.onReasoningDelta?.(reasoning, reasoning);
+      if (stop === "length" || stop === "max_tokens") throw new Error("模型输出达到长度上限，请缩小生成范围后重试。");
       if (!answer.trim()) throw new Error("模型未返回文本，请检查所选模型是否支持对话。");
     }
     return { answer, trace: { backend: "direct_api", endpoint: config.endpoint, mode: "live", provider: config.provider, source: "direct_api" } };

@@ -617,6 +617,7 @@ export function useArtifactActions({
     }
     const scopedPapers = papersForArtifactScope(artifactType, selectedPapers, getActiveReaderPaper?.());
     const taskId = queuedTaskId ?? artifactStore.createTask(artifactType);
+    if (artifactType === "thin_reading") openThinReadingPreview(taskId, scopedPapers);
     if (!queuedTaskId) {
       syncArtifacts(taskId);
     }
@@ -936,6 +937,15 @@ export function useArtifactActions({
     return message;
   }
 
+  function openThinReadingPreview(taskId: string, papers: Paper[]) {
+    const artifactId = artifactStore.getTask(taskId)?.artifactId ?? createArtifactId(taskId);
+    artifactStore.updateTask(taskId, { artifactId });
+    if (!artifactStore.getOpenTabs().some((tab) => tab.artifactId === artifactId)) {
+      artifactStore.openPreviewTab({ artifactId, title: "薄读", type: "thin_reading",
+        papers: papers.map((paper) => ({ id: paper.id, title: paper.title })) });
+    }
+  }
+
   function startAnalysisForPapers(artifactType: ArtifactType, selectedPapers: Paper[], generationOptions?: AgentArtifactGenerationOptions) {
     const scopedPapers = papersForArtifactScope(artifactType, selectedPapers, getActiveReaderPaper?.());
     if (scopedPapers.length === 0) {
@@ -953,7 +963,8 @@ export function useArtifactActions({
       (task.status === "queued" || task.status === "running") &&
       task.sourcePaperIds?.length === sourcePaperIds.length && sourcePaperIds.every((id) => task.sourcePaperIds?.includes(id)));
     if (pendingTask) {
-      const message = "该论文的同类产物正在生成，可在对话中查看进度。";
+      if (artifactType === "thin_reading") { openThinReadingPreview(pendingTask.id, scopedPapers); syncArtifacts(pendingTask.id); }
+      const message = artifactType === "thin_reading" ? "该论文的薄读正在生成，可在薄读页面查看进度。" : "该论文的同类产物正在生成，可在对话中查看进度。";
       onAnalysisHint(message);
       return message;
     }
@@ -978,6 +989,7 @@ export function useArtifactActions({
     }
     const taskId = artifactStore.createTask(artifactType);
     artifactStore.updateTask(taskId, { recovery: { papers: scopedPapers, chunks: {}, options: generationOptions }, sourcePaperIds, message: "正在准备论文，解析完成后自动开始生成。", stage: "waiting_for_import", progress: 5 });
+    if (artifactType === "thin_reading") openThinReadingPreview(taskId, scopedPapers);
     syncArtifacts(taskId);
     const begin = () => {
       if (artifactStore.getTask(taskId)?.status === "cancelled") return;

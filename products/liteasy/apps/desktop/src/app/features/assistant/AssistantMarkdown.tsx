@@ -47,7 +47,7 @@ export function normalizeAssistantMathDelimiters(value: string) {
     .join("");
 }
 
-const components: Components = {
+export const assistantMarkdownComponents: Components = {
   a: ({ children, href, ...props }) => {
     const safeHref = safeWebUrl(href);
     return safeHref ? (
@@ -109,7 +109,7 @@ export function AssistantMarkdown({ className = "assistant-markdown", value }: A
   return (
     <div className={className}>
       <ReactMarkdown
-        components={components}
+        components={assistantMarkdownComponents}
         rehypePlugins={[rehypeKatex]}
         remarkPlugins={[remarkGfm, remarkMath]}
         urlTransform={(url) => safeWebUrl(url) ?? ""}

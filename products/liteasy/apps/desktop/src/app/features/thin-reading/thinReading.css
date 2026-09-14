@@ -138,6 +138,34 @@
   user-select: text;
 }
 .thin-reading__summary-paragraph { max-width: 36em; }
+.thin-reading__markdown { max-width: 36em; }
+.thin-reading__markdown h1,
+.thin-reading__markdown h2,
+.thin-reading__markdown h3,
+.thin-reading__markdown h4,
+.thin-reading__markdown h5,
+.thin-reading__markdown h6 { font-family: Inter, "Noto Sans SC", system-ui, sans-serif; font-size: 1.12em; line-height: 1.5; margin: 1.25em 0 .5em; max-width: none; }
+.thin-reading__markdown > :first-child { margin-top: 0; }
+.thin-reading__markdown li > p { margin-bottom: .3em; }
+.thin-reading__markdown .thin-reading__deepen-term {
+  background: #eef5fa;
+  border: 0;
+  border-radius: 4px;
+  color: #174c86;
+  display: inline;
+  font: inherit;
+  min-height: 0;
+  min-width: 0;
+  padding: 0 3px;
+  text-align: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 4px;
+  vertical-align: baseline;
+  white-space: normal;
+}
+.thin-reading__markdown .thin-reading__deepen-term:hover { background: #d9eaff; }
+.thin-reading__markdown .thin-reading__deepen-term:focus-visible { outline: 2px solid #4b9fe8; outline-offset: 2px; }
+.thin-reading__markdown .thin-reading__deepen-term:disabled { color: var(--thin-muted); cursor: progress; }
 .thin-reading__summary-sentence { outline-offset: 3px; }
 .thin-reading__anchor {
   background: #d9eaff;
@@ -221,8 +249,10 @@
 .thin-reading__omitted button svg { font-size: 15px; }
 .thin-reading__status, .thin-reading__error { border-radius: 6px; font-size: 12px; margin-top: 18px; padding: 10px 12px; }
 .thin-reading__status { background: #e5efea; color: #3e6d68; display: grid; gap: 8px; }
-.thin-reading__generation-status { background: rgba(251, 253, 252, .98); border: 1px solid #cbdcd7; border-radius: 6px; bottom: 18px; box-shadow: 0 6px 18px rgba(38, 66, 63, .1); color: #435c59; font-size: 12px; line-height: 1.5; max-width: min(360px, calc(100vw - 36px)); padding: 10px 12px 10px 30px; position: fixed; right: 18px; z-index: 20; }
-.thin-reading__generation-status::before { animation: thin-reading-generation-pulse 1.2s ease-in-out infinite; background: #2f8177; border-radius: 50%; content: ""; height: 8px; left: 12px; position: absolute; top: 15px; width: 8px; }
+.thin-reading__generation-status { align-items: center; background: rgba(251, 253, 252, .98); border: 1px solid #cbdcd7; border-radius: 6px; color: #435c59; display: flex; font-size: 12px; gap: 10px; line-height: 1.5; max-width: 100%; padding: 10px 12px; }
+.thin-reading__generation-status > span { min-width: 0; overflow-wrap: anywhere; }
+.thin-reading__generation-status > button { flex-shrink: 0; margin-left: auto; }
+.thin-reading__generation-status.is-floating { bottom: 18px; box-shadow: 0 6px 18px rgba(38, 66, 63, .1); max-width: min(360px, calc(100vw - 36px)); position: fixed; right: 18px; z-index: 20; }
 .thin-reading__generation-progress { background: rgba(62, 109, 104, .16); border-radius: 999px; height: 4px; overflow: hidden; width: min(260px, 100%); }
 .thin-reading__generation-progress > span { background: #477b79; display: block; height: 100%; transition: width 180ms ease; }
 .thin-reading__error { background: #f9e7e1; color: #9b4c3f; }

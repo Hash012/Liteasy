@@ -90,3 +90,39 @@ test("saving a generated page or a PDF excerpt preserves the existing full sourc
   expect((await result.current.repository.resolveLatest(ref!.objectId)).revision).not.toBe(ref!.revision);
   unmount();
 });
+
+test("a library thin-reading locator resolves its actual document and deeper pages to immutable context", async () => {
+  const { ARTIFACT_CONTEXT_MIME } = await import("../app/features/object-transfer/contextTransfer");
+  const { createThinReadingDocument } = await import("../app/features/thin-reading/thinReadingProjection");
+  const { createThinReadingFixture } = await import("./fixtures/thinReadingFixtures");
+  const thin = structuredClone(createThinReadingDocument(createThinReadingFixture()));
+  const root = thin.nodes[thin.rootNodeId];
+  thin.nodes["deeper-page"] = { ...root, id: "deeper-page", summary: "下一层实际解释：注意力权重的归一化。", title: "深入注意力", depth: 1 };
+  const artifact = {
+    agent: { apiVersion: "1", runId: "run-artifact", sessionId: "session", status: "completed" as const },
+    artifactId: "saved-thin", artifactType: "thin_reading" as const, answer: "", citations: [],
+    createdAt: new Date().toISOString(), papers: createThinReadingFixture().papers,
+    thinReadingDocument: thin, title: "文库薄读", version: "liteasy.agent-artifact/v1" as const,
+  };
+  const scopeId = crypto.randomUUID();
+  const { result, unmount } = renderHook(() => useObjectWorkbenchController({
+    scopeId, getApi: () => { throw new Error("No model expected"); },
+    getPapers: () => [], listLegacyArtifacts: async () => [artifact],
+    getSettings: () => createSettingsStore().getState(), openEvidence: vi.fn(),
+  }));
+  const data = transfer();
+  data.setData(ARTIFACT_CONTEXT_MIME, artifact.artifactId);
+  const attachments = await result.current.port.receiveContextDrop!(data);
+  const snapshot = await resolveContextSnapshot({ repository: result.current.repository,
+    refs: attachments[0].refs, purpose: "解释" });
+  const body = snapshot.entries.map((entry) => entry.text).join("\n");
+  expect(body).toContain(root.summary);
+  expect(body).toContain("下一层实际解释");
+  expect(body).toContain("Self-attention replaces recurrence");
+  expect(result.current.visible).toBe(false);
+  thin.nodes["deeper-page"].summary = "多层详细正文".repeat(6000);
+  await expect(result.current.port.receiveContextDrop!(data)).rejects.toThrow(/超|预算/);
+  data.setData(ARTIFACT_CONTEXT_MIME, "other-account-artifact");
+  await expect(result.current.port.receiveContextDrop!(data)).rejects.toThrow("当前账号不可用");
+  unmount();
+});

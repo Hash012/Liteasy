@@ -1,3 +1,4 @@
+import { ARTIFACT_CONTEXT_MIME } from "../object-transfer/contextTransfer";
 import {
   Button,
   Dialog,
@@ -398,6 +399,13 @@ function SavedArtifactList({
             appearance="transparent"
             aria-label={`打开产物：${artifact.title}`}
             className="artifact-library-row-main"
+            draggable
+            onDragStart={(event) => {
+              event.stopPropagation();
+              event.dataTransfer.effectAllowed = "copy";
+              event.dataTransfer.setData(ARTIFACT_CONTEXT_MIME, artifact.artifactId);
+              event.dataTransfer.setData("text/plain", artifact.title);
+            }}
             icon={<DocumentBulletListRegular />}
             onClick={() => onOpen(artifact.artifactId)}
           >

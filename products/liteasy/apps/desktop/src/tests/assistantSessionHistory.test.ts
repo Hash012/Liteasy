@@ -147,6 +147,20 @@ test("keeps all pages of one thin-reading artifact in its paper-bound session", 
   })).toBe("artifact:thin-reading:artifact-paper-attention");
 });
 
+test("retains earlier reading layers and replaces only the updating task", () => {
+  const root = { id: "root-task", artifactId: "reading", type: "thin_reading" as const,
+    message: "概览已完成", status: "completed" as const, stage: "completed" as const, progress: 100 };
+  const branch = { ...root, id: "branch-task", message: "正在解释术语", status: "running" as const,
+    stage: "thin_reading_generating_branch" as const, progress: 30 };
+  const first = createArtifactTaskSession(root);
+  const second = createArtifactTaskSession(branch, first);
+  const third = createArtifactTaskSession({ ...branch, progress: 70 }, second);
+  expect(third.id).toBe(first.id);
+  expect(third.messages.filter((message) => message.artifactTask).map((message) => message.artifactTask?.id)).toEqual([root.id, branch.id]);
+  expect(third.status).toBe("running");
+  expect(third.artifactTaskId).toBe(branch.id);
+});
+
 test("projects safe artifact failures into the AI generation session", () => {
   const failed = createArtifactTaskSession({
     failure: {

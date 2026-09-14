@@ -114,6 +114,23 @@ test("exposes public reasoning separately from the streamed answer", () => {
   expect(delta).toHaveBeenCalledOnce();
 });
 
+test("preserves the final streamed delta before reporting the output limit", () => {
+  const reasoning = vi.fn();
+  const delta = vi.fn();
+  const stream = createDirectModelStream("openai", delta, reasoning);
+  stream.push(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"正文草稿","reasoning_content":"分析参考"},"finish_reason":"length"}]}\n\n'));
+  expect(() => stream.finish()).toThrow("长度上限");
+  expect(delta).toHaveBeenCalledWith("正文草稿", "正文草稿");
+  expect(reasoning).toHaveBeenCalledWith("分析参考", "分析参考");
+});
+
+test("preserves non-streamed public reasoning when the output budget is exhausted", async () => {
+  const onReasoningDelta = vi.fn();
+  const client = createDirectModelClient(openai, async () => JSON.stringify({ choices: [{ message: { content: "", reasoning_content: "分析参考" }, finish_reason: "length" }] }));
+  await expect(client({ ...input, onReasoningDelta })).rejects.toThrow("长度上限");
+  expect(onReasoningDelta).toHaveBeenCalledWith("分析参考", "分析参考");
+});
+
 test("shows Anthropic public thinking and ignores redacted blocks and signatures", () => {
   const reasoning = vi.fn();
   const stream = createDirectModelStream("anthropic", vi.fn(), reasoning);

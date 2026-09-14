@@ -25,7 +25,7 @@ export async function stageImage(
     throw new Error(
       "图片格式与文件内容不一致，仅支持 PNG、JPEG、GIF 和 WebP。",
     );
-  const digest = await crypto.subtle.digest("SHA-256", bytes.slice().buffer);
+  const digest = await crypto.subtle.digest("SHA-256", bytes.slice());
   const sha256 = Array.from(new Uint8Array(digest), (b) =>
     b.toString(16).padStart(2, "0"),
   ).join("");

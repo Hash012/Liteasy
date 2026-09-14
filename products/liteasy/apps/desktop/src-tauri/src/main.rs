@@ -9,6 +9,7 @@ mod assistant_history;
 mod desktop_identity;
 mod direct_model;
 mod local_library;
+mod note_files;
 mod object_store;
 mod paper_cache;
 mod paper_services;
@@ -37,6 +38,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            note_files::note_files_dispatch,
             direct_model::has_direct_model_key,
             direct_model::save_direct_model_key,
             direct_model::delete_direct_model_key,

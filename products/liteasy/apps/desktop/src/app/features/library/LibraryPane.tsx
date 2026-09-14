@@ -1,3 +1,4 @@
+import { ARTIFACT_CONTEXT_MIME } from "../object-transfer/contextTransfer";
 import {
   useEffect,
   useMemo,
@@ -987,6 +988,14 @@ export function LibraryPane({
                     icon={<DocumentTextRegular />}
                     title={child.meta ? `${child.label} · ${child.meta}` : child.label}
                     aria-label={`打开论文文件：${child.label}`}
+                    draggable={child.kind === "artifact"}
+                    onDragStart={(event) => {
+                      if (child.kind !== "artifact") return;
+                      event.stopPropagation();
+                      event.dataTransfer.effectAllowed = "copy";
+                      event.dataTransfer.setData(ARTIFACT_CONTEXT_MIME, child.id);
+                      event.dataTransfer.setData("text/plain", child.label);
+                    }}
                     onClick={() => onOpenPaperChild?.(child, sourcePaper)}
                   >{child.label}</Button>
                 </li>

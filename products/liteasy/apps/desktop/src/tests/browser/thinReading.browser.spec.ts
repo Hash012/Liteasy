@@ -334,11 +334,11 @@ test("keeps generation progress visible and prevents duplicate branch starts", a
   await page.setViewportSize({ height: 900, width: 1440 });
   await mountThinReadingBrowserFixture(page, { generationProgress: true });
 
-  await expect(page.getByText("核验薄读证据", { exact: true })).toBeVisible();
-  await expect(page.getByText("正在核验句级证据映射", { exact: true })).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "LLM 实时工作窗口" })).toBeVisible();
-  const progressbar = page.getByRole("progressbar", { name: "薄读 Agent 进度" });
-  await expect(progressbar).toHaveAttribute("aria-valuenow", "64");
+  await expect(page.getByRole("status")).toContainText("生成中");
+  await expect(page.getByRole("button", { name: "详情", exact: true })).toBeDisabled();
+  await expect(page.getByText("核验薄读证据", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("正在核验句级证据映射", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("complementary", { name: "LLM 实时工作窗口" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "查看已生成的下一层页面" })).toBeDisabled();
 });
 

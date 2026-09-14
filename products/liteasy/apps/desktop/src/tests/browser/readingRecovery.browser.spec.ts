@@ -31,6 +31,7 @@ test("keeps a failed thin-reading draft across reload and resumes with the origi
   await page.getByLabel("选择 das24a.pdf").check();
   await page.getByRole("button", { name: "锁定选中文献集", exact: true }).click();
   await page.getByRole("button", { name: "薄读", exact: true }).click();
+  await page.locator(".thin-reading__generation-status").getByRole("button", { name: "详情", exact: true }).click();
   await expect(page.getByRole("button", { name: "继续薄读", exact: true })).toBeVisible({ timeout: 30_000 });
   expect(prompts).toHaveLength(3);
   await page.getByRole("button", { name: "分析 模型公开推理", exact: true }).click();
@@ -93,4 +94,83 @@ test("configures MinerU, switches to reading mode, and restores the extracted ma
   await expect(page.getByLabel("左边栏导航").getByRole("toolbar", { name: "阅读区布局控制" })).toBeVisible();
   await expect(page.getByLabel("PDF 标题栏")).toHaveCount(0);
   await page.screenshot({ path: "test-results/mineru-reading-mode.png", fullPage: true });
+});
+
+test("repairs a reasoning response with an empty summary into readable thin-reading prose", async ({ page }) => {
+  test.setTimeout(90_000);
+  const requests: Array<{ prompt: string; responseFormat: unknown }> = [];
+  await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
+  await page.route("https://api.openai.com/v1/chat/completions", async (route) => {
+    const body = route.request().postDataJSON();
+    const prompt = body.messages.map((message: { content: string }) => message.content).join("\n");
+    let content = "连接测试响应。";
+    if (!prompt.includes("确认你已准备好")) {
+      requests.push({ prompt, responseFormat: body.response_format });
+      content = requests.length === 1 ? '{"summary":"","paperEvidence":[],"omittedSections":[],"recommendedFigures":[]}'
+        : "论文通过外部记忆保存历史信息。理解实验结果时需要结合原文给出的任务与评价条件。";
+    }
+    await route.fulfill({ contentType: "text/event-stream", body:
+      `data: ${JSON.stringify({ choices: [{ delta: { reasoning_content: "已有分析参考：需要解释外部记忆的方法。" } }] })}\n\n` +
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\ndata: [DONE]\n\n` });
+  });
+  await page.goto("/?pdf-highlight-fixture#importable");
+  await page.getByRole("button", { name: "设置", exact: true }).click();
+  await page.getByLabel("AI 接入方式").selectOption("direct");
+  await page.getByLabel("模型 ID", { exact: true }).fill("recovery-model");
+  await page.getByLabel("API key", { exact: true }).fill("browser-only-key");
+  await page.getByRole("button", { name: "保存并测试", exact: true }).click();
+  await expect(page.getByLabel("测试响应")).toHaveValue("连接测试响应。");
+  await page.getByRole("button", { name: "文献库", exact: true }).click();
+  await page.getByLabel("选择 das24a.pdf").check();
+  await page.getByRole("button", { name: "锁定选中文献集", exact: true }).click();
+  await page.getByRole("button", { name: "薄读", exact: true }).click();
+  await expect(page.locator(".thin-reading")).toContainText("论文通过外部记忆保存历史信息。", { timeout: 45_000 });
+  expect(requests).toHaveLength(2);
+  expect(requests[1].prompt).toContain("已有分析参考：需要解释外部记忆的方法。");
+  expect(requests[1].responseFormat).toBeUndefined();
+  await expect(page.locator(".thin-reading")).toContainText("论文通过外部记忆保存历史信息。");
+  await expect(page.getByRole("button", { name: "继续薄读", exact: true })).toHaveCount(0);
+});
+
+test("generates compact Markdown layers and deepens a triple-bracket term with one request per layer", async ({ page }) => {
+  test.setTimeout(90_000);
+  const prompts: string[] = [];
+  await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
+  await page.route("https://api.openai.com/v1/chat/completions", async (route) => {
+    const body = route.request().postDataJSON();
+    const prompt = body.messages.map((message: { content: string }) => message.content).join("\n");
+    let content = "连接测试响应。";
+    if (!prompt.includes("确认你已准备好")) {
+      prompts.push(prompt);
+      content = JSON.stringify({
+        summary: prompts.length === 1
+          ? "## 当前层概览\n\n论文使用 [[[外部记忆]]] 保留历史信息。计算形式为 $y = Wx$。\n\n- 只说明核心机制\n- 实验条件需对照原文"
+          : "## 外部记忆的工作方式\n\n当前层只解释读取已有状态的方法，后续可以展开 [[[写入规则]]]。",
+        paperEvidence: [], omittedSections: [], recommendedFigures: []
+      });
+    }
+    await route.fulfill({ contentType: "text/event-stream", body:
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\ndata: [DONE]\n\n` });
+  });
+  await page.goto("/?pdf-highlight-fixture#importable");
+  await page.getByRole("button", { name: "设置", exact: true }).click();
+  await page.getByLabel("AI 接入方式").selectOption("direct");
+  await page.getByLabel("模型 ID", { exact: true }).fill("compact-reading-model");
+  await page.getByLabel("API key", { exact: true }).fill("browser-only-key");
+  await page.getByRole("button", { name: "保存并测试", exact: true }).click();
+  await expect(page.getByLabel("测试响应")).toHaveValue("连接测试响应。");
+  await page.getByRole("radio", { name: "严谨", exact: true }).check();
+  await page.getByRole("button", { name: "文献库", exact: true }).click();
+  await page.getByLabel("选择 das24a.pdf").check();
+  await page.getByRole("button", { name: "锁定选中文献集", exact: true }).click();
+  await page.getByRole("button", { name: "薄读", exact: true }).click();
+  await expect(page.locator(".thin-reading").getByRole("heading", { name: "当前层概览", exact: true })).toBeVisible({ timeout: 45_000 });
+  await expect(page.locator(".thin-reading .katex")).toBeVisible();
+  expect(prompts).toHaveLength(1);
+  expect(prompts[0]).toContain("350–600");
+  await page.getByRole("button", { name: "深入阅读“外部记忆”", exact: true }).click();
+  await expect(page.locator(".thin-reading").getByRole("heading", { name: "外部记忆的工作方式", exact: true })).toBeVisible({ timeout: 30_000 });
+  expect(prompts).toHaveLength(2);
+  expect(prompts[1]).toContain("200–400");
+  expect(prompts[1]).toContain('"excerpt":"外部记忆"');
 });

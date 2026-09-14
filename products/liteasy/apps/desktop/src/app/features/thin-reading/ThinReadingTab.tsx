@@ -58,9 +58,10 @@ import type { MultimodalVisualizationCapability } from "../account/accountCapabi
 import type { ThinReadingVisualizationStatus } from "../artifacts/artifact.types";
 import { ThinReadingVisualizationRegion } from "./ThinReadingVisualizationRegion";
 import { ThinReadingSourceFigures, type ThinReadingSourceFigure } from "./ThinReadingSourceFigures";
+import { ThinReadingMarkdown } from "./ThinReadingMarkdown";
 import { ThinReadingGraphView } from "./ThinReadingGraphView";
 import type { ThinReadingGraphMode } from "./ThinReadingGraphView";
-import { AgentLiveWorkPanel } from "../agent-work/AgentLiveWorkPanel";
+import { ThinReadingGenerationStatus } from "./ThinReadingGenerationStatus";
 import "./thinReading.css";
 import { SaveArtifactPageButton } from "../notes/SaveArtifactPageButton";
 import { notifyNotesSourcesChanged } from "../notes/notesPort";
@@ -101,6 +102,7 @@ export type ThinReadingTabProps = {
     source: ThinReadingBranchSource;
   }) => Promise<void>;
   onOpenExternalFullText?: (source: ThinReadingExternalSource) => Promise<void>;
+  onOpenGenerationDetails?: () => void;
   onOpenEvidence?: (request: ThinReadingEvidenceOpenRequest) => void;
   onOpenVisualization?: (data: VisualizationTabData) => void;
   onPromoteExternalPaperToLibrary?: (source: ThinReadingExternalSource) => Promise<void>;
@@ -223,26 +225,20 @@ function branchSourceLabel(
   return sourceLabel(source, labels);
 }
 
-function splitSummarySentences(summary: string) {
-  const matches = summary.replace(/\s+/g, " ").trim().match(/[^。！？!?]+[。！？!?]?/g) ?? [];
-  return matches.map((sentence) => sentence.trim()).filter(Boolean);
-}
-
 function getSummarySentences(
   node: ThinReadingDocument["nodes"][string]
 ): readonly ThinReadingSummarySentence[] {
   if (node.evidence.summarySentences && node.evidence.summarySentences.length > 0) {
     return node.evidence.summarySentences;
   }
-  const sentences = splitSummarySentences(node.summary);
-  return (sentences.length > 0 ? sentences : [node.summary]).map((sentence, index) => ({
+  return [{
     // Legacy artifacts lack a sentence-level source mapping; never infer one from a node-level claim.
     evidenceIds: [],
     externalKnowledge: [],
-    id: `${node.id}-summary-sentence-${index}`,
+    id: `${node.id}-summary-sentence-0`,
     status: "unsupported",
-    text: sentence
-  }));
+    text: node.summary
+  }];
 }
 
 type SummaryTextSegment = {
@@ -283,7 +279,6 @@ export function splitThinReadingSummaryTextByAnchors(input: {
 
 export function ThinReadingTab({
   artifactId,
-  developerDiagnostics = false,
   communityRecommendationState,
   document,
   generationProgress,
@@ -295,6 +290,7 @@ export function ThinReadingTab({
   taskFailureMessage,
   onGenerateBranch,
   onOpenExternalFullText,
+  onOpenGenerationDetails,
   onOpenEvidence,
   onOpenVisualization,
   onPromoteExternalPaperToLibrary,
@@ -335,7 +331,6 @@ export function ThinReadingTab({
   const [generating, setGenerating] = useState(false);
   const [retryingInterruptedBranch, setRetryingInterruptedBranch] = useState(false);
   const [generationError, setGenerationError] = useState("");
-  const [generationNotice, setGenerationNotice] = useState("");
   const [activeAnchorId, setActiveAnchorId] = useState<string | null>(null);
   const [recommendationStage, setRecommendationStage] = useState<RecommendationStage>("article");
   const [activeSourceId, setActiveSourceId] = useState<string | null>(null);
@@ -659,12 +654,10 @@ export function ThinReadingTab({
 
   async function generateBranch(source: ThinReadingBranchSource) {
     if (generationLockRef.current || generationInProgress) {
-      setGenerationNotice("已有一项薄读生成正在运行，请等待它完成，避免产生重复内容。");
       return;
     }
     generationLockRef.current = true;
     setGenerationError("");
-    setGenerationNotice("请求已提交。薄读 Agent 正在工作，请勿重复点击；可以继续阅读当前页面。");
     try {
       const existingChild = findThinReadingChildBySource(document, activeNode.id, source);
       if (existingChild) {
@@ -685,7 +678,6 @@ export function ThinReadingTab({
     } finally {
       setGenerating(false);
       generationLockRef.current = false;
-      setGenerationNotice("");
     }
   }
 
@@ -973,9 +965,6 @@ export function ThinReadingTab({
     : recommendationStage === "marks"
       ? "打开页级关联图"
       : "返回正文";
-  const visibleGenerationProgress = generationProgress ?? (generating
-    ? { message: generationNotice || labels.generating, partialAnswer: undefined, progress: null, runKey: "local-thin-reading", stageLabel: "薄读 Agent 已启动" }
-    : null);
   const visibleGenerationError = generationError || taskFailureMessage;
   const ancestorPath = [] as Array<ThinReadingDocument["nodes"][string]>;
   const visitedNodeIds = new Set<string>();
@@ -1009,6 +998,12 @@ export function ThinReadingTab({
           <SaveArtifactPageButton artifactId={artifactId} pageId={activeNode.id}
             title={activeNode.title} text={activeNode.summary} paperIds={document.paperIds} />
           {headerAction}
+          {!generationInProgress && onOpenGenerationDetails ? (
+            <Button appearance="subtle" onClick={onOpenGenerationDetails} size="small"
+              title={locale === "zh" ? "在 AI 对话中查看生成详情" : "View generation details in the AI conversation"}>
+              {locale === "zh" ? "详情" : "Details"}
+            </Button>
+          ) : null}
           <span className="thin-reading__language">{labels.languageName}</span>
           <Tooltip content="控制生成可视化" positioning="below" relationship="description">
             <span className="thin-reading__visualization-toggle">
@@ -1071,22 +1066,8 @@ export function ThinReadingTab({
         ))}
       </div>
 
-      {visibleGenerationProgress ? (
-        developerDiagnostics ? (
-          <AgentLiveWorkPanel
-            floating
-            markdown={visibleGenerationProgress.partialAnswer}
-            message={generationNotice || visibleGenerationProgress.message}
-            progress={visibleGenerationProgress.progress}
-            progressLabel={labels.generationProgress}
-            runKey={visibleGenerationProgress.runKey}
-            stageLabel={visibleGenerationProgress.stageLabel}
-          />
-        ) : (
-          <div aria-live="polite" className="thin-reading__generation-status" role="status">
-            {labels.generatingPrivately}
-          </div>
-        )
+      {generationInProgress ? (
+        <ThinReadingGenerationStatus floating locale={locale} onOpenDetails={onOpenGenerationDetails} />
       ) : null}
 
       {graphMode === null ? (
@@ -1189,46 +1170,23 @@ export function ThinReadingTab({
               data-thin-reading-layer-body
               data-testid="thin-reading-summary"
             >
-              <p
-                className="thin-reading__summary-paragraph"
-                data-thin-reading-annotation-target="node_summary"
-                data-thin-reading-layer-body
-              >
-                {summarySentences.map((sentence) => {
-                  return (
-                      <span
-                        className="thin-reading__summary-sentence"
-                        data-thin-reading-summary-evidence-ids={sentence.evidenceIds.join(",")}
-                        data-thin-reading-summary-external-source-ids={sentence.externalKnowledge.join(",")}
-                        key={sentence.id}
-                      >
-                        {splitThinReadingSummaryTextByAnchors({ anchors, sentence }).map((segment, segmentIndex) => (
-                          segment.anchor ? (
-                            <mark
-                              aria-label={marksVisible ? `查看“${segment.anchor.text}”关联论文` : undefined}
-                              aria-pressed={marksVisible ? activeAnchor?.id === segment.anchor.id : undefined}
-                              className={`thin-reading__anchor${marksVisible ? "" : " is-hidden"}${activeAnchor?.id === segment.anchor.id ? " is-active" : ""}`}
-                              data-anchor-id={segment.anchor.id}
-                              data-thin-reading-anchor-id={segment.anchor.id}
-                              data-thin-reading-summary-external-source-ids={segment.anchor.externalSourceIds.join(",")}
-                              key={segment.anchor.id}
-                              onClick={marksVisible ? () => toggleActiveAnchor(segment.anchor!.id) : undefined}
-                              onKeyDown={marksVisible ? (event) => {
-                                if (event.key === "Enter" || event.key === " ") {
-                                  event.preventDefault();
-                                  toggleActiveAnchor(segment.anchor!.id);
-                                }
-                              } : undefined}
-                              role={marksVisible ? "button" : undefined}
-                              tabIndex={marksVisible ? 0 : -1}
-                              title={marksVisible
-                                ? `${segment.anchor.text} · ${Math.round(segment.anchor.importance * 100)}%`
-                                : undefined}
-                            >
-                              {segment.text}
-                            </mark>
-                          ) : <span key={`${sentence.id}-text-${segmentIndex}`}>{segment.text}</span>
-                        ))}
+              <ThinReadingMarkdown
+                activeAnchorId={activeAnchor?.id}
+                anchors={anchors}
+                generating={generationInProgress}
+                locale={locale}
+                marksVisible={marksVisible}
+                onDeepen={(excerpt, sentence) => void generateBranch({
+                  kind: "selected_text",
+                  excerpt,
+                  ...(sentence.evidenceIds.length > 0 ? { evidenceIds: sentence.evidenceIds } : {}),
+                  ...(sentence.externalKnowledge.length > 0 ? { externalSourceIds: sentence.externalKnowledge } : {}),
+                  requestedOutput: "explanation"
+                })}
+                onSelectAnchor={toggleActiveAnchor}
+                sentences={summarySentences}
+                summary={activeNode.summary}
+                renderReferences={(sentence) => <>
                     {sentence.evidenceIds.map((evidenceId, evidenceIndex) => {
                       const span = paperEvidenceSpans.find((candidate) => candidate.id === evidenceId);
                       const canOpenEvidence = Boolean(
@@ -1289,10 +1247,8 @@ export function ThinReadingTab({
                         </sup>
                       );
                     })}
-                      </span>
-                  );
-                })}
-              </p>
+                </>}
+              />
             </div>
           </section>
           {activeLegacyEvidence ? (

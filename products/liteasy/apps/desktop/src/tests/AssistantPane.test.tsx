@@ -13,6 +13,7 @@ import type { ModelTransport } from "../app/features/models/modelHttpClient";
 import type { ModelAuditTransport } from "../app/features/models/modelAuditClient";
 
 const testQuestions = [
+  "解释这一段",
   "总结这篇论文的核心方法",
   "这篇论文讲了什么？",
   "这篇综述如何定义向量数据库系统？",
@@ -115,108 +116,76 @@ test("shows the unified composer before a conversation starts", async () => {
   expect(await screen.findByText(/云端回答：总结这篇论文的核心方法/)).toBeInTheDocument();
 });
 
-test("shows thin-reading progress in the current conversation for regular accounts", async () => {
-  const baseProps = {
-    onGenerateArtifact: () => "unused",
-    selectedSetStatus: {
-      importedCount: 1,
-      selectedCount: 1,
-      selectionLocked: true
-    }
-  };
-  render(
-    <AssistantPane
-      {...baseProps}
-      artifactTasks={[{
-        id: "artifact-task-thin-root",
-        message: "正在规划薄读路径与证据范围",
-        partialAnswer: "尚未审计的薄读正文",
-        progress: 43,
-        stage: "thin_reading_planning",
-        status: "running",
-        type: "thin_reading"
-      }]}
-    />
-  );
-
-  await waitFor(() => {
-    expect(screen.getByLabelText("当前会话")).toHaveTextContent("普通对话新对话");
-  });
+test.each([false, true])("creates a background thin-reading session without changing the conversation (diagnostics=%s)", async (developerDiagnostics) => {
+  const task = { id: "artifact-task-thin-root", message: "正在规划薄读路径与证据范围",
+    partialAnswer: "尚未审计的薄读正文", progress: 43, stage: "thin_reading_planning" as const,
+    status: "running" as const, type: "thin_reading" as const };
+  const props = { developerDiagnostics, onGenerateArtifact: () => "unused",
+    selectedSetStatus: { importedCount: 1, selectedCount: 1, selectionLocked: true } };
+  const { rerender } = render(<AssistantPane {...props} artifactTasks={[]} />);
+  const user = userEvent.setup();
+  const input = screen.getByPlaceholderText("输入你的问题或命令");
+  await user.type(input, "当前对话的草稿");
+  rerender(<AssistantPane {...props} artifactTasks={[task]} />);
+  await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("普通对话新对话"));
+  expect(input).toHaveValue("当前对话的草稿");
+  expect(screen.queryByText(/正在规划薄读路径与证据范围/)).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "历史" }));
+  expect(screen.getByRole("button", { name: "打开会话：生成：薄读" })).toBeInTheDocument();
+  rerender(<AssistantPane {...props} artifactTasks={[task]}
+    artifactSessionOpenRequest={{ requestId: "details-1", taskId: task.id }} />);
+  await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("产物生成生成：薄读"));
   expect(screen.getAllByText(/正在规划薄读路径与证据范围/).length).toBeGreaterThan(0);
   expect(screen.getByRole("button", { name: "中断薄读" })).toBeInTheDocument();
   expect(screen.getByText(/尚未审计的薄读正文/)).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "分析 正文草稿" })).toBeInTheDocument();
-
-  await userEvent.setup().click(screen.getByRole("button", { name: "历史" }));
-  expect(screen.queryByRole("button", { name: "打开会话：生成：薄读" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "历史" }));
+  await user.click(screen.getByRole("button", { name: "打开会话：新对话" }));
+  expect(input).toHaveValue("当前对话的草稿");
+  // Assigning the artifact ID and changing diagnostic access must retain this session.
+  rerender(<AssistantPane {...props} developerDiagnostics={!developerDiagnostics}
+    artifactTasks={[{ ...task, artifactId: "thin-paper", message: "正在核验薄读证据" }]}
+    artifactSessionOpenRequest={{ requestId: "details-2", taskId: task.id }} />);
+  await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("产物生成生成：薄读"));
+  expect(screen.getAllByText(/正在核验薄读证据/).length).toBeGreaterThan(0);
+  await user.click(screen.getByRole("button", { name: "新建" }));
+  rerender(<AssistantPane {...props} artifactTasks={[{ ...task, artifactId: "thin-paper", progress: 70 }]}
+    artifactSessionOpenRequest={{ requestId: "details-2", taskId: task.id }} />);
+  await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("普通对话"));
+  expect(screen.queryByRole("button", { name: "中断薄读" })).not.toBeInTheDocument();
 });
 
-test("shows thin-reading generation sessions to server-authorized developer accounts", async () => {
-  const baseProps = {
-    developerDiagnostics: true,
-    onGenerateArtifact: () => "unused",
-    selectedSetStatus: {
-      importedCount: 1,
-      selectedCount: 1,
-      selectionLocked: true
-    }
-  };
-  const { rerender } = render(
-    <AssistantPane
-      {...baseProps}
-      artifactTasks={[{
-        id: "artifact-task-thin-root",
-        message: "正在规划薄读路径与证据范围",
-        progress: 43,
-        stage: "thin_reading_planning",
-        status: "running",
-        type: "thin_reading"
-      }]}
-    />
-  );
+test("preserves a question asked from generation details when task progress changes", async () => {
+  const task = { id: "task-details", artifactId: "thin-paper", type: "thin_reading" as const,
+    message: "正在生成", status: "running" as const, stage: "generating_answer" as const, progress: 30 };
+  const props = { onGenerateArtifact: () => "unused", artifactSessionOpenRequest: { requestId: "open", taskId: task.id },
+    selectedSetStatus: { importedCount: 1, selectedCount: 1, selectionLocked: true } };
+  const { rerender } = render(<AssistantPane {...props} artifactTasks={[task]} />);
+  await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("生成：薄读"));
+  const user = userEvent.setup();
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "解释这一段");
+  await user.click(screen.getByRole("button", { name: "发送", exact: true }));
+  await screen.findByText(/云端回答：解释这一段/);
+  expect(screen.getByLabelText("当前会话")).toHaveTextContent("普通对话");
+  rerender(<AssistantPane {...props} artifactTasks={[{ ...task, progress: 60 }]} />);
+  expect(screen.getAllByText("解释这一段", { exact: true }).length).toBeGreaterThan(0);
+  expect(screen.getByText(/云端回答：解释这一段/)).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "历史" }));
+  await user.click(screen.getByRole("button", { name: "打开会话：生成：薄读" }));
+  await user.click(screen.getByRole("button", { name: "历史" }));
+  await user.click(screen.getByRole("button", { name: "打开会话：解释这一段" }));
+  expect(screen.getByText(/云端回答：解释这一段/)).toBeInTheDocument();
+});
 
-  await waitFor(() => {
-    expect(screen.getByLabelText("当前会话")).toHaveTextContent("产物生成生成：薄读");
-  });
-  expect(screen.getByText(/正在规划薄读路径与证据范围/)).toBeInTheDocument();
-
-  rerender(
-    <AssistantPane
-      {...baseProps}
-      artifactTasks={[{
-        id: "artifact-task-thin-root",
-        message: "正在核验薄读证据",
-        progress: 73,
-        stage: "thin_reading_validating",
-        status: "running",
-        type: "thin_reading"
-      }]}
-    />
-  );
-
-  await waitFor(() => {
-    expect(screen.getAllByText(/正在核验薄读证据/).length).toBeGreaterThan(0);
-  });
-
-  rerender(
-    <AssistantPane
-      {...baseProps}
-      developerDiagnostics={false}
-      artifactTasks={[{
-        id: "artifact-task-thin-root",
-        message: "正在核验薄读证据",
-        progress: 73,
-        stage: "thin_reading_validating",
-        status: "running",
-        type: "thin_reading"
-      }]}
-    />
-  );
-
-  await waitFor(() => {
-    expect(screen.getByLabelText("当前会话")).toHaveTextContent("普通对话新对话");
-  });
-  expect(screen.getAllByText(/正在核验薄读证据/).length).toBeGreaterThan(0);
+test("keeps the cancel target on a resumed older layer after a newer layer completed", async () => {
+  const older = { id: "old-layer", artifactId: "thin-paper", type: "thin_reading" as const,
+    message: "继续生成旧层", status: "running" as const, stage: "generating_answer" as const, progress: 30 };
+  const newer = { ...older, id: "new-layer", message: "新层已完成", status: "completed" as const, progress: 100 };
+  const cancel = vi.fn(async () => "已中断");
+  render(<AssistantPane onGenerateArtifact={() => "unused"} onCancelArtifactTask={cancel}
+    artifactSessionOpenRequest={{ requestId: "details", taskId: older.id }} artifactTasks={[newer, older]}
+    selectedSetStatus={{ importedCount: 1, selectedCount: 1, selectionLocked: true }} />);
+  await userEvent.setup().click(await screen.findByRole("button", { name: "终止", exact: true }));
+  expect(cancel).toHaveBeenCalledWith(older.id);
 });
 
 test("keeps thin-reading branch progress on the active reading page", async () => {

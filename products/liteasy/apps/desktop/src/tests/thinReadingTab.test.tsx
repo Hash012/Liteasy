@@ -354,8 +354,56 @@ describe("ThinReadingTab", () => {
     expect(screen.getByRole("button", { name: "深入了解局限" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "回到上一层：总述" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "查看已生成的下一层页面" })).toBeDisabled();
-    expect(container.querySelectorAll("[data-testid='thin-reading-summary'] > p")).toHaveLength(1);
+    expect(container.querySelectorAll("[data-testid='thin-reading-summary'] .thin-reading__markdown > p")).toHaveLength(1);
     expect(container.querySelector(".thin-reading__summary-unit")).toBeNull();
+  });
+
+  test("opens a marked term directly as a focused child and reuses the generated layer", async () => {
+    const fixture = createThinReadingFixture();
+    const summary = "论文使用 [[[自注意力]]] 建模。";
+    const root = createThinReadingDocument({
+      ...fixture,
+      rootSeed: {
+        ...fixture.rootSeed,
+        summary,
+        evidence: {
+          ...fixture.rootSeed.evidence,
+          summarySentences: [{
+            ...fixture.rootSeed.evidence.summarySentences![0],
+            text: summary
+          }]
+        }
+      }
+    });
+    const source = {
+      kind: "selected_text" as const,
+      excerpt: "自注意力",
+      evidenceIds: ["evidence-attention-self-attention"],
+      requestedOutput: "explanation" as const
+    };
+    const onGenerateBranch = vi.fn(async () => undefined);
+    const onUpdateDocument = vi.fn();
+    const props = {
+      artifactId: root.artifactId, document: root, onGenerateBranch, onUpdateDocument,
+      papers: fixture.papers
+    };
+    const { rerender } = render(<ThinReadingTab {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "深入阅读“自注意力”" }));
+    await waitFor(() => expect(onGenerateBranch).toHaveBeenCalledWith({
+      artifactId: root.artifactId, document: root, source
+    }));
+    const withChild = advanceThinReadingDocument(root, {
+      parentNodeId: root.rootNodeId,
+      seed: fixture.rootSeed,
+      source,
+      title: "自注意力"
+    });
+    rerender(<ThinReadingTab {...props} document={{ ...withChild, activeNodeId: root.rootNodeId }} />);
+    fireEvent.click(screen.getByRole("button", { name: "深入阅读“自注意力”" }));
+    await waitFor(() => expect(onUpdateDocument).toHaveBeenCalledWith(root.artifactId, expect.objectContaining({
+      activeNodeId: withChild.activeNodeId
+    })));
+    expect(onGenerateBranch).toHaveBeenCalledTimes(1);
   });
 
   test("offers relationship-network and mind-map hierarchy views without a top Graph View button", () => {
@@ -735,9 +783,8 @@ describe("ThinReadingTab", () => {
     expect(screen.getByRole("button", { name: "Collapse Intuecho recommendations" })).toBeInTheDocument();
     expect(screen.getByText("Connect Intuecho to view community shared annotations")).toBeInTheDocument();
     expect(screen.getByText("No annotations yet")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Generating the thin-reading text. It will appear on this page when ready."
-    );
+    expect(screen.getByRole("status")).toHaveTextContent("Generating");
+    expect(screen.getByRole("button", { name: "Details" })).toBeDisabled();
     expect(screen.queryByText("Internal generation stage")).not.toBeInTheDocument();
     expect(screen.queryByText("Unreviewed streamed prose")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Explore Method" })).toBeInTheDocument();
@@ -1067,7 +1114,8 @@ describe("ThinReadingTab", () => {
     fireEvent.click(command);
 
     expect(screen.queryByLabelText("快捷命令列表")).not.toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("正在生成薄读正文，完成后将在当前页面显示。");
+    expect(screen.getByRole("status")).toHaveTextContent("生成中");
+    expect(screen.getByRole("button", { name: "详情" })).toBeDisabled();
     expect(screen.queryByLabelText("LLM 实时工作窗口")).not.toBeInTheDocument();
     expect(screen.queryByText(/请求已提交.*请勿重复点击/)).not.toBeInTheDocument();
     expect(onGenerateBranch).toHaveBeenCalledTimes(1);

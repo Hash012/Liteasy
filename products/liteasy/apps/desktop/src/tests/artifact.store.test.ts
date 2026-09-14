@@ -1,5 +1,15 @@
 import { createArtifactStore } from "../app/features/artifacts/artifact.store";
 
+test("opens a pending reading without publishing it to the library", () => {
+  const store = createArtifactStore();
+  const preview = { artifactId: "reading-pending", title: "薄读", type: "thin_reading" as const };
+  store.openPreviewTab(preview);
+  expect(store.getOpenTabs()).toEqual([preview]);
+  expect(store.getCatalog()).toEqual([]);
+  store.closeTab(preview.artifactId);
+  expect(store.getOpenTabs()).toEqual([]);
+});
+
 test("completes a mind-map artifact task and opens a new tab", () => {
   const store = createArtifactStore();
   const taskId = store.createTask("mindmap");
