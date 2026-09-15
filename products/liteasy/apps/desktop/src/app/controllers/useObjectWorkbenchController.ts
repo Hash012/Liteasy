@@ -6,7 +6,7 @@ import { useBoardFileController } from "./useBoardFileController";
 import { loadUserPaperArtifact } from "../features/library/userPaperArtifactClient";
 import { normalizePaperFulltext } from "../features/pdf/paperFulltextStore";
 import { preparePdfAnnotationCapture } from "../features/pdf/pdfAnnotationCapture";
-import { PDF_ANNOTATION_REVIEW_PROMPT } from "../features/pdf/pdfAnnotationReview";
+import { PDF_ANNOTATION_REVIEW_PROMPT } from "../features/pdf/pdfAnnotationReviewContent";
 import { NOTES_REFERENCE_MIME } from "../features/notes/notesPort";
 import { isTauri } from "@tauri-apps/api/core";
 import {

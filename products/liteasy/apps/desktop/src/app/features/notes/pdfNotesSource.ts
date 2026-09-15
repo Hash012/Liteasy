@@ -1,4 +1,4 @@
-import { pdfAnnotationReviewMarkdown } from "../pdf/pdfAnnotationReview";
+import { pdfAnnotationReviewMarkdown } from "../pdf/pdfAnnotationReviewContent";
 import { resolvePaperIdentity } from "../paper-identity/paperIdentity";
 import {
   isUserPaperArtifactStoreAvailable,

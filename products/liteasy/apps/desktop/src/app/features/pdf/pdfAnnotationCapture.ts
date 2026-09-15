@@ -1,5 +1,5 @@
 import type { PdfAnnotationCaptureInput } from "../objects/objectWorkbenchPort";
-import { pdfAnnotationReviewMarkdown } from "./pdfAnnotationReview";
+import { pdfAnnotationReviewMarkdown } from "./pdfAnnotationReviewContent";
 import type { PdfAnnotationRect } from "./pdfAnnotationStorage";
 import { pdfInkGroupBounds, pdfInkStrokes } from "./pdfInk";
 
