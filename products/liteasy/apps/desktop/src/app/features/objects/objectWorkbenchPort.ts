@@ -2,7 +2,10 @@ import { createContext, useContext } from "react";
 import type { Paper } from "../workspace/workspace.types";
 import type { ObjectRef } from "./object.types";
 import type { ContextRef } from "../context/objectContext";
-import type { PdfAnnotationRect, PdfAnnotationV2 } from "../pdf/pdfAnnotationStorage";
+import type {
+  PdfAnnotationRect,
+  PdfAnnotationV2,
+} from "../pdf/pdfAnnotationStorage";
 export type PdfCaptureInput = {
   paper: Paper;
   page: number;
@@ -16,19 +19,49 @@ export type PdfAnnotationCaptureInput = {
   pageAspectRatio?: number;
 };
 export type MessageCaptureInput = {
+  paperAnchors?: import("../paper-anchors/paperAnchorEntity").PaperAnchorEntity[];
   messageId: string;
   text: string;
   excerpt: string;
   partial: boolean;
 };
 export type ObjectWorkbenchPort = {
-  resolveBoardFile?(file: import("../note-files/noteFileService").NoteFileSnapshot): Promise<ObjectRef>;
-  receiveContextDrop?(data: Pick<DataTransfer, "getData">): Promise<import("../object-transfer/contextTransfer").ResourceContextAttachment[]>;
+  openPaperAnchor?(anchor: import("../paper-anchors/paperAnchorEntity").PaperAnchorEntity): Promise<void>;
+  dragBoardFile?(
+    file: import("../boards/boardFileFormat").BoardFileSnapshot,
+    data: DataTransfer,
+  ): void;
+  resolveBoardFile?(
+    file: import("../boards/boardFileFormat").BoardFileSnapshot,
+  ): Promise<ObjectRef>;
+  openBoardFile?(
+    file: import("../boards/boardFileFormat").BoardFileSnapshot,
+  ): Promise<void>;
+  serializeBoardFile?(ref: ObjectRef): Promise<string>;
+  reviewAnnotation?(
+    input: PdfAnnotationCaptureInput,
+    signal: AbortSignal,
+  ): Promise<string>;
+  receiveContextDrop?(
+    data: Pick<DataTransfer, "getData">,
+  ): Promise<
+    import("../object-transfer/contextTransfer").ResourceContextAttachment[]
+  >;
   capturePaperContext?(paperIds: string[]): Promise<ObjectRef[]>;
-  captureArtifactPage?(input: { artifactId: string; pageId: string; title: string; text: string; paperIds: string[] }): Promise<ObjectRef>;
+  captureArtifactPage?(input: {
+    paperAnchors?: import("../paper-anchors/paperAnchorEntity").PaperAnchorEntity[];
+    artifactId: string;
+    pageId: string;
+    title: string;
+    text: string;
+    paperIds: string[];
+  }): Promise<ObjectRef>;
   readonly isOpen?: boolean;
   close?(): void;
-  captureAnnotation?(input: PdfAnnotationCaptureInput, target: "board" | "tray"): Promise<ObjectRef[]>;
+  captureAnnotation?(
+    input: PdfAnnotationCaptureInput,
+    target: "board" | "tray",
+  ): Promise<ObjectRef[]>;
   dragAnnotation?(input: PdfAnnotationCaptureInput, data: DataTransfer): void;
   capturePdf(
     input: PdfCaptureInput,

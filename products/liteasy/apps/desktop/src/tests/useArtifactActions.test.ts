@@ -9,7 +9,8 @@ import {
   createThinReadingDocument
 } from "../app/features/thin-reading/thinReadingProjection";
 import { parseThinReadingDocument } from "../app/features/thin-reading/thinReadingVersioning";
-import type { ArtifactTab, ArtifactTask } from "../app/features/artifacts/artifact.types";
+import type { AgentArtifactResult, ArtifactTab, ArtifactTask, ArtifactType } from "../app/features/artifacts/artifact.types";
+import type { AuthoredArtifact } from "../app/features/artifact-workflow/authoredArtifact";
 import type { Paper } from "../app/features/workspace/workspace.types";
 import { useArtifactActions } from "../app/features/artifacts/useArtifactActions";
 import type { AgentRun } from "../app/features/agent-api/agentApi.types";
@@ -17,6 +18,7 @@ import type { MineruFigure } from "../app/features/import/import.types";
 import { v1Fixture } from "./fixtures/thinReadingVersionFixtures";
 import { artifactWithSelectedObject } from "./fixtures/visualizationFixtures";
 import { createThinReadingBranchRecoverySnapshot } from "../app/features/artifacts/artifactTaskRecovery";
+import { artifactResourceScope, createArtifactResourceService } from "../app/features/resource-filesystem/artifactResourceProvider";
 
 function createMindmapArtifact(verificationStatus: "fail" | "pass" = "pass") {
   const verification = {
@@ -184,6 +186,31 @@ function createCompletedThinReadingRun(): AgentRun {
   };
 }
 
+function createCompletedPptRun(options: { objectOnly?: boolean; title?: string } = {}): AgentRun {
+  const run = createCompletedAgentRun();
+  const authoredArtifact: AuthoredArtifact = {
+    version: "liteasy.authored-artifact/v1",
+    kind: "slides",
+    title: options.title ?? "Literature PPT Outline",
+    slides: [{
+      id: "slide-model-1", title: "模型组织的研究问题", markdown: "## 方法比较\n\n模型根据指定资料组织的 **演示内容**，含公式 $x^2$。",
+      notes: "先交代研究问题，再解释方法与局限。", evidenceIds: []
+    }]
+  };
+  const answer = run.events.find((event) => event.type === "assistant.message")!;
+  if (answer.type !== "assistant.message") throw new Error("expected answer");
+  answer.metadata = { ...(options.objectOnly ? {} : answer.metadata), authoredArtifact };
+  if (options.objectOnly) answer.citations = [];
+  run.input = { artifactType: "ppt", message: "生成演示文稿", mode: "qa" };
+  return run;
+}
+
+async function waitForArtifactTask(store: ReturnType<typeof createArtifactStore>, status: ArtifactTask["status"] = "completed") {
+  await act(async () => {
+    await vi.waitFor(() => expect(store.getTasks()[0]?.status).toBe(status), { interval: 10, timeout: 2000 });
+  });
+}
+
 const paper: Paper = {
   id: "demo-1",
   sourcePath: "fixtures/demo-1.pdf",
@@ -196,6 +223,7 @@ function renderArtifactActions(options: {
   assistantLanguage?: string;
   confirmDuplicateGeneration?: ReturnType<typeof vi.fn>;
   diagnosticContext?: { endpoint: string; model: string; provider: string };
+  getCurrentResourceScopeId?: () => string;
   imported?: boolean;
   locked?: boolean;
   modelAccessAvailable?: boolean;
@@ -214,7 +242,7 @@ function renderArtifactActions(options: {
     locked: options.locked ?? true
   };
   const importedChunks: Record<string, RetrievalChunk[]> = options.imported
-    ? Object.fromEntries(selectedPapers.map((item) => [item.id, buildImportedChunksForPaper(item)]))
+    ? Object.fromEntries((options.allPapers ?? selectedPapers).map((item) => [item.id, buildImportedChunksForPaper(item)]))
     : {};
   const queueImportForPapers = vi.fn((queuedPapers: Paper[], onComplete?: () => void) => {
     if (options.imported) {
@@ -228,7 +256,8 @@ function renderArtifactActions(options: {
     }, 1200);
     return queuedPapers.length > 0 ? "started" : "idle";
   });
-  const runAgentAnalysis = vi.fn(async () => createCompletedAgentRun());
+  const runAgentAnalysis = vi.fn(async (artifactType: ArtifactType) => artifactType === "ppt"
+    ? createCompletedPptRun() : createCompletedAgentRun());
   const saveArtifactResult = vi.fn(options.saveArtifactResult ?? (async (document: { artifactId: string }) =>
     `development/test-data/agent-results/${document.artifactId}.json`
   ));
@@ -243,6 +272,7 @@ function renderArtifactActions(options: {
         save: saveArtifactResult
       },
       confirmDuplicateGeneration: options.confirmDuplicateGeneration,
+      getCurrentResourceScopeId: options.getCurrentResourceScopeId,
       getAssistantLanguage: options.assistantLanguage
         ? () => options.assistantLanguage!
         : undefined,
@@ -287,6 +317,54 @@ describe("useArtifactActions", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  test("retains only the requested papers in generation recovery", async () => {
+    const unrelatedPaper = { ...paper, id: "unrelated-paper", title: "Unrelated paper" };
+    const actions = renderArtifactActions({ imported: true, allPapers: [paper, unrelatedPaper] });
+    let finish!: (run: AgentRun) => void;
+    actions.runAgentAnalysis.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+
+    act(() => { actions.result.current.startAnalysisForPapers("ppt", [paper]); });
+
+    const recovery = actions.artifactStore.getTasks()[0].recovery!;
+    expect(Object.keys(recovery.chunks)).toEqual([paper.id]);
+    expect(recovery.chunks[paper.id]).toEqual(buildImportedChunksForPaper(paper));
+    expect(recovery.papers).toEqual([paper]);
+    finish(createCompletedPptRun());
+    await waitForArtifactTask(actions.artifactStore);
+    expect(actions.artifactStore.getTasks()[0].recovery).toBeUndefined();
+  });
+
+  test("publishes the saved result when cancellation is requested during storage", async () => {
+    let finishSave!: (path: string) => void;
+    const actions = renderArtifactActions({ imported: true,
+      saveArtifactResult: () => new Promise((resolve) => { finishSave = resolve; }) });
+    act(() => { actions.result.current.startAnalysisForPapers("ppt", [paper]); });
+    await act(async () => { await vi.waitFor(() => expect(finishSave).toBeTypeOf("function")); });
+    const task = actions.artifactStore.getTasks()[0];
+    expect(task.stage).toBe("saving_result");
+    expect(actions.artifactStore.cancelTask(task.id)).toBe(false);
+    let message = "";
+    await act(async () => { message = await actions.result.current.cancelArtifactTask(task.id); });
+    expect(message).toContain("内容正在保存");
+    expect(task.status).toBe("running");
+    finishSave("liteasy://agent-artifacts/saved-slides");
+    await waitForArtifactTask(actions.artifactStore);
+    expect(actions.artifactStore.getCatalog()).toHaveLength(1);
+    expect(actions.artifactStore.getCatalog()[0].resultPath).toBe("liteasy://agent-artifacts/saved-slides");
+  });
+
+  test("acknowledges a committed save without publishing the prior account's artifact", async () => {
+    let currentScope = "device";
+    const actions = renderArtifactActions({ imported: true,
+      getCurrentResourceScopeId: () => currentScope,
+      saveArtifactResult: async () => { currentScope = "account-other"; return "liteasy://agent-artifacts/saved-slides"; } });
+    act(() => { actions.result.current.startAnalysisForPapers("ppt", [paper]); });
+    await waitForArtifactTask(actions.artifactStore);
+    expect(actions.artifactStore.getCatalog()).toHaveLength(0);
+    expect(actions.artifactStore.getOpenTabs()).toHaveLength(0);
+    expect(actions.onAnalysisHint).toHaveBeenLastCalledWith("结果已保存至原账户；当前账户已切换，请返回原账户查看。");
   });
 
   test("syncs all concurrent generation tasks without dropping older sessions", () => {
@@ -363,7 +441,7 @@ describe("useArtifactActions", () => {
   });
 
   test("queues imports before starting analysis when selected papers are not imported", async () => {
-    const { onAnalysisHint, onArtifactTabsChanged, onArtifactTasksChanged, queueImportForPapers, result } = renderArtifactActions();
+    const { artifactStore, onAnalysisHint, onArtifactTabsChanged, onArtifactTasksChanged, queueImportForPapers, result } = renderArtifactActions();
 
     let message = "";
     act(() => {
@@ -390,16 +468,20 @@ describe("useArtifactActions", () => {
       await vi.advanceTimersByTimeAsync(1200);
       await Promise.resolve();
     });
+    await waitForArtifactTask(artifactStore);
     expect(onArtifactTabsChanged).toHaveBeenLastCalledWith([
       expect.objectContaining({ title: "Literature Mind Map", type: "mindmap" })
     ]);
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
       expect.stringContaining("Agent 分析完成并已保存")
     );
+    expect(onArtifactTasksChanged.mock.lastCall?.[0][0].status).toBe("completed");
+    expect(onArtifactTasksChanged.mock.lastCall?.[0][0].recovery).toBeUndefined();
   });
 
   test("starts analysis immediately when selected papers are already imported", async () => {
     const {
+      artifactStore,
       onAnalysisHint,
       onArtifactTabsChanged,
       onArtifactTasksChanged,
@@ -421,10 +503,7 @@ describe("useArtifactActions", () => {
       expect.objectContaining({ status: "running", type: "ppt" })
     ]);
 
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await waitForArtifactTask(artifactStore);
     expect(onArtifactTabsChanged).toHaveBeenLastCalledWith([
       expect.objectContaining({ title: "Literature PPT Outline", type: "ppt" })
     ]);
@@ -434,11 +513,66 @@ describe("useArtifactActions", () => {
         agent: expect.objectContaining({ runId: "run-artifact-1" }),
         artifactType: "ppt",
         version: "liteasy.agent-artifact/v1"
-      })
+      }),
+      undefined
     );
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
       "Agent 分析完成并已保存。"
     );
+  });
+
+  test("does not save a PPT when the Agent returns prose without structured slides", async () => {
+    const actions = renderArtifactActions({ imported: true });
+    actions.runAgentAnalysis.mockResolvedValueOnce(createCompletedAgentRun());
+    act(() => { actions.result.current.startAnalysis("ppt"); });
+    await waitForArtifactTask(actions.artifactStore, "failed");
+    expect(actions.artifactStore.getTasks()[0].failure?.message).toContain("未返回可展示的幻灯片内容");
+    expect(actions.saveArtifactResult).not.toHaveBeenCalled();
+    expect(actions.artifactStore.getCatalog()).toEqual([]);
+    expect(actions.artifactStore.getOpenTabs()).toEqual([]);
+  });
+
+  test("generates from fixed object references without selected papers, saves a named resource and restores the slide interface", async () => {
+    const documents: AgentArtifactResult[] = [];
+    const local = createLocalArtifactResultClient({
+      list: async () => structuredClone(documents),
+      save: async (document) => {
+        documents.push(structuredClone(document));
+        return `liteasy-local://agent-artifacts/${document.artifactId}.json`;
+      },
+      delete: async () => undefined
+    });
+    const actions = renderArtifactActions({ selectedPapers: [], saveArtifactResult: local.save });
+    actions.runAgentAnalysis.mockResolvedValueOnce(createCompletedPptRun({ objectOnly: true, title: "对象资料演示" }));
+    const contextRefs = [{ objectId: "note-methods", revision: "revision-3" }];
+    act(() => {
+      actions.result.current.startAnalysisForPapers("ppt", [], { contextRefs, supplementalContext: "将这份笔记整理成研究组汇报。" });
+    });
+    await waitForArtifactTask(actions.artifactStore);
+    expect(actions.queueImportForPapers).not.toHaveBeenCalled();
+    expect(actions.runAgentAnalysis).toHaveBeenCalledWith("ppt", expect.any(Function), expect.objectContaining({ contextRefs, sourcePaperIds: [] }));
+    const saved = (await local.list())[0];
+    expect(saved).toMatchObject({
+      version: "liteasy.agent-artifact/v1", artifactType: "ppt", papers: [], sourceContextRefs: contextRefs,
+      authoredArtifact: { kind: "slides", title: "对象资料演示", slides: [expect.objectContaining({ title: "模型组织的研究问题" })] }
+    });
+    expect(saved.analysis).toBeUndefined();
+    const resources = createArtifactResourceService({ client: local, scope: artifactResourceScope() });
+    const native = await resources.read(`liteasy://agent-artifacts/${saved.artifactId}`, { representation: "native", maxBytes: 10_000 });
+    expect(native.fileName).toBe("对象资料演示.slides.json");
+    expect(JSON.parse(native.content)).toEqual({ schema: "liteasy.authored-resource/v1", artifactId: saved.artifactId,
+      content: saved.authoredArtifact, sources: { paperAnchors: saved.paperAnchors ?? [], contextRefs } });
+    const reopened = renderArtifactActions({ selectedPapers: [] });
+    act(() => {
+      reopened.result.current.restoreArtifactResult(saved);
+      reopened.result.current.openArtifact(saved.artifactId);
+    });
+    const tab = reopened.artifactStore.getOpenTabs()[0];
+    expect(tab).toMatchObject({ title: "对象资料演示", sourceContextRefs: contextRefs, authoredArtifact: saved.authoredArtifact });
+    expect(tab.uiDsl?.root).toMatchObject({
+      component: "SlideDeck", props: { slides: saved.authoredArtifact?.kind === "slides" ? saved.authoredArtifact.slides : [] }
+    });
+    expect(reopened.runAgentAnalysis).not.toHaveBeenCalled();
   });
 
   test("generates a completed thin-reading artifact through Agent for imported papers", async () => {
@@ -458,10 +592,7 @@ describe("useArtifactActions", () => {
       result.current.startAnalysis("thin_reading");
     });
 
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await waitForArtifactTask(artifactStore);
 
     expect(runAgentAnalysis).toHaveBeenCalledWith(
       "thin_reading",
@@ -481,7 +612,7 @@ describe("useArtifactActions", () => {
       thinReadingDocument: expect.objectContaining({
         targetLanguage: "zh-CN"
       })
-    }));
+    }), undefined);
     expect(artifactStore.getTasks()[0]).toEqual(expect.objectContaining({
       artifactId: expect.any(String),
       status: "completed",
@@ -508,6 +639,7 @@ describe("useArtifactActions", () => {
       title: "A second selected paper"
     };
     const {
+      artifactStore,
       onArtifactTabsChanged,
       queueImportForPapers,
       result,
@@ -523,10 +655,7 @@ describe("useArtifactActions", () => {
       result.current.startAnalysis("thin_reading");
     });
 
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await waitForArtifactTask(artifactStore);
 
     expect(queueImportForPapers).toHaveBeenCalledWith(
       [secondPaper],
@@ -557,6 +686,7 @@ describe("useArtifactActions", () => {
       result.current.startAnalysisForPapers("thin_reading", [paper], { supplementalContext: "请用薄读解释方法与动机" });
       await vi.runAllTimersAsync();
     });
+    await waitForArtifactTask(artifactStore);
     const saved = (await createLocalArtifactResultClient().list()).find((item) => item.artifactId === artifactStore.getTasks()[0].artifactId);
     expect(saved).toMatchObject({
       artifactType: "thin_reading", supplementalContext: "请用薄读解释方法与动机",
@@ -1119,6 +1249,7 @@ describe("useArtifactActions", () => {
 
   test("applies assistant language to generated thin-reading content", async () => {
     const {
+      artifactStore,
       onArtifactTabsChanged,
       runAgentAnalysis,
       result
@@ -1167,10 +1298,7 @@ describe("useArtifactActions", () => {
       result.current.startAnalysis("thin_reading");
     });
 
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await waitForArtifactTask(artifactStore);
 
     const thinReadingDocument = onArtifactTabsChanged.mock.lastCall?.[0][0].thinReadingDocument;
     const root = thinReadingDocument?.nodes[thinReadingDocument.rootNodeId];
@@ -1225,6 +1353,7 @@ describe("useArtifactActions", () => {
 
   test("persists verified mindmap artifact metadata with the saved result", async () => {
     const {
+      artifactStore,
       onArtifactTabsChanged,
       result,
       saveArtifactResult
@@ -1236,17 +1365,14 @@ describe("useArtifactActions", () => {
       result.current.startAnalysis("mindmap");
     });
 
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await waitForArtifactTask(artifactStore);
 
     expect(saveArtifactResult).toHaveBeenCalledWith(expect.objectContaining({
       mindmapArtifact: expect.objectContaining({
         verification: expect.objectContaining({ status: "pass" })
       }),
       verification: expect.objectContaining({ status: "pass" })
-    }));
+    }), undefined);
     expect(onArtifactTabsChanged).toHaveBeenLastCalledWith([
       expect.objectContaining({
         mindmapArtifact: expect.objectContaining({
@@ -1441,7 +1567,7 @@ describe("useArtifactActions", () => {
   });
 
   test("starts comparison-table analysis as a first-class artifact type", async () => {
-    const { onArtifactTabsChanged, onArtifactTasksChanged, result } = renderArtifactActions({
+    const { artifactStore, onArtifactTabsChanged, onArtifactTasksChanged, result } = renderArtifactActions({
       imported: true
     });
 
@@ -1453,10 +1579,7 @@ describe("useArtifactActions", () => {
       expect.objectContaining({ status: "running", type: "comparison_table" })
     ]);
 
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await waitForArtifactTask(artifactStore);
     expect(onArtifactTabsChanged).toHaveBeenLastCalledWith([
       expect.objectContaining({
         title: "Literature Comparison Table",
@@ -1503,7 +1626,7 @@ describe("useArtifactActions", () => {
     ["tree", "TreeOutline"],
     ["ppt", "SlideDeck"]
   ] as const)("creates a typed center artifact DSL for %s analysis", async (artifactType, component) => {
-    const { onArtifactTabsChanged, result } = renderArtifactActions({
+    const { artifactStore, onArtifactTabsChanged, result } = renderArtifactActions({
       imported: true
     });
 
@@ -1511,10 +1634,7 @@ describe("useArtifactActions", () => {
       result.current.startAnalysis(artifactType);
     });
 
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await waitForArtifactTask(artifactStore);
 
     expect(onArtifactTabsChanged).toHaveBeenLastCalledWith([
       expect.objectContaining({
@@ -1546,6 +1666,7 @@ describe("useArtifactActions", () => {
 
   test("keeps the model-generated Markdown hierarchy as the final tree", async () => {
     const {
+      artifactStore,
       onArtifactTabsChanged,
       runAgentAnalysis,
       saveArtifactResult,
@@ -1569,10 +1690,7 @@ describe("useArtifactActions", () => {
     act(() => {
       result.current.startAnalysis("tree");
     });
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await waitForArtifactTask(artifactStore);
 
     expect(onArtifactTabsChanged).toHaveBeenLastCalledWith([
       expect.objectContaining({
@@ -1591,7 +1709,8 @@ describe("useArtifactActions", () => {
         outlineNodes: expect.arrayContaining([
           expect.objectContaining({ label: "指标与基线" })
         ])
-      })
+      }),
+      undefined
     );
   });
 
@@ -1884,10 +2003,7 @@ describe("useArtifactActions", () => {
       });
     });
 
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await waitForArtifactTask(artifactStore);
 
     expect(runAgentAnalysis).toHaveBeenCalledWith(
       "tree",
@@ -1903,7 +2019,8 @@ describe("useArtifactActions", () => {
         papers: [{ id: paper.id, title: paper.title }],
         regeneratedFromArtifactId: "artifact-original",
         supplementalContext: "请结合 Table 2 的 MRR@10 结果。"
-      })
+      }),
+      undefined
     );
     expect(onArtifactTabsChanged).toHaveBeenLastCalledWith([
       expect.objectContaining({

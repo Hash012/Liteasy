@@ -1,5 +1,6 @@
 import { vi } from "vitest";
-import { createArtifactResultClient } from "../app/features/artifacts/artifactResultClient";
+import { createArtifactResultClient, isArtifactResult } from "../app/features/artifacts/artifactResultClient";
+import { paperAnchorFromEvidence } from "../app/features/paper-anchors/paperAnchorEntity";
 
 const document = {
   agent: {
@@ -29,6 +30,15 @@ const document = {
   },
   version: "liteasy.agent-artifact/v1" as const
 };
+
+test("validates persisted paper anchor entities while accepting legacy documents without them", () => {
+  const anchor = paperAnchorFromEvidence({ id: "evidence-1", paperId: "paper-1", page: 2, quote: "Source passage", paperTitle: "Paper 1" });
+  expect(isArtifactResult(document)).toBe(true);
+  expect(isArtifactResult({ ...document, paperAnchors: [anchor] })).toBe(true);
+  expect(isArtifactResult({ ...document, paperAnchors: ["evidence-1"] })).toBe(false);
+  expect(isArtifactResult({ ...document, paperAnchors: [{ ...anchor, presentation: { title: "Title only" } }] })).toBe(false);
+  expect(isArtifactResult({ ...document, paperAnchors: { [anchor.id]: anchor } })).toBe(false);
+});
 
 test("saves and lists account-scoped Agent artifact documents", async () => {
   const transport = vi
@@ -105,6 +115,21 @@ test("passes an abort signal through artifact persistence transport", async () =
     "http://127.0.0.1:8787/v1/agent-artifacts",
     expect.objectContaining({ signal: controller.signal })
   );
+});
+
+test("passes cancellation to catalog reads and rejects invalid authored documents before transport", async () => {
+  const malformed = { ...document, artifactType: "ppt" as const, authoredArtifact: { kind: "slides", slides: "invalid" } };
+  const transport = vi.fn(async () => ({
+    json: async () => ({ artifacts: [document, malformed] }), ok: true, status: 200
+  }));
+  const client = createArtifactResultClient({
+    getAccessToken: () => "session-token", getBaseEndpoint: () => "https://example.test", transport
+  });
+  const controller = new AbortController();
+  await expect(client.list(controller.signal)).resolves.toEqual([document]);
+  expect(transport).toHaveBeenCalledWith("https://example.test/v1/agent-artifacts", expect.objectContaining({ signal: controller.signal }));
+  await expect(client.save(malformed as unknown as Parameters<typeof client.save>[0])).rejects.toThrow("产物格式无效");
+  expect(transport).toHaveBeenCalledTimes(1);
 });
 
 test("reports a failed artifact deletion", async () => {

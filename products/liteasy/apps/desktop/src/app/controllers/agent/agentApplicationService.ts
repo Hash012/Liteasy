@@ -387,9 +387,16 @@ export function createAgentApplicationService(
       emittedAt: now().toISOString(),
       eventId: createId("event"),
       runId: run.runId,
-      sequence: run.events.length + 1,
+      sequence: (run.events.at(-1)?.sequence ?? 0) + 1,
       sessionId: stored.session.sessionId
     } as AgentEvent;
+    // Reasoning updates contain the full current text. Keep only the latest state
+    // per activity in replay/history; live subscribers still receive every update.
+    if (event.type === "manager.activity" && event.kind === "reasoning_summary") {
+      const previous = run.events.findIndex((item) => item.type === "manager.activity" &&
+        item.kind === "reasoning_summary" && item.activityId === event.activityId);
+      if (previous !== -1) run.events.splice(previous, 1);
+    }
     run.events.push(event);
     stored.listeners.forEach((listener) => listener(event));
     return event;
@@ -820,7 +827,8 @@ export function createAgentApplicationService(
           runId,
           signal: abortController.signal
         };
-        const runtime = context.objectSnapshot ? "liteasy_knowledge_workflow" : ports.executeManagerTurn
+        const directObjectQuestion = context.objectSnapshot && !request.input.artifactType;
+        const runtime = directObjectQuestion ? "liteasy_knowledge_workflow" : ports.executeManagerTurn
           ? ports.managerRuntime ?? "custom_manager"
           : request.input.mode === "command"
             ? "liteasy_command_workflow"
@@ -849,7 +857,7 @@ export function createAgentApplicationService(
           runtime,
           type: "execution.route"
         });
-        const managerResult = !context.objectSnapshot && ports.executeManagerTurn
+        const managerResult = !directObjectQuestion && ports.executeManagerTurn
           ? await ports.executeManagerTurn(executionInput)
           : undefined;
         if (managerResult?.kind === "runtime" || (!managerResult && request.input.mode === "command")) {

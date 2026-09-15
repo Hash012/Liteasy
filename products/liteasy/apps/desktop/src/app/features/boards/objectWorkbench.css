@@ -422,6 +422,59 @@
   overflow: visible;
   font-size: calc(11px * var(--app-font-ratio, 1));
 }
+.object-board-file-actions,
+.object-board-file-location,
+.object-connection-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.object-board-file-location > span,
+.object-connection-row > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.object-connection-handle {
+  position: absolute;
+  z-index: 5;
+  width: 12px;
+  height: 12px;
+  min-width: 0;
+  padding: 0;
+  border: 2px solid var(--colorBrandStroke1, #0f6cbd);
+  border-radius: 50%;
+  background: var(--colorNeutralBackground1, white);
+  cursor: crosshair;
+  opacity: 0;
+}
+.object-placement:hover > .object-connection-handle,
+.object-placement:focus-within > .object-connection-handle,
+.object-connection-handle.is-connecting {
+  opacity: 1;
+}
+.object-connection-top {
+  top: -7px;
+  left: calc(50% - 6px);
+}
+.object-connection-right {
+  right: -7px;
+  top: calc(50% - 6px);
+}
+.object-connection-bottom {
+  bottom: -7px;
+  left: calc(50% - 6px);
+}
+.object-connection-left {
+  left: -7px;
+  top: calc(50% - 6px);
+}
+.object-connection-handle:hover,
+.object-connection-handle:focus-visible {
+  background: var(--colorBrandBackground, #0f6cbd);
+}
 .object-placement:has(> .object-placement-assets):not(:has(.object-surface))
   .object-placement-assets {
   flex: 1 1 auto;

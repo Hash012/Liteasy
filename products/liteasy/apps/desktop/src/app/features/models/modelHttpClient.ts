@@ -1,5 +1,9 @@
 import type { GenerateAnswerInput, ModelGenerationResult } from "./modelGateway";
 import type { ModelExecutionTrace } from "./modelExecution";
+import {
+  assertModelResponseSize, createBoundedModelFrames, createModelTextBudget,
+  MODEL_RESPONSE_LIMITS, modelTextBytes, readBoundedModelStream, readBoundedModelText
+} from "./modelResponseBudget";
 
 export type ModelClientSource = "cloud_proxy";
 
@@ -144,72 +148,51 @@ async function readStreamingAnswer(input: {
   if (!input.response.body) {
     throw new Error(`模型流式响应缺少可读数据（${input.source}）`);
   }
-  const reader = input.response.body.getReader();
-  const decoder = new TextDecoder();
   let answer = "";
   let reasoning = "";
-  let buffer = "";
   let completedPayload: AnswerPayload | null = null;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value, { stream: !done });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-    for (const line of lines) {
-      if (!line.trim()) {
-        continue;
-      }
-      let event: unknown;
-      try {
-        event = JSON.parse(line);
-      } catch {
-        throw new Error(`模型流式响应格式无效（${input.source}）`);
-      }
-      if (!event || typeof event !== "object") {
-        continue;
-      }
-      if ("type" in event && event.type === "error") {
-        const detail = "message" in event && typeof event.message === "string"
-          ? event.message
-          : "code" in event && typeof event.code === "string"
-            ? event.code
-            : "error" in event && typeof event.error === "string"
-              ? event.error
-              : "unknown_stream_error";
-        const trace = "traceId" in event && typeof event.traceId === "string"
-          ? `（${event.traceId}）`
-          : "";
-        throw new Error(`模型流式请求失败（${input.source}）：${detail}${trace}`);
-      }
-      if (
-        "type" in event &&
-        event.type === "delta" &&
-        "delta" in event &&
-        typeof event.delta === "string"
-      ) {
-        answer += event.delta;
-        input.generateInput.onDelta?.(event.delta, answer);
-      }
-      if ("type" in event && event.type === "reasoning_delta" && "delta" in event && typeof event.delta === "string") {
-        reasoning += event.delta;
-        input.generateInput.onReasoningDelta?.(event.delta, reasoning);
-      }
-      if ("type" in event && event.type === "completed" && isAnswerPayload(event)) {
-        completedPayload = event;
-      }
+  const budget = createModelTextBudget();
+  const frames = createBoundedModelFrames(/\n/, MODEL_RESPONSE_LIMITS.ndjsonFrameBytes, (line) => {
+    if (completedPayload || !line.trim()) return;
+    let event: unknown;
+    try { event = JSON.parse(line); }
+    catch { throw new Error(`模型流式响应格式无效（${input.source}）`); }
+    if (!event || typeof event !== "object") return;
+    if ("type" in event && event.type === "error") {
+      const detail = "message" in event && typeof event.message === "string" ? event.message
+        : "code" in event && typeof event.code === "string" ? event.code
+          : "error" in event && typeof event.error === "string" ? event.error : "unknown_stream_error";
+      const trace = "traceId" in event && typeof event.traceId === "string" ? `（${event.traceId}）` : "";
+      throw new Error(`模型流式请求失败（${input.source}）：${detail}${trace}`);
     }
-    if (done) {
-      break;
+    if ("type" in event && event.type === "delta" && "delta" in event && typeof event.delta === "string") {
+      budget.answer(event.delta);
+      answer += event.delta;
+      input.generateInput.onDelta?.(event.delta, answer);
     }
-  }
+    if ("type" in event && event.type === "reasoning_delta" && "delta" in event && typeof event.delta === "string") {
+      budget.reasoning(event.delta);
+      reasoning += event.delta;
+      input.generateInput.onReasoningDelta?.(event.delta, reasoning);
+    }
+    if ("type" in event && event.type === "completed" && isAnswerPayload(event)) {
+      assertModelResponseSize(modelTextBytes(event.answer), MODEL_RESPONSE_LIMITS.answerBytes, "正文");
+      if (event.reasoning_content) assertModelResponseSize(modelTextBytes(event.reasoning_content), MODEL_RESPONSE_LIMITS.reasoningBytes, "推理内容");
+      completedPayload = event;
+    }
+  });
+  await readBoundedModelStream(input.response.body, (chunk) => {
+    frames.push(chunk);
+    return !completedPayload;
+  }, input.generateInput.signal);
+  frames.finish();
 
   if (!completedPayload) {
     throw new Error(`模型流式响应未正常完成（${input.source}）`);
   }
   return {
-    answer: completedPayload.answer || answer,
-    trace: buildExecutionTrace(completedPayload, input.endpoint, input.source)
+    answer: (completedPayload as AnswerPayload).answer || answer,
+    trace: buildExecutionTrace(completedPayload as AnswerPayload, input.endpoint, input.source)
   };
 }
 
@@ -219,6 +202,7 @@ export function createHttpModelClient({
   transport = defaultTransport
 }: CreateHttpModelClientInput) {
   return async (input: GenerateAnswerInput): Promise<ModelGenerationResult> => {
+    input.signal?.throwIfAborted();
     const transportRequest: ModelTransportRequest = {
       body: JSON.stringify({
         model: input.model,
@@ -238,6 +222,8 @@ export function createHttpModelClient({
       transportRequest.signal = input.signal;
     }
     const response = await transport(transportRequest);
+    if (input.signal?.aborted) await response.body?.cancel(input.signal.reason).catch(() => undefined);
+    input.signal?.throwIfAborted();
 
     if (!response.ok) {
       const detail = await readBackendError(response);
@@ -257,12 +243,19 @@ export function createHttpModelClient({
       });
     }
 
-    const payload = await response.json();
+    const payload = response.body
+      ? JSON.parse(await readBoundedModelText(response.body, input.signal))
+      : await response.json();
+    input.signal?.throwIfAborted();
     if (!isAnswerPayload(payload)) {
       throw new Error(`模型服务返回格式无效（${source}）`);
     }
 
-    if (typeof payload.reasoning_content === "string") input.onReasoningDelta?.(payload.reasoning_content, payload.reasoning_content);
+    assertModelResponseSize(modelTextBytes(payload.answer), MODEL_RESPONSE_LIMITS.answerBytes, "正文");
+    if (typeof payload.reasoning_content === "string") {
+      assertModelResponseSize(modelTextBytes(payload.reasoning_content), MODEL_RESPONSE_LIMITS.reasoningBytes, "推理内容");
+      input.onReasoningDelta?.(payload.reasoning_content, payload.reasoning_content);
+    }
     return {
       answer: payload.answer,
       trace: buildExecutionTrace(payload, endpoint, source)

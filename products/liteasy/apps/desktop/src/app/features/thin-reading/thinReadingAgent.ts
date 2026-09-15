@@ -3,6 +3,7 @@ import type {
   PreparedMultiPaperAnalysis
 } from "../paper-analysis/analysis.types";
 import { z } from "zod";
+import { paperAnchorFromEvidence } from "../paper-anchors/paperAnchorEntity";
 import {
   buildThinReadingPromptGuidance,
   resolveThinReadingVisualizationIntentRequest
@@ -1764,6 +1765,7 @@ function buildEvidenceSpans(input: {
       return [];
     }
     return [{
+      paperAnchor: paperAnchorFromEvidence(evidence),
       chunkId: evidence.chunkId,
       confidence: evidence.relevance,
       id: evidence.id,

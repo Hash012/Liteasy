@@ -43,6 +43,7 @@ import {
   refOf,
   type ObjectEnvelope,
   type Placement,
+  type BoardSide,
 } from "../objects/object.types";
 import type { WorkbenchViewModel } from "./ObjectWorkbench";
 import { writePlacementDrag } from "./boardPlacementDrag";
@@ -96,6 +97,7 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
   setSelected,
   actions,
   setDetails,
+  connection,
 }: {
   p: Placement;
   object?: ObjectEnvelope | null;
@@ -103,6 +105,12 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
   setSelected: Dispatch<SetStateAction<string[]>>;
   actions: { current: WorkbenchViewModel };
   setDetails: Dispatch<SetStateAction<ObjectEnvelope | undefined>>;
+  connection?: {
+    active: boolean;
+    start(placement: Placement, side: BoardSide): void;
+    finish(placement: Placement, side: BoardSide): void;
+    cancel(): void;
+  };
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const gesture = useRef<{
@@ -502,6 +510,73 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
               {object === null ? "内容不可用，引用仍保留。" : "正在读取内容…"}
             </p>
           )}
+          {connection &&
+            (["top", "right", "bottom", "left"] as BoardSide[]).map((side) => {
+              const label = {
+                top: "上",
+                right: "右",
+                bottom: "下",
+                left: "左",
+              }[side];
+              return (
+                <Tooltip
+                  key={side}
+                  content={`从${label}边连接其他卡片；也可依次点击两个端点`}
+                  relationship="description"
+                >
+                  <button
+                    type="button"
+                    className={`object-connection-handle object-connection-${side}${connection.active ? " is-connecting" : ""}`}
+                    aria-label={`连接卡片：${label}边`}
+                    data-connection-side={side}
+                    draggable
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      connection.finish(p, side);
+                    }}
+                    onDragStart={(event) => {
+                      event.stopPropagation();
+                      event.dataTransfer.effectAllowed = "link";
+                      event.dataTransfer.setData(
+                        "application/x-liteasy-board-connection",
+                        p.boardId,
+                      );
+                      connection.start(p, side);
+                    }}
+                    onDragOver={(event) => {
+                      if (
+                        !event.dataTransfer.types.includes(
+                          "application/x-liteasy-board-connection",
+                        )
+                      )
+                        return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      event.dataTransfer.dropEffect = "link";
+                    }}
+                    onDrop={(event) => {
+                      if (
+                        event.dataTransfer.getData(
+                          "application/x-liteasy-board-connection",
+                        ) !== p.boardId
+                      )
+                        return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      connection.finish(p, side);
+                    }}
+                    onDragEnd={() => connection.cancel()}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        event.stopPropagation();
+                        connection.cancel();
+                      }
+                    }}
+                  />
+                </Tooltip>
+              );
+            })}
           {(Object.keys(resizeLabels) as ResizeDirection[]).map((direction) => (
             <Tooltip
               key={direction}

@@ -1,4 +1,5 @@
 export type Citation = {
+  paperAnchor?: import("../paper-anchors/paperAnchorEntity").PaperAnchorEntity;
   paperId: string;
   page: number;
   snippet: string;

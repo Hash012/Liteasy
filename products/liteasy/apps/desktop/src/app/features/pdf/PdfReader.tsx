@@ -22,6 +22,8 @@ import { Button, Checkbox, Tooltip } from "@fluentui/react-components";
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import {
   ChatHelpRegular,
+  SparkleRegular,
+  ArrowClockwiseRegular,
   GlobeRegular,
   LocationRegular,
   ChevronUpRegular,
@@ -50,7 +52,6 @@ import { ensureReadableStreamAsyncIterator } from "./pdfStreamCompatibility";
 import type { Paper } from "../workspace/workspace.types";
 import type { ReaderConversationContext } from "../assistant/assistantContext.types";
 import {
-  clearMigratedPdfAnnotationBrowserCache,
   loadPdfAnnotationBrowserMigrationState,
   loadPdfAnnotationAutoPublic,
   loadPdfAnnotations,
@@ -58,10 +59,10 @@ import {
   pdfAnnotationAutoPublicStorageKey,
   pdfAnnotationStorageKey,
   savePdfAnnotationAutoPublic,
-  savePdfAnnotations,
   revisePdfAnnotation,
   type PdfAnnotation,
   type PdfAnnotationKind,
+  type PdfAnnotationReview as PdfAnnotationReviewValue,
   type PdfAnnotationPublication,
   type PdfAnnotationRect,
   type PdfAnnotationV2,
@@ -88,6 +89,9 @@ import { sortPdfAnnotationsByReadingOrder } from "./pdfAnnotationReadingOrder";
 import { PdfAnnotationMarkdown } from "./PdfAnnotationMarkdown";
 import { PdfAnnotationEditor } from "./PdfAnnotationEditor";
 import { PdfAnnotationStatus } from "./PdfAnnotationStatus";
+import { PdfAnnotationReview } from "./PdfAnnotationReview";
+import { usePdfAnnotationReview } from "./usePdfAnnotationReview";
+import { persistPdfAnnotationState } from "./pdfAnnotationPersistence";
 import "./pdfAnnotationList.css";
 import { PdfMarkdownTextBox } from "./PdfMarkdownTextBox";
 import { usePdfCitationParsing } from "./usePdfCitationParsing";
@@ -1684,7 +1688,18 @@ export function PdfReader({
   const [hydratedWhiteboardStorageKey, setHydratedWhiteboardStorageKey] = useState<string | null>(null);
   const [autoPublicAnnotations, setAutoPublicAnnotations] = useState(false);
   const [hydratedAnnotationStorageKey, setHydratedAnnotationStorageKey] = useState<string | null>(null);
+  const [annotationLoadError, setAnnotationLoadError] = useState("");
+  const [annotationLoadAttempt, setAnnotationLoadAttempt] = useState(0);
   const fulltext = usePdfFulltextStore(activePaper?.id);
+  const annotationReview = usePdfAnnotationReview({
+    scopeKey: annotationStorageKey,
+    getAnnotation: (id) => annotationsRef.current.find((annotation) => annotation.id === id),
+    request: async (annotation, signal) => {
+      if (!objectWorkbench?.reviewAnnotation) throw new Error("AI review 暂不可用。");
+      return objectWorkbench.reviewAnnotation(annotationCaptureInput(annotation), signal);
+    },
+    commit: saveAnnotationReview,
+  });
 
   useEffect(() => {
     if (!selection || !activePaper) {
@@ -2030,10 +2045,12 @@ export function PdfReader({
       version: 2
     }, fallbackPaperIdentity);
     setHydratedAnnotationStorageKey(null);
+    setAnnotationLoadError("");
     setAnnotations(browserState.annotations);
     annotationsRef.current = browserState.annotations;
     setAutoPublicAnnotations(browserState.autoPublic);
     let cancelled = false;
+    let readSucceeded = !isUserPaperArtifactStoreAvailable();
 
     if (!activePaper?.id) {
       setHydratedAnnotationStorageKey(annotationStorageKey);
@@ -2046,6 +2063,7 @@ export function PdfReader({
     })
       .then((snapshot) => {
         if (cancelled) return;
+        readSucceeded = true;
         const stored = snapshot === undefined
           ? browserState
           : recoverPdfAnnotationPrivateState(snapshot, fallbackPaperIdentity);
@@ -2053,21 +2071,23 @@ export function PdfReader({
         annotationsRef.current = stored.annotations;
         setAutoPublicAnnotations(stored.autoPublic);
         if (stored.issues.length > 0) {
-          setStatus("部分批注的论坛恢复信息损坏；本地批注已保留，可检查后重试。");
+          setStatus("部分批注附加信息损坏；用户内容已保留，可检查后重试。");
         }
         queueMicrotask(() => replayRecoveredPublications(stored));
       })
-      .catch(() => {
-        // The browser cache remains a compatibility fallback when the user store is unavailable.
+      .catch((error: unknown) => {
+        // A failed native read must never be followed by writing an empty browser fallback.
         if (cancelled) return;
         if (isUserPaperArtifactStoreAvailable()) {
-          setStatus("批注恢复信息暂时无法读取；本地批注已保留，未发送论坛重放请求。");
+          const detail = error instanceof Error ? error.message : "未知错误";
+          setAnnotationLoadError(`无法读取批注：${detail}。请重试恢复，磁盘内容保持不变。`);
+          setStatus("批注尚未恢复，保存暂不可用。");
         } else {
           queueMicrotask(() => replayRecoveredPublications(browserState));
         }
       })
       .finally(() => {
-        if (!cancelled) {
+        if (!cancelled && readSucceeded) {
           setHydratedAnnotationStorageKey(annotationStorageKey);
         }
       });
@@ -2075,7 +2095,7 @@ export function PdfReader({
     return () => {
       cancelled = true;
     };
-  }, [activePaper, annotationStorageKey, autoPublicStorageKey]);
+  }, [activePaper, annotationStorageKey, autoPublicStorageKey, annotationLoadAttempt]);
 
   useEffect(() => {
     setSelection(null);
@@ -2155,20 +2175,13 @@ export function PdfReader({
 
   useEffect(() => {
     if (annotationStorageKey && hydratedAnnotationStorageKey === annotationStorageKey) {
-      savePdfAnnotations(annotationStorageKey, annotations);
       if (activePaper?.id) {
-        void saveUserPaperArtifact({
-          artifactKind: "annotations",
+        void persistPdfAnnotationState({
+          annotationStorageKey,
+          autoPublicStorageKey,
           paperId: activePaper.id,
-          snapshot: {
-            annotations,
-            autoPublic: autoPublicAnnotations,
-            version: 2
-          }
+          snapshot: { annotations, autoPublic: autoPublicAnnotations, version: 2 }
         })
-          .then(() => {
-            clearMigratedPdfAnnotationBrowserCache(annotationStorageKey, autoPublicStorageKey);
-          })
           .catch((error: unknown) => {
             const detail = error instanceof Error ? error.message : "未知错误";
             setStatus(`批注尚未写入本地文献库：${detail}。请检查库目录后重试。`);
@@ -2560,11 +2573,9 @@ export function PdfReader({
   }
 
   function setCurrentAnnotations(update: (current: PdfAnnotationV2[]) => PdfAnnotationV2[]) {
-    setAnnotations((current) => {
-      const next = update(current);
-      annotationsRef.current = next;
-      return next;
-    });
+    const next = update(annotationsRef.current);
+    annotationsRef.current = next;
+    setAnnotations(next);
   }
 
   function replayRecoveredPublications(recovery: ReturnType<typeof recoverPdfAnnotationPrivateState>) {
@@ -2910,6 +2921,44 @@ export function PdfReader({
         pageElement.scrollIntoView({ behavior: "smooth", block: "center" });
       }
     });
+  }
+
+  async function saveAnnotationReview(id: string, expectedRevision: number, review: PdfAnnotationReviewValue) {
+    if (!activePaper || !annotationStorageKey || hydratedAnnotationStorageKey !== annotationStorageKey) {
+      throw new Error("批注仍在恢复，请稍后保存 review。");
+    }
+    const annotation = annotationsRef.current.find((item) => item.id === id);
+    if (!annotation) throw new Error("该批注已删除，review 未写入其他条目。");
+    if (annotation.revision !== expectedRevision) throw new Error("批注已更改，请重新核对并保存 review。");
+    const updated = revisePdfAnnotation(annotation, { review, updatedAt: new Date().toISOString() });
+    const next = annotationsRef.current.map((item) => item.id === id ? updated : item);
+    annotationsRef.current = next;
+    setAnnotations(next);
+    await persistPdfAnnotationState({
+      annotationStorageKey,
+      autoPublicStorageKey,
+      paperId: activePaper.id,
+      snapshot: { annotations: next, autoPublic: autoPublicAnnotations, version: 2 }
+    });
+    setStatus("AI review 已随批注保存。");
+  }
+
+  function renderAnnotationReviewButton(annotation: PdfAnnotationV2) {
+    if (!objectWorkbench?.reviewAnnotation) return null;
+    const dirtyNote = activeAnnotationId === annotation.id && annotation.kind !== "text" &&
+      !annotation.quickAsk && annotationNoteDraft !== (annotation.note ?? "");
+    const tooltip = dirtyNote ? "请先保存批注，再进行 AI review" : annotation.review ? "重新生成 AI review" : "AI review";
+    return <Tooltip content={tooltip} relationship="description">
+      <Button aria-label={`AI review：${annotation.excerpt}`} appearance="subtle" size="small" icon={<SparkleRegular />}
+        disabled={dirtyNote || hydratedAnnotationStorageKey !== annotationStorageKey || annotationReview.states[annotation.id]?.pending}
+        onClick={() => void annotationReview.generate(annotation.id)} />
+    </Tooltip>;
+  }
+
+  function renderAnnotationReview(annotation: PdfAnnotationV2) {
+    return <PdfAnnotationReview key={annotation.id} annotation={annotation} state={annotationReview.states[annotation.id]}
+      onCancel={() => annotationReview.cancel(annotation.id)}
+      onSave={(revision, review) => annotationReview.save(annotation.id, revision, review)} />;
   }
 
   function saveAnnotationNote() {
@@ -3346,6 +3395,13 @@ export function PdfReader({
                   {status ? <div aria-live="polite" className="pdf-status">
                     {status}
                   </div> : null}
+                  {annotationLoadError ? <div className="pdf-annotation-load-error" role="alert">
+                    <p>{annotationLoadError}</p>
+                    <Tooltip content="重试恢复批注" relationship="description">
+                      <Button aria-label="重试恢复批注" appearance="subtle" size="small" icon={<ArrowClockwiseRegular />}
+                        onClick={() => setAnnotationLoadAttempt((attempt) => attempt + 1)} />
+                    </Tooltip>
+                  </div> : null}
                   {activePaper?.literature ? (
                     <>
                       <div
@@ -3427,6 +3483,7 @@ export function PdfReader({
                               <Button aria-label={`定位批注：${annotation.excerpt}`} appearance="subtle" size="small" icon={<LocationRegular />}
                                 onClick={() => locateAnnotation(annotation)} />
                             </Tooltip>
+                            {renderAnnotationReviewButton(annotation)}
                             {objectWorkbench ? <>
                               <Tooltip content="拖动批注到研究白板" relationship="description">
                                 <Button aria-label={`拖动批注到研究白板：${annotation.excerpt}`} appearance="subtle" size="small"
@@ -3456,6 +3513,7 @@ export function PdfReader({
                               <Button aria-label="收起批注操作" appearance="subtle" size="small" icon={<ChevronUpRegular />} onClick={cancelAnnotationEditing} />
                             </Tooltip>
                           </div> : null}
+                          {activeAnnotationId === annotation.id ? renderAnnotationReview(annotation) : null}
                           {activeAnnotationId === annotation.id && annotation.kind !== "text" && annotation.note && (
                             <div className="annotation-divider" />
                           )}
@@ -3836,6 +3894,8 @@ export function PdfReader({
                   <Tooltip content="关闭注释编辑器" relationship="description"><Button aria-label="关闭注释编辑器" appearance="subtle" size="small" icon={<DismissRegular />} onClick={cancelAnnotationEditing} /></Tooltip>
                 </header>
                 <p className="pdf-annotation-popover-excerpt">{popupAnnotation.excerpt}</p>
+                {renderAnnotationReviewButton(popupAnnotation)}
+                {renderAnnotationReview(popupAnnotation)}
                 {popupAnnotation.quickAsk ? <>
                   <strong>{popupAnnotation.quickAsk.question}</strong>
                   <PdfAnnotationMarkdown value={popupAnnotation.quickAsk.answer} />

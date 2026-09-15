@@ -1,6 +1,7 @@
 import { loadDurableEntries, putDurableEntry } from "../features/persistence/durableJsonStore";
 import { useEffect, useRef, useState } from "react";
 import { useArtifactActions } from "../features/artifacts/useArtifactActions";
+import { artifactResourceScope } from "../features/resource-filesystem/artifactResourceProvider";
 import {
   useThinReadingVisualizationController,
   type ThinReadingVisualizationCancellationReason,
@@ -195,10 +196,15 @@ export function useArtifactWorkflowController({
   const [artifactCatalogLoadState, setArtifactCatalogLoadState] =
     useState<ArtifactCatalogLoadState>({ status: "idle" });
   const artifactResultClientRef = useRef(artifactResultClient);
+  const resourceScope = artifactResourceScope(artifactResultScopeKey);
+  const resourceScopeIdRef = useRef(resourceScope.id);
+  resourceScopeIdRef.current = resourceScope.id;
   const catalogRequestRef = useRef(0);
   const localRepositoryRef = useRef<ArtifactLocalRepository | null>(null);
   const persistenceReadyRef = useRef(false);
   const persistenceQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const lastCatalogRef = useRef<ArtifactTab[]>([]);
+  const lastTabsRef = useRef<ArtifactTab[]>([]);
   const artifactActionsRef = useRef<ReturnType<typeof useArtifactActions> | null>(null);
   const visualizationRecoveryScopesRef = useRef(new Set<string>());
   if (!localRepositoryRef.current) {
@@ -221,15 +227,48 @@ export function useArtifactWorkflowController({
   }
 
   function handleArtifactCatalogChanged(catalog: ArtifactTab[]) {
+    // Token progress updates also synchronize the store. A new array containing
+    // the same immutable entries does not mean the saved artifacts have changed.
+    if (catalog.length === lastCatalogRef.current.length &&
+      catalog.every((entry, index) => entry === lastCatalogRef.current[index])) {
+      return;
+    }
+    lastCatalogRef.current = catalog;
     setArtifactCatalog(catalog);
     persistCatalog(catalog);
   }
 
+  function handleArtifactTabsChanged(tabs: ArtifactTab[]) {
+    if (tabs.length === lastTabsRef.current.length &&
+      tabs.every((entry, index) => entry === lastTabsRef.current[index])) {
+      return;
+    }
+    lastTabsRef.current = tabs;
+    setArtifactTabs(tabs);
+  }
+
   const taskPersistenceReady = useRef(false);
+  const lastTaskCheckpointRef = useRef<{ scopeKey: string; tasks: ArtifactTask[] }>();
   function handleArtifactTasksChanged(tasks: ArtifactTask[]) {
-    if (taskPersistenceReady.current) void putDurableEntry("artifact-tasks", artifactResultScopeKey ?? "device",
-      tasks.filter((task) => task.type === "thin_reading" && task.status !== "completed")
-    ).catch((error) => onAnalysisHint(`恢复快照保存失败：${String(error)}`));
+    if (taskPersistenceReady.current) {
+      const scopeKey = artifactResultScopeKey ?? "device";
+      const checkpointTasks = tasks.filter((task) => task.type === "thin_reading" && task.status !== "completed");
+      const previous = lastTaskCheckpointRef.current;
+      const unchanged = previous?.scopeKey === scopeKey && previous.tasks.length === checkpointTasks.length &&
+        checkpointTasks.every((task, index) => {
+          const previousTask = previous.tasks[index];
+          const keys = Object.keys(task) as (keyof ArtifactTask)[];
+          return keys.length === Object.keys(previousTask).length && keys.every((key) => task[key] === previousTask[key]);
+        });
+      if (!unchanged) {
+        const checkpoint = { scopeKey, tasks: checkpointTasks };
+        lastTaskCheckpointRef.current = checkpoint;
+        void putDurableEntry("artifact-tasks", scopeKey, checkpointTasks).catch((error) => {
+          if (lastTaskCheckpointRef.current === checkpoint) lastTaskCheckpointRef.current = undefined;
+          onAnalysisHint(`恢复快照保存失败：${String(error)}`);
+        });
+      }
+    }
     persistInterruptedArtifactTasks(tasks, artifactResultScopeKey);
     setArtifactTasks(tasks);
   }
@@ -279,6 +318,8 @@ export function useArtifactWorkflowController({
   const artifactActions = useArtifactActions({
     artifactStore,
     artifactResultClient,
+    resourceScope,
+    getCurrentResourceScopeId: () => resourceScopeIdRef.current,
     confirmDuplicateGeneration,
     cancelAgentRun,
     getImportedChunksByPaperId,
@@ -296,7 +337,7 @@ export function useArtifactWorkflowController({
     isAgentModelAccessAvailable,
     onAnalysisHint,
     onArtifactCatalogChanged: handleArtifactCatalogChanged,
-    onArtifactTabsChanged: setArtifactTabs,
+    onArtifactTabsChanged: handleArtifactTabsChanged,
     onArtifactTasksChanged: handleArtifactTasksChanged,
     onThinReadingDocumentPersisted: ({ artifactId, document, nodeId }) => {
       const node = document.nodes[nodeId];

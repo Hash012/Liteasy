@@ -1,15 +1,13 @@
 import { useMemo, type ReactNode } from "react";
 import { Button, Tooltip } from "@fluentui/react-components";
 import type { Root } from "mdast";
-import ReactMarkdown, { type Components } from "react-markdown";
-import rehypeKatex from "rehype-katex";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
+import { type Components } from "react-markdown";
 import {
-  assistantMarkdownComponents,
-  normalizeAssistantMathDelimiters
-} from "../assistant/AssistantMarkdown";
+  MarkdownContent,
+  normalizeMarkdownMathDelimiters
+} from "../markdown/MarkdownContent";
 import type { ThinReadingAnchor, ThinReadingSummarySentence } from "./thinReading.types";
+import type { PaperAnchorEntity } from "../paper-anchors/paperAnchorEntity";
 
 type SentenceRange = { end: number; sentence: ThinReadingSummarySentence; start: number };
 type AnchorRange = { anchor: ThinReadingAnchor; end: number; start: number };
@@ -29,6 +27,7 @@ type ThinReadingMarkdownProps = {
   marksVisible: boolean;
   onDeepen: (text: string, sentence: ThinReadingSummarySentence) => void;
   onSelectAnchor: (anchorId: string) => void;
+  paperAnchors?: readonly PaperAnchorEntity[];
   renderReferences: (sentence: ThinReadingSummarySentence) => ReactNode;
   sentences: readonly ThinReadingSummarySentence[];
   summary: string;
@@ -36,18 +35,18 @@ type ThinReadingMarkdownProps = {
 
 /** Preserve the original Markdown separators instead of flattening its lists, tables and math. */
 function buildMarkdownRanges(summary: string, sentences: readonly ThinReadingSummarySentence[]) {
-  let markdown = normalizeAssistantMathDelimiters(summary);
+  let markdown = normalizeMarkdownMathDelimiters(summary);
   let cursor = 0;
   let ranges: SentenceRange[] = [];
   for (const sentence of sentences) {
-    const text = normalizeAssistantMathDelimiters(sentence.text);
+    const text = normalizeMarkdownMathDelimiters(sentence.text);
     const start = markdown.indexOf(text, cursor);
     if (start < 0) {
       // Old artifacts sometimes store an edited summary alongside the authoritative evidence text.
-      markdown = sentences.map((entry) => normalizeAssistantMathDelimiters(entry.text)).join("\n\n");
+      markdown = sentences.map((entry) => normalizeMarkdownMathDelimiters(entry.text)).join("\n\n");
       cursor = 0;
       ranges = sentences.map((entry) => {
-        const length = normalizeAssistantMathDelimiters(entry.text).length;
+        const length = normalizeMarkdownMathDelimiters(entry.text).length;
         const range = { end: cursor + length, sentence: entry, start: cursor };
         cursor += length + 2;
         return range;
@@ -186,7 +185,7 @@ function readingMarkupPlugin(ranges: SentenceRange[], anchors: AnchorRange[]) {
 /** Rich prose keeps sentence evidence and association marks while exposing explicit next layers. */
 export function ThinReadingMarkdown({
   activeAnchorId, anchors, generating, locale, marksVisible, onDeepen, onSelectAnchor,
-  renderReferences, sentences, summary
+  paperAnchors, renderReferences, sentences, summary
 }: ThinReadingMarkdownProps) {
   const { markdown, ranges } = useMemo(() => buildMarkdownRanges(summary, sentences), [summary, sentences]);
   const sentenceById = new Map(sentences.map((sentence) => [sentence.id, sentence]));
@@ -194,11 +193,10 @@ export function ThinReadingMarkdown({
   const plugin = useMemo(() => readingMarkupPlugin(ranges, anchors.flatMap((anchor) => {
     const range = ranges.find(({ sentence }) => sentence.id === anchor.summarySentenceId);
     if (!range || range.sentence.text.slice(anchor.start, anchor.end) !== anchor.text) return [];
-    const start = range.start + normalizeAssistantMathDelimiters(range.sentence.text.slice(0, anchor.start)).length;
+    const start = range.start + normalizeMarkdownMathDelimiters(range.sentence.text.slice(0, anchor.start)).length;
     return [{ anchor, end: start + anchor.text.length, start }];
   })), [anchors, ranges]);
   const components: Components = {
-    ...assistantMarkdownComponents,
     a: ({ children, href, node: _node, ...props }) => {
       if (href?.startsWith("#")) return <a {...props} href={href}>{children}</a>;
       return /^https?:\/\//u.test(href ?? "")
@@ -257,10 +255,14 @@ export function ThinReadingMarkdown({
     }
   };
   return (
-    <div className="assistant-markdown thin-reading__markdown">
-      <ReactMarkdown components={components} rehypePlugins={[rehypeKatex]} remarkPlugins={[remarkGfm, remarkMath, plugin]}>
-        {markdown}
-      </ReactMarkdown>
-    </div>
+    <MarkdownContent
+      className="assistant-markdown thin-reading__markdown"
+      components={components}
+      normalizeMath={false}
+      paperAnchors={paperAnchors}
+      remarkPlugins={[plugin]}
+      streaming={generating}
+      value={markdown}
+    />
   );
 }

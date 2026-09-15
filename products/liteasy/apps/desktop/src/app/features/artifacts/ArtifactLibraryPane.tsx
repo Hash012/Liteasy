@@ -67,7 +67,7 @@ const artifactTypeLabels: Record<ArtifactType, string> = {
   comparison_table: "文献对比",
   layered_graph: "分层关系图",
   mindmap: "思维导图",
-  ppt: "演示文稿大纲",
+  ppt: "演示文稿",
   skill_doc: "Skill 文档",
   thin_reading: "薄读",
   tree: "树形分析"

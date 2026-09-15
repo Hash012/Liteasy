@@ -12,7 +12,7 @@ const modalityLabels = {
   comparison_table: "对比表",
   layered_graph: "分层关系图",
   mindmap: "思维导图",
-  ppt: "PPT 大纲",
+  ppt: "演示文稿",
   thin_reading: "薄读",
   tree: "树形分析"
 } as const;
@@ -130,7 +130,7 @@ export async function runAgentArtifactAnalysis(
         "严格使用 Markdown unordered list 表达层级，每层缩进两个空格；不要使用制表符、ASCII 树线或代码围栏。",
         "以每篇论文为一级分析对象，继续展开研究动机、问题定义、关键假设、数据流、算法步骤、公式/变量、模型与组件、数据集、基线、指标、定量结果、消融、效率、失败模式、局限与可复现信息。",
         "证据中出现的专有名词、模型名、组件名、算法名、数据集名和指标名都要作为可继续展开的节点，解释它是什么、在方法中的位置、与相邻概念的关系。",
-        "不要为了缩短输出而合并有独立含义的概念，也不要设置固定节点数；深度和规模应随证据量增长。每个事实节点附 evidence ID。",
+        "按证据覆盖重要概念；控制深度与输出体积，过大的主题建议拆为多个文件。证据 ID 仅放结构化引用字段，不向读者展示。",
         "证据不足时明确标注未知项，不能用常识补写。"
       ].join("")
     : "";
@@ -186,10 +186,12 @@ export async function runAgentArtifactAnalysis(
     }
     if (event.type === "analysis.subtask.delta") {
       const current = subtaskDrafts.get(event.subtaskId);
+      subtaskDrafts.delete(event.subtaskId);
       subtaskDrafts.set(event.subtaskId, {
-        content: `${current?.content ?? ""}${event.delta}`,
+        content: `${current?.content ?? ""}${event.delta}`.slice(-6_000),
         label: event.label
       });
+      if (subtaskDrafts.size > 16) subtaskDrafts.delete(subtaskDrafts.keys().next().value!);
       const visibleWorklog = [...subtaskDrafts.values()]
         .map((draft) => `### ${draft.label}\n\n${draft.content}`)
         .join("\n\n");
@@ -207,6 +209,7 @@ export async function runAgentArtifactAnalysis(
     }
     if (event.type === "assistant.delta") {
       partialAnswer += event.delta;
+      if (artifactType === "ppt" || artifactType === "comparison_table") partialAnswer = partialAnswer.slice(-1_600);
       const partialOutlineNodes = artifactType === "tree" || artifactType === "mindmap" || artifactType === "layered_graph"
         ? parseStreamingOutlineMarkdown(partialAnswer)
         : undefined;
@@ -228,7 +231,9 @@ export async function runAgentArtifactAnalysis(
     result = await client.send(
       { artifactType, message, mode: "qa" },
       {
-        attachments: [buildSelectionAttachment(options)],
+        ...(options?.contextRefs?.length
+          ? { contextRefs: options.contextRefs, contextPurpose: message }
+          : { attachments: [buildSelectionAttachment(options)] }),
         idempotencyKey
       }
     );

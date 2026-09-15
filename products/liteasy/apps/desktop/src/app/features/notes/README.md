@@ -1,13 +1,34 @@
 # Notes
 
-Notes is a personal directory view over existing sources. `notesRepository` stores folder metadata and references in the same account-scoped `ObjectStorage` used by the object workbench. It stores no note bodies, PDF annotation publication fields, generated pages, or multimodal payloads.
+Notes is a personal directory view over existing sources, with an optional connection to Markdown folders such as an Obsidian Vault. `notesRepository` stores folder metadata and references in the account-scoped `ObjectStorage`. User-created and imported note bodies are durable `content.note` objects in that store (desktop SQLite, browser IndexedDB). Native annotations and generated artifacts retain their own save and publication flow.
 
-`default/paper` reads user-written PDF comments and text boxes from the existing PDF store. `default/board` maps user-created object notes currently on a board; `default/note` contains other user object notes. `default/artifact` collects thin-reading annotations and explicitly saved generated pages. A plain highlight with no user comment is not automatically classified as user-written text, but can still be collected explicitly. Images without user text are not automatically added.
+## Sources and directory references
 
-Creating a directory, copying a reference, and removing a directory reference do not modify or delete any source. User-note directory entries follow the object's latest revision. Generated pages retain the exact object revision captured when collected. PDF and thin-reading annotation references resolve through their native identities. Missing sources remain visible as unavailable references so users can clean their directories. Empty user folders can be deleted; built-in folders cannot.
+- `default/paper` reads PDF comments, text boxes, and entries with saved AI reviews. A plain highlight can be collected explicitly. Its native annotation identity is retained, so later comment/review edits appear in the same Note entry.
+- `default/board` lists board files and user notes placed on boards. Board files open their actual canvas.
+- `default/note` contains other user-created or imported Markdown notes.
+- `default/artifact` collects thin-reading annotations and explicitly saved generated pages.
 
-`useNotesController` handles scope, read adapters, live refresh, and source-opening callbacks. `NotesPanel` depends only on its model. The shell injects the existing `ObjectRepository`, paper and artifact readers, and navigation callbacks. Features use `useNotes()?.collect(target, folderId)` and call `notifyNotesSourcesChanged()` after their own native source saves complete. Object-store commits already notify live Notes views through `subscribeObjectStorage`.
+Creating a personal directory, copying a reference, and removing a reference do not modify or delete the source. User-note and board directory references follow the latest object revision. Generated pages retain the exact revision captured when collected. PDF and thin-reading annotations resolve by native identity. Missing sources remain manageable as unavailable references. Empty user folders can be deleted; built-in and connected folders are not deleted by this view.
 
-Editing a user object note changes that object's current head. Existing pinned board placements, evidence, and history retain their revision. Native PDF/thin-reading notes are edited through **打开来源**, preserving their owner’s save and publication flow. Generated artifacts have no edit action in Notes.
+The list displays filenames. Selecting one opens its contents separately. Imported Markdown filenames remain stable when the body is edited. Native PDF/thin-reading entries are edited through **打开来源**; generated artifacts have no edit action in Notes. Editing a user object note advances its current head, while existing pinned board placements, evidence, and history retain their recorded revision.
 
-This module is a bounded personal view, not the proposed full virtual resource filesystem.
+## Markdown import and connected folders
+
+**导入 Markdown 文件** accepts `.md` and `.markdown` files and creates editable, durable user notes. Dragging a folder imports its Markdown hierarchy; hidden directories such as `.obsidian` and non-Markdown attachments are omitted. Markdown text, frontmatter, and links are preserved verbatim. Import does not resolve Obsidian plugins or wiki links into Liteasy objects.
+
+**连接文件夹 / Obsidian Vault** uses `note-files/noteFileService` to retain a user-selected filesystem grant for this account. The service owns native/browser access, relative-path validation, version checks, and mount persistence. Connected `.md`, `.markdown`, and `.canvas` files appear by filename. A Canvas file opens through the board controller and can be dragged through the workbench's trusted capture ticket.
+
+The physical Markdown file is authoritative for a connected note. An object projection keyed by `note-file-${mountId}-${path}` provides a stable identity and immutable revisions for AI context and board cards; `ObjectRepository.setObjectFileBinding` retains its path. Editing writes to disk with the version captured when the editor opened. A concurrent edit in Obsidian rejects the write and preserves the user's draft. Refresh then projects the current disk contents. External file revisions do not rewrite previously pinned AI evidence.
+
+Copying a connected file into a personal Note directory records an `external-file` reference. Dropping content onto a connected filesystem directory creates a standalone Markdown file (or a Canvas file for a board), preserving included AI review and source text/link. Existing filenames receive a numeric suffix; the service's create-only write still rejects a concurrent name collision. This operation creates an export on disk and does not move the original source. Markdown attachments are preserved as source references/text; the import/export adapter does not copy a Vault's binary asset tree.
+
+## Refresh and integration
+
+`useNotesController` coordinates sources and files; `NotesPanel` depends only on its model. The shell injects the existing `ObjectRepository`, paper/artifact readers, trusted capture receiver, and navigation/file callbacks. `notesFileDrop` reads HTML drag entries before asynchronous file IO and bounds folder traversal.
+
+Local objects, directory references, and successful saves are published before optional PDF/artifact loading. An unavailable or hanging remote artifact request cannot hide a freshly saved local note or hold its save open. A failed PDF read is isolated to that paper. Previously loaded source entries remain in the current view during temporary failures, with a compact source-availability status. After an application restart, unresolved native references may temporarily appear unavailable until their source can be read. External refresh requests are coalesced so object-projection notifications do not enqueue a complete Vault scan for each file.
+
+Features collect references through `useNotes()?.collect(target, folderId)` and call `notifyNotesSourcesChanged()` after successful native source saves. `subscribeObjectStorage` and `subscribeNoteFiles` provide local change notifications. File refresh also occurs when Notes is opened, the application regains focus, or the user selects refresh; this is not a filesystem watch daemon.
+
+This module implements personal views and selected Markdown/Canvas folders. The broader virtual resource filesystem remains a separate proposal.

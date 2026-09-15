@@ -26,7 +26,16 @@ import {
   ZoomInRegular,
   ZoomOutRegular,
   ArrowExpandRegular,
+  FolderOpenRegular,
+  SaveRegular,
+  SaveCopyRegular,
+  DeleteRegular,
 } from "@fluentui/react-icons";
+import {
+  connectionPath,
+  connectionPoint,
+  type BoardFileBinding,
+} from "./boardFileFormat";
 import { ObjectPlacementCard } from "./ObjectPlacementCard";
 import { BOARD_PLACEMENT_MIME, readPlacementDrag } from "./boardPlacementDrag";
 import { ObjectDetails } from "../object-surface/ObjectSurface";
@@ -36,6 +45,8 @@ import {
   type ObjectEnvelope,
   type ObjectRef,
   type Placement,
+  type BoardSide,
+  type BoardConnection,
 } from "../objects/object.types";
 import {
   makeObjectTransfer,
@@ -87,6 +98,17 @@ export type WorkbenchViewModel = {
   saveAnswer(): Promise<unknown>;
   openSource(object: ObjectEnvelope): Promise<ObjectEnvelope | undefined>;
   refresh(): Promise<void>;
+  boardFile?: BoardFileBinding;
+  fileBusy?: boolean;
+  chooseBoardFile?(): Promise<void>;
+  saveBoardFile?(choose?: boolean): Promise<void>;
+  connect?(
+    from: Placement,
+    fromSide: BoardSide,
+    to: Placement,
+    toSide: BoardSide,
+  ): Promise<unknown>;
+  removeConnection?(edgeId: string): Promise<unknown>;
 };
 export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
   useEffect(() => {
@@ -121,8 +143,44 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
   }, [model.tray.length]);
   const [selected, setSelected] = useState<string[]>([]);
   const [edges, setEdges] = useState<
-    Array<{ id: string; from: string; to: string; label: string }>
+    Array<BoardConnection & { semantic?: boolean }>
   >([]);
+  const [connection, setConnection] = useState<{
+    from: Placement;
+    side: BoardSide;
+    point?: { x: number; y: number };
+  }>();
+  const connectionRef = useRef(connection);
+  connectionRef.current = connection;
+  const connectionActions = {
+    active: !!connection,
+    start(from: Placement, side: BoardSide) {
+      const next = { from, side };
+      connectionRef.current = next;
+      setConnection(next);
+      model.setStatus("拖到另一张卡片的连接点；也可点击目标连接点。Esc 取消。");
+    },
+    finish(to: Placement, toSide: BoardSide) {
+      const start = connectionRef.current;
+      if (!start) {
+        this.start(to, toSide);
+        return;
+      }
+      if (start.from.placementId === to.placementId) {
+        this.start(to, toSide);
+        return;
+      }
+      connectionRef.current = undefined;
+      setConnection(undefined);
+      void model
+        .connect?.(start.from, start.side, to, toSide)
+        .catch((e) => model.setStatus(e.message));
+    },
+    cancel() {
+      connectionRef.current = undefined;
+      setConnection(undefined);
+    },
+  };
   useEffect(() => {
     let active = true;
     const board = model.board;
@@ -136,13 +194,14 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
     ])
       .then(([visual, semantic]) => {
         if (!active) return;
-        const lines = visual.map((edge) => ({
-          id: edge.edgeId,
-          from: edge.from,
-          to: edge.to,
-          label: edge.label ?? "连线",
-        }));
+        const lines: Array<BoardConnection & { semantic?: boolean }> = [
+          ...visual,
+        ];
+        const represented = new Set(
+          visual.flatMap((edge) => (edge.relationId ? [edge.relationId] : [])),
+        );
         for (const relation of semantic) {
+          if (represented.has(relation.relationId)) continue;
           const from = model.placements.find(
             (p) => JSON.stringify(p.ref) === JSON.stringify(relation.from),
           );
@@ -151,7 +210,9 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
           );
           if (from && to)
             lines.push({
-              id: relation.relationId,
+              edgeId: relation.relationId,
+              kind: relation.predicate,
+              semantic: true,
               from: from.placementId,
               to: to.placementId,
               label:
@@ -183,6 +244,8 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
   cachedCards.current = cards;
   useEffect(() => {
     setSelected([]);
+    connectionRef.current = undefined;
+    setConnection(undefined);
     setDetails(undefined);
     setCards({});
   }, [model.repository, model.board?.objectId]);
@@ -288,24 +351,80 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
         <span className="object-workbench-title">
           {model.board?.title ?? "研究白板"}
         </span>
-        <Tooltip content="关闭白板" relationship="description">
-          <Button
-            appearance="subtle"
-            size="small"
-            type="button"
-            aria-label="关闭白板"
-            icon={<DismissRegular />}
-            onClick={() => {
-              setDetails(undefined);
-              model.closeOpened();
-              model.setVisible(false);
-            }}
-          />
-        </Tooltip>
+        <span className="object-board-file-actions">
+          {model.chooseBoardFile ? (
+            <Tooltip content="打开白板文件" relationship="description">
+              <Button
+                size="small"
+                appearance="subtle"
+                aria-label="打开白板文件"
+                icon={<FolderOpenRegular />}
+                disabled={model.fileBusy}
+                onClick={() => void model.chooseBoardFile?.().catch(error)}
+              />
+            </Tooltip>
+          ) : null}
+          {model.saveBoardFile ? (
+            <Tooltip
+              content={
+                model.boardFile
+                  ? `保存 ${model.boardFile.name}`
+                  : "选择白板存储文件"
+              }
+              relationship="description"
+            >
+              <Button
+                size="small"
+                appearance="subtle"
+                aria-label={
+                  model.boardFile ? "保存白板文件" : "选择白板存储文件"
+                }
+                icon={<SaveRegular />}
+                disabled={!model.board || model.fileBusy}
+                onClick={() => void model.saveBoardFile?.().catch(error)}
+              />
+            </Tooltip>
+          ) : null}
+          <Tooltip content="关闭白板" relationship="description">
+            <Button
+              appearance="subtle"
+              size="small"
+              type="button"
+              aria-label="关闭白板"
+              icon={<DismissRegular />}
+              onClick={() => {
+                setDetails(undefined);
+                model.closeOpened();
+                model.setVisible(false);
+              }}
+            />
+          </Tooltip>
+        </span>
       </header>
       <div
         className={`object-board${showGrid ? " has-grid" : ""}`}
         ref={viewport}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") connectionActions.cancel();
+          if (
+            (event.ctrlKey || event.metaKey) &&
+            event.key.toLowerCase() === "s"
+          ) {
+            event.preventDefault();
+            void model.saveBoardFile?.(event.shiftKey).catch(error);
+          }
+        }}
+        onPointerMove={(event) => {
+          const bounds = canvas.current?.getBoundingClientRect();
+          if (connectionRef.current && bounds)
+            setConnection({
+              ...connectionRef.current,
+              point: {
+                x: (event.clientX - bounds.left) / zoom,
+                y: (event.clientY - bounds.top) / zoom,
+              },
+            });
+        }}
         onPointerDown={(event) => {
           if (
             event.target === event.currentTarget ||
@@ -315,6 +434,23 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
         }}
         onDragOver={(event) => {
           event.preventDefault();
+          if (
+            event.dataTransfer.types?.includes(
+              "application/x-liteasy-board-connection",
+            )
+          ) {
+            event.dataTransfer.dropEffect = "link";
+            const bounds = canvas.current?.getBoundingClientRect();
+            if (connectionRef.current && bounds)
+              setConnection({
+                ...connectionRef.current,
+                point: {
+                  x: (event.clientX - bounds.left) / zoom,
+                  y: (event.clientY - bounds.top) / zoom,
+                },
+              });
+            return;
+          }
           event.dataTransfer.dropEffect =
             event.dataTransfer.types.includes(BOARD_PLACEMENT_MIME) &&
             !event.ctrlKey &&
@@ -344,6 +480,14 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
         onDrop={(e) => {
           e.preventDefault();
           e.stopPropagation();
+          if (
+            e.dataTransfer.types?.includes(
+              "application/x-liteasy-board-connection",
+            )
+          ) {
+            connectionActions.cancel();
+            return;
+          }
           const dragged = readPlacementDrag(e.dataTransfer);
           const placement =
             dragged?.boardId === model.board?.objectId
@@ -419,7 +563,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
                   markerHeight="8"
                   refX="7"
                   refY="4"
-                  orient="auto"
+                  orient="auto-start-reverse"
                 >
                   <path d="M0,0 L8,4 L0,8" fill="currentColor" />
                 </marker>
@@ -432,25 +576,55 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
                   (p) => p.placementId === edge.to,
                 );
                 if (!from || !to) return null;
-                const x1 = from.position.x + from.size.width / 2,
-                  y1 = from.position.y + from.size.height,
-                  x2 = to.position.x + to.size.width / 2,
-                  y2 = to.position.y + to.size.height;
-                const lane = Math.max(y1, y2) + 24;
+                const a = connectionPoint(from, edge.fromSide ?? "bottom");
+                const b = connectionPoint(to, edge.toSide ?? "top");
                 return (
-                  <g key={edge.id}>
+                  <g key={edge.edgeId} data-edge-id={edge.edgeId}>
                     <path
-                      d={`M ${x1} ${y1} V ${lane} H ${x2} V ${y2}`}
+                      d={connectionPath(
+                        a,
+                        edge.fromSide ?? "bottom",
+                        b,
+                        edge.toSide ?? "top",
+                        [from, to],
+                      )}
                       fill="none"
                       stroke="currentColor"
-                      markerEnd="url(#object-arrow)"
+                      markerStart={
+                        edge.fromEnd === "arrow"
+                          ? "url(#object-arrow)"
+                          : undefined
+                      }
+                      markerEnd={
+                        edge.toEnd === "none" ? undefined : "url(#object-arrow)"
+                      }
                     />
-                    <text x={(x1 + x2) / 2} y={lane - 6} textAnchor="middle">
-                      {edge.label}
-                    </text>
+                    {edge.label ? (
+                      <text
+                        x={(a.x + b.x) / 2}
+                        y={(a.y + b.y) / 2 - 8}
+                        textAnchor="middle"
+                      >
+                        {edge.label}
+                      </text>
+                    ) : null}
                   </g>
                 );
               })}
+              {connection?.point ? (
+                <path
+                  className="object-connection-preview"
+                  d={connectionPath(
+                    connectionPoint(connection.from, connection.side),
+                    connection.side,
+                    connection.point,
+                    "top",
+                  )}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeDasharray="5 4"
+                />
+              ) : null}
             </svg>
             {model.placements.map((p) => (
               <ObjectPlacementCard
@@ -461,6 +635,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
                 setSelected={setSelected}
                 actions={actions}
                 setDetails={setDetails}
+                connection={model.connect ? connectionActions : undefined}
               />
             ))}
             {!model.placements.length ? (
@@ -533,6 +708,24 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
       {panel === "boards" ? (
         <div className="object-tool-panel" role="region" aria-label="白板列表">
           {panelHeader}
+          {model.boardFile ? (
+            <div
+              className="object-board-file-location"
+              title={model.boardFile.path}
+            >
+              <span>{model.boardFile.name}</span>
+              <Tooltip content="另存为白板文件" relationship="description">
+                <Button
+                  size="small"
+                  appearance="subtle"
+                  aria-label="另存为白板文件"
+                  icon={<SaveCopyRegular />}
+                  disabled={model.fileBusy}
+                  onClick={() => void model.saveBoardFile?.(true).catch(error)}
+                />
+              </Tooltip>
+            </div>
+          ) : null}
           <div className="object-toolbar">
             <select
               aria-label="选择白板"
@@ -695,6 +888,27 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
       {panel === "relations" ? (
         <div className="object-tool-panel" role="region" aria-label="连接内容">
           {panelHeader}
+          {edges
+            .filter((edge) => !edge.semantic)
+            .map((edge) => (
+              <div className="object-connection-row" key={edge.edgeId}>
+                <span>
+                  {cards[edge.from]?.title ?? "卡片"} →{" "}
+                  {cards[edge.to]?.title ?? "卡片"}
+                </span>
+                <Tooltip content="移除连接" relationship="description">
+                  <Button
+                    size="small"
+                    appearance="subtle"
+                    aria-label="移除连接"
+                    icon={<DeleteRegular />}
+                    onClick={() =>
+                      void model.removeConnection?.(edge.edgeId).catch(error)
+                    }
+                  />
+                </Tooltip>
+              </div>
+            ))}
           <div className="object-toolbar">
             <Button
               disabled={!refs.length}

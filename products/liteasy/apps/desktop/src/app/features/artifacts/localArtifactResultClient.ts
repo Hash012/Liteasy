@@ -1,6 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { AgentArtifactResult } from "./artifact.types";
-import type { ArtifactResultClient } from "./artifactResultClient";
+import { isArtifactResult, type ArtifactResultClient } from "./artifactResultClient";
 
 const key = "liteasy.local-agent-artifacts.v1";
 type Transport = {
@@ -48,15 +48,21 @@ export function createLocalArtifactResultClient(transport?: Transport): Artifact
     delete: (artifactId) => invoke("delete_local_agent_artifact", { artifactId })
   } : browserTransport());
   return {
-    list: storage.list,
+    async list(signal) {
+      signal?.throwIfAborted();
+      const documents = await storage.list();
+      signal?.throwIfAborted();
+      return documents.filter(isArtifactResult);
+    },
     delete: storage.delete,
     async save(document, signal) {
       signal?.throwIfAborted();
+      if (!isArtifactResult(document)) throw new Error("产物格式无效，无法保存。");
       return storage.save(document);
     },
     async rename(artifactId, title) {
       const document = (await storage.list()).find((item) => item.artifactId === artifactId);
-      if (!document) throw new Error("本地产物不存在。");
+      if (!document || !isArtifactResult(document)) throw new Error("本地产物不存在或格式无效。");
       const renamed = { ...document, title };
       await storage.save(renamed);
       return renamed;

@@ -1,3 +1,5 @@
+import { formatPaperAnchorText } from "../paper-anchors/paperAnchorEntity";
+import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
 import { ObjectAssetImage } from "./ObjectAssetImage";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button, Tooltip } from "@fluentui/react-components";
@@ -13,7 +15,7 @@ import {
   type ObjectEnvelope,
   type ObjectRef,
 } from "../objects/object.types";
-import { AssistantMarkdown } from "../assistant/AssistantMarkdown";
+import { MarkdownContent } from "../markdown/MarkdownContent";
 import {
   makeObjectTransfer,
   writeObjectTransfer,
@@ -71,11 +73,11 @@ export function ObjectSurface({
   return (
     <article
       className={`object-surface object-${presentation}${editor ? " has-editor" : ""}`}
-      aria-label={object.title}
+      aria-label={formatPaperAnchorText(object.title, object.paperAnchors)}
     >
       {presentation !== "canvas" ? (
         <>
-          <strong>{object.title}</strong>
+          <strong>{formatPaperAnchorText(object.title, object.paperAnchors)}</strong>
           <span className="object-meta">
             {partial ? "未完成快照 · " : ""}已保存到本机
           </span>
@@ -121,9 +123,10 @@ export function ObjectSurface({
                 : undefined
             }
           >
-            <AssistantMarkdown value={text} />
+            <MarkdownContent value={text} paperAnchors={object.paperAnchors} />
           </div>
         ) : null)}
+      {object.lifecycle !== "tombstoned" ? <PaperAnchorReferences anchors={object.paperAnchors ?? []} /> : null}
       {sourceText ? (
         <details className="object-source-quote" open>
           <summary
@@ -132,7 +135,7 @@ export function ObjectSurface({
           >
             原文
           </summary>
-          <blockquote>{sourceText}</blockquote>
+          <blockquote><MarkdownContent value={sourceText} /></blockquote>
         </details>
       ) : null}
       {presentation !== "canvas" ? (
@@ -246,7 +249,8 @@ export function ObjectDetails({
     <section className="object-details" aria-label="内容详情">
       <Button onClick={onClose}>关闭详情</Button>
       <h3>{object.title}</h3>
-      <AssistantMarkdown value={objectDisplayText(object)} />
+      <MarkdownContent value={objectDisplayText(object)} paperAnchors={object.paperAnchors} />
+      <PaperAnchorReferences anchors={object.paperAnchors ?? []} />
       {object.assets.map((asset) => (
         <ObjectAssetImage
           key={asset.assetId}

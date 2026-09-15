@@ -10,6 +10,8 @@ import { DynamicCanvas } from "../generative-ui/DynamicCanvas";
 import type { UIDslActionRef } from "../generative-ui/generativeUi.types";
 import { AgentActivityCard } from "./AgentActivityCard";
 import { AssistantMarkdown } from "./AssistantMarkdown";
+import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
+import { collectPaperAnchors, formatPaperAnchorText, paperAnchorsFromCitations } from "../paper-anchors/paperAnchorEntity";
 import {
   ArrowClockwiseRegular,
   ChevronDownRegular,
@@ -125,10 +127,11 @@ export function AssistantMessageList({
   const selectedText = useRef("");
   const selectedMessageId = useRef("");
   const captureInput = (message: AssistantMessage) => {
-    const text = getAnswerDisplayText(message.content || message.agentActivity?.generatedContent || "");
+    const paperAnchors = collectPaperAnchors(message.paperAnchors ?? [], paperAnchorsFromCitations(message.citations ?? [], papers, message.id));
+    const text = formatPaperAnchorText(getAnswerDisplayText(message.content || message.agentActivity?.generatedContent || ""), paperAnchors);
     const excerpt = selectedMessageId.current === message.id && selectedText.current && text.includes(selectedText.current)
       ? selectedText.current : text;
-    return { messageId: message.id, text, excerpt,
+    return { messageId: message.id, text, excerpt, paperAnchors,
       partial: !!message.agentActivity && message.agentActivity.status !== "completed" };
   };
   if (messages.length === 0) {
@@ -146,6 +149,7 @@ export function AssistantMessageList({
     }}>
       {captureStatus ? <p role="status">{captureStatus}</p> : null}
       {messages.map((message, index) => {
+        const paperAnchors = collectPaperAnchors(message.paperAnchors ?? [], paperAnchorsFromCitations(message.citations ?? [], papers, message.id));
         return (
           <article
             aria-label={message.role === "user" ? "你的消息" : "AI 回复"}
@@ -175,7 +179,10 @@ export function AssistantMessageList({
               {message.content &&
               (!message.uiDsl || message.citations?.length || message.audit || message.executionTrace) ? (
                 message.role === "assistant" ? (
-                  <AssistantMarkdown className="assistant-answer-text assistant-markdown" value={getAnswerDisplayText(message.content)} />
+                  <AssistantMarkdown className="assistant-answer-text assistant-markdown"
+                    paperAnchors={paperAnchors}
+                    streaming={message.agentActivity?.status === "working"}
+                    value={getAnswerDisplayText(message.content)} />
                 ) : (
                   <ExpandableUserMessage value={message.content} />
                 )
@@ -223,24 +230,21 @@ export function AssistantMessageList({
               {message.uiDsl && !message.uiDsl.id.startsWith("ui-answer-") ? (
                 <DynamicCanvas
                   document={message.uiDsl}
+                  paperAnchors={paperAnchors}
+                  onOpenPaperAnchor={onOpenCitation ? (anchor) => {
+                    const citation = message.citations?.find((entry) => entry.paperId === anchor.source.paperId &&
+                      entry.page === anchor.locator.page && entry.snippet === anchor.snapshot.quote);
+                    if (citation) onOpenCitation(citation);
+                  } : undefined}
                   onAction={(action) => onDynamicAction?.(action, message.uiDsl?.audit.traceId ?? "")}
                 />
               ) : null}
-              {message.citations?.length ? (
-                <details className="assistant-citation-card">
-                  <summary>查看引用原文</summary>
-                  {message.citations.filter((citation, index, citations) => citations.findIndex((other) =>
-                    other.paperId === citation.paperId && other.page === citation.page && other.snippet === citation.snippet
-                  ) === index).map((citation, citationIndex) => (
-                    <div key={`${citation.paperId}-${citation.page}-${citationIndex}`}>
-                      <Button appearance="subtle" disabled={!onOpenCitation} onClick={() => onOpenCitation?.(citation)} size="small">
-                        {papers.find((paper) => paper.id === citation.paperId)?.title ?? "引用文献"} · 第 {citation.page} 页
-                      </Button>
-                      <blockquote>{citation.snippet}</blockquote>
-                    </div>
-                  ))}
-                </details>
-              ) : null}
+              <PaperAnchorReferences anchors={paperAnchors} className="assistant-citation-card"
+                onOpen={onOpenCitation ? (anchor) => {
+                  const citation = message.citations?.find((entry) => entry.paperId === anchor.source.paperId &&
+                    entry.page === anchor.locator.page && entry.snippet === anchor.snapshot.quote);
+                  if (citation) onOpenCitation(citation);
+                } : undefined} />
               {message.audit ? (
                 <div className={`assistant-audit-card ${message.audit.verdict}`}>
                   <strong>模型审计</strong>
@@ -361,7 +365,7 @@ export function AssistantMessageList({
                     <button
                       aria-label="复制回复"
                       className="assistant-message-action"
-                      onClick={() => void navigator.clipboard?.writeText(getAnswerDisplayText(message.content))}
+                      onClick={() => void navigator.clipboard?.writeText(formatPaperAnchorText(getAnswerDisplayText(message.content), paperAnchors))}
                       title="复制回复"
                       type="button"
                     >

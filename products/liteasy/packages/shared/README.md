@@ -30,3 +30,13 @@ cd products/liteasy/apps/desktop && npm run schema:objects
 桌面构建会重新生成并检查这些文件。六类对象使用严格的类型化内容，未知类型仅允许安全读取和导出。
 这些新增契约供本地对象仓库使用；旧 `/v1/agent-artifacts` 仍读写 `liteasy.agent-artifact/v1`，
 不能向旧端点提交 object envelope。P0 未新增云对象写入或同步端点。
+
+## 生成内容与资源契约
+
+`authoredArtifact.v1.schema.json` 定义可视化幻灯片和层级大纲，
+`authoredResourceFile.v1.schema.json` 定义 `.slides.json` / `.outline.json` 的同源文件表示：`content` 保留创作结构，`sources` 保留论文锚点实体和 ContextRef，不复制完整分析正文；
+`paperAnchorEntity.v1.schema.json` 定义带固定出处呈现的论文锚点，
+`resourceRef.v1.schema.json` 定义明确 scope、provider 和内容版本的资源引用。
+通过桌面 `npm run schema:resources` 从 Zod 真源生成，桌面构建同时更新这些文件。
+它们是应用层契约；正式 `/v1/agent-artifacts` 继续接收原 v1 记录，
+结构化正文和锚点作为可选字段保存，不需要另建正文存储。

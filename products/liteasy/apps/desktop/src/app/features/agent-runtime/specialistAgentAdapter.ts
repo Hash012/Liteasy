@@ -117,8 +117,8 @@ function validateInstruction(value: unknown) {
     throw new Error("Specialist instruction must be a non-empty string");
   }
   const instruction = value.trim();
-  if (instruction.length > 8000) {
-    throw new Error("Specialist instruction exceeds 8000 characters");
+  if (instruction.length > 24_000) {
+    throw new Error("任务要求及补充上下文超过 24000 字符，请减少内容后重试。");
   }
   return instruction;
 }

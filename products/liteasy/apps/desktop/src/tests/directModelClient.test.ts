@@ -81,7 +81,7 @@ test.each([
   'data: not-json\n\n'
 ])("rejects incomplete, truncated or failed generation instead of returning success", (events) => {
   const stream = createDirectModelStream("openai", vi.fn());
-  stream.push(new TextEncoder().encode(events));
+  try { stream.push(new TextEncoder().encode(events)); } catch { /* The transport now stops at the first invalid frame. */ }
   expect(() => stream.finish()).toThrow();
 });
 
@@ -118,7 +118,7 @@ test("preserves the final streamed delta before reporting the output limit", () 
   const reasoning = vi.fn();
   const delta = vi.fn();
   const stream = createDirectModelStream("openai", delta, reasoning);
-  stream.push(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"正文草稿","reasoning_content":"分析参考"},"finish_reason":"length"}]}\n\n'));
+  expect(() => stream.push(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"正文草稿","reasoning_content":"分析参考"},"finish_reason":"length"}]}\n\n'))).toThrow("长度上限");
   expect(() => stream.finish()).toThrow("长度上限");
   expect(delta).toHaveBeenCalledWith("正文草稿", "正文草稿");
   expect(reasoning).toHaveBeenCalledWith("分析参考", "分析参考");

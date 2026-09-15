@@ -1,3 +1,5 @@
+import { formatPaperAnchorText, type PaperAnchorEntity } from "../paper-anchors/paperAnchorEntity";
+import { paperAnchorsForArtifact } from "../paper-anchors/paperAnchorAdapters";
 import type { ArtifactOutlineNode, ArtifactTab, ArtifactType } from "./artifact.types";
 import type {
   ArtifactDocumentFormat,
@@ -13,31 +15,28 @@ const artifactTypeLabels: Record<ArtifactType, string> = {
   comparison_table: "文献对比",
   layered_graph: "分层关系图",
   mindmap: "思维导图",
-  ppt: "演示文稿大纲",
+  ppt: "演示文稿",
   skill_doc: "Skill 文档",
   thin_reading: "薄读",
   tree: "树形分析"
 };
 
-const internalEvidenceIdPattern = /\[?\bevidence-[a-z0-9][a-z0-9-]*\b\]?/gi;
 const maximumMarkdownEvidenceQuoteCharacters = 600;
 
-function cleanExportText(value: string) {
-  return value
-    .replace(internalEvidenceIdPattern, "")
+function cleanExportText(value: string, anchors: readonly PaperAnchorEntity[] = []) {
+  return formatPaperAnchorText(value, anchors)
     .replace(/\s+([，。；：,.!?])/g, "$1")
     .replace(/[ \t]{2,}/g, " ")
     .trim();
 }
 
-function removeInternalEvidenceIds(value: string) {
-  return value
-    .replace(internalEvidenceIdPattern, "")
+function removeInternalEvidenceIds(value: string, anchors: readonly PaperAnchorEntity[] = []) {
+  return formatPaperAnchorText(value, anchors)
     .replace(/[ \t]+([，。；：,.!?])/g, "$1");
 }
 
-function safeMarkdownText(value: string) {
-  return cleanExportText(value)
+function safeMarkdownText(value: string, anchors: readonly PaperAnchorEntity[] = []) {
+  return cleanExportText(value, anchors)
     .replace(/[\r\n]+/g, " ")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -58,7 +57,7 @@ function exportedEvidenceIds(ids: readonly string[]) {
   return ids.filter((id) => /^[A-Za-z][A-Za-z0-9_-]{0,119}$/.test(id));
 }
 
-function visualizationToMarkdown(visualizations: readonly VisualizationArtifactV1[]) {
+function visualizationToMarkdown(visualizations: readonly VisualizationArtifactV1[], anchors: readonly PaperAnchorEntity[]) {
   if (!visualizations.length) return "";
   const lines: string[] = ["## 生成可视化", ""];
   visualizations.forEach((artifact, index) => {
@@ -77,10 +76,10 @@ function visualizationToMarkdown(visualizations: readonly VisualizationArtifactV
       });
     } else {
       lines.push(`- 图：${safeMarkdownText(source.sourceFigureId)}`);
-      lines.push(`- 来源：${safeMarkdownText(source.paperId)} · 第 ${source.page} 页`);
+      lines.push(`- 来源：${safeMarkdownText(anchors.find((anchor) => anchor.source.paperId === source.paperId)?.presentation.title ?? "引用文献")} · 第 ${source.page} 页`);
       lines.push(`- 图注：${safeMarkdownText(source.caption)}`);
       if (source.regions.length) {
-        lines.push("", "| 区域 | x | y | width | height | 证据 IDs |", "| --- | ---: | ---: | ---: | ---: | --- |");
+        lines.push("", "| 区域 | x | y | width | height | 论文出处 |", "| --- | ---: | ---: | ---: | ---: | --- |");
         source.regions.forEach((region) => {
           const ids = exportedEvidenceIds(region.evidenceIds);
           const { x, y, width, height } = region.bbox;
@@ -121,10 +120,10 @@ function sourceFiguresToMarkdown(figures: readonly MineruFigure[], tab: Artifact
     const evidenceIds = exportedEvidenceIds(recommendation.evidenceIds);
     lines.push(`### ${safeMarkdownText(caption)}`, "");
     lines.push(`- 图：${safeMarkdownText(figure.id)}`);
-    lines.push(`- 来源：${safeMarkdownText(paperId)} · 第 ${figure.page} 页`);
+    lines.push(`- 来源：${safeMarkdownText(tab.papers?.find((paper) => paper.id === paperId)?.title ?? "引用文献")} · 第 ${figure.page} 页`);
     lines.push(`- 图注：${safeMarkdownText(caption)}`);
     if (evidenceIds.length) {
-      lines.push(`- 证据 IDs：${evidenceIds.join("、")}`);
+      lines.push(`- 论文出处：${evidenceIds.join("、")}`);
     }
     if (index < exported.length - 1) lines.push("");
   });
@@ -141,7 +140,7 @@ function safeFileStem(value: string) {
   return normalized || "Liteasy-产物";
 }
 
-function outlineToMarkdown(nodes: readonly ArtifactOutlineNode[]) {
+function outlineToMarkdown(nodes: readonly ArtifactOutlineNode[], anchors: readonly PaperAnchorEntity[]) {
   const ids = new Set(nodes.map((node) => node.id));
   const byParent = new Map<string | undefined, ArtifactOutlineNode[]>();
   nodes.forEach((node) => {
@@ -154,7 +153,7 @@ function outlineToMarkdown(nodes: readonly ArtifactOutlineNode[]) {
   const visit = (node: ArtifactOutlineNode, depth: number, path: ReadonlySet<string>) => {
     if (path.has(node.id)) return;
     const evidenceCount = node.evidenceIds?.length ?? 0;
-    lines.push(`${"  ".repeat(depth)}- ${cleanExportText(node.label)}${evidenceCount ? `（${evidenceCount} 条证据）` : ""}`);
+    lines.push(`${"  ".repeat(depth)}- ${cleanExportText(node.label, anchors)}${evidenceCount ? `（${evidenceCount} 条证据）` : ""}`);
     const nextPath = new Set(path).add(node.id);
     (byParent.get(node.id) ?? []).forEach((child) => visit(child, depth + 1, nextPath));
   };
@@ -162,7 +161,7 @@ function outlineToMarkdown(nodes: readonly ArtifactOutlineNode[]) {
   return lines.join("\n");
 }
 
-function thinReadingToMarkdown(tab: ArtifactTab) {
+function thinReadingToMarkdown(tab: ArtifactTab, anchors: readonly PaperAnchorEntity[]) {
   const document = tab.thinReadingDocument;
   if (!document) return { markdown: "薄读内容缺失。", isV2: false };
   const lines: string[] = [];
@@ -174,7 +173,8 @@ function thinReadingToMarkdown(tab: ArtifactTab) {
     if (!node) return;
     visited.add(nodeId);
     const headingLevel = Math.min(6, node.depth + 2);
-    const safeText = document.version === "liteasy.thin-reading/v2" ? safeMarkdownText : cleanExportText;
+    const safeText = (value: string) => document.version === "liteasy.thin-reading/v2"
+      ? safeMarkdownText(value, anchors) : cleanExportText(value, anchors);
     lines.push(`${"#".repeat(headingLevel)} ${safeText(node.title)}`, "", safeText(node.summary), "");
     const legacyEvidence = document.version === "liteasy.thin-reading/v1"
       ? document.nodes[nodeId]?.evidence
@@ -202,7 +202,7 @@ function thinReadingToMarkdown(tab: ArtifactTab) {
   Object.keys(document.nodes).forEach(visit);
   if (document.version === "liteasy.thin-reading/v2") {
     const visuals = Object.values(document.nodes).flatMap((node) => node.visualizations);
-    const visual = visualizationToMarkdown(visuals);
+    const visual = visualizationToMarkdown(visuals, anchors);
     if (visual) lines.push("", visual);
     const sourceFigures = sourceFiguresToMarkdown(tab.figures ?? [], tab, document);
     if (sourceFigures) lines.push("", sourceFigures);
@@ -211,14 +211,15 @@ function thinReadingToMarkdown(tab: ArtifactTab) {
   return { markdown: lines.join("\n").trim(), isV2: false };
 }
 
-export function createArtifactMarkdown(tab: ArtifactTab) {
-  if (tab.type === "skill_doc") return `${removeInternalEvidenceIds(tab.markdown?.trim() || `# ${tab.title}`)}\n`;
+export function createArtifactMarkdown(tab: ArtifactTab, options: { includeExportedAt?: boolean } = {}) {
+  const anchors = paperAnchorsForArtifact(tab);
+  if (tab.type === "skill_doc") return `${removeInternalEvidenceIds(tab.markdown?.trim() || `# ${tab.title}`, anchors)}\n`;
 
   const lines = [
     `# ${safeMarkdownText(tab.title)}`,
     "",
     `> 产物类型：${artifactTypeLabels[tab.type]}`,
-    `> 导出时间：${new Date().toLocaleString("zh-CN")}`
+    ...(options.includeExportedAt === false ? [] : [`> 导出时间：${new Date().toLocaleString("zh-CN")}`])
   ];
   if (tab.papers?.length) {
     lines.push(`> 来源论文：${tab.papers.map((paper) => safeMarkdownText(paper.title)).join("；")}`);
@@ -227,16 +228,16 @@ export function createArtifactMarkdown(tab: ArtifactTab) {
 
   let isV2ThinReading = false;
   if (tab.type === "thin_reading") {
-    const thinReadingMarkdown = thinReadingToMarkdown(tab);
+    const thinReadingMarkdown = thinReadingToMarkdown(tab, anchors);
     lines.push(thinReadingMarkdown.markdown);
-    if (tab.answer?.trim()) lines.push("", "## Agent 分析", "", thinReadingMarkdown.isV2 ? safeMarkdownText(tab.answer) : cleanExportText(tab.answer));
+    if (tab.answer?.trim()) lines.push("", "## Agent 分析", "", thinReadingMarkdown.isV2 ? safeMarkdownText(tab.answer, anchors) : cleanExportText(tab.answer, anchors));
     isV2ThinReading = thinReadingMarkdown.isV2;
   } else {
     const outline = tab.outlineNodes?.length
-      ? outlineToMarkdown(tab.outlineNodes)
-      : cleanExportText(tab.outlineMarkdown ?? "");
+      ? outlineToMarkdown(tab.outlineNodes, anchors)
+      : cleanExportText(tab.outlineMarkdown ?? "", anchors);
     if (outline) lines.push("## 结构化内容", "", outline, "");
-    if (tab.answer?.trim()) lines.push("## Agent 分析", "", cleanExportText(tab.answer), "");
+    if (tab.answer?.trim()) lines.push("## Agent 分析", "", cleanExportText(tab.answer, anchors), "");
     if (!outline && !tab.answer?.trim() && tab.preview) {
       lines.push("## 结构化内容", "", `- ${tab.preview.rootLabel}`, ...tab.preview.nodes.map((node) => `  - ${node}`), "");
     }
@@ -249,7 +250,15 @@ export function createArtifactMarkdown(tab: ArtifactTab) {
     });
   }
   const markdown = lines.join("\n").trim();
-  return `${isV2ThinReading ? markdown : removeInternalEvidenceIds(markdown)}\n`;
+  const exportAnchors = anchors.map((anchor) => ({
+    ...anchor,
+    presentation: {
+      ...anchor.presentation,
+      title: safeMarkdownText(anchor.presentation.title),
+      location: safeMarkdownText(anchor.presentation.location),
+    },
+  }));
+  return `${removeInternalEvidenceIds(markdown, exportAnchors)}\n`;
 }
 
 function escapeHtml(value: string) {

@@ -1,3 +1,4 @@
+import { paperCitationOpenRequest } from "../features/paper-anchors/paperAnchorEntity";
 import { useAssistantContextCatalog } from "../controllers/useAssistantContextCatalog";
 import { useArtifactSessionNavigationController } from "../controllers/useArtifactSessionNavigationController";
 import { usePdfMetadataImportController } from "../controllers/usePdfMetadataImportController";
@@ -269,7 +270,7 @@ export function AppShell({
     const local = localArtifactResultClientRef.current;
     const client = () => settingsStoreRef.current.getState()["models.connection_mode"] === "direct" || !loadStoredAccountSession()?.sessionId ? local : cloud;
     artifactResultClientRef.current = {
-      list: () => client().list(), save: (document, signal) => client().save(document, signal),
+      list: (signal) => client().list(signal), save: (document, signal) => client().save(document, signal),
       delete: (id) => client().delete(id), rename: (id, title) => client().rename(id, title)
     };
   }
@@ -1097,6 +1098,10 @@ export function AppShell({
     openObject: (ref) => objectWorkbench.openLink(objectLink(ref)),
     openAnnotation: (paper, annotation) => openEvidenceInReader({ evidenceId: annotation.id, paperId: paper.id, page: annotation.page, quote: annotation.excerpt }),
     dragAnnotation: (paper, annotation, data) => objectWorkbench.port.dragAnnotation?.({ paper, annotation }, data),
+    receiveContextDrop: (data) => objectWorkbench.port.receiveContextDrop!(data),
+    openExternalFile: (file) => objectWorkbench.port.openBoardFile!(file),
+    exportBoardFile: (ref) => objectWorkbench.port.serializeBoardFile!(ref),
+    dragExternalFile: (file, data) => objectWorkbench.port.dragBoardFile?.(file, data),
     listArtifacts: () => artifactResultClientRef.current!.list(),
     openArtifact: (id) => { artifactWorkflow.actions.openArtifact(id); activateArtifactSurface(id); }
   });
@@ -1923,7 +1928,7 @@ export function AppShell({
         <AssistantSidebar
           key={assistantScopeId}
           historyPersistence={assistantHistoryRef.current}
-          onOpenCitation={(citation) => openEvidenceInReader({ evidenceId: `citation-${citation.paperId}-${citation.page}`, paperId: citation.paperId, page: citation.page, quote: citation.snippet })}
+          onOpenCitation={(citation) => openEvidenceInReader(paperCitationOpenRequest(citation))}
           agentClient={assistantAgent.agentClient}
           academicProfile={profileActions.academicProfile}
           artifactTasks={artifactTasks}
@@ -1940,13 +1945,13 @@ export function AppShell({
           onApplyThemePreset={runtimeActionContext.applyThemePreset}
           onResumeArtifactTask={artifactWorkflow.actions.resumeArtifactTask}
           onCancelArtifactTask={artifactWorkflow.actions.cancelArtifactTask}
-          onGenerateArtifact={(artifactType, paperIds, context) => {
+          onGenerateArtifact={(artifactType, paperIds, context, contextRefs) => {
             const ids = paperIds?.length ? paperIds : workspaceStoreRef.current.getSelectedDocumentSet().locked
               ? workspaceStoreRef.current.getSelectedDocumentSet().documentIds : [];
             const papers = ids.map((id) => workspaceStoreRef.current.getState().papers.find((paper) => paper.id === id));
-            if (!papers.length || papers.some((paper) => !paper)) return "请通过 @ 指定论文，或勾选并锁定论文后再生成。";
+            if ((!papers.length && !contextRefs?.length) || papers.some((paper) => !paper)) return "请指定论文或将笔记、白板等资源拖入对话后再生成。";
             const sources = papers.filter((paper): paper is Paper => Boolean(paper));
-            const options = context ? { supplementalContext: context } : undefined;
+            const options = { supplementalContext: context, contextRefs };
             return artifactType === "thin_reading"
               ? sources.map((paper) => artifactWorkflow.actions.startAnalysisForPapers(artifactType, [paper], options)).join("\n")
               : artifactWorkflow.actions.startAnalysisForPapers(artifactType, sources, options);

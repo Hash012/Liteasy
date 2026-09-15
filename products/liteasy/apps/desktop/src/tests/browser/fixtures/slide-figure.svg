@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="120" viewBox="0 0 480 120">
+  <title>渲染测试示意图</title>
+  <rect width="480" height="120" rx="6" fill="#f1f6fa"/>
+  <path d="M44 92V24M44 92H448" fill="none" stroke="#697b8c" stroke-width="2"/>
+  <rect x="86" y="60" width="64" height="32" rx="4" fill="#b8d6ed"/>
+  <rect x="208" y="42" width="64" height="50" rx="4" fill="#7db3dd"/>
+  <rect x="330" y="22" width="64" height="70" rx="4" fill="#397fb3"/>
+</svg>

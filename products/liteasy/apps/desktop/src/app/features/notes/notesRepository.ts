@@ -14,7 +14,7 @@ import {
   type NotesTarget,
 } from "./notes.types";
 
-const targetSchema = z.discriminatedUnion("kind", [
+export const notesTargetSchema = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("object"),
     ref: objectRefSchema,
@@ -30,6 +30,11 @@ const targetSchema = z.discriminatedUnion("kind", [
     artifactId: z.string().min(1),
     annotationId: z.string().min(1),
   }),
+  z.strictObject({
+    kind: z.literal("external-file"),
+    mountId: z.string().min(1),
+    path: z.string().min(1),
+  }),
 ]);
 const folderSchema = z.strictObject({
   folderId: z.string().min(1),
@@ -39,7 +44,7 @@ const folderSchema = z.strictObject({
 const entrySchema = z.strictObject({
   entryId: z.string().min(1),
   folderId: z.string().min(1),
-  target: targetSchema,
+  target: notesTargetSchema,
   createdAt: z.iso.datetime(),
 });
 export function createNotesRepository(storage: ObjectStorage) {
@@ -148,7 +153,7 @@ export function createNotesRepository(storage: ObjectStorage) {
         ]);
     },
     async collect(target: NotesTarget, folderId: string) {
-      targetSchema.parse(target);
+      notesTargetSchema.parse(target);
       await requireFolder(folderId);
       const key = `notes/reference/${encodeURIComponent(folderId)}/${encodeURIComponent(notesTargetKey(target))}`;
       const old = await storage.get(key);

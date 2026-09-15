@@ -1,7 +1,7 @@
 # Liteasy 统一资源文件系统：分层命名空间与链接管理规格
 
 日期：2026-09-14
-状态：**Draft proposal / 改造提案，未实现。** 本文只定义候选架构、实施边界和验收要求，不授权或表示已开展 VFS 实施，不代表上线验收。
+状态：**分阶段改造提案；2026-09-15 已实现产物应用层门面，F0–F3 尚未完成验收。** 本文的大部分目录、专业 provider、变更集和跨服务协议仍为提案。首个有界实现及其限制见第 11.1 节，不代表完整 VFS 或生产环境已验收。
 范围：Liteasy 桌面及其应用服务；后续按阶段适配 Liteasy API。Intuecho 保持独立服务、数据库和凭据。
 前置规格：[Agent Native 对象工作台](2026-09-13-agent-native-object-workbench-spec.md)。本提案补充其寻址、组织和操作层，保留对象、来源、版本、关系、上下文快照的既有语义。
 
@@ -115,6 +115,7 @@ mountId 是不透明挂载标识，不能包含绝对路径、邮箱、密钥或
 type ResourceRef = {
   providerId: string;
   resourceId: string;
+  scopeId: string;    // 首期显式绑定挂载归属；旧 URI 仅在唯一挂载内兼容解析
   revision?: string;   // 缺省只表示请求最新；不允许直接作为运行快照
   selectorId?: string;
 };
@@ -368,6 +369,27 @@ PDF 批注条目、收藏网页、笔记卡片、文件/资源列表和设置行
 
 F0 可按单条批注的真实只读闭环先验证，再扩展到其他场景；不能用一个通用文件浏览器或仅列举资源名称来宣告完成。F2 必须覆盖用户内容与设置的受控修改，不能只以白板移动成功代替专业写入验收。阶段目标是拟议交付范围，不表示已有实现或本次开始开发。
 
+### 11.1 2026-09-15 首期：产物应用层门面
+
+本次已新增 [`features/resource-filesystem/`](../../../products/liteasy/apps/desktop/src/app/features/resource-filesystem/)，通过受信任代码注册 provider，在已有 `ArtifactResultClient` 上适配产物，不增加正文数据库或把结果再次迁入 ObjectRepository。
+
+| 已实现接口 | 行为与边界 |
+| --- | --- |
+| `ResourceRef` / `resourceRefSchema`、`ResourceStat` | `liteasy.resource-file/v1` 应用层描述包含 provider、资源 ID、明确 scope、SHA-256 内容摘要、可读文件表示与能力。它不替代 ObjectRef，不是发送给旧正式 API 的新 envelope。 |
+| `createResourceFileService` / `registerProvider` | `stat`、`list`、`read` 分派到显式注册的领域适配器；提供其他 objects/notes/help provider 的接入点，资源正文不能动态注册 provider。当前仅交付 artifacts provider。 |
+| `createArtifactResourceService.saveArtifact` | 复用现有 `client.save` 保存 `liteasy.agent-artifact/v1`。新 slides/outline 位于同一记录的可选 `authoredArtifact` 字段，旧无此字段记录保持可读。返回既有 resultPath 和资源描述；没有第二份正文真源。 |
+| `read(..., { representation, maxBytes, signal })` | 返回实际 UTF-8 文本及文件名/媒体类型/字节数。结构化演示为 `.slides.json`，大纲为 `.outline.json`，两者采用 `liteasy.authored-resource/v1`，`content` 为创作结构，`sources` 保留原论文实体和 ContextRef；旧记录为 `.artifact.json`。同源 Markdown 为 `.md`，逐页或节点呈现可读出处并附引文索引，不插入当前导出时间，保持同一内容版本的确定性。尚未新增二进制 `.pptx` 导出器。 |
+| `stat` / `list` | 对外只返回元数据，列表默认 50 项、上限 100 项。游标绑定 scope 和目录成员/排序元数据；目录变更要求重新加载。内容版本取实际记录摘要，不把名称或全库版本当作资源身份。 |
+| 稳定 URI 与旧链接 | 规范地址使用 `liteasy://resources/artifacts/{artifactId}?scope={opaqueScopeId}&revision={sha256}`。保留 `liteasy://agent-artifacts/{artifactId}` 适配；只在唯一的显式挂载内解析，没有不明确的跨账号猜测、自动认领或旧数据迁移。规范 URI 不含物理路径或认证 token。 |
+| Scope 与取消 | 本地旧产物明确为 device，云路由使用调用方确认的 account scope 摘要；开始和异步完成后均核对当前 scope。HTTP list/save 传递 AbortSignal；本地 list 检查调用前后取消，不能中止已经执行中的原生 IPC，也不将迟到取消描述为存储回滚。 |
+| 内容版本 | 产物 provider 明确声明 `snapshot_required`。旧存储只保留当前记录，传入旧 digest 时返回 `revision_unavailable`，不返回当前正文冒充旧版本；本次没有不可变历史字节仓库或新的 ContextSnapshot 持久化协议。 |
+
+读取上限在 1 字节至 12 MiB 之间，按 UTF-8 字节检查；超过上限返回错误，不静默截断为“完整内容”。本次仍有旧接口限制：正式 API 与宿主目前向此适配器提供全量 `list`，所以 `stat/read` 仍通过该旧入口找到指定记录，分页只是应用层返回边界，不是服务端元数据分页或有界字节流。未来需要专门实现单条读取、服务端目录分页和流式传输，才能验收第 12.2 节大目录指标。当前应用层有界 JSON 校验不代表网络层不会先接收整份旧目录。
+
+生成过程还修正了已验证的存储放大：无变化的产物目录和 tabs 不随每条 token 再发布，PPT 进度不重写未变化的薄读恢复快照；恢复存储合并正在写入时的更新，完成任务释放生成上下文。回归中 200 条 PPT 进度不再触发 200 次完整目录写入；阻塞存储期间 200 次恢复更新合并为初始和最新两份。这是本地确定性测试结果，不是用户 Windows 内存耗尽故障的唯一根因认定。
+
+验证覆盖同源保存及真实命名内容读取、分页和过期游标、设备/账号区分、旧版本拒绝、UTF-8 上限、取消与切换账号后的迟到结果、旧产物兼容及坏 `authoredArtifact` 拒绝。目录树/快捷方式仓库、对象与论文等其他 provider、跨服务事务、专业 ReviewFinding/ResourceChangeSet、历史快照及完整沉浸式 AI 验收仍未在本次交付；不能用这一个门面认定 F0 或 F2 完成。
+
 ## 12. 验收规格
 
 ### 12.1 必须覆盖的行为
@@ -391,7 +413,7 @@ F0 可按单条批注的真实只读闭环先验证，再扩展到其他场景�
 
 目录 UI 使用有界分页，变化事件只刷新受影响分支；订阅取消后没有持续遍历或后台读取。大文件使用受限流式读取与取消，不要求把整份 PDF 经 JSON/base64 一次传给 Agent。性能目标不表示当前代码已测得这些结果。
 
-测试分为 provider 契约与权限测试、SQLite/IndexedDB 并发恢复测试、真实文件系统集成测试、公共 Agent 生命周期测试及 Chromium/Tauri 实际交互。文档提案阶段不改代码、不运行数据迁移；实施时必须保留当前用户修改，并运行受影响测试和桌面构建。
+测试分为 provider 契约与权限测试、SQLite/IndexedDB 并发恢复测试、真实文件系统集成测试、公共 Agent 生命周期测试及 Chromium/Tauri 实际交互。首期实现不运行数据迁移；后续实施同样必须保留当前用户修改，并运行受影响测试和桌面构建。
 
 ### 12.3 沉浸式 AI 端到端验收
 
@@ -416,4 +438,4 @@ F0 可按单条批注的真实只读闭环先验证，再扩展到其他场景�
 | 元数据优先与按需读取 | 可控制上下文量和读取范围。 | 摘要会过期，必须携带版本和派生标记；全文提取仍有成本。 |
 | 暂不替换为 OpenViking | 先解决产品内引用和权限问题，不引入第二套真源。 | 暂不获得其完整检索/记忆系统；将来需要单独验证接入收益与权限映射。 |
 
-建议未来从 F0–F1 开始拆实施计划。启动前应冻结：默认复制的是稳定引用、项目拖入默认创建快捷方式、同名冲突不自动覆盖、scope 归属以现有权威记录为准，以及首期不开放跨账号移动。这些是本提案的推荐默认值，不表示本文已启动实施。
+下一步继续按 F0–F1 的退出条件补齐范围；已完成的有限产物门面见第 11.1 节。后续实施保持：默认复制稳定引用、项目拖入默认创建快捷方式、同名冲突不自动覆盖、scope 归属以现有权威记录为准，以及首期不开放跨账号移动。该门面的交付不表示后续各阶段已完成。

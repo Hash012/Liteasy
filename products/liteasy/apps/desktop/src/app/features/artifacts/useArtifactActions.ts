@@ -1,3 +1,7 @@
+import { createArtifactResourceService, artifactResourceScope } from "../resource-filesystem/artifactResourceProvider";
+import type { ResourceScope } from "../resource-filesystem/resourceFile.types";
+import { parseAuthoredArtifact, type AuthoredArtifact } from "../artifact-workflow/authoredArtifact";
+import type { ContextRef } from "../context/objectContext";
 import { removeThinReadingCheckpoint } from "../thin-reading/adaptiveThinReading";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { AgentCoreCatalogEntry } from "../agent-core/agentCoreConfig";
@@ -76,6 +80,8 @@ function trackExecution(store: ArtifactStore, taskId: string) {
 
 
 type AgentArtifactMetadata = {
+  authoredArtifact?: AuthoredArtifact;
+  paperAnchors?: import("../paper-anchors/paperAnchorEntity").PaperAnchorEntity[];
   analysis?: CompletedMultiPaperAnalysis;
   artifactWorkflow?: MindmapArtifactWorkflowMetadata;
   thinReading?: {
@@ -90,6 +96,7 @@ type VerifiedMindmapMetadata = {
 };
 
 export type AgentArtifactGenerationOptions = {
+  contextRefs?: ContextRef[];
   knowledgeSnapshot?: {
     papers: Paper[];
     chunks: Record<string, RetrievalChunk[]>;
@@ -117,6 +124,8 @@ export type DuplicateArtifactGenerationConfirmation = {
 type UseArtifactActionsInput = {
   artifactStore: ArtifactStore;
   artifactResultClient: ArtifactResultClient;
+  resourceScope?: ResourceScope;
+  getCurrentResourceScopeId?: () => string;
   confirmDuplicateGeneration?: (
     input: DuplicateArtifactGenerationConfirmation
   ) => boolean;
@@ -165,6 +174,12 @@ type UseArtifactActionsInput = {
     options?: AgentArtifactGenerationOptions
   ) => Promise<AgentRun>;
 };
+
+class ArtifactSavedOutsideCurrentScope extends Error {
+  constructor() {
+    super("结果已保存至原账户；当前账户已切换，请返回原账户查看。");
+  }
+}
 
 function getArtifactTitle(type: ArtifactType) {
   if (type === "thin_reading") {
@@ -504,6 +519,8 @@ function confirmDuplicateGenerationInBrowser(_input: DuplicateArtifactGeneration
 export function useArtifactActions({
   artifactStore,
   artifactResultClient,
+  resourceScope,
+  getCurrentResourceScopeId,
   confirmDuplicateGeneration = confirmDuplicateGenerationInBrowser,
   cancelAgentRun,
   getImportedChunksByPaperId,
@@ -527,6 +544,24 @@ export function useArtifactActions({
   queueImportForPapers,
   runAgentAnalysis
 }: UseArtifactActionsInput) {
+  const resources = createArtifactResourceService({ client: artifactResultClient,
+    scope: resourceScope ?? artifactResourceScope(), getCurrentScopeId: getCurrentResourceScopeId });
+  const saveArtifact = async (document: Parameters<ArtifactResultClient["save"]>[0], signal?: AbortSignal) => {
+    const receipt = await resources.saveArtifact(document, { signal });
+    if (!receipt.publishable) throw new ArtifactSavedOutsideCurrentScope();
+    return receipt.resultPath;
+  };
+  function handleSavedOutsideScope(taskId: string, error: unknown) {
+    if (!(error instanceof ArtifactSavedOutsideCurrentScope)) return false;
+    if (artifactStore.getTask(taskId)) {
+      artifactStore.updateTask(taskId, { status: "completed", stage: "completed", progress: 100,
+        message: error.message, recovery: undefined, thinReadingBranchRecovery: undefined,
+        partialAnswer: undefined, partialOutlineNodes: undefined });
+      syncArtifacts(taskId);
+    }
+    onAnalysisHint(error.message);
+    return true;
+  }
   const modelLoginRequiredMessage = "请在设置 → AI 接入中配置自己的 API key，或登录 Liteasy 使用云端模型。";
 
   function modelAccessFailureMessage() {
@@ -593,7 +628,7 @@ export function useArtifactActions({
   async function startArtifactTask(
     artifactType: ArtifactType,
     selectedPapers: Paper[],
-    importedChunksByPaperId: Record<string, RetrievalChunk[]>,
+    workspaceChunksByPaperId: Record<string, RetrievalChunk[]>,
     queuedTaskId?: string,
     generationOptions?: AgentArtifactGenerationOptions
   ) {
@@ -616,6 +651,10 @@ export function useArtifactActions({
       return;
     }
     const scopedPapers = papersForArtifactScope(artifactType, selectedPapers, getActiveReaderPaper?.());
+    // Recovery must not retain unrelated papers from the workspace text index.
+    const importedChunksByPaperId = Object.fromEntries(scopedPapers
+      .filter((paper) => workspaceChunksByPaperId[paper.id])
+      .map((paper) => [paper.id, workspaceChunksByPaperId[paper.id]]));
     const taskId = queuedTaskId ?? artifactStore.createTask(artifactType);
     if (artifactType === "thin_reading") openThinReadingPreview(taskId, scopedPapers);
     if (!queuedTaskId) {
@@ -718,7 +757,11 @@ export function useArtifactActions({
         !Array.isArray(answerEvent.metadata)
           ? answerEvent.metadata as AgentArtifactMetadata
           : {};
-      if (!metadata.analysis) {
+      const authoredArtifact = metadata.authoredArtifact ? parseAuthoredArtifact(metadata.authoredArtifact) : undefined;
+      if (artifactType === "ppt" && authoredArtifact?.kind !== "slides") {
+        throw new Error("演示文稿未返回可展示的幻灯片内容，尚未保存，请重试。");
+      }
+      if (!metadata.analysis && !authoredArtifact) {
         throw new Error("Agent run 缺少可持久化的 AnalysisRun/Evidence/Claim");
       }
       const verifiedMindmap = artifactType === "mindmap"
@@ -730,7 +773,7 @@ export function useArtifactActions({
       const artifactId = rawArtifactId
         .replace(/[^A-Za-z0-9._-]/g, "-")
         .slice(0, 120);
-      const title = getArtifactTitle(artifactType);
+      const title = authoredArtifact?.title ?? getArtifactTitle(artifactType);
       const createdAt = new Date().toISOString();
       if (artifactType === "thin_reading") {
         const thinReading = requireThinReadingSeed(metadata, thinReadingContext!);
@@ -748,7 +791,7 @@ export function useArtifactActions({
         syncArtifacts(taskId);
         const document = createThinReadingResultDocument({
           agentRun,
-          analysis: metadata.analysis,
+          analysis: metadata.analysis!,
           answer: answerEvent.message,
           citations: answerEvent.citations,
           createdAt,
@@ -760,7 +803,7 @@ export function useArtifactActions({
           ),
           papers: scopedPapers.map((paper) => ({ id: paper.id, title: paper.title }))
         });
-        const resultPath = await artifactResultClient.save(document);
+        const resultPath = await saveArtifact(document);
         artifactStore.completeTask(taskId, {
           agentRunId: agentRun.runId,
           analysis: metadata.analysis,
@@ -786,27 +829,28 @@ export function useArtifactActions({
         onAnalysisHint("薄读已生成并保存，可在论文下的薄读条目中重新打开。");
         return;
       }
-      const evidenceOutlineNodes = buildArtifactOutline({
+      const evidenceOutlineNodes = metadata.analysis ? buildArtifactOutline({
         analysis: metadata.analysis,
         papers: selectedPapers,
         title
-      });
+      }) : [];
       const generatedOutlineNodes = artifactType === "tree" || artifactType === "mindmap" || artifactType === "layered_graph"
         ? parseStreamingOutlineMarkdown(answerEvent.message)
         : [];
-      const outlineNodes = generatedOutlineNodes.length >= 4
-        ? generatedOutlineNodes
-        : evidenceOutlineNodes;
+      const outlineNodes = authoredArtifact?.kind === "outline"
+        ? authoredArtifact.nodes.map((node) => ({ ...node, kind: "section" as const, parentId: node.parentId ?? undefined }))
+        : generatedOutlineNodes.length >= 4 ? generatedOutlineNodes : evidenceOutlineNodes;
       const outlineMarkdown = outlineToMarkdown(outlineNodes);
       const uiDsl = generateCenterArtifactUIDslDocument({
         artifactId,
         artifactType,
+        authoredArtifact,
         importedChunksByPaperId,
         outlineNodes,
         selectedPapers,
         title
       });
-      const intuitionGraph = artifactType === "mindmap" || artifactType === "layered_graph"
+      const intuitionGraph = metadata.analysis && (artifactType === "mindmap" || artifactType === "layered_graph")
         ? createEvidenceBackedBaseGraph({
             analysis: metadata.analysis,
             artifactId,
@@ -821,6 +865,9 @@ export function useArtifactActions({
           status: "completed" as const
         },
         analysis: metadata.analysis,
+        authoredArtifact,
+        paperAnchors: metadata.paperAnchors,
+        sourceContextRefs: generationOptions?.contextRefs,
         answer: answerEvent.message,
         artifactId,
         artifactType,
@@ -856,10 +903,13 @@ export function useArtifactActions({
         stage: "saving_result"
       });
       syncArtifacts(taskId);
-      const resultPath = await artifactResultClient.save(document);
+      const resultPath = await saveArtifact(document);
       artifactStore.completeTask(taskId, {
         agentRunId: agentRun.runId,
         analysis: metadata.analysis,
+        authoredArtifact,
+        paperAnchors: metadata.paperAnchors,
+        sourceContextRefs: generationOptions?.contextRefs,
         answer: answerEvent.message,
         artifactId,
         citations: answerEvent.citations,
@@ -886,6 +936,7 @@ export function useArtifactActions({
       if (thinReadingContext) void removeThinReadingCheckpoint(thinReadingContext).catch((error) => onAnalysisHint(`薄读已保存，但临时草稿清理失败：${String(error)}`));
       onAnalysisHint("Agent 分析完成并已保存。");
     } catch (error) {
+      if (handleSavedOutsideScope(taskId, error)) return;
       if (artifactStore.getTask(taskId)?.status === "cancelled") {
         syncArtifacts(taskId);
         return;
@@ -916,6 +967,11 @@ export function useArtifactActions({
     const task = artifactStore.getTask(taskId);
     if (!task || task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
       return "该生成任务已经结束。";
+    }
+    if (task.stage === "saving_result" || task.stage === "thin_reading_saving") {
+      const message = "内容正在保存，请等待保存结果；此时无法中断写入。";
+      onAnalysisHint(message);
+      return message;
     }
 
     artifactStore.cancelTask(taskId);
@@ -948,7 +1004,7 @@ export function useArtifactActions({
 
   function startAnalysisForPapers(artifactType: ArtifactType, selectedPapers: Paper[], generationOptions?: AgentArtifactGenerationOptions) {
     const scopedPapers = papersForArtifactScope(artifactType, selectedPapers, getActiveReaderPaper?.());
-    if (scopedPapers.length === 0) {
+    if (scopedPapers.length === 0 && !generationOptions?.contextRefs?.length) {
       const message = "请通过 @ 指定论文，或在左栏勾选并锁定文献后再生成产物。";
       onAnalysisHint(message);
       return message;
@@ -961,6 +1017,7 @@ export function useArtifactActions({
     const sourcePaperIds = scopedPapers.map((paper) => paper.id);
     const pendingTask = artifactStore.getTasks().find((task) => task.type === artifactType &&
       (task.status === "queued" || task.status === "running") &&
+      JSON.stringify(task.recovery?.options?.contextRefs ?? []) === JSON.stringify(generationOptions?.contextRefs ?? []) &&
       task.sourcePaperIds?.length === sourcePaperIds.length && sourcePaperIds.every((id) => task.sourcePaperIds?.includes(id)));
     if (pendingTask) {
       if (artifactType === "thin_reading") { openThinReadingPreview(pendingTask.id, scopedPapers); syncArtifacts(pendingTask.id); }
@@ -997,7 +1054,7 @@ export function useArtifactActions({
         ...generationOptions, sourcePaperIds: scopedPapers.map((paper) => paper.id)
       });
     };
-    const importStatus = queueImportForPapers(scopedPapers, begin, ({ error, paper }) => {
+    const importStatus = generationOptions?.contextRefs?.length ? "already_imported" : queueImportForPapers(scopedPapers, begin, ({ error, paper }) => {
       const failedStage = artifactType === "thin_reading" ? "thin_reading_parsing_document" : "waiting_for_import";
       const message = `《${paper.title}》PDF 导入失败：${error.message}`;
       artifactStore.failTask(taskId, {
@@ -1160,7 +1217,10 @@ export function useArtifactActions({
           title: result.title
         })
       : undefined);
-    const uiDsl = outlineNodes && (result.artifactType === "tree" || result.artifactType === "mindmap" || result.artifactType === "layered_graph")
+    const uiDsl = result.authoredArtifact?.kind === "slides"
+      ? generateCenterArtifactUIDslDocument({ artifactId: result.artifactId, artifactType: result.artifactType,
+          authoredArtifact: parseAuthoredArtifact(result.authoredArtifact), importedChunksByPaperId: {}, selectedPapers: result.papers, title: result.title })
+      : outlineNodes && (result.artifactType === "tree" || result.artifactType === "mindmap" || result.artifactType === "layered_graph")
       ? generateCenterArtifactUIDslDocument({
           artifactId: result.artifactId,
           artifactType: result.artifactType,
@@ -1189,6 +1249,9 @@ export function useArtifactActions({
       thinReadingDocument: result.thinReadingDocument,
       title: result.title,
       type: result.artifactType,
+      authoredArtifact: result.authoredArtifact,
+      paperAnchors: result.paperAnchors,
+      sourceContextRefs: result.sourceContextRefs,
       supplementalContext: result.supplementalContext,
       uiDsl,
       verification: result.verification
@@ -1232,7 +1295,7 @@ export function useArtifactActions({
         thinReadingDocument: clone,
         title: `${existingV1.title}（副本）`
       };
-      const resultPath = await artifactResultClient.save(createThinReadingResultDocument({
+      const resultPath = await saveArtifact(createThinReadingResultDocument({
         createdAt: cloneCreatedAt,
         document: clone,
         existing: cloneEntry,
@@ -1446,7 +1509,7 @@ export function useArtifactActions({
         });
         syncArtifacts(taskId);
         const createdAt = existing.createdAt ?? new Date().toISOString();
-        const resultPath = await artifactResultClient.save(createThinReadingResultDocument({
+        const resultPath = await saveArtifact(createThinReadingResultDocument({
           agentRun,
           analysis: metadata.analysis,
           answer: answerEvent.message,
@@ -1477,6 +1540,7 @@ export function useArtifactActions({
         void removeThinReadingCheckpoint(context).catch((error) => onAnalysisHint(`薄读已保存，但临时草稿清理失败：${String(error)}`));
         onAnalysisHint("薄读下一层已由 Agent 生成并已保存。");
       } catch (error) {
+        if (handleSavedOutsideScope(taskId, error)) return;
         if (artifactStore.getTask(taskId)?.status === "cancelled") return;
         const message = error instanceof Error ? error.message : String(error);
         const modelContext = getModelDiagnosticContext?.() ?? {};
@@ -1555,7 +1619,7 @@ export function useArtifactActions({
     if ((options.commitMode ?? "before_save") === "before_save") {
       commitDocument();
     }
-    await artifactResultClient.save(createThinReadingResultDocument({
+    await saveArtifact(createThinReadingResultDocument({
       createdAt: existing.createdAt ?? new Date().toISOString(),
       document: nextDocument,
       existing,

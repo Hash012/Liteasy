@@ -98,7 +98,7 @@ describe("artifact document export", () => {
     const markdown = createArtifactMarkdown(tab);
 
     expect(markdown).toContain("## Agent 分析");
-    expect(markdown).toContain("补充 Agent 结论。");
+    expect(markdown).toContain("补充 Agent 结论 〔来源待关联〕。");
     expect(markdown).not.toContain("evidence-private-123");
   });
 
@@ -260,7 +260,8 @@ describe("artifact document export", () => {
 
     expect(markdown).toContain("生成可视化");
     expect(markdown).toContain("输入编码");
-    expect(markdown).toContain("evidence-attention-self-attention");
+    expect(markdown).toContain("〔Attention Is All You Need · 第 2 页〕");
+    expect(markdown).not.toContain("evidence-attention-self-attention");
     expect(markdown).toContain("论文原图");
     expect(markdown).not.toContain("figure-fixture");
     expect(markdown).toContain("第 3 页");
@@ -275,7 +276,7 @@ describe("artifact document export", () => {
     expect(markdown).not.toContain("costPolicyVersion");
   });
 
-  test("escapes v2 structured metadata and keeps evidence IDs scoped to their fields", () => {
+  test("escapes v2 structured metadata and resolves references without exposing internal evidence IDs", () => {
     const base = createThinReadingFixture();
     const document = createThinReadingDocument({
       ...base,
@@ -312,7 +313,8 @@ describe("artifact document export", () => {
       type: "thin_reading"
     });
 
-    expect(markdown).toContain("evidence-one-more");
+    expect(markdown).toContain("〔来源待关联〕");
+    expect(markdown).not.toContain("evidence-one-more");
     expect(markdown).not.toContain("evidence-one and");
     expect(markdown).toContain("__LITEASY_EVIDENCE_0__");
     expect(markdown).not.toContain("<script>");
@@ -356,9 +358,9 @@ describe("artifact document export", () => {
     });
 
     expect(markdown).toContain("图：figure-a");
-    expect(markdown).toContain("来源：paper-a · 第 3 页");
+    expect(markdown).toContain("来源：Paper A · 第 3 页");
     expect(markdown).toContain("图：figure-b");
-    expect(markdown).toContain("来源：paper-b · 第 4 页");
+    expect(markdown).toContain("来源：Paper B · 第 4 页");
     expect(markdown).not.toContain("figure-ambiguous");
     expect(markdown).not.toContain("figure-unrecommended");
   });

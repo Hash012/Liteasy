@@ -1,6 +1,7 @@
 import type { GenerateAnswerInput, ModelGenerationResult } from "./modelGateway";
 import { directModelTransport, type DirectModelTransport } from "./directModelTransport";
 import { validateDirectModelConfig, type DirectModelConfig } from "./modelProviders";
+import { assertModelResponseSize, createBoundedModelFrames, createModelTextBudget, MODEL_RESPONSE_LIMITS, modelTextBytes } from "./modelResponseBudget";
 
 function parseResponseJson(value: string) {
   try { return JSON.parse(value); }
@@ -33,8 +34,7 @@ function textContent(content: unknown): string {
 
 // Decode bytes incrementally: UTF-8 characters and SSE frames can cross IPC chunks.
 export function createDirectModelStream(protocol: DirectModelConfig["protocol"], onDelta: NonNullable<GenerateAnswerInput["onDelta"]>, onReasoningDelta?: GenerateAnswerInput["onReasoningDelta"]) {
-  const decoder = new TextDecoder();
-  let buffer = "";
+  const budget = createModelTextBudget();
   let answer = "";
   let reasoning = "";
   let completed = false;
@@ -62,29 +62,23 @@ export function createDirectModelStream(protocol: DirectModelConfig["protocol"],
       delta = textContent(choice?.delta?.content);
       reasoningDelta = textContent(choice?.delta?.reasoning_content ?? choice?.delta?.reasoning);
     }
-    if (reasoningDelta) { reasoning += reasoningDelta; onReasoningDelta?.(reasoningDelta, reasoning); }
-    if (delta) { answer += delta; onDelta(delta, answer); }
+    if (reasoningDelta) { budget.reasoning(reasoningDelta); reasoning += reasoningDelta; onReasoningDelta?.(reasoningDelta, reasoning); }
+    if (delta) { budget.answer(delta); answer += delta; onDelta(delta, answer); }
     if (limitReached) throw new Error("模型输出达到长度上限，请缩小生成范围后重试。");
   }
-  function consume() {
-    let match: RegExpExecArray | null;
-    while ((match = /\r?\n\r?\n/.exec(buffer))) {
-      const raw = buffer.slice(0, match.index);
-      buffer = buffer.slice(match.index + match[0].length);
-      frame(raw);
-    }
-  }
+  const frames = createBoundedModelFrames(/\r?\n\r?\n/, MODEL_RESPONSE_LIMITS.sseFrameBytes, frame);
   return {
     push(chunk: Uint8Array) {
-      if (failure) return;
-      try { buffer += decoder.decode(chunk, { stream: true }); consume(); }
-      catch (error) { failure = error instanceof Error ? error : new Error("模型流式响应无效。"); }
+      if (failure) throw failure;
+      try { frames.push(chunk); }
+      catch (error) {
+        failure = error instanceof Error ? error : new Error("模型流式响应无效。");
+        throw failure;
+      }
     },
     finish() {
       if (failure) throw failure;
-      buffer += decoder.decode();
-      consume();
-      if (buffer.trim()) frame(buffer);
+      frames.finish();
       if (!completed) throw new Error("模型连接提前结束，响应未完成，请重试。");
       if (!answer.trim()) throw new Error("模型未返回文本，请检查所选模型是否支持对话。");
       return answer;
@@ -102,13 +96,18 @@ export function createDirectModelClient(inputConfig: DirectModelConfig, transpor
     let answer: string;
     if (stream) answer = stream.finish();
     else {
+      assertModelResponseSize(modelTextBytes(raw), MODEL_RESPONSE_LIMITS.wireBytes, "响应数据");
       const result = parseResponseJson(raw);
       const stop = config.protocol === "anthropic" ? result.stop_reason : result.choices?.[0]?.finish_reason;
       answer = textContent(config.protocol === "anthropic" ? result.content : result.choices?.[0]?.message?.content);
       const reasoning = config.protocol === "anthropic"
         ? (result.content ?? []).filter((part: { type: string }) => part.type === "thinking").map((part: { thinking: string }) => part.thinking).join("\n")
         : textContent(result.choices?.[0]?.message?.reasoning_content ?? result.choices?.[0]?.message?.reasoning);
-      if (reasoning) input.onReasoningDelta?.(reasoning, reasoning);
+      assertModelResponseSize(modelTextBytes(answer), MODEL_RESPONSE_LIMITS.answerBytes, "正文");
+      if (reasoning) {
+        assertModelResponseSize(modelTextBytes(reasoning), MODEL_RESPONSE_LIMITS.reasoningBytes, "推理内容");
+        input.onReasoningDelta?.(reasoning, reasoning);
+      }
       if (stop === "length" || stop === "max_tokens") throw new Error("模型输出达到长度上限，请缩小生成范围后重试。");
       if (!answer.trim()) throw new Error("模型未返回文本，请检查所选模型是否支持对话。");
     }

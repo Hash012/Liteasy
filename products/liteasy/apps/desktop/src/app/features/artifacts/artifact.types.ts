@@ -149,6 +149,9 @@ export type ArtifactRegenerationRequest = {
 };
 
 export type ArtifactTab = {
+  paperAnchors?: import("../paper-anchors/paperAnchorEntity").PaperAnchorEntity[];
+  authoredArtifact?: import("../artifact-workflow/authoredArtifact").AuthoredArtifact;
+  sourceContextRefs?: import("../context/objectContext").ContextRef[];
   agentRunId?: string;
   analysis?: CompletedMultiPaperAnalysis;
   answer?: string;
@@ -176,6 +179,9 @@ export type ArtifactTab = {
 };
 
 export type AgentArtifactResult = {
+  paperAnchors?: import("../paper-anchors/paperAnchorEntity").PaperAnchorEntity[];
+  authoredArtifact?: import("../artifact-workflow/authoredArtifact").AuthoredArtifact;
+  sourceContextRefs?: import("../context/objectContext").ContextRef[];
   agent: {
     apiVersion: string;
     runId: string;

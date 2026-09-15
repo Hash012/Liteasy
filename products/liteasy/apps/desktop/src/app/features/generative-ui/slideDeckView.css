@@ -1,0 +1,8 @@
+.slide-deck-navigation { display: flex; align-items: center; gap: 8px; margin: 8px 0; min-width: 0; }
+.slide-deck-navigation > span[role="status"] { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.slide-deck-navigation select { max-width: 100%; }
+.slide-deck-navigation > :nth-child(2) { flex: 1; min-width: 0; }
+.slide-deck-page { background: #fff; border: 1px solid #d8e2e9; border-radius: 6px; min-height: 240px; padding: 20px; }
+.slide-deck-page > h3 { font-size: 1.25em; margin: 0 0 16px; }
+.slide-deck-notes { border-top: 1px solid #d8e2e9; margin-top: 10px; padding-top: 6px; }
+.slide-deck-notes > div { margin: 8px; }

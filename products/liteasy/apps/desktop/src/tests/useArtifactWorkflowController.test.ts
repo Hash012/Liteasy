@@ -1,10 +1,10 @@
 vi.mock("../app/features/persistence/durableJsonStore", () => ({
   loadDurableEntries: async (scope: string) => JSON.parse(localStorage.getItem(`liteasy.checkpoints.v1:${scope}`) ?? "{}"),
-  putDurableEntry: async (scope: string, key: string, value: unknown) => {
+  putDurableEntry: vi.fn(async (scope: string, key: string, value: unknown) => {
     const entries = JSON.parse(localStorage.getItem(`liteasy.checkpoints.v1:${scope}`) ?? "{}");
     entries[key] = value;
     localStorage.setItem(`liteasy.checkpoints.v1:${scope}`, JSON.stringify(entries));
-  }
+  })
 }));
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -12,6 +12,7 @@ import { useArtifactWorkflowController } from "../app/controllers/useArtifactWor
 import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
 import { createThinReadingBranchRecoverySnapshot } from "../app/features/artifacts/artifactTaskRecovery";
 import { createArtifactStore } from "../app/features/artifacts/artifact.store";
+import { putDurableEntry } from "../app/features/persistence/durableJsonStore";
 import { buildImportedChunksForPaper } from "./fixtures/retrievalFixtures";
 import type { Paper } from "../app/features/workspace/workspace.types";
 import type { AgentRun } from "../app/features/agent-api/agentApi.types";
@@ -216,6 +217,53 @@ describe("useArtifactWorkflowController", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  test("does not rewrite the artifact catalog or replace tabs for every streamed PPT delta", async () => {
+    const artifactStore = createArtifactStore();
+    const localRepository = {
+      list: vi.fn(async () => [{
+        artifactId: "saved-deck",
+        answer: "已有演示文稿。".repeat(100_000),
+        title: "已有演示文稿",
+        type: "ppt" as const
+      }]),
+      replace: vi.fn(async () => undefined)
+    };
+    let emitProgress!: Parameters<Parameters<typeof useArtifactWorkflowController>[0]["runAgentAnalysis"]>[1];
+    let finishGeneration!: (run: AgentRun) => void;
+    const { result } = renderHook(() => useArtifactWorkflowController({
+      artifactLocalRepository: localRepository,
+      artifactResultClient: artifactResultClient(),
+      artifactStore,
+      getImportedChunksByPaperId: () => ({ [paper.id]: buildImportedChunksForPaper(paper) }),
+      getSelectedDocumentSet: () => ({ documentIds: [paper.id], locked: true }),
+      getSelectedPapers: () => [paper],
+      onAnalysisHint: vi.fn(),
+      queueImportForPapers: vi.fn(() => "already_imported"),
+      runAgentAnalysis: async (_type, onProgress) => {
+        emitProgress = onProgress;
+        return new Promise<AgentRun>((resolve) => { finishGeneration = resolve; });
+      }
+    }));
+    await act(async () => { await Promise.resolve(); });
+    act(() => { result.current.actions.startAnalysis("ppt"); });
+    await act(async () => { await Promise.resolve(); });
+    localRepository.replace.mockClear();
+    vi.mocked(putDurableEntry).mockClear();
+    const tabsBeforeStreaming = result.current.model.artifactTabs;
+    const catalogBeforeStreaming = result.current.model.artifactCatalog;
+    await act(async () => {
+      for (let index = 0; index < 200; index += 1) {
+        emitProgress({ message: "正在生成演示文稿", partialAnswer: `大纲 ${index}`, progress: 68, stage: "generating_answer" });
+      }
+    });
+    expect(localRepository.replace.mock.calls.length).toBe(0);
+    expect(vi.mocked(putDurableEntry).mock.calls.length).toBe(0);
+    expect(result.current.model.artifactTabs).toBe(tabsBeforeStreaming);
+    expect(result.current.model.artifactCatalog).toBe(catalogBeforeStreaming);
+    expect(result.current.model.artifactTasks[0].partialAnswer).toBe("大纲 199");
+    await act(async () => { finishGeneration({ ...completedRun(), status: "cancelled" }); });
   });
 
   test("exposes empty artifact workflow state before analysis starts", async () => {

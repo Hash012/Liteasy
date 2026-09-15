@@ -58,6 +58,7 @@ test("Notes organizes references, edits the source once and persists after reope
   await expect(notes).toBeVisible();
   await notes.getByRole("button", { name: "检索研究", exact: true }).click();
   await expect(entry).toHaveCount(1);
+  await entry.click();
   await expect(notes).toContainText("补充：保留失败案例以评估边界。");
   await notes.getByRole("button", { name: /笔记操作 研究问题/ }).click();
   await page
@@ -68,5 +69,6 @@ test("Notes organizes references, edits the source once and persists after reope
     .getByRole("button", { name: "default/note", exact: true })
     .click();
   await expect(entry).toHaveCount(1);
+  await entry.click();
   await expect(notes).toContainText("补充：保留失败案例以评估边界。");
 });

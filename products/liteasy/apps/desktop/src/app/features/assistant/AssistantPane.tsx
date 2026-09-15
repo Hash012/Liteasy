@@ -1,3 +1,4 @@
+import { collectPaperAnchors } from "../paper-anchors/paperAnchorEntity";
 import { readerContextDragMime, readDraggedReaderContext } from "./readerContextDrag";
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import { hasResourceContextTransfer, readContextPaper } from "../object-transfer/contextTransfer";
@@ -137,7 +138,7 @@ type AssistantPaneProps = {
   onApplyThemePreset?: ActionContext["applyThemePreset"];
   onResumeArtifactTask?: (taskId: string) => Promise<void>;
   onCancelArtifactTask?: (taskId: string) => string | Promise<string>;
-  onGenerateArtifact: (artifactType: ArtifactType, paperIds?: string[], context?: string) => string;
+  onGenerateArtifact: (artifactType: ArtifactType, paperIds?: string[], context?: string, contextRefs?: import("../context/objectContext").ContextRef[]) => string;
   onImportSelectedSet?: ActionContext["importSelectedSet"];
   onPreparePapersForContext?: (paperIds: string[]) => Promise<void>;
   onMoveDockItem?: ActionContext["moveDockItem"];
@@ -1083,19 +1084,23 @@ export function AssistantPane({
 
     if (event.type === "assistant.message") {
       let audit: AnswerAuditResult | undefined;
+      let paperAnchors: AssistantMessage["paperAnchors"];
       let executionTrace: ModelExecutionTrace | undefined;
       if (event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)) {
         const metadata = event.metadata as {
           audit?: AnswerAuditResult;
           executionTrace?: ModelExecutionTrace;
+          paperAnchors?: unknown;
         };
         audit = metadata.audit;
         executionTrace = metadata.executionTrace;
+        if (Array.isArray(metadata.paperAnchors)) paperAnchors = collectPaperAnchors(metadata.paperAnchors);
       }
       updateAgentMessage(activityMessageId, (message) => ({
         ...message,
         audit: event.citations?.length ? audit : undefined,
         citations: event.citations,
+        paperAnchors,
         confidence: event.confidence,
         content: event.message,
         executionTrace
@@ -1740,8 +1745,7 @@ export function AssistantPane({
     const artifactType = requestedArtifactType(turn.message);
     // The artifact workflow creates a task, submits its artifactType to the main Agent,
     // and saves the specialist result. Keep slash shortcuts on that complete path.
-    if (artifactType && (artifactType === "thin_reading" ||
-      (turn.mode === "command" && getActivePublicAgentClient()))) {
+    if (artifactType && (artifactType === "thin_reading" || getActivePublicAgentClient())) {
       const previousPaperIds = assistantStoreRef.current.getState().messages.slice(0, -1).reverse()
         .find((message) => message.role === "user" && message.contextTokens?.some((token) => token.kind === "paper"))
         ?.contextTokens?.filter((token) => token.kind === "paper").map((token) => token.id.replace(/^paper-/, ""));
@@ -1751,7 +1755,14 @@ export function AssistantPane({
         .slice(-6).map((message) => `${message.role === "user" ? "用户" : "助手"}：${message.content}`).join("\n").slice(-8_000);
       const context = [turn.message, turn.attachedContextPrompt, recentContext].filter(Boolean).join("\n\n");
       try {
-        const result = onGenerateArtifact(artifactType, paperIds, context);
+        let contextRefs = selectedContextRefs(turn.contextTokens);
+        if (contextRefs.length && paperIds?.length) {
+          if (!objectWorkbench?.capturePaperContext) throw new Error("资源上下文尚未准备好，请重试。");
+          await onPreparePapersForContext?.(paperIds);
+          contextRefs = [...contextRefs, ...await objectWorkbench.capturePaperContext(paperIds)];
+        }
+        const result = contextRefs.length ? onGenerateArtifact(artifactType, paperIds, context, contextRefs)
+          : onGenerateArtifact(artifactType, paperIds, context);
         assistantStoreRef.current.addMessage(createMessage("assistant", result));
       } catch (error) {
         assistantStoreRef.current.addMessage(createMessage("assistant", getAssistantErrorMessage(error, { developerDiagnostics })));
@@ -1860,9 +1871,10 @@ export function AssistantPane({
       return;
     }
 
+    const requestedType = requestedArtifactType(adapted.runtimeInput.message);
     if (composerContextTokens.some((token) => token.contextRefs?.length) &&
-      (adapted.runtimeInput.mode === "command" || requestedArtifactType(adapted.runtimeInput.message))) {
-      setContextDropMessage("已加入的内容可用于提问和审阅；当前产物生成或命令入口暂不支持这些对象，请使用普通问题或移除对象后重试。");
+      requestedType !== "ppt" && requestedType !== "tree" && (adapted.runtimeInput.mode === "command" || requestedType)) {
+      setContextDropMessage("已加入的内容支持提问、审阅、生成演示文稿和大纲；当前命令尚不支持这些资源。");
       return;
     }
 

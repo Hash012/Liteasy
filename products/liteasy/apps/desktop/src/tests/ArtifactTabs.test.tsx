@@ -1197,7 +1197,7 @@ describe("ArtifactTabs", () => {
     expect(screen.getByText("论文原文证据（1 条） · 点击跳转 PDF")).toBeInTheDocument();
     expect(screen.getByText("MaxSim matches every query token against document tokens.")).toBeInTheDocument();
     expect(screen.getByText("摘要：MaxSim 保留 token 级细粒度匹配。")).toBeInTheDocument();
-    expect(screen.getByText("MaxSim")).toBeInTheDocument();
+    expect(screen.getAllByText("MaxSim").length).toBeGreaterThan(0);
     expect(screen.getByText("1 条证据")).toBeInTheDocument();
     expect(screen.queryByText(/evidence-2-5ae8057b/i)).not.toBeInTheDocument();
 

@@ -1,9 +1,5 @@
-import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
-import type { PdfTextBoxImages } from "./pdfTextBoxImages";
-import rehypeKatex from "rehype-katex";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
-import "katex/dist/katex.min.css";
+import { MarkdownContent, markdownUrlTransform } from "../markdown/MarkdownContent";
+import { isPdfTextBoxImages, type PdfTextBoxImages } from "./pdfTextBoxImages";
 
 type PdfAnnotationMarkdownProps = {
   className?: string;
@@ -12,37 +8,23 @@ type PdfAnnotationMarkdownProps = {
   images?: PdfTextBoxImages;
 };
 
-/**
- * Annotation comments are persisted as Markdown, but are always presented as formatted content.
- * Raw HTML is deliberately not enabled: comments may later be synchronized from another user.
- */
+/** Annotation attachments are resolved from the current annotation only. */
 export function PdfAnnotationMarkdown({
-  className = "pdf-annotation-markdown",
-  emptyLabel,
-  value,
-  images
+  className = "pdf-annotation-markdown", emptyLabel, value, images
 }: PdfAnnotationMarkdownProps) {
-  const markdown = value.trim();
-  if (!markdown) {
-    return emptyLabel ? <p className={`${className} is-empty`}>{emptyLabel}</p> : null;
-  }
-
   return (
-    <div className={className}>
-      <ReactMarkdown
-        urlTransform={(url, key) => key === "src" && url.startsWith("attachment:")
-          ? images?.[url.slice("attachment:".length)] ?? ""
-          : defaultUrlTransform(url)}
-        components={{
-          a: ({ children, ...props }) => (
-            <a {...props} rel="noreferrer" target="_blank">{children}</a>
-          )
-        }}
-        rehypePlugins={[rehypeKatex]}
-        remarkPlugins={[remarkGfm, remarkMath]}
-      >
-        {markdown}
-      </ReactMarkdown>
-    </div>
+    <MarkdownContent
+      className={className}
+      emptyLabel={emptyLabel}
+      value={value}
+      urlTransform={(url, key, node) => {
+        if (key === "src" && url.startsWith("attachment:")) {
+          const id = url.slice("attachment:".length);
+          const image = images?.[id];
+          return image && isPdfTextBoxImages({ [id]: image }) ? image : "";
+        }
+        return markdownUrlTransform(url, key, node);
+      }}
+    />
   );
 }

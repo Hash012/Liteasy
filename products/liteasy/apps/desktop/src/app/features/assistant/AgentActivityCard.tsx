@@ -118,7 +118,7 @@ export function AgentActivityCard({ activity }: AgentActivityCardProps) {
                   ) : null}
                   {entry.content && expanded ? (
                     <div className="assistant-agent-step-detail" id={detailId}>
-                      <AssistantMarkdown value={entry.content} />
+                      <AssistantMarkdown streaming={entry.status === "running"} value={entry.content} />
                     </div>
                   ) : null}
                 </li>

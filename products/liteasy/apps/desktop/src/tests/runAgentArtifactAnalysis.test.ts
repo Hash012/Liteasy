@@ -36,7 +36,7 @@ test("submits modal analysis through the public Agent client", async () => {
   expect(send).toHaveBeenCalledWith(
     expect.objectContaining({
       artifactType: "mindmap",
-      message: expect.stringContaining("不要设置固定节点数"),
+      message: expect.stringContaining("控制深度与输出体积"),
       mode: "qa"
     }),
     {

@@ -11,10 +11,13 @@ import {
   type ObjectRef,
   type Placement,
   type ObjectRelation,
+  type BoardConnection,
+  type BoardSide,
 } from "./object.types";
 import type { ObjectStorage, StorageChange, StorageRow } from "./objectStorage";
 
 export type ObjectDraft = ObjectContent & {
+  paperAnchors?: ObjectEnvelope["paperAnchors"];
   assets?: ObjectEnvelope["assets"];
   title: string;
   sourceRefs?: ObjectRef[];
@@ -58,6 +61,7 @@ export function createObjectRepository(
         id: scopeId,
       },
       assets: draft.assets ?? previous?.assets ?? [],
+      ...((draft.paperAnchors ?? previous?.paperAnchors) ? { paperAnchors: draft.paperAnchors ?? previous?.paperAnchors } : {}),
       provenance: {
         sourceRefs: draft.sourceRefs ?? [],
         derivedFrom: draft.derivedFrom,
@@ -274,6 +278,29 @@ export function createObjectRepository(
             throw new ObjectStoreError("revision_conflict", "卡片已移除。");
           changes.push({ key, expected: row.version, row: null });
         }
+        if (input.remove?.length) {
+          for (const row of await storage.list(
+            `edge/${board.objectId}/`,
+            "",
+            1000,
+          )) {
+            const edge = row.value as BoardConnection;
+            if (
+              !input.remove.includes(edge.from) &&
+              !input.remove.includes(edge.to)
+            )
+              continue;
+            changes.push({ key: row.key, expected: row.version, row: null });
+            const relationKey = `relation/board-link/${board.objectId}/${edge.edgeId}`;
+            const relation = await storage.get(relationKey);
+            if (relation)
+              changes.push({
+                key: relationKey,
+                expected: relation.version,
+                row: null,
+              });
+          }
+        }
         for (const move of input.move ?? []) {
           const key = `placement/${board.objectId}/${move.placementId}`;
           const row = await storage.get(key);
@@ -402,7 +429,8 @@ export function createObjectRepository(
           previous.title === candidate.title &&
           JSON.stringify(previous.content) ===
             JSON.stringify(candidate.content) &&
-          JSON.stringify(previous.assets) === JSON.stringify(candidate.assets);
+          JSON.stringify(previous.assets) === JSON.stringify(candidate.assets) &&
+          JSON.stringify(previous.paperAnchors) === JSON.stringify(candidate.paperAnchors);
         const object = unchanged ? previous : candidate;
         const changes = unchanged ? [] : objectChanges(object, mappedHead);
         if (input.legacyKey && !unchanged)
@@ -584,6 +612,7 @@ export function createObjectRepository(
         title: `${source.title}（副本）`,
         kind: "content.note",
         assets: source.assets,
+        paperAnchors: source.paperAnchors,
         content: {
           schema: "liteasy.note/v1",
           payload: {
@@ -652,6 +681,7 @@ export function createObjectRepository(
               kind: "content.note",
               title: input.text.slice(0, 80) || "笔记",
               assets: source.assets,
+              paperAnchors: source.paperAnchors,
               sourceRefs: [p.ref],
               derivedFrom: [p.ref],
               content: {
@@ -685,6 +715,30 @@ export function createObjectRepository(
           member?.version ?? null,
         ),
       );
+      for (const edgeRow of await storage.list(
+        `edge/${board.objectId}/`,
+        "",
+        1000,
+      )) {
+        const edge = edgeRow.value as BoardConnection;
+        if (edge.from !== p.placementId && edge.to !== p.placementId) continue;
+        const key = `relation/board-link/${board.objectId}/${edge.edgeId}`;
+        const row = await storage.get(key);
+        if (!row) continue;
+        const relation = row.value as ObjectRelation;
+        changes.push(
+          change(
+            key,
+            {
+              ...relation,
+              revision: id(),
+              from: edge.from === p.placementId ? refOf(next) : relation.from,
+              to: edge.to === p.placementId ? refOf(next) : relation.to,
+            },
+            row.version,
+          ),
+        );
+      }
       if (source.kind === "content.fragment") {
         const relation: ObjectRelation = {
           relationId: id(),
@@ -893,18 +947,317 @@ export function createObjectRepository(
     getRunRecord: async (runId: string) =>
       (await storage.get(`run/${runId}`))?.value as
         { status: string; createdAt: string; question: string } | undefined,
-    listEdges: async (boardId: string) => {
+    listEdges: async (boardId: string): Promise<BoardConnection[]> => {
       await resolveLatest(boardId);
       return (await storage.list(`edge/${boardId}/`, "", 1000)).map(
-        (row) =>
-          row.value as {
-            edgeId: string;
-            from: string;
-            to: string;
-            kind: string;
-            label?: string;
-          },
+        (row) => row.value as BoardConnection,
       );
+    },
+    connectPlacements: async (input: {
+      boardRef: ObjectRef;
+      from: { placementId: string; revision: string; side: BoardSide };
+      to: { placementId: string; revision: string; side: BoardSide };
+      label?: string;
+      operationId: string;
+    }) =>
+      commitOperation(input.operationId, input, async () => {
+        const head = await storage.get(headKey(input.boardRef.objectId));
+        const board = readObject(head);
+        if (
+          board.kind !== "workspace.board" ||
+          board.lifecycle !== "active" ||
+          board.revision !== input.boardRef.revision
+        )
+          throw new ObjectStoreError(
+            "revision_conflict",
+            "白板已变化，请刷新后重试。",
+          );
+        if (input.from.placementId === input.to.placementId)
+          throw new ObjectStoreError(
+            "capability_denied",
+            "请选择另一张卡片建立连接。",
+          );
+        const endpoints = await Promise.all(
+          [input.from, input.to].map(async (endpoint) => {
+            if (!["top", "right", "bottom", "left"].includes(endpoint.side))
+              throw new ObjectStoreError("capability_denied", "连接端点无效。");
+            const row = await storage.get(
+              `placement/${board.objectId}/${endpoint.placementId}`,
+            );
+            const p = row?.value as Placement | undefined;
+            if (!p || p.revision !== endpoint.revision)
+              throw new ObjectStoreError(
+                "revision_conflict",
+                "连接的卡片已变化，请重试。",
+              );
+            await get(p.ref);
+            return p;
+          }),
+        );
+        const edge: BoardConnection = {
+          edgeId: id(),
+          from: endpoints[0].placementId,
+          to: endpoints[1].placementId,
+          fromSide: input.from.side,
+          toSide: input.to.side,
+          kind: "related_to",
+          label: input.label,
+          relationId: id(),
+        };
+        const next = make({ ...board, ...board.provenance }, board);
+        return {
+          changes: [
+            ...objectChanges(next, head),
+            change(`edge/${board.objectId}/${edge.edgeId}`, edge),
+            change(`relation/board-link/${board.objectId}/${edge.edgeId}`, {
+              relationId: edge.relationId!,
+              revision: id(),
+              from: endpoints[0].ref,
+              to: endpoints[1].ref,
+              predicate: "related_to",
+              scopeId,
+              assertedBy: { type: "user", id: scopeId },
+              createdAt: next.updatedAt,
+              basis: {
+                type: "user_judgment",
+                reason: input.label || "用户在白板中连接卡片",
+              },
+              reviewStatus: "accepted",
+            } satisfies ObjectRelation),
+          ],
+          result: [refOf(next)],
+        };
+      }),
+    removeConnection: async (boardRef: ObjectRef, edgeId: string) => {
+      const head = await storage.get(headKey(boardRef.objectId));
+      const board = readObject(head);
+      if (
+        board.kind !== "workspace.board" ||
+        board.revision !== boardRef.revision
+      )
+        throw new ObjectStoreError(
+          "revision_conflict",
+          "白板已变化，请刷新后重试。",
+        );
+      const key = `edge/${board.objectId}/${edgeId}`;
+      const row = await storage.get(key);
+      if (!row) throw new ObjectStoreError("revision_conflict", "连接已移除。");
+      const relationKey = `relation/board-link/${board.objectId}/${edgeId}`;
+      const relation = await storage.get(relationKey);
+      const next = make({ ...board, ...board.provenance }, board);
+      await storage.commit([
+        ...objectChanges(next, head),
+        { key, expected: row.version, row: null },
+        ...(relation
+          ? [{ key: relationKey, expected: relation.version, row: null }]
+          : []),
+      ]);
+      return next;
+    },
+    getObjectFileBinding: async (
+      objectId: string,
+    ): Promise<
+      | {
+          mountId: string;
+          path: string;
+          version: string | null;
+          objectRevision?: string;
+        }
+      | undefined
+    > => {
+      await resolveLatest(objectId);
+      return (await storage.get(`object-file/${objectId}`))?.value as
+        | {
+            mountId: string;
+            path: string;
+            version: string | null;
+            objectRevision?: string;
+          }
+        | undefined;
+    },
+    setObjectFileBinding: async (
+      objectId: string,
+      binding: {
+        mountId: string;
+        path: string;
+        version: string | null;
+        objectRevision?: string;
+      },
+    ) => {
+      const object = await resolveLatest(objectId);
+      const value = {
+        ...binding,
+        objectRevision: binding.objectRevision ?? object.revision,
+      };
+      const key = `object-file/${objectId}`;
+      const row = await storage.get(key);
+      if (JSON.stringify(row?.value) === JSON.stringify(value)) return;
+      await storage.commit([change(key, value, row?.version ?? null)]);
+    },
+    getBoardFileBinding: async <T = unknown>(
+      boardId: string,
+    ): Promise<T | undefined> => {
+      await resolveLatest(boardId);
+      return (await storage.get(`board-file/${boardId}`))?.value as
+        T | undefined;
+    },
+    setBoardFileBinding: async (boardId: string, binding: unknown) => {
+      const board = await resolveLatest(boardId);
+      if (board.kind !== "workspace.board")
+        throw new ObjectStoreError("capability_denied", "请选择白板。");
+      const key = `board-file/${boardId}`;
+      const row = await storage.get(key);
+      await storage.commit([change(key, binding, row?.version ?? null)]);
+    },
+    importBoardFile: async (input: {
+      title: string;
+      replaceRef?: ObjectRef;
+      nodes: Array<{
+        id: string;
+        draft?: ObjectDraft;
+        ref?: ObjectRef;
+        position: Placement["position"];
+        size: Placement["size"];
+      }>;
+      edges: BoardConnection[];
+      operationId: string;
+    }) => {
+      const result = await commitOperation(
+        input.operationId,
+        input,
+        async () => {
+          const previousHead = input.replaceRef
+            ? await storage.get(headKey(input.replaceRef.objectId))
+            : null;
+          const previous = previousHead ? readObject(previousHead) : undefined;
+          if (
+            input.replaceRef &&
+            (!previous ||
+              previous.kind !== "workspace.board" ||
+              previous.lifecycle !== "active" ||
+              previous.revision !== input.replaceRef.revision)
+          )
+            throw new ObjectStoreError(
+              "revision_conflict",
+              "白板已变化，请先保存本地修改。",
+            );
+          const board = make(
+            {
+              kind: "workspace.board",
+              title: input.title,
+              content: {
+                schema: "liteasy.board/v1",
+                payload: { description: "" },
+              },
+            },
+            previous,
+          );
+          const changes = objectChanges(board, previousHead);
+          const oldRows = new Map<string, StorageRow>();
+          if (previous) {
+            for (const prefix of [
+              `placement/${board.objectId}/`,
+              `edge/${board.objectId}/`,
+              `relation/board-link/${board.objectId}/`,
+              `relation/member_of/${board.objectId}/`,
+            ]) {
+              for (const row of await storage.list(prefix, "", 1000))
+                oldRows.set(row.key, row);
+            }
+          }
+          const nodes = new Map<string, Placement>();
+          const memberships = new Set<string>();
+          for (const node of input.nodes) {
+            if (
+              !node.id ||
+              nodes.has(node.id) ||
+              ![
+                node.position.x,
+                node.position.y,
+                node.size.width,
+                node.size.height,
+              ].every(Number.isFinite) ||
+              node.size.width <= 0 ||
+              node.size.height <= 0
+            )
+              throw new ObjectStoreError(
+                "unsupported_schema",
+                "白板包含无效或重复的卡片。",
+              );
+            const object = node.ref
+              ? await get(node.ref)
+              : node.draft
+                ? make(node.draft)
+                : null;
+            if (!object)
+              throw new ObjectStoreError(
+                "unsupported_schema",
+                "白板卡片缺少内容。",
+              );
+            if (!node.ref) changes.push(...objectChanges(object));
+            const p: Placement = {
+              ...placement(board.objectId, refOf(object)),
+              placementId: node.id,
+              position: node.position,
+              size: node.size,
+            };
+            nodes.set(node.id, p);
+            changes.push(
+              change(`placement/${board.objectId}/${p.placementId}`, p),
+            );
+            if (!memberships.has(object.objectId)) {
+              memberships.add(object.objectId);
+              changes.push(
+                change(
+                  membershipKey(board.objectId, object.objectId),
+                  membership(board, p.ref),
+                ),
+              );
+            }
+          }
+          const ids = new Set<string>();
+          for (const source of input.edges) {
+            const from = nodes.get(source.from),
+              to = nodes.get(source.to);
+            if (!from || !to || !source.edgeId || ids.has(source.edgeId))
+              throw new ObjectStoreError(
+                "unsupported_schema",
+                "白板包含无效或重复的连接。",
+              );
+            ids.add(source.edgeId);
+            const edge: BoardConnection = { ...source, relationId: id() };
+            changes.push(
+              change(`edge/${board.objectId}/${edge.edgeId}`, edge),
+              change(`relation/board-link/${board.objectId}/${edge.edgeId}`, {
+                relationId: edge.relationId!,
+                revision: id(),
+                from: from.ref,
+                to: to.ref,
+                predicate: "related_to",
+                scopeId,
+                assertedBy: { type: "user", id: scopeId },
+                createdAt: board.createdAt,
+                basis: {
+                  type: "user_judgment",
+                  reason: source.label || "用户导入白板连接",
+                },
+                reviewStatus: "accepted",
+              } satisfies ObjectRelation),
+            );
+          }
+          for (const item of changes) {
+            const old = oldRows.get(item.key);
+            if (old) {
+              item.expected = old.version;
+              oldRows.delete(item.key);
+            }
+          }
+          for (const row of oldRows.values())
+            changes.push({ key: row.key, expected: row.version, row: null });
+          return { changes, result: [refOf(board)] };
+        },
+      );
+      return get(result[0]);
     },
     setLifecycle: async (
       ref: ObjectRef,
@@ -973,6 +1326,7 @@ export function createObjectRepository(
       if (
         JSON.stringify(current.content) === JSON.stringify(next.content) &&
         JSON.stringify(current.assets) === JSON.stringify(next.assets) &&
+        JSON.stringify(current.paperAnchors) === JSON.stringify(next.paperAnchors) &&
         current.title === next.title
       )
         return current;

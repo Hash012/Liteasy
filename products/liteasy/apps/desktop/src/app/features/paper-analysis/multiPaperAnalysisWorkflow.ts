@@ -1,4 +1,5 @@
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
+import { paperAnchorFromEvidence } from "../paper-anchors/paperAnchorEntity";
 import type {
   AnalysisClaim,
   AnalysisEvidence,
@@ -296,6 +297,9 @@ export function prepareMultiPaperAnalysis(
     }
   }
 
+  // Persist the presentation with the source snapshot so later views do not rebuild
+  // labels from opaque evidence IDs or a renamed paper in another workspace.
+  evidence.forEach((item) => { item.paperAnchor = paperAnchorFromEvidence(item); });
   const selectedPaperIds = input.selectedPapers.map((paper) => paper.id);
   const coveredPaperIds = selectedPaperIds.filter((paperId) =>
     evidence.some((item) => item.paperId === paperId)
@@ -331,6 +335,7 @@ export function prepareMultiPaperAnalysis(
 
   return {
     citations: evidence.map((item) => ({
+      paperAnchor: item.paperAnchor,
       page: item.page,
       paperId: item.paperId,
       snippet: item.quote

@@ -1,4 +1,5 @@
 import type { PdfAnnotationCaptureInput } from "../objects/objectWorkbenchPort";
+import { pdfAnnotationReviewMarkdown } from "./pdfAnnotationReview";
 import type { PdfAnnotationRect } from "./pdfAnnotationStorage";
 import { pdfInkGroupBounds, pdfInkStrokes } from "./pdfInk";
 
@@ -21,7 +22,7 @@ export async function preparePdfAnnotationCapture({
       : annotation.excerpt;
   let text = annotation.quickAsk
     ? `### ${annotation.quickAsk.question}\n\n${annotation.quickAsk.answer}`
-    : annotation.note?.trim() || quote;
+    : annotation.note?.trim() || quote || (annotation.kind === "text" ? annotation.text.trim() : "");
   if (annotation.kind === "ink") {
     const strokes = pdfInkStrokes(annotation);
     if (!strokes.length) throw new Error("手绘笔记没有可读取的笔迹。");
@@ -64,6 +65,7 @@ export async function preparePdfAnnotationCapture({
       .filter(Boolean)
       .join("\n\n");
   }
+  text = [text, pdfAnnotationReviewMarkdown(annotation)].filter(Boolean).join("\n\n");
   return {
     text: text || `第 ${annotation.page} 页笔记`,
     quote,

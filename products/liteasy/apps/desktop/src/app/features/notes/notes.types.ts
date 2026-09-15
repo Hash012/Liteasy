@@ -1,4 +1,5 @@
 import type { ObjectEnvelope, ObjectRef } from "../objects/object.types";
+import type { NoteFileSnapshot } from "../note-files/noteFileService";
 import type { Paper } from "../workspace/workspace.types";
 import type { PdfAnnotationV2 } from "../pdf/pdfAnnotationStorage";
 
@@ -6,12 +7,14 @@ import type { PdfAnnotationV2 } from "../pdf/pdfAnnotationStorage";
 export type NotesTarget =
   | { kind: "object"; ref: ObjectRef; followLatest?: boolean }
   | { kind: "pdf-annotation"; paperId: string; annotationId: string }
-  | { kind: "artifact-annotation"; artifactId: string; annotationId: string };
+  | { kind: "artifact-annotation"; artifactId: string; annotationId: string }
+  | { kind: "external-file"; mountId: string; path: string };
 export type NotesFolder = {
   folderId: string;
   parentId: string;
   name: string;
   system?: boolean;
+  external?: { mountId: string; path: string };
 };
 export type NotesReference = {
   entryId: string;
@@ -20,6 +23,7 @@ export type NotesReference = {
   createdAt: string;
 };
 export type NotesItem = {
+  paperAnchors?: import("../paper-anchors/paperAnchorEntity").PaperAnchorEntity[];
   key: string;
   target: NotesTarget;
   title: string;
@@ -36,6 +40,7 @@ export type NotesItem = {
   artifactId?: string;
   nodeId?: string;
   entryId?: string;
+  file?: NoteFileSnapshot;
 };
 export type NotesViewModel = {
   folders: NotesFolder[];
@@ -44,11 +49,14 @@ export type NotesViewModel = {
   query: string;
   busy: boolean;
   error: string;
+  sourceWarning?: string;
   selected?: NotesItem;
   selectFolder(folderId: string): void;
   selectItem(item: NotesItem): void;
   search(query: string): void;
   refresh(): Promise<void>;
+  connectFolder(): Promise<void>;
+  importFiles(files?: File[]): Promise<void>;
   createFolder(name: string): Promise<void>;
   removeFolder(): Promise<void>;
   createNote(text: string): Promise<void>;
@@ -74,5 +82,7 @@ export function notesTargetKey(target: NotesTarget): string {
     ? `object:${target.ref.objectId}:${target.followLatest ? "latest" : target.ref.revision}:${target.ref.selectorId ?? ""}`
     : target.kind === "pdf-annotation"
       ? `pdf:${target.paperId}:${target.annotationId}`
-      : `artifact-annotation:${target.artifactId}:${target.annotationId}`;
+      : target.kind === "artifact-annotation"
+        ? `artifact-annotation:${target.artifactId}:${target.annotationId}`
+        : `external-file:${target.mountId}:${target.path}`;
 }

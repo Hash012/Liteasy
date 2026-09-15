@@ -17,6 +17,7 @@ export type MultiPaperAnalysisPlan = {
 };
 
 export type AnalysisEvidence = {
+  paperAnchor?: import("../paper-anchors/paperAnchorEntity").PaperAnchorEntity;
   analysisRunId: string;
   chunkId: string;
   id: string;

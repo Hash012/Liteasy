@@ -448,7 +448,7 @@ export function generateEvidenceUIDslDocument(input: {
       props: {
         confidence: input.confidence,
         snippet: firstCitation.snippet,
-        source: `${firstCitation.paperId} p.${firstCitation.page}`,
+        source: `${firstCitation.paperAnchor?.presentation.title ?? "引用文献"} · 第 ${firstCitation.page} 页`,
         title: "主要证据"
       }
     });
@@ -460,7 +460,9 @@ export function generateEvidenceUIDslDocument(input: {
     props: {
       citations: input.citations.map((citation) => ({
         page: String(citation.page),
-        paperId: citation.paperId
+        paperId: citation.paperId,
+        paperTitle: citation.paperAnchor?.presentation.title ?? "引用文献",
+        snippet: citation.snippet
       }))
     }
   });
@@ -677,6 +679,7 @@ function createCenterArtifactRoot(input: {
   actionBar: UIDslNode;
   artifactType: ArtifactType;
   importedChunksByPaperId: Record<string, RetrievalChunk[]>;
+  authoredArtifact?: import("../artifact-workflow/authoredArtifact").AuthoredArtifact;
   outlineNodes?: ArtifactOutlineNode[];
   selectedPapers: Paper[];
   title: string;
@@ -735,7 +738,7 @@ function createCenterArtifactRoot(input: {
       component: "SlideDeck",
       id: "artifact-slide-deck",
       props: {
-        slides: createSlides(input.selectedPapers, input.importedChunksByPaperId, input.title),
+        slides: input.authoredArtifact?.kind === "slides" ? input.authoredArtifact.slides : createSlides(input.selectedPapers, input.importedChunksByPaperId, input.title),
         title: input.title
       }
     };
@@ -758,6 +761,7 @@ export function generateCenterArtifactUIDslDocument(input: {
   artifactId: string;
   artifactType: ArtifactType;
   importedChunksByPaperId: Record<string, RetrievalChunk[]>;
+  authoredArtifact?: import("../artifact-workflow/authoredArtifact").AuthoredArtifact;
   outlineNodes?: ArtifactOutlineNode[];
   selectedPapers: Paper[];
   title?: string;
@@ -771,6 +775,7 @@ export function generateCenterArtifactUIDslDocument(input: {
     actionBar: createArtifactActionBar(openArtifactAction),
     artifactType: input.artifactType,
     importedChunksByPaperId: input.importedChunksByPaperId,
+    authoredArtifact: input.authoredArtifact,
     outlineNodes: input.outlineNodes,
     selectedPapers: input.selectedPapers,
     title

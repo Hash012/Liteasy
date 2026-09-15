@@ -3,7 +3,8 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 type Scope = "artifact-tasks" | "thin-reading" | "paper-services";
 const cache = new Map<Scope, Record<string, unknown>>();
 const pending = new Map<Scope, Promise<Record<string, unknown>>>();
-let queue = Promise.resolve();
+type WriterState = { revision: number; savedRevision: number; flushing?: Promise<void> };
+const writers = new Map<Scope, WriterState>();
 async function browserRead(scope: Scope) {
   return JSON.parse(localStorage.getItem(`liteasy.checkpoints.v1:${scope}`) ?? "{}");
 }
@@ -21,10 +22,23 @@ export async function putDurableEntry(scope: Scope, key: string, value: unknown)
   const entries = await loadDurableEntries(scope);
   if (value === undefined) delete entries[key];
   else entries[key] = structuredClone(value);
-  queue = queue.catch(() => {}).then(async () => {
-    const snapshot = structuredClone(entries);
-    if (isTauri()) await invoke("save_workflow_checkpoints", { scope, snapshot });
-    else localStorage.setItem(`liteasy.checkpoints.v1:${scope}`, JSON.stringify(snapshot));
+  const writer = writers.get(scope) ?? { revision: 0, savedRevision: 0 };
+  writers.set(scope, writer);
+  writer.revision += 1;
+  // Keep one active write and one latest cached state, instead of queuing a full
+  // checkpoint serialization for every streaming token while disk/IPC is busy.
+  writer.flushing ??= Promise.resolve().then(async () => {
+    try {
+      while (writer.savedRevision < writer.revision) {
+        const savingRevision = writer.revision;
+        const snapshot = structuredClone(entries);
+        if (isTauri()) await invoke("save_workflow_checkpoints", { scope, snapshot });
+        else localStorage.setItem(`liteasy.checkpoints.v1:${scope}`, JSON.stringify(snapshot));
+        writer.savedRevision = savingRevision;
+      }
+    } finally {
+      writer.flushing = undefined;
+    }
   });
-  return queue;
+  return writer.flushing;
 }

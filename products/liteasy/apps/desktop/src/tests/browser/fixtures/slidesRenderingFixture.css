@@ -1,0 +1,6 @@
+body { margin: 0; background: #f3f6f9; }
+.slides-rendering-fixture { box-sizing: border-box; max-width: 1020px; margin: 0 auto; padding: 24px; }
+.slides-rendering-fixture > header { margin-bottom: 20px; }
+.slides-rendering-fixture > header h1 { margin: 0 0 8px; font-size: 24px; }
+.slides-rendering-fixture > header p { margin: 0; color: #52697a; }
+.slides-rendering-fixture > aside { margin-top: 18px; border: 1px solid #d8e2e9; border-radius: 6px; padding: 12px; }

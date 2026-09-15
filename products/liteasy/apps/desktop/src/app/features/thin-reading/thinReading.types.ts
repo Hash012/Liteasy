@@ -94,6 +94,7 @@ export type ThinReadingIntuechoRecommendation = {
 };
 
 export type ThinReadingEvidenceSpan = {
+  paperAnchor?: import("../paper-anchors/paperAnchorEntity").PaperAnchorEntity;
   chunkId?: string;
   confidence: number;
   id: string;

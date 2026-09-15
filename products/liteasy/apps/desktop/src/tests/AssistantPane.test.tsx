@@ -262,7 +262,7 @@ test("shows public workflow audit summaries after a public Agent run when enable
           }
         ],
         idempotencyKey: "conversation:qa:test",
-        input: { message: "生成思维导图", mode: "qa" },
+        input: { message: "解释论文的方法", mode: "qa" },
         runId: "run-public-audit",
         sessionId: "session-public-audit",
         status: "completed"
@@ -285,7 +285,7 @@ test("shows public workflow audit summaries after a public Agent run when enable
     />
   );
 
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "生成思维导图");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "解释论文的方法");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(await screen.findByText("公开审计过程")).toBeInTheDocument();

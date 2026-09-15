@@ -3728,6 +3728,8 @@ test("applies a configured external reranker only to the quality-gated shortlist
       sessionId: "external-reranker-user"
     }),
     handler: createDevCloudRequestHandler({
+      // This test supplies OpenAlex candidates; unrelated live feeds can exhaust its request budget.
+      expandedSourcesEnabled: false,
       crossrefEnabled: false,
       openAlexTransport: async () => ({
         json: async () => ({
@@ -4132,7 +4134,9 @@ test("migrates provider and arXiv candidate keys to DOI without duplicating hist
   assert.equal(candidates[0].canonicalId, "doi:10.1000/canonical");
   assert.equal(candidates[0].discoveryCount, 3);
   assert.equal(candidates[0].firstDiscoveredAt, "2026-07-28T00:00:00.000Z");
-  assert.deepEqual(listRecommendationCandidateSources("identity-user", "Target")[0], {
+  assert.deepEqual(listRecommendationCandidateSources("identity-user", "Target", {
+    now: new Date("2026-07-29T00:00:00.000Z")
+  })[0], {
     canonicalPaperId: "doi:10.1000/canonical",
     arxivId: "2101.01234",
     discoveredAt: "2026-07-29T00:00:00.000Z",

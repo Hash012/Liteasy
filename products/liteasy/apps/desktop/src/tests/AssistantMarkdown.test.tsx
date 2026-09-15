@@ -10,7 +10,7 @@ vi.mock("../app/features/mermaid/MermaidPreview", () => ({
 import { AssistantMarkdown } from "../app/features/assistant/AssistantMarkdown";
 
 describe("AssistantMarkdown", () => {
-  test("renders GFM, math, code, Mermaid and accessible web images", () => {
+  test("renders GFM, math, code, Mermaid and accessible web images", async () => {
     render(
       <AssistantMarkdown value={`# 结果
 
@@ -36,7 +36,7 @@ flowchart LR
     expect(within(screen.getByRole("table")).getByText("95%")).toBeInTheDocument();
     expect(document.querySelector(".katex")).toBeInTheDocument();
     expect(screen.getByText("const answer = 42;")).toBeInTheDocument();
-    expect(screen.getByLabelText("Mermaid 图表")).toHaveTextContent("A --> B");
+    expect(await screen.findByLabelText("Mermaid 图表")).toHaveTextContent("A --> B");
     expect(screen.getByRole("img", { name: "实验曲线" })).toHaveAttribute(
       "src",
       "https://example.com/chart.png"

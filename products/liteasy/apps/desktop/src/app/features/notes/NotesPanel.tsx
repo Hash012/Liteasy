@@ -1,3 +1,4 @@
+import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
 import { useEffect, useState } from "react";
 import {
   Button,
@@ -14,6 +15,8 @@ import {
 import {
   AddRegular,
   ArrowClockwiseRegular,
+  ArrowImportRegular,
+  FolderOpenRegular,
   ArrowUpRightRegular,
   CopyRegular,
   DeleteRegular,
@@ -22,13 +25,15 @@ import {
   EditRegular,
   FolderAddRegular,
   FolderRegular,
-  LinkRegular,
   MoreHorizontalRegular,
   NoteRegular,
   SaveRegular,
   SearchRegular,
 } from "@fluentui/react-icons";
-import { OBJECT_TRANSFER_MIME } from "../object-transfer/objectTransfer";
+import {
+  OBJECT_TRANSFER_MIME,
+  PENDING_CAPTURE_MIME,
+} from "../object-transfer/objectTransfer";
 import { NOTES_REFERENCE_MIME } from "./notesPort";
 import {
   NOTES_ROOT,
@@ -36,6 +41,8 @@ import {
   type NotesItem,
   type NotesViewModel,
 } from "./notes.types";
+import { MarkdownContent } from "../markdown/MarkdownContent";
+import { PdfAnnotationMarkdown } from "../pdf/PdfAnnotationMarkdown";
 import "./notes.css";
 
 function IconButton({
@@ -65,12 +72,12 @@ function IconButton({
 export function NotesPanel({ model }: { model: NotesViewModel }) {
   const [folderName, setFolderName] = useState<string>();
   const [draft, setDraft] = useState<string>();
-  const [editingKey, setEditingKey] = useState<string>();
+  const [editingItem, setEditingItem] = useState<NotesItem>();
   const [destination, setDestination] = useState(NOTES_ROOT);
   const [collecting, setCollecting] = useState<NotesItem>();
   useEffect(() => {
     setDraft(undefined);
-    setEditingKey(undefined);
+    setEditingItem(undefined);
     setCollecting(undefined);
   }, [model.folderId]);
   const run = (action: Promise<void>) => {
@@ -86,11 +93,18 @@ export function NotesPanel({ model }: { model: NotesViewModel }) {
     path(a).localeCompare(path(b)),
   );
   const folder = model.folders.find((item) => item.folderId === model.folderId);
+  const filename = (item: NotesItem) =>
+    /\.(md|markdown|canvas)$/i.test(item.title)
+      ? item.title
+      : `${item.title}.${item.object?.kind === "workspace.board" ? "canvas" : "md"}`;
   const onDragOver = (event: React.DragEvent) => {
     if (
-      [NOTES_REFERENCE_MIME, OBJECT_TRANSFER_MIME].some((type) =>
-        event.dataTransfer.types.includes(type),
-      )
+      [
+        NOTES_REFERENCE_MIME,
+        OBJECT_TRANSFER_MIME,
+        PENDING_CAPTURE_MIME,
+        "Files",
+      ].some((type) => event.dataTransfer.types.includes(type))
     ) {
       event.preventDefault();
       event.dataTransfer.dropEffect = "copy";
@@ -106,13 +120,23 @@ export function NotesPanel({ model }: { model: NotesViewModel }) {
           icon={<AddRegular />}
           onClick={() => {
             setDraft("");
-            setEditingKey(undefined);
+            setEditingItem(undefined);
           }}
         />
         <IconButton
           label="新建目录"
           icon={<FolderAddRegular />}
           onClick={() => setFolderName("")}
+        />
+        <IconButton
+          label="导入 Markdown 文件"
+          icon={<ArrowImportRegular />}
+          onClick={() => run(model.importFiles())}
+        />
+        <IconButton
+          label="连接文件夹 / Obsidian Vault"
+          icon={<FolderOpenRegular />}
+          onClick={() => run(model.connectFolder())}
         />
         <IconButton
           label="刷新笔记"
@@ -138,6 +162,11 @@ export function NotesPanel({ model }: { model: NotesViewModel }) {
       {model.error && (
         <p role="alert" className="notes-error">
           {model.error}
+        </p>
+      )}
+      {model.sourceWarning && (
+        <p role="status" className="notes-source-warning">
+          {model.sourceWarning}
         </p>
       )}
       {folderName !== undefined && (
@@ -257,16 +286,14 @@ export function NotesPanel({ model }: { model: NotesViewModel }) {
               className="notes-editor"
               onSubmit={(event) => {
                 event.preventDefault();
-                const item = model.items.find(
-                  (candidate) => candidate.key === editingKey,
-                );
+                const item = editingItem;
                 const save = item
                   ? model.editNote(item, draft)
                   : model.createNote(draft);
                 void save
                   .then(() => {
                     setDraft(undefined);
-                    setEditingKey(undefined);
+                    setEditingItem(undefined);
                   })
                   .catch(() => undefined);
               }}
@@ -287,7 +314,7 @@ export function NotesPanel({ model }: { model: NotesViewModel }) {
                   icon={<DismissRegular />}
                   onClick={() => {
                     setDraft(undefined);
-                    setEditingKey(undefined);
+                    setEditingItem(undefined);
                   }}
                 />
               </div>
@@ -309,7 +336,14 @@ export function NotesPanel({ model }: { model: NotesViewModel }) {
               >
                 <button
                   className="notes-item-content"
-                  onClick={() => model.selectItem(item)}
+                  onClick={() => {
+                    model.selectItem(item);
+                    if (
+                      item.object?.kind === "workspace.board" ||
+                      item.file?.path.endsWith(".canvas")
+                    )
+                      model.openSource(item);
+                  }}
                   aria-label={`查看笔记 ${item.title}`}
                   aria-expanded={model.selected?.key === item.key}
                 >
@@ -319,12 +353,7 @@ export function NotesPanel({ model }: { model: NotesViewModel }) {
                     ) : (
                       <NoteRegular aria-hidden="true" />
                     )}
-                    <strong>{item.title}</strong>
-                  </span>
-                  <span className="notes-item-text">{item.text}</span>
-                  <span className="notes-item-source">
-                    <LinkRegular aria-hidden="true" />
-                    {item.source}
+                    <strong title={filename(item)}>{filename(item)}</strong>
                   </span>
                 </button>
                 <Menu>
@@ -361,7 +390,7 @@ export function NotesPanel({ model }: { model: NotesViewModel }) {
                           icon={<EditRegular />}
                           onClick={() => {
                             setDraft(item.text);
-                            setEditingKey(item.key);
+                            setEditingItem(item);
                           }}
                         >
                           编辑笔记
@@ -378,47 +407,67 @@ export function NotesPanel({ model }: { model: NotesViewModel }) {
                     </MenuList>
                   </MenuPopover>
                 </Menu>
-                {model.selected?.key === item.key && (
-                  <div className="notes-item-detail">
-                    <p>{item.text}</p>
-                    {item.annotation?.excerpt &&
-                      item.annotation.excerpt !== item.text && (
-                        <details>
-                          <summary>原文</summary>
-                          <blockquote>{item.annotation.excerpt}</blockquote>
-                        </details>
-                      )}
-                    <div className="notes-item-actions">
-                      <IconButton
-                        label="打开来源"
-                        icon={<ArrowUpRightRegular />}
-                        disabled={item.unavailable}
-                        onClick={() => model.openSource(item)}
-                      />
-                      <IconButton
-                        label="复制引用到目录"
-                        icon={<CopyRegular />}
-                        onClick={() => {
-                          setCollecting(item);
-                          setDestination(model.folderId);
-                        }}
-                      />
-                      {item.editable && (
-                        <IconButton
-                          label="编辑笔记"
-                          icon={<EditRegular />}
-                          onClick={() => {
-                            setDraft(item.text);
-                            setEditingKey(item.key);
-                          }}
-                        />
-                      )}
-                    </div>
-                  </div>
-                )}
               </article>
             ))}
           </div>
+          {model.selected &&
+            draft === undefined &&
+            (() => {
+              const item = model.selected;
+              const quote =
+                item.annotation?.excerpt ||
+                (item.object?.kind === "content.fragment"
+                  ? item.object.content.payload.anchors
+                      .map((anchor) =>
+                        "quote" in anchor ? anchor.quote.exact : "",
+                      )
+                      .filter(Boolean)
+                      .join("\n")
+                  : "");
+              return (
+                <section className="notes-item-detail" aria-label="打开的笔记">
+                  <header>
+                    <strong>{filename(item)}</strong>
+                    <span>{item.source}</span>
+                  </header>
+                  {item.annotation ? <PdfAnnotationMarkdown value={item.text} images={item.annotation.images} />
+                    : <MarkdownContent value={item.text} paperAnchors={item.paperAnchors ?? item.object?.paperAnchors} />}
+                  <PaperAnchorReferences anchors={item.paperAnchors ?? item.object?.paperAnchors ?? []} />
+                  {quote && !item.text.includes(quote) && (
+                    <details>
+                      <summary>原文</summary>
+                      <blockquote><MarkdownContent value={quote} /></blockquote>
+                    </details>
+                  )}
+                  <div className="notes-item-actions">
+                    <IconButton
+                      label="打开来源"
+                      icon={<ArrowUpRightRegular />}
+                      disabled={item.unavailable}
+                      onClick={() => model.openSource(item)}
+                    />
+                    <IconButton
+                      label="复制引用到目录"
+                      icon={<CopyRegular />}
+                      onClick={() => {
+                        setCollecting(item);
+                        setDestination(model.folderId);
+                      }}
+                    />
+                    {item.editable && (
+                      <IconButton
+                        label="编辑笔记"
+                        icon={<EditRegular />}
+                        onClick={() => {
+                          setDraft(item.text);
+                          setEditingItem(item);
+                        }}
+                      />
+                    )}
+                  </div>
+                </section>
+              );
+            })()}
         </div>
       </div>
     </section>

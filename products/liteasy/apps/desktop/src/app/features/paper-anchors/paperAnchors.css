@@ -1,0 +1,6 @@
+.paper-anchor-references { margin-block: 8px; border: 1px solid var(--colorNeutralStroke2, #e0e0e0); border-radius: 6px; padding: 8px; }
+.paper-anchor-references summary { cursor: pointer; font-size: 12px; }
+.paper-anchor-references ol { display: grid; gap: 8px; list-style: none; margin: 8px 0 0; padding: 0; }
+.paper-anchor-references li { min-width: 0; }
+.paper-anchor-references blockquote { margin: 4px 0; padding-inline-start: 8px; border-inline-start: 2px solid var(--colorNeutralStroke2, #e0e0e0); font-size: 12px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.paper-anchor-references p, .paper-anchor-references li > span { font-size: 12px; margin: 4px 0; }

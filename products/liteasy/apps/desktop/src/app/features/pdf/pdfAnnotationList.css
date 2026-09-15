@@ -119,3 +119,28 @@
   min-width: 0;
   width: 100%;
 }
+
+.pdf-entry-review {
+  min-width: 0;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--colorNeutralStroke2);
+  overflow-wrap: anywhere;
+}
+.pdf-entry-review > header {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.pdf-entry-review > header > strong {
+  flex: 1;
+  font-size: calc(12px * var(--app-font-ratio, 1));
+}
+.pdf-entry-review > .fui-Textarea {
+  width: 100%;
+  margin-top: 4px;
+}
+.pdf-entry-review [role="alert"] {
+  color: var(--colorPaletteRedForeground1);
+}

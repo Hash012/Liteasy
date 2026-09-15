@@ -45,5 +45,5 @@ test("only bounded raster attachments are admitted and unsafe Markdown links sta
   expect(png).toBe(image);
   render(<PdfAnnotationMarkdown value="![图片](attachment:pic) [链接](javascript:alert)" images={{ pic: image }} />);
   expect(screen.getByAltText("图片")).toHaveAttribute("src", image);
-  expect(screen.getByText("链接")).toHaveAttribute("href", "");
+  expect(screen.getByText("链接")).not.toHaveAttribute("href");
 });

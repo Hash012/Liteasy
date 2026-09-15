@@ -227,7 +227,7 @@ function createSpecialistAgent(input: {
     parameters: workflowParameters
   });
   return new Agent<SdkManagerContext>({
-    instructions: `你是${specialistDefinition.agent.name}。只执行注册的工作流，并把结果返回主 Agent。`,
+    instructions: specialistDefinition.agent.instructions,
     model: new ExplicitRouteModel({
       arguments: { instruction: input.sdkContext.input.request.input.message },
       completedText: `${artifactLabel}工作流已完成。`,

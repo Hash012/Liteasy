@@ -55,6 +55,12 @@ export function createArtifactStore(taskNamespace = "") {
       task.progress = 100;
       task.stage = "completed";
       task.status = "completed";
+      // The final document now owns the result. Keeping its generation context
+      // on every completed task retains another full set of parsed papers.
+      delete task.recovery;
+      delete task.thinReadingBranchRecovery;
+      delete task.partialAnswer;
+      delete task.partialOutlineNodes;
       catalog.set(payload.artifactId, payload);
       upsertOpenTab(payload);
     },
@@ -146,6 +152,7 @@ export function createArtifactStore(taskNamespace = "") {
     cancelTask(id: string) {
       const task = tasks.get(id);
       if (!task || task.status === "completed" || task.status === "failed") return false;
+      if (task.stage === "saving_result" || task.stage === "thin_reading_saving") return false;
       task.message = "用户已终止生成";
       task.stage = "cancelled";
       task.status = "cancelled";

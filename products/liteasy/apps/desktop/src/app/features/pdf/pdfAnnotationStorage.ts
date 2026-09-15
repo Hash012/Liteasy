@@ -37,6 +37,13 @@ export type PdfAnnotationPublication = {
     | "failed";
 };
 
+export type PdfAnnotationReview = {
+  text: string;
+  generatedAt: string;
+  updatedAt: string;
+  sourceRevision: number;
+};
+
 type PdfAnnotationBase = {
   color?: PdfHighlightColor;
   createdAt: string;
@@ -49,6 +56,7 @@ type PdfAnnotationBase = {
   /** Ordered strokes in one drawing note. `ink` remains the first stroke for old snapshots. */
   inkStrokes?: PdfInkStroke[];
   inkLastStrokeAt?: string;
+  review?: PdfAnnotationReview;
   quickAsk?: { question: string; answer: string; pageText: string; abstractText: string };
   normalizedStart?: number;
   opacity?: number;
@@ -97,7 +105,7 @@ export type PdfAnnotationRestartRecovery = PdfAnnotationPrivateState & {
 
 type PdfAnnotationEdit = Partial<Pick<
   PdfAnnotation,
-  "color" | "excerpt" | "kind" | "ink" | "inkStrokes" | "inkLastStrokeAt" | "normalizedStart" | "note" | "images" | "manualSize" | "opacity" | "page" | "publication" | "rects" | "text"
+  "color" | "excerpt" | "kind" | "ink" | "inkStrokes" | "inkLastStrokeAt" | "normalizedStart" | "note" | "review" | "images" | "manualSize" | "opacity" | "page" | "publication" | "rects" | "text"
 >> & { updatedAt: string };
 
 type PdfAnnotationPublicationReceipt = {
@@ -222,6 +230,15 @@ function isPublication(value: unknown): value is PdfAnnotationPublication {
     (candidate.remoteRevision === undefined ||
       (hasRemoteAnnotation && typeof candidate.remoteRevision === "number" &&
         Number.isInteger(candidate.remoteRevision) && candidate.remoteRevision > 0));
+}
+
+export function isPdfAnnotationReview(value: unknown): value is PdfAnnotationReview {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const review = value as Partial<PdfAnnotationReview>;
+  return typeof review.text === "string" &&
+    typeof review.generatedAt === "string" && Number.isFinite(Date.parse(review.generatedAt)) &&
+    typeof review.updatedAt === "string" && Number.isFinite(Date.parse(review.updatedAt)) &&
+    typeof review.sourceRevision === "number" && Number.isInteger(review.sourceRevision) && review.sourceRevision > 0;
 }
 
 function hasAnnotationFields(value: unknown) {
@@ -359,6 +376,12 @@ export function normalizePdfAnnotations(value: unknown, fallbackPaperIdentity?: 
   if (!Array.isArray(value)) return [];
   const now = new Date().toISOString();
   return value.flatMap((annotation) => {
+    // Damage to optional generated content must never discard the user's entry.
+    if (annotation && typeof annotation === "object" && !Array.isArray(annotation) &&
+      "review" in annotation && !isPdfAnnotationReview(annotation.review)) {
+      const { review: _review, ...entry } = annotation;
+      annotation = entry;
+    }
     if (isAnnotation(annotation)) {
       const { syncState: _syncState, visibility: _visibility, ...current } = annotation;
       return [{ ...current, publication: { ...annotation.publication! }, rects: annotation.rects.map((rect) => ({ ...rect })) }];
@@ -487,6 +510,10 @@ export function recoverPdfAnnotationPrivateState(
   for (const value of values) {
     const [normalized] = normalizePdfAnnotations([value], fallbackPaperIdentity);
     if (normalized) {
+      if (value && typeof value === "object" && "review" in value &&
+        value.review !== undefined && !isPdfAnnotationReview(value.review)) {
+        issues.push({ annotationId: normalized.id, message: "AI review 数据损坏；用户批注已保留。" });
+      }
       annotations.push(normalized);
       continue;
     }

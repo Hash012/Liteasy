@@ -23,7 +23,7 @@ function renderMarkdown(summary: string, sentences = [sentence(summary)]) {
 }
 
 describe("ThinReadingMarkdown", () => {
-  test("renders full Markdown structure, math, code, diagrams and footnotes without flattening paragraphs", () => {
+  test("renders full Markdown structure, math, code, diagrams and footnotes without flattening paragraphs", async () => {
     const summary = `## 方法
 
 使用 **注意力** 和 ~~循环~~。
@@ -60,7 +60,7 @@ flowchart LR
     expect(container.querySelectorAll(".katex")).toHaveLength(3);
     expect(container.querySelector(".katex-display")).toBeInTheDocument();
     expect(screen.getByText("const result = 42;")).toBeVisible();
-    expect(screen.getByLabelText("Mermaid 图表")).toHaveTextContent("A --> B");
+    expect(await screen.findByLabelText("Mermaid 图表")).toHaveTextContent("A --> B");
     expect(container.querySelector("[data-footnotes]")).toHaveTextContent("这是脚注。");
     expect(screen.getAllByLabelText("来源 sentence-one")).toHaveLength(1);
   });

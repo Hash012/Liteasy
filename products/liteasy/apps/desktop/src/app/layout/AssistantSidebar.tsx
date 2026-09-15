@@ -36,7 +36,7 @@ type AssistantSidebarProps = {
   onApplyThemePreset?: ActionContext["applyThemePreset"];
   onResumeArtifactTask?: (taskId: string) => Promise<void>;
   onCancelArtifactTask?: (taskId: string) => string | Promise<string>;
-  onGenerateArtifact: (artifactType: ArtifactType, paperIds?: string[], context?: string) => string;
+  onGenerateArtifact: (artifactType: ArtifactType, paperIds?: string[], context?: string, contextRefs?: import("../features/context/objectContext").ContextRef[]) => string;
   onImportSelectedSet?: ActionContext["importSelectedSet"];
   onPreparePapersForContext?: (paperIds: string[]) => Promise<void>;
   onMoveDockItem?: ActionContext["moveDockItem"];

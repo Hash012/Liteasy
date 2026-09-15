@@ -1,9 +1,14 @@
+import { formatPaperAnchorText, paperAnchorsFromCitations, type PaperAnchorEntity } from "../paper-anchors/paperAnchorEntity";
+import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
 import type { UIDslActionRef, UIDslDocument, UIDslNode } from "./generativeUi.types";
 import { GeneratedMindMap } from "./GeneratedMindMap";
+import { SlideDeckView } from "./SlideDeckView";
 import { validateUIDslDocument } from "./uiDslValidator";
 import { validateUIDslUx } from "./uxValidator";
 
 type DynamicCanvasProps = {
+  paperAnchors?: readonly PaperAnchorEntity[];
+  onOpenPaperAnchor?: (anchor: PaperAnchorEntity) => void;
   document: UIDslDocument;
   onAction: (action: UIDslActionRef) => void;
 };
@@ -33,18 +38,10 @@ type VisualOutlineNode = {
   parentId?: string;
 };
 
-const evidenceIdPattern = /\[?\bevidence-[a-z0-9][a-z0-9-]*\b\]?/gi;
-
-function hideInternalEvidenceIds(value: string, replacement = "〔证据〕") {
-  return value
-    .replace(evidenceIdPattern, replacement)
-    .replace(/(?:〔证据〕[\s,，、;；]*){2,}/g, "〔证据〕 ")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-}
-
 function cleanOutlineLabel(value: string) {
-  return hideInternalEvidenceIds(value, "").replace(/\s+([，。；：,.!?])/g, "$1");
+  // The structured node retains evidenceIds; references are rendered below its content.
+  return value.replace(/\[?\bevidence-[A-Za-z0-9][A-Za-z0-9_-]*\b\]?/gu, "")
+    .replace(/\s+([，。；：,.!?])/g, "$1").trim();
 }
 
 function normalizeOutlineNodes(records: Record<string, unknown>[]): VisualOutlineNode[] {
@@ -170,9 +167,12 @@ export function OutlineTree({
 function renderNode(
   node: UIDslNode,
   actionsById: Map<string, UIDslActionRef>,
-  onAction: (action: UIDslActionRef) => void
+  onAction: (action: UIDslActionRef) => void,
+  paperAnchors: readonly PaperAnchorEntity[],
+  onOpenPaperAnchor?: (anchor: PaperAnchorEntity) => void,
 ): JSX.Element {
-  const children = node.children?.map((child) => renderNode(child, actionsById, onAction));
+  const children = node.children?.map((child) => renderNode(child, actionsById, onAction, paperAnchors, onOpenPaperAnchor));
+  const hideInternalEvidenceIds = (value: string) => formatPaperAnchorText(value, paperAnchors);
 
   if (node.component === "Stack") {
     return (
@@ -260,15 +260,17 @@ function renderNode(
 
   if (node.component === "CitationList") {
     const citations = getRecordArrayProp(node.props, "citations");
-    return (
-      <ul className="genui-citation-list" key={node.id}>
-        {citations.map((citation, index) => (
-          <li key={`${node.id}-${index}`}>
-            {getStringProp(citation, "paperId")} · 第 {getStringProp(citation, "page")} 页
-          </li>
-        ))}
-      </ul>
+    const anchors = paperAnchors.length ? paperAnchors : paperAnchorsFromCitations(
+      citations.flatMap((citation) => {
+        const paperId = getStringProp(citation, "paperId");
+        const page = Number(citation.page);
+        return paperId && Number.isInteger(page) && page > 0
+          ? [{ paperId, page, snippet: getStringProp(citation, "snippet") }] : [];
+      }),
+      citations.map((citation) => ({ id: getStringProp(citation, "paperId"), title: getStringProp(citation, "paperTitle", "引用文献") })),
+      node.id,
     );
+    return <PaperAnchorReferences anchors={anchors} onOpen={onOpenPaperAnchor} className="genui-citation-list" key={node.id} />;
   }
 
   if (node.component === "ArtifactLauncher") {
@@ -321,27 +323,10 @@ function renderNode(
   }
 
   if (node.component === "SlideDeck") {
-    const slides = getRecordArrayProp(node.props, "slides");
-    return (
-      <section className="genui-slide-deck" key={node.id}>
-        <strong>{getStringProp(node.props, "title", "PPT")}</strong>
-        <div className="genui-slide-list">
-          {slides.map((slide, index) => (
-            <article className="genui-slide" key={`${node.id}-slide-${index}`}>
-              <span>{getStringProp(slide, "title", `Slide ${index + 1}`)}</span>
-              <ul>
-                {getStringArrayProp(slide, "bullets").map((bullet) => (
-                  <li key={`${node.id}-slide-${index}-${bullet}`}>
-                    {hideInternalEvidenceIds(bullet)}
-                  </li>
-                ))}
-              </ul>
-            </article>
-          ))}
-        </div>
-        {children}
-      </section>
-    );
+    return <div key={node.id}>
+      <SlideDeckView paperAnchors={paperAnchors} onOpenPaperAnchor={onOpenPaperAnchor} slides={getRecordArrayProp(node.props, "slides")} title={getStringProp(node.props, "title", "PPT")} />
+      {children}
+    </div>;
   }
 
   if (node.component === "ActionBar") {
@@ -371,7 +356,7 @@ function renderNode(
   return <div key={node.id}>{children}</div>;
 }
 
-export function DynamicCanvas({ document, onAction }: DynamicCanvasProps) {
+export function DynamicCanvas({ document, onAction, onOpenPaperAnchor, paperAnchors = [] }: DynamicCanvasProps) {
   const validation = validateUIDslDocument(document);
   const uxValidation = validation.valid ? validateUIDslUx(document) : { errors: [], valid: true };
 
@@ -387,7 +372,7 @@ export function DynamicCanvas({ document, onAction }: DynamicCanvasProps) {
 
   return (
     <section className="genui-canvas" data-trace-id={document.audit.traceId}>
-      {renderNode(document.root, actionsById, onAction)}
+      {renderNode(document.root, actionsById, onAction, paperAnchors, onOpenPaperAnchor)}
     </section>
   );
 }

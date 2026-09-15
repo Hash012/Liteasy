@@ -212,15 +212,24 @@ describe("Notes reference directories", () => {
         "default/board",
       ),
     );
-    expect(result.current.model.items[0].source).toContain("读书研究");
+    expect(
+      result.current.model.items.find(
+        (item) => item.object?.objectId === refs[0].objectId,
+      )?.source,
+    ).toContain("读书研究");
     await act(async () => {
       await f.repository.setLifecycle(refs[0], "tombstoned");
     });
     await waitFor(() =>
-      expect(result.current.model.items[0]?.unavailable).toBe(true),
+      expect(
+        result.current.model.items.find((item) => item.unavailable)
+          ?.unavailable,
+      ).toBe(true),
     );
     await act(async () => {
-      await result.current.model.removeReference(result.current.model.items[0]);
+      await result.current.model.removeReference(
+        result.current.model.items.find((item) => item.unavailable)!,
+      );
     });
     expect(await f.notes.listReferences()).toEqual([]);
   });

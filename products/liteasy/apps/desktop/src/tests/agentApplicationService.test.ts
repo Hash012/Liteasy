@@ -292,3 +292,29 @@ test("publishes structured safe errors for failed runtime actions", async () => 
     })
   ]));
 });
+
+
+test("keeps only the current reasoning activity in replay while delivering every live update", async () => {
+  const api = createAgentApplicationService({
+    executeCommand: () => ({ events: [], settingsChanged: false }),
+    executeKnowledge: ({ reportManagerActivity }) => {
+      for (let count = 1; count <= 200; count += 1) reportManagerActivity({
+        activityId: "reasoning", kind: "reasoning_summary", label: "整理来源", status: "running", detail: "来源".repeat(count)
+      });
+      return { message: "分析完成" };
+    }
+  });
+  const session = await api.createSession({ consumer: "frontend" });
+  if (!session.ok) throw new Error(session.error.message);
+  let observed = 0;
+  api.subscribe(session.data.sessionId, (event) => { if (event.type === "manager.activity") observed += 1; });
+  const result = await api.submitTurn({ sessionId: session.data.sessionId, idempotencyKey: "reasoning-budget",
+    input: { message: "分析来源", mode: "qa" } });
+  if (!result.ok) throw new Error(result.error.message);
+  expect(observed).toBe(200);
+  const activity = result.data.events.filter((event) => event.type === "manager.activity");
+  expect(activity).toHaveLength(1);
+  expect(activity[0]).toMatchObject({ detail: "来源".repeat(200) });
+  const sequences = result.data.events.map((event) => event.sequence);
+  expect(sequences.every((value, index) => index === 0 || value > sequences[index - 1])).toBe(true);
+});

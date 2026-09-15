@@ -1,14 +1,10 @@
 import { defaultSchema } from "hast-util-sanitize";
 import { type ComponentPropsWithoutRef } from "react";
-import ReactMarkdown from "react-markdown";
-import rehypeKatex from "rehype-katex";
+import { MarkdownContent } from "../markdown/MarkdownContent";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
 import type { MineruFigure } from "./import.types";
 import { resolveMineruImageSource } from "./mineruImageSources";
-import "katex/dist/katex.min.css";
 
 type MineruMarkdownProps = {
   content: string;
@@ -60,8 +56,10 @@ function MarkdownImage({
  */
 export function MineruMarkdown({ content, figures = [] }: MineruMarkdownProps) {
   return (
-    <div className="mineru-markdown">
-    <ReactMarkdown
+    <MarkdownContent
+      className="mineru-markdown"
+      html="sanitized"
+      value={content}
       components={{
         a: ({ href, children, ...props }) => {
           const safe = safeHref(href);
@@ -72,14 +70,10 @@ export function MineruMarkdown({ content, figures = [] }: MineruMarkdownProps) {
         img: (props) => <MarkdownImage {...props} figures={figures} />,
         table: ({ children, ...props }) => <div className="mineru-markdown__table-scroll"><table {...props}>{children}</table></div>
       }}
-      rehypePlugins={[rehypeRaw, [rehypeSanitize, mineruSanitizeSchema], rehypeKatex]}
-      remarkPlugins={[remarkGfm, remarkMath]}
+      rehypePluginsBeforeMath={[rehypeRaw, [rehypeSanitize, mineruSanitizeSchema]]}
       urlTransform={(url, key) => (
         key === "src" ? resolveMineruImageSource(url, figures) : safeHref(url)
       ) ?? ""}
-    >
-      {content}
-    </ReactMarkdown>
-    </div>
+    />
   );
 }

@@ -84,6 +84,8 @@ test("edits, displays and filters local papers by category and tags", async () =
   // dispatch the action directly here to isolate metadata editing from jsdom motion.
   fireEvent.click(await screen.findByRole("menuitem", { name: "编辑分类与标签" }));
   await screen.findByRole("dialog", { name: "编辑论文分类与标签" });
+  // Move focus into the editor after the menu restores focus in jsdom.
+  await user.click(screen.getByLabelText("论文分类"));
   fireEvent.change(screen.getByRole("textbox", { name: "论文分类" }), {
     target: { value: "已精读" }
   });

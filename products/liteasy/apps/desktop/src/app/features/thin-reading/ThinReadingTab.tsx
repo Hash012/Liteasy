@@ -1,3 +1,5 @@
+import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
+import { paperAnchorFromEvidence, paperAnchorLabel, paperAnchorOpenRequest } from "../paper-anchors/paperAnchorEntity";
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { Button, Switch, Tooltip } from "@fluentui/react-components";
 import {
@@ -896,6 +898,9 @@ export function ThinReadingTab({
   const previousLabel = labels.previous(parent?.title ?? labels.overview);
   const nodeAnnotations = document.annotations.filter((annotation) => annotation.nodeId === activeNode.id);
   const paperEvidenceSpans = activeNode.evidence.paperEvidenceSpans ?? [];
+  const paperAnchors = paperEvidenceSpans.map((span) => paperAnchorFromEvidence({
+    ...span, paperTitle: papers.find((paper) => paper.id === span.paperId)?.title,
+  }));
   const summarySentences = getSummarySentences(activeNode);
   const sourceFigures = inlineFigures as readonly ThinReadingSourceFigure[];
   const activeVisualizations = [
@@ -996,7 +1001,8 @@ export function ThinReadingTab({
         </div>
         <div className="thin-reading__controls">
           <SaveArtifactPageButton artifactId={artifactId} pageId={activeNode.id}
-            title={activeNode.title} text={activeNode.summary} paperIds={document.paperIds} />
+            title={activeNode.title} text={activeNode.summary} paperIds={document.paperIds}
+            paperAnchors={paperAnchors} />
           {headerAction}
           {!generationInProgress && onOpenGenerationDetails ? (
             <Button appearance="subtle" onClick={onOpenGenerationDetails} size="small"
@@ -1176,6 +1182,7 @@ export function ThinReadingTab({
                 generating={generationInProgress}
                 locale={locale}
                 marksVisible={marksVisible}
+                paperAnchors={paperAnchors}
                 onDeepen={(excerpt, sentence) => void generateBranch({
                   kind: "selected_text",
                   excerpt,
@@ -1202,7 +1209,8 @@ export function ThinReadingTab({
                               aria-label={labels.evidenceOpen(sentence.text, evidenceIndex + 1)}
                               className="thin-reading__summary-marker"
                               onClick={(event) => openSummaryMarkerEvidence(event, span!)}
-                              title={labels.evidenceOpenTitle(evidenceId)}
+                              title={paperAnchors.find((anchor) => anchor.id === evidenceId)
+                                ? paperAnchorLabel(paperAnchors.find((anchor) => anchor.id === evidenceId)!) : "来源待关联"}
                               type="button"
                             >
                               {labels.evidencePaper(evidenceIndex + 1)}
@@ -1210,7 +1218,7 @@ export function ThinReadingTab({
                           ) : (
                             <span
                               className="thin-reading__summary-marker is-static"
-                              title={labels.evidenceUnavailableTitle(evidenceId)}
+                              title="来源位置未记录"
                             >
                               {labels.evidencePaper(evidenceIndex + 1)}
                             </span>
@@ -1250,6 +1258,11 @@ export function ThinReadingTab({
                 </>}
               />
             </div>
+            <PaperAnchorReferences anchors={paperAnchors}
+              onOpen={onOpenEvidence ? (anchor) => {
+                const request = paperAnchorOpenRequest(anchor);
+                if (request) onOpenEvidence(request);
+              } : undefined} />
           </section>
           {activeLegacyEvidence ? (
             <section aria-label="旧版薄读来源" className="thin-reading__legacy-source">

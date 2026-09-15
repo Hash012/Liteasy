@@ -1,8 +1,13 @@
+import { paperAnchorsForArtifact } from "../features/paper-anchors/paperAnchorAdapters";
+import { paperAnchorOpenRequest } from "../features/paper-anchors/paperAnchorEntity";
 import { ARTIFACT_CONTEXT_MIME } from "../features/object-transfer/contextTransfer";
 import { artifactContextText } from "../features/artifacts/artifactContext";
+import { useBoardFileController } from "./useBoardFileController";
 import { loadUserPaperArtifact } from "../features/library/userPaperArtifactClient";
 import { normalizePaperFulltext } from "../features/pdf/paperFulltextStore";
 import { preparePdfAnnotationCapture } from "../features/pdf/pdfAnnotationCapture";
+import { PDF_ANNOTATION_REVIEW_PROMPT } from "../features/pdf/pdfAnnotationReview";
+import { NOTES_REFERENCE_MIME } from "../features/notes/notesPort";
 import { isTauri } from "@tauri-apps/api/core";
 import {
   createObjectResolver,
@@ -26,6 +31,7 @@ import {
   type ObjectEnvelope,
   type ObjectRef,
   type Placement,
+  type BoardSide,
 } from "../features/objects/object.types";
 import type {
   ObjectWorkbenchPort,
@@ -102,6 +108,7 @@ export function useObjectWorkbenchController(input: {
   const boardRef = useRef(board);
   boardRef.current = board;
   const pending = useRef(new Set<{ api: AgentPublicApi; sessionId: string }>());
+  const isolatedContextSessions = useRef(new Set<string>());
   const tickets = useMemo(createCaptureTickets, [input.scopeId]);
   const mounted = useRef(true);
   const active = () =>
@@ -162,6 +169,14 @@ export function useObjectWorkbenchController(input: {
         if (active()) setStatus(String(e.message ?? e));
       });
   }, [visible, repository]);
+  async function selectBoard(object: ObjectEnvelope) {
+    if (object.kind !== "workspace.board") throw new Error("此内容不是白板。");
+    boardRef.current = object;
+    setOpened(undefined);
+    setVisible(true);
+    await refresh();
+  }
+  const boardFiles = useBoardFileController({ repository, board, active, select: selectBoard, setStatus });
   async function openLink(link: string) {
     const generation = closeGeneration.current;
     if (link.startsWith("liteasy://agent-artifacts/")) {
@@ -173,8 +188,12 @@ export function useObjectWorkbenchController(input: {
     }
     const result = await createObjectResolver(repository).open(link);
     if (active() && generation === closeGeneration.current) {
-      setOpened(result);
-      setVisible(true);
+      if ("object" in result && result.object.kind === "workspace.board") {
+        await selectBoard(await repository.resolveLatest(result.object.objectId));
+      } else {
+        setOpened(result);
+        setVisible(true);
+      }
     }
   }
   const openLinkRef = useRef(openLink);
@@ -333,11 +352,13 @@ export function useObjectWorkbenchController(input: {
   ): Promise<ObjectDraft & { kind: "content.fragment" }> {
     if (!message.text.includes(message.excerpt) || !message.excerpt.trim())
       throw new Error("请选择回答中的有效文字。");
-    const hash = await hashText(message.text);
+    const hash = await hashText(message.paperAnchors?.length
+      ? JSON.stringify({ text: message.text, paperAnchors: message.paperAnchors }) : message.text);
     const source = await repository.legacy(
       `message-${message.messageId}-${hash}`,
       {
         kind: "conversation.message",
+        paperAnchors: message.paperAnchors,
         title: message.partial ? "回答（生成中快照）" : "回答",
         content: {
           schema: "liteasy.message/v1",
@@ -354,6 +375,7 @@ export function useObjectWorkbenchController(input: {
     return {
       kind: "content.fragment",
       title: `${message.partial ? "未完成回答" : "回答"}摘录`,
+      paperAnchors: message.paperAnchors,
       sourceRefs: [refOf(source)],
       content: {
         schema: "liteasy.fragment/v1",
@@ -433,6 +455,7 @@ export function useObjectWorkbenchController(input: {
       page: selection.annotation.page,
       excerpt: material.quote,
       rects: material.rects,
+      normalizedStart: selection.annotation.normalizedStart,
     });
     const assets = await Promise.all(
       Object.entries(material.images).map(async ([key, dataUrl]) => ({
@@ -467,6 +490,20 @@ export function useObjectWorkbenchController(input: {
     return refs;
   }
   const port: ObjectWorkbenchPort = {
+    dragBoardFile(file, data) {
+      const ticket = tickets.register(async () => [await boardFiles.resolveBoardFile(file)]);
+      data.setData(PENDING_CAPTURE_MIME, ticket);
+      data.setData("text/plain", file.name);
+      data.effectAllowed = "copy";
+    },
+    openBoardFile: boardFiles.openBoardFile,
+    resolveBoardFile: boardFiles.resolveBoardFile,
+    serializeBoardFile: boardFiles.serializeBoardFile,
+    async reviewAnnotation(selection, signal) {
+      if (signal.aborted || !active()) throw new Error("Review 已取消。");
+      const refs = await captureAnnotation(selection, "saved");
+      return ask(PDF_ANNOTATION_REVIEW_PROMPT, refs, signal, false);
+    },
     isOpen: visible,
     close,
     async capturePaperContext(paperIds) {
@@ -506,6 +543,7 @@ export function useObjectWorkbenchController(input: {
         if (!text.trim()) throw new Error("这份产物尚未生成可添加的正文。");
         const object = await repository.projectLegacy(`artifact-context-${artifactId}`, {
           title: artifact.title,
+          paperAnchors: paperAnchorsForArtifact(artifact),
           kind: "artifact.document",
           runId: artifact.agent.runId,
           content: { schema: "liteasy.document/v1", payload: {
@@ -539,6 +577,18 @@ export function useObjectWorkbenchController(input: {
       if (!active()) throw new Error("账号已切换。");
       return attachments;
     },
+    async openPaperAnchor(anchor) {
+      const request = paperAnchorOpenRequest(anchor);
+      if (!active()) throw new Error("账号已切换。");
+      if (!request) throw new Error("来源位置未记录，原文摘录仍可阅读。");
+      const paper = latest.current.getPapers().find((candidate) => candidate.id === request.paperId);
+      if (!paper) throw new Error("来源文献在当前工作区不可用，原文摘录仍可阅读。");
+      if (anchor.source.objectRef) await repository.get(anchor.source.objectRef);
+      if (anchor.source.documentHash && anchor.source.documentHash !== await documentHash(paper))
+        throw new Error("来源版本已变化，原文摘录仍可阅读。");
+      if (!active()) throw new Error("账号已切换。");
+      latest.current.openEvidence(request);
+    },
     async captureArtifactPage(page) {
       if (!page.text.trim()) throw new Error("当前页面还没有可收藏的正文。");
       const sourceRefs: ObjectRef[] = [];
@@ -554,7 +604,7 @@ export function useObjectWorkbenchController(input: {
       }
       if (!active()) throw new Error("账号已切换。");
       const object = await repository.projectLegacy(`artifact-page-${page.artifactId}-${page.pageId}`, {
-        kind: "artifact.document", title: page.title, sourceRefs,
+        kind: "artifact.document", title: page.title, sourceRefs, paperAnchors: page.paperAnchors,
         content: { schema: "liteasy.document/v1", payload: {
           legacyArtifactId: page.artifactId,
           blocks: [{ blockId: page.pageId, type: "markdown", text: page.text, sourceRefs }],
@@ -565,6 +615,7 @@ export function useObjectWorkbenchController(input: {
     },
     captureAnnotation,
     dragAnnotation(selection, data) {
+      data.setData(NOTES_REFERENCE_MIME, JSON.stringify({ kind: "pdf-annotation", paperId: selection.paper.id, annotationId: selection.annotation.id }));
       const operationId = crypto.randomUUID();
       const ticket = tickets.register(() =>
         captureAnnotation(selection, "saved", operationId),
@@ -700,7 +751,7 @@ export function useObjectWorkbenchController(input: {
     return resolveContextSnapshot({
       repository,
       refs: request.contextRefs ?? [],
-      pinnedRefs: tray
+      pinnedRefs: isolatedContextSessions.current.has(request.sessionId) ? [] : tray
         .filter((entry) => entry.pinned)
         .map((entry) => entry.ref),
       purpose: request.contextPurpose ?? "解释所选内容",
@@ -712,6 +763,7 @@ export function useObjectWorkbenchController(input: {
     question: string,
     refs = tray.map((item) => item.ref),
     signal?: AbortSignal,
+    updateWorkbench = true,
   ) {
     if (!question.trim() || refs.length === 0)
       throw new Error("请加入内容并输入问题。");
@@ -750,6 +802,7 @@ export function useObjectWorkbenchController(input: {
     });
     if (!session.ok) throw new Error(session.error.message);
     const pendingSession = { api, sessionId: session.data.sessionId };
+    if (!updateWorkbench) isolatedContextSessions.current.add(session.data.sessionId);
     pending.current.add(pendingSession);
     const cancel = () => {
       void api.closeSession(pendingSession.sessionId);
@@ -784,13 +837,16 @@ export function useObjectWorkbenchController(input: {
         throw new Error("没有可保存的回答。");
       await repository.saveRunRecord(run.data);
       if (!active() || signal?.aborted) throw new Error("提问已取消。");
-      setAnswer({ text: output.message, run: run.data });
-      setPreview(run.data.contextSnapshot);
-      setTray((current) => current.filter((item) => item.pinned));
+      if (updateWorkbench) {
+        setAnswer({ text: output.message, run: run.data });
+        setPreview(run.data.contextSnapshot);
+        setTray((current) => current.filter((item) => item.pinned));
+      }
       return output.message;
     } finally {
       signal?.removeEventListener("abort", cancel);
       pending.current.delete(pendingSession);
+      isolatedContextSessions.current.delete(session.data.sessionId);
       await api.closeSession(session.data.sessionId);
     }
   }
@@ -852,6 +908,7 @@ export function useObjectWorkbenchController(input: {
     return source;
   }
   return {
+    ...boardFiles,
     repository,
     port,
     opened,
@@ -1070,11 +1127,21 @@ export function useObjectWorkbenchController(input: {
         if (active()) setStatus((e as Error).message);
       }
     },
-    selectBoard: async (object: ObjectEnvelope) => {
-      boardRef.current = object;
-      setBoard(object);
-      setPlacements(await repository.listPlacements(object.objectId));
-    },
+    selectBoard,
+    connect: (from: Placement, fromSide: BoardSide, to: Placement, toSide: BoardSide) =>
+      perform(async () => {
+        const current = boardRef.current;
+        if (!current) throw new Error("白板已关闭。");
+        return repository.connectPlacements({ boardRef: refOf(current),
+          from: { placementId: from.placementId, revision: from.revision, side: fromSide },
+          to: { placementId: to.placementId, revision: to.revision, side: toSide },
+          operationId: crypto.randomUUID() });
+      }, true),
+    removeConnection: (edgeId: string) => perform(async () => {
+      const current = boardRef.current;
+      if (!current) throw new Error("白板已关闭。");
+      return repository.removeConnection(refOf(current), edgeId);
+    }, true),
     createBoard: (title: string) =>
       perform(async () => {
         const object = await repository.create({

@@ -41,6 +41,7 @@ export type AgentJsonValue =
   | { [key: string]: AgentJsonValue };
 
 export type AgentCitation = {
+  paperAnchor?: import("../paper-anchors/paperAnchorEntity").PaperAnchorEntity;
   paperId: string;
   page: number;
   snippet: string;

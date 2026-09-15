@@ -1,10 +1,6 @@
 import { DismissRegular } from "@fluentui/react-icons";
 import { useEffect, useMemo, useState, type DragEvent } from "react";
-import ReactMarkdown from "react-markdown";
-import rehypeKatex from "rehype-katex";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
-import "katex/dist/katex.min.css";
+import { MarkdownContent } from "../markdown/MarkdownContent";
 
 export type GeneratedMindMapNode = {
   evidenceIds: string[];
@@ -48,18 +44,7 @@ export function normalizeGeneratedMindMapMarkdown(value: string) {
 }
 
 function MindMapMarkdown({ children }: { children: string }) {
-  return (
-    <ReactMarkdown
-      components={{
-        a: ({ children: label }) => <span>{label}</span>,
-        p: ({ children: paragraph }) => <span>{paragraph}</span>
-      }}
-      rehypePlugins={[rehypeKatex]}
-      remarkPlugins={[remarkGfm, remarkMath]}
-    >
-      {normalizeGeneratedMindMapMarkdown(children)}
-    </ReactMarkdown>
-  );
+  return <MarkdownContent inline value={normalizeGeneratedMindMapMarkdown(children)} />;
 }
 
 function collectInitiallyExpanded(

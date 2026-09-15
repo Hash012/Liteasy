@@ -1,5 +1,9 @@
 import { Button } from "@fluentui/react-components";
-import { useEffect, useState } from "react";
+import { AssistantMarkdown } from "../assistant/AssistantMarkdown";
+import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
+import { paperAnchorsForArtifact } from "../paper-anchors/paperAnchorAdapters";
+import { paperAnchorOpenRequest } from "../paper-anchors/paperAnchorEntity";
+import { useEffect, useMemo, useState } from "react";
 import type {
   ArtifactRegenerationRequest,
   ArtifactTab,
@@ -114,7 +118,7 @@ function getFallbackPreview(type: ArtifactType) {
 
   return {
     nodes: ["研究背景", "核心方法", "结果与局限"],
-    rootLabel: "PPT 大纲"
+    rootLabel: "演示文稿"
   };
 }
 
@@ -153,15 +157,6 @@ const verificationStatusLabels = {
   pass: "审计通过",
   review: "需复核"
 } as const;
-
-function cleanAgentAnswer(answer: string) {
-  return answer
-    .replace(/^\s*```(?:text|markdown|md)?\s*$/gim, "")
-    .replace(/^\s*```\s*$/gim, "")
-    .replace(/\[?\bevidence-[a-z0-9][a-z0-9-]*\b\]?/gi, "〔证据〕")
-    .replace(/(?:〔证据〕[\s,，、;；]*){2,}/g, "〔证据〕 ")
-    .trim();
-}
 
 function mermaidBlocks(value: string | undefined) {
   if (!value) return [];
@@ -239,6 +234,7 @@ export function ArtifactTabs({
   const [graphMode, setGraphMode] = useState(false);
   const [graphView, setGraphView] = useState(defaultGraphViewState);
   const activeTab = tabs.find((tab) => tab.artifactId === activeArtifactId) ?? tabs[0] ?? null;
+  const paperAnchors = useMemo(() => activeTab ? paperAnchorsForArtifact(activeTab) : [], [activeTab]);
   const activePreview = activeTab ? (activeTab.preview ?? getFallbackPreview(activeTab.type)) : null;
   const activeTask = tasks[0] ?? null;
   const activeThinReadingTask = tasks.find((task) => (
@@ -623,52 +619,24 @@ export function ArtifactTabs({
           {activeTab.answer ? (
             <details className="artifact-agent-answer">
               <summary>查看原始 Agent 分析记录</summary>
-              <div className="artifact-agent-answer-body">{cleanAgentAnswer(activeTab.answer)}</div>
+              <AssistantMarkdown className="artifact-agent-answer-body assistant-markdown" value={activeTab.answer} paperAnchors={paperAnchors} />
             </details>
           ) : null}
           {activeTab.outlineMarkdown ? (
             <details className="artifact-outline-markdown">
               <summary>查看可提交的 Markdown 大纲元数据</summary>
-              <pre>{cleanAgentAnswer(activeTab.outlineMarkdown)}</pre>
+              <AssistantMarkdown value={activeTab.outlineMarkdown} paperAnchors={paperAnchors} />
             </details>
           ) : null}
-          {activeTab.analysis?.evidence.length ? (
-            <details className="artifact-evidence-index" open>
-              <summary>
-                论文原文证据（{activeTab.analysis.evidence.length} 条）
-                {onOpenEvidence ? " · 点击跳转 PDF" : ""}
-              </summary>
-              <ol>
-                {activeTab.analysis.evidence.map((evidence, index) => (
-                  <li key={evidence.id}>
-                    <button
-                      aria-label={`打开原文证据 ${index + 1}：${evidence.paperTitle} 第 ${evidence.page} 页`}
-                      disabled={!onOpenEvidence}
-                      onClick={() => onOpenEvidence?.({
-                        evidenceId: evidence.id,
-                        page: evidence.page,
-                        ...(typeof evidence.pageTextEnd === "number" ? { pageTextEnd: evidence.pageTextEnd } : {}),
-                        ...(typeof evidence.pageTextStart === "number" ? { pageTextStart: evidence.pageTextStart } : {}),
-                        ...(evidence.textExtraction ? { textExtraction: evidence.textExtraction } : {}),
-                        paperId: evidence.paperId,
-                        quote: evidence.quote
-                      })}
-                      type="button"
-                    >
-                      <span className="artifact-evidence-heading">
-                        <strong>{evidence.paperTitle}</strong>
-                        <span>第 {evidence.page} 页</span>
-                      </span>
-                      <q>{evidence.quote}</q>
-                      {evidence.summary && evidence.summary !== evidence.quote ? (
-                        <span className="artifact-evidence-summary">摘要：{evidence.summary}</span>
-                      ) : null}
-                    </button>
-                  </li>
-                ))}
-              </ol>
-            </details>
-          ) : null}
+          <PaperAnchorReferences
+            anchors={paperAnchors}
+            className="artifact-evidence-index"
+            label={`论文原文证据（${paperAnchors.length} 条）${onOpenEvidence ? " · 点击跳转 PDF" : ""}`}
+            onOpen={onOpenEvidence ? (anchor) => {
+              const request = paperAnchorOpenRequest(anchor);
+              if (request) onOpenEvidence(request);
+            } : undefined}
+          />
           <div className="artifact-card-body">
             {mermaidBlocks(activeTab.answer).map((code, index) => (
               <MermaidPreview code={code} key={`${activeTab.artifactId}-mermaid-${index}`} onOpenInTab={() => onOpenVisualization?.({ code, id: `mermaid:${activeTab.artifactId}:${index}`, kind: "mermaid", title: `${activeTab.title} · 关系与流程` })} title="关系与流程" />
@@ -681,7 +649,12 @@ export function ArtifactTabs({
                 view={graphView}
               />
             ) : activeTab.uiDsl ? (
-              <DynamicCanvas document={activeTab.uiDsl} onAction={(action) => onDynamicAction?.(action)} />
+              <DynamicCanvas document={activeTab.uiDsl} paperAnchors={paperAnchors}
+                onOpenPaperAnchor={onOpenEvidence ? (anchor) => {
+                  const request = paperAnchorOpenRequest(anchor);
+                  if (request) onOpenEvidence(request);
+                } : undefined}
+                onAction={(action) => onDynamicAction?.(action)} />
             ) : activePreview ? (
               <>
                 <div className="mindmap-node root">{activePreview.rootLabel}</div>

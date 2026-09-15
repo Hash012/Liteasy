@@ -1,62 +1,9 @@
 import { z } from "zod";
+import { anchorSchema, objectRefSchema, type ObjectRef } from "./objectAnchor.types";
+import { paperAnchorEntitySchema } from "../paper-anchors/paperAnchorEntity";
+export { anchorSchema, objectRefSchema, type ObjectAnchor, type ObjectRef } from "./objectAnchor.types";
 
 const id = z.string().min(1).max(512);
-export const objectRefSchema = z.strictObject({
-  objectId: id,
-  revision: id,
-  selectorId: id.optional(),
-});
-export type ObjectRef = z.infer<typeof objectRefSchema>;
-const quote = z.strictObject({
-  exact: z.string().min(1),
-  prefix: z.string(),
-  suffix: z.string(),
-});
-const range = z.strictObject({
-  start: z.number().int().nonnegative(),
-  end: z.number().int().nonnegative(),
-});
-const rect = z.strictObject({
-  x: z.number().min(0).max(1),
-  y: z.number().min(0).max(1),
-  width: z.number().min(0).max(1),
-  height: z.number().min(0).max(1),
-});
-export const anchorSchema = z.discriminatedUnion("type", [
-  z.strictObject({
-    type: z.literal("pdf"),
-    sourceRef: objectRefSchema,
-    documentHash: z.string().optional(),
-    page: z.number().int().positive(),
-    displayPage: z.string().optional(),
-    // Drawing and text-box anchors locate a page region without quoting PDF text.
-    quote: quote.extend({ exact: z.string() }),
-    range: range.optional(),
-    rects: z.array(rect),
-    extractor: id,
-    normalization: id,
-    precision: z.enum(["exact", "page"]),
-  }),
-  z.strictObject({
-    type: z.literal("text"),
-    sourceRef: objectRefSchema,
-    blockId: id,
-    quote,
-    range: range.optional(),
-  }),
-  z.strictObject({
-    type: z.literal("semantic"),
-    sourceRef: objectRefSchema,
-    semanticObjectId: id,
-  }),
-  z.strictObject({
-    type: z.literal("table"),
-    sourceRef: objectRefSchema,
-    rowId: id,
-    columnId: id,
-  }),
-]);
-export type ObjectAnchor = z.infer<typeof anchorSchema>;
 const block = z.discriminatedUnion("type", [
   z.strictObject({
     blockId: id,
@@ -151,6 +98,7 @@ export const objectContentSchema = z.discriminatedUnion("kind", [
 ]);
 export type ObjectContent = z.infer<typeof objectContentSchema>;
 export const objectMetadataSchema = z.strictObject({
+  paperAnchors: z.array(paperAnchorEntitySchema).optional(),
   schemaVersion: z.literal("liteasy.object/v1"),
   objectId: id,
   revision: id,
@@ -261,6 +209,19 @@ export const relationSchema = z.strictObject({
   reviewStatus: z.enum(["proposed", "accepted", "rejected"]),
 });
 export type ObjectRelation = z.infer<typeof relationSchema>;
+export type BoardSide = "top" | "right" | "bottom" | "left";
+export type BoardConnection = {
+  edgeId: string;
+  from: string;
+  to: string;
+  fromSide?: BoardSide;
+  toSide?: BoardSide;
+  fromEnd?: "none" | "arrow";
+  toEnd?: "none" | "arrow";
+  kind: string;
+  label?: string;
+  relationId?: string;
+};
 export const placementSchema = z.strictObject({
   placementId: id,
   revision: id,

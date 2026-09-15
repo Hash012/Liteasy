@@ -19,6 +19,8 @@ export function requestedArtifactType(message: string): ArtifactType | null {
   const selectedCommand = artifactCommands.find(({ label }) => commandText.startsWith(label) &&
     (commandText.length === label.length || /^[\s，,。:：]/.test(commandText.slice(label.length))));
   if (selectedCommand) return selectedCommand.artifactType;
+  if (/^(?:请问|我想知道|你知道)?\s*(?:如何|怎么|怎样|how (?:do|can|to))|(?:PPT|幻灯片|演示文稿|大纲|提纲|slides?).{0,6}(?:是什么|怎么用|如何使用|的区别)/i.test(text)) return null;
+  if (/^(?:请)?(?:不要|不用|别|do not|don't).{0,12}(?:生成|制作|做|画|create|generate)/i.test(text)) return null;
   if (/(?:不要|不用|别|do not|don't).{0,12}(?:薄读|thin[ _-]?reading|生成)/i.test(text) ||
     /(?:薄读|thin[ _-]?reading).{0,4}(?:是什么|什么意思|怎么用|如何使用|的区别)/i.test(text)) return null;
   if (/(?:这[个份篇]?|已有|所选|添加的|生成的|上面|刚才的)薄读|薄读(?:中|里|内)|薄读的(?!风格)/.test(text) &&
@@ -28,7 +30,7 @@ export function requestedArtifactType(message: string): ArtifactType | null {
   if (!/(生成|做|制作|画|绘制|create|generate|draw)/i.test(text)) return null;
   if (/分层关系图|分层图|obsidian|星图|关系网络/i.test(text)) return "layered_graph";
   if (/思维导图|脑图|mind\s?map/i.test(text)) return "mindmap";
-  if (/\bppt\b|演示文稿|幻灯片/i.test(text)) return "ppt";
+  if (/ppt|powerpoint|slides?|演示文稿|幻灯片/i.test(text)) return "ppt";
   if (/树状图|树形图|树形展开|提纲|大纲|outline/i.test(text)) return "tree";
   if (/对比表|对比矩阵|comparison table/i.test(text)) return "comparison_table";
   return null;

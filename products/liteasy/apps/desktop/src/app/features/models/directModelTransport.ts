@@ -1,5 +1,6 @@
 import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 import { directModelNeedsKey, validateDirectModelConfig, type DirectModelConfig } from "./modelProviders";
+import { readBoundedModelStream, readBoundedModelText } from "./modelResponseBudget";
 
 export type DirectModelRequest = {
   config: DirectModelConfig;
@@ -40,10 +41,18 @@ export const directModelTransport: DirectModelTransport = async ({ config: input
     const requestId = crypto.randomUUID();
     const chunks = new Channel<number[]>();
     let completeStream = () => {};
+    let streamFailure: Error | undefined;
     const streamCompleted = new Promise<void>((resolve) => { completeStream = resolve; });
     chunks.onmessage = (bytes) => {
       if (bytes.length === 0) completeStream();
-      else if (!signal?.aborted) onChunk?.(new Uint8Array(bytes));
+      else if (!signal?.aborted && !streamFailure) {
+        try { onChunk?.(new Uint8Array(bytes)); }
+        catch (error) {
+          streamFailure = error instanceof Error ? error : new Error("模型流式响应无效。");
+          completeStream();
+          void invoke("cancel_direct_model_request", { requestId }).catch(() => undefined);
+        }
+      }
     };
     const cancel = () => {
       completeStream();
@@ -56,9 +65,11 @@ export const directModelTransport: DirectModelTransport = async ({ config: input
       // chunk is an ordered end marker, so wait for it before parsing completion.
       if (onChunk) await streamCompleted;
       signal?.throwIfAborted();
+      if (streamFailure) throw streamFailure;
       return response;
     } catch (error) {
       signal?.throwIfAborted();
+      if (streamFailure) throw streamFailure;
       throw error instanceof Error ? error : new Error(String(error));
     } finally {
       signal?.removeEventListener("abort", cancel);
@@ -82,19 +93,9 @@ export const directModelTransport: DirectModelTransport = async ({ config: input
     throw new Error("无法连接 API。请检查网络与地址；若服务商限制浏览器跨域访问，请使用桌面安装版。");
   }
   if (!response.ok) throw new Error(directModelHttpError(response.status));
-  if (!onChunk) return response.text();
   if (!response.body) throw new Error("API 没有返回可读取的响应。");
-  const reader = response.body.getReader();
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      onChunk(value);
-    }
-  } finally {
-    await reader.cancel().catch(() => undefined);
-    reader.releaseLock();
-  }
+  if (!onChunk) return readBoundedModelText(response.body, signal);
+  await readBoundedModelStream(response.body, onChunk, signal);
   return "";
 };
 

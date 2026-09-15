@@ -33,6 +33,7 @@ import {
   type SpecialistAgentToolInvocation
 } from "../../features/agent-runtime/specialistAgentAdapter";
 import { generateAssistantAnswer } from "../../features/assistant/generateAssistantAnswer";
+import { collectPaperAnchors } from "../../features/paper-anchors/paperAnchorEntity";
 import { executeWorkflowSkill } from "../../features/skills/workflowSkillRegistry";
 import {
   createPluginBuilderToolCatalog,
@@ -56,6 +57,7 @@ import {
   type AgentManagerExecutionResult
 } from "./agentApplicationService";
 
+import { runArtifactAuthoring } from "../../features/artifact-workflow/runArtifactAuthoring";
 import { contextSnapshotPrompt, type ContextSnapshot } from "../../features/context/objectContext";
 import { createModelGatewayFromSettings } from "../../features/models/modelRuntime";
 import { getActiveModelProvider, getModelForSettings } from "../../features/models/modelPolicy";
@@ -151,7 +153,40 @@ async function executeKnowledgeTurn(
   if (request.input.mode === "command") {
     throw new Error("Command turns cannot use the knowledge executor");
   }
+  const artifactType = override?.artifactType ?? request.input.artifactType;
+  const question = override?.question ?? request.input.message;
+  const author = async (source: string, evidenceIds: string[]) => {
+    if (artifactType !== "ppt" && artifactType !== "tree") throw new Error("当前资源尚不支持这种产物格式。");
+    const settings = environment.knowledge.settings;
+    const gateway = createModelGatewayFromSettings(settings, { cloudTransport: environment.knowledge.modelTransport });
+    const activityId = `${input.runId}:artifact-authoring`;
+    input.reportManagerActivity({ activityId, kind: "handoff", label: "创作结构化内容", status: "running", detail: "正在依据来源编写并校验可保存的内容。" });
+    try {
+      const result = await runArtifactAuthoring({ artifactType, instruction: question, source, evidenceIds, signal,
+        generate: (authorRequest) => gateway.generateAnswer({ ...authorRequest, model: getModelForSettings(settings), provider: getActiveModelProvider(settings) })
+      });
+      input.reportManagerActivity({ activityId, kind: "handoff", label: "内容校验通过", status: "completed", detail: "内容已交回生成任务，等待资源保存。" });
+      return result;
+    } catch (error) {
+      input.reportManagerActivity({ activityId, kind: "handoff", label: "内容生成未完成", status: "failed", detail: "内容尚未保存，可减少来源或重试。" });
+      throw error;
+    }
+  };
   if (input.context.objectSnapshot) {
+    const snapshot = input.context.objectSnapshot;
+    const paperAnchors = collectPaperAnchors(...snapshot.entries.map((entry) => entry.paperAnchors ?? []));
+    const resourceSnapshot = { snapshotId: snapshot.snapshotId, scopeId: snapshot.scopeId,
+      entries: snapshot.entries.map(({ text: _text, ...entry }) => entry) };
+    if (artifactType) {
+      const ids = snapshot.entries.map((entry, index) => "objectId" in entry.ref
+        ? `${entry.ref.objectId}@${entry.ref.revision}` : `context-${index + 1}`);
+      const source = snapshot.entries.map((entry, index) => `[${ids[index]}] ${entry.title} (${entry.trustLabel})\n${entry.text}`).join("\n\n");
+      const anchorSource = paperAnchors.map((anchor) => `[${anchor.evidenceIds.join(",")}] ${anchor.presentation.title} · ${anchor.presentation.location}\n${anchor.snapshot.quote}`).join("\n\n");
+      const result = await author([source, anchorSource].filter(Boolean).join("\n\n"), [...new Set([...ids, ...paperAnchors.flatMap((anchor) => anchor.evidenceIds)])]);
+      return { message: result.message, metadata: JSON.parse(JSON.stringify({ authoredArtifact: result.authoredArtifact, paperAnchors,
+        resourceSnapshot
+      })) };
+    }
     const settings = environment.knowledge.settings;
     const gateway = createModelGatewayFromSettings(settings, { cloudTransport: environment.knowledge.modelTransport });
     const result = await gateway.generateAnswer({
@@ -162,10 +197,13 @@ async function executeKnowledgeTurn(
       signal
     });
     if (!result.answer.trim()) throw new Error("未收到回答，请重试。");
-    return { message: result.answer };
+    return { message: result.answer,
+      citations: paperAnchors.flatMap((anchor) => anchor.locator.page ? [{
+        paperAnchor: anchor, paperId: anchor.source.paperId, page: anchor.locator.page, snippet: anchor.snapshot.quote,
+      }] : []),
+      metadata: JSON.parse(JSON.stringify({ paperAnchors, resourceSnapshot })),
+    };
   }
-  const artifactType = override?.artifactType ?? request.input.artifactType;
-  const question = override?.question ?? request.input.message;
   const answer = await generateAssistantAnswer({
     ...environment.knowledge,
     agentCoreContext: coreTurn.runtimeContext.prompt,
@@ -187,11 +225,18 @@ async function executeKnowledgeTurn(
     question,
     signal
   });
+  const authored = artifactType === "ppt" || artifactType === "tree"
+    ? await author([
+      answer.content,
+      ...(answer.analysis?.evidence ?? []).map((evidence) => `[${evidence.id}] ${evidence.paperTitle} · 第 ${evidence.page} 页\n${evidence.quote}`)
+    ].join("\n\n"), answer.analysis?.evidence.map((evidence) => evidence.id) ?? [])
+    : undefined;
   return {
     citations: answer.citations,
     confidence: answer.confidence,
-    message: answer.content,
+    message: authored?.message ?? answer.content,
     metadata: JSON.parse(JSON.stringify({
+      authoredArtifact: authored?.authoredArtifact,
       analysis: answer.analysis,
       artifactWorkflow: answer.artifactWorkflow,
       audit: answer.audit,
@@ -270,7 +315,7 @@ export function createDesktopAgentService(
     executeManagerTurn: options.managerAgent
       ? async (input) => {
           const environment = input.context.value as DesktopAgentEnvironment;
-          if (input.context.objectSnapshot) return { kind: "knowledge", result: await executeKnowledgeTurn(input, environment) };
+          if (input.context.objectSnapshot && !input.request.input.artifactType) return { kind: "knowledge", result: await executeKnowledgeTurn(input, environment) };
           const runtimeContext = createDesktopRuntimeContext(environment, {
             agentCore: input.coreTurn.runtimeContext,
             runtimeInput: {

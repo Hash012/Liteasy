@@ -521,3 +521,50 @@ test("canvas drawing captions stay in the image description instead of duplicati
   );
   expect(container).toBeEmptyDOMElement();
 });
+
+test("card midpoint handles connect by native drag or two clicks without editing or moving cards", async () => {
+  const f = await fixture();
+  const second = {
+    ...f.placement,
+    placementId: "other",
+    position: { x: 440, y: 100 },
+  };
+  const connect = vi.fn().mockResolvedValue(undefined);
+  render(
+    <ObjectWorkbench
+      model={{ ...f.model, placements: [f.placement, second], connect }}
+    />,
+  );
+  const from = (
+    await screen.findAllByRole("button", { name: "连接卡片：右边" })
+  )[0];
+  const to = screen.getAllByRole("button", { name: "连接卡片：左边" })[1];
+  const payload = new Map<string, string>();
+  const data = {
+    types: [] as string[],
+    setData(type: string, value: string) {
+      payload.set(type, value);
+      this.types.push(type);
+    },
+    getData: (type: string) => payload.get(type) ?? "",
+    effectAllowed: "none",
+    dropEffect: "none",
+  };
+  fireEvent.dragStart(from, { dataTransfer: data });
+  fireEvent.dragOver(to, { dataTransfer: data });
+  fireEvent.drop(to, { dataTransfer: data });
+  expect(connect).toHaveBeenCalledWith(f.placement, "right", second, "left");
+  expect(f.model.move).not.toHaveBeenCalled();
+  expect(f.model.drop).not.toHaveBeenCalled();
+  expect(
+    screen.queryByRole("textbox", { name: "编辑卡片正文" }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getAllByRole("button", { name: "连接卡片：下边" })[0]);
+  fireEvent.click(screen.getAllByRole("button", { name: "连接卡片：上边" })[1]);
+  expect(connect).toHaveBeenLastCalledWith(
+    f.placement,
+    "bottom",
+    second,
+    "top",
+  );
+});

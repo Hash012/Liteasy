@@ -21,6 +21,7 @@ export type AssistantMessage = {
   role: "user" | "assistant";
   content: string;
   citations?: Citation[];
+  paperAnchors?: import("../paper-anchors/paperAnchorEntity").PaperAnchorEntity[];
   contextTokens?: AssistantContextToken[];
   confidence?: number;
   audit?: AnswerAuditResult;

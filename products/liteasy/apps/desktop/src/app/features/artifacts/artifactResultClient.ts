@@ -1,6 +1,9 @@
 import type { AgentArtifactResult } from "./artifact.types";
 import { IntuitionGraphDocumentSchema } from "../intuition-graph/intuitionGraph.schema";
 import { loadStoredAccountSession } from "../account/accountSessionStorage";
+import { parseAuthoredArtifact } from "../artifact-workflow/authoredArtifact";
+import { contextRefSchema } from "../context/objectContext";
+import { paperAnchorEntitySchema } from "../paper-anchors/paperAnchorEntity";
 
 type ArtifactResultTransport = (
   url: string,
@@ -21,11 +24,26 @@ function requireAccessToken(getAccessToken: () => string | undefined) {
   return token;
 }
 
-function isArtifactResult(value: unknown): value is AgentArtifactResult {
+export function isArtifactResult(value: unknown): value is AgentArtifactResult {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
   }
   const candidate = value as Partial<AgentArtifactResult>;
+  if (candidate.paperAnchors !== undefined && (!Array.isArray(candidate.paperAnchors) ||
+    candidate.paperAnchors.length > 512 || !candidate.paperAnchors.every((anchor) => paperAnchorEntitySchema.safeParse(anchor).success))) {
+    return false;
+  }
+  if (candidate.authoredArtifact !== undefined) {
+    try {
+      const authored = parseAuthoredArtifact(candidate.authoredArtifact);
+      if (authored.kind === "slides" && candidate.artifactType !== "ppt") return false;
+      if (authored.kind === "outline" && !["tree", "mindmap", "layered_graph"].includes(candidate.artifactType ?? "")) return false;
+    } catch { return false; }
+  }
+  if (candidate.sourceContextRefs !== undefined && (!Array.isArray(candidate.sourceContextRefs) ||
+    candidate.sourceContextRefs.length > 100 || !candidate.sourceContextRefs.every((ref) => contextRefSchema.safeParse(ref).success))) {
+    return false;
+  }
   return (
     candidate.version === "liteasy.agent-artifact/v1" &&
     typeof candidate.artifactId === "string" &&
@@ -70,14 +88,17 @@ export function createArtifactResultClient(input: {
       }
     },
 
-    async list() {
+    async list(signal?: AbortSignal) {
+      signal?.throwIfAborted();
       const response = await transport(endpoint(input.getBaseEndpoint()), {
-        headers: authorizationHeaders()
+        headers: authorizationHeaders(),
+        ...(signal ? { signal } : {})
       });
       if (!response.ok) {
         throw new Error(`加载 Agent 产物失败：HTTP ${response.status}`);
       }
       const payload = await response.json() as { artifacts?: unknown[] };
+      signal?.throwIfAborted();
       return (payload.artifacts ?? []).filter(isArtifactResult);
     },
 
@@ -98,6 +119,8 @@ export function createArtifactResultClient(input: {
     },
 
     async save(document: AgentArtifactResult, signal?: AbortSignal) {
+      signal?.throwIfAborted();
+      if (!isArtifactResult(document)) throw new Error("产物格式无效，无法保存。");
       const response = await transport(endpoint(input.getBaseEndpoint()), {
         body: JSON.stringify(document),
         headers: { ...authorizationHeaders(), "Content-Type": "application/json" },

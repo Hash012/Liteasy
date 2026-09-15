@@ -5,7 +5,7 @@ import {
   HomeRegular,
   SearchRegular,
 } from "@fluentui/react-icons";
-import ReactMarkdown from "react-markdown";
+import { MarkdownContent } from "../markdown/MarkdownContent";
 import type { HelpViewModel } from "./help.types";
 import "./help.css";
 
@@ -76,7 +76,7 @@ export function HelpPanel({ model }: { model: HelpViewModel }) {
             model.article ? (
               <article aria-label={model.article.title}>
                 <h1>{model.article.title}</h1>
-                <ReactMarkdown skipHtml>{model.article.body}</ReactMarkdown>
+                <MarkdownContent html="skip" value={model.article.body} />
               </article>
             ) : (
               <p>未找到此帮助条目。</p>

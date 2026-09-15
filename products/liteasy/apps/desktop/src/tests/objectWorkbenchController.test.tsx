@@ -10,6 +10,90 @@ import type { PdfAnnotationV2 } from "../app/features/pdf/pdfAnnotationStorage";
 
 beforeEach(() => vi.stubGlobal("crypto", webcrypto));
 
+test("entry review sends authoritative quote and user text through the public Agent without consuming board context", async () => {
+  let current: ReturnType<typeof useObjectWorkbenchController>;
+  const scopeId = crypto.randomUUID();
+  const received: Array<{ prompt: string; text: string }> = [];
+  const api = createAgentApplicationService({
+    supportsObjectContext: true,
+    getPrincipalId: () => scopeId,
+    resolveContext: async ({ request }) => ({
+      objectSnapshot: await current.resolveContext(request),
+    }),
+    executeCommand: () => ({ events: [], settingsChanged: false }),
+    executeKnowledge: async ({ request, context }) => {
+      received.push({
+        prompt: request.input.message,
+        text: context
+          .objectSnapshot!.entries.map((entry) => entry.text)
+          .join("\n"),
+      });
+      return { message: "需要补充反例。" };
+    },
+  });
+  const paper = {
+    id: "review-paper",
+    title: "Paper",
+    contentHash: "pdf-content",
+  };
+  const hook = renderHook(() =>
+    useObjectWorkbenchController({
+      scopeId,
+      getApi: () => api,
+      getPapers: () => [paper],
+      getSettings: () => createSettingsStore().getState(),
+      openEvidence: vi.fn(),
+    }),
+  );
+  current = hook.result.current;
+  await act(async () => {
+    await current.port.capturePdf(
+      { paper, page: 1, excerpt: "保留在白板上下文中的内容", rects: [] },
+      "tray",
+    );
+  });
+  current = hook.result.current;
+  await act(async () => {
+    current.setTray((items) =>
+      items.map((item) => ({ ...item, pinned: true })),
+    );
+  });
+  current = hook.result.current;
+  const tray = current.tray;
+  const annotation: PdfAnnotationV2 = {
+    id: "entry",
+    kind: "highlight",
+    page: 1,
+    paperIdentity: resolvePaperIdentity(paper),
+    excerpt: "原文证据",
+    text: "原文证据",
+    note: "我的理解",
+    images: {},
+    rects: [],
+    revision: 1,
+    createdAt: "2026-09-14T00:00:00Z",
+    updatedAt: "2026-09-14T00:00:00Z",
+    publication: { desiredVisibility: "private", state: "not_published" },
+  };
+  await act(async () => {
+    expect(
+      await current.port.reviewAnnotation!(
+        { paper, annotation },
+        new AbortController().signal,
+      ),
+    ).toBe("需要补充反例。");
+  });
+  expect(received).toHaveLength(1);
+  expect(received[0].prompt).toContain("一致的语言");
+  expect(received[0].text).toContain("原文证据");
+  expect(received[0].text).toContain("我的理解");
+  expect(received[0].text).not.toContain("保留在白板上下文中的内容");
+  expect(hook.result.current.tray).toEqual(tray);
+  expect(hook.result.current.answer).toBeUndefined();
+  expect(hook.result.current.placements).toHaveLength(0);
+  hook.unmount();
+});
+
 test("saved annotation capture preserves notes, source quote, attachment and identity", async () => {
   const paper = {
     id: "annotated-paper",
