@@ -1,0 +1,30 @@
+Commit: d2212fa63e02b5c8996aa35c71e194e03c657658
+
+修复 Windows 构建中的 PDF review 模块大小写冲突
+
+问题来源
+用户提供的 GitHub Actions build-windows 日志：run 34953386532，job 104331045056。
+上一提交 aeb95a68 同时包含 PdfAnnotationReview.tsx（React 组件）和 pdfAnnotationReview.ts（提示词与 Markdown 内容函数）。在大小写不敏感的 Windows 文件系统上，不带扩展名的 ./PdfAnnotationReview 导入会优先匹配 .ts 文件，从而错误解析到逻辑模块。
+
+错误链
+- 同一 .ts 文件被以不同大小写路径引用，TypeScript 报文件名大小写冲突。
+- 错误解析到的模块没有导出 PdfAnnotationReview 组件，产生 exported member 错误。
+- 组件类型丢失后，onSave 回调的 revision/review 失去上下文推断，产生隐式 any 错误。
+这些属于同一根因的连带错误；没有通过关闭 strict、关闭 casing 检查或补 any 强行绕过。
+
+具体修复
+1. 将逻辑模块 pdfAnnotationReview.ts 改名为 pdfAnnotationReviewContent.ts；名称在忽略大小写和扩展名后也与组件明确不同。
+2. 更新 useObjectWorkbenchController、pdfNotesSource、pdfAnnotationCapture 的三处引用。提示词、Markdown 内容和组件行为保持一致。
+3. 新增 sourceModuleCasing.test.ts，递归检查 src 中脚本模块的相对路径，去除扩展名后按大小写不敏感规则分组，拒绝冲突；覆盖 .ts/.tsx 等不同扩展名组合，并排除声明文件。
+4. 检查同时发现 PdfWhiteboard.test.tsx 与 pdfWhiteboard.test.ts 的同类名称问题，将后者改为 pdfWhiteboardStorage.test.ts，测试内容不变。
+
+回归证据
+- 重命名前，新增检查明确失败并列出 PDF review 与白板测试两组冲突；重命名后通过。
+- Node.js 22.23.2，npx vitest run src/tests/sourceModuleCasing.test.ts src/tests/PdfAnnotationReview.test.tsx src/tests/PdfAnnotationRecovery.test.tsx src/tests/objectWorkbenchController.test.tsx src/tests/notesView.test.tsx src/tests/paperAnchorResources.test.tsx src/tests/PdfWhiteboard.test.tsx src/tests/pdfWhiteboardStorage.test.ts：8 个文件、30 项全部通过。
+- npm run build：TypeScript、schema 生成、Vite 生产构建与 152 项发布资源检查通过。原有大包体积提示仍存在。
+- git diff --cached --check 通过。
+
+验证边界与提交范围
+- 上述验证在 Linux 环境运行；新的命名检查能在 Linux 主动暴露这类 Windows 导入问题，但不等同于已重新执行 Windows/Tauri 安装包构建。
+- 仍需推送后由 Windows CI 确认安装包任务最终结果；本次未推送或触发远端 Actions。
+- 只提交本次六个文件的修复，独立的 CI 工作流、脚本和文档改动继续保留工作区。
