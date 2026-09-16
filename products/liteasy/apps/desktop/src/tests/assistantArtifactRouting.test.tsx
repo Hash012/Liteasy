@@ -125,3 +125,51 @@ test("an explanatory question about generating PPT stays in ordinary question an
   expect(executeKnowledge).toHaveBeenCalledTimes(1);
   expect(onGenerateArtifact).not.toHaveBeenCalled();
 });
+
+test("a pasted Liteasy Path becomes fixed object context in the public Agent request", async () => {
+  const port = { ...createContextPort(), scopeId: "device" };
+  port.resolveLiteasyPath = vi.fn(async () => [{ ref: noteRef, refs: [noteRef], title: "路径笔记", kind: "content.note" as const }]);
+  const { user, submit } = await renderRouting({ port });
+  const composer = screen.getByPlaceholderText("输入你的问题或命令");
+  fireEvent.paste(composer, { clipboardData: { getData: () => "liteasy://objects/note-methods?scope=device&revision=note-revision-3" } });
+  expect(await screen.findByRole("button", { name: "移除上下文：路径笔记" })).toBeInTheDocument();
+  expect(composer).toHaveValue("");
+  await user.type(composer, "分析这份笔记");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+  await waitFor(() => expect(submit).toHaveBeenCalledWith(expect.objectContaining({
+    contextRefs: [noteRef]
+  })));
+});
+
+test("paper paths prepare full text before capture and keep send disabled while reading", async () => {
+  const port = { ...createContextPort(), scopeId: "device" };
+  port.resolveLiteasyPath = vi.fn(async () => [{ ref: paperRef, refs: [paperRef], title: "论文全文", kind: "source.document" as const }]);
+  let finish!: () => void;
+  const prepare = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
+  const { user } = await renderRouting({ port, prepare });
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "分析全文");
+  fireEvent.paste(screen.getByPlaceholderText("输入你的问题或命令"), { clipboardData: { getData: () => "liteasy://papers/paper-locked?scope=device" } });
+  await waitFor(() => expect(prepare).toHaveBeenCalledWith([lockedPaper.id]));
+  expect(port.resolveLiteasyPath).not.toHaveBeenCalled();
+  expect(screen.getByRole("button", { name: "发送" })).toBeDisabled();
+  await act(async () => { finish(); });
+  expect(await screen.findByRole("button", { name: "移除上下文：论文全文" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "发送" })).toBeEnabled();
+});
+
+test("cross-account and missing resource paths produce no context chip", async () => {
+  const port = { ...createContextPort(), scopeId: "device" };
+  port.resolveLiteasyPath = vi.fn(async () => { throw new Error("原文件已删除"); });
+  const { user } = await renderRouting({ port });
+  await user.click(screen.getByText("通过 Liteasy Path 添加上下文"));
+  const input = screen.getByRole("textbox", { name: "添加上下文的 Liteasy Path" });
+  await user.type(input, "liteasy://objects/note-methods?scope=other&revision=r");
+  await user.click(screen.getByRole("button", { name: "读取并加入上下文" }));
+  expect(await screen.findByText(/属于其他账户/)).toBeInTheDocument();
+  expect(port.resolveLiteasyPath).not.toHaveBeenCalled();
+  await user.clear(input);
+  await user.type(input, "liteasy://objects/note-methods?scope=device&revision=r");
+  await user.click(screen.getByRole("button", { name: "读取并加入上下文" }));
+  expect(await screen.findByText("原文件已删除")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /^移除上下文/ })).not.toBeInTheDocument();
+});

@@ -23,6 +23,7 @@ type AssistantComposerProps = {
   onCancelEdit?: () => void;
   onAddContextToken?: (token: AssistantContextToken) => void;
   onInputChange: (value: string) => void;
+  onPasteLiteasyPath?: (path: string) => void;
   onResolveContextToken?: (resolve: () => Promise<AssistantContextToken>) => void;
   onRemoveContextToken?: (tokenId: string) => void;
   onSend: () => void;
@@ -54,6 +55,7 @@ export function AssistantComposer({
   onCancelEdit,
   onAddContextToken,
   onInputChange,
+  onPasteLiteasyPath,
   onResolveContextToken,
   onRemoveContextToken,
   onSend,
@@ -176,6 +178,13 @@ export function AssistantComposer({
       <div className="assistant-input-editor">
       <div aria-hidden="true" className="assistant-input-highlight" ref={highlightRef}>{highlightedInput}{"\n"}</div>
       <textarea
+        onPaste={(event) => {
+          const text = event.clipboardData.getData("text/plain").trim();
+          if (onPasteLiteasyPath && /^liteasy:\/\/\S+$/.test(text)) {
+            event.preventDefault();
+            onPasteLiteasyPath(text);
+          }
+        }}
         className="assistant-input"
         onScroll={(event) => {
           if (highlightRef.current) {

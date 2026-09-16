@@ -70,6 +70,9 @@ fn artifact_path(app: &AppHandle, paper_id: &str, artifact_kind: &str) -> Result
         .join(paper_directory)
         .join(format!("{artifact_kind}.v1.json")))
 }
+pub(crate) fn location(app: &AppHandle, paper_id: &str, kind: &str) -> Result<PathBuf, String> {
+    artifact_path(app, paper_id, kind)
+}
 
 fn write_json_atomically(path: &PathBuf, serialized: &[u8]) -> Result<(), String> {
     let parent = path

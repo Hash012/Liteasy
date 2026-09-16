@@ -1,3 +1,4 @@
+import { artifactResourceScope } from "../features/resource-filesystem/artifactResourceProvider";
 import { paperCitationOpenRequest } from "../features/paper-anchors/paperAnchorEntity";
 import { useAssistantContextCatalog } from "../controllers/useAssistantContextCatalog";
 import { useArtifactSessionNavigationController } from "../controllers/useArtifactSessionNavigationController";
@@ -1063,6 +1064,8 @@ export function AppShell({
   const agentRecentState = profileActions.agentRecentStateOverride.trim() || generatedAgentRecentState;
   const objectAgentApiRef = useRef<import("../features/agent-api/agentApi.types").AgentPublicApi>();
   const objectWorkbench = useObjectWorkbenchController({
+    artifactScopeId: artifactResourceScope(artifactAccountId && settingsState["models.connection_mode"] !== "direct"
+      ? `${settingsState["models.cloud_proxy_endpoint"]}:${artifactAccountId}` : undefined).id,
     scopeId: accountSession?.userId ? `user:${accountSession.userId}` : "local",
     getApi: () => objectAgentApiRef.current!,
     readPaperBytes: loadPaperPdfBytes,

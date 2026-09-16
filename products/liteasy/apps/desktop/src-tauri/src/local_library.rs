@@ -545,8 +545,7 @@ struct LibraryRootSetting {
 }
 
 fn root_setting_path(app: &AppHandle) -> Result<PathBuf, String> {
-    app.path()
-        .app_data_dir()
+    crate::data_location::root(&app)
         .map(|directory| directory.join("local-library").join(ROOT_SETTING_FILE_NAME))
         .map_err(|error| format!("无法确定当前操作系统用户的应用数据目录：{error}"))
 }
@@ -564,7 +563,7 @@ fn read_root_override(app: &AppHandle) -> Result<Option<PathBuf>, String> {
         .root_path
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-        .map(PathBuf::from))
+        .map(|value| crate::data_location::remap_path(Path::new(&value))))
 }
 
 fn write_root_override(app: &AppHandle, root: &Path) -> Result<(), String> {
@@ -593,9 +592,7 @@ fn remove_root_override(app: &AppHandle) -> Result<(), String> {
 }
 
 fn legacy_root_candidates(app: &AppHandle) -> Result<Vec<PathBuf>, String> {
-    let app_data = app
-        .path()
-        .app_data_dir()
+    let app_data = crate::data_location::root(&app)
         .map_err(|error| format!("无法确定当前操作系统用户的应用数据目录：{error}"))?;
     let mut candidates = Vec::new();
     let legacy_settings = app_data.join("library-profiles");
@@ -669,9 +666,7 @@ fn legacy_root_candidates(app: &AppHandle) -> Result<Vec<PathBuf>, String> {
 }
 
 fn default_library_root(app: &AppHandle) -> Result<PathBuf, String> {
-    let app_data = app
-        .path()
-        .app_data_dir()
+    let app_data = crate::data_location::root(&app)
         .map_err(|error| format!("无法确定当前操作系统用户的应用数据目录：{error}"))?;
     Ok(app_data.join("local-library").join("library"))
 }
@@ -2141,6 +2136,10 @@ pub fn cancel_local_library_pdf_import(app: AppHandle, import_id: String) -> Res
 }
 
 fn remap_legacy_resource_path(root: &Path, requested_path: &str) -> PathBuf {
+    let remapped = crate::data_location::remap_path(Path::new(requested_path));
+    if remapped != Path::new(requested_path) {
+        return remapped;
+    }
     let requested = PathBuf::from(requested_path);
     if requested.exists() {
         return requested;

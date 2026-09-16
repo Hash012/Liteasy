@@ -211,6 +211,13 @@ impl FileStore {
             .map_err(|e| e.to_string())?;
         Ok(mount)
     }
+    pub fn location(&self, id: &str, path: &str) -> Result<PathBuf, String> {
+        let result = self.resolve(id, path, true)?;
+        if !result.is_file() {
+            return Err("文件已移动或不可用。".into());
+        }
+        Ok(result)
+    }
     fn resolve(&self, id: &str, path: &str, file: bool) -> Result<PathBuf, String> {
         validate_path(path, file)?;
         let grant = self.mount(id)?;

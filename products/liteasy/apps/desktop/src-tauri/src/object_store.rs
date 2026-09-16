@@ -5,7 +5,7 @@ use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 static WRITE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -26,9 +26,7 @@ fn open(app: &AppHandle, scope: &str) -> Result<Connection, String> {
     if active != scope {
         return Err("object_forbidden".into());
     }
-    let directory = app
-        .path()
-        .app_data_dir()
+    let directory = crate::data_location::root(&app)
         .map_err(|e| e.to_string())?
         .join("objects");
     std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
@@ -266,9 +264,7 @@ fn asset_path(app: &AppHandle, scope: &str, hash: &str) -> Result<std::path::Pat
     if hash.len() != 64 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err("persistence_failed: invalid asset id".into());
     }
-    Ok(app
-        .path()
-        .app_data_dir()
+    Ok(crate::data_location::root(&app)
         .map_err(|e| e.to_string())?
         .join("objects")
         .join("assets")

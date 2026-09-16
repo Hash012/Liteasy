@@ -1,4 +1,5 @@
 import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
+import { ResourceLocationButton } from "../resource-filesystem/ResourceLocationButton";
 import { useEffect, useState } from "react";
 import {
   Button,
@@ -407,6 +408,7 @@ export function NotesPanel({ model }: { model: NotesViewModel }) {
                     </MenuList>
                   </MenuPopover>
                 </Menu>
+                <ResourceLocationButton className="notes-item-location" target={item.target} />
               </article>
             ))}
           </div>

@@ -1,4 +1,7 @@
 import { paperAnchorsForArtifact } from "../features/paper-anchors/paperAnchorAdapters";
+import { createNoteFileService } from "../features/note-files/noteFileService";
+import { resolveLiteasyContext, contextAttachments } from "../features/resource-filesystem/resourceContext";
+import { describeResourceLocation } from "../features/resource-filesystem/resourceLocation";
 import { paperAnchorOpenRequest } from "../features/paper-anchors/paperAnchorEntity";
 import { ARTIFACT_CONTEXT_MIME } from "../features/object-transfer/contextTransfer";
 import { artifactContextText } from "../features/artifacts/artifactContext";
@@ -63,6 +66,7 @@ import { resolveObjectAnchor } from "../features/objects/objectAnchors";
 
 export function useObjectWorkbenchController(input: {
   scopeId: string;
+  artifactScopeId?: string;
   getApi: () => AgentPublicApi;
   getPapers: () => Paper[];
   getSettings: () => SettingsState;
@@ -490,6 +494,18 @@ export function useObjectWorkbenchController(input: {
     return refs;
   }
   const port: ObjectWorkbenchPort = {
+    scopeId: repository.scopeId,
+    resolveLiteasyPath: (path) => resolveLiteasyContext({ path, repository, active,
+      artifactScopeId: latest.current.artifactScopeId ?? "device",
+      files: createNoteFileService(repository.scopeId, () => latest.current.scopeId),
+      getPapers: () => latest.current.getPapers(), getArtifacts: () => latest.current.listLegacyArtifacts?.() ?? Promise.resolve([]),
+      capturePapers: (ids) => port.capturePaperContext!(ids),
+      captureAnnotation: (selection) => captureAnnotation(selection, "saved"),
+      resolveBoard: boardFiles.resolveBoardFile,
+    }),
+    describeResource: (target, reveal) => describeResourceLocation({ target, reveal, repository, active,
+      files: createNoteFileService(repository.scopeId, () => latest.current.scopeId),
+      getPapers: () => latest.current.getPapers(), artifactScopeId: latest.current.artifactScopeId ?? "device" }),
     dragBoardFile(file, data) {
       const ticket = tickets.register(async () => [await boardFiles.resolveBoardFile(file)]);
       data.setData(PENDING_CAPTURE_MIME, ticket);
@@ -554,28 +570,7 @@ export function useObjectWorkbenchController(input: {
         refs = [refOf(object)];
       }
       if (!refs?.length) throw new Error("没有可加入对话的内容。");
-      const attachments: import("../features/object-transfer/contextTransfer").ResourceContextAttachment[] = [];
-      for (const ref of refs) {
-        if (!active()) throw new Error("账号已切换。");
-        const object = await repository.get(ref);
-        const members = object.kind === "workspace.board"
-          ? await repository.listPlacements(object.objectId) : [];
-        if (object.kind === "workspace.board" &&
-          (await repository.resolveLatest(object.objectId)).revision !== ref.revision) {
-          throw new Error("白板已变化，请重新拖入以固定最新内容。");
-        }
-        const contextRefs = [ref, ...members.map((member) => member.ref)];
-        // Validate every member now; model submission resolves these same fixed revisions.
-        for (const memberRef of contextRefs) await repository.get(memberRef);
-        attachments.push({ ref, refs: contextRefs, title: object.title, kind: object.kind,
-          detail: object.kind === "workspace.board" ? `${members.length} 个元素 · 已固定版本` : "已固定版本" });
-      }
-      if (attachments.reduce((count, item) => count + item.refs.length, 0) > 100)
-        throw new Error("所选内容超过 100 项，请选择部分白板元素。");
-      await resolveContextSnapshot({ repository, refs: attachments.flatMap((item) => item.refs),
-        purpose: "加入对话上下文", persist: false });
-      if (!active()) throw new Error("账号已切换。");
-      return attachments;
+      return contextAttachments(repository, refs, active);
     },
     async openPaperAnchor(anchor) {
       const request = paperAnchorOpenRequest(anchor);

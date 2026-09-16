@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 const EXPORT_HISTORY_VERSION: &str = "liteasy.artifact-export-history/v1";
 const MAX_EXPORT_HISTORY_BYTES: u64 = 2 * 1024 * 1024;
@@ -107,9 +107,7 @@ fn history_path_at(app_data: &Path) -> PathBuf {
 }
 
 fn history_root(app: &AppHandle) -> Result<PathBuf, String> {
-    app.path()
-        .app_data_dir()
-        .map_err(|error| format!("无法定位导出历史目录：{error}"))
+    crate::data_location::root(&app).map_err(|error| format!("无法定位导出历史目录：{error}"))
 }
 
 fn timestamp_nonce() -> u128 {

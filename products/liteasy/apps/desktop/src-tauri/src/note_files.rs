@@ -3,7 +3,7 @@ mod store;
 use rfd::FileDialog;
 use serde_json::{json, Value};
 use std::sync::Mutex;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 static FILE_LOCK: Mutex<()> = Mutex::new(());
 
 #[tauri::command]
@@ -64,7 +64,7 @@ pub fn note_files_dispatch(app: AppHandle, scope: String, request: Value) -> Res
     let _guard = FILE_LOCK
         .lock()
         .map_err(|_| "笔记文件存储正在恢复，请重试。")?;
-    let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let app_data = crate::data_location::root(&app).map_err(|e| e.to_string())?;
     let files = store::FileStore::open(&app_data, &scope)?;
     let value = |key: &str| {
         request[key]
@@ -89,6 +89,13 @@ pub fn note_files_dispatch(app: AppHandle, scope: String, request: Value) -> Res
         "listMounts" => Ok(json!(files.mounts()?)),
         "listEntries" => Ok(json!(files.entries(value("mountId")?)?)),
         "readFile" => Ok(json!(files.read(value("mountId")?, value("path")?)?)),
+        "locateFile" | "revealFile" => {
+            let path = files.location(value("mountId")?, value("path")?)?;
+            if action == "revealFile" {
+                crate::data_location::reveal(&path)?;
+            }
+            Ok(json!({ "path": path }))
+        }
         "writeFile" => {
             let expected = match &request["expectedVersion"] {
                 Value::Null => None,

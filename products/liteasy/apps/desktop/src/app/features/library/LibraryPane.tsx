@@ -1,4 +1,5 @@
 import { ARTIFACT_CONTEXT_MIME } from "../object-transfer/contextTransfer";
+import { ResourceLocationButton } from "../resource-filesystem/ResourceLocationButton";
 import {
   useEffect,
   useMemo,
@@ -971,6 +972,7 @@ export function LibraryPane({
           ) : null}
         </div>
         {!entry.bodyAvailable ? <span className="library-entry-status">仅元数据</span> : null}
+        {sourcePaper ? <ResourceLocationButton target={{ kind: "paper", paperId: sourcePaper.id }} /> : null}
       </div>
     );
     return (

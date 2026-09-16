@@ -1,4 +1,5 @@
 import { ARTIFACT_CONTEXT_MIME } from "../object-transfer/contextTransfer";
+import { ResourceLocationButton } from "../resource-filesystem/ResourceLocationButton";
 import {
   Button,
   Dialog,
@@ -394,7 +395,7 @@ function SavedArtifactList({
   return (
     <ul aria-label="已保存产物" className="artifact-library-list">
       {artifacts.map((artifact) => (
-        <li className="artifact-library-row" key={artifact.artifactId}>
+        <li className="artifact-library-row artifact-library-saved-row" key={artifact.artifactId}>
           <Button
             appearance="transparent"
             aria-label={`打开产物：${artifact.title}`}
@@ -446,6 +447,7 @@ function SavedArtifactList({
               </MenuList>
             </MenuPopover>
           </Menu>
+          <ResourceLocationButton target={{ kind: "artifact", artifactId: artifact.artifactId }} />
         </li>
       ))}
     </ul>

@@ -1,10 +1,11 @@
 import { collectPaperAnchors } from "../paper-anchors/paperAnchorEntity";
+import { parseLiteasyPath } from "../resource-filesystem/liteasyPath";
 import { readerContextDragMime, readDraggedReaderContext } from "./readerContextDrag";
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import { hasResourceContextTransfer, readContextPaper } from "../object-transfer/contextTransfer";
 import { contextRefSchema, type ContextRef } from "../context/objectContext";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Tooltip } from "@fluentui/react-components";
+import { Tooltip, Button, Input } from "@fluentui/react-components";
 import { AddRegular, DismissRegular, HistoryRegular } from "@fluentui/react-icons";
 import { AssistantComposer } from "./AssistantComposer";
 import { AssistantHistoryPanel } from "./AssistantHistoryPanel";
@@ -309,6 +310,7 @@ export function AssistantPane({
   const objectWorkbench = useObjectWorkbench();
   const [contextDropCount, setContextDropCount] = useState(0);
   const [contextDropMessage, setContextDropMessage] = useState("");
+  const [contextPath, setContextPath] = useState("");
   const assistantStoreRef = useRef(createAssistantStore());
   const initialSessionRef = useRef(
     createAssistantSession({
@@ -688,6 +690,36 @@ export function AssistantPane({
     } finally {
       if (mountedRef.current) setContextDropCount((count) => count - 1);
     }
+  }
+
+  async function addLiteasyPath(path: string) {
+    const sessionId = activeSessionIdRef.current;
+    setContextDropCount((count) => count + 1);
+    setContextDropMessage("");
+    try {
+      if (!objectWorkbench?.resolveLiteasyPath) throw new Error("资源服务尚未就绪，请稍后重试。");
+      if (objectWorkbench.scopeId && !path.trim().startsWith("liteasy://resources/")) {
+        const target = parseLiteasyPath(path.trim(), objectWorkbench.scopeId);
+        if (target.kind === "paper") await onPreparePapersForContext?.([target.paperId]);
+      }
+      const attachments = await objectWorkbench.resolveLiteasyPath(path.trim());
+      if (!mountedRef.current || activeSessionIdRef.current !== sessionId) return;
+      const tokens: AssistantContextToken[] = attachments.map((attachment) => ({
+        id: `object-${JSON.stringify(attachment.ref)}`, kind: "object", label: attachment.title,
+        detail: attachment.detail, prompt: "", contextRefs: attachment.refs,
+      }));
+      if (!tokens.length) throw new Error("此路径没有可分析的内容。");
+      setComposerContextTokens((current) => {
+        const next = [...new Map([...current, ...tokens].map((token) => [token.id, token])).values()];
+        draftRef.current = { ...draftRef.current, tokens: next };
+        return next;
+      });
+      setContextPath("");
+      inputRef.current?.focus();
+    } catch (error) {
+      if (mountedRef.current && activeSessionIdRef.current === sessionId)
+        setContextDropMessage(error instanceof Error ? error.message : String(error));
+    } finally { if (mountedRef.current) setContextDropCount((count) => count - 1); }
   }
 
   function removeComposerContextToken(tokenId: string) {
@@ -2226,6 +2258,13 @@ export function AssistantPane({
         onWithdrawQueuedMessage={withdrawQueuedTurn}
       />
 
+      {objectWorkbench?.resolveLiteasyPath ? <details className="assistant-path-context">
+        <summary>通过 Liteasy Path 添加上下文</summary>
+        <Input aria-label="添加上下文的 Liteasy Path" placeholder="liteasy://…" value={contextPath}
+          onChange={(_, data) => setContextPath(data.value)} style={{ width: "100%" }}
+          onKeyDown={(event) => { if (event.key === "Enter" && contextPath.trim() && !contextDropCount) { event.preventDefault(); void addLiteasyPath(contextPath); } }} />
+        <Button size="small" disabled={!contextPath.trim() || contextDropCount > 0} onClick={() => void addLiteasyPath(contextPath)}>读取并加入上下文</Button>
+      </details> : null}
       <AssistantComposer
         editing={Boolean(editingMessageId)}
         input={input}
@@ -2237,6 +2276,7 @@ export function AssistantPane({
         contextLoading={contextDropCount > 0}
         onCancelEdit={cancelEdit}
         onInputChange={setInput}
+        onPasteLiteasyPath={objectWorkbench?.resolveLiteasyPath ? (path) => { void addLiteasyPath(path); } : undefined}
         onRemoveContextToken={removeComposerContextToken}
         onSend={handleSend}
         onVoiceInput={showVoiceInputPlaceholder}

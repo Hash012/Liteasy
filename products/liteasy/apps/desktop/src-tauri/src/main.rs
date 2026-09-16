@@ -6,6 +6,7 @@ mod agent_state;
 mod artifact_catalog_state;
 mod artifact_export;
 mod assistant_history;
+mod data_location;
 mod desktop_identity;
 mod direct_model;
 mod local_library;
@@ -28,6 +29,7 @@ fn main() {
         .manage(direct_model::DirectModelState::default())
         .manage(local_library::LocalLibraryWatchState::default())
         .setup(|app| {
+            data_location::initialize(app.handle()).map_err(std::io::Error::other)?;
             if let Err(error) = object_store::recover(app.handle()) {
                 eprintln!("Local object recovery: {error}");
             }
@@ -39,6 +41,12 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             note_files::note_files_dispatch,
+            data_location::get_data_location,
+            data_location::choose_data_location,
+            data_location::cancel_data_location_change,
+            data_location::reveal_data_location,
+            data_location::restart_for_data_location,
+            data_location::resource_location,
             direct_model::has_direct_model_key,
             direct_model::save_direct_model_key,
             direct_model::delete_direct_model_key,

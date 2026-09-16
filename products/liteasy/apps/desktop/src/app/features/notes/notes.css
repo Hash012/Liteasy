@@ -106,7 +106,7 @@
   display: flex;
   flex-direction: column;
   gap: 5px;
-  padding: 6px 32px 6px 6px;
+  padding: 6px 64px 6px 6px;
   color: inherit;
   background: transparent;
   border: 0;
@@ -215,4 +215,10 @@
 }
 .notes-toolbar {
   flex-wrap: wrap;
+}
+
+.notes-item-location {
+  position: absolute;
+  top: 1px;
+  right: 34px;
 }

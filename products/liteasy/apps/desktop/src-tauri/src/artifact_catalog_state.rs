@@ -3,7 +3,7 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 const MAX_ARTIFACT_CATALOG_BYTES: u64 = 64 * 1024 * 1024;
 
@@ -63,9 +63,7 @@ fn catalog_path_at(app_data: &Path) -> Result<PathBuf, String> {
 }
 
 fn catalog_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let app_data = app
-        .path()
-        .app_data_dir()
+    let app_data = crate::data_location::root(&app)
         .map_err(|error| format!("Could not resolve artifact catalog directory: {error}"))?;
     catalog_path_at(&app_data)
 }

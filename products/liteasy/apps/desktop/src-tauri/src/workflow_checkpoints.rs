@@ -1,13 +1,11 @@
 use serde_json::Value;
 use std::{fs, path::PathBuf};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 fn path(app: &AppHandle, scope: &str) -> Result<PathBuf, String> {
     if !matches!(scope, "artifact-tasks" | "thin-reading" | "paper-services") {
         return Err("未知工作流存储。".into());
     }
-    Ok(app
-        .path()
-        .app_data_dir()
+    Ok(crate::data_location::root(&app)
         .map_err(|e| e.to_string())?
         .join(format!("{scope}-checkpoints.v1.json")))
 }

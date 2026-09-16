@@ -66,15 +66,16 @@ fn read(path: &Path) -> Result<Value, String> {
 fn save(root: &Path, document: &Value) -> Result<String, String> {
     let id = document["artifactId"].as_str().ok_or("产物标识缺失。")?;
     validate_id(id)?;
-    let paper_id = document["papers"][0]["id"]
-        .as_str()
-        .ok_or("产物缺少来源论文。")?;
+    let paper_id = document["papers"][0]["id"].as_str();
     if document["version"] != "liteasy.agent-artifact/v1"
         || document["agent"]["status"] != "completed"
     {
         return Err("只能保存完整的结构化产物。".into());
     }
-    let directory = root.join(paper_artifact_directory_name(paper_id)?);
+    let directory = root.join(match paper_id {
+        Some(id) => paper_artifact_directory_name(id)?,
+        None => "workspace-artifacts".to_string(),
+    });
     let result_dir = directory.join("agent-results");
     for path in [&directory, &result_dir] {
         if path.exists()
@@ -101,6 +102,13 @@ pub fn list_local_agent_artifacts(app: AppHandle) -> Result<Vec<Value>, String> 
         .map(|path| read(path))
         .collect()
 }
+pub(crate) fn locate(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
+    validate_id(id)?;
+    files(&artifacts_directory(&library_root(app)?))?
+        .into_iter()
+        .find(|path| path.file_stem().and_then(|s| s.to_str()) == Some(id))
+        .ok_or_else(|| "本地产物文件不可用。".into())
+}
 #[tauri::command]
 pub fn save_local_agent_artifact(app: AppHandle, document: Value) -> Result<String, String> {
     save(&artifacts_directory(&library_root(&app)?), &document)
@@ -118,6 +126,22 @@ pub fn delete_local_agent_artifact(app: AppHandle, artifact_id: String) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn stores_artifacts_created_from_notes_without_a_source_paper() {
+        let root = std::env::temp_dir().join(format!(
+            "liteasy-workspace-artifacts-{}",
+            std::process::id()
+        ));
+        let document = serde_json::json!({"version":"liteasy.agent-artifact/v1","artifactId":"slides-from-notes","papers":[],"agent":{"status":"completed"},"answer":"slides"});
+        let path = PathBuf::from(save(&root, &document).unwrap());
+        assert_eq!(
+            path,
+            root.join("workspace-artifacts/agent-results/slides-from-notes.json")
+        );
+        assert_eq!(read(&path).unwrap(), document);
+        assert_eq!(files(&root).unwrap(), vec![path]);
+        fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn round_trips_paper_bound_extensible_artifacts_and_replaces_them() {
         let root =

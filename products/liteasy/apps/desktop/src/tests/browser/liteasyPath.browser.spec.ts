@@ -1,0 +1,45 @@
+import { expect, test } from "@playwright/test";
+
+test("an imported note exposes its location and copied Liteasy Path becomes readable Agent context", async ({ page, context }, testInfo) => {
+  test.setTimeout(75_000);
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto("/");
+  await page.getByRole("navigation", { name: "左边栏导航" }).getByRole("button", { name: "笔记", exact: true }).click();
+  const notes = page.getByRole("region", { name: "笔记", exact: true });
+  const chooser = page.waitForEvent("filechooser");
+  await notes.getByRole("button", { name: "导入 Markdown 文件", exact: true }).click();
+  await (await chooser).setFiles({ name: "PathResearch.md", mimeType: "text/markdown", buffer: Buffer.from("# 路径研究\n这段真实文件内容应被读取到 Agent 上下文。") });
+  const row = notes.getByRole("listitem").filter({ hasText: "PathResearch.md" });
+  await row.getByRole("button", { name: "位置与 Liteasy Path", exact: true }).click();
+  const path = await page.getByRole("textbox", { name: "Liteasy Path", exact: true }).inputValue();
+  expect(path).toMatch(/^liteasy:\/\/objects\//);
+  await expect(page.getByRole("textbox", { name: "资源实际位置" })).toHaveValue(/浏览器/);
+  await expect(page.getByRole("button", { name: "在文件管理器中显示" })).toBeDisabled();
+  await page.getByRole("button", { name: "复制 Liteasy Path", exact: true }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(path);
+  await page.keyboard.press("Escape");
+  await page.getByText("通过 Liteasy Path 添加上下文", { exact: true }).click();
+  await page.getByRole("textbox", { name: "添加上下文的 Liteasy Path" }).fill(path);
+  await page.getByRole("button", { name: "读取并加入上下文" }).click();
+  await expect(page.getByRole("button", { name: "移除上下文：PathResearch.md", exact: true })).toBeVisible();
+  // Inspect the same persisted, revision-pinned object through the real context resolver.
+  const text = await page.evaluate(async (path) => {
+    const base = "/src/app/features/";
+    const { parseLiteasyPath } = await import(base + "resource-filesystem/liteasyPath.ts");
+    const { createObjectStorage } = await import(base + "objects/objectStorage.ts");
+    const { createObjectRepository } = await import(base + "objects/objectRepository.ts");
+    const { resolveContextSnapshot } = await import(base + "context/objectContext.ts");
+    const scope = new URL(path).searchParams.get("scope")!;
+    const target = parseLiteasyPath(path, scope);
+    const repository = createObjectRepository(createObjectStorage(scope, () => scope), scope);
+    const object = target.followLatest ? await repository.resolveLatest(target.ref.objectId) : await repository.get(target.ref);
+    const snapshot = await resolveContextSnapshot({ repository, refs: [{ objectId: object.objectId, revision: object.revision }], purpose: "浏览器验证", persist: false });
+    return snapshot.entries[0].text;
+  }, path);
+  expect(text).toContain("这段真实文件内容应被读取到 Agent 上下文。");
+  await page.screenshot({ path: testInfo.outputPath("liteasy-path-context.png"), fullPage: true, animations: "disabled" });
+  expect(errors).toEqual([]);
+});

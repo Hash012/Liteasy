@@ -178,3 +178,7 @@
     margin-top: 4px;
   }
 }
+
+.artifact-library-saved-row {
+  grid-template-columns: minmax(0, 1fr) 32px 32px;
+}

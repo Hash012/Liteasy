@@ -1,4 +1,5 @@
 import { formatPaperAnchorText } from "../paper-anchors/paperAnchorEntity";
+import { ResourceLocationButton } from "../resource-filesystem/ResourceLocationButton";
 import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
 import { ObjectAssetImage } from "./ObjectAssetImage";
 import { useEffect, useState, type ReactNode } from "react";
@@ -140,6 +141,7 @@ export function ObjectSurface({
       ) : null}
       {presentation !== "canvas" ? (
         <div className="object-toolbar">
+          <ResourceLocationButton target={{ kind: "object", ref: refOf(object) }} />
           <Tooltip
             content="拖入白板或对话；点击复制带来源链接的文字"
             relationship="description"

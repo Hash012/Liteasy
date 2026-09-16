@@ -3,13 +3,12 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 const MAX_AGENT_STATE_BYTES: u64 = 10 * 1024 * 1024;
 
 fn state_path(app: &AppHandle) -> Result<PathBuf, String> {
-    app.path()
-        .app_data_dir()
+    crate::data_location::root(&app)
         .map(|directory| directory.join("agent-state.v1.json"))
         .map_err(|error| format!("Could not resolve Agent state directory: {error}"))
 }

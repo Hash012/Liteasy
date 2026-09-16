@@ -35,7 +35,7 @@ export function awaitResourceRead<T>(operation: Promise<T>, signal?: AbortSignal
   });
 }
 
-function parseResourceUri(uri: string) {
+export function parseResourceUri(uri: string) {
   if (uri.length > 2048 || /[\u0000-\u0020\\#]/.test(uri)) {
     throw new ResourceFileError("invalid_ref", "资源地址格式无效。");
   }

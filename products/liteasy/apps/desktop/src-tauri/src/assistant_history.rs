@@ -1,6 +1,6 @@
 use serde_json::Value;
 use std::{fs, path::Path};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 const MAX_BYTES: usize = 32 * 1024 * 1024;
 
@@ -30,8 +30,7 @@ pub(crate) fn save(path: &Path, snapshot: &Value) -> Result<(), String> {
 #[tauri::command]
 pub fn load_assistant_history(app: AppHandle) -> Result<Option<Value>, String> {
     load(
-        &app.path()
-            .app_data_dir()
+        &crate::data_location::root(&app)
             .map_err(|e| e.to_string())?
             .join("assistant-history.v1.json"),
     )
@@ -40,8 +39,7 @@ pub fn load_assistant_history(app: AppHandle) -> Result<Option<Value>, String> {
 #[tauri::command]
 pub fn save_assistant_history(app: AppHandle, snapshot: Value) -> Result<(), String> {
     save(
-        &app.path()
-            .app_data_dir()
+        &crate::data_location::root(&app)
             .map_err(|e| e.to_string())?
             .join("assistant-history.v1.json"),
         &snapshot,
