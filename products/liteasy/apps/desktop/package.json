@@ -28,6 +28,8 @@
     "test:multimodal-release": "npm run build && vitest run src/tests/staticScienceConformance.test.ts src/tests/interactiveMathConformance.test.ts src/tests/processRasterConformance.test.ts src/tests/staticScienceReleaseGate.test.ts src/tests/interactiveMathReleaseGate.test.ts src/tests/processRasterReleaseGate.test.ts src/tests/multimodalEvaluation.test.ts src/tests/visualizationDecisionEvaluation.test.ts src/tests/visualizationPerformance.test.ts src/tests/multimodalReleaseGate.test.ts src/tests/builtinSkillRegistry.test.ts src/tests/visualizationRendererRegistry.test.ts && npm run benchmark:visualization",
     "tauri": "tauri",
     "schema:objects": "vite-node scripts/write-object-schemas.ts",
+    "ci:smoke": "vitest run src/tests/sourceModuleCasing.test.ts src/tests/tauriResourceConfig.test.ts",
+    "ci:contracts": "npm run verify:tauri-resources -- --require-git-tracked && npm run schema:visualization && npm run schema:objects && npm run schema:resources && tsc --noEmit && node ../../../../.github/scripts/check-clean.mjs package-lock.json src-tauri/Cargo.lock ../../packages/shared",
     "schema:resources": "vite-node scripts/write-resource-schemas.ts"
   },
   "dependencies": {

@@ -78,12 +78,34 @@ export function verifyTauriResources({
     violations.push(`Windows resource icon must use the canonical path: ${canonicalWindowsIcon}`);
   }
 
+  // These files are otherwise first read by the NSIS bundler, after Rust compilation.
+  const nsis = config.bundle?.windows?.nsis ?? {};
+  const installerResources = [
+    "installerHooks", "template", "headerImage", "sidebarImage",
+    "installerIcon", "uninstallerIcon", "uninstallerHeaderImage"
+  ].flatMap((field) => nsis[field] == null ? [] : [[field, nsis[field]]]);
+  for (const [field, resource] of installerResources) {
+    if (typeof resource !== "string" || !resource.trim()) {
+      violations.push(`bundle.windows.nsis.${field} must be a non-empty resource path`);
+      continue;
+    }
+    const normalizedResource = normalizeResourcePath(resource);
+    const resourcePath = path.resolve(tauriDirectory, normalizedResource);
+    if (!isInside(tauriDirectory, resourcePath)) {
+      violations.push(`installer resource must stay inside src-tauri: ${resource}`);
+    } else if (!fs.statSync(resourcePath, { throwIfNoEntry: false })?.isFile()) {
+      violations.push(`configured installer resource does not exist: ${normalizedResource}`);
+    } else if (requireGitTracked) {
+      assertTracked(resourcePath, repositoryDirectory, violations);
+    }
+  }
+
   if (violations.length > 0) {
     throw new Error(`tauri_resource_contract:\n${violations.join("\n")}`);
   }
 
   return {
-    checkedResources: normalizedIcons.length,
+    checkedResources: normalizedIcons.length + installerResources.length,
     verified: true,
     windowsIcon: canonicalWindowsIcon
   };

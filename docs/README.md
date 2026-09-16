@@ -20,6 +20,8 @@
 
 下一步 Agent Native 产品提案见 [对象工作台规格](superpowers/specs/2026-09-13-agent-native-object-workbench-spec.md)，覆盖统一对象、来源与关系、跨页面上下文、白板组合和受控 Agent 操作。
 
+桌面分支自动检查、缓存与安装包发布方式见 [桌面分层 CI](engineering/desktop-ci.md)。
+
 ## 使用与检查
 
 本目录是 Markdown/HTML/PDF 资料，不启动服务。Markdown 可直接在仓库浏览器或编辑器预览；需要生成 PDF 时从仓库根目录执行：

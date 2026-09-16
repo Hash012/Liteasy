@@ -1,0 +1,15 @@
+name: Set up desktop frontend
+description: Use the installer Node version and lockfile with an npm download cache.
+runs:
+  using: composite
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+      with:
+        node-version-file: products/liteasy/apps/desktop/.nvmrc
+        cache: npm
+        cache-dependency-path: products/liteasy/apps/desktop/package-lock.json
+    - name: Install locked frontend dependencies
+      shell: bash
+      working-directory: products/liteasy/apps/desktop
+      run: npm ci --no-audit --no-fund

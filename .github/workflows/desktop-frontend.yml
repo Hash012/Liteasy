@@ -1,0 +1,59 @@
+name: Desktop frontend checks
+
+on:
+  workflow_call:
+    inputs:
+      full-tests:
+        description: Run both shards of the complete desktop suite.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: L1 - Configuration and types
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Validate workflow syntax
+        run: bash .github/scripts/lint-workflows.sh
+      - name: Check CI result gate
+        run: node --test .github/scripts/*.test.mjs
+      - uses: ./.github/actions/setup-desktop
+      - name: Verify resources, generated contracts and TypeScript
+        working-directory: products/liteasy/apps/desktop
+        run: npm run ci:contracts
+      - name: Check Windows resource and module naming regressions
+        working-directory: products/liteasy/apps/desktop
+        run: npm run ci:smoke
+
+  tests:
+    name: L2 - Desktop tests (${{ matrix.shard }}/2)
+    if: ${{ inputs.full-tests }}
+    needs: contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      # Keep both failure reports if one shard fails. No tests are omitted.
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    defaults:
+      run:
+        working-directory: products/liteasy/apps/desktop
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: ./.github/actions/setup-desktop
+      - name: Run complete desktop suite shard
+        run: npm test -- --shard=${{ matrix.shard }}/2 --reporter=default --reporter=junit --outputFile.junit=test-results/unit-${{ matrix.shard }}.xml
+      - name: Upload test report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: desktop-tests-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: products/liteasy/apps/desktop/test-results/unit-*.xml
+          retention-days: 7
+          if-no-files-found: error

@@ -2,12 +2,6 @@ name: Build Windows installer
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - fallback
-    tags:
-      - "v*"
 
 permissions:
   contents: read
@@ -18,85 +12,11 @@ concurrency:
 
 jobs:
   test-desktop:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: products/liteasy/apps/desktop
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version-file: products/liteasy/apps/desktop/.nvmrc
-          cache: npm
-          cache-dependency-path: products/liteasy/apps/desktop/package-lock.json
-
-      - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Test desktop frontend
-        run: npm test
-
+    uses: ./.github/workflows/desktop-frontend.yml
+    with:
+      full-tests: true
   build-windows:
     needs: test-desktop
-    runs-on: windows-latest
-    timeout-minutes: 120
-    env:
-      CARGO_INCREMENTAL: 0
-      CARGO_PROFILE_TEST_DEBUG: 0
-      # Keep both frontend builds (including Tauri's beforeBuildCommand) identical.
-      VITE_FORUM_API_URL: https://community.staging.liteasyclaw.com
-      VITE_FORUM_WEB_URL: https://community.staging.liteasyclaw.com
-      VITE_LITEASY_CLOUD_URL: https://api.staging.liteasyclaw.com
-    defaults:
-      run:
-        working-directory: products/liteasy/apps/desktop
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version-file: products/liteasy/apps/desktop/.nvmrc
-          cache: npm
-          cache-dependency-path: products/liteasy/apps/desktop/package-lock.json
-
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: products/liteasy/apps/desktop/src-tauri -> target
-
-      - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Verify Tauri resource paths
-        run: npm run verify:tauri-resources -- --require-git-tracked
-
-      # generate_context! embeds frontendDist even during cargo test. A clean
-      # checkout has no dist; direct Cargo commands do not run beforeBuildCommand.
-      - name: Build and verify production assets
-        run: npm run build
-
-      - name: Verify release service endpoints
-        run: npm run verify:production-assets -- --require-release-endpoints
-
-      - name: Test Tauri host
-        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
-
-      - name: Build NSIS installer
-        run: npm run tauri -- build --bundles nsis -- --locked
-
-      - name: Upload Windows installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: Liteasy-windows-x64-installer
-          path: products/liteasy/apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
-          if-no-files-found: error
+    uses: ./.github/workflows/desktop-windows.yml
+    with:
+      build-installer: true

@@ -1,0 +1,104 @@
+name: Desktop Windows checks
+
+on:
+  workflow_call:
+    inputs:
+      build-installer:
+        description: Package the validated Release executable as an NSIS installer.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: ${{ inputs.build-installer && 'Windows Release and installer' || 'Windows development compile check' }}
+    # Match successful installer run 34762166987, without moving -latest aliases.
+    runs-on: windows-2025-vs2026
+    timeout-minutes: ${{ inputs.build-installer && 120 || 45 }}
+    env:
+      RUST_TOOLCHAIN: 1.98.1
+      CARGO_INCREMENTAL: 0
+      CARGO_PROFILE_TEST_DEBUG: 0
+      # Single source for both explicit builds and Tauri's beforeBuildCommand.
+      VITE_FORUM_API_URL: https://community.staging.liteasyclaw.com
+      VITE_FORUM_WEB_URL: https://community.staging.liteasyclaw.com
+      VITE_LITEASY_CLOUD_URL: https://api.staging.liteasyclaw.com
+    defaults:
+      run:
+        working-directory: products/liteasy/apps/desktop
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: ./.github/actions/setup-desktop
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master, pinned
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - name: Cache Cargo registry and compiled dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: products/liteasy/apps/desktop/src-tauri -> target
+          shared-key: liteasy-windows-v1
+          # Runner updates can change the MSVC ABI even under a fixed image label.
+          env-vars: CARGO CC CFLAGS CXX CMAKE RUST ImageOS ImageVersion
+          # Keep registry, test and Release dependencies, but rebuild app source.
+          cache-workspace-crates: false
+          # PR merge-ref caches cannot seed subsequent branch builds.
+          save-if: ${{ github.event_name != 'pull_request' }}
+      - name: Record toolchain and runner
+        shell: pwsh
+        run: |
+          node --version
+          rustc --version --verbose
+          cargo --version
+          "Image: $env:ImageOS / $env:ImageVersion" >> $env:GITHUB_STEP_SUMMARY
+          "Rust: $env:RUST_TOOLCHAIN" >> $env:GITHUB_STEP_SUMMARY
+      - name: L3.1 - Verify tracked installer resources
+        run: npm run verify:tauri-resources -- --require-git-tracked
+      - name: Check Windows host without Release linking or embedded frontend
+        if: ${{ !inputs.build-installer }}
+        # The devUrl path is a real Tauri configuration; never create fake dist assets.
+        run: cargo check --locked --all-targets --no-default-features --manifest-path src-tauri/Cargo.toml
+      # Default custom-protocol embeds the real frontend during tests and Release builds.
+      - name: L3.2 - Build production frontend
+        if: ${{ inputs.build-installer }}
+        run: npm run build
+      - name: L3.3 - Verify release service endpoints
+        if: ${{ inputs.build-installer }}
+        run: npm run verify:production-assets -- --require-release-endpoints
+      - name: L3.4 - Test Windows Tauri host
+        if: ${{ inputs.build-installer }}
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      - name: L3.5 - Compile and link Windows Release executable
+        if: ${{ inputs.build-installer }}
+        run: npm run tauri -- build --no-bundle -- --locked
+      - name: Verify Release executable exists
+        if: ${{ inputs.build-installer }}
+        shell: pwsh
+        run: |
+          $binary = "src-tauri/target/release/liteasy-desktop.exe"
+          if (!(Test-Path $binary -PathType Leaf)) { throw "Windows Release executable is missing: $binary" }
+          $digest = (Get-FileHash $binary -Algorithm SHA256).Hash
+          "Windows EXE SHA256: $digest" >> $env:GITHUB_STEP_SUMMARY
+      - name: Verify assets after Tauri beforeBuildCommand
+        if: ${{ inputs.build-installer }}
+        run: npm run verify:production-assets -- --require-release-endpoints
+      - name: L4 - Package validated executable with NSIS
+        if: ${{ inputs.build-installer }}
+        run: npm run tauri -- bundle --bundles nsis
+      - name: Verify dependency locks and generated schemas stayed unchanged
+        run: node ../../../../.github/scripts/check-clean.mjs package-lock.json src-tauri/Cargo.lock ../../packages/shared
+      - name: Upload Windows installer
+        if: ${{ inputs.build-installer }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Liteasy-windows-x64-installer
+          path: products/liteasy/apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
+      - name: Explain validation boundary
+        if: ${{ success() && !inputs.build-installer }}
+        shell: pwsh
+        run: |
+          "Basic resource checks and Windows development-mode compilation passed." >> $env:GITHUB_STEP_SUMMARY
+          "Production frontend embedding, full tests, Release linking and NSIS require an explicit installer request. Installation and UI acceptance still require manual verification." >> $env:GITHUB_STEP_SUMMARY

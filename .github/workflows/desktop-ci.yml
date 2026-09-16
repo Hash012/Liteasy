@@ -1,0 +1,58 @@
+name: Desktop CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled, ready_for_review]
+  merge_group:
+  workflow_dispatch:
+    inputs:
+      build-installer:
+        description: Run the complete test suite and build the Windows installer.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  policy:
+    name: Select CI depth
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      build-installer: ${{ steps.policy.outputs.build-installer }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Read event markers without executing event text
+        id: policy
+        run: node .github/scripts/installer-policy.mjs
+  frontend:
+    needs: policy
+    uses: ./.github/workflows/desktop-frontend.yml
+    with:
+      full-tests: ${{ needs.policy.outputs.build-installer == 'true' }}
+  windows:
+    # Do not produce an installer until every requested frontend test has passed.
+    needs: [policy, frontend]
+    uses: ./.github/workflows/desktop-windows.yml
+    with:
+      build-installer: ${{ needs.policy.outputs.build-installer == 'true' }}
+  ready:
+    name: Desktop CI ready
+    if: ${{ always() }}
+    needs: [policy, frontend, windows]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Require every requested validation layer to succeed
+        env:
+          CI_RESULTS: ${{ toJSON(needs) }}
+          BUILD_INSTALLER: ${{ needs.policy.outputs.build-installer }}
+        run: node .github/scripts/require-ci-success.mjs
