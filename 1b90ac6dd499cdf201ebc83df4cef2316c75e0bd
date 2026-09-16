@@ -1,0 +1,26 @@
+CI 按需安装包构建改造
+
+解决问题：普通提交原先触发完整 Windows Installer，或仍执行完整测试和 Release 链接，仅省略 NSIS，导致日常检查耗时过高。
+
+本次改动：
+- Desktop CI 默认执行资源/类型/schema/锁文件检查、Windows 文件名大小写回归，以及 Windows cargo check --locked --all-targets --no-default-features。
+- push 最新 commit message 或 PR 当前标题/正文含 [build-installer] / [windows-installer]（不区分大小写），或 PR 带对应无方括号标签，才运行完整测试、生产前端、Windows 宿主测试、Release 链接与 NSIS 打包。
+- PR 编辑、标签增删、新提交均重新判定；不扫描历史提交和评论。merge queue 默认基础档。
+- 保留手动 Installer 入口及 Desktop CI 的 build-installer 手动开关；普通 main/fallback push 和 v* 标签不再直接触发旧 Installer。
+- 两档共享锁定 Node/Rust/runner、安装与缓存配置；完整打包须等待全量前端测试通过。Desktop CI ready 严格汇总 policy/frontend/windows 的成功结果。
+- 事件 JSON 不作为 shell 代码执行；只读权限、普通 pull_request，不使用发布密钥。
+- 新增 NSIS 资源存在/受 Git 管理检查；生成 schema 和锁文件检查覆盖已暂存、未暂存及新生成的未跟踪文件。
+
+验证：
+- actionlint 1.7.12 通过。
+- Node CI 脚本测试 76/76 通过。
+- ci:contracts 通过，资源与大小写 smoke 8/8 通过。
+- 显式将 frontendDist 指向不存在目录的 Linux 开发模式 cargo check 通过，证明轻量路径无需生产 dist。
+- npm run build 通过，152 个生产资源文件校验通过；保留现有大 chunk 提示。
+- git diff --check 通过。
+
+边界：
+- 本地使用 Node 20.20.2、Rust 1.98.0；GitHub 使用 .nvmrc 指定的 Node 22.23.2、Rust 1.98.1 和 windows-2025-vs2026。
+- Windows 新路由尚待 GitHub 首跑。基础检查不等于生产嵌入、Release 链接、完整测试或 NSIS 成功；完整自动构建也不替代安装/升级及 UI 验收。
+- 未修改远端分支保护规则。
+- 详细触发方式与验证记录见 docs/engineering/desktop-ci.md。
