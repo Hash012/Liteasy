@@ -1,0 +1,16 @@
+修复问题
+桌面 package.json、Cargo.toml 与 tauri.conf.json 的应用版本回退为 0.1.0，导致已成功生成的 NSIS 安装包命名为 Liteasy_0.1.0_x64-setup.exe。此前已交付 0.1.15；远端已存在 v0.1.16，因此使用新的 0.1.17，避免复用已存在的版本号。
+
+修改范围
+统一 npm、Rust、Tauri 应用版本为 0.1.17，并同步 package-lock.json 的两处应用版本及 Cargo.lock 的 liteasy-desktop 包版本。仅修改五个文件中的六处应用版本，不升级任何依赖、不创建发布 tag、不修改 Windows workflow、schema generator 或 check-clean。
+
+验证
+- npm run ci:smoke：2 个测试文件、8 项测试全部通过。
+- npm run build：资源检查、三个 schema generator、TypeScript、Vite 生产构建及生产资源校验全部通过；152 个生产文件验证成功。
+- cargo metadata --locked --offline --no-deps：通过。
+- 自动核对 npm/Tauri/Cargo 配置和两类锁文件中的应用版本，全部为 0.1.17。
+- 提交后运行原有 check-clean.mjs，覆盖 package-lock.json、src-tauri/Cargo.lock 和 ../../packages/shared，输出 Selected paths match Git; no generated-file or lockfile drift detected.
+- git diff --check：通过；提交后工作区干净。
+
+环境与交付范围
+本地 Linux 验证使用 Node 20.20.2、Rust 1.98.0；原生 Windows 安装包和上传仍待 GitHub Actions 验证。提交主题包含 [windows-installer]，用于推送后触发完整 Installer CI。
