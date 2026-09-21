@@ -91,6 +91,7 @@ import { PdfAnnotationEditor } from "./PdfAnnotationEditor";
 import { PdfAnnotationStatus } from "./PdfAnnotationStatus";
 import { PdfAnnotationReview } from "./PdfAnnotationReview";
 import { usePdfAnnotationReview } from "./usePdfAnnotationReview";
+import { PaperReviewSharePanel } from "./PaperReviewSharePanel";
 import { persistPdfAnnotationState } from "./pdfAnnotationPersistence";
 import "./pdfAnnotationList.css";
 import { PdfMarkdownTextBox } from "./PdfMarkdownTextBox";
@@ -3419,6 +3420,9 @@ export function PdfReader({
                       />
                     </>
                   ) : null}
+                  <PaperReviewSharePanel scopeKey={annotationStorageKey}
+                    ready={Boolean(activePaper && annotationStorageKey && hydratedAnnotationStorageKey === annotationStorageKey && !annotationLoadError)}
+                    source={{ title: activePaper?.title ?? "", annotations, pageTexts }} />
                   <details className="pdf-annotation-options"><summary>批注选项</summary>
                   <label className="pdf-annotation-auto-public-toggle">
                     <input
