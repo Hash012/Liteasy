@@ -1,0 +1,17 @@
+修复 Installer CI 第 1 分片中产物工作流测试的异步时序问题。
+
+问题：产物资源保存前需要等待 WebCrypto SHA-256 计算；固定执行两次 Promise.resolve() 不能保证原生异步摘要与后续保存已经完成，因此测试可能在 artifactTabs 仍为空时断言失败。
+
+修改：
+- 两个涉及产物保存的用例使用真实计时器及 waitFor，等待实际可观察的完成状态。
+- 思维导图用例覆盖即时保存及手动控制的延迟保存，确认保存未完成时标签页为空、任务仍运行，保存完成后才出现已验证产物并转为 completed。
+- 薄读自动可视化用例等待生成调用出现，同时保留先保存后启动可视化的顺序断言。
+- 仅修改测试，不改变运行时业务行为、不增加 CI 重试或放宽产物断言。
+
+验证：
+- useArtifactWorkflowController + resourceFileService：39 项通过。
+- CI 第 1 分片：186 个文件通过、2 个跳过；1395 项通过、4 项跳过。
+- npm run build 通过，152 个生产资源文件校验通过；仍有既有大 chunk 提示。
+- git diff --check 通过。
+
+提交信息包含 [windows-installer]，推送此提交后将按现有工作流规则请求完整 Installer 构建。上述结果来自本地验证，不代表远端 Installer 已通过。
