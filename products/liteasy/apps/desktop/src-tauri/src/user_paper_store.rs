@@ -188,7 +188,9 @@ pub fn save_user_paper_artifact(
         return Err("用户阅读产物超过大小限制。".to_string());
     }
     let path = artifact_path(&app, &paper_id, &artifact_kind)?;
-    write_json_atomically(&path, &serialized)
+    crate::local_library::with_local_library_index_transaction(&app, || {
+        write_json_atomically(&path, &serialized)
+    })
 }
 
 #[cfg(test)]

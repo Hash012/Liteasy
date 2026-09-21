@@ -1,3 +1,4 @@
+import { useWebDavSyncController } from "../controllers/useWebDavSyncController";
 import { artifactResourceScope } from "../features/resource-filesystem/artifactResourceProvider";
 import { paperCitationOpenRequest } from "../features/paper-anchors/paperAnchorEntity";
 import { useAssistantContextCatalog } from "../controllers/useAssistantContextCatalog";
@@ -296,6 +297,7 @@ export function AppShell({
     Partial<Record<DockRegionId, string>>
   >({});
   const [openReaderPaperIds, setOpenReaderPaperIds] = useState<string[]>(initialOpenReaderPaperIds);
+  useWebDavSyncController(openReaderPaperIds, localLibrarySnapshot?.rootPath ?? null);
   const [activeReaderPaperId, setActiveReaderPaperId] = useState<string | null>(
     initialOpenReaderPaperIds[0] ?? null
   );

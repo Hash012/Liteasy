@@ -1,4 +1,5 @@
 import { PaperServicesSettingsPanel } from "../features/paper-services/PaperServicesSettingsPanel";
+import { WebDavSettingsPanel } from "../features/webdav/WebDavSettingsPanel";
 import { DataLocationSettings } from "../features/settings/DataLocationSettings";
 import { useState } from "react";
 import { BotRegular, ChevronDownRegular, ChevronRightRegular, DatabaseRegular, EyeRegular, FolderRegular, SettingsRegular } from "@fluentui/react-icons";
@@ -51,6 +52,7 @@ export function SettingsPane({
     <section aria-label="左边栏设置" className="settings-panel">
       <div aria-hidden="true" className="settings-panel-icon"><SettingsRegular /></div>
       <DataLocationSettings />
+      <WebDavSettingsPanel key={libraryRootPath ?? "default"} />
       <section className="sidebar-section settings-model-section">
         <button aria-expanded={modelExpanded} aria-label={`${modelExpanded ? "收起" : "展开"} AI 接入`} className="sidebar-section-header" onClick={() => setModelExpanded((current) => !current)} type="button">
           <span aria-hidden="true" className="sidebar-section-disclosure">{modelExpanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>

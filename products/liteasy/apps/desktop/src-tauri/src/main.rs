@@ -15,6 +15,7 @@ mod object_store;
 mod paper_cache;
 mod paper_services;
 mod user_paper_store;
+mod webdav;
 mod workflow_checkpoints;
 
 fn main() {
@@ -40,6 +41,12 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            webdav::set_webdav_open_documents,
+            webdav::get_webdav_settings,
+            webdav::save_webdav_settings,
+            webdav::disconnect_webdav,
+            webdav::verify_webdav,
+            webdav::sync_webdav,
             note_files::note_files_dispatch,
             data_location::get_data_location,
             data_location::choose_data_location,

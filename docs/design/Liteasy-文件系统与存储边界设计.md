@@ -4,6 +4,8 @@
 确认日期：2026-08-06  
 适用范围：LiteasyClaw 桌面端、Liteasy 云服务、Intuecho 身份互通、管理后台
 
+WebDAV 文献库同步的协议、凭据隔离与恢复机制见 [Liteasy WebDAV 同步设计](Liteasy-WebDAV同步设计.md)。该同步连接由本机用户配置，独立于 SaaS 账号、组织库和推荐元数据同步。
+
 ## 1. 文档目的
 
 本文定义 Liteasy 投入使用后的文件与数据边界，解决以下问题：

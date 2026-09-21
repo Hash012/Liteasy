@@ -376,7 +376,10 @@ impl LocalLibraryWatchState {
     }
 }
 
-fn with_local_library_index_transaction<T, F>(app: &AppHandle, operation: F) -> Result<T, String>
+pub(crate) fn with_local_library_index_transaction<T, F>(
+    app: &AppHandle,
+    operation: F,
+) -> Result<T, String>
 where
     F: FnOnce() -> Result<T, String>,
 {
@@ -1080,6 +1083,7 @@ pub fn backup_local_library(
     app: AppHandle,
     destination_directory: String,
 ) -> Result<String, String> {
+    let _sync_guard = crate::webdav::lock_library_location_change()?;
     let requested = PathBuf::from(destination_directory.trim());
     if requested.as_os_str().is_empty() || !requested.is_absolute() {
         return Err("请提供备份保存目录的完整路径。".to_string());
@@ -1103,6 +1107,7 @@ pub fn select_legacy_local_library_root(
     app: AppHandle,
     legacy_root_path: String,
 ) -> Result<LocalLibrarySnapshot, String> {
+    let _sync_guard = crate::webdav::lock_library_location_change()?;
     if read_root_override(&app)?.is_some() {
         return Err("旧文献库选择已经完成；如需更换位置，请使用移动文献库。".to_string());
     }
@@ -1155,6 +1160,7 @@ pub fn set_local_library_root(
     app: AppHandle,
     next_root_path: String,
 ) -> Result<LocalLibrarySnapshot, String> {
+    let _sync_guard = crate::webdav::lock_library_location_change()?;
     let requested = PathBuf::from(next_root_path.trim());
     if requested.as_os_str().is_empty() || !requested.is_absolute() {
         return Err("请提供文献库根目录的完整路径。".to_string());
@@ -1239,6 +1245,7 @@ fn relative_path(root: &Path, path: &Path) -> Result<String, String> {
 }
 
 fn read_index(root: &Path) -> Result<LocalLibraryIndex, String> {
+    recover_webdav_apply(root)?;
     let path = index_path(root);
     if !path.exists() {
         let mut index = LocalLibraryIndex::default();
@@ -5314,6 +5321,282 @@ mod tests {
             .map(|entry| entry.id.clone())
             .collect::<HashSet<_>>();
         assert_eq!(restored_ids, ids);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+// File publication and identity adoption share the library index transaction. The
+// journal is recovered before every index read, including startup/watcher scans.
+pub(crate) fn apply_webdav_file(
+    app: &AppHandle,
+    root: &Path,
+    relative: &str,
+    expected_hash: Option<&str>,
+    version: Option<&crate::webdav::model::FileVersion>,
+    bytes: Option<&[u8]>,
+) -> Result<(), String> {
+    let snapshot = with_local_library_index_transaction(app, || {
+        if library_root(app)? != root {
+            return Err("文献库位置已改变，请重新同步。".into());
+        }
+        let index = read_index(root)?;
+        if crate::webdav::artifact_is_open(relative)
+            || version
+                .and_then(|v| v.document_id.as_deref())
+                .is_some_and(crate::webdav::document_is_open)
+            || index
+                .entries
+                .iter()
+                .any(|e| e.relative_path == relative && crate::webdav::document_is_open(&e.id))
+        {
+            return Err("webdav_document_open".into());
+        }
+        apply_webdav_file_at(root, relative, expected_hash, version, bytes)?;
+        snapshot_from_index(root, &read_index(root)?)
+    })?;
+    let _ = app.emit(
+        "local-library-changed",
+        LocalLibraryChangedEvent {
+            external_deletion: false,
+            full_rescan: true,
+            operation_id: Some(format!("webdav-{}", unix_timestamp_ms())),
+            paths: vec![root.join(relative).to_string_lossy().to_string()],
+            revision: snapshot.revision,
+            snapshot,
+        },
+    );
+    Ok(())
+}
+
+pub(crate) fn apply_webdav_file_at(
+    root: &Path,
+    relative: &str,
+    expected_hash: Option<&str>,
+    version: Option<&crate::webdav::model::FileVersion>,
+    bytes: Option<&[u8]>,
+) -> Result<(), String> {
+    use crate::webdav::{local, model};
+    recover_webdav_apply(root)?;
+    if let Some(bytes) = bytes {
+        if relative.to_ascii_lowercase().ends_with(".pdf") && !bytes.starts_with(b"%PDF-") {
+            return Err("远端文件不是有效的 PDF，已保留本地内容。".into());
+        }
+        if relative.starts_with(".liteasy/metadata-entries/") {
+            let entry: MetadataOnlyEntry =
+                serde_json::from_slice(bytes).map_err(|_| "远端文献元数据损坏。")?;
+            if metadata_entry_path(root, &entry.id)? != root.join(relative) {
+                return Err("远端文献元数据身份不匹配。".into());
+            }
+        } else if relative.starts_with(".liteasy/paper-artifacts/") {
+            if bytes.len() > 32 * 1024 * 1024 {
+                return Err("远端阅读产物超过大小限制。".into());
+            }
+            let value = serde_json::from_slice::<serde_json::Value>(bytes)
+                .map_err(|_| "远端阅读产物不是有效 JSON。")?;
+            if value.is_null() {
+                return Err("远端阅读产物不能为 null。".into());
+            }
+        }
+    }
+    let current = local::current_hash(root, relative)?;
+    if current.as_deref() != expected_hash {
+        return Err("同步期间本地文件发生变化，请重新同步。".into());
+    }
+    let directory = local::state_directory(root)?;
+    if let Some(version) = version {
+        let bytes = bytes.ok_or("下载内容缺失。")?;
+        if model::digest(bytes) != version.hash || bytes.len() as u64 != version.size {
+            return Err("下载文件校验失败。".into());
+        }
+        write_bytes_atomically(&directory.join("incoming"), bytes)?;
+    }
+    local::save_json(
+        &directory.join("apply.json"),
+        &local::ApplyJournal {
+            path: relative.into(),
+            version: version.cloned(),
+            previous_hash: current,
+        },
+    )?;
+    recover_webdav_apply(root)
+}
+
+fn recover_webdav_apply(root: &Path) -> Result<(), String> {
+    use crate::webdav::{local, model};
+    if !root.join(".liteasy/webdav").exists() {
+        return Ok(());
+    }
+    let directory = local::state_directory(root)?;
+    let journal_path = directory.join("apply.json");
+    if !journal_path.exists() {
+        return Ok(());
+    }
+    let journal: local::ApplyJournal =
+        serde_json::from_slice(&fs::read(&journal_path).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+    let path = local::safe_path(root, &journal.path)?;
+    let current = local::read_file(&path)?;
+    let current_hash = current.as_ref().map(|b| model::digest(b));
+    let desired_hash = journal.version.as_ref().map(|v| v.hash.clone());
+    // Preserve every replaced version, including edits made after a crash.
+    if current_hash != desired_hash {
+        if let Some(bytes) = &current {
+            let backup = directory.join("recovery").join(format!(
+                "{}-{}",
+                model::digest(journal.path.as_bytes()),
+                model::digest(bytes)
+            ));
+            write_bytes_atomically(&backup, bytes)?;
+        }
+        if current_hash != journal.previous_hash {
+            fs::remove_file(&journal_path).map_err(|e| e.to_string())?;
+            return Err("本地文件在同步恢复期间发生变化，已保留本地内容，请重新同步。".into());
+        }
+    }
+    let mut index: LocalLibraryIndex = if index_path(root).exists() {
+        serde_json::from_slice(&fs::read(index_path(root)).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?
+    } else {
+        LocalLibraryIndex::default()
+    };
+    if let Some(version) = &journal.version {
+        if let Some(id) = &version.document_id {
+            if index.entries.iter().any(|e| {
+                e.id == *id
+                    && e.relative_path != journal.path
+                    && root.join(&e.relative_path).exists()
+            }) {
+                fs::remove_file(&journal_path).map_err(|e| e.to_string())?;
+                return Err("同一文献在本地有不同路径，请先解决重命名冲突。".into());
+            }
+            index
+                .entries
+                .retain(|e| e.relative_path != journal.path && e.id != *id);
+            index.entries.push(LocalLibraryIndexEntry {
+                id: id.clone(),
+                relative_path: journal.path.clone(),
+                content_hash: Some(version.hash.clone()),
+                file_size: Some(version.size),
+                modified_at_ns: None,
+            });
+        }
+        if current_hash != desired_hash {
+            let bytes =
+                local::read_file(&directory.join("incoming"))?.ok_or("同步恢复内容缺失。")?;
+            if model::digest(&bytes) != version.hash || bytes.len() as u64 != version.size {
+                return Err("同步恢复内容损坏。".into());
+            }
+            write_bytes_atomically(&path, &bytes)?;
+        }
+    } else {
+        if path.exists() {
+            fs::remove_file(&path).map_err(|e| e.to_string())?;
+        }
+        index.entries.retain(|e| e.relative_path != journal.path);
+    }
+    // Avoid resurrecting deleted metadata from the old derived index.
+    index.metadata_only = read_metadata_entries(root)?;
+    index.revision = index.revision.saturating_add(1);
+    write_index(root, &index)?;
+    fs::remove_file(journal_path).map_err(|e| e.to_string())?;
+    if directory.join("incoming").exists() {
+        fs::remove_file(directory.join("incoming")).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+pub(crate) fn webdav_library_id(root: &Path) -> Result<String, String> {
+    Ok(ensure_library_marker(root)?.library_id)
+}
+
+#[cfg(test)]
+pub(crate) fn webdav_snapshot_at(root: &Path) -> Result<LocalLibrarySnapshot, String> {
+    scan_local_library_root(root)
+}
+
+#[cfg(test)]
+mod webdav_recovery_tests {
+    use super::*;
+    use crate::webdav::{local, model};
+    fn root() -> PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "liteasy-webdav-recovery-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        root
+    }
+    #[test]
+    fn webdav_recovers_identity_after_file_publish_before_index_commit() {
+        let root = root();
+        let bytes = b"%PDF-1.7 remote";
+        let version = model::FileVersion {
+            hash: model::digest(bytes),
+            size: bytes.len() as u64,
+            document_id: Some("remote-doc-123".into()),
+        };
+        let directory = local::state_directory(&root).unwrap();
+        local::save_json(
+            &directory.join("apply.json"),
+            &local::ApplyJournal {
+                path: "paper.pdf".into(),
+                version: Some(version),
+                previous_hash: None,
+            },
+        )
+        .unwrap();
+        fs::write(root.join("paper.pdf"), bytes).unwrap();
+        let snapshot = scan_local_library_root(&root).unwrap();
+        assert_eq!(snapshot.entries[0].id, "remote-doc-123");
+        assert!(!directory.join("apply.json").exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn webdav_deletion_preserves_recovery_copy_and_does_not_resurrect_metadata() {
+        let root = root();
+        let entry = MetadataOnlyEntry {
+            id: "metadata-123".into(),
+            title: "Test".into(),
+            doi: None,
+            external_url: None,
+            source_id: None,
+        };
+        migrate_legacy_layout(&root).unwrap();
+        write_metadata_entry(&root, &entry).unwrap();
+        scan_local_library_root(&root).unwrap();
+        let relative = ".liteasy/metadata-entries/metadata-123.json";
+        let previous = local::current_hash(&root, relative).unwrap().unwrap();
+        apply_webdav_file_at(&root, relative, Some(&previous), None, None).unwrap();
+        assert!(scan_local_library_root(&root).unwrap().entries.is_empty());
+        assert_eq!(
+            fs::read_dir(root.join(".liteasy/webdav/recovery"))
+                .unwrap()
+                .count(),
+            1
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn webdav_refuses_concurrent_edit_and_invalid_metadata() {
+        let root = root();
+        fs::write(root.join("paper.pdf"), b"new edit").unwrap();
+        assert!(
+            apply_webdav_file_at(&root, "paper.pdf", Some(&model::digest(b"old")), None, None)
+                .is_err()
+        );
+        assert_eq!(fs::read(root.join("paper.pdf")).unwrap(), b"new edit");
+        assert!(apply_webdav_file_at(
+            &root,
+            ".liteasy/metadata-entries/doc-1.json",
+            None,
+            None,
+            Some(b"invalid json")
+        )
+        .is_err());
         fs::remove_dir_all(root).unwrap();
     }
 }
