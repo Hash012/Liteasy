@@ -239,6 +239,8 @@ fn migrate(source: &Path, target: &Path) -> Result<(), String> {
             .write_all(&serde_json::to_vec(source).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
         marker.sync_all().map_err(|e| e.to_string())?;
+        // Windows cannot rename a directory while a file inside it is open.
+        drop(marker);
         // Never replace another directory created while the copy was in progress.
         if target.exists() {
             return Err("迁移目标已存在，原数据保留。".into());
