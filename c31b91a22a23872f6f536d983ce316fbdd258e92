@@ -1,0 +1,14 @@
+修复 Windows Installer 完成 NSIS 打包后，生成 schema 的行尾差异导致 check-clean 判红、安装包未上传的问题。
+
+依据用户提供的 run 35586437904：前端、Windows Rust tests、Release EXE 和 NSIS 均已成功，失败集中在 11 个未声明 LF 的 schema；唯一已有 LF 属性的 visualization schema 未被报告为修改。
+
+范围：仅将 .gitattributes 中单个 visualizationArtifact schema 的 text eol=lf 规则扩展为 products/liteasy/packages/shared/*.schema.json text eol=lf。保留 *.pdf binary。不修改生成器、check-clean 或 workflow，也不增加 continue-on-error。
+
+验证：
+- 执行 git add --renormalize products/liteasy/packages/shared；现有 index 已为 LF，无 schema 内容变动。
+- 依次执行 schema:visualization、schema:objects、schema:resources。
+- 对 package-lock.json、src-tauri/Cargo.lock、../../packages/shared 执行原 check-clean，输出 Selected paths match Git; no generated-file or lockfile drift detected.
+- 用临时输出目录及 core.autocrlf=true 执行 checkout-index，全部 12 个 schema 均不含 CR，且逐字节等于 index 中的内容。
+- git diff --cached --check 通过。
+
+上述验证在 Linux 完成；远端 Windows 构建和安装包上传仍待此提交推送后的新一轮 CI 确认。
