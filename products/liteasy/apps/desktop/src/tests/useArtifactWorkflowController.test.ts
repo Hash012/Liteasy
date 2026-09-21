@@ -6,7 +6,7 @@ vi.mock("../app/features/persistence/durableJsonStore", () => ({
     localStorage.setItem(`liteasy.checkpoints.v1:${scope}`, JSON.stringify(entries));
   })
 }));
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { useArtifactWorkflowController } from "../app/controllers/useArtifactWorkflowController";
 import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
@@ -375,6 +375,7 @@ describe("useArtifactWorkflowController", () => {
   });
 
   test("starts automatic visualization only after the generated thin-reading node is persisted", async () => {
+    vi.useRealTimers();
     const client = artifactResultClient();
     let settleGeneration!: () => void;
     const generateThinReadingVisualization = vi.fn(() => new Promise<readonly unknown[]>((resolve) => {
@@ -399,18 +400,9 @@ describe("useArtifactWorkflowController", () => {
     act(() => {
       result.current.actions.startAnalysis("thin_reading");
     });
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
+    await waitFor(() => expect(generateThinReadingVisualization).toHaveBeenCalledTimes(1));
     expect(client.save).toHaveBeenCalledBefore(generateThinReadingVisualization);
-    expect(generateThinReadingVisualization).toHaveBeenCalledTimes(1);
-    settleGeneration();
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await act(async () => { settleGeneration(); });
   });
 
   test("marks a persisted in-flight thin-reading task as interrupted after restart", async () => {
@@ -556,14 +548,24 @@ describe("useArtifactWorkflowController", () => {
     expect(Object.keys(result.current.model.artifactTabs[0]?.thinReadingDocument?.nodes ?? [])).toHaveLength(2);
   });
 
-  test("updates workflow state when imported selected papers start analysis", async () => {
+  test.each([false, true])("updates workflow state when imported selected papers start analysis (deferred save: %s)", async (deferredSave) => {
+    // WebCrypto hashing uses the native event loop, not the fake timer queue.
+    // Waiting for a fixed number of Promise turns cannot finish resource saving.
+    vi.useRealTimers();
     const artifactStore = createArtifactStore();
     const onAnalysisHint = vi.fn();
+    const client = artifactResultClient();
+    let finishSave!: () => void;
+    if (deferredSave) {
+      client.save.mockImplementationOnce((document) => new Promise<string>((resolve) => {
+        finishSave = () => resolve(`development/test-data/agent-results/${document.artifactId}.json`);
+      }));
+    }
 
     const { result } = renderHook(() =>
       useArtifactWorkflowController({
         artifactStore,
-        artifactResultClient: artifactResultClient(),
+        artifactResultClient: client,
         getImportedChunksByPaperId: () => ({
           [paper.id]: buildImportedChunksForPaper(paper)
         }),
@@ -584,12 +586,14 @@ describe("useArtifactWorkflowController", () => {
     ]);
     expect(onAnalysisHint).toHaveBeenLastCalledWith("论文已准备好，正在生成产物。");
 
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await waitFor(() => expect(client.save).toHaveBeenCalledTimes(1));
+    if (deferredSave) {
+      expect(result.current.model.artifactTabs).toEqual([]);
+      expect(result.current.model.artifactTasks[0]).toMatchObject({ status: "running" });
+      await act(async () => { finishSave(); });
+    }
 
-    expect(result.current.model.artifactTabs).toEqual([
+    await waitFor(() => expect(result.current.model.artifactTabs).toEqual([
       expect.objectContaining({
         mindmapArtifact: expect.objectContaining({
           verification: expect.objectContaining({ status: "pass" })
@@ -598,7 +602,8 @@ describe("useArtifactWorkflowController", () => {
         title: "Literature Mind Map",
         type: "mindmap"
       })
-    ]);
+    ]));
+    expect(result.current.model.artifactTasks[0]).toMatchObject({ status: "completed", type: "mindmap" });
   });
 
   test("projects a stable failure when artifact workflow audit blocks persistence", async () => {
