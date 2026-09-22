@@ -1,0 +1,104 @@
+.app-frame.workspace-frame {
+  --shell-top-height: 40px;
+  --shell-bottom-height: 26px;
+  --shell-horizontal-gap: 8px;
+  --shell-padding-x: 10px;
+  --shell-icon-size: 16px;
+  --shell-icon-button: 30px;
+  --shell-status-font-size: 12px;
+  grid-template-rows: var(--shell-top-height) minmax(0, 1fr) var(--shell-bottom-height);
+  padding: 0;
+  background: var(--colorNeutralBackground1);
+}
+
+.workspace-command-bar,
+.file-status-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  min-width: 0;
+  gap: var(--shell-horizontal-gap);
+  padding: 0 var(--shell-padding-x);
+  color: var(--colorNeutralForeground2);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.workspace-command-bar {
+  height: var(--shell-top-height);
+  background: var(--colorNeutralBackground3);
+  border-bottom: 1px solid var(--colorNeutralStroke2);
+}
+
+.shell-navigation,
+.shell-commands {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: var(--shell-horizontal-gap);
+}
+
+.shell-navigation { gap: 2px; }
+
+.workspace-command-bar .shell-icon-button {
+  width: var(--shell-icon-button);
+  min-width: var(--shell-icon-button);
+  height: var(--shell-icon-button);
+  padding: 0;
+  border-radius: var(--borderRadiusMedium);
+  color: var(--colorNeutralForeground2);
+}
+
+.workspace-command-bar .shell-icon-button:disabled { color: var(--colorNeutralForegroundDisabled); }
+.workspace-command-bar .shell-icon-button:hover:not(:disabled) { background: var(--colorSubtleBackgroundHover); }
+.workspace-command-bar .shell-icon-button:active:not(:disabled) { background: var(--colorSubtleBackgroundPressed); }
+.workspace-command-bar .shell-icon-button svg { width: var(--shell-icon-size); height: var(--shell-icon-size); }
+
+.shell-workspace-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--fontSizeBase200);
+  font-weight: var(--fontWeightSemibold);
+  color: var(--colorNeutralForeground1);
+}
+
+.file-status-bar {
+  height: var(--shell-bottom-height);
+  background: var(--colorNeutralBackground2);
+  border-top: 1px solid var(--colorNeutralStroke2);
+  font-size: var(--shell-status-font-size);
+  line-height: 1;
+}
+
+.shell-file-details { display: flex; align-items: center; flex: 1 1 auto; min-width: 0; gap: var(--shell-horizontal-gap); }
+.shell-file-name { flex: 0 1 auto; max-width: min(24vw, 240px); }
+.shell-file-metadata { flex: 0 1 auto; }
+.shell-file-name,
+.shell-file-metadata,
+.shell-file-progress { overflow: hidden; text-overflow: ellipsis; }
+.shell-file-name:focus-visible { outline: 1px solid var(--colorStrokeFocus2); outline-offset: 2px; }
+.shell-file-progress { flex: 0 0 auto; max-width: 48%; }
+.shell-file-progress.has-error { color: var(--colorStatusDangerForeground1); }
+.file-status-bar.is-idle { color: var(--colorNeutralForeground3); }
+
+/* The existing dock remains the sizing owner. Flatten only its outer chrome
+   so its tabs and the shell read as one continuous desktop workspace. */
+.workspace-frame > .app-shell { min-width: 0; }
+.workspace-frame > .app-shell > .activity-bar {
+  border: 0;
+  border-right: 1px solid var(--colorNeutralStroke2);
+  border-radius: 0;
+  box-shadow: none;
+}
+.workspace-frame .dock-workspace-columns > .dock-region,
+.workspace-frame .dock-bottom-columns > .dock-region {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.workspace-frame .dock-region-tab-row {
+  background: var(--colorNeutralBackground2);
+  border-bottom-color: var(--colorNeutralStroke2);
+}

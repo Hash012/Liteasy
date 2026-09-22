@@ -1,3 +1,7 @@
+import { WorkspaceCommandBar } from "./WorkspaceCommandBar";
+import { FileStatusBar } from "./FileStatusBar";
+import { noteFileStatus, paperFileStatus, usePdfFileStatus, useWorkspaceShellController } from "../controllers/useWorkspaceShellController";
+import type { WorkspaceSurface } from "../features/workspace/workspaceShell.types";
 import { useWebDavSyncController } from "../controllers/useWebDavSyncController";
 import { artifactResourceScope } from "../features/resource-filesystem/artifactResourceProvider";
 import { paperCitationOpenRequest } from "../features/paper-anchors/paperAnchorEntity";
@@ -18,7 +22,7 @@ import { NotesContext } from "../features/notes/notesPort";
 import { refOf, objectLink } from "../features/objects/object.types";
 import { makeObjectTransfer, writeObjectTransfer } from "../features/object-transfer/objectTransfer";
 import { PAPER_CONTEXT_MIME } from "../features/object-transfer/contextTransfer";
-import { isBaseDockRegionId } from "../features/dock/dockRegistry";
+import { dockItemRegistry, isBaseDockRegionId } from "../features/dock/dockRegistry";
 import { useHelpController } from "../controllers/useHelpController";
 import { HelpPanel } from "../features/help/HelpPanel";
 import { HelpContext } from "../features/help/helpContext";
@@ -286,6 +290,7 @@ export function AppShell({
     refresh: refreshLocalLibrary,
     snapshot: localLibrarySnapshot
   } = useLocalLibrary(localLibraryLoader);
+  const pdfFileStatus = usePdfFileStatus();
   const paneLayout = usePaneLayout();
   const dock = useDockLayout();
   const assistantSurfaceHost = useMemo(createDockSurfaceHost, []);
@@ -1791,6 +1796,7 @@ export function AppShell({
   }
 
   function activateDockItem(regionId: DockRegionId, itemId: DockItemId) {
+    workspaceShell.focusRegion(regionId);
     if (regionId === "main") {
       setActiveCenterArtifactId(null);
       setActiveReaderPaperId(null);
@@ -2020,6 +2026,7 @@ export function AppShell({
     ];
     return (
       <ReaderPane
+        onDocumentInfo={pdfFileStatus.onDocumentInfo}
         onQuickAsk={askPdfQuestion}
         {...teamAnnotations.readerBindings(paper)}
         allowServerPdfParsing={false}
@@ -2131,10 +2138,7 @@ export function AppShell({
     }
   }
 
-  function renderDockRegion(regionId: DockRegionId) {
-    const showDetachedLayoutControls =
-      regionId === "main" &&
-      activeCenterArtifactId !== null;
+  function getDockRegionTabs(regionId: DockRegionId) {
     const dynamicReaderTabs = openReaderPapers.filter((paper) => (dock.findDynamicItemRegion(`pdf-${paper.id}`) ?? "main") === regionId).map((paper) => ({
           draggable: true,
           onDragStart: (event: React.DragEvent<HTMLButtonElement>) => { event.dataTransfer.effectAllowed = "copyMove"; event.dataTransfer.setData(PAPER_CONTEXT_MIME, paper.id); },
@@ -2213,7 +2217,11 @@ export function AppShell({
           title: tab.title
         };
       });
-    const dynamicTabs = [...dynamicReaderTabs, ...dynamicPaperResourceTabs, ...dynamicVisualizationTabs, ...dynamicArtifactTabs];
+    return [...dynamicReaderTabs, ...dynamicPaperResourceTabs, ...dynamicVisualizationTabs, ...dynamicArtifactTabs];
+  }
+
+  function renderDockRegion(regionId: DockRegionId) {
+    const dynamicTabs = getDockRegionTabs(regionId);
     return (
       <DockRegion
         dynamicTabs={dynamicTabs}
@@ -2250,6 +2258,42 @@ export function AppShell({
     );
   }
 
+  const shellSurfaces = Object.keys(dock.layout.regions).flatMap((id): WorkspaceSurface[] => {
+    const region = id as DockRegionId;
+    const tabs = getDockRegionTabs(region);
+    const visible = visibleHorizontalRegions.includes(region) || (bottomPaneVisible && dock.layout.bottomOrder.includes(region));
+    const selected = tabs.find((tab) => tab.selected);
+    return [
+      ...tabs.map((tab): WorkspaceSurface => {
+        const paper = openReaderPapers.find((paper) => tab.id === `pdf-${paper.id}`);
+        return {
+          id: tab.id, region, dynamic: true, active: visible && tab === selected, title: tab.title,
+          fileStatus: paper ? paperFileStatus(paper, importJobsByDocumentId[paper.id], pdfFileStatus.forPaper(paper)) : undefined,
+          search: paper?.sourcePath ? "pdf" : undefined,
+          onActivate: () => { revealDockRegion(region); tab.onActivate(); }
+        };
+      }),
+      ...dock.layout.regions[region].itemIds.map((item): WorkspaceSurface => ({
+        id: item, region,
+        active: visible && !selected && dock.layout.regions[region].activeItemId === item,
+        title: item === "notes" ? notes.model.selected?.title ?? dockItemRegistry[item].title : dockItemRegistry[item].title,
+        fileStatus: item === "notes" ? noteFileStatus(notes.model.selected) : undefined,
+        search: item === "library" ? "library" : item === "notes" ? "notes" : undefined,
+        onActivate: () => { revealDockRegion(region); activateDockItem(region, item); }
+      }))
+    ];
+  });
+  const workspaceShell = useWorkspaceShellController({
+    surfaces: shellSurfaces,
+    layoutActions: (["left", "right", "bottom"] as const).map((region) => ({
+      id: region,
+      label: { left: "左侧栏", right: "右侧栏", bottom: "下栏" }[region],
+      checked: !paneLayout.collapsed[region],
+      onSelect: () => paneLayout.setCollapsed(region, !paneLayout.collapsed[region])
+    })),
+    openSettings: () => openDockedLeftRailView("settings")
+  });
+
   const appFrameStyle = {
     ...(runtimeTheme.kind === "generated"
       ? (createGeneratedThemeStyle(runtimeTheme.theme) as CSSProperties)
@@ -2257,7 +2301,7 @@ export function AppShell({
     fontFamily: settingsState["view.font_family"],
     fontSize: `${settingsState["view.font_size"]}px`
   } as CSSProperties;
-  const appFrameClassName = `app-frame${
+  const appFrameClassName = `app-frame workspace-frame${
     runtimeTheme.kind === "preset" && runtimeTheme.preset === "playful" ? " theme-playful" : ""
   }${runtimeTheme.kind === "generated" ? " theme-generated" : ""}`;
   const appFrameScope =
@@ -2268,6 +2312,7 @@ export function AppShell({
     <HelpContext.Provider value={help.port}>
     <ObjectWorkbenchContext.Provider value={objectWorkbench.port}>
     <div className={appFrameClassName} data-theme-scope={appFrameScope} style={appFrameStyle}>
+      <WorkspaceCommandBar state={workspaceShell.toolbar} />
       <div
         className={`app-shell${objectWorkbench.visible ? " object-workbench-open" : ""}`}
         data-testid="workbench-layout"
@@ -2424,6 +2469,7 @@ export function AppShell({
           </section>
         ) : null}
       </div>
+      <FileStatusBar status={workspaceShell.fileStatus} />
     </div>
     {createPortal(renderAssistantSurface(dock.findItemRegion("assistant") ?? "right"), assistantSurfaceHost)}
     </ObjectWorkbenchContext.Provider>
