@@ -29,6 +29,10 @@ test("imports real EPUB, Markdown and text, filters metadata and restores readin
   const table = library.getByRole("table", { name: "文献与文件列表" });
   await expect(table.getByRole("row")).toHaveCount(4);
   const search = library.getByRole("textbox", { name: "搜索文献与文件" });
+  const commands = page.getByRole("toolbar", { name: "工作区命令栏" });
+  await expect(commands).toContainText("书库与元信息");
+  await commands.getByRole("button", { name: "搜索", exact: true }).click();
+  await expect(search).toBeFocused();
   await search.fill("9781234567897");
   await expect(table.getByRole("row")).toHaveCount(2);
   await table.getByRole("row").filter({ hasText: "Research Field Guide" }).click();
@@ -49,7 +53,10 @@ test("imports real EPUB, Markdown and text, filters metadata and restores readin
   await page.getByRole("combobox", { name: "阅读主题", exact: true }).selectOption("warm");
   await page.keyboard.press("Escape");
   await page.screenshot({ path: testInfo.outputPath("epub-reader-warm.png"), fullPage: true, animations: "disabled" });
-  await library.getByRole("button", { name: "搜索正文", exact: true }).click();
+  await expect(commands).toContainText("Research Field Guide");
+  await expect(page.getByLabel("文件状态栏", { exact: true })).toContainText("EPUB");
+  await commands.getByRole("button", { name: "搜索", exact: true }).click();
+  await expect(library.getByRole("textbox", { name: "搜索书内文字" })).toBeFocused();
   await library.getByRole("textbox", { name: "搜索书内文字" }).fill("uncertainty");
   await expect(library.getByRole("status").filter({ hasText: "1 处匹配" })).toBeVisible();
   await library.getByRole("button", { name: "返回书库", exact: true }).click();

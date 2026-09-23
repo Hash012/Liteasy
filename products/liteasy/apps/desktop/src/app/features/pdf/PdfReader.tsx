@@ -217,6 +217,7 @@ export type PdfAnnotationPublicationChange = {
 };
 
 type PdfReaderProps = {
+  onDocumentInfo?: (info: import("./pdfDocumentInfo").PdfDocumentInfo) => void;
   onQuickAsk?: (request: PdfQuickAskRequest) => Promise<string>;
   readingControls?: ReactNode;
   allowServerPdfParsing?: boolean;
@@ -1569,6 +1570,7 @@ function PdfThumbnail({ active, annotations, onNavigate, pageNumber, pdfDocument
 }
 
 export function PdfReader({
+  onDocumentInfo,
   readingControls,
   allowServerPdfParsing = false,
   externalKnowledgeEndpoint = "",
@@ -1606,6 +1608,7 @@ export function PdfReader({
   annotationsRef.current = annotations;
   const [selectedColor, setSelectedColor] = useState<HighlightColor>("yellow");
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
+  const documentInfoSource = useRef<{ paperId?: string; sourcePath?: string }>({});
   const [pageCount, setPageCount] = useState(1);
   const [focusedPage, setFocusedPage] = useState(1);
   const [layoutMode, setLayoutMode] = useState<PdfPageLayoutMode>(loadPdfPageLayoutMode);
@@ -2156,6 +2159,7 @@ export function PdfReader({
           return;
         }
 
+        documentInfoSource.current = { paperId: activePaper?.id, sourcePath: activePaper?.sourcePath };
         setPdfDocument(document);
         setPageCount(document.numPages);
         setStatus(`已加载 ${document.numPages} 页 PDF，可直接选中文本批注。`);
@@ -2173,6 +2177,20 @@ export function PdfReader({
       void loadingTask?.destroy();
     };
   }, [activePaper?.sourcePath, loadPdfSource, pdfDisplaySource]);
+
+  useEffect(() => {
+    if (!pdfDocument || !activePaper || !onDocumentInfo ||
+      documentInfoSource.current.paperId !== activePaper.id ||
+      documentInfoSource.current.sourcePath !== activePaper.sourcePath) return;
+    let cancelled = false;
+    const info = { paperId: activePaper.id, sourcePath: activePaper.sourcePath, pageCount: pdfDocument.numPages };
+    onDocumentInfo(info);
+    // PDF.js reports the existing download; no second fetch or parsing pass.
+    void pdfDocument.getDownloadInfo().then(({ length }) => {
+      if (!cancelled) onDocumentInfo({ ...info, size: length });
+    }).catch(() => { /* Page count remains useful when byte length is unavailable. */ });
+    return () => { cancelled = true; };
+  }, [pdfDocument, activePaper?.id, activePaper?.sourcePath, onDocumentInfo]);
 
   useEffect(() => {
     if (annotationStorageKey && hydratedAnnotationStorageKey === annotationStorageKey) {

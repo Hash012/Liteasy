@@ -272,7 +272,7 @@ describe("AssistantPane multi-session registry", () => {
       expect(cancel).toHaveBeenCalledWith("run-target", "用户终止了 AI 对话");
     });
     expect(agentClient.send).toHaveBeenCalledWith(
-      { message: "解释 MaxSim", mode: "qa" },
+      { message: "解释 MaxSim", mode: "qa", thinkingDepth: "balanced" },
       expect.objectContaining({
         idempotencyKey: expect.stringMatching(/^conversation:qa:/)
       })
