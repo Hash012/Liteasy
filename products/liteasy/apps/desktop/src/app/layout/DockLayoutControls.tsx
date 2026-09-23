@@ -29,8 +29,9 @@ function LayoutToggleButton({
   return (
     <button
       aria-label={label}
-      aria-pressed={collapsed}
-      className={collapsed ? "reader-layout-button collapsed" : "reader-layout-button"}
+      aria-pressed={!collapsed}
+      aria-expanded={!collapsed}
+      className={collapsed ? "reader-layout-button" : "reader-layout-button active"}
       onClick={onToggle}
       onDragEnter={(event) => {
         if (collapsed && Array.from(event.dataTransfer.types).some((type) => type === dockItemMimeType || type === dockDynamicTabMimeType)) onToggle?.();

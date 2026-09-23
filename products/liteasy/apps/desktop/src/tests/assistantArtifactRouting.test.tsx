@@ -162,7 +162,7 @@ test("cross-account and missing resource paths produce no context chip", async (
   port.resolveLiteasyPath = vi.fn(async () => { throw new Error("原文件已删除"); });
   const { user } = await renderRouting({ port });
   await user.click(screen.getByText("通过 Liteasy Path 添加上下文"));
-  const input = screen.getByRole("textbox", { name: "添加上下文的 Liteasy Path" });
+  const input = screen.getByRole("combobox", { name: "添加上下文的 Liteasy Path" });
   await user.type(input, "liteasy://objects/note-methods?scope=other&revision=r");
   await user.click(screen.getByRole("button", { name: "读取并加入上下文" }));
   expect(await screen.findByText(/属于其他账户/)).toBeInTheDocument();
@@ -172,4 +172,21 @@ test("cross-account and missing resource paths produce no context chip", async (
   await user.click(screen.getByRole("button", { name: "读取并加入上下文" }));
   expect(await screen.findByText("原文件已删除")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /^移除上下文/ })).not.toBeInTheDocument();
+});
+
+
+test("sends the chosen thinking depth with the turn and uses it in artifact authoring", async () => {
+  const { user, submit, onGenerateArtifact } = await renderRouting();
+  const slider = screen.getByRole("slider", { name: "思考深度" });
+  expect(slider).toHaveAttribute("aria-valuetext", "均衡");
+  fireEvent.change(slider, { target: { value: "2" } });
+  expect(slider).toHaveAttribute("aria-valuetext", "熟虑");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "分析这个方案");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+  await waitFor(() => expect(submit).toHaveBeenCalledWith(expect.objectContaining({ input: expect.objectContaining({ thinkingDepth: "deliberate" }) })));
+  await screen.findByText("可以先整理资料，再规划幻灯片内容。");
+  fireEvent.change(slider, { target: { value: "0" } });
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "生成PPT");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+  await waitFor(() => expect(onGenerateArtifact).toHaveBeenCalledWith("ppt", undefined, expect.stringContaining("思考深度：快速")));
 });

@@ -1,3 +1,5 @@
+import { rankRecommendationStyle, recommendationPublicationDate } from "./recommendationStyle.mjs";
+
 function normalizeRecommendationTitle(value) {
   return typeof value === "string"
     ? value.toLowerCase().replace(/[^a-z0-9\u3400-\u9fff]+/g, " ").trim()
@@ -579,6 +581,8 @@ export function buildLiveRecommendationPayload(body, sourceGroups, now = new Dat
         id: `reading-candidate:${identityResolution.canonicalId}`,
         identityResolution,
         ...(Number.isInteger(source.year) ? { publishedYear: source.year } : {}),
+        ...(Number.isSafeInteger(source.citationCount) && source.citationCount >= 0 ? { citationCount: source.citationCount } : {}),
+        ...(recommendationPublicationDate(source.publishedAt) ? { publishedAt: source.publishedAt } : {}),
         ...(source.openAccessAvailable === true && typeof source.fullTextUrl === "string" &&
           source.fullTextUrl.startsWith("https://") ? { fullTextUrl: source.fullTextUrl } : {}),
         ...(source.openAccessAvailable === true ? { openAccessAvailable: true } : {}),
@@ -646,6 +650,12 @@ export function buildLiveRecommendationPayload(body, sourceGroups, now = new Dat
         : `${preferred.reason}${identityReason}`;
       candidates.set(candidate.id, {
         ...preferred,
+        ...(preferred.citationCount !== undefined || existing.citationCount !== undefined || candidate.citationCount !== undefined
+          ? { citationCount: preferred.citationCount ?? existing.citationCount ?? candidate.citationCount }
+          : {}),
+        ...(preferred.publishedAt || existing.publishedAt || candidate.publishedAt
+          ? { publishedAt: preferred.publishedAt || existing.publishedAt || candidate.publishedAt }
+          : {}),
         identityResolution: combinedIdentity,
         personalizationRelevance: Math.max(
           existing.personalizationRelevance,
@@ -684,7 +694,11 @@ export function buildLiveRecommendationPayload(body, sourceGroups, now = new Dat
       version: "recommendation-quality/v1"
     },
     rankingFusion: fusion.audit,
-    recommendations: rerankRecommendationDiversity(fusion.candidates)
+    recommendations: rankRecommendationStyle(
+      rerankRecommendationDiversity(fusion.candidates, body?.style && body.style !== "balanced" ? 32 : 8),
+      body?.style,
+      now
+    )
   };
 }
 

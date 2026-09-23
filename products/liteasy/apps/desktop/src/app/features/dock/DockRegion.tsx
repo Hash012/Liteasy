@@ -52,6 +52,7 @@ function getDockItemIcon(itemId: DockItemId) {
     case "artifact-library":
       return <FolderOpenRegular />;
     case "library":
+    case "reading-library":
       return <BookRegular />;
     case "organization":
       return <PeopleRegular />;

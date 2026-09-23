@@ -1,3 +1,4 @@
+import { thinkingDepthInstruction } from "../../features/assistant/thinkingDepth";
 import type {
   AgentPublicApi,
   AgentExecutionRuntime,
@@ -154,7 +155,7 @@ async function executeKnowledgeTurn(
     throw new Error("Command turns cannot use the knowledge executor");
   }
   const artifactType = override?.artifactType ?? request.input.artifactType;
-  const question = override?.question ?? request.input.message;
+  const question = [request.input.thinkingDepth ? thinkingDepthInstruction(request.input.thinkingDepth) : "", override?.question ?? request.input.message].filter(Boolean).join("\n\n");
   const author = async (source: string, evidenceIds: string[]) => {
     if (artifactType !== "ppt" && artifactType !== "tree") throw new Error("当前资源尚不支持这种产物格式。");
     const settings = environment.knowledge.settings;
@@ -192,7 +193,7 @@ async function executeKnowledgeTurn(
     const result = await gateway.generateAnswer({
       model: getModelForSettings(settings),
       provider: getActiveModelProvider(settings),
-      prompt: contextSnapshotPrompt(input.context.objectSnapshot, request.input.message),
+      prompt: contextSnapshotPrompt(input.context.objectSnapshot, question),
       requireLive: true,
       signal
     });

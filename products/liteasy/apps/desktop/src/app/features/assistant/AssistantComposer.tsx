@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
-import { Tooltip } from "@fluentui/react-components";
+import { Slider, Tooltip } from "@fluentui/react-components";
+import { thinkingDepths, thinkingDepthLabels, type ThinkingDepth } from "./thinkingDepth";
 import { MicRegular, SendRegular } from "@fluentui/react-icons";
 import type { AssistantComposerSuggestion, AssistantContextToken } from "./assistant.types";
 import { createAssistantSuggestionIndex } from "./assistantSuggestionIndex";
@@ -14,6 +15,8 @@ type ActiveTrigger = {
 };
 
 type AssistantComposerProps = {
+  thinkingDepth?: ThinkingDepth;
+  onThinkingDepthChange?: (depth: ThinkingDepth) => void;
   contextTokens?: AssistantContextToken[];
   contextLoading?: boolean;
   editing?: boolean;
@@ -46,6 +49,8 @@ function getActiveTrigger(input: string, caret: number): ActiveTrigger | null {
 
 
 export function AssistantComposer({
+  thinkingDepth = "balanced",
+  onThinkingDepthChange,
   contextTokens = [],
   contextLoading = false,
   editing = false,
@@ -251,6 +256,13 @@ export function AssistantComposer({
       />
       </div>
       <div className="assistant-composer-actions">
+        {onThinkingDepthChange ? <div className="assistant-thinking-depth">
+          <span>思考深度 · {thinkingDepthLabels[thinkingDepth]}</span>
+          <Slider aria-label="思考深度" aria-valuetext={thinkingDepthLabels[thinkingDepth]} min={0} max={2} step={1}
+            value={thinkingDepths.indexOf(thinkingDepth)}
+            onChange={(_, data) => onThinkingDepthChange(thinkingDepths[data.value])} />
+          <div className="assistant-thinking-labels"><span>快速</span><span>均衡</span><span>熟虑</span></div>
+        </div> : null}
         <Tooltip content="语音输入（预留）" positioning="above" relationship="description">
           <button
             aria-label="语音输入（预留）"

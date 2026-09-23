@@ -27,6 +27,7 @@ export type MessageCaptureInput = {
 };
 export type ObjectWorkbenchPort = {
   readonly scopeId?: string;
+  searchLiteasyPaths?(query: string): Promise<import("../resource-filesystem/resourcePathSearch").ResourcePathCandidate[]>;
   resolveLiteasyPath?(path: string): Promise<import("../object-transfer/contextTransfer").ResourceContextAttachment[]>;
   describeResource?(target: import("../resource-filesystem/liteasyPath").ResourceTarget, reveal?: boolean): Promise<import("../resource-filesystem/liteasyPath").ResourceLocation>;
   openPaperAnchor?(anchor: import("../paper-anchors/paperAnchorEntity").PaperAnchorEntity): Promise<void>;

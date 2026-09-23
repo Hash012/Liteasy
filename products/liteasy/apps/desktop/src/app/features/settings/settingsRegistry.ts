@@ -8,6 +8,12 @@ export const settingsRegistry: Record<SettingKey, { label: string; help?: string
   "papers.mineru_endpoint": { label: "MinerU API 地址" },
   "network.recommendation.enabled": { ...{ help: "控制联网文献推荐。关闭后不获取新的联网推荐，不会删除已保存的文献。", dependencies: [], restartRequirement: "none" }, label: "联网推荐" },
   "network.recommendation.sort_mode": { label: "推荐排序" },
+  "network.recommendation.style": {
+    label: "推荐风格",
+    help: "均衡兼顾新进展与基础文献；追踪前沿侧重近期研究；经典基础参考主题相关性与引用积累；跨域探索拓展相邻主题。切换后更新推荐，并在本机保留选择。引用次数仅供参考，不代表论文质量。",
+    dependencies: ["network.recommendation.enabled"],
+    restartRequirement: "none"
+  },
   "assistant.public_audit.enabled": { label: "公开审计过程" },
   "profile.enabled": { label: "用户画像" },
   "assistant.default_output_mode": { label: "默认输出模式" },
@@ -24,6 +30,7 @@ export const settingsRegistry: Record<SettingKey, { label: string; help?: string
   "models.cloud_proxy_endpoint": { label: "云代理模型端点" },
   "models.control_plane_endpoint": { label: "云端控制平面端点" },
   "view.font_family": { ...{ help: "选择应用界面的字体。不会安装系统字体或改写论文。", dependencies: [], restartRequirement: "none" }, label: "界面字体" },
+  "view.theme": { label: "外观", help: "选择浅色、深色，或随系统自动切换。即时生效并在本机记住选择，PDF 保留原有阅读底色。", dependencies: [], restartRequirement: "none" },
   "view.font_size": { ...{ help: "调整应用界面字号。不会修改论文 PDF 文件。", dependencies: [], restartRequirement: "none" }, label: "界面字号" },
   "view.display_scale": { help: "整体调整应用界面、面板和控件的显示比例。Ctrl + 加号或减号调整，Ctrl + 0 恢复 100%。不会修改 PDF 文件。", dependencies: [], restartRequirement: "none", label: "显示比例" },
   "view.pdf_background": { ...{ help: "调整 PDF 阅读区域的显示底色，不修改 PDF 原文件。", dependencies: [], restartRequirement: "none" }, label: "PDF 阅读底色" },

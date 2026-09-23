@@ -19,6 +19,7 @@ const MANAGED: &[&str] = &[
     "user-library",
     "artifact-catalog",
     "artifact-exports",
+    "paper-cache",
     "artifact-catalog.v1.json",
     "agent-state.v1.json",
     "assistant-history.v1.json",
@@ -50,6 +51,25 @@ static ACTIVE: OnceLock<Active> = OnceLock::new();
 static CONFIG_LOCK: Mutex<()> = Mutex::new(());
 fn bootstrap(app: &AppHandle) -> Result<PathBuf, String> {
     app.path().app_data_dir().map_err(|e| e.to_string())
+}
+fn initial_root(base: &Path, config: &Config, installation: &Path) -> PathBuf {
+    if let Some(root) = &config.root {
+        return root.clone();
+    }
+    // An upgrade must never hide an existing library or interrupt a pending migration.
+    if config.pending.is_some() || MANAGED.iter().any(|name| base.join(name).exists()) {
+        return base.to_path_buf();
+    }
+    installation.join("LiteasyData")
+}
+fn prepare_new_root(path: &Path) -> Result<(), String> {
+    if !path.exists() {
+        private_directory(path)?;
+    }
+    let probe = path.join(format!(".liteasy-write-check-{}", std::process::id()));
+    let file = private_file(&probe).map_err(|e| format!("数据保存位置不可写：{e}"))?;
+    drop(file);
+    fs::remove_file(probe).map_err(|e| e.to_string())
 }
 fn read_config(base: &Path) -> Result<Config, String> {
     let path = base.join(CONFIG);
@@ -256,7 +276,40 @@ pub fn initialize(app: &AppHandle) -> Result<(), String> {
     let base = bootstrap(app)?;
     fs::create_dir_all(&base).map_err(|e| e.to_string())?;
     let mut config = read_config(&base)?;
-    let mut root = config.root.clone().unwrap_or_else(|| base.clone());
+    let installation = if cfg!(windows) {
+        std::env::current_exe()
+            .map_err(|e| e.to_string())?
+            .parent()
+            .ok_or("无法确定安装目录")?
+            .to_path_buf()
+    } else {
+        // Other desktop platforms keep their existing storage convention.
+        base.clone()
+    };
+    let mut root = if cfg!(windows) {
+        initial_root(&base, &config, &installation)
+    } else {
+        config.root.clone().unwrap_or_else(|| base.clone())
+    };
+    if config.root.is_none() {
+        if let Err(error) = prepare_new_root(&root) {
+            if MANAGED.iter().any(|name| root.join(name).exists()) {
+                return Err(format!("{error}；原数据保留，请恢复目录写入权限后重启。"));
+            }
+            // Never silently put new business data back on the system drive.
+            let parent = rfd::FileDialog::new()
+                .set_title("安装目录不可写，请选择数据保存位置")
+                .pick_folder()
+                .ok_or(format!("{error}；未选择其他位置，未创建新库。"))?;
+            root = parent.join("LiteasyData");
+            if root.exists() {
+                return Err("所选位置已有 LiteasyData，请选择新的保存位置。".into());
+            }
+            prepare_new_root(&root)?;
+        }
+        config.root = Some(root.clone());
+        save_config(&base, &config)?;
+    }
     if !root.is_dir() {
         return Err("数据目录不可用；请连接原磁盘后重启，未创建空库。".into());
     }
@@ -297,19 +350,11 @@ pub fn initialize(app: &AppHandle) -> Result<(), String> {
         })
         .map_err(|_| "数据目录已初始化".to_string())
 }
-pub fn root(app: &AppHandle) -> Result<PathBuf, String> {
+pub fn root(_app: &AppHandle) -> Result<PathBuf, String> {
     ACTIVE
         .get()
         .map(|a| a.root.clone())
         .ok_or_else(|| "数据目录尚未就绪".to_string())
-        .or_else(|e| {
-            // No fallback when a configured root is unavailable.
-            if read_config(&bootstrap(app)?)?.root.is_some() {
-                Err(e)
-            } else {
-                bootstrap(app)
-            }
-        })
 }
 pub fn remap_path(path: &Path) -> PathBuf {
     if let Some(active) = ACTIVE.get() {
@@ -364,6 +409,20 @@ pub fn cancel_data_location_change(app: AppHandle) -> Result<DataLocation, Strin
     save_config(&base, &config)?;
     get_data_location(app)
 }
+#[cfg(any(windows, test))]
+fn shell_path(path: &Path) -> PathBuf {
+    let text = path.to_string_lossy();
+    if let Some(unc) = text.strip_prefix(r"\\?\UNC\") {
+        return PathBuf::from(format!(r"\\{unc}"));
+    }
+    if let Some(drive) = text.strip_prefix(r"\\?\") {
+        let bytes = drive.as_bytes();
+        if bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && &bytes[1..3] == b":\\" {
+            return PathBuf::from(drive);
+        }
+    }
+    path.to_path_buf()
+}
 pub fn reveal(path: &Path) -> Result<(), String> {
     if !path.exists() {
         return Err("文件位置不可用。".into());
@@ -371,10 +430,12 @@ pub fn reveal(path: &Path) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     let result = if path.is_file() {
         std::process::Command::new("explorer")
-            .arg(format!("/select,{}", path.display()))
+            .arg(format!("/select,{}", shell_path(path).display()))
             .spawn()
     } else {
-        std::process::Command::new("explorer").arg(path).spawn()
+        std::process::Command::new("explorer")
+            .arg(shell_path(path))
+            .spawn()
     };
     #[cfg(target_os = "macos")]
     let result = std::process::Command::new("open")
@@ -420,13 +481,10 @@ pub fn resource_location(
             let path = remap_path(Path::new(request["path"].as_str().ok_or("缺少论文位置")?));
             let canonical = path.canonicalize().map_err(|e| e.to_string())?;
             let library = crate::local_library::library_root(&app)?;
-            let cache = app
-                .path()
-                .app_cache_dir()
-                .map_err(|e| e.to_string())?
-                .join("paper-cache");
             if !canonical.starts_with(&library)
-                && !cache.canonicalize().is_ok_and(|c| canonical.starts_with(c))
+                && !crate::paper_cache::cache_roots(&app)?
+                    .iter()
+                    .any(|cache| canonical.starts_with(cache))
             {
                 return Err("文件不属于当前文献库或论文缓存。".into());
             }
@@ -454,6 +512,53 @@ pub fn resource_location(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn explorer_uses_ordinary_drive_and_unc_paths() {
+        assert_eq!(
+            shell_path(Path::new(r"\\?\D:\LiteasyData\paper.pdf")),
+            PathBuf::from(r"D:\LiteasyData\paper.pdf")
+        );
+        assert_eq!(
+            shell_path(Path::new(r"\\?\UNC\server\share\paper.pdf")),
+            PathBuf::from(r"\\server\share\paper.pdf")
+        );
+        assert_eq!(
+            shell_path(Path::new("/data/paper.pdf")),
+            PathBuf::from("/data/paper.pdf")
+        );
+    }
+    #[test]
+    fn defaults_to_installation_but_preserves_existing_data_and_custom_roots() {
+        let temp = fixture();
+        let base = temp.join("profile");
+        let install = temp.join("installation");
+        assert_eq!(
+            initial_root(&base, &Config::default(), &install),
+            install.join("LiteasyData")
+        );
+        fs::create_dir_all(base.join("objects")).unwrap();
+        assert_eq!(initial_root(&base, &Config::default(), &install), base);
+        let config = Config {
+            root: Some(temp.join("custom")),
+            ..Config::default()
+        };
+        assert_eq!(initial_root(&base, &config, &install), temp.join("custom"));
+        let config = Config {
+            pending: Some(temp.join("pending")),
+            ..Config::default()
+        };
+        assert_eq!(
+            initial_root(&temp.join("empty"), &config, &install),
+            temp.join("empty")
+        );
+        fs::create_dir_all(&install).unwrap();
+        prepare_new_root(&install.join("LiteasyData")).unwrap();
+        assert_eq!(
+            fs::read_dir(install.join("LiteasyData")).unwrap().count(),
+            0
+        );
+        fs::remove_dir_all(temp).unwrap();
+    }
     fn fixture() -> PathBuf {
         let path = std::env::temp_dir().join(format!(
             "liteasy-data-root-{}-{}",

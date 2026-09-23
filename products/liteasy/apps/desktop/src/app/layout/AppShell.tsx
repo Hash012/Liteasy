@@ -1,4 +1,7 @@
 import { useWebDavSyncController } from "../controllers/useWebDavSyncController";
+import { useReadingLibraryController } from "../controllers/useReadingLibraryController";
+import { ReadingLibrarySurface } from "../features/reading-library/ReadingLibrarySurface";
+import { ResourceLocationButton } from "../features/resource-filesystem/ResourceLocationButton";
 import { artifactResourceScope } from "../features/resource-filesystem/artifactResourceProvider";
 import { paperCitationOpenRequest } from "../features/paper-anchors/paperAnchorEntity";
 import { useAssistantContextCatalog } from "../controllers/useAssistantContextCatalog";
@@ -1072,6 +1075,7 @@ export function AppShell({
     getApi: () => objectAgentApiRef.current!,
     readPaperBytes: loadPaperPdfBytes,
     listLegacyArtifacts: () => artifactResultClientRef.current!.list(),
+    getArtifactTitles: () => artifactCatalog,
     openLegacyArtifact: (id) => artifactWorkflow.actions.openArtifact(id),
     getPapers: () => workspaceStoreRef.current.getState().papers,
     getSettings: () => settingsStoreRef.current.getState(),
@@ -1115,6 +1119,13 @@ export function AppShell({
     objects: objectWorkbench.objects,
     port: objectWorkbench.port,
     repository: objectWorkbench.repository
+  });
+  const readingLibrary = useReadingLibraryController({
+    scopeId: objectWorkbench.repository.scopeId,
+    papers: workspaceState.papers,
+    enabled: Boolean(dock.findItemRegion("reading-library")),
+    importPdfs: (files) => workspaceActions.addDroppedPdfFiles(files),
+    openPaper: openPaperInReader
   });
   const artifactSessionNavigation = useArtifactSessionNavigationController({
     tasks: artifactTasks, scopeId: assistantScopeId,
@@ -1216,6 +1227,7 @@ export function AppShell({
     recommendationTransport,
     recommendationsEnabled: settingsState["network.recommendation.enabled"],
     recommendationSortMode: settingsState["network.recommendation.sort_mode"],
+    recommendationStyle: settingsState["network.recommendation.style"],
     personalizationEnabled: settingsState["profile.enabled"],
     personalizationVersion: profileActions.personalizationVersion,
     researchProfile: settingsState["profile.enabled"]
@@ -1664,6 +1676,7 @@ export function AppShell({
     onAddExternalPdf: externalPapers.promoteExternalPaperToLibrary,
     onClearProfile: profileActions.openClearProfileConfirm,
     onClearRecommendations: knowledgeSync.actions.clearRecommendationCache,
+    onRefreshRecommendations: knowledgeSync.actions.refreshRecommendations,
     onDeleteArtifact: deleteArtifact,
     onDismissRecommendation: async (recommendation) => {
       await knowledgeSync.actions.dismissRecommendation(recommendation);
@@ -1772,6 +1785,11 @@ export function AppShell({
     recommendationPending,
     recommendationStatus,
     readNotificationIds,
+    recommendationStyle: settingsState["network.recommendation.style"],
+    onRecommendationStyleChange: (style) => {
+      settingsStoreRef.current.apply({ intent: "update_setting", target: "network.recommendation.style", value: style });
+      setSettingsState(cloneSettingsState(settingsStoreRef.current.getState()));
+    },
     selectedPaperIds: workspaceState.selectedPaperIds,
     selectionLocked: workspaceState.selectionLocked,
     settings: settingsState,
@@ -1916,6 +1934,13 @@ export function AppShell({
   }
 
   function renderDockItem(itemId: DockItemId, regionId: DockRegionId) {
+    if (itemId === "reading-library") return <ReadingLibrarySurface
+      key={objectWorkbench.repository.scopeId}
+      entries={readingLibrary.entries} active={readingLibrary.active} pending={readingLibrary.pending}
+      message={readingLibrary.message} scopeId={objectWorkbench.repository.scopeId}
+      onImportFiles={readingLibrary.importFiles} onOpen={readingLibrary.open} onCloseReader={readingLibrary.closeReader}
+      onMetadataChange={readingLibrary.updateMetadata} onExport={readingLibrary.exportFile} onRemove={readingLibrary.remove}
+      renderLocation={(entry) => <ResourceLocationButton target={readingLibrary.target(entry)} />} />;
     if (itemId === "help") return <HelpPanel model={help.model} />;
     if (isLeftRailDockItem(itemId)) {
       return <LeftPane {...leftPaneProps} leftRailView={itemId} />;
@@ -2298,6 +2323,9 @@ export function AppShell({
             onToggleRight={() => paneLayout.setCollapsed("right", !paneLayout.collapsed.right)}
           /></>}
           activeView={leftRail.leftRailView}
+          onOpenReadingLibrary={() => workbenchNavigation.open("reading-library")}
+          readingLibraryOpen={workbenchNavigation.isVisible("reading-library")}
+          isViewVisible={workbenchNavigation.isVisible}
           accountSessionAvailable={accountSession !== null}
           onSelectView={(view) => {
             openDockedLeftRailView(view);

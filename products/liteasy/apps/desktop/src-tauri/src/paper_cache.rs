@@ -29,14 +29,39 @@ fn looks_like_pdf(bytes: &[u8]) -> bool {
 }
 
 fn cache_root(app: &AppHandle) -> Result<PathBuf, String> {
-    let root = app
-        .path()
-        .app_cache_dir()
-        .map_err(|error| format!("无法确定论文缓存目录：{error}"))?
-        .join(CACHE_DIRECTORY_NAME);
+    let root = crate::data_location::root(app)?.join(CACHE_DIRECTORY_NAME);
     fs::create_dir_all(&root).map_err(|error| format!("无法创建论文缓存目录：{error}"))?;
     root.canonicalize()
         .map_err(|error| format!("无法访问论文缓存目录：{error}"))
+}
+
+/// New downloads follow the configured data root. Old cached links remain readable.
+pub(crate) fn cache_roots(app: &AppHandle) -> Result<Vec<PathBuf>, String> {
+    let mut roots = vec![cache_root(app)?];
+    let legacy = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?
+        .join(CACHE_DIRECTORY_NAME);
+    if legacy.is_dir() {
+        let legacy = legacy.canonicalize().map_err(|e| e.to_string())?;
+        if !roots.contains(&legacy) {
+            roots.push(legacy);
+        }
+    }
+    Ok(roots)
+}
+
+fn resolve_cache_path(app: &AppHandle, requested: &str) -> Result<PathBuf, String> {
+    let remapped = crate::data_location::remap_path(Path::new(requested));
+    resolve_from_cache_roots(&cache_roots(app)?, &remapped)
+}
+
+fn resolve_from_cache_roots(roots: &[PathBuf], requested: &Path) -> Result<PathBuf, String> {
+    roots
+        .iter()
+        .find_map(|root| resolve_cached_pdf(root, &requested.to_string_lossy()).ok())
+        .ok_or_else(|| "找不到缓存 PDF，或文件不属于论文缓存目录。".into())
 }
 
 fn resolve_cached_pdf(root: &Path, requested_path: &str) -> Result<PathBuf, String> {
@@ -93,8 +118,7 @@ pub fn cache_external_pdf(
 
 #[tauri::command]
 pub fn read_cached_pdf(app: AppHandle, cache_path: String) -> Result<Vec<u8>, String> {
-    let root = cache_root(&app)?;
-    let source = resolve_cached_pdf(&root, &cache_path)?;
+    let source = resolve_cache_path(&app, &cache_path)?;
     let size = fs::metadata(&source)
         .map_err(|error| format!("无法读取缓存 PDF 信息：{error}"))?
         .len();
@@ -115,8 +139,7 @@ pub fn promote_cached_pdf_to_library(
     cache_path: String,
     file_name: String,
 ) -> Result<String, String> {
-    let root = cache_root(&app)?;
-    let source = resolve_cached_pdf(&root, &cache_path)?;
+    let source = resolve_cache_path(&app, &cache_path)?;
     let papers = library_papers_directory(&app)?;
     let target = unique_pdf_target(&papers, &file_name)?;
     move_file_across_volumes(&source, &target)?;
@@ -125,21 +148,23 @@ pub fn promote_cached_pdf_to_library(
 
 #[tauri::command]
 pub fn paper_cache_usage(app: AppHandle) -> Result<PaperCacheUsage, String> {
-    let root = cache_root(&app)?;
     let mut usage = PaperCacheUsage {
         byte_length: 0,
         file_count: 0,
     };
-    for entry in fs::read_dir(&root).map_err(|error| format!("无法读取论文缓存目录：{error}"))?
-    {
-        let entry = entry.map_err(|error| error.to_string())?;
-        if entry
-            .file_type()
-            .map_err(|error| error.to_string())?
-            .is_file()
+    for root in cache_roots(&app)? {
+        for entry in
+            fs::read_dir(&root).map_err(|error| format!("无法读取论文缓存目录：{error}"))?
         {
-            usage.byte_length += entry.metadata().map(|data| data.len()).unwrap_or(0);
-            usage.file_count += 1;
+            let entry = entry.map_err(|error| error.to_string())?;
+            if entry
+                .file_type()
+                .map_err(|error| error.to_string())?
+                .is_file()
+            {
+                usage.byte_length += entry.metadata().map(|data| data.len()).unwrap_or(0);
+                usage.file_count += 1;
+            }
         }
     }
     Ok(usage)
@@ -147,25 +172,27 @@ pub fn paper_cache_usage(app: AppHandle) -> Result<PaperCacheUsage, String> {
 
 #[tauri::command]
 pub fn clear_paper_cache(app: AppHandle) -> Result<PaperCacheUsage, String> {
-    let root = cache_root(&app)?;
     let mut removed = PaperCacheUsage {
         byte_length: 0,
         file_count: 0,
     };
-    for entry in fs::read_dir(&root).map_err(|error| format!("无法读取论文缓存目录：{error}"))?
-    {
-        let entry = entry.map_err(|error| error.to_string())?;
-        if !entry
-            .file_type()
-            .map_err(|error| error.to_string())?
-            .is_file()
+    for root in cache_roots(&app)? {
+        for entry in
+            fs::read_dir(&root).map_err(|error| format!("无法读取论文缓存目录：{error}"))?
         {
-            continue;
-        }
-        let size = entry.metadata().map(|data| data.len()).unwrap_or(0);
-        if fs::remove_file(entry.path()).is_ok() {
-            removed.byte_length += size;
-            removed.file_count += 1;
+            let entry = entry.map_err(|error| error.to_string())?;
+            if !entry
+                .file_type()
+                .map_err(|error| error.to_string())?
+                .is_file()
+            {
+                continue;
+            }
+            let size = entry.metadata().map(|data| data.len()).unwrap_or(0);
+            if fs::remove_file(entry.path()).is_ok() {
+                removed.byte_length += size;
+                removed.file_count += 1;
+            }
         }
     }
     Ok(removed)
@@ -174,6 +201,31 @@ pub fn clear_paper_cache(app: AppHandle) -> Result<PaperCacheUsage, String> {
 #[cfg(test)]
 mod tests {
     use super::{content_hash_file_name, looks_like_pdf};
+    #[test]
+    fn reads_current_and_legacy_caches_without_allowing_other_locations() {
+        use super::*;
+        let base = std::env::temp_dir().join(format!(
+            "liteasy-cache-roots-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(base.join("current")).unwrap();
+        fs::create_dir_all(base.join("legacy")).unwrap();
+        let base = base.canonicalize().unwrap();
+        let roots = vec![base.join("current"), base.join("legacy")];
+        for root in &roots {
+            let file = root.join("paper.pdf");
+            fs::write(&file, b"%PDF-1.7").unwrap();
+            assert_eq!(resolve_from_cache_roots(&roots, &file).unwrap(), file);
+        }
+        fs::write(base.join("outside.pdf"), b"%PDF-1.7").unwrap();
+        assert!(resolve_from_cache_roots(&roots, &base.join("outside.pdf")).is_err());
+        assert!(resolve_from_cache_roots(&roots, &base.join("missing.pdf")).is_err());
+        fs::remove_dir_all(base).unwrap();
+    }
 
     const VALID_HASH: &str = "0123456789abcdef0123456789ABCDEF0123456789abcdef0123456789abcdef";
 

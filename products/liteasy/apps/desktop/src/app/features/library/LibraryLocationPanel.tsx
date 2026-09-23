@@ -1,3 +1,4 @@
+import { displayPath } from "../resource-filesystem/displayPath";
 import { useEffect, useState } from "react";
 import { Button, Input } from "@fluentui/react-components";
 import { FolderOpenRegular, SaveRegular } from "@fluentui/react-icons";
@@ -68,7 +69,7 @@ export function LibraryLocationPanel({
     try {
       const backupPath = await onBackup(destinationDirectory);
       setBackupDirectory("");
-      setMessage(`完整备份已保存到 ${backupPath}。`);
+      setMessage(`完整备份已保存到 ${displayPath(backupPath)}。`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "文献库备份失败。");
     } finally {
@@ -99,8 +100,8 @@ export function LibraryLocationPanel({
     <div aria-label="本地文献库位置" className="library-location-panel">
       <p className="library-location-current">
         <span className="library-location-label">当前目录</span>
-        <span className="library-location-path" title={rootPath ?? ""}>
-          {rootPath || "尚未确定"}
+        <span className="library-location-path" title={displayPath(rootPath ?? "")}>
+          {displayPath(rootPath || "尚未确定")}
         </span>
       </p>
       {onOpenInFileManager ? (
@@ -125,7 +126,7 @@ export function LibraryLocationPanel({
           </p>
           {legacyRoots.map((path) => (
             <div className="library-location-current" key={path}>
-              <span className="library-location-path" title={path}>{path}</span>
+              <span className="library-location-path" title={displayPath(path)}>{displayPath(path)}</span>
               <Button
                 appearance="secondary"
                 disabled={moving}

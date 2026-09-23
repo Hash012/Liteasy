@@ -3445,6 +3445,54 @@ test("rejects malformed recommendation research profiles before retrieval", asyn
   assert.equal(response.json.code, "research_profile_topics_invalid");
 });
 
+test("rejects unsupported recommendation styles before calling any live provider", async () => {
+  let calls = 0;
+  const handler = createDevCloudRequestHandler({
+    searchExternalKnowledge: async () => { calls += 1; return { sources: [] }; }
+  });
+  for (const style of ["unknown", null, {}, "CLASSIC"]) {
+    const response = await invokeHandler({
+      handler,
+      method: "POST",
+      headers: { "content-type": "application/json", host: "127.0.0.1:8787" },
+      body: JSON.stringify({ style, sessionId: "test-session-1", selectedDocuments: [{ id: "paper-1", title: "Target Paper" }] }),
+      url: "/v1/recommendations"
+    });
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.json.code, "recommendation_style_invalid");
+  }
+  assert.equal(calls, 0);
+});
+
+test("propagates recommendation styles through retrieval, ranking and candidate metadata storage", async () => {
+  const requests = [];
+  const currentYear = new Date().getUTCFullYear();
+  const handler = createDevCloudRequestHandler({
+    searchExternalKnowledge: async (body) => {
+      requests.push(body);
+      return { sources: [
+        { id: "openalex:W910", provider: "openalex", title: "Classic retrieval foundations", relevance: 0.9, year: currentYear - 12, citationCount: 2500, url: "https://openalex.org/W910" },
+        { id: "openalex:W911", provider: "openalex", title: "Frontier neural advances", relevance: 0.9, year: currentYear, citationCount: 2, url: "https://openalex.org/W911" }
+      ] };
+    }
+  });
+  for (const [style, expectedId] of [["frontier", "openalex:W911"], ["classic", "openalex:W910"]]) {
+    const response = await invokeHandler({
+      handler,
+      method: "POST",
+      headers: { "content-type": "application/json", host: "127.0.0.1:8787" },
+      body: JSON.stringify({ style, sessionId: "test-session-1", selectedDocuments: [{ id: "paper-1", title: "Target Paper" }] }),
+      url: "/v1/recommendations"
+    });
+    assert.equal(response.statusCode, 200, JSON.stringify(response.json));
+    assert.equal(requests.at(-1).recommendationStyle, style);
+    assert.equal(response.json.recommendations[0].canonicalId, expectedId);
+    assert.ok(response.json.recommendations.every((candidate) => candidate.rankingStyle === style));
+  }
+  const stored = listRecommendationCandidateSources(testOwnerKey("test-session-1"), "Target Paper");
+  assert.equal(stored.find((candidate) => candidate.id === "openalex:W910").citationCount, 2500);
+});
+
 test("completes an implicit recommendation profile after behavior personalization", async () => {
   const handler = createDevCloudRequestHandler({
     crossrefEnabled: false,
@@ -3577,6 +3625,8 @@ test("returns provenance-bearing live reading candidates instead of demo recomme
       version: "recommendation-identity/v2"
     },
     publishedYear: 2025,
+    rankingStyle: "balanced",
+    styleScore: 1,
     qualityGate: {
       checks: {
         canonicalIdentity: true,
@@ -3947,6 +3997,7 @@ test("preserves an arXiv-declared DOI as bounded publication-link evidence", asy
       sessionId: "publication-link-user"
     }),
     handler: createDevCloudRequestHandler({
+      expandedSourcesEnabled: false,
       arxivEnabled: true,
       arxivTransport: async () => ({
         ok: true,

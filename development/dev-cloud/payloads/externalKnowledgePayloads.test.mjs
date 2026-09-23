@@ -101,6 +101,55 @@ function paper(paperId, title) {
   };
 }
 
+test("Crossref discovery applies style windows and keeps real publication and citation metadata", async () => {
+  for (const style of ["balanced", "frontier", "classic"]) {
+    let requested;
+    const payload = await searchExternalKnowledge({
+      limit: 8,
+      query: "neural retrieval",
+      recommendationStyle: style
+    }, {
+      openAlexEnabled: false,
+      crossrefEnabled: true,
+      crossrefTransport: async (url) => {
+        requested = new URL(url);
+        return response({ message: { items: [{
+          DOI: "10.1234/retrieval",
+          title: ["Neural retrieval methods"],
+          "published-online": { "date-parts": [[2024, 5, 17]] },
+          "is-referenced-by-count": 53
+        }] } });
+      }
+    });
+    assert.equal(requested.searchParams.get("query.bibliographic"), "neural retrieval");
+    if (style === "balanced") assert.equal(requested.searchParams.has("filter"), false);
+    if (style === "frontier") assert.match(requested.searchParams.get("filter"), /^from-pub-date:\d{4}-\d{2}-\d{2}$/);
+    if (style === "classic") {
+      assert.match(requested.searchParams.get("filter"), /^until-pub-date:\d{4}-\d{2}-\d{2}$/);
+      assert.equal(requested.searchParams.get("sort"), "is-referenced-by-count");
+      assert.equal(requested.searchParams.get("order"), "desc");
+    }
+    assert.equal(payload.sources[0].year, 2024);
+    assert.equal(payload.sources[0].publishedAt, "2024-05-17");
+    assert.equal(payload.sources[0].citationCount, 53);
+  }
+});
+
+test("partial and absent Crossref dates and citation counts remain unknown", async () => {
+  const payload = await searchExternalKnowledge({ query: "neural retrieval" }, {
+    openAlexEnabled: false,
+    crossrefEnabled: true,
+    crossrefTransport: async () => response({ message: { items: [{
+      DOI: "10.1234/partial",
+      title: ["Neural retrieval methods"],
+      issued: { "date-parts": [[2020]] }
+    }] } })
+  });
+  assert.equal(payload.sources[0].year, 2020);
+  assert.equal("publishedAt" in payload.sources[0], false);
+  assert.equal("citationCount" in payload.sources[0], false);
+});
+
 test("a contact email cannot replace the deployment-owned OpenAlex key", async () => {
   let contacted = false;
   await assert.rejects(

@@ -29,6 +29,8 @@ function candidateRecord(candidate, existing, now) {
   return {
     ...(typeof candidate.abstract === "string" ? { abstract: candidate.abstract } : {}),
     ...(Array.isArray(candidate.authors) ? { authors: candidate.authors } : {}),
+    ...(Number.isSafeInteger(candidate.citationCount) && candidate.citationCount >= 0 ? { citationCount: candidate.citationCount } : {}),
+    ...(typeof candidate.publishedAt === "string" ? { publishedAt: candidate.publishedAt } : {}),
     canonicalId: candidate.canonicalId,
     candidateId: candidate.id,
     discoveryCount: (Number.isInteger(existing?.discoveryCount) ? existing.discoveryCount : 0) + 1,
@@ -157,6 +159,8 @@ export function createRecommendationCandidateRepository(database) {
             : {}),
           discoveredAt: candidate.lastDiscoveredAt,
           ...(candidate.identityResolution?.doi ? { doi: candidate.identityResolution.doi } : {}),
+          ...(Number.isSafeInteger(candidate.citationCount) && candidate.citationCount >= 0 ? { citationCount: candidate.citationCount } : {}),
+          ...(typeof candidate.publishedAt === "string" ? { publishedAt: candidate.publishedAt } : {}),
           id: candidate.canonicalId,
           ...(typeof candidate.fullTextUrl === "string" ? { fullTextUrl: candidate.fullTextUrl } : {}),
           ...(candidate.openAccessAvailable === true ? { openAccessAvailable: true } : {}),

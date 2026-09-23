@@ -52,6 +52,7 @@ import {
   buildLiveRecommendationPayload,
   normalizeRecommendationResearchProfile
 } from "./payloads/recommendationPayloads.mjs";
+import { normalizeRecommendationStyle, rankRecommendationStyle } from "./payloads/recommendationStyle.mjs";
 import { applyRecommendationEmbeddingScores } from "./payloads/recommendationEmbeddingPayloads.mjs";
 import { applyRecommendationExternalReranker } from "./payloads/recommendationRerankerPayloads.mjs";
 import { createAccountRepository } from "./db/accountRepository.mjs";
@@ -1665,6 +1666,14 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       if (!authorizeAccountScopedBody(request, response, body, authService)) {
         return;
       }
+      const styleResult = normalizeRecommendationStyle(body.style);
+      if (!styleResult.ok) {
+        writeJson(request, response, 400, {
+          error: styleResult.error,
+          message: "推荐风格无效。"
+        });
+        return;
+      }
       const personalizationPreferences =
         personalizationRepository.getRecommendationPreferences(body.sessionId);
       const requestedProfileResult = normalizeRecommendationResearchProfile(body.researchProfile);
@@ -1747,7 +1756,8 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       try {
         const sourceGroups = await Promise.all(selectedDocuments.map(async (document) => {
           const result = await externalKnowledgeSearch({
-            limit: 5,
+            limit: styleResult.value === "balanced" ? 5 : 8,
+            recommendationStyle: styleResult.value,
             query: document.title,
             targetPaperTitle: document.title
           }, retrievalOptions);
@@ -1767,7 +1777,8 @@ export function createDevCloudRequestHandler(customConfig = {}) {
           : "";
         if (profileQuery) {
           const profileSources = await externalKnowledgeSearch({
-            limit: 5,
+            limit: styleResult.value === "balanced" ? 5 : 8,
+            recommendationStyle: styleResult.value,
             query: profileQuery,
             targetPaperTitle: profileQuery
           }, retrievalOptions);
@@ -1780,7 +1791,8 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         // tag-driven：每个 top tag 一组检索，结果携带 surfacing tag 溯源。
         const tagGroups = await Promise.all(topTags.map(async (tag) => {
           const result = await externalKnowledgeSearch({
-            limit: 5,
+            limit: styleResult.value === "balanced" ? 5 : 8,
+            recommendationStyle: styleResult.value,
             query: tag,
             targetPaperTitle: tag
           }, retrievalOptions);
@@ -1819,14 +1831,18 @@ export function createDevCloudRequestHandler(customConfig = {}) {
             transport: customConfig.recommendationRerankerTransport
           }
         );
+        const recommendations = rankRecommendationStyle(
+          externalReranker.recommendations,
+          styleResult.value
+        );
         upsertRecommendationCandidates(
           body.sessionId,
-          externalReranker.recommendations.filter((candidate) => candidate.sourceKind === "live")
+          recommendations.filter((candidate) => candidate.sourceKind === "live")
         );
         writeJson(request, response, 200, withoutRecommendationPrivateFields(withoutSuppressedRecommendations({
           ...payload,
           externalReranker: externalReranker.audit,
-          recommendations: externalReranker.recommendations,
+          recommendations,
           semanticRetrieval: semanticRetrieval.audit
         }, personalizationPreferences)));
       } catch (error) {

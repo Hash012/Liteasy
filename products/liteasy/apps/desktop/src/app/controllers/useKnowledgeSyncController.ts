@@ -1,3 +1,4 @@
+import type { RecommendationRuntimeInput } from "../features/recommendations/recommendationRuntime";
 import { useDocumentMetadataSync } from "../features/metadata/useDocumentMetadataSync";
 import type { DocumentMetadataTransport } from "../features/metadata/documentMetadataClient";
 import { useRecommendations } from "../features/recommendations/useRecommendations";
@@ -8,6 +9,7 @@ import type { SettingsState } from "../features/settings/settings.types";
 import type { Paper } from "../features/workspace/workspace.types";
 import type {
   RecommendationItem,
+  RecommendationStyle,
   RecommendationResearchProfile
 } from "../features/recommendations/recommendation.types";
 import type { RecommendationCacheScope } from "../features/recommendations/recommendationCache.types";
@@ -32,17 +34,12 @@ type UseKnowledgeSyncControllerInput = {
   recommendationCacheTransport?: RecommendationCacheTransport;
   recommendationFeedbackTransport?: RecommendationFeedbackTransport;
   recommendationGeneratorDeps?: {
-    fetch: (input: {
-      controlPlaneEndpoint: string;
-      researchProfile?: RecommendationResearchProfile;
-      selectedDocuments: Array<{ id: string; title: string }>;
-      sessionId: string;
-      sortMode: SettingsState["network.recommendation.sort_mode"];
-    }) => Promise<RecommendationItem[]>;
+    fetch: (input: RecommendationRuntimeInput) => Promise<RecommendationItem[]>;
   };
   recommendationTransport?: RecommendationTransport;
   recommendationsEnabled: boolean;
   recommendationSortMode: SettingsState["network.recommendation.sort_mode"];
+  recommendationStyle?: RecommendationStyle;
   personalizationVersion?: number;
   personalizationEnabled: boolean;
   researchProfile?: RecommendationResearchProfile;
@@ -63,6 +60,7 @@ export function useKnowledgeSyncController({
   recommendationTransport,
   recommendationsEnabled,
   recommendationSortMode,
+  recommendationStyle,
   personalizationVersion,
   personalizationEnabled,
   researchProfile,
@@ -80,6 +78,7 @@ export function useKnowledgeSyncController({
     recommendationTransport,
     recommendationsEnabled,
     recommendationSortMode,
+    recommendationStyle,
     personalizationVersion,
     researchProfile,
     selectedPapers,
@@ -98,6 +97,7 @@ export function useKnowledgeSyncController({
   return {
     actions: {
       clearRecommendationCache: recommendations.clearRecommendationCache,
+      refreshRecommendations: recommendations.refreshRecommendations,
       recordRecommendationSaved: (recommendation: RecommendationItem) =>
         recommendations.recordRecommendationFeedback(recommendation, "saved"),
       dismissRecommendation: (recommendation: RecommendationItem) =>

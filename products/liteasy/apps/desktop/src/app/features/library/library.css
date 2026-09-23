@@ -1129,3 +1129,20 @@
 .reader-reading-surface { min-width: 0; min-height: 0; overflow: auto; }
 .reader-service-error { padding: 8px; margin: 0; }
 .settings-service-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.recommendation-style-control {
+  margin: 4px 0 10px;
+}
+
+.library-recommendation-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 4px 0;
+  color: var(--colorNeutralForeground2);
+  font-size: calc(11px * var(--app-font-ratio, 1));
+}
+
+.library-recommendation-metadata a {
+  color: var(--colorBrandForegroundLink);
+}

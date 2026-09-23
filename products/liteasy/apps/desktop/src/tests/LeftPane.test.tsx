@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { OrganizationSummary } from "../app/features/organization/organization.types";
 import { createSeededSettingsStore } from "../app/features/settings/settingsStateHelpers";
 import type { CloudLibraryTree } from "../app/features/library/cloudLibraryStorageClient";
 import type { ArtifactExportRecord } from "../app/features/artifacts/artifactExport.types";
+import type { RecommendationItem } from "../app/features/recommendations/recommendation.types";
 import { LeftPane, type LeftPaneProps } from "../app/layout/LeftPane";
 
 const cloudTrees = vi.hoisted(() => ({
@@ -159,6 +160,97 @@ beforeEach(() => {
 });
 
 describe("LeftPane", () => {
+  test("keeps cached recommendations visible while refreshing and forwards manual refresh", async () => {
+    const user = userEvent.setup();
+    const onRefreshRecommendations = vi.fn();
+    const props = createProps({
+      leftRailView: "library",
+      recommendationPending: true,
+      onRefreshRecommendations,
+      recommendationItems: [{
+        id: "cached-paper", title: "Cached attention paper", discoveredAt: "2026-09-21T00:00:00Z",
+        relatedDocumentTitle: "Attention methods", relevanceBand: "high", relevanceScore: 0.8,
+        reason: "与当前文献主题相关。", source: "Crossref", sourceKind: "cache"
+      }]
+    });
+    const { rerender } = render(<LeftPane {...props} />);
+    const panel = within(screen.getByRole("region", { name: "关联推荐" }));
+    expect(panel.getByText("Cached attention paper")).toBeInTheDocument();
+    expect(panel.getByRole("status")).toHaveTextContent("正在更新推荐，仍可浏览已有结果…");
+    expect(panel.getByRole("button", { name: "刷新推荐" })).toBeDisabled();
+
+    rerender(<LeftPane {...props} recommendationPending={false} />);
+    expect(panel.queryByRole("status")).not.toBeInTheDocument();
+    await user.click(panel.getByRole("button", { name: "刷新推荐" }));
+    expect(onRefreshRecommendations).toHaveBeenCalledOnce();
+
+    rerender(<LeftPane {...props} accountSession={null} recommendationPending={false} />);
+    expect(panel.getByRole("button", { name: "刷新推荐" })).toBeDisabled();
+    expect(panel.queryByText("Cached attention paper")).not.toBeInTheDocument();
+  });
+
+  test("announces first recommendation loading without an empty-result message", async () => {
+    await act(async () => {
+      render(<LeftPane {...createProps({ leftRailView: "library", recommendationPending: true })} />);
+    });
+    const panel = within(screen.getByRole("region", { name: "关联推荐" }));
+    expect(panel.getByRole("status")).toHaveTextContent("正在获取推荐…");
+    expect(panel.queryByText("暂无关联推荐")).not.toBeInTheDocument();
+  });
+
+  test.each([
+    { publishedAt: "2024-02-29T00:00:00Z", publishedYear: 2024, citationCount: 0, dateLabel: "2024-02-29", citationLabel: "引用 0" },
+    { publishedAt: "2024-02-30", publishedYear: 2024, citationCount: -1, dateLabel: "2024 年", citationLabel: null },
+    { publishedAt: "invalid-date", publishedYear: Number.NaN, citationCount: Number.NaN, dateLabel: null, citationLabel: null }
+  ])("uses publication metadata safely: $publishedAt", async ({ dateLabel, citationLabel, ...metadata }) => {
+    const paper: RecommendationItem = {
+      id: "dated-paper", title: "Publication date paper", discoveredAt: "2026-09-21T00:00:00Z",
+      relatedDocumentTitle: "Attention methods", relevanceBand: "high", relevanceScore: 0.8,
+      reason: "与当前文献主题相关。", source: "Crossref", sourceKind: "live", ...metadata
+    };
+    await act(async () => {
+      render(<LeftPane {...createProps({ leftRailView: "library", recommendationItems: [paper] })} />);
+    });
+    const panel = within(screen.getByRole("region", { name: "关联推荐" }));
+    if (dateLabel) expect(panel.getByText(dateLabel)).toBeInTheDocument();
+    else expect(panel.queryByText(/年|invalid-date/)).not.toBeInTheDocument();
+    if (citationLabel) expect(panel.getByText(citationLabel)).toBeInTheDocument();
+    else expect(panel.queryByText(/^引用 /)).not.toBeInTheDocument();
+    expect(panel.queryByText(/2026-09-21|NaN/)).not.toBeInTheDocument();
+  });
+
+  test("exposes recommendation styles beside papers with publication and citation context", async () => {
+    const user = userEvent.setup();
+    const onRecommendationStyleChange = vi.fn();
+    render(<LeftPane {...createProps({
+      leftRailView: "library",
+      onRecommendationStyleChange,
+      recommendationStyle: "balanced",
+      recommendationStatus: "ready",
+      recommendationItems: [{
+        id: "classic-paper",
+        title: "Foundations of attention",
+        publishedYear: 2017,
+        citationCount: 1200,
+        discoveredAt: "2026-09-21T00:00:00.000Z",
+        relatedDocumentTitle: "Attention methods",
+        relevanceBand: "high",
+        relevanceScore: 0.8,
+        reason: "主题相关，并有长期引用积累。",
+        source: "Crossref",
+        sourceKind: "live",
+        sourceUrl: "https://doi.org/10.1234/example"
+      }]
+    })} />);
+    const panel = within(screen.getByRole("region", { name: "关联推荐" }));
+    await user.selectOptions(panel.getByRole("combobox", { name: "推荐风格" }), "classic");
+    expect(onRecommendationStyleChange).toHaveBeenCalledWith("classic");
+    expect(panel.getByText("2017 年")).toBeInTheDocument();
+    expect(panel.getByText("引用 1,200")).toBeInTheDocument();
+    expect(panel.getByText("主题相关，并有长期引用积累。")).toBeInTheDocument();
+    expect(panel.getByRole("link", { name: "Crossref" })).toHaveAttribute("href", "https://doi.org/10.1234/example");
+  });
+
   test("uses task-specific pane headers", () => {
     const { rerender } = render(<LeftPane {...createProps({ leftRailView: "library" })} />);
     expect(screen.getByText("文献库", { selector: ".pane-header" })).toBeInTheDocument();

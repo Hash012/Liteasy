@@ -197,6 +197,7 @@ function errorMessage(code) {
     recommendation_cache_scope_invalid: "The recommendation cache scope is invalid. Refresh and retry.",
     recommendation_documents_invalid: "Select up to three valid documents and retry.",
     recommendation_feedback_invalid: "The recommendation feedback is invalid.",
+    recommendation_style_invalid: "Select a valid recommendation style and retry.",
     recommendation_provider_response_invalid: "The literature provider returned an invalid response. Retry later.",
     recommendation_provider_timeout: "The literature provider timed out. Retry later.",
     recommendation_provider_unavailable: "The literature provider is temporarily unavailable. Retry later.",

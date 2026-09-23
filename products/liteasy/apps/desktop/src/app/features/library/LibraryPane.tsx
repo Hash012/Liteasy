@@ -55,8 +55,10 @@ import type { ImportJob } from "../import/import.types";
 import type { PaperResourceKind } from "../import/paperResource.types";
 import type {
   RecommendationItem,
-  RecommendationStatus
+  RecommendationStatus,
+  RecommendationStyle
 } from "../recommendations/recommendation.types";
+import { RecommendationStyleControl } from "../recommendations/RecommendationStyleControl";
 import type { Paper, WorkspaceSourceType } from "../workspace/workspace.types";
 import {
   createCloudLibraryStorageClient,
@@ -134,6 +136,8 @@ type LibraryPaneProps = {
   recommendationMessage: string;
   recommendationPending: boolean;
   recommendationStatus: RecommendationStatus;
+  recommendationStyle?: RecommendationStyle;
+  onRecommendationStyleChange?: (style: RecommendationStyle) => void;
   selectedPaperIds: string[];
   selectionLocked: boolean;
   workspaceLabel: string;
@@ -141,6 +145,7 @@ type LibraryPaneProps = {
   onAddDroppedPdfFiles?: (files: File[], targetFolderPath?: string) => void | Promise<void>;
   onAddExternalPdf?: (item: ExternalPdfDragPayload) => void | Promise<void>;
   onClearRecommendations: () => void;
+  onRefreshRecommendations?: () => void;
   onDismissRecommendation: (recommendation: RecommendationItem) => void;
   onImportZoteroDirectory?: (files: File[]) => string | Promise<string>;
   onLoginRequired?: () => void;
@@ -214,6 +219,19 @@ type CreateFolderTarget = {
 
 const resourceTransferMimeType = "application/x-liteasy-library-resource-v2";
 const sectionIds: LibraryResourceArea[] = ["local", "collection", "recommendation", "organization"];
+
+function recommendationPublicationLabel(recommendation: RecommendationItem) {
+  const publishedAt = recommendation.publishedAt;
+  if (typeof publishedAt === "string" && /^\d{4}-\d{2}-\d{2}(?:T|$)/.test(publishedAt)) {
+    const date = publishedAt.slice(0, 10);
+    const parsed = new Date(`${date}T00:00:00.000Z`);
+    if (Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date) return date;
+  }
+  const year = recommendation.publishedYear;
+  return typeof year === "number" && Number.isInteger(year) && year >= 1000 && year <= 9999
+    ? `${year} 年`
+    : null;
+}
 
 export function personalLibraryScopeId(accountScopeId?: string) {
   if (!accountScopeId) return "";
@@ -422,6 +440,7 @@ export function LibraryPane({
   loadLegacyLibraryRoots,
   onAddDroppedPdfFiles,
   onClearRecommendations,
+  onRefreshRecommendations,
   onDismissRecommendation,
   onImportZoteroDirectory,
   onLoginRequired,
@@ -448,6 +467,8 @@ export function LibraryPane({
   recommendationMessage,
   recommendationPending,
   recommendationStatus,
+  recommendationStyle = "balanced",
+  onRecommendationStyleChange,
   selectedPaperIds,
   selectionLocked
 }: LibraryPaneProps) {
@@ -1403,7 +1424,10 @@ export function LibraryPane({
 
       <section aria-label="关联推荐" className="library-section">
         <SectionHeader
-          actions={iconAction("清除推荐缓存", <DeleteDismissRegular />, onClearRecommendations, !accountSessionAvailable)}
+          actions={<>
+            {iconAction("刷新推荐", <ArrowClockwiseRegular />, () => onRefreshRecommendations?.(), !accountSessionAvailable || recommendationPending || !onRefreshRecommendations)}
+            {iconAction("清除推荐缓存", <DeleteDismissRegular />, onClearRecommendations, !accountSessionAvailable)}
+          </>}
           count={recommendationItems.length}
           expanded={!collapsedSections.includes("recommendation")}
           icon={<LightbulbRegular />}
@@ -1412,12 +1436,21 @@ export function LibraryPane({
         />
         {!collapsedSections.includes("recommendation") ? (
           <div className="library-section-content">
+            {accountSessionAvailable ? (
+              <RecommendationStyleControl
+                onChange={onRecommendationStyleChange}
+                value={recommendationStyle}
+              />
+            ) : null}
+            {accountSessionAvailable && recommendationPending ? (
+              <div className="library-recommendation-message loading" role="status">
+                {recommendationItems.length > 0 ? "正在更新推荐，仍可浏览已有结果…" : "正在获取推荐…"}
+              </div>
+            ) : null}
             {!accountSessionAvailable ? (
               <button className="library-inline-button" onClick={onLoginRequired} type="button">登录</button>
-            ) : recommendationPending ? (
-              <div className="library-empty-collection">加载中…</div>
             ) : recommendationItems.length === 0 ? (
-              <div className="library-empty-collection">{recommendationMessage || "暂无关联推荐"}</div>
+              !recommendationPending ? <div className="library-empty-collection">{recommendationMessage || "暂无关联推荐"}</div> : null
             ) : (
               <ul className="library-resource-tree">
                 {recommendationItems.map((recommendation) => (
@@ -1433,6 +1466,15 @@ export function LibraryPane({
                       <span className="library-paper-title">{recommendation.title}</span>
                       <Tooltip content="收藏" relationship="label"><Button appearance="subtle" aria-label={`收藏 ${recommendation.title}`} disabled={!collection.tree || pendingNodeIds.includes(recommendation.id)} icon={<BookmarkRegular />} onClick={() => void saveRecommendation(recommendation)} size="small" /></Tooltip>
                       <Tooltip content="不感兴趣" relationship="label"><Button appearance="subtle" aria-label={`忽略 ${recommendation.title}`} icon={<DeleteRegular />} onClick={() => onDismissRecommendation(recommendation)} size="small" /></Tooltip>
+                    </div>
+                    <div className="library-recommendation-metadata">
+                      {recommendationPublicationLabel(recommendation) ? <span>{recommendationPublicationLabel(recommendation)}</span> : null}
+                      {typeof recommendation.citationCount === "number" && Number.isSafeInteger(recommendation.citationCount) && recommendation.citationCount >= 0 ? (
+                        <span title="数据源记录的引用次数，仅供参考">引用 {recommendation.citationCount.toLocaleString("zh-CN")}</span>
+                      ) : null}
+                      {recommendation.sourceUrl && /^https?:\/\//i.test(recommendation.sourceUrl) ? (
+                        <a href={recommendation.sourceUrl} rel="noopener noreferrer" target="_blank">{recommendation.source}</a>
+                      ) : <span>{recommendation.source}</span>}
                     </div>
                     <div className="library-recommendation-reason">{recommendation.reason}</div>
                   </li>

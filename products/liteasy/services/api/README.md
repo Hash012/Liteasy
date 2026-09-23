@@ -121,6 +121,8 @@ PostgreSQL schema 的反例验证脚本位于 `scripts/verify-filesystem-invaria
 
 文献、组织、推荐和个性化路由只接受 `liteasy-desktop` Bearer token；管理路由只接受 `liteasy-admin` audience。平台角色由 PostgreSQL 授权而非信任 token 自报角色，高风险写操作和支持正文访问同时要求 `amr=mfa` 与五分钟内的 `auth_time`。支持授权最长 60 分钟，必须说明原因并精确绑定一个作用域中的一篇活动 PDF；平台管理员没有授权时不能读取正文。
 
+论文推荐支持可选 `style`（`balanced`、`frontier`、`classic`、`exploratory`），默认均衡。检索、分数契约、桌面兼容性和验证边界见[论文推荐风格](../../../../docs/engineering/paper-recommendation-styles.md)。
+
 Intuecho 的组织可见性和组织邀请使用独立内部边界。服务 token 必须是配置的 `LITEASY_IDP_INTUECHO_SERVICE_CLIENT_ID`，audience 为 `liteasy-internal`，scope 精确包含 `organization:authorize`；随后仍由本仓库实时读取组织状态、负责人、成员状态和角色。邀请者权限、目标成员冲突、事务锁、幂等结果、组织修订号和审计均由 Liteasy 决定，Intuecho 不能通过结构化消息字段自行授予组织权限。
 
 写操作要求幂等键和预期修订号或等价的受控授权标识，业务写入、幂等结果和审计事件位于同一数据库事务。审计表由数据库触发器禁止更新和删除。PDF 先流式写入私有暂存对象，服务端计算 SHA-256、大小和文件头，再从 S3 暂存对象流式发送给 `LITEASY_PDF_SCANNER_URL`；扫描请求使用部署 Bearer secret，并携带内容长度和 SHA-256。扫描响应必须是最多 16 KiB 的严格 JSON：`clean`、`contentHash`、`scanner`、`version` 四个字段缺一不可，且返回哈希必须与暂存哈希一致。只有 `clean: true` 才会进入数据库 prepare；拒绝返回稳定 422，超时、不可用、非法响应或哈希不一致返回稳定 503，且请求产生的暂存对象会被删除。

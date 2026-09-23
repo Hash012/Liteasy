@@ -1,6 +1,7 @@
 import { Button, Tooltip } from "@fluentui/react-components";
 import {
   BookRegular,
+  LibraryRegular,
   NoteRegular,
   BotRegular,
   FolderOpenRegular,
@@ -14,6 +15,8 @@ import { dockItemMimeType } from "../features/dock/DockRegion";
 import type { LeftRailView } from "./useLeftRailNavigation";
 
 type ActivityBarProps = {
+  readingLibraryOpen?: boolean;
+  onOpenReadingLibrary?: () => void;
   agentOpen?: boolean;
   notesOpen?: boolean;
   onOpenNotes?: () => void;
@@ -22,6 +25,7 @@ type ActivityBarProps = {
   onOpenHelp?: () => void;
   layoutControls?: ReactNode;
   activeView: LeftRailView;
+  isViewVisible?: (view: LeftRailView) => boolean;
   accountSessionAvailable?: boolean;
   onToggleActiveView?: (view: LeftRailView) => void;
   onSelectView: (view: LeftRailView) => void;
@@ -40,6 +44,8 @@ const activityItems: Array<{
 ];
 
 export function ActivityBar({
+  readingLibraryOpen = false,
+  onOpenReadingLibrary,
   agentOpen = false,
   notesOpen = false,
   onOpenNotes,
@@ -48,12 +54,18 @@ export function ActivityBar({
   onOpenHelp,
   layoutControls,
   activeView,
+  isViewVisible = (view) => view === activeView,
   accountSessionAvailable = true,
   onToggleActiveView,
   onSelectView,
 }: ActivityBarProps) {
   return (
     <nav aria-label="左边栏导航" className="activity-bar">
+      {onOpenReadingLibrary ? <Tooltip content="书库与元信息" positioning="after" relationship="description">
+        <Button appearance="subtle" aria-label="书库与元信息" aria-pressed={readingLibraryOpen}
+          className={`activity-button${readingLibraryOpen ? " active" : ""}`} icon={<LibraryRegular />}
+          onClick={onOpenReadingLibrary} />
+      </Tooltip> : null}
       {activityItems.map((item) => (
         <Tooltip
           content={item.label}
@@ -64,8 +76,9 @@ export function ActivityBar({
           <Button
             appearance="subtle"
             aria-label={item.label}
+            aria-pressed={isViewVisible(item.view)}
             className={
-              activeView === item.view
+              isViewVisible(item.view)
                 ? "activity-button active"
                 : "activity-button"
             }

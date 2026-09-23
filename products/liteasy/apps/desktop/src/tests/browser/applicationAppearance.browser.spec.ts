@@ -1,0 +1,38 @@
+import { expect, test } from "@playwright/test";
+
+test("appearance follows the system and an explicit choice persists across launches", async ({ page }, testInfo) => {
+  test.setTimeout(75_000);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "dark");
+  const settings = page.getByRole("navigation", { name: "左边栏导航" }).getByRole("button", { name: "设置", exact: true });
+  await settings.click();
+  const appearance = page.getByRole("radiogroup", { name: "外观", exact: true });
+  await expect(appearance.getByRole("radio", { name: "跟随系统" })).toBeChecked();
+  await expect(page.locator(".activity-bar")).toHaveCSS("background-color", "rgb(31, 31, 31)");
+  await expect(page.locator(".reader-layout-button:not(.active)").first()).toHaveCSS("background-color", "rgb(31, 31, 31)");
+  await expect(page.locator(".assistant-active-session-kind")).toHaveCSS("background-color", "rgb(23, 59, 86)");
+  await page.getByRole("combobox", { name: "界面字号", exact: true }).click();
+  const options = page.getByRole("listbox");
+  await expect(options).toBeVisible();
+  expect(await options.evaluate((element) => getComputedStyle(element).getPropertyValue("--colorNeutralForeground1").trim())).toBe("#ffffff");
+  await page.keyboard.press("Escape");
+  await appearance.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("appearance-dark.png"), fullPage: true, animations: "disabled" });
+  await appearance.getByRole("radio", { name: "浅色", exact: true }).check();
+  await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "light");
+  await expect(page.locator(".activity-bar")).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await page.screenshot({ path: testInfo.outputPath("appearance-light.png"), fullPage: true, animations: "disabled" });
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "light");
+  if (!(await appearance.isVisible())) await settings.click();
+  await expect(appearance.getByRole("radio", { name: "浅色", exact: true })).toBeChecked();
+  await appearance.getByRole("radio", { name: "跟随系统", exact: true }).check();
+  await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "dark");
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "light");
+  expect(errors).toEqual([]);
+});

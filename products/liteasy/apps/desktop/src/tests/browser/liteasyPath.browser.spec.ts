@@ -22,8 +22,18 @@ test("an imported note exposes its location and copied Liteasy Path becomes read
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(path);
   await page.keyboard.press("Escape");
   await page.getByText("通过 Liteasy Path 添加上下文", { exact: true }).click();
-  await page.getByRole("textbox", { name: "添加上下文的 Liteasy Path" }).fill(path);
-  await page.getByRole("button", { name: "读取并加入上下文" }).click();
+  const search = page.getByRole("combobox", { name: "添加上下文的 Liteasy Path" });
+  await expect(page.getByRole("option").filter({ hasText: "PathResearch.md" })).toBeVisible();
+  await search.fill("PathResearch");
+  await expect(page.getByRole("option").filter({ hasText: "PathResearch.md" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("liteasy-path-candidates.png"), fullPage: true, animations: "disabled" });
+  await page.getByRole("option").filter({ hasText: "PathResearch.md" }).click();
+  const slider = page.getByRole("slider", { name: "思考深度" });
+  await slider.focus();
+  await page.keyboard.press("End");
+  await expect(slider).toHaveAttribute("aria-valuetext", "熟虑");
+  await page.keyboard.press("Home");
+  await expect(slider).toHaveAttribute("aria-valuetext", "快速");
   await expect(page.getByRole("button", { name: "移除上下文：PathResearch.md", exact: true })).toBeVisible();
   // Inspect the same persisted, revision-pinned object through the real context resolver.
   const text = await page.evaluate(async (path) => {
@@ -40,6 +50,14 @@ test("an imported note exposes its location and copied Liteasy Path becomes read
     return snapshot.entries[0].text;
   }, path);
   expect(text).toContain("这段真实文件内容应被读取到 Agent 上下文。");
+  const rail = page.getByRole("navigation", { name: "左边栏导航" });
+  const bottomToggle = rail.getByRole("button", { name: "展开下栏", exact: true });
+  await expect(bottomToggle).not.toHaveClass(/active/);
+  await bottomToggle.click();
+  await expect(rail.getByRole("button", { name: "折叠下栏", exact: true })).toHaveClass(/active/);
+  await rail.getByRole("button", { name: "折叠下栏", exact: true }).click();
+  await expect(bottomToggle).not.toHaveClass(/active/);
+  await expect(rail.getByRole("button", { name: "文献库", exact: true })).not.toHaveClass(/active/);
   await page.screenshot({ path: testInfo.outputPath("liteasy-path-context.png"), fullPage: true, animations: "disabled" });
   expect(errors).toEqual([]);
 });

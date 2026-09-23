@@ -542,6 +542,24 @@ export function createObjectRepository(
               (r.to.revision === ref.revision || r.predicate === "member_of"))),
       );
   }
+  async function searchTitles(query = "", limit = 20) {
+    const results: Array<{ objectId: string; title: string }> = [];
+    const normalized = query.toLocaleLowerCase();
+    let after = "";
+    do {
+      const rows = await storage.list("title/", after, 1000);
+      for (const row of rows) {
+        after = row.key;
+        const entry = row.value as { objectId: string; title: string; lifecycle: string };
+        if (entry.lifecycle === "active" && `${entry.title} ${entry.objectId}`.toLocaleLowerCase().includes(normalized)) {
+          results.push({ objectId: entry.objectId, title: entry.title });
+          if (results.length >= limit) return results;
+        }
+      }
+      if (rows.length < 1000) break;
+    } while (after);
+    return results;
+  }
   async function search(query = "", cursor = "") {
     const objects: ObjectEnvelope[] = [];
     const normalized = query.toLocaleLowerCase();
@@ -1280,6 +1298,7 @@ export function createObjectRepository(
     resolveLatest,
     create,
     search,
+    searchTitles,
     listRelations,
     relate,
     captureFragment: captureObject,

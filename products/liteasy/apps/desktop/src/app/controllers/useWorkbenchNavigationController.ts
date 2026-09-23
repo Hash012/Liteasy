@@ -26,7 +26,7 @@ export function useWorkbenchNavigationController(input: {
   activeDynamicItems: Partial<Record<DockRegionId, string | null>>;
 }) {
   return {
-    open(item: "assistant" | "help" | "notes" | "board") {
+    open(item: "assistant" | "help" | "notes" | "board" | "reading-library") {
       const region =
         input.dock.findItemRegion(item) ??
         dockItemRegistry[item].preferredRegion;
@@ -37,7 +37,7 @@ export function useWorkbenchNavigationController(input: {
       else if (isBaseDockRegionId(region) && region !== "main")
         input.setCollapsed(region, false);
     },
-    isVisible(item: "assistant" | "help" | "notes" | "board") {
+    isVisible(item: DockItemId) {
       const region = input.dock.findItemRegion(item);
       return Boolean(
         region &&

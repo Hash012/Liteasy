@@ -4,6 +4,40 @@ import { describe, expect, test, vi } from "vitest";
 import { SettingsPane } from "../app/layout/SettingsPane";
 
 describe("SettingsPane", () => {
+  test("offers light, dark and system appearance in display settings", async () => {
+    const user = userEvent.setup();
+    const onUpdateSetting = vi.fn();
+    render(<SettingsPane documentMetadataSyncResult={null} documentMetadataSyncStatus="idle" settings={{ "view.theme": "system" }} onUpdateSetting={onUpdateSetting} />);
+    const appearance = within(screen.getByRole("radiogroup", { name: "外观" }));
+    expect(appearance.getByRole("radio", { name: "跟随系统" })).toBeChecked();
+    await user.click(appearance.getByRole("radio", { name: "深色" }));
+    expect(onUpdateSetting).toHaveBeenLastCalledWith({ intent: "update_setting", target: "view.theme", value: "dark" });
+    await user.click(appearance.getByRole("radio", { name: "浅色" }));
+    expect(onUpdateSetting).toHaveBeenLastCalledWith({ intent: "update_setting", target: "view.theme", value: "light" });
+  });
+
+  test("lets researchers choose a recommendation style and control online recommendations", async () => {
+    const user = userEvent.setup();
+    const onUpdateSetting = vi.fn();
+    render(<SettingsPane
+      documentMetadataSyncResult={null}
+      documentMetadataSyncStatus="idle"
+      onUpdateSetting={onUpdateSetting}
+      settings={{ "network.recommendation.style": "classic", "network.recommendation.enabled": true }}
+    />);
+    const panel = within(screen.getByRole("region", { name: "论文推荐设置" }));
+    expect(panel.getByRole("combobox", { name: "推荐风格" })).toHaveValue("classic");
+    expect(panel.getByText("侧重与研究主题相关、积累引用的基础文献。")).toBeInTheDocument();
+    await user.selectOptions(panel.getByRole("combobox", { name: "推荐风格" }), "frontier");
+    expect(onUpdateSetting).toHaveBeenLastCalledWith({
+      intent: "update_setting", target: "network.recommendation.style", value: "frontier"
+    });
+    await user.click(panel.getByRole("switch", { name: "联网推荐" }));
+    expect(onUpdateSetting).toHaveBeenLastCalledWith({
+      intent: "update_setting", target: "network.recommendation.enabled", value: false
+    });
+  });
+
   test("lets users toggle public workflow audit visibility from Agent settings", async () => {
     const user = userEvent.setup();
     const onUpdateSetting = vi.fn();

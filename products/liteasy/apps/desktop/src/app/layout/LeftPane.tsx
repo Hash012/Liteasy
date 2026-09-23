@@ -22,7 +22,7 @@ import type {
   LibraryResourceTransferTarget
 } from "../features/library/libraryResourceTransfer.types";
 import type { LocalLibrarySnapshot } from "../features/library/localLibrary.types";
-import type { RecommendationItem, RecommendationStatus } from "../features/recommendations/recommendation.types";
+import type { RecommendationItem, RecommendationStatus, RecommendationStyle } from "../features/recommendations/recommendation.types";
 import type { UserTag } from "../features/profile/academicProfileClient";
 import type { Paper, WorkspaceSourceType } from "../features/workspace/workspace.types";
 import type { LiteratureHydrationState } from "../features/paper-identity/literature.types";
@@ -75,6 +75,7 @@ export type LeftPaneProps = {
   onAddDroppedPdfFiles?: (files: File[], targetFolderPath?: string) => void | Promise<void>;
   onClearProfile: () => void;
   onClearRecommendations: () => void;
+  onRefreshRecommendations?: () => void;
   onDeleteArtifact: (
     artifactId: string
   ) => ArtifactMutationOutcome | Promise<ArtifactMutationOutcome>;
@@ -140,6 +141,8 @@ export type LeftPaneProps = {
   recommendationMessage: string;
   recommendationPending: boolean;
   recommendationStatus: RecommendationStatus;
+  recommendationStyle?: RecommendationStyle;
+  onRecommendationStyleChange?: (style: RecommendationStyle) => void;
   readNotificationIds: string[];
   selectedPaperIds: string[];
   selectionLocked: boolean;
@@ -205,6 +208,7 @@ export function LeftPane({
   onAddDroppedPdfFiles,
   onClearProfile,
   onClearRecommendations,
+  onRefreshRecommendations,
   onDeleteArtifact,
   onDismissRecommendation,
   onCreateOrganization,
@@ -263,6 +267,8 @@ export function LeftPane({
   recommendationMessage,
   recommendationPending,
   recommendationStatus,
+  recommendationStyle,
+  onRecommendationStyleChange,
   readNotificationIds,
   selectedPaperIds,
   selectionLocked,
@@ -400,6 +406,7 @@ export function LeftPane({
             onAddExternalPdf={onAddExternalPdf}
             onAddDroppedPdfFiles={onAddDroppedPdfFiles}
             onClearRecommendations={onClearRecommendations}
+            onRefreshRecommendations={onRefreshRecommendations}
             onDismissRecommendation={onDismissRecommendation}
             onImportZoteroDirectory={onImportZoteroDirectory}
             onLoginRequired={onLoginRequired}
@@ -434,6 +441,8 @@ export function LeftPane({
             recommendationMessage={recommendationMessage}
             recommendationPending={recommendationPending}
             recommendationStatus={recommendationStatus}
+            recommendationStyle={recommendationStyle}
+            onRecommendationStyleChange={onRecommendationStyleChange}
             selectedPaperIds={selectedPaperIds}
             selectionLocked={selectionLocked}
             workspaceLabel={workspaceLabel}

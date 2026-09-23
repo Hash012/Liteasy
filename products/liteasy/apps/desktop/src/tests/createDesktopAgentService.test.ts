@@ -189,7 +189,7 @@ test("carries completed turns into the next model request within one Agent sessi
 
   await api.submitTurn({
     idempotencyKey: "context-turn-1",
-    input: { message: "请记住数字 17。", mode: "qa" },
+    input: { message: "请记住数字 17。", mode: "qa", thinkingDepth: "deliberate" },
     sessionId: session.data.sessionId
   });
   await api.submitTurn({
@@ -200,6 +200,8 @@ test("carries completed turns into the next model request within one Agent sessi
 
   expect(prompts).toHaveLength(2);
   expect(prompts[0]).not.toContain("近期对话上下文");
+  expect(prompts[0]).toContain("思考深度：熟虑");
+  expect(prompts[1]).not.toContain("思考深度：熟虑");
   expect(prompts[1]).toContain("用户：请记住数字 17。");
   expect(prompts[1]).toContain("助手：好的，我会记住数字 17。");
   expect(prompts[1]).toContain("问题：我刚才让你记住什么？");

@@ -14,6 +14,7 @@ export type { AssistantMode };
 export type AssistantConfirmationRequest = HumanConfirmationRequest | AgentConfirmationRequest;
 
 export type AssistantMessage = {
+  thinkingDepth?: import("./thinkingDepth").ThinkingDepth;
   agentActivity?: AgentActivity;
   artifactTask?: { id: string; artifactId?: string; status: "queued" | "running" | "completed" | "failed" | "cancelled" };
   favorite?: boolean;
