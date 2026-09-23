@@ -200,3 +200,16 @@ test("rejects empty or oversized source files before touching storage", async ()
   await expect(f.repository.importFile("huge.epub", new Uint8Array(MAX_LIBRARY_FILE_BYTES + 1), source.parsed)).rejects.toThrow("20 MB");
   expect(commit).not.toHaveBeenCalled();
 });
+
+test("stores opaque file formats without parsing or changing their bytes", async () => {
+  const f = fixture();
+  const bytes = new Uint8Array([0, 255, 40, 11, 128, 79]);
+  const imported = await f.repository.importFile("实验数据.bin", bytes, {
+    format: "other", title: "实验数据.bin", authors: [], chapters: [], resources: [], toc: [], warnings: []
+  });
+  expect(imported.entry.format).toBe("other");
+  expect((await f.reopen().readFile(imported.entry.id)).bytes).toEqual(bytes);
+  expect((await f.repository.importFile("再次导入.bin", bytes, {
+    format: "other", title: "再次导入.bin", authors: [], chapters: [], resources: [], toc: [], warnings: []
+  })).duplicate).toBe(true);
+});

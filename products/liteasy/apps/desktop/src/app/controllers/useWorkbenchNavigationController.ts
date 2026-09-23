@@ -26,7 +26,7 @@ export function useWorkbenchNavigationController(input: {
   activeDynamicItems: Partial<Record<DockRegionId, string | null>>;
 }) {
   return {
-    open(item: "assistant" | "help" | "notes" | "board" | "reading-library") {
+    open(item: "assistant" | "help" | "notes" | "board" | "document-reader") {
       const region =
         input.dock.findItemRegion(item) ??
         dockItemRegistry[item].preferredRegion;

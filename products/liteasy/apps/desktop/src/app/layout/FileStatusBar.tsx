@@ -1,5 +1,7 @@
+import { ReadingCatalogDetails, type ReadingCatalogActions } from "../features/library/ReadingCatalogDetails";
+import "../features/library/readingCatalog.css";
 import { displayPath } from "../features/resource-filesystem/displayPath";
-import { Tooltip } from "@fluentui/react-components";
+import { Button, Popover, PopoverSurface, PopoverTrigger, Tooltip } from "@fluentui/react-components";
 import type { FileStatus } from "../features/workspace/workspaceShell.types";
 import "../styles/workspaceShell.css";
 
@@ -11,10 +13,14 @@ function fileSize(size?: number) {
   return `${Number((size / 1024 ** exponent).toFixed(1))} ${units[exponent - 1]}`;
 }
 
-export function FileStatusBar({ status }: { status?: FileStatus }) {
+export function FileStatusBar({ status, actions }: { status?: FileStatus; actions?: ReadingCatalogActions }) {
   const modified = status?.modifiedAt && Number.isFinite(status.modifiedAt.getTime()) ? status.modifiedAt.toLocaleString() : undefined;
   const details = [
     status?.type,
+    status?.entry?.authors?.join(" · "),
+    status?.entry?.year,
+    status?.entry?.publication,
+    status?.entry?.doi ? `DOI ${status.entry.doi}` : status?.entry?.identifier,
     status?.pageCount && Number.isFinite(status.pageCount) && status.pageCount > 0 ? `${status.pageCount} 页` : undefined,
     status?.itemCount !== undefined && Number.isFinite(status.itemCount) && status.itemCount >= 0 ? `${status.itemCount} 项` : undefined,
     fileSize(status?.size),
@@ -35,6 +41,10 @@ export function FileStatusBar({ status }: { status?: FileStatus }) {
         {status?.name && details ? <span aria-hidden="true">·</span> : null}
         <span className="shell-file-metadata">{details || (!status?.name ? "Liteasy · 就绪" : "")}</span>
       </div>
+      {status?.entry && actions ? <Popover key={status.entry.id} positioning="above-end">
+        <PopoverTrigger disableButtonEnhancement><Button appearance="subtle" size="small" aria-label="展开文件元信息">元信息</Button></PopoverTrigger>
+        <PopoverSurface className="shell-file-inspector"><ReadingCatalogDetails key={status.entry.id} entry={status.entry} {...actions} /></PopoverSurface>
+      </Popover> : null}
       <span role="status" aria-live="polite" className={`shell-file-progress${error ? " has-error" : ""}`} title={progress}>{progress}</span>
     </footer>
   );

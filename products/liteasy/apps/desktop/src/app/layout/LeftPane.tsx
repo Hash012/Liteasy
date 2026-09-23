@@ -1,3 +1,4 @@
+import { type LibraryFileAccess } from "../features/library/LibraryFileList";
 import {
   LibraryPane,
   type LibraryPaperChildItem
@@ -39,6 +40,7 @@ import type {
 import type { LeftRailView } from "./useLeftRailNavigation";
 
 export type LeftPaneProps = {
+  fileLibrary?: LibraryFileAccess;
   accountScopeId?: string;
   activePaperId?: string | null;
   academicProfile: AcademicProfile;
@@ -173,6 +175,7 @@ function getPaneHeader(leftRailView: LeftRailView) {
 }
 
 export function LeftPane({
+  fileLibrary,
   accountScopeId,
   activePaperId,
   academicProfile,
@@ -391,6 +394,7 @@ export function LeftPane({
           />
         ) : (
           <LibraryPane
+            fileLibrary={fileLibrary}
             accountScopeId={accountScopeId}
             accountSessionAvailable={accountSession !== null}
             activePaperId={activePaperId}

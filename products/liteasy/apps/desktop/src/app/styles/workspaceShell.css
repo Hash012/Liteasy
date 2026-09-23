@@ -102,3 +102,15 @@
   background: var(--colorNeutralBackground2);
   border-bottom-color: var(--colorNeutralStroke2);
 }
+
+.shell-workspace-title[data-tauri-drag-region] { user-select: none; align-self: stretch; line-height: var(--shell-top-height); }
+.shell-window-controls { display: flex; flex: 0 0 auto; align-self: stretch; }
+.shell-window-controls > button { width: 46px; min-width: 46px; height: var(--shell-top-height); border: 0; border-radius: 0; }
+.shell-window-controls .shell-window-close:hover { background: #c42b1c; color: #fff; }
+.shell-window-controls .shell-window-close:active { background: #a82418; color: #fff; }
+.shell-window-error { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.shell-file-inspector { width: min(680px, calc(100vw - 24px)); padding: 0; max-height: min(680px, calc(100vh - 90px)); overflow: auto; }
+.shell-file-inspector .reading-catalog-details { border: 0; max-width: none; }
+.file-status-bar > button { flex: 0 0 auto; min-height: 22px; height: 22px; padding-block: 0; }
+
+.workspace-command-bar:has(.shell-window-controls) { padding-right: 0; }

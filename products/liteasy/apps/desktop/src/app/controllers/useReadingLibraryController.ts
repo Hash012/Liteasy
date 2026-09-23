@@ -10,7 +10,8 @@ import type { Paper } from "../features/workspace/workspace.types";
 
 export function useReadingLibraryController(input: {
   scopeId: string; papers: Paper[]; enabled: boolean;
-  importPdfs(files: File[]): Promise<unknown>;
+  importPdfs(files: File[], targetFolderPath?: string): Promise<unknown>;
+  onOpenReader(): void;
   openPaper(id: string): void;
 }) {
   const latest = useRef(input); latest.current = input;
@@ -21,6 +22,7 @@ export function useReadingLibraryController(input: {
   const [stateScope, setStateScope] = useState(input.scopeId);
   const [metadata, setMetadata] = useState<Record<string, ReadingMetadata>>({});
   const [legacyMetadata, setLegacyMetadata] = useState<Record<string, ReadingMetadata>>({});
+  const [selection, setSelection] = useState<{ scope: string; entry: ReadingCatalogEntry; open?: () => void }>();
   const [active, setActive] = useState<{ id: string; document: ParsedReadingDocument }>();
   const [pending, setPending] = useState(false);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -101,7 +103,7 @@ export function useReadingLibraryController(input: {
     }
     if (current()) setMetadata((previous) => ({ ...previous, [id]: value }));
   }
-  async function importFiles(selected: File[]) {
+  async function importFiles(selected: File[], targetFolderPath?: string) {
     if (importing.current) return;
     importing.current = true; setPending(true); setMessage("");
     let imported = 0, duplicates = 0;
@@ -110,12 +112,13 @@ export function useReadingLibraryController(input: {
       for (const file of selected) {
         if (!current()) break;
         try {
-          if (/\.pdf$/i.test(file.name)) { await input.importPdfs([file]); imported += 1; continue; }
-          if (!/\.(epub|md|markdown|txt)$/i.test(file.name)) throw new Error("支持 PDF、EPUB、Markdown 和 TXT。");
+          if (/\.pdf$/i.test(file.name)) { await input.importPdfs([file], targetFolderPath); imported += 1; continue; }
           if (file.size > MAX_LIBRARY_FILE_BYTES) throw new Error("文件超过 20 MB。");
           const bytes = new Uint8Array(await file.arrayBuffer());
           const { parseReadingFile } = await import("../features/reading-library/parseReadingFile");
-          const document = await parseReadingFile({ name: file.name, bytes });
+          const document: ParsedReadingDocument = /\.(epub|md|markdown|txt)$/i.test(file.name)
+            ? await parseReadingFile({ name: file.name, bytes })
+            : { format: "other", title: file.name, authors: [], description: "此格式已保存原文件，暂不支持内置阅读。可导出后使用对应应用打开。", chapters: [], toc: [], resources: [], warnings: [] };
           if (!current()) break;
           const result = await repository.importFile(file.name, bytes, document);
           if (result.duplicate) duplicates += 1; else imported += 1;
@@ -133,7 +136,18 @@ export function useReadingLibraryController(input: {
     } catch (error) { if (current()) setMessage(error instanceof Error ? error.message : String(error)); }
     finally { importing.current = false; if (current()) setPending(false); }
   }
+  async function exportFile(entry: ReadingCatalogEntry) {
+    try {
+      const { entry: file, bytes } = await repository.readFile(entry.id);
+      if (!current()) return;
+      const url = URL.createObjectURL(new Blob([bytes.slice()]));
+      const link = document.createElement("a"); link.href = url; link.download = file.fileName; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) { if (current()) setMessage(String(error)); }
+  }
   async function open(entry: ReadingCatalogEntry) {
+    setSelection({ scope: input.scopeId, entry });
+    if (entry.format === "other") { await exportFile(entry); return; }
     if (entry.format === "pdf") {
       request.current += 1; setPending(false);
       input.openPaper(entry.id);
@@ -150,12 +164,20 @@ export function useReadingLibraryController(input: {
       const document = await parseReadingFile({ name: file.fileName, bytes });
       if (id !== request.current || !current()) return;
       setActive({ id: entry.id, document });
+      input.onOpenReader();
       if (metadata[entry.id]?.readingStatus !== "finished") await updateMetadata(entry.id, { readingStatus: "reading" });
     } catch (error) { if (id === request.current && current()) setMessage(error instanceof Error ? error.message : String(error)); }
     finally { if (id === request.current && current()) setPending(false); }
   }
   return {
-    entries, active: stateScope === input.scopeId ? active : undefined,
+    entries,
+    selected: selection?.scope === input.scopeId ? entries.find((entry) => entry.id === selection.entry.id) ?? selection.entry : undefined,
+    inspect: (entry: ReadingCatalogEntry, open?: () => void) => setSelection({ scope: input.scopeId, entry, open }),
+    openInspected: (entry: ReadingCatalogEntry) => {
+      if (selection?.scope === input.scopeId && selection.entry.id === entry.id && selection.open) selection.open();
+      else void open(entry);
+    },
+    active: stateScope === input.scopeId ? active : undefined,
     pending: stateScope === input.scopeId && (pending || catalogLoading),
     message: stateScope === input.scopeId ? message : "", importFiles, updateMetadata,
     open: (entry: ReadingCatalogEntry) => { void open(entry); },
@@ -164,23 +186,16 @@ export function useReadingLibraryController(input: {
       const file = files.find((file) => file.id === entry.id);
       return file ? { kind: "object", ref: file.ref, followLatest: true } : { kind: "paper", paperId: entry.id };
     },
-    async exportFile(entry: ReadingCatalogEntry) {
-      try {
-        const { entry: file, bytes } = await repository.readFile(entry.id);
-        if (!current()) return;
-        const url = URL.createObjectURL(new Blob([bytes.slice()]));
-        const link = document.createElement("a"); link.href = url; link.download = file.fileName; link.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-      } catch (error) { if (current()) setMessage(String(error)); }
-    },
+    exportFile,
     async remove(entry: ReadingCatalogEntry) {
-      if (!window.confirm(`将“${entry.title}”移出书库？已有笔记和 Agent 引用将继续保留。`)) return;
+      if (!window.confirm(`将“${entry.title}”移出文献库？已有笔记和 Agent 引用将继续保留。`)) return;
       try {
         await repository.removeFromLibrary(entry.id);
         if (current()) {
           setFiles((previous) => previous.filter((file) => file.id !== entry.id));
+          setSelection((previous) => previous?.entry.id === entry.id ? undefined : previous);
           if (active?.id === entry.id) { request.current += 1; setActive(undefined); }
-          setMessage("已移出书库。");
+          setMessage("已移出文献库。");
         }
       } catch (error) { if (current()) setMessage(String(error)); }
     }

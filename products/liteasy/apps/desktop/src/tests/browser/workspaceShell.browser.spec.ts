@@ -137,3 +137,21 @@ test("an imported note supplies document metadata and a long title without shift
   await expect(toolbar(page).getByRole("button", { name: "更多工作区操作" })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("after-note-document.png"), animations: "disabled" });
 });
+
+
+test("native title-bar controls share one row with commands and never become drag targets", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 640, height: 460 });
+  await page.goto("/src/tests/browser/fixtures/workspace-shell.html?native");
+  await expect(toolbar(page).getByRole("group", { name: "窗口控制" })).toBeVisible();
+  await expect(page.locator(".shell-workspace-title")).toHaveAttribute("data-tauri-drag-region");
+  await toolbar(page).getByRole("button", { name: "最大化窗口", exact: true }).click();
+  await expect(toolbar(page).getByRole("button", { name: "还原窗口", exact: true })).toBeVisible();
+  await toolbar(page).getByRole("button", { name: "还原窗口", exact: true }).click();
+  await expect(toolbar(page).getByRole("button", { name: "最大化窗口", exact: true })).toBeVisible();
+  await expect(toolbar(page).getByRole("button", { name: "关闭窗口", exact: true })).not.toHaveAttribute("data-tauri-drag-region");
+  await page.setViewportSize({ width: 400, height: 460 });
+  await expect.poll(() => toolbar(page).evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await expect(toolbar(page).getByRole("button", { name: "关闭窗口", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "切换测试主题" }).click();
+  await page.screenshot({ path: testInfo.outputPath("unified-native-titlebar-dark.png"), animations: "disabled" });
+});

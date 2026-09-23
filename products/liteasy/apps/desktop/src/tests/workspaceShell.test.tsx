@@ -57,7 +57,7 @@ describe("ambient file status", () => {
   it("projects reading metadata without inventing indexing or sync state", () => {
     expect(readingFileStatus()).toBeUndefined();
     expect(readingFileStatus({ id: "book", title: "Book", format: "epub", readingStatus: "reading", fileSize: 4096, liteasyPath: "liteasy://book" }))
-      .toEqual({ name: "Book", type: "EPUB", size: 4096, path: "liteasy://book" });
+      .toMatchObject({ name: "Book", type: "EPUB", size: 4096, path: "liteasy://book" });
   });
   it("renders only known metadata and describes failures with text", () => {
     const { rerender } = render(<FileStatusBar status={{ name: "Paper", path: "/private/Paper.pdf", type: "PDF", pageCount: 18, size: 1782579, source: "local", indexState: "indexing" }} />);

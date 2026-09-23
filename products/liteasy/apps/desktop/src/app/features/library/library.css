@@ -1146,3 +1146,12 @@
 .library-recommendation-metadata a {
   color: var(--colorBrandForegroundLink);
 }
+
+.library-file-list { list-style: none; margin: 0; padding: 0; }
+.library-file-row { display: flex; align-items: center; gap: 6px; padding: 6px; width: 100%; min-width: 0; border: 0; border-radius: 4px; text-align: left; color: var(--colorNeutralForeground1); background: transparent; cursor: pointer; }
+.library-file-row:hover { background: var(--colorSubtleBackgroundHover); }
+.library-file-row.active { background: var(--colorSubtleBackgroundSelected); box-shadow: inset 2px 0 var(--colorBrandStroke1); }
+.library-file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.library-file-name small { display: block; overflow: hidden; text-overflow: ellipsis; color: var(--colorNeutralForeground3); }
+.library-file-row > small { color: var(--colorNeutralForeground3); }
+.library-file-filters { display: grid; gap: 10px; width: min(260px, calc(100vw - 24px)); }

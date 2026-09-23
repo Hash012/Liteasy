@@ -12,74 +12,75 @@ function ebook() {
   }));
 }
 
-test("imports real EPUB, Markdown and text, filters metadata and restores reading progress", async ({ page }, testInfo) => {
+test("the original library stores all formats and shows selection metadata in the bottom bar", async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.setViewportSize({ width: 1800, height: 1100 });
+  await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto("/");
-  await page.getByRole("navigation", { name: "左边栏导航" }).getByRole("button", { name: "书库与元信息", exact: true }).click();
-  const library = page.getByRole("region", { name: "书库与元信息", exact: true });
-  await expect(library.getByRole("button", { name: "导入文件" })).toBeEnabled();
-  await library.getByLabel("选择阅读文件").setInputFiles([
+  const nav = page.getByRole("navigation", { name: "左边栏导航" });
+  await expect(nav.getByRole("button", { name: "书库与元信息" })).toHaveCount(0);
+  const library = page.getByRole("region", { name: "本地文献库", exact: true });
+  await expect(library.getByRole("button", { name: "导入文件", exact: true })).toBeEnabled();
+  await library.getByLabel("选择文献库文件").setInputFiles([
     { name: "field-guide.epub", mimeType: "application/epub+zip", buffer: ebook() },
-    { name: "research.md", mimeType: "text/markdown", buffer: Buffer.from("# Research Notes\n\nA readable formula: $E=mc^2$.\n\n## Next Steps\n\n- Inspect evidence\n- Check conclusions") },
-    { name: "meeting.txt", mimeType: "text/plain", buffer: Buffer.from("A plain text research memo.\n\nPreserve the original text and paragraph spacing.") }
+    { name: "research.md", mimeType: "text/markdown", buffer: Buffer.from("# Research Notes\n\nA readable formula: $E=mc^2$.") },
+    { name: "meeting.txt", mimeType: "text/plain", buffer: Buffer.from("A plain text research memo.\n\nPreserve the original text and paragraph spacing.") },
+    { name: "experiment.bin", mimeType: "application/octet-stream", buffer: Buffer.from([0, 255, 128, 23]) }
   ]);
-  const table = library.getByRole("table", { name: "文献与文件列表" });
-  await expect(table.getByRole("row")).toHaveCount(4);
-  const search = library.getByRole("textbox", { name: "搜索文献与文件" });
-  const commands = page.getByRole("toolbar", { name: "工作区命令栏" });
-  await expect(commands).toContainText("书库与元信息");
-  await commands.getByRole("button", { name: "搜索", exact: true }).click();
-  await expect(search).toBeFocused();
+  const files = library.getByRole("list", { name: "文献库文件" });
+  await expect(files.getByRole("listitem")).toHaveCount(4);
+  const search = page.getByRole("textbox", { name: "搜索文献资源" });
   await search.fill("9781234567897");
-  await expect(table.getByRole("row")).toHaveCount(2);
-  await table.getByRole("row").filter({ hasText: "Research Field Guide" }).click();
-  await expect(table.getByRole("cell", { name: "2024", exact: true })).toHaveCSS("white-space", "nowrap");
-  const details = library.getByRole("complementary", { name: "文件元信息" });
-  await expect(details.getByText("Lin Researcher", { exact: true })).toBeVisible();
+  await expect(files.getByRole("listitem")).toHaveCount(1);
+  const book = files.getByRole("button", { name: "选择文件 Research Field Guide", exact: true });
+  await book.click();
+  const bottom = page.getByLabel("文件状态栏", { exact: true });
+  await expect(bottom).toContainText("Research Field Guide");
+  await expect(bottom).toContainText("Lin Researcher");
+  await expect(bottom).toContainText("2024");
+  await bottom.getByRole("button", { name: "展开文件元信息" }).click();
+  const details = page.getByRole("complementary", { name: "文件元信息" });
   await expect(details.getByText("Research Press", { exact: true })).toBeVisible();
   await details.getByRole("textbox", { name: "文件分类" }).fill("Research Methods");
   await details.getByRole("textbox", { name: "文件标签" }).fill("classic, reading");
   await details.getByRole("button", { name: "保存整理信息" }).click();
-  await page.screenshot({ path: testInfo.outputPath("reading-library-light.png"), fullPage: true, animations: "disabled" });
-  await details.getByRole("button", { name: "开始阅读" }).click();
-  const reading = library.getByLabel("文档阅读区域", { exact: true });
-  await expect(reading.getByText("Reliable evidence supports careful scientific reading.")).toBeVisible();
-  await library.getByRole("navigation", { name: "章节目录" }).getByRole("button", { name: "Methods", exact: true }).click();
-  await expect(reading.getByText("Replication and uncertainty guide our methods.")).toBeVisible();
-  await library.getByRole("button", { name: "阅读外观", exact: true }).click();
-  await page.getByRole("combobox", { name: "阅读主题", exact: true }).selectOption("warm");
+  await expect(details.getByRole("status")).toContainText("已保存");
+  await page.screenshot({ path: testInfo.outputPath("unified-library-metadata.png"), animations: "disabled" });
   await page.keyboard.press("Escape");
-  await page.screenshot({ path: testInfo.outputPath("epub-reader-warm.png"), fullPage: true, animations: "disabled" });
-  await expect(commands).toContainText("Research Field Guide");
-  await expect(page.getByLabel("文件状态栏", { exact: true })).toContainText("EPUB");
-  await commands.getByRole("button", { name: "搜索", exact: true }).click();
-  await expect(library.getByRole("textbox", { name: "搜索书内文字" })).toBeFocused();
-  await library.getByRole("textbox", { name: "搜索书内文字" }).fill("uncertainty");
-  await expect(library.getByRole("status").filter({ hasText: "1 处匹配" })).toBeVisible();
-  await library.getByRole("button", { name: "返回书库", exact: true }).click();
-  await expect(search).toHaveValue("9781234567897");
-  await details.getByRole("button", { name: "开始阅读" }).click();
+  await book.dblclick();
+  const reader = page.getByRole("region", { name: "文件阅读器", exact: true });
+  const reading = reader.getByLabel("文档阅读区域", { exact: true });
+  await expect(reading.getByText("Reliable evidence supports careful scientific reading.")).toBeVisible();
+  await expect(bottom).toContainText("EPUB");
+  await reader.getByRole("navigation", { name: "章节目录" }).getByRole("button", { name: "Methods", exact: true }).click();
   await expect(reading.getByText("Replication and uncertainty guide our methods.")).toBeVisible();
-  await library.getByRole("button", { name: "返回书库", exact: true }).click();
+  await page.getByRole("toolbar", { name: "工作区命令栏" }).getByRole("button", { name: "搜索", exact: true }).click();
+  await expect(reader.getByRole("textbox", { name: "搜索书内文字" })).toBeFocused();
+  await reader.getByRole("button", { name: "返回文献库", exact: true }).click();
+  await expect(search).toHaveValue("9781234567897");
+  await book.dblclick();
+  await expect(reading.getByText("Replication and uncertainty guide our methods.")).toBeVisible();
+  await reader.getByRole("button", { name: "返回文献库", exact: true }).click();
   await search.fill("Research Notes");
-  await table.getByRole("row").filter({ hasText: "Research Notes" }).dblclick();
+  await files.getByRole("button", { name: "选择文件 Research Notes", exact: true }).dblclick();
   await expect(reading.locator(".katex").first()).toBeVisible();
-  await library.getByRole("button", { name: "返回书库", exact: true }).click();
+  await reader.getByRole("button", { name: "返回文献库", exact: true }).click();
   await search.fill("meeting");
-  await table.getByRole("row").filter({ hasText: "meeting" }).dblclick();
+  await files.getByRole("button", { name: "选择文件 meeting", exact: true }).dblclick();
   await expect(reading.getByText(/Preserve the original text/)).toBeVisible();
-  await library.getByRole("button", { name: "返回书库", exact: true }).click();
+  await reader.getByRole("button", { name: "返回文献库", exact: true }).click();
+  await search.fill("experiment");
+  const downloaded = page.waitForEvent("download");
+  await files.getByRole("button", { name: "选择文件 experiment.bin", exact: true }).dblclick();
+  expect((await downloaded).suggestedFilename()).toBe("experiment.bin");
   await page.reload();
-  await expect(library).toBeVisible();
-  await expect(table.getByRole("row")).toHaveCount(4);
+  await expect(files.getByRole("listitem")).toHaveCount(4);
   await search.fill("classic");
-  await expect(table.getByRole("row")).toHaveCount(2);
-  await table.getByRole("row").filter({ hasText: "Research Field Guide" }).click();
+  await expect(files.getByRole("listitem")).toHaveCount(1);
+  await book.click();
   await page.emulateMedia({ colorScheme: "dark" });
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "dark");
-  await page.screenshot({ path: testInfo.outputPath("reading-library-dark.png"), fullPage: true, animations: "disabled" });
+  await page.screenshot({ path: testInfo.outputPath("unified-library-dark.png"), animations: "disabled" });
   expect(errors).toEqual([]);
 });

@@ -263,3 +263,16 @@ test("splits bottom containers alongside each other and restores their row", () 
     "bar-notes",
   ]);
 });
+
+test("migrates the retired reading catalog to the single library without duplicate tabs", () => {
+  const layout = normalizeDockLayout({ version: 2, regions: {
+    left: { itemIds: ["library"], activeItemId: "library" },
+    main: { itemIds: ["reading-library"], activeItemId: "reading-library" }
+  } });
+  expect(Object.values(layout.regions).flatMap((region) => region.itemIds).filter((id) => id === "library")).toHaveLength(1);
+  expect(JSON.stringify(layout)).not.toContain("reading-library");
+  const relocated = normalizeDockLayout({ version: 2, regions: {
+    main: { itemIds: ["reading-library"], activeItemId: "reading-library" }
+  } });
+  expect(relocated.regions.main.activeItemId).toBe("library");
+});

@@ -1,4 +1,6 @@
+import type { ReadingCatalogEntry } from "../library/readingCatalog.types";
 export interface FileStatus {
+  entry?: ReadingCatalogEntry;
   name?: string;
   path?: string;
   type?: string;
@@ -42,4 +44,13 @@ export interface WorkspaceSurface {
   fileStatus?: FileStatus;
   search?: "library" | "notes" | "pdf" | "reading-catalog" | "reading-document";
   onActivate: () => void;
+}
+
+export interface WindowControlsState {
+  available: boolean;
+  maximized: boolean;
+  error: string;
+  minimize(): void;
+  toggleMaximize(): void;
+  close(): void;
 }

@@ -48,8 +48,8 @@ test("opens local PDFs as independent tabs while the selected set remains locked
   await user.click(within(library).getByRole("checkbox", { name: `选择 ${secondTitle}` }));
   await user.click(screen.getByRole("button", { name: "锁定选中文献集" }));
 
-  await user.click(within(library).getByRole("button", { name: secondTitle }));
-  await user.click(within(library).getByRole("button", { name: firstTitle }));
+  await user.dblClick(within(library).getByRole("button", { name: secondTitle }));
+  await user.dblClick(within(library).getByRole("button", { name: firstTitle }));
 
   expect(screen.getByRole("tab", { name: firstTitle })).toHaveAttribute("aria-selected", "true");
   expect(screen.getByRole("tab", { name: secondTitle })).toBeInTheDocument();

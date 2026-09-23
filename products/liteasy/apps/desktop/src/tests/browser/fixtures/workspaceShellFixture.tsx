@@ -6,11 +6,15 @@ import { FileStatusBar } from "../../../app/layout/FileStatusBar";
 import "../../../app/styles/app.css";
 
 function Fixture() {
+  const [maximized, setMaximized] = useState(false);
   const [dark, setDark] = useState(false);
   const [selected, setSelected] = useState("");
   return <FluentProvider theme={dark ? webDarkTheme : webLightTheme}>
     <div className="app-frame workspace-frame">
-      <WorkspaceCommandBar state={{
+      <WorkspaceCommandBar windowControls={location.search.includes("native") ? {
+        available: true, maximized, error: "", minimize: () => setSelected("minimize"),
+        toggleMaximize: () => setMaximized((value) => !value), close: () => setSelected("close")
+      } : undefined} state={{
         title: "Lairmar: Large Language Models with Episodic Memory Control — a long document title that must preserve the command area",
         actions: [
           { id: "search", label: "搜索", icon: "search", priority: 100, onSelect: () => setSelected("搜索") },

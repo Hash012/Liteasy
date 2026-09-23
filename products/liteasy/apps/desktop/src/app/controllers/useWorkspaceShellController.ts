@@ -38,8 +38,10 @@ export function readingFileStatus(entry?: ReadingCatalogEntry): FileStatus | und
   if (!entry) return undefined;
   return {
     name: entry.title,
+    entry,
     path: entry.physicalPath ? displayPath(entry.physicalPath) : entry.liteasyPath,
-    type: entry.format === "markdown" ? "Markdown" : entry.format.toUpperCase(),
+    type: entry.format === "other" ? entry.fileName?.split(".").pop()?.toUpperCase() || "文件"
+      : entry.format === "markdown" ? "Markdown" : entry.format.toUpperCase(),
     size: entry.fileSize
   };
 }

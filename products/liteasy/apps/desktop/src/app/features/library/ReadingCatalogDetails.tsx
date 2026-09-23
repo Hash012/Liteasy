@@ -83,7 +83,7 @@ export function ReadingCatalogDetails({ entry, ...actions }: { entry: ReadingCat
       {entry.authors?.length ? <p>{entry.authors.join(" · ")}</p> : null}
     </div>
     <div className="reading-catalog-detail-actions">
-      <Button appearance="primary" icon={<OpenRegular />} disabled={busy || entry.available === false} onClick={() => void invoke(() => actions.onOpen(entry))}>开始阅读</Button>
+      <Button appearance="primary" icon={<OpenRegular />} disabled={busy || entry.available === false} onClick={() => void invoke(() => actions.onOpen(entry))}>{entry.format === "other" ? "导出原文件" : "开始阅读"}</Button>
       <Button icon={<CopyRegular />} disabled={busy} onClick={() => void copy(readingCatalogCitation(entry))}>复制引用</Button>
       {actions.onAddToContext ? <Button disabled={busy} onClick={() => void invoke(() => actions.onAddToContext!(entry))}>添加到 Agent 上下文</Button> : null}
       {actions.renderLocation?.(entry)}
@@ -124,7 +124,7 @@ export function ReadingCatalogDetails({ entry, ...actions }: { entry: ReadingCat
         {actions.onExport && entry.canExport !== false ? <Button icon={<ArrowDownloadRegular />} disabled={busy || entry.available === false} onClick={() => void invoke(() => actions.onExport!(entry))}>导出原文件</Button> : null}
       </div>
     </section> : null}
-    {actions.onDelete && entry.canRemove !== false ? <Button icon={<DeleteRegular />} disabled={busy} onClick={() => void invoke(() => actions.onDelete!(entry))}>移出阅读库</Button> : null}
+    {actions.onDelete && entry.canRemove !== false ? <Button icon={<DeleteRegular />} disabled={busy} onClick={() => void invoke(() => actions.onDelete!(entry))}>移出文献库</Button> : null}
     <p role="status" className="reading-catalog-action-status">{message}</p>
   </aside>;
 }

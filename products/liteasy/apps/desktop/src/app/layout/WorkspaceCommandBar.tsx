@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Button, Menu, MenuItem, MenuItemCheckbox, MenuList, MenuPopover, MenuTrigger, Toolbar, Tooltip } from "@fluentui/react-components";
-import { ArrowLeftRegular, ArrowRightRegular, MoreHorizontalRegular, PanelLeftRegular, SearchRegular, SettingsRegular } from "@fluentui/react-icons";
-import type { ToolbarAction, WorkspaceToolbarState } from "../features/workspace/workspaceShell.types";
+import { ArrowLeftRegular, ArrowRightRegular, MoreHorizontalRegular, PanelLeftRegular, SearchRegular, SettingsRegular, SubtractRegular, SquareRegular, SquareMultipleRegular, DismissRegular } from "@fluentui/react-icons";
+import type { ToolbarAction, WorkspaceToolbarState, WindowControlsState } from "../features/workspace/workspaceShell.types";
 import "../styles/workspaceShell.css";
 
 function actionIcon(icon: ToolbarAction["icon"]) {
@@ -37,7 +37,7 @@ function ActionButton({ action }: { action: ToolbarAction }) {
   ) : <Tooltip content={action.label} relationship="description">{button}</Tooltip>;
 }
 
-export function WorkspaceCommandBar({ state }: { state: WorkspaceToolbarState }) {
+export function WorkspaceCommandBar({ state, windowControls }: { state: WorkspaceToolbarState; windowControls?: WindowControlsState }) {
   const root = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useLayoutEffect(() => {
@@ -50,7 +50,7 @@ export function WorkspaceCommandBar({ state }: { state: WorkspaceToolbarState })
   }, []);
   const actions = state.actions ?? [];
   // Reserve navigation, overflow, and a readable title before allocating commands.
-  const capacity = Math.max(0, Math.floor((width - 350) / 38));
+  const capacity = Math.max(0, Math.floor((width - 350 - (windowControls?.available ? 138 : 0)) / 38));
   const visibleIds = new Set([...actions].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0)).slice(0, capacity).map((action) => action.id));
   const overflow = [...actions.filter((action) => !visibleIds.has(action.id)), ...(state.overflowActions ?? [])];
   const title = [...(state.breadcrumb?.map((item) => item.label) ?? []), state.title].filter(Boolean).join(" / ");
@@ -60,7 +60,7 @@ export function WorkspaceCommandBar({ state }: { state: WorkspaceToolbarState })
         <Tooltip content="后退" relationship="description"><Button className="shell-icon-button" appearance="subtle" aria-label="后退" disabled={!state.canGoBack} icon={<ArrowLeftRegular />} onClick={state.onGoBack} /></Tooltip>
         <Tooltip content="前进" relationship="description"><Button className="shell-icon-button" appearance="subtle" aria-label="前进" disabled={!state.canGoForward} icon={<ArrowRightRegular />} onClick={state.onGoForward} /></Tooltip>
       </div>
-      <div className="shell-workspace-title" title={title}>{title || "Liteasy"}</div>
+      <div className="shell-workspace-title" data-tauri-drag-region={windowControls?.available ? true : undefined} title={title}>{windowControls?.available && title ? `Liteasy · ${title}` : title || "Liteasy"}</div>
       <div className="shell-commands">
         {actions.filter((action) => visibleIds.has(action.id)).map((action) => <ActionButton key={action.id} action={action} />)}
         {overflow.length > 0 ? <Menu>
@@ -70,6 +70,12 @@ export function WorkspaceCommandBar({ state }: { state: WorkspaceToolbarState })
           <MenuPopover><ActionMenuItems actions={overflow} /></MenuPopover>
         </Menu> : null}
       </div>
+      {windowControls?.available ? <div className="shell-window-controls" role="group" aria-label="窗口控制">
+        {windowControls.error ? <span role="alert" className="shell-window-error">{windowControls.error}</span> : null}
+        <Tooltip content="最小化窗口" relationship="description"><Button appearance="subtle" aria-label="最小化窗口" icon={<SubtractRegular />} onClick={windowControls.minimize} /></Tooltip>
+        <Tooltip content={windowControls.maximized ? "还原窗口" : "最大化窗口"} relationship="description"><Button appearance="subtle" aria-label={windowControls.maximized ? "还原窗口" : "最大化窗口"} icon={windowControls.maximized ? <SquareMultipleRegular /> : <SquareRegular />} onClick={windowControls.toggleMaximize} /></Tooltip>
+        <Tooltip content="关闭窗口" relationship="description"><Button className="shell-window-close" appearance="subtle" aria-label="关闭窗口" icon={<DismissRegular />} onClick={windowControls.close} /></Tooltip>
+      </div> : null}
     </Toolbar>
   );
 }
