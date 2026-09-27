@@ -14,27 +14,39 @@ const assets: AssistantComposerSuggestion[] = [
 
 describe("ContextAssetBrowser", () => {
   it("keeps cross-project selections through filters and adds them without sending", async () => {
-    const user = userEvent.setup();
     const add = vi.fn();
-    render(<ContextAssetBrowser suggestions={assets} onClose={vi.fn()} onAddContextToken={add} />);
-    const filters = screen.getByRole("navigation", { name: "上下文资产筛选" });
+    let completeSource!: (value: AssistantContextToken) => void;
+    const source = new Promise<AssistantContextToken>((resolve) => { completeSource = resolve; });
+    render(<ContextAssetBrowser suggestions={[{ ...assets[0], token: undefined, resolveToken: () => source }, assets[1]]}
+      onClose={vi.fn()} onAddContextToken={add} />);
+    // Initialize after Dialog so user-event preserves Keyborg's focus wrapper.
+    // Slow clicks also exercise Tabster's deferred accessibility update.
+    const user = userEvent.setup({ delay: 80 });
+    const filters = await screen.findByRole("navigation", { name: "上下文资产筛选" });
     await user.click(within(filters).getByRole("button", { name: /注意力研究/ }));
     expect(screen.queryByRole("checkbox", { name: "选择 实验记录" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("checkbox", { name: "选择 注意力论文原文" }));
     await user.click(within(filters).getByRole("button", { name: /视觉研究/ }));
     await user.click(screen.getByRole("checkbox", { name: "选择 实验记录" }));
     expect(screen.getByText("已选 2 项")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "添加所选（2）" }));
-    await waitFor(() => expect(add).toHaveBeenCalledTimes(2));
+    const addButton = screen.getByRole("button", { name: "添加所选（2）" });
+    await user.click(addButton);
+    expect(addButton).toBeDisabled();
+    expect(add).not.toHaveBeenCalled();
+    await act(async () => { completeSource(token("source")); });
+    // Callback completion precedes the rendered status and modal accessibility updates.
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent("已添加 2 项上下文");
+      expect(screen.getByRole("dialog", { name: "上下文资产浏览器" })).toBeInTheDocument();
+    });
+    expect(add).toHaveBeenCalledTimes(2);
     expect(add.mock.calls.map(([value]) => value.id)).toEqual(["source", "note"]);
-    expect(screen.getByRole("status")).toHaveTextContent("已添加 2 项上下文");
-    expect(screen.getByRole("dialog", { name: "上下文资产浏览器" })).toBeInTheDocument();
   });
 
   it("searches metadata, previews on demand and does not offer fictional assets", async () => {
-    const user = userEvent.setup();
     const loadPreview = vi.fn(async () => ({ text: "真实识别正文", imageUrl: "data:image/png;base64,cHJldmlldw==" }));
     const { rerender } = render(<ContextAssetBrowser suggestions={[{ ...assets[0], loadPreview }, assets[1]]} onClose={vi.fn()} />);
+    const user = userEvent.setup();
     expect(loadPreview).not.toHaveBeenCalled();
     await user.type(screen.getByRole("textbox", { name: "搜索全部上下文资产" }), "注意力 原文 只读");
     expect(screen.queryByRole("checkbox", { name: "选择 实验记录" })).not.toBeInTheDocument();
@@ -48,11 +60,11 @@ describe("ContextAssetBrowser", () => {
   });
 
   it("retains only failed selections and exposes the resolver error for a retry", async () => {
-    const user = userEvent.setup();
     const resolve = vi.fn().mockRejectedValueOnce(new Error("文件暂时不可用")).mockResolvedValue(token("note"));
     const add = vi.fn();
     render(<ContextAssetBrowser suggestions={[assets[0], { ...assets[1], token: undefined, resolveToken: resolve }]}
       onClose={vi.fn()} onResolveContextToken={async (read) => { add(await read()); return true; }} />);
+    const user = userEvent.setup();
     await user.click(screen.getByRole("checkbox", { name: "选择 注意力论文原文" }));
     await user.click(screen.getByRole("checkbox", { name: "选择 实验记录" }));
     await user.click(screen.getByRole("button", { name: "添加所选（2）" }));
@@ -60,17 +72,18 @@ describe("ContextAssetBrowser", () => {
     expect(screen.getByRole("checkbox", { name: "选择 注意力论文原文" })).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: "选择 实验记录" })).toBeChecked();
     await user.click(screen.getByRole("button", { name: "添加所选（1）" }));
-    await waitFor(() => expect(add).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("已添加 1 项上下文"));
+    expect(add).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("discards an in-flight asset when it disappears from the current catalog", async () => {
-    const user = userEvent.setup();
     let complete!: (value: AssistantContextToken) => void;
     const add = vi.fn();
     const resolveToken = () => new Promise<AssistantContextToken>((resolve) => { complete = resolve; });
     const { rerender } = render(<ContextAssetBrowser suggestions={[{ ...assets[0], token: undefined, resolveToken }]}
       onClose={vi.fn()} onAddContextToken={add} />);
+    const user = userEvent.setup();
     await user.click(screen.getByRole("checkbox", { name: "选择 注意力论文原文" }));
     await user.click(screen.getByRole("button", { name: "添加所选（1）" }));
     rerender(<ContextAssetBrowser suggestions={[]} onClose={vi.fn()} onAddContextToken={add} />);
@@ -80,22 +93,24 @@ describe("ContextAssetBrowser", () => {
   });
 
   it("creates a separate source copy and allows a note in a project that cannot yet be attached", async () => {
-    const user = userEvent.setup();
     const copy = vi.fn(async () => token("copy"));
     const createNote = vi.fn(async () => token("new-note"));
     const add = vi.fn();
     render(<ContextAssetBrowser suggestions={[{ ...assets[0], createEditableCopy: copy }, {
       id: "project", label: "空项目", category: "项目", trigger: "@", unavailableReason: "项目暂无可读取内容", createNote,
     }]} onClose={vi.fn()} onAddContextToken={add} />);
+    const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "预览 注意力论文原文" }));
     await user.click(screen.getByRole("button", { name: "创建可编辑副本" }));
-    await waitFor(() => expect(add).toHaveBeenCalledWith(token("copy")));
+    expect(await screen.findByRole("status")).toHaveTextContent("已创建可编辑副本并加入上下文");
+    expect(add).toHaveBeenCalledWith(token("copy"));
     expect(assets[0].preview).toBe("Attention is all you need.");
     await user.click(screen.getByRole("button", { name: "预览 空项目" }));
     expect(screen.getByRole("checkbox", { name: "选择 空项目" })).toBeDisabled();
     await user.type(screen.getByRole("textbox", { name: "新建项目笔记" }), "进一步核对实验结果");
     await user.click(screen.getByRole("button", { name: "保存并加入上下文" }));
-    await waitFor(() => expect(createNote).toHaveBeenCalledWith("进一步核对实验结果"));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("已保存项目笔记并加入上下文"));
+    expect(createNote).toHaveBeenCalledWith("进一步核对实验结果");
     expect(add).toHaveBeenCalledWith(token("new-note"));
   });
 });
