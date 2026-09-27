@@ -46,7 +46,7 @@ test(`generates thin reading from ${entry} with a real PDF without library selec
   await page.getByLabel("API key", { exact: true }).fill("browser-test-only-key");
   await page.getByRole("button", { name: "保存并测试", exact: true }).click();
   await expect(page.getByLabel("测试响应")).toHaveValue("连接测试响应。");
-  await page.getByRole("button", { name: "文献库", exact: true }).click();
+  await page.getByRole("tab", { name: "das24a.pdf", exact: true }).click();
   if (entry === "workbench") {
     await page.getByRole("toolbar", { name: "工作区命令栏" }).getByRole("button", { name: "AI 工作台" }).click();
     const ai = page.getByRole("dialog", { name: /论文工作台/ });

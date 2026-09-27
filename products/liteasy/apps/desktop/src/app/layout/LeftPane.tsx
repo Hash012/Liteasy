@@ -290,9 +290,9 @@ export function LeftPane({
     : "组织共享文献库";
 
   return (
-    <aside className="pane left">
-      <div className="pane-header">{getPaneHeader(leftRailView)}</div>
-      <div className="pane-body">
+    <aside className={leftRailView === "settings" ? "pane settings-host" : "pane left"}>
+      {leftRailView !== "settings" ? <div className="pane-header">{getPaneHeader(leftRailView)}</div> : null}
+      <div className={leftRailView === "settings" ? "settings-host-body" : "pane-body"}>
         {leftRailView === "artifact-library" ? (
           <ArtifactLibraryPane
             accountAvailable={accountSession !== null}

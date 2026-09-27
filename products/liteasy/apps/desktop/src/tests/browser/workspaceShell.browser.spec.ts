@@ -55,9 +55,11 @@ test("commands overflow without wrapping, keep accessible names, and retain the 
   await expect(page.getByRole("tooltip", { name: "布局", exact: true })).toBeVisible();
   await page.setViewportSize({ width: 400, height: 740 });
   await expect(layout).toHaveCount(0);
-  await expect(toolbar(page).getByRole("button", { name: "搜索", exact: true })).toBeVisible();
+  // The persistent AI entry leaves search in the overflow at this width.
+  await expect(toolbar(page).getByRole("button", { name: "搜索", exact: true })).toHaveCount(0);
   await expectGeometry(page);
   await toolbar(page).getByRole("button", { name: "更多工作区操作" }).click();
+  await expect(page.getByRole("menuitem", { name: "搜索", exact: true })).toBeVisible();
   await page.getByRole("menuitem", { name: "布局", exact: true }).click();
   const right = page.getByRole("menuitemcheckbox", { name: "右侧栏", exact: true });
   await expect(right).toBeChecked();

@@ -1,9 +1,11 @@
+import { useId, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { Button, Input, Tooltip } from "@fluentui/react-components";
+import { AppsListRegular, BotRegular, CloudSyncRegular, DismissRegular, DocumentSearchRegular, FolderRegular, PaintBrushRegular, SearchRegular } from "@fluentui/react-icons";
 import { PaperServicesSettingsPanel } from "../features/paper-services/PaperServicesSettingsPanel";
 import { WebDavSettingsPanel } from "../features/webdav/WebDavSettingsPanel";
 import { DataLocationSettings } from "../features/settings/DataLocationSettings";
 import { RecommendationSettingsPanel } from "../features/settings/RecommendationSettingsPanel";
-import { useState } from "react";
-import { BotRegular, ChevronDownRegular, ChevronRightRegular, DatabaseRegular, EyeRegular, FolderRegular, LightbulbRegular, SettingsRegular } from "@fluentui/react-icons";
+import { AnnotationSyncSettingsPanel } from "../features/settings/AnnotationSyncSettingsPanel";
 import { AgentSettingsPanel } from "../features/agent-core/AgentSettingsPanel";
 import { ViewSettingsPanel } from "../features/settings/ViewSettingsPanel";
 import { ModelConnectionPanel } from "../features/models/ModelConnectionPanel";
@@ -12,6 +14,8 @@ import { LibraryLocationPanel } from "../features/library/LibraryLocationPanel";
 import { DocumentMetadataSyncPanel } from "../features/metadata/DocumentMetadataSyncPanel";
 import type { DocumentMetadataSyncResult, DocumentMetadataSyncStatus } from "../features/metadata/metadata.types";
 import type { SettingsState, UpdateSettingCommand } from "../features/settings/settings.types";
+import { matchesSettingsSearch, settingsCategories, settingsSections, type SettingsCategory, type SettingsSectionId } from "../features/settings/settingsNavigation";
+import "../features/settings/settingsPage.css";
 
 type SettingsPaneProps = {
   documentMetadataSyncMessage?: string;
@@ -29,102 +33,87 @@ type SettingsPaneProps = {
   settings?: Partial<SettingsState>;
 };
 
-export function SettingsPane({
-  documentMetadataSyncMessage,
-  libraryRootPath,
-  loadLegacyLibraryRoots,
-  onBackupLibrary,
-  onChangeLibraryRoot,
-  onOpenLibraryInFileManager,
-  onSelectLegacyLibraryRoot,
-  documentMetadataSyncResult,
-  documentMetadataSyncStatus,
-  onOpenSkillDocument,
-  onRetryDocumentMetadataSync,
-  onUpdateSetting,
-  settings
-}: SettingsPaneProps) {
-  const [viewExpanded, setViewExpanded] = useState(true);
-  const [modelExpanded, setModelExpanded] = useState(true);
-  const [agentExpanded, setAgentExpanded] = useState(false);
-  const [syncExpanded, setSyncExpanded] = useState(true);
-  const [libraryExpanded, setLibraryExpanded] = useState(libraryRootPath == null);
-  return (
-    <section aria-label="左边栏设置" className="settings-panel">
-      <div aria-hidden="true" className="settings-panel-icon"><SettingsRegular /></div>
-      <DataLocationSettings />
-      <WebDavSettingsPanel key={libraryRootPath ?? "default"} />
-      <section className="sidebar-section settings-model-section">
-        <button aria-expanded={modelExpanded} aria-label={`${modelExpanded ? "收起" : "展开"} AI 接入`} className="sidebar-section-header" onClick={() => setModelExpanded((current) => !current)} type="button">
-          <span aria-hidden="true" className="sidebar-section-disclosure">{modelExpanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
-          <BotRegular />
-          <span>AI 接入</span>
-        </button>
-        {modelExpanded ? <div className="sidebar-section-content"><ModelConnectionPanel settings={settings} onUpdateSetting={onUpdateSetting} /></div> : null}
-      </section>
-      <section className="sidebar-section settings-paper-services"><div className="sidebar-section-header"><DatabaseRegular /><span>论文与薄读</span></div><div className="sidebar-section-content"><PaperServicesSettingsPanel settings={settings} onUpdateSetting={onUpdateSetting} /></div></section>
-      <section aria-label="论文推荐设置" className="sidebar-section settings-recommendation-section">
-        <div className="sidebar-section-header"><LightbulbRegular /><span>论文推荐</span></div>
-        <div className="sidebar-section-content">
-          <RecommendationSettingsPanel settings={settings} onUpdateSetting={onUpdateSetting} />
-        </div>
-      </section>
-      <section className="sidebar-section settings-view-section">
-        <button aria-expanded={viewExpanded} aria-label={`${viewExpanded ? "收起" : "展开"} View 设置`} className="sidebar-section-header" onClick={() => setViewExpanded((current) => !current)} type="button">
-          <span aria-hidden="true" className="sidebar-section-disclosure">{viewExpanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
-          <EyeRegular />
-          <span>View</span>
-        </button>
-        {viewExpanded ? <div className="sidebar-section-content">
-          <ViewSettingsPanel onUpdateSetting={onUpdateSetting} settings={settings} />
+
+const categoryIcons: Record<SettingsCategory, ReactElement> = {
+  all: <AppsListRegular />, appearance: <PaintBrushRegular />, ai: <BotRegular />,
+  papers: <DocumentSearchRegular />, storage: <FolderRegular />, sync: <CloudSyncRegular />
+};
+
+export function SettingsPane(props: SettingsPaneProps) {
+  const [category, setCategory] = useState<SettingsCategory>("all");
+  const [query, setQuery] = useState("");
+  const contentRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const id = useId();
+  const searching = query.trim().length > 0;
+  const visibleSections = settingsSections.filter((section) => searching
+    ? matchesSettingsSearch(section, query)
+    : category === "all" || section.category === category);
+  const visibleIds = new Set<SettingsSectionId>(visibleSections.map((section) => section.id));
+  const shared = { settings: props.settings, onUpdateSetting: props.onUpdateSetting };
+  const panels: Record<SettingsSectionId, ReactNode> = {
+    appearance: <ViewSettingsPanel {...shared} />,
+    models: <ModelConnectionPanel {...shared} expandAdvanced={searching} />,
+    assistant: <AgentSettingsPanel {...shared} expandCapabilities={searching} onOpenSkillDocument={props.onOpenSkillDocument} />,
+    papers: <PaperServicesSettingsPanel {...shared} />,
+    recommendations: <RecommendationSettingsPanel {...shared} />,
+    data: <DataLocationSettings embedded />,
+    library: <LibraryLocationPanel
+      loadLegacyRoots={props.loadLegacyLibraryRoots} onBackup={props.onBackupLibrary}
+      onChangeRoot={props.onChangeLibraryRoot} onOpenInFileManager={props.onOpenLibraryInFileManager}
+      onSelectLegacyRoot={props.onSelectLegacyLibraryRoot} rootPath={props.libraryRootPath} />,
+    webdav: <WebDavSettingsPanel key={props.libraryRootPath ?? "default"} embedded />,
+    metadata: <DocumentMetadataSyncPanel lastResult={props.documentMetadataSyncResult}
+      message={props.documentMetadataSyncMessage ?? ""} onRetrySync={props.onRetryDocumentMetadataSync}
+      status={props.documentMetadataSyncStatus} />,
+    annotations: <AnnotationSyncSettingsPanel {...shared} />
+  };
+  function resetScroll() {
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+  }
+  function clearSearch() {
+    setQuery("");
+    resetScroll();
+    searchRef.current?.focus();
+  }
+  return <section aria-label="应用设置" className="settings-page">
+    <header className="settings-page-header">
+      <div><h1>设置</h1><p>让 Liteasy 更适合你的研究习惯</p></div>
+      <Input ref={searchRef} className="settings-search" aria-label="搜索设置"
+        placeholder="搜索设置，如模型、主题、保存位置" value={query}
+        contentBefore={<SearchRegular aria-hidden="true" />}
+        contentAfter={query ? <Tooltip content="清除搜索" relationship="description">
+          <Button appearance="subtle" size="small" aria-label="清除设置搜索" icon={<DismissRegular />} onClick={clearSearch} />
+        </Tooltip> : undefined}
+        onChange={(_, data) => { setQuery(data.value); resetScroll(); }}
+        onKeyDown={(event) => { if (event.key === "Escape" && query) { event.stopPropagation(); clearSearch(); } }} />
+    </header>
+    <div className="settings-page-body">
+      <nav aria-label="设置分类" className="settings-categories">
+        {settingsCategories.map((item) => <Button key={item.id} appearance="subtle"
+          aria-pressed={!searching && category === item.id} icon={categoryIcons[item.id]}
+          onClick={() => { setCategory(item.id); setQuery(""); resetScroll(); }}>
+          {item.label}
+        </Button>)}
+      </nav>
+      <div className="settings-content" ref={contentRef}>
+        {searching ? <p className="settings-search-summary" role="status">找到 {visibleSections.length} 个设置分组 · 搜索全部分类</p> : null}
+        {searching && visibleSections.length === 0 ? <div className="settings-empty">
+          <SearchRegular aria-hidden="true" /><h2>没有找到相关设置</h2>
+          <p>试试“API”“字体”或“同步”等关键词。</p>
+          <Button onClick={clearSearch}>清除搜索</Button>
         </div> : null}
-      </section>
-      <section className="sidebar-section settings-agent-section">
-        <button aria-expanded={agentExpanded} aria-label={`${agentExpanded ? "收起" : "展开"} Agent 设置`} className="sidebar-section-header" onClick={() => setAgentExpanded((current) => !current)} type="button">
-          <span aria-hidden="true" className="sidebar-section-disclosure">{agentExpanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
-          <BotRegular />
-          <span>Agent</span>
-        </button>
-        {agentExpanded ? <div className="sidebar-section-content">
-          <AgentSettingsPanel
-            onOpenSkillDocument={onOpenSkillDocument}
-            onUpdateSetting={onUpdateSetting}
-            settings={settings}
-          />
-        </div> : null}
-      </section>
-      <section className="sidebar-section settings-sync-section">
-        <button aria-expanded={syncExpanded} aria-label={`${syncExpanded ? "收起" : "展开"}文献同步`} className="sidebar-section-header" onClick={() => setSyncExpanded((current) => !current)} type="button">
-          <span aria-hidden="true" className="sidebar-section-disclosure">{syncExpanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
-          <DatabaseRegular />
-          <span>文献同步</span>
-        </button>
-        {syncExpanded ? <div className="sidebar-section-content">
-          <DocumentMetadataSyncPanel
-            lastResult={documentMetadataSyncResult}
-            message={documentMetadataSyncMessage ?? ""}
-            onRetrySync={onRetryDocumentMetadataSync}
-            status={documentMetadataSyncStatus}
-          />
-        </div> : null}
-      </section>
-      <section className="sidebar-section settings-library-section">
-        <button aria-expanded={libraryExpanded} aria-label={`${libraryExpanded ? "收起" : "展开"}文献库位置`} className="sidebar-section-header" onClick={() => setLibraryExpanded((current) => !current)} type="button">
-          <span aria-hidden="true" className="sidebar-section-disclosure">{libraryExpanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
-          <FolderRegular />
-          <span>文献库位置</span>
-        </button>
-        {libraryExpanded ? <div className="sidebar-section-content">
-          <LibraryLocationPanel
-            loadLegacyRoots={loadLegacyLibraryRoots}
-            onBackup={onBackupLibrary}
-            onChangeRoot={onChangeLibraryRoot}
-            onOpenInFileManager={onOpenLibraryInFileManager}
-            onSelectLegacyRoot={onSelectLegacyLibraryRoot}
-            rootPath={libraryRootPath}
-          />
-        </div> : null}
-      </section>
-    </section>
-  );
+        {/* Keep forms mounted so switching categories or searching never discards unsaved input. */}
+        {settingsSections.map((section) => <section key={section.id}
+          aria-label={section.id === "recommendations" ? "论文推荐设置" : section.title}
+          className="settings-card" hidden={!visibleIds.has(section.id)}>
+          <header className="settings-card-header">
+            <h2 id={`${id}-${section.id}`}>{section.title}</h2>
+            <p>{section.description}</p>
+          </header>
+          <div className="settings-card-content">{panels[section.id]}</div>
+        </section>)}
+      </div>
+    </div>
+  </section>;
 }

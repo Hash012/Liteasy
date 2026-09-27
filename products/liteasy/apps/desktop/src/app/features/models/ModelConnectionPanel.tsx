@@ -1,3 +1,4 @@
+import { OpenRegular } from "@fluentui/react-icons";
 import { rememberVerifiedModel, forgetVerifiedModel, modelProfileId, directModelSettingCommands } from "./verifiedModelProfiles";
 import { useVerifiedModels } from "./useVerifiedModels";
 import { useEffect, useId, useRef, useState } from "react";
@@ -9,9 +10,10 @@ import { deleteDirectModelKey, hasDirectModelKey, saveDirectModelKey } from "./d
 import { directModelNeedsKey, getDirectModelConfig, getModelProvider, modelProviders, validateDirectModelConfig, type DirectModelConfig } from "./modelProviders";
 import "./modelConnection.css";
 
-type Props = { settings?: Partial<SettingsState>; onUpdateSetting?: (command: UpdateSettingCommand) => void };
+type Props = { expandAdvanced?: boolean; settings?: Partial<SettingsState>; onUpdateSetting?: (command: UpdateSettingCommand) => void };
 
-export function ModelConnectionPanel({ settings = {}, onUpdateSetting }: Props) {
+export function ModelConnectionPanel({ settings = {}, onUpdateSetting, expandAdvanced = false }: Props) {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [mode, setMode] = useState(settings["models.connection_mode"] ?? "direct");
   const [config, setConfig] = useState(() => getDirectModelConfig(settings));
   const [apiKey, setApiKey] = useState("");
@@ -121,6 +123,8 @@ export function ModelConnectionPanel({ settings = {}, onUpdateSetting }: Props) 
           {modelProviders.map((entry) => <option value={entry.provider} key={entry.provider}>{entry.label}</option>)}
         </Select>
       </Field>
+      {preset.docs ? <Button as="a" appearance="subtle" size="small" className="model-provider-docs"
+        icon={<OpenRegular />} href={preset.docs} rel="noopener noreferrer" target="_blank">查看服务商 API 文档</Button> : null}
       <Field label="API 基础地址" hint={preset.hint ?? "保留服务商要求的版本路径；无需添加 /chat/completions 或 /messages。"}>
         <Input aria-label="API 基础地址" disabled={pending} value={config.endpoint} onChange={(_event, data) => update({ endpoint: data.value })} placeholder="https://api.example.com/v1" />
       </Field>
@@ -131,7 +135,7 @@ export function ModelConnectionPanel({ settings = {}, onUpdateSetting }: Props) 
       <Field label="API key" hint={config.provider === "ollama" ? "本机 Ollama 不需要密钥。" : hasKey ? "此 API 地址已有密钥；留空即可保留，填写新值可替换。" : isTauri() ? "保存在此设备的系统凭据库中。" : "浏览器预览仅在当前页面会话保留密钥；关闭或刷新页面后需重新填写。"}>
         <Input aria-label="API key" autoComplete="off" disabled={pending} type="password" value={apiKey} onChange={(_event, data) => setApiKey(data.value)} placeholder={hasKey ? "已保存，留空保留" : "输入 API key"} />
       </Field>
-      <details>
+      <details open={expandAdvanced || advancedOpen} onToggle={(event) => { if (!expandAdvanced) setAdvancedOpen(event.currentTarget.open); }}>
         <summary>高级设置</summary>
         <Field label="API 协议">
           <Select aria-label="API 协议" disabled={pending} value={config.protocol} onChange={(_event, data) => update({ protocol: data.value as DirectModelConfig["protocol"] })}>
@@ -147,7 +151,7 @@ export function ModelConnectionPanel({ settings = {}, onUpdateSetting }: Props) 
           </Select>
         </Field> : null}
       </details>
-      {preset.docs ? <a href={preset.docs} rel="noreferrer" target="_blank">查看服务商 API 文档</a> : null}
+
     </> : <p className="model-connection-description">使用 Liteasy 账号提供的云端模型与额度。社区与云端同步功能仍需要登录。</p>}
     <div className="model-connection-actions">
       <Button appearance="primary" disabled={pending || !onUpdateSetting} onClick={() => void save(false)}>保存配置</Button>

@@ -7,7 +7,7 @@ import {
   syncWebDav, verifyWebDav, webdavStatus, type WebDavSettings
 } from "./webdavClient";
 
-export function WebDavSettingsPanel() {
+export function WebDavSettingsPanel({ embedded = false }: { embedded?: boolean }) {
   const desktop = isTauri();
   const [settings, setSettings] = useState<WebDavSettings>(emptyWebDavSettings);
   const [saved, setSaved] = useState<WebDavSettings | null>(null);
@@ -32,8 +32,8 @@ export function WebDavSettingsPanel() {
     try { await saveWebDavSettings(settings, password); setSaved({ ...settings }); setPassword(""); }
     catch { /* The shared status presents the error. */ }
   }
-  return <section className="sidebar-section" aria-label="WebDAV 同步">
-    <div className="sidebar-section-header"><CloudSyncRegular aria-hidden="true" /><span>WebDAV 同步</span></div>
+  return <section className={embedded ? "settings-embedded-panel" : "sidebar-section"} aria-label="WebDAV 同步">
+    {!embedded ? <div className="sidebar-section-header"><CloudSyncRegular aria-hidden="true" /><span>WebDAV 同步</span></div> : null}
     <div className="sidebar-section-content">
       <p>同步当前文献库中的 PDF、文献信息、批注和阅读产物。其他设备填写相同服务器地址与同步库名称即可连接。</p>
       {desktop ? <div style={{ display: "grid", gap: 8 }}>

@@ -186,3 +186,16 @@ test("wires the PDF reader to direct per-annotation publication controls", async
   expect(screen.queryByRole("button", { name: "发到论坛" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "立即同步" })).not.toBeInTheDocument();
 });
+
+
+test("opens settings in the main workspace while retaining the library sidebar", async () => {
+  const user = userEvent.setup();
+  render(<AppShell initialPapers={[]} localLibraryLoader={async () => localLibrarySnapshot} />);
+  await enterLocalWorkbench(user);
+  await user.click(screen.getByRole("button", { name: "设置", exact: true }));
+  expect(screen.getByRole("region", { name: "应用设置" }).closest('[data-region="main"]')).not.toBeNull();
+  expect(screen.getByRole("region", { name: "本地文献库" }).closest('[data-region="left"]')).not.toBeNull();
+  expect(screen.getByRole("textbox", { name: "搜索设置" })).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "设置", exact: true }));
+  expect(screen.getByRole("region", { name: "应用设置" })).toBeVisible();
+});

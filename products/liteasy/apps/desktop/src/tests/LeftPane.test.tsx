@@ -259,7 +259,7 @@ describe("LeftPane", () => {
     rerender(<LeftPane {...createProps({ leftRailView: "profile" })} />);
     expect(screen.getByText("个人中心", { selector: ".pane-header" })).toBeInTheDocument();
     rerender(<LeftPane {...createProps({ leftRailView: "settings" })} />);
-    expect(screen.getByText("设置", { selector: ".pane-header" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "设置", level: 1 })).toBeInTheDocument();
     rerender(<LeftPane {...createProps({ leftRailView: "artifact-library" })} />);
     expect(screen.getByText("产物库", { selector: ".pane-header" })).toBeInTheDocument();
   });
@@ -723,7 +723,7 @@ describe("LeftPane", () => {
       leftRailView: "settings",
       libraryRootPath: "/library"
     })} />);
-    expect(screen.getByLabelText("左边栏设置")).toBeInTheDocument();
+    expect(screen.getByLabelText("应用设置")).toBeInTheDocument();
     expect(screen.getByLabelText("文献元数据同步")).toBeInTheDocument();
   });
 

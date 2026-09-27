@@ -55,6 +55,12 @@ export function PaperServicesSettingsPanel({ settings, onUpdateSetting }: {
       </RadioGroup>
     </Field>
     <p>快速模式直接生成讲解；严谨模式加强原文依据并补充核验提示。两种模式均不限固定字数，局部证据不足会注明，不阻止生成。进行中的任务继续使用原模式。</p>
+    <Field label="扫描 PDF OCR 语言" hint="用于没有文字层的 PDF，可离线识别；识别结果支持页级定位。">
+      <Select aria-label="扫描 PDF OCR 语言" value={settings?.["import.ocr_language"] ?? "eng"}
+        onChange={(_, data) => update("import.ocr_language", data.value)}>
+        <option value="eng">English</option><option value="chi_sim">中文（简体）</option><option value="eng+chi_sim">中文 + English</option>
+      </Select>
+    </Field>
     <Field label="文献元信息服务">
       <Select aria-label="文献元信息服务" value={provider} onChange={(_, data) => {
         update("papers.metadata_provider", data.value);

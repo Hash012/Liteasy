@@ -13,7 +13,7 @@ import type { useDockLayout } from "../features/dock/useDockLayout";
 export function useWorkbenchNavigationController(input: {
   dock: Pick<
     ReturnType<typeof useDockLayout>,
-    "layout" | "findItemRegion" | "openItem"
+    "layout" | "findItemRegion" | "openItem" | "moveItem"
   >;
   collapsed: Record<Exclude<DockBaseRegionId, "main">, boolean>;
   setCollapsed(
@@ -26,7 +26,13 @@ export function useWorkbenchNavigationController(input: {
   activeDynamicItems: Partial<Record<DockRegionId, string | null>>;
 }) {
   return {
-    open(item: "assistant" | "help" | "notes" | "board" | "document-reader") {
+    open(item: "assistant" | "help" | "notes" | "board" | "document-reader" | "settings") {
+      // Settings is a workspace page, including for users with an old sidebar layout.
+      if (item === "settings") {
+        input.dock.moveItem(item, "main");
+        input.activate("main", item);
+        return;
+      }
       const region =
         input.dock.findItemRegion(item) ??
         dockItemRegistry[item].preferredRegion;

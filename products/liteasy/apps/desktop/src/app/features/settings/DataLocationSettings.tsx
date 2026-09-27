@@ -6,7 +6,7 @@ import { FolderOpenRegular } from "@fluentui/react-icons";
 
 type DataLocation = { currentPath: string; pendingPath?: string | null; migrationError?: string | null };
 
-export function DataLocationSettings() {
+export function DataLocationSettings({ embedded = false }: { embedded?: boolean }) {
   const [location, setLocation] = useState<DataLocation>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -26,8 +26,8 @@ export function DataLocationSettings() {
     } catch (e) { setError(String(e)); }
     finally { setBusy(false); }
   }
-  return <section className="sidebar-section" aria-label="本地数据保存位置">
-    <div className="sidebar-section-header"><FolderOpenRegular /><span>数据保存位置</span></div>
+  return <section className={embedded ? "settings-embedded-panel" : "sidebar-section"} aria-label="本地数据保存位置">
+    {!embedded ? <div className="sidebar-section-header"><FolderOpenRegular /><span>数据保存位置</span></div> : null}
     <div className="sidebar-section-content">
       {desktop ? <>
         <p>Windows 新安装默认将数据保存在安装目录下的 LiteasyData；已有数据和自定义目录保持原位置，可在此迁移。文献库、笔记对象、聊天历史和生成内容保存在此目录。外接文件夹和单独设置的文献库保持原位置。</p>

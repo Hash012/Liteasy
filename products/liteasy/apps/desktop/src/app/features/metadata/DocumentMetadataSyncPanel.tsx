@@ -1,5 +1,6 @@
 import type { DocumentMetadataSyncResult, DocumentMetadataSyncStatus } from "./metadata.types";
-import { ArrowSyncRegular, DatabaseRegular } from "@fluentui/react-icons";
+import { Button } from "@fluentui/react-components";
+import { ArrowSyncRegular } from "@fluentui/react-icons";
 
 type DocumentMetadataSyncPanelProps = {
   lastResult: DocumentMetadataSyncResult | null;
@@ -25,7 +26,7 @@ function getStatusLabel(status: DocumentMetadataSyncStatus, lastResult: Document
     return "无文献";
   }
 
-  return "当前已退化为本地阅读器";
+  return "登录后可同步";
 }
 
 export function DocumentMetadataSyncPanel({
@@ -36,22 +37,10 @@ export function DocumentMetadataSyncPanel({
 }: DocumentMetadataSyncPanelProps) {
   const statusLabel = getStatusLabel(status, lastResult);
 
-  return (
-    <div className="metadata-sync-card">
-      <div aria-label="文献元数据同步" className="metadata-sync-icon"><DatabaseRegular /></div>
-      <div className={`model-policy-status ${status}`} title={message}>
-        {statusLabel}
-      </div>
-      <button
-        aria-label="重新同步文献元数据"
-        className="policy-button sync icon-only"
-        disabled={status === "syncing" || status === "unauthenticated"}
-        onClick={onRetrySync}
-        title={message}
-        type="button"
-      >
-        <ArrowSyncRegular />
-      </button>
-    </div>
-  );
+  return <div className="settings-metadata-sync">
+    <p role="status">{statusLabel}{message ? ` · ${message}` : ""}</p>
+    <Button aria-label="重新同步文献元数据" icon={<ArrowSyncRegular />}
+      disabled={!onRetrySync || status === "syncing" || status === "unauthenticated"}
+      onClick={onRetrySync}>重新同步</Button>
+  </div>;
 }

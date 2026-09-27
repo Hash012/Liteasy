@@ -17,3 +17,10 @@
 .model-connection-panel details > summary { cursor: pointer; margin-bottom: 8px; }
 .model-connection-panel details > div + div { margin-top: 8px; }
 .model-connection-panel input { min-width: 0; }
+
+.model-provider-docs {
+  align-self: flex-start;
+  width: fit-content;
+  margin-top: -8px;
+  text-decoration: none;
+}

@@ -40,7 +40,7 @@ export const dockItemRegistry: Record<DockItemId, DockItemDescriptor> = {
   settings: {
     allowedRegions: sideToolRegions,
     id: "settings",
-    preferredRegion: "left",
+    preferredRegion: "main",
     title: "设置",
   },
   assistant: {

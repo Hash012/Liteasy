@@ -405,6 +405,10 @@ export function AppShell({
   }
 
   function openDockedLeftRailView(view: LeftRailView) {
+    if (view === "settings") {
+      workbenchNavigation.open("settings");
+      return;
+    }
     leftRail.setLeftRailView(view);
     const regionId = dock.findItemRegion(view) ?? "left";
     dock.openItem(view);
@@ -2390,6 +2394,10 @@ export function AppShell({
             openDockedLeftRailView(view);
           }}
           onToggleActiveView={(view) => {
+            if (view === "settings") {
+              workbenchNavigation.open("settings");
+              return;
+            }
             const regionId = dock.findItemRegion(view) ?? "left";
             const region = dock.layout.regions[regionId];
             if (region.activeItemId !== view) {

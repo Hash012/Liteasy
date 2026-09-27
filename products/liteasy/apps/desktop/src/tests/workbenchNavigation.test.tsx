@@ -61,3 +61,17 @@ test("reopens a tool in a persisted split without touching other regions", () =>
   expect(result.current.collapsed.right).toBe(true);
   expect(result.current.dock.findItemRegion("notes")).toBe("bar-notes");
 });
+
+
+test("settings opens in the center and relocates old sidebar placements without closing other tools", () => {
+  const { result } = renderHook(useFixture);
+  act(() => result.current.navigation.open("settings"));
+  expect(result.current.dock.findItemRegion("settings")).toBe("main");
+  expect(result.current.navigation.isVisible("settings")).toBe(true);
+  act(() => result.current.dock.moveItem("settings", "left"));
+  act(() => result.current.navigation.open("settings"));
+  expect(result.current.dock.layout.regions.main.activeItemId).toBe("settings");
+  expect(result.current.dock.layout.regions.left.itemIds).toContain("library");
+  expect(result.current.dock.layout.regions.left.itemIds).not.toContain("settings");
+  expect(result.current.dock.layout.regions.right.itemIds).toContain("assistant");
+});
