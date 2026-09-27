@@ -17,6 +17,7 @@ import {
   type PdfReaderSelectionSnapshot
 } from "../features/pdf/PdfReader";
 import type { PdfAnnotation, PdfAnnotationPublication } from "../features/pdf/pdfAnnotationStorage";
+import type { PdfReadingAnnotations } from "../features/pdf/pdfReadingAnnotations";
 import type { ReaderConversationContext } from "../features/assistant/assistantContext.types";
 import type { Paper } from "../features/workspace/workspace.types";
 import type { ForumFeedQuery, ForumPost } from "../features/forum/forum.types";
@@ -44,7 +45,7 @@ import type { ThinReadingVisualizationStatus } from "../features/artifacts/artif
 type ReaderPaneProps = {
   onDocumentInfo?: (info: import("../features/pdf/pdfDocumentInfo").PdfDocumentInfo) => void;
   onQuickAsk?: (request: PdfQuickAskRequest) => Promise<string>;
-  readingContent?: ReactNode;
+  readingContent?: ReactNode | ((annotations: PdfReadingAnnotations) => ReactNode);
   extractingPaper?: boolean;
   onExtractPaper?: () => Promise<void>;
   allowServerPdfParsing?: boolean;
@@ -200,8 +201,14 @@ export function ReaderPane({
               : "artifacts-detached"
           }`}
         >
-          <div className="reader-pdf-surface" hidden={readingVisible}>
+          <div className="reader-pdf-surface">
           <PdfReader
+            onEnterReadingMode={readingContent ? () => setReadingMode(true) : undefined}
+            onExitReadingMode={() => setReadingMode(false)}
+            readingView={readingVisible ? (annotations) => <section aria-label="论文阅读模式" className="reader-reading-surface">
+              <Button size="small" onClick={() => setReadingMode(false)}>PDF 模式</Button>
+              {typeof readingContent === "function" ? readingContent(annotations) : readingContent}
+            </section> : undefined}
             onDocumentInfo={onDocumentInfo}
             onQuickAsk={onQuickAsk}
             readingControls={readingContent
@@ -234,10 +241,6 @@ export function ReaderPane({
           />
           {extractionError ? <p role="alert" className="reader-service-error">{extractionError}</p> : null}
           </div>
-          {readingVisible ? <section aria-label="论文阅读模式" className="reader-reading-surface">
-            <Button size="small" onClick={() => setReadingMode(false)}>PDF 模式</Button>
-            {readingContent}
-          </section> : null}
           {artifactRegionVisible ? (
             <section aria-label="多模态产物区域" className="reader-artifact-region">
               <ArtifactTabs

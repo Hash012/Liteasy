@@ -46,6 +46,7 @@ import { extractPdfResourcesWithMineruFallback } from "../features/import/mineru
 import { extractImportedChunksForPaper } from "../features/import/importedPaperExtraction";
 import { loadPdfBytesForImport } from "../features/import/pdfSourceClient";
 import { PaperResourceTab } from "../features/import/PaperResourceTab";
+import { PaperReadingWorkspace } from "../features/paper-reading/PaperReadingWorkspace";
 import type { PaperResourceKind } from "../features/import/paperResource.types";
 import { VisualizationTab } from "../features/visualization/VisualizationTab";
 import type { VisualizationTabData } from "../features/visualization/visualization.types";
@@ -2076,7 +2077,9 @@ export function AppShell({
         {...teamAnnotations.readerBindings(paper)}
         allowServerPdfParsing={false}
         readingContent={getPaperMineruResources(paper.id)?.textChunks.some((chunk) => chunk.textExtraction === "mineru")
-          ? renderPaperResource({ paperId: paper.id, kind: "multimodal" }) : undefined}
+          ? (session) => <PaperReadingWorkspace session={session} chunks={getPaperMineruResources(paper.id)?.textChunks ?? []}>
+              {renderPaperResource({ paperId: paper.id, kind: "multimodal" })}
+            </PaperReadingWorkspace> : undefined}
         extractingPaper={paperServices.running.includes(paper.id)}
         onExtractPaper={async () => { await paperServices.extract(paper); }}
         analysisHint={analysisHint}

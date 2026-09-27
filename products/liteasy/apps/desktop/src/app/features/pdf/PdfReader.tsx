@@ -95,6 +95,7 @@ import { PdfAnnotationReview } from "./PdfAnnotationReview";
 import { usePdfAnnotationReview } from "./usePdfAnnotationReview";
 import { PaperReviewSharePanel } from "./PaperReviewSharePanel";
 import { persistPdfAnnotationState } from "./pdfAnnotationPersistence";
+import { readingQuoteRects, type PdfReadingAnnotations } from "./pdfReadingAnnotations";
 import "./pdfAnnotationList.css";
 import { PdfOutline } from "./PdfOutline";
 import { PdfThumbnail } from "./PdfThumbnail";
@@ -228,6 +229,9 @@ type PdfReaderProps = {
   onDocumentInfo?: (info: import("./pdfDocumentInfo").PdfDocumentInfo) => void;
   onQuickAsk?: (request: PdfQuickAskRequest) => Promise<string>;
   readingControls?: ReactNode;
+  readingView?: (annotations: PdfReadingAnnotations) => ReactNode;
+  onEnterReadingMode?: () => void;
+  onExitReadingMode?: () => void;
   allowServerPdfParsing?: boolean;
   /** Where the structured citation parser lives; its snapshot is what thin reading reads back. */
   externalKnowledgeEndpoint?: string;
@@ -1443,6 +1447,7 @@ function PdfPageView({
 export function PdfReader({
   onDocumentInfo,
   readingControls,
+  readingView, onEnterReadingMode, onExitReadingMode,
   allowServerPdfParsing = false,
   externalKnowledgeEndpoint = "",
   loadLiteratureHints = collectPdfLiteratureHints,
@@ -1547,6 +1552,9 @@ export function PdfReader({
   const [mutatingTeamAnnotationId, setMutatingTeamAnnotationId] = useState<string | null>(null);
   const pdfDisplaySource = resolvePdfDisplaySource(activePaper?.sourcePath);
   const annotationStorageKey = pdfAnnotationStorageKey(activePaper);
+  const annotationScopeRef = useRef(annotationStorageKey);
+  annotationScopeRef.current = annotationStorageKey;
+  const [readingAnnotationId, setReadingAnnotationId] = useState<string>();
   useEffect(() => {
     setReaderView("document");
     readingScrollTop.current = 0;
@@ -1570,6 +1578,7 @@ export function PdfReader({
   const [autoPublicAnnotations, setAutoPublicAnnotations] = useState(false);
   const [hydratedAnnotationStorageKey, setHydratedAnnotationStorageKey] = useState<string | null>(null);
   const [annotationLoadError, setAnnotationLoadError] = useState("");
+  const [annotationSaveError, setAnnotationSaveError] = useState("");
   const [annotationLoadAttempt, setAnnotationLoadAttempt] = useState(0);
   const fulltext = usePdfFulltextStore(activePaper?.id);
   const annotationReview = usePdfAnnotationReview({
@@ -1918,6 +1927,7 @@ export function PdfReader({
     const measuredStageElement = stageElement;
 
     function updateLayout() {
+      if (measuredStageElement.clientWidth === 0) return;
       setStageWidth(measuredStageElement.clientWidth);
       // The graph is laid out in the frame's own pixels, which is the stage minus its padding.
       setDocumentFrameWidth(documentFrameRef.current?.clientWidth ?? 0);
@@ -1950,6 +1960,8 @@ export function PdfReader({
     }, fallbackPaperIdentity);
     setHydratedAnnotationStorageKey(null);
     setAnnotationLoadError("");
+    setAnnotationSaveError("");
+    setReadingAnnotationId(undefined);
     setAnnotations(browserState.annotations);
     annotationsRef.current = browserState.annotations;
     setAutoPublicAnnotations(browserState.autoPublic);
@@ -2101,8 +2113,11 @@ export function PdfReader({
           paperId: activePaper.id,
           snapshot: { annotations, autoPublic: autoPublicAnnotations, version: 2 }
         })
+          .then(() => { if (annotationScopeRef.current === annotationStorageKey) setAnnotationSaveError(""); })
           .catch((error: unknown) => {
+            if (annotationScopeRef.current !== annotationStorageKey) return;
             const detail = error instanceof Error ? error.message : "未知错误";
+            setAnnotationSaveError(`批注尚未写入本地文献库：${detail}。`);
             setStatus(`批注尚未写入本地文献库：${detail}。请检查库目录后重试。`);
           });
         if (annotations.length > 0 && onPaperAnnotated) {
@@ -2904,6 +2919,54 @@ export function PdfReader({
     setAnnotationPopup(null);
   }
 
+  function assertReadingAnnotationsReady() {
+    if (!activePaper || !annotationStorageKey || annotationScopeRef.current !== annotationStorageKey ||
+      hydratedAnnotationStorageKey !== annotationStorageKey || annotationLoadError) {
+      throw new Error("批注尚未恢复或论文已切换，请稍后重试。");
+    }
+  }
+
+  async function persistReadingAnnotations() {
+    assertReadingAnnotationsReady();
+    await persistPdfAnnotationState({ annotationStorageKey: annotationStorageKey!, autoPublicStorageKey,
+      paperId: activePaper!.id, snapshot: { annotations: annotationsRef.current, autoPublic: autoPublicAnnotations, version: 2 } });
+  }
+
+  async function createReadingAnnotation(input: { page: number; excerpt: string; note: string }) {
+    assertReadingAnnotationsReady();
+    if (!Number.isInteger(input.page) || input.page < 1 || !input.note.trim()) throw new Error("请选择页码并填写批注。");
+    const duplicate = annotationsRef.current.find((item) => item.page === input.page && item.excerpt === input.excerpt && item.note === input.note.trim());
+    if (duplicate) { await persistReadingAnnotations(); setReadingAnnotationId(duplicate.id); return; }
+    const now = new Date().toISOString();
+    const rects = readingQuoteRects(pageCharModelsRef.current.get(input.page), input.excerpt);
+    const annotation: PdfAnnotationV2 = { id: `reading-${crypto.randomUUID()}`, kind: rects.length ? "highlight" : "note",
+      color: rects.length ? "yellow" : undefined, createdAt: now, updatedAt: now, revision: 1,
+      page: input.page, excerpt: input.excerpt, note: input.note.trim(), text: "阅读批注", rects,
+      paperIdentity: resolvePaperIdentity(activePaper!), publication: { desiredVisibility: "private", state: "not_published" } };
+    setCurrentAnnotations((current) => [...current, annotation]);
+    setReadingAnnotationId(annotation.id);
+    await persistReadingAnnotations();
+  }
+
+  async function updateReadingAnnotation(id: string, revision: number, note: string) {
+    assertReadingAnnotationsReady();
+    const annotation = annotationsRef.current.find((item) => item.id === id);
+    if (!annotation) throw new Error("批注已删除，请重新打开后编辑。");
+    if (annotation.revision !== revision) {
+      // A failed disk write leaves the edited value in memory; retry that value without a new revision.
+      if (annotation.note === note) { await persistReadingAnnotations(); return; }
+      throw new Error("批注已变化，请重新打开后编辑。");
+    }
+    const updated = revisePdfAnnotation(annotation, { note, updatedAt: new Date().toISOString(),
+      publication: annotation.publication.state === "published" ? { ...annotation.publication, state: "pending_update" } : annotation.publication });
+    setCurrentAnnotations((current) => current.map((item) => item.id === id ? updated : item));
+    if (annotation.publication.state === "published") {
+      publicationIntentsRef.current.set(id, "public");
+      queueMicrotask(() => void applyPublication(updated, "update"));
+    }
+    await persistReadingAnnotations();
+  }
+
   function createInkAnnotation(page: number, ink: PdfInkStroke) {
     if (!activePaper || hydratedAnnotationStorageKey !== annotationStorageKey) return;
     setFocusedPage(page);
@@ -3221,8 +3284,29 @@ export function PdfReader({
       data-pdf-source={pdfDisplaySource ?? ""}
       style={{ "--pdf-reading-background": pdfBackground } as CSSProperties}
     >
+      {readingView?.({ scopeKey: annotationStorageKey ?? "", ready: Boolean(annotationStorageKey && hydratedAnnotationStorageKey === annotationStorageKey && !annotationLoadError),
+        error: annotationLoadError || annotationSaveError, annotations: hydratedAnnotationStorageKey === annotationStorageKey ? annotationsInReadingOrder : [],
+        pageTexts, pageCount, focusedPage, selectedId: readingAnnotationId,
+        create: createReadingAnnotation, update: updateReadingAnnotation,
+        remove: async (id) => {
+          assertReadingAnnotationsReady();
+          const annotation = annotationsRef.current.find((item) => item.id === id);
+          if (!annotation) return;
+          await deleteAnnotation(annotation);
+          if (annotationsRef.current.some((item) => item.id === id)) throw new Error("批注尚未删除，请在 PDF 模式检查公开状态后重试。");
+          await persistReadingAnnotations();
+        },
+        openPdf: (id) => {
+          const annotation = annotationsRef.current.find((item) => item.id === id);
+          if (!annotation) return;
+          onExitReadingMode?.();
+          openAnnotationEditor(annotation);
+          locateAnnotation(annotation);
+        },
+      })}
       <div
         aria-label="PDF 阅读工作区"
+        hidden={Boolean(readingView)}
         style={{ "--pdf-sidebar-width": `${sidebarWidth}px`, "--pdf-whiteboard-width": `${whiteboardWidth}px` } as CSSProperties}
         className={`pdf-workspace ${sidebarCollapsed ? "sidebar-collapsed" : "sidebar-open"} ${
           whiteboardOpen && (!objectWorkbench || legacyBoardPreview) ? "whiteboard-open" : ""
@@ -3426,6 +3510,10 @@ export function PdfReader({
                                 onClick={() => locateAnnotation(annotation)} />
                             </Tooltip>
                             {renderAnnotationReviewButton(annotation)}
+                            {onEnterReadingMode ? <Tooltip content="在阅读模式查看批注" relationship="description">
+                              <Button aria-label={`阅读模式查看批注：${annotation.excerpt}`} appearance="subtle" size="small" icon={<DocumentRegular />}
+                                onClick={() => { setReadingAnnotationId(annotation.id); onEnterReadingMode(); }} />
+                            </Tooltip> : null}
                             {objectWorkbench ? <>
                               <Tooltip content="拖动批注到研究白板" relationship="description">
                                 <Button aria-label={`拖动批注到研究白板：${annotation.excerpt}`} appearance="subtle" size="small"

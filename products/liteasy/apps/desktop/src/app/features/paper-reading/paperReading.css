@@ -1,0 +1,39 @@
+.pdf-workspace[hidden] { display: none; }
+.pdf-reader > .reader-reading-surface { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; gap: 6px; }
+.reader-reading-surface > button { align-self: flex-start; flex-shrink: 0; }
+.paper-reading-workspace { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: hidden; color: var(--colorNeutralForeground1); background: var(--colorNeutralBackground2); }
+.paper-reading-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--colorNeutralStroke2); flex-shrink: 0; }
+.paper-reading-preferences { display: grid; gap: 12px; width: 260px; }
+.paper-reading-body { display: grid; grid-template-columns: minmax(0, 1fr); flex: 1; min-height: 0; overflow: hidden; }
+.paper-reading-body.with-comments { grid-template-columns: minmax(0, 1fr) 280px; }
+.paper-reading-content { min-height: 0; min-width: 0; overflow: hidden; }
+.paper-reading-content .paper-resource-tab { background: var(--colorNeutralBackground2); color: var(--colorNeutralForeground1); }
+.paper-reading-content .paper-resource-tab__header h1, .paper-reading-content .paper-resource-tab__eyebrow { display: none; }
+.paper-reading-content .paper-resource-tab__header { gap: 8px; flex-wrap: wrap; }
+.paper-reading-content .paper-resource-tab__multimodal-document,
+.paper-reading-content .paper-resource-tab__reading-pane,
+.paper-reading-content .paper-resource-tab__text-list article { background: var(--colorNeutralBackground1); border-color: var(--colorNeutralStroke2); }
+.paper-reading-content .mineru-markdown { font-family: var(--paper-reading-font); font-size: var(--paper-reading-size); line-height: var(--paper-reading-line-height); max-width: var(--paper-reading-width); color: var(--colorNeutralForeground1); text-align: var(--paper-reading-alignment); padding: 12px 0; }
+.paper-reading-content .mineru-markdown h1 { font-size: 1.65em; }
+.paper-reading-content .mineru-markdown h2 { font-size: 1.4em; }
+.paper-reading-content .mineru-markdown h3 { font-size: 1.2em; }
+.paper-reading-content .mineru-markdown :is(h1, h2, h3, h4, h5, h6, blockquote, th) { color: inherit; }
+.paper-reading-content .mineru-markdown :is(pre, code, th, .mineru-markdown__formula--block) { background: var(--colorNeutralBackground2); color: inherit; border-color: var(--colorNeutralStroke2); }
+.paper-reading-content [data-reading-comment-match] { background: var(--colorBrandBackground2); outline: 2px solid var(--colorBrandStroke1); outline-offset: 3px; border-radius: 4px; }
+.paper-reading-comments { overflow-y: auto; min-height: 0; padding: 12px; border-left: 1px solid var(--colorNeutralStroke2); background: var(--colorNeutralBackground1); font-size: 13px; }
+.paper-reading-comments > p { font-size: 12px; color: var(--colorNeutralForeground2); }
+.paper-reading-comments [role="alert"] { color: var(--colorStatusDangerForeground1); }
+.paper-reading-comment, .paper-reading-comment-editor { border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; padding: 10px; margin-top: 12px; display: flex; flex-direction: column; gap: 8px; overflow-wrap: anywhere; }
+.paper-reading-comment-editor { background: var(--colorNeutralBackground2); }
+.paper-reading-comment-editor blockquote { margin: 0; padding-left: 8px; border-left: 2px solid var(--colorBrandStroke1); max-height: 120px; overflow-y: auto; }
+.paper-reading-comment-source { border: 0; background: transparent; color: var(--colorBrandForeground1); font: inherit; text-align: left; cursor: pointer; padding: 0; max-height: 100px; overflow-y: auto; }
+.paper-reading-comment-source:focus-visible { outline: 2px solid var(--colorStrokeFocus2); outline-offset: 2px; }
+.paper-reading-comment-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.paper-reading-comment .pdf-annotation-markdown { font-size: 13px; }
+@media (max-width: 1000px) {
+  .paper-reading-body.with-comments { grid-template-columns: minmax(0, 1fr) 240px; }
+}
+@media (max-width: 680px) {
+  .paper-reading-body.with-comments { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(200px, 1fr) minmax(160px, 35%); }
+  .paper-reading-comments { border-left: 0; border-top: 1px solid var(--colorNeutralStroke2); }
+}

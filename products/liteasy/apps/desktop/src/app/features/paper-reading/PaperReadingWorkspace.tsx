@@ -1,0 +1,202 @@
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Button, Field, Popover, PopoverSurface, PopoverTrigger, Select, Slider, Textarea, Tooltip } from "@fluentui/react-components";
+import { AddRegular, CommentRegular, TextFontSizeRegular } from "@fluentui/react-icons";
+import type { PdfReadingAnnotations } from "../pdf/pdfReadingAnnotations";
+import type { RetrievalChunk } from "../retrieval/retrieval.types";
+import { compactPdfTextForSearch } from "../pdf/pdfTextSearch";
+import { PdfAnnotationMarkdown } from "../pdf/PdfAnnotationMarkdown";
+import { resolveLocalAccountKey } from "../library/localAccountKey";
+import { defaultPaperReadingPreferences, loadPaperReadingPreferences, paperReadingFonts, type PaperReadingPreferences } from "./paperReadingPreferences";
+import "./paperReading.css";
+
+export function readingQuotePages(quote: string, pageTexts: Record<number, string>, chunks: readonly RetrievalChunk[]) {
+  const needle = compactPdfTextForSearch(quote);
+  if (!needle) return [];
+  const pages = new Map<number, string[]>();
+  for (const [page, text] of Object.entries(pageTexts)) pages.set(Number(page), [text]);
+  for (const chunk of chunks) pages.set(chunk.page, [...(pages.get(chunk.page) ?? []), chunk.snippet]);
+  return [...pages].filter(([, texts]) => texts.some((text) => compactPdfTextForSearch(text).includes(needle))).map(([page]) => page);
+}
+
+function locateQuote(root: HTMLElement, quote: string) {
+  const needle = compactPdfTextForSearch(quote);
+  if (!needle) return false;
+  const matches: HTMLElement[] = [];
+  for (const body of root.querySelectorAll<HTMLElement>(".mineru-markdown")) {
+    const pane = body.closest(".paper-resource-tab__reading-pane");
+    if (pane && pane.getAttribute("aria-label") !== "原文") continue;
+    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+    const nodes: Text[] = [];
+    const offsets: number[] = [];
+    let text = "";
+    while (walker.nextNode()) {
+      const node = walker.currentNode as Text;
+      const folded = compactPdfTextForSearch(node.data);
+      for (let index = 0; index < folded.length; index += 1) offsets.push(nodes.length);
+      nodes.push(node); text += folded;
+    }
+    const index = text.indexOf(needle);
+    if (index >= 0 && text.indexOf(needle, index + 1) < 0) {
+      const element = nodes[offsets[index]]?.parentElement;
+      if (element) matches.push(element.closest<HTMLElement>("p, li, blockquote, td, h1, h2, h3") ?? element);
+    }
+  }
+  if (matches.length !== 1) return false;
+  matches[0].dataset.readingCommentMatch = "true";
+  matches[0].scrollIntoView?.({ block: "center", behavior: "smooth" });
+  return true;
+}
+
+export function PaperReadingWorkspace(props: { session: PdfReadingAnnotations; chunks: readonly RetrievalChunk[]; children: ReactNode }) {
+  return <ReadingSession key={props.session.scopeKey} {...props} />;
+}
+
+function ReadingSession({ session, chunks, children }: { session: PdfReadingAnnotations; chunks: readonly RetrievalChunk[]; children: ReactNode }) {
+  const preferenceKey = `liteasy.paper-reading.preferences.v1:${encodeURIComponent(resolveLocalAccountKey())}`;
+  const [preferences, setPreferences] = useState(() => loadPaperReadingPreferences(preferenceKey));
+  const [commentsVisible, setCommentsVisible] = useState(true);
+  const [draft, setDraft] = useState<{ excerpt: string; page: string; id?: string; revision?: number }>();
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const rootRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const mounted = useRef(true);
+  const pendingPosition = useRef<number>();
+  const pages = [...new Set([...Array.from({ length: session.pageCount }, (_, index) => index + 1), ...chunks.map((chunk) => chunk.page)])].sort((a, b) => a - b);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => {
+    try { localStorage.setItem(preferenceKey, JSON.stringify(preferences)); } catch { /* Keep session preferences. */ }
+  }, [preferenceKey, preferences]);
+
+  function changePreferences(next: PaperReadingPreferences) {
+    const scroller = contentRef.current?.querySelector<HTMLElement>(".paper-resource-tab");
+    if (scroller) pendingPosition.current = scroller.scrollTop / Math.max(1, scroller.scrollHeight - scroller.clientHeight);
+    setPreferences(next);
+  }
+  useLayoutEffect(() => {
+    const scroller = contentRef.current?.querySelector<HTMLElement>(".paper-resource-tab");
+    if (scroller && pendingPosition.current !== undefined) {
+      scroller.scrollTop = pendingPosition.current * Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+      pendingPosition.current = undefined;
+    }
+  }, [preferences]);
+
+  function locate(id: string) {
+    const annotation = session.annotations.find((item) => item.id === id);
+    const root = contentRef.current;
+    if (!annotation || !root) return;
+    root.querySelectorAll("[data-reading-comment-match]").forEach((node) => node.removeAttribute("data-reading-comment-match"));
+    setCommentsVisible(true);
+    if (locateQuote(root, annotation.excerpt)) setMessage(`已定位第 ${annotation.page} 页批注的原文。`);
+    else {
+      const page = root.querySelector<HTMLElement>(`[data-reading-page="${annotation.page}"]`);
+      page?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+      setMessage(`此批注属于第 ${annotation.page} 页，当前文字未能精确对应。可切换原文或查看 PDF 定位。`);
+    }
+    Array.from(rootRef.current?.querySelectorAll<HTMLElement>("[data-reading-annotation-id]") ?? [])
+      .find((element) => element.dataset.readingAnnotationId === id)?.scrollIntoView?.({ block: "nearest" });
+  }
+  useEffect(() => { if (session.selectedId) locate(session.selectedId); }, [session.selectedId]);
+
+  function captureSelection() {
+    if (draft || busy) return;
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !contentRef.current?.contains(selection.anchorNode) || !contentRef.current.contains(selection.focusNode)) return;
+    const start = selection.anchorNode?.parentElement?.closest(".mineru-markdown");
+    const end = selection.focusNode?.parentElement?.closest(".mineru-markdown");
+    if (!start || start !== end) return;
+    const pane = start.closest(".paper-resource-tab__reading-pane");
+    if (pane && pane.getAttribute("aria-label") !== "原文") { setMessage("请在原文侧选择批注位置；已有批注可在右侧查看。"); return; }
+    const excerpt = selection.toString().trim();
+    if (!excerpt) return;
+    if (excerpt.length > 4000) { setMessage("选段过长，请缩小范围后添加批注。"); return; }
+    const candidates = readingQuotePages(excerpt, session.pageTexts, chunks);
+    const page = candidates.length === 1 ? String(candidates[0]) : start.closest<HTMLElement>("[data-reading-page]")?.dataset.readingPage ?? "";
+    setDraft({ excerpt, page }); setNote(""); setCommentsVisible(true); setError("");
+    setMessage(page ? `已选择第 ${page} 页原文。` : "请选择选段所在的 PDF 页码；保存后可在两种模式中查看。");
+  }
+
+  async function save() {
+    if (!draft || busy) return;
+    setBusy(true); setError("");
+    try {
+      if (draft.id) await session.update(draft.id, draft.revision!, note);
+      else await session.create({ page: Number(draft.page), excerpt: draft.excerpt, note });
+      if (mounted.current) { setDraft(undefined); setNote(""); setMessage("批注已保存，PDF 与阅读模式共用同一份内容。"); }
+    } catch (failure) { if (mounted.current) setError(failure instanceof Error ? failure.message : "保存失败，请重试。"); }
+    finally { if (mounted.current) setBusy(false); }
+  }
+
+  const styles = { "--paper-reading-font": paperReadingFonts[preferences.font].family, "--paper-reading-size": `${preferences.fontSize}px`,
+    "--paper-reading-width": preferences.width ? `${preferences.width}px` : "100%", "--paper-reading-line-height": preferences.lineHeight,
+    "--paper-reading-alignment": preferences.alignment } as CSSProperties;
+  return <div className="paper-reading-workspace" ref={rootRef} style={styles}>
+    <div className="paper-reading-toolbar" role="toolbar" aria-label="阅读排版与批注">
+      <Popover positioning="below-start">
+        <PopoverTrigger disableButtonEnhancement><Tooltip content="调整字号、字体与版面" relationship="description">
+          <Button icon={<TextFontSizeRegular />}>阅读排版</Button>
+        </Tooltip></PopoverTrigger>
+        <PopoverSurface aria-label="阅读排版设置" className="paper-reading-preferences">
+          <Field label={`字号 ${preferences.fontSize} px`}><Slider aria-label="阅读字号" min={14} max={30} step={1} value={preferences.fontSize}
+            onChange={(_, data) => changePreferences({ ...preferences, fontSize: data.value })} /></Field>
+          <Field label="字体"><Select aria-label="阅读字体" value={preferences.font} onChange={(_, data) => changePreferences({ ...preferences, font: data.value as PaperReadingPreferences["font"] })}>
+            {Object.entries(paperReadingFonts).map(([value, font]) => <option key={value} value={value}>{font.label}</option>)}
+          </Select></Field>
+          <Field label="页面宽度"><Select aria-label="阅读页面宽度" value={preferences.width} onChange={(_, data) => changePreferences({ ...preferences, width: Number(data.value) })}>
+            <option value="640">窄版</option><option value="800">适中</option><option value="1080">宽版</option><option value="0">填满窗口</option>
+          </Select></Field>
+          <Field label="行距"><Select aria-label="阅读行距" value={preferences.lineHeight} onChange={(_, data) => changePreferences({ ...preferences, lineHeight: Number(data.value) })}>
+            <option value="1.5">紧凑</option><option value="1.85">舒适</option><option value="2.2">宽松</option>
+          </Select></Field>
+          <Field label="对齐"><Select aria-label="阅读对齐" value={preferences.alignment} onChange={(_, data) => changePreferences({ ...preferences, alignment: data.value as "left" | "justify" })}>
+            <option value="left">左对齐</option><option value="justify">两端对齐</option>
+          </Select></Field>
+          <Button onClick={() => changePreferences(defaultPaperReadingPreferences)}>恢复默认排版</Button>
+        </PopoverSurface>
+      </Popover>
+      <Button icon={<AddRegular />} disabled={!session.ready || Boolean(draft)} onClick={() => {
+        setDraft({ page: String(session.focusedPage), excerpt: "" }); setNote(""); setCommentsVisible(true); setError("");
+      }}>添加页批注</Button>
+      <Button icon={<CommentRegular />} aria-pressed={commentsVisible} onClick={() => setCommentsVisible(!commentsVisible)}>批注（{session.annotations.length}）</Button>
+    </div>
+    <div className={`paper-reading-body${commentsVisible ? " with-comments" : ""}`}>
+      <div className="paper-reading-content" ref={contentRef} onMouseUp={captureSelection} onKeyUp={(event) => { if (event.key === "Shift") captureSelection(); }}>{children}</div>
+      {commentsVisible ? <aside aria-label="阅读模式批注" className="paper-reading-comments">
+        <strong>批注 · 与 PDF 共用</strong>
+        {!session.ready ? <p role="status">正在恢复批注…</p> : null}
+        {session.error || error ? <p role="alert">{error || session.error}</p> : null}
+        {message ? <p role="status">{message}</p> : null}
+        {draft ? <div className="paper-reading-comment-editor">
+          <strong>{draft.id ? "编辑批注" : "新建批注"}</strong>
+          {draft.excerpt ? <blockquote>{draft.excerpt}</blockquote> : null}
+          <Field label="PDF 页码"><Select aria-label="批注页码" value={draft.page} disabled={busy || Boolean(draft.id)} onChange={(_, data) => setDraft({ ...draft, page: data.value })}>
+            <option value="">请选择页码</option>{pages.map((page) => <option key={page} value={page}>第 {page} 页</option>)}
+          </Select></Field>
+          <Field label="批注内容"><Textarea aria-label="阅读批注内容" rows={5} resize="vertical" value={note} disabled={busy} onChange={(_, data) => setNote(data.value)} /></Field>
+          <div className="paper-reading-comment-actions"><Button appearance="primary" disabled={busy || !session.ready || !draft.page || (!draft.id && !note.trim())} onClick={() => void save()}>保存批注</Button>
+            <Button disabled={busy} onClick={() => { setDraft(undefined); setNote(""); setError(""); }}>取消</Button></div>
+        </div> : null}
+        {!session.annotations.length && !draft && session.ready ? <p>选中原文后添加批注，或记录整页想法。</p> : null}
+        {session.annotations.map((annotation) => <article className="paper-reading-comment" key={annotation.id} data-reading-annotation-id={annotation.id}>
+          <button type="button" className="paper-reading-comment-source" onClick={() => locate(annotation.id)}>第 {annotation.page} 页 · {annotation.excerpt || (annotation.kind === "ink" ? "手绘批注" : "页批注")}</button>
+          <PdfAnnotationMarkdown value={annotation.quickAsk ? `${annotation.quickAsk.question}\n\n${annotation.quickAsk.answer}` : annotation.note || (annotation.kind === "text" ? annotation.text : "")}
+            images={annotation.images} emptyLabel={annotation.kind === "ink" ? "手绘笔迹可在 PDF 原页查看。" : "尚无补充评论"} />
+          {annotation.review ? <PdfAnnotationMarkdown value={annotation.review.text} /> : null}
+          <div className="paper-reading-comment-actions">
+            <Button size="small" onClick={() => session.openPdf(annotation.id)}>查看 PDF</Button>
+            <Button size="small" disabled={busy || !session.ready || Boolean(draft)} onClick={() => {
+              setDraft({ id: annotation.id, revision: annotation.revision, page: String(annotation.page), excerpt: annotation.excerpt }); setNote(annotation.note ?? ""); setError("");
+            }}>编辑</Button>
+            <Button size="small" disabled={busy || !session.ready || Boolean(draft)} onClick={() => {
+              setBusy(true); setError("");
+              void session.remove(annotation.id).catch((failure) => { if (mounted.current) setError(failure instanceof Error ? failure.message : "删除失败"); })
+                .finally(() => { if (mounted.current) setBusy(false); });
+            }}>删除</Button>
+          </div>
+        </article>)}
+      </aside> : null}
+    </div>
+  </div>;
+}

@@ -632,7 +632,7 @@ export function PaperResourceTab({
               const pageChunks = orderedChunks.filter((chunk) => chunk.page === page);
               const pageFigures = orderedFigures.filter((figure) => figure.page === page);
               return (
-                <article className="paper-resource-tab__multimodal-page" key={page}>
+                <article className="paper-resource-tab__multimodal-page" key={page} data-reading-page={page}>
                   <header><span>第 {page} 页</span><small>MinerU 图文提取</small></header>
                   {pageChunks.map((chunk, index) => <MineruMarkdown content={chunk.snippet} figures={pageFigures} key={`${chunk.paperId}-${chunk.page}-${index}`} />)}
                   {pageFigures.map((figure) => (
@@ -650,7 +650,7 @@ export function PaperResourceTab({
         readableChunks.length > 0 ? (
           <section className="paper-resource-tab__text-list" aria-label="按页排列的论文提取文本">
             {readableChunks.map((chunk, index) => (
-              <article key={`${chunk.paperId}-${chunk.page}-${index}`}>
+              <article key={`${chunk.paperId}-${chunk.page}-${index}`} data-reading-page={chunk.sourceMarkdown ? undefined : chunk.page}>
                 <header><span>{chunk.sourceMarkdown ? "完整论文" : `第 ${chunk.page} 页`}</span><small>{chunk.sourceMarkdown ? "MinerU Markdown" : chunk.textExtraction === "mineru" ? "MinerU 精准提取" : "PDF 文本提取"}</small></header>
                 <MineruMarkdown content={chunk.snippet} figures={orderedFigures} />
               </article>
