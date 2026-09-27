@@ -933,8 +933,16 @@ describe("ReaderPane", () => {
 
     expect(screen.getByLabelText("PDF 左侧批注栏")).toBeInTheDocument();
     expect(screen.getByLabelText("PDF 页面滚动区")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "缩略图" })).toHaveAttribute("title", "显示页面缩略图");
-    expect(screen.getByRole("button", { name: "批注" })).toHaveAttribute("title", "显示当前文档批注");
+    const thumbnailsButton = screen.getByRole("button", { name: "缩略图" });
+    const annotationsButton = screen.getByRole("button", { name: "批注" });
+    expect(thumbnailsButton).toHaveAttribute("title", "页面缩略图；双击或按 Enter 展开全部页面");
+    expect(annotationsButton).toHaveAttribute("title", "文档批注；双击或按 Enter 展开全部批注");
+    fireEvent.click(thumbnailsButton);
+    expect(thumbnailsButton).toHaveAttribute("aria-pressed", "true");
+    expect(annotationsButton).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(annotationsButton);
+    expect(thumbnailsButton).toHaveAttribute("aria-pressed", "false");
+    expect(annotationsButton).toHaveAttribute("aria-pressed", "true");
   });
 
   test("provides document search, page navigation, and persisted page layout controls", async () => {

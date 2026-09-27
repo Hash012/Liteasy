@@ -114,14 +114,16 @@ describe("ReadingLibraryCatalog", () => {
     expect(screen.getByRole("textbox", { name: "DOI" })).toHaveValue("10.5555/attention");
   });
 
-  test("only exposes export and removal for entries whose storage supports them", () => {
-    render(<ReadingLibraryCatalog entries={[{ ...entries[0], canExport: false, canRemove: false }, entries[1]]} onOpen={vi.fn()} onExport={vi.fn()} onDelete={vi.fn()} />);
+  test("only exposes export and removal for entries whose storage supports them", async () => {
+    const onDelete = vi.fn();
+    render(<ReadingLibraryCatalog entries={[{ ...entries[0], canExport: false, canRemove: false }, entries[1]]} onOpen={vi.fn()} onExport={vi.fn()} onDelete={onDelete} />);
     fireEvent.click(fileRows()[0]);
     expect(screen.queryByRole("button", { name: "导出原文件" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "移出阅读库" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "移出文献库" })).not.toBeInTheDocument();
     fireEvent.click(fileRows()[1]);
     expect(screen.getByRole("button", { name: "导出原文件" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "移出阅读库" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "移出文献库" }));
+    await waitFor(() => expect(onDelete).toHaveBeenCalledExactlyOnceWith(entries[1]));
   });
 
   test("copies a citation and a Liteasy Path and exposes import/export/context callbacks", async () => {
