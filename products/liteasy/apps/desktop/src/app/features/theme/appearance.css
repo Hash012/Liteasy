@@ -44,7 +44,7 @@
    PDF canvases, cover art and slides must keep their original colors. */
 html[data-color-scheme="dark"] :is(
   .activity-bar, .pane-header, .dock-tab.active, .assistant-input-wrap,
-  .assistant-path-candidates, .assistant-path-candidate, .assistant-suggestion-menu,
+  .assistant-suggestion-menu,
   .assistant-context-panel, .assistant-history-panel, .assistant-history-item,
   .assistant-session-button, .assistant-launcher-mode, .assistant-command-feedback,
   .assistant-editing-banner, .assistant-context-toggle, .assistant-message-action,
@@ -96,7 +96,6 @@ html[data-color-scheme="dark"] :is(
   .library-selection-summary, .library-empty-collection, .library-workspace-root,
   .library-inline-button, .library-disclosure, .library-section-icon,
   .sidebar-section-disclosure, .assistant-thinking-labels,
-  .assistant-path-candidate span, .assistant-path-candidate small,
   .assistant-history-item-meta, .assistant-active-session-kind,
   .assistant-queued-message, .agent-settings-row-description,
   .model-policy-footnote, .settings-model-copy, .organization-sidebar-kicker,
@@ -118,7 +117,7 @@ html[data-color-scheme="dark"] :is(
   .library-tree-row.active, .library-folder-row.is-selected,
   .library-item.selected > .paper-row, .library-item.active > .paper-row,
   .library-collection-row.active, .library-workspace-switcher button.active,
-  .assistant-path-candidate[aria-selected="true"], .assistant-history-item.active,
+  .assistant-history-item.active,
   .assistant-message-action.active, .assistant-suggestion-item.active,
   .assistant-command-chip, .assistant-context-token, .assistant-message-token,
   .pdf-sidebar-switcher button.active, .pdf-thumbnail-list li.active,

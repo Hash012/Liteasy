@@ -1,5 +1,5 @@
 import { AssistantModelPicker } from "../models/AssistantModelPicker";
-import { LiteasyPathContextPicker } from "../resource-filesystem/LiteasyPathContextPicker";
+import { contextPreviewText } from "./contextAssetPreview";
 import { thinkingDepthInstruction, type ThinkingDepth } from "./thinkingDepth";
 import { collectPaperAnchors } from "../paper-anchors/paperAnchorEntity";
 import { parseContextCoverageReport } from "./contextCoverageReport";
@@ -98,6 +98,7 @@ import { artifactSlashSuggestions, requestedArtifactType } from "../artifacts/ar
 import type { AssistantHistoryPersistence, AssistantHistorySnapshot } from "./assistantHistoryPersistence";
 
 type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
+const emptyImportedChunks: Record<string, RetrievalChunk[]> = {};
 
 type QueuedAssistantTurn = {
   thinkingDepth: ThinkingDepth;
@@ -284,7 +285,7 @@ export function AssistantPane({
   auditTransport,
   developerDiagnostics = false,
   executionJournal,
-  importedChunksByPaperId = {},
+  importedChunksByPaperId = emptyImportedChunks,
   modelTransport,
   onApplyGeneratedTheme,
   onApplyLayoutPreset,
@@ -772,6 +773,9 @@ export function AssistantPane({
       return {
         detail: paper.sourcePath ?? "整篇论文",
         category: "论文", description: "整篇论文问答；也可在项目中按页选择原文或图片。", readOnly: true,
+        preview: contextPreviewText((importedChunksByPaperId[paper.id] ?? []).map((chunk) => `第 ${chunk.page} 页\n${chunk.snippet}`).join("\n\n")) ||
+          [paper.title, paper.authors?.length ? `作者：${typeof paper.authors === "string" ? paper.authors : paper.authors.join("、")}` : "",
+            "尚未读取论文正文。添加后将准备可用内容；解析完成后可在项目中预览原文和图片。"].filter(Boolean).join("\n\n"),
         id: `paper-${paper.id}`,
         label: paper.title,
         token: paperToken,
@@ -784,6 +788,7 @@ export function AssistantPane({
     const pageSuggestions: AssistantComposerSuggestion[] = availablePapers.flatMap((paper) =>
       [...new Set((importedChunksByPaperId[paper.id] ?? []).map((chunk) => chunk.page))].sort((a, b) => a - b).map((page) => ({
         category: "原文", readOnly: true, description: "已识别的论文页面。",
+        preview: contextPreviewText((importedChunksByPaperId[paper.id] ?? []).filter((chunk) => chunk.page === page).map((chunk) => chunk.snippet).join("\n\n")),
         detail: `${paper.title} · 第 ${page} 页`,
         id: `page-${paper.id}-${page}`,
         label: `${paper.title} p.${page}`,
@@ -815,7 +820,7 @@ export function AssistantPane({
     return [...artifactSlashSuggestions, ...commandSuggestions, ...paperSuggestions, ...contextSuggestions, ...pageSuggestions, ...skillSuggestions];
   }
 
-  const composerSuggestions = useMemo(buildComposerSuggestions, [availablePapers, contextSuggestions]);
+  const composerSuggestions = useMemo(buildComposerSuggestions, [availablePapers, contextSuggestions, importedChunksByPaperId]);
 
   function setMode(mode: AssistantMode) {
     const adapted = adaptDefaultUiIntent({
@@ -2288,9 +2293,6 @@ export function AssistantPane({
         <span>{contextCatalogStatus}</span>
         {onRefreshContextCatalog ? <Button appearance="subtle" size="small" onClick={onRefreshContextCatalog}>重试</Button> : null}
       </div> : null}
-      {objectWorkbench?.resolveLiteasyPath ? <LiteasyPathContextPicker
-        scopeId={objectWorkbench.scopeId} search={objectWorkbench.searchLiteasyPaths}
-        onAdd={addLiteasyPath} busy={contextDropCount > 0} /> : null}
       <AssistantComposer
         contextScopeId={`${objectWorkbench?.scopeId ?? "local"}:${activeSessionId}`}
         modelPicker={<AssistantModelPicker settingsStore={settingsStoreRef.current} onSettingsChanged={onSettingsChanged}

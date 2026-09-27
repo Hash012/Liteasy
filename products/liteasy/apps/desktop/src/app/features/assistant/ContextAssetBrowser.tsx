@@ -6,12 +6,14 @@ import {
 import { AddRegular, CopyRegular, DismissRegular, DocumentRegular, FolderRegular, SearchRegular } from "@fluentui/react-icons";
 import type { AssistantComposerSuggestion, AssistantContextToken } from "./assistant.types";
 import { createAssistantSuggestionIndex, getAssistantReadOnlyLabel } from "./assistantSuggestionIndex";
+import type { ContextAssetPreview } from "./contextAssetPreview";
 import "./contextAssetBrowser.css";
 
 type ContextAssetBrowserProps = {
   suggestions: AssistantComposerSuggestion[];
   contextTokens?: AssistantContextToken[];
   initialQuery?: string;
+  initialPreviewId?: string;
   onClose: () => void;
   onAddContextToken?: (token: AssistantContextToken) => void;
   onResolveContextToken?: (resolve: () => Promise<AssistantContextToken>) => void | Promise<boolean | void>;
@@ -22,22 +24,21 @@ const categoryOf = (asset: AssistantComposerSuggestion) => asset.category ?? "�
 const available = (asset: AssistantComposerSuggestion) => !asset.unavailableReason && Boolean(asset.token || asset.resolveToken);
 
 /** Uses the same catalog as @ mentions; no secondary asset inventory or eager reads. */
-export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQuery = "", onClose,
+export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQuery = "", initialPreviewId, onClose,
   onAddContextToken, onResolveContextToken }: ContextAssetBrowserProps) {
   const [query, setQuery] = useState(initialQuery);
   const [category, setCategory] = useState("");
   const [project, setProject] = useState("");
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
-  const [previewId, setPreviewId] = useState<string>();
+  const [previewId, setPreviewId] = useState(initialPreviewId);
   const [onlySelected, setOnlySelected] = useState(false);
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
   const [noteText, setNoteText] = useState("");
-  const [loadedPreview, setLoadedPreview] = useState<{ text: string; imageUrl?: string }>();
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState("");
+  const [previewResult, setPreviewResult] = useState<{ asset: AssistantComposerSuggestion; value?: ContextAssetPreview; error?: string }>();
+  const [previewAttempt, setPreviewAttempt] = useState(0);
   const mounted = useRef(true);
   const operation = useRef(false);
   const catalog = useMemo(() => [...new Map(suggestions.filter((asset) => asset.trigger === "@" &&
@@ -64,6 +65,10 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
     (!onlySelected || selected.has(asset.id))), [index, query, category, project, onlySelected, selected]);
   const visible = matches.slice(0, limit);
   const preview = catalog.find((asset) => asset.id === previewId);
+  const loadedPreview = previewResult?.asset === preview ? previewResult?.value : undefined;
+  const previewError = previewResult?.asset === preview ? previewResult?.error : undefined;
+  const previewLoading = Boolean(preview?.loadPreview && !loadedPreview && !previewError);
+  const previewText = loadedPreview?.text ?? preview?.preview;
   const addedIds = new Set(contextTokens.map((token) => token.id));
 
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -71,16 +76,16 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
   useEffect(() => { setNoteText(""); }, [previewId]);
   useEffect(() => {
     let active = true;
-    setLoadedPreview(undefined); setPreviewError(""); setPreviewLoading(Boolean(preview?.loadPreview));
+    setPreviewResult(undefined);
     if (preview?.loadPreview) {
       void preview.loadPreview().then((value) => {
-        if (active) setLoadedPreview(value);
+        if (active) setPreviewResult({ asset: preview, value });
       }).catch((error) => {
-        if (active) setPreviewError(error instanceof Error ? error.message : "暂时无法读取预览，请稍后再试。");
-      }).finally(() => { if (active) setPreviewLoading(false); });
+        if (active) setPreviewResult({ asset: preview, error: error instanceof Error ? error.message : "暂时无法读取预览，请稍后再试。" });
+      });
     }
     return () => { active = false; };
-  }, [preview?.id, preview?.loadPreview]);
+  }, [preview, previewAttempt]);
   useEffect(() => {
     const liveIds = new Set(catalog.filter(available).map((asset) => asset.id));
     setSelected((current) => [...current].every((id) => liveIds.has(id)) ? current :
@@ -196,7 +201,10 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
               <div className="context-asset-grid">
                 {visible.map((asset) => <article key={asset.id} className={`context-asset-card${previewId === asset.id ? " previewing" : ""}`}>
                   <Checkbox aria-label={`选择 ${asset.label}`} checked={selected.has(asset.id)}
-                    disabled={busy || !available(asset)} onChange={(_, data) => toggleSelection(asset.id, Boolean(data.checked))} />
+                    disabled={busy || !available(asset)} onChange={(_, data) => {
+                      toggleSelection(asset.id, Boolean(data.checked));
+                      if (data.checked) setPreviewId(asset.id);
+                    }} />
                   <button className="context-asset-card-preview" type="button" aria-label={`预览 ${asset.label}`}
                     aria-pressed={previewId === asset.id} onClick={() => setPreviewId(asset.id)}>
                     <span className="context-asset-card-heading">{categoryOf(asset) === "项目" ? <FolderRegular /> : <DocumentRegular />}<strong>{asset.label}</strong></span>
@@ -221,9 +229,15 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
                 {preview.description || preview.detail ? <p>{preview.description ?? preview.detail}</p> : null}
                 {preview.unavailableReason ? <p role="note">{preview.unavailableReason}</p> : null}
                 {previewLoading ? <p role="status">正在读取预览…</p> : null}
-                {previewError ? <p role="alert">{previewError}</p> : null}
-                {loadedPreview?.imageUrl ? <img className="context-asset-preview-image" src={loadedPreview.imageUrl} alt={preview.label} /> : null}
-                <div className="context-asset-preview-text">{loadedPreview?.text || preview.preview || "此资产暂无文字预览。添加时将读取可用内容。"}</div>
+                {previewError ? <><p role="alert">{previewError}</p><Button size="small" onClick={() => setPreviewAttempt((value) => value + 1)}>重试预览</Button></> : null}
+                <strong className="context-asset-preview-heading">供 AI 参考的内容</strong>
+                {loadedPreview?.images?.map((image, index) => <img key={index} className="context-asset-preview-image" src={image.url} alt={image.label} />)}
+                {!previewLoading && !previewError ? <>
+                  {previewText ? <div className="context-asset-preview-text">{previewText}</div> :
+                    !loadedPreview?.images?.length ? <p>此资产暂无可预览的内容。</p> : null}
+                  <p className="context-asset-muted">{categoryOf(preview) === "设置" ? "包含当前设置值、用途和生效时间；发送时读取最新设置。" :
+                    categoryOf(preview) === "项目" ? "添加整个项目会包含以上资产，也可逐项选择。" : "此处为内容预览，长篇资料会根据问题选取相关片段。"}</p>
+                </> : null}
                 {preview.readOnly ? <p className="context-asset-muted">{getAssistantReadOnlyLabel(preview) === "原始内容 · 只读"
                   ? "原始资料保留原义；需要修改时，请创建独立副本。" : "此项用于解释与参考。"}</p> : null}
                 {preview.readOnly && preview.createEditableCopy ? <Button icon={<CopyRegular />} disabled={busy || Boolean(preview.unavailableReason)}

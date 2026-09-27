@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("an imported note exposes its location and copied Liteasy Path becomes readable Agent context", async ({ page, context }, testInfo) => {
+test("an imported note exposes its location and visual preview before becoming readable Agent context", async ({ page, context }, testInfo) => {
   test.setTimeout(75_000);
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const errors: string[] = [];
@@ -21,13 +21,16 @@ test("an imported note exposes its location and copied Liteasy Path becomes read
   await page.getByRole("button", { name: "复制 Liteasy Path", exact: true }).click();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(path);
   await page.keyboard.press("Escape");
-  await page.getByText("通过 Liteasy Path 添加上下文", { exact: true }).click();
-  const search = page.getByRole("combobox", { name: "添加上下文的 Liteasy Path" });
-  await expect(page.getByRole("option").filter({ hasText: "PathResearch.md" })).toBeVisible();
-  await search.fill("PathResearch");
-  await expect(page.getByRole("option").filter({ hasText: "PathResearch.md" })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath("liteasy-path-candidates.png"), fullPage: true, animations: "disabled" });
-  await page.getByRole("option").filter({ hasText: "PathResearch.md" }).click();
+  await expect(page.getByText("通过 Liteasy Path 添加上下文", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "添加上下文", exact: true }).click();
+  const browser = page.getByRole("dialog", { name: "上下文资产浏览器" });
+  await browser.getByRole("textbox", { name: "搜索全部上下文资产" }).fill("PathResearch");
+  await browser.getByRole("checkbox", { name: "选择 PathResearch.md", exact: true }).check();
+  await expect(browser.getByRole("complementary", { name: "资产预览" })).toContainText("这段真实文件内容应被读取到 Agent 上下文。");
+  await page.screenshot({ path: testInfo.outputPath("note-context-preview.png"), fullPage: true, animations: "disabled" });
+  await browser.getByRole("button", { name: "添加所选（1）", exact: true }).click();
+  await expect(browser.getByRole("status")).toContainText("已添加 1 项上下文");
+  await browser.getByRole("button", { name: "返回对话", exact: true }).last().click();
   await page.getByRole("button", { name: "调整思考深度：均衡" }).click();
   const slider = page.getByRole("slider", { name: "思考深度" });
   await slider.focus();

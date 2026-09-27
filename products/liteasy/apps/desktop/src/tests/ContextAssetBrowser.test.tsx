@@ -44,19 +44,36 @@ describe("ContextAssetBrowser", () => {
   });
 
   it("searches metadata, previews on demand and does not offer fictional assets", async () => {
-    const loadPreview = vi.fn(async () => ({ text: "真实识别正文", imageUrl: "data:image/png;base64,cHJldmlldw==" }));
+    const loadPreview = vi.fn(async () => ({ text: "真实识别正文", images: [{ url: "data:image/png;base64,cHJldmlldw==", label: "注意力论文原文" }] }));
     const { rerender } = render(<ContextAssetBrowser suggestions={[{ ...assets[0], loadPreview }, assets[1]]} onClose={vi.fn()} />);
     const user = userEvent.setup();
     expect(loadPreview).not.toHaveBeenCalled();
     await user.type(screen.getByRole("textbox", { name: "搜索全部上下文资产" }), "注意力 原文 只读");
     expect(screen.queryByRole("checkbox", { name: "选择 实验记录" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "预览 注意力论文原文" }));
+    await user.click(screen.getByRole("checkbox", { name: "选择 注意力论文原文" }));
     expect(await screen.findByText("真实识别正文")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "注意力论文原文" })).toHaveAttribute("src", "data:image/png;base64,cHJldmlldw==");
     expect(loadPreview).toHaveBeenCalledOnce();
     rerender(<ContextAssetBrowser suggestions={[]} onClose={vi.fn()} />);
     expect(screen.getByText("还没有可添加的资产")).toBeInTheDocument();
     expect(screen.queryByText("真实识别正文")).not.toBeInTheDocument();
+  });
+
+  it("discards late previews when selection changes and retries a failed read", async () => {
+    let complete!: (value: { text: string }) => void;
+    const delayed = () => new Promise<{ text: string }>((resolve) => { complete = resolve; });
+    const retry = vi.fn().mockRejectedValueOnce(new Error("文件暂不可读")).mockResolvedValue({ text: "重新读取的笔记" });
+    render(<ContextAssetBrowser suggestions={[{ ...assets[0], loadPreview: delayed }, { ...assets[1], loadPreview: retry }]} onClose={vi.fn()} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("checkbox", { name: "选择 注意力论文原文" }));
+    expect(screen.getByRole("status")).toHaveTextContent("正在读取预览");
+    await user.click(screen.getByRole("checkbox", { name: "选择 实验记录" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("文件暂不可读");
+    await act(async () => { complete({ text: "已切走的原文" }); });
+    expect(screen.queryByText("已切走的原文")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "重试预览" }));
+    expect(await screen.findByText("重新读取的笔记")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("retains only failed selections and exposes the resolver error for a retry", async () => {

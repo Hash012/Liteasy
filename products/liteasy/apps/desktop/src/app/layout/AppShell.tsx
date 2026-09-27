@@ -1134,6 +1134,7 @@ export function AppShell({
     repository: objectWorkbench.repository,
     projects: paperProjects,
     papers: workspaceState.papers,
+    settings: settingsState,
   });
   const readingLibrary = useReadingLibraryController({
     scopeId: objectWorkbench.repository.scopeId,

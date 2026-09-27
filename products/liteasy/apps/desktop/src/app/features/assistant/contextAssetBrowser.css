@@ -3,7 +3,7 @@
 .context-asset-browser-content { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: hidden; }
 .context-asset-intro { margin: 4px 0 0; color: var(--colorNeutralForeground2); font-size: 13px; }
 .context-asset-search { flex-shrink: 0; }
-.context-asset-workspace { display: grid; grid-template-columns: 184px minmax(240px, 1fr) minmax(220px, 300px); gap: 16px; min-height: 0; flex: 1; }
+.context-asset-workspace { display: grid; grid-template-columns: 184px minmax(240px, 1fr) minmax(260px, 360px); gap: 16px; min-height: 0; flex: 1; }
 .context-asset-filters, .context-asset-results, .context-asset-preview { min-width: 0; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
 .context-asset-filters { display: flex; flex-direction: column; gap: 4px; padding-right: 8px; border-right: 1px solid var(--colorNeutralStroke2); }
 .context-asset-filters > strong { font-size: 12px; color: var(--colorNeutralForeground3); padding: 8px; }
@@ -27,7 +27,8 @@
 .context-asset-preview { border-left: 1px solid var(--colorNeutralStroke2); padding: 8px 0 8px 16px; display: flex; flex-direction: column; gap: 12px; align-items: stretch; overflow-wrap: anywhere; }
 .context-asset-preview > p { margin: 0; color: var(--colorNeutralForeground2); font-size: 12px; }
 .context-asset-preview-text { white-space: pre-wrap; font-size: 13px; line-height: 1.6; max-height: 320px; overflow-y: auto; border-radius: 4px; padding: 10px; background: var(--colorNeutralBackground2); flex-shrink: 0; }
-.context-asset-preview-image { max-width: 100%; max-height: 260px; object-fit: contain; border-radius: 4px; flex-shrink: 0; }
+.context-asset-preview-image { max-width: 100%; max-height: 320px; object-fit: contain; border-radius: 4px; flex-shrink: 0; background: var(--colorNeutralBackground2); }
+.context-asset-preview-heading { font-size: 12px; color: var(--colorNeutralForeground2); }
 .context-asset-preview > button { flex-shrink: 0; }
 .context-asset-note { display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
 .context-asset-empty { grid-column: 1 / -1; padding: 28px 16px; text-align: center; color: var(--colorNeutralForeground3); }

@@ -62,6 +62,24 @@ test("searches all mounted paths and sends the selected file body via fixed cont
   await act(async () => {});
 });
 
+test("mounted notes and help articles preview their body without projecting saved objects", async () => {
+  const scopeId = crypto.randomUUID();
+  const hook = renderHook(() => {
+    const workbench = useObjectWorkbenchController({ scopeId, getApi: () => { throw new Error("No model expected"); },
+      getPapers: () => [], getSettings: () => createSettingsStore().getState(), openEvidence: vi.fn() });
+    return { workbench, suggestions: useAssistantContextCatalog({ artifacts: [], objects: workbench.objects, repository: workbench.repository, port: workbench.port }) };
+  });
+  await waitFor(() => expect(hook.result.current.suggestions.some((item) => item.label === "review.md")).toBe(true));
+  expect(files.readFile).not.toHaveBeenCalled();
+  expect((await hook.result.current.suggestions.find((item) => item.label === "review.md")!.loadPreview!()).text).toContain("归一化后权重和为一");
+  await waitFor(() => expect(hook.result.current.suggestions.some((item) => item.category === "帮助")).toBe(true));
+  const help = hook.result.current.suggestions.find((item) => item.category === "帮助")!;
+  const preview = await help.loadPreview!();
+  expect(preview.text.length).toBeGreaterThan(help.description?.length ?? 0);
+  expect(await hook.result.current.workbench.repository.searchTitles("", 100)).toEqual([]);
+  hook.unmount();
+});
+
 
 test("keeps candidate and resolver identity on unrelated component renders", async () => {
   const artifacts: [] = [];

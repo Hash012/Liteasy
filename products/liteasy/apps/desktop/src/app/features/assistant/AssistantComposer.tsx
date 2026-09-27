@@ -2,7 +2,7 @@ import "../models/assistantModelPicker.css";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Button, Popover, PopoverSurface, PopoverTrigger, Slider, Tooltip } from "@fluentui/react-components";
 import { thinkingDepths, thinkingDepthLabels, type ThinkingDepth } from "./thinkingDepth";
-import { AddRegular, BrainCircuitRegular, FlashRegular, GridRegular, MicRegular, SendRegular } from "@fluentui/react-icons";
+import { AddRegular, BrainCircuitRegular, EyeRegular, FlashRegular, GridRegular, MicRegular, SendRegular } from "@fluentui/react-icons";
 import type { AssistantComposerSuggestion, AssistantContextToken } from "./assistant.types";
 import { createAssistantSuggestionIndex, getAssistantReadOnlyLabel } from "./assistantSuggestionIndex";
 import { ContextAssetBrowser } from "./ContextAssetBrowser";
@@ -82,6 +82,7 @@ export function AssistantComposer({
   const [activeIndex, setActiveIndex] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const [browserQuery, setBrowserQuery] = useState<string | null>(null);
+  const [browserPreviewId, setBrowserPreviewId] = useState<string>();
   useEffect(() => { setBrowserQuery(null); }, [contextScopeId]);
   useEffect(() => { setDismissed(false); setActiveIndex(0); }, [input]);
   useEffect(() => {
@@ -110,7 +111,8 @@ export function AssistantComposer({
   const showBrowseEntry = activeTrigger?.trigger === "@";
   const menuItemCount = visibleSuggestions.length + (showBrowseEntry ? 1 : 0);
 
-  function openAssetBrowser() {
+  function openAssetBrowser(previewId?: string) {
+    setBrowserPreviewId(previewId);
     setBrowserQuery(activeTrigger?.trigger === "@" ? activeTrigger.query.trim() : "");
     if (activeTrigger?.trigger === "@") {
       onInputChange(`${input.slice(0, activeTrigger.start)}${input.slice(activeTrigger.end)}`.replace(/\s{2,}/g, " "));
@@ -209,10 +211,12 @@ export function AssistantComposer({
           ))}
           {showBrowseEntry ? <>
             {!visibleSuggestions.length ? <p className="assistant-suggestion-empty">没有找到匹配项，可打开资产浏览器按类别和项目查找。</p> : null}
+            {visibleSuggestions[activeIndex] ? <Button icon={<EyeRegular />} appearance="subtle"
+              onMouseDown={(event) => event.preventDefault()} onClick={() => openAssetBrowser(visibleSuggestions[activeIndex].id)}>预览当前候选</Button> : null}
             <Button className={`assistant-suggestion-browse${activeIndex === visibleSuggestions.length ? " active" : ""}`}
               id={`${menuId}-${visibleSuggestions.length}`} aria-current={activeIndex === visibleSuggestions.length}
               icon={<GridRegular />} onMouseMove={() => setActiveIndex(visibleSuggestions.length)}
-              onMouseDown={(event) => event.preventDefault()} onClick={openAssetBrowser}>浏览全部资产</Button>
+              onMouseDown={(event) => event.preventDefault()} onClick={() => openAssetBrowser()}>浏览全部资产</Button>
           </> : null}
         </div>
       ) : null}
@@ -294,7 +298,7 @@ export function AssistantComposer({
       <div className="assistant-composer-actions">
         {modelPicker}
         <Tooltip content="按类别和项目浏览资料，组合添加到上下文" relationship="description">
-          <Button appearance="subtle" className="assistant-add-context" icon={<AddRegular />} onClick={openAssetBrowser}>添加上下文</Button>
+          <Button appearance="subtle" className="assistant-add-context" icon={<AddRegular />} onClick={() => openAssetBrowser()}>添加上下文</Button>
         </Tooltip>
         {onThinkingDepthChange ? <Popover positioning="above" trapFocus>
           <PopoverTrigger disableButtonEnhancement>
@@ -338,7 +342,7 @@ export function AssistantComposer({
           </button>
         </Tooltip>
       </div>
-      {browserQuery !== null ? <ContextAssetBrowser key={contextScopeId} suggestions={suggestions} contextTokens={contextTokens}
+      {browserQuery !== null ? <ContextAssetBrowser key={contextScopeId} suggestions={suggestions} contextTokens={contextTokens} initialPreviewId={browserPreviewId}
         initialQuery={browserQuery} onAddContextToken={onAddContextToken} onResolveContextToken={onResolveContextToken}
         onClose={() => { setBrowserQuery(null); editorRef.current?.focus(); }} /> : null}
     </div>

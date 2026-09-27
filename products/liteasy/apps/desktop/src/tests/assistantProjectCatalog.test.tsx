@@ -13,6 +13,10 @@ import { contextAttachments } from "../app/features/resource-filesystem/resource
 import { resolveContextSnapshot } from "../app/features/context/objectContext";
 import { readObjectTransfer } from "../app/features/object-transfer/objectTransfer";
 import { objectText, refOf } from "../app/features/objects/object.types";
+import { stageImage } from "../app/features/objects/objectAssets";
+import { createSettingsStore } from "../app/features/settings/settings.store";
+import { describeObjectSetting } from "../app/features/settings/settingsRegistry";
+import { readObjectContextPreview } from "../app/features/assistant/contextAssetPreview";
 
 beforeEach(() => vi.stubGlobal("crypto", webcrypto));
 function setup() {
@@ -140,4 +144,71 @@ test("derived notes use their latest revision while shared references keep the c
   expect(pinnedToken.contextRefs).toEqual([note.ref]);
   expect(objectText(await env.repository.get(note.ref!))).toBe("原始理解");
   hook.unmount();
+});
+
+test("setting previews follow current values and match the content passed to the assistant", async () => {
+  const env = setup();
+  const settings = { ...createSettingsStore().getState(), "view.font_size": "18" };
+  const hook = renderHook(({ settings }) => useAssistantContextCatalog({ artifacts: [], objects: [], repository: env.repository, port: env.port, settings }), { initialProps: { settings } });
+  await act(async () => {});
+  const candidate = hook.result.current.find((item) => item.id === "setting-view.font_size")!;
+  expect(candidate.preview).toContain("界面字号：18");
+  const snapshot = await resolveContextSnapshot({ repository: env.repository, refs: candidate.token!.contextRefs!, purpose: "说明设置", persist: false,
+    describeSetting: (key) => describeObjectSetting(key, settings) });
+  expect(snapshot.entries[0].text).toBe(candidate.preview);
+  hook.rerender({ settings: { ...settings, "view.font_size": "24" } });
+  expect(hook.result.current.find((item) => item.id === candidate.id)!.preview).toContain("界面字号：24");
+  expect(hook.result.current.some((item) => item.id === "setting-models.direct_endpoint")).toBe(false);
+  hook.unmount();
+});
+
+test("image previews read actual bytes lazily for both project sources and saved copies without writing", async () => {
+  const env = setup();
+  const project = await env.projects.ensurePaperProject({ paperId: "a", title: "论文 A" });
+  const image = await stageImage(Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3, 4]), "image/png");
+  const source = await env.projects.registerSource(project.projectId, { assetId: "figure:1", paperId: "a", title: "实验装置", kind: "image", text: "图 1：实验装置说明", assets: [image] });
+  const copy = await env.projects.createEditableCopy(project.projectId, source.ref!);
+  const object = await env.repository.get(copy.ref!);
+  const projects = { catalog: [{ project, assets: [source] }], repository: env.projects, error: "", busy: false, refresh: vi.fn(), createNote: env.projects.createNote, createEditableCopy: env.projects.createEditableCopy } satisfies PaperProjectsController;
+  const read = vi.spyOn(env.repository, "readAsset");
+  const write = vi.spyOn(env.storage, "commit");
+  const hook = renderHook(() => useAssistantContextCatalog({ artifacts: [], objects: [object], repository: env.repository, port: env.port, projects }));
+  await act(async () => {});
+  expect(read).not.toHaveBeenCalled();
+  for (const candidate of hook.result.current.filter((item) => item.category === "图片" || item.id === `saved-${object.objectId}`)) {
+    const preview = await candidate.loadPreview!();
+    expect(preview.text).toContain("实验装置说明");
+    expect(preview.images).toEqual([{ url: `data:image/png;base64,${image.base64}`, label: candidate.label }]);
+  }
+  expect(read).toHaveBeenCalledTimes(2);
+  expect(write).not.toHaveBeenCalled();
+  hook.unmount();
+});
+
+test("board previews include member content without creating a snapshot or changing membership", async () => {
+  const env = setup();
+  const note = await env.repository.create({ kind: "content.note", title: "实验记录", content: { schema: "liteasy.note/v1", payload: { text: "需要核对对照组结果", origin: "user" } } });
+  const board = await env.repository.create({ kind: "workspace.board", title: "研究白板", content: { schema: "liteasy.board/v1", payload: { description: "实验计划" } } });
+  await env.repository.applyBoardPatch({ boardRef: refOf(board), operationId: crypto.randomUUID(), add: [refOf(note)] });
+  const save = vi.spyOn(env.repository, "saveSnapshot");
+  const hook = renderHook(() => useAssistantContextCatalog({ artifacts: [], objects: [board], repository: env.repository, port: env.port }));
+  await act(async () => {});
+  const preview = await hook.result.current.find((item) => item.label === "研究白板")!.loadPreview!();
+  expect(preview.text).toContain("1 个元素、0 条连接");
+  expect(preview.text).toContain("需要核对对照组结果");
+  expect(save).not.toHaveBeenCalled();
+  expect(await env.repository.listPlacements(board.objectId)).toHaveLength(1);
+  hook.unmount();
+});
+
+test("saved excerpt previews include the original quote that accompanies the user's comment", async () => {
+  const env = setup();
+  const note = await env.repository.create({ kind: "content.note", title: "来源", content: { schema: "liteasy.note/v1", payload: { text: "实验样本共 128 个", origin: "user" } } });
+  const fragment = await env.repository.create({ kind: "content.fragment", title: "样本批注", content: { schema: "liteasy.fragment/v1", payload: {
+    text: "需要核对样本量", partial: false, anchors: [{ type: "text", sourceRef: refOf(note), blockId: "body", quote: { exact: "实验样本共 128 个", prefix: "", suffix: "" } }],
+  } } });
+  const preview = await readObjectContextPreview(env.repository, fragment, () => {});
+  const snapshot = await resolveContextSnapshot({ repository: env.repository, refs: [refOf(fragment)], purpose: "检查批注", persist: false });
+  expect(preview.text).toBe(snapshot.entries[0].text);
+  expect(preview.text).toContain("实验样本共 128 个");
 });

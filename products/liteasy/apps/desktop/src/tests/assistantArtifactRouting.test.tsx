@@ -160,16 +160,13 @@ test("paper paths prepare full text before capture and keep send disabled while 
 test("cross-account and missing resource paths produce no context chip", async () => {
   const port = { ...createContextPort(), scopeId: "device" };
   port.resolveLiteasyPath = vi.fn(async () => { throw new Error("原文件已删除"); });
-  const { user } = await renderRouting({ port });
-  await user.click(screen.getByText("通过 Liteasy Path 添加上下文"));
-  const input = screen.getByRole("combobox", { name: "添加上下文的 Liteasy Path" });
-  await user.type(input, "liteasy://objects/note-methods?scope=other&revision=r");
-  await user.click(screen.getByRole("button", { name: "读取并加入上下文" }));
+  await renderRouting({ port });
+  const input = screen.getByPlaceholderText("输入你的问题或命令");
+  expect(screen.queryByText("通过 Liteasy Path 添加上下文")).not.toBeInTheDocument();
+  fireEvent.paste(input, { clipboardData: { getData: () => "liteasy://objects/note-methods?scope=other&revision=r" } });
   expect(await screen.findByText(/属于其他账户/)).toBeInTheDocument();
   expect(port.resolveLiteasyPath).not.toHaveBeenCalled();
-  await user.clear(input);
-  await user.type(input, "liteasy://objects/note-methods?scope=device&revision=r");
-  await user.click(screen.getByRole("button", { name: "读取并加入上下文" }));
+  fireEvent.paste(input, { clipboardData: { getData: () => "liteasy://objects/note-methods?scope=device&revision=r" } });
   expect(await screen.findByText("原文件已删除")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /^移除上下文/ })).not.toBeInTheDocument();
 });
