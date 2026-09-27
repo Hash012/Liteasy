@@ -5,6 +5,18 @@ import { AssistantMessageList } from "../app/features/assistant/AssistantMessage
 import type { AssistantMessage } from "../app/features/assistant/assistant.types";
 
 describe("AssistantMessageList", () => {
+  test("shows partial and omitted source coverage separately from the model answer", async () => {
+    render(<AssistantMessageList mode="qa" onModeChange={vi.fn()} messages={[{ id: "coverage", role: "assistant", content: "基于选段的分析",
+      contextCoverage: { total: 3, full: 1, partial: 1, omitted: 1, items: [
+        { title: "摘要", status: "full", includedCharacters: 100, totalCharacters: 100 },
+        { title: "长篇论文", status: "partial", includedCharacters: 200, totalCharacters: 20000 },
+        { title: "附录", status: "omitted", includedCharacters: 0, totalCharacters: 5000 },
+      ] } }]} />);
+    await userEvent.setup().click(screen.getByText("本轮读取范围：1 项完整读取，1 项选段，1 项未覆盖"));
+    expect(screen.getByText(/不能视为对全部资料的完整审阅/)).toBeVisible();
+    expect(screen.getByText(/附录 · 未读取/)).toBeVisible();
+    expect(screen.getByText("基于选段的分析")).toBeVisible();
+  });
   test("renders an empty initial message region without persistent mode copy", async () => {
     const onModeChange = vi.fn();
 

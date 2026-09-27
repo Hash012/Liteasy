@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { inspect } from "node:util";
 import { createDevCloudRequestHandler } from "./server.mjs";
 import { createDatabase } from "./db/database.mjs";
 import { hashSessionToken } from "./auth/sessionTokens.mjs";
@@ -3379,6 +3380,56 @@ test("uses the configured openai provider when an api key is available", async (
       provider: "openai"
     }
   });
+});
+
+test("model routes accept bounded inline images without increasing unrelated JSON limits", async () => {
+  const bytes = Buffer.alloc(600 * 1024);
+  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes);
+  const images = [{ mediaType: "image/png", label: "论文原图", base64: bytes.toString("base64") }];
+  let captured;
+  const input = { prompt: "解释原图", provider: "openai", images };
+  const response = await invokeHandler({ method: "POST", headers: { "content-type": "application/json" },
+    url: "/v1/model/generate", body: JSON.stringify(input), handlerOptions: { providers: { openai: async (value) => { captured = value; return "图片已读取"; } } } });
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(captured.images, images);
+  assert.equal(response.json.answer, "图片已读取");
+  const oversizedAudit = await invokeHandler({ method: "POST", headers: { "content-type": "application/json" },
+    url: "/v1/model/audit", body: JSON.stringify(input) });
+  assert.equal(oversizedAudit.statusCode, 413);
+  const invalid = await invokeHandler({ method: "POST", headers: { "content-type": "application/json" },
+    url: "/v1/model/generate", body: JSON.stringify({ ...input, images: [{ ...images[0], base64: "invalid" }] }) });
+  assert.equal(invalid.statusCode, 400);
+});
+
+test("validates images before starting a model stream and keeps image errors out of logs", async (context) => {
+  const image = { mediaType: "image/png", label: "论文原图", base64: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]).toString("base64") };
+  const body = { provider: "openai", prompt: "解释", images: [image] };
+  const invoke = (input, handlerOptions = {}, path = "/v1/model/generate-stream") => invokeHandler({
+    method: "POST", headers: { "content-type": "application/json" }, url: path, body: JSON.stringify(input), handlerOptions,
+  });
+  const unsupported = await invoke({ ...body, provider: "deepseek" });
+  assert.equal(unsupported.statusCode, 400);
+  assert.match(unsupported.json.message, /不支持图片/);
+  const invalid = await invoke({ ...body, images: [{ ...image, label: "x".repeat(1001) }] });
+  assert.equal(invalid.statusCode, 400);
+  const oversized = await invoke({ ...body, prompt: "x".repeat(8 * 1024 * 1024) });
+  assert.equal(oversized.statusCode, 413);
+  const logs = [];
+  context.mock.method(console, "error", (...args) => logs.push(args));
+  const error = new Error(`upstream echoed data:image/png;base64,${image.base64}`, { cause: new Error(image.base64) });
+  const failed = await invoke(body, { streamingProviders: { openai: async function* (input) {
+    assert.deepEqual(input.images, [image]);
+    yield "部分回答".repeat(30);
+    throw error;
+  } } });
+  const events = failed.body.trim().split("\n").map((line) => JSON.parse(line));
+  assert.equal(events.at(-1).type, "error");
+  assert.equal(events.some((event) => event.type === "completed"), false);
+  assert.equal(inspect(logs, { depth: 8 }).includes(image.base64), false);
+  const regular = await invoke(body, { providers: { openai: async () => { throw error; } } }, "/v1/model/generate");
+  assert.equal(regular.statusCode, 502);
+  assert.equal(regular.body.includes(image.base64), false);
+  assert.match(regular.json.message, /图片数据已隐藏/);
 });
 
 test("supplies the configured OpenAI model when a browser request omits it", async () => {

@@ -1,5 +1,6 @@
 import type { GenerateAnswerInput, ModelGenerationResult } from "./modelGateway";
 import type { ModelExecutionTrace } from "./modelExecution";
+import { validateModelImages } from "./modelImages";
 import {
   assertModelResponseSize, createBoundedModelFrames, createModelTextBudget,
   MODEL_RESPONSE_LIMITS, modelTextBytes, readBoundedModelStream, readBoundedModelText
@@ -203,11 +204,13 @@ export function createHttpModelClient({
 }: CreateHttpModelClientInput) {
   return async (input: GenerateAnswerInput): Promise<ModelGenerationResult> => {
     input.signal?.throwIfAborted();
+    validateModelImages(input.images);
     const transportRequest: ModelTransportRequest = {
       body: JSON.stringify({
         model: input.model,
         ...(input.outputFormat ? { outputFormat: input.outputFormat } : {}),
         prompt: input.prompt,
+        ...(input.images?.length ? { images: input.images } : {}),
         provider: input.provider,
         ...(input.requireLive ? { requireLive: true } : {}),
         source
@@ -227,6 +230,8 @@ export function createHttpModelClient({
 
     if (!response.ok) {
       const detail = await readBackendError(response);
+      if (input.images?.length && /model_request_invalid|model request is invalid|model_images_unsupported|does not support image/i.test(detail ?? ""))
+        throw new Error("当前云端服务或所选模型尚不支持图片上下文。请更新服务或选择支持图片的模型连接后重试。");
       throw new Error(
         detail
           ? `模型服务请求失败（${source} ${response.status}）：${detail}`

@@ -29,6 +29,7 @@ import {
   generateAnswer,
   generateAnswerStream
 } from "./payloads/modelPayloads.mjs";
+import { describeModelImageError, validateModelImageProvider } from "./payloads/modelImages.mjs";
 import {
   buildOrganizationCreatePayload,
   buildOrganizationGovernancePayload,
@@ -159,6 +160,7 @@ import {
 // 深度论文分析会携带多篇论文的分层证据和 SubAgent 区段报告。
 // 仍保留明确上限以防止本地开发服务被无界请求占满内存。
 const maximumJsonBodyBytes = 512 * 1024;
+const maximumModelBodyBytes = 8 * 1024 * 1024;
 // MinerU figures are persisted with generated artifacts and can contain several
 // megabytes of base64 image data.
 const maximumAgentArtifactBodyBytes = 12 * 1024 * 1024;
@@ -393,7 +395,7 @@ function writePdf(request, response, bytes) {
   response.end(bytes);
 }
 
-async function writeNdjsonStream(request, response, stream) {
+async function writeNdjsonStream(request, response, stream, hasImageInput = false) {
   const traceId = request.liteasyTraceId ?? `trace_${randomUUID()}`;
   request.liteasyTraceId = traceId;
   response.writeHead(200, {
@@ -408,7 +410,9 @@ async function writeNdjsonStream(request, response, stream) {
       response.write(`${JSON.stringify(event)}\n`);
     }
   } catch (error) {
-    console.error(`Model stream failed (${traceId})`, error);
+    console.error(`Model stream failed (${traceId})`, hasImageInput
+      ? { code: "model_image_stream_failed", status: Number.isInteger(error?.status) ? error.status : undefined }
+      : error);
     response.write(`${JSON.stringify({
       code: "model_stream_failed",
       message: "模型流式响应中断，请重试。",
@@ -1461,7 +1465,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     }
 
     if (method === "POST" && url.pathname === "/v1/model/generate") {
-      const body = await readJsonOrWriteError(request, response);
+      const body = await readJsonOrWriteError(request, response, maximumModelBodyBytes);
       if (body === null) {
         return;
       }
@@ -1469,26 +1473,38 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       try {
         writeJson(request, response, 200, await generateAnswer(withConfiguredOpenAIModel(body, config), providers));
       } catch (error) {
-        const message = error instanceof Error ? error.message : "unknown_error";
+        const message = body.images?.length ? describeModelImageError(error, body.images)
+          : error instanceof Error ? error.message : "unknown_error";
         const statusCode =
-          typeof message === "string" && message.includes("未注册 provider") ? 400 : 502;
+          Number.isInteger(error?.status) && [400, 413].includes(error.status) ? error.status :
+            typeof message === "string" && message.includes("未注册 provider") ? 400 : 502;
 
-        writeJson(request, response, statusCode, {
-          error: message
-        });
+        writeJson(request, response, statusCode, body.images !== undefined
+          ? { code: statusCode === 413 ? "model_images_too_large" : "model_image_request_failed", message }
+          : { error: message });
       }
       return;
     }
 
     if (method === "POST" && url.pathname === "/v1/model/generate-stream") {
-      const body = await readJsonOrWriteError(request, response);
+      const body = await readJsonOrWriteError(request, response, maximumModelBodyBytes);
       if (body === null) {
+        return;
+      }
+      try {
+        validateModelImageProvider(body);
+      } catch (error) {
+        writeJson(request, response, [400, 413].includes(error?.status) ? error.status : 400, {
+          code: error?.status === 413 ? "model_images_too_large" : "model_image_request_failed",
+          message: describeModelImageError(error, body.images)
+        });
         return;
       }
       await writeNdjsonStream(
         request,
         response,
-        generateAnswerStream(withConfiguredOpenAIModel(body, config), providers, streamingProviders)
+        generateAnswerStream(withConfiguredOpenAIModel(body, config), providers, streamingProviders),
+        Boolean(body.images?.length)
       );
       return;
     }

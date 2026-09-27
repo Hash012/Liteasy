@@ -10,6 +10,7 @@ import { ResourceLocationButton } from "../features/resource-filesystem/Resource
 import { artifactResourceScope } from "../features/resource-filesystem/artifactResourceProvider";
 import { paperCitationOpenRequest } from "../features/paper-anchors/paperAnchorEntity";
 import { useAssistantContextCatalog } from "../controllers/useAssistantContextCatalog";
+import { usePaperProjectsController } from "../controllers/usePaperProjectsController";
 import { useArtifactSessionNavigationController } from "../controllers/useArtifactSessionNavigationController";
 import { usePdfMetadataImportController } from "../controllers/usePdfMetadataImportController";
 import { extractPdfRecognitionEvidence } from "../features/import/pdfTextExtractor";
@@ -1121,11 +1122,18 @@ export function AppShell({
     listArtifacts: () => artifactResultClientRef.current!.list(),
     openArtifact: (id) => { artifactWorkflow.actions.openArtifact(id); activateArtifactSurface(id); }
   });
+  const projectExtractionVersion = useMemo(() => ({ imports: importJobsByDocumentId, saved: paperServices.resources }), [importJobsByDocumentId, paperServices.resources]);
+  const paperProjects = usePaperProjectsController({
+    scopeId: objectWorkbench.repository.scopeId, papers: workspaceState.papers, artifacts: artifactCatalog,
+    extractionVersion: projectExtractionVersion, getResources: getPaperMineruResources,
+  });
   const assistantContextSuggestions = useAssistantContextCatalog({
     artifacts: artifactCatalog,
     objects: objectWorkbench.objects,
     port: objectWorkbench.port,
-    repository: objectWorkbench.repository
+    repository: objectWorkbench.repository,
+    projects: paperProjects,
+    papers: workspaceState.papers,
   });
   const readingLibrary = useReadingLibraryController({
     scopeId: objectWorkbench.repository.scopeId,
@@ -2041,6 +2049,8 @@ export function AppShell({
           runtimeWorkspace={workspaceState.workspaceSource}
           availablePapers={workspaceState.papers}
           contextSuggestions={assistantContextSuggestions}
+          contextCatalogStatus={paperProjects.error || undefined}
+          onRefreshContextCatalog={paperProjects.error ? paperProjects.refresh : undefined}
           selectedPaperCount={workspaceState.selectedPaperIds.length}
           selectedPapers={selectedPapers}
           selectionLocked={workspaceState.selectionLocked}

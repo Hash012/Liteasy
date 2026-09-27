@@ -22,12 +22,19 @@ export type AssistantSuggestionIndex = {
   search: (
     trigger: SuggestionTrigger,
     query: string,
-    limit?: number
+    limit?: number,
+    options?: { includePages?: boolean }
   ) => AssistantComposerSuggestion[];
 };
 
 const indexes = new WeakMap<readonly AssistantComposerSuggestion[], AssistantSuggestionIndex>();
 const MAX_CACHED_SEARCHES = 32;
+
+export function getAssistantReadOnlyLabel(suggestion: AssistantComposerSuggestion): string | undefined {
+  if (!suggestion.readOnly) return undefined;
+  return suggestion.createEditableCopy || ["原文", "图片", "阅读文件"].includes(suggestion.category ?? "")
+    ? "原始内容 · 只读" : "只读参考";
+}
 
 function normalize(value: string): string {
   return value.toLocaleLowerCase().replace(/\\/g, "/");
@@ -52,7 +59,8 @@ export function createAssistantSuggestionIndex(
     const label = suggestion.label;
     buckets[suggestion.trigger].push({
       suggestion,
-      searchable: normalize(`${label} ${suggestion.detail ?? ""}`),
+      searchable: normalize([label, suggestion.detail, suggestion.category, suggestion.projectTitle,
+        suggestion.description, ...(suggestion.keywords ?? []), getAssistantReadOnlyLabel(suggestion)].filter(Boolean).join(" ")),
       page: suggestion.token?.kind === "page"
     });
     if (suggestion.trigger === "/") commands.push(suggestion.insertText ?? `/${label}`);
@@ -62,10 +70,10 @@ export function createAssistantSuggestionIndex(
   const cache = new Map<string, SearchResult>();
   const index: AssistantSuggestionIndex = {
     commands,
-    search(trigger, query, limit = 100) {
+    search(trigger, query, limit = 100, options = {}) {
       const normalizedQuery = normalize(query).trim().replace(/\s+/g, " ");
       const resultLimit = Number.isNaN(limit) ? 0 : Math.max(0, Math.floor(limit));
-      const key = JSON.stringify([trigger, normalizedQuery, resultLimit]);
+      const key = JSON.stringify([trigger, normalizedQuery, resultLimit, Boolean(options.includePages)]);
       const cached = cache.get(key);
       if (cached) {
         cache.delete(key);
@@ -73,7 +81,7 @@ export function createAssistantSuggestionIndex(
         return cached.suggestions;
       }
 
-      const allowPages = /(?:p\.?|第)\s*\d/i.test(normalizedQuery);
+      const allowPages = Boolean(options.includePages) || /(?:p\.?|第)\s*\d/i.test(normalizedQuery);
       let candidates = buckets[trigger];
       let longestPrefix = -1;
       for (const previous of cache.values()) {

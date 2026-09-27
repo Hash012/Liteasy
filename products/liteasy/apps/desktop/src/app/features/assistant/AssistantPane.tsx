@@ -2,6 +2,7 @@ import { AssistantModelPicker } from "../models/AssistantModelPicker";
 import { LiteasyPathContextPicker } from "../resource-filesystem/LiteasyPathContextPicker";
 import { thinkingDepthInstruction, type ThinkingDepth } from "./thinkingDepth";
 import { collectPaperAnchors } from "../paper-anchors/paperAnchorEntity";
+import { parseContextCoverageReport } from "./contextCoverageReport";
 import { parseLiteasyPath } from "../resource-filesystem/liteasyPath";
 import { readerContextDragMime, readDraggedReaderContext } from "./readerContextDrag";
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
@@ -160,6 +161,8 @@ type AssistantPaneProps = {
   runtimeOrganizationName?: string;
   availablePapers?: Paper[];
   contextSuggestions?: AssistantComposerSuggestion[];
+  contextCatalogStatus?: string;
+  onRefreshContextCatalog?: () => void;
   runtimeWorkspace?: Partial<WorkspaceSource>;
   selectedPapers?: Paper[];
   selectedSetStatus: SelectedSetStatus;
@@ -304,6 +307,8 @@ export function AssistantPane({
   registrationWelcomeMessage,
   readerConversationContext = null,
   runtimeOrganizationName,
+  contextCatalogStatus,
+  onRefreshContextCatalog,
   runtimeWorkspace,
   selectedPapers = [],
   availablePapers = selectedPapers,
@@ -658,10 +663,13 @@ export function AssistantPane({
     setContextDropMessage("");
     try {
       const token = await resolve();
-      if (mountedRef.current && activeSessionIdRef.current === sessionId) addComposerContextToken(token);
+      if (!mountedRef.current || activeSessionIdRef.current !== sessionId) return false;
+      addComposerContextToken(token);
+      return true;
     } catch (error) {
       if (mountedRef.current && activeSessionIdRef.current === sessionId)
         setContextDropMessage(error instanceof Error ? error.message : "添加上下文失败，请重试。");
+      return false;
     } finally {
       if (mountedRef.current) setContextDropCount((count) => count - 1);
     }
@@ -763,6 +771,7 @@ export function AssistantPane({
       };
       return {
         detail: paper.sourcePath ?? "整篇论文",
+        category: "论文", description: "整篇论文问答；也可在项目中按页选择原文或图片。", readOnly: true,
         id: `paper-${paper.id}`,
         label: paper.title,
         token: paperToken,
@@ -773,7 +782,8 @@ export function AssistantPane({
     // 先提供所有“整篇论文”候选，避免每篇的页码把后续论文挤出首屏；
     // 输入标题或 p.页码时仍可检索到下面的精确页码上下文。
     const pageSuggestions: AssistantComposerSuggestion[] = availablePapers.flatMap((paper) =>
-      Array.from({ length: 20 }, (_, index) => index + 1).map((page) => ({
+      [...new Set((importedChunksByPaperId[paper.id] ?? []).map((chunk) => chunk.page))].sort((a, b) => a - b).map((page) => ({
+        category: "原文", readOnly: true, description: "已识别的论文页面。",
         detail: `${paper.title} · 第 ${page} 页`,
         id: `page-${paper.id}-${page}`,
         label: `${paper.title} p.${page}`,
@@ -1122,22 +1132,26 @@ export function AssistantPane({
     if (event.type === "assistant.message") {
       let audit: AnswerAuditResult | undefined;
       let paperAnchors: AssistantMessage["paperAnchors"];
+      let contextCoverage: AssistantMessage["contextCoverage"];
       let executionTrace: ModelExecutionTrace | undefined;
       if (event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)) {
         const metadata = event.metadata as {
           audit?: AnswerAuditResult;
           executionTrace?: ModelExecutionTrace;
           paperAnchors?: unknown;
+          contextCoverage?: unknown;
         };
         audit = metadata.audit;
         executionTrace = metadata.executionTrace;
         if (Array.isArray(metadata.paperAnchors)) paperAnchors = collectPaperAnchors(metadata.paperAnchors);
+        contextCoverage = parseContextCoverageReport(metadata.contextCoverage);
       }
       updateAgentMessage(activityMessageId, (message) => ({
         ...message,
         audit: event.citations?.length ? audit : undefined,
         citations: event.citations,
         paperAnchors,
+        contextCoverage,
         confidence: event.confidence,
         content: event.message,
         executionTrace
@@ -2270,10 +2284,15 @@ export function AssistantPane({
         onWithdrawQueuedMessage={withdrawQueuedTurn}
       />
 
+      {contextCatalogStatus ? <div role="status" className="assistant-command-feedback">
+        <span>{contextCatalogStatus}</span>
+        {onRefreshContextCatalog ? <Button appearance="subtle" size="small" onClick={onRefreshContextCatalog}>重试</Button> : null}
+      </div> : null}
       {objectWorkbench?.resolveLiteasyPath ? <LiteasyPathContextPicker
         scopeId={objectWorkbench.scopeId} search={objectWorkbench.searchLiteasyPaths}
         onAdd={addLiteasyPath} busy={contextDropCount > 0} /> : null}
       <AssistantComposer
+        contextScopeId={`${objectWorkbench?.scopeId ?? "local"}:${activeSessionId}`}
         modelPicker={<AssistantModelPicker settingsStore={settingsStoreRef.current} onSettingsChanged={onSettingsChanged}
           disabled={assistantState.pending || !historyReady || queuedAssistantTurnsRef.current.length > 0} />}
         thinkingDepth={thinkingDepth}
@@ -2284,7 +2303,7 @@ export function AssistantPane({
         contextTokens={composerContextTokens}
         modeHint={composerHint}
         onAddContextToken={addComposerContextToken}
-        onResolveContextToken={(resolve) => { void resolveComposerContextToken(resolve); }}
+        onResolveContextToken={resolveComposerContextToken}
         contextLoading={contextDropCount > 0}
         onCancelEdit={cancelEdit}
         onInputChange={setInput}

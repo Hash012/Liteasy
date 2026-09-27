@@ -1,4 +1,5 @@
 import { fetchWithConfiguredProxy } from "./proxyFetch.mjs";
+import { validateModelImages } from "../payloads/modelImages.mjs";
 
 const defaultBaseUrl = "https://api.openai.com/v1";
 
@@ -136,10 +137,15 @@ function extractOutputText(payload) {
 }
 
 function buildResponseRequest(input, stream = false, options = {}) {
+  validateModelImages(input.images);
   const includeOutputFormat = options.includeOutputFormat ?? true;
   const includeReasoning = options.includeReasoning ?? true;
   return {
-    input: input.input ?? input.prompt,
+    input: input.images?.length ? [{ role: "user", content: [
+      { type: "input_text", text: input.prompt },
+      ...input.images.flatMap((image) => [{ type: "input_text", text: image.label },
+        { type: "input_image", image_url: `data:${image.mediaType};base64,${image.base64}`, detail: "auto" }]),
+    ] }] : input.input ?? input.prompt,
     model: input.model,
     ...(includeReasoning && input.reasoningEffort ? {
       reasoning: { effort: input.reasoningEffort }

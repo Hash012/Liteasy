@@ -757,6 +757,9 @@ export function useObjectWorkbenchController(input: {
         .filter((entry) => entry.pinned)
         .map((entry) => entry.ref),
       purpose: request.contextPurpose ?? "解释所选内容",
+      policy: "balanced",
+      question: request.input.message,
+      active,
       describeSetting: (key) =>
         describeObjectSetting(key, latest.current.getSettings()),
     });

@@ -56,6 +56,8 @@ type AssistantSidebarProps = {
   selectedPaperCount: number;
   availablePapers?: Paper[];
   contextSuggestions?: AssistantComposerSuggestion[];
+  contextCatalogStatus?: string;
+  onRefreshContextCatalog?: () => void;
   selectedPapers: Paper[];
   selectionLocked: boolean;
   settingsStore: SettingsStoreLike;
@@ -98,6 +100,8 @@ export function AssistantSidebar({
   selectedPaperCount,
   availablePapers,
   contextSuggestions,
+  contextCatalogStatus,
+  onRefreshContextCatalog,
   selectedPapers,
   selectionLocked,
   settingsStore
@@ -143,6 +147,8 @@ export function AssistantSidebar({
           runtimeWorkspace={runtimeWorkspace}
           availablePapers={availablePapers}
           contextSuggestions={contextSuggestions}
+          contextCatalogStatus={contextCatalogStatus}
+          onRefreshContextCatalog={onRefreshContextCatalog}
           selectedPapers={selectedPapers}
           selectedSetStatus={{
             importedCount: importedSelectedCount,

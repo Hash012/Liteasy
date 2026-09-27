@@ -1,4 +1,5 @@
 import type { ModelExecutionTrace } from "./modelExecution";
+import { validateModelImages, type ModelImageInput } from "./modelImages";
 
 export type ModelPolicy = {
   allowedModels: string[];
@@ -17,6 +18,7 @@ export type GenerateAnswerInput = {
   onDelta?: (delta: string, accumulated: string) => void;
   outputFormat?: ModelOutputFormat;
   prompt: string;
+  images?: ModelImageInput[];
   provider: string;
   requireLive?: boolean;
   signal?: AbortSignal;
@@ -35,6 +37,7 @@ type ModelGatewayDeps = {
 export function createModelGateway(deps: ModelGatewayDeps) {
   return {
     async generateAnswer(input: GenerateAnswerInput): Promise<ModelGenerationResult> {
+      validateModelImages(input.images);
       if (!deps.policy.allowedProviders.includes(input.provider)) {
         throw new Error(`当前云端策略未开放该 provider：${input.provider}`);
       }

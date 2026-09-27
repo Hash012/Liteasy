@@ -2,6 +2,7 @@ import type { GenerateAnswerInput, ModelGenerationResult } from "./modelGateway"
 import { directModelTransport, type DirectModelTransport } from "./directModelTransport";
 import { validateDirectModelConfig, type DirectModelConfig } from "./modelProviders";
 import { assertModelResponseSize, createBoundedModelFrames, createModelTextBudget, MODEL_RESPONSE_LIMITS, modelTextBytes } from "./modelResponseBudget";
+import { validateModelImages } from "./modelImages";
 
 function parseResponseJson(value: string) {
   try { return JSON.parse(value); }
@@ -9,12 +10,21 @@ function parseResponseJson(value: string) {
 }
 
 export function buildDirectModelBody(config: DirectModelConfig, input: GenerateAnswerInput) {
+  validateModelImages(input.images);
   const prompt = input.outputFormat
     ? `${input.prompt}\n\nReturn only JSON matching this schema, without Markdown fences:\n${JSON.stringify(input.outputFormat.schema)}`
     : input.prompt;
   const body: Record<string, unknown> = {
     model: config.model,
-    messages: [{ role: "user", content: prompt }],
+    messages: [{ role: "user", content: input.images?.length ? [
+      { type: "text", text: prompt },
+      ...input.images.flatMap((image) => [
+        { type: "text", text: image.label },
+        config.protocol === "anthropic"
+          ? { type: "image", source: { type: "base64", media_type: image.mediaType, data: image.base64 } }
+          : { type: "image_url", image_url: { url: `data:${image.mediaType};base64,${image.base64}` } },
+      ]),
+    ] : prompt }],
     stream: Boolean(input.onDelta)
   };
   if (config.protocol === "anthropic") body.max_tokens = 8192;

@@ -114,7 +114,13 @@ function outputTextFromDeepSeek(payload) {
 
 function openAiBody(input, model, stream) {
   return {
-    input: input.prompt,
+    input: input.images?.length ? [{ role: "user", content: [
+      { type: "input_text", text: input.prompt },
+      ...input.images.flatMap((image) => [
+        { type: "input_text", text: image.label },
+        { type: "input_image", image_url: `data:${image.mediaType};base64,${image.base64}` },
+      ]),
+    ] }] : input.prompt,
     model,
     ...(input.outputFormat ? {
       text: {
@@ -131,6 +137,7 @@ function openAiBody(input, model, stream) {
 }
 
 function deepSeekBody(input, model, stream) {
+  if (input.images?.length) throw new ModelUpstreamError("model_images_unsupported", 415, "configured provider does not support image input");
   return {
     messages: [{ content: input.prompt, role: "user" }],
     model,
@@ -205,6 +212,7 @@ function createOpenAiProvider(config, options) {
   const fetchImpl = options.fetchImpl ?? fetch;
   const timeoutMs = options.timeoutMs;
   return Object.freeze({
+    supportsImages: true,
     model: config.model,
     async generate(input) {
       const response = await fetchUpstream(fetchImpl, upstreamUrl(config.baseUrl, "responses"), {

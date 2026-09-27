@@ -4,11 +4,40 @@ import { createModelGatewayFromSettings } from "../app/features/models/modelRunt
 import { createSettingsStore } from "../app/features/settings/settings.store";
 import { getActiveModelProvider, getModelForSettings } from "../app/features/models/modelPolicy";
 import { getModelProvider, modelProviders, validateDirectModelConfig } from "../app/features/models/modelProviders";
+import { createHttpModelClient } from "../app/features/models/modelHttpClient";
 
 afterEach(() => { localStorage.clear(); vi.restoreAllMocks(); });
 const openai = getModelProvider("openai");
 const format = { name: "answer", schema: { type: "object", properties: { answer: { type: "string" } }, required: ["answer"], additionalProperties: false }, strict: true };
 const input = { provider: "openai", model: "gpt-5-mini", prompt: "Test", outputFormat: format };
+
+test("sends selected image bytes with their labels using each configured multimodal protocol", () => {
+  const images = [{ mediaType: "image/png", base64: "iVBORw0KGgoAAAAA", label: "资料图片：实验曲线" }];
+  expect(buildDirectModelBody(openai, { ...input, images })).toMatchObject({ messages: [{ role: "user", content: [
+    { type: "text", text: expect.stringContaining("Test") }, { type: "text", text: "资料图片：实验曲线" },
+    { type: "image_url", image_url: { url: "data:image/png;base64,iVBORw0KGgoAAAAA" } },
+  ] }] });
+  expect(buildDirectModelBody(getModelProvider("anthropic"), { ...input, images })).toMatchObject({ messages: [{ content: [
+    { type: "text" }, { type: "text" }, { type: "image", source: { type: "base64", media_type: "image/png", data: "iVBORw0KGgoAAAAA" } },
+  ] }] });
+});
+
+test("sends image bytes to the cloud protocol and never retries an unsupported service as text", async () => {
+  const transport = vi.fn(async () => ({ ok: false, status: 400, json: async () => ({ code: "model_request_invalid" }) }));
+  const client = createHttpModelClient({ endpoint: "http://127.0.0.1:8080", source: "cloud_proxy", transport });
+  await expect(client({ ...input, images: [{ mediaType: "image/png", base64: "iVBORw0KGgoAAAAA", label: "图片" }] })).rejects.toThrow("尚不支持图片上下文");
+  expect(transport).toHaveBeenCalledOnce();
+  expect(JSON.parse(transport.mock.calls[0][0].body).images).toEqual([{ mediaType: "image/png", base64: "iVBORw0KGgoAAAAA", label: "图片" }]);
+});
+
+test("rejects invalid or excessive image inputs before invoking a transport", async () => {
+  const transport = vi.fn();
+  const client = createDirectModelClient(openai, transport);
+  await expect(client({ ...input, images: [{ mediaType: "image/svg+xml", base64: "iVBORw0KGgoAAAAA", label: "svg" }] })).rejects.toThrow("图片格式不支持");
+  await expect(client({ ...input, images: Array.from({ length: 13 }, () => ({ mediaType: "image/png", base64: "iVBORw0KGgoAAAAA", label: "图片" })) })).rejects.toThrow("最多读取 12 张");
+  await expect(client({ ...input, images: [{ mediaType: "image/png", base64: "iVBORw0KGgoAAAAA", label: "x".repeat(1001) }] })).rejects.toThrow("图片说明无效");
+  expect(transport).not.toHaveBeenCalled();
+});
 
 test("uses the configured personal model without calling the account transport or trusting a cloud endpoint", async () => {
   const store = createSettingsStore();

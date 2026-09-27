@@ -20,13 +20,24 @@ export async function contextAttachments(repository: ObjectRepository, refs: Obj
     if (!active()) throw new Error("账号已切换。");
     const object = await repository.get(ref);
     const members = object.kind === "workspace.board" ? await repository.listPlacements(object.objectId) : [];
+    const edges = object.kind === "workspace.board" ? await repository.listEdges(object.objectId) : [];
     if (object.kind === "workspace.board" && (await repository.resolveLatest(object.objectId)).revision !== ref.revision)
       throw new Error("白板已变化，请重新加入以固定最新内容。");
     const contextRefs = [ref, ...members.map((member) => member.ref)];
+    if (object.kind === "workspace.board") {
+      if (!active()) throw new Error("账号已切换。");
+      const fixed = { snapshotId: crypto.randomUUID(), scopeId: repository.scopeId, boardRef: ref,
+        text: `白板结构（固定于加入上下文时；坐标表示空间布局，连接表示用户组织关系，不等于已证实的因果关系）：\n${JSON.stringify({
+          elements: members.map((member) => ({ id: member.placementId, ref: member.ref, position: member.position,
+            size: member.size, collapsed: member.collapsed, view: member.viewId })), connections: edges,
+        }, null, 2)}` };
+      await repository.saveSnapshot(fixed);
+      contextRefs.push({ ...ref, selectorId: `board-context:${fixed.snapshotId}` });
+    }
     attachments.push({ ref, refs: contextRefs, title: object.title, kind: object.kind,
       detail: object.kind === "workspace.board" ? `${members.length} 个元素 · 已固定版本` : "已固定版本" });
   }
-  await resolveContextSnapshot({ repository, refs: attachments.flatMap((item) => item.refs), purpose: "加入对话上下文", persist: false });
+  await resolveContextSnapshot({ repository, refs: attachments.flatMap((item) => item.refs), purpose: "加入对话上下文", persist: false, policy: "balanced", active });
   if (!active()) throw new Error("账号已切换。");
   return attachments;
 }

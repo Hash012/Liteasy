@@ -5,8 +5,37 @@ import {
   createOpenAIModelFailoverProvider,
   createOpenAIModelFailoverStreamProvider,
   generateAnswer,
+  generateAnswerStream,
   openAIModelFailoverOrder
 } from "./modelPayloads.mjs";
+
+test("rejects invalid, excessive, and unsupported image input before calling a provider", async () => {
+  let calls = 0;
+  const providers = { openai: async () => { calls += 1; return "answer"; }, deepseek: async () => { calls += 1; return "text-only answer"; } };
+  const image = { mediaType: "image/png", label: "原图", base64: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]).toString("base64") };
+  await assert.rejects(generateAnswer({ provider: "openai", images: Array(13).fill(image) }, providers), /最多读取 12/);
+  await assert.rejects(generateAnswer({ provider: "openai", images: [{ ...image, base64: Buffer.from("not an image").toString("base64") }] }, providers), /内容与格式/);
+  await assert.rejects(generateAnswer({ provider: "deepseek", images: [image] }, providers), /不支持图片/);
+  await assert.rejects(generateAnswer({ provider: "openai", images: [{ ...image, base64: Buffer.alloc(5 * 1024 * 1024 + 1).toString("base64") }] }, providers), /超过 5 MB/);
+  await assert.rejects(generateAnswer({ provider: "openai", images: [{ ...image, label: "x".repeat(1001) }] }, providers), /图片数据无效/);
+  await assert.rejects(generateAnswer({ provider: "openai", images: [{ ...image, label: "图\u0000片" }] }, providers), /图片数据无效/);
+  await assert.rejects(generateAnswer({ provider: "openai", images: [{ ...image, base64: "AA==" }] }, providers), /图片编码无效/);
+  assert.equal(calls, 0);
+});
+
+test("keeps image inputs in streaming and non-streaming provider fallback paths", async () => {
+  const image = { mediaType: "image/png", label: "原图", base64: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]).toString("base64") };
+  const inputs = [];
+  const body = { provider: "openai", prompt: "图片", images: [image] };
+  for (const streaming of [true, false]) {
+    const providers = { openai: async (input) => { inputs.push(input); return "图片回答"; } };
+    const streamingProviders = streaming ? { openai: async function* (input) { inputs.push(input); yield "图片回答"; } } : {};
+    const events = [];
+    for await (const event of generateAnswerStream(body, providers, streamingProviders)) events.push(event);
+    assert.equal(events.at(-1).type, "completed");
+  }
+  assert.deepEqual(inputs.map((input) => input.images), [[image], [image]]);
+});
 
 test("registers a DeepSeek provider when a DeepSeek api key is configured", () => {
   const providers = buildProviderRegistry({

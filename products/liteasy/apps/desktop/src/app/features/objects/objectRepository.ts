@@ -93,6 +93,8 @@ export function createObjectRepository(
             objectId: object.objectId,
             title: object.title,
             lifecycle: object.lifecycle,
+            kind: object.kind,
+            revision: object.revision,
           },
         },
       },
@@ -543,16 +545,16 @@ export function createObjectRepository(
       );
   }
   async function searchTitles(query = "", limit = 20) {
-    const results: Array<{ objectId: string; title: string }> = [];
+    const results: Array<{ objectId: string; title: string; kind?: ObjectEnvelope["kind"]; revision?: string }> = [];
     const normalized = query.toLocaleLowerCase();
     let after = "";
     do {
       const rows = await storage.list("title/", after, 1000);
       for (const row of rows) {
         after = row.key;
-        const entry = row.value as { objectId: string; title: string; lifecycle: string };
+        const entry = row.value as { objectId: string; title: string; lifecycle: string; kind?: ObjectEnvelope["kind"]; revision?: string };
         if (entry.lifecycle === "active" && `${entry.title} ${entry.objectId}`.toLocaleLowerCase().includes(normalized)) {
-          results.push({ objectId: entry.objectId, title: entry.title });
+          results.push({ objectId: entry.objectId, title: entry.title, ...(entry.kind ? { kind: entry.kind } : {}), ...(entry.revision ? { revision: entry.revision } : {}) });
           if (results.length >= limit) return results;
         }
       }
@@ -606,7 +608,7 @@ export function createObjectRepository(
     if (current.kind !== "content.note")
       throw new ObjectStoreError(
         "capability_denied",
-        "摘录为只读，请制作独立副本。",
+        "论文原文、原图和摘录为只读，请制作独立副本。",
       );
     const next = make(
       {
