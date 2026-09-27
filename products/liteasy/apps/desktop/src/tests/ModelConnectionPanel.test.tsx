@@ -1,4 +1,6 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { loadVerifiedModelProfiles, rememberVerifiedModel } from "../app/features/models/verifiedModelProfiles";
+import { getModelProvider } from "../app/features/models/modelProviders";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, test, vi } from "vitest";
 import { ModelConnectionPanel } from "../app/features/models/ModelConnectionPanel";
 import { hasDirectModelKey, saveDirectModelKey, deleteDirectModelKey, directModelTransport } from "../app/features/models/directModelTransport";
@@ -13,7 +15,7 @@ vi.mock("../app/features/models/directModelTransport", () => ({
   })
 }));
 
-beforeEach(() => { vi.clearAllMocks(); vi.mocked(hasDirectModelKey).mockResolvedValue(false); });
+beforeEach(() => { localStorage.clear(); vi.clearAllMocks(); vi.mocked(hasDirectModelKey).mockResolvedValue(false); });
 
 test("offers mainstream providers, editable endpoint/model, and password-masked credentials without a login", async () => {
   const onUpdateSetting = vi.fn();
@@ -34,6 +36,7 @@ test("offers mainstream providers, editable endpoint/model, and password-masked 
   expect(onUpdateSetting).toHaveBeenCalledWith({ intent: "update_setting", target: "models.connection_mode", value: "direct" });
   expect(JSON.stringify(onUpdateSetting.mock.calls)).not.toContain("test-only-secret");
   expect(key).toHaveValue("");
+  expect(loadVerifiedModelProfiles().map((profile) => profile.config.model)).toEqual(["custom-deepseek-model"]);
 });
 
 test("keeps a saved key when left blank, and deletes it explicitly", async () => {
@@ -62,4 +65,18 @@ test("changing the endpoint clears an unsaved credential and never forwards it t
   fireEvent.change(screen.getByLabelText("API 基础地址"), { target: { value: "https://other.example.test/v1" } });
   expect(screen.getByLabelText("API key")).toHaveValue("");
   expect(saveDirectModelKey).not.toHaveBeenCalled();
+});
+
+
+test("saving without testing does not register availability, and a failed re-test removes previous verification", async () => {
+  vi.mocked(hasDirectModelKey).mockResolvedValue(true);
+  render(<ModelConnectionPanel onUpdateSetting={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
+  await screen.findByText(/配置已保存，可直接使用 AI/);
+  expect(loadVerifiedModelProfiles()).toEqual([]);
+  await act(async () => { rememberVerifiedModel(getModelProvider("openai")); });
+  vi.mocked(directModelTransport).mockRejectedValueOnce(new Error("API 拒绝访问"));
+  fireEvent.click(screen.getByRole("button", { name: "保存并测试" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("API 拒绝访问");
+  expect(loadVerifiedModelProfiles()).toEqual([]);
 });

@@ -1,0 +1,12 @@
+.assistant-model-trigger { min-width: 0; max-width: 180px; margin-right: auto; }
+.assistant-model-trigger > span:not(.fui-Button__icon) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assistant-model-popover { width: min(360px, calc(100vw - 40px)); display: flex; flex-direction: column; gap: 10px; }
+.assistant-model-options { display: flex; flex-direction: column; gap: 4px; max-height: min(340px, 55vh); overflow: auto; }
+.assistant-model-options > button { justify-content: flex-start; text-align: left; flex-shrink: 0; }
+.assistant-model-options strong, .assistant-model-options small { display: block; overflow-wrap: anywhere; }
+.assistant-model-options small, .assistant-model-hint { color: var(--colorNeutralForeground3); font-size: 12px; font-weight: 400; }
+.assistant-model-hint { margin: 0; }
+.assistant-thinking-popover { width: min(250px, calc(100vw - 40px)); }
+.assistant-thinking-popover .assistant-thinking-depth { width: 100%; max-width: none; gap: 8px; color: var(--colorNeutralForeground1); }
+.assistant-thinking-popover .assistant-thinking-labels { color: var(--colorNeutralForeground2); }
+.assistant-thinking-description { margin: 0; color: var(--colorNeutralForeground3); font-size: 12px; }

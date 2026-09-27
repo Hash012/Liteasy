@@ -73,7 +73,7 @@ test("content-sized text boxes keep tools outside, insert images, move and resto
   await page.screenshot({ path: testInfo.outputPath("text-box-image.png"), fullPage: true });
 });
 
-test("margin comments keep both page edges aligned and whiteboard width persists", async ({ page }, testInfo) => {
+test("margin comments keep both page edges aligned and the unified PDF board persists", async ({ page }, testInfo) => {
   await openReader(page);
   const bounds = (await firstPage(page).locator(".pdf-text-layer").boundingBox())!;
   await page.mouse.move(bounds.x + bounds.width * .102, bounds.y + bounds.height * .18);
@@ -94,20 +94,19 @@ test("margin comments keep both page edges aligned and whiteboard width persists
   }).toBeLessThan(1);
   await page.screenshot({ path: testInfo.outputPath("aligned-margin-comments.png"), fullPage: true });
   await page.getByRole("button", { name: "打开 PDF 白板", exact: true }).click();
-  const separator = page.getByRole("separator", { name: "调整白板宽度" });
-  const initial = await page.locator(".pdf-whiteboard-pane").boundingBox();
-  await separator.focus();
-  await separator.press("ArrowRight");
-  await expect(separator).toHaveAttribute("aria-valuenow", "340");
-  const resize = (await separator.boundingBox())!;
-  await page.mouse.move(resize.x + 3, resize.y + 150);
-  await page.mouse.down();
-  await page.mouse.move(resize.x + 53, resize.y + 150, { steps: 8 });
-  await page.mouse.up();
-  await expect(separator).toHaveAttribute("aria-valuenow", "290");
-  expect((await page.locator(".pdf-whiteboard-pane").boundingBox())!.width).toBeLessThan(initial!.width);
+  // PDF boards now open in the shared workbench, rather than the legacy inline pane.
+  const board = page.getByRole("region", { name: "研究白板", exact: true });
+  await expect(board).toBeVisible();
+  await expect(board).toContainText("das24a.pdf · 白板");
+  await board.getByRole("button", { name: "添加笔记", exact: true }).click();
+  await board.getByLabel("笔记内容", { exact: true }).fill("PDF 阅读中的持久笔记");
+  await board.getByRole("button", { name: "新建笔记", exact: true }).click();
+  await expect(board.locator(".object-placement")).toContainText("PDF 阅读中的持久笔记");
   await page.reload();
-  await expect(separator).toHaveAttribute("aria-valuenow", "290");
+  await expect(board).toBeVisible();
+  await expect(board.locator(".object-placement")).toContainText("PDF 阅读中的持久笔记");
+  await expect(page.locator(".pdf-margin-comment")).toHaveText(/页边注释/);
+
 });
 
 test("freehand strokes survive reload and zoom, with cancel, undo and eraser", async ({ page }, testInfo) => {

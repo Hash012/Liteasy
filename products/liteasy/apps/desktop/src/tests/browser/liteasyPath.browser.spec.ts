@@ -28,12 +28,14 @@ test("an imported note exposes its location and copied Liteasy Path becomes read
   await expect(page.getByRole("option").filter({ hasText: "PathResearch.md" })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("liteasy-path-candidates.png"), fullPage: true, animations: "disabled" });
   await page.getByRole("option").filter({ hasText: "PathResearch.md" }).click();
+  await page.getByRole("button", { name: "调整思考深度：均衡" }).click();
   const slider = page.getByRole("slider", { name: "思考深度" });
   await slider.focus();
   await page.keyboard.press("End");
   await expect(slider).toHaveAttribute("aria-valuetext", "熟虑");
   await page.keyboard.press("Home");
   await expect(slider).toHaveAttribute("aria-valuetext", "快速");
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "移除上下文：PathResearch.md", exact: true })).toBeVisible();
   // Inspect the same persisted, revision-pinned object through the real context resolver.
   const text = await page.evaluate(async (path) => {

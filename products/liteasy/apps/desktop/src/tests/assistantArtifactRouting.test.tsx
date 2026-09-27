@@ -177,6 +177,7 @@ test("cross-account and missing resource paths produce no context chip", async (
 
 test("sends the chosen thinking depth with the turn and uses it in artifact authoring", async () => {
   const { user, submit, onGenerateArtifact } = await renderRouting();
+  await user.click(screen.getByRole("button", { name: "调整思考深度：均衡" }));
   const slider = screen.getByRole("slider", { name: "思考深度" });
   expect(slider).toHaveAttribute("aria-valuetext", "均衡");
   fireEvent.change(slider, { target: { value: "2" } });
@@ -185,7 +186,8 @@ test("sends the chosen thinking depth with the turn and uses it in artifact auth
   await user.click(screen.getByRole("button", { name: "发送" }));
   await waitFor(() => expect(submit).toHaveBeenCalledWith(expect.objectContaining({ input: expect.objectContaining({ thinkingDepth: "deliberate" }) })));
   await screen.findByText("可以先整理资料，再规划幻灯片内容。");
-  fireEvent.change(slider, { target: { value: "0" } });
+  await user.click(screen.getByRole("button", { name: "调整思考深度：熟虑" }));
+  fireEvent.change(screen.getByRole("slider", { name: "思考深度" }), { target: { value: "0" } });
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "生成PPT");
   await user.click(screen.getByRole("button", { name: "发送" }));
   await waitFor(() => expect(onGenerateArtifact).toHaveBeenCalledWith("ppt", undefined, expect.stringContaining("思考深度：快速")));

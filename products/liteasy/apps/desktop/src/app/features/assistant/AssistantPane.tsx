@@ -1,3 +1,4 @@
+import { AssistantModelPicker } from "../models/AssistantModelPicker";
 import { LiteasyPathContextPicker } from "../resource-filesystem/LiteasyPathContextPicker";
 import { thinkingDepthInstruction, type ThinkingDepth } from "./thinkingDepth";
 import { collectPaperAnchors } from "../paper-anchors/paperAnchorEntity";
@@ -2273,6 +2274,8 @@ export function AssistantPane({
         scopeId={objectWorkbench.scopeId} search={objectWorkbench.searchLiteasyPaths}
         onAdd={addLiteasyPath} busy={contextDropCount > 0} /> : null}
       <AssistantComposer
+        modelPicker={<AssistantModelPicker settingsStore={settingsStoreRef.current} onSettingsChanged={onSettingsChanged}
+          disabled={assistantState.pending || !historyReady || queuedAssistantTurnsRef.current.length > 0} />}
         thinkingDepth={thinkingDepth}
         onThinkingDepthChange={setThinkingDepth}
         editing={Boolean(editingMessageId)}

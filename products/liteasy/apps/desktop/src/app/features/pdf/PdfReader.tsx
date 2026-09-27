@@ -1,3 +1,4 @@
+import { getHighlightColor, getOverlayStyle } from "./pdfAnnotationAppearance";
 import { DrawShapeRegular, EraserRegular, ArrowUndoRegular } from "@fluentui/react-icons";
 import { PdfInkLayer } from "./PdfInkLayer";
 import { canGroupPdfInkStroke, pdfInkGroupBounds, pdfInkStrokes, type PdfInkMode, type PdfInkStroke } from "./pdfInk";
@@ -33,6 +34,7 @@ import {
   CopyRegular,
   DeleteRegular,
   DocumentRegular,
+  TextBulletListLtrRegular,
   EditRegular,
   HighlightRegular,
   PanelLeftContractRegular,
@@ -94,6 +96,11 @@ import { usePdfAnnotationReview } from "./usePdfAnnotationReview";
 import { PaperReviewSharePanel } from "./PaperReviewSharePanel";
 import { persistPdfAnnotationState } from "./pdfAnnotationPersistence";
 import "./pdfAnnotationList.css";
+import { PdfOutline } from "./PdfOutline";
+import { PdfThumbnail } from "./PdfThumbnail";
+import { PdfPagesOverview } from "./PdfPagesOverview";
+import { PdfAnnotationsOverview } from "./PdfAnnotationsOverview";
+import "./pdfNavigationViews.css";
 import { PdfMarkdownTextBox } from "./PdfMarkdownTextBox";
 import { usePdfCitationParsing } from "./usePdfCitationParsing";
 import { usePdfFulltextStore } from "./usePdfFulltextStore";
@@ -201,7 +208,8 @@ type PublicationTransport = {
   promise: Promise<PdfAnnotationPublication>;
 };
 
-type PdfSidebarMode = "thumbnails" | "annotations";
+type PdfSidebarMode = "thumbnails" | "annotations" | "outline";
+type PdfReaderView = "document" | "pages" | "annotations";
 
 const pdfPageLayoutStorageKey = "liteasy:pdf-reader:page-layout";
 const pdfMarginCommentsStorageKey = "liteasy:pdf-reader:margin-comments";
@@ -403,23 +411,6 @@ function getAnnotationSummaryText(annotation: PdfAnnotationV2) {
   return annotation.kind === "ink"
     ? note || `${pdfInkStrokes(annotation).length} 笔`
     : note || "空白笔记";
-}
-
-function getHighlightColor(color: HighlightColor): string {
-  switch (color) {
-    case "yellow":
-      return "#ffeaa7";
-    case "red":
-      return "#fab1a0";
-    case "blue":
-      return "#74b9ff";
-    case "green":
-      return "#55efc4";
-    case "pink":
-      return "#fd79a8";
-    default:
-      return "#ffeaa7";
-  }
 }
 
 function getHighlightBorderColor(color: HighlightColor): string {
@@ -964,43 +955,6 @@ function clearPdfCanvas(canvas: HTMLCanvasElement | null) {
   canvas.height = 0;
 }
 
-function getOverlayStyle(kind: AnnotationKind, rect: PdfAnnotationRect, color?: HighlightColor): CSSProperties {
-  if (kind === "note") {
-    return {
-      backgroundColor: "rgba(36, 80, 142, 0.95)",
-      borderRadius: "999px",
-      height: "2%",
-      left: `${Math.max(0, rect.left - 1.2)}%`,
-      top: `${rect.top + Math.min(rect.height, 1)}%`,
-      width: "2%"
-    };
-  }
-
-  if (kind === "underline") {
-    return {
-      border: "none",
-      boxShadow: "none",
-      background: "none",
-      height: `${rect.height}%`,
-      left: `${rect.left}%`,
-      top: `${rect.top}%`,
-      width: `${rect.width}%`,
-      borderBottom: "2px solid rgba(27, 102, 179, 0.8)"
-    };
-  }
-
-  const highlightColor = color ? getHighlightColor(color) : getHighlightColor("yellow");
-  const verticalInset = rect.height * 0.05;
-
-  return {
-    backgroundColor: highlightColor,
-    height: `${rect.height - verticalInset * 2}%`,
-    left: `${rect.left}%`,
-    top: `${rect.top + verticalInset}%`,
-    width: `${rect.width}%`
-  };
-}
-
 export function buildPdfTextBoxRect(input: {
   clientX: number;
   clientY: number;
@@ -1486,89 +1440,6 @@ function PdfPageView({
   );
 }
 
-type PdfThumbnailProps = {
-  active: boolean;
-  annotations: PdfAnnotationV2[];
-  onNavigate: (page: number) => void;
-  pageNumber: number;
-  pdfDocument: PDFDocumentProxy | null;
-};
-
-function PdfThumbnail({ active, annotations, onNavigate, pageNumber, pdfDocument }: PdfThumbnailProps) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    let renderTask: { cancel: () => void; promise: Promise<unknown> } | null = null;
-
-    async function renderThumbnail() {
-      if (!pdfDocument) {
-        clearPdfCanvas(canvasRef.current);
-        return;
-      }
-
-      const canvas = canvasRef.current;
-      if (!canvas) {
-        return;
-      }
-
-      try {
-        const page = await pdfDocument.getPage(pageNumber);
-        if (cancelled) {
-          return;
-        }
-
-        const viewport = page.getViewport({ scale: 0.18 });
-        const context = getCanvasContext(canvas);
-        canvas.width = Math.floor(viewport.width);
-        canvas.height = Math.floor(viewport.height);
-        canvas.style.width = "100%";
-        canvas.style.height = "auto";
-
-        if (context) {
-          renderTask = page.render({ canvas, canvasContext: context, viewport });
-          await renderTask.promise;
-        }
-      } catch {
-        clearPdfCanvas(canvasRef.current);
-      }
-    }
-
-    void renderThumbnail();
-
-    return () => {
-      cancelled = true;
-      renderTask?.cancel();
-    };
-  }, [pageNumber, pdfDocument]);
-
-  return (
-    <li className={active ? "active" : ""}>
-      <button
-        aria-current={active ? "page" : undefined}
-        aria-label={`转到第 ${pageNumber} 页`}
-        onClick={() => onNavigate(pageNumber)}
-        title={`转到第 ${pageNumber} 页`}
-        type="button"
-      >
-        <span className="pdf-thumbnail-page">
-          <canvas aria-label={`PDF.js 缩略图 ${pageNumber}`} className="pdf-thumbnail-canvas" ref={canvasRef} />
-          {annotations.filter((annotation) => annotation.page === pageNumber &&
-            (annotation.kind === "highlight" || annotation.kind === "underline"))
-            .flatMap((annotation) => annotation.rects.map((rect, index) => (
-              <span
-                aria-hidden="true"
-                className={`pdf-thumbnail-mark ${annotation.kind}`}
-                key={`${annotation.id}-${index}`}
-                style={getOverlayStyle(annotation.kind, rect, annotation.kind === "highlight" ? annotation.color : undefined)}
-              />
-            )))}
-        </span>
-        <span className="pdf-thumbnail-number">{pageNumber}</span>
-      </button>
-    </li>
-  );
-}
-
 export function PdfReader({
   onDocumentInfo,
   readingControls,
@@ -1639,6 +1510,8 @@ export function PdfReader({
   useEffect(() => {
     try { localStorage.setItem("liteasy.pdf-sidebar-width", String(sidebarWidth)); } catch { /* Width remains usable. */ }
   }, [sidebarWidth]);
+  const [readerView, setReaderView] = useState<PdfReaderView>("document");
+  const readingScrollTop = useRef(0);
   const [sidebarMode, setSidebarMode] = useState<PdfSidebarMode>("annotations");
   const [stageWidth, setStageWidth] = useState(960);
   const [status, setStatus] = useState("选择文段后可添加高亮、划线，或把选中文段交给 AI。");
@@ -1674,6 +1547,10 @@ export function PdfReader({
   const [mutatingTeamAnnotationId, setMutatingTeamAnnotationId] = useState<string | null>(null);
   const pdfDisplaySource = resolvePdfDisplaySource(activePaper?.sourcePath);
   const annotationStorageKey = pdfAnnotationStorageKey(activePaper);
+  useEffect(() => {
+    setReaderView("document");
+    readingScrollTop.current = 0;
+  }, [annotationStorageKey, pdfDisplaySource]);
   useEffect(() => {
     setQuickAskSelection(null);
     setQuickAskPending(false);
@@ -1786,7 +1663,27 @@ export function PdfReader({
     }
   }, []);
 
-  function navigateToPage(page: number, behavior: ScrollBehavior = "smooth") {
+  function openOverview(view: "pages" | "annotations") {
+    if (readerView === "document") readingScrollTop.current = stageRef.current?.scrollTop ?? 0;
+    setSelection(null);
+    setSelectionPreview(null);
+    setAnnotationPopup(null);
+    setQuickAskSelection(null);
+    setTextBoxToolActive(false);
+    setInkMode(null);
+    clearBrowserSelection();
+    setReaderView(view);
+  }
+
+  function closeOverview() {
+    setReaderView("document");
+    window.requestAnimationFrame(() => {
+      if (stageRef.current) stageRef.current.scrollTop = readingScrollTop.current;
+    });
+  }
+
+  function navigateToPage(page: number, behavior: ScrollBehavior = "smooth", topRatio?: number) {
+    setReaderView("document");
     const nextPage = Math.min(Math.max(1, Math.trunc(page || 1)), Math.max(1, pageCount));
     setFocusedPage(nextPage);
     setStatus(`已转到第 ${nextPage} 页。`);
@@ -1794,7 +1691,10 @@ export function PdfReader({
       const stageElement = stageRef.current;
       const pageElement = stageElement?.querySelector<HTMLElement>(`[data-page="${nextPage}"]`);
       if (!stageElement || !pageElement) return;
-      if (layoutMode === "continuous" && typeof pageElement.scrollIntoView === "function") {
+      if (topRatio !== undefined && typeof stageElement.scrollTo === "function") {
+        const rect = getPdfPageSurfaceRect(pageElement);
+        stageElement.scrollTo({ behavior, top: Math.max(0, stageElement.scrollTop + rect.top - getElementContentRect(stageElement).top + rect.height * topRatio) });
+      } else if (layoutMode === "continuous" && typeof pageElement.scrollIntoView === "function") {
         pageElement.scrollIntoView({ behavior, block: "start" });
       } else if (typeof stageElement.scrollTo === "function") {
         stageElement.scrollTo({ behavior, left: 0, top: 0 });
@@ -2033,7 +1933,7 @@ export function PdfReader({
     const observer = new ResizeObserver(updateLayout);
     observer.observe(measuredStageElement);
     return () => observer.disconnect();
-  }, []);
+  }, [readerView]);
 
 
   useEffect(() => {
@@ -2235,6 +2135,7 @@ export function PdfReader({
       Math.max(1, Math.trunc(targetEvidence.page || 1)),
       Math.max(1, pageCount)
     );
+    setReaderView("document");
     setFocusedPage(targetPage);
     setSidebarMode("thumbnails");
     setSidebarCollapsed(false);
@@ -2917,7 +2818,8 @@ export function PdfReader({
     setAnnotationPopup(null);
   }
 
-  function locateAnnotation(annotation: PdfAnnotationV2) {
+  function locateAnnotation(annotation: PdfAnnotation) {
+    setReaderView("document");
     setFocusedPage(annotation.page);
     setStatus(`已定位到第 ${annotation.page} 页的${getAnnotationLabel(annotation.kind)}。`);
     window.requestAnimationFrame(() => {
@@ -3367,11 +3269,19 @@ export function PdfReader({
           ) : (
             <>
               <div className="pdf-sidebar-switcher">
+                <button aria-label="目录" aria-pressed={sidebarMode === "outline"}
+                  className={sidebarMode === "outline" ? "active" : ""}
+                  onClick={() => setSidebarMode("outline")} title="查看 PDF 书签目录" type="button">
+                  <TextBulletListLtrRegular />
+                </button>
                 <button
                   aria-label="缩略图"
                   className={sidebarMode === "thumbnails" ? "active" : ""}
+                  aria-pressed={sidebarMode === "thumbnails"}
                   onClick={() => setSidebarMode("thumbnails")}
-                  title="显示页面缩略图"
+                  onDoubleClick={() => openOverview("pages")}
+                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); setSidebarMode("thumbnails"); openOverview("pages"); } }}
+                  title="页面缩略图；双击或按 Enter 展开全部页面"
                   type="button"
                 >
                   <DocumentRegular />
@@ -3379,8 +3289,11 @@ export function PdfReader({
                 <button
                   aria-label="批注"
                   className={sidebarMode === "annotations" ? "active" : ""}
+                  aria-pressed={sidebarMode === "annotations"}
                   onClick={() => setSidebarMode("annotations")}
-                  title="显示当前文档批注"
+                  onDoubleClick={() => openOverview("annotations")}
+                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); setSidebarMode("annotations"); openOverview("annotations"); } }}
+                  title="文档批注；双击或按 Enter 展开全部批注"
                   type="button"
                 >
                   <CommentRegular />
@@ -3396,7 +3309,14 @@ export function PdfReader({
                 </button>
               </div>
 
-              {sidebarMode === "thumbnails" ? (
+              {sidebarMode === "outline" ? (
+                <PdfOutline document={pdfDocument} onNavigate={({ page, topRatio }) => navigateToPage(page, "auto", topRatio)} />
+              ) : ((readerView === "pages" && sidebarMode === "thumbnails") || (readerView === "annotations" && sidebarMode === "annotations")) ? (
+                <div className="pdf-overview-sidebar-note">
+                  <p>{readerView === "pages" ? "全部页面已在阅读区展开。" : "全部批注已在阅读区展开。"}</p>
+                  <Button onClick={closeOverview}>返回 PDF</Button>
+                </div>
+              ) : sidebarMode === "thumbnails" ? (
                 <ol className="pdf-thumbnail-list">
                   {pageNumbers.map((pageNumber) => (
                     <PdfThumbnail
@@ -3749,25 +3669,32 @@ export function PdfReader({
           </div>
           <div
             aria-label="PDF 页面滚动区"
-            className={`pdf-stage ${textBoxToolActive ? "text-box-tool-active" : ""}`}
-            onContextMenu={handleSelectionContextMenu}
-            onCopy={handleStageCopy}
-            onMouseUp={handleTextSelection}
-            onPointerCancel={handleSelectionPointerCancel}
-            onPointerDown={handleSelectionPointerDown}
-            onPointerMove={handleSelectionPointerMove}
-            onPointerUp={handleSelectionPointerUp}
-            onKeyDown={handleStageKeyDown}
-            onScroll={handleStageScroll}
+            className={`pdf-stage ${readerView !== "document" ? "is-overview" : ""} ${textBoxToolActive ? "text-box-tool-active" : ""}`}
+            onContextMenu={readerView === "document" ? handleSelectionContextMenu : undefined}
+            onCopy={readerView === "document" ? handleStageCopy : undefined}
+            onMouseUp={readerView === "document" ? handleTextSelection : undefined}
+            onPointerCancel={readerView === "document" ? handleSelectionPointerCancel : undefined}
+            onPointerDown={readerView === "document" ? handleSelectionPointerDown : undefined}
+            onPointerMove={readerView === "document" ? handleSelectionPointerMove : undefined}
+            onPointerUp={readerView === "document" ? handleSelectionPointerUp : undefined}
+            onKeyDown={readerView === "document" ? handleStageKeyDown : (event) => { if (event.key === "Escape") closeOverview(); }}
+            onScroll={readerView === "document" ? handleStageScroll : undefined}
             ref={stageRef}
             tabIndex={0}
           >
-            {documentHasNoTextLayer ? (
+            {readerView === "document" && documentHasNoTextLayer ? (
               <p className="pdf-page-text-unavailable" role="note">
                 本篇没有可用文本层，无法按字符定位。完成 OCR 后才能选中正文与定位证据。
               </p>
             ) : null}
-            <div className="pdf-document-frame" ref={documentFrameRef}>
+            {readerView === "pages" ? (
+              <PdfPagesOverview document={pdfDocument} count={pageCount} currentPage={focusedPage}
+                annotations={annotations} onNavigate={navigateToPage} onClose={closeOverview} />
+            ) : readerView === "annotations" ? (
+              <PdfAnnotationsOverview annotations={annotations} teamAnnotations={teamAnnotations}
+                paperIdentity={activePaper ? resolvePaperIdentity(activePaper) : undefined}
+                error={annotationLoadError} onNavigate={locateAnnotation} onClose={closeOverview} />
+            ) : <div className="pdf-document-frame" ref={documentFrameRef}>
               <div
                 aria-label="PDF.js 页面列表"
                 className={`pdf-page-list responsive layout-${layoutMode} ${
@@ -3817,7 +3744,7 @@ export function PdfReader({
                   />
                 ))}
               </div>
-            </div>
+            </div>}
             {selection ? (
               <div
                 aria-label="选中文本批注菜单"

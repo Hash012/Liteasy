@@ -1,3 +1,5 @@
+import { rememberVerifiedModel, forgetVerifiedModel, modelProfileId, directModelSettingCommands } from "./verifiedModelProfiles";
+import { useVerifiedModels } from "./useVerifiedModels";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button, Field, Input, Select, Textarea } from "@fluentui/react-components";
 import { isTauri } from "@tauri-apps/api/core";
@@ -21,6 +23,7 @@ export function ModelConnectionPanel({ settings = {}, onUpdateSetting }: Props) 
   const requestRef = useRef<AbortController>();
   const mountedRef = useRef(true);
   const modelListId = useId();
+  const { profiles } = useVerifiedModels();
   const preset = getModelProvider(config.provider);
   useEffect(() => {
     mountedRef.current = true;
@@ -46,6 +49,7 @@ export function ModelConnectionPanel({ settings = {}, onUpdateSetting }: Props) 
     setPending(true); setFailed(false); setMessage(""); setReply("");
     const controller = new AbortController();
     requestRef.current = controller;
+    let testedConfig: DirectModelConfig | undefined;
     try {
       if (mode === "cloud") {
         apply("models.connection_mode", "cloud");
@@ -60,24 +64,24 @@ export function ModelConnectionPanel({ settings = {}, onUpdateSetting }: Props) 
         throw new Error("请填写 API key；修改服务商或 API 地址后需要重新保存对应密钥。");
       }
       controller.signal.throwIfAborted();
-      apply("models.direct_provider", valid.provider);
-      apply("models.direct_endpoint", valid.endpoint);
-      apply("models.direct_model", valid.model);
-      apply("models.direct_protocol", valid.protocol);
-      apply("models.direct_output_format", valid.outputFormat);
-      apply("models.connection_mode", "direct");
+      for (const command of directModelSettingCommands(valid)) onUpdateSetting?.(command);
       setConfig(valid);
       setMessage(testConnection ? "配置已保存，正在发送测试请求…" : "配置已保存，可直接使用 AI，无需登录。");
       if (testConnection) {
+        testedConfig = valid;
         const result = await createDirectModelClient(valid)({
           model: valid.model, provider: valid.provider,
           prompt: "请只用一句简短中文确认你已准备好帮助阅读论文。",
           signal: controller.signal,
           onDelta: (_delta, accumulated) => { if (mountedRef.current) setReply(accumulated); }
         });
+        controller.signal.throwIfAborted();
+        if (!result.answer.trim()) throw new Error("模型返回了空响应，请检查配置后重新测试。");
+        rememberVerifiedModel(valid);
         if (mountedRef.current) { setReply(result.answer); setMessage("连接成功，已收到模型的真实响应。可以开始对话或论文分析。"); }
       }
     } catch (error) {
+      if (testedConfig && !controller.signal.aborted) forgetVerifiedModel(modelProfileId(testedConfig));
       if (mountedRef.current) {
         setFailed(!controller.signal.aborted);
         setMessage(controller.signal.aborted ? "已停止测试。" : error instanceof Error ? error.message : String(error));
@@ -103,6 +107,15 @@ export function ModelConnectionPanel({ settings = {}, onUpdateSetting }: Props) 
       </Select>
     </Field>
     {mode === "direct" ? <>
+      {profiles.length ? <Field label="已验证模型" hint="可保留多个服务商、地址与模型；对话输入框可直接切换。">
+        <Select aria-label="载入已验证模型配置" disabled={pending} value="" onChange={(_, data) => {
+          const profile = profiles.find((item) => item.id === data.value);
+          if (profile) update(profile.config);
+        }}>
+          <option value="">选择已保存的模型配置</option>
+          {profiles.map((profile) => <option value={profile.id} key={profile.id}>{profile.config.model} · {getModelProvider(profile.config.provider).label} · {profile.config.endpoint}</option>)}
+        </Select>
+      </Field> : null}
       <Field label="服务商">
         <Select aria-label="API 服务商" disabled={pending} value={config.provider} onChange={(_event, data) => update(getModelProvider(data.value))}>
           {modelProviders.map((entry) => <option value={entry.provider} key={entry.provider}>{entry.label}</option>)}
