@@ -80,3 +80,84 @@ test("reading typography and comments stay consistent with the PDF and survive r
   await expect(page.locator(".pdf-annotation-item")).toHaveCount(1);
   expect(errors).toEqual([]);
 });
+
+test("long-form navigation, bookmarks, themes and focus retain the reading paragraph through reflow and reopening", async ({ page }, testInfo) => {
+  test.setTimeout(90_000);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
+  const pdf = await readFile(new URL("../../../../../../../development/test-data/pdf-selection/glyph-boundaries.pdf", import.meta.url));
+  await page.route("**/manual-preview/das24a.pdf", (route) => route.fulfill({ body: pdf, contentType: "application/pdf" }));
+  const paragraph = "A scientific reader should preserve the original text, help readers navigate between sections, and remember the paragraph after changing typography. ".repeat(3);
+  const markdown = `# Reader navigation\n\n${["Background", "Methods", "Results landmark", "Discussion"].map((heading) => `## ${heading}\n\n${Array.from({ length: 8 }, (_, i) => `Paragraph ${i + 1}. ${paragraph}`).join("\n\n")}`).join("\n\n")}`;
+  await page.route("https://reading-navigation.example.test/v1/pdf/mineru-extract", (route) => route.fulfill({ json: {
+    pages: [{ page: 1, text: markdown }], markdown, figures: [],
+  } }));
+  await page.setViewportSize({ width: 1600, height: 1050 });
+  await page.goto("/?pdf-highlight-fixture#importable");
+  await page.getByRole("button", { name: "设置", exact: true }).click();
+  await page.getByLabel("论文内容解析").selectOption("custom");
+  await page.getByLabel("MinerU API 地址").fill("https://reading-navigation.example.test");
+  await page.getByLabel("mineru API key", { exact: true }).fill("reading-test-key");
+  await page.getByRole("button", { name: "保存密钥", exact: true }).last().click();
+  await page.getByRole("button", { name: "MinerU 解析", exact: true }).click();
+  await page.getByRole("button", { name: "阅读模式", exact: true }).click();
+  const reading = page.getByRole("region", { name: "论文阅读模式", exact: true });
+  const workspace = reading.locator(".paper-reading-workspace");
+  const scroller = reading.locator(".paper-resource-tab");
+  const heading = reading.locator(".mineru-markdown h2").filter({ hasText: "Results landmark" });
+  const relativeTop = () => heading.evaluate((element) => element.getBoundingClientRect().top - element.closest(".paper-resource-tab")!.getBoundingClientRect().top);
+
+  await reading.getByRole("button", { name: "阅读目录", exact: true }).click();
+  await reading.getByRole("navigation", { name: "论文目录" }).getByRole("button", { name: "Results landmark", exact: true }).click();
+  await expect.poll(async () => Math.abs(await relativeTop() - 16)).toBeLessThan(3);
+  await expect.poll(() => reading.getByRole("progressbar", { name: "正文阅读位置" }).getAttribute("value")).not.toBe("0");
+  await reading.getByRole("button", { name: "返回跳转前", exact: true }).click();
+  await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeLessThan(200);
+  await reading.getByRole("navigation", { name: "论文目录" }).getByRole("button", { name: "Results landmark", exact: true }).click();
+  await reading.getByRole("tab", { name: "书签", exact: true }).click();
+  await reading.getByRole("button", { name: "收藏当前位置", exact: true }).click();
+  await expect(reading.locator(".paper-reading-bookmark")).toContainText("Results landmark");
+
+  await reading.getByRole("button", { name: "阅读排版", exact: true }).click();
+  await page.getByRole("combobox", { name: "阅读主题" }).selectOption("night");
+  await page.getByRole("combobox", { name: "阅读段间距" }).selectOption("1.5");
+  await page.getByRole("slider", { name: "阅读字号" }).focus();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Escape");
+  await expect.poll(async () => Math.abs(await relativeTop() - 16)).toBeLessThan(3);
+  await expect(reading.locator(".mineru-markdown")).toHaveCSS("color", "rgb(220, 225, 229)");
+  await reading.getByRole("button", { name: "专注阅读", exact: true }).click();
+  await expect(workspace).toHaveClass(/is-focused/);
+  await expect.poll(() => workspace.evaluate((element) => element.getBoundingClientRect().width)).toBe(1600);
+  await expect.poll(async () => Math.abs(await relativeTop() - 16)).toBeLessThan(3);
+  await reading.getByRole("button", { name: "返回跳转前", exact: true }).focus();
+  await page.keyboard.press("Tab");
+  await expect(reading.getByRole("button", { name: "阅读目录", exact: true })).toBeFocused();
+  await reading.getByRole("button", { name: "阅读排版", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "阅读主题" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(workspace).toHaveClass(/is-focused/);
+  await page.screenshot({ path: testInfo.outputPath("focused-night-reading.png"), fullPage: true, animations: "disabled" });
+  await page.keyboard.press("Escape");
+  await expect(workspace).not.toHaveClass(/is-focused/);
+
+  await workspace.focus(); await page.keyboard.press("Control+f");
+  const search = reading.getByRole("textbox", { name: "查找阅读正文" });
+  await expect(search).toBeFocused();
+  await search.fill("Discussion");
+  await expect(reading.getByRole("status").filter({ hasText: "1 个匹配段落" })).toBeVisible();
+  await search.press("Enter");
+  await expect(reading.locator("[data-reading-navigation-match]")).toHaveText("Discussion");
+  await search.press("Escape");
+  await reading.getByRole("button", { name: "返回跳转前", exact: true }).click();
+  await expect.poll(async () => Math.abs(await relativeTop() - 16)).toBeLessThan(3);
+  await reading.getByRole("button", { name: "PDF 模式", exact: true }).click();
+  await page.getByRole("button", { name: "阅读模式", exact: true }).click();
+  await expect.poll(async () => Math.abs(await relativeTop() - 16)).toBeLessThan(3);
+  await expect(workspace).toHaveAttribute("data-reading-theme", "night");
+  await reading.getByRole("button", { name: "阅读书签", exact: true }).click();
+  await expect(reading.locator(".paper-reading-bookmark")).toContainText("Results landmark");
+  await page.screenshot({ path: testInfo.outputPath("reading-bookmarks-and-progress.png"), fullPage: true, animations: "disabled" });
+  expect(errors).toEqual([]);
+});

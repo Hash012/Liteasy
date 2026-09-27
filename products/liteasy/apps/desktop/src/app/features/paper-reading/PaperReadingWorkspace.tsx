@@ -1,12 +1,15 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Button, Field, Popover, PopoverSurface, PopoverTrigger, Select, Slider, Textarea, Tooltip } from "@fluentui/react-components";
-import { AddRegular, CommentRegular, TextFontSizeRegular } from "@fluentui/react-icons";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Button, Field, Popover, PopoverSurface, PopoverTrigger, Select, Slider, Textarea, Tooltip, useFocusFinders, useModalAttributes } from "@fluentui/react-components";
+import { AddRegular, ArrowUndoRegular, BookOpenRegular, BookmarkRegular, CommentRegular, FullScreenMaximizeRegular, FullScreenMinimizeRegular, SearchRegular, TextFontSizeRegular } from "@fluentui/react-icons";
 import type { PdfReadingAnnotations } from "../pdf/pdfReadingAnnotations";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import { compactPdfTextForSearch } from "../pdf/pdfTextSearch";
 import { PdfAnnotationMarkdown } from "../pdf/PdfAnnotationMarkdown";
 import { resolveLocalAccountKey } from "../library/localAccountKey";
 import { defaultPaperReadingPreferences, loadPaperReadingPreferences, paperReadingFonts, type PaperReadingPreferences } from "./paperReadingPreferences";
+import { usePaperReadingNavigation } from "./usePaperReadingNavigation";
+import { PaperReadingNavigator, type ReadingPanel } from "./PaperReadingNavigator";
+import { readingMinutes } from "./paperReadingNavigation";
 import "./paperReading.css";
 
 export function readingQuotePages(quote: string, pageTexts: Record<number, string>, chunks: readonly RetrievalChunk[]) {
@@ -55,6 +58,10 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
   const preferenceKey = `liteasy.paper-reading.preferences.v1:${encodeURIComponent(resolveLocalAccountKey())}`;
   const [preferences, setPreferences] = useState(() => loadPaperReadingPreferences(preferenceKey));
   const [commentsVisible, setCommentsVisible] = useState(true);
+  const [panel, setPanel] = useState<ReadingPanel | null>(null);
+  const [focus, setFocus] = useState(false);
+  const { modalAttributes } = useModalAttributes({ trapFocus: focus, legacyTrapFocus: true });
+  const { findFirstFocusable } = useFocusFinders();
   const [draft, setDraft] = useState<{ excerpt: string; page: string; id?: string; revision?: number }>();
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -62,33 +69,39 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
   const [error, setError] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const navigation = usePaperReadingNavigation(contentRef, session.scopeKey);
   const mounted = useRef(true);
-  const pendingPosition = useRef<number>();
+  const showComments = commentsVisible && !panel && !focus;
+  const totalMinutes = useMemo(() => readingMinutes(navigation.blocks), [navigation.blocks]);
+  const minutes = Math.max(1, Math.ceil(totalMinutes * (1 - navigation.progress)));
   const pages = [...new Set([...Array.from({ length: session.pageCount }, (_, index) => index + 1), ...chunks.map((chunk) => chunk.page)])].sort((a, b) => a - b);
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => { mounted.current = true; rootRef.current?.focus({ preventScroll: true }); return () => { mounted.current = false; }; }, []);
+  useEffect(() => { if (focus && rootRef.current) findFirstFocusable(rootRef.current)?.focus({ preventScroll: true }); }, [focus, findFirstFocusable]);
   useEffect(() => {
     try { localStorage.setItem(preferenceKey, JSON.stringify(preferences)); } catch { /* Keep session preferences. */ }
   }, [preferenceKey, preferences]);
 
   function changePreferences(next: PaperReadingPreferences) {
-    const scroller = contentRef.current?.querySelector<HTMLElement>(".paper-resource-tab");
-    if (scroller) pendingPosition.current = scroller.scrollTop / Math.max(1, scroller.scrollHeight - scroller.clientHeight);
+    navigation.rememberPosition();
     setPreferences(next);
   }
   useLayoutEffect(() => {
-    const scroller = contentRef.current?.querySelector<HTMLElement>(".paper-resource-tab");
-    if (scroller && pendingPosition.current !== undefined) {
-      scroller.scrollTop = pendingPosition.current * Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-      pendingPosition.current = undefined;
-    }
-  }, [preferences]);
+    navigation.restorePosition();
+  }, [preferences, panel, commentsVisible, focus]);
+  function openPanel(next: ReadingPanel) { navigation.rememberPosition(); setPanel(next); }
+  function closePanel() {
+    navigation.rememberPosition(); setPanel(null);
+    if (rootRef.current) (focus ? findFirstFocusable(rootRef.current) : rootRef.current)?.focus({ preventScroll: true });
+  }
+  function toggleFocus() { navigation.rememberPosition(); setFocus(!focus); setPanel(null); }
+  function openComments() { setPanel(null); setFocus(false); setCommentsVisible(true); }
 
   function locate(id: string) {
     const annotation = session.annotations.find((item) => item.id === id);
     const root = contentRef.current;
     if (!annotation || !root) return;
     root.querySelectorAll("[data-reading-comment-match]").forEach((node) => node.removeAttribute("data-reading-comment-match"));
-    setCommentsVisible(true);
+    openComments();
     if (locateQuote(root, annotation.excerpt)) setMessage(`已定位第 ${annotation.page} 页批注的原文。`);
     else {
       const page = root.querySelector<HTMLElement>(`[data-reading-page="${annotation.page}"]`);
@@ -114,7 +127,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
     if (excerpt.length > 4000) { setMessage("选段过长，请缩小范围后添加批注。"); return; }
     const candidates = readingQuotePages(excerpt, session.pageTexts, chunks);
     const page = candidates.length === 1 ? String(candidates[0]) : start.closest<HTMLElement>("[data-reading-page]")?.dataset.readingPage ?? "";
-    setDraft({ excerpt, page }); setNote(""); setCommentsVisible(true); setError("");
+    setDraft({ excerpt, page }); setNote(""); openComments(); setError("");
     setMessage(page ? `已选择第 ${page} 页原文。` : "请选择选段所在的 PDF 页码；保存后可在两种模式中查看。");
   }
 
@@ -131,9 +144,26 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
 
   const styles = { "--paper-reading-font": paperReadingFonts[preferences.font].family, "--paper-reading-size": `${preferences.fontSize}px`,
     "--paper-reading-width": preferences.width ? `${preferences.width}px` : "100%", "--paper-reading-line-height": preferences.lineHeight,
-    "--paper-reading-alignment": preferences.alignment } as CSSProperties;
-  return <div className="paper-reading-workspace" ref={rootRef} style={styles}>
+    "--paper-reading-alignment": preferences.alignment, "--paper-reading-paragraph-spacing": `${preferences.paragraphSpacing}em` } as CSSProperties;
+  return <div className={`paper-reading-workspace${focus ? " is-focused" : ""}`} ref={rootRef} style={styles} data-reading-theme={preferences.theme} tabIndex={-1}
+    {...modalAttributes} role={focus ? "dialog" : undefined} aria-modal={focus || undefined} aria-label={focus ? "专注阅读" : undefined}
+    onKeyDown={(event) => {
+      if (event.defaultPrevented || event.nativeEvent.isComposing) return;
+      const key = event.key.toLowerCase();
+      if ((event.ctrlKey || event.metaKey) && key === "f") {
+        event.preventDefault(); event.stopPropagation();
+        if (event.shiftKey) toggleFocus(); else openPanel("search");
+      } else if ((event.ctrlKey || event.metaKey) && event.shiftKey && key === "b") {
+        event.preventDefault(); event.stopPropagation(); navigation.addBookmark(); openPanel("bookmarks");
+      } else if (event.key === "Escape" && !((event.target as HTMLElement).closest("textarea, [contenteditable=true]"))) {
+        if (panel) { event.preventDefault(); event.stopPropagation(); closePanel(); }
+        else if (focus) { event.preventDefault(); event.stopPropagation(); toggleFocus(); }
+      }
+    }}>
     <div className="paper-reading-toolbar" role="toolbar" aria-label="阅读排版与批注">
+      <Tooltip content="章节目录" relationship="description"><Button aria-label="阅读目录" aria-pressed={panel === "contents"} icon={<BookOpenRegular />} onClick={() => panel === "contents" ? closePanel() : openPanel("contents")} /></Tooltip>
+      <Tooltip content="查找正文（Ctrl / ⌘ + F）" relationship="description"><Button aria-label="查找阅读正文" aria-pressed={panel === "search"} icon={<SearchRegular />} onClick={() => panel === "search" ? closePanel() : openPanel("search")} /></Tooltip>
+      <Tooltip content="查看书签；Ctrl / ⌘ + Shift + B 收藏当前位置" relationship="description"><Button aria-label="阅读书签" aria-pressed={panel === "bookmarks"} icon={<BookmarkRegular />} onClick={() => panel === "bookmarks" ? closePanel() : openPanel("bookmarks")} /></Tooltip>
       <Popover positioning="below-start">
         <PopoverTrigger disableButtonEnhancement><Tooltip content="调整字号、字体与版面" relationship="description">
           <Button icon={<TextFontSizeRegular />}>阅读排版</Button>
@@ -153,17 +183,25 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
           <Field label="对齐"><Select aria-label="阅读对齐" value={preferences.alignment} onChange={(_, data) => changePreferences({ ...preferences, alignment: data.value as "left" | "justify" })}>
             <option value="left">左对齐</option><option value="justify">两端对齐</option>
           </Select></Field>
+          <Field label="段间距"><Select aria-label="阅读段间距" value={preferences.paragraphSpacing} onChange={(_, data) => changePreferences({ ...preferences, paragraphSpacing: Number(data.value) })}>
+            <option value="0.6">紧凑</option><option value="1">舒适</option><option value="1.5">宽松</option>
+          </Select></Field>
+          <Field label="阅读主题"><Select aria-label="阅读主题" value={preferences.theme} onChange={(_, data) => changePreferences({ ...preferences, theme: data.value as PaperReadingPreferences["theme"] })}>
+            <option value="auto">跟随应用</option><option value="paper">纸白</option><option value="warm">暖纸</option><option value="night">夜读</option>
+          </Select></Field>
           <Button onClick={() => changePreferences(defaultPaperReadingPreferences)}>恢复默认排版</Button>
         </PopoverSurface>
       </Popover>
       <Button icon={<AddRegular />} disabled={!session.ready || Boolean(draft)} onClick={() => {
-        setDraft({ page: String(session.focusedPage), excerpt: "" }); setNote(""); setCommentsVisible(true); setError("");
+        setDraft({ page: String(session.focusedPage), excerpt: "" }); setNote(""); openComments(); setError("");
       }}>添加页批注</Button>
-      <Button icon={<CommentRegular />} aria-pressed={commentsVisible} onClick={() => setCommentsVisible(!commentsVisible)}>批注（{session.annotations.length}）</Button>
+      <Button icon={<CommentRegular />} aria-pressed={showComments} onClick={() => { navigation.rememberPosition(); if (showComments) setCommentsVisible(false); else openComments(); }}>批注（{session.annotations.length}）</Button>
+      <Tooltip content="专注阅读（Ctrl / ⌘ + Shift + F）；Esc 退出" relationship="description"><Button icon={focus ? <FullScreenMinimizeRegular /> : <FullScreenMaximizeRegular />} aria-pressed={focus} onClick={toggleFocus}>{focus ? "退出专注" : "专注阅读"}</Button></Tooltip>
     </div>
-    <div className={`paper-reading-body${commentsVisible ? " with-comments" : ""}`}>
+    <div className={`paper-reading-body${showComments || panel ? " with-comments" : ""}`}>
       <div className="paper-reading-content" ref={contentRef} onMouseUp={captureSelection} onKeyUp={(event) => { if (event.key === "Shift") captureSelection(); }}>{children}</div>
-      {commentsVisible ? <aside aria-label="阅读模式批注" className="paper-reading-comments">
+      {panel ? <PaperReadingNavigator panel={panel} onPanelChange={openPanel} onClose={closePanel} navigation={navigation} /> : null}
+      {showComments ? <aside aria-label="阅读模式批注" className="paper-reading-comments">
         <strong>批注 · 与 PDF 共用</strong>
         {!session.ready ? <p role="status">正在恢复批注…</p> : null}
         {session.error || error ? <p role="alert">{error || session.error}</p> : null}
@@ -198,5 +236,12 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
         </article>)}
       </aside> : null}
     </div>
+    {navigation.notice ? <div className="paper-reading-notice" role="status">{navigation.notice}</div> : null}
+    <footer className="paper-reading-progress">
+      <Tooltip content="返回目录、查找或书签跳转前的位置" relationship="description"><Button size="small" appearance="subtle" icon={<ArrowUndoRegular />} disabled={!navigation.canGoBack} onClick={navigation.goBack}>返回跳转前</Button></Tooltip>
+      <progress aria-label="正文阅读位置" max={100} value={Math.round(navigation.progress * 100)} />
+      <span>位置 {Math.round(navigation.progress * 100)}%</span>
+      {navigation.blocks.length ? <span title="按中文每分钟 300 字、英文每分钟 220 词粗略估算；公式与图表需要额外时间。">{navigation.progress >= 0.995 ? "已到文末" : `约余 ${minutes} 分钟`}</span> : null}
+    </footer>
   </div>;
 }

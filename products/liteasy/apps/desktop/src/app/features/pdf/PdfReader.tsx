@@ -1872,6 +1872,7 @@ export function PdfReader({
 
   useEffect(() => {
     function handleFindShortcut(event: KeyboardEvent) {
+      if (readingView || event.defaultPrevented) return;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
         event.preventDefault();
         openSearch();
