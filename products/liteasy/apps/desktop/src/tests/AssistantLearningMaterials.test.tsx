@@ -42,7 +42,7 @@ test.each([
   expect(within(menu).getByRole("button", { name: /把 AI 助手放到下栏/ })).toBeInTheDocument();
   await user.click(within(menu).getByRole("button", { name: new RegExp(label) }));
   expect(input).toHaveValue(`/${label} `);
-  expect(document.querySelector(".assistant-command-chip")).toHaveTextContent(`/${label}`);
+  expect(document.querySelector(".assistant-command-chip")?.textContent).toBe(label);
   expect(onGenerateArtifact).not.toHaveBeenCalled();
   await user.type(input, "面向初学者，包含对比表");
   await user.click(screen.getByRole("button", { name: "发送", exact: true }));
