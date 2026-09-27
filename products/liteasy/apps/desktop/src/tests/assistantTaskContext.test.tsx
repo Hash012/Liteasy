@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 import { AssistantPane } from "../app/features/assistant/AssistantPane";
 import type { FrontendAgentClient } from "../app/features/agent-api/frontendAgentClient";
-import { FloatingModalityButton } from "../app/features/artifacts/FloatingModalityButton";
 
 function createAgentClient(): FrontendAgentClient {
   return {
@@ -142,58 +141,6 @@ test("sends @ papers as one-turn attachments without changing the locked selecti
       }]
     })
   );
-});
-
-test("starts thin reading directly from the central button", async () => {
-  const user = userEvent.setup();
-  const onStartAnalysis = vi.fn();
-
-  render(
-    <FloatingModalityButton
-      analysisHint="选择一种产物"
-      canStartAnalysis={true}
-      onStartAnalysis={onStartAnalysis}
-    />
-  );
-
-  expect(screen.getByRole("button", { name: "薄读" })).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "打开 AI 选择" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "树形展开" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "思维导图" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "分层关系图" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "PPT" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "对比表" })).not.toBeInTheDocument();
-
-  await user.click(screen.getByRole("button", { name: "薄读" }));
-
-  expect(onStartAnalysis).toHaveBeenCalledWith("thin_reading");
-  expect(screen.getByRole("button", { name: "薄读" })).toBeInTheDocument();
-});
-
-test("shows thin-reading progress around the central thin-reading button only while generating", () => {
-  const { rerender } = render(
-    <FloatingModalityButton
-      analysisHint="选择一种产物"
-      canStartAnalysis={true}
-      generationProgress={32}
-      onStartAnalysis={() => undefined}
-    />
-  );
-
-  expect(screen.getByRole("progressbar", { name: "薄读生成进度" })).toHaveAttribute(
-    "aria-valuenow",
-    "32"
-  );
-
-  rerender(
-    <FloatingModalityButton
-      analysisHint="选择一种产物"
-      canStartAnalysis={true}
-      onStartAnalysis={() => undefined}
-    />
-  );
-
-  expect(screen.queryByRole("progressbar", { name: "薄读生成进度" })).not.toBeInTheDocument();
 });
 
 test("natural thin-reading requests prefer an explicit paper and retain the user's explanation requirements", async () => {

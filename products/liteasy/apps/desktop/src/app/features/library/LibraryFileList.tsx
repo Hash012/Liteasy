@@ -1,3 +1,4 @@
+import { libraryFileDragType, libraryFolderKey } from "./libraryFolderMembership";
 import { useMemo, useState, useEffect } from "react";
 import { Button } from "@fluentui/react-components";
 import { DocumentTextRegular } from "@fluentui/react-icons";
@@ -10,22 +11,32 @@ export type LibraryFileAccess = {
   selectedId?: string;
   pending: boolean;
   message: string;
-  onImport(files: File[], targetFolderPath?: string): Promise<void>;
+  onImport(files: File[], targetFolderPath?: string): Promise<void | string>;
+  onMoveFile?(id: string, targetFolderPath?: string): Promise<void>;
+  onRelocateFolder?(source: string, target: string): Promise<void>;
   onInspect(entry: ReadingCatalogEntry, open?: () => void): void;
   onOpen(entry: ReadingCatalogEntry): void;
   onMetadataChange?(id: string, patch: ReadingCatalogMetadataPatch): Promise<void>;
 };
 
 /** Non-PDF assets share the existing library search and selection inspector. */
-export function LibraryFileList({ access, query, category, filters }: { access: LibraryFileAccess; query: string; category: string; filters: ReadingCatalogFilters }) {
+export function LibraryFileList({ access, query, category, filters, folderPath, libraryRootPath = "", rootEntries, depth = 0 }: { access: LibraryFileAccess; query: string; category: string; filters: ReadingCatalogFilters; folderPath?: string; libraryRootPath?: string; rootEntries?: Set<string>; depth?: number }) {
   const [limit, setLimit] = useState(50);
-  const index = useMemo(() => indexReadingCatalog(access.entries.filter((entry) => entry.format !== "pdf")), [access.entries]);
+  const index = useMemo(() => indexReadingCatalog(access.entries.filter((entry) => entry.format !== "pdf" && (rootEntries ? rootEntries.has(entry.id)
+    : libraryFolderKey(`${libraryRootPath}/${entry.folderPath ?? ""}`) === libraryFolderKey(`${libraryRootPath}/${folderPath ?? ""}`)))), [access.entries, folderPath, libraryRootPath, rootEntries]);
   const entries = useMemo(() => queryReadingCatalog(index, { ...filters, query, collection: category }), [index, query, category, filters]);
   useEffect(() => setLimit(50), [query, category, filters]);
   return <>
     <ul className="library-file-list" aria-label="文献库文件">
       {entries.slice(0, limit).map((entry) => <li key={entry.id}>
         <button type="button" className={`library-file-row${access.selectedId === entry.id ? " active" : ""}`}
+          style={{ paddingLeft: `${depth * 12 + 6}px` }}
+          draggable={Boolean(access.onMoveFile) && !access.pending}
+          onDragStart={(event) => {
+            event.stopPropagation();
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData(libraryFileDragType, entry.id);
+          }}
           aria-label={`选择文件 ${entry.title}`} aria-pressed={access.selectedId === entry.id}
           onClick={() => access.onInspect(entry)} onFocus={() => access.onInspect(entry)}
           onDoubleClick={() => access.onOpen(entry)} onKeyDown={(event) => {

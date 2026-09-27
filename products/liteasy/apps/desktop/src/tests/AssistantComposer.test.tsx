@@ -84,7 +84,7 @@ describe("AssistantComposer", () => {
 });
 
 
-test("renders a selected slash command as a capsule and sends after dismissing suggestions", async () => {
+test("renders a selected slash command as plain highlighted text and sends after dismissing suggestions", async () => {
   const user = userEvent.setup();
   const send = vi.fn();
   function Composer() {
@@ -97,7 +97,7 @@ test("renders a selected slash command as a capsule and sends after dismissing s
   const input = screen.getByPlaceholderText("输入你的问题或命令");
   await user.type(input, "/{Enter}");
   expect(input).toHaveValue("/生成薄读 ");
-  expect(document.querySelector(".assistant-command-chip")).toHaveTextContent("/生成薄读");
+  expect(document.querySelector(".assistant-command-chip")).toHaveTextContent("生成薄读");
   expect(screen.queryByLabelText("输入候选")).not.toBeInTheDocument();
   await user.keyboard("{Enter}");
   expect(send).toHaveBeenCalledWith("/生成薄读 ");
@@ -213,4 +213,39 @@ test("keeps thinking depth collapsed until clicked and supports keyboard adjustm
   await user.keyboard("{Escape}");
   expect(screen.queryByRole("slider", { name: "思考深度" })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "调整思考深度：快速" })).toBeInTheDocument();
+});
+
+test("shows context names without trigger prefixes and preserves removal and command syntax", () => {
+  const remove = vi.fn();
+  render(<AssistantComposer input="/生成薄读Extra /生成薄读 " modeHint="命令" onInputChange={vi.fn()}
+    onSend={vi.fn()} onVoiceInput={vi.fn()} onRemoveContextToken={remove}
+    contextTokens={[{ id: "book", kind: "paper", label: "@Field Guide", detail: "Book source", prompt: "Read guide" }]}
+    suggestions={[{ id: "thin", label: "生成薄读", trigger: "/", insertText: "/生成薄读" }]} />);
+  const context = screen.getByRole("button", { name: "移除上下文：@Field Guide" });
+  expect(context).toHaveTextContent(/^Field Guide$/);
+  expect(context).toHaveAttribute("title", "Book source");
+  fireEvent.click(context);
+  expect(remove).toHaveBeenCalledWith("book");
+  expect(document.querySelectorAll(".assistant-command-chip")).toHaveLength(1);
+  expect(document.querySelector(".assistant-command-chip")).toHaveTextContent(/^生成薄读$/);
+  expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveValue("/生成薄读Extra /生成薄读 ");
+});
+
+test("moves the caret past a clicked command and closes the candidate menu", async () => {
+  function Composer() {
+    const [input, setInput] = useState("");
+    return <AssistantComposer input={input} modeHint="命令" onInputChange={setInput}
+      onSend={vi.fn()} onVoiceInput={vi.fn()}
+      suggestions={[{ id: "ppt", label: "制作PPT", trigger: "/", insertText: "/制作PPT" }]} />;
+  }
+  const user = userEvent.setup();
+  render(<Composer />);
+  const editor = screen.getByPlaceholderText("输入你的问题或命令") as HTMLTextAreaElement;
+  await user.type(editor, "/PPT");
+  await user.click(screen.getByRole("button", { name: /制作PPT/ }));
+  expect(editor).toHaveValue("/制作PPT ");
+  expect(editor.selectionStart).toBe(editor.value.length);
+  expect(screen.queryByLabelText("输入候选")).not.toBeInTheDocument();
+  await user.type(editor, "方法");
+  expect(editor).toHaveValue("/制作PPT 方法");
 });

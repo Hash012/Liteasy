@@ -39,6 +39,8 @@
 }
 
 .shell-navigation { gap: 2px; }
+.workspace-command-bar .shell-ai-button { min-width: 48px; height: 28px; padding: 0 12px; border-radius: 4px; font-size: 15px; font-weight: 800; letter-spacing: 0.5px; }
+.reader-ai-feedback { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--colorNeutralForeground2); font-size: 12px; }
 
 .workspace-command-bar .shell-icon-button {
   width: var(--shell-icon-button);

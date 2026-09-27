@@ -20,7 +20,6 @@ function renderLibraryPane(childProps: Partial<React.ComponentProps<typeof Libra
   return render(
     <FluentProvider theme={webLightTheme}>
       <LibraryPane
-        {...childProps}
         accountSessionAvailable={false}
         canOpenOrganizationWorkspace={false}
         cloudEndpoint=""
@@ -54,6 +53,7 @@ function renderLibraryPane(childProps: Partial<React.ComponentProps<typeof Libra
         selectionLocked={false}
         workspaceLabel="本地文献库"
         workspaceSourceType="local_library"
+        {...childProps}
       />
     </FluentProvider>
   );
@@ -159,4 +159,79 @@ test("unifies paper selection, metadata search and file format filters without o
   await user.selectOptions(screen.getByRole("combobox", { name: "筛选文件格式" }), "epub");
   expect(screen.queryByRole("button", { name: paper.title, exact: true })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "选择文件 Field Guide" })).toBeInTheDocument();
+});
+
+const foldersSnapshot = {
+  entries: [], libraryId: "folders", revision: 1, rootPath: "/library", trashEntries: [],
+  folders: [{ name: "eBooks", path: "/library/eBooks", parentPath: null },
+    { name: "Topics", path: "/library/eBooks/Topics", parentPath: "/library/eBooks" }]
+};
+function transferData(files: File[] = [], payload: Record<string, string> = {}) {
+  return { files, items: [], types: [...Object.keys(payload), ...(files.length ? ["Files"] : [])],
+    getData: (key: string) => payload[key] ?? "", setData: vi.fn(), dropEffect: "none" };
+}
+function fileAccess(overrides: Partial<NonNullable<React.ComponentProps<typeof LibraryPane>["fileLibrary"]>> = {}) {
+  return { entries: [], pending: false, message: "", onImport: vi.fn(async () => "已导入 1 个文件。"),
+    onInspect: vi.fn(), onOpen: vi.fn(), onMoveFile: vi.fn(async () => {}), ...overrides };
+}
+
+test("highlights the hovered directory, imports there once, and reports completion", async () => {
+  const access = fileAccess();
+  renderLibraryPane({ localLibrarySnapshot: foldersSnapshot, fileLibrary: access });
+  const folder = screen.getByRole("button", { name: "eBooks", exact: true }).closest(".library-folder-row")!;
+  const file = new File(["# Reading"], "notes.md", { type: "text/markdown" });
+  const dataTransfer = transferData([file]);
+  fireEvent.dragEnter(folder, { dataTransfer });
+  expect(folder).toHaveClass("is-drop-target");
+  expect(screen.getByRole("status")).toHaveTextContent("松开即可导入“eBooks”");
+  fireEvent.dragLeave(folder, { dataTransfer, relatedTarget: document.body });
+  expect(folder).not.toHaveClass("is-drop-target");
+  fireEvent.dragOver(folder, { dataTransfer });
+  fireEvent.drop(folder, { dataTransfer });
+  await waitFor(() => expect(access.onImport).toHaveBeenCalledExactlyOnceWith([file], "/library/eBooks"));
+  expect(await screen.findByText("目标：eBooks。已导入 1 个文件。")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "收起eBooks" })).toHaveAttribute("aria-expanded", "true");
+  expect(folder).not.toHaveClass("is-drop-target");
+});
+
+test("moves existing reading files and exposes write failures without a success message", async () => {
+  const move = vi.fn().mockRejectedValue(new Error("存储空间不足"));
+  renderLibraryPane({ localLibrarySnapshot: foldersSnapshot, fileLibrary: fileAccess({ onMoveFile: move }) });
+  const folder = screen.getByRole("button", { name: "eBooks", exact: true });
+  const dataTransfer = transferData([], { "application/x-liteasy-reading-file": "ebook-1" });
+  fireEvent.dragOver(folder, { dataTransfer });
+  expect(screen.getByRole("status")).toHaveTextContent("松开即可移入“eBooks”");
+  fireEvent.drop(folder, { dataTransfer });
+  expect(await screen.findByText("存储空间不足")).toBeInTheDocument();
+  expect(move).toHaveBeenCalledExactlyOnceWith("ebook-1", "/library/eBooks");
+  expect(screen.queryByText("文件已移入“eBooks”。")).not.toBeInTheDocument();
+});
+
+test("rejects moving a folder into its descendant and keeps the drop feedback explicit", async () => {
+  const move = vi.fn();
+  renderLibraryPane({ localLibrarySnapshot: foldersSnapshot, onMoveFolder: move });
+  fireEvent.click(screen.getByRole("button", { name: "展开eBooks" }));
+  const folder = screen.getByRole("button", { name: "Topics", exact: true });
+  const dataTransfer = transferData([], { "application/x-liteasy-library-resource-v2": JSON.stringify({
+    area: "local", folder: foldersSnapshot.folders[0], tree: { children: [], entries: [], name: "eBooks" }
+  }) });
+  fireEvent.dragOver(folder, { dataTransfer });
+  expect(folder.closest(".library-folder-row")).toHaveClass("is-drop-blocked");
+  expect(screen.getByRole("status")).toHaveTextContent("不能将目录移入自身或其子目录");
+  fireEvent.drop(folder, { dataTransfer });
+  expect(move).not.toHaveBeenCalled();
+});
+
+test("shows non-PDF files inside their folder, finds them through search, and keeps orphaned files visible", async () => {
+  renderLibraryPane({ localLibrarySnapshot: foldersSnapshot, fileLibrary: fileAccess({ entries: [
+    { id: "book", title: "Research Handbook", format: "epub", folderPath: "eBooks/Topics" },
+    { id: "orphan", title: "Old notes", format: "markdown", folderPath: "Deleted" }
+  ] }) });
+  expect(screen.queryByRole("button", { name: "选择文件 Research Handbook" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "选择文件 Old notes" })).toBeInTheDocument();
+  fireEvent.change(screen.getByRole("textbox", { name: "搜索文献资源" }), { target: { value: "Handbook" } });
+  const book = await screen.findByRole("button", { name: "选择文件 Research Handbook" });
+  expect(book.closest(".library-folder-node")).toHaveTextContent("Topics");
+  expect(screen.getAllByRole("button", { name: "选择文件 Research Handbook" })).toHaveLength(1);
+  expect(screen.queryByRole("button", { name: "选择文件 Old notes" })).not.toBeInTheDocument();
 });

@@ -17,6 +17,8 @@ export type ReadingCatalogEntry = {
   abstract?: string;
   tags?: string[];
   collection?: string;
+  /** Directory relative to the local library root, separate from category metadata. */
+  folderPath?: string;
   readingStatus?: ReadingCatalogStatus;
   addedAt?: string;
   updatedAt?: string;
@@ -32,6 +34,8 @@ export type ReadingCatalogEntry = {
 export type ReadingCatalogMetadataPatch = {
   tags?: string[];
   collection?: string;
+  /** Directory relative to the local library root, separate from category metadata. */
+  folderPath?: string;
   readingStatus?: ReadingCatalogStatus;
 };
 

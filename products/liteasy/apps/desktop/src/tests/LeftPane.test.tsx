@@ -327,7 +327,7 @@ describe("LeftPane", () => {
     render(<LeftPane {...createProps({ leftRailView: "library" })} />);
 
     expect(screen.queryByRole("button", { name: "导入选中文献" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "锁定选中文献集" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "锁定选中文献集" })).not.toBeInTheDocument();
   });
 
   test("renders the real local folder hierarchy, PDFs, and metadata-only entries", async () => {

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("offers learning-material commands in the scrollable slash menu and displays the selected capsule", async ({ page }, testInfo) => {
+test("offers learning-material commands in the scrollable slash menu and displays the selected command as plain highlighted text", async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 1680, height: 1050 });
   await page.goto("/?pdf-highlight-fixture");
@@ -18,6 +18,6 @@ test("offers learning-material commands in the scrollable slash menu and display
   await input.fill("/PPT");
   await menu.getByRole("button", { name: /制作PPT/ }).click();
   await expect(input).toHaveValue("/制作PPT ");
-  await expect(page.locator(".assistant-command-chip")).toHaveText("/制作PPT");
+  await expect(page.locator(".assistant-command-chip")).toHaveText("制作PPT");
   await expect(menu).toHaveCount(0);
 });

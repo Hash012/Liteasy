@@ -160,18 +160,7 @@ body {
   transform: var(--button-hover-transform);
 }
 
-.app-frame.theme-generated[data-theme-scope~="floating_controls"] .floating-modality-main,
-.app-frame.theme-generated[data-theme-scope~="global"] .floating-modality-main {
-  border-color: var(--button-border-color);
-  border-style: solid;
-  border-width: var(--button-border-width);
-  border-radius: 50%;
-  background: var(--button-background);
-  color: var(--button-color);
-  font-weight: var(--button-font-weight);
-  box-shadow: var(--button-shadow);
-  transform-origin: center;
-}
+
 
 .app-shell {
   position: relative;
@@ -495,69 +484,7 @@ body {
   background: var(--paper-0);
 }
 
-.floating-modality-launcher {
-  position: absolute;
-  right: 28px;
-  bottom: 28px;
-  z-index: 13;
-  width: 64px;
-  height: 64px;
-  pointer-events: auto;
-}
 
-.floating-modality-launcher.dragging {
-  cursor: grabbing;
-}
-
-.floating-modality-main {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  aspect-ratio: 1;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 50%;
-  background: #0f6cbd;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
-  color: #fff;
-  cursor: pointer;
-  font-size: 15px;
-  font-weight: 600;
-  width: 64px;
-  height: 64px;
-  letter-spacing: 0;
-  min-height: 0;
-  min-width: 0;
-  overflow: hidden;
-  white-space: normal;
-  z-index: 1;
-}
-
-.floating-modality-progress-ring {
-  position: absolute;
-  inset: -4px;
-  z-index: 2;
-  border-radius: 50%;
-  background: conic-gradient(
-    from -90deg,
-    #107c10 var(--floating-modality-progress),
-    #c8c6c4 var(--floating-modality-progress) 100%
-  );
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
-  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
-  pointer-events: none;
-}
-
-.floating-modality-main:focus-visible {
-  outline: 3px solid rgba(27, 102, 179, 0.32);
-  outline-offset: 3px;
-}
-
-.floating-modality-main[aria-disabled="true"] {
-  cursor: not-allowed;
-  opacity: 0.46;
-  filter: grayscale(0.35);
-}
 
 .pane-collapse-button,
 .pane-rail-button {
@@ -1301,8 +1228,7 @@ body {
   gap: 6px;
 }
 
-.assistant-message-token,
-.assistant-context-token {
+.assistant-message-token {
   align-items: center;
   border: 1px solid rgba(47, 111, 167, 0.18);
   border-radius: 8px;
@@ -1315,8 +1241,7 @@ body {
   padding: 4px 8px;
 }
 
-.assistant-message-token span,
-.assistant-context-token span {
+.assistant-message-token span {
   color: #587b9b;
   font-size: calc(11px * var(--app-font-ratio, 1));
   overflow: hidden;
@@ -1325,19 +1250,21 @@ body {
 }
 
 .assistant-context-token {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--colorBrandForeground1, #185a97);
   cursor: pointer;
   font-size: calc(12px * var(--app-font-ratio, 1));
+  max-width: 100%;
+  padding: 2px 0;
+  overflow-wrap: anywhere;
 }
 
 .assistant-context-token:hover,
 .assistant-context-token:focus-visible {
-  border-color: rgba(27, 102, 179, 0.34);
-  background: #dceeff;
-}
-
-.assistant-context-token-remove {
-  color: #477292;
-  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .assistant-suggestion-menu {
@@ -6759,7 +6686,7 @@ button.pdf-overlay-mark:focus-visible {
   line-height: 1.4;
 }
 
-/* Text and decoration share metrics so command capsules follow wrapping and scrolling. */
+/* Keep textarea and mirror advances identical for selection, IME and wrapping. */
 .assistant-input-editor { position: relative; }
 .assistant-input-editor .assistant-input,
 .assistant-input-highlight {
@@ -6786,12 +6713,14 @@ button.pdf-overlay-mark:focus-visible {
   color: var(--ink-1);
 }
 .assistant-command-chip {
-  background: #e6f0fa;
-  color: #185a97;
-  border-radius: 5px;
-  box-shadow: inset 0 0 0 1px #aac9e6;
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
+  background: transparent;
+  color: var(--colorBrandForeground1, #185a97);
+  /* Paint heavier strokes without changing the editable text's glyph widths. */
+  text-shadow: 0.35px 0 currentColor, -0.35px 0 currentColor;
+}
+.assistant-command-chip::before {
+  content: attr(data-prefix);
+  visibility: hidden;
 }
 .assistant-pane.accepting-reader-context .assistant-input-wrap {
   outline: 2px solid var(--accent-1);

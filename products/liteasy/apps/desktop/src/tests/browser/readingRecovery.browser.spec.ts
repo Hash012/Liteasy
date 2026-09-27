@@ -29,8 +29,7 @@ test("keeps a failed thin-reading draft across reload and resumes with the origi
   await expect(page.getByLabel("测试响应")).toHaveValue("连接测试响应。");
   await page.getByRole("button", { name: "文献库", exact: true }).click();
   await page.getByLabel("选择 das24a.pdf").check();
-  await page.getByRole("button", { name: "锁定选中文献集", exact: true }).click();
-  await page.getByRole("button", { name: "薄读", exact: true }).click();
+  await page.getByRole("button", { name: "AI 薄读", exact: true }).click();
   await page.locator(".thin-reading__generation-status").getByRole("button", { name: "详情", exact: true }).click();
   await expect(page.getByRole("button", { name: "继续薄读", exact: true })).toBeVisible({ timeout: 30_000 });
   expect(prompts).toHaveLength(3);
@@ -122,8 +121,7 @@ test("repairs a reasoning response with an empty summary into readable thin-read
   await expect(page.getByLabel("测试响应")).toHaveValue("连接测试响应。");
   await page.getByRole("button", { name: "文献库", exact: true }).click();
   await page.getByLabel("选择 das24a.pdf").check();
-  await page.getByRole("button", { name: "锁定选中文献集", exact: true }).click();
-  await page.getByRole("button", { name: "薄读", exact: true }).click();
+  await page.getByRole("button", { name: "AI 薄读", exact: true }).click();
   await expect(page.locator(".thin-reading")).toContainText("论文通过外部记忆保存历史信息。", { timeout: 45_000 });
   expect(requests).toHaveLength(2);
   expect(requests[1].prompt).toContain("已有分析参考：需要解释外部记忆的方法。");
@@ -162,8 +160,7 @@ test("generates compact Markdown layers and deepens a triple-bracket term with o
   await page.getByRole("radio", { name: "严谨", exact: true }).check();
   await page.getByRole("button", { name: "文献库", exact: true }).click();
   await page.getByLabel("选择 das24a.pdf").check();
-  await page.getByRole("button", { name: "锁定选中文献集", exact: true }).click();
-  await page.getByRole("button", { name: "薄读", exact: true }).click();
+  await page.getByRole("button", { name: "AI 薄读", exact: true }).click();
   await expect(page.locator(".thin-reading").getByRole("heading", { name: "当前层概览", exact: true })).toBeVisible({ timeout: 45_000 });
   await expect(page.locator(".thin-reading .katex")).toBeVisible();
   expect(prompts).toHaveLength(1);

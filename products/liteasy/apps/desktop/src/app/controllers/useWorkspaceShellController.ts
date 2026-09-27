@@ -156,5 +156,5 @@ export function useWorkspaceShellController(input: {
     ],
     overflowActions: [{ id: "settings", label: "设置", icon: "settings", onSelect: () => latest.current.openSettings() }]
   };
-  return { toolbar, fileStatus: active?.fileStatus, focusRegion, trackInteraction };
+  return { toolbar, activeSurfaceId: active?.id, fileStatus: active?.fileStatus, focusRegion, trackInteraction };
 }

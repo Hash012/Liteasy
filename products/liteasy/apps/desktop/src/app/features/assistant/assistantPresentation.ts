@@ -52,11 +52,7 @@ export function getModeHint(mode: AssistantMode) {
 
 export function getSelectedSetReadyMessage(selectedSetStatus: SelectedSetStatus) {
   if (selectedSetStatus.selectedCount === 0) {
-    return "请先在左栏勾选文件，形成选中文献集。";
-  }
-
-  if (!selectedSetStatus.selectionLocked) {
-    return "请先锁定选中文献集，再使用右栏自然语言分支能力。";
+    return "用 @ 添加论文上下文，或从顶栏 AI 工作台选择论文和能力。";
   }
 
   if (selectedSetStatus.importedCount < selectedSetStatus.selectedCount) {

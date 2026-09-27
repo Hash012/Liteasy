@@ -2,6 +2,23 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "../../app/layout/AppShell";
 import type { Paper } from "../../app/features/workspace/workspace.types";
 
+const loadFolderFixture = async () => ({
+  entries: [], libraryId: "folder-preview-library", revision: 1,
+  rootPath: "D:\\Library", trashEntries: [],
+  folders: [{ name: "eBooks", path: "D:\\Library\\eBooks", parentPath: null }]
+});
+
+const aiPapers: Paper[] = [
+  { id: "ai-current", title: "Current Research", sourcePath: new URL("/manual-preview/current.pdf", window.location.origin).href },
+  { id: "ai-recent", title: "Recent Research", sourcePath: new URL("/manual-preview/recent.pdf", window.location.origin).href },
+  { id: "ai-archive", title: "Archived Methods", sourcePath: new URL("/manual-preview/Research/methods.pdf", window.location.origin).href }
+];
+const loadAiFixture = async () => ({
+  entries: aiPapers.map((paper) => ({ id: paper.id, path: paper.sourcePath!, title: paper.title, contentHash: null, relativePath: paper.id === "ai-archive" ? "Research/methods.pdf" : `${paper.id}.pdf` })),
+  folders: [{ name: "Research", path: new URL("/manual-preview/Research", window.location.origin).href, parentPath: null }],
+  rootPath: new URL("/manual-preview", window.location.origin).href, libraryId: "ai-library", revision: 1, trashEntries: []
+});
+
 function ImportablePdfBrowserFixture() {
   const [sourcePath, setSourcePath] = useState<string>();
   const [contentHash, setContentHash] = useState<string>();
@@ -27,6 +44,8 @@ function ImportablePdfBrowserFixture() {
 }
 
 export default function PdfHighlightBrowserFixture() {
+  if (window.location.hash === "#ai-workbench") return <AppShell localLibraryLoader={loadAiFixture} initialPapers={aiPapers} initialOpenReaderPaperIds={aiPapers.slice(0, 2).map((paper) => paper.id)} />;
+  if (window.location.hash === "#library-folders") return <AppShell localLibraryLoader={loadFolderFixture} initialPapers={[]} />;
   if (window.location.hash === "#importable") return <ImportablePdfBrowserFixture />;
   const previewPaper: Paper = {
     id: "manual-das24a-preview",

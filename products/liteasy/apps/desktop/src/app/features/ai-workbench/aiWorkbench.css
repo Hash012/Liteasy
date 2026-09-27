@@ -1,0 +1,31 @@
+.ai-workbench-dialog button { color: var(--colorNeutralForeground1); }
+.ai-workbench-dialog button:disabled { color: var(--colorNeutralForegroundDisabled); }
+.ai-paper-confirm button:not(:disabled):last-child { color: var(--colorNeutralForegroundOnBrand); }
+.ai-workbench-brand { color: var(--colorBrandForeground1); font-weight: 800; margin-right: 6px; }
+.ai-workbench-content { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 24px; }
+.ai-workbench-content h3 { font-size: 14px; margin: 4px 0 12px; }
+.ai-workbench-papers { display: flex; flex-direction: column; min-width: 0; }
+.ai-workbench-capabilities { border-left: 1px solid var(--colorNeutralStroke2); padding-left: 24px; min-width: 0; max-height: min(66vh, 610px); overflow: auto; }
+.ai-paper-picker-scroll { height: min(45vh, 420px); overflow: auto; padding: 4px 2px; }
+.ai-paper-row { border-radius: 4px; margin: 2px 0; }
+.ai-paper-row.selected { background: var(--colorBrandBackground2); }
+.ai-paper-row > div { width: 100%; }
+.ai-paper-label { display: flex; flex-direction: column; gap: 3px; overflow-wrap: anywhere; }
+.ai-paper-label strong { font-size: 13px; font-weight: 600; }
+.ai-paper-label small, .ai-workbench-muted, .ai-capability small { color: var(--colorNeutralForeground3); font-size: 12px; line-height: 1.6; }
+.ai-paper-folder summary { display: flex; align-items: center; gap: 6px; padding: 7px 4px; cursor: pointer; }
+.ai-folder-chevron { flex: 0 0 12px; }
+.ai-paper-folder[open] > summary .ai-folder-chevron { transform: rotate(90deg); }
+.ai-paper-folder > div { padding-left: 12px; }
+.ai-paper-confirm { display: flex; align-items: center; gap: 6px; padding-top: 12px; border-top: 1px solid var(--colorNeutralStroke2); }
+.ai-paper-confirm > span { flex: 1; font-size: 12px; }
+.ai-confirmed-papers { margin: 0 0 12px; padding-left: 18px; max-height: 80px; overflow: auto; font-size: 12px; }
+.ai-capability-list { display: grid; gap: 8px; }
+.ai-capability-list .ai-capability { justify-content: flex-start; text-align: left; padding: 10px 12px; gap: 10px; }
+.ai-capability span > strong, .ai-capability small { display: block; }
+.ai-workbench-result { font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--colorNeutralBackground3); border-radius: 4px; padding: 10px; }
+@media (max-width: 640px) {
+  .ai-workbench-content { grid-template-columns: minmax(0, 1fr); max-height: 75vh; overflow: auto; gap: 12px; }
+  .ai-paper-picker-scroll { height: 25vh; }
+  .ai-workbench-capabilities { border-left: 0; border-top: 1px solid var(--colorNeutralStroke2); padding: 12px 0 0; max-height: none; }
+}

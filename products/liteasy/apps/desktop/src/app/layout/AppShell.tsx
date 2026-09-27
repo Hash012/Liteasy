@@ -73,7 +73,8 @@ import {
   type DevCloudEnvLike
 } from "../features/models/localDevCloudEndpoint";
 import { ArtifactTabs } from "../features/artifacts/ArtifactTabs";
-import { FloatingModalityButton } from "../features/artifacts/FloatingModalityButton";
+import { AiWorkbenchDialog } from "../features/ai-workbench/AiWorkbenchDialog";
+import { useAiWorkbenchController } from "../controllers/useAiWorkbenchController";
 import type {
   ArtifactOutlineNode,
   ArtifactTaskStage,
@@ -364,7 +365,7 @@ export function AppShell({
   const [cloudTreeRevision, setCloudTreeRevision] = useState(0);
   const savedMineruResourcesRef = useRef<Record<string, PaperMineruResources>>({});
   const [analysisHint, setAnalysisHint] = useState(
-    "先勾选并锁定文献形成选中文献集，再用中栏 AI 按钮启动分析。"
+    "从顶栏 AI 工作台选择论文和能力，或在阅读页点击 AI 薄读。"
   );
   useEffect(() => {
     if (localLibraryNotice) setAnalysisHint(localLibraryNotice);
@@ -559,10 +560,6 @@ export function AppShell({
     thinReadingVisualizationReadyArtifacts,
     thinReadingVisualizationStatuses
   } = artifactWorkflow.model;
-  const activeThinReadingTask = artifactTasks.find((task) => (
-    task.type === "thin_reading" &&
-    (task.status === "queued" || task.status === "running")
-  ));
   const savedMineruResourcesByPaperId = workspaceState.papers.reduce<Record<string, PaperMineruResources>>(
     (resources, paper) => {
       const artifact = artifactCatalog.find((candidate) => {
@@ -1138,6 +1135,7 @@ export function AppShell({
     settings: settingsState,
   });
   const readingLibrary = useReadingLibraryController({
+    localLibraryRootPath: localLibrarySnapshot?.rootPath,
     scopeId: objectWorkbench.repository.scopeId,
     papers: workspaceState.papers,
     enabled: true,
@@ -1590,6 +1588,7 @@ export function AppShell({
     fileLibrary: {
       entries: readingLibrary.entries, selectedId: readingLibrary.selected?.id,
       pending: readingLibrary.pending, message: readingLibrary.message,
+      onMoveFile: readingLibrary.moveFile, onRelocateFolder: readingLibrary.relocateFolder,
       onImport: readingLibrary.importFiles, onInspect: readingLibrary.inspect, onOpen: readingLibrary.open,
       onMetadataChange: readingLibrary.updateMetadata
     },
@@ -1881,20 +1880,9 @@ export function AppShell({
 
   function startReaderScopedAnalysis(artifactType: ArtifactType, papers?: typeof selectedPapers) {
     if (papers && papers.length > 0) {
-      artifactWorkflow.actions.startAnalysisForPapers(artifactType, papers);
-      return;
+      return artifactWorkflow.actions.startAnalysisForPapers(artifactType, papers);
     }
     void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
-  }
-
-  function getActiveReaderAnalysisPapers() {
-    if (!activeReaderPaper || !workspaceState.selectedPaperIds.includes(activeReaderPaper.id)) {
-      return selectedPapers;
-    }
-    return [
-      activeReaderPaper,
-      ...selectedPapers.filter((paper) => paper.id !== activeReaderPaper.id)
-    ];
   }
 
   function renderArtifactSurface(
@@ -2286,20 +2274,6 @@ export function AppShell({
         }}
         onMoveDynamicTab={moveDynamicTab}
         onMoveItem={moveDockItem}
-        overlay={
-          regionId === "main" && !["help", "notes", "board"].some((item) => dock.layout.regions.main.activeItemId === item && !dynamicTabs.some((tab) => tab.selected)) ? (
-            <FloatingModalityButton
-              analysisHint={analysisHint}
-              canStartAnalysis={
-                workspaceState.selectedPaperIds.length > 0 && workspaceState.selectionLocked
-              }
-              generationProgress={activeThinReadingTask?.progress}
-              onStartAnalysis={(artifactType) => {
-                startReaderScopedAnalysis(artifactType, getActiveReaderAnalysisPapers());
-              }}
-            />
-          ) : undefined
-        }
         regionId={regionId}
         renderItem={renderDockItem}
       />
@@ -2347,6 +2321,14 @@ export function AppShell({
     openSettings: () => openDockedLeftRailView("settings")
   });
 
+  const aiWorkbench = useAiWorkbenchController({
+    scopeId: objectWorkbench.repository.scopeId,
+    papers: workspaceState.papers,
+    openedPapers: openReaderPapers,
+    activePaperId: openReaderPapers.find((paper) => `pdf-${paper.id}` === workspaceShell.activeSurfaceId)?.id ?? activeReaderPaper?.id,
+    startAnalysis: artifactWorkflow.actions.startAnalysisForPapers
+  });
+
   const appFrameStyle = {
     ...(runtimeTheme.kind === "generated"
       ? (createGeneratedThemeStyle(runtimeTheme.theme) as CSSProperties)
@@ -2365,7 +2347,13 @@ export function AppShell({
     <HelpContext.Provider value={help.port}>
     <ObjectWorkbenchContext.Provider value={objectWorkbench.port}>
     <div className={appFrameClassName} data-theme-scope={appFrameScope} style={appFrameStyle}>
-      <WorkspaceCommandBar state={workspaceShell.toolbar} windowControls={windowControls} />
+      <WorkspaceCommandBar state={workspaceShell.toolbar} windowControls={windowControls} onOpenAi={aiWorkbench.show} />
+      <AiWorkbenchDialog open={aiWorkbench.open} papers={aiWorkbench.papers} openedPapers={openReaderPapers}
+        activePaperId={openReaderPapers.find((paper) => `pdf-${paper.id}` === workspaceShell.activeSurfaceId)?.id ?? activeReaderPaper?.id}
+        snapshot={localLibrarySnapshot} selectedIds={aiWorkbench.selectedIds} confirmed={aiWorkbench.confirmed}
+        message={aiWorkbench.message} selectionValid={aiWorkbench.selectionValid}
+        onClose={aiWorkbench.close} onToggle={aiWorkbench.toggle} onIncludeOpened={aiWorkbench.includeOpened}
+        onClear={aiWorkbench.clear} onConfirm={aiWorkbench.confirm} onStart={aiWorkbench.start} />
       <div
         className={`app-shell${objectWorkbench.visible ? " object-workbench-open" : ""}`}
         data-testid="workbench-layout"

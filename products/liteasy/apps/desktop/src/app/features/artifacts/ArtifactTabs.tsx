@@ -498,17 +498,9 @@ export function ArtifactTabs({
       {tabs.length === 0 ? (
         <div
           className="artifact-empty"
-          title={
-            canStartAnalysis
-              ? "使用中间栏悬浮 AI 按钮生成新的多模态产物。"
-              : analysisHint
-          }
+          title="从顶栏 AI 工作台选择论文和能力。"
         >
-          {selectedCount === 0
-            ? "选择文献后开始分析"
-            : selectionLocked
-              ? "选择分析类型以生成产物"
-              : "锁定选中文献后开始分析"}
+          从顶栏 AI 工作台选择论文，开始薄读或生成内容。
         </div>
       ) : activeTab?.type === "skill_doc" ? (
         <div className="artifact-card skill-doc-card">

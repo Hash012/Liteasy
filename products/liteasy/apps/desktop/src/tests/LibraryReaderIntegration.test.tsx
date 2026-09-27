@@ -7,7 +7,7 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-test("opens local PDFs as independent tabs while the selected set remains locked", async () => {
+test("opens local PDFs as independent tabs while the selected set remains editable", async () => {
   const user = userEvent.setup();
   const firstTitle = "Local Retrieval Paper";
   const secondTitle = "Local Storage Paper";
@@ -46,15 +46,15 @@ test("opens local PDFs as independent tabs while the selected set remains locked
   await user.click(within(library).getByRole("button", { name: "展开Research" }));
   await user.click(within(library).getByRole("checkbox", { name: `选择 ${firstTitle}` }));
   await user.click(within(library).getByRole("checkbox", { name: `选择 ${secondTitle}` }));
-  await user.click(screen.getByRole("button", { name: "锁定选中文献集" }));
+  expect(screen.queryByRole("button", { name: "锁定选中文献集" })).not.toBeInTheDocument();
 
   await user.dblClick(within(library).getByRole("button", { name: secondTitle }));
   await user.dblClick(within(library).getByRole("button", { name: firstTitle }));
 
   expect(screen.getByRole("tab", { name: firstTitle })).toHaveAttribute("aria-selected", "true");
   expect(screen.getByRole("tab", { name: secondTitle })).toBeInTheDocument();
-  expect(within(library).getByRole("checkbox", { name: `选择 ${firstTitle}` })).toBeDisabled();
-  expect(within(library).getByRole("checkbox", { name: `选择 ${secondTitle}` })).toBeDisabled();
+  expect(within(library).getByRole("checkbox", { name: `选择 ${firstTitle}` })).toBeEnabled();
+  expect(within(library).getByRole("checkbox", { name: `选择 ${secondTitle}` })).toBeEnabled();
   expect(screen.getByRole("checkbox", { name: "新批注自动公开到论坛" })).not.toBeChecked();
   expect(screen.queryByRole("button", { name: "发到论坛" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "立即同步" })).not.toBeInTheDocument();

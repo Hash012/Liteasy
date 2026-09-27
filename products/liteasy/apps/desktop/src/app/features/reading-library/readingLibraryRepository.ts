@@ -8,6 +8,7 @@ import type { ParsedReadingDocument } from "./readingDocument.types";
 export const MAX_LIBRARY_FILE_BYTES = 20 * 1024 * 1024;
 const metadataSchema = z.object({
   tags: z.array(z.string().trim().min(1).max(60)).max(50).optional(),
+  folderPath: z.string().max(4096).optional(),
   collection: z.string().trim().max(120).optional(),
   readingStatus: z.enum(["unread", "reading", "finished"]).optional()
 });

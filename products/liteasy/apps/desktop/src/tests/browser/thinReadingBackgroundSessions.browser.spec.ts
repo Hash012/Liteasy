@@ -31,10 +31,9 @@ test("generates reading layers in the background and opens their session only fr
     await expect(page.getByLabel("测试响应")).toHaveValue("连接测试响应。");
     await page.getByRole("button", { name: "文献库", exact: true }).click();
     await page.getByLabel("选择 das24a.pdf").check();
-    await page.getByRole("button", { name: "锁定选中文献集", exact: true }).click();
     await page.getByRole("button", { name: "关闭 Liteasy Chat", exact: true }).click();
     await expect(page.locator(".assistant-pane")).not.toBeVisible();
-    await page.getByRole("button", { name: "薄读", exact: true }).click();
+    await page.getByRole("button", { name: "AI 薄读", exact: true }).click();
     const status = page.locator(".thin-reading__generation-status");
     await expect(status).toContainText("生成中");
     await expect.poll(() => requests).toBe(1);

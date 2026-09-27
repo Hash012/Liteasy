@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { Button, Menu, MenuItem, MenuItemCheckbox, MenuList, MenuPopover, MenuTrigger, Toolbar, Tooltip } from "@fluentui/react-components";
+import { Button, Menu, MenuItem, MenuItemCheckbox, MenuList, MenuPopover, MenuTrigger, Toolbar, Tooltip, useRestoreFocusTarget } from "@fluentui/react-components";
 import { ArrowLeftRegular, ArrowRightRegular, MoreHorizontalRegular, PanelLeftRegular, SearchRegular, SettingsRegular, SubtractRegular, SquareRegular, SquareMultipleRegular, DismissRegular } from "@fluentui/react-icons";
 import type { ToolbarAction, WorkspaceToolbarState, WindowControlsState } from "../features/workspace/workspaceShell.types";
 import "../styles/workspaceShell.css";
@@ -37,8 +37,9 @@ function ActionButton({ action }: { action: ToolbarAction }) {
   ) : <Tooltip content={action.label} relationship="description">{button}</Tooltip>;
 }
 
-export function WorkspaceCommandBar({ state, windowControls }: { state: WorkspaceToolbarState; windowControls?: WindowControlsState }) {
+export function WorkspaceCommandBar({ state, windowControls, onOpenAi }: { state: WorkspaceToolbarState; windowControls?: WindowControlsState; onOpenAi?: () => void }) {
   const root = useRef<HTMLDivElement>(null);
+  const restoreAiFocus = useRestoreFocusTarget();
   const [width, setWidth] = useState(0);
   useLayoutEffect(() => {
     const element = root.current;
@@ -50,7 +51,7 @@ export function WorkspaceCommandBar({ state, windowControls }: { state: Workspac
   }, []);
   const actions = state.actions ?? [];
   // Reserve navigation, overflow, and a readable title before allocating commands.
-  const capacity = Math.max(0, Math.floor((width - 350 - (windowControls?.available ? 138 : 0)) / 38));
+  const capacity = Math.max(0, Math.floor((width - 350 - (onOpenAi ? 64 : 0) - (windowControls?.available ? 138 : 0)) / 38));
   const visibleIds = new Set([...actions].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0)).slice(0, capacity).map((action) => action.id));
   const overflow = [...actions.filter((action) => !visibleIds.has(action.id)), ...(state.overflowActions ?? [])];
   const title = [...(state.breadcrumb?.map((item) => item.label) ?? []), state.title].filter(Boolean).join(" / ");
@@ -62,6 +63,7 @@ export function WorkspaceCommandBar({ state, windowControls }: { state: Workspac
       </div>
       <div className="shell-workspace-title" data-tauri-drag-region={windowControls?.available ? true : undefined} title={title}>{windowControls?.available && title ? `Liteasy · ${title}` : title || "Liteasy"}</div>
       <div className="shell-commands">
+        {onOpenAi ? <Tooltip content="选择论文并使用 AI 能力" relationship="description"><Button {...restoreAiFocus} appearance="primary" className="shell-ai-button" aria-label="AI 工作台" onClick={onOpenAi}>AI</Button></Tooltip> : null}
         {actions.filter((action) => visibleIds.has(action.id)).map((action) => <ActionButton key={action.id} action={action} />)}
         {overflow.length > 0 ? <Menu>
           <MenuTrigger disableButtonEnhancement>

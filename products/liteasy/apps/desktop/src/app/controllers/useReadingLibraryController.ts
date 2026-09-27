@@ -1,3 +1,4 @@
+import { libraryFolderKey, relativeLibraryFolder } from "../features/library/libraryFolderMembership";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createObjectStorage, subscribeObjectStorage } from "../features/objects/objectStorage";
 import { createReadingLibraryRepository, MAX_LIBRARY_FILE_BYTES, type ReadingLibraryFile, type ReadingMetadata } from "../features/reading-library/readingLibraryRepository";
@@ -9,7 +10,7 @@ import { displayPath } from "../features/resource-filesystem/displayPath";
 import type { Paper } from "../features/workspace/workspace.types";
 
 export function useReadingLibraryController(input: {
-  scopeId: string; papers: Paper[]; enabled: boolean;
+  scopeId: string; papers: Paper[]; enabled: boolean; localLibraryRootPath?: string;
   importPdfs(files: File[], targetFolderPath?: string): Promise<unknown>;
   onOpenReader(): void;
   openPaper(id: string): void;
@@ -104,11 +105,12 @@ export function useReadingLibraryController(input: {
     if (current()) setMetadata((previous) => ({ ...previous, [id]: value }));
   }
   async function importFiles(selected: File[], targetFolderPath?: string) {
-    if (importing.current) return;
+    if (importing.current) throw new Error("文件正在导入，请完成后再添加。");
     importing.current = true; setPending(true); setMessage("");
     let imported = 0, duplicates = 0;
     const errors: string[] = [];
     try {
+      const folderPath = targetFolderPath ? relativeLibraryFolder(input.localLibraryRootPath, targetFolderPath) : undefined;
       for (const file of selected) {
         if (!current()) break;
         try {
@@ -121,19 +123,25 @@ export function useReadingLibraryController(input: {
             : { format: "other", title: file.name, authors: [], description: "此格式已保存原文件，暂不支持内置阅读。可导出后使用对应应用打开。", chapters: [], toc: [], resources: [], warnings: [] };
           if (!current()) break;
           const result = await repository.importFile(file.name, bytes, document);
+          if (folderPath !== undefined) await repository.updateMetadata(result.entry.id, { folderPath });
           if (result.duplicate) duplicates += 1; else imported += 1;
         } catch (error) { errors.push(`${file.name}：${error instanceof Error ? error.message : String(error)}`); }
         // Yield between files so large batches leave input and scrolling responsive.
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
       if (current()) {
-        const nextFiles = await repository.list();
+        const [nextFiles, nextMetadata] = await Promise.all([repository.list(), repository.metadata()]);
         if (current()) {
-          setFiles(nextFiles);
-          setMessage(`已导入 ${imported} 个文件${duplicates ? `，跳过 ${duplicates} 个重复文件` : ""}。${errors.length ? `\n${errors.join("\n")}` : ""}`);
+          setFiles(nextFiles); setMetadata(nextMetadata);
+          const summary = `已导入 ${imported} 个文件${duplicates ? targetFolderPath ? `，${duplicates} 个已有文件已归入目标目录` : `，跳过 ${duplicates} 个重复文件` : ""}。${errors.length ? `\n${errors.join("\n")}` : ""}`;
+          setMessage(summary);
+          return summary;
         }
       }
-    } catch (error) { if (current()) setMessage(error instanceof Error ? error.message : String(error)); }
+    } catch (error) {
+      if (current()) setMessage(error instanceof Error ? error.message : String(error));
+      throw error;
+    }
     finally { importing.current = false; if (current()) setPending(false); }
   }
   async function exportFile(entry: ReadingCatalogEntry) {
@@ -180,6 +188,23 @@ export function useReadingLibraryController(input: {
     active: stateScope === input.scopeId ? active : undefined,
     pending: stateScope === input.scopeId && (pending || catalogLoading),
     message: stateScope === input.scopeId ? message : "", importFiles, updateMetadata,
+    async moveFile(id: string, targetFolderPath?: string) {
+      if (!(await repository.list()).some((file) => file.id === id)) throw new Error("文件已移除，请刷新文献库。");
+      if (!current()) throw new Error("文献库已切换，请重新拖放。");
+      await updateMetadata(id, { folderPath: relativeLibraryFolder(input.localLibraryRootPath, targetFolderPath) });
+    },
+    async relocateFolder(source: string, target: string) {
+      const from = relativeLibraryFolder(input.localLibraryRootPath, source);
+      const to = relativeLibraryFolder(input.localLibraryRootPath, target);
+      const key = (path: string) => libraryFolderKey(`${input.localLibraryRootPath}/${path}`);
+      const values = await repository.metadata();
+      for (const [id, value] of Object.entries(values)) {
+        if (value.folderPath && (key(value.folderPath) === key(from) || key(value.folderPath).startsWith(`${key(from)}/`))) {
+          if (!current()) throw new Error("文献库已切换。");
+          await updateMetadata(id, { folderPath: to + value.folderPath.slice(from.length) });
+        }
+      }
+    },
     open: (entry: ReadingCatalogEntry) => { void open(entry); },
     closeReader: () => { request.current += 1; setActive(undefined); setPending(false); },
     target(entry: ReadingCatalogEntry): ResourceTarget {

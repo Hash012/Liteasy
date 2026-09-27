@@ -349,7 +349,7 @@ describe("ReaderPane", () => {
     expect(screen.getByRole("toolbar", { name: "PDF 导航工具栏" })).toBeInTheDocument();
     expect(screen.getByLabelText("PDF 显示比例 100%")).toBeInTheDocument();
     expect(document.querySelector(".pdf-toolbar")).not.toBeInTheDocument();
-    expect(screen.getByText("选择分析类型以生成产物")).toBeInTheDocument();
+    expect(screen.getByText("从顶栏 AI 工作台选择论文，开始薄读或生成内容。")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "思维导图" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "对比表" })).not.toBeInTheDocument();
     expect(onStartAnalysis).not.toHaveBeenCalled();
@@ -1120,7 +1120,7 @@ describe("ReaderPane", () => {
       />
     );
 
-    expect(screen.getByText("锁定选中文献后开始分析")).toBeInTheDocument();
+    expect(screen.getByText("从顶栏 AI 工作台选择论文，开始薄读或生成内容。")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "树形展开" })).not.toBeInTheDocument();
   });
 
@@ -1214,4 +1214,15 @@ test("only offers reading mode after MinerU material exists and preserves PDF on
   expect(screen.queryByRole("toolbar", { name: "PDF 导航工具栏" })).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "PDF 模式" }));
   expect(screen.getByRole("toolbar", { name: "PDF 导航工具栏" })).toBeInTheDocument();
+});
+
+test("starts thin reading from the reader toolbar for only this paper without a library lock", async () => {
+  const start = vi.fn(() => "正在准备当前论文。");
+  render(<ReaderPane analysisHint="" artifactTabs={[]} artifactTasks={[]} onStartAnalysis={start}
+    selectedPapers={[readerTestPaper, { id: "other", title: "Other Paper", sourcePath: "/other.pdf" }]}
+    selectedPaperIds={["other"]} selectionLocked={false} />);
+  await userEvent.click(screen.getByRole("button", { name: "AI 薄读" }));
+  expect(start).toHaveBeenCalledExactlyOnceWith("thin_reading", [readerTestPaper]);
+  expect(screen.getByRole("status")).toHaveTextContent("正在准备当前论文。");
+  expect(screen.queryByLabelText("中间栏悬浮薄读")).not.toBeInTheDocument();
 });

@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { passingEvidenceReview } from "../fixtures/thinReadingModelResponses";
 
-test("generates thin reading from a real PDF without login and reopens the saved paper child after reload", async ({ page }) => {
+for (const entry of ["workbench", "reader"] as const) {
+test(`generates thin reading from ${entry} with a real PDF without library selection and reopens the saved paper child after reload`, async ({ page }) => {
   test.setTimeout(90_000);
   const summary = "Larimar 通过外部记忆支持语言模型的知识更新，使模型能够利用记忆中的信息调整生成内容。";
   const formats: string[] = [];
@@ -46,23 +47,29 @@ test("generates thin reading from a real PDF without login and reopens the saved
   await page.getByRole("button", { name: "保存并测试", exact: true }).click();
   await expect(page.getByLabel("测试响应")).toHaveValue("连接测试响应。");
   await page.getByRole("button", { name: "文献库", exact: true }).click();
-  await page.getByLabel("选择 das24a.pdf").check();
-  await page.getByRole("button", { name: "锁定选中文献集", exact: true }).click();
-  await page.getByRole("button", { name: "薄读", exact: true }).click();
-  await expect(page.getByRole("button", { name: "打开薄读", exact: true })).toBeVisible({ timeout: 60_000 });
-  await expect(page.locator(".thin-reading").getByText(summary, { exact: true }).first()).toBeVisible();
+  if (entry === "workbench") {
+    await page.getByRole("toolbar", { name: "工作区命令栏" }).getByRole("button", { name: "AI 工作台" }).click();
+    const ai = page.getByRole("dialog", { name: /论文工作台/ });
+    await expect(ai.getByRole("checkbox", { name: /das24a.pdf/ })).toBeChecked();
+    await ai.getByRole("button", { name: "确认选择", exact: true }).click();
+    await ai.getByRole("button", { name: "薄读", exact: true }).click();
+    await expect(ai.getByRole("status")).not.toBeEmpty();
+    await ai.getByRole("button", { name: "关闭 AI 工作台" }).click();
+  } else {
+    await page.getByRole("button", { name: "AI 薄读", exact: true }).click();
+  }
+  await expect(page.locator(".thin-reading").getByText(summary, { exact: true }).first()).toBeVisible({ timeout: 60_000 });
   expect(formats).toContain("liteasy_thin_reading");
   expect(formats).not.toContain("liteasy_thin_reading_evidence_review");
+  await expect(page.locator(".thin-reading__generation-status")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "打开论文文件：薄读", exact: true, includeHidden: true })).toHaveCount(1);
   const requestCount = formats.length;
   await page.reload();
-  await expect(page.getByRole("button", { name: "打开薄读", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "打开薄读", exact: true }).click();
-  await expect(page.locator(".thin-reading").getByText(summary, { exact: true }).first()).toBeVisible();
   const paperRow = page.locator(".library-paper-node").filter({ hasText: "das24a.pdf" });
-  await paperRow.locator("summary").click();
-  await page.getByRole("button", { name: "关闭 薄读", exact: true }).click();
+  if (!await paperRow.locator("details").evaluate((element) => (element as HTMLDetailsElement).open)) await paperRow.locator("summary").click();
   await paperRow.getByRole("button", { name: "打开论文文件：薄读", exact: true }).click();
   await expect(page.locator(".thin-reading").getByText(summary, { exact: true }).first()).toBeVisible();
-  await page.screenshot({ path: "test-results/thin-reading-lifecycle.png", fullPage: true });
+  await page.screenshot({ path: `test-results/thin-reading-lifecycle-${entry}.png`, fullPage: true });
   expect(formats).toHaveLength(requestCount);
 });
+}

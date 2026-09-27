@@ -1773,7 +1773,7 @@ export function AssistantPane({
       combinedContextPrompt.length > 0
         ? `${combinedContextPrompt}\n\n用户问题：${question}`
         : readyMessage
-          ? `${question}\n\n系统上下文：当前尚未准备论文任务。请自然、友好地先回答用户，不要复述系统上下文或错误提示。回答末尾简短提醒：可在左栏勾选并锁定一些论文，或使用 @ 添加论文后开始分析。`
+          ? `${question}\n\n系统上下文：当前尚未准备论文任务。请自然、友好地先回答用户，不要复述系统上下文或错误提示。回答末尾简短提醒：可从顶栏 AI 工作台选择论文和能力，或使用 @ 添加论文后开始分析。`
           : question;
     const paperById = new Map(availablePapers.map((paper) => [paper.id, paper]));
     const attachments: AgentAttachment[] = [
@@ -2141,7 +2141,7 @@ export function AssistantPane({
   const composerHint = input.startsWith("/")
     ? getModeHint("command")
     : readyMessage
-    ? "可以先直接对话来检查 AI 服务；需要论文分析时，再在左栏锁定论文或用 @ 添加论文。"
+    ? "可以先直接对话来检查 AI 服务；需要论文分析时，从顶栏 AI 工作台选择论文，或用 @ 添加论文。"
     : getModeHint("qa");
   const activeSession = sessionHistory.find((session) => session.id === activeSessionId);
   const activeSessionRunning = activeSession?.kind === "artifact_generation"

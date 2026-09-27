@@ -19,10 +19,13 @@ describe("assistant presentation helpers", () => {
   test("explains why the selected document set is not ready", () => {
     expect(
       getSelectedSetReadyMessage({ importedCount: 0, selectedCount: 0, selectionLocked: false })
-    ).toBe("请先在左栏勾选文件，形成选中文献集。");
+    ).toBe("用 @ 添加论文上下文，或从顶栏 AI 工作台选择论文和能力。");
     expect(
       getSelectedSetReadyMessage({ importedCount: 0, selectedCount: 2, selectionLocked: false })
-    ).toBe("请先锁定选中文献集，再使用右栏自然语言分支能力。");
+    ).toBe("请先将当前选中文献集导入 AI 流程，再进行问答或解释。");
+    expect(
+      getSelectedSetReadyMessage({ importedCount: 2, selectedCount: 2, selectionLocked: false })
+    ).toBeNull();
     expect(
       getSelectedSetReadyMessage({ importedCount: 1, selectedCount: 2, selectionLocked: true })
     ).toBe("请先将当前选中文献集导入 AI 流程，再进行问答或解释。");

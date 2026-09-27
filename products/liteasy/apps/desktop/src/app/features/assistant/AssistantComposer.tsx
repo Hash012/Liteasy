@@ -83,8 +83,16 @@ export function AssistantComposer({
   const [dismissed, setDismissed] = useState(false);
   const [browserQuery, setBrowserQuery] = useState<string | null>(null);
   const [browserPreviewId, setBrowserPreviewId] = useState<string>();
+  const insertionCaret = useRef<number>();
   useEffect(() => { setBrowserQuery(null); }, [contextScopeId]);
   useEffect(() => { setDismissed(false); setActiveIndex(0); }, [input]);
+  useEffect(() => {
+    if (insertionCaret.current === undefined) return;
+    const position = insertionCaret.current;
+    insertionCaret.current = undefined;
+    editorRef.current?.setSelectionRange(position, position);
+    setCaret(position);
+  }, [input, editorRef]);
   useEffect(() => {
     document.getElementById(`${menuId}-${activeIndex}`)?.scrollIntoView?.({ block: "nearest" });
   }, [activeIndex, menuId]);
@@ -96,9 +104,10 @@ export function AssistantComposer({
     let offset = 0;
     while (offset < input.length) {
       const command = suggestionIndex.commands.find((value) => input.startsWith(value, offset) &&
-        (offset === 0 || /\s/.test(input[offset - 1])));
+        (offset === 0 || /\s/.test(input[offset - 1])) &&
+        (offset + value.length === input.length || /[\s，。！？,!?;；]/.test(input[offset + value.length])));
       if (command) {
-        highlighted.push(<mark className="assistant-command-chip" key={offset}>{command}</mark>);
+        highlighted.push(<mark className="assistant-command-chip" data-prefix="/" key={offset}>{command.slice(1)}</mark>);
         offset += command.length;
       } else highlighted.push(input[offset++]);
     }
@@ -141,7 +150,10 @@ export function AssistantComposer({
       return;
     }
 
-    onInputChange(`${beforeTrigger}${suggestion.insertText ?? suggestion.label}${suggestion.trigger === "/" ? " " : ""}${afterTrigger}`);
+    const inserted = `${suggestion.insertText ?? suggestion.label}${suggestion.trigger === "/" ? " " : ""}`;
+    insertionCaret.current = beforeTrigger.length + inserted.length;
+    setCaret(insertionCaret.current);
+    onInputChange(`${beforeTrigger}${inserted}${afterTrigger}`);
     editorRef.current?.focus();
   }
 
@@ -176,9 +188,7 @@ export function AssistantComposer({
               title={token.detail ?? token.prompt}
               type="button"
             >
-              <strong>{token.label}</strong>
-              {token.detail ? <span>{token.detail}</span> : null}
-              <span aria-hidden="true" className="assistant-context-token-remove">x</span>
+              <strong>{token.label.replace(/^[@/$]/, "")}</strong>
             </button>
           ))}
         </div>

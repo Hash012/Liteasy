@@ -277,7 +277,7 @@ function renderArtifactActions(options: {
         ? () => options.assistantLanguage!
         : undefined,
       getActiveReaderPaper: () => options.activeReaderPaper ?? null,
-      getImportedChunksByPaperId: () => importedChunks,
+      getImportedChunksByPaperId: () => Object.fromEntries(selectedPapers.map((item) => [item.id, importedChunks[item.id] ?? []])),
       getImportedChunksForPaperId: (paperId) => importedChunks[paperId] ?? [],
       getMineruFiguresForPaperId: (paperId) => options.mineruFiguresByPaperId?.[paperId] ?? [],
       isAgentModelAccessAvailable: () => options.modelAccessAvailable ?? true,
@@ -404,22 +404,24 @@ describe("useArtifactActions", () => {
     ]);
   });
 
-  test("requires a selected and locked document set before analysis", () => {
+  test("directs empty requests to the workbench and accepts selected papers without a library lock", async () => {
     const empty = renderArtifactActions({ selectedPapers: [] });
 
     let message = "";
     act(() => {
       message = empty.result.current.startAnalysis("mindmap");
     });
-    expect(message).toBe("请先在工作区勾选文件，形成选中文献集。");
-    expect(empty.onAnalysisHint).toHaveBeenLastCalledWith("请先在工作区勾选文件，形成选中文献集。");
+    expect(message).toBe("请从顶栏 AI 工作台选择论文和能力。");
+    expect(empty.onAnalysisHint).toHaveBeenLastCalledWith(message);
 
     const unlocked = renderArtifactActions({ locked: false });
     act(() => {
       message = unlocked.result.current.startAnalysis("tree");
     });
-    expect(message).toBe("请先锁定选中文献集，再启动 AI 分析。");
-    expect(unlocked.queueImportForPapers).not.toHaveBeenCalled();
+    expect(message).toBe("正在解析论文，完成后将自动生成产物。");
+    expect(unlocked.queueImportForPapers).toHaveBeenCalledWith([paper], expect.any(Function), expect.any(Function));
+    await act(async () => { await vi.advanceTimersByTimeAsync(1200); });
+    await waitForArtifactTask(unlocked.artifactStore);
   });
 
   test("blocks thin-reading before import or task creation when model access requires login", () => {
@@ -573,6 +575,27 @@ describe("useArtifactActions", () => {
       component: "SlideDeck", props: { slides: saved.authoredArtifact?.kind === "slides" ? saved.authoredArtifact.slides : [] }
     });
     expect(reopened.runAgentAnalysis).not.toHaveBeenCalled();
+  });
+
+  test.each([false, true])("reads explicit thin-reading sources without library selection (already imported: %s)", async (imported) => {
+    const unrelatedPaper = { ...paper, id: "unrelated", title: "Unrelated paper" };
+    const { artifactStore, result, runAgentAnalysis, saveArtifactResult } = renderArtifactActions({
+      allPapers: [paper, unrelatedPaper], imported, locked: false, selectedPapers: []
+    });
+    runAgentAnalysis.mockResolvedValueOnce(createCompletedThinReadingRun());
+
+    act(() => { result.current.startAnalysisForPapers("thin_reading", [paper]); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1200); });
+    await waitForArtifactTask(artifactStore);
+
+    expect(runAgentAnalysis).toHaveBeenCalledWith("thin_reading", expect.any(Function), expect.objectContaining({
+      sourcePaperIds: [paper.id],
+      knowledgeSnapshot: expect.objectContaining({
+        papers: [paper], chunks: { [paper.id]: buildImportedChunksForPaper(paper) }
+      })
+    }));
+    expect(saveArtifactResult).toHaveBeenCalledTimes(1);
+    expect(artifactStore.getTasks()[0].status).toBe("completed");
   });
 
   test("generates a completed thin-reading artifact through Agent for imported papers", async () => {

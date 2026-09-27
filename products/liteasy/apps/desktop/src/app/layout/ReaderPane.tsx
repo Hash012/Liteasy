@@ -98,7 +98,7 @@ type ReaderPaneProps = {
   intuechoSessionId?: string;
   mineruFiguresByPaperId?: Record<string, MineruFigure[]>;
   pdfBackground?: string;
-  onStartAnalysis: (artifactType: ArtifactType, selectedPapers?: Paper[]) => void;
+  onStartAnalysis: (artifactType: ArtifactType, selectedPapers?: Paper[]) => void | string;
   onToggleBottomPane?: () => void;
   onToggleLeftPane?: () => void;
   onToggleRightPane?: () => void;
@@ -180,9 +180,17 @@ export function ReaderPane({
   const [zoom, setZoom] = useState(100);
   const [readingMode, setReadingMode] = useState(false);
   const [extractionError, setExtractionError] = useState("");
+  const [analysisFeedback, setAnalysisFeedback] = useState("");
   useEffect(() => { setReadingMode(false); }, [selectedPapers[0]?.id, targetEvidence?.requestId]);
   const readingVisible = readingMode && Boolean(readingContent);
   const activePaper = selectedPapers[0] ?? null;
+  const thinReadingButton = activePaper ? <>
+    <Button appearance="primary" size="small" onClick={() => {
+      try { setAnalysisFeedback(onStartAnalysis("thin_reading", [activePaper]) ?? ""); }
+      catch (error) { setAnalysisFeedback(error instanceof Error ? error.message : "薄读启动失败，请重试。"); }
+    }} title={`为《${activePaper.title}》生成薄读`}>AI 薄读</Button>
+    {analysisFeedback ? <span role="status" className="reader-ai-feedback" title={analysisFeedback}>{analysisFeedback}</span> : null}
+  </> : null;
   const analysisPapers = useMemo(() => {
     const selectedPaperIdSet = new Set(selectedPaperIds);
     return selectedPapers.filter((paper) => selectedPaperIdSet.has(paper.id));
@@ -206,17 +214,18 @@ export function ReaderPane({
             onEnterReadingMode={readingContent ? () => setReadingMode(true) : undefined}
             onExitReadingMode={() => setReadingMode(false)}
             readingView={readingVisible ? (annotations) => <section aria-label="论文阅读模式" className="reader-reading-surface">
+              {thinReadingButton}
               <Button size="small" onClick={() => setReadingMode(false)}>PDF 模式</Button>
               {typeof readingContent === "function" ? readingContent(annotations) : readingContent}
             </section> : undefined}
             onDocumentInfo={onDocumentInfo}
             onQuickAsk={onQuickAsk}
-            readingControls={readingContent
+            readingControls={<>{thinReadingButton}{readingContent
               ? <Button size="small" onClick={() => setReadingMode(true)}>阅读模式</Button>
               : onExtractPaper ? <Button size="small" disabled={extractingPaper} onClick={() => {
                 setExtractionError("");
                 void onExtractPaper().catch((error) => setExtractionError(error instanceof Error ? error.message : String(error)));
-              }}>{extractingPaper ? "正在解析…" : "MinerU 解析"}</Button> : null}
+              }}>{extractingPaper ? "正在解析…" : "MinerU 解析"}</Button> : null}</>}
             allowServerPdfParsing={allowServerPdfParsing}
             externalKnowledgeEndpoint={externalKnowledgeEndpoint}
             loadPdfSource={loadPdfSource}

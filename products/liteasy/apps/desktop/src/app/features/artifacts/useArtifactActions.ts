@@ -582,6 +582,11 @@ export function useArtifactActions({
       [];
   }
 
+  function importedChunksForPapers(papers: Paper[]) {
+    // A reader or workbench request has its own sources, independent of library checkboxes.
+    return Object.fromEntries(papers.map((paper) => [paper.id, importedChunksForPaper(paper.id)]));
+  }
+
   async function ensureThinReadingPaperImported(paper: Paper) {
     if (importedChunksForPaper(paper.id).length > 0) {
       return;
@@ -1005,7 +1010,7 @@ export function useArtifactActions({
   function startAnalysisForPapers(artifactType: ArtifactType, selectedPapers: Paper[], generationOptions?: AgentArtifactGenerationOptions) {
     const scopedPapers = papersForArtifactScope(artifactType, selectedPapers, getActiveReaderPaper?.());
     if (scopedPapers.length === 0 && !generationOptions?.contextRefs?.length) {
-      const message = "请通过 @ 指定论文，或在左栏勾选并锁定文献后再生成产物。";
+      const message = "请通过 @ 指定论文，或在顶栏 AI 工作台选择论文后再生成产物。";
       onAnalysisHint(message);
       return message;
     }
@@ -1050,7 +1055,7 @@ export function useArtifactActions({
     syncArtifacts(taskId);
     const begin = () => {
       if (artifactStore.getTask(taskId)?.status === "cancelled") return;
-      void startArtifactTask(artifactType, scopedPapers, getImportedChunksByPaperId(), taskId, {
+      void startArtifactTask(artifactType, scopedPapers, importedChunksForPapers(scopedPapers), taskId, {
         ...generationOptions, sourcePaperIds: scopedPapers.map((paper) => paper.id)
       });
     };
@@ -1081,13 +1086,7 @@ export function useArtifactActions({
   function startAnalysis(artifactType: ArtifactType) {
     const selectedSet = getSelectedDocumentSet();
     if (selectedSet.documentIds.length === 0) {
-      const message = "请先在工作区勾选文件，形成选中文献集。";
-      onAnalysisHint(message);
-      return message;
-    }
-
-    if (!selectedSet.locked) {
-      const message = "请先锁定选中文献集，再启动 AI 分析。";
+      const message = "请从顶栏 AI 工作台选择论文和能力。";
       onAnalysisHint(message);
       return message;
     }
@@ -1098,7 +1097,7 @@ export function useArtifactActions({
   function handleAssistantArtifact(artifactType: ArtifactType) {
     const selectedSet = getSelectedDocumentSet();
     if (selectedSet.documentIds.length === 0) {
-      const message = "当前没有可用的选中文献集。请先在左栏勾选并锁定文献。";
+      const message = "请从顶栏 AI 工作台选择论文和能力。";
       onAnalysisHint(message);
       return message;
     }
@@ -1131,14 +1130,14 @@ export function useArtifactActions({
       supplementalContext: request.supplementalContext
     };
     const selectedPapers: Paper[] = request.papers.map((paper) => ({ ...paper }));
-    const importedChunksByPaperId = getImportedChunksByPaperId();
+    const importedChunksByPaperId = importedChunksForPapers(selectedPapers);
     let queuedTaskId: string | undefined;
     const beginRegeneration = () => {
       const taskId = queuedTaskId ?? artifactStore.createTask(request.artifactType);
       void startArtifactTask(
         request.artifactType,
         selectedPapers,
-        getImportedChunksByPaperId(),
+        importedChunksForPapers(selectedPapers),
         taskId,
         generationOptions
       );
@@ -1452,7 +1451,7 @@ export function useArtifactActions({
       };
       const generationOptions: AgentArtifactGenerationOptions = restoredRecovery?.options ?? {
         supplementalContext: existing.supplementalContext, sourcePaperIds: [primaryPaperId], thinReadingContext: context,
-        knowledgeSnapshot: { papers: [structuredClone(primaryPaper)], chunks: structuredClone(getImportedChunksByPaperId()), settings: getGenerationSettings?.() ? structuredClone(getGenerationSettings!()) : undefined }
+        knowledgeSnapshot: { papers: [structuredClone(primaryPaper)], chunks: structuredClone(importedChunksForPapers([primaryPaper])), settings: getGenerationSettings?.() ? structuredClone(getGenerationSettings!()) : undefined }
       };
       artifactStore.updateTask(taskId, { recovery: { papers: [primaryPaper], chunks: generationOptions.knowledgeSnapshot?.chunks ?? {}, options: generationOptions } });
       syncArtifacts(taskId);
@@ -1712,7 +1711,8 @@ export function useArtifactActions({
     artifactStore.updateTask(taskId, { status: "queued", failure: undefined, agentRunId: undefined, message: "正在恢复原论文与对话上下文" });
     syncArtifacts(taskId);
     const begin = () => { void startArtifactTask(task.type, snapshot.papers,
-      Object.keys(snapshot.chunks).length ? snapshot.chunks : getImportedChunksByPaperId(), taskId, snapshot.options); };
+      snapshot.papers.every((paper) => snapshot.chunks[paper.id]?.length)
+        ? snapshot.chunks : importedChunksForPapers(snapshot.papers), taskId, snapshot.options); };
     if (snapshot.papers.every((paper) => snapshot.chunks[paper.id]?.length)) begin();
     else {
       const status = queueImportForPapers(snapshot.papers, begin, ({ error }) => {

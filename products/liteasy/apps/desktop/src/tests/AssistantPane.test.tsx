@@ -800,7 +800,7 @@ test("answers qa mode while surfacing selection readiness in runtime context", a
   expect(screen.getByText(/已导入 0\/1/)).toBeInTheDocument();
   expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveAttribute(
     "title",
-    "可以先直接对话来检查 AI 服务；需要论文分析时，再在左栏锁定论文或用 @ 添加论文。"
+    "可以先直接对话来检查 AI 服务；需要论文分析时，从顶栏 AI 工作台选择论文，或用 @ 添加论文。"
   );
 });
 

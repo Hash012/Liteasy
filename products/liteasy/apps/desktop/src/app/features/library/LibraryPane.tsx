@@ -1,3 +1,5 @@
+import { libraryFileDragType, libraryFolderKey, normalizedLibraryPath, relativeLibraryFolder } from "./libraryFolderMembership";
+import { buildMovedFolderPath, buildRenamedFolderPath } from "../workspace/workspacePathOperations";
 import { indexReadingCatalog, queryReadingCatalog, type ReadingCatalogFilters } from "./readingCatalogSearch";
 import { readingCatalogFormatLabels, readingCatalogStatusLabels } from "./readingCatalog.types";
 import { LibraryFileList, type LibraryFileAccess } from "./LibraryFileList";
@@ -48,8 +50,6 @@ import {
   FolderOpenRegular,
   FolderRegular,
   LightbulbRegular,
-  LockClosedRegular,
-  LockOpenRegular,
   OrganizationRegular,
   OpenRegular,
   DocumentArrowUpRegular,
@@ -355,7 +355,7 @@ function sortTree(tree: ExplorerTree): ExplorerTree {
   };
 }
 
-function filterTree(tree: ExplorerTree, query: string, category = "", matches?: Set<string>): ExplorerTree {
+function filterTree(tree: ExplorerTree, query: string, category = "", matches?: Set<string>, fileFolders?: Set<string>): ExplorerTree {
   const entryMatches = (entry: ExplorerEntry) => {
     if (matches) return matches.has(entry.id);
     const categoryMatches = !category || entry.metadata?.category === category;
@@ -368,7 +368,7 @@ function filterTree(tree: ExplorerTree, query: string, category = "", matches?: 
   const filterFolders = (folders: ExplorerFolder[]): ExplorerFolder[] => folders.flatMap((folder) => {
     const children = filterFolders(folder.children);
     const entries = folder.entries.filter(entryMatches);
-    return (!matches && !category && folder.label.toLocaleLowerCase().includes(query)) || children.length > 0 || entries.length > 0
+    return (!matches && !category && folder.label.toLocaleLowerCase().includes(query)) || children.length > 0 || entries.length > 0 || fileFolders?.has(libraryFolderKey(folder.id))
       ? [{ ...folder, children, entries, unfilteredFolder: folder }]
       : [];
   });
@@ -382,7 +382,16 @@ function readTransfer(event: ReactDragEvent): LibraryResourceTransferSource | nu
   const serialized = event.dataTransfer.getData(resourceTransferMimeType);
   if (!serialized) return null;
   try {
-    return JSON.parse(serialized) as LibraryResourceTransferSource;
+    const source = JSON.parse(serialized);
+    if (!source || typeof source !== "object") return null;
+    if (source.area === "recommendation") return typeof source.recommendation?.id === "string" ? source : null;
+    if (!["local", "collection", "organization"].includes(source.area)) return null;
+    if (source.area !== "local" && typeof source.scope?.scopeId !== "string") return null;
+    if (source.folder) {
+      if (typeof (source.area === "local" ? source.folder.path : source.folder.folderId) !== "string") return null;
+      return Array.isArray(source.tree?.children) && Array.isArray(source.tree?.entries) ? source : null;
+    }
+    return typeof (source.area === "local" ? source.entry?.id : source.entry?.documentId) === "string" ? source : null;
   } catch {
     return null;
   }
@@ -466,7 +475,6 @@ export function LibraryPane({
   onRenameFolder,
   onRenamePaper,
   onResourceTransfer,
-  onToggleLock,
   onToggleSelection,
   organizationId,
   organizationStorageAccess,
@@ -518,6 +526,15 @@ export function LibraryPane({
   const [metadataEditorError, setMetadataEditorError] = useState("");
   const [metadataEditorPending, setMetadataEditorPending] = useState(false);
   const [message, setMessage] = useState("");
+  const [dropHover, setDropHover] = useState<{ key: string; allowed: boolean; label: string } | null>(null);
+  const dragSourceRef = useRef<LibraryResourceTransferSource | null>(null);
+  const dropBusy = useRef(false);
+  useEffect(() => {
+    const clear = () => { setDropHover(null); dragSourceRef.current = null; };
+    window.addEventListener("dragend", clear); window.addEventListener("drop", clear);
+    window.addEventListener("blur", clear);
+    return () => { window.removeEventListener("dragend", clear); window.removeEventListener("drop", clear); window.removeEventListener("blur", clear); };
+  }, []);
   const [createFolderTarget, setCreateFolderTarget] = useState<CreateFolderTarget | null>(null);
   const [folderName, setFolderName] = useState("");
   const [folderDialogError, setFolderDialogError] = useState("");
@@ -564,9 +581,24 @@ export function LibraryPane({
   const filteredIds = useMemo(() => fileLibrary && (query || selectedCategory || fileFilters.format !== "all" || fileFilters.status !== "all" || fileFilters.year)
     ? new Set(queryReadingCatalog(fileIndex, { ...fileFilters, query: search, collection: selectedCategory }).map((entry) => entry.id)) : undefined,
     [fileIndex, query, selectedCategory, fileFilters, Boolean(fileLibrary)]);
+  const fileFolders = useMemo(() => {
+    const paths = new Set<string>();
+    const root = normalizedLibraryPath(localLibrarySnapshot?.rootPath ?? "");
+    for (const entry of fileLibrary?.entries ?? []) {
+      if (entry.format === "pdf" || !entry.folderPath || (filteredIds && !filteredIds.has(entry.id))) continue;
+      const parts = entry.folderPath.split("/");
+      while (parts.length) { paths.add(libraryFolderKey(`${root}/${parts.join("/")}`)); parts.pop(); }
+    }
+    return paths;
+  }, [fileLibrary?.entries, localLibrarySnapshot?.rootPath, filteredIds]);
+  const rootFileIds = useMemo(() => {
+    const paths = new Set(localLibrarySnapshot?.folders.map((folder) => libraryFolderKey(folder.path)));
+    const root = normalizedLibraryPath(localLibrarySnapshot?.rootPath ?? "");
+    return new Set(fileLibrary?.entries.filter((entry) => !entry.folderPath || !paths.has(libraryFolderKey(`${root}/${entry.folderPath}`))).map((entry) => entry.id));
+  }, [fileLibrary?.entries, localLibrarySnapshot]);
   const localTree = useMemo(
-    () => filterTree(localExplorerTree(localLibrarySnapshot, visiblePaperMetadata), query, selectedCategory, filteredIds),
-    [localLibrarySnapshot, visiblePaperMetadata, query, selectedCategory, filteredIds]
+    () => filterTree(localExplorerTree(localLibrarySnapshot, visiblePaperMetadata), query, selectedCategory, filteredIds, fileFolders),
+    [localLibrarySnapshot, visiblePaperMetadata, query, selectedCategory, filteredIds, fileFolders]
   );
   const collectionTree = useMemo(
     () => filterTree(cloudExplorerTree("collection", collectionScope, collection.tree), query),
@@ -696,7 +728,8 @@ export function LibraryPane({
 
   async function transfer(source: LibraryResourceTransferSource, target: LibraryResourceTransferTarget) {
     try {
-      await onResourceTransfer?.(source, target);
+      if (!onResourceTransfer) throw new Error("当前资源暂不支持转移。");
+      await onResourceTransfer(source, target);
       setMessage("资源已复制到目标位置。");
       await Promise.all([collection.refresh(), organization.refresh()]);
     } catch (error) {
@@ -772,7 +805,9 @@ export function LibraryPane({
     if (!requested || requested === folder.label) return;
     if (area === "local") {
       if (!folder.localPath || !onRenameFolder) throw new Error("当前本地目录无法重命名。");
-      setMessage(await onRenameFolder(folder.localPath, requested));
+      const result = await onRenameFolder(folder.localPath, requested);
+      if (result.startsWith("已将目录")) await fileLibrary?.onRelocateFolder?.(folder.localPath, buildRenamedFolderPath(folder.localPath, requested));
+      setMessage(result);
       await onRefreshLocalLibrary?.();
       return;
     }
@@ -863,53 +898,95 @@ export function LibraryPane({
     );
   }
 
-  function dropOnTarget(
-    event: ReactDragEvent,
-    area: Exclude<LibraryResourceArea, "recommendation">,
-    folder?: ExplorerFolder
-  ) {
-    event.preventDefault();
-    event.stopPropagation();
-    const source = readTransfer(event);
+  function dropKey(area: string, folder?: ExplorerFolder) { return `${area}:${folder?.id ?? "root"}`; }
+  function dropPermission(event: ReactDragEvent, area: "local" | "collection" | "organization", folder?: ExplorerFolder) {
+    if (dropBusy.current || fileLibrary?.pending) return "请等待当前文件操作完成。";
+    if (folder?.virtual) return "此分组不是可导入的目录。";
+    if (area !== "local" && !accountSessionAvailable) return "请登录后再导入收藏或组织目录。";
+    if (event.dataTransfer.types.includes(libraryFileDragType)) return area === "local" && fileLibrary?.onMoveFile ? "" : "阅读文件目前可整理到本地目录。";
+    const source = dragSourceRef.current ?? readTransfer(event);
     if (source) {
-      const target = targetFor(area, folder);
-      const permissionMessage = transferPermissionMessage(source, target);
-      if (permissionMessage) {
-        setMessage(permissionMessage);
-        return;
+      const denied = transferPermissionMessage(source, targetFor(area, folder));
+      if (denied) return denied;
+      if (source.area === "local" && "folder" in source && area === "local") {
+        const from = libraryFolderKey(source.folder.path), to = libraryFolderKey(folder?.localPath ?? localLibrarySnapshot?.rootPath ?? "");
+        if (to === from || to.startsWith(`${from}/`)) return "不能将目录移入自身或其子目录。";
       }
-      if ("folder" in source) {
-        if (source.area === "local" && area === "local") {
-          const targetPath = folder?.localPath ?? localLibrarySnapshot?.rootPath;
-          if (targetPath && source.folder.path !== targetPath) {
-            void onMoveFolder?.(source.folder.path, targetPath).then(setMessage);
+      return "";
+    }
+    if (area === "organization" && (!organizationStorageAccess || !canUploadToOrganization(organizationStorageAccess))) return "当前组织角色不能导入文件。";
+    if (event.dataTransfer.types.includes(resourceTransferMimeType) || event.dataTransfer.types.includes("Files")) return "";
+    return "请拖入文件或文献库中的条目。";
+  }
+  function hoverTarget(event: ReactDragEvent, area: "local" | "collection" | "organization", folder?: ExplorerFolder) {
+    event.preventDefault(); event.stopPropagation();
+    const reason = dropPermission(event, area, folder);
+    const moving = event.dataTransfer.types.includes(libraryFileDragType) || (dragSourceRef.current?.area === area);
+    event.dataTransfer.dropEffect = reason ? "none" : moving ? "move" : "copy";
+    const name = folder?.label ?? (area === "local" ? "本地文献库" : area === "collection" ? "收藏" : "组织文献库");
+    const next = { key: dropKey(area, folder), allowed: !reason, label: reason || `松开即可${moving ? "移入" : "导入"}“${name}”` };
+    setDropHover((current) => current?.key === next.key && current.label === next.label ? current : next);
+  }
+  function leaveTarget(event: ReactDragEvent, area: "local" | "collection" | "organization", folder?: ExplorerFolder) {
+    if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
+      setDropHover((current) => current?.key === dropKey(area, folder) ? null : current);
+    }
+  }
+  async function dropOnTarget(event: ReactDragEvent, area: "local" | "collection" | "organization", folder?: ExplorerFolder) {
+    event.preventDefault(); event.stopPropagation(); setDropHover(null);
+    const denied = dropPermission(event, area, folder);
+    if (denied) { setMessage(denied); return; }
+    const source = readTransfer(event);
+    const readingId = event.dataTransfer.getData(libraryFileDragType);
+    const files = Array.from(event.dataTransfer.files ?? []);
+    const directory = Array.from(event.dataTransfer.items ?? []).some((item) => item.webkitGetAsEntry?.()?.isDirectory);
+    const target = targetFor(area, folder);
+    const name = folder?.label ?? (area === "local" ? "本地文献库" : area === "collection" ? "收藏" : "组织文献库");
+    dropBusy.current = true;
+    setMessage(`正在导入“${name}”…`);
+    try {
+      if (directory) throw new Error("请打开文件夹，选择其中的文件后拖入。");
+      if (readingId) {
+        if (!fileLibrary?.onMoveFile || area !== "local") throw new Error("此文件无法移动到该位置。");
+        await fileLibrary.onMoveFile(readingId, target.localFolderPath);
+        setMessage(`文件已移入“${name}”。`);
+      } else if (source) {
+        if ("folder" in source && source.area === "local" && area === "local") {
+          if (!onMoveFolder || !target.localFolderPath) throw new Error("当前目录无法移动。");
+          const result = await onMoveFolder(source.folder.path, target.localFolderPath);
+          if (result.startsWith("已将目录")) await fileLibrary?.onRelocateFolder?.(source.folder.path, buildMovedFolderPath(source.folder.path, target.localFolderPath));
+          setMessage(result);
+        } else if (source.area === "local" && "entry" in source && source.entry.path && area === "local") {
+          if (!onMovePaper || !target.localFolderPath) throw new Error("当前文献无法移动。");
+          setMessage(await onMovePaper(source.entry.id, target.localFolderPath));
+        } else await transfer(source, target);
+      } else if (files.length) {
+        if (area === "local") {
+          if (!fileLibrary && files.some((file) => !/\.pdf$/i.test(file.name))) throw new Error("当前入口仅支持 PDF 文件。");
+          if (!fileLibrary && !onAddDroppedPdfFiles) throw new Error("文件导入暂不可用。");
+          const result = fileLibrary ? await fileLibrary.onImport(files, target.localFolderPath) : await onAddDroppedPdfFiles!(files, target.localFolderPath);
+          setMessage(typeof result === "string" ? `目标：${name}。${result}` : `已将 ${files.length} 个文件导入“${name}”。`);
+        } else {
+          if (files.some((file) => !/\.pdf$/i.test(file.name))) throw new Error("云端收藏和组织目录目前仅支持 PDF；其他格式请导入本地目录。");
+          if (!target.scope) throw new Error("目标目录不可用，请刷新后重试。");
+          const client = createCloudLibraryStorageClient({ endpoint: cloudEndpoint });
+          let revision = target.expectedRevision ?? 0, imported = 0;
+          for (const file of files) {
+            const result = await client.uploadDocument({ file, scope: target.scope, folderId: target.folderId, expectedRevision: revision });
+            revision = result.revision ?? revision;
+            if (result.status === "imported") imported += 1;
           }
-          return;
+          await (area === "collection" ? collection.refresh() : organization.refresh());
+          setMessage(`已导入 ${imported} 个 PDF 到“${name}”（重复文件未新增）。`);
         }
-        void transfer(source, target);
-        return;
+      } else throw new Error("没有可导入的文件，请从文件管理器或文献库拖入。");
+      if (folder) {
+        setExpandedFolders((current) => ({ ...current, [area]: [...new Set([...current[area], folder.id])] }));
+        setSelectedFolderIds((current) => ({ ...current, [area]: folder.id }));
       }
-      if (source.area === "local" && area === "local" && source.entry.path) {
-        const targetPath = folder?.localPath ?? localLibrarySnapshot?.rootPath;
-        if (targetPath) {
-          void onMovePaper?.(source.entry.id, targetPath).then(setMessage);
-        }
-        return;
-      }
-      void transfer(source, target);
-      return;
-    }
-    if (area === "local") {
-      const files = Array.from(event.dataTransfer.files ?? []).filter((file) =>
-        fileLibrary || file.name.toLocaleLowerCase().endsWith(".pdf")
-      );
-      if (files.length > 0) {
-        void Promise.resolve(fileLibrary ? fileLibrary.onImport(files, folder?.localPath ?? localLibrarySnapshot?.rootPath) : onAddDroppedPdfFiles?.(
-          files,
-          folder?.localPath ?? localLibrarySnapshot?.rootPath
-        )).then(() => onRefreshLocalLibrary?.());
-      }
-    }
+      await onRefreshLocalLibrary?.();
+    } catch (error) { setMessage(error instanceof Error ? error.message : "导入失败，请重试。"); }
+    finally { dropBusy.current = false; dragSourceRef.current = null; }
   }
 
   function renderEntry(area: "local" | "collection" | "organization", entry: ExplorerEntry, depth: number) {
@@ -952,6 +1029,7 @@ export function LibraryPane({
             return;
           }
           event.dataTransfer.effectAllowed = "copyMove";
+          dragSourceRef.current = entry.source;
           event.dataTransfer.setData(resourceTransferMimeType, JSON.stringify(entry.source));
         }}
         style={{ paddingLeft: `${depth * 12 + 6}px` }}
@@ -1082,7 +1160,7 @@ export function LibraryPane({
     folder: ExplorerFolder,
     depth: number
   ) {
-    const expanded = query.length > 0 || expandedFolders[area].includes(folder.id);
+    const expanded = query.length > 0 || Boolean(area === "local" && filteredIds && fileFolders.has(libraryFolderKey(folder.id))) || expandedFolders[area].includes(folder.id);
     const selected = !folder.virtual && selectedFolderIds[area] === folder.id;
     const pending = pendingNodeIds.includes(folder.id);
     const canManageFolder = area !== "organization" || Boolean(
@@ -1092,7 +1170,7 @@ export function LibraryPane({
     const row = (
       <div
         aria-busy={pending}
-        className={`library-folder-row${selected ? " is-selected" : ""}`}
+        className={`library-folder-row${selected ? " is-selected" : ""}${dropHover?.key === dropKey(area, folder) ? dropHover.allowed ? " is-drop-target" : " is-drop-blocked" : ""}`}
         draggable={Boolean(
           !pending && !folder.virtual && folderSource && canStartResourceDrag(folderSource)
         )}
@@ -1105,10 +1183,13 @@ export function LibraryPane({
             return;
           }
           event.dataTransfer.effectAllowed = "copyMove";
+          event.stopPropagation(); dragSourceRef.current = source;
           event.dataTransfer.setData(resourceTransferMimeType, JSON.stringify(source));
         } : undefined}
-        onDragOver={folder.virtual ? undefined : (event) => event.preventDefault()}
-        onDrop={folder.virtual ? undefined : (event) => dropOnTarget(event, area, folder)}
+        onDragEnter={(event) => hoverTarget(event, area, folder)}
+        onDragOver={(event) => hoverTarget(event, area, folder)}
+        onDragLeave={(event) => leaveTarget(event, area, folder)}
+        onDrop={(event) => void dropOnTarget(event, area, folder)}
         style={{ paddingLeft: `${depth * 12}px` }}
       >
         <button
@@ -1129,7 +1210,7 @@ export function LibraryPane({
           type="button"
         >
           <FolderRegular aria-hidden="true" />
-          <span>{folder.label}</span>
+          <span>{folder.label}{dropHover?.key === dropKey(area, folder) ? <small className="library-drop-feedback" role="status">{dropHover.label}</small> : null}</span>
         </button>
       </div>
     );
@@ -1163,6 +1244,8 @@ export function LibraryPane({
           <ul className="library-tree-children">
             {folder.children.map((child) => renderFolder(area, child, depth + 1))}
             {folder.entries.map((entry) => renderEntry(area, entry, depth + 1))}
+            {area === "local" && folder.localPath && fileLibrary ? <li className="library-folder-files"><LibraryFileList access={fileLibrary} query={search} category={selectedCategory} filters={fileFilters}
+              libraryRootPath={localLibrarySnapshot?.rootPath} folderPath={relativeLibraryFolder(localLibrarySnapshot?.rootPath, folder.localPath)} depth={depth + 1} /></li> : null}
           </ul>
         ) : null}
       </li>
@@ -1176,10 +1259,11 @@ export function LibraryPane({
   ) {
     return (
       <div
-        className="library-tree-drop-root"
-        onDragOver={(event) => event.preventDefault()}
-        onDrop={(event) => dropOnTarget(event, area)}
+        className={`library-tree-drop-root${dropHover?.key === dropKey(area) ? dropHover.allowed ? " is-drop-target" : " is-drop-blocked" : ""}`}
+        onDragEnter={(event) => hoverTarget(event, area)} onDragOver={(event) => hoverTarget(event, area)} onDragLeave={(event) => leaveTarget(event, area)}
+        onDrop={(event) => void dropOnTarget(event, area)}
       >
+        {area !== "local" && dropHover?.key === dropKey(area) ? <div className="library-drop-feedback" role="status">{dropHover.label}</div> : null}
         {tree.folders.length > 0 || tree.entries.length > 0 ? (
           <ul className="library-resource-tree">
             {tree.folders.map((folder) => renderFolder(area, folder, 0))}
@@ -1320,15 +1404,12 @@ export function LibraryPane({
             ))}
           </Select>
         ) : null}
-        {iconAction(
-          selectionLocked ? "解除选中文献集锁定" : "锁定选中文献集",
-          selectionLocked ? <LockClosedRegular /> : <LockOpenRegular />,
-          onToggleLock
-        )}
       </div>
+      <p className="library-drag-help">将文件拖到目录名称上导入；拖动库内条目可整理位置。</p>
       {message || fileLibrary?.message ? <div aria-live="polite" className="library-resource-action-message">{message || fileLibrary?.message}</div> : null}
 
-      <section aria-label="本地文献库" className="library-section" onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }} onDrop={(event) => { if (event.dataTransfer.files.length) dropOnTarget(event, "local"); }}>
+      <section aria-label="本地文献库" className={`library-section${dropHover?.key === dropKey("local") ? dropHover.allowed ? " is-drop-target" : " is-drop-blocked" : ""}`}
+        onDragEnter={(event) => hoverTarget(event, "local")} onDragOver={(event) => hoverTarget(event, "local")} onDragLeave={(event) => leaveTarget(event, "local")} onDrop={(event) => void dropOnTarget(event, "local")}>
         <SectionHeader
           actions={<>
             {iconAction("新建本地目录", <FolderAddRegular />, () => openCreateFolderDialog("local"), !localLibrarySnapshot)}
@@ -1343,6 +1424,7 @@ export function LibraryPane({
           title="本地文献库"
         />
         <LiteratureHydrationStatus hydration={literatureHydration} />
+        {dropHover?.key === dropKey("local") ? <div className="library-drop-feedback" role="status">{dropHover.label}</div> : null}
         <input
           accept={fileLibrary ? undefined : ".pdf,application/pdf"}
           aria-label="选择文献库文件"
@@ -1446,7 +1528,7 @@ export function LibraryPane({
                 />
               </>
             )}
-            {fileLibrary ? <LibraryFileList access={fileLibrary} query={search} category={selectedCategory} filters={fileFilters} /> : null}
+            {fileLibrary ? <LibraryFileList access={fileLibrary} query={search} category={selectedCategory} filters={fileFilters} rootEntries={rootFileIds} /> : null}
           </div>
         ) : null}
       </section>

@@ -119,7 +119,7 @@ html[data-color-scheme="dark"] :is(
   .library-collection-row.active, .library-workspace-switcher button.active,
   .assistant-history-item.active,
   .assistant-message-action.active, .assistant-suggestion-item.active,
-  .assistant-command-chip, .assistant-context-token, .assistant-message-token,
+  .assistant-message-token,
   .pdf-sidebar-switcher button.active, .pdf-thumbnail-list li.active,
   .library-paper-tag, .library-paper-category
 ) { background: var(--selection-surface); color: var(--accent-1); border-color: var(--accent-1); }
@@ -147,8 +147,7 @@ html[data-color-scheme="dark"] :is(.reader-layout-button.active, .assistant-acti
 }
 html[data-color-scheme="dark"] .assistant-input-highlight { background: transparent; }
 html[data-color-scheme="dark"] .assistant-pane.accepting-reader-context .assistant-input-wrap { background: var(--selection-surface); }
-html[data-color-scheme="dark"] .assistant-command-chip { box-shadow: inset 0 0 0 1px var(--line-2); }
-html[data-color-scheme="dark"] :is(.assistant-context-token span, .assistant-message-token span) { color: var(--ink-2); }
+html[data-color-scheme="dark"] .assistant-message-token span { color: var(--ink-2); }
 html[data-color-scheme="dark"] :is(.library-button.danger, .assistant-session-button.danger, .pdf-text-box-error) { color: var(--danger-ink); background: var(--paper-2); }
 html[data-color-scheme="dark"] :is(.profile-login-status, .activity-login-badge) { background: #3e3020; border-color: #755837; color: var(--warning-ink); }
 

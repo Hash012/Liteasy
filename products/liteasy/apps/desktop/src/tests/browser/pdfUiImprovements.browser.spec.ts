@@ -28,10 +28,11 @@ test("commands, compact resizable annotations, context drag, and persistent quic
   const composer = page.getByPlaceholder("输入你的问题或命令");
   await composer.fill("/");
   await composer.press("Enter");
-  await expect(page.locator(".assistant-command-chip")).toHaveText("/生成薄读");
+  await expect(page.locator(".assistant-command-chip")).toHaveText("生成薄读");
   await expect(page.getByLabel("输入候选")).toHaveCount(0);
   const chip = page.locator(".assistant-command-chip");
-  await expect(chip).toHaveCSS("border-radius", "5px");
+  await expect(chip).toHaveCSS("border-radius", "0px")
+  await expect(chip).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
 
   const resizer = page.getByRole("separator", { name: "调整批注栏宽度" });
   const resizeBox = (await resizer.boundingBox())!;
@@ -57,7 +58,12 @@ test("commands, compact resizable annotations, context drag, and persistent quic
   await expect(summary).toHaveCSS("-webkit-line-clamp", "3");
   await expect(page.getByRole("checkbox", { name: /将第 1 页高亮批注公开到论坛/ })).toHaveCount(0);
   await mark.dragTo(composer);
-  await expect(page.getByRole("button", { name: "移除上下文：das24a.pdf" })).toBeVisible();
+  const context = page.getByRole("button", { name: "移除上下文：das24a.pdf" });
+  await expect(context).toBeVisible();
+  await expect(context).toHaveText("das24a.pdf · 第 1 页 · 批注");
+  await expect(context).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(context).toHaveCSS("border-radius", "0px");
+  await expect(context.locator("strong")).toHaveCSS("font-weight", "700");
   await expect(page.getByText("已将选中文段添加到对话。", { exact: true })).toHaveCount(0);
   await mark.click();
   await expect(page.getByText("输入后将在这里实时显示排版效果。")).toHaveCount(0);
