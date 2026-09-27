@@ -1,3 +1,4 @@
+import { displayPath } from "./displayPath";
 import { useEffect, useRef, useState } from "react";
 import { Button, Input, Popover, PopoverSurface, PopoverTrigger, Tooltip } from "@fluentui/react-components";
 import { CopyRegular, FolderOpenRegular, LinkRegular } from "@fluentui/react-icons";
@@ -38,7 +39,7 @@ export function ResourceLocationButton({ target, className }: { target: Resource
         void navigator.clipboard.writeText(path).then(() => setMessage("已复制 Liteasy Path。")).catch(() => setMessage("复制失败，请选中路径手动复制。"));
       }}>复制 Liteasy Path</Button>
       <p>实际位置{location?.physicalKind === "database" ? "（内容保存在数据库中）" : ""}</p>
-      <Input aria-label="资源实际位置" readOnly value={location?.physicalPath ?? (busy ? "读取中…" : "位置不可用")} style={{ width: "100%" }} />
+      <Input aria-label="资源实际位置" readOnly value={displayPath(location?.physicalPath ?? (busy ? "读取中…" : "位置不可用"))} style={{ width: "100%" }} />
       <Button size="small" icon={<FolderOpenRegular />} disabled={busy || !location?.canReveal} onClick={() => void inspect(true)}>在文件管理器中显示</Button>
       {message ? <p role="status">{message}</p> : null}
     </PopoverSurface>

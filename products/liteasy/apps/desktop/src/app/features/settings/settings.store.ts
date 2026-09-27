@@ -1,8 +1,10 @@
 import type { SettingsState, UpdateSettingCommand } from "./settings.types";
 import { normalizeDisplayScale, normalizeViewFontSize } from "./viewSettings";
+import { isRecommendationStyle, normalizeRecommendationStyle } from "../recommendations/recommendationStyle";
+import { isAppearancePreference, normalizeAppearancePreference, notifyAppearancePreference, viewSettingsStorageKey } from "../theme/appearancePreference";
 
-const viewSettingsStorageKey = "liteasy.view-settings.v1";
 const modelSettingsStorageKey = "liteasy.model-connection.v1";
+const recommendationSettingsStorageKey = "liteasy.recommendation-settings.v1";
 const modelSettingKeys = ["thin_reading.mode", "papers.metadata_provider", "papers.metadata_endpoint", "papers.mineru_mode", "papers.mineru_endpoint", "models.connection_mode", "models.direct_provider", "models.direct_endpoint", "models.direct_model", "models.direct_protocol", "models.direct_output_format"] as const;
 
 function loadPersistedModelSettings(): Partial<SettingsState> {
@@ -10,6 +12,15 @@ function loadPersistedModelSettings(): Partial<SettingsState> {
     const parsed = JSON.parse(globalThis.localStorage?.getItem(modelSettingsStorageKey) ?? "{}");
     return Object.fromEntries(modelSettingKeys.filter((key) => typeof parsed?.[key] === "string").map((key) => [key, parsed[key]]));
   } catch { return {}; }
+}
+
+function loadRecommendationStyle() {
+  try {
+    const parsed = JSON.parse(globalThis.localStorage?.getItem(recommendationSettingsStorageKey) ?? "{}");
+    return normalizeRecommendationStyle(parsed?.["network.recommendation.style"]);
+  } catch {
+    return "balanced" as const;
+  }
 }
 
 type DesktopRuntimeEnv = {
@@ -43,6 +54,7 @@ function loadPersistedViewSettings(): Partial<SettingsState> {
     if (!value) return {};
     const parsed = JSON.parse(value) as Partial<SettingsState>;
     return Object.fromEntries(Object.entries({
+      "view.theme": normalizeAppearancePreference(parsed["view.theme"]),
       "view.font_family": typeof parsed["view.font_family"] === "string" ? parsed["view.font_family"] : undefined,
       "view.font_size": normalizeViewFontSize(parsed["view.font_size"]),
       "view.display_scale": normalizeDisplayScale(parsed["view.display_scale"]),
@@ -63,6 +75,7 @@ function persistViewSettings(state: SettingsState) {
     globalThis.localStorage?.setItem(
       viewSettingsStorageKey,
       JSON.stringify({
+        "view.theme": state["view.theme"],
         "view.font_family": state["view.font_family"],
         "view.font_size": state["view.font_size"],
         "view.display_scale": state["view.display_scale"],
@@ -86,6 +99,7 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
     "papers.mineru_endpoint": "https://mineru.net",
     "network.recommendation.enabled": true,
     "network.recommendation.sort_mode": "relevance",
+    "network.recommendation.style": loadRecommendationStyle(),
     "assistant.public_audit.enabled": false,
     "profile.enabled": false,
     "assistant.default_output_mode": "mindmap",
@@ -104,6 +118,7 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
     "models.direct_protocol": "openai",
     "models.direct_output_format": "json_schema",
     ...loadPersistedModelSettings(),
+    "view.theme": "system",
     "view.font_family": '"Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", sans-serif',
     "view.font_size": "14",
     "view.display_scale": "100",
@@ -114,6 +129,12 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
 
   return {
     apply(command: UpdateSettingCommand) {
+      if (command.target === "view.theme" && !isAppearancePreference(command.value)) {
+        throw new Error("invalid_appearance_preference");
+      }
+      if (command.target === "network.recommendation.style" && !isRecommendationStyle(command.value)) {
+        throw new Error("invalid_recommendation_style");
+      }
       state[command.target] = (command.target === "view.display_scale"
         ? normalizeDisplayScale(command.value)
         : command.target === "view.font_size"
@@ -121,6 +142,16 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
           : command.value) as never;
       if (command.target.startsWith("view.")) {
         persistViewSettings(state);
+      }
+      if (command.target === "view.theme") {
+        notifyAppearancePreference(state["view.theme"]);
+      }
+      if (command.target === "network.recommendation.style") {
+        try {
+          globalThis.localStorage?.setItem(recommendationSettingsStorageKey, JSON.stringify({
+            "network.recommendation.style": state["network.recommendation.style"]
+          }));
+        } catch { /* The preference remains active for this session when storage is unavailable. */ }
       }
       if (modelSettingKeys.includes(command.target as typeof modelSettingKeys[number])) {
         try {

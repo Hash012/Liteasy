@@ -7,6 +7,12 @@ import type {
 const sideToolRegions: DockRegionId[] = ["left", "main", "right", "bottom"];
 
 export const dockItemRegistry: Record<DockItemId, DockItemDescriptor> = {
+  "document-reader": {
+    allowedRegions: sideToolRegions,
+    id: "document-reader",
+    preferredRegion: "main",
+    title: "阅读器",
+  },
   "artifact-library": {
     allowedRegions: sideToolRegions,
     id: "artifact-library",

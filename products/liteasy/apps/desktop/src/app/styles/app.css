@@ -686,11 +686,16 @@ body {
   white-space: nowrap;
 }
 
-.reader-pdf-toolbar button:hover,
-.reader-layout-button:hover {
+.reader-pdf-toolbar button:hover {
   border-color: rgba(27, 102, 179, 0.36);
   background: #e9f3ff;
   color: var(--accent-1);
+}
+
+.reader-layout-button:hover {
+  border-color: var(--line-1);
+  background: #f5f5f5;
+  color: var(--ink-2);
 }
 
 .reader-layout-controls {
@@ -700,7 +705,7 @@ body {
   gap: 6px;
 }
 
-.reader-layout-button.collapsed {
+.reader-layout-button.active {
   border-color: rgba(27, 102, 179, 0.42);
   background: #e9f3ff;
   color: var(--accent-1);
@@ -6015,8 +6020,13 @@ button.pdf-overlay-mark:focus-visible {
   writing-mode: horizontal-tb;
 }
 
-.activity-button.active,
 .activity-button:hover {
+  background: #f5f5f5;
+  color: #424242;
+}
+
+.activity-button.active,
+.activity-button.active:hover {
   border-color: transparent;
   background: #e0eefa;
   color: #0f6cbd;
@@ -6962,3 +6972,21 @@ button.pdf-overlay-mark:focus-visible {
 .assistant-suggestion-menu.commands .assistant-suggestion-main span {
   flex: 1;
 }
+
+.assistant-path-search { position: relative; }
+.assistant-path-candidates {
+  position: absolute; bottom: 100%; left: 0; right: 0; z-index: 20;
+  max-height: 280px; overflow-y: auto; padding: 4px;
+  background: #fff; border: 1px solid var(--line-1); border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .12);
+}
+.assistant-path-candidate {
+  display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left;
+  padding: 8px; background: #fff; color: #242424; border: 0; border-radius: 4px;
+  cursor: pointer; overflow-wrap: anywhere;
+}
+.assistant-path-candidate[aria-selected="true"] { background: #e0eefa; }
+.assistant-path-candidate span, .assistant-path-candidate small { color: #616161; }
+.assistant-path-candidate small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.assistant-thinking-depth { display: flex; flex-direction: column; width: 180px; max-width: 60%; margin-right: auto; font-size: 12px; }
+.assistant-thinking-labels { display: flex; justify-content: space-between; color: #616161; }

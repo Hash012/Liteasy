@@ -1,4 +1,41 @@
 import { createRecommendationClient } from "../app/features/recommendations/recommendationClient";
+import { expect, test, vi } from "vitest";
+
+test("sends style, bounds the seed set to the service limit, and forwards cancellation", async () => {
+  const transport = vi.fn(async (_request: unknown) => ({
+    json: async () => ({ recommendations: [] }), ok: true, status: 200
+  }));
+  const client = createRecommendationClient({ endpoint: "https://liteasy.example.com", transport });
+  const controller = new AbortController();
+  const selectedDocuments = Array.from({ length: 5 }, (_, index) => ({ id: `paper-${index}`, title: `Paper ${index}` }));
+  await client({ style: "frontier", signal: controller.signal, selectedDocuments, sessionId: "session" });
+  expect(transport).toHaveBeenCalledWith(expect.objectContaining({
+    signal: controller.signal,
+    body: JSON.stringify({ style: "frontier", selectedDocuments: selectedDocuments.slice(0, 3), sessionId: "session" })
+  }));
+  controller.abort();
+  await expect(client({ signal: controller.signal, selectedDocuments, sessionId: "session" })).rejects.toThrow();
+  expect(transport).toHaveBeenCalledTimes(1);
+});
+
+test("preserves actual publication metadata and refuses invalid ranking scores", async () => {
+  const candidate = {
+    discoveredAt: "2026-09-21T00:00:00Z", id: "paper", title: "Paper", relatedDocumentTitle: "Seed",
+    relevanceBand: "high", relevanceScore: 0.9, reason: "Related", source: "Crossref",
+    sourceKind: "live", sourceUrl: "https://doi.org/10.1234/paper", citationCount: 100,
+    publishedAt: "2016-04-01", rankingStyle: "classic", styleScore: 0.7,
+    scoreComponents: { finalScore: 0.85 }
+  };
+  const client = createRecommendationClient({ endpoint: "https://liteasy.example.com", transport: async () => ({
+    json: async () => ({ recommendations: [candidate] }), ok: true, status: 200
+  }) });
+  const input = { selectedDocuments: [], sessionId: "session" };
+  expect(await client(input)).toEqual([candidate]);
+  for (const finalScore of [NaN, Infinity, -1, 2]) {
+    candidate.scoreComponents.finalScore = finalScore;
+    await expect(client(input)).rejects.toThrow("关联推荐返回格式无效");
+  }
+});
 
 test("posts the selected document set to the cloud recommendation endpoint", async () => {
   const requests: Array<{ body: string; url: string }> = [];

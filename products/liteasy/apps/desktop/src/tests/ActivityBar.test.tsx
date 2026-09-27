@@ -4,6 +4,14 @@ import { describe, expect, test, vi } from "vitest";
 import { ActivityBar } from "../app/layout/ActivityBar";
 
 describe("ActivityBar", () => {
+  test("highlights only panels that are actually visible, including panels moved to another region", () => {
+    const { rerender } = render(<ActivityBar activeView="library" isViewVisible={() => false} onSelectView={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "文献库" })).not.toHaveClass("active");
+    expect(screen.getByRole("button", { name: "文献库" })).toHaveAttribute("aria-pressed", "false");
+    rerender(<ActivityBar activeView="library" isViewVisible={(view) => view === "settings"} onSelectView={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "设置" })).toHaveClass("active");
+    expect(screen.getByRole("button", { name: "文献库" })).not.toHaveClass("active");
+  });
   test("offers independent Agent and help entries after their dock tabs are closed", async () => {
     const user = userEvent.setup();
     const onOpenAgent = vi.fn();

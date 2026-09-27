@@ -5528,7 +5528,8 @@ mod webdav_recovery_tests {
                 .as_nanos()
         ));
         fs::create_dir_all(&root).unwrap();
-        root
+        // Production library_root() always supplies a canonical path.
+        root.canonicalize().unwrap()
     }
     #[test]
     fn webdav_recovers_identity_after_file_publish_before_index_commit() {

@@ -22,6 +22,7 @@ type ActivityBarProps = {
   onOpenHelp?: () => void;
   layoutControls?: ReactNode;
   activeView: LeftRailView;
+  isViewVisible?: (view: LeftRailView) => boolean;
   accountSessionAvailable?: boolean;
   onToggleActiveView?: (view: LeftRailView) => void;
   onSelectView: (view: LeftRailView) => void;
@@ -48,12 +49,14 @@ export function ActivityBar({
   onOpenHelp,
   layoutControls,
   activeView,
+  isViewVisible = (view) => view === activeView,
   accountSessionAvailable = true,
   onToggleActiveView,
   onSelectView,
 }: ActivityBarProps) {
   return (
     <nav aria-label="左边栏导航" className="activity-bar">
+
       {activityItems.map((item) => (
         <Tooltip
           content={item.label}
@@ -64,8 +67,9 @@ export function ActivityBar({
           <Button
             appearance="subtle"
             aria-label={item.label}
+            aria-pressed={isViewVisible(item.view)}
             className={
-              activeView === item.view
+              isViewVisible(item.view)
                 ? "activity-button active"
                 : "activity-button"
             }

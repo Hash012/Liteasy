@@ -1,3 +1,4 @@
+import { thinkingDepthInstruction } from "../../features/assistant/thinkingDepth";
 import type {
   AgentPublicApi,
   AgentExecutionRuntime,
@@ -58,7 +59,7 @@ import {
 } from "./agentApplicationService";
 
 import { runArtifactAuthoring } from "../../features/artifact-workflow/runArtifactAuthoring";
-import { contextSnapshotPrompt, type ContextSnapshot } from "../../features/context/objectContext";
+import { contextEntryText, contextSnapshotImages, contextSnapshotPrompt, type ContextSnapshot } from "../../features/context/objectContext";
 import { createModelGatewayFromSettings } from "../../features/models/modelRuntime";
 import { getActiveModelProvider, getModelForSettings } from "../../features/models/modelPolicy";
 
@@ -154,8 +155,8 @@ async function executeKnowledgeTurn(
     throw new Error("Command turns cannot use the knowledge executor");
   }
   const artifactType = override?.artifactType ?? request.input.artifactType;
-  const question = override?.question ?? request.input.message;
-  const author = async (source: string, evidenceIds: string[]) => {
+  const question = [request.input.thinkingDepth ? thinkingDepthInstruction(request.input.thinkingDepth) : "", override?.question ?? request.input.message].filter(Boolean).join("\n\n");
+  const author = async (source: string, evidenceIds: string[], images?: Awaited<ReturnType<typeof contextSnapshotImages>>) => {
     if (artifactType !== "ppt" && artifactType !== "tree") throw new Error("当前资源尚不支持这种产物格式。");
     const settings = environment.knowledge.settings;
     const gateway = createModelGatewayFromSettings(settings, { cloudTransport: environment.knowledge.modelTransport });
@@ -163,7 +164,7 @@ async function executeKnowledgeTurn(
     input.reportManagerActivity({ activityId, kind: "handoff", label: "创作结构化内容", status: "running", detail: "正在依据来源编写并校验可保存的内容。" });
     try {
       const result = await runArtifactAuthoring({ artifactType, instruction: question, source, evidenceIds, signal,
-        generate: (authorRequest) => gateway.generateAnswer({ ...authorRequest, model: getModelForSettings(settings), provider: getActiveModelProvider(settings) })
+        generate: (authorRequest) => gateway.generateAnswer({ ...authorRequest, ...(images?.length ? { images } : {}), model: getModelForSettings(settings), provider: getActiveModelProvider(settings) })
       });
       input.reportManagerActivity({ activityId, kind: "handoff", label: "内容校验通过", status: "completed", detail: "内容已交回生成任务，等待资源保存。" });
       return result;
@@ -174,17 +175,23 @@ async function executeKnowledgeTurn(
   };
   if (input.context.objectSnapshot) {
     const snapshot = input.context.objectSnapshot;
+    const images = await contextSnapshotImages(snapshot);
+    const coverageItems = snapshot.entries.flatMap((entry) => entry.coverage ? [{ title: entry.title,
+      status: entry.coverage.status, includedCharacters: entry.coverage.includedCharacters, totalCharacters: entry.coverage.totalCharacters }] : []);
+    const contextCoverage = coverageItems.length ? { total: coverageItems.length,
+      full: coverageItems.filter((entry) => entry.status === "full").length,
+      partial: coverageItems.filter((entry) => entry.status === "partial").length,
+      omitted: coverageItems.filter((entry) => entry.status === "omitted").length, items: coverageItems } : undefined;
     const paperAnchors = collectPaperAnchors(...snapshot.entries.map((entry) => entry.paperAnchors ?? []));
     const resourceSnapshot = { snapshotId: snapshot.snapshotId, scopeId: snapshot.scopeId,
       entries: snapshot.entries.map(({ text: _text, ...entry }) => entry) };
     if (artifactType) {
       const ids = snapshot.entries.map((entry, index) => "objectId" in entry.ref
         ? `${entry.ref.objectId}@${entry.ref.revision}` : `context-${index + 1}`);
-      const source = snapshot.entries.map((entry, index) => `[${ids[index]}] ${entry.title} (${entry.trustLabel})\n${entry.text}`).join("\n\n");
-      const anchorSource = paperAnchors.map((anchor) => `[${anchor.evidenceIds.join(",")}] ${anchor.presentation.title} · ${anchor.presentation.location}\n${anchor.snapshot.quote}`).join("\n\n");
-      const result = await author([source, anchorSource].filter(Boolean).join("\n\n"), [...new Set([...ids, ...paperAnchors.flatMap((anchor) => anchor.evidenceIds)])]);
+      const source = snapshot.entries.map((entry, index) => `[${ids[index]}] ${entry.title} (${entry.trustLabel})${contextEntryText(entry)}`).join("\n\n");
+      const result = await author(source, [...new Set([...ids, ...paperAnchors.flatMap((anchor) => anchor.evidenceIds)])], images);
       return { message: result.message, metadata: JSON.parse(JSON.stringify({ authoredArtifact: result.authoredArtifact, paperAnchors,
-        resourceSnapshot
+        resourceSnapshot, contextCoverage
       })) };
     }
     const settings = environment.knowledge.settings;
@@ -192,7 +199,8 @@ async function executeKnowledgeTurn(
     const result = await gateway.generateAnswer({
       model: getModelForSettings(settings),
       provider: getActiveModelProvider(settings),
-      prompt: contextSnapshotPrompt(input.context.objectSnapshot, request.input.message),
+      prompt: contextSnapshotPrompt(input.context.objectSnapshot, question),
+      ...(images.length ? { images } : {}),
       requireLive: true,
       signal
     });
@@ -201,7 +209,7 @@ async function executeKnowledgeTurn(
       citations: paperAnchors.flatMap((anchor) => anchor.locator.page ? [{
         paperAnchor: anchor, paperId: anchor.source.paperId, page: anchor.locator.page, snippet: anchor.snapshot.quote,
       }] : []),
-      metadata: JSON.parse(JSON.stringify({ paperAnchors, resourceSnapshot })),
+      metadata: JSON.parse(JSON.stringify({ paperAnchors, resourceSnapshot, contextCoverage })),
     };
   }
   const answer = await generateAssistantAnswer({

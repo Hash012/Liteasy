@@ -176,6 +176,11 @@ export function AssistantMessageList({
               ) : message.artifactTask && ["failed", "cancelled"].includes(message.artifactTask.status) && onResumeArtifactTask ? (
                 <ResumeReadingButton onResume={() => onResumeArtifactTask(message.artifactTask!.id)} />
               ) : null}
+              {message.contextCoverage ? <details className="assistant-context-coverage">
+                <summary>本轮读取范围：{message.contextCoverage.full} 项完整读取{message.contextCoverage.partial ? `，${message.contextCoverage.partial} 项选段` : ""}{message.contextCoverage.omitted ? `，${message.contextCoverage.omitted} 项未覆盖` : ""}</summary>
+                {message.contextCoverage.partial || message.contextCoverage.omitted ? <p>本轮回答基于已读取内容，不能视为对全部资料的完整审阅。可选择具体页面或缩小范围继续提问。</p> : null}
+                <ul>{message.contextCoverage.items.map((item, index) => <li key={index}>{item.title} · {{ full: "完整", partial: "部分", omitted: "未读取" }[item.status]}（{item.includedCharacters.toLocaleString()} / {item.totalCharacters.toLocaleString()} 字符）</li>)}</ul>
+              </details> : null}
               {message.content &&
               (!message.uiDsl || message.citations?.length || message.audit || message.executionTrace) ? (
                 message.role === "assistant" ? (

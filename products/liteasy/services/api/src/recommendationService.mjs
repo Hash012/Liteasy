@@ -1,4 +1,5 @@
 import { LibraryRepositoryError } from "./libraryRepository.mjs";
+import { diverseRecommendations, recommendationStyle, score, similarity, styleEvidence, titleKey } from "./recommendationRanking.mjs";
 
 const profileLimits = { datasets: 12, languages: 6, methods: 12, topics: 12 };
 
@@ -54,36 +55,27 @@ function pdfGrantInput(value) {
   return { candidateId: value.candidateId };
 }
 
-function tokens(value) {
-  const normalized = normalizedText(value).toLocaleLowerCase("en-US");
-  const latin = normalized.match(/[a-z0-9][a-z0-9-]{1,}/g) ?? [];
-  const chineseRuns = normalized.match(/[\u4e00-\u9fff]{2,}/g) ?? [];
-  return [...new Set([...latin, ...chineseRuns.flatMap((run) =>
-    Array.from({ length: run.length - 1 }, (_, index) => run.slice(index, index + 2))
-  )])];
-}
-
-function similarity(left, right) {
-  const leftTokens = tokens(left);
-  const rightTokens = new Set(tokens(right));
-  if (leftTokens.length === 0 || rightTokens.size === 0) return 0;
-  return leftTokens.filter((token) => rightTokens.has(token)).length /
-    Math.max(1, Math.min(leftTokens.length, rightTokens.size));
-}
-
 function band(score) {
   return score >= 0.75 ? "high" : score >= 0.45 ? "medium" : "low";
 }
 
+function documentIdentity(value) {
+  const normalized = value.toLowerCase().replace(/^reading-candidate:/, "")
+    .replace(/^https?:\/\/(?:dx\.)?doi\.org\//, "doi:");
+  return /^10\.\d{4,9}\/\S+$/.test(normalized) ? `doi:${normalized}` : normalized;
+}
+
 export class RecommendationService {
-  constructor(repository, provider, pdfGrantRepository) {
+  constructor(repository, provider, pdfGrantRepository, dependencies = {}) {
     this.repository = repository;
     this.provider = provider;
     this.pdfGrantRepository = pdfGrantRepository;
+    this.now = dependencies.now ?? (() => new Date());
   }
 
   async generate(subject, input) {
     const selectedDocuments = documents(input.selectedDocuments);
+    const style = recommendationStyle(input.style);
     const requestedProfile = profile(input.researchProfile);
     const context = await this.repository.context(subject);
     const researchProfile = context.enabled ? requestedProfile : undefined;
@@ -97,21 +89,35 @@ export class RecommendationService {
     const personalizedQueries = context.enabled
       ? context.terms.slice(0, 3).map((item) => ({ label: `tag:${item.term}`, query: item.term }))
       : [];
-    const queryGroups = [...explicitQueries, ...personalizedQueries];
+    const seenQueries = new Set();
+    const queryGroups = [...explicitQueries, ...personalizedQueries].filter((group) => {
+      const key = titleKey(group.query);
+      if (seenQueries.has(key)) return false;
+      seenQueries.add(key);
+      return true;
+    }).slice(0, 5);
     if (queryGroups.length === 0) return { recommendations: [] };
-    const settled = await Promise.allSettled(queryGroups.map(async (group) => ({
-      ...group,
-      candidates: await this.provider.search(group.query, 8)
-    })));
+    // At most five distinct queries, two active query groups and three provider lanes per group.
+    const settled = [];
+    for (let index = 0; index < queryGroups.length; index += 2) {
+      settled.push(...await Promise.allSettled(queryGroups.slice(index, index + 2).map(async (group) => ({
+        ...group,
+        candidates: await this.provider.search(group.query, 12, { style })
+      }))));
+    }
     const completed = settled.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
     if (completed.length === 0) throw settled[0].reason;
-    const selectedTitles = selectedDocuments.map((document) => document.title);
+    const selectedTitles = new Set(selectedDocuments.map((document) => titleKey(document.title)));
+    const selectedIds = new Set(selectedDocuments.map((document) => documentIdentity(document.id)));
     const suppressed = new Set(context.suppressions);
     const candidates = new Map();
-    const now = new Date().toISOString();
+    const timestamp = this.now();
+    const now = timestamp.toISOString();
     for (const group of completed) {
       for (const source of group.candidates) {
-        if (suppressed.has(source.id) || selectedTitles.some((title) => similarity(title, source.title) >= 0.96)) continue;
+        if (suppressed.has(source.id) || selectedTitles.has(titleKey(source.title)) ||
+          selectedIds.has(source.canonicalId ? documentIdentity(source.canonicalId) : undefined) ||
+          selectedIds.has(documentIdentity(source.id))) continue;
         const lexical = similarity(group.query, source.title);
         const termRelevance = context.enabled
           ? Math.max(0, ...context.terms.map((term) => similarity(term.term, source.title) * Math.min(1, term.weight / 3)))
@@ -121,42 +127,61 @@ export class RecommendationService {
             .filter((feedback) => feedback.action === "saved")
             .map((feedback) => similarity(feedback.title, source.title)))
           : 0;
-        const providerRelevance = Math.max(0.2, 1 - (source.providerRank - 1) * 0.08);
+        // Citation-sorted position is not topical relevance. Require actual title overlap
+        // from every lane so a popular, off-topic result cannot win on date/citations.
+        if (lexical < 0.12) continue;
+        const providerRelevance = source.retrievalLane === "classic" ? 0.5
+          : Math.max(0.2, 1 - (source.providerRank - 1) * 0.04);
         const preference = Math.max(termRelevance, feedbackRelevance);
-        const score = Number(Math.min(1, providerRelevance * 0.62 + lexical * 0.28 + preference * 0.1).toFixed(3));
+        const relevance = score(providerRelevance * 0.25 + lexical * 0.65 + preference * 0.1);
+        const evidence = styleEvidence(source, style, timestamp);
+        const styleWeight = style === "frontier" || style === "classic" ? 0.3 : style === "balanced" ? 0.18 : 0;
+        // Style evidence can reorder related work, but its contribution scales with
+        // topical relevance; citations/recency alone cannot lift a weak title match.
+        const finalScore = score(relevance * (1 - styleWeight + evidence.styleScore * styleWeight));
         const item = {
           ...(source.authors.length ? { authors: source.authors } : {}),
           canonicalId: source.canonicalId,
+          ...(Number.isSafeInteger(source.citationCount) && source.citationCount >= 0
+            ? { citationCount: source.citationCount } : {}),
           discoveredAt: now,
           ...(source.fullTextUrl ? { fullTextUrl: source.fullTextUrl } : {}),
           id: source.id,
           ...(source.openAccessAvailable ? { openAccessAvailable: true } : {}),
           ...(source.publishedYear ? { publishedYear: source.publishedYear } : {}),
+          ...(source.publishedAt ? { publishedAt: source.publishedAt } : {}),
+          rankingStyle: style,
           relatedDocumentTitle: group.label,
-          relevanceBand: band(score),
-          relevanceScore: score,
-          reason: `Crossref 书目数据中与“${group.label}”相关的真实文献候选；请通过 DOI 来源页核对正文与结论。`,
+          relevanceBand: band(relevance),
+          relevanceScore: relevance,
+          reason: `与“${group.label}”主题相关；${evidence.explanation}。请通过 DOI 来源页核对正文与结论。`,
           scoreComponents: {
-            baseRelevance: score,
+            baseRelevance: relevance,
             diversityPenalty: 0,
-            finalScore: score,
+            finalScore,
             lexicalRelevance: Number(lexical.toFixed(3)),
             preference: Number(preference.toFixed(3)),
             providerRelevance: Number(providerRelevance.toFixed(3)),
-            sourceRelevance: score
+            sourceRelevance: relevance
           },
+          styleScore: evidence.styleScore,
           source: source.source,
           sourceKind: "live",
           sourceUrl: source.sourceUrl,
           title: source.title
         };
-        const existing = candidates.get(item.id);
-        if (!existing || item.relevanceScore > existing.relevanceScore) candidates.set(item.id, item);
+        const key = item.canonicalId?.toLowerCase() ?? item.id;
+        const existing = candidates.get(key);
+        if (!existing || item.relevanceScore > existing.relevanceScore) candidates.set(key, item);
       }
     }
-    const recommendations = [...candidates.values()]
-      .sort((left, right) => right.relevanceScore - left.relevanceScore || left.title.localeCompare(right.title))
-      .slice(0, 8);
+    const uniqueTitles = new Map();
+    for (const item of candidates.values()) {
+      const key = titleKey(item.title);
+      const existing = uniqueTitles.get(key);
+      if (!existing || item.relevanceScore > existing.relevanceScore) uniqueTitles.set(key, item);
+    }
+    const recommendations = diverseRecommendations([...uniqueTitles.values()], style);
     await this.repository.saveCandidates(subject, recommendations, input.traceId);
     return {
       recommendations: recommendations.map(({ fullTextUrl: _, ...item }) => item)

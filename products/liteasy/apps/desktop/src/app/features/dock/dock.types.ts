@@ -3,6 +3,7 @@ export type DockRegionId = DockBaseRegionId | `bar-${string}`;
 
 export type DockItemId =
   | "library"
+  | "document-reader"
   | "artifact-library"
   | "organization"
   | "profile"

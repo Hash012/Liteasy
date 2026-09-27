@@ -163,6 +163,9 @@ function errorMessage(code) {
     model_policy_not_configured: "The model policy is not configured.",
     model_policy_revision_conflict: "The model policy changed. Refresh it and retry.",
     model_not_allowed: "The requested model is not enabled by the current deployment.",
+    model_images_invalid: "Image inputs must be valid PNG, JPEG, GIF or WebP images; select at most 12 images.",
+    model_images_too_large: "Image inputs exceed 5 MB. Add fewer images and retry.",
+    model_images_unsupported: "The configured model provider does not support image input. Select a model connection that supports images.",
     model_output_format_invalid: "The requested structured output format is invalid.",
     model_output_format_too_large: "The requested structured output format is too large.",
     model_prompt_invalid: "Enter a valid prompt and retry.",
@@ -197,6 +200,7 @@ function errorMessage(code) {
     recommendation_cache_scope_invalid: "The recommendation cache scope is invalid. Refresh and retry.",
     recommendation_documents_invalid: "Select up to three valid documents and retry.",
     recommendation_feedback_invalid: "The recommendation feedback is invalid.",
+    recommendation_style_invalid: "Select a valid recommendation style and retry.",
     recommendation_provider_response_invalid: "The literature provider returned an invalid response. Retry later.",
     recommendation_provider_timeout: "The literature provider timed out. Retry later.",
     recommendation_provider_unavailable: "The literature provider is temporarily unavailable. Retry later.",
@@ -460,7 +464,7 @@ export function createCloudRequestHandler(runtime, config) {
           request.headers.authorization,
           "liteasy-desktop"
         );
-        const body = await readJsonBody(request);
+        const body = await readJsonBody(request, 8 * 1024 * 1024);
         const controller = new AbortController();
         request.once("aborted", () => controller.abort());
         const context = {

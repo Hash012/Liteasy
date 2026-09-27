@@ -1,8 +1,11 @@
-import { useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
-import { Tooltip } from "@fluentui/react-components";
-import { MicRegular, SendRegular } from "@fluentui/react-icons";
+import "../models/assistantModelPicker.css";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { Button, Popover, PopoverSurface, PopoverTrigger, Slider, Tooltip } from "@fluentui/react-components";
+import { thinkingDepths, thinkingDepthLabels, type ThinkingDepth } from "./thinkingDepth";
+import { AddRegular, BrainCircuitRegular, FlashRegular, GridRegular, MicRegular, SendRegular } from "@fluentui/react-icons";
 import type { AssistantComposerSuggestion, AssistantContextToken } from "./assistant.types";
-import { createAssistantSuggestionIndex } from "./assistantSuggestionIndex";
+import { createAssistantSuggestionIndex, getAssistantReadOnlyLabel } from "./assistantSuggestionIndex";
+import { ContextAssetBrowser } from "./ContextAssetBrowser";
 
 const emptySuggestions: AssistantComposerSuggestion[] = [];
 
@@ -14,8 +17,12 @@ type ActiveTrigger = {
 };
 
 type AssistantComposerProps = {
+  modelPicker?: ReactNode;
+  thinkingDepth?: ThinkingDepth;
+  onThinkingDepthChange?: (depth: ThinkingDepth) => void;
   contextTokens?: AssistantContextToken[];
   contextLoading?: boolean;
+  contextScopeId?: string;
   editing?: boolean;
   input: string;
   inputRef?: RefObject<HTMLTextAreaElement>;
@@ -24,7 +31,7 @@ type AssistantComposerProps = {
   onAddContextToken?: (token: AssistantContextToken) => void;
   onInputChange: (value: string) => void;
   onPasteLiteasyPath?: (path: string) => void;
-  onResolveContextToken?: (resolve: () => Promise<AssistantContextToken>) => void;
+  onResolveContextToken?: (resolve: () => Promise<AssistantContextToken>) => void | Promise<boolean | void>;
   onRemoveContextToken?: (tokenId: string) => void;
   onSend: () => void;
   onVoiceInput: () => void;
@@ -46,8 +53,12 @@ function getActiveTrigger(input: string, caret: number): ActiveTrigger | null {
 
 
 export function AssistantComposer({
+  modelPicker,
+  thinkingDepth = "balanced",
+  onThinkingDepthChange,
   contextTokens = [],
   contextLoading = false,
+  contextScopeId,
   editing = false,
   input,
   inputRef,
@@ -70,6 +81,8 @@ export function AssistantComposer({
   const [caret, setCaret] = useState(input.length);
   const [activeIndex, setActiveIndex] = useState(0);
   const [dismissed, setDismissed] = useState(false);
+  const [browserQuery, setBrowserQuery] = useState<string | null>(null);
+  useEffect(() => { setBrowserQuery(null); }, [contextScopeId]);
   useEffect(() => { setDismissed(false); setActiveIndex(0); }, [input]);
   useEffect(() => {
     document.getElementById(`${menuId}-${activeIndex}`)?.scrollIntoView?.({ block: "nearest" });
@@ -94,9 +107,25 @@ export function AssistantComposer({
   const visibleSuggestions = activeTrigger
     ? suggestionIndex.search(activeTrigger.trigger, activeTrigger.query)
     : emptySuggestions;
+  const showBrowseEntry = activeTrigger?.trigger === "@";
+  const menuItemCount = visibleSuggestions.length + (showBrowseEntry ? 1 : 0);
+
+  function openAssetBrowser() {
+    setBrowserQuery(activeTrigger?.trigger === "@" ? activeTrigger.query.trim() : "");
+    if (activeTrigger?.trigger === "@") {
+      onInputChange(`${input.slice(0, activeTrigger.start)}${input.slice(activeTrigger.end)}`.replace(/\s{2,}/g, " "));
+    }
+    setDismissed(true);
+  }
+
+  function selectMenuItem() {
+    const index = Math.min(activeIndex, menuItemCount - 1);
+    if (index === visibleSuggestions.length && showBrowseEntry) openAssetBrowser();
+    else if (visibleSuggestions[index]) selectSuggestion(visibleSuggestions[index]);
+  }
 
   function selectSuggestion(suggestion: AssistantComposerSuggestion) {
-    if (!activeTrigger) {
+    if (!activeTrigger || suggestion.unavailableReason) {
       return;
     }
 
@@ -152,16 +181,17 @@ export function AssistantComposer({
           ))}
         </div>
       ) : null}
-      {visibleSuggestions.length > 0 ? (
+      {menuItemCount > 0 ? (
         <div aria-label="输入候选" id={menuId} role="group" className={`assistant-suggestion-menu${activeTrigger?.trigger === "/" ? " commands" : ""}`}>
           {visibleSuggestions.map((suggestion, index) => (
             <button
               className={`assistant-suggestion-item${index === activeIndex ? " active" : ""}`}
               id={`${menuId}-${index}`}
               aria-current={index === activeIndex}
+              aria-disabled={Boolean(suggestion.unavailableReason)}
               onMouseMove={() => setActiveIndex(index)}
               key={suggestion.id}
-              title={`${suggestion.label}${suggestion.detail ? ` · ${suggestion.detail}` : ""}`}
+              title={[suggestion.label, suggestion.projectTitle, suggestion.description, suggestion.unavailableReason, suggestion.detail].filter(Boolean).join(" · ")}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => selectSuggestion(suggestion)}
               type="button"
@@ -169,10 +199,21 @@ export function AssistantComposer({
               <span className="assistant-suggestion-trigger">{suggestion.trigger}</span>
               <span className="assistant-suggestion-main">
                 <strong>{suggestion.label}</strong>
+                {suggestion.trigger === "@" && (suggestion.category || suggestion.projectTitle || suggestion.readOnly) ?
+                  <span className="assistant-suggestion-metadata">{[suggestion.category, suggestion.projectTitle,
+                    getAssistantReadOnlyLabel(suggestion)].filter(Boolean).join(" · ")}</span> : null}
+                {suggestion.unavailableReason || suggestion.description ? <span>{suggestion.unavailableReason ?? suggestion.description}</span> : null}
                 {suggestion.detail ? <span>{suggestion.detail}</span> : null}
               </span>
             </button>
           ))}
+          {showBrowseEntry ? <>
+            {!visibleSuggestions.length ? <p className="assistant-suggestion-empty">没有找到匹配项，可打开资产浏览器按类别和项目查找。</p> : null}
+            <Button className={`assistant-suggestion-browse${activeIndex === visibleSuggestions.length ? " active" : ""}`}
+              id={`${menuId}-${visibleSuggestions.length}`} aria-current={activeIndex === visibleSuggestions.length}
+              icon={<GridRegular />} onMouseMove={() => setActiveIndex(visibleSuggestions.length)}
+              onMouseDown={(event) => event.preventDefault()} onClick={openAssetBrowser}>浏览全部资产</Button>
+          </> : null}
         </div>
       ) : null}
       <div className="assistant-input-editor">
@@ -193,25 +234,25 @@ export function AssistantComposer({
           }
         }}
         ref={editorRef}
-        aria-controls={visibleSuggestions.length ? menuId : undefined}
-        aria-expanded={visibleSuggestions.length > 0}
-        aria-activedescendant={visibleSuggestions.length ? `${menuId}-${Math.min(activeIndex, visibleSuggestions.length - 1)}` : undefined}
+        aria-controls={menuItemCount ? menuId : undefined}
+        aria-expanded={menuItemCount > 0}
+        aria-activedescendant={menuItemCount ? `${menuId}-${Math.min(activeIndex, menuItemCount - 1)}` : undefined}
         onChange={(event) => {
           setCaret(event.target.selectionStart);
           onInputChange(event.target.value);
         }}
         onSelect={(event) => { setCaret(event.currentTarget.selectionStart); }}
         onKeyDown={(event) => {
-          if (visibleSuggestions.length && !event.nativeEvent.isComposing) {
+          if (menuItemCount && !event.nativeEvent.isComposing) {
             if (event.key === "Escape") { event.preventDefault(); setDismissed(true); return; }
             if (event.key === "ArrowDown" || event.key === "ArrowUp") {
               event.preventDefault();
-              setActiveIndex((current) => (current + (event.key === "ArrowDown" ? 1 : -1) + visibleSuggestions.length) % visibleSuggestions.length);
+              setActiveIndex((current) => (current + (event.key === "ArrowDown" ? 1 : -1) + menuItemCount) % menuItemCount);
               return;
             }
             if (event.key === "Tab") {
               event.preventDefault();
-              selectSuggestion(visibleSuggestions[Math.min(activeIndex, visibleSuggestions.length - 1)]);
+              selectMenuItem();
               return;
             }
           }
@@ -230,10 +271,10 @@ export function AssistantComposer({
             event.key === "Enter" &&
             !event.shiftKey &&
             !event.nativeEvent.isComposing &&
-            visibleSuggestions.length > 0
+            menuItemCount > 0
           ) {
             event.preventDefault();
-            selectSuggestion(visibleSuggestions[Math.min(activeIndex, visibleSuggestions.length - 1)]);
+            selectMenuItem();
             return;
           }
 
@@ -251,6 +292,28 @@ export function AssistantComposer({
       />
       </div>
       <div className="assistant-composer-actions">
+        {modelPicker}
+        <Tooltip content="按类别和项目浏览资料，组合添加到上下文" relationship="description">
+          <Button appearance="subtle" className="assistant-add-context" icon={<AddRegular />} onClick={openAssetBrowser}>添加上下文</Button>
+        </Tooltip>
+        {onThinkingDepthChange ? <Popover positioning="above" trapFocus>
+          <PopoverTrigger disableButtonEnhancement>
+            <Tooltip content={`思考深度：${thinkingDepthLabels[thinkingDepth]}`} relationship="description">
+              <Button aria-label={`调整思考深度：${thinkingDepthLabels[thinkingDepth]}`} appearance="subtle"
+                className="assistant-thinking-trigger" icon={thinkingDepth === "quick" ? <FlashRegular /> : <BrainCircuitRegular />} />
+            </Tooltip>
+          </PopoverTrigger>
+          <PopoverSurface aria-label="思考深度设置" className="assistant-thinking-popover">
+            <div className="assistant-thinking-depth">
+              <strong>思考深度 · {thinkingDepthLabels[thinkingDepth]}</strong>
+              <Slider aria-label="思考深度" aria-valuetext={thinkingDepthLabels[thinkingDepth]} min={0} max={2} step={1}
+                value={thinkingDepths.indexOf(thinkingDepth)}
+                onChange={(_, data) => onThinkingDepthChange(thinkingDepths[data.value])} />
+              <div className="assistant-thinking-labels"><span>快速</span><span>均衡</span><span>熟虑</span></div>
+              <p className="assistant-thinking-description">快速优先简洁回应；熟虑加强分析与核验，通常需要更长时间。</p>
+            </div>
+          </PopoverSurface>
+        </Popover> : null}
         <Tooltip content="语音输入（预留）" positioning="above" relationship="description">
           <button
             aria-label="语音输入（预留）"
@@ -275,6 +338,9 @@ export function AssistantComposer({
           </button>
         </Tooltip>
       </div>
+      {browserQuery !== null ? <ContextAssetBrowser key={contextScopeId} suggestions={suggestions} contextTokens={contextTokens}
+        initialQuery={browserQuery} onAddContextToken={onAddContextToken} onResolveContextToken={onResolveContextToken}
+        onClose={() => { setBrowserQuery(null); editorRef.current?.focus(); }} /> : null}
     </div>
   );
 }

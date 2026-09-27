@@ -710,6 +710,9 @@ export function createAgentApplicationService(
           "idempotencyKey and input.message must be non-empty"
         );
       }
+      if (request.input.thinkingDepth !== undefined && !["quick", "balanced", "deliberate"].includes(request.input.thinkingDepth)) {
+        return apiError("invalid_request", "Unsupported thinking depth");
+      }
 
       if (request.contextRefs) {
         try {
@@ -733,6 +736,7 @@ export function createAgentApplicationService(
         if (
           existingRun.input.message !== request.input.message ||
           existingRun.input.mode !== request.input.mode ||
+          existingRun.input.thinkingDepth !== request.input.thinkingDepth ||
           existingRun.input.artifactType !== request.input.artifactType ||
           JSON.stringify(existingRun.contextRefs) !== JSON.stringify(request.contextRefs) ||
           existingRun.contextPurpose !== request.contextPurpose ||

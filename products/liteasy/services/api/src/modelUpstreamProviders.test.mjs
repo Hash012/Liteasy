@@ -92,3 +92,31 @@ test("keeps raw upstream errors inside the server boundary", async () => {
     }
   );
 });
+
+test("supplies actual image data URLs to OpenAI Responses in normal and streaming requests", async () => {
+  const bodies = [];
+  const image = { mediaType: "image/png", base64: "cHJpdmF0ZQ==", label: "Figure 1" };
+  const providers = createModelUpstreamProviders(config(), { fetchImpl: async (_url, init) => {
+    const body = JSON.parse(init.body);
+    bodies.push(body);
+    return body.stream ? new Response('data: {"type":"response.output_text.delta","delta":"Result"}\n\n')
+      : new Response(JSON.stringify({ output_text: "Result" }));
+  } });
+  await providers.openai.generate({ prompt: "Analyze", images: [image] });
+  for await (const _delta of providers.openai.stream({ prompt: "Analyze", images: [image] })) { /* consume */ }
+  assert.equal(bodies.length, 2);
+  for (const body of bodies) assert.deepEqual(body.input, [{ role: "user", content: [
+    { type: "input_text", text: "Analyze" }, { type: "input_text", text: "Figure 1" },
+    { type: "input_image", image_url: "data:image/png;base64,cHJpdmF0ZQ==" },
+  ] }]);
+});
+
+test("rejects image input on the text-only provider before upstream access", async () => {
+  let fetched = false;
+  const providers = createModelUpstreamProviders(config({ deepseek: { model: "text", apiKey: "unused", baseUrl: "https://example.test" } }), {
+    fetchImpl: async () => { fetched = true; throw new Error("should not reach upstream"); },
+  });
+  await assert.rejects(providers.deepseek.generate({ prompt: "Analyze", images: [{ mediaType: "image/png", base64: "aW1hZ2U=", label: "image" }] }),
+    { code: "model_images_unsupported" });
+  assert.equal(fetched, false);
+});

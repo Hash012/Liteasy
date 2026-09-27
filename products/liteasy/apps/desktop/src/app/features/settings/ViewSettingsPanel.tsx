@@ -2,6 +2,8 @@ import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import { Button, Tooltip, Field, Input, Option, Radio, RadioGroup, Dropdown } from "@fluentui/react-components";
 import type { SettingsState, UpdateSettingCommand } from "./settings.types";
 import { isHexColor, normalizeDisplayScale, pdfBackgroundPresets, viewDisplayScaleOptions, viewFontOptions, viewFontSizeOptions } from "./viewSettings";
+import { normalizeAppearancePreference } from "../theme/appearancePreference";
+import { DarkThemeRegular, WeatherSunnyRegular, DesktopRegular } from "@fluentui/react-icons";
 
 type ViewSettingsPanelProps = {
   onUpdateSetting?: (command: UpdateSettingCommand) => void;
@@ -28,6 +30,19 @@ export function ViewSettingsPanel({ onUpdateSetting, settings }: ViewSettingsPan
 
   return (
     <div aria-label="View 显示设置" className="view-settings-panel">
+      <Field label="外观" hint="跟随系统自动切换，或选定你喜欢的外观。">
+        <RadioGroup
+          aria-label="外观"
+          className="appearance-options"
+          value={normalizeAppearancePreference(settings?.["view.theme"])}
+          onChange={(_, data) => update("view.theme", data.value)}
+        >
+          <Radio value="system" label={<span><DesktopRegular aria-hidden="true" />跟随系统</span>} />
+          <Radio value="light" label={<span><WeatherSunnyRegular aria-hidden="true" />浅色</span>} />
+          <Radio value="dark" label={<span><DarkThemeRegular aria-hidden="true" />深色</span>} />
+        </RadioGroup>
+      </Field>
+
       <Field label={<span>界面字体 {workbench ? <Tooltip content="解释此设置" relationship="description"><Button size="small" appearance="subtle" onClick={() => workbench.explain({ type: "setting", key: "view.font_family" })}>解释</Button></Tooltip> : null}</span>}>
         <Dropdown
           aria-label="界面字体"

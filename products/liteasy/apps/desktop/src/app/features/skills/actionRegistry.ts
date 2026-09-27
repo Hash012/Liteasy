@@ -1,6 +1,7 @@
 import type { ArtifactType } from "../artifacts/artifact.types";
 import type { ActionRiskLevel } from "../resources/resourceActionPolicy";
 import { settingsRegistry } from "../settings/settingsRegistry";
+import { normalizeRecommendationStyle, recommendationStyles } from "../recommendations/recommendationStyle";
 import type { UpdateSettingCommand } from "../settings/settings.types";
 import {
   parseGeneratedThemeInput,
@@ -80,6 +81,9 @@ function formatSettingValue(
 ) {
   if (target === "network.recommendation.sort_mode") {
     return value === "retrieved_at" ? "按检索时间" : "按关联度";
+  }
+  if (target === "network.recommendation.style") {
+    return recommendationStyles[normalizeRecommendationStyle(value)].label;
   }
 
   return String(value);

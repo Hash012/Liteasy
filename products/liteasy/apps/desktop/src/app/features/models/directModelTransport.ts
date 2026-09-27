@@ -1,3 +1,4 @@
+import { invalidateVerifiedModels } from "./verifiedModelProfiles";
 import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 import { directModelNeedsKey, validateDirectModelConfig, type DirectModelConfig } from "./modelProviders";
 import { readBoundedModelStream, readBoundedModelText } from "./modelResponseBudget";
@@ -27,11 +28,13 @@ export async function saveDirectModelKey(config: DirectModelConfig, apiKey: stri
   if (!apiKey.trim() || /[\r\n]/.test(apiKey) || apiKey.length > 8192) throw new Error("请填写有效的 API key。");
   if (isTauri()) await invoke("save_direct_model_key", { config, apiKey: apiKey.trim() });
   else sessionKeys.set(credentialScope(config), apiKey.trim());
+  invalidateVerifiedModels(config);
 }
 
 export async function deleteDirectModelKey(config: DirectModelConfig) {
   if (isTauri()) await invoke("delete_direct_model_key", { config });
   else sessionKeys.delete(credentialScope(config));
+  invalidateVerifiedModels(config);
 }
 
 export const directModelTransport: DirectModelTransport = async ({ config: inputConfig, body, signal, onChunk }) => {

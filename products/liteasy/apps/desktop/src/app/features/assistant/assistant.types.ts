@@ -14,6 +14,8 @@ export type { AssistantMode };
 export type AssistantConfirmationRequest = HumanConfirmationRequest | AgentConfirmationRequest;
 
 export type AssistantMessage = {
+  contextCoverage?: import("./contextCoverageReport").ContextCoverageReport;
+  thinkingDepth?: import("./thinkingDepth").ThinkingDepth;
   agentActivity?: AgentActivity;
   artifactTask?: { id: string; artifactId?: string; status: "queued" | "running" | "completed" | "failed" | "cancelled" };
   favorite?: boolean;
@@ -74,6 +76,18 @@ export type AssistantContextToken = {
 export type AssistantComposerSuggestion = {
   /** Resolve a library locator only when the user selects it. */
   resolveToken?: () => Promise<AssistantContextToken>;
+  category?: string;
+  projectId?: string;
+  projectTitle?: string;
+  description?: string;
+  keywords?: string[];
+  readOnly?: boolean;
+  unavailableReason?: string;
+  preview?: string;
+  loadPreview?: () => Promise<{ text: string; imageUrl?: string }>;
+  /** Preserve the source; create a separately editable project asset. */
+  createEditableCopy?: () => Promise<AssistantContextToken>;
+  createNote?: (text: string) => Promise<AssistantContextToken>;
   detail?: string;
   id: string;
   insertText?: string;

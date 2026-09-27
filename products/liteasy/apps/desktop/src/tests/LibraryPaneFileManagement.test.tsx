@@ -138,3 +138,25 @@ test("left-click opens a paper and right-click exposes identity confirmation", a
   await userEvent.click(await screen.findByRole("menuitem", { name: "确认文献身份" }));
   expect(resolve).toHaveBeenCalledWith(paper);
 });
+
+test("unifies paper selection, metadata search and file format filters without opening on selection", async () => {
+  const user = userEvent.setup(), inspect = vi.fn(), openPaper = vi.fn();
+  const pdf = { id: paper.id, title: paper.title, format: "pdf" as const, authors: ["Lin Researcher"], year: 2024, doi: "10.1234/vector" };
+  renderLibraryPane({ onOpenPaper: openPaper, fileLibrary: {
+    entries: [pdf, { id: "ebook", title: "Field Guide", format: "epub", readingStatus: "unread" }],
+    pending: false, message: "", onImport: vi.fn(), onInspect: inspect, onOpen: vi.fn()
+  } });
+  await user.click(screen.getByRole("button", { name: paper.title, exact: true }));
+  expect(inspect).toHaveBeenCalledWith(pdf, expect.any(Function));
+  expect(openPaper).not.toHaveBeenCalled();
+  await user.dblClick(screen.getByRole("button", { name: paper.title, exact: true }));
+  expect(openPaper).toHaveBeenCalledWith(paper.id);
+  await user.type(screen.getByRole("textbox", { name: "搜索文献资源" }), '"Lin Researcher" 10.1234/vector');
+  expect(screen.getByRole("button", { name: paper.title, exact: true })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "选择文件 Field Guide" })).not.toBeInTheDocument();
+  await user.clear(screen.getByRole("textbox", { name: "搜索文献资源" }));
+  await user.click(screen.getByRole("button", { name: "筛选本地文件" }));
+  await user.selectOptions(screen.getByRole("combobox", { name: "筛选文件格式" }), "epub");
+  expect(screen.queryByRole("button", { name: paper.title, exact: true })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "选择文件 Field Guide" })).toBeInTheDocument();
+});

@@ -1,2 +1,2 @@
 *.pdf binary
-products/liteasy/packages/shared/visualizationArtifact.v1.schema.json text eol=lf
+products/liteasy/packages/shared/*.schema.json text eol=lf

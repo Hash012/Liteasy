@@ -38,9 +38,34 @@ function outputFormat(value) {
   };
 }
 
+function imageInputs(value) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length > 12) throw new ModelProxyError("model_images_invalid");
+  let totalBytes = 0;
+  return value.map((image) => {
+    exactFields(image, new Set(["mediaType", "base64", "label"]), "model_images_invalid");
+    if (typeof image.mediaType !== "string" || !/^image\/(png|jpeg|gif|webp)$/.test(image.mediaType) ||
+      typeof image.label !== "string" || image.label.length > 1000 || image.label.includes("\u0000") ||
+      typeof image.base64 !== "string" || !image.base64.length)
+      throw new ModelProxyError("model_images_invalid");
+    if (image.base64.length > Math.ceil(5 * 1024 * 1024 / 3) * 4) throw new ModelProxyError("model_images_too_large", 413);
+    if (image.base64.length % 4 || !/^[A-Za-z0-9+/]*={0,2}$/.test(image.base64)) throw new ModelProxyError("model_images_invalid");
+    const bytes = Buffer.from(image.base64, "base64");
+    if (bytes.toString("base64") !== image.base64 || bytes.length < 12) throw new ModelProxyError("model_images_invalid");
+    totalBytes += bytes.length;
+    if (totalBytes > 5 * 1024 * 1024) throw new ModelProxyError("model_images_too_large", 413);
+    const signatureMatches = image.mediaType === "image/png" ? bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+      : image.mediaType === "image/jpeg" ? bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
+      : image.mediaType === "image/gif" ? /^GIF8[79]a$/.test(bytes.subarray(0, 6).toString("ascii"))
+      : bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP";
+    if (!signatureMatches) throw new ModelProxyError("model_images_invalid");
+    return { mediaType: image.mediaType, base64: image.base64, label: image.label };
+  });
+}
+
 function generationInput(value) {
   exactFields(value, new Set([
-    "model", "outputFormat", "prompt", "provider", "requireLive", "source"
+    "model", "outputFormat", "prompt", "provider", "requireLive", "source", "images"
   ]), "model_request_invalid");
   if (typeof value.prompt !== "string" || value.prompt.trim().length === 0 || value.prompt.includes("\u0000")) {
     throw new ModelProxyError("model_prompt_invalid");
@@ -60,7 +85,8 @@ function generationInput(value) {
     prompt: value.prompt,
     provider: value.provider,
     requireLive: value.requireLive === true,
-    source: "cloud_proxy"
+    source: "cloud_proxy",
+    ...(value.images !== undefined ? { images: imageInputs(value.images) } : {})
   };
 }
 
@@ -92,6 +118,7 @@ function providerForRequest(providers, policy, input) {
   if (input.model !== provider.model) {
     throw new ModelProxyError("model_not_allowed", 403);
   }
+  if (input.images?.length && provider.supportsImages !== true) throw new ModelProxyError("model_images_unsupported", 415);
   return provider;
 }
 

@@ -1,3 +1,4 @@
+import { recommendationPublicationDate } from "./recommendationStyle.mjs";
 import {
   anchorCoupling,
   matchReferenceEntriesToWorks
@@ -246,6 +247,8 @@ function normalizeWork(work, input, rank) {
     abstract: reconstructAbstract(work?.abstract_inverted_index),
     ...(arxivId ? { arxivId } : {}),
     authors,
+    ...(Number.isSafeInteger(work?.cited_by_count) && work.cited_by_count >= 0 ? { citationCount: work.cited_by_count } : {}),
+    ...(recommendationPublicationDate(work?.publication_date) ? { publishedAt: work.publication_date } : {}),
     doi,
     ...(fullTextUrl ? { fullTextUrl } : {}),
     id: `openalex:${sourceId}`,
@@ -703,9 +706,16 @@ function crossrefAuthors(item) {
 }
 
 function crossrefYear(item) {
-  const dateParts = item?.published_print?.["date-parts"] ?? item?.published_online?.["date-parts"] ?? item?.issued?.["date-parts"];
+  const dateParts = item?.["published-print"]?.["date-parts"] ?? item?.["published-online"]?.["date-parts"] ?? item?.published_print?.["date-parts"] ?? item?.published_online?.["date-parts"] ?? item?.issued?.["date-parts"];
   const year = Array.isArray(dateParts) && Array.isArray(dateParts[0]) ? dateParts[0][0] : undefined;
   return Number.isInteger(year) ? year : undefined;
+}
+
+function crossrefPublicationDate(item) {
+  const parts = item?.["published-print"]?.["date-parts"]?.[0] ??
+    item?.["published-online"]?.["date-parts"]?.[0] ?? item?.issued?.["date-parts"]?.[0];
+  if (!Array.isArray(parts) || parts.length < 3 || !parts.every(Number.isInteger)) return undefined;
+  return recommendationPublicationDate(parts.slice(0, 3).map((value, index) => String(value).padStart(index === 0 ? 4 : 2, "0")).join("-"));
 }
 
 function normalizeCrossrefWork(item, query, rank) {
@@ -740,6 +750,8 @@ function normalizeCrossrefWork(item, query, rank) {
     abstract: normalizeText(item?.abstract).replace(/<[^>]*>/g, "").slice(0, 2400),
     ...(arxivId ? { arxivId } : {}),
     authors: crossrefAuthors(item),
+    ...(Number.isSafeInteger(item?.["is-referenced-by-count"]) && item["is-referenced-by-count"] >= 0 ? { citationCount: item["is-referenced-by-count"] } : {}),
+    ...(crossrefPublicationDate(item) ? { publishedAt: crossrefPublicationDate(item) } : {}),
     doi: `https://doi.org/${doiKey}`,
     ...(fullTextUrl ? { fullTextUrl } : {}),
     id: `crossref:${doiKey}`,
@@ -764,6 +776,16 @@ async function searchCrossrefExternalKnowledge(body, options = {}) {
     : 5;
   const url = new URL(crossrefEndpoint);
   url.searchParams.set("query.bibliographic", query);
+  if (body?.recommendationStyle === "frontier" || body?.recommendationStyle === "classic") {
+    const cutoff = new Date();
+    cutoff.setUTCFullYear(cutoff.getUTCFullYear() - (body.recommendationStyle === "frontier" ? 2 : 5));
+    const field = body.recommendationStyle === "frontier" ? "from-pub-date" : "until-pub-date";
+    url.searchParams.set("filter", `${field}:${cutoff.toISOString().slice(0, 10)}`);
+    if (body.recommendationStyle === "classic") {
+      url.searchParams.set("sort", "is-referenced-by-count");
+      url.searchParams.set("order", "desc");
+    }
+  }
   url.searchParams.set("rows", String(Math.min(maximumResults, limit)));
   let payload;
   try {
@@ -852,7 +874,8 @@ function normalizeArxivEntry(entry, query, targetPaperTitle, rank) {
     sourceId: arxivId,
     title,
     url,
-    ...(Number.isInteger(year) ? { year } : {})
+    ...(Number.isInteger(year) ? { year } : {}),
+    ...(recommendationPublicationDate(published) ? { publishedAt: published } : {})
   };
 }
 
@@ -1599,6 +1622,10 @@ export function mergeExternalSources(sources, limit, options = {}) {
     const arxivKey = sourceArxivKey(primary) || sourceArxivKey(existing) || sourceArxivKey(source);
     const merged = {
       ...primary,
+      ...(primary.citationCount !== undefined || existing.citationCount !== undefined || source.citationCount !== undefined
+        ? { citationCount: primary.citationCount ?? existing.citationCount ?? source.citationCount } : {}),
+      ...(primary.publishedAt || existing.publishedAt || source.publishedAt
+        ? { publishedAt: primary.publishedAt || existing.publishedAt || source.publishedAt } : {}),
       ...(doiKey ? { doi: `https://doi.org/${doiKey}` } : {}),
       ...(doiKey ? { canonicalPaperId: `doi:${doiKey}` } : {}),
       ...(!doiKey && arxivKey ? { canonicalPaperId: `arxiv:${arxivKey}` } : {}),

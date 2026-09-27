@@ -1,0 +1,58 @@
+.context-asset-browser.fui-DialogSurface { width: min(1320px, calc(100vw - 40px)); max-width: none; height: min(900px, calc(100dvh - 40px)); max-height: calc(100dvh - 40px); padding: 20px; border-radius: 8px; }
+.context-asset-browser-body { height: 100%; grid-template-rows: auto minmax(0, 1fr) auto; }
+.context-asset-browser-content { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: hidden; }
+.context-asset-intro { margin: 4px 0 0; color: var(--colorNeutralForeground2); font-size: 13px; }
+.context-asset-search { flex-shrink: 0; }
+.context-asset-workspace { display: grid; grid-template-columns: 184px minmax(240px, 1fr) minmax(220px, 300px); gap: 16px; min-height: 0; flex: 1; }
+.context-asset-filters, .context-asset-results, .context-asset-preview { min-width: 0; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+.context-asset-filters { display: flex; flex-direction: column; gap: 4px; padding-right: 8px; border-right: 1px solid var(--colorNeutralStroke2); }
+.context-asset-filters > strong { font-size: 12px; color: var(--colorNeutralForeground3); padding: 8px; }
+.context-asset-filters > button { justify-content: space-between; flex-shrink: 0; gap: 8px; text-align: left; }
+.context-asset-filters > button > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.context-asset-filters > button > span:last-child:not(:first-child) { color: var(--colorNeutralForeground3); font-size: 11px; }
+.context-asset-results { display: flex; flex-direction: column; gap: 8px; }
+.context-asset-results-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; flex-shrink: 0; }
+.context-asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(230px, 100%), 1fr)); align-content: start; gap: 8px; }
+.context-asset-card { display: flex; align-items: flex-start; border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; background: var(--colorNeutralBackground1); padding: 4px; min-width: 0; }
+.context-asset-card.previewing { border-color: var(--colorBrandStroke1); background: var(--colorBrandBackground2); }
+.context-asset-card-preview { display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-width: 0; flex: 1; padding: 8px 4px; border: 0; background: transparent; color: var(--colorNeutralForeground1); text-align: left; cursor: pointer; border-radius: 4px; }
+.context-asset-card-preview:hover { background: var(--colorSubtleBackgroundHover); }
+.context-asset-card-preview:focus-visible { outline: 2px solid var(--colorStrokeFocus2); outline-offset: -2px; }
+.context-asset-card-heading { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; overflow-wrap: anywhere; }
+.context-asset-card-heading > svg { flex-shrink: 0; font-size: 18px; color: var(--colorBrandForeground1); }
+.context-asset-badges { display: flex; flex-wrap: wrap; gap: 4px; font-size: 11px; }
+.context-asset-badges > span { border: 1px solid var(--colorNeutralStroke2); background: var(--colorNeutralBackground2); border-radius: 4px; padding: 1px 5px; color: var(--colorNeutralForeground2); }
+.context-asset-card-project, .context-asset-card-description { color: var(--colorNeutralForeground3); font-size: 12px; overflow-wrap: anywhere; }
+.context-asset-card-description { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.context-asset-preview { border-left: 1px solid var(--colorNeutralStroke2); padding: 8px 0 8px 16px; display: flex; flex-direction: column; gap: 12px; align-items: stretch; overflow-wrap: anywhere; }
+.context-asset-preview > p { margin: 0; color: var(--colorNeutralForeground2); font-size: 12px; }
+.context-asset-preview-text { white-space: pre-wrap; font-size: 13px; line-height: 1.6; max-height: 320px; overflow-y: auto; border-radius: 4px; padding: 10px; background: var(--colorNeutralBackground2); flex-shrink: 0; }
+.context-asset-preview-image { max-width: 100%; max-height: 260px; object-fit: contain; border-radius: 4px; flex-shrink: 0; }
+.context-asset-preview > button { flex-shrink: 0; }
+.context-asset-note { display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
+.context-asset-empty { grid-column: 1 / -1; padding: 28px 16px; text-align: center; color: var(--colorNeutralForeground3); }
+.context-asset-empty > svg { display: block; font-size: 28px; margin: 0 auto 12px; }
+.context-asset-empty > p, .context-asset-muted { font-size: 12px; color: var(--colorNeutralForeground3); }
+.context-asset-actions { grid-column: 1 / -1; width: 100%; align-items: center; border-top: 1px solid var(--colorNeutralStroke2); padding-top: 12px; }
+.context-asset-selection-count { margin-right: auto; font-size: 13px; white-space: nowrap; }
+.context-asset-status { margin: 0; font-size: 12px; color: var(--colorNeutralForeground2); }
+.context-asset-errors { padding: 8px 12px; font-size: 12px; border: 1px solid var(--colorStatusDangerBorder1); background: var(--colorStatusDangerBackground1); border-radius: 4px; max-height: 100px; overflow: auto; flex-shrink: 0; }
+.context-asset-errors ul { margin: 4px 0 0; padding-left: 20px; }
+.assistant-suggestion-main .assistant-suggestion-metadata { color: var(--colorNeutralForeground2); font-size: 11px; }
+.assistant-suggestion-item[aria-disabled="true"] { opacity: .65; }
+.assistant-suggestion-browse { position: sticky; bottom: 0; flex-shrink: 0; background: var(--colorNeutralBackground1); }
+.assistant-suggestion-empty { margin: 4px 8px; font-size: 12px; color: var(--colorNeutralForeground3); }
+.assistant-add-context { flex-shrink: 0; }
+@media (max-width: 900px) {
+  .context-asset-workspace { grid-template-columns: 148px minmax(200px, 1fr); gap: 12px; overflow-y: auto; }
+  .context-asset-filters { grid-row: 1 / 3; }
+  .context-asset-preview { grid-column: 2; max-height: 280px; border-left: 0; border-top: 1px solid var(--colorNeutralStroke2); padding: 12px 0; }
+  .context-asset-results { min-height: 220px; }
+}
+@media (max-width: 560px) {
+  .context-asset-browser.fui-DialogSurface { width: calc(100vw - 16px); height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); padding: 12px; }
+  .context-asset-workspace { grid-template-columns: 110px minmax(0, 1fr); gap: 8px; }
+  .context-asset-results-toolbar { flex-wrap: wrap; }
+  .context-asset-actions { flex-wrap: wrap; }
+  .context-asset-selection-count { width: 100%; }
+}

@@ -7,6 +7,40 @@ import {
   isRetryableOpenAIResponsesError
 } from "./openaiResponses.mjs";
 
+test("sends selected local image bytes in Responses input and refuses remote image references", async () => {
+  let sent;
+  const provider = createOpenAIResponsesProvider({ apiKey: "test-key", fetchImpl: async (_url, request) => {
+    sent = JSON.parse(request.body);
+    return { ok: true, status: 200, json: async () => ({ output_text: "图像分析" }) };
+  } });
+  const image = { mediaType: "image/png", label: "论文 A 第 2 页", base64: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]).toString("base64") };
+  assert.equal(await provider({ model: "test-vision", prompt: "比较原图", images: [image] }), "图像分析");
+  assert.deepEqual(sent.input[0].content, [
+    { type: "input_text", text: "比较原图" }, { type: "input_text", text: image.label },
+    { type: "input_image", image_url: `data:image/png;base64,${image.base64}`, detail: "auto" },
+  ]);
+  await assert.rejects(provider({ model: "test-vision", prompt: "解释", images: [{ ...image, url: "http://127.0.0.1/private" }] }), /图片数据无效/);
+});
+
+test("keeps actual images in streaming requests when retrying an unsupported optional Responses field", async () => {
+  const requests = [];
+  const image = { mediaType: "image/png", label: "原图", base64: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]).toString("base64") };
+  const provider = createOpenAIResponsesStreamProvider({ apiKey: "test-key", reasoningEffort: "high",
+    fetchImpl: async (_url, request) => {
+      requests.push(JSON.parse(request.body));
+      if (requests.length === 1) return { ok: false, status: 400, json: async () => ({ error: "reasoning unsupported" }) };
+      return { ok: true, status: 200, body: Readable.from([Buffer.from('data: {"type":"response.output_text.delta","delta":"图片回答"}\n\n')]) };
+    } });
+  const answer = [];
+  for await (const delta of provider({ model: "vision", prompt: "原图", images: [image] })) answer.push(delta);
+  assert.deepEqual(answer, ["图片回答"]);
+  assert.equal(requests.length, 2);
+  for (const request of requests) {
+    assert.equal(request.stream, true);
+    assert.equal(request.input[0].content[2].image_url, `data:image/png;base64,${image.base64}`);
+  }
+});
+
 test("posts to the OpenAI Responses API and extracts text output", async () => {
   let capturedRequest;
   const provider = createOpenAIResponsesProvider({

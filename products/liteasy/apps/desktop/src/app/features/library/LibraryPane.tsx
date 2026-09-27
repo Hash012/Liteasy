@@ -1,3 +1,6 @@
+import { indexReadingCatalog, queryReadingCatalog, type ReadingCatalogFilters } from "./readingCatalogSearch";
+import { readingCatalogFormatLabels, readingCatalogStatusLabels } from "./readingCatalog.types";
+import { LibraryFileList, type LibraryFileAccess } from "./LibraryFileList";
 import { ARTIFACT_CONTEXT_MIME } from "../object-transfer/contextTransfer";
 import { ResourceLocationButton } from "../resource-filesystem/ResourceLocationButton";
 import {
@@ -18,6 +21,7 @@ import {
   DialogSurface,
   DialogTitle,
   Input,
+  Field, Popover, PopoverSurface, PopoverTrigger,
   Menu,
   MenuItem,
   MenuList,
@@ -29,6 +33,7 @@ import {
 } from "@fluentui/react-components";
 import {
   AddRegular,
+  FilterRegular,
   ArrowClockwiseRegular,
   ArrowResetRegular,
   BookmarkRegular,
@@ -55,8 +60,10 @@ import type { ImportJob } from "../import/import.types";
 import type { PaperResourceKind } from "../import/paperResource.types";
 import type {
   RecommendationItem,
-  RecommendationStatus
+  RecommendationStatus,
+  RecommendationStyle
 } from "../recommendations/recommendation.types";
+import { RecommendationStyleControl } from "../recommendations/RecommendationStyleControl";
 import type { Paper, WorkspaceSourceType } from "../workspace/workspace.types";
 import {
   createCloudLibraryStorageClient,
@@ -114,6 +121,7 @@ export type LibraryPaperChildItem = {
 };
 
 type LibraryPaneProps = {
+  fileLibrary?: LibraryFileAccess;
   accountScopeId?: string;
   accountSessionAvailable?: boolean;
   activePaperId?: string | null;
@@ -134,6 +142,8 @@ type LibraryPaneProps = {
   recommendationMessage: string;
   recommendationPending: boolean;
   recommendationStatus: RecommendationStatus;
+  recommendationStyle?: RecommendationStyle;
+  onRecommendationStyleChange?: (style: RecommendationStyle) => void;
   selectedPaperIds: string[];
   selectionLocked: boolean;
   workspaceLabel: string;
@@ -141,6 +151,7 @@ type LibraryPaneProps = {
   onAddDroppedPdfFiles?: (files: File[], targetFolderPath?: string) => void | Promise<void>;
   onAddExternalPdf?: (item: ExternalPdfDragPayload) => void | Promise<void>;
   onClearRecommendations: () => void;
+  onRefreshRecommendations?: () => void;
   onDismissRecommendation: (recommendation: RecommendationItem) => void;
   onImportZoteroDirectory?: (files: File[]) => string | Promise<string>;
   onLoginRequired?: () => void;
@@ -214,6 +225,19 @@ type CreateFolderTarget = {
 
 const resourceTransferMimeType = "application/x-liteasy-library-resource-v2";
 const sectionIds: LibraryResourceArea[] = ["local", "collection", "recommendation", "organization"];
+
+function recommendationPublicationLabel(recommendation: RecommendationItem) {
+  const publishedAt = recommendation.publishedAt;
+  if (typeof publishedAt === "string" && /^\d{4}-\d{2}-\d{2}(?:T|$)/.test(publishedAt)) {
+    const date = publishedAt.slice(0, 10);
+    const parsed = new Date(`${date}T00:00:00.000Z`);
+    if (Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date) return date;
+  }
+  const year = recommendation.publishedYear;
+  return typeof year === "number" && Number.isInteger(year) && year >= 1000 && year <= 9999
+    ? `${year} 年`
+    : null;
+}
 
 export function personalLibraryScopeId(accountScopeId?: string) {
   if (!accountScopeId) return "";
@@ -331,19 +355,20 @@ function sortTree(tree: ExplorerTree): ExplorerTree {
   };
 }
 
-function filterTree(tree: ExplorerTree, query: string, category = ""): ExplorerTree {
+function filterTree(tree: ExplorerTree, query: string, category = "", matches?: Set<string>): ExplorerTree {
   const entryMatches = (entry: ExplorerEntry) => {
+    if (matches) return matches.has(entry.id);
     const categoryMatches = !category || entry.metadata?.category === category;
     if (!categoryMatches) return false;
     if (!query) return true;
     return [entry.label, entry.metadata?.category, ...(entry.metadata?.tags ?? [])]
       .some((value) => value?.toLocaleLowerCase().includes(query));
   };
-  if (!query && !category) return tree;
+  if (!query && !category && !matches) return tree;
   const filterFolders = (folders: ExplorerFolder[]): ExplorerFolder[] => folders.flatMap((folder) => {
     const children = filterFolders(folder.children);
     const entries = folder.entries.filter(entryMatches);
-    return (!category && folder.label.toLocaleLowerCase().includes(query)) || children.length > 0 || entries.length > 0
+    return (!matches && !category && folder.label.toLocaleLowerCase().includes(query)) || children.length > 0 || entries.length > 0
       ? [{ ...folder, children, entries, unfilteredFolder: folder }]
       : [];
   });
@@ -411,6 +436,7 @@ function SectionHeader(props: {
 }
 
 export function LibraryPane({
+  fileLibrary,
   accountScopeId,
   accountSessionAvailable = false,
   activePaperId,
@@ -422,6 +448,7 @@ export function LibraryPane({
   loadLegacyLibraryRoots,
   onAddDroppedPdfFiles,
   onClearRecommendations,
+  onRefreshRecommendations,
   onDismissRecommendation,
   onImportZoteroDirectory,
   onLoginRequired,
@@ -448,6 +475,8 @@ export function LibraryPane({
   recommendationMessage,
   recommendationPending,
   recommendationStatus,
+  recommendationStyle = "balanced",
+  onRecommendationStyleChange,
   selectedPaperIds,
   selectionLocked
 }: LibraryPaneProps) {
@@ -481,6 +510,7 @@ export function LibraryPane({
   });
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [fileFilters, setFileFilters] = useState<ReadingCatalogFilters>({ query: "", collection: "", format: "all", status: "all", year: "", sort: "added" });
   const [paperMetadataById, setPaperMetadataById] = useState<Record<string, PaperFileMetadata>>({});
   const [metadataEditorEntry, setMetadataEditorEntry] = useState<ExplorerEntry | null>(null);
   const [metadataCategoryDraft, setMetadataCategoryDraft] = useState("");
@@ -507,14 +537,36 @@ export function LibraryPane({
     string | null
   >>({ collection: null, local: null, organization: null });
   const query = search.trim().toLocaleLowerCase();
+  const visiblePaperMetadata = useMemo(() => {
+    const result = { ...paperMetadataById };
+    for (const entry of fileLibrary?.entries ?? []) {
+      if (entry.format !== "pdf" || (entry.collection === undefined && entry.tags === undefined)) continue;
+      result[entry.id] = normalizePaperFileMetadata({
+        category: entry.collection ?? result[entry.id]?.category,
+        tags: entry.tags ?? result[entry.id]?.tags
+      });
+    }
+    return result;
+  }, [paperMetadataById, fileLibrary?.entries]);
   const categories = useMemo(() => Array.from(new Set(
-    Object.values(paperMetadataById)
-      .map((metadata) => metadata.category)
-      .filter(Boolean)
-  )).sort((left, right) => left.localeCompare(right)), [paperMetadataById]);
+    [...Object.values(visiblePaperMetadata).map((metadata) => metadata.category), ...(fileLibrary?.entries.map((entry) => entry.collection ?? "") ?? [])].filter(Boolean)
+  )).sort((left, right) => left.localeCompare(right)), [visiblePaperMetadata, fileLibrary?.entries]);
+  const fileIndex = useMemo(() => {
+    const knownIds = new Set(fileLibrary?.entries.map((entry) => entry.id));
+    return indexReadingCatalog([
+    ...(fileLibrary?.entries ?? []),
+    ...(localLibrarySnapshot?.entries ?? []).filter((entry) => !knownIds.has(entry.id)).map((entry) => ({
+      id: entry.id, title: entry.title, format: "pdf" as const,
+      collection: paperMetadataById[entry.id]?.category, tags: paperMetadataById[entry.id]?.tags
+    }))
+  ]);
+  }, [fileLibrary?.entries, localLibrarySnapshot, paperMetadataById]);
+  const filteredIds = useMemo(() => fileLibrary && (query || selectedCategory || fileFilters.format !== "all" || fileFilters.status !== "all" || fileFilters.year)
+    ? new Set(queryReadingCatalog(fileIndex, { ...fileFilters, query: search, collection: selectedCategory }).map((entry) => entry.id)) : undefined,
+    [fileIndex, query, selectedCategory, fileFilters, Boolean(fileLibrary)]);
   const localTree = useMemo(
-    () => filterTree(localExplorerTree(localLibrarySnapshot, paperMetadataById), query, selectedCategory),
-    [localLibrarySnapshot, paperMetadataById, query, selectedCategory]
+    () => filterTree(localExplorerTree(localLibrarySnapshot, visiblePaperMetadata), query, selectedCategory, filteredIds),
+    [localLibrarySnapshot, visiblePaperMetadata, query, selectedCategory, filteredIds]
   );
   const collectionTree = useMemo(
     () => filterTree(cloudExplorerTree("collection", collectionScope, collection.tree), query),
@@ -575,10 +627,13 @@ export function LibraryPane({
     setMetadataEditorPending(true);
     setMetadataEditorError("");
     try {
-      const metadata = await savePaperFileMetadata(metadataEditorEntry.id, {
-        category: metadataCategoryDraft,
-        tags: metadataTagsDraft.split(/[,，\n]/u)
-      });
+      const draft = normalizePaperFileMetadata({ category: metadataCategoryDraft, tags: metadataTagsDraft.split(/[,，\n]/u) });
+      if (fileLibrary?.onMetadataChange) {
+        await fileLibrary.onMetadataChange(metadataEditorEntry.id, { collection: draft.category, tags: draft.tags });
+      } else {
+        await savePaperFileMetadata(metadataEditorEntry.id, draft);
+      }
+      const metadata = draft;
       setPaperMetadataById((current) => ({ ...current, [metadataEditorEntry.id]: metadata }));
       setSelectedCategory((current) => current === previousCategory ? metadata.category : current);
       setMessage("论文分类与标签已保存。");
@@ -846,10 +901,10 @@ export function LibraryPane({
     }
     if (area === "local") {
       const files = Array.from(event.dataTransfer.files ?? []).filter((file) =>
-        file.name.toLocaleLowerCase().endsWith(".pdf")
+        fileLibrary || file.name.toLocaleLowerCase().endsWith(".pdf")
       );
       if (files.length > 0) {
-        void Promise.resolve(onAddDroppedPdfFiles?.(
+        void Promise.resolve(fileLibrary ? fileLibrary.onImport(files, folder?.localPath ?? localLibrarySnapshot?.rootPath) : onAddDroppedPdfFiles?.(
           files,
           folder?.localPath ?? localLibrarySnapshot?.rootPath
         )).then(() => onRefreshLocalLibrary?.());
@@ -870,7 +925,16 @@ export function LibraryPane({
     const canManageEntry = area !== "organization" || Boolean(
       organizationStorageAccess && canManageOrganizationLibrary(organizationStorageAccess.role)
     );
+    const inspectEntry = () => fileLibrary?.onInspect(fileLibrary.entries.find((item) => item.id === entry.id) ?? {
+      id: entry.id, title: entry.label, format: "pdf", canExport: false, canRemove: false,
+      physicalPath: entry.source.area === "local" ? entry.source.entry.path ?? undefined : undefined,
+      available: entry.bodyAvailable, tags: entry.metadata?.tags, collection: entry.metadata?.category
+    }, () => {
+      if (entry.source.area === "local") onOpenPaper?.(entry.id);
+      else void onOpenCloudEntry?.(entry.source.scope, entry.source.entry);
+    });
     const openEntry = () => {
+      inspectEntry();
       if (entry.source.area === "local") onOpenPaper?.(entry.id);
       else void onOpenCloudEntry?.(entry.source.scope, entry.source.entry);
     };
@@ -878,6 +942,8 @@ export function LibraryPane({
       <div
         aria-busy={pending}
         className="library-paper-row"
+        onClick={inspectEntry}
+        onFocus={inspectEntry}
         draggable={!pending && canStartResourceDrag(entry.source)}
         onDragStart={(event) => {
           if (!canStartResourceDrag(entry.source)) {
@@ -906,7 +972,9 @@ export function LibraryPane({
           <Menu openOnContext>
             <MenuTrigger disableButtonEnhancement>
               <button
-                onClick={openEntry}
+                onClick={fileLibrary ? inspectEntry : openEntry}
+                onDoubleClick={fileLibrary ? openEntry : undefined}
+                onKeyDown={fileLibrary ? (event) => { if (event.key === "Enter") { event.preventDefault(); openEntry(); } } : undefined}
                 className="library-paper-title"
                 disabled={pending}
                 title={entry.bodyAvailable ? entry.label : `${entry.label}（仅元数据）`}
@@ -1117,7 +1185,7 @@ export function LibraryPane({
             {tree.folders.map((folder) => renderFolder(area, folder, 0))}
             {tree.entries.map((entry) => renderEntry(area, entry, 0))}
           </ul>
-        ) : <div className="library-empty-collection">{empty}</div>}
+        ) : empty ? <div className="library-empty-collection">{empty}</div> : null}
       </div>
     );
   }
@@ -1206,7 +1274,7 @@ export function LibraryPane({
     );
   }
 
-  const localCount = localLibrarySnapshot?.entries.length ?? 0;
+  const localCount = (localLibrarySnapshot?.entries.length ?? 0) + (fileLibrary?.entries.filter((entry) => entry.format !== "pdf").length ?? 0);
   const legacyLibrarySelectionRequired = localLibraryError?.startsWith(
     "检测到多个旧账号本地库"
   ) ?? false;
@@ -1221,10 +1289,23 @@ export function LibraryPane({
           className="library-search-input"
           contentBefore={<SearchRegular aria-hidden="true" />}
           onChange={(_, data) => setSearch(data.value)}
-          placeholder="搜索文献"
+          placeholder="搜索标题、作者、标签或文件"
           size="small"
           value={search}
         />
+        {fileLibrary ? <Popover positioning="below-start">
+          <PopoverTrigger disableButtonEnhancement><Tooltip content="筛选本地文件" relationship="description"><Button appearance="subtle" size="small" aria-label="筛选本地文件" icon={<FilterRegular />} /></Tooltip></PopoverTrigger>
+          <PopoverSurface className="library-file-filters">
+            <Field label="格式"><Select aria-label="筛选文件格式" value={fileFilters.format} onChange={(_, data) => setFileFilters((value) => ({ ...value, format: data.value as ReadingCatalogFilters["format"] }))}>
+              <option value="all">全部格式</option>{Object.entries(readingCatalogFormatLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </Select></Field>
+            <Field label="阅读状态"><Select aria-label="筛选阅读状态" value={fileFilters.status} onChange={(_, data) => setFileFilters((value) => ({ ...value, status: data.value as ReadingCatalogFilters["status"] }))}>
+              <option value="all">全部状态</option>{Object.entries(readingCatalogStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </Select></Field>
+            <Field label="年份"><Input aria-label="筛选发表年份" placeholder="例如 2024" value={fileFilters.year} onChange={(_, data) => setFileFilters((value) => ({ ...value, year: data.value }))} /></Field>
+            <Button appearance="subtle" onClick={() => { setSelectedCategory(""); setFileFilters((value) => ({ ...value, format: "all", status: "all", year: "" })); }}>重置筛选</Button>
+          </PopoverSurface>
+        </Popover> : null}
         {categories.length > 0 ? (
           <Select
             aria-label="按论文分类筛选"
@@ -1245,13 +1326,13 @@ export function LibraryPane({
           onToggleLock
         )}
       </div>
-      {message ? <div aria-live="polite" className="library-resource-action-message">{message}</div> : null}
+      {message || fileLibrary?.message ? <div aria-live="polite" className="library-resource-action-message">{message || fileLibrary?.message}</div> : null}
 
-      <section aria-label="本地文献库" className="library-section">
+      <section aria-label="本地文献库" className="library-section" onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }} onDrop={(event) => { if (event.dataTransfer.files.length) dropOnTarget(event, "local"); }}>
         <SectionHeader
           actions={<>
             {iconAction("新建本地目录", <FolderAddRegular />, () => openCreateFolderDialog("local"), !localLibrarySnapshot)}
-            {iconAction("导入 PDF", <AddRegular />, openLocalPdfPicker, !localLibrarySnapshot)}
+            {iconAction(fileLibrary ? "导入文件" : "导入 PDF", <AddRegular />, openLocalPdfPicker, fileLibrary ? fileLibrary.pending : !localLibrarySnapshot)}
             {iconAction("从 Zotero 导出目录导入 PDF", <FolderOpenRegular />, () => zoteroDirectoryInputRef.current?.click(), !localLibrarySnapshot)}
             {iconAction("刷新本地文献库", <ArrowClockwiseRegular />, () => void onRefreshLocalLibrary?.())}
           </>}
@@ -1263,20 +1344,21 @@ export function LibraryPane({
         />
         <LiteratureHydrationStatus hydration={literatureHydration} />
         <input
-          accept=".pdf,application/pdf"
+          accept={fileLibrary ? undefined : ".pdf,application/pdf"}
+          aria-label="选择文献库文件"
           hidden
           multiple
           onChange={(event) => {
             const files = Array.from(event.target.files ?? []);
             event.target.value = "";
             if (files.length === 0) return;
-            setMessage(`正在导入 ${files.length} 个 PDF...`);
+            setMessage(`正在导入 ${files.length} 个文件...`);
             const targetFolderPath = localImportTargetPathRef.current ?? localLibrarySnapshot?.rootPath;
             localImportTargetPathRef.current = undefined;
-            void Promise.resolve(onAddDroppedPdfFiles?.(files, targetFolderPath))
+            void Promise.resolve(fileLibrary ? fileLibrary.onImport(files, targetFolderPath) : onAddDroppedPdfFiles?.(files, targetFolderPath))
               .then(async () => {
                 await onRefreshLocalLibrary?.();
-                setMessage(`已导入 ${files.length} 个 PDF。`);
+                setMessage(fileLibrary ? "" : `已导入 ${files.length} 个 PDF。`);
               })
               .catch((error) => {
                 setMessage(error instanceof Error
@@ -1346,7 +1428,7 @@ export function LibraryPane({
               />
             ) : (
               <>
-                {renderTree("local", localTree, query ? "没有匹配的本地文献" : "本地文献库为空")}
+                {renderTree("local", localTree, fileLibrary?.entries.some((entry) => entry.format !== "pdf" && (!filteredIds || filteredIds.has(entry.id))) ? "" : query ? "没有匹配的本地文件" : "本地文献库为空")}
                 <TrashGroup
                   entries={localLibrarySnapshot?.trashEntries ?? []}
                   onEmpty={async () => {
@@ -1364,6 +1446,7 @@ export function LibraryPane({
                 />
               </>
             )}
+            {fileLibrary ? <LibraryFileList access={fileLibrary} query={search} category={selectedCategory} filters={fileFilters} /> : null}
           </div>
         ) : null}
       </section>
@@ -1403,7 +1486,10 @@ export function LibraryPane({
 
       <section aria-label="关联推荐" className="library-section">
         <SectionHeader
-          actions={iconAction("清除推荐缓存", <DeleteDismissRegular />, onClearRecommendations, !accountSessionAvailable)}
+          actions={<>
+            {iconAction("刷新推荐", <ArrowClockwiseRegular />, () => onRefreshRecommendations?.(), !accountSessionAvailable || recommendationPending || !onRefreshRecommendations)}
+            {iconAction("清除推荐缓存", <DeleteDismissRegular />, onClearRecommendations, !accountSessionAvailable)}
+          </>}
           count={recommendationItems.length}
           expanded={!collapsedSections.includes("recommendation")}
           icon={<LightbulbRegular />}
@@ -1412,12 +1498,21 @@ export function LibraryPane({
         />
         {!collapsedSections.includes("recommendation") ? (
           <div className="library-section-content">
+            {accountSessionAvailable ? (
+              <RecommendationStyleControl
+                onChange={onRecommendationStyleChange}
+                value={recommendationStyle}
+              />
+            ) : null}
+            {accountSessionAvailable && recommendationPending ? (
+              <div className="library-recommendation-message loading" role="status">
+                {recommendationItems.length > 0 ? "正在更新推荐，仍可浏览已有结果…" : "正在获取推荐…"}
+              </div>
+            ) : null}
             {!accountSessionAvailable ? (
               <button className="library-inline-button" onClick={onLoginRequired} type="button">登录</button>
-            ) : recommendationPending ? (
-              <div className="library-empty-collection">加载中…</div>
             ) : recommendationItems.length === 0 ? (
-              <div className="library-empty-collection">{recommendationMessage || "暂无关联推荐"}</div>
+              !recommendationPending ? <div className="library-empty-collection">{recommendationMessage || "暂无关联推荐"}</div> : null
             ) : (
               <ul className="library-resource-tree">
                 {recommendationItems.map((recommendation) => (
@@ -1433,6 +1528,15 @@ export function LibraryPane({
                       <span className="library-paper-title">{recommendation.title}</span>
                       <Tooltip content="收藏" relationship="label"><Button appearance="subtle" aria-label={`收藏 ${recommendation.title}`} disabled={!collection.tree || pendingNodeIds.includes(recommendation.id)} icon={<BookmarkRegular />} onClick={() => void saveRecommendation(recommendation)} size="small" /></Tooltip>
                       <Tooltip content="不感兴趣" relationship="label"><Button appearance="subtle" aria-label={`忽略 ${recommendation.title}`} icon={<DeleteRegular />} onClick={() => onDismissRecommendation(recommendation)} size="small" /></Tooltip>
+                    </div>
+                    <div className="library-recommendation-metadata">
+                      {recommendationPublicationLabel(recommendation) ? <span>{recommendationPublicationLabel(recommendation)}</span> : null}
+                      {typeof recommendation.citationCount === "number" && Number.isSafeInteger(recommendation.citationCount) && recommendation.citationCount >= 0 ? (
+                        <span title="数据源记录的引用次数，仅供参考">引用 {recommendation.citationCount.toLocaleString("zh-CN")}</span>
+                      ) : null}
+                      {recommendation.sourceUrl && /^https?:\/\//i.test(recommendation.sourceUrl) ? (
+                        <a href={recommendation.sourceUrl} rel="noopener noreferrer" target="_blank">{recommendation.source}</a>
+                      ) : <span>{recommendation.source}</span>}
                     </div>
                     <div className="library-recommendation-reason">{recommendation.reason}</div>
                   </li>

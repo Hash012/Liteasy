@@ -1,4 +1,10 @@
+export type RecommendationStyle = "balanced" | "frontier" | "classic" | "exploratory";
+
 export type RecommendationItem = {
+  citationCount?: number;
+  publishedAt?: string;
+  rankingStyle?: RecommendationStyle;
+  styleScore?: number;
   abstract?: string;
   authors?: string[];
   canonicalId?: string;

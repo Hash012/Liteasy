@@ -1,0 +1,184 @@
+/* Application surfaces use semantic colors. Generated themes continue to own
+   their scoped variables; document pages and exported artwork retain their ink. */
+:root {
+  --selection-surface: #e0eefa;
+  --hover-surface: #f0f3f6;
+  --danger-ink: #a4262c;
+  --success-ink: #107c10;
+  --warning-ink: #875a28;
+  --ink-3: #707070;
+}
+
+:root[data-color-scheme="dark"] {
+  --paper-0: #141414;
+  --paper-1: #1f1f1f;
+  --paper-2: #292929;
+  --ink-1: #f0f0f0;
+  --ink-2: #c2c2c2;
+  --ink-3: #a3a3a3;
+  --line-1: #424242;
+  --line-2: #575757;
+  --accent-1: #75b6e7;
+  --accent-2: #8cce8c;
+  --accent-3: #f5b58b;
+  --surface-1: #1f1f1f;
+  --surface-2: #292929;
+  --selection-surface: #173b56;
+  --hover-surface: #333333;
+  --danger-ink: #ffb3b8;
+  --success-ink: #8cce8c;
+  --warning-ink: #f2cb91;
+  --button-background: var(--paper-2);
+  --button-hover-background: var(--hover-surface);
+  color: var(--ink-1);
+  background: var(--paper-0);
+}
+
+#root > .fluent-app-root { min-height: 100%; }
+.app-frame { color: var(--ink-1); }
+.appearance-options { display: flex; flex-wrap: wrap; flex-direction: row; gap: 0 8px; }
+.appearance-options .fui-Radio__label > span { display: inline-flex; align-items: center; gap: 5px; }
+.appearance-options svg { width: 18px; height: 18px; }
+
+/* Chrome, side panels and editing surfaces. No blanket filters or inversion:
+   PDF canvases, cover art and slides must keep their original colors. */
+html[data-color-scheme="dark"] :is(
+  .activity-bar, .pane-header, .dock-tab.active, .assistant-input-wrap,
+  .assistant-path-candidates, .assistant-path-candidate, .assistant-suggestion-menu,
+  .assistant-context-panel, .assistant-history-panel, .assistant-history-item,
+  .assistant-session-button, .assistant-launcher-mode, .assistant-command-feedback,
+  .assistant-editing-banner, .assistant-context-toggle, .assistant-message-action,
+  .pdf-toolbar, .pdf-left-sidebar, .pdf-sidebar-collapse-button, .pdf-ink-tools,
+  .pdf-annotation-item, .pdf-annotation-popover, .pdf-annotation-note-editor,
+  .pdf-annotation-editor, .pdf-entry-review, .pdf-quick-ask-panel,
+  .note-editor textarea, .skill-doc-editor, .organization-form-input,
+  .library-metadata-editor, .library-file-drop-target, .library-workspace-switcher,
+  .library-button, .library-import-target select, .left-rail-button,
+  .agent-settings-card, .agent-settings-row, .agent-settings-chip,
+  .artifact-card, .artifact-agent-answer, .artifact-outline-markdown,
+  .artifact-evidence-index, .artifact-external-reference-index,
+  .artifact-regenerate-dialog, .artifact-regenerate-dialog textarea,
+  .lightweight-login-dialog, .workspace-modal-panel, .genui-canvas,
+  .genui-action, .layered-graph, .layered-graph-detail
+) {
+  background: var(--surface-1);
+  border-color: var(--line-1);
+  color: var(--ink-1);
+  box-shadow: none;
+}
+
+html[data-color-scheme="dark"] :is(
+  .dock-region-tab-row, .dock-empty-state, .assistant-input-highlight,
+  .pdf-sidebar-switcher, .pdf-thumbnail-list li, .assistant-history-restore,
+  .pdf-annotation-popover .pdf-annotation-markdown, .note-editor .pdf-annotation-markdown,
+  .artifact-result-meta, .assistant-suggestion-trigger
+) { background: var(--surface-2); color: var(--ink-1); border-color: var(--line-1); }
+
+html[data-color-scheme="dark"] :is(
+  .activity-button, .sidebar-section-header, .library-section-header,
+  .library-section-title, .library-folder-name, .library-collection-name,
+  .library-paper-title, .library-tree-row, .library-file-name,
+  .assistant-active-session-title, .assistant-history-title,
+  .agent-settings-row-title, .agent-settings-title,
+  .organization-sidebar-title, .organization-form-field,
+  .settings-panel-title, .artifact-card-title
+) { color: var(--ink-1); }
+
+html[data-color-scheme="dark"] :is(
+  .library-section, .sidebar-section, .library-drop-zone, .library-collection-content,
+  .library-tree-row, .library-folder-row, .paper-row,
+  .agent-settings-row, .organization-member-governance-row, .layered-graph-toolbar
+) { border-color: var(--line-1); }
+
+html[data-color-scheme="dark"] :is(
+  .library-section-count, .library-folder-count, .library-file-drop-hint,
+  .library-paper-metadata, .library-metadata-editor small,
+  .library-selection-summary, .library-empty-collection, .library-workspace-root,
+  .library-inline-button, .library-disclosure, .library-section-icon,
+  .sidebar-section-disclosure, .assistant-thinking-labels,
+  .assistant-path-candidate span, .assistant-path-candidate small,
+  .assistant-history-item-meta, .assistant-active-session-kind,
+  .assistant-queued-message, .agent-settings-row-description,
+  .model-policy-footnote, .settings-model-copy, .organization-sidebar-kicker,
+  .artifact-evidence-summary, .artifact-evidence-heading span,
+  .artifact-external-reference-index li span, .skill-doc-path,
+  .layered-graph-detail small, .layered-graph-control > span
+) { color: var(--ink-2); }
+
+html[data-color-scheme="dark"] :is(
+  .activity-button:hover, .sidebar-section-header:hover, .library-section-header:hover,
+  .library-tree-row:hover, .library-folder-row:hover, .paper-row:hover,
+  .library-paper-row:hover, .library-collection-row:hover, .library-disclosure:hover,
+  .assistant-history-restore:hover, .assistant-message-action:hover,
+  .dock-tab-close:hover, .library-file-drop-target:hover, .genui-action:hover
+) { background: var(--hover-surface); color: var(--ink-1); }
+
+html[data-color-scheme="dark"] :is(
+  .activity-button.active, .activity-button.active:hover,
+  .library-tree-row.active, .library-folder-row.is-selected,
+  .library-item.selected > .paper-row, .library-item.active > .paper-row,
+  .library-collection-row.active, .library-workspace-switcher button.active,
+  .assistant-path-candidate[aria-selected="true"], .assistant-history-item.active,
+  .assistant-message-action.active, .assistant-suggestion-item.active,
+  .assistant-command-chip, .assistant-context-token, .assistant-message-token,
+  .pdf-sidebar-switcher button.active, .pdf-thumbnail-list li.active,
+  .library-paper-tag, .library-paper-category
+) { background: var(--selection-surface); color: var(--accent-1); border-color: var(--accent-1); }
+
+html[data-color-scheme="dark"] :is(
+  .pdf-toolbar button, .pdf-sidebar-switcher button,
+  .library-workspace-switcher button, .artifact-regenerate-actions button,
+  .layered-graph-control button, .layered-graph-detail button
+) { background: var(--paper-2); color: var(--ink-1); border-color: var(--line-1); }
+
+html[data-color-scheme="dark"] :is(
+  .pdf-toolbar button:hover, .pdf-sidebar-switcher button.active,
+  .library-workspace-switcher button.active
+) { background: var(--selection-surface); color: var(--accent-1); }
+
+html[data-color-scheme="dark"] .assistant-input-editor .assistant-input { background: transparent; }
+html[data-color-scheme="dark"] :is(.reader-layout-button, .assistant-voice-button) {
+  background: var(--surface-1); color: var(--ink-2); border-color: var(--line-1);
+}
+html[data-color-scheme="dark"] :is(.reader-layout-button:hover, .assistant-voice-button:hover) {
+  background: var(--hover-surface); color: var(--ink-1);
+}
+html[data-color-scheme="dark"] :is(.reader-layout-button.active, .assistant-active-session-kind, .assistant-launcher-mode.active) {
+  background: var(--selection-surface); color: var(--accent-1); border-color: var(--accent-1);
+}
+html[data-color-scheme="dark"] .assistant-input-highlight { background: transparent; }
+html[data-color-scheme="dark"] .assistant-pane.accepting-reader-context .assistant-input-wrap { background: var(--selection-surface); }
+html[data-color-scheme="dark"] .assistant-command-chip { box-shadow: inset 0 0 0 1px var(--line-2); }
+html[data-color-scheme="dark"] :is(.assistant-context-token span, .assistant-message-token span) { color: var(--ink-2); }
+html[data-color-scheme="dark"] :is(.library-button.danger, .assistant-session-button.danger, .pdf-text-box-error) { color: var(--danger-ink); background: var(--paper-2); }
+html[data-color-scheme="dark"] :is(.profile-login-status, .activity-login-badge) { background: #3e3020; border-color: #755837; color: var(--warning-ink); }
+
+/* Rich text follows its containing surface, including reader-specific palettes. */
+html[data-color-scheme="dark"] .markdown-content :is(th, td) { border-color: var(--line-1); }
+html[data-color-scheme="dark"] .markdown-content :is(th, :not(pre) > code, .markdown-content__code-block) {
+  background: var(--paper-2); color: var(--ink-1); border-color: var(--line-1);
+}
+html[data-color-scheme="dark"] .markdown-content__code-language { border-color: var(--line-1); color: var(--ink-2); }
+html[data-color-scheme="dark"] .markdown-content :is(blockquote, .markdown-content__image > span, .markdown-content__image-unavailable) { color: var(--ink-2); }
+html[data-color-scheme="dark"] .markdown-content a { color: var(--accent-1); }
+html[data-color-scheme="dark"] .markdown-content blockquote { border-color: var(--accent-1); }
+html[data-color-scheme="dark"] .markdown-content img { border-color: var(--line-1); }
+html[data-color-scheme="dark"] .pdf-annotation-markdown :is(pre, code, th) { background: var(--paper-2); }
+
+/* Mermaid's authored SVG uses its own light palette; its controls use the app
+   palette so labels stay legible without altering the diagram's semantics. */
+html[data-color-scheme="dark"] .mermaid-preview { border-color: var(--line-1); }
+html[data-color-scheme="dark"] .mermaid-preview__header { background: var(--surface-2); border-color: var(--line-1); }
+html[data-color-scheme="dark"] .mermaid-preview__header > div { color: var(--ink-1); }
+html[data-color-scheme="dark"] .mermaid-preview__svg { color: #242424; color-scheme: light; background: #ffffff; }
+
+/* PDF page annotations are authored against the paper, not the UI chrome. */
+html[data-color-scheme="dark"] .pdf-page-shell {
+  color-scheme: light;
+  --ink-1: #242424;
+  --ink-2: #616161;
+  --ink-3: #707070;
+  --paper-2: #ffffff;
+  --line-1: #d1d1d1;
+  --accent-1: #0f6cbd;
+}

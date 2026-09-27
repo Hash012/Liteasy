@@ -1,0 +1,32 @@
+.pdf-left-sidebar .pdf-sidebar-switcher { grid-template-columns: repeat(4, 28px); gap: 4px; padding: 8px; }
+.pdf-left-sidebar .pdf-sidebar-switcher button { width: 28px; height: 30px; }
+.pdf-overview-sidebar-note { padding: 10px; overflow: auto; color: var(--colorNeutralForeground2); font-size: 12px; }
+.pdf-outline { padding: 10px; overflow: auto; color: var(--colorNeutralForeground1); }
+.pdf-outline ol { list-style: none; padding: 0 0 0 10px; margin: 0; }
+.pdf-outline > ol { padding-left: 0; }
+.pdf-outline li { margin: 4px 0; }
+.pdf-outline summary { cursor: pointer; overflow-wrap: anywhere; padding: 5px 0; }
+.pdf-outline-link { width: 100%; text-align: left; border: 0; border-radius: 4px; padding: 6px; cursor: pointer; color: inherit; background: transparent; overflow-wrap: anywhere; }
+.pdf-outline-link:hover { background: var(--colorSubtleBackgroundHover); }
+.pdf-outline-link:disabled { color: var(--colorNeutralForegroundDisabled); cursor: default; }
+.pdf-stage.is-overview { overflow: hidden; display: flex; padding: 0; }
+.pdf-overview { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; height: 100%; background: var(--colorNeutralBackground2); color: var(--colorNeutralForeground1); }
+.pdf-overview-header { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--colorNeutralStroke2); }
+.pdf-overview-header > strong { margin-right: auto; }
+.pdf-pages-scroll, .pdf-annotations-overview-scroll { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
+.pdf-pages-grid { position: absolute; inset-inline: 0; display: grid; gap: 0 16px; list-style: none; padding: 0; margin: 0; }
+.pdf-pages-grid li { align-self: start; min-width: 0; padding: 8px; border: 1px solid transparent; border-radius: 6px; text-align: center; overflow: hidden; }
+.pdf-pages-grid li.active { border-color: var(--colorBrandStroke1); background: var(--colorBrandBackground2); }
+.pdf-pages-grid li > button { width: 100%; border: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; }
+.pdf-pages-grid li > button:focus-visible { outline: 2px solid var(--colorStrokeFocus2); }
+.pdf-pages-grid .pdf-thumbnail-page { display: block; margin: 0 auto; background: white; box-shadow: 0 1px 4px #0002; }
+.pdf-pages-grid .pdf-thumbnail-canvas { display: block; width: 100%; height: auto; }
+.pdf-thumbnail-retry { font-size: 11px; }
+.pdf-annotations-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 14px; list-style: none; padding: 0; margin: 0 0 14px; align-items: start; }
+.pdf-annotation-card { min-width: 0; padding: 14px; border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; background: var(--colorNeutralBackground1); overflow-wrap: anywhere; }
+.pdf-annotation-card > header { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; }
+.pdf-annotation-card > header > button { margin-left: auto; }
+.pdf-annotation-card blockquote { margin: 12px 0; padding-left: 10px; border-left: 3px solid var(--colorBrandStroke1); white-space: pre-wrap; }
+.pdf-overview-muted { color: var(--colorNeutralForeground3); }
+
+.pdf-pages-grid .pdf-thumbnail-number { margin: 5px auto 0; }

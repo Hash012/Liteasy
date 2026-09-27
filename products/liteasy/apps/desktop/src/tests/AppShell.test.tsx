@@ -180,7 +180,7 @@ test("wires the PDF reader to direct per-annotation publication controls", async
   await enterLocalWorkbench(user);
   const library = screen.getByRole("region", { name: "本地文献库" });
   await user.click(within(library).getByRole("button", { name: "展开Research" }));
-  await user.click(within(library).getByRole("button", { name: "Paper" }));
+  await user.dblClick(within(library).getByRole("button", { name: "Paper" }));
 
   expect(await screen.findByRole("checkbox", { name: "新批注自动公开到论坛" })).not.toBeChecked();
   expect(screen.queryByRole("button", { name: "发到论坛" })).not.toBeInTheDocument();

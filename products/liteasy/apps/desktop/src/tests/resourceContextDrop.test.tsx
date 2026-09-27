@@ -46,7 +46,8 @@ test("whole board context fixes its members and versions when dropped", async ()
   const data = transfer();
   writeObjectTransfer(data, makeObjectTransfer([refOf(result.current.board!)]));
   const attachments = await result.current.port.receiveContextDrop!(data);
-  expect(attachments[0].refs).toHaveLength(2);
+  expect(attachments[0].refs).toHaveLength(3);
+  expect(attachments[0].refs.some((ref) => ref.selectorId?.startsWith("board-context:"))).toBe(true);
   await act(async () => { await result.current.createNote("后来加入的内容"); });
   const snapshot = await resolveContextSnapshot({ repository: result.current.repository,
     refs: attachments[0].refs, purpose: "review" });
@@ -121,7 +122,11 @@ test("a library thin-reading locator resolves its actual document and deeper pag
   expect(body).toContain("Self-attention replaces recurrence");
   expect(result.current.visible).toBe(false);
   thin.nodes["deeper-page"].summary = "多层详细正文".repeat(6000);
-  await expect(result.current.port.receiveContextDrop!(data)).rejects.toThrow(/超|预算/);
+  const longAttachments = await result.current.port.receiveContextDrop!(data);
+  const bounded = await resolveContextSnapshot({ repository: result.current.repository,
+    refs: longAttachments[0].refs, purpose: "解释长文", policy: "balanced" });
+  expect(bounded.tokens).toBeLessThanOrEqual(6000);
+  expect(bounded.entries[0].coverage?.status).toBe("partial");
   data.setData(ARTIFACT_CONTEXT_MIME, "other-account-artifact");
   await expect(result.current.port.receiveContextDrop!(data)).rejects.toThrow("当前账号不可用");
   unmount();

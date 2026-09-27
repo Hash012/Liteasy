@@ -51,7 +51,7 @@ function normalizeRegion(
   const rawItemIds =
     "itemIds" in value && Array.isArray(value.itemIds) ? value.itemIds : [];
   const regionItems = new Set<DockItemId>();
-  const candidateItemIds = rawItemIds.filter((itemId): itemId is DockItemId => {
+  const candidateItemIds = rawItemIds.map((id) => id === "reading-library" ? "library" : id).filter((itemId): itemId is DockItemId => {
     if (
       !isDockItemId(itemId) ||
       claimedItems.has(itemId) ||
@@ -68,7 +68,8 @@ function normalizeRegion(
     regionItems.add(itemId);
     return true;
   });
-  const rawActiveItemId = "activeItemId" in value ? value.activeItemId : null;
+  const oldActiveItemId = "activeItemId" in value ? value.activeItemId : null;
+  const rawActiveItemId = oldActiveItemId === "reading-library" ? "library" : oldActiveItemId;
   const activeItemId =
     isDockItemId(rawActiveItemId) && candidateItemIds.includes(rawActiveItemId)
       ? rawActiveItemId

@@ -222,3 +222,21 @@ test("opens a persistent whiteboard beside the PDF reader", async () => {
   expect(screen.queryByLabelText("PDF 思考白板")).not.toBeInTheDocument();
   expect(toggle).toHaveAttribute("aria-pressed", "false");
 });
+
+test("double-clicking navigation buttons replaces pages with an overview and locating returns to the document", async () => {
+  renderAnnotation(annotation());
+  await screen.findByRole("button", { name: /编辑批注/u });
+  fireEvent.click(screen.getByRole("button", { name: "缩略图", exact: true }));
+  expect(screen.getByLabelText("PDF.js 页面列表")).toBeInTheDocument();
+  fireEvent.doubleClick(screen.getByRole("button", { name: "缩略图", exact: true }));
+  const pages = screen.getByRole("region", { name: "全部页面缩略图" });
+  expect(screen.queryByLabelText("PDF.js 页面列表")).not.toBeInTheDocument();
+  fireEvent.click(within(pages).getByRole("button", { name: "转到第 1 页" }));
+  expect(screen.getByLabelText("PDF.js 页面列表")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "批注", exact: true }));
+  fireEvent.doubleClick(screen.getByRole("button", { name: "批注", exact: true }));
+  const notes = screen.getByRole("region", { name: "全部批注" });
+  expect(screen.queryByLabelText("PDF.js 页面列表")).not.toBeInTheDocument();
+  fireEvent.click(within(notes).getByRole("button", { name: /定位第 1 页高亮/ }));
+  expect(screen.getByLabelText("PDF.js 页面列表")).toBeInTheDocument();
+});

@@ -1,5 +1,18 @@
 import { invoke } from "@tauri-apps/api/core";
 
+export const PAPER_FULLTEXT_SAVED_EVENT = "liteasy:paper-fulltext-saved";
+
+/** Observe successful reader/OCR writes without subscribing to unrelated paper settings. */
+export function subscribePaperFulltextSaved(listener: (paperId: string) => void) {
+  if (typeof window === "undefined") return () => undefined;
+  const receive = (event: Event) => {
+    const paperId = (event as CustomEvent<unknown>).detail;
+    if (typeof paperId === "string" && paperId.trim()) listener(paperId);
+  };
+  window.addEventListener(PAPER_FULLTEXT_SAVED_EVENT, receive);
+  return () => window.removeEventListener(PAPER_FULLTEXT_SAVED_EVENT, receive);
+}
+
 export type UserPaperArtifactKind =
   | "anchor-graph"
   | "anchors"
@@ -42,4 +55,7 @@ export async function saveUserPaperArtifact(input: {
   await invoke("save_user_paper_artifact", {
     ...input
   });
+  if (input.artifactKind === "fulltext") {
+    window.dispatchEvent(new CustomEvent(PAPER_FULLTEXT_SAVED_EVENT, { detail: input.paperId }));
+  }
 }

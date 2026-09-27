@@ -4,9 +4,10 @@ import { listen } from "@tauri-apps/api/event";
 import type { AgentJsonValue, AgentPublicApi } from "../../features/agent-api/agentApi.types";
 import { createAgentCliAdapter } from "../../features/agent-api/agentCliAdapter";
 import { createAgentMcpJsonRpcHandler } from "../../features/agent-api/agentMcpJsonRpc";
+import { paperReviewShareStore } from "../../features/pdf/paperReviewShare";
 
 type AgentHostRequest = {
-  kind: "cli" | "mcp_line";
+  kind: "cli" | "mcp_line" | "paper_review";
   payload: AgentJsonValue;
   requestId: string;
 };
@@ -28,7 +29,9 @@ export function useTauriAgentHostBridge(api: AgentPublicApi) {
         if (!isRecord(request.payload)) {
           throw new Error("Agent host payload must be an object");
         }
-        if (request.kind === "cli") {
+        if (request.kind === "paper_review") {
+          response = { ok: true, value: paperReviewShareStore.read(request.payload) } as AgentJsonValue;
+        } else if (request.kind === "cli") {
           const argv = request.payload.argv;
           if (!Array.isArray(argv) || !argv.every((value) => typeof value === "string")) {
             throw new Error("Agent CLI request requires a string argv array");

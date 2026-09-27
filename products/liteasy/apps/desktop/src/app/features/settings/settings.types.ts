@@ -1,3 +1,6 @@
+import type { RecommendationStyle } from "../recommendations/recommendation.types";
+import type { AppearancePreference } from "../theme/appearancePreference";
+
 export type SettingKey =
   | "thin_reading.mode"
   | "papers.metadata_provider"
@@ -6,6 +9,7 @@ export type SettingKey =
   | "papers.mineru_endpoint"
   | "network.recommendation.enabled"
   | "network.recommendation.sort_mode"
+  | "network.recommendation.style"
   | "assistant.public_audit.enabled"
   | "profile.enabled"
   | "assistant.default_output_mode"
@@ -22,6 +26,7 @@ export type SettingKey =
   | "models.cloud_proxy_endpoint"
   | "models.control_plane_endpoint"
   | "view.font_family"
+  | "view.theme"
   | "view.font_size"
   | "view.display_scale"
   | "view.pdf_background"
@@ -35,6 +40,7 @@ export type SettingsState = {
   "papers.mineru_endpoint": string;
   "network.recommendation.enabled": boolean;
   "network.recommendation.sort_mode": "relevance" | "retrieved_at";
+  "network.recommendation.style": RecommendationStyle;
   "assistant.public_audit.enabled": boolean;
   "profile.enabled": boolean;
   "assistant.default_output_mode": string;
@@ -51,6 +57,7 @@ export type SettingsState = {
   "models.cloud_proxy_endpoint": string;
   "models.control_plane_endpoint": string;
   "view.font_family": string;
+  "view.theme": AppearancePreference;
   "view.font_size": string;
   "view.display_scale": string;
   "view.pdf_background": "paper" | "warm" | "mint" | "custom";

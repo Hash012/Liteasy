@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { AssistantComposer } from "../app/features/assistant/AssistantComposer";
@@ -158,4 +158,59 @@ test("recognizes a mention directly after Chinese text", async () => {
   await user.keyboard("{Enter}");
   expect(add).toHaveBeenCalledOnce();
   expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveValue("解释一下");
+});
+
+test("opens the full asset browser from an empty mention result with the keyboard", async () => {
+  const user = userEvent.setup();
+  const send = vi.fn();
+  function Composer() {
+    const [input, setInput] = useState("");
+    return <AssistantComposer input={input} modeHint="上下文" onInputChange={setInput}
+      onSend={send} onVoiceInput={vi.fn()} suggestions={[]} />;
+  }
+  render(<Composer />);
+  expect(screen.getByRole("button", { name: "添加上下文" })).toBeInTheDocument();
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "@找不到的论文{Enter}");
+  expect(screen.getByRole("dialog", { name: "上下文资产浏览器" })).toBeInTheDocument();
+  expect(screen.getByRole("textbox", { name: "搜索全部上下文资产" })).toHaveValue("找不到的论文");
+  expect(send).not.toHaveBeenCalled();
+});
+
+test("closes the browser and ignores pending additions when the context scope changes", async () => {
+  const user = userEvent.setup();
+  const add = vi.fn();
+  let complete!: (token: import("../app/features/assistant/assistant.types").AssistantContextToken) => void;
+  const props = { input: "", modeHint: "上下文", onInputChange: vi.fn(), onSend: vi.fn(), onVoiceInput: vi.fn(),
+    onAddContextToken: add, suggestions: [{ id: "asset", label: "原文", trigger: "@" as const,
+      resolveToken: () => new Promise<import("../app/features/assistant/assistant.types").AssistantContextToken>((resolve) => { complete = resolve; }) }] };
+  const { rerender } = render(<AssistantComposer {...props} contextScopeId="account-a/session-1" />);
+  await user.click(screen.getByRole("button", { name: "添加上下文" }));
+  await user.click(screen.getByRole("checkbox", { name: "选择 原文" }));
+  await user.click(screen.getByRole("button", { name: "添加所选（1）" }));
+  rerender(<AssistantComposer {...props} contextScopeId="account-b/session-2" />);
+  complete({ id: "source", label: "原文", kind: "object", prompt: "" });
+  expect(screen.queryByRole("dialog", { name: "上下文资产浏览器" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "添加上下文" }));
+  expect(add).not.toHaveBeenCalled();
+  expect(screen.getByText("已选 0 项")).toBeInTheDocument();
+});
+
+test("keeps thinking depth collapsed until clicked and supports keyboard adjustment and dismissal", async () => {
+  function Composer() {
+    const [depth, setDepth] = useState<"quick" | "balanced" | "deliberate">("balanced");
+    return <AssistantComposer input="" modeHint="问答" onInputChange={vi.fn()} onSend={vi.fn()} onVoiceInput={vi.fn()}
+      thinkingDepth={depth} onThinkingDepthChange={setDepth} />;
+  }
+  const user = userEvent.setup();
+  render(<Composer />);
+  expect(screen.queryByRole("slider", { name: "思考深度" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "调整思考深度：均衡" }));
+  const slider = screen.getByRole("slider", { name: "思考深度" });
+  slider.focus();
+  // jsdom does not implement native range keyboard changes; the browser suite covers dragging/keys.
+  fireEvent.change(slider, { target: { value: "0" } });
+  expect(slider).toHaveAttribute("aria-valuetext", "快速");
+  await user.keyboard("{Escape}");
+  expect(screen.queryByRole("slider", { name: "思考深度" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "调整思考深度：快速" })).toBeInTheDocument();
 });

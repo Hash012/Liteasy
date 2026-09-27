@@ -1,3 +1,4 @@
+import { displayPath } from "../resource-filesystem/displayPath";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { Button, Input } from "@fluentui/react-components";
@@ -29,13 +30,13 @@ export function DataLocationSettings() {
     <div className="sidebar-section-header"><FolderOpenRegular /><span>数据保存位置</span></div>
     <div className="sidebar-section-content">
       {desktop ? <>
-        <p>文献库、笔记对象、聊天历史和生成内容保存在此目录。外接文件夹和单独设置的文献库保持原位置。</p>
-        <label>当前目录<Input aria-label="当前数据保存路径" readOnly value={location?.currentPath ?? ""} style={{ width: "100%" }} /></label>
+        <p>Windows 新安装默认将数据保存在安装目录下的 LiteasyData；已有数据和自定义目录保持原位置，可在此迁移。文献库、笔记对象、聊天历史和生成内容保存在此目录。外接文件夹和单独设置的文献库保持原位置。</p>
+        <label>当前目录<Input aria-label="当前数据保存路径" readOnly value={displayPath(location?.currentPath ?? "")} style={{ width: "100%" }} /></label>
         <Button size="small" disabled={busy} onClick={() => void run("choose_data_location")}>选择数据保存位置</Button>
         <Button size="small" disabled={busy || !location} onClick={() => void run("reveal_data_location")}>打开数据文件夹</Button>
         <p>选择后将在目标位置创建 LiteasyData。重启时复制并校验现有数据，成功后启用新目录，旧目录保留。</p>
         {location?.pendingPath ? <>
-          <p>重启后保存至：<span style={{ overflowWrap: "anywhere" }}>{location.pendingPath}</span></p>
+          <p>重启后保存至：<span style={{ overflowWrap: "anywhere" }}>{displayPath(location.pendingPath)}</span></p>
           <p>请先保存正在编辑的内容并等待生成任务结束。</p>
           <Button size="small" disabled={busy} onClick={() => void run("restart_for_data_location")}>重启并迁移数据</Button>
           <Button size="small" disabled={busy} onClick={() => void run("cancel_data_location_change")}>取消目录更改</Button>

@@ -1,7 +1,16 @@
+import { useWindowControls } from "../controllers/useWindowControls";
+import { WorkspaceCommandBar } from "./WorkspaceCommandBar";
+import { FileStatusBar } from "./FileStatusBar";
+import { noteFileStatus, paperFileStatus, readingFileStatus, usePdfFileStatus, useWorkspaceShellController } from "../controllers/useWorkspaceShellController";
+import type { WorkspaceSurface } from "../features/workspace/workspaceShell.types";
 import { useWebDavSyncController } from "../controllers/useWebDavSyncController";
+import { useReadingLibraryController } from "../controllers/useReadingLibraryController";
+import { ReadingLibrarySurface } from "../features/reading-library/ReadingLibrarySurface";
+import { ResourceLocationButton } from "../features/resource-filesystem/ResourceLocationButton";
 import { artifactResourceScope } from "../features/resource-filesystem/artifactResourceProvider";
 import { paperCitationOpenRequest } from "../features/paper-anchors/paperAnchorEntity";
 import { useAssistantContextCatalog } from "../controllers/useAssistantContextCatalog";
+import { usePaperProjectsController } from "../controllers/usePaperProjectsController";
 import { useArtifactSessionNavigationController } from "../controllers/useArtifactSessionNavigationController";
 import { usePdfMetadataImportController } from "../controllers/usePdfMetadataImportController";
 import { extractPdfRecognitionEvidence } from "../features/import/pdfTextExtractor";
@@ -18,7 +27,7 @@ import { NotesContext } from "../features/notes/notesPort";
 import { refOf, objectLink } from "../features/objects/object.types";
 import { makeObjectTransfer, writeObjectTransfer } from "../features/object-transfer/objectTransfer";
 import { PAPER_CONTEXT_MIME } from "../features/object-transfer/contextTransfer";
-import { isBaseDockRegionId } from "../features/dock/dockRegistry";
+import { dockItemRegistry, isBaseDockRegionId } from "../features/dock/dockRegistry";
 import { useHelpController } from "../controllers/useHelpController";
 import { HelpPanel } from "../features/help/HelpPanel";
 import { HelpContext } from "../features/help/helpContext";
@@ -286,6 +295,8 @@ export function AppShell({
     refresh: refreshLocalLibrary,
     snapshot: localLibrarySnapshot
   } = useLocalLibrary(localLibraryLoader);
+  const pdfFileStatus = usePdfFileStatus();
+  const windowControls = useWindowControls();
   const paneLayout = usePaneLayout();
   const dock = useDockLayout();
   const assistantSurfaceHost = useMemo(createDockSurfaceHost, []);
@@ -1072,6 +1083,7 @@ export function AppShell({
     getApi: () => objectAgentApiRef.current!,
     readPaperBytes: loadPaperPdfBytes,
     listLegacyArtifacts: () => artifactResultClientRef.current!.list(),
+    getArtifactTitles: () => artifactCatalog,
     openLegacyArtifact: (id) => artifactWorkflow.actions.openArtifact(id),
     getPapers: () => workspaceStoreRef.current.getState().papers,
     getSettings: () => settingsStoreRef.current.getState(),
@@ -1110,11 +1122,26 @@ export function AppShell({
     listArtifacts: () => artifactResultClientRef.current!.list(),
     openArtifact: (id) => { artifactWorkflow.actions.openArtifact(id); activateArtifactSurface(id); }
   });
+  const projectExtractionVersion = useMemo(() => ({ imports: importJobsByDocumentId, saved: paperServices.resources }), [importJobsByDocumentId, paperServices.resources]);
+  const paperProjects = usePaperProjectsController({
+    scopeId: objectWorkbench.repository.scopeId, papers: workspaceState.papers, artifacts: artifactCatalog,
+    extractionVersion: projectExtractionVersion, getResources: getPaperMineruResources,
+  });
   const assistantContextSuggestions = useAssistantContextCatalog({
     artifacts: artifactCatalog,
     objects: objectWorkbench.objects,
     port: objectWorkbench.port,
-    repository: objectWorkbench.repository
+    repository: objectWorkbench.repository,
+    projects: paperProjects,
+    papers: workspaceState.papers,
+  });
+  const readingLibrary = useReadingLibraryController({
+    scopeId: objectWorkbench.repository.scopeId,
+    papers: workspaceState.papers,
+    enabled: true,
+    importPdfs: (files, targetFolderPath) => workspaceActions.addDroppedPdfFiles(files, targetFolderPath),
+    onOpenReader: () => { workbenchNavigation.open("document-reader"); workspaceShell.focusRegion(dock.findItemRegion("document-reader") ?? "main"); },
+    openPaper: openPaperInReader
   });
   const artifactSessionNavigation = useArtifactSessionNavigationController({
     tasks: artifactTasks, scopeId: assistantScopeId,
@@ -1216,6 +1243,7 @@ export function AppShell({
     recommendationTransport,
     recommendationsEnabled: settingsState["network.recommendation.enabled"],
     recommendationSortMode: settingsState["network.recommendation.sort_mode"],
+    recommendationStyle: settingsState["network.recommendation.style"],
     personalizationEnabled: settingsState["profile.enabled"],
     personalizationVersion: profileActions.personalizationVersion,
     researchProfile: settingsState["profile.enabled"]
@@ -1557,6 +1585,12 @@ export function AppShell({
   }
 
   const leftPaneProps: Omit<LeftPaneProps, "leftRailView"> = {
+    fileLibrary: {
+      entries: readingLibrary.entries, selectedId: readingLibrary.selected?.id,
+      pending: readingLibrary.pending, message: readingLibrary.message,
+      onImport: readingLibrary.importFiles, onInspect: readingLibrary.inspect, onOpen: readingLibrary.open,
+      onMetadataChange: readingLibrary.updateMetadata
+    },
     accountScopeId: accountSession?.userId,
     activePaperId: activeReaderPaper?.id ?? null,
     academicProfile: profileActions.academicProfile,
@@ -1664,6 +1698,7 @@ export function AppShell({
     onAddExternalPdf: externalPapers.promoteExternalPaperToLibrary,
     onClearProfile: profileActions.openClearProfileConfirm,
     onClearRecommendations: knowledgeSync.actions.clearRecommendationCache,
+    onRefreshRecommendations: knowledgeSync.actions.refreshRecommendations,
     onDeleteArtifact: deleteArtifact,
     onDismissRecommendation: async (recommendation) => {
       await knowledgeSync.actions.dismissRecommendation(recommendation);
@@ -1772,6 +1807,11 @@ export function AppShell({
     recommendationPending,
     recommendationStatus,
     readNotificationIds,
+    recommendationStyle: settingsState["network.recommendation.style"],
+    onRecommendationStyleChange: (style) => {
+      settingsStoreRef.current.apply({ intent: "update_setting", target: "network.recommendation.style", value: style });
+      setSettingsState(cloneSettingsState(settingsStoreRef.current.getState()));
+    },
     selectedPaperIds: workspaceState.selectedPaperIds,
     selectionLocked: workspaceState.selectionLocked,
     settings: settingsState,
@@ -1791,6 +1831,7 @@ export function AppShell({
   }
 
   function activateDockItem(regionId: DockRegionId, itemId: DockItemId) {
+    workspaceShell.focusRegion(regionId);
     if (regionId === "main") {
       setActiveCenterArtifactId(null);
       setActiveReaderPaperId(null);
@@ -1916,6 +1957,13 @@ export function AppShell({
   }
 
   function renderDockItem(itemId: DockItemId, regionId: DockRegionId) {
+    if (itemId === "document-reader") return <ReadingLibrarySurface
+      key={objectWorkbench.repository.scopeId}
+      entries={readingLibrary.entries} active={readingLibrary.active} pending={readingLibrary.pending}
+      message={readingLibrary.message} scopeId={objectWorkbench.repository.scopeId}
+      onCloseReader={() => { readingLibrary.closeReader(); openDockedLeftRailView("library"); dock.closeItem("document-reader"); }}
+      onMetadataChange={readingLibrary.updateMetadata} onExport={readingLibrary.exportFile} onRemove={readingLibrary.remove}
+      renderLocation={(entry) => <ResourceLocationButton target={readingLibrary.target(entry)} />} />;
     if (itemId === "help") return <HelpPanel model={help.model} />;
     if (isLeftRailDockItem(itemId)) {
       return <LeftPane {...leftPaneProps} leftRailView={itemId} />;
@@ -2001,6 +2049,8 @@ export function AppShell({
           runtimeWorkspace={workspaceState.workspaceSource}
           availablePapers={workspaceState.papers}
           contextSuggestions={assistantContextSuggestions}
+          contextCatalogStatus={paperProjects.error || undefined}
+          onRefreshContextCatalog={paperProjects.error ? paperProjects.refresh : undefined}
           selectedPaperCount={workspaceState.selectedPaperIds.length}
           selectedPapers={selectedPapers}
           selectionLocked={workspaceState.selectionLocked}
@@ -2020,6 +2070,7 @@ export function AppShell({
     ];
     return (
       <ReaderPane
+        onDocumentInfo={pdfFileStatus.onDocumentInfo}
         onQuickAsk={askPdfQuestion}
         {...teamAnnotations.readerBindings(paper)}
         allowServerPdfParsing={false}
@@ -2131,10 +2182,7 @@ export function AppShell({
     }
   }
 
-  function renderDockRegion(regionId: DockRegionId) {
-    const showDetachedLayoutControls =
-      regionId === "main" &&
-      activeCenterArtifactId !== null;
+  function getDockRegionTabs(regionId: DockRegionId) {
     const dynamicReaderTabs = openReaderPapers.filter((paper) => (dock.findDynamicItemRegion(`pdf-${paper.id}`) ?? "main") === regionId).map((paper) => ({
           draggable: true,
           onDragStart: (event: React.DragEvent<HTMLButtonElement>) => { event.dataTransfer.effectAllowed = "copyMove"; event.dataTransfer.setData(PAPER_CONTEXT_MIME, paper.id); },
@@ -2213,7 +2261,11 @@ export function AppShell({
           title: tab.title
         };
       });
-    const dynamicTabs = [...dynamicReaderTabs, ...dynamicPaperResourceTabs, ...dynamicVisualizationTabs, ...dynamicArtifactTabs];
+    return [...dynamicReaderTabs, ...dynamicPaperResourceTabs, ...dynamicVisualizationTabs, ...dynamicArtifactTabs];
+  }
+
+  function renderDockRegion(regionId: DockRegionId) {
+    const dynamicTabs = getDockRegionTabs(regionId);
     return (
       <DockRegion
         dynamicTabs={dynamicTabs}
@@ -2250,6 +2302,47 @@ export function AppShell({
     );
   }
 
+  const readingEntry = readingLibrary.entries.find((entry) => entry.id === readingLibrary.active?.id);
+  const shellSurfaces = Object.keys(dock.layout.regions).flatMap((id): WorkspaceSurface[] => {
+    const region = id as DockRegionId;
+    const tabs = getDockRegionTabs(region);
+    const visible = visibleHorizontalRegions.includes(region) || (bottomPaneVisible && dock.layout.bottomOrder.includes(region));
+    const selected = tabs.find((tab) => tab.selected);
+    return [
+      ...tabs.map((tab): WorkspaceSurface => {
+        const paper = openReaderPapers.find((paper) => tab.id === `pdf-${paper.id}`);
+        return {
+          id: tab.id, region, dynamic: true, active: visible && tab === selected, title: tab.title,
+          fileStatus: paper ? { ...paperFileStatus(paper, importJobsByDocumentId[paper.id], pdfFileStatus.forPaper(paper)), entry: readingLibrary.entries.find((entry) => entry.id === paper.id) } : undefined,
+          search: paper?.sourcePath ? "pdf" : undefined,
+          onActivate: () => { revealDockRegion(region); tab.onActivate(); }
+        };
+      }),
+      ...dock.layout.regions[region].itemIds.map((item): WorkspaceSurface => ({
+        id: item, region,
+        active: visible && !selected && dock.layout.regions[region].activeItemId === item,
+        title: item === "document-reader" ? readingLibrary.active?.document.title ?? dockItemRegistry[item].title
+          : item === "notes" ? notes.model.selected?.title ?? dockItemRegistry[item].title : dockItemRegistry[item].title,
+        fileStatus: item === "library" ? readingFileStatus(readingLibrary.selected)
+          : item === "document-reader" ? readingFileStatus(readingEntry)
+          : item === "notes" ? noteFileStatus(notes.model.selected) : undefined,
+        search: item === "document-reader" ? readingLibrary.active ? "reading-document" : undefined
+          : item === "library" ? "library" : item === "notes" ? "notes" : undefined,
+        onActivate: () => { revealDockRegion(region); activateDockItem(region, item); }
+      }))
+    ];
+  });
+  const workspaceShell = useWorkspaceShellController({
+    surfaces: shellSurfaces,
+    layoutActions: (["left", "right", "bottom"] as const).map((region) => ({
+      id: region,
+      label: { left: "左侧栏", right: "右侧栏", bottom: "下栏" }[region],
+      checked: !paneLayout.collapsed[region],
+      onSelect: () => paneLayout.setCollapsed(region, !paneLayout.collapsed[region])
+    })),
+    openSettings: () => openDockedLeftRailView("settings")
+  });
+
   const appFrameStyle = {
     ...(runtimeTheme.kind === "generated"
       ? (createGeneratedThemeStyle(runtimeTheme.theme) as CSSProperties)
@@ -2257,7 +2350,7 @@ export function AppShell({
     fontFamily: settingsState["view.font_family"],
     fontSize: `${settingsState["view.font_size"]}px`
   } as CSSProperties;
-  const appFrameClassName = `app-frame${
+  const appFrameClassName = `app-frame workspace-frame${
     runtimeTheme.kind === "preset" && runtimeTheme.preset === "playful" ? " theme-playful" : ""
   }${runtimeTheme.kind === "generated" ? " theme-generated" : ""}`;
   const appFrameScope =
@@ -2268,6 +2361,7 @@ export function AppShell({
     <HelpContext.Provider value={help.port}>
     <ObjectWorkbenchContext.Provider value={objectWorkbench.port}>
     <div className={appFrameClassName} data-theme-scope={appFrameScope} style={appFrameStyle}>
+      <WorkspaceCommandBar state={workspaceShell.toolbar} windowControls={windowControls} />
       <div
         className={`app-shell${objectWorkbench.visible ? " object-workbench-open" : ""}`}
         data-testid="workbench-layout"
@@ -2298,6 +2392,7 @@ export function AppShell({
             onToggleRight={() => paneLayout.setCollapsed("right", !paneLayout.collapsed.right)}
           /></>}
           activeView={leftRail.leftRailView}
+          isViewVisible={workbenchNavigation.isVisible}
           accountSessionAvailable={accountSession !== null}
           onSelectView={(view) => {
             openDockedLeftRailView(view);
@@ -2424,6 +2519,11 @@ export function AppShell({
           </section>
         ) : null}
       </div>
+      <FileStatusBar key={objectWorkbench.repository.scopeId} status={workspaceShell.fileStatus}
+        actions={{ onOpen: readingLibrary.openInspected,
+          onMetadataChange: readingLibrary.entries.some((entry) => entry.id === workspaceShell.fileStatus?.entry?.id) ? readingLibrary.updateMetadata : undefined,
+          onExport: readingLibrary.exportFile, onDelete: readingLibrary.remove,
+          renderLocation: (entry) => readingLibrary.entries.some((item) => item.id === entry.id) ? <ResourceLocationButton target={readingLibrary.target(entry)} /> : null }} />
     </div>
     {createPortal(renderAssistantSurface(dock.findItemRegion("assistant") ?? "right"), assistantSurfaceHost)}
     </ObjectWorkbenchContext.Provider>

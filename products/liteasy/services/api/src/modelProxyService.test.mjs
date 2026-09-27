@@ -3,6 +3,8 @@ import test from "node:test";
 import { ModelProxyError, ModelProxyService } from "./modelProxyService.mjs";
 import { ModelUpstreamError } from "./modelUpstreamProviders.mjs";
 
+const image = { mediaType: "image/png", base64: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]).toString("base64"), label: "Private research figure" };
+
 function context() {
   return { subjectId: "user_1", traceId: "trace_model_1" };
 }
@@ -122,4 +124,39 @@ test("streams only text deltas and records completion after the iterator finishe
   assert.deepEqual(deltas, ["Real ", "answer"]);
   assert.equal(events[0].outputChars, 11);
   assert.equal(events[0].status, "completed");
+});
+
+test("validates and forwards images for generation and streaming without logging their content", async () => {
+  const inputs = [];
+  const { instance, events } = service({ providers: { openai: { model: "gpt-5-mini", supportsImages: true,
+    async generate(input) { inputs.push(input); return "Image answer"; },
+    async *stream(input) { inputs.push(input); yield "Image answer"; },
+  } } });
+  await instance.generate(body({ images: [image] }), context());
+  for await (const _delta of instance.generateStream(body({ images: [image] }), context())) { /* consume */ }
+  assert.equal(inputs.length, 2);
+  assert.deepEqual(inputs.map((input) => input.images), [[image], [image]]);
+  assert.equal(JSON.stringify(events).includes(image.base64), false);
+  assert.equal(JSON.stringify(events).includes(image.label), false);
+});
+
+test("rejects malformed, external, mismatched and excessive image data before provider access", async () => {
+  let accessed = false;
+  const { instance } = service({ providers: { openai: { model: "gpt-5-mini", supportsImages: true,
+    async generate() { accessed = true; return "unused"; },
+  } } });
+  for (const images of [null, {}, Array(13).fill(image), [{ ...image, url: "https://untrusted/image.png" }],
+    [{ ...image, mediaType: "image/jpeg" }], [{ ...image, base64: "not base64" }], [{ ...image, label: "x".repeat(1001) }]]) {
+    await assert.rejects(instance.generate(body({ images }), context()), { code: "model_images_invalid" });
+  }
+  const large = Buffer.alloc(3 * 1024 * 1024);
+  Buffer.from(image.base64, "base64").copy(large);
+  await assert.rejects(instance.generate(body({ images: [{ ...image, base64: large.toString("base64") }, { ...image, base64: large.toString("base64") }] }), context()),
+    { code: "model_images_too_large", status: 413 });
+  assert.equal(accessed, false);
+});
+
+test("does not silently strip images for a provider without image capability", async () => {
+  const { instance } = service();
+  await assert.rejects(instance.generate(body({ images: [image] }), context()), { code: "model_images_unsupported", status: 415 });
 });

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { formatCloudConnectionError } from "../network/cloudErrorMessage";
 import type { AccountSession } from "../account/account.types";
 import type { SettingsState } from "../settings/settings.types";
-import { fetchCloudRecommendations } from "./recommendationRuntime";
+import { fetchCloudRecommendations, type RecommendationRuntimeInput } from "./recommendationRuntime";
+import { rankRecommendations, recommendationRankingVersion } from "./recommendationRanking";
 import {
   clearCloudRecommendationCache,
   getCloudRecommendationCache,
@@ -10,6 +11,7 @@ import {
 } from "./recommendationCacheRuntime";
 import type {
   RecommendationItem,
+  RecommendationStyle,
   RecommendationResearchProfile,
   RecommendationStatus
 } from "./recommendation.types";
@@ -38,13 +40,7 @@ type UseRecommendationsInput = {
     ) => Promise<{ cachedAt: string; ok: true }>;
   };
   recommendationGeneratorDeps?: {
-    fetch: (input: {
-      controlPlaneEndpoint: string;
-      researchProfile?: RecommendationResearchProfile;
-      selectedDocuments: Array<{ id: string; title: string }>;
-      sessionId: string;
-      sortMode: SettingsState["network.recommendation.sort_mode"];
-    }) => Promise<RecommendationItem[]>;
+    fetch: (input: RecommendationRuntimeInput) => Promise<RecommendationItem[]>;
   };
   recommendationFeedbackDeps?: {
     record: (input: {
@@ -58,6 +54,7 @@ type UseRecommendationsInput = {
   recommendationCacheTransport?: RecommendationCacheTransport;
   recommendationsEnabled: boolean;
   recommendationSortMode: SettingsState["network.recommendation.sort_mode"];
+  recommendationStyle?: RecommendationStyle;
   personalizationVersion?: number;
   researchProfile?: RecommendationResearchProfile;
   selectedPapers: Paper[];
@@ -67,14 +64,15 @@ type UseRecommendationsInput = {
 
 function buildSelectionCacheKey(
   selectedPapers: Paper[],
-  researchProfile?: RecommendationResearchProfile
+  researchProfile?: RecommendationResearchProfile,
+  style: RecommendationStyle = "balanced"
 ) {
   const paperKey = selectedPapers
-    .map((paper) => paper.id)
+    .map((paper) => `${paper.id}:${paper.title}`)
     .sort()
     .join("|");
   const serializedProfile = researchProfile ? JSON.stringify(researchProfile) : "";
-  const rawKey = `${paperKey}::${serializedProfile}`;
+  const rawKey = `${recommendationRankingVersion}:${style}:${paperKey}::${serializedProfile}`;
   let hash = 2166136261;
   for (let index = 0; index < rawKey.length; index += 1) {
     hash ^= rawKey.charCodeAt(index);
@@ -92,19 +90,6 @@ function buildWorkspaceCacheKey(workspaceSourceKey: string) {
   return `workspace:${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
-function sortRecommendationItems(
-  items: RecommendationItem[],
-  sortMode: SettingsState["network.recommendation.sort_mode"]
-) {
-  const nextItems = [...items];
-
-  if (sortMode === "retrieved_at") {
-    return nextItems.sort((left, right) => right.discoveredAt.localeCompare(left.discoveredAt));
-  }
-
-  return nextItems.sort((left, right) => right.relevanceScore - left.relevanceScore);
-}
-
 export function useRecommendations({
   accountSession,
   controlPlaneEndpoint,
@@ -116,6 +101,7 @@ export function useRecommendations({
   recommendationTransport,
   recommendationsEnabled,
   recommendationSortMode,
+  recommendationStyle = "balanced",
   personalizationVersion = 0,
   researchProfile,
   selectedPapers,
@@ -123,7 +109,18 @@ export function useRecommendations({
   workspaceSourceKey
 }: UseRecommendationsInput) {
   const suppressNextCachedMessageRef = useRef(false);
-  const selectionKey = buildSelectionCacheKey(selectedPapers, researchProfile);
+  const selectionKey = buildSelectionCacheKey(selectedPapers, researchProfile, recommendationStyle);
+  const requestController = useRef<AbortController>();
+  const cacheWrites = useRef(new Set<{ key: string; promise: Promise<unknown> }>());
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const accountKey = `${controlPlaneEndpoint}:${accountSession?.sessionId}`;
+  const hidden = useRef({ account: accountKey, ids: new Set<string>() });
+  if (hidden.current.account !== accountKey) hidden.current = { account: accountKey, ids: new Set() };
+  const scopeKey = `${controlPlaneEndpoint}:${accountSession?.sessionId}:${selectionKey}:${workspaceSourceKey}:${workspaceRevision}:${recommendationSortMode}`;
+  const scopeRef = useRef(scopeKey);
+  const displayedScope = useRef("");
+  scopeRef.current = scopeKey;
+  const sortItems = (items: RecommendationItem[]) => rankRecommendations(items.filter((item) => !hidden.current.ids.has(item.canonicalId ?? item.id)), { style: recommendationStyle, sortMode: recommendationSortMode, selectedDocuments: selectedPapers });
   const currentScope = accountSession
       ? {
         personalizationVersion,
@@ -133,9 +130,10 @@ export function useRecommendations({
         workspaceKey: buildWorkspaceCacheKey(workspaceSourceKey)
       }
     : null;
+  const cacheKey = JSON.stringify([controlPlaneEndpoint, currentScope]);
   const [recommendationItems, setRecommendationItems] = useState<RecommendationItem[]>([]);
   const [recommendationMessage, setRecommendationMessage] = useState(
-    "勾选文献后，这里会显示与当前选中文献集相关的推荐。"
+    "勾选文献或完善研究兴趣后，这里会显示相关论文推荐。"
   );
   const [recommendationPending, setRecommendationPending] = useState(false);
   const [recommendationStatus, setRecommendationStatus] = useState<RecommendationStatus>("idle");
@@ -144,7 +142,7 @@ export function useRecommendations({
     setRecommendationItems([]);
     setRecommendationPending(false);
     setRecommendationStatus("idle");
-    setRecommendationMessage("勾选文献后，这里会显示与当前选中文献集相关的推荐。");
+    setRecommendationMessage("勾选文献或完善研究兴趣后，这里会显示相关论文推荐。");
   }, [workspaceRevision]);
 
   useEffect(() => {
@@ -156,11 +154,11 @@ export function useRecommendations({
       return;
     }
 
-    if (selectedPapers.length === 0) {
+    if (selectedPapers.length === 0 && ![...(researchProfile?.topics ?? []), ...(researchProfile?.methods ?? [])].some((term) => term.trim())) {
       setRecommendationItems([]);
       setRecommendationPending(false);
       setRecommendationStatus("idle");
-      setRecommendationMessage("勾选文献后，这里会显示与当前选中文献集相关的推荐。");
+      setRecommendationMessage("勾选文献或完善研究兴趣后，这里会显示相关论文推荐。");
       return;
     }
 
@@ -174,6 +172,11 @@ export function useRecommendations({
 
     let active = true;
     const session = accountSession;
+    const controller = new AbortController();
+    requestController.current = controller;
+    const isActive = () => active && !controller.signal.aborted;
+    if (displayedScope.current !== scopeKey) setRecommendationItems([]);
+    displayedScope.current = scopeKey;
     setRecommendationPending(true);
     setRecommendationStatus("loading");
     setRecommendationMessage("正在获取与当前选中文献集相关的推荐...");
@@ -213,13 +216,7 @@ export function useRecommendations({
     };
 
     const generatorApi = recommendationGeneratorDeps ?? {
-      fetch: (input: {
-        controlPlaneEndpoint: string;
-        researchProfile?: RecommendationResearchProfile;
-        selectedDocuments: Array<{ id: string; title: string }>;
-        sessionId: string;
-        sortMode: SettingsState["network.recommendation.sort_mode"];
-      }) =>
+      fetch: (input: RecommendationRuntimeInput) =>
         fetchCloudRecommendations(input, {
           transport: recommendationTransport
         })
@@ -239,12 +236,10 @@ export function useRecommendations({
         cacheResult = null;
       }
 
+      if (!isActive()) throw new DOMException("Request superseded", "AbortError");
       if (cacheResult?.cacheHit) {
-        if (active) {
-          setRecommendationItems(sortRecommendationItems(
-            cacheResult.recommendations,
-            recommendationSortMode
-          ));
+        if (isActive()) {
+          setRecommendationItems(sortItems(cacheResult.recommendations));
           setRecommendationStatus("ready");
           setRecommendationMessage("已显示缓存推荐，正在联网刷新。");
         }
@@ -253,6 +248,8 @@ export function useRecommendations({
       let generatedRecommendations: RecommendationItem[];
       try {
         generatedRecommendations = await generatorApi.fetch({
+          style: recommendationStyle,
+          signal: controller.signal,
           controlPlaneEndpoint,
           researchProfile,
           sortMode: recommendationSortMode,
@@ -267,33 +264,31 @@ export function useRecommendations({
           return {
             fromCache: true as const,
             refreshError: error,
-            recommendations: sortRecommendationItems(
-              cacheResult.recommendations,
-              recommendationSortMode
-            )
+            recommendations: sortItems(cacheResult.recommendations)
           };
         }
         throw error;
       }
 
+      if (!isActive()) throw new DOMException("Request superseded", "AbortError");
       try {
-        await cacheApi.put(currentScope!, generatedRecommendations);
+        const write = { key: cacheKey, promise: cacheApi.put(currentScope!, generatedRecommendations) };
+        cacheWrites.current.add(write);
+        try { await write.promise; }
+        finally { cacheWrites.current.delete(write); }
       } catch {
         // Cache write-back is best-effort. Recommendation display must still succeed.
       }
 
       return {
         fromCache: false as const,
-        recommendations: sortRecommendationItems(
-          generatedRecommendations,
-          recommendationSortMode
-        )
+        recommendations: sortItems(generatedRecommendations)
       };
     }
 
     void runRecommendationFlow()
       .then((items) => {
-        if (!active) {
+        if (!isActive()) {
           return;
         }
 
@@ -318,7 +313,7 @@ export function useRecommendations({
         );
       })
       .catch((error) => {
-        if (!active) {
+        if (!isActive()) {
           return;
         }
 
@@ -330,13 +325,14 @@ export function useRecommendations({
         setRecommendationMessage(`关联推荐获取失败。详细信息：${detail}`);
       })
       .finally(() => {
-        if (active) {
+        if (isActive()) {
           setRecommendationPending(false);
         }
       });
 
     return () => {
       active = false;
+      controller.abort();
     };
   }, [
     accountSession?.sessionId,
@@ -345,11 +341,16 @@ export function useRecommendations({
     recommendationTransport,
     recommendationsEnabled,
     recommendationSortMode,
+    recommendationStyle,
+    workspaceRevision,
+    refreshVersion,
     selectionKey,
     workspaceSourceKey
   ]);
 
   async function clearRecommendationCache() {
+    requestController.current?.abort();
+    const startedScope = scopeKey;
     if (!currentScope) {
       setRecommendationItems([]);
       setRecommendationPending(false);
@@ -371,7 +372,21 @@ export function useRecommendations({
         )
     };
 
-    await cacheApi.clear(currentScope);
+    try {
+      // An already dispatched cache write cannot be aborted. Clear after it
+      // settles so an older request cannot repopulate a successfully cleared scope.
+      await Promise.allSettled([...cacheWrites.current].filter((write) => write.key === cacheKey).map((write) => write.promise));
+      await cacheApi.clear(currentScope);
+    }
+    catch {
+      if (scopeRef.current === startedScope) {
+        setRecommendationPending(false);
+        setRecommendationStatus("error");
+        setRecommendationMessage("推荐缓存清理失败，可重试或刷新推荐。");
+      }
+      return;
+    }
+    if (scopeRef.current !== startedScope) return;
     suppressNextCachedMessageRef.current = true;
     setRecommendationItems([]);
     setRecommendationPending(false);
@@ -387,6 +402,7 @@ export function useRecommendations({
       setRecommendationMessage("登录后才能保存推荐反馈。");
       return false;
     }
+    const startedScope = scopeKey;
     const feedbackApi = recommendationFeedbackDeps ?? {
       record: createRecommendationFeedbackClient({
         endpoint: controlPlaneEndpoint,
@@ -400,10 +416,19 @@ export function useRecommendations({
         sessionId: accountSession.sessionId
       });
     } catch {
-      setRecommendationMessage("推荐反馈保存失败，请稍后重试。");
+      if (scopeRef.current === startedScope) {
+        setRecommendationStatus("error");
+        setRecommendationMessage("推荐反馈保存失败，请稍后重试。");
+      }
       return false;
     }
-    setRecommendationItems((items) => items.filter((item) => item.id !== candidate.id));
+    if (hidden.current.account !== accountKey) return false;
+    hidden.current.ids.add(candidate.canonicalId ?? candidate.id);
+    setRecommendationItems((items) => items.filter((item) => (item.canonicalId ?? item.id) !== (candidate.canonicalId ?? candidate.id)));
+    if (scopeRef.current !== startedScope) return true;
+    requestController.current?.abort();
+    setRecommendationPending(false);
+    setRecommendationStatus("ready");
     setRecommendationMessage(action === "saved"
       ? "已收藏，并用于改进后续推荐。"
       : "已标记不感兴趣，并用于降低相似候选排序。");
@@ -412,6 +437,7 @@ export function useRecommendations({
 
   return {
     clearRecommendationCache,
+    refreshRecommendations: () => { requestController.current?.abort(); setRefreshVersion((value) => value + 1); },
     recordRecommendationFeedback,
     recommendationItems,
     recommendationMessage,

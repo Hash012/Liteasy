@@ -13,8 +13,8 @@ export type PaperFileMetadata = {
 
 const storagePrefix = "liteasy.paper-file-metadata/v1";
 
-function storageKey(paperId: string) {
-  return `${storagePrefix}:${resolveLocalAccountKey()}:${paperId}`;
+function storageKey(paperId: string, accountKey: string) {
+  return `${storagePrefix}:${accountKey}:${paperId}`;
 }
 
 export function normalizePaperFileMetadata(value: unknown): PaperFileMetadata {
@@ -34,17 +34,17 @@ export function normalizePaperFileMetadata(value: unknown): PaperFileMetadata {
   return { category, tags, version: 1 };
 }
 
-function loadBrowserMetadata(paperId: string) {
+function loadBrowserMetadata(paperId: string, accountKey: string) {
   try {
-    return normalizePaperFileMetadata(JSON.parse(window.localStorage.getItem(storageKey(paperId)) ?? "{}"));
+    return normalizePaperFileMetadata(JSON.parse(window.localStorage.getItem(storageKey(paperId, accountKey)) ?? "{}"));
   } catch {
     return normalizePaperFileMetadata(undefined);
   }
 }
 
-function cacheBrowserMetadata(paperId: string, metadata: PaperFileMetadata) {
+function cacheBrowserMetadata(paperId: string, accountKey: string, metadata: PaperFileMetadata) {
   try {
-    window.localStorage.setItem(storageKey(paperId), JSON.stringify(metadata));
+    window.localStorage.setItem(storageKey(paperId, accountKey), JSON.stringify(metadata));
     return null;
   } catch (error) {
     return error;
@@ -53,13 +53,17 @@ function cacheBrowserMetadata(paperId: string, metadata: PaperFileMetadata) {
 
 export async function loadPaperFileMetadata(paperId: string): Promise<PaperFileMetadata> {
   if (typeof window === "undefined" || !paperId.trim()) return normalizePaperFileMetadata(undefined);
-  const browserMetadata = loadBrowserMetadata(paperId);
+  const accountKey = resolveLocalAccountKey();
+  const browserMetadata = loadBrowserMetadata(paperId, accountKey);
   if (!isUserPaperArtifactStoreAvailable()) return browserMetadata;
   try {
     const stored = await loadUserPaperArtifact<unknown>({ artifactKind: "file-metadata", paperId });
+    // A delayed native response belongs to the caller's original account. Keep
+    // the original fallback and do not populate either account's cache after a switch.
+    if (resolveLocalAccountKey() !== accountKey) return browserMetadata;
     if (stored === undefined) return browserMetadata;
     const normalized = normalizePaperFileMetadata(stored);
-    cacheBrowserMetadata(paperId, normalized);
+    cacheBrowserMetadata(paperId, accountKey, normalized);
     return normalized;
   } catch {
     return browserMetadata;
@@ -69,13 +73,15 @@ export async function loadPaperFileMetadata(paperId: string): Promise<PaperFileM
 export async function savePaperFileMetadata(paperId: string, value: unknown): Promise<PaperFileMetadata> {
   const normalized = normalizePaperFileMetadata(value);
   if (typeof window === "undefined" || !paperId.trim()) return normalized;
-  const browserStorageError = cacheBrowserMetadata(paperId, normalized);
+  const accountKey = resolveLocalAccountKey();
+  const browserStorageError = cacheBrowserMetadata(paperId, accountKey, normalized);
   if (isUserPaperArtifactStoreAvailable()) {
     await saveUserPaperArtifact({
       artifactKind: "file-metadata",
       paperId,
       snapshot: normalized
     });
+    if (resolveLocalAccountKey() !== accountKey) throw new Error("账号已切换，请重新打开文献。");
   } else if (browserStorageError) {
     throw browserStorageError;
   }

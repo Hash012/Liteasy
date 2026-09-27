@@ -1,4 +1,5 @@
 import { createDeepSeekChatCompletionsProvider } from "../providers/deepseekChatCompletions.mjs";
+import { validateModelImageProvider } from "./modelImages.mjs";
 import {
   createOpenAIResponsesProvider,
   createOpenAIResponsesStreamProvider,
@@ -175,6 +176,7 @@ export function buildModelAuditPayload(body) {
 }
 
 export async function generateAnswer(body, providers) {
+  validateModelImageProvider(body);
   const providerId = typeof body.provider === "string" ? body.provider : "openai";
   const liveProvider = providers[providerId];
 
@@ -193,6 +195,7 @@ export async function generateAnswer(body, providers) {
 }
 
 export async function* generateAnswerStream(body, providers, streamingProviders) {
+  validateModelImageProvider(body);
   const providerId = typeof body.provider === "string" ? body.provider : "openai";
   const streamProvider = streamingProviders[providerId];
 

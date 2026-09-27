@@ -57,12 +57,22 @@ test("help providers namespace identities and do not require built-in manual con
   expect(() => createHelpCatalog([provider("a"), provider("a")])).toThrow(
     /唯一/,
   );
-  expect(
-    await createHelpCatalog(builtinHelpProviders).search({
-      ...request,
-      query: "",
-    }),
-  ).toEqual([]);
+});
+
+test("built-in user manual exposes the ChatGPT connection guide by topic and body search", async () => {
+  const request = { locale: "zh-CN", signal: new AbortController().signal };
+  const catalog = createHelpCatalog(builtinHelpProviders);
+  const matches = await catalog.search({ ...request, query: "chatgpt 隧道", topic: { providerId: "liteasy", topicId: "reading" } });
+  expect(matches).toHaveLength(1);
+  expect(matches[0].ref).toEqual({ providerId: "liteasy", articleId: "reading.chatgpt-review" });
+  const article = await catalog.read(matches[0].ref, request);
+  expect(article?.body).toContain("CONTROL_PLANE_API_KEY");
+  expect(article?.body).toContain("停止共享");
+  expect(await catalog.search({ ...request, query: "", topic: { providerId: "liteasy", topicId: "boards" } })).toEqual([]);
+  expect(await catalog.read({ providerId: "liteasy", articleId: "missing" }, request)).toBeNull();
+  const abort = new AbortController();
+  abort.abort();
+  await expect(catalog.read(matches[0].ref, { ...request, signal: abort.signal })).rejects.toThrow();
 });
 
 test("help UI searches, opens provider content and handles missing articles and retry", async () => {

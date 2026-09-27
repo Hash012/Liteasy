@@ -300,7 +300,8 @@ mod tests {
                 std::process::id()
             ));
             fs::create_dir_all(&path).unwrap();
-            Self(path)
+            // Match library_root(), including the Windows verbatim path prefix.
+            Self(path.canonicalize().unwrap())
         }
         fn current(&self) -> Manifest {
             let snapshot = crate::local_library::webdav_snapshot_at(&self.0).unwrap();

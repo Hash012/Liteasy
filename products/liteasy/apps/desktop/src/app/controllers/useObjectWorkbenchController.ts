@@ -2,6 +2,7 @@ import { paperAnchorsForArtifact } from "../features/paper-anchors/paperAnchorAd
 import { createNoteFileService } from "../features/note-files/noteFileService";
 import { resolveLiteasyContext, contextAttachments } from "../features/resource-filesystem/resourceContext";
 import { describeResourceLocation } from "../features/resource-filesystem/resourceLocation";
+import { searchResourcePaths } from "../features/resource-filesystem/resourcePathSearch";
 import { paperAnchorOpenRequest } from "../features/paper-anchors/paperAnchorEntity";
 import { ARTIFACT_CONTEXT_MIME } from "../features/object-transfer/contextTransfer";
 import { artifactContextText } from "../features/artifacts/artifactContext";
@@ -69,6 +70,7 @@ export function useObjectWorkbenchController(input: {
   artifactScopeId?: string;
   getApi: () => AgentPublicApi;
   getPapers: () => Paper[];
+  getArtifactTitles?: () => Array<{ artifactId: string; title: string }>;
   getSettings: () => SettingsState;
   readPaperBytes?: (sourcePath: string) => Promise<Uint8Array>;
   listLegacyArtifacts?: () => Promise<
@@ -495,6 +497,11 @@ export function useObjectWorkbenchController(input: {
   }
   const port: ObjectWorkbenchPort = {
     scopeId: repository.scopeId,
+    searchLiteasyPaths: (query) => searchResourcePaths({ query, repository, active,
+      files: createNoteFileService(repository.scopeId, () => latest.current.scopeId),
+      getPapers: () => latest.current.getPapers(),
+      getArtifacts: async () => latest.current.getArtifactTitles?.() ?? [],
+    }),
     resolveLiteasyPath: (path) => resolveLiteasyContext({ path, repository, active,
       artifactScopeId: latest.current.artifactScopeId ?? "device",
       files: createNoteFileService(repository.scopeId, () => latest.current.scopeId),
@@ -750,6 +757,9 @@ export function useObjectWorkbenchController(input: {
         .filter((entry) => entry.pinned)
         .map((entry) => entry.ref),
       purpose: request.contextPurpose ?? "解释所选内容",
+      policy: "balanced",
+      question: request.input.message,
+      active,
       describeSetting: (key) =>
         describeObjectSetting(key, latest.current.getSettings()),
     });

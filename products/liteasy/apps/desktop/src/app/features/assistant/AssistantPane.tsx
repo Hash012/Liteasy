@@ -1,4 +1,8 @@
+import { AssistantModelPicker } from "../models/AssistantModelPicker";
+import { LiteasyPathContextPicker } from "../resource-filesystem/LiteasyPathContextPicker";
+import { thinkingDepthInstruction, type ThinkingDepth } from "./thinkingDepth";
 import { collectPaperAnchors } from "../paper-anchors/paperAnchorEntity";
+import { parseContextCoverageReport } from "./contextCoverageReport";
 import { parseLiteasyPath } from "../resource-filesystem/liteasyPath";
 import { readerContextDragMime, readDraggedReaderContext } from "./readerContextDrag";
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
@@ -96,6 +100,7 @@ import type { AssistantHistoryPersistence, AssistantHistorySnapshot } from "./as
 type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 
 type QueuedAssistantTurn = {
+  thinkingDepth: ThinkingDepth;
   attachedContextPrompt: string;
   contextTokens: AssistantContextToken[];
   message: string;
@@ -156,6 +161,8 @@ type AssistantPaneProps = {
   runtimeOrganizationName?: string;
   availablePapers?: Paper[];
   contextSuggestions?: AssistantComposerSuggestion[];
+  contextCatalogStatus?: string;
+  onRefreshContextCatalog?: () => void;
   runtimeWorkspace?: Partial<WorkspaceSource>;
   selectedPapers?: Paper[];
   selectedSetStatus: SelectedSetStatus;
@@ -300,6 +307,8 @@ export function AssistantPane({
   registrationWelcomeMessage,
   readerConversationContext = null,
   runtimeOrganizationName,
+  contextCatalogStatus,
+  onRefreshContextCatalog,
   runtimeWorkspace,
   selectedPapers = [],
   availablePapers = selectedPapers,
@@ -310,7 +319,7 @@ export function AssistantPane({
   const objectWorkbench = useObjectWorkbench();
   const [contextDropCount, setContextDropCount] = useState(0);
   const [contextDropMessage, setContextDropMessage] = useState("");
-  const [contextPath, setContextPath] = useState("");
+  const [thinkingDepth, setThinkingDepth] = useState<ThinkingDepth>("balanced");
   const assistantStoreRef = useRef(createAssistantStore());
   const initialSessionRef = useRef(
     createAssistantSession({
@@ -654,10 +663,13 @@ export function AssistantPane({
     setContextDropMessage("");
     try {
       const token = await resolve();
-      if (mountedRef.current && activeSessionIdRef.current === sessionId) addComposerContextToken(token);
+      if (!mountedRef.current || activeSessionIdRef.current !== sessionId) return false;
+      addComposerContextToken(token);
+      return true;
     } catch (error) {
       if (mountedRef.current && activeSessionIdRef.current === sessionId)
         setContextDropMessage(error instanceof Error ? error.message : "添加上下文失败，请重试。");
+      return false;
     } finally {
       if (mountedRef.current) setContextDropCount((count) => count - 1);
     }
@@ -703,7 +715,7 @@ export function AssistantPane({
         if (target.kind === "paper") await onPreparePapersForContext?.([target.paperId]);
       }
       const attachments = await objectWorkbench.resolveLiteasyPath(path.trim());
-      if (!mountedRef.current || activeSessionIdRef.current !== sessionId) return;
+      if (!mountedRef.current || activeSessionIdRef.current !== sessionId) return false;
       const tokens: AssistantContextToken[] = attachments.map((attachment) => ({
         id: `object-${JSON.stringify(attachment.ref)}`, kind: "object", label: attachment.title,
         detail: attachment.detail, prompt: "", contextRefs: attachment.refs,
@@ -714,11 +726,12 @@ export function AssistantPane({
         draftRef.current = { ...draftRef.current, tokens: next };
         return next;
       });
-      setContextPath("");
       inputRef.current?.focus();
+      return true;
     } catch (error) {
       if (mountedRef.current && activeSessionIdRef.current === sessionId)
         setContextDropMessage(error instanceof Error ? error.message : String(error));
+      return false;
     } finally { if (mountedRef.current) setContextDropCount((count) => count - 1); }
   }
 
@@ -758,6 +771,7 @@ export function AssistantPane({
       };
       return {
         detail: paper.sourcePath ?? "整篇论文",
+        category: "论文", description: "整篇论文问答；也可在项目中按页选择原文或图片。", readOnly: true,
         id: `paper-${paper.id}`,
         label: paper.title,
         token: paperToken,
@@ -768,7 +782,8 @@ export function AssistantPane({
     // 先提供所有“整篇论文”候选，避免每篇的页码把后续论文挤出首屏；
     // 输入标题或 p.页码时仍可检索到下面的精确页码上下文。
     const pageSuggestions: AssistantComposerSuggestion[] = availablePapers.flatMap((paper) =>
-      Array.from({ length: 20 }, (_, index) => index + 1).map((page) => ({
+      [...new Set((importedChunksByPaperId[paper.id] ?? []).map((chunk) => chunk.page))].sort((a, b) => a - b).map((page) => ({
+        category: "原文", readOnly: true, description: "已识别的论文页面。",
         detail: `${paper.title} · 第 ${page} 页`,
         id: `page-${paper.id}-${page}`,
         label: `${paper.title} p.${page}`,
@@ -1117,22 +1132,26 @@ export function AssistantPane({
     if (event.type === "assistant.message") {
       let audit: AnswerAuditResult | undefined;
       let paperAnchors: AssistantMessage["paperAnchors"];
+      let contextCoverage: AssistantMessage["contextCoverage"];
       let executionTrace: ModelExecutionTrace | undefined;
       if (event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)) {
         const metadata = event.metadata as {
           audit?: AnswerAuditResult;
           executionTrace?: ModelExecutionTrace;
           paperAnchors?: unknown;
+          contextCoverage?: unknown;
         };
         audit = metadata.audit;
         executionTrace = metadata.executionTrace;
         if (Array.isArray(metadata.paperAnchors)) paperAnchors = collectPaperAnchors(metadata.paperAnchors);
+        contextCoverage = parseContextCoverageReport(metadata.contextCoverage);
       }
       updateAgentMessage(activityMessageId, (message) => ({
         ...message,
         audit: event.citations?.length ? audit : undefined,
         citations: event.citations,
         paperAnchors,
+        contextCoverage,
         confidence: event.confidence,
         content: event.message,
         executionTrace
@@ -1257,7 +1276,8 @@ export function AssistantPane({
     message: string,
     mode: AssistantMode,
     attachments?: AgentAttachment[],
-    contextRefs?: ContextRef[]
+    contextRefs?: ContextRef[],
+    depth?: ThinkingDepth
   ) {
     const sessionAgentClient = getActivePublicAgentClient();
     if (!sessionAgentClient) {
@@ -1273,7 +1293,7 @@ export function AssistantPane({
           return [];
         }
       });
-      await runEmbeddedAgentMessage(message, mode, attachedPaperIds);
+      await runEmbeddedAgentMessage(depth && mode !== "command" ? `${thinkingDepthInstruction(depth)}\n\n${message}` : message, mode, attachedPaperIds);
       return;
     }
 
@@ -1352,7 +1372,7 @@ export function AssistantPane({
     syncAssistant();
     try {
       const result = await sessionAgentClient.send(
-        { message, mode },
+        { message, mode, ...(depth ? { thinkingDepth: depth } : {}) },
         { attachments, idempotencyKey, ...(contextRefs?.length ? { contextRefs, contextPurpose: message } : {}) }
       );
       if (!result.ok) {
@@ -1722,7 +1742,7 @@ export function AssistantPane({
   async function runKnowledgeMessage(
     question: string,
     mode: Exclude<AssistantMode, "command">,
-    options: { attachedContextPrompt?: string; referencedPaperIds?: string[]; contextRefs?: ContextRef[] } = {}
+    options: { thinkingDepth?: ThinkingDepth; attachedContextPrompt?: string; referencedPaperIds?: string[]; contextRefs?: ContextRef[] } = {}
   ) {
     const referencedPaperIds = [...new Set([
       ...(options.referencedPaperIds ?? []),
@@ -1766,7 +1786,7 @@ export function AssistantPane({
         uri: `liteasy://paper/${encodeURIComponent(paperId)}`
       }))
     ];
-    await runPublicAgentMessage(publicQuestion, mode, contextRefs?.length ? undefined : attachments, contextRefs);
+    await runPublicAgentMessage(publicQuestion, mode, contextRefs?.length ? undefined : attachments, contextRefs, options.thinkingDepth);
   }
 
   async function executePreparedTurn(turn: QueuedAssistantTurn) {
@@ -1785,7 +1805,7 @@ export function AssistantPane({
         : selectedSetStatus.selectionLocked ? selectedPapers.map((paper) => paper.id) : previousPaperIds;
       const recentContext = assistantStoreRef.current.getState().messages.filter((message) => !message.artifactTask && !message.agentActivity)
         .slice(-6).map((message) => `${message.role === "user" ? "用户" : "助手"}：${message.content}`).join("\n").slice(-8_000);
-      const context = [turn.message, turn.attachedContextPrompt, recentContext].filter(Boolean).join("\n\n");
+      const context = [thinkingDepthInstruction(turn.thinkingDepth), turn.message, turn.attachedContextPrompt, recentContext].filter(Boolean).join("\n\n");
       try {
         let contextRefs = selectedContextRefs(turn.contextTokens);
         if (contextRefs.length && paperIds?.length) {
@@ -1824,6 +1844,7 @@ export function AssistantPane({
 
     try {
       await runKnowledgeMessage(turn.message, turn.mode, {
+        thinkingDepth: turn.thinkingDepth,
         attachedContextPrompt: turn.attachedContextPrompt,
         referencedPaperIds: turn.referencedPaperIds,
         contextRefs: selectedContextRefs(turn.contextTokens)
@@ -1945,6 +1966,7 @@ export function AssistantPane({
     assistantStoreRef.current.setMode(activeMode);
     const userMessage = createMessage("user", adapted.userMessageContent);
     userMessage.contextTokens = contextTokensForTurn;
+    userMessage.thinkingDepth = thinkingDepth;
     if (currentState.pending) {
       userMessage.queuedDelivery = { policy: "after_tool" };
     }
@@ -1957,6 +1979,7 @@ export function AssistantPane({
     setVoiceInputMessage(undefined);
 
     const preparedTurn: QueuedAssistantTurn = {
+      thinkingDepth,
       attachedContextPrompt,
       contextTokens: contextTokensForTurn,
       message: adapted.runtimeInput.message,
@@ -2035,6 +2058,7 @@ export function AssistantPane({
     setEditingMessageId(null);
     setInput("");
     await runKnowledgeMessage(previousUserMessage.content, currentState.mode, {
+      thinkingDepth: previousUserMessage.thinkingDepth ?? thinkingDepth,
       attachedContextPrompt: buildComposerTokenPrompt(contextTokens),
       referencedPaperIds,
       contextRefs: selectedContextRefs(contextTokens)
@@ -2072,6 +2096,7 @@ export function AssistantPane({
       .map((token) => token.id.replace(/^paper-/, ""));
     const retriedMessage = createMessage("user", adapted.userMessageContent);
     retriedMessage.contextTokens = message.contextTokens;
+    retriedMessage.thinkingDepth = message.thinkingDepth ?? thinkingDepth;
     assistantStoreRef.current.setMode(activeMode);
     assistantStoreRef.current.addMessage(retriedMessage);
     setInput("");
@@ -2080,6 +2105,7 @@ export function AssistantPane({
     syncAssistant();
 
     await executePreparedTurn({
+      thinkingDepth: message.thinkingDepth ?? thinkingDepth,
       attachedContextPrompt,
       contextTokens,
       message: adapted.runtimeInput.message,
@@ -2258,21 +2284,26 @@ export function AssistantPane({
         onWithdrawQueuedMessage={withdrawQueuedTurn}
       />
 
-      {objectWorkbench?.resolveLiteasyPath ? <details className="assistant-path-context">
-        <summary>通过 Liteasy Path 添加上下文</summary>
-        <Input aria-label="添加上下文的 Liteasy Path" placeholder="liteasy://…" value={contextPath}
-          onChange={(_, data) => setContextPath(data.value)} style={{ width: "100%" }}
-          onKeyDown={(event) => { if (event.key === "Enter" && contextPath.trim() && !contextDropCount) { event.preventDefault(); void addLiteasyPath(contextPath); } }} />
-        <Button size="small" disabled={!contextPath.trim() || contextDropCount > 0} onClick={() => void addLiteasyPath(contextPath)}>读取并加入上下文</Button>
-      </details> : null}
+      {contextCatalogStatus ? <div role="status" className="assistant-command-feedback">
+        <span>{contextCatalogStatus}</span>
+        {onRefreshContextCatalog ? <Button appearance="subtle" size="small" onClick={onRefreshContextCatalog}>重试</Button> : null}
+      </div> : null}
+      {objectWorkbench?.resolveLiteasyPath ? <LiteasyPathContextPicker
+        scopeId={objectWorkbench.scopeId} search={objectWorkbench.searchLiteasyPaths}
+        onAdd={addLiteasyPath} busy={contextDropCount > 0} /> : null}
       <AssistantComposer
+        contextScopeId={`${objectWorkbench?.scopeId ?? "local"}:${activeSessionId}`}
+        modelPicker={<AssistantModelPicker settingsStore={settingsStoreRef.current} onSettingsChanged={onSettingsChanged}
+          disabled={assistantState.pending || !historyReady || queuedAssistantTurnsRef.current.length > 0} />}
+        thinkingDepth={thinkingDepth}
+        onThinkingDepthChange={setThinkingDepth}
         editing={Boolean(editingMessageId)}
         input={input}
         inputRef={inputRef}
         contextTokens={composerContextTokens}
         modeHint={composerHint}
         onAddContextToken={addComposerContextToken}
-        onResolveContextToken={(resolve) => { void resolveComposerContextToken(resolve); }}
+        onResolveContextToken={resolveComposerContextToken}
         contextLoading={contextDropCount > 0}
         onCancelEdit={cancelEdit}
         onInputChange={setInput}

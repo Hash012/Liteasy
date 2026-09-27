@@ -55,9 +55,9 @@ export function usePaperServicesController(input: {
     setRunning((current) => [...current, paper.id]);
     return task;
   }
-  const resources = Object.fromEntries(input.papers.flatMap((paper) => {
+  const resources = useMemo(() => Object.fromEntries(input.papers.flatMap((paper) => {
     const material = materials[paper.id];
     return material && (material.contentHash && paper.contentHash ? material.contentHash === paper.contentHash : material.sourcePath === paper.sourcePath) ? [[paper.id, { textChunks: material.chunks, figures: material.figures }]] : [];
-  }));
+  })), [input.papers, materials]);
   return { extract, literatureClient, resources, running };
 }

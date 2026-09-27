@@ -42,6 +42,7 @@ import type { PaneCollapseState } from "./paneLayout.types";
 import type { ThinReadingVisualizationStatus } from "../features/artifacts/artifact.types";
 
 type ReaderPaneProps = {
+  onDocumentInfo?: (info: import("../features/pdf/pdfDocumentInfo").PdfDocumentInfo) => void;
   onQuickAsk?: (request: PdfQuickAskRequest) => Promise<string>;
   readingContent?: ReactNode;
   extractingPaper?: boolean;
@@ -120,6 +121,7 @@ const defaultLayoutCollapsed: PaneCollapseState = {
 };
 
 export function ReaderPane({
+  onDocumentInfo,
   onQuickAsk,
   readingContent, extractingPaper, onExtractPaper,
   allowServerPdfParsing = false,
@@ -200,6 +202,7 @@ export function ReaderPane({
         >
           <div className="reader-pdf-surface" hidden={readingVisible}>
           <PdfReader
+            onDocumentInfo={onDocumentInfo}
             onQuickAsk={onQuickAsk}
             readingControls={readingContent
               ? <Button size="small" onClick={() => setReadingMode(true)}>阅读模式</Button>

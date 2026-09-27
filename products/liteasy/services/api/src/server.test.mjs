@@ -543,6 +543,24 @@ test("authenticates formal model generation and derives the subject from the des
   assert.equal(instance.calls.some((item) => item.audience === "liteasy-desktop"), true);
 });
 
+test("permits bounded image-sized model requests while retaining the normal JSON limit elsewhere", async () => {
+  const instance = runtime();
+  const handler = createCloudRequestHandler(instance, internalConfig());
+  const body = { model: "gpt-5-mini", provider: "openai", source: "cloud_proxy", prompt: "Figure",
+    images: [{ mediaType: "image/png", label: "Figure", base64: "a".repeat(2 * 1024 * 1024) }] };
+  for (const path of ["/v1/model/generate", "/v1/model/generate-stream"]) {
+    const result = response();
+    await handler(request("POST", path, body), result);
+    assert.equal(result.status, 200);
+  }
+  const ordinary = response();
+  await handler(request("POST", "/v1/library/tree", body), ordinary);
+  assert.equal(ordinary.status, 413);
+  const excessive = response();
+  await handler(request("POST", "/v1/model/generate", { ...body, prompt: "a".repeat(8 * 1024 * 1024) }), excessive);
+  assert.equal(excessive.status, 413);
+});
+
 test("streams an owned raster asset through the private desktop account route", async () => {
   const instance = runtime();
   const handler = createCloudRequestHandler(instance, internalConfig());
