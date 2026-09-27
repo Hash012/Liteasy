@@ -4186,7 +4186,8 @@ body {
   display: grid;
   justify-items: center;
   gap: 6px;
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   margin: 0 auto;
 }
 
@@ -4216,7 +4217,6 @@ body {
   grid-template-columns: max-content;
   align-items: start;
   justify-content: center;
-  max-width: 100%;
 }
 
 .pdf-page-row.has-margin-comments {
@@ -4230,7 +4230,7 @@ body {
 
 .pdf-page-shell {
   position: relative;
-  max-width: 100%;
+  box-sizing: content-box;
   border: 1px solid var(--line-1);
   border-radius: 8px;
   background: var(--pdf-reading-background, #ffffff);
@@ -4260,7 +4260,7 @@ body {
 
 .pdf-page-canvas {
   display: block;
-  max-width: 100%;
+  max-width: none;
   background: var(--pdf-reading-background, #ffffff);
   mix-blend-mode: multiply;
 }

@@ -46,6 +46,7 @@ import {
 } from "@fluentui/react-icons";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import { loadPdfGlyphGeometry } from "./pdfGlyphGeometry";
+import { usePdfPixelRatio } from "./usePdfPixelRatio";
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
 import { compactPdfTextForSearch, normalizePdfTextForSearch } from "./pdfTextSearch";
@@ -1052,6 +1053,7 @@ type PdfPageViewProps = {
   onPageCharModelRendered?: (pageNumber: number, model: PageCharModel | null) => void;
   onPageTextRendered?: (input: PdfPageText) => void;
   pageNumber: number;
+  pixelRatio: number;
   pdfDocument: PDFDocumentProxy | null;
   searchMatches?: PdfReaderSearchMatch[];
   searchQuery?: string;
@@ -1082,6 +1084,7 @@ function PdfPageView({
   onTextAnnotationMove,
   onTextAnnotationOpacityChange,
   pageNumber,
+  pixelRatio,
   pdfDocument,
   searchMatches = [],
   searchQuery = "",
@@ -1155,6 +1158,7 @@ function PdfPageView({
   useEffect(() => {
     let cancelled = false;
     let renderTask: { cancel: () => void; promise: Promise<unknown> } | null = null;
+    let layer: InstanceType<typeof pdfjsLib.TextLayer> | null = null;
 
     async function renderPage() {
       if (!pdfDocument) {
@@ -1187,20 +1191,23 @@ function PdfPageView({
         const viewport = page.getViewport({
           scale: getScaleForStage(baseViewport, stageWidth, zoom)
         });
-        const outputScale = window.devicePixelRatio || 1;
         const context = getCanvasContext(canvas);
-        canvas.width = Math.floor(viewport.width * outputScale);
-        canvas.height = Math.floor(viewport.height * outputScale);
-        canvas.style.width = `${viewport.width}px`;
-        canvas.style.height = `${viewport.height}px`;
+        canvas.width = Math.ceil(viewport.width * pixelRatio);
+        canvas.height = Math.ceil(viewport.height * pixelRatio);
+        // Present each rendered pixel at one screen pixel. Keep CSS sizes tied to
+        // that pixel grid so layout constraints cannot resample the finished page.
+        const width = canvas.width / pixelRatio;
+        const height = canvas.height / pixelRatio;
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
         textLayer.style.width = `${viewport.width}px`;
         textLayer.style.height = `${viewport.height}px`;
         textLayer.style.setProperty("--total-scale-factor", String(viewport.scale));
-        setPageSize({ height: viewport.height, width: viewport.width });
+        setPageSize({ height, width });
 
         if (context) {
-          context.setTransform(outputScale, 0, 0, outputScale, 0, 0);
-          renderTask = page.render({ canvas, canvasContext: context, viewport });
+          renderTask = page.render({ canvas, canvasContext: context, viewport,
+            transform: [pixelRatio, 0, 0, pixelRatio, 0, 0] });
           await renderTask.promise;
         }
 
@@ -1212,7 +1219,7 @@ function PdfPageView({
         const textContent = await page.getTextContent();
         const glyphs = await loadPdfGlyphGeometry(page);
         if (cancelled) return;
-        const layer = new pdfjsLib.TextLayer({
+        layer = new pdfjsLib.TextLayer({
           container: textLayer,
           textContentSource: textContent,
           viewport
@@ -1237,6 +1244,8 @@ function PdfPageView({
           setTextLayerRevision((revision) => revision + 1);
         }
       } catch (error) {
+        // A cancelled zoom/DPI render must not clear the newer render's shared canvas.
+        if (cancelled) return;
         // Swallowing this silently hid a total failure of the text layer, and with it every
         // anchor, for as long as it took someone to inspect the DOM. A page that cannot render
         // is worth saying out loud.
@@ -1258,11 +1267,12 @@ function PdfPageView({
     return () => {
       cancelled = true;
       renderTask?.cancel();
+      layer?.cancel();
       onPageCharModelRendered?.(pageNumber, null);
     };
   // Focus changes while scrolling must not tear down the text layer in the middle of a drag.
   // Evidence/search overlays have their own effects below and do not require repainting the PDF.
-  }, [activePaper?.id, onPageCharModelRendered, onPageTextRendered, pageNumber, pdfDocument, stageWidth, zoom]);
+  }, [activePaper?.id, onPageCharModelRendered, onPageTextRendered, pageNumber, pixelRatio, pdfDocument, stageWidth, zoom]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(updateTargetHighlightRects);
@@ -1473,6 +1483,7 @@ export function PdfReader({
   onUpdateOrganizationAnnotation
 }: PdfReaderProps) {
   const activePaper = selectedPapers[0] ?? null;
+  const pixelRatio = usePdfPixelRatio();
   const stageRef = useRef<HTMLDivElement | null>(null);
   const documentFrameRef = useRef<HTMLDivElement | null>(null);
   const objectWorkbench = useObjectWorkbench();
@@ -3815,6 +3826,7 @@ export function PdfReader({
                     onTextAnnotationMove={moveTextAnnotation}
                     onTextAnnotationOpacityChange={changeTextAnnotationOpacity}
                     pageNumber={pageNumber}
+                    pixelRatio={pixelRatio}
                     pdfDocument={pdfDocument}
                     searchMatches={searchOpen
                       ? searchMatches.filter((match) => match.page === pageNumber)
