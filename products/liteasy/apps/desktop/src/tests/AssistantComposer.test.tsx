@@ -249,3 +249,15 @@ test("moves the caret past a clicked command and closes the candidate menu", asy
   await user.type(editor, "方法");
   expect(editor).toHaveValue("/制作PPT 方法");
 });
+
+
+test("keeps the estimated context percentage and configured limit visible while running", () => {
+  const { rerender } = render(<AssistantComposer input="" modeHint="上下文" onInputChange={vi.fn()}
+    onSend={vi.fn()} onVoiceInput={vi.fn()} pending contextUsage={{ usedTokens: 8192, maxTokens: 32768, estimated: true }} />);
+  expect(screen.getByRole("meter", { name: "上下文占用" })).toHaveAttribute("aria-valuenow", "8192");
+  expect(screen.getByText("上下文 约 25% · 上限 32,768 tokens")).toBeVisible();
+  rerender(<AssistantComposer input="" modeHint="上下文" onInputChange={vi.fn()}
+    onSend={vi.fn()} onVoiceInput={vi.fn()} pending contextUsage={{ usedTokens: 50000, maxTokens: 32768, estimated: true }} />);
+  expect(screen.getByRole("meter", { name: "上下文占用" })).toHaveAttribute("aria-valuemax", "32768");
+  expect(screen.getByText("上下文 约 153% · 上限 32,768 tokens")).toBeVisible();
+});

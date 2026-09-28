@@ -123,6 +123,21 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
     } else throw new Error("当前会话尚未就绪，请稍后重试。");
   }
 
+  async function addPreview(asset: AssistantComposerSuggestion) {
+    if (operation.current || !available(asset)) return;
+    operation.current = true;
+    setBusy(true); setErrors([]);
+    try {
+      await addResolved(asset, asset.resolveToken ?? (() => Promise.resolve(asset.token!)));
+      if (mounted.current) onClose();
+    } catch (error) {
+      if (mounted.current) setErrors([error instanceof Error ? error.message : "添加失败，请重试。"]);
+    } finally {
+      operation.current = false;
+      if (mounted.current) setBusy(false);
+    }
+  }
+
   async function addSelection() {
     if (operation.current) return;
     operation.current = true;
@@ -174,7 +189,7 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
         <DialogTitle action={<Tooltip content="返回对话" relationship="label"><Button appearance="subtle"
           aria-label="返回对话" icon={<DismissRegular />} onClick={onClose} /></Tooltip>}>添加上下文</DialogTitle>
         <DialogContent className="context-asset-browser-content">
-          <p className="context-asset-intro">按类别和项目寻找资料，可将不同论文、不同项目的资产一起加入对话。</p>
+          <p className="context-asset-intro">搜索名称的一部分，或按类别、项目浏览。论文、笔记和其他文件都从这里加入对话，也可直接拖到输入框。</p>
           <Input aria-label="搜索全部上下文资产" className="context-asset-search" contentBefore={<SearchRegular />}
             placeholder="搜索标题、项目、类别、内容说明或路径；多个关键词可组合" value={query}
             onChange={(_, data) => setQuery(data.value)} />
@@ -208,7 +223,7 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
                   <button className="context-asset-card-preview" type="button" aria-label={`预览 ${asset.label}`}
                     aria-pressed={previewId === asset.id} onClick={() => setPreviewId(asset.id)}>
                     <span className="context-asset-card-heading">{categoryOf(asset) === "项目" ? <FolderRegular /> : <DocumentRegular />}<strong>{asset.label}</strong></span>
-                    <span className="context-asset-badges"><span>{categoryOf(asset)}</span>{asset.readOnly ? <span>{getAssistantReadOnlyLabel(asset)}</span> : null}
+                    <span className="context-asset-badges"><span>{categoryOf(asset)}</span>{asset.readOnly ? <span>{getAssistantReadOnlyLabel(asset)}</span> : asset.readOnly === false ? <span className="context-asset-editable">可编辑</span> : null}
                       {asset.token && addedIds.has(asset.token.id) ? <span>已加入对话</span> : null}</span>
                     {asset.projectTitle ? <span className="context-asset-card-project">{asset.projectTitle}</span> : null}
                     <span className="context-asset-card-description">{asset.unavailableReason ?? asset.description ?? asset.detail ?? "选择后可加入对话上下文"}</span>
@@ -224,7 +239,7 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
             <aside className="context-asset-preview" aria-label="资产预览">
               {preview ? <>
                 <strong>{preview.label}</strong>
-                <div className="context-asset-badges"><span>{categoryOf(preview)}</span>{preview.readOnly ? <span>{getAssistantReadOnlyLabel(preview)}</span> : null}</div>
+                <div className="context-asset-badges"><span>{categoryOf(preview)}</span>{preview.readOnly ? <span>{getAssistantReadOnlyLabel(preview)}</span> : preview.readOnly === false ? <span className="context-asset-editable">可编辑</span> : null}</div>
                 {preview.projectTitle ? <p>{preview.projectTitle}</p> : null}
                 {preview.description || preview.detail ? <p>{preview.description ?? preview.detail}</p> : null}
                 {preview.unavailableReason ? <p role="note">{preview.unavailableReason}</p> : null}
@@ -251,6 +266,9 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
                   <Button icon={<AddRegular />} disabled={busy || !noteText.trim()}
                     onClick={() => { void createAsset(preview, "note"); }}>保存并加入上下文</Button>
                 </div> : null}
+                {preview.readOnly === false ? <p className="context-asset-muted">可让 AI 读取内容，并按你的要求修改此资产；实际操作会显示在对话中。</p> : null}
+                <Button appearance="primary" icon={<AddRegular />} disabled={busy || !available(preview)}
+                  onClick={() => { void addPreview(preview); }}>加入对话</Button>
                 <Button disabled={busy || !available(preview)} onClick={() => toggleSelection(preview.id, !selected.has(preview.id))}>
                   {selected.has(preview.id) ? "取消选择此资产" : "选择此资产"}
                 </Button>

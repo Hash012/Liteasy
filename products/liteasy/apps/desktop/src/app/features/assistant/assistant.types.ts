@@ -14,6 +14,7 @@ export type { AssistantMode };
 export type AssistantConfirmationRequest = HumanConfirmationRequest | AgentConfirmationRequest;
 
 export type AssistantMessage = {
+  assetWrites?: import("./assistantAssetWrites").AssistantAssetWrite[];
   contextCoverage?: import("./contextCoverageReport").ContextCoverageReport;
   thinkingDepth?: import("./thinkingDepth").ThinkingDepth;
   agentActivity?: AgentActivity;
@@ -56,7 +57,16 @@ export type AgentActivityEntry = {
  * ids, raw tool arguments, and backend configuration so the worklog is useful
  * without exposing implementation details or credentials.
  */
+export type AgentContextUsage = {
+  usedTokens: number;
+  maxTokens: number;
+  estimated: boolean;
+};
+
 export type AgentActivity = {
+  startedAt?: string;
+  finishedAt?: string;
+  contextUsage?: AgentContextUsage;
   connectionText?: string;
   entries: AgentActivityEntry[];
   generatedContent: string;

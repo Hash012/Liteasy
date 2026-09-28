@@ -1,4 +1,7 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { createAgentApplicationService } from "../app/controllers/agent/agentApplicationService";
+import { createFrontendAgentClient } from "../app/features/agent-api/frontendAgentClient";
+import { ObjectWorkbenchContext, type ObjectWorkbenchPort } from "../app/features/objects/objectWorkbenchPort";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
 import { afterEach, vi } from "vitest";
@@ -137,7 +140,9 @@ test.each([false, true])("creates a background thin-reading session without chan
   await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("产物生成生成：薄读"));
   expect(screen.getAllByText(/正在规划薄读路径与证据范围/).length).toBeGreaterThan(0);
   expect(screen.getByRole("button", { name: "中断薄读" })).toBeInTheDocument();
-  expect(screen.getByText(/尚未审计的薄读正文/)).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "查看 Agent 执行过程" }));
+  await user.click(screen.getByRole("button", { name: "正文草稿" }));
+  expect(screen.getByText(/尚未审计的薄读正文/)).toBeVisible();
   await user.click(screen.getByRole("button", { name: "历史" }));
   await user.click(screen.getByRole("button", { name: "打开会话：新对话" }));
   expect(input).toHaveValue("当前对话的草稿");
@@ -326,6 +331,7 @@ test("projects public Agent streaming events into the expandable work status car
           type: "run.started" as const
         },
         { ...base, eventId: "stream-context", sequence: 2, type: "context.prepared" as const },
+        { ...base, eventId: "stream-usage", sequence: 2.1, type: "context.usage" as const, usedTokens: 4096, maxTokens: 16384, estimated: true },
         {
           ...base,
           detail: "本轮由已注入的 OpenAI Agents SDK Manager 负责执行。",
@@ -375,6 +381,8 @@ test("projects public Agent streaming events into the expandable work status car
           sequence: 7,
           type: "assistant.message" as const
         },
+        { ...base, eventId: "stream-write", sequence: 7.5, type: "asset.written" as const,
+          receipt: { asset: { title: "CicN", path: "liteasy://objects/note-cicn?scope=local", revision: "r2" }, changed: true, addedLines: 12, removedLines: 1 } },
         { ...base, eventId: "stream-complete", sequence: 8, type: "run.completed" as const }
       ] as AgentEvent[];
       events.forEach((event) => listeners.forEach((listener) => listener(event)));
@@ -407,16 +415,18 @@ test("projects public Agent streaming events into the expandable work status car
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "解释方法");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(await screen.findByText("Manager 已完成本次运行")).toBeInTheDocument();
+  expect(await screen.findByText(/^已完成 ·/)).toBeInTheDocument();
   expect(screen.getAllByLabelText("AI 回复")).toHaveLength(1);
-  expect(screen.getByRole("status")).toHaveTextContent("主 Agent 连接已结束");
-  const streamStep = screen.getByRole("button", { name: "分析 理解用户问题" });
+  expect(screen.getByText("上下文 约 25% · 上限 16,384 tokens")).toBeVisible();
+  expect(screen.getByLabelText("已保存的资产修改")).toHaveTextContent("已更新 CicN");
+  await user.click(screen.getByRole("button", { name: "查看 Agent 执行过程" }));
+  const streamStep = screen.getByRole("button", { name: "理解用户问题" });
   expect(streamStep).toHaveAttribute("aria-expanded", "false");
   await user.click(streamStep);
   expect(streamStep).toHaveAttribute("aria-expanded", "true");
   expect(screen.getByText("先理解用户问题，再决定是否调用工具。")).toBeInTheDocument();
   expect(screen.getByText("结构生成完成")).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "输出 结构生成完成" }));
+  await user.click(screen.getByRole("button", { name: "结构生成完成" }));
   expect(screen.getByText("结构生成工具已返回。")).toBeInTheDocument();
   const favorite = screen.getByRole("button", { name: "收藏回复" });
   await user.click(favorite);
@@ -777,7 +787,7 @@ test("keeps a placeholder voice-input seam in the assistant composer", async () 
 });
 
 
-test("answers qa mode while surfacing selection readiness in runtime context", async () => {
+test("answers qa mode without exposing runtime diagnostics by default", async () => {
   const user = userEvent.setup();
 
   render(
@@ -797,7 +807,7 @@ test("answers qa mode while surfacing selection readiness in runtime context", a
 
   expect(screen.getAllByText("这篇论文讲了什么？").length).toBeGreaterThan(0);
   expect(await screen.findByText(/云端回答：这篇论文讲了什么？/)).toBeInTheDocument();
-  expect(screen.getByText(/已导入 0\/1/)).toBeInTheDocument();
+  expect(screen.queryByLabelText("运行时上下文")).not.toBeInTheDocument();
   expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveAttribute(
     "title",
     "可以先直接对话来检查 AI 服务；需要论文分析时，从顶栏 AI 工作台选择论文，或用 @ 添加论文。"
@@ -1075,7 +1085,7 @@ test("routes qa generation through the cloud-governed model gateway by default",
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(await screen.findByText(/云端回答：这篇综述如何定义向量数据库系统？/)).toBeInTheDocument();
-  expect(screen.getByText(/模型链路：云端模型能力 -> 云端服务/)).toBeInTheDocument();
+  expect(screen.getByText(/使用模型：云端模型能力 -> 云端服务/)).toBeInTheDocument();
 });
 
 test("lets users edit a previous prompt and replaces the following answer", async () => {
@@ -1435,6 +1445,7 @@ test("renders the expandable runtime context panel inside the assistant", async 
 
   render(
     <AssistantPane
+      developerDiagnostics
       onGenerateArtifact={() => "unused"}
       profileUnlocked={true}
       runtimeOrganizationName="Liteasy AI Reading Lab"
@@ -1616,4 +1627,81 @@ test("falls back to the local semantic planner when model command planning fails
   expect(onApplyLayoutPreset).toHaveBeenCalledWith({
     preset: "two_column"
   });
+});
+
+
+function lazyPaperAgentFixture() {
+  const prepare = vi.fn(async (_paperIds: string[]): Promise<void> => undefined);
+  const paperRef = { objectId: "cicada-metadata", revision: "metadata-v1" };
+  const fulltextRef = { objectId: "cicada-fulltext", revision: "fulltext-v1" };
+  const noteRef = { objectId: "cicn-note", revision: "note-v1" };
+  const captureMetadata = vi.fn(async (_paperIds: string[]) => [paperRef]);
+  const captureFulltext = vi.fn(async (_paperIds: string[]) => [fulltextRef]);
+  const resolvePath = vi.fn(async (path: string) => {
+    const isPaper = path.startsWith("liteasy://papers/");
+    const ref = isPaper ? paperRef : noteRef;
+    return [{ ref, refs: [ref], title: isPaper ? "Cicada" : "CicN", kind: isPaper ? "source.document" : "content.note" }];
+  });
+  const api = createAgentApplicationService({ supportsObjectContext: true,
+    resolveContext: () => ({}), executeCommand: () => ({ events: [], settingsChanged: false }),
+    executeKnowledge: async () => ({ message: "已收到资料索引，将按需读取。" }) });
+  const submit = vi.spyOn(api, "submitTurn");
+  const port = { scopeId: "local", resolveLiteasyPath: resolvePath, capturePaperContext: captureMetadata,
+    capturePaperFulltextContext: captureFulltext } as unknown as ObjectWorkbenchPort;
+  return { prepare, paperRef, fulltextRef, noteRef, captureMetadata, captureFulltext, resolvePath,
+    submit, port, client: createFrontendAgentClient(api) };
+}
+
+test.each(["mention", "path"] as const)("lazy paper %s forwards identity without parsing the PDF before a normal question", async (source) => {
+  const fixture = lazyPaperAgentFixture();
+  render(<ObjectWorkbenchContext.Provider value={fixture.port}>
+    <AssistantPane lazyPaperContext agentClient={fixture.client} availablePapers={[{ id: "cicada", title: "Cicada" }]}
+      onGenerateArtifact={() => "unused"} onPreparePapersForContext={fixture.prepare}
+      selectedSetStatus={{ importedCount: 0, selectedCount: 0, selectionLocked: false }} />
+  </ObjectWorkbenchContext.Provider>);
+  const user = userEvent.setup();
+  const input = screen.getByPlaceholderText("输入你的问题或命令");
+  if (source === "mention") {
+    await user.type(input, "@Cic");
+    await user.click(screen.getByRole("button", { name: /Cicada.*整篇论文/ }));
+  } else {
+    fireEvent.paste(input, { clipboardData: { getData: () => "liteasy://papers/cicada?scope=local" } });
+  }
+  expect(await screen.findByRole("button", { name: "移除上下文：Cicada" })).toBeInTheDocument();
+  expect(fixture.prepare).not.toHaveBeenCalled();
+  await user.type(input, "先介绍一下这篇论文");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+  expect(await screen.findByText("已收到资料索引，将按需读取。")).toBeInTheDocument();
+  expect(fixture.prepare).not.toHaveBeenCalled();
+  expect(fixture.captureFulltext).not.toHaveBeenCalled();
+  const request = fixture.submit.mock.calls[0][0];
+  if (source === "mention") expect(request.attachments).toEqual([{ name: "Cicada", source: "paper", uri: "liteasy://paper/cicada" }]);
+  else expect(request.contextRefs).toEqual([fixture.paperRef]);
+});
+
+test.each([["生成PPT", "ppt"], ["/制作提纲", "tree"]] as const)("lazy paper mode still prepares full text for mixed-context %s", async (command, type) => {
+  const fixture = lazyPaperAgentFixture();
+  const generate = vi.fn(() => "已启动产物生成。");
+  let finishPrepare!: () => void;
+  fixture.prepare.mockImplementationOnce(() => new Promise<void>((resolve) => { finishPrepare = resolve; }));
+  render(<ObjectWorkbenchContext.Provider value={fixture.port}>
+    <AssistantPane lazyPaperContext agentClient={fixture.client}
+      selectedPapers={[{ id: "cicada", title: "Cicada" }]} onGenerateArtifact={generate}
+      onPreparePapersForContext={fixture.prepare}
+      selectedSetStatus={{ importedCount: 0, selectedCount: 1, selectionLocked: true }} />
+  </ObjectWorkbenchContext.Provider>);
+  const user = userEvent.setup();
+  const input = screen.getByPlaceholderText("输入你的问题或命令");
+  fireEvent.paste(input, { clipboardData: { getData: () => "liteasy://objects/cicn-note?scope=local&revision=note-v1" } });
+  expect(await screen.findByRole("button", { name: "移除上下文：CicN" })).toBeInTheDocument();
+  await user.type(input, command);
+  await user.click(screen.getByRole("button", { name: "发送" }));
+  await waitFor(() => expect(fixture.prepare).toHaveBeenCalledWith(["cicada"]));
+  expect(fixture.captureFulltext).not.toHaveBeenCalled();
+  expect(generate).not.toHaveBeenCalled();
+  await act(async () => { finishPrepare(); });
+  await waitFor(() => expect(generate).toHaveBeenCalledWith(type, ["cicada"], expect.any(String), [fixture.noteRef, fixture.fulltextRef]));
+  expect(fixture.captureFulltext).toHaveBeenCalledWith(["cicada"]);
+  expect(fixture.captureMetadata).not.toHaveBeenCalled();
+  expect(fixture.submit).not.toHaveBeenCalled();
 });

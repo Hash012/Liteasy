@@ -28,7 +28,7 @@ describe("agent activity projection", () => {
     }));
 
     expect(activity.connectionText).toBe("主 Agent");
-    expect(activity.statusText).toBe("主 Agent");
+    expect(activity.statusText).toBe("正在处理…");
   });
 
   test("projects real SDK Manager summaries and tool events without exposing credentials", () => {
@@ -151,4 +151,15 @@ test("keeps fragmented subtask working payloads out of public activity details",
   expect(activity.entries).toHaveLength(1);
   expect(activity.entries[0].content).toBe("正在分析论文区段，结果将汇总到回答或产物中。");
   expect(JSON.stringify(activity)).not.toContain("local-private-reference");
+});
+
+
+test("projects usage without adding a fake operation and records the actual run duration", () => {
+  let activity = applyAgentActivityEvent(createAgentActivity(), event({ type: "run.started" }));
+  activity = applyAgentActivityEvent(activity, event({ type: "context.usage", usedTokens: 2400, maxTokens: 32768, estimated: true }));
+  activity = applyAgentActivityEvent(activity, event({ type: "run.completed", emittedAt: "2026-09-02T00:00:05.000Z" }));
+  expect(activity.contextUsage).toEqual({ usedTokens: 2400, maxTokens: 32768, estimated: true });
+  expect(activity.entries).toEqual([]);
+  expect(activity.startedAt).toBe("2026-09-02T00:00:00.000Z");
+  expect(activity.finishedAt).toBe("2026-09-02T00:00:05.000Z");
 });

@@ -3,81 +3,56 @@ import userEvent from "@testing-library/user-event";
 import { expect, test } from "vitest";
 import type { AgentEvent } from "../app/features/agent-api/agentApi.types";
 import { AgentActivityCard } from "../app/features/assistant/AgentActivityCard";
-import {
-  applyAgentActivityEvent,
-  completeAgentActivity,
-  createAgentActivity
-} from "../app/features/assistant/agentActivity";
+import { applyAgentActivityEvent, completeAgentActivity, createAgentActivity } from "../app/features/assistant/agentActivity";
 
 function event(payload: Record<string, unknown>) {
-  return {
-    apiVersion: "liteasy.agent/v1",
-    emittedAt: "2026-09-02T00:00:00.000Z",
-    eventId: `event-${payload.type}`,
-    runId: "run-activity",
-    sequence: 1,
-    sessionId: "session-activity",
-    ...payload
-  } as AgentEvent;
+  return { apiVersion: "liteasy.agent/v1", emittedAt: "2026-09-02T00:00:00.000Z",
+    eventId: `event-${payload.type}`, runId: "run-activity", sequence: 1,
+    sessionId: "session-activity", ...payload } as AgentEvent;
 }
 
-test("keeps the running step expanded and collapses all steps when the result completes", async () => {
+test("keeps work details collapsed while making the current operation visible", async () => {
   const user = userEvent.setup();
   const activity = applyAgentActivityEvent(createAgentActivity(), event({
-    activityId: "reasoning-1",
-    detail: "先判断用户意图，再选择工具。",
-    kind: "reasoning_summary",
-    label: "判断用户意图",
-    status: "running",
-    type: "manager.activity"
+    activityId: "read-1", detail: "已读取摘要；全文尚未加载。", kind: "tool_call",
+    label: "读取 Cicada 摘要", status: "running", type: "manager.activity"
   }));
   const { rerender } = render(<AgentActivityCard activity={activity} />);
-
-  const runningStep = screen.getByRole("button", { name: "分析 判断用户意图" });
-  expect(runningStep).toHaveAttribute("aria-expanded", "true");
-  expect(screen.getByText("先判断用户意图，再选择工具。")).toBeInTheDocument();
-
+  const header = screen.getByRole("button", { name: "查看 Agent 执行过程" });
+  expect(header).toHaveAttribute("aria-expanded", "false");
+  expect(screen.getByRole("status")).toHaveTextContent("读取 Cicada 摘要");
+  expect(screen.queryByText("已读取摘要；全文尚未加载。")).not.toBeInTheDocument();
+  await user.click(header);
+  const step = screen.getByRole("button", { name: "读取 Cicada 摘要" });
+  expect(step).toHaveAttribute("aria-expanded", "false");
+  await user.click(step);
+  expect(screen.getByText("已读取摘要；全文尚未加载。")).toBeVisible();
   rerender(<AgentActivityCard activity={completeAgentActivity(activity, "completed")} />);
-  expect(runningStep).toHaveAttribute("aria-expanded", "false");
-  expect(screen.queryByText("先判断用户意图，再选择工具。")).not.toBeInTheDocument();
-
-  await user.click(runningStep);
-  expect(runningStep).toHaveAttribute("aria-expanded", "true");
-  expect(screen.getByText("先判断用户意图，再选择工具。")).toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent("已完成");
+  // Incoming events must not close details that the user is inspecting.
+  expect(step).toHaveAttribute("aria-expanded", "true");
 });
 
-test("shows where a specialist result is handed back and visualized", () => {
-  let activity = applyAgentActivityEvent(createAgentActivity(), event({
-    activityId: "specialist-multimodal",
-    detail: "Multimodal Agent 已返回受控工作流结果。",
-    kind: "handoff",
-    label: "思维导图子任务已返回",
-    status: "completed",
-    type: "manager.activity"
-  }));
-  activity = applyAgentActivityEvent(activity, event({
-    activityId: "result-multimodal",
-    detail: "结果将由产物工作流校验并保存；完成后可在中心产物页查看。",
-    kind: "tool_result",
-    label: "思维导图结果已传回",
-    status: "completed",
-    type: "manager.activity"
-  }));
-
+test("summarizes actual completed writes and keeps their results inspectable", async () => {
+  const user = userEvent.setup();
+  const activity = completeAgentActivity(applyAgentActivityEvent({ ...createAgentActivity(),
+    startedAt: "2026-09-02T00:00:00.000Z" }, event({ activityId: "write-1",
+    detail: "笔记已保存，共 420 字。", kind: "tool_result", label: "已更新 CicN",
+    status: "completed", type: "manager.activity"
+  })), "completed", "2026-09-02T00:01:05.000Z");
   render(<AgentActivityCard activity={activity} />);
-
-  expect(screen.getByRole("button", { name: "链路 思维导图子任务已返回" }))
-    .toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "输出 思维导图结果已传回" }))
-    .toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent("已完成 · 1 分 5 秒");
+  expect(screen.getByText("已更新 CicN", { selector: ".assistant-agent-operation-summary" })).toBeVisible();
+  expect(screen.queryByText("链路")).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "查看 Agent 执行过程" }));
+  await user.click(screen.getByRole("button", { name: "已更新 CicN" }));
+  expect(screen.getByText("笔记已保存，共 420 字。")).toBeVisible();
 });
 
-test("expands the completed run header even when the provider supplies no summary", async () => {
+test("does not invent steps for a simple response", async () => {
   const user = userEvent.setup();
   render(<AgentActivityCard activity={completeAgentActivity(createAgentActivity(), "completed")} />);
-  const toggle = screen.getByRole("button", { name: "查看 Agent 执行过程" });
-  await user.click(toggle);
-  expect(toggle).toHaveAttribute("aria-expanded", "false");
-  await user.click(toggle);
-  expect(screen.getByText("本次运行未返回可展示的过程摘要。")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "查看 Agent 执行过程" }));
+  expect(screen.getByText("本轮没有使用工具。")).toBeVisible();
+  expect(screen.queryByRole("list", { name: "Agent 执行步骤" })).not.toBeInTheDocument();
 });

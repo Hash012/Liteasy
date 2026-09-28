@@ -1,4 +1,5 @@
 import { PaperSelectionTools } from "./PaperSelectionTools";
+import { PdfSelectionMenu } from "./PdfSelectionMenu";
 import { resolveReadingQuoteRects } from "./readingAnnotationGeometry";
 import type { ReadingMarkStyle } from "./pdfReadingAnnotations";
 import { pdfCanvasSize } from "./pdfRenderBudget";
@@ -3924,24 +3925,9 @@ export function PdfReader({
               </div>
             </div>}
             {selection ? (
-              <div
-                aria-label="选中文本批注菜单"
-                className={`pdf-selection-menu is-${selection.menuPlacement}`}
-                style={{ left: selection.menuLeft, top: selection.menuTop }}
-              >
-                  <div className="color-selector">
-                    {(["yellow", "red", "blue", "green", "pink"] as HighlightColor[]).map((color) => (
-                      <button
-                        key={color}
-                        className={`color-option ${selectedColor === color ? "active" : ""}`}
-                        style={{ backgroundColor: getHighlightColor(color) }}
-                        onClick={() => setSelectedColor(color)}
-                        title={`选择${color === "yellow" ? "黄色" : color === "red" ? "红色" : color === "blue" ? "蓝色" : color === "green" ? "绿色" : "粉色"}高亮`}
-                        type="button"
-                      />
-                    ))}
-                  </div>
-                <PaperSelectionTools highlight={() => addAnnotation("highlight")} underline={() => addAnnotation("underline")}
+              <PdfSelectionMenu stageRef={stageRef} anchor={{ left: selection.menuLeft, top: selection.menuTop, placement: selection.menuPlacement }}>
+                <PaperSelectionTools color={selectedColor} onColorChange={setSelectedColor}
+                  highlight={() => addAnnotation("highlight")} underline={() => addAnnotation("underline")}
                   copy={() => void copySelectedText()} board={addSelectionToWhiteboard} dragBoard={handleSelectionWhiteboardDragStart}
                   tray={objectWorkbench ? () => { if (activePaper) void objectWorkbench.capturePdf({ paper: activePaper, ...selection }, "tray").catch((e) => setStatus(e.message)); } : undefined}
                   conversation={addSelectionToConversation} quickAsk={onQuickAsk ? () => {
@@ -3949,7 +3935,7 @@ export function PdfReader({
                     setQuickAskPending(false); setQuickAskSelection(selection); setQuickAskQuestion("");
                     setQuickAskError(""); setSelection(null); setSelectionPreview(null); clearBrowserSelection(); setAnnotationPopup(null);
                   } : undefined} />
-              </div>
+              </PdfSelectionMenu>
             ) : null}
             {quickAskSelection ? (
               <aside aria-label="速问" className="pdf-quick-ask-panel">

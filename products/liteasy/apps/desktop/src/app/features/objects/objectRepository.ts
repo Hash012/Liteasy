@@ -5,6 +5,7 @@ import {
   parseObject,
   refOf,
   objectText,
+  isPaperMetadataReference,
   ObjectStoreError,
   type ObjectContent,
   type ObjectEnvelope,
@@ -91,10 +92,18 @@ export function createObjectRepository(
           version: headChange.row!.version,
           value: {
             objectId: object.objectId,
+            scopeId,
             title: object.title,
             lifecycle: object.lifecycle,
             kind: object.kind,
             revision: object.revision,
+            ...(object.kind === "source.document" ? {
+              paperId: object.content.payload.paperId,
+              ...(object.content.payload.abstractText || isPaperMetadataReference(object) ? { summary: [
+                ...(isPaperMetadataReference(object) ? ["题录已固定；正文按需读取。"] : []),
+                object.content.payload.abstractText || "摘要尚未提取。",
+              ].join("\n").slice(0, 4000) } : {}),
+            } : {}),
           },
         },
       },
@@ -551,16 +560,17 @@ export function createObjectRepository(
       );
   }
   async function searchTitles(query = "", limit = 20) {
-    const results: Array<{ objectId: string; title: string; kind?: ObjectEnvelope["kind"]; revision?: string }> = [];
+    const results: Array<{ objectId: string; title: string; kind?: ObjectEnvelope["kind"]; revision?: string; paperId?: string; summary?: string }> = [];
     const normalized = query.toLocaleLowerCase();
     let after = "";
     do {
       const rows = await storage.list("title/", after, 1000);
       for (const row of rows) {
         after = row.key;
-        const entry = row.value as { objectId: string; title: string; lifecycle: string; kind?: ObjectEnvelope["kind"]; revision?: string };
+        const entry = row.value as { objectId: string; title: string; lifecycle: string; kind?: ObjectEnvelope["kind"]; revision?: string; paperId?: string; summary?: string };
         if (entry.lifecycle === "active" && `${entry.title} ${entry.objectId}`.toLocaleLowerCase().includes(normalized)) {
-          results.push({ objectId: entry.objectId, title: entry.title, ...(entry.kind ? { kind: entry.kind } : {}), ...(entry.revision ? { revision: entry.revision } : {}) });
+          results.push({ objectId: entry.objectId, title: entry.title, ...(entry.kind ? { kind: entry.kind } : {}), ...(entry.revision ? { revision: entry.revision } : {}),
+            ...(entry.paperId ? { paperId: entry.paperId } : {}), ...(entry.summary ? { summary: entry.summary } : {}) });
           if (results.length >= limit) return results;
         }
       }
@@ -891,6 +901,19 @@ export function createObjectRepository(
   }
   return {
     scopeId,
+    /** Lightweight current-head metadata; old indexes safely fall back to their existing object. */
+    async describeObject(objectId: string) {
+      const row = await storage.get(`title/${objectId}`);
+      const indexed = row?.value as { scopeId?: string; objectId: string; title: string; lifecycle: string; kind?: ObjectEnvelope["kind"]; revision?: string; paperId?: string; summary?: string } | undefined;
+      const object = !indexed?.kind || !indexed.revision || indexed.scopeId !== scopeId ? await resolveLatest(objectId) : undefined;
+      const description = object ? { objectId: object.objectId, title: object.title, kind: object.kind, revision: object.revision, lifecycle: object.lifecycle,
+        ...(object.kind === "source.document" ? { paperId: object.content.payload.paperId, summary: object.content.payload.abstractText?.slice(0, 4000) } : {}) }
+        : { ...indexed!, kind: indexed!.kind!, revision: indexed!.revision! };
+      if (description.lifecycle !== "active") throw new ObjectStoreError("object_not_found", "内容已归档或删除。");
+      const binding = description.kind === "content.note" ? await storage.get(`object-file/${objectId}`)
+        : description.kind === "workspace.board" ? await storage.get(`board-file/${objectId}`) : undefined;
+      return { ...description, fileBinding: binding?.value as { mountId: string; path: string } | undefined };
+    },
     migrateBoard,
     readRaw: async (ref: { objectId: string; revision?: string }) => {
       const head = await storage.get(headKey(ref.objectId));
@@ -1173,7 +1196,7 @@ export function createObjectRepository(
               title: input.title,
               content: {
                 schema: "liteasy.board/v1",
-                payload: { description: "" },
+                payload: previous?.kind === "workspace.board" ? previous.content.payload : { description: "" },
               },
             },
             previous,

@@ -3,7 +3,10 @@ import { paperAnchorsForArtifact } from "../features/paper-anchors/paperAnchorAd
 import { createNoteFileService } from "../features/note-files/noteFileService";
 import { resolveLiteasyContext, contextAttachments } from "../features/resource-filesystem/resourceContext";
 import { describeResourceLocation } from "../features/resource-filesystem/resourceLocation";
-import { searchResourcePaths } from "../features/resource-filesystem/resourcePathSearch";
+import { createWorkspaceAgentAssetService } from "../features/resource-filesystem/workspaceAgentAssetService";
+import { createPaperProjectRepository } from "../features/paper-projects/paperProjectRepository";
+import { extractQuickAskAbstract } from "../features/pdf/pdfQuickAsk";
+import type { RetrievalChunk } from "../features/retrieval/retrieval.types";
 import { paperAnchorOpenRequest } from "../features/paper-anchors/paperAnchorEntity";
 import { ARTIFACT_CONTEXT_MIME } from "../features/object-transfer/contextTransfer";
 import { artifactContextText } from "../features/artifacts/artifactContext";
@@ -32,6 +35,7 @@ import {
 } from "../features/objects/objectRepository";
 import {
   objectText,
+  isPaperMetadataReference,
   refOf,
   type ObjectEnvelope,
   type ObjectRef,
@@ -71,6 +75,8 @@ export function useObjectWorkbenchController(input: {
   artifactScopeId?: string;
   getApi: () => AgentPublicApi;
   getPapers: () => Paper[];
+  getImportedChunksForPaperId?: (paperId: string) => RetrievalChunk[];
+  ensurePaperImported?: (paper: Paper, signal?: AbortSignal) => Promise<void>;
   getArtifactTitles?: () => Array<{ artifactId: string; title: string }>;
   getSettings: () => SettingsState;
   readPaperBytes?: (sourcePath: string) => Promise<Uint8Array>;
@@ -120,6 +126,14 @@ export function useObjectWorkbenchController(input: {
   const mounted = useRef(true);
   const active = () =>
     mounted.current && latest.current.scopeId === repository.scopeId;
+  async function paperAbstract(paper: Paper) {
+    const opening = (latest.current.getImportedChunksForPaperId?.(paper.id) ?? [])
+      .filter((chunk) => chunk.page <= 2).map((chunk) => chunk.sourceMarkdown || chunk.snippet).join("\n\n");
+    if (/\babstract\b|摘\s*要/i.test(opening)) return extractQuickAskAbstract(opening).slice(0, 4000);
+    const summary = (await repository.searchTitles(paper.title, 100)).find((entry) => entry.paperId === paper.id && entry.summary)?.summary;
+    const abstract = summary?.replace(/^题录已固定；正文按需读取。\n/, "");
+    return abstract && abstract !== "摘要尚未提取。" ? abstract : undefined;
+  }
   async function refresh() {
     const all: ObjectEnvelope[] = [];
     const fileProjections = await repository.fileProjectionIds();
@@ -504,21 +518,21 @@ export function useObjectWorkbenchController(input: {
     setStatus("已保存到本机");
     return refs;
   }
+  const resolveLegacyContext = (path: string) => resolveLiteasyContext({ path, repository, active,
+    artifactScopeId: latest.current.artifactScopeId ?? "device",
+    files: createNoteFileService(repository.scopeId, () => latest.current.scopeId),
+    getPapers: () => latest.current.getPapers(), getArtifacts: () => latest.current.listLegacyArtifacts?.() ?? Promise.resolve([]),
+    capturePapers: (ids) => port.capturePaperContext!(ids),
+    captureAnnotation: (selection) => captureAnnotation(selection, "saved"),
+    resolveBoard: boardFiles.resolveBoardFile,
+  });
   const port: ObjectWorkbenchPort = {
     scopeId: repository.scopeId,
-    searchLiteasyPaths: (query) => searchResourcePaths({ query, repository, active,
-      files: createNoteFileService(repository.scopeId, () => latest.current.scopeId),
-      getPapers: () => latest.current.getPapers(),
-      getArtifacts: async () => latest.current.getArtifactTitles?.() ?? [],
-    }),
-    resolveLiteasyPath: (path) => resolveLiteasyContext({ path, repository, active,
-      artifactScopeId: latest.current.artifactScopeId ?? "device",
-      files: createNoteFileService(repository.scopeId, () => latest.current.scopeId),
-      getPapers: () => latest.current.getPapers(), getArtifacts: () => latest.current.listLegacyArtifacts?.() ?? Promise.resolve([]),
-      capturePapers: (ids) => port.capturePaperContext!(ids),
-      captureAnnotation: (selection) => captureAnnotation(selection, "saved"),
-      resolveBoard: boardFiles.resolveBoardFile,
-    }),
+    searchLiteasyPaths: async (query) => (await agentAssets.search({ query })).map((asset) => ({
+      title: asset.title, kind: asset.kind, path: asset.path,
+    })),
+    resolveLiteasyPath: (path) => /^liteasy:\/\/(?:resources|paper-annotations|artifact-annotations)\//.test(path)
+      ? resolveLegacyContext(path) : agentAssets.context(path),
     describeResource: (target, reveal) => describeResourceLocation({ target, reveal, repository, active,
       files: createNoteFileService(repository.scopeId, () => latest.current.scopeId),
       getPapers: () => latest.current.getPapers(), artifactScopeId: latest.current.artifactScopeId ?? "device" }),
@@ -550,15 +564,51 @@ export function useObjectWorkbenchController(input: {
       for (const paperId of [...new Set(paperIds)]) {
         const paper = latest.current.getPapers().find((item) => item.id === paperId);
         if (!paper || !active()) throw new Error("来源文献在当前工作区不可用。");
-        const fulltext = normalizePaperFulltext(await loadUserPaperArtifact({ artifactKind: "fulltext", paperId }));
-        if (!fulltext?.pages.some((page) => page.text.trim()))
+        const abstract = await paperAbstract(paper);
+        if (!active()) throw new Error("账号已切换。");
+        const title = paper.literature?.title || paper.title;
+        const authors = paper.literature?.authors ?? paper.authors;
+        const metadata = [Array.isArray(authors) ? authors.join("、") : authors, paper.literature?.year ?? paper.year].filter(Boolean).join(" · ");
+        const source = await repository.projectLegacy(`paper-context-metadata:${paper.id}`, {
+          kind: "source.document", title,
+          content: { schema: "liteasy.source-document/v1", payload: {
+            paperId, legacyKey: `paper-context-metadata:${paper.id}`, availability: "local",
+            ...(paper.contentHash ? { documentHash: paper.contentHash } : {}),
+            ...(paper.literature?.literatureId ? { literatureId: paper.literature.literatureId } : {}),
+            ...(abstract ? { abstractText: abstract } : {}),
+            text: [`# ${title}`, metadata, abstract ? `摘要：${abstract}` : "摘要尚未提取。", "此引用仅固定论文题录，正文将在需要时读取。"].filter(Boolean).join("\n\n"),
+          } },
+        });
+        refs.push(refOf(source));
+      }
+      if (!active()) throw new Error("账号已切换。");
+      return refs;
+    },
+    async capturePaperFulltextContext(paperIds) {
+      const refs: ObjectRef[] = [];
+      for (const paperId of [...new Set(paperIds)]) {
+        const paper = latest.current.getPapers().find((item) => item.id === paperId);
+        if (!paper || !active()) throw new Error("来源文献在当前工作区不可用。");
+        let fulltext = normalizePaperFulltext(await loadUserPaperArtifact({ artifactKind: "fulltext", paperId }));
+        let chunks = latest.current.getImportedChunksForPaperId?.(paperId) ?? [];
+        if (!fulltext?.pages.some((page) => page.text.trim()) && !chunks.length && latest.current.ensurePaperImported) {
+          await latest.current.ensurePaperImported(paper);
+          if (!active()) throw new Error("账号已切换。");
+          chunks = latest.current.getImportedChunksForPaperId?.(paperId) ?? [];
+          if (!chunks.length) fulltext = normalizePaperFulltext(await loadUserPaperArtifact({ artifactKind: "fulltext", paperId }));
+        }
+        const grouped = new Map<number, string[]>();
+        for (const chunk of chunks) grouped.set(chunk.page, [...(grouped.get(chunk.page) ?? []), chunk.sourceMarkdown || chunk.snippet]);
+        const pages = fulltext?.pages.some((page) => page.text.trim()) ? fulltext.pages
+          : [...grouped.entries()].sort(([a], [b]) => a - b).map(([page, parts]) => ({ page, text: parts.join("\n\n") }));
+        if (!pages.some((page) => page.text.trim()))
           throw new Error(`《${paper.title}》的正文尚未就绪，请完成解析后重试。`);
         const source = await repository.projectLegacy(`paper-${paper.id}`, {
           kind: "source.document", title: paper.title,
           content: { schema: "liteasy.source-document/v1", payload: {
             paperId, legacyKey: paperId, availability: "local", documentHash: await documentHash(paper),
-            text: fulltext.pages.map((page) => `第 ${page.page} 页\n${page.text}`).join("\n\n"),
-            pages: fulltext.pages.map((page) => ({ page: page.page, text: page.text })),
+            text: pages.map((page) => `第 ${page.page} 页\n${page.text}`).join("\n\n"),
+            pages: pages.map((page) => ({ page: page.page, text: page.text })),
           } },
         });
         refs.push(refOf(source));
@@ -766,9 +816,25 @@ export function useObjectWorkbenchController(input: {
     },
   };
   async function resolveContext(request: SubmitAgentTurnRequest) {
+    const refs: ContextRef[] = [];
+    for (const ref of request.contextRefs ?? []) {
+      if (!request.input.artifactType || !("objectId" in ref) || ref.selectorId) { refs.push(ref); continue; }
+      const source = await repository.get(ref);
+      if (source.kind !== "source.document" || !isPaperMetadataReference(source)) { refs.push(ref); continue; }
+      const paper = latest.current.getPapers().find((item) => item.id === source.content.payload.paperId);
+      if (!paper || !active()) throw new Error("来源论文在当前工作区不可用。");
+      const hash = source.content.payload.documentHash;
+      if (hash && paper.contentHash !== hash) throw new Error("论文文件版本已变化，请重新添加论文。");
+      const fullRefs = await port.capturePaperFulltextContext!([paper.id]);
+      if (hash) {
+        const captured = await repository.get(fullRefs[0]);
+        if (captured.kind !== "source.document" || captured.content.payload.documentHash !== hash) throw new Error("论文文件版本已变化，请重新添加论文。");
+      }
+      refs.push(...fullRefs);
+    }
     return resolveContextSnapshot({
       repository,
-      refs: request.contextRefs ?? [],
+      refs,
       pinnedRefs: isolatedContextSessions.current.has(request.sessionId) ? [] : tray
         .filter((entry) => entry.pinned)
         .map((entry) => entry.ref),
@@ -928,8 +994,44 @@ export function useObjectWorkbenchController(input: {
     );
     return source;
   }
+  const assetContextResolver = useRef(resolveLegacyContext);
+  assetContextResolver.current = resolveLegacyContext;
+  const agentAssets = useMemo(() => createWorkspaceAgentAssetService({
+    repository,
+    active,
+    files: createNoteFileService(repository.scopeId, () => latest.current.scopeId),
+    projects: createPaperProjectRepository(createObjectStorage(repository.scopeId, () => latest.current.scopeId), repository.scopeId),
+    getPapers: () => latest.current.getPapers(),
+    getArtifacts: () => latest.current.listLegacyArtifacts?.() ?? Promise.resolve([]),
+    getArtifactTitles: () => latest.current.getArtifactTitles?.() ?? [],
+    getPaperAbstract: paperAbstract,
+    resolveContext: (path) => assetContextResolver.current(path),
+    readPaper: async (paper, options) => {
+      const readAvailable = async () => {
+        options.signal?.throwIfAborted();
+        if (!active()) throw new Error("账号已切换。");
+        const chunks = latest.current.getImportedChunksForPaperId?.(paper.id) ?? [];
+        if (chunks.length) return `已保存的解析片段，覆盖页码：${[...new Set(chunks.map((chunk) => chunk.page))].sort((a, b) => a - b).join("、")}。仅代表以下已解析内容，不能据此确认全文覆盖。\n\n` +
+          chunks.map((chunk) => `第 ${chunk.page} 页\n${chunk.sourceMarkdown || chunk.snippet}`).join("\n\n");
+        const fulltext = normalizePaperFulltext(await loadUserPaperArtifact({ artifactKind: "fulltext", paperId: paper.id }));
+        if (!active()) throw new Error("账号已切换。");
+        options.signal?.throwIfAborted();
+        if (fulltext?.pages.some((page) => page.text.trim())) return `阅读器已缓存页码：${fulltext.pages.map((page) => page.page).join("、")}。论文总页数未知，不能将缓存视为完整全文。\n\n` +
+          fulltext.pages.map((page) => `第 ${page.page} 页\n${page.text}`).join("\n\n");
+      };
+      const ready = await readAvailable();
+      if (ready) return ready;
+      if (latest.current.ensurePaperImported) {
+        await latest.current.ensurePaperImported(paper, options.signal);
+        const imported = await readAvailable();
+        if (imported) return imported;
+      }
+      throw new Error(`《${paper.title}》正文尚未就绪，请在阅读器完成解析后重试。`);
+    },
+  }), [repository]);
   return {
     ...boardFiles,
+    agentAssets,
     repository,
     port,
     opened,

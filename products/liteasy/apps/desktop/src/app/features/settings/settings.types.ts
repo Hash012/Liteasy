@@ -16,6 +16,7 @@ export type SettingKey =
   | "profile.enabled"
   | "assistant.default_output_mode"
   | "assistant.language"
+  | "assistant.context_window"
   | "import.ocr_language"
   | "thin_reading.intuecho_endpoint"
   | "models.default_provider"
@@ -49,6 +50,7 @@ export type SettingsState = {
   "profile.enabled": boolean;
   "assistant.default_output_mode": string;
   "assistant.language": string;
+  "assistant.context_window"?: string;
   "import.ocr_language": "chi_sim" | "eng" | "eng+chi_sim";
   "thin_reading.intuecho_endpoint": string;
   "models.default_provider": string;

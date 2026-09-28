@@ -1,3 +1,6 @@
+import { agentContextLimit, withModelContextBudget } from "../../features/context/modelContextBudget";
+import { runWorkspaceAgent } from "./runWorkspaceAgent";
+import type { AgentAssetService } from "../../features/resource-filesystem/agentAssetService";
 import { thinkingDepthInstruction } from "../../features/assistant/thinkingDepth";
 import type {
   AgentPublicApi,
@@ -69,6 +72,8 @@ type KnowledgeEnvironment = Omit<
 >;
 
 export type DesktopAgentEnvironment = {
+  assets?: AgentAssetService;
+  assetScopeId?: string;
   activity?: {
     artifactTasks: readonly ArtifactTask[];
   };
@@ -155,11 +160,12 @@ async function executeKnowledgeTurn(
     throw new Error("Command turns cannot use the knowledge executor");
   }
   const artifactType = override?.artifactType ?? request.input.artifactType;
+  if (!artifactType && environment.assets) return runWorkspaceAgent(input, environment);
   const question = [request.input.thinkingDepth ? thinkingDepthInstruction(request.input.thinkingDepth) : "", override?.question ?? request.input.message].filter(Boolean).join("\n\n");
   const author = async (source: string, evidenceIds: string[], images?: Awaited<ReturnType<typeof contextSnapshotImages>>) => {
     if (artifactType !== "ppt" && artifactType !== "tree") throw new Error("当前资源尚不支持这种产物格式。");
     const settings = environment.knowledge.settings;
-    const gateway = createModelGatewayFromSettings(settings, { cloudTransport: environment.knowledge.modelTransport });
+    const gateway = withModelContextBudget(createModelGatewayFromSettings(settings, { cloudTransport: environment.knowledge.modelTransport }), agentContextLimit(settings["assistant.context_window"]), input.reportContextUsage);
     const activityId = `${input.runId}:artifact-authoring`;
     input.reportManagerActivity({ activityId, kind: "handoff", label: "创作结构化内容", status: "running", detail: "正在依据来源编写并校验可保存的内容。" });
     try {
@@ -195,7 +201,7 @@ async function executeKnowledgeTurn(
       })) };
     }
     const settings = environment.knowledge.settings;
-    const gateway = createModelGatewayFromSettings(settings, { cloudTransport: environment.knowledge.modelTransport });
+    const gateway = withModelContextBudget(createModelGatewayFromSettings(settings, { cloudTransport: environment.knowledge.modelTransport }), agentContextLimit(settings["assistant.context_window"]), input.reportContextUsage);
     const result = await gateway.generateAnswer({
       model: getModelForSettings(settings),
       provider: getActiveModelProvider(settings),
@@ -222,11 +228,8 @@ async function executeKnowledgeTurn(
     onDelta: artifactType
       ? (delta) => reportDelta(delta)
       : undefined,
-    onReasoningDelta: (_delta, accumulated) => input.reportManagerActivity({
-      activityId: `${input.runId}:model-reasoning`, kind: "reasoning_summary", label: "模型公开推理",
-      detail: accumulated, status: "running"
-    }),
     onProgress: reportProgress,
+    onContextUsage: input.reportContextUsage,
     onSubtaskDelta: artifactType
       ? reportSubtaskDelta
       : undefined,
@@ -323,7 +326,6 @@ export function createDesktopAgentService(
     executeManagerTurn: options.managerAgent
       ? async (input) => {
           const environment = input.context.value as DesktopAgentEnvironment;
-          if (input.context.objectSnapshot && !input.request.input.artifactType) return { kind: "knowledge", result: await executeKnowledgeTurn(input, environment) };
           const runtimeContext = createDesktopRuntimeContext(environment, {
             agentCore: input.coreTurn.runtimeContext,
             runtimeInput: {
@@ -436,7 +438,8 @@ export function createDesktopAgentService(
     async resolveContext({ request, session }) {
       const environment = options.getEnvironment({ request, session });
       return {
-        objectSnapshot: request.contextRefs?.length ? await options.resolveObjectContext?.(request) : undefined,
+        objectSnapshot: request.contextRefs?.length && (!environment.assets || request.input.artifactType || request.contextRefs.some((ref) => !("objectId" in ref)))
+          ? await options.resolveObjectContext?.(request) : undefined,
         runtimeContext: request.contextRefs?.length ? undefined : environment.runtime.contextView,
         value: environment
       };

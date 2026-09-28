@@ -61,6 +61,8 @@ export type AgentCommandExecutionInput = {
   request: SubmitAgentTurnRequest;
   reportProgress: (input: { phase: string; progress: number; summary: string }) => void;
   reportDelta: (delta: string) => void;
+  reportAssetWrite?: (receipt: AgentJsonValue) => void;
+  reportContextUsage?: (usage: { usedTokens: number; maxTokens: number; estimated: boolean }) => void;
   reportManagerActivity: (input: AgentManagerActivity) => void;
   reportSubtaskDelta: (input: { delta: string; label: string; subtaskId: string }) => void;
   runId: string;
@@ -380,7 +382,7 @@ export function createAgentApplicationService(
   };
 
   const emit = (stored: StoredSession, run: AgentRun, payload: AgentEventPayload) => {
-    if (run.status === "cancelled" && payload.type !== "run.cancelled") return;
+    if (run.status === "cancelled" && payload.type !== "run.cancelled" && payload.type !== "asset.written") return;
     const event = {
       ...payload,
       apiVersion: AGENT_API_VERSION,
@@ -818,6 +820,12 @@ export function createAgentApplicationService(
               type: "progress.started"
             });
           },
+          reportAssetWrite(receipt) {
+            emit(stored, run, { receipt, type: "asset.written" });
+          },
+          reportContextUsage(usage) {
+            emit(stored, run, { ...usage, type: "context.usage" });
+          },
           reportDelta(delta) {
             emit(stored, run, { delta, type: "assistant.delta" });
           },
@@ -831,8 +839,7 @@ export function createAgentApplicationService(
           runId,
           signal: abortController.signal
         };
-        const directObjectQuestion = context.objectSnapshot && !request.input.artifactType;
-        const runtime = directObjectQuestion ? "liteasy_knowledge_workflow" : ports.executeManagerTurn
+        const runtime = ports.executeManagerTurn
           ? ports.managerRuntime ?? "custom_manager"
           : request.input.mode === "command"
             ? "liteasy_command_workflow"
@@ -861,7 +868,7 @@ export function createAgentApplicationService(
           runtime,
           type: "execution.route"
         });
-        const managerResult = !directObjectQuestion && ports.executeManagerTurn
+        const managerResult = ports.executeManagerTurn
           ? await ports.executeManagerTurn(executionInput)
           : undefined;
         if (managerResult?.kind === "runtime" || (!managerResult && request.input.mode === "command")) {

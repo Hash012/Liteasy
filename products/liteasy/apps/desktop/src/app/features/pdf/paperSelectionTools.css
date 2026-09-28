@@ -1,0 +1,109 @@
+.paper-selection-tools {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--colorNeutralForeground1);
+}
+
+.paper-selection-colors {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 4px 6px;
+  border-bottom: 1px solid var(--colorNeutralStroke2);
+}
+
+.paper-selection-colors > span {
+  color: var(--colorNeutralForeground3);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.paper-selection-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.paper-selection-tools .paper-selection-swatch {
+  box-sizing: border-box;
+  flex: 0 0 24px;
+  min-width: 24px;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, .16);
+  border-radius: 4px;
+  color: #242424;
+}
+
+.paper-selection-tools .paper-selection-swatch[aria-pressed="true"] {
+  outline: 1px solid var(--colorNeutralForeground1);
+  outline-offset: 2px;
+}
+
+.paper-selection-primary,
+.paper-selection-destinations {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.paper-selection-primary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.paper-selection-destinations {
+  grid-template-columns: repeat(auto-fit, minmax(min(112px, 100%), 1fr));
+  border-top: 1px solid var(--colorNeutralStroke2);
+  padding-top: 6px;
+}
+
+.paper-selection-primary > .fui-Button,
+.paper-selection-destinations > .fui-Button {
+  min-width: 0;
+  min-height: 30px;
+  padding: 5px 6px;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  border-radius: 4px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.paper-selection-destinations > .fui-Button {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.paper-selection-tools .fui-Button__icon {
+  flex-shrink: 0;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+}
+
+.pdf-selection-menu {
+  box-sizing: border-box;
+  position: absolute;
+  z-index: 8;
+  width: 292px;
+  min-width: 0;
+  max-width: calc(100% - 16px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 8px;
+  border: 1px solid var(--colorNeutralStroke2);
+  border-radius: 8px;
+  background: var(--colorNeutralBackground1);
+  color: var(--colorNeutralForeground1);
+  box-shadow: var(--shadow8);
+  user-select: none;
+}

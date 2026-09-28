@@ -1,3 +1,4 @@
+import { agentContextLimit } from "../context/modelContextBudget";
 import type { SettingsState, UpdateSettingCommand } from "./settings.types";
 import { normalizeDisplayScale, normalizeViewFontSize } from "./viewSettings";
 import { isRecommendationStyle, normalizeRecommendationStyle } from "../recommendations/recommendationStyle";
@@ -5,7 +6,7 @@ import { isAppearancePreference, normalizeAppearancePreference, notifyAppearance
 
 const modelSettingsStorageKey = "liteasy.model-connection.v1";
 const recommendationSettingsStorageKey = "liteasy.recommendation-settings.v1";
-const modelSettingKeys = ["thin_reading.mode", "papers.metadata_provider", "papers.metadata_endpoint", "papers.mineru_mode", "papers.mineru_endpoint", "models.connection_mode", "models.direct_provider", "models.direct_endpoint", "models.direct_model", "models.direct_protocol", "models.direct_output_format"] as const;
+const modelSettingKeys = ["assistant.context_window","thin_reading.mode", "papers.metadata_provider", "papers.metadata_endpoint", "papers.mineru_mode", "papers.mineru_endpoint", "models.connection_mode", "models.direct_provider", "models.direct_endpoint", "models.direct_model", "models.direct_protocol", "models.direct_output_format"] as const;
 
 function loadPersistedModelSettings(): Partial<SettingsState> {
   try {
@@ -94,7 +95,7 @@ function persistViewSettings(state: SettingsState) {
 export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.env) {
   const cloudEndpoint = releaseEndpoint(runtimeEnv.VITE_LITEASY_CLOUD_URL, "http://127.0.0.1:8787");
   const forumEndpoint = releaseEndpoint(runtimeEnv.VITE_FORUM_API_URL, "");
-  const state: SettingsState = {
+  const state: SettingsState & { "assistant.context_window": string } = {
     "thin_reading.mode": "fast",
     "papers.metadata_provider": "crossref",
     "papers.metadata_endpoint": "https://api.crossref.org",
@@ -109,6 +110,7 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
     "profile.local_enabled": loadLocalSetting("profile.local_enabled"),
     "assistant.default_output_mode": "mindmap",
     "assistant.language": "zh-CN",
+    "assistant.context_window": "32768",
     "import.ocr_language": "eng",
     "thin_reading.intuecho_endpoint": forumEndpoint,
     "models.default_provider": runtimeEnv.VITE_LITEASY_MODEL_PROVIDER === "deepseek"
@@ -132,8 +134,14 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
     ...loadPersistedViewSettings()
   };
 
+  state["assistant.context_window"] = String(agentContextLimit(state["assistant.context_window"]));
+
   return {
     apply(command: UpdateSettingCommand) {
+      if (command.target === "assistant.context_window" &&
+        (!Number.isInteger(Number(command.value)) || Number(command.value) < 4096 || Number(command.value) > 262144)) {
+        throw new Error("上下文上限应为 4096 至 262144 之间的整数。");
+      }
       if (command.target === "view.theme" && !isAppearancePreference(command.value)) {
         throw new Error("invalid_appearance_preference");
       }

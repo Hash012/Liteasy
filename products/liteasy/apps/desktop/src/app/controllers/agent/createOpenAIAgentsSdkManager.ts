@@ -281,7 +281,8 @@ function createMainAgent(sdkContext: SdkManagerContext) {
     mainToolName = "liteasy_knowledge_workflow";
     const knowledgeParameters = z.object({ input: z.string() });
     tools.push(tool<typeof knowledgeParameters, SdkManagerContext>({
-      description: "执行 Liteasy 文献检索和知识回答工作流。",
+      description: "按用户任务检索、读取和更新文库资产，或直接回答。",
+      errorFunction: (_context, error) => { throw error; },
       execute: async (_arguments, runContext) => {
         const context = getSdkContext(runContext);
         context.result = {

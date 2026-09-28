@@ -63,11 +63,20 @@ export function AgentSettingsPanel({
   settings
 }: AgentSettingsPanelProps) {
   const [capabilitiesOpen, setCapabilitiesOpen] = useState(false);
+  const contextLimit = settings?.["assistant.context_window"] ?? "32768";
+  const contextLimits = [...new Set(["4096", "8192", "16384", "32768", "65536", "131072", "262144", contextLimit])]
+    .sort((left, right) => Number(left) - Number(right));
   return <div className="view-settings-panel">
     <Field label="薄读生成语言" hint="用于后续生成；已有回答保持原样。跟随系统时使用浏览器语言。">
       <Select aria-label="薄读生成语言" value={settings?.["assistant.language"] ?? "zh-CN"}
         onChange={(_, data) => onUpdateSetting?.({ intent: "update_setting", target: "assistant.language", value: data.value })}>
         <option value="zh-CN">中文</option><option value="en-US">English</option><option value="system">跟随系统</option>
+      </Select>
+    </Field>
+    <Field label="Agent 上下文上限" hint="限制每次请求的上下文容量；请勿超过所用模型支持的容量。长篇资料按需分段读取，输入框会显示估算占用。">
+      <Select aria-label="Agent 上下文上限" value={contextLimit}
+        onChange={(_, data) => onUpdateSetting?.({ intent: "update_setting", target: "assistant.context_window", value: data.value })}>
+        {contextLimits.map((value) => <option key={value} value={value}>{Number(value).toLocaleString()} tokens</option>)}
       </Select>
     </Field>
     <Field hint="在回答或产物旁展示安全摘要，不展示内部推理和个人画像细节。">

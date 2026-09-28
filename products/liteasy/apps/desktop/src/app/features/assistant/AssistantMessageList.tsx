@@ -19,6 +19,7 @@ import {
   ClockRegular,
   CopyRegular,
   DismissRegular,
+  DocumentEditRegular,
   EditRegular,
   FlashRegular,
   StarFilled,
@@ -84,6 +85,7 @@ function getPublicAuditStatusLabel(status: "blocked" | "passed" | "warning") {
 type AssistantMessageListProps = {
   papers?: Paper[];
   onOpenArtifact?: (artifactId: string) => void;
+  onOpenAsset?: (path: string) => void | Promise<void>;
   onResumeArtifactTask?: (taskId: string) => Promise<void>;
   onCancelArtifactTask?: (taskId: string) => void;
   onOpenCitation?: (citation: Citation) => void;
@@ -105,6 +107,7 @@ type AssistantMessageListProps = {
 export function AssistantMessageList({
   papers = [],
   onOpenArtifact,
+  onOpenAsset,
   onResumeArtifactTask,
   onCancelArtifactTask,
   onOpenCitation,
@@ -176,11 +179,6 @@ export function AssistantMessageList({
               ) : message.artifactTask && ["failed", "cancelled"].includes(message.artifactTask.status) && onResumeArtifactTask ? (
                 <ResumeReadingButton onResume={() => onResumeArtifactTask(message.artifactTask!.id)} />
               ) : null}
-              {message.contextCoverage ? <details className="assistant-context-coverage">
-                <summary>本轮读取范围：{message.contextCoverage.full} 项完整读取{message.contextCoverage.partial ? `，${message.contextCoverage.partial} 项选段` : ""}{message.contextCoverage.omitted ? `，${message.contextCoverage.omitted} 项未覆盖` : ""}</summary>
-                {message.contextCoverage.partial || message.contextCoverage.omitted ? <p>本轮回答基于已读取内容，不能视为对全部资料的完整审阅。可选择具体页面或缩小范围继续提问。</p> : null}
-                <ul>{message.contextCoverage.items.map((item, index) => <li key={index}>{item.title} · {{ full: "完整", partial: "部分", omitted: "未读取" }[item.status]}（{item.includedCharacters.toLocaleString()} / {item.totalCharacters.toLocaleString()} 字符）</li>)}</ul>
-              </details> : null}
               {message.content &&
               (!message.uiDsl || message.citations?.length || message.audit || message.executionTrace) ? (
                 message.role === "assistant" ? (
@@ -192,6 +190,25 @@ export function AssistantMessageList({
                   <ExpandableUserMessage value={message.content} />
                 )
               ) : null}
+              {message.contextCoverage ? <details className="assistant-context-coverage">
+                <summary>本轮读取范围：{message.contextCoverage.full} 项完整读取{message.contextCoverage.partial ? `，${message.contextCoverage.partial} 项选段` : ""}{message.contextCoverage.omitted ? `，${message.contextCoverage.omitted} 项未覆盖` : ""}</summary>
+                {message.contextCoverage.partial || message.contextCoverage.omitted ? <p>本轮回答基于已读取内容，不能视为对全部资料的完整审阅。可选择具体页面或缩小范围继续提问。</p> : null}
+                <ul>{message.contextCoverage.items.map((item, index) => <li key={index}>{item.title} · {{ full: "完整", partial: "部分", omitted: "未读取" }[item.status]}（{item.includedCharacters.toLocaleString()} / {item.totalCharacters.toLocaleString()} 字符）</li>)}</ul>
+              </details> : null}
+              {message.assetWrites?.length ? <div className="assistant-asset-writes" aria-label="已保存的资产修改">
+                {message.assetWrites.map((write, writeIndex) => <div className="assistant-asset-write" key={`${write.path}-${writeIndex}`}>
+                  <DocumentEditRegular aria-hidden="true" />
+                  <div className="assistant-asset-write-description">
+                    <strong>{write.changed ? "已更新" : "已核对"} {write.title}</strong>
+                    <span className="assistant-asset-write-counts"><span>+{write.addedLines}</span><span>−{write.removedLines}</span><small>行</small></span>
+                    {write.warnings?.map((warning, warningIndex) => <small key={warningIndex}>{warning}</small>)}
+                  </div>
+                  {onOpenAsset ? <Button appearance="subtle" size="small" onClick={() => {
+                    void Promise.resolve().then(() => onOpenAsset(write.path)).catch((error) =>
+                      setCaptureStatus(error instanceof Error ? error.message : "暂时无法打开此资产。"));
+                  }}>查看</Button> : null}
+                </div>)}
+              </div> : null}
               {message.role === "user" && message.queuedDelivery ? (
                 <div className={`assistant-queued-message ${message.queuedDelivery.policy}`}>
                   <span>
@@ -287,9 +304,9 @@ export function AssistantMessageList({
                 </div>
               ) : null}
               {message.executionTrace ? (
-                <div className="assistant-execution-trace">
-                  模型链路：{formatModelExecutionLabel(message.executionTrace)}
-                </div>
+                <details className="assistant-execution-trace"><summary>生成信息</summary>
+                  使用模型：{formatModelExecutionLabel(message.executionTrace)}
+                </details>
               ) : null}
               {message.confirmation ? (
                 <div className="assistant-confirmation-actions">

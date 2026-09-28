@@ -53,6 +53,7 @@ export type ObjectWorkbenchPort = {
     import("../object-transfer/contextTransfer").ResourceContextAttachment[]
   >;
   capturePaperContext?(paperIds: string[]): Promise<ObjectRef[]>;
+  capturePaperFulltextContext?(paperIds: string[]): Promise<ObjectRef[]>;
   captureArtifactPage?(input: {
     paperAnchors?: import("../paper-anchors/paperAnchorEntity").PaperAnchorEntity[];
     artifactId: string;

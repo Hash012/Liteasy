@@ -54,9 +54,9 @@ test("keeps collapsed canonical registry nodes graphite instead of generic blue"
 test("disables all recommendation graph transitions when reduced motion is requested", () => {
   const sheet = style.sheet;
   if (!sheet) throw new Error("Association graph stylesheet was not parsed");
-  const reducedMotion = Array.from(sheet.cssRules).find((rule): rule is CSSMediaRule =>
+  const reducedMotion = Array.from(sheet.cssRules).filter((rule): rule is CSSMediaRule =>
     "conditionText" in rule && rule.conditionText === "(prefers-reduced-motion: reduce)");
-  const reducedRules = reducedMotion ? allRules(reducedMotion.cssRules) : [];
+  const reducedRules = reducedMotion.flatMap((rule) => allRules(rule.cssRules));
   const transitionlessSelectors = reducedRules.flatMap((rule) =>
     "selectorText" in rule && rule.style.getPropertyValue("transition") === "none"
       ? rule.selectorText.split(",").map((part) => part.trim())

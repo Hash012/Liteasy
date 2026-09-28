@@ -1,3 +1,5 @@
+import { createAgentAssetNavigator } from "../controllers/agent/createAgentAssetNavigator";
+import { createNoteFileService } from "../features/note-files/noteFileService";
 import { usePaperAttachmentController } from "../controllers/usePaperAttachmentController";
 import { PaperNoteEditor } from "../features/paper-projects/PaperNoteEditor";
 import { useExternalNoteController } from "../controllers/useExternalNoteController";
@@ -1094,6 +1096,8 @@ export function AppShell({
     scopeId: accountSession?.userId ? `user:${accountSession.userId}` : "local",
     getApi: () => objectAgentApiRef.current!,
     readPaperBytes: loadPaperPdfBytes,
+    ensurePaperImported: async (paper) => { await workspaceActions.ensurePapersImported([paper]); },
+    getImportedChunksForPaperId: (paperId) => importStoreRef.current.getParsedChunksByDocumentId(paperId),
     listLegacyArtifacts: () => artifactResultClientRef.current!.list(),
     getArtifactTitles: () => artifactCatalog,
     openLegacyArtifact: (id) => artifactWorkflow.actions.openArtifact(id),
@@ -1155,6 +1159,20 @@ export function AppShell({
     openEditor: () => { setLibraryExpanded(false); workbenchNavigation.open("paper-note"); },
     openBoard: async (object) => { await objectWorkbench.selectBoard(object); setLibraryExpanded(false); objectWorkbench.setVisible(true); workbenchNavigation.open("board"); },
   });
+  const objectAgentScopeRef = useRef(objectWorkbench.repository.scopeId);
+  objectAgentScopeRef.current = objectWorkbench.repository.scopeId;
+  const openAgentAsset = createAgentAssetNavigator({
+    repository: objectWorkbench.repository,
+    projects: paperProjects.repository,
+    files: createNoteFileService(objectWorkbench.repository.scopeId, () => objectAgentScopeRef.current),
+    active: () => objectWorkbench.repository.scopeId === objectAgentScopeRef.current,
+    getPapers: () => workspaceStoreRef.current.getState().papers,
+    openAttachment: paperAttachments.open,
+    openObject: objectWorkbench.openLink,
+    openFile: (file) => /\.canvas$/i.test(file.path) ? objectWorkbench.port.openBoardFile!(file) : externalNote.open(file),
+    openPaper: (paper) => openPaperInReader(paper.id),
+    openArtifact: (id) => { artifactWorkflow.actions.openArtifact(id); activateArtifactSurface(id); }
+  });
   const assistantContextSuggestions = useAssistantContextCatalog({
     artifacts: artifactCatalog,
     objects: objectWorkbench.objects,
@@ -1202,6 +1220,7 @@ export function AppShell({
   const assistantAgent = useAssistantAgentController({
     principalId: objectWorkbench.repository.scopeId,
     resolveObjectContext: objectWorkbench.resolveContext,
+    agentAssets: objectWorkbench.agentAssets,
     academicProfile: profileActions.academicProfile,
     getAgentMemories: () => profileActions.agentMemories,
     getAllPapers: () => workspaceStoreRef.current.getState().papers,
@@ -1393,8 +1412,9 @@ export function AppShell({
   const rightPaneUtilitySize = paneLayout.collapsed.right ? "0px" : "4px";
   const bottomPaneVisible = !paneLayout.collapsed.bottom;
   const visibleHorizontalRegions = dock.layout.horizontalOrder.filter((region) => !isBaseDockRegionId(region) || region === "main" || !paneLayout.collapsed[region]);
+  const defaultRegionWeights = { main: paneLayout.layout.center, left: paneLayout.layout.left, right: paneLayout.layout.right };
   function regionWeight(region: DockRegionId) {
-    return dock.layout.regionWidths[region] ?? (region === "main" ? paneLayout.layout.center : region === "left" ? paneLayout.layout.left : region === "right" ? paneLayout.layout.right : 32);
+    return dock.layout.regionWidths[region] ?? defaultRegionWeights[region as keyof typeof defaultRegionWeights] ?? 32;
   }
   const readerArtifactRowSize = "0px";
   const bottomPaneSize = bottomPaneVisible
@@ -2055,6 +2075,7 @@ export function AppShell({
               : artifactWorkflow.actions.startAnalysisForPapers(artifactType, sources, options);
           }}
           onImportSelectedSet={runtimeActionContext.importSelectedSet}
+          lazyPaperContext
           onPreparePapersForContext={async (paperIds) => {
             const paperIdSet = new Set(paperIds);
             const papers = workspaceStoreRef.current.getState().papers.filter((paper) =>
@@ -2093,6 +2114,7 @@ export function AppShell({
           runtimeOrganizationName={organizationSummary?.name}
           runtimeWorkspace={workspaceState.workspaceSource}
           availablePapers={workspaceState.papers}
+          onOpenAsset={openAgentAsset}
           contextSuggestions={assistantContextSuggestions}
           contextCatalogStatus={paperProjects.error || undefined}
           onRefreshContextCatalog={paperProjects.error ? paperProjects.refresh : undefined}
@@ -2529,13 +2551,10 @@ export function AppShell({
         />
         <div className="dock-workspace-columns" style={{ gridTemplateColumns: visibleHorizontalRegions.map((region) => `minmax(0, ${regionWeight(region)}fr)`).join(" 4px ") }}>
           {visibleHorizontalRegions.map((region, index) => <Fragment key={region}>
-            {index > 0 ? <PaneResizer ariaLabel={`调整${region === "right" ? "右栏" : region === "left" ? "左栏" : "分栏"}宽度`} onResize={(pixels) => {
-              const total = visibleHorizontalRegions.reduce((sum, id) => sum + regionWeight(id), 0);
-              const delta = pixels / Math.max(1, window.innerWidth - 64) * total;
-              const previous = visibleHorizontalRegions[index - 1];
-              dock.resizeRegion(previous, regionWeight(previous) + delta);
-              dock.resizeRegion(region, regionWeight(region) - delta);
-            }} /> : null}
+            {index > 0 ? <PaneResizer ariaLabel={`调整${region === "right" ? "右栏" : region === "left" ? "左栏" : "分栏"}宽度`} onResize={(deltaPixels, containerPixels) => dock.resizeBoundary({
+              before: visibleHorizontalRegions[index - 1], after: region,
+              deltaPixels, containerPixels, visibleRegions: visibleHorizontalRegions, defaultWeights: defaultRegionWeights,
+            })} /> : null}
             {renderDockRegion(region)}
           </Fragment>)}
         </div>
@@ -2552,13 +2571,10 @@ export function AppShell({
         </div>
         {bottomPaneVisible ? <div className="dock-bottom-columns" style={{ gridTemplateColumns: dock.layout.bottomOrder.map((region) => `minmax(0, ${regionWeight(region)}fr)`).join(" 4px ") }}>
           {dock.layout.bottomOrder.map((region, index) => <Fragment key={region}>
-            {index > 0 ? <PaneResizer ariaLabel="调整下栏分栏宽度" onResize={(pixels) => {
-              const total = dock.layout.bottomOrder.reduce((sum, id) => sum + regionWeight(id), 0);
-              const delta = pixels / Math.max(1, window.innerWidth - 64) * total;
-              const previous = dock.layout.bottomOrder[index - 1];
-              dock.resizeRegion(previous, regionWeight(previous) + delta);
-              dock.resizeRegion(region, regionWeight(region) - delta);
-            }} /> : null}
+            {index > 0 ? <PaneResizer ariaLabel="调整下栏分栏宽度" onResize={(deltaPixels, containerPixels) => dock.resizeBoundary({
+              before: dock.layout.bottomOrder[index - 1], after: region,
+              deltaPixels, containerPixels, visibleRegions: dock.layout.bottomOrder, defaultWeights: defaultRegionWeights,
+            })} /> : null}
             {renderDockRegion(region)}
           </Fragment>)}
         </div> : null}

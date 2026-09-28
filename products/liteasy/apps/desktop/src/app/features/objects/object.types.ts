@@ -97,6 +97,10 @@ export const objectContentSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 export type ObjectContent = z.infer<typeof objectContentSchema>;
+/** A small paper locator fixes metadata; its body is fetched explicitly by the Agent. */
+export function isPaperMetadataReference(object: ObjectContent) {
+  return object.kind === "source.document" && object.content.payload.legacyKey === `paper-context-metadata:${object.content.payload.paperId}`;
+}
 export const objectMetadataSchema = z.strictObject({
   paperAnchors: z.array(paperAnchorEntitySchema).optional(),
   schemaVersion: z.literal("liteasy.object/v1"),

@@ -81,7 +81,7 @@ describe("object-context PPT through the public Agent service", () => {
     expect(request.outputFormat).toBeUndefined();
     expect(request.prompt).toContain("用户问题：解释这份笔记");
     expect(run.data.events).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: "execution.route", runtime: "liteasy_knowledge_workflow" })
+      expect.objectContaining({ type: "execution.route", runtime: "openai_agents_sdk" })
     ]));
   });
 

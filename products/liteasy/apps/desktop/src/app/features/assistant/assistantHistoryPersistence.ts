@@ -1,3 +1,4 @@
+import { parseSavedAssistantAssetWrites } from "./assistantAssetWrites";
 import { createObjectStorage } from "../objects/objectStorage";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { AssistantSessionHistoryItem } from "./assistantSessionHistory";
@@ -37,6 +38,7 @@ export function parseAssistantHistory(value: unknown): AssistantHistorySnapshot 
       status: session.status === "running" ? "cancelled" : session.status,
       messages: session.messages.map(({ queuedDelivery: _queued, confirmation: _confirmation, ...message }) => ({
         ...message,
+        assetWrites: parseSavedAssistantAssetWrites(message.assetWrites),
         ...(message.artifactTask && ["queued", "running"].includes(message.artifactTask.status) ? {
           artifactTask: { ...message.artifactTask, status: "cancelled" as const }
         } : {}),

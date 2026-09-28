@@ -60,7 +60,7 @@ describe("AssistantMessageList", () => {
     expect(onOpenCitation).toHaveBeenCalledWith(messages[0].citations![0]);
     expect(screen.queryByText(/paper-1/)).not.toBeInTheDocument();
     expect(screen.getByText("审计评分 0.91 · 通过")).toBeInTheDocument();
-    expect(screen.getByText(/模型链路：/)).toBeInTheDocument();
+    expect(screen.getByText(/使用模型：/)).toBeInTheDocument();
   });
 
   test("uses compact unlabelled conversation rows and keeps message actions outside their content", () => {
@@ -239,11 +239,12 @@ describe("AssistantMessageList", () => {
     expect(screen.getByLabelText("Agent 工作状态")).toBeInTheDocument();
     expect(screen.getByText("正在组织可追溯的分析结论。")).toBeInTheDocument();
     expect(screen.getByText("工具调用：artifact.generate")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "输出 产物已请求" }));
+    await user.click(screen.getByRole("button", { name: "查看 Agent 执行过程" }));
+    await user.click(screen.getByRole("button", { name: "产物已请求" }));
     expect(screen.getByText("已创建可查看的产物。")).toBeInTheDocument();
   });
 
-  test("does not display structured Agent metadata as realtime content", () => {
+  test("does not display structured Agent metadata as realtime content", async () => {
     const messages: AssistantMessage[] = [
       {
         agentActivity: {
@@ -269,9 +270,10 @@ describe("AssistantMessageList", () => {
 
     render(<AssistantMessageList messages={messages} mode="qa" onModeChange={vi.fn()} />);
 
-    expect(screen.getByText("工具调用：检索论文")).toBeInTheDocument();
+    expect(screen.getByText("工具调用：检索论文", { selector: ".assistant-agent-operation-summary" })).toBeVisible();
+    await userEvent.setup().click(screen.getByRole("button", { name: "查看 Agent 执行过程" }));
     expect(screen.queryByText(/internal-run|internalToolArguments|secret-paper/)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "工具 工具调用：检索论文" }))
+    expect(screen.getByRole("button", { name: "工具调用：检索论文" }))
       .not.toHaveAttribute("aria-expanded");
   });
 

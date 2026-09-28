@@ -73,7 +73,7 @@ test("product AssistantSidebar executes chat commands through the injected publi
   await waitFor(() => expect(applyTheme).toHaveBeenCalledTimes(1));
   expect(await screen.findByLabelText("动态界面：已应用卡通风格。")).toBeInTheDocument();
   expect(screen.getByLabelText("Agent 工作状态")).toBeInTheDocument();
-  expect(screen.getByText("主 Agent 连接已结束")).toBeInTheDocument();
+  expect(screen.getByText(/^已完成 ·/)).toBeInTheDocument();
 
   await user.type(
     screen.getByPlaceholderText("输入你的问题或命令"),
@@ -84,5 +84,5 @@ test("product AssistantSidebar executes chat commands through the injected publi
   await waitFor(() => expect(screen.getByText(/云端回答：总结这篇论文的检索方法/)).toBeInTheDocument());
   expect(screen.getByText("查看引用原文")).toBeInTheDocument();
   expect(screen.getByText("模型审计")).toBeInTheDocument();
-  expect(screen.getByText(/模型链路：/)).toBeInTheDocument();
+  expect(screen.getByText(/使用模型：/)).toBeInTheDocument();
 });

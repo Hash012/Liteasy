@@ -7,6 +7,8 @@ import {
   openDockItem,
   splitDockRegion,
   removeDockRegion,
+  resizeDockBoundary,
+  type DockBoundaryResize,
 } from "./dockLayout";
 import {
   loadDockLayout,
@@ -82,14 +84,8 @@ export function useDockLayout() {
       saveDynamicDockPlacements(next);
       setDynamicItemRegions(next);
     },
-    resizeRegion(id: DockRegionId, width: number) {
-      updateLayout((current) => ({
-        ...current,
-        regionWidths: {
-          ...current.regionWidths,
-          [id]: Math.max(8, Math.min(160, width)),
-        },
-      }));
+    resizeBoundary(input: DockBoundaryResize) {
+      updateLayout((current) => resizeDockBoundary(current, input));
     },
     openItem(itemId: DockItemId) {
       updateLayout((current) => openDockItem(current, itemId));

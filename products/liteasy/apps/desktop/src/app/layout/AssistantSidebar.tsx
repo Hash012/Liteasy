@@ -38,11 +38,13 @@ type AssistantSidebarProps = {
   onCancelArtifactTask?: (taskId: string) => string | Promise<string>;
   onGenerateArtifact: (artifactType: ArtifactType, paperIds?: string[], context?: string, contextRefs?: import("../features/context/objectContext").ContextRef[]) => string;
   onImportSelectedSet?: ActionContext["importSelectedSet"];
+  lazyPaperContext?: boolean;
   onPreparePapersForContext?: (paperIds: string[]) => Promise<void>;
   onMoveDockItem?: ActionContext["moveDockItem"];
   onOpenAcademicArchive?: ActionContext["openAcademicArchive"];
   onOpenCitation?: (citation: Citation) => void;
   onOpenArtifact?: (artifactId: string) => void;
+  onOpenAsset?: (path: string) => void | Promise<void>;
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onActiveSessionChange?: (session: AssistantSessionHistoryItem) => void;
   onSettingsChanged?: (settings: SettingsState) => void;
@@ -83,9 +85,11 @@ export function AssistantSidebar({
   onGenerateArtifact,
   onImportSelectedSet,
   onPreparePapersForContext,
+  lazyPaperContext,
   onMoveDockItem,
   onOpenAcademicArchive,
   onOpenArtifact,
+  onOpenAsset,
   onOpenCitation,
   onOpenOrganizationSharedLibrary,
   onActiveSessionChange,
@@ -131,10 +135,12 @@ export function AssistantSidebar({
           onCancelArtifactTask={onCancelArtifactTask}
           onGenerateArtifact={onGenerateArtifact}
           onImportSelectedSet={onImportSelectedSet}
+          lazyPaperContext={lazyPaperContext}
           onPreparePapersForContext={onPreparePapersForContext}
           onMoveDockItem={onMoveDockItem}
           onOpenAcademicArchive={onOpenAcademicArchive}
           onOpenArtifact={onOpenArtifact}
+          onOpenAsset={onOpenAsset}
           onOpenCitation={onOpenCitation}
           onOpenOrganizationSharedLibrary={onOpenOrganizationSharedLibrary}
           onActiveSessionChange={onActiveSessionChange}

@@ -1,3 +1,4 @@
+import { mergeAssistantAssetWrites, parseAssistantAssetWrites } from "./assistantAssetWrites";
 import { AssistantModelPicker } from "../models/AssistantModelPicker";
 import { contextPreviewText } from "./contextAssetPreview";
 import { thinkingDepthInstruction, type ThinkingDepth } from "./thinkingDepth";
@@ -17,6 +18,7 @@ import { AssistantMessageList } from "./AssistantMessageList";
 import type {
   AssistantConfirmationRequest,
   AgentActivityStatus,
+  AgentContextUsage,
   AssistantMessage,
   AssistantComposerSuggestion,
   AssistantContextToken,
@@ -124,6 +126,7 @@ export function hasPaperGroundedAuditScope(run: AgentRun) {
 }
 
 type AssistantPaneProps = {
+  contextUsage?: AgentContextUsage;
   /**
    * The application always supplies the public Agent client. Keeping this optional
    * makes the pane usable in isolated previews and provides a real model-backed
@@ -147,10 +150,12 @@ type AssistantPaneProps = {
   onCancelArtifactTask?: (taskId: string) => string | Promise<string>;
   onGenerateArtifact: (artifactType: ArtifactType, paperIds?: string[], context?: string, contextRefs?: import("../context/objectContext").ContextRef[]) => string;
   onImportSelectedSet?: ActionContext["importSelectedSet"];
+  lazyPaperContext?: boolean;
   onPreparePapersForContext?: (paperIds: string[]) => Promise<void>;
   onMoveDockItem?: ActionContext["moveDockItem"];
   onOpenAcademicArchive?: ActionContext["openAcademicArchive"];
   onOpenArtifact?: (artifactId: string) => void;
+  onOpenAsset?: (path: string) => void | Promise<void>;
   onOpenCitation?: (citation: Citation) => void;
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onActiveSessionChange?: (session: AssistantSessionHistoryItem) => void;
@@ -277,6 +282,7 @@ function createConversationIdempotencyKey(mode: AssistantMode) {
 }
 
 export function AssistantPane({
+  contextUsage,
   agentClient,
   historyPersistence,
   academicProfile,
@@ -296,9 +302,11 @@ export function AssistantPane({
   onGenerateArtifact,
   onImportSelectedSet,
   onPreparePapersForContext,
+  lazyPaperContext = false,
   onMoveDockItem,
   onOpenAcademicArchive,
   onOpenArtifact,
+  onOpenAsset,
   onOpenCitation,
   onOpenOrganizationSharedLibrary,
   onActiveSessionChange,
@@ -713,7 +721,7 @@ export function AssistantPane({
       if (!objectWorkbench?.resolveLiteasyPath) throw new Error("资源服务尚未就绪，请稍后重试。");
       if (objectWorkbench.scopeId && !path.trim().startsWith("liteasy://resources/")) {
         const target = parseLiteasyPath(path.trim(), objectWorkbench.scopeId);
-        if (target.kind === "paper") await onPreparePapersForContext?.([target.paperId]);
+        if (target.kind === "paper" && !lazyPaperContext) await onPreparePapersForContext?.([target.paperId]);
       }
       const attachments = await objectWorkbench.resolveLiteasyPath(path.trim());
       if (!mountedRef.current || activeSessionIdRef.current !== sessionId) return false;
@@ -993,7 +1001,7 @@ export function AssistantPane({
   }
 
   function startAgentActivity() {
-    const activityMessage = createMessage("assistant", "");
+    const activityMessage = { ...createMessage("assistant", ""), agentActivity: createAgentActivity() };
     assistantStoreRef.current.addMessage(activityMessage);
     return activityMessage.id;
   }
@@ -1031,17 +1039,10 @@ export function AssistantPane({
       return;
     }
     processedAgentActivityEventIdsRef.current.add(event.eventId);
-    if (
-      event.type === "execution.route" &&
-      (event.runtime === "custom_manager" || event.runtime === "openai_agents_sdk")
-    ) {
-      updateAgentMessage(activityMessageId, (message) => ({
-        ...message,
-        agentActivity: applyAgentActivityEvent(createAgentActivity(), event)
-      }));
-      return;
-    }
-    updateAgentActivity(activityMessageId, (activity) => applyAgentActivityEvent(activity, event));
+    updateAgentMessage(activityMessageId, (message) => ({
+      ...message,
+      agentActivity: applyAgentActivityEvent(message.agentActivity ?? createAgentActivity(), event)
+    }));
   }
 
   function updateQueuedMessagePolicy(
@@ -1134,18 +1135,29 @@ export function AssistantPane({
       return;
     }
 
+    if (event.type === "asset.written") {
+      const receipts = parseAssistantAssetWrites([event.receipt]);
+      if (receipts) updateAgentMessage(activityMessageId, (message) => ({
+        ...message, assetWrites: mergeAssistantAssetWrites(message.assetWrites, receipts)
+      }));
+      return;
+    }
+
     if (event.type === "assistant.message") {
+      let assetWrites: AssistantMessage["assetWrites"];
       let audit: AnswerAuditResult | undefined;
       let paperAnchors: AssistantMessage["paperAnchors"];
       let contextCoverage: AssistantMessage["contextCoverage"];
       let executionTrace: ModelExecutionTrace | undefined;
       if (event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)) {
         const metadata = event.metadata as {
+          assetWrites?: unknown;
           audit?: AnswerAuditResult;
           executionTrace?: ModelExecutionTrace;
           paperAnchors?: unknown;
           contextCoverage?: unknown;
         };
+        assetWrites = parseAssistantAssetWrites(metadata.assetWrites);
         audit = metadata.audit;
         executionTrace = metadata.executionTrace;
         if (Array.isArray(metadata.paperAnchors)) paperAnchors = collectPaperAnchors(metadata.paperAnchors);
@@ -1153,6 +1165,7 @@ export function AssistantPane({
       }
       updateAgentMessage(activityMessageId, (message) => ({
         ...message,
+        assetWrites: assetWrites ? mergeAssistantAssetWrites(message.assetWrites, assetWrites) : message.assetWrites,
         audit: event.citations?.length ? audit : undefined,
         citations: event.citations,
         paperAnchors,
@@ -1754,7 +1767,7 @@ export function AssistantPane({
       ...(options.contextRefs?.length && selectedSetStatus.selectionLocked
         ? selectedPapers.map((paper) => paper.id) : []),
     ])];
-    if (referencedPaperIds.length > 0) {
+    if (referencedPaperIds.length > 0 && !lazyPaperContext) {
       await onPreparePapersForContext?.(referencedPaperIds);
     }
     let contextRefs = options.contextRefs;
@@ -1816,7 +1829,7 @@ export function AssistantPane({
         if (contextRefs.length && paperIds?.length) {
           if (!objectWorkbench?.capturePaperContext) throw new Error("资源上下文尚未准备好，请重试。");
           await onPreparePapersForContext?.(paperIds);
-          contextRefs = [...contextRefs, ...await objectWorkbench.capturePaperContext(paperIds)];
+          contextRefs = [...contextRefs, ...await (objectWorkbench.capturePaperFulltextContext ?? objectWorkbench.capturePaperContext)(paperIds)];
         }
         const result = contextRefs.length ? onGenerateArtifact(artifactType, paperIds, context, contextRefs)
           : onGenerateArtifact(artifactType, paperIds, context);
@@ -2256,9 +2269,10 @@ export function AssistantPane({
       {contextDropCount > 0 ? <p role="status">正在添加所选内容…</p> : null}
       {contextDropMessage ? <p role="alert">{contextDropMessage}</p> : null}
       {historyError ? <div role="alert">{historyError}<button type="button" onClick={() => historyReady ? persistConversation() : setHistoryLoadAttempt((value) => value + 1)}>重试</button></div> : null}
-      <AssistantContextPanel context={runtimeContext} />
+      {developerDiagnostics ? <AssistantContextPanel context={runtimeContext} /> : null}
 
       <AssistantMessageList
+        onOpenAsset={onOpenAsset}
         onOpenArtifact={onOpenArtifact}
         onResumeArtifactTask={onResumeArtifactTask}
         onCancelArtifactTask={(id) => { void onCancelArtifactTask?.(id); }}
@@ -2294,6 +2308,12 @@ export function AssistantPane({
         {onRefreshContextCatalog ? <Button appearance="subtle" size="small" onClick={onRefreshContextCatalog}>重试</Button> : null}
       </div> : null}
       <AssistantComposer
+        contextUsage={contextUsage ?? [...assistantState.messages].reverse()
+          .find((message) => message.agentActivity?.contextUsage)?.agentActivity?.contextUsage ?? {
+            usedTokens: 0,
+            maxTokens: Number(settingsStoreRef.current.getState()["assistant.context_window"]) || 32768,
+            estimated: true
+          }}
         contextScopeId={`${objectWorkbench?.scopeId ?? "local"}:${activeSessionId}`}
         modelPicker={<AssistantModelPicker settingsStore={settingsStoreRef.current} onSettingsChanged={onSettingsChanged}
           disabled={assistantState.pending || !historyReady || queuedAssistantTurnsRef.current.length > 0} />}

@@ -56,16 +56,17 @@ function replaceEntry(entries: AgentActivityEntry[], nextEntry: AgentActivityEnt
 }
 
 function statusTextFor(status: AgentActivityStatus) {
-  if (status === "completed") return "Manager 已完成本次运行";
-  if (status === "failed") return "Manager 运行失败";
-  if (status === "cancelled") return "Manager 运行已取消";
-  if (status === "waiting") return "Manager 正在等待你的操作";
-  return "Manager 正在运行";
+  if (status === "completed") return "已完成";
+  if (status === "failed") return "未能完成";
+  if (status === "cancelled") return "已停止";
+  if (status === "waiting") return "等待你的操作";
+  return "正在处理…";
 }
 
 export function createAgentActivity(statusText = statusTextFor("working")): AgentActivity {
   return {
-    connectionText: "已连接主 Agent",
+    startedAt: new Date().toISOString(),
+    connectionText: "已连接",
     entries: [],
     generatedContent: "",
     status: "working",
@@ -75,13 +76,15 @@ export function createAgentActivity(statusText = statusTextFor("working")): Agen
 
 export function completeAgentActivity(
   activity: AgentActivity,
-  status: Exclude<AgentActivityStatus, "working">
+  status: Exclude<AgentActivityStatus, "working">,
+  finishedAt = new Date().toISOString()
 ): AgentActivity {
   return {
     ...activity,
+    finishedAt: status === "waiting" ? undefined : activity.finishedAt ?? finishedAt,
     connectionText: status === "waiting"
-      ? "主 Agent 连接保持中"
-      : "主 Agent 连接已结束",
+      ? "连接保持中"
+      : "本轮已结束",
     entries: activity.entries.map((entry) =>
       status === "completed" && entry.status === "running"
         ? { ...entry, status: "completed" as const }
@@ -94,6 +97,10 @@ export function completeAgentActivity(
 
 /** Projects the stable public activity events emitted by the active Manager. */
 export function applyAgentActivityEvent(activity: AgentActivity, event: AgentEvent): AgentActivity {
+  if (event.type === "context.usage") return { ...activity, contextUsage: {
+    usedTokens: event.usedTokens, maxTokens: event.maxTokens, estimated: event.estimated
+  } };
+  if (event.type === "run.started") return { ...activity, startedAt: event.emittedAt };
   if (event.type === "context.prepared" || event.type === "progress.started" || event.type === "analysis.subtask.delta") {
     const id = event.type === "analysis.subtask.delta" ? event.subtaskId
       : event.type === "progress.started" ? `${event.planId}-${event.phase ?? "progress"}` : `${event.runId}-context`;
@@ -105,7 +112,10 @@ export function applyAgentActivityEvent(activity: AgentActivity, event: AgentEve
       : event.type === "progress.started" ? event.summary : "本轮使用的上下文已准备完成。";
     return {
       ...activity,
-      entries: replaceEntry(activity.entries, {
+      statusText: toUserVisibleAgentActivityText(label),
+      entries: replaceEntry(activity.entries.map((entry) =>
+        event.type === "progress.started" && entry.kind === "runtime" && entry.status === "running"
+          ? { ...entry, status: "completed" as const } : entry), {
         id, label: toUserVisibleAgentActivityText(label), content: safeDetail(detail),
         kind: event.type === "analysis.subtask.delta" ? "analysis" : "runtime",
         status: event.type === "context.prepared" ? "completed" : "running"
@@ -119,7 +129,7 @@ export function applyAgentActivityEvent(activity: AgentActivity, event: AgentEve
     return {
       ...activity,
       connectionText: event.label,
-      statusText: event.label
+      statusText: activity.statusText
     };
   }
 
@@ -131,7 +141,7 @@ export function applyAgentActivityEvent(activity: AgentActivity, event: AgentEve
         : event.kind === "tool_call"
           ? "tool"
           : "output";
-    const label = toUserVisibleAgentActivityText(event.label) || "Manager 事件";
+    const label = toUserVisibleAgentActivityText(event.label) || "工作进展";
     return {
       ...activity,
       entries: replaceEntry(activity.entries, {
@@ -158,7 +168,7 @@ export function applyAgentActivityEvent(activity: AgentActivity, event: AgentEve
         content: safeDetail(failureText),
         id: event.eventId,
         kind: "output",
-        label: "Manager 输出",
+        label: "操作未完成",
         status: "failed"
       }),
       status: "failed",
@@ -166,7 +176,7 @@ export function applyAgentActivityEvent(activity: AgentActivity, event: AgentEve
     };
   }
 
-  if (event.type === "run.cancelled") return completeAgentActivity(activity, "cancelled");
-  if (event.type === "run.completed") return completeAgentActivity(activity, "completed");
+  if (event.type === "run.cancelled") return completeAgentActivity(activity, "cancelled", event.emittedAt);
+  if (event.type === "run.completed") return completeAgentActivity(activity, "completed", event.emittedAt);
   return activity;
 }

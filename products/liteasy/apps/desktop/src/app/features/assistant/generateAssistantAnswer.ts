@@ -1,3 +1,4 @@
+import { agentContextLimit, withModelContextBudget, type ModelContextUsage } from "../context/modelContextBudget";
 import { generateAdaptiveThinReading } from "../thin-reading/adaptiveThinReading";
 import { formatAnswer } from "./answerFormatter";
 import type { AssistantMode } from "./assistant.types";
@@ -108,6 +109,7 @@ type GenerateAssistantAnswerInput = {
   importedChunksByPaperId: Record<string, RetrievalChunk[]>;
   mode: Exclude<AssistantMode, "command">;
   modelTransport?: ModelTransport;
+  onContextUsage?: (usage: ModelContextUsage) => void;
   onReasoningDelta?: (delta: string, accumulated: string) => void;
   onDelta?: (delta: string, accumulated: string) => void;
   onProgress?: (input: { phase: string; progress: number; summary: string }) => void;
@@ -4415,6 +4417,7 @@ export async function generateAssistantAnswer({
   modelTransport,
   onDelta,
   onReasoningDelta,
+  onContextUsage,
   onProgress,
   onSubtaskDelta,
   question,
@@ -4437,7 +4440,7 @@ export async function generateAssistantAnswer({
   onProgress?.({
     phase: "retrieving_evidence",
     progress: 32,
-    summary: "正在检索并整理选中文献证据"
+    summary: "查找相关原文"
   });
   const preparedAnalysis = analysisInputPapers.length > 0
     ? prepareMultiPaperAnalysis({
@@ -4458,9 +4461,9 @@ export async function generateAssistantAnswer({
         citations: [],
         confidence: 0
       };
-  const baseGateway = createModelGatewayFromSettings(settings, {
+  const baseGateway = withModelContextBudget(createModelGatewayFromSettings(settings, {
     cloudTransport: modelTransport
-  });
+  }), agentContextLimit(settings["assistant.context_window"]), onContextUsage);
   const publicReasoning: string[] = [];
   const gateway = { generateAnswer: (request: import("../models/modelGateway").GenerateAnswerInput) => {
     const index = publicReasoning.length;
@@ -4727,7 +4730,7 @@ export async function generateAssistantAnswer({
   onProgress?.({
     phase: "generating_answer",
     progress: 55,
-    summary: "正在调用模型生成分析结构"
+    summary: "整理分析结果"
   });
   const generation = await gateway.generateAnswer({
     model,
@@ -4743,7 +4746,7 @@ export async function generateAssistantAnswer({
   onProgress?.({
     phase: "auditing_answer",
     progress: 78,
-    summary: "正在核对引用与证据覆盖"
+    summary: "核对引用"
   });
   const localAudit = auditAssistantAnswer({
     answer: generatedAnswerText,
@@ -4802,7 +4805,7 @@ export async function generateAssistantAnswer({
   onProgress?.({
     phase: "structuring_artifact",
     progress: 88,
-    summary: "正在构造可视化产物数据"
+    summary: "准备可视化"
   });
 
   return {

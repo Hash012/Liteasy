@@ -318,7 +318,11 @@ test("keeps the previous translation visible when retranslation fails and suppor
   await user.click(screen.getByRole("button", { name: "翻译文本" }));
   await user.click(screen.getByRole("button", { name: "确认翻译为 中文" }));
   expect(await screen.findByText("第一版译文")).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "重新翻译" }));
+  // The translation text is set before the request's finally block enables
+  // retranslation. Clicking a disabled button is intentionally a no-op.
+  const retranslate = screen.getByRole("button", { name: "重新翻译" });
+  await waitFor(() => expect(retranslate).toBeEnabled());
+  await user.click(retranslate);
   await user.click(await screen.findByRole("button", { name: "确认翻译为 中文" }));
   expect(await screen.findByText("本地翻译服务仍在使用旧配置")).toBeInTheDocument();
   expect(screen.getByText("第一版译文")).toBeInTheDocument();

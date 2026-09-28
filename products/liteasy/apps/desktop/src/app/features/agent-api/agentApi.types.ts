@@ -122,6 +122,8 @@ export type AgentConfirmationRequest = {
 export type AgentEventPayload =
   | { idempotencyKey: string; inputMode: AgentMode; message: string; type: "run.started" }
   | { type: "context.prepared"; snapshotId?: string }
+  | { type: "asset.written"; receipt: AgentJsonValue }
+  | { type: "context.usage"; usedTokens: number; maxTokens: number; estimated: boolean }
   | {
       detail: string;
       label: string;

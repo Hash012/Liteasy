@@ -44,6 +44,7 @@ type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 
 export type AssistantAgentControllerInput = {
   principalId?: string;
+  agentAssets?: import("../../features/resource-filesystem/agentAssetService").AgentAssetService;
   resolveObjectContext?: import("./createDesktopAgentService").DesktopAgentServiceOptions["resolveObjectContext"];
   academicProfile?: AcademicProfile;
   getAgentMemories?: () => AgentMemoryEntry[];
@@ -138,12 +139,13 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
       },
       getEnvironment({ request } = {}) {
         const current = inputRef.current;
+        const metadataOnly = !!current.agentAssets && !request?.input.artifactType;
         const knowledgeScope = resolveAgentKnowledgeScope({
           allPapers: current.getAllPapers?.() ?? current.selectedPapers,
           fallbackImportedChunksByPaperId:
-            current.getImportedChunksByPaperId?.() ?? current.importedChunksByPaperId,
+            metadataOnly ? {} : current.getImportedChunksByPaperId?.() ?? current.importedChunksByPaperId,
           fallbackSelectedPapers: current.getSelectedPapers?.() ?? current.selectedPapers,
-          getImportedChunksForPaperId: current.getImportedChunksForPaperId,
+          getImportedChunksForPaperId: metadataOnly ? undefined : current.getImportedChunksForPaperId,
           request
         });
         const savedScope = request?.attachments?.find((attachment) => attachment.source === "selection")?.metadata?.knowledgeSnapshot as unknown as {
@@ -164,6 +166,8 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
         });
 
         return {
+          assets: current.agentAssets,
+          assetScopeId: current.principalId ?? "local",
           activity: {
             artifactTasks: current.getArtifactTasks?.() ?? []
           },

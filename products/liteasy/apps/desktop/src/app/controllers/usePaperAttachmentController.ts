@@ -27,7 +27,7 @@ export function usePaperAttachmentController(input: { repository: ObjectReposito
       if (object.kind !== "content.note") return;
       const project = await input.projects.ensurePaperProject({ paperId: paper.id, title: paper.title });
       if (!active() || ticket !== request.current) return;
-      setSessions((current) => ({ ...Object.fromEntries(Object.entries(current).filter(([, note]) => note.draft !== note.saved)), [object.objectId]: current[object.objectId] ?? {
+      setSessions((current) => ({ ...Object.fromEntries(Object.entries(current).filter(([, note]) => note.draft !== note.saved)), [object.objectId]: current[object.objectId]?.draft !== current[object.objectId]?.saved ? current[object.objectId] : {
         object, draft: object.content.payload.text, saved: object.content.payload.text, projectId: project.projectId, assetId: item.id,
       } }));
       setSelected(object.objectId); setError(""); input.openEditor();

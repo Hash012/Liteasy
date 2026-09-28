@@ -3,9 +3,10 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefOb
 import { Button, Popover, PopoverSurface, PopoverTrigger, Slider, Tooltip } from "@fluentui/react-components";
 import { thinkingDepths, thinkingDepthLabels, type ThinkingDepth } from "./thinkingDepth";
 import { AddRegular, BrainCircuitRegular, EyeRegular, FlashRegular, GridRegular, MicRegular, SendRegular } from "@fluentui/react-icons";
-import type { AssistantComposerSuggestion, AssistantContextToken } from "./assistant.types";
+import type { AgentContextUsage, AssistantComposerSuggestion, AssistantContextToken } from "./assistant.types";
 import { createAssistantSuggestionIndex, getAssistantReadOnlyLabel } from "./assistantSuggestionIndex";
 import { ContextAssetBrowser } from "./ContextAssetBrowser";
+import { ContextUsageIndicator } from "./ContextUsageIndicator";
 
 const emptySuggestions: AssistantComposerSuggestion[] = [];
 
@@ -17,6 +18,7 @@ type ActiveTrigger = {
 };
 
 type AssistantComposerProps = {
+  contextUsage?: AgentContextUsage;
   modelPicker?: ReactNode;
   thinkingDepth?: ThinkingDepth;
   onThinkingDepthChange?: (depth: ThinkingDepth) => void;
@@ -53,6 +55,7 @@ function getActiveTrigger(input: string, caret: number): ActiveTrigger | null {
 
 
 export function AssistantComposer({
+  contextUsage,
   modelPicker,
   thinkingDepth = "balanced",
   onThinkingDepthChange,
@@ -352,6 +355,7 @@ export function AssistantComposer({
           </button>
         </Tooltip>
       </div>
+      {contextUsage ? <ContextUsageIndicator usage={contextUsage} /> : null}
       {browserQuery !== null ? <ContextAssetBrowser key={contextScopeId} suggestions={suggestions} contextTokens={contextTokens} initialPreviewId={browserPreviewId}
         initialQuery={browserQuery} onAddContextToken={onAddContextToken} onResolveContextToken={onResolveContextToken}
         onClose={() => { setBrowserQuery(null); editorRef.current?.focus(); }} /> : null}

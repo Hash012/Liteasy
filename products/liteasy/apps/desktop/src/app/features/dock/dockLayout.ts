@@ -13,6 +13,36 @@ import type {
 
 const regionOrder: DockRegionId[] = ["left", "main", "right", "bottom"];
 
+export type DockBoundaryResize = {
+  before: DockRegionId;
+  after: DockRegionId;
+  deltaPixels: number;
+  containerPixels: number;
+  visibleRegions: DockRegionId[];
+  defaultWeights: Partial<Record<DockRegionId, number>>;
+};
+
+/** Apply each pointer delta to the latest layout, keeping the adjacent total fixed. */
+export function resizeDockBoundary(layout: DockLayout, input: DockBoundaryResize): DockLayout {
+  const { before, after, visibleRegions, defaultWeights } = input;
+  const available = input.containerPixels - (visibleRegions.length - 1) * 4;
+  if (!layout.regions[before] || !layout.regions[after] || before === after ||
+      !visibleRegions.includes(before) || !visibleRegions.includes(after) ||
+      !Number.isFinite(available) || available <= 0 || !Number.isFinite(input.deltaPixels)) return layout;
+  const weight = (id: DockRegionId) => layout.regionWidths[id] ?? defaultWeights[id] ?? 32;
+  const first = weight(before);
+  const second = weight(after);
+  const total = visibleRegions.reduce((sum, id) => sum + weight(id), 0);
+  const delta = Math.max(Math.max(8 - first, second - 160),
+    Math.min(Math.min(160 - first, second - 8), input.deltaPixels / available * total));
+  if (!Number.isFinite(delta) || delta === 0) return layout;
+  return { ...layout, regionWidths: {
+    ...layout.regionWidths,
+    [before]: first + delta,
+    [after]: second - delta,
+  } };
+}
+
 function createRegion(
   itemIds: DockItemId[],
   activeItemId?: DockItemId,

@@ -43,3 +43,29 @@ export function resolvePdfSelectionMenuPosition(input: {
       input.scrollTop
   };
 }
+
+/** Fit the measured menu into the visible part of the scrolled reader, not the full PDF width. */
+export function fitPdfSelectionMenuPosition(input: {
+  anchor: PdfSelectionMenuPosition;
+  menuWidth: number;
+  menuHeight: number;
+  viewportWidth: number;
+  viewportHeight: number;
+  scrollLeft: number;
+  scrollTop: number;
+}): { left: number; top: number; maxHeight: number } {
+  const gap = 8;
+  const maxHeight = Math.max(0, input.viewportHeight - gap * 2);
+  const menuWidth = Math.min(input.menuWidth, Math.max(0, input.viewportWidth - gap * 2));
+  const menuHeight = Math.min(input.menuHeight, maxHeight);
+  const minLeft = input.scrollLeft + gap;
+  const minTop = input.scrollTop + gap;
+  const desiredTop = input.anchor.placement === "above"
+    ? input.anchor.top - menuHeight - gap
+    : input.anchor.top + gap;
+  return {
+    left: Math.max(minLeft, Math.min(input.anchor.left - menuWidth / 2, input.scrollLeft + input.viewportWidth - gap - menuWidth)),
+    top: Math.max(minTop, Math.min(desiredTop, input.scrollTop + input.viewportHeight - gap - menuHeight)),
+    maxHeight
+  };
+}

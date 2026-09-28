@@ -57,3 +57,5 @@
   .context-asset-actions { flex-wrap: wrap; }
   .context-asset-selection-count { width: 100%; }
 }
+
+.context-asset-badges > .context-asset-editable { color: var(--colorPaletteGreenForeground1); background: var(--colorPaletteGreenBackground1); border-color: var(--colorPaletteGreenBorder1); }

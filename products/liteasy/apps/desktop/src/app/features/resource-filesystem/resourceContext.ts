@@ -1,6 +1,5 @@
 import type { ObjectRepository } from "../objects/objectRepository";
-import { refOf, type ObjectRef } from "../objects/object.types";
-import { resolveContextSnapshot } from "../context/objectContext";
+import { isPaperMetadataReference, refOf, type ObjectRef } from "../objects/object.types";
 import type { ResourceContextAttachment } from "../object-transfer/contextTransfer";
 import { artifactContextText } from "../artifacts/artifactContext";
 import type { AgentArtifactResult } from "../artifacts/artifact.types";
@@ -35,9 +34,11 @@ export async function contextAttachments(repository: ObjectRepository, refs: Obj
       contextRefs.push({ ...ref, selectorId: `board-context:${fixed.snapshotId}` });
     }
     attachments.push({ ref, refs: contextRefs, title: object.title, kind: object.kind,
-      detail: object.kind === "workspace.board" ? `${members.length} 个元素 · 已固定版本` : "已固定版本" });
+      detail: object.kind === "workspace.board" ? `${members.length} 个元素 · 已固定版本`
+        : isPaperMetadataReference(object) ? "题录已固定 · 正文按需读取" : "已固定版本" });
   }
-  await resolveContextSnapshot({ repository, refs: attachments.flatMap((item) => item.refs), purpose: "加入对话上下文", persist: false, policy: "balanced", active });
+  // Adding a locator fixes its version. Text/image loading and budget selection
+  // belong to execution, so opening the context picker never reads every body twice.
   if (!active()) throw new Error("账号已切换。");
   return attachments;
 }

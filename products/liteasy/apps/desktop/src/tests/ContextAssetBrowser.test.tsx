@@ -131,3 +131,21 @@ describe("ContextAssetBrowser", () => {
     expect(add).toHaveBeenCalledWith(token("new-note"));
   });
 });
+
+it("finds an editable note by part of its name and adds it directly from its preview", async () => {
+  const add = vi.fn();
+  const close = vi.fn();
+  const resolve = vi.fn(async () => token("CicN"));
+  render(<ContextAssetBrowser suggestions={[{ id: "cicn", trigger: "@", label: "CicN", category: "笔记",
+    readOnly: false, description: "Cicada 论文笔记", resolveToken: resolve }, ...assets]}
+    onClose={close} onAddContextToken={add} />);
+  const user = userEvent.setup();
+  await user.type(screen.getByRole("textbox", { name: "搜索全部上下文资产" }), "cic");
+  expect(screen.getByRole("button", { name: "预览 CicN" })).toBeVisible();
+  expect(resolve).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "预览 CicN" }));
+  expect(screen.getAllByText("可编辑")).toHaveLength(2);
+  await user.click(screen.getByRole("button", { name: "加入对话" }));
+  await waitFor(() => expect(add).toHaveBeenCalledWith(token("CicN")));
+  expect(close).toHaveBeenCalledOnce();
+});
