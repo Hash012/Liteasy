@@ -33,6 +33,9 @@ import { makeObjectTransfer, writeObjectTransfer } from "../features/object-tran
 import { PAPER_CONTEXT_MIME } from "../features/object-transfer/contextTransfer";
 import { dockItemRegistry, isBaseDockRegionId } from "../features/dock/dockRegistry";
 import { useHelpController } from "../controllers/useHelpController";
+import { useWorkbenchCommandsController } from "../controllers/useWorkbenchCommandsController";
+import { WorkbenchCommandsContext } from "../features/workbench/workbenchCommandsContext";
+import { WorkbenchCommandsDialog } from "../features/workbench/WorkbenchCommandsDialog";
 import { HelpPanel } from "../features/help/HelpPanel";
 import { HelpContext } from "../features/help/helpContext";
 import { builtinHelpProviders } from "../features/help/builtinHelpProvider";
@@ -1113,7 +1116,14 @@ export function AppShell({
   const help = useHelpController({
     providers: helpProviders,
     visible: workbenchNavigation.isVisible("help"),
+    keyboardShortcutEnabled: false,
     onOpen: () => workbenchNavigation.open("help")
+  });
+  const workbenchCommands = useWorkbenchCommandsController({
+    library: () => openDockedLeftRailView("library"),
+    assistant: () => workbenchNavigation.open("assistant"),
+    settings: () => workbenchNavigation.open("settings"),
+    help: () => help.port.open()
   });
   const externalNote = useExternalNoteController({
     scopeId: objectWorkbench.repository.scopeId,
@@ -2388,11 +2398,13 @@ export function AppShell({
     runtimeTheme.kind === "generated" ? runtimeTheme.theme.scope.join(" ") : undefined;
 
   return (
+    <WorkbenchCommandsContext.Provider value={workbenchCommands.execute}>
     <NotesContext.Provider value={notes.port}>
     <HelpContext.Provider value={help.port}>
     <ObjectWorkbenchContext.Provider value={objectWorkbench.port}>
     <div className={appFrameClassName} data-theme-scope={appFrameScope} style={appFrameStyle}>
       <WorkspaceCommandBar state={workspaceShell.toolbar} windowControls={windowControls} onOpenAi={aiWorkbench.show} />
+      {workbenchCommands.open ? <WorkbenchCommandsDialog onClose={workbenchCommands.close} onExecute={workbenchCommands.execute} /> : null}
       <AiWorkbenchDialog open={aiWorkbench.open} papers={aiWorkbench.papers} openedPapers={openReaderPapers}
         activePaperId={openReaderPapers.find((paper) => `pdf-${paper.id}` === workspaceShell.activeSurfaceId)?.id ?? activeReaderPaper?.id}
         snapshot={localLibrarySnapshot} selectedIds={aiWorkbench.selectedIds} confirmed={aiWorkbench.confirmed}
@@ -2421,7 +2433,7 @@ export function AppShell({
           onOpenNotes={() => notes.port.open()}
           agentOpen={workbenchNavigation.isVisible("assistant")}
           helpOpen={workbenchNavigation.isVisible("help")}
-          onOpenAgent={() => workbenchNavigation.open("assistant")}
+          onOpenAgent={() => workbenchCommands.execute("assistant")}
           onOpenHelp={() => help.port.open()}
           layoutControls={<><Tooltip content={objectWorkbench.visible ? "关闭研究白板" : "研究白板"} relationship="description"><Button appearance="subtle" aria-label="研究白板" aria-pressed={objectWorkbench.visible} icon={<WhiteboardRegular />} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData(dockItemMimeType, "board"); }} onClick={() => { if (workbenchNavigation.isVisible("board")) objectWorkbench.setVisible(false); else { objectWorkbench.setVisible(true); if (dock.findItemRegion("board")) workbenchNavigation.open("board"); } }} /></Tooltip><DockLayoutControls
             collapsed={paneLayout.collapsed}
@@ -2571,5 +2583,6 @@ export function AppShell({
     </ObjectWorkbenchContext.Provider>
     </HelpContext.Provider>
     </NotesContext.Provider>
+    </WorkbenchCommandsContext.Provider>
   );
 }

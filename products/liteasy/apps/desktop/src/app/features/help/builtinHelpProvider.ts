@@ -1,7 +1,16 @@
 import type { HelpArticle, HelpContentProvider } from "./help.types";
 import chatgptCommentReview from "./articles/chatgpt-comment-review.md?raw";
+import gettingStarted from "./articles/getting-started.md?raw";
+import { commandShortcut, workbenchCommands } from "../workbench/workbenchCommands";
 
 const articles: readonly HelpArticle[] = [{
+  id: "getting-started.basics",
+  topicId: "getting-started",
+  title: "开始使用 Liteasy：文献库、AI 与快捷键",
+  summary: "导入文件、打开阅读、发起第一次 AI 对话，以及常用快捷操作。",
+  body: `${gettingStarted}\n\n| 操作 | 快捷键 |\n| --- | --- |\n${workbenchCommands.map((command) => `| ${command.title} | ${commandShortcut(command.id)} |`).join("\n")}\n`,
+  format: "markdown",
+}, {
   id: "reading.chatgpt-review",
   topicId: "reading",
   title: "连接 ChatGPT Review 论文评论",

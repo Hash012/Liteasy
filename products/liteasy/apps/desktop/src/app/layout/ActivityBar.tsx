@@ -12,6 +12,7 @@ import {
 import type { ReactElement, ReactNode } from "react";
 import { dockItemMimeType } from "../features/dock/DockRegion";
 import type { LeftRailView } from "./useLeftRailNavigation";
+import { commandShortcut } from "../features/workbench/workbenchCommands";
 
 type ActivityBarProps = {
   onExpandLibrary?: () => void;
@@ -61,7 +62,7 @@ export function ActivityBar({
 
       {activityItems.map((item) => (
         <Tooltip
-          content={item.view === "library" ? "文献库 · 双击或 Shift+Enter 展开大窗口" : item.label}
+          content={item.view === "library" ? `文献库 · ${commandShortcut("library")} · 双击展开大窗口` : item.view === "settings" ? `设置 · ${commandShortcut("settings")}` : item.label}
           key={item.view}
           positioning="after"
           relationship="description"
@@ -119,7 +120,7 @@ export function ActivityBar({
         </Tooltip>
       ) : null}
       {onOpenAgent ? (
-        <Tooltip content="Agent" positioning="after" relationship="description">
+        <Tooltip content={`AI 对话 · ${commandShortcut("assistant")}`} positioning="after" relationship="description">
           <Button
             appearance="subtle"
             aria-label="Agent"

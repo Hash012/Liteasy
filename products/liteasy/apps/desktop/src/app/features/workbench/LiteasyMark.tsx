@@ -1,0 +1,11 @@
+/** Transparent vector rendering of the existing book-and-ring brand mark. */
+export function LiteasyMark({ className }: { className?: string }) {
+  return <svg className={className} viewBox="0 0 512 512" fill="currentColor" role="img" aria-label="LiteasyClaw" focusable="false">
+    <path d="M447 142 C410 71 340 28 258 28 C131 28 28 130 28 256 C28 382 131 484 258 484 C340 484 410 441 447 370"
+      fill="none" stroke="currentColor" strokeWidth="22" strokeLinecap="round" />
+    <path d="M416 142 H447 M412 370 H447" fill="none" stroke="currentColor" strokeWidth="19" strokeLinecap="round" />
+    <path d="M111 160 L133 167 V326 Q205 343 258 377 Q317 343 390 326 V167 L412 160 V344 Q322 364 258 409 Q198 364 111 344 Z" />
+    <path d="M153 152 L175 159 V293 L230 317 V340 L153 308 Z M250 184 H271 V208 H250 Z M250 229 H271 V378 H250 Z" />
+    <path d="M292 166 Q330 143 369 126 V150 Q330 166 292 190 Z M292 214 Q331 188 369 172 V311 Q329 324 292 345 V322 L347 299 V264 L302 287 V263 L347 239 V213 L292 239 Z" />
+  </svg>;
+}

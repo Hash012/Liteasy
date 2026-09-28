@@ -6,7 +6,7 @@ import {
   WarningRegular
 } from "@fluentui/react-icons";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import liteasyLogoUrl from "../../assets/liteasyclaw-logo.jpg";
+import { WorkbenchWelcome } from "../features/workbench/WorkbenchWelcome";
 import { ArtifactTabs } from "../features/artifacts/ArtifactTabs";
 import type { ArtifactTask, ArtifactTab, ArtifactType } from "../features/artifacts/artifact.types";
 import type { UIDslActionRef } from "../features/generative-ui/generativeUi.types";
@@ -285,7 +285,7 @@ export function ReaderPane({
         </div>
       ) : (
         <div aria-label="PDF 空状态" className="pane-body reader-empty-brand">
-          <img alt="LiteasyClaw" src={liteasyLogoUrl} />
+          <WorkbenchWelcome />
         </div>
       )}
     </main>

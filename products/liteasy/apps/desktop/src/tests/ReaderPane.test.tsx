@@ -355,7 +355,7 @@ describe("ReaderPane", () => {
     expect(onStartAnalysis).not.toHaveBeenCalled();
   });
 
-  test("shows only the LiteasyClaw logo in the reader body when no paper is open", () => {
+  test("shows a vector brand and getting-started guidance when no paper is open", () => {
     render(
       <ReaderPane
         analysisHint="请选择文献。"
@@ -369,6 +369,7 @@ describe("ReaderPane", () => {
 
     const emptyState = screen.getByLabelText("PDF 空状态");
     expect(within(emptyState).getByRole("img", { name: "LiteasyClaw" })).toBeInTheDocument();
+    expect(within(emptyState).getByText("从这里开始研究")).toBeInTheDocument();
     expect(screen.queryByText("选择文献后开始阅读")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("PDF 阅读器")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("多模态产物区域")).not.toBeInTheDocument();

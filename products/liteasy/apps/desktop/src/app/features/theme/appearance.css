@@ -68,7 +68,7 @@ html[data-color-scheme="dark"] :is(
 }
 
 html[data-color-scheme="dark"] :is(
-  .dock-region-tab-row, .dock-empty-state, .assistant-input-highlight,
+  .dock-region-tab-row, .assistant-input-highlight,
   .pdf-sidebar-switcher, .pdf-thumbnail-list li, .assistant-history-restore,
   .pdf-annotation-popover .pdf-annotation-markdown, .note-editor .pdf-annotation-markdown,
   .artifact-result-meta, .assistant-suggestion-trigger

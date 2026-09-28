@@ -16,11 +16,13 @@ export function useHelpController({
   onOpen,
   visible,
   locale = "zh-CN",
+  keyboardShortcutEnabled = true,
 }: {
   providers: readonly HelpContentProvider[];
   onOpen(): void;
   visible: boolean;
   locale?: string;
+  keyboardShortcutEnabled?: boolean;
 }): { port: HelpPort; model: HelpViewModel } {
   const catalog = useMemo(() => createHelpCatalog(providers), [providers]);
   const [topics, setTopics] = useState<HelpTopicEntry[]>([]);
@@ -45,6 +47,7 @@ export function useHelpController({
   );
 
   useEffect(() => {
+    if (!keyboardShortcutEnabled) return;
     const openHelp = (event: KeyboardEvent) => {
       if (
         event.key !== "F1" ||
@@ -59,7 +62,7 @@ export function useHelpController({
     };
     window.addEventListener("keydown", openHelp);
     return () => window.removeEventListener("keydown", openHelp);
-  }, [port]);
+  }, [port, keyboardShortcutEnabled]);
 
   useEffect(() => {
     if (!visible) return;

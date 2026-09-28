@@ -1,0 +1,42 @@
+.workbench-welcome {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  padding: clamp(16px, 4vw, 48px);
+  box-sizing: border-box;
+  color: var(--colorNeutralForeground2);
+  background: var(--paper-0, var(--colorNeutralBackground1));
+  container-type: inline-size;
+}
+.workbench-welcome-content { width: min(100%, 560px); margin: auto; }
+.workbench-welcome-mark { display: block; width: clamp(120px, 52%, 256px); max-width: 100%; margin: 0 auto 24px; color: var(--colorNeutralForeground1); opacity: .085; }
+.workbench-welcome h1 { font-size: 14px; font-weight: 500; text-align: center; color: var(--colorNeutralForeground3); margin: 0 0 20px; }
+.workbench-welcome-actions { display: grid; gap: 6px; }
+.workbench-welcome-action, .workbench-command-option, .workbench-welcome-more {
+  font: inherit; color: inherit; background: transparent; border: 1px solid transparent; border-radius: 6px;
+  display: flex; align-items: center; gap: 12px; min-width: 0; padding: 10px; text-align: left; cursor: pointer;
+}
+.workbench-welcome-action:hover, .workbench-command-option:hover, .workbench-welcome-more:hover { background: var(--colorSubtleBackgroundHover); color: var(--colorNeutralForeground1); }
+.workbench-welcome-action:focus-visible, .workbench-command-option:focus-visible, .workbench-welcome-more:focus-visible { outline: 2px solid var(--colorStrokeFocus2); outline-offset: 2px; }
+.workbench-welcome-action > svg, .workbench-command-option > svg, .workbench-welcome-more > svg { width: 21px; height: 21px; flex: 0 0 auto; }
+.workbench-welcome-action-copy { display: grid; gap: 4px; min-width: 0; flex: 1; }
+.workbench-welcome-action-copy > span { font-weight: 500; }
+.workbench-welcome-action-copy small { color: var(--colorNeutralForeground3); font-size: 12px; line-height: 1.5; }
+.workbench-shortcut { display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto; color: var(--colorNeutralForeground3); font-size: 11px; white-space: nowrap; }
+.workbench-shortcut-part { display: inline-flex; align-items: center; gap: 3px; }
+.workbench-shortcut kbd { font: inherit; min-width: 19px; text-align: center; padding: 2px 5px; border: 1px solid var(--colorNeutralStroke2); border-bottom-width: 2px; border-radius: 4px; background: var(--colorNeutralBackground3); }
+.workbench-welcome-more { margin: 18px auto 0; color: var(--colorNeutralForeground3); font-size: 12px; flex-wrap: wrap; justify-content: center; }
+.workbench-welcome.is-compact .workbench-welcome-mark { max-width: 180px; margin-bottom: 0; }
+.workbench-commands-dialog { width: min(540px, calc(100vw - 32px)); }
+.workbench-commands-dialog .fui-Input { width: 100%; box-sizing: border-box; }
+.workbench-command-list { display: grid; gap: 4px; margin: 12px 0; }
+.workbench-command-option > span:not(.workbench-shortcut) { flex: 1; }
+.workbench-commands-dialog small { color: var(--colorNeutralForeground3); }
+@container (max-width: 440px) {
+  .workbench-welcome-action { display: grid; grid-template-columns: 21px minmax(0, 1fr); gap: 6px 10px; }
+  .workbench-welcome-action > .workbench-shortcut { grid-column: 2; }
+  .workbench-welcome-mark { margin-bottom: 16px; }
+}
+@media (forced-colors: active) { .workbench-welcome-mark { opacity: 1; color: GrayText; } }

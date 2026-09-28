@@ -1,9 +1,9 @@
-import liteasyLogoUrl from "../../../assets/liteasyclaw-logo.jpg";
+import { WorkbenchWelcome } from "../workbench/WorkbenchWelcome";
 
-export function DockEmptyState() {
+export function DockEmptyState({ showActions = false }: { showActions?: boolean }) {
   return (
     <div aria-label="空 Dock 区域" className="dock-empty-state">
-      <img alt="LiteasyClaw" src={liteasyLogoUrl} />
+      <WorkbenchWelcome compact={!showActions} />
     </div>
   );
 }

@@ -478,7 +478,7 @@ export function DockRegion({
 
       <div className="dock-region-body">
         {layout.itemIds.length === 0 && dynamicTabs.length === 0 ? (
-          <DockEmptyState />
+          <DockEmptyState showActions={regionId === "main"} />
         ) : (
           <>
             {layout.itemIds.map((itemId) => {
