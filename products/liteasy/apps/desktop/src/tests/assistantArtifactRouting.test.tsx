@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { mockFocusLayout } from "./fixtures/mockFocusLayout";
 import { createAgentApplicationService } from "../app/controllers/agent/agentApplicationService";
 import { createFrontendAgentClient } from "../app/features/agent-api/frontendAgentClient";
 import { AssistantPane } from "../app/features/assistant/AssistantPane";
@@ -8,6 +9,10 @@ import { createAssistantHistoryPersistence } from "../app/features/assistant/ass
 import { ObjectWorkbenchContext, type ObjectWorkbenchPort } from "../app/features/objects/objectWorkbenchPort";
 import type { ObjectRef } from "../app/features/objects/object.types";
 import { makeObjectTransfer, readObjectTransfer, writeObjectTransfer } from "../app/features/object-transfer/objectTransfer";
+
+let restoreFocusLayout: () => void;
+beforeEach(() => { restoreFocusLayout = mockFocusLayout(); });
+afterEach(() => restoreFocusLayout());
 
 const lockedPaper = { id: "paper-locked", title: "锁定的研究论文" };
 const noteRef: ObjectRef = { objectId: "note-methods", revision: "note-revision-3" };
@@ -175,22 +180,23 @@ test("cross-account and missing resource paths produce no context chip", async (
 test("sends the chosen thinking depth with the turn and uses it in artifact authoring", async () => {
   const { user, submit, onGenerateArtifact } = await renderRouting();
   await user.click(screen.getByRole("button", { name: "调整思考深度：均衡" }));
-  const slider = screen.getByRole("slider", { name: "思考深度" });
+  const slider = await screen.findByRole("slider", { name: "思考深度" });
   expect(slider).toHaveAttribute("aria-valuetext", "均衡");
   fireEvent.change(slider, { target: { value: "2" } });
   expect(slider).toHaveAttribute("aria-valuetext", "熟虑");
   slider.focus();
   await user.keyboard("{Escape}");
-  expect(screen.queryByRole("slider", { name: "思考深度" })).not.toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByRole("slider", { name: "思考深度", hidden: true })).not.toBeInTheDocument());
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "分析这个方案");
   await user.click(screen.getByRole("button", { name: "发送" }));
   await waitFor(() => expect(submit).toHaveBeenCalledWith(expect.objectContaining({ input: expect.objectContaining({ thinkingDepth: "deliberate" }) })));
   await screen.findByText("可以先整理资料，再规划幻灯片内容。");
   await user.click(screen.getByRole("button", { name: "调整思考深度：熟虑" }));
-  const quickSlider = screen.getByRole("slider", { name: "思考深度" });
+  const quickSlider = await screen.findByRole("slider", { name: "思考深度" });
   fireEvent.change(quickSlider, { target: { value: "0" } });
   quickSlider.focus();
   await user.keyboard("{Escape}");
+  await waitFor(() => expect(screen.queryByRole("slider", { name: "思考深度", hidden: true })).not.toBeInTheDocument());
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "生成PPT");
   await user.click(screen.getByRole("button", { name: "发送" }));
   await waitFor(() => expect(onGenerateArtifact).toHaveBeenCalledWith("ppt", undefined, expect.stringContaining("思考深度：快速")));
