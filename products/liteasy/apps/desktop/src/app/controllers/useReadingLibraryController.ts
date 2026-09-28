@@ -1,3 +1,4 @@
+import { isReadableFileName, readingFormatForName } from "../features/reading-library/readingFormats";
 import { libraryFolderKey, relativeLibraryFolder } from "../features/library/libraryFolderMembership";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createObjectStorage, subscribeObjectStorage } from "../features/objects/objectStorage";
@@ -90,7 +91,7 @@ export function useReadingLibraryController(input: {
       };
     });
     return [...papers, ...files.map((file): ReadingCatalogEntry => ({
-      ...file, year: /^\d{4}/.test(file.publishedAt ?? "") ? Number(file.publishedAt!.slice(0, 4)) : undefined,
+      ...file, format: file.format === "other" ? readingFormatForName(file.fileName) : file.format, year: /^\d{4}/.test(file.publishedAt ?? "") ? Number(file.publishedAt!.slice(0, 4)) : undefined,
       readingStatus: "unread", available: true, ...metadata[file.id],
       liteasyPath: liteasyPath(input.scopeId, { kind: "object", ref: file.ref, followLatest: true })
     }))];
@@ -118,7 +119,7 @@ export function useReadingLibraryController(input: {
           if (file.size > MAX_LIBRARY_FILE_BYTES) throw new Error("文件超过 20 MB。");
           const bytes = new Uint8Array(await file.arrayBuffer());
           const { parseReadingFile } = await import("../features/reading-library/parseReadingFile");
-          const document: ParsedReadingDocument = /\.(epub|md|markdown|txt)$/i.test(file.name)
+          const document: ParsedReadingDocument = isReadableFileName(file.name)
             ? await parseReadingFile({ name: file.name, bytes })
             : { format: "other", title: file.name, authors: [], description: "此格式已保存原文件，暂不支持内置阅读。可导出后使用对应应用打开。", chapters: [], toc: [], resources: [], warnings: [] };
           if (!current()) break;
@@ -155,7 +156,7 @@ export function useReadingLibraryController(input: {
   }
   async function open(entry: ReadingCatalogEntry) {
     setSelection({ scope: input.scopeId, entry });
-    if (entry.format === "other") { await exportFile(entry); return; }
+    if (entry.format === "other" && !isReadableFileName(entry.fileName ?? "")) { await exportFile(entry); return; }
     if (entry.format === "pdf") {
       request.current += 1; setPending(false);
       input.openPaper(entry.id);
@@ -168,7 +169,9 @@ export function useReadingLibraryController(input: {
     const id = ++request.current; setPending(true); setMessage("");
     try {
       const { entry: file, bytes } = await repository.readFile(entry.id);
+      if (id !== request.current || !current()) return;
       const { parseReadingFile } = await import("../features/reading-library/parseReadingFile");
+      if (id !== request.current || !current()) return;
       const document = await parseReadingFile({ name: file.fileName, bytes });
       if (id !== request.current || !current()) return;
       setActive({ id: entry.id, document });

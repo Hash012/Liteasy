@@ -6,6 +6,43 @@ use std::sync::Mutex;
 use tauri::AppHandle;
 static FILE_LOCK: Mutex<()> = Mutex::new(());
 
+// A workspace file can outlive Obsidian. Combine it with a best-effort process
+// probe; inability to inspect processes is unknown, never proof that editing stopped.
+fn obsidian_running() -> Option<bool> {
+    use std::process::Command;
+    #[cfg(windows)]
+    let output = {
+        use std::os::windows::process::CommandExt;
+        let system = std::env::var_os("SystemRoot")?;
+        Command::new(std::path::PathBuf::from(system).join("System32/tasklist.exe"))
+            .args(["/FI", "IMAGENAME eq Obsidian.exe", "/FO", "CSV", "/NH"])
+            .creation_flags(0x08000000)
+            .output()
+            .ok()?
+    };
+    #[cfg(not(windows))]
+    let output = Command::new("pgrep")
+        .args(["-i", "-x", "obsidian"])
+        .output()
+        .ok()?;
+    #[cfg(windows)]
+    {
+        output.status.success().then(|| {
+            String::from_utf8_lossy(&output.stdout)
+                .to_ascii_lowercase()
+                .contains("obsidian.exe")
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        match output.status.code() {
+            Some(0) => Some(true),
+            Some(1) => Some(false),
+            _ => None,
+        }
+    }
+}
+
 #[tauri::command]
 pub fn note_files_dispatch(app: AppHandle, scope: String, request: Value) -> Result<Value, String> {
     let check = || {
@@ -86,6 +123,9 @@ pub fn note_files_dispatch(app: AppHandle, scope: String, request: Value) -> Res
                     .and_then(|v| serde_json::to_value(v).map_err(|e| e.to_string()))
             })
             .unwrap_or(Ok(Value::Null)),
+        "workspaceState" => Ok(
+            json!({ "workspace": files.workspace_state(value("mountId")?)?, "running": obsidian_running() }),
+        ),
         "listMounts" => Ok(json!(files.mounts()?)),
         "listEntries" => Ok(json!(files.entries(value("mountId")?)?)),
         "readFile" => Ok(json!(files.read(value("mountId")?, value("path")?)?)),

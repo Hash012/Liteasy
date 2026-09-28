@@ -71,6 +71,8 @@ function IconButton({
   );
 }
 export function NotesPanel({ model }: { model: NotesViewModel }) {
+  const [visibleCount, setVisibleCount] = useState(100);
+  useEffect(() => setVisibleCount(100), [model.folderId, model.query]);
   const [folderName, setFolderName] = useState<string>();
   const [draft, setDraft] = useState<string>();
   const [editingItem, setEditingItem] = useState<NotesItem>();
@@ -327,7 +329,7 @@ export function NotesPanel({ model }: { model: NotesViewModel }) {
             </p>
           )}
           <div className="notes-list" role="list" aria-label="笔记条目">
-            {model.items.map((item) => (
+            {model.items.slice(0, visibleCount).map((item) => (
               <article
                 key={item.key}
                 role="listitem"
@@ -341,7 +343,7 @@ export function NotesPanel({ model }: { model: NotesViewModel }) {
                     model.selectItem(item);
                     if (
                       item.object?.kind === "workspace.board" ||
-                      item.file?.path.endsWith(".canvas")
+                      item.target.kind === "external-file"
                     )
                       model.openSource(item);
                   }}
@@ -390,8 +392,8 @@ export function NotesPanel({ model }: { model: NotesViewModel }) {
                         <MenuItem
                           icon={<EditRegular />}
                           onClick={() => {
-                            setDraft(item.text);
-                            setEditingItem(item);
+                            if (item.target.kind === "external-file") model.openSource(item);
+                            else { setDraft(item.text); setEditingItem(item); }
                           }}
                         >
                           编辑笔记
@@ -412,6 +414,7 @@ export function NotesPanel({ model }: { model: NotesViewModel }) {
               </article>
             ))}
           </div>
+          {visibleCount < model.items.length ? <Button onClick={() => setVisibleCount((count) => count + 100)}>显示更多（已显示 {visibleCount} / {model.items.length}）</Button> : null}
           {model.selected &&
             draft === undefined &&
             (() => {
@@ -461,8 +464,8 @@ export function NotesPanel({ model }: { model: NotesViewModel }) {
                         label="编辑笔记"
                         icon={<EditRegular />}
                         onClick={() => {
-                          setDraft(item.text);
-                          setEditingItem(item);
+                          if (item.target.kind === "external-file") model.openSource(item);
+                          else { setDraft(item.text); setEditingItem(item); }
                         }}
                       />
                     )}

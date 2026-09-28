@@ -1,3 +1,4 @@
+import { liteasyPath } from "../features/resource-filesystem/liteasyPath";
 import { paperAnchorsForArtifact } from "../features/paper-anchors/paperAnchorAdapters";
 import { createNoteFileService } from "../features/note-files/noteFileService";
 import { resolveLiteasyContext, contextAttachments } from "../features/resource-filesystem/resourceContext";
@@ -121,9 +122,10 @@ export function useObjectWorkbenchController(input: {
     mounted.current && latest.current.scopeId === repository.scopeId;
   async function refresh() {
     const all: ObjectEnvelope[] = [];
+    const fileProjections = await repository.fileProjectionIds();
     let cursor: string | undefined;
     do {
-      const page = await repository.search("", cursor);
+      const page = await repository.search("", cursor, fileProjections);
       all.push(...page.objects);
       cursor = page.cursor;
     } while (cursor);
@@ -135,6 +137,13 @@ export function useObjectWorkbenchController(input: {
     const nextPlacements = next
       ? await repository.listPlacements(next.objectId)
       : [];
+    // A file explicitly placed on the current board still loads its pinned revision.
+    // Unopened legacy Vault projections stay on disk instead of filling the catalog.
+    for (const placement of nextPlacements) {
+      if (!all.some((object) => object.objectId === placement.ref.objectId)) {
+        try { all.push(await repository.get(placement.ref)); } catch { /* Missing references retain their existing unavailable state. */ }
+      }
+    }
     if (!active()) return;
     setObjects(all);
     boardRef.current = next;
@@ -513,6 +522,13 @@ export function useObjectWorkbenchController(input: {
     describeResource: (target, reveal) => describeResourceLocation({ target, reveal, repository, active,
       files: createNoteFileService(repository.scopeId, () => latest.current.scopeId),
       getPapers: () => latest.current.getPapers(), artifactScopeId: latest.current.artifactScopeId ?? "device" }),
+    dragNoteFile(file, data) {
+      const path = liteasyPath(repository.scopeId, { kind: "external-file", mountId: file.mountId, path: file.path });
+      const ticket = tickets.register(async () => (await port.resolveLiteasyPath!(path)).map((attachment) => attachment.ref));
+      data.setData(PENDING_CAPTURE_MIME, ticket);
+      data.setData("text/plain", path);
+      data.effectAllowed = "copy";
+    },
     dragBoardFile(file, data) {
       const ticket = tickets.register(async () => [await boardFiles.resolveBoardFile(file)]);
       data.setData(PENDING_CAPTURE_MIME, ticket);

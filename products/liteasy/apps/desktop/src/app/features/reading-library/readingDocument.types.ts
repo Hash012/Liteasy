@@ -1,4 +1,4 @@
-export type ReadingFormat = "epub" | "markdown" | "text" | "other";
+export type ReadingFormat = "epub" | "mobi" | "fb2" | "html" | "markdown" | "text" | "other";
 
 export type ReadingChapter = {
   id: string;

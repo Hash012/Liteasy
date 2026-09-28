@@ -1,3 +1,5 @@
+import { textChapters } from "./readingTextChapters";
+export { textChapters } from "./readingTextChapters";
 import { normalizeArchivePath, readReadingArchive, readingFileLimits, resolveReadingPath } from "./readingArchive";
 import type { ParsedReadingDocument, ReadingChapter, ReadingResource, ReadingTocEntry } from "./readingDocument.types";
 
@@ -89,42 +91,6 @@ function decodeText(bytes: Uint8Array, warnings: string[]) {
   }
   if (/[\u0000]/.test(result) || (result.match(/[\u0001-\u0008\u000b\u000c\u000e-\u001f]/g)?.length ?? 0) > result.length / 100) throw new Error("此文件包含二进制内容，无法作为文本读取。");
   return result.replace(/^\ufeff/, "").replace(/\r\n?/g, "\n");
-}
-
-/** Section at headings and bounded paragraph/line boundaries, keeping ordinary fenced blocks together. */
-function textChapters(text: string, title: string, markdown: boolean) {
-  const chapters: ReadingChapter[] = [];
-  let lines: string[] = [];
-  let size = 0;
-  let heading = title;
-  let fence: string | undefined;
-  const flush = () => {
-    const content = lines.join("\n").trim();
-    if (content) chapters.push({ id: `chapter-${chapters.length + 1}`, title: heading, content, plainText: content, format: markdown ? "markdown" : "text" });
-    lines = [];
-    size = 0;
-    if (chapters.length > readingFileLimits.chapters) throw new Error("文档章节过多，请拆分后导入。");
-  };
-  for (const line of text.split("\n")) {
-    const fenceMatch = markdown ? line.match(/^ {0,3}(`{3,}|~{3,})/) : null;
-    const section = !fence ? (markdown ? line.match(/^ {0,3}#{1,2}\s+(.+?)\s*#*$/) : line.match(/^\s*((?:第[\d一二三四五六七八九十百千零〇]+[章节部卷篇]|chapter\s+\d+).{0,80})$/i)) : null;
-    if (section && lines.length) flush();
-    if (section) heading = section[1].trim();
-    if (size > readingFileLimits.chapterCharacters && !fence && !line.trim()) { flush(); heading = `${title} · ${chapters.length + 1}`; }
-    // A single pathological line/fence cannot produce an unbounded React/Markdown tree.
-    for (let start = 0; start < Math.max(line.length, 1); start += readingFileLimits.chapterCharacters) {
-      if (size > readingFileLimits.chapterCharacters * 2) { flush(); heading = `${title} · ${chapters.length + 1}`; }
-      const part = line.slice(start, start + readingFileLimits.chapterCharacters);
-      lines.push(part); size += part.length + 1;
-    }
-    if (fenceMatch) {
-      if (!fence) fence = fenceMatch[1];
-      else if (fenceMatch[1][0] === fence[0] && fenceMatch[1].length >= fence.length) fence = undefined;
-    }
-  }
-  flush();
-  if (!chapters.length) chapters.push({ id: "chapter-1", title, content: "", plainText: "", format: markdown ? "markdown" : "text" });
-  return chapters;
 }
 
 type ManifestItem = { id: string; path: string; mediaType: string; properties: string };
@@ -293,11 +259,96 @@ async function parseEpub(name: string, bytes: Uint8Array): Promise<ParsedReading
   };
 }
 
+/** Reuse the EPUB sanitizer and chapter budget for legacy ebook and HTML content. */
+async function parseHtmlBook(name: string, bytes: Uint8Array): Promise<ParsedReadingDocument> {
+  const warnings: string[] = [];
+  let format: ParsedReadingDocument["format"] = "html";
+  let metadata: Partial<ParsedReadingDocument> = {};
+  let source: string;
+  const resources: ReadingResource[] = [];
+  if (/\.(mobi|prc|azw)$/i.test(name)) {
+    const { readMobiDocument } = await import("./mobiDocument");
+    const mobi = readMobiDocument(bytes);
+    format = "mobi";
+    metadata = { title: mobi.title, authors: mobi.authors, language: mobi.language, publisher: mobi.publisher,
+      publishedAt: mobi.publishedAt, identifier: mobi.identifier, description: mobi.description };
+    source = mobi.html.replace(/<mbp:pagebreak\s*\/?\s*>/gi, "<hr>");
+    // The bytes stay bounded by the original 20 MB file; only referenced raster images are retained below.
+    for (let index = mobi.imageStart; index < mobi.records.length; index++) {
+      const data = mobi.records[index];
+      const mimeType = data[0] === 0xff && data[1] === 0xd8 ? "image/jpeg" : data[0] === 137 && data[1] === 80 && data[2] === 78 && data[3] === 71 ? "image/png"
+        : data[0] === 71 && data[1] === 73 && data[2] === 70 ? "image/gif" : undefined;
+      if (mimeType && data.length <= readingFileLimits.entryBytes) resources.push({ path: `images/${index - mobi.imageStart + 1}`, mimeType, bytes: data });
+    }
+  } else source = decodeText(bytes, warnings);
+  // Bound DOM allocation before invoking DOMParser, as well as during sanitization.
+  let tags = 0;
+  for (const character of source) if (character === "<" && ++tags > 100_000) throw new Error("文档结构过于复杂，请拆分后导入。");
+  let body: Element;
+  if (/\.fb2$/i.test(name)) {
+    format = "fb2";
+    const xml = parseXml(source, "FB2 电子书");
+    if (xml.documentElement.localName !== "FictionBook") throw new Error("此文件不是有效的 FB2 电子书。");
+    const info = elements(xml, "title-info")[0];
+    metadata = { title: info && textOf(info, "book-title"), authors: info ? elements(info, "author").map((author) =>
+      [textOf(author, "first-name"), textOf(author, "middle-name"), textOf(author, "last-name")].filter(Boolean).join(" ")).filter(Boolean) : [], language: info && textOf(info, "lang") };
+    for (const binary of elements(xml, "binary")) {
+      const id = binary.getAttribute("id"); const mimeType = binary.getAttribute("content-type") ?? "";
+      const base64 = binary.textContent?.replace(/\s/g, "") ?? "";
+      if (id && imageTypes.has(mimeType) && base64.length < readingFileLimits.entryBytes * 4 / 3 && /^[A-Za-z0-9+/]*={0,2}$/.test(base64)) {
+        try { resources.push({ path: `images/${encodeURIComponent(id)}`, mimeType, bytes: Uint8Array.from(atob(base64), (c) => c.charCodeAt(0)) }); } catch { warnings.push("部分插图无法读取。"); }
+      }
+      binary.remove();
+    }
+    const host = window.document.implementation.createHTMLDocument("");
+    for (const section of elements(xml, "body")) host.body.appendChild(host.importNode(section, true));
+    for (const element of Array.from(host.body.querySelectorAll("*"))) {
+      const tag = ({ title: "h2", subtitle: "h3", emphasis: "em", image: "img", "empty-line": "br", v: "p" } as Record<string, string>)[element.localName];
+      if (!tag) continue;
+      const replacement = host.createElement(tag);
+      if (tag === "img") replacement.setAttribute("src", `images/${encodeURIComponent((element.getAttribute("l:href") ?? element.getAttribute("xlink:href") ?? element.getAttributeNS("http://www.w3.org/1999/xlink", "href") ?? "").replace(/^#/, ""))}`);
+      if (element.id) replacement.id = element.id;
+      replacement.append(...Array.from(element.childNodes)); element.replaceWith(replacement);
+    }
+    body = host.body;
+  } else {
+    const html = new DOMParser().parseFromString(source, "text/html");
+    if (!metadata.title) metadata.title = html.title || undefined;
+    if (!metadata.authors?.length) metadata.authors = [html.querySelector('meta[name="author"]')?.getAttribute("content") ?? ""].filter(Boolean);
+    for (const image of html.querySelectorAll("img[recindex]")) image.setAttribute("src", `images/${Number(image.getAttribute("recindex"))}`);
+    body = html.body;
+  }
+  const title = metadata.title || name.replace(/\.[^.]+$/, "");
+  const chapter: ReadingChapter = { id: "chapter-1", title, content: "", plainText: "", format: "html", sourcePath: "book.html" };
+  const used = new Set<string>();
+  const manifest = new Map(resources.map((resource) => [resource.path, { id: resource.path, path: resource.path, mediaType: resource.mimeType, properties: "" }]));
+  const clean = sanitizeChapter(body, chapter.id, "book.html", new Map([["book.html", chapter]]), manifest, used);
+  const fragments = splitSafeHtml(clean);
+  if (fragments.length > readingFileLimits.chapters) throw new Error("文档章节过多，请拆分后导入。");
+  const chapters = fragments.map((content, index) => {
+    const html = new DOMParser().parseFromString(content, "text/html");
+    return { ...chapter, id: index ? `chapter-1-part-${index + 1}` : chapter.id,
+      title: html.querySelector("h1,h2,h3")?.textContent?.trim() || (fragments.length > 1 ? `${title} · ${index + 1}` : title), content, plainText: htmlPlainText(content) };
+  });
+  const anchors = new Map<string, string>();
+  for (const chapter of chapters) for (const element of new DOMParser().parseFromString(chapter.content, "text/html").querySelectorAll("[id]")) anchors.set(element.id, chapter.id);
+  for (const chapter of chapters) {
+    const html = new DOMParser().parseFromString(chapter.content, "text/html");
+    for (const link of html.querySelectorAll("a[data-reading-anchor]")) {
+      const id = anchors.get(link.getAttribute("href")!.slice(1));
+      if (id) link.setAttribute("data-reading-chapter", id);
+    }
+    chapter.content = html.body.innerHTML;
+  }
+  return { ...metadata, title, authors: metadata.authors ?? [], format, chapters, toc: chapters.map((chapter) => ({ id: chapter.id, label: chapter.title, chapterId: chapter.id, depth: 0 })), resources: resources.filter((resource) => used.has(resource.path)), warnings };
+}
+
 export async function parseReadingFile({ name, bytes }: { name: string; bytes: Uint8Array }): Promise<ParsedReadingDocument> {
   if (bytes.byteLength > MAX_READING_FILE_BYTES) throw new Error("文件超过 20 MB，请拆分后导入。");
   if (/\.epub$/i.test(name)) return parseEpub(name, bytes);
+  if (/\.(mobi|prc|azw|fb2|html|htm)$/i.test(name)) return parseHtmlBook(name, bytes);
   const markdown = /\.(?:md|markdown)$/i.test(name);
-  if (!markdown && !/\.txt$/i.test(name)) throw new Error("请选择 EPUB、Markdown 或 TXT 文件。");
+  if (!markdown && !/\.txt$/i.test(name)) throw new Error("请选择 EPUB、MOBI、FB2、HTML、Markdown 或 TXT 文件。");
   const warnings: string[] = [];
   const text = decodeText(bytes, warnings);
   const title = markdown ? text.match(/^ {0,3}#\s+(.+?)\s*#*$/m)?.[1] ?? name.replace(/\.[^.]+$/, "") : name.replace(/\.[^.]+$/, "");

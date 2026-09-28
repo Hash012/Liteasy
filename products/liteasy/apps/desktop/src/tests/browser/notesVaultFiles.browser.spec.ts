@@ -31,16 +31,18 @@ test("dropping a note into a connected Vault writes Markdown and protects subseq
   await page.reload();
   await vault.click();
   await file.click();
-  await notes.getByRole("button", { name: "编辑笔记", exact: true }).click();
-  const editor = notes.getByRole("textbox", { name: "笔记正文" });
+  const workspace = page.getByRole("region", { name: "Markdown 文件阅读与编辑" });
+  await expect(page.locator('[data-region="main"] .external-note-editor')).toBeVisible();
+  await workspace.getByRole("button", { name: "编辑", exact: true }).click();
+  const editor = workspace.getByRole("textbox", { name: "Markdown 源码" });
   await editor.fill("Liteasy 尚未保存的编辑");
   await page.evaluate(async () => {
     const directory = await (await navigator.storage.getDirectory()).getDirectoryHandle("Research Vault");
     const writable = await (await directory.getFileHandle("Vault sample.md")).createWritable();
     await writable.write("Obsidian 中刚保存的内容"); await writable.close();
   });
-  await notes.getByRole("button", { name: "保存", exact: true }).click();
-  await expect(notes.getByRole("alert")).toContainText("其他应用");
+  await workspace.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(workspace.getByRole("alert")).toContainText("其他应用");
   await expect(editor).toHaveValue("Liteasy 尚未保存的编辑");
   expect(await readFile()).toBe("Obsidian 中刚保存的内容");
   await page.screenshot({ path: testInfo.outputPath("vault-file-conflict.png"), fullPage: true, animations: "disabled" });

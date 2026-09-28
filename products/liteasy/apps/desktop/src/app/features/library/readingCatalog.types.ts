@@ -1,4 +1,4 @@
-export type ReadingCatalogFormat = "pdf" | "epub" | "markdown" | "txt" | "other";
+export type ReadingCatalogFormat = "pdf" | "epub" | "mobi" | "fb2" | "html" | "markdown" | "txt" | "other";
 
 export type ReadingCatalogStatus = "unread" | "reading" | "finished";
 
@@ -42,6 +42,9 @@ export type ReadingCatalogMetadataPatch = {
 export const readingCatalogFormatLabels: Record<ReadingCatalogFormat, string> = {
   pdf: "PDF",
   epub: "EPUB",
+  mobi: "MOBI",
+  fb2: "FB2",
+  html: "HTML",
   markdown: "Markdown",
   txt: "TXT",
   other: "其他"

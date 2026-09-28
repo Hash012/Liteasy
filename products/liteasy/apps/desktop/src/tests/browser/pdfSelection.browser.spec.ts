@@ -65,6 +65,9 @@ for (const scenario of [
 test("a drag beginning in the right column does not absorb the preceding left column", async ({ page }) => {
   await page.setViewportSize({ height: 1220, width: 2048 });
   await page.goto("/?pdf-highlight-fixture");
+  await expect(page.locator('.pdf-page-shell[data-page="3"]')).toBeAttached();
+  await page.getByLabel("当前页码").fill("3");
+  await page.getByLabel("当前页码").press("Enter");
 
   const target = page.locator('.pdf-page-shell[data-page="3"] .pdf-text-layer span:not(.markedContent)', {
     hasText: "ciative memory"
@@ -105,6 +108,9 @@ test("a drag beginning in the right column does not absorb the preceding left co
 test("dragging beyond a word right edge includes all of its trailing letters", async ({ page }) => {
   await page.setViewportSize({ height: 1220, width: 2048 });
   await page.goto("/?pdf-highlight-fixture");
+  await expect(page.locator('.pdf-page-shell[data-page="3"]')).toBeAttached();
+  await page.getByLabel("当前页码").fill("3");
+  await page.getByLabel("当前页码").press("Enter");
 
   const target = page
     .locator('.pdf-page-shell[data-page="3"] .pdf-text-layer span:not(.markedContent)')

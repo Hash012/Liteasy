@@ -1,3 +1,4 @@
+import { readingMediaTypes } from "./readingFormats";
 import { z } from "zod";
 import { createObjectRepository } from "../objects/objectRepository";
 import { objectRefSchema, refOf } from "../objects/object.types";
@@ -15,7 +16,7 @@ const metadataSchema = z.object({
 export type ReadingMetadata = z.infer<typeof metadataSchema>;
 const entrySchema = z.object({
   id: z.string(), ref: objectRefSchema, assetId: z.string(), fileName: z.string(),
-  format: z.enum(["epub", "markdown", "txt", "other"]), title: z.string(), authors: z.array(z.string()),
+  format: z.enum(["epub", "mobi", "fb2", "html", "markdown", "txt", "other"]), title: z.string(), authors: z.array(z.string()),
   language: z.string().optional(), publication: z.string().optional(), publishedAt: z.string().optional(),
   identifier: z.string().optional(), abstract: z.string().optional(), fileSize: z.number().int().nonnegative(),
   addedAt: z.string(), contextTruncated: z.boolean()
@@ -72,7 +73,7 @@ export function createReadingLibraryRepository(storage: ObjectStorage, scopeId: 
       if (previous) return { entry: entrySchema.parse(previous.value), duplicate: true };
       const asset: StagedObjectAsset = {
         assetId: hash, sha256: hash, byteLength: bytes.length, base64: base64(bytes),
-        mediaType: document.format === "other" ? "application/octet-stream" : document.format === "epub" ? "application/epub+zip" : document.format === "markdown" ? "text/markdown" : "text/plain"
+        mediaType: readingMediaTypes[document.format]
       };
       // Persist the immutable source first, keeping each transaction below the shared
       // store limit. Retry reuses the same hash if index creation was interrupted.

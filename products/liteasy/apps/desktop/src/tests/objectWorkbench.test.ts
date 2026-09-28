@@ -589,3 +589,17 @@ test("chat history stays scoped and rejects pending writes after switching accou
     code: "object_forbidden",
   });
 });
+
+
+test("legacy Vault catalog filtering reads identities without loading file bodies and keeps explicit references readable", async () => {
+  const { repository, storage } = fixture();
+  const file = await repository.projectLegacy("note-file-vault-large.md", {
+    kind: "content.note", title: "large.md", content: { schema: "liteasy.note/v1", payload: { text: "long body".repeat(10000), origin: "external" } },
+  });
+  const local = await repository.create(note("Local note"));
+  const reads = vi.spyOn(storage, "get");
+  const excluded = await repository.fileProjectionIds();
+  expect((await repository.search("", "", excluded)).objects.map((item) => item.objectId)).toEqual([local.objectId]);
+  expect(reads.mock.calls.some(([key]) => key === `head/${file.objectId}`)).toBe(false);
+  expect((await repository.get(refOf(file))).content).toEqual(file.content);
+});

@@ -31,13 +31,15 @@ test("PDF and reading mode edit and delete the same persisted comment without ch
   const comments = await screen.findByRole("complementary", { name: "阅读模式批注" });
   expect(await within(comments).findByText("PDF 里的原始评论")).toBeInTheDocument();
   await user.click(within(comments).getByRole("button", { name: "编辑", exact: true }));
+  await user.selectOptions(screen.getByRole("combobox", { name: "标记类型" }), "underline");
+  await user.selectOptions(screen.getByRole("combobox", { name: "标记颜色" }), "green");
   await user.clear(screen.getByRole("textbox", { name: "阅读批注内容" }));
   await user.type(screen.getByRole("textbox", { name: "阅读批注内容" }), "从阅读模式补充的评论");
   await user.click(screen.getByRole("button", { name: "保存批注", exact: true }));
   await waitFor(() => expect(within(comments).getByRole("status")).toHaveTextContent("批注已保存"));
   const saved = JSON.parse(localStorage.getItem(pdfAnnotationStorageKey(paper)!)!);
   expect(saved).toHaveLength(1);
-  expect(saved[0]).toMatchObject({ id: original.id, revision: 2, excerpt: original.excerpt, rects: original.rects, note: "从阅读模式补充的评论" });
+  expect(saved[0]).toMatchObject({ id: original.id, revision: 2, kind: "underline", color: "green", excerpt: original.excerpt, rects: original.rects, note: "从阅读模式补充的评论" });
   await user.click(within(comments).getByRole("button", { name: "查看 PDF" }));
   expect(screen.queryByRole("complementary", { name: "阅读模式批注" })).not.toBeInTheDocument();
   expect(screen.getByLabelText("补充批注笔记")).toHaveValue("从阅读模式补充的评论");
@@ -58,6 +60,8 @@ test("selected reading text retains its page and comment across mode changes and
   window.getSelection()?.addRange(range);
   fireEvent.mouseUp(paragraph);
   expect(screen.getByRole("combobox", { name: "批注页码" })).toHaveValue("2");
+  // This fixture has extracted text but no PDF document/geometry. Keep a page note rather than guess a highlight.
+  await user.selectOptions(screen.getByRole("combobox", { name: "标记类型" }), "note");
   await user.type(screen.getByRole("textbox", { name: "阅读批注内容" }), "核对样本量");
   await user.click(screen.getByRole("button", { name: "保存批注", exact: true }));
   await waitFor(() => expect(screen.queryByRole("textbox", { name: "阅读批注内容" })).not.toBeInTheDocument());

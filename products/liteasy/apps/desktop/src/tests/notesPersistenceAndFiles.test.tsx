@@ -1,3 +1,5 @@
+import { useExternalNoteController } from "../app/controllers/useExternalNoteController";
+import { ExternalNoteEditor } from "../app/features/note-files/ExternalNoteEditor";
 import "fake-indexeddb/auto";
 import {
   act,
@@ -391,6 +393,21 @@ it("imports a dragged Vault hierarchy while omitting hidden settings and non-Mar
 });
 
 describe("Markdown files and connected Vaults", () => {
+  it("lists a large Vault without reading or projecting any Markdown bodies", async () => {
+    const f = fixture();
+    fileSystem.mountNow();
+    for (let index = 0; index < 2000; index++) fileSystem.put(`note-${index}.md`, "body".repeat(1000));
+    const project = vi.spyOn(f.repository, "projectLegacy");
+    const open = vi.fn();
+    const { result } = renderHook(() => useNotesController({ ...f.input, openExternalFile: open }));
+    await waitFor(() => expect(result.current.model.items).toHaveLength(2000));
+    expect(fileSystem.service.readFile).not.toHaveBeenCalled(); expect(project).not.toHaveBeenCalled();
+    act(() => result.current.model.openSource(result.current.model.items[0]));
+    await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
+    expect(fileSystem.service.readFile).toHaveBeenCalledTimes(1);
+    expect(project).not.toHaveBeenCalled();
+  });
+
   it("imports Markdown verbatim into the drop destination and survives reopening", async () => {
     const f = fixture();
     const folder = await f.notes.createFolder("root", "Imported");
@@ -443,15 +460,13 @@ describe("Markdown files and connected Vaults", () => {
         result.current.model.items.some((item) => item.title === "Existing.md"),
       ).toBe(true),
     );
-    const external = result.current.model.items.find((item) => item.file)!;
-    expect(
-      await f.repository.getObjectFileBinding(external.object!.objectId),
-    ).toMatchObject({ mountId: "vault", path: "Existing.md" });
+    const external = result.current.model.items.find((item) => item.target.kind === "external-file")!;
+    expect(external.file).toBeUndefined();
+    expect(external.object).toBeUndefined();
+    expect(fileSystem.service.readFile).not.toHaveBeenCalled();
     const data = transfer();
     result.current.model.drag(external, data);
-    expect(
-      JSON.parse(data.getData(OBJECT_TRANSFER_MIME)).refs[0].objectId,
-    ).toBe(external.object!.objectId);
+    expect(JSON.parse(data.getData(NOTES_REFERENCE_MIME))).toEqual(external.target);
     await act(async () => {
       await result.current.port.collect(
         { kind: "object", ref: refOf(object) },
@@ -486,9 +501,11 @@ describe("Markdown files and connected Vaults", () => {
     fileSystem.put("Source.md", "Original external body");
     let view!: ReturnType<typeof useNotesController>;
     function Harness() {
-      view = useNotesController(f.input);
+      const external = useExternalNoteController({ scopeId: f.input.scopeId, visible: true, onOpen: () => {} });
+      view = useNotesController({ ...f.input, openExternalFile: external.open });
       return (
         <FluentProvider theme={webLightTheme}>
+          <ExternalNoteEditor model={external} />
           <NotesPanel model={view.model} />
         </FluentProvider>
       );
@@ -503,23 +520,19 @@ describe("Markdown files and connected Vaults", () => {
     expect(within(list).getByText("Source.md")).toBeTruthy();
     await user.click(entry);
     expect(
-      screen.getByRole("region", { name: "打开的笔记" }),
+      await screen.findByRole("region", { name: "Markdown 文件阅读与编辑" }),
     ).toHaveTextContent("Original external body");
     await user.click(
-      screen.getByRole("button", { name: "编辑笔记", exact: true }),
+      screen.getByRole("button", { name: "编辑", exact: true }),
     );
-    const editor = screen.getByRole("textbox", { name: "笔记正文" });
+    const editor = screen.getByRole("textbox", { name: "Markdown 源码" });
     await user.clear(editor);
     await user.type(editor, "My unsaved changes");
-    const next = fileSystem.put("Source.md", "Changed in Obsidian");
+    fileSystem.put("Source.md", "Changed in Obsidian");
     await act(async () => {
       await view.refresh();
     });
-    await waitFor(() =>
-      expect(view.model.items.find((item) => item.file)?.file?.version).toBe(
-        next.version,
-      ),
-    );
+    expect(view.model.items.find((item) => item.title === "Source.md")?.file).toBeUndefined();
     await user.click(screen.getByRole("button", { name: "保存", exact: true }));
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent("其他应用中修改"),

@@ -1,3 +1,4 @@
+import { obsidianEditingStatus } from "./obsidianWorkspace";
 import {
   MAX_NOTE_FILE_BYTES,
   noteFileVersion,
@@ -142,6 +143,18 @@ export function createBrowserNoteFiles(
     };
   }
   return {
+    editingStatus: async (id, path) => {
+      const row = await grant(id);
+      if (row.handle.kind !== "directory") return obsidianEditingStatus(null, path);
+      try {
+        const config = await (row.handle as Directory).getDirectoryHandle(".obsidian");
+        const file = await (await config.getFileHandle("workspace.json")).getFile();
+        if (file.size > 1024 * 1024) return obsidianEditingStatus(null, path);
+        const workspace: unknown = JSON.parse(await file.text());
+        check();
+        return obsidianEditingStatus(workspace, path);
+      } catch { return obsidianEditingStatus(null, path); }
+    },
     listMounts: async () => (await rows()).map((row) => row.mount),
     chooseFolder: async () => {
       if (!pickers().showDirectoryPicker)

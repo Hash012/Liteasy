@@ -129,6 +129,31 @@ impl FileStore {
             scope: scope.into(),
         })
     }
+    pub fn workspace_state(&self, id: &str) -> Result<serde_json::Value, String> {
+        let mount = self.mount(id)?;
+        if mount.kind != "directory" {
+            return Ok(serde_json::Value::Null);
+        }
+        let root = fs::canonicalize(&mount.location).map_err(|e| e.to_string())?;
+        let path = root.join(".obsidian").join("workspace.json");
+        if !path.exists() {
+            return Ok(serde_json::Value::Null);
+        }
+        let path = fs::canonicalize(path).map_err(|e| e.to_string())?;
+        if !path.starts_with(&root) {
+            return Err("工作区记录不在所选文件夹内。".into());
+        }
+        let file = fs::File::open(path).map_err(|e| e.to_string())?;
+        let mut bytes = Vec::new();
+        file.take(1024 * 1024 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|e| e.to_string())?;
+        if bytes.len() > 1024 * 1024 {
+            return Ok(serde_json::Value::Null);
+        }
+        // Obsidian may be in the middle of saving the advisory workspace record.
+        Ok(serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null))
+    }
     pub fn mounts(&self) -> Result<Vec<Mount>, String> {
         let mut query = self
             .connection
@@ -508,6 +533,45 @@ mod tests {
         let root = std::env::temp_dir().join(format!("liteasy-notefiles-{}", nonce()));
         fs::create_dir_all(root.join("vault")).unwrap();
         root
+    }
+    #[test]
+    fn workspace_probe_is_bounded_and_scope_isolated() {
+        let root = workspace();
+        let store = FileStore::open(&root, "a").unwrap();
+        let mount = store.register(&root.join("vault"), "directory").unwrap();
+        assert!(store.workspace_state(&mount.id).unwrap().is_null());
+        let config = root.join("vault/.obsidian");
+        fs::create_dir(&config).unwrap();
+        let json = r#"{"main":{"type":"markdown","state":{"file":"paper.md","mode":"source"}}}"#;
+        fs::write(config.join("workspace.json"), json).unwrap();
+        assert_eq!(
+            store.workspace_state(&mount.id).unwrap()["main"]["state"]["file"],
+            "paper.md"
+        );
+        assert!(FileStore::open(&root, "b")
+            .unwrap()
+            .workspace_state(&mount.id)
+            .is_err());
+        fs::write(config.join("workspace.json"), vec![b' '; 1024 * 1024 + 1]).unwrap();
+        assert!(store.workspace_state(&mount.id).unwrap().is_null());
+        fs::write(config.join("workspace.json"), b"{partial").unwrap();
+        assert!(store.workspace_state(&mount.id).unwrap().is_null());
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[cfg(unix)]
+    #[test]
+    fn workspace_probe_rejects_symlinks_outside_vault() {
+        let root = workspace();
+        let store = FileStore::open(&root, "a").unwrap();
+        let mount = store.register(&root.join("vault"), "directory").unwrap();
+        fs::create_dir(root.join("private-config")).unwrap();
+        fs::write(root.join("private-config/workspace.json"), "{}").unwrap();
+        std::os::unix::fs::symlink(root.join("private-config"), root.join("vault/.obsidian"))
+            .unwrap();
+        assert!(store.workspace_state(&mount.id).is_err());
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
     }
     #[test]
     fn grants_and_utf8_files_survive_reopen_and_are_scope_isolated() {

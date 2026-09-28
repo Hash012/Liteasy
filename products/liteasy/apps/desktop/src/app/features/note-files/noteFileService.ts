@@ -1,3 +1,4 @@
+import { obsidianEditingStatus, type ExternalEditingStatus } from "./obsidianWorkspace";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { createBrowserNoteFiles } from "./browserNoteFiles";
 
@@ -30,6 +31,7 @@ export type NoteFileChoice = {
 };
 export type ImportedNoteFile = { name: string; path: string; text: string };
 export interface NoteFileService {
+  editingStatus?(mountId: string, path: string): Promise<ExternalEditingStatus>;
   listMounts(): Promise<NoteFileMount[]>;
   chooseFolder(): Promise<NoteFileMount | null>;
   listEntries(mountId: string): Promise<NoteFileEntry[]>;
@@ -109,6 +111,11 @@ export function createNoteFileService(
   };
   const backend: NoteFileService = isTauri()
     ? {
+        editingStatus: async (mountId, path) => {
+          const result = await call<{ workspace: unknown; running: boolean | null }>("workspaceState", { mountId });
+          const status = obsidianEditingStatus(result.workspace, path);
+          return result.running === false ? { ...status, open: false, editing: false } : status;
+        },
         listMounts: () => call("listMounts"),
         chooseFolder: () => call("chooseFolder"),
         listEntries: (mountId) => call("listEntries", { mountId }),
@@ -127,6 +134,7 @@ export function createNoteFileService(
     return result;
   };
   return {
+    editingStatus: (id, path) => wrap(() => backend.editingStatus?.(id, path) ?? Promise.resolve({ available: false, open: false, editing: false })),
     listMounts: () => wrap(() => backend.listMounts()),
     chooseFolder: async () => {
       const mount = await wrap(() => backend.chooseFolder());

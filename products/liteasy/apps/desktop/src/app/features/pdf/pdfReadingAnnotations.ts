@@ -1,6 +1,8 @@
-import type { PdfAnnotationV2 } from "./pdfAnnotationStorage";
+import type { PdfAnnotationV2, PdfHighlightColor } from "./pdfAnnotationStorage";
 import { buildPdfSelectionRange, type PageCharModel } from "./pdfSelectionEngine";
 import { compactPdfTextForSearch } from "./pdfTextSearch";
+
+export type ReadingMarkStyle = { kind?: "highlight" | "underline" | "note"; color?: PdfHighlightColor };
 
 /** Both reader views operate on the PDF reader's live annotations, never a second store. */
 export type PdfReadingAnnotations = {
@@ -12,8 +14,8 @@ export type PdfReadingAnnotations = {
   pageCount: number;
   focusedPage: number;
   selectedId?: string;
-  create(input: { page: number; excerpt: string; note: string }): Promise<void>;
-  update(id: string, revision: number, note: string): Promise<void>;
+  create(input: { page: number; excerpt: string; note: string } & ReadingMarkStyle): Promise<void>;
+  update(id: string, revision: number, note: string, style?: ReadingMarkStyle): Promise<void>;
   remove(id: string): Promise<void>;
   openPdf(id: string): void;
 };

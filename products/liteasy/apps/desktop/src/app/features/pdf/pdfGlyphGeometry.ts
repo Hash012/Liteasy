@@ -153,6 +153,10 @@ export function buildPdfGlyphGeometry(input: {
 
 const pageGeometry = new WeakMap<PDFPageProxy, Promise<PdfGlyphGeometry[]>>();
 
+export function releasePdfGlyphGeometry(page: PDFPageProxy) {
+  pageGeometry.delete(page);
+}
+
 export function loadPdfGlyphGeometry(page: PDFPageProxy) {
   if (typeof page.getOperatorList !== "function") return Promise.resolve([]);
   let geometry = pageGeometry.get(page);

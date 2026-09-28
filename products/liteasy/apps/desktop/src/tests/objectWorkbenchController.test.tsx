@@ -1,3 +1,5 @@
+import { refOf } from "../app/features/objects/object.types";
+import { PENDING_CAPTURE_MIME } from "../app/features/object-transfer/objectTransfer";
 import "fake-indexeddb/auto";
 import { webcrypto } from "node:crypto";
 import { act, renderHook, waitFor } from "@testing-library/react";
@@ -323,4 +325,25 @@ test("tray selections remain temporary until submit, then produce a saved artifa
     ),
   ).toHaveLength(1);
   hook.unmount();
+});
+
+
+test("dragging an unopened Vault file resolves its current context only when dropped", async () => {
+  const scopeId = crypto.randomUUID();
+  const { result } = renderHook(() => useObjectWorkbenchController({
+    scopeId, getApi: () => { throw new Error("No model call"); },
+    getPapers: () => [], getSettings: () => createSettingsStore().getState(), openEvidence: vi.fn(),
+  }));
+  let object!: Awaited<ReturnType<typeof result.current.repository.create>>;
+  await act(async () => { object = await result.current.repository.create({ kind: "content.note", title: "Vault.md", content: { schema: "liteasy.note/v1", payload: { text: "Fresh disk body", origin: "external" } } }); });
+  const ref = refOf(object);
+  const port = result.current.port;
+  const resolve = vi.spyOn(port, "resolveLiteasyPath").mockResolvedValue([{ ref, refs: [ref], title: "Vault.md", kind: "markdown" }]);
+  const values = new Map<string, string>();
+  const data = { setData: (key: string, value: string) => values.set(key, value), getData: (key: string) => values.get(key) ?? "", effectAllowed: "" } as unknown as DataTransfer;
+  port.dragNoteFile!({ mountId: "vault", path: "Vault.md" }, data);
+  expect(values.get(PENDING_CAPTURE_MIME)).toBeTruthy(); expect(resolve).not.toHaveBeenCalled();
+  await act(async () => { await result.current.drop(data); });
+  expect(resolve).toHaveBeenCalledTimes(1);
+  expect(result.current.placements).toEqual([expect.objectContaining({ ref })]);
 });

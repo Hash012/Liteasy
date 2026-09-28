@@ -1,3 +1,5 @@
+import { useExternalNoteController } from "../controllers/useExternalNoteController";
+import { ExternalNoteEditor } from "../features/note-files/ExternalNoteEditor";
 import { useWindowControls } from "../controllers/useWindowControls";
 import { WorkspaceCommandBar } from "./WorkspaceCommandBar";
 import { FileStatusBar } from "./FileStatusBar";
@@ -1108,6 +1110,11 @@ export function AppShell({
     visible: workbenchNavigation.isVisible("help"),
     onOpen: () => workbenchNavigation.open("help")
   });
+  const externalNote = useExternalNoteController({
+    scopeId: objectWorkbench.repository.scopeId,
+    visible: workbenchNavigation.isVisible("note-file-reader"),
+    onOpen: () => { workbenchNavigation.open("note-file-reader"); workspaceShell.focusRegion(dock.findItemRegion("note-file-reader") ?? "main"); },
+  });
   const notes = useNotesController({
     scopeId: objectWorkbench.repository.scopeId,
     repository: objectWorkbench.repository,
@@ -1118,9 +1125,9 @@ export function AppShell({
     openAnnotation: (paper, annotation) => openEvidenceInReader({ evidenceId: annotation.id, paperId: paper.id, page: annotation.page, quote: annotation.excerpt }),
     dragAnnotation: (paper, annotation, data) => objectWorkbench.port.dragAnnotation?.({ paper, annotation }, data),
     receiveContextDrop: (data) => objectWorkbench.port.receiveContextDrop!(data),
-    openExternalFile: (file) => objectWorkbench.port.openBoardFile!(file),
+    openExternalFile: (file) => /\.canvas$/i.test(file.path) ? objectWorkbench.port.openBoardFile!(file) : externalNote.open(file),
     exportBoardFile: (ref) => objectWorkbench.port.serializeBoardFile!(ref),
-    dragExternalFile: (file, data) => objectWorkbench.port.dragBoardFile?.(file, data),
+    dragExternalFile: (file, data) => objectWorkbench.port.dragNoteFile?.(file, data),
     listArtifacts: () => artifactResultClientRef.current!.list(),
     openArtifact: (id) => { artifactWorkflow.actions.openArtifact(id); activateArtifactSurface(id); }
   });
@@ -1951,6 +1958,7 @@ export function AppShell({
   }
 
   function renderDockItem(itemId: DockItemId, regionId: DockRegionId) {
+    if (itemId === "note-file-reader") return <ExternalNoteEditor model={externalNote} />;
     if (itemId === "document-reader") return <ReadingLibrarySurface
       key={objectWorkbench.repository.scopeId}
       entries={readingLibrary.entries} active={readingLibrary.active} pending={readingLibrary.pending}
@@ -2303,7 +2311,7 @@ export function AppShell({
       ...dock.layout.regions[region].itemIds.map((item): WorkspaceSurface => ({
         id: item, region,
         active: visible && !selected && dock.layout.regions[region].activeItemId === item,
-        title: item === "document-reader" ? readingLibrary.active?.document.title ?? dockItemRegistry[item].title
+        title: item === "note-file-reader" ? externalNote.session?.snapshot.name ?? "Markdown" : item === "document-reader" ? readingLibrary.active?.document.title ?? dockItemRegistry[item].title
           : item === "notes" ? notes.model.selected?.title ?? dockItemRegistry[item].title : dockItemRegistry[item].title,
         fileStatus: item === "library" ? readingFileStatus(readingLibrary.selected)
           : item === "document-reader" ? readingFileStatus(readingEntry)

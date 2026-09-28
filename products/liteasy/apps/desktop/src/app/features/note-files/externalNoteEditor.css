@@ -1,0 +1,9 @@
+.external-note-editor { height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 16px; color: var(--colorNeutralForeground1); background: var(--colorNeutralBackground1); }
+.external-note-editor > header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--colorNeutralStroke2); padding-bottom: 12px; }
+.external-note-editor > header > div { flex: 1; min-width: 160px; overflow-wrap: anywhere; }
+.external-note-editor small { display: block; color: var(--colorNeutralForeground3); }
+.external-note-editor > p { margin: 0; }
+.external-note-notice { padding: 10px; background: var(--colorNeutralBackground3); border-left: 3px solid var(--colorBrandStroke1); border-radius: 4px; }
+.external-note-source, .external-note-preview { flex: 1; min-height: 0; overflow: auto; }
+.external-note-source textarea { height: 100%; font-family: monospace; line-height: 1.6; }
+.external-note-preview { width: 100%; max-width: 900px; align-self: center; padding: 12px; line-height: 1.8; }

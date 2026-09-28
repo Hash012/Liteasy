@@ -562,7 +562,7 @@ export function createObjectRepository(
     } while (after);
     return results;
   }
-  async function search(query = "", cursor = "") {
+  async function search(query = "", cursor = "", excluded?: ReadonlySet<string>) {
     const objects: ObjectEnvelope[] = [];
     const normalized = query.toLocaleLowerCase();
     let after = cursor;
@@ -576,7 +576,7 @@ export function createObjectRepository(
         };
         after = row.key;
         if (
-          entry.lifecycle !== "active" ||
+          entry.lifecycle !== "active" || excluded?.has(entry.objectId) ||
           !entry.title.toLocaleLowerCase().includes(normalized)
         )
           continue;
@@ -1321,6 +1321,16 @@ export function createObjectRepository(
       storage.commit([change(`snapshot/${snapshot.snapshotId}`, snapshot)]),
     getSnapshot: async (snapshotId: string) =>
       (await storage.get(`snapshot/${snapshotId}`))?.value,
+    async fileProjectionIds() {
+      const ids = new Set<string>();
+      let cursor = "";
+      do {
+        const rows = await storage.list("legacy/note-file-", cursor, 1000);
+        for (const row of rows) ids.add((row.value as ObjectRef).objectId);
+        cursor = rows.length === 1000 ? rows.at(-1)!.key : "";
+      } while (cursor);
+      return ids;
+    },
     projectLegacy: async (key: string, draft: ObjectDraft) => {
       const mapping = await storage.get(`legacy/${key}`);
       const ref = mapping?.value as ObjectRef | undefined;

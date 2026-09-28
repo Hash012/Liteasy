@@ -22,7 +22,7 @@ test("bookmarks, page overview and annotation overview navigate real PDF pages",
   await page.route("**/manual-preview/das24a.pdf", (route) => route.fulfill({ body: Buffer.from(source), contentType: "application/pdf" }));
   await page.setViewportSize({ width: 1680, height: 1050 });
   await page.goto("/?pdf-highlight-fixture#navigation");
-  await expect(page.locator('.pdf-page-shell[data-page="4"] .pdf-text-layer')).toContainText("Abstract", { timeout: 30_000 });
+  await expect(page.locator('.pdf-page-shell[data-page="1"] .pdf-text-layer')).toContainText("Abstract", { timeout: 30_000 });
   await page.getByRole("button", { name: "目录", exact: true }).click();
   await page.getByRole("button", { name: "Named Section", exact: true }).click();
   await expect(page.getByLabel("当前页码")).toHaveValue("3");
@@ -70,8 +70,11 @@ test("bookmarks, page overview and annotation overview navigate real PDF pages",
   await pages.getByRole("button", { name: "转到第 3 页", exact: true }).click();
   await expect(page.getByLabel("当前页码")).toHaveValue("3");
   await expect.poll(async () => {
-    const stage = (await page.getByLabel("PDF 页面滚动区").boundingBox())!;
-    const third = (await page.locator('.pdf-page-shell[data-page="3"]').boundingBox())!;
-    return Math.abs(third.y - stage.y);
+    return page.getByLabel("PDF 页面滚动区").evaluate((stage) => {
+      const third = stage.querySelector<HTMLElement>('.pdf-page-shell[data-page="3"]')!;
+      const desired = stage.scrollTop + third.getBoundingClientRect().top - stage.getBoundingClientRect().top;
+      // Near the last page, the browser clamps navigation to the scroll range.
+      return Math.abs(stage.scrollTop - Math.min(desired, stage.scrollHeight - stage.clientHeight));
+    });
   }).toBeLessThan(20);
 });

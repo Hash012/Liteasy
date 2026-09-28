@@ -17,10 +17,13 @@ test("reading typography and comments stay consistent with the PDF and survive r
     pages: [{ page: 1, text }], markdown: `# 阅读测试\n\n${text}`, figures: [],
   } }));
   await page.getByRole("button", { name: "设置", exact: true }).click();
+  await page.getByRole("region", { name: "应用设置" }).getByRole("button", { name: "论文与推荐" }).click();
   await page.getByLabel("论文内容解析").selectOption("custom");
   await page.getByLabel("MinerU API 地址").fill("https://reading-parser.example.test");
   await page.getByLabel("mineru API key", { exact: true }).fill("reading-test-key");
   await page.getByRole("button", { name: "保存密钥", exact: true }).last().click();
+  await page.getByRole("button", { name: "关闭 设置", exact: true }).click();
+  await page.getByRole("tab", { name: "das24a.pdf", exact: true }).click();
   await page.getByRole("button", { name: "MinerU 解析", exact: true }).click();
   await expect(page.getByRole("button", { name: "阅读模式", exact: true })).toBeVisible();
   const span = paper.locator(".pdf-text-layer span").filter({ hasText: /\S{4}/ }).first();
@@ -38,6 +41,9 @@ test("reading typography and comments stay consistent with the PDF and survive r
   const reading = page.getByRole("region", { name: "论文阅读模式", exact: true });
   const comments = reading.getByRole("complementary", { name: "阅读模式批注" });
   await expect(comments).toContainText("来自 PDF 的评论");
+  await expect.poll(() => page.evaluate(() => [...CSS.highlights.values()].reduce((sum, marks) => sum + marks.size, 0))).toBeGreaterThan(0);
+  await expect.poll(() => page.locator(".pdf-page-canvas").evaluateAll((nodes) => nodes.reduce((sum, node) => sum + (node as HTMLCanvasElement).width * (node as HTMLCanvasElement).height, 0))).toBeLessThan(10);
+
   await reading.getByRole("button", { name: "阅读排版", exact: true }).click();
   const size = page.getByRole("slider", { name: "阅读字号" });
   await size.focus(); await page.keyboard.press("End");
@@ -51,10 +57,12 @@ test("reading typography and comments stay consistent with the PDF and survive r
   await expect(body).toHaveCSS("max-width", "1080px");
   await comments.getByRole("button", { name: "编辑", exact: true }).click();
   await comments.getByRole("textbox", { name: "阅读批注内容" }).fill("阅读模式补充的评论");
+  await comments.getByRole("combobox", { name: "标记颜色" }).selectOption("pink");
   await comments.getByRole("button", { name: "保存批注", exact: true }).click();
   await expect(comments.getByRole("status")).toContainText("批注已保存");
   await comments.getByRole("button", { name: "查看 PDF", exact: true }).click();
   await expect(row.getByLabel("补充批注笔记")).toHaveValue("阅读模式补充的评论");
+  await expect(page.locator(".pdf-overlay-mark.highlight").first()).toHaveCSS("background-color", "rgb(253, 121, 168)");
   await row.getByRole("button", { name: /阅读模式查看批注：/ }).click();
   await expect(reading.locator("[data-reading-comment-match]")).toBeVisible();
   const paragraph = body.locator("p").first();
@@ -96,10 +104,13 @@ test("long-form navigation, bookmarks, themes and focus retain the reading parag
   await page.setViewportSize({ width: 1600, height: 1050 });
   await page.goto("/?pdf-highlight-fixture#importable");
   await page.getByRole("button", { name: "设置", exact: true }).click();
+  await page.getByRole("region", { name: "应用设置" }).getByRole("button", { name: "论文与推荐" }).click();
   await page.getByLabel("论文内容解析").selectOption("custom");
   await page.getByLabel("MinerU API 地址").fill("https://reading-navigation.example.test");
   await page.getByLabel("mineru API key", { exact: true }).fill("reading-test-key");
   await page.getByRole("button", { name: "保存密钥", exact: true }).last().click();
+  await page.getByRole("button", { name: "关闭 设置", exact: true }).click();
+  await page.getByRole("tab", { name: "das24a.pdf", exact: true }).click();
   await page.getByRole("button", { name: "MinerU 解析", exact: true }).click();
   await page.getByRole("button", { name: "阅读模式", exact: true }).click();
   const reading = page.getByRole("region", { name: "论文阅读模式", exact: true });

@@ -31,6 +31,7 @@ export type ObjectWorkbenchPort = {
   resolveLiteasyPath?(path: string): Promise<import("../object-transfer/contextTransfer").ResourceContextAttachment[]>;
   describeResource?(target: import("../resource-filesystem/liteasyPath").ResourceTarget, reveal?: boolean): Promise<import("../resource-filesystem/liteasyPath").ResourceLocation>;
   openPaperAnchor?(anchor: import("../paper-anchors/paperAnchorEntity").PaperAnchorEntity): Promise<void>;
+  dragNoteFile?(file: Pick<import("../note-files/noteFileService").NoteFileEntry, "mountId" | "path">, data: DataTransfer): void;
   dragBoardFile?(
     file: import("../boards/boardFileFormat").BoardFileSnapshot,
     data: DataTransfer,

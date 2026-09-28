@@ -180,3 +180,16 @@ test("browser new-note race preserves a file another application creates during 
     Reflect.deleteProperty(window, "showDirectoryPicker");
   }
 });
+
+
+test("native editing status combines workspace leaves with process liveness without granting new paths", async () => {
+  const workspace = { main: { state: { type: "markdown", state: { file: "paper.md", mode: "source" } } } };
+  const service = createNoteFileService("scope", () => "scope");
+  native.invoke.mockResolvedValue({ workspace, running: true });
+  expect(await service.editingStatus!("vault", "paper.md")).toEqual({ available: true, open: true, editing: true });
+  expect(native.invoke).toHaveBeenCalledWith("note_files_dispatch", { scope: "scope", request: { action: "workspaceState", mountId: "vault" } });
+  native.invoke.mockResolvedValue({ workspace, running: false });
+  expect((await service.editingStatus!("vault", "paper.md")).editing).toBe(false);
+  native.invoke.mockResolvedValue({ workspace, running: null });
+  expect((await service.editingStatus!("vault", "paper.md")).editing).toBe(true);
+});

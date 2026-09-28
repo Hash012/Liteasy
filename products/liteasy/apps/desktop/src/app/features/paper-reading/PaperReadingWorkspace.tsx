@@ -1,7 +1,8 @@
+import { useReadingHighlights } from "./useReadingHighlights";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Button, Field, Popover, PopoverSurface, PopoverTrigger, Select, Slider, Textarea, Tooltip, useFocusFinders, useModalAttributes } from "@fluentui/react-components";
 import { AddRegular, ArrowUndoRegular, BookOpenRegular, BookmarkRegular, CommentRegular, FullScreenMaximizeRegular, FullScreenMinimizeRegular, SearchRegular, TextFontSizeRegular } from "@fluentui/react-icons";
-import type { PdfReadingAnnotations } from "../pdf/pdfReadingAnnotations";
+import type { PdfReadingAnnotations, ReadingMarkStyle } from "../pdf/pdfReadingAnnotations";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import { compactPdfTextForSearch } from "../pdf/pdfTextSearch";
 import { PdfAnnotationMarkdown } from "../pdf/PdfAnnotationMarkdown";
@@ -64,6 +65,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
   const { findFirstFocusable } = useFocusFinders();
   const [draft, setDraft] = useState<{ excerpt: string; page: string; id?: string; revision?: number }>();
   const [note, setNote] = useState("");
+  const [markStyle, setMarkStyle] = useState<ReadingMarkStyle>();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -113,6 +115,8 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
   }
   useEffect(() => { if (session.selectedId) locate(session.selectedId); }, [session.selectedId]);
 
+  useReadingHighlights(contentRef, session.annotations, locate);
+
   function captureSelection() {
     if (draft || busy) return;
     const selection = window.getSelection();
@@ -127,7 +131,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
     if (excerpt.length > 4000) { setMessage("选段过长，请缩小范围后添加批注。"); return; }
     const candidates = readingQuotePages(excerpt, session.pageTexts, chunks);
     const page = candidates.length === 1 ? String(candidates[0]) : start.closest<HTMLElement>("[data-reading-page]")?.dataset.readingPage ?? "";
-    setDraft({ excerpt, page }); setNote(""); openComments(); setError("");
+    setDraft({ excerpt, page }); setMarkStyle({ kind: "highlight", color: "yellow" }); setNote(""); openComments(); setError("");
     setMessage(page ? `已选择第 ${page} 页原文。` : "请选择选段所在的 PDF 页码；保存后可在两种模式中查看。");
   }
 
@@ -135,8 +139,8 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
     if (!draft || busy) return;
     setBusy(true); setError("");
     try {
-      if (draft.id) await session.update(draft.id, draft.revision!, note);
-      else await session.create({ page: Number(draft.page), excerpt: draft.excerpt, note });
+      if (draft.id) await session.update(draft.id, draft.revision!, note, markStyle);
+      else await session.create({ page: Number(draft.page), excerpt: draft.excerpt, note, ...markStyle });
       if (mounted.current) { setDraft(undefined); setNote(""); setMessage("批注已保存，PDF 与阅读模式共用同一份内容。"); }
     } catch (failure) { if (mounted.current) setError(failure instanceof Error ? failure.message : "保存失败，请重试。"); }
     finally { if (mounted.current) setBusy(false); }
@@ -193,7 +197,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
         </PopoverSurface>
       </Popover>
       <Button icon={<AddRegular />} disabled={!session.ready || Boolean(draft)} onClick={() => {
-        setDraft({ page: String(session.focusedPage), excerpt: "" }); setNote(""); openComments(); setError("");
+        setDraft({ page: String(session.focusedPage), excerpt: "" }); setMarkStyle(undefined); setNote(""); openComments(); setError("");
       }}>添加页批注</Button>
       <Button icon={<CommentRegular />} aria-pressed={showComments} onClick={() => { navigation.rememberPosition(); if (showComments) setCommentsVisible(false); else openComments(); }}>批注（{session.annotations.length}）</Button>
       <Tooltip content="专注阅读（Ctrl / ⌘ + Shift + F）；Esc 退出" relationship="description"><Button icon={focus ? <FullScreenMinimizeRegular /> : <FullScreenMaximizeRegular />} aria-pressed={focus} onClick={toggleFocus}>{focus ? "退出专注" : "专注阅读"}</Button></Tooltip>
@@ -212,8 +216,16 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
           <Field label="PDF 页码"><Select aria-label="批注页码" value={draft.page} disabled={busy || Boolean(draft.id)} onChange={(_, data) => setDraft({ ...draft, page: data.value })}>
             <option value="">请选择页码</option>{pages.map((page) => <option key={page} value={page}>第 {page} 页</option>)}
           </Select></Field>
+          {markStyle ? <>
+            <Field label="标记"><Select aria-label="标记类型" value={markStyle.kind} onChange={(_, data) => setMarkStyle({ ...markStyle, kind: data.value as ReadingMarkStyle["kind"] })}>
+              <option value="highlight">高亮</option><option value="underline">下划线</option>{!draft.id ? <option value="note">页批注</option> : null}
+            </Select></Field>
+            {markStyle.kind !== "note" ? <Field label="颜色"><Select aria-label="标记颜色" value={markStyle.color ?? (markStyle.kind === "underline" ? "blue" : "yellow")} onChange={(_, data) => setMarkStyle({ ...markStyle, color: data.value as ReadingMarkStyle["color"] })}>
+              <option value="yellow">黄色</option><option value="red">红色</option><option value="blue">蓝色</option><option value="green">绿色</option><option value="pink">粉色</option>
+            </Select></Field> : null}
+          </> : null}
           <Field label="批注内容"><Textarea aria-label="阅读批注内容" rows={5} resize="vertical" value={note} disabled={busy} onChange={(_, data) => setNote(data.value)} /></Field>
-          <div className="paper-reading-comment-actions"><Button appearance="primary" disabled={busy || !session.ready || !draft.page || (!draft.id && !note.trim())} onClick={() => void save()}>保存批注</Button>
+          <div className="paper-reading-comment-actions"><Button appearance="primary" disabled={busy || !session.ready || !draft.page || (!draft.id && !note.trim() && !draft.excerpt)} onClick={() => void save()}>保存批注</Button>
             <Button disabled={busy} onClick={() => { setDraft(undefined); setNote(""); setError(""); }}>取消</Button></div>
         </div> : null}
         {!session.annotations.length && !draft && session.ready ? <p>选中原文后添加批注，或记录整页想法。</p> : null}
@@ -225,6 +237,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
           <div className="paper-reading-comment-actions">
             <Button size="small" onClick={() => session.openPdf(annotation.id)}>查看 PDF</Button>
             <Button size="small" disabled={busy || !session.ready || Boolean(draft)} onClick={() => {
+              setMarkStyle(annotation.kind === "highlight" || annotation.kind === "underline" ? { kind: annotation.kind, color: annotation.color } : undefined);
               setDraft({ id: annotation.id, revision: annotation.revision, page: String(annotation.page), excerpt: annotation.excerpt }); setNote(annotation.note ?? ""); setError("");
             }}>编辑</Button>
             <Button size="small" disabled={busy || !session.ready || Boolean(draft)} onClick={() => {

@@ -69,7 +69,7 @@ export function useNotesController(input: {
   openArtifact?(artifactId: string, nodeId?: string): void;
   receiveContextDrop?: ObjectWorkbenchPort["receiveContextDrop"];
   openExternalFile?(file: NoteFileSnapshot): void | Promise<void>;
-  dragExternalFile?(file: NoteFileSnapshot, data: DataTransfer): void;
+  dragExternalFile?(file: { mountId: string; path: string }, data: DataTransfer): void;
   exportBoardFile?(ref: ObjectRef): Promise<string>;
 }) {
   const latest = useRef(input);
@@ -110,6 +110,7 @@ export function useNotesController(input: {
     artifacts: [],
   });
   const request = useRef(0);
+  const externalOpenRequest = useRef(0);
   const mounted = useRef(true);
   const active = () =>
     mounted.current && latest.current.scopeId === repository.scopeId;
@@ -239,22 +240,12 @@ export function useNotesController(input: {
               external: { mountId: mount.id, path: entry.path },
             });
           } else if (/\.(md|markdown|canvas)$/i.test(entry.name)) {
-            try {
-              const item = await fromFile(
-                await files.readFile(mount.id, entry.path),
-              );
-              if (mount.kind === "file") item.defaultFolderId = NOTES_ROOT;
-              nextItems.push(item);
-            } catch {
-              unavailable = true;
-              nextItems.push(
-                ...externalCache.current.items.filter(
-                  (item) =>
-                    item.file?.mountId === mount.id &&
-                    item.file.path === entry.path,
-                ),
-              );
-            }
+            const target: NotesTarget = { kind: "external-file", mountId: mount.id, path: entry.path };
+            nextItems.push({
+              key: notesTargetKey(target), target, title: entry.name, text: "", source: entry.path,
+              defaultFolderId: mount.kind === "file" ? NOTES_ROOT : externalFolderId(mount.id, entry.path.split("/").slice(0, -1).join("/")),
+              updatedAt: "", editable: /\.(md|markdown)$/i.test(entry.name), automaticallyListed: true,
+            });
           }
         }
       } catch {
@@ -267,7 +258,7 @@ export function useNotesController(input: {
         );
         nextItems.push(
           ...externalCache.current.items.filter(
-            (item) => item.file?.mountId === mount.id,
+            (item) => item.target.kind === "external-file" && item.target.mountId === mount.id,
           ),
         );
       }
@@ -292,6 +283,9 @@ export function useNotesController(input: {
     item: Pick<NotesItem, "title" | "text"> & Partial<NotesItem>,
     destination: { mountId: string; path: string },
   ) {
+    if (!item.file && item.target?.kind === "external-file") {
+      item = { ...item, file: await files.readFile(item.target.mountId, item.target.path) };
+    }
     const board = item.object?.kind === "workspace.board";
     let text = item.file?.text ?? `# ${item.title}\n\n${item.text}`;
     if (board) {
@@ -442,9 +436,10 @@ export function useNotesController(input: {
     setBusy(true);
     try {
       const all: ObjectEnvelope[] = [];
+      const fileProjections = await repository.fileProjectionIds();
       let cursor: string | undefined;
       do {
-        const page = await repository.search("", cursor);
+        const page = await repository.search("", cursor, fileProjections);
         all.push(...page.objects);
         cursor = page.cursor;
       } while (cursor);
@@ -877,14 +872,15 @@ export function useNotesController(input: {
         setSelectedKey("");
       }),
     openSource(item) {
-      if (item.file && /\.canvas$/i.test(item.file.path)) {
+      const operation = ++externalOpenRequest.current;
+      if (item.target.kind === "external-file") {
+        const target = item.target;
         void perform(async () => {
-          if (!latest.current.openExternalFile)
-            throw new Error("无法打开此白板文件。");
-          await latest.current.openExternalFile(item.file!);
+          if (!latest.current.openExternalFile) throw new Error("无法打开此文件。");
+          const file = await files.readFile(target.mountId, target.path);
+          if (active() && operation === externalOpenRequest.current) await latest.current.openExternalFile(file);
         }).catch(() => undefined);
-      } else if (item.file) setSelectedKey(item.key);
-      else if (item.paper && item.annotation)
+      } else if (item.paper && item.annotation)
         latest.current.openAnnotation(item.paper, item.annotation);
       else if (item.artifactId)
         latest.current.openArtifact?.(item.artifactId, item.nodeId);
@@ -903,8 +899,8 @@ export function useNotesController(input: {
     },
     drag(item, data) {
       data.setData(NOTES_REFERENCE_MIME, JSON.stringify(item.target));
-      if (item.file && /\.canvas$/i.test(item.file.path))
-        latest.current.dragExternalFile?.(item.file, data);
+      if (item.target.kind === "external-file")
+        latest.current.dragExternalFile?.({ mountId: item.target.mountId, path: item.target.path }, data);
       else if (item.paper && item.annotation)
         latest.current.dragAnnotation?.(item.paper, item.annotation, data);
       else if (item.object)

@@ -179,7 +179,7 @@ function ReaderSession({ document, documentId, storageScope, onProgressChange }:
   }, [chapter?.id, jump]);
 
   if (!chapter) return <p role="status">这份文档没有可阅读的正文。</p>;
-  const label = document.format === "epub" ? "EPUB" : document.format === "markdown" ? "Markdown" : "TXT";
+  const label = document.format === "markdown" ? "Markdown" : document.format === "text" ? "TXT" : document.format.toUpperCase();
   const cssVariables = { "--reading-font-size": `${preferences.fontSize}px`, "--reading-line-height": preferences.lineHeight, "--reading-width": `${preferences.width}px` } as CSSProperties;
 
   return <div className={`reading-document${focus ? " is-focused" : ""}`} data-reading-theme={preferences.theme} ref={rootRef} style={cssVariables}>

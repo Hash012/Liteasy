@@ -1,3 +1,7 @@
+import { resolveReadingQuoteRects } from "./readingAnnotationGeometry";
+import type { ReadingMarkStyle } from "./pdfReadingAnnotations";
+import { pdfCanvasSize } from "./pdfRenderBudget";
+import { usePdfPageWindow } from "./usePdfPageWindow";
 import { getHighlightColor, getOverlayStyle } from "./pdfAnnotationAppearance";
 import { DrawShapeRegular, EraserRegular, ArrowUndoRegular } from "@fluentui/react-icons";
 import { PdfInkLayer } from "./PdfInkLayer";
@@ -45,7 +49,7 @@ import {
   WhiteboardRegular
 } from "@fluentui/react-icons";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
-import { loadPdfGlyphGeometry } from "./pdfGlyphGeometry";
+import { loadPdfGlyphGeometry, releasePdfGlyphGeometry } from "./pdfGlyphGeometry";
 import { usePdfPixelRatio } from "./usePdfPixelRatio";
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
@@ -935,7 +939,7 @@ export function resolvePdfPageStageWidth(
   return Math.max(360, layoutColumnWidth - (marginCommentsVisible ? 228 : 0));
 }
 
-function getScaleForStage(baseViewport: PageViewport, stageWidth: number, zoom: number) {
+function getScaleForStage(baseViewport: Pick<PageViewport, "width">, stageWidth: number, zoom: number) {
   const availableWidth = Math.max(300, stageWidth - 6);
   return Math.max(0.5, Math.min(2.8, (availableWidth / baseViewport.width) * (zoom / 100)));
 }
@@ -1053,6 +1057,8 @@ type PdfPageViewProps = {
   onPageCharModelRendered?: (pageNumber: number, model: PageCharModel | null) => void;
   onPageTextRendered?: (input: PdfPageText) => void;
   pageNumber: number;
+  renderActive: boolean;
+  defaultPageSize: { width: number; height: number };
   pixelRatio: number;
   pdfDocument: PDFDocumentProxy | null;
   searchMatches?: PdfReaderSearchMatch[];
@@ -1084,6 +1090,8 @@ function PdfPageView({
   onTextAnnotationMove,
   onTextAnnotationOpacityChange,
   pageNumber,
+  renderActive,
+  defaultPageSize,
   pixelRatio,
   pdfDocument,
   searchMatches = [],
@@ -1096,7 +1104,11 @@ function PdfPageView({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const pageShellRef = useRef<HTMLElement | null>(null);
   const textLayerRef = useRef<HTMLDivElement | null>(null);
-  const [pageSize, setPageSize] = useState({ height: 980, width: 760 });
+  const [measuredPage, setMeasuredPage] = useState<{ document: PDFDocumentProxy; width: number; height: number }>();
+  const basePageSize = measuredPage?.document === pdfDocument ? measuredPage : defaultPageSize;
+  const pageScale = getScaleForStage(basePageSize, stageWidth, zoom);
+  const dimensions = pdfCanvasSize(basePageSize.width * pageScale, basePageSize.height * pageScale, pixelRatio);
+  const pageSize = { height: dimensions.height / dimensions.ratio, width: dimensions.width / dimensions.ratio };
   const [textLayerRevision, setTextLayerRevision] = useState(0);
   const [searchHighlightRects, setSearchHighlightRects] = useState<Array<{
     active: boolean;
@@ -1159,9 +1171,12 @@ function PdfPageView({
     let cancelled = false;
     let renderTask: { cancel: () => void; promise: Promise<unknown> } | null = null;
     let layer: InstanceType<typeof pdfjsLib.TextLayer> | null = null;
+    let renderedPage: PDFPageProxy | undefined;
+    const ownedCanvas = canvasRef.current;
+    const ownedTextLayer = textLayerRef.current;
 
     async function renderPage() {
-      if (!pdfDocument) {
+      if (!pdfDocument || !renderActive) {
         clearPdfCanvas(canvasRef.current);
         if (textLayerRef.current) {
           textLayerRef.current.replaceChildren();
@@ -1187,27 +1202,29 @@ function PdfPageView({
           return;
         }
 
+        renderedPage = page;
         const baseViewport = page.getViewport({ scale: 1 });
+        setMeasuredPage({ document: pdfDocument, width: baseViewport.width, height: baseViewport.height });
         const viewport = page.getViewport({
           scale: getScaleForStage(baseViewport, stageWidth, zoom)
         });
         const context = getCanvasContext(canvas);
-        canvas.width = Math.ceil(viewport.width * pixelRatio);
-        canvas.height = Math.ceil(viewport.height * pixelRatio);
+        const output = pdfCanvasSize(viewport.width, viewport.height, pixelRatio);
+        canvas.width = output.width;
+        canvas.height = output.height;
         // Present each rendered pixel at one screen pixel. Keep CSS sizes tied to
         // that pixel grid so layout constraints cannot resample the finished page.
-        const width = canvas.width / pixelRatio;
-        const height = canvas.height / pixelRatio;
+        const width = canvas.width / output.ratio;
+        const height = canvas.height / output.ratio;
         canvas.style.width = `${width}px`;
         canvas.style.height = `${height}px`;
         textLayer.style.width = `${viewport.width}px`;
         textLayer.style.height = `${viewport.height}px`;
         textLayer.style.setProperty("--total-scale-factor", String(viewport.scale));
-        setPageSize({ height, width });
 
         if (context) {
           renderTask = page.render({ canvas, canvasContext: context, viewport,
-            transform: [pixelRatio, 0, 0, pixelRatio, 0, 0] });
+            transform: [output.ratio, 0, 0, output.ratio, 0, 0] });
           await renderTask.promise;
         }
 
@@ -1268,11 +1285,17 @@ function PdfPageView({
       cancelled = true;
       renderTask?.cancel();
       layer?.cancel();
+      clearPdfCanvas(ownedCanvas);
+      ownedTextLayer?.replaceChildren();
+      if (renderedPage) {
+        releasePdfGlyphGeometry(renderedPage);
+        renderedPage.cleanup();
+      }
       onPageCharModelRendered?.(pageNumber, null);
     };
   // Focus changes while scrolling must not tear down the text layer in the middle of a drag.
   // Evidence/search overlays have their own effects below and do not require repainting the PDF.
-  }, [activePaper?.id, onPageCharModelRendered, onPageTextRendered, pageNumber, pixelRatio, pdfDocument, stageWidth, zoom]);
+  }, [activePaper?.id, onPageCharModelRendered, onPageTextRendered, pageNumber, pixelRatio, pdfDocument, renderActive, stageWidth, zoom]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(updateTargetHighlightRects);
@@ -1337,7 +1360,7 @@ function PdfPageView({
         <div aria-label={pageNumber === 1 ? "PDF 批注覆盖层" : undefined} className="pdf-annotation-overlay">
         {onInkCreate && onTextAnnotationDelete ? <PdfInkLayer
           annotations={pageAnnotations.filter((annotation) => annotation.kind === "ink")}
-          mode={inkMode} color={inkColor} width={inkWidth} aspectRatio={pageSize.height / pageSize.width}
+          mode={inkMode} color={inkColor} width={inkWidth} aspectRatio={basePageSize.height / basePageSize.width}
           onCreate={(stroke) => onInkCreate(pageNumber, stroke)} onDelete={onTextAnnotationDelete} onDeleteStroke={onInkDeleteStroke} /> : null}
         {pageAnnotations.filter((annotation) => annotation.kind !== "ink").map((annotation) => annotation.kind === "text" ? (
           annotation.rects[0] && onTextAnnotationActivate && onTextAnnotationCommit &&
@@ -1382,7 +1405,7 @@ function PdfPageView({
               style={{ ...getOverlayStyle(
                 annotation.kind,
                 rect,
-                annotation.kind === "highlight" ? annotation.color : undefined
+                annotation.color
               ), ...(annotation.quickAsk ? { borderBottomStyle: "dashed" } : {}) }}
               title={`第 ${annotation.page} 页：${annotation.excerpt}`}
               type="button"
@@ -1495,6 +1518,7 @@ export function PdfReader({
   annotationsRef.current = annotations;
   const [selectedColor, setSelectedColor] = useState<HighlightColor>("yellow");
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
+  const [defaultPageSize, setDefaultPageSize] = useState({ width: 760, height: 980 });
   const documentInfoSource = useRef<{ paperId?: string; sourcePath?: string }>({});
   const [pageCount, setPageCount] = useState(1);
   const [focusedPage, setFocusedPage] = useState(1);
@@ -1627,6 +1651,10 @@ export function PdfReader({
     () => getVisiblePageNumbers(layoutMode, focusedPage, pageCount),
     [focusedPage, layoutMode, pageCount]
   );
+  const renderedPages = usePdfPageWindow(stageRef, documentFrameRef, {
+    enabled: !readingView && readerView === "document", document: pdfDocument,
+    focusedPage, pageCount, layout: layoutMode, zoom, width: stageWidth
+  });
   const hasVisibleMarginComments = marginCommentsVisible && annotations.some((annotation) =>
     (annotation.kind === "highlight" || annotation.kind === "underline") &&
     Boolean(annotation.note?.trim()) &&
@@ -2076,13 +2104,16 @@ export function PdfReader({
         loadingTask = pdfjsLib.getDocument(source);
         return loadingTask.promise;
       })
-      .then((document) => {
+      .then(async (document) => {
         if (!document) return;
         if (cancelled) {
           void document.destroy();
           return;
         }
 
+        const viewport = (await document.getPage(1)).getViewport({ scale: 1 });
+        if (cancelled) return;
+        setDefaultPageSize({ width: viewport.width, height: viewport.height });
         documentInfoSource.current = { paperId: activePaper?.id, sourcePath: activePaper?.sourcePath };
         setPdfDocument(document);
         setPageCount(document.numPages);
@@ -2944,15 +2975,21 @@ export function PdfReader({
       paperId: activePaper!.id, snapshot: { annotations: annotationsRef.current, autoPublic: autoPublicAnnotations, version: 2 } });
   }
 
-  async function createReadingAnnotation(input: { page: number; excerpt: string; note: string }) {
+  async function createReadingAnnotation(input: { page: number; excerpt: string; note: string } & ReadingMarkStyle) {
     assertReadingAnnotationsReady();
-    if (!Number.isInteger(input.page) || input.page < 1 || !input.note.trim()) throw new Error("请选择页码并填写批注。");
-    const duplicate = annotationsRef.current.find((item) => item.page === input.page && item.excerpt === input.excerpt && item.note === input.note.trim());
+    if (!Number.isInteger(input.page) || input.page < 1 || (pdfDocument && input.page > pdfDocument.numPages) || (!input.note.trim() && !input.excerpt.trim())) throw new Error("请选择页码并填写批注。");
+    const duplicate = annotationsRef.current.find((item) => item.page === input.page && item.excerpt === input.excerpt && item.note === input.note.trim() && (!input.kind || item.kind === input.kind) && (!input.color || item.color === input.color));
     if (duplicate) { await persistReadingAnnotations(); setReadingAnnotationId(duplicate.id); return; }
     const now = new Date().toISOString();
-    const rects = readingQuoteRects(pageCharModelsRef.current.get(input.page), input.excerpt);
-    const annotation: PdfAnnotationV2 = { id: `reading-${crypto.randomUUID()}`, kind: rects.length ? "highlight" : "note",
-      color: rects.length ? "yellow" : undefined, createdAt: now, updatedAt: now, revision: 1,
+    const scope = annotationStorageKey;
+    let rects = readingQuoteRects(pageCharModelsRef.current.get(input.page), input.excerpt);
+    if (!rects.length && input.excerpt && pdfDocument) rects = await resolveReadingQuoteRects(pdfDocument, input.page, input.excerpt);
+    assertReadingAnnotationsReady();
+    if (annotationScopeRef.current !== scope) throw new Error("论文已切换，请重新选择原文。");
+    if ((input.kind === "highlight" || input.kind === "underline") && !rects.length)
+      throw new Error("这段文字无法唯一对应到 PDF。请在 PDF 中划线，或改为页批注；不会猜测高亮位置。");
+    const annotation: PdfAnnotationV2 = { id: `reading-${crypto.randomUUID()}`, kind: input.kind ?? (rects.length ? "highlight" : "note"),
+      color: rects.length ? input.color ?? "yellow" : undefined, createdAt: now, updatedAt: now, revision: 1,
       page: input.page, excerpt: input.excerpt, note: input.note.trim(), text: "阅读批注", rects,
       paperIdentity: resolvePaperIdentity(activePaper!), publication: { desiredVisibility: "private", state: "not_published" } };
     setCurrentAnnotations((current) => [...current, annotation]);
@@ -2960,16 +2997,16 @@ export function PdfReader({
     await persistReadingAnnotations();
   }
 
-  async function updateReadingAnnotation(id: string, revision: number, note: string) {
+  async function updateReadingAnnotation(id: string, revision: number, note: string, style: ReadingMarkStyle = {}) {
     assertReadingAnnotationsReady();
     const annotation = annotationsRef.current.find((item) => item.id === id);
     if (!annotation) throw new Error("批注已删除，请重新打开后编辑。");
     if (annotation.revision !== revision) {
       // A failed disk write leaves the edited value in memory; retry that value without a new revision.
-      if (annotation.note === note) { await persistReadingAnnotations(); return; }
+      if (annotation.note === note && (!style.kind || annotation.kind === style.kind) && (!style.color || annotation.color === style.color)) { await persistReadingAnnotations(); return; }
       throw new Error("批注已变化，请重新打开后编辑。");
     }
-    const updated = revisePdfAnnotation(annotation, { note, updatedAt: new Date().toISOString(),
+    const updated = revisePdfAnnotation(annotation, { note, ...style, updatedAt: new Date().toISOString(),
       publication: annotation.publication.state === "published" ? { ...annotation.publication, state: "pending_update" } : annotation.publication });
     setCurrentAnnotations((current) => current.map((item) => item.id === id ? updated : item));
     if (annotation.publication.state === "published") {
@@ -3826,6 +3863,8 @@ export function PdfReader({
                     onTextAnnotationMove={moveTextAnnotation}
                     onTextAnnotationOpacityChange={changeTextAnnotationOpacity}
                     pageNumber={pageNumber}
+                    renderActive={renderedPages.has(pageNumber) && visiblePageNumbers.has(pageNumber)}
+                    defaultPageSize={defaultPageSize}
                     pixelRatio={pixelRatio}
                     pdfDocument={pdfDocument}
                     searchMatches={searchOpen
