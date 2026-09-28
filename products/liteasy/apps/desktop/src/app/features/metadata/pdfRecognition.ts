@@ -2,7 +2,7 @@ import type { LiteratureCandidate, LiteratureResolveInput, LiteratureResolveResu
 import { inferPaperIdentityMetadataFromPdfText } from "../paper-identity/paperIdentity";
 import { parsePmlrHint } from "../paper-identity/literatureRecord";
 
-export type PdfRecognitionEvidence = { firstPageText: string; embeddedTitle?: string; titleText?: string };
+export type PdfRecognitionEvidence = { firstPageText: string; embeddedTitle?: string; titleText?: string; sourceName?: string };
 
 export function readableBibliographicTitle(value: string) {
   // Registry titles may contain JATS/HTML emphasis and inline formula markup.
@@ -44,6 +44,12 @@ export function buildPdfRecognitionRequest(evidence: PdfRecognitionEvidence): Li
   if (identity.doi) identifiers.push({ kind: "doi", value: identity.doi });
   if (identity.arxivId) identifiers.push({ kind: "arxiv_id", value: identity.arxivId });
   const pmlr = parsePmlrHint(evidence.firstPageText.slice(0, 20_000));
+  const slug = evidence.sourceName?.replace(/\\/g, "/").split("/").at(-1)?.replace(/\.pdf$/i, "");
+  // A filename is only a lookup hint: the official record still has to match
+  // the PDF title, author and imprint before automatic confirmation.
+  if (pmlr && slug && /^[a-z][a-z0-9._-]{0,100}\d{2}[a-z]$/i.test(slug)) {
+    identifiers.push({ kind: "pmlr_id", value: `v${pmlr.volume}/${slug.toLowerCase()}` });
+  }
   const title = [evidence.embeddedTitle, evidence.titleText].find((value) => value &&
     normalized(value).length >= 8 && normalized(heading).includes(normalized(value)));
   // A bounded bibliographic query is only a search hint, never a title to save directly.

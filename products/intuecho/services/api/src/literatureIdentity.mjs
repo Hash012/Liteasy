@@ -154,10 +154,12 @@ export function normalizeLiteratureSourceEvidence(candidate) {
     if (artifactUrl.protocol !== "https:" || artifactUrl.hostname !== "proceedings.mlr.press" ||
       artifactUrl.username || artifactUrl.password ||
       artifactUrl.search || artifactUrl.hash ||
-      !artifactUrl.pathname.endsWith(`/v${volume}/assets/bib/bibliography.bib`) ||
+      !(evidence?.sourceKind === "official_article_page"
+        ? artifactUrl.href === `https://proceedings.mlr.press/${identifier}.html`
+        : evidence?.sourceKind === "official_volume_bibtex" && artifactUrl.pathname === `/v${volume}/assets/bib/bibliography.bib`) ||
       recordUrl.toString() !== `https://proceedings.mlr.press/${identifier}.html` ||
       !/^sha256:[a-f0-9]{64}$/.test(String(evidence?.artifactHash ?? "")) ||
-      evidence?.sourceKind !== "official_volume_bibtex" || evidence?.volume !== volume ||
+      evidence?.volume !== volume ||
       evidence?.entryKey !== `pmlr-${identifier.replace("/", "-")}`) return null;
     return { ...evidence, artifactUrl: artifactUrl.toString() };
   } catch {

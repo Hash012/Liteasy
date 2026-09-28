@@ -87,18 +87,18 @@ test("edits, displays and filters local papers by category and tags", async () =
   // Pointer movement across the context menu is covered by the browser test;
   // dispatch the action directly here to isolate metadata editing from jsdom motion.
   fireEvent.click(await screen.findByRole("menuitem", { name: "编辑分类与标签" }));
-  await screen.findByRole("dialog", { name: "编辑论文分类与标签" });
+  await screen.findByRole("dialog", { name: "编辑资产分类与标签" });
   // Move focus into the editor after the menu restores focus in jsdom.
-  await user.click(screen.getByLabelText("论文分类"));
-  fireEvent.change(screen.getByRole("textbox", { name: "论文分类" }), {
+  await user.click(screen.getByLabelText("资产分类"));
+  fireEvent.change(screen.getByRole("textbox", { name: "资产分类" }), {
     target: { value: "已精读" }
   });
-  fireEvent.change(screen.getByRole("textbox", { name: "论文标签" }), {
+  fireEvent.change(screen.getByRole("textbox", { name: "资产标签" }), {
     target: { value: "检索, 必读" }
   });
   await user.click(screen.getByRole("button", { name: "保存" }));
 
-  await waitFor(() => expect(screen.queryByRole("dialog", { name: "编辑论文分类与标签" })).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "编辑资产分类与标签" })).not.toBeInTheDocument());
   const updatedMetadata = await screen.findByLabelText(`${paper.title} 的分类与标签`);
   expect(within(updatedMetadata).getByText("已精读")).toBeInTheDocument();
   expect(within(updatedMetadata).getByText("必读")).toBeInTheDocument();
@@ -127,23 +127,24 @@ test("opens a saved multimodal document under its source paper", async () => {
   const open = vi.fn();
   const child = { id: "thin-1", kind: "artifact" as const, label: "薄读：方法" };
   renderLibraryPane({ paperChildren: { [paper.id]: [child] }, onOpenPaperChild: open });
-  await userEvent.click(screen.getByText("论文文件（1）"));
+  await userEvent.click(screen.getByRole("button", { name: `展开 ${paper.title} 的 1 个附件` }));
   await userEvent.click(screen.getByRole("button", { name: "打开论文文件：薄读：方法" }));
   expect(open).toHaveBeenCalledWith(child, paper);
 });
 
-test("left-click opens a paper and right-click exposes identity confirmation", async () => {
-  const open = vi.fn(); const resolve = vi.fn();
-  renderLibraryPane({ onOpenPaper: open, onResolvePaperIdentity: resolve });
+test("single-click selects without opening and right-click exposes identity confirmation", async () => {
+  const open = vi.fn(); const resolve = vi.fn(); const select = vi.fn();
+  renderLibraryPane({ onOpenPaper: open, onResolvePaperIdentity: resolve, onToggleSelection: select });
   await userEvent.click(screen.getByRole("button", { name: paper.title }));
-  expect(open).toHaveBeenCalled();
+  expect(open).not.toHaveBeenCalled();
+  expect(select).toHaveBeenCalledWith(paper.id);
   expect(screen.queryByRole("menuitem", { name: "确认文献身份" })).not.toBeInTheDocument();
   await userEvent.pointer({ keys: "[MouseRight]", target: screen.getByRole("button", { name: paper.title }) });
   await userEvent.click(await screen.findByRole("menuitem", { name: "确认文献身份" }));
   expect(resolve).toHaveBeenCalledWith(paper);
 });
 
-test("opens papers on a single click while retaining metadata inspection and file filters", async () => {
+test("opens papers on double click while retaining metadata inspection and file filters", async () => {
   const user = userEvent.setup(), inspect = vi.fn(), openPaper = vi.fn();
   const pdf = { id: paper.id, title: paper.title, format: "pdf" as const, authors: ["Lin Researcher"], year: 2024, doi: "10.1234/vector" };
   renderLibraryPane({ onOpenPaper: openPaper, fileLibrary: {
@@ -152,6 +153,8 @@ test("opens papers on a single click while retaining metadata inspection and fil
   } });
   await user.click(screen.getByRole("button", { name: paper.title, exact: true }));
   expect(inspect).toHaveBeenCalledWith(pdf, expect.any(Function));
+  expect(openPaper).not.toHaveBeenCalled();
+  await user.dblClick(screen.getByRole("button", { name: paper.title, exact: true }));
   expect(openPaper).toHaveBeenCalledOnce();
   expect(openPaper).toHaveBeenCalledWith(paper.id);
   await user.type(screen.getByRole("textbox", { name: "搜索文献资源" }), '"Lin Researcher" 10.1234/vector');
@@ -284,6 +287,8 @@ test("distinguishes paper derivatives and offers custom icons for ordinary files
     { id: "figures", label: "论文插图", kind: "figures" },
     { id: "combined", label: "论文图文", kind: "multimodal" }
   ] }, fileLibrary: fileAccess({ entries: [{ id: "book", title: "My Book", format: "mobi" }] }) });
+  expect(screen.queryByRole("button", { name: "打开论文文件：论文文本" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: `展开 ${paper.title} 的 3 个附件` }));
   for (const [label, icon] of [["论文文本", "text"], ["论文插图", "images"], ["论文图文", "multimodal"]]) {
     expect(screen.getByRole("button", { name: `打开论文文件：${label}` }).querySelector("[data-icon]")).toHaveAttribute("data-icon", icon);
   }
@@ -326,7 +331,7 @@ test("expanded library retains search and file actions inside a closable dialog"
   const close = vi.fn(), open = vi.fn();
   renderLibraryPane({ expanded: true, onCloseExpanded: close, onOpenPaper: open });
   const dialog = await screen.findByRole("dialog", { name: "文献库", exact: true });
-  fireEvent.click(within(dialog).getByRole("button", { name: paper.title, exact: true }));
+  fireEvent.doubleClick(within(dialog).getByRole("button", { name: paper.title, exact: true }));
   expect(open).toHaveBeenCalledWith(paper.id);
   fireEvent.click(within(dialog).getByRole("button", { name: "关闭文献库浮窗" }));
   expect(close).toHaveBeenCalledOnce();
@@ -340,4 +345,35 @@ test("shows confirmed paper titles immediately even when the physical filename s
   expect(screen.queryByRole("button", { name: paper.title, exact: true })).not.toBeInTheDocument();
   await userEvent.type(screen.getByRole("textbox", { name: "搜索文献资源" }), "Official");
   expect(screen.getByRole("button", { name: title, exact: true })).toBeInTheDocument();
+});
+
+test("edits semantic facets for an ebook through the same asset editor", async () => {
+  const update = vi.fn().mockResolvedValue(undefined);
+  renderLibraryPane({ fileLibrary: fileAccess({ entries: [{ id: "book", title: "My Book", format: "epub", authors: ["Jane Austen"] }], onMetadataChange: update }) });
+  fireEvent.contextMenu(screen.getByRole("button", { name: "选择文件 My Book" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑分类与标签" }));
+  const editor = await screen.findByRole("dialog", { name: "编辑资产分类与标签" });
+  expect(within(editor).getByRole("combobox", { name: "资产类别" })).toHaveValue("book");
+  fireEvent.change(within(editor).getByRole("textbox", { name: "资产年份" }), { target: { value: "2024" } });
+  fireEvent.change(within(editor).getByRole("textbox", { name: "资产学科" }), { target: { value: "文学, 历史" } });
+  fireEvent.change(within(editor).getByRole("textbox", { name: "资产标签" }), { target: { value: "经典, 待读" } });
+  fireEvent.click(within(editor).getByRole("button", { name: "保存", exact: true }));
+  await waitFor(() => expect(update).toHaveBeenCalledWith("book", expect.objectContaining({ assetType: "book", year: 2024,
+    authors: ["Jane Austen"], subjects: ["文学", "历史"], tags: ["经典", "待读"] })));
+});
+
+test("displays compact facet chips and combines quick tag selection with author filtering", async () => {
+  await savePaperFileMetadata(paper.id, { category: "项目", tags: ["必读"], assetType: "journal-article", year: 2024, authors: ["Alice Smith"], subjects: ["机器学习"] });
+  renderLibraryPane();
+  const chips = await screen.findByLabelText(`${paper.title} 的分类与标签`);
+  expect(within(chips).getByText("期刊论文")).toBeInTheDocument();
+  expect(within(chips).getByText("2024")).toBeInTheDocument();
+  expect(within(chips).queryByText("Alice Smith")).not.toBeInTheDocument();
+  fireEvent.click(within(chips).getByText("必读"));
+  expect(screen.getByRole("button", { name: paper.title })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "筛选本地文件" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "筛选作者" }), { target: { value: "Someone Else" } });
+  expect(screen.queryByRole("button", { name: paper.title })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "重置筛选" }));
+  expect(screen.getByRole("button", { name: paper.title })).toBeInTheDocument();
 });

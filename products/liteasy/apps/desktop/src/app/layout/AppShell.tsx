@@ -1277,6 +1277,12 @@ export function AppShell({
       : undefined,
     selectedPapers,
     workspaceRevision: workspaceState.workspaceRevision,
+    prepareRecommendationPaper: async (paper) => {
+      const message = await retrievePdfMetadata({ paper, firstPageText: "", manual: false });
+      const updated = workspaceStoreRef.current.getState().papers.find((item) => item.id === paper.id);
+      if (!updated?.literature && message) throw new Error(message);
+      return updated;
+    },
     workspaceSourceKey: `${workspaceState.workspaceSource.type}:${workspaceState.workspaceSource.rootPath}`
   });
   const {

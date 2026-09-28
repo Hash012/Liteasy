@@ -10,6 +10,15 @@ const entries: ReadingCatalogEntry[] = [
 ];
 
 describe("reading catalog search", () => {
+  test("combines semantic type, author, subject and multiple tags across PDFs and books", () => {
+    const paper = { ...entries[0], assetType: "conference-paper", subjects: ["机器学习"] };
+    const book = { ...entries[1], subjects: ["机器学习"] };
+    const index = indexReadingCatalog([paper, book]);
+    expect(queryReadingCatalog(index, { ...filters, assetType: "conference-paper", author: "vaswani", subject: "机器", tags: ["Transformer", "经典"], year: "2017" })).toEqual([paper]);
+    expect(queryReadingCatalog(index, { ...filters, assetType: "book", tags: ["Transformer"] })).toEqual([book]);
+    expect(queryReadingCatalog(index, { ...filters, tags: ["Transformer", "不存在"] })).toEqual([]);
+    expect(queryReadingCatalog(index, { ...filters, query: "会议论文 机器学习" })).toEqual([paper]);
+  });
   test("searches all metadata, supports combined words and quoted phrases with normalized casing", () => {
     const index = indexReadingCatalog(entries);
     for (const query of ["Vaswani transformer", '"attention is all" 2017', "NEURIPS", "transduction", "10.5555/3295222.3295349", "liteasy://workspace/paper/paper", "经典"]) {

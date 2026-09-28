@@ -11,12 +11,16 @@ import { createLiteratureResolutionRepository, resolutionStateFromResult } from 
 const bibliography = readFileSync(resolve(process.cwd(), "../../../../development/test-data/literature/larimar-pmlr.bib"), "utf8");
 const title = "Larimar: Large Language Models with Episodic Memory Control";
 const config = { provider: "crossref" as const, endpoint: "https://api.crossref.org" };
+function articlePage() {
+  return `<html><head><meta name="citation_publisher" content="PMLR"><meta name="citation_abstract_html_url" content="https://proceedings.mlr.press/v235/das24a.html"><meta name="citation_title" content="${title}"></head><body><code id="bibtex">${bibliography}</code></body></html>`;
+}
 const evidence = { firstPageText: `${title}\nPayel Das 1 Subhajit Chaudhury 1\nAbstract\nPMLR 235, 2024.` };
 afterEach(async () => { await deletePaperServiceKey(config); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 test("retrieves Larimar from its official PMLR volume without Crossref or leaking API keys", async () => {
   await savePaperServiceKey(config, "private-crossref-key");
   const fetch = vi.fn(async (url: URL, init?: RequestInit) => {
+    if (url.pathname === "/v235/das24a.html") return new Response(articlePage());
     expect(url.href).toBe("https://proceedings.mlr.press/v235/assets/bib/bibliography.bib");
     expect(init?.headers).not.toHaveProperty("Crossref-Plus-API-Token");
     return new Response(bibliography);
@@ -45,6 +49,26 @@ test("retrieves Larimar from its official PMLR volume without Crossref or leakin
   const restarted = await createMetadataProviderClient(config).confirmLiterature({ candidateKey: candidate.candidateKey, mode: "candidate" });
   expect(restarted.literature.literatureId).toBe(confirmed.literature.literatureId);
   expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+test("uses the small official article page for a PDF filename hint and persists truthful page evidence", async () => {
+  const fetch = vi.fn(async () => new Response(articlePage()));
+  vi.stubGlobal("fetch", fetch);
+  const request = buildPdfRecognitionRequest({ ...evidence, sourceName: "D:\\papers\\das24a.pdf" })!;
+  const client = createMetadataProviderClient(config);
+  const result = await client.resolveLiterature(request);
+  expect(result.status).toBe("exact");
+  const candidate = selectPdfRecognitionCandidate(result, evidence)!;
+  expect(candidate.sourceEvidence).toMatchObject({ sourceKind: "official_article_page",
+    artifactUrl: "https://proceedings.mlr.press/v235/das24a.html",
+    artifactHash: `sha256:${createHash("sha256").update(articlePage()).digest("hex")}` });
+  const saveArtifact = vi.fn();
+  await createLiteratureResolutionRepository({ loadArtifact: vi.fn(), saveArtifact }).save("das24a", resolutionStateFromResult(request, result));
+  expect(saveArtifact).toHaveBeenCalledOnce();
+  expect(fetch).toHaveBeenCalledOnce();
+  expect((fetch.mock.calls[0][0] as unknown as URL).pathname).toBe("/v235/das24a.html");
+  await client.resolveLiterature(request);
+  expect(fetch).toHaveBeenCalledOnce();
 });
 
 test("does not substitute a preprint, wrong volume or related Crossref paper for a PMLR publication", async () => {

@@ -47,6 +47,17 @@ test("persists paper file metadata in the browser fallback", async () => {
   });
 });
 
+test("retains asset facets and additive metadata across save and reload", async () => {
+  await savePaperFileMetadata("facets", { category: "项目资料", tags: ["必读"], assetType: "journal-article",
+    year: 2024, authors: [" Ada Lovelace "], subjects: ["计算机科学", "计算机科学"], extension: { kept: true } });
+  expect(await loadPaperFileMetadata("facets")).toMatchObject({ assetType: "journal-article", year: 2024,
+    authors: ["Ada Lovelace"], subjects: ["计算机科学"], extension: { kept: true } });
+  const invalid = normalizePaperFileMetadata({ subjects: "invalid", authors: false, year: "bad" });
+  expect(invalid.subjects).toBeUndefined();
+  expect(invalid.authors).toBeUndefined();
+  expect(invalid.year).toBeUndefined();
+});
+
 function signIn(userId: string) {
   storeAccountSession({ userId, email: `${userId}@example.test`, name: userId, sessionId: userId, expiresAt: "2099-01-01T00:00:00.000Z" });
 }

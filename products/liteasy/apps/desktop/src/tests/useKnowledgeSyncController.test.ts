@@ -1,3 +1,4 @@
+import { confirmedLiterature } from "./fixtures/confirmedLiterature";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import { useKnowledgeSyncController } from "../app/controllers/useKnowledgeSyncController";
@@ -16,7 +17,8 @@ const selectedPapers: Paper[] = [
   {
     id: "paper-1",
     sourcePath: "fixtures/paper-1.pdf",
-    title: "Attention Is All You Need"
+    title: "Attention Is All You Need",
+    literature: confirmedLiterature("Attention Is All You Need")
   }
 ];
 

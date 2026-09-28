@@ -8,6 +8,10 @@ import type { ParsedReadingDocument } from "./readingDocument.types";
 
 export const MAX_LIBRARY_FILE_BYTES = 20 * 1024 * 1024;
 const metadataSchema = z.object({
+  assetType: z.string().trim().max(80).optional(),
+  subjects: z.array(z.string().trim().min(1).max(60)).max(20).optional(),
+  authors: z.array(z.string().trim().min(1).max(300)).max(200).optional(),
+  year: z.number().int().min(1000).max(9999).optional(),
   tags: z.array(z.string().trim().min(1).max(60)).max(50).optional(),
   folderPath: z.string().max(4096).optional(),
   collection: z.string().trim().max(120).optional(),

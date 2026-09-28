@@ -21,13 +21,27 @@ type Input = {
 };
 
 export function createPdfMetadataImportController(input: Input) {
-  let queue = Promise.resolve();
+  const pending = new Map<string, Promise<string | undefined>>();
+  const waiting: Array<{ key: string; manual: boolean; start: () => void }> = [];
+  let active = 0;
+  function drain() {
+    waiting.sort((left, right) => Number(right.manual) - Number(left.manual));
+    while (active < 2 && waiting.length) { active++; waiting.shift()!.start(); }
+  }
   return (imported: { paper: Paper; firstPageText: string; manual?: boolean }) => {
-    const task = queue.then(async () => {
+    const initialSource = { ...input.workspaceStore.getState().workspaceSource };
+    const key = JSON.stringify([initialSource.rootPath, imported.paper.id, imported.paper.sourcePath]);
+    const existing = pending.get(key);
+    if (existing) {
+      const queued = waiting.find((job) => job.key === key);
+      if (queued && imported.manual) queued.manual = true;
+      return existing;
+    }
+    const ready = new Promise<void>((start) => { waiting.push({ key, manual: Boolean(imported.manual), start }); drain(); });
+    const task = ready.then(async () => {
       const { paper } = imported;
-      const initial = input.workspaceStore.getState();
-      if (initial.workspaceSource.type !== "local_library" || paper.libraryReference || (paper.literature && !imported.manual)) return;
-      const rootPath = initial.workspaceSource.rootPath;
+      if (initialSource.type !== "local_library" || paper.libraryReference || (paper.literature && !imported.manual)) return;
+      const rootPath = initialSource.rootPath;
       const unchanged = () => {
         const state = input.workspaceStore.getState();
         const current = state.papers.find((item) => item.id === paper.id);
@@ -44,9 +58,15 @@ export function createPdfMetadataImportController(input: Input) {
         const read = await input.readEvidence?.(paper);
         if (read?.firstPageText.trim()) evidence = read;
       } catch { /* Existing extracted/OCR text remains usable if a second read fails. */ }
-      const request = buildPdfRecognitionRequest(evidence);
+      const request = buildPdfRecognitionRequest({ ...evidence,
+        sourceName: paper.sourcePath && !/^(?:blob:|data:)/.test(paper.sourcePath) ? paper.sourcePath : paper.title });
       if (!unchanged()) return;
       if (!request) return "未能从 PDF 中提取可用的元数据线索，请使用“确认文献身份”手动检索。";
+      const knownPmlr = paper.literature?.identifiers.find((id) => id.kind === "pmlr_id" &&
+        id.value.startsWith(`v${request.hints?.pmlr?.volume}/`));
+      if (knownPmlr && !request.hints?.identifiers?.some((id) => id.kind === "pmlr_id")) {
+        request.hints = { ...request.hints, identifiers: [...(request.hints?.identifiers ?? []), { kind: "pmlr_id", value: knownPmlr.value }] };
+      }
       await input.stageIdentity(paper, request);
       let result = await input.literatureClient.resolveLiterature(request);
       if (unchanged()) await input.stageIdentity(paper, request, result);
@@ -125,7 +145,8 @@ export function createPdfMetadataImportController(input: Input) {
       input.onHint(message);
       return message;
     });
-    queue = task.then(() => undefined);
+    pending.set(key, task);
+    void task.finally(() => { pending.delete(key); active--; drain(); });
     return task;
   };
 }

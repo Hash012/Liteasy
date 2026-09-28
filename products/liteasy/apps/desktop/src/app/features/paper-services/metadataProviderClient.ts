@@ -16,7 +16,7 @@ export function createMetadataProviderClient(config: PaperServiceConfig): Litera
     if (candidates.size > 200) candidates.delete(candidates.keys().next().value!);
   }
   async function read(url: URL) {
-    const response = await paperServiceRequest(config, url.href);
+    const response = await paperServiceRequest(config, url.href, { timeoutMs: 15_000, maxResponseBytes: 2 * 1024 * 1024 });
     if (response.status === 404) return null;
     if (!response.ok) throw new Error(`元信息服务请求失败（HTTP ${response.status}），请检查接入设置。`);
     return response.json();
@@ -65,6 +65,7 @@ export function createMetadataProviderClient(config: PaperServiceConfig): Litera
         const candidate: LiteratureCandidate = {
           candidateKey: `${provider}:${identifiers[0].value}`, provider,
           record: { title, identifiers,
+            documentType: typeof item.type === "string" ? item.type.slice(0, 100) : undefined,
             authors: config.provider === "crossref" ? (Array.isArray(item.author) ? item.author : []).filter(Boolean).map((author: any) => [author.given, author.family].filter(Boolean).join(" ")).filter(Boolean)
               : config.provider === "openalex" ? (Array.isArray(item.authorships) ? item.authorships : []).filter(Boolean).map((author: any) => author.author?.display_name).filter(Boolean)
               : (Array.isArray(item.authors) ? item.authors : []).filter(Boolean).map((author: any) => author.name).filter(Boolean),

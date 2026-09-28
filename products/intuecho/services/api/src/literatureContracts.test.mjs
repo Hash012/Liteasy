@@ -88,6 +88,12 @@ test("binds PMLR audit evidence to the exact official record and volume", () => 
   };
 
   assert.equal(literatureCandidateSchema.safeParse(candidate).success, true);
+  const article = { ...candidate, sourceEvidence: { ...candidate.sourceEvidence,
+    sourceKind: "official_article_page", artifactUrl: candidate.recordUrl } };
+  assert.equal(literatureCandidateSchema.safeParse(article).success, true);
+  assert.equal(literatureCandidateSchema.safeParse({ ...article, sourceEvidence: {
+    ...article.sourceEvidence, artifactUrl: "https://proceedings.mlr.press/v235/another24a.html"
+  } }).success, false);
   for (const invalid of [
     { ...candidate, sourceEvidence: undefined },
     { ...candidate, recordUrl: "https://proceedings.mlr.press/v236/abad-rocamora24a.html" },

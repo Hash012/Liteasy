@@ -94,31 +94,67 @@ export async function parsePmlrBibliography(bytes: Uint8Array<ArrayBuffer>, volu
 async function readVolume(config: PaperServiceConfig, volume: number) {
   const response = await paperServiceRequest(config,
     `https://proceedings.mlr.press/v${volume}/assets/bib/bibliography.bib`,
-    { authenticate: false, maxResponseBytes: MAX_BYTES });
+    { authenticate: false, maxResponseBytes: MAX_BYTES, timeoutMs: 25_000 });
   if (response.status === 404) return [];
   if (!response.ok) throw new Error(`PMLR 题录请求失败（HTTP ${response.status}），请稍后重试。`);
   return parsePmlrBibliography(new Uint8Array(await response.arrayBuffer()), volume);
 }
 
+export async function readPmlrArticle(config: PaperServiceConfig, id: string): Promise<LiteratureCandidate | undefined> {
+  const volume = Number(id.match(/^v(\d+)\//)?.[1]);
+  const url = `https://proceedings.mlr.press/${id}.html`;
+  const response = await paperServiceRequest(config, url, { authenticate: false, maxResponseBytes: 512 * 1024, timeoutMs: 8_000 });
+  if (!response.ok) return undefined;
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const page = new DOMParser().parseFromString(new TextDecoder("utf-8", { fatal: true }).decode(bytes), "text/html");
+  if (page.querySelector('meta[name="citation_abstract_html_url"]')?.getAttribute("content") !== url ||
+    page.querySelector('meta[name="citation_publisher"]')?.getAttribute("content") !== "PMLR") return undefined;
+  const bibtex = page.querySelector("code#bibtex")?.textContent;
+  if (!bibtex) return undefined;
+  const candidates = await parsePmlrBibliography(new TextEncoder().encode(bibtex), volume);
+  const candidate = candidates.find((item) => item.candidateKey === `pmlr:pmlr_id:${id}`);
+  if (!candidate || candidates.length !== 1 || titleKey(candidate.record.title) !==
+    titleKey(page.querySelector('meta[name="citation_title"]')?.getAttribute("content") ?? "")) return undefined;
+  const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)))
+    .map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return { ...candidate, sourceEvidence: { ...candidate.sourceEvidence!, artifactHash: `sha256:${hash}`,
+    artifactUrl: url, sourceKind: "official_article_page" } };
+}
+
 export function createPmlrMetadataReader(config: PaperServiceConfig) {
   // Keep one compact, parsed volume only; release downloaded text/abstracts.
   let cache: { volume: number; expires: number; entries: Promise<LiteratureCandidate[]> } | undefined;
+  const articles = new Map<string, { expires: number; result: Promise<LiteratureCandidate | undefined> }>();
   return async (input: LiteratureResolveInput): Promise<LiteratureResolveResult | undefined> => {
     const id = normalizeLiteratureIdentifier("pmlr_id", input.hints?.identifiers?.find((item) => item.kind === "pmlr_id")?.value ?? input.query);
     const volume = id ? Number(id.match(/^v(\d+)\//)?.[1]) : input.hints?.pmlr?.volume;
     if (!volume || !Number.isInteger(volume) || volume < 1 || volume > 9999) return undefined;
+    const requestedTitle = titleKey(input.hints?.title ?? (id ? "" : input.query) ?? "");
+    if (id) {
+      let article = articles.get(id);
+      if (!article || article.expires < Date.now()) {
+        article = { expires: Date.now() + 5 * 60_000, result: readPmlrArticle(config, id).catch(() => undefined) };
+        articles.set(id, article);
+        if (articles.size > 50) articles.delete(articles.keys().next().value!);
+      }
+      const candidate = await article.result;
+      if (candidate && (!requestedTitle || titleKey(candidate.record.title) === requestedTitle)) {
+        return { status: "exact", candidate, confirmationMode: "candidate", unavailableProviders: [] };
+      }
+    }
     if (!cache || cache.volume !== volume || cache.expires < Date.now()) {
       const next = { volume, expires: Date.now() + 5 * 60_000, entries: readVolume(config, volume) };
       cache = next;
       void next.entries.catch(() => { if (cache === next) cache = undefined; });
     }
-    const requestedTitle = titleKey(input.hints?.title ?? input.query ?? "");
     const year = input.hints?.year ?? input.hints?.pmlr?.year;
-    const results = (await cache.entries).filter((candidate) => id
+    const results = (await cache.entries).filter((candidate) => id && !requestedTitle
       ? candidate.record.identifiers.some((item) => item.kind === "pmlr_id" && item.value === id)
       : requestedTitle.length >= 8 && titleKey(candidate.record.title).includes(requestedTitle) && (!year || candidate.record.year === year)
     ).slice(0, Math.max(1, Math.min(20, input.limit ?? 5)));
-    if (id && results.length === 1) return { status: "exact", candidate: results[0], confirmationMode: "candidate", unavailableProviders: [] };
+    if (id && results.length === 1 && results[0].record.identifiers.some((item) => item.kind === "pmlr_id" && item.value === id)) {
+      return { status: "exact", candidate: results[0], confirmationMode: "candidate", unavailableProviders: [] };
+    }
     return results.length ? { status: "ambiguous", candidates: results, unavailableProviders: [] }
       : { status: "not_found", candidates: [], unavailableProviders: [] };
   };

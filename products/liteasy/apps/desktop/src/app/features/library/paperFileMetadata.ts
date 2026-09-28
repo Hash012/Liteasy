@@ -5,7 +5,7 @@ import {
   saveUserPaperArtifact
 } from "./userPaperArtifactClient";
 
-export type PaperFileMetadata = {
+export type PaperFileMetadata = import("./libraryAssetMetadata").LibraryAssetMetadata & {
   category: string;
   tags: string[];
   version: 1;
@@ -19,7 +19,7 @@ function storageKey(paperId: string, accountKey: string) {
 
 export function normalizePaperFileMetadata(value: unknown): PaperFileMetadata {
   const candidate = value && typeof value === "object" && !Array.isArray(value)
-    ? value as { category?: unknown; tags?: unknown }
+    ? value as Record<string, unknown>
     : {};
   const category = typeof candidate.category === "string"
     ? candidate.category.trim().slice(0, 80)
@@ -31,7 +31,16 @@ export function normalizePaperFileMetadata(value: unknown): PaperFileMetadata {
         return normalized ? [normalized] : [];
       }))).slice(0, 20)
     : [];
-  return { category, tags, version: 1 };
+  const strings = (value: unknown, limit: number, length: number) => Array.isArray(value)
+    ? [...new Set(value.filter((item): item is string => typeof item === "string").map((item) => item.trim().slice(0, length)).filter(Boolean))].slice(0, limit) : undefined;
+  const extensions = { ...candidate };
+  for (const key of ["assetType", "subjects", "authors", "year"]) delete extensions[key];
+  return { ...extensions, category, tags, version: 1,
+    ...(typeof candidate.assetType === "string" ? { assetType: candidate.assetType.trim().slice(0, 80) } : {}),
+    ...(Array.isArray(candidate.subjects) ? { subjects: strings(candidate.subjects, 20, 60) } : {}),
+    ...(Array.isArray(candidate.authors) ? { authors: strings(candidate.authors, 200, 300) } : {}),
+    ...(Number.isInteger(candidate.year) && Number(candidate.year) >= 1000 && Number(candidate.year) <= 9999 ? { year: Number(candidate.year) } : {})
+  };
 }
 
 function loadBrowserMetadata(paperId: string, accountKey: string) {

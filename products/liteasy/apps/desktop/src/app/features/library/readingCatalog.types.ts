@@ -3,7 +3,7 @@ export type ReadingCatalogFormat = "pdf" | "epub" | "mobi" | "fb2" | "html" | "m
 export type ReadingCatalogStatus = "unread" | "reading" | "finished";
 
 /** A presentation record: original papers and imported books keep their own storage identities. */
-export type ReadingCatalogEntry = {
+export type ReadingCatalogEntry = import("./libraryAssetMetadata").LibraryAssetMetadata & {
   id: string;
   title: string;
   format: ReadingCatalogFormat;
@@ -31,7 +31,7 @@ export type ReadingCatalogEntry = {
   canRemove?: boolean;
 };
 
-export type ReadingCatalogMetadataPatch = {
+export type ReadingCatalogMetadataPatch = import("./libraryAssetMetadata").LibraryAssetMetadata & {
   tags?: string[];
   collection?: string;
   /** Directory relative to the local library root, separate from category metadata. */

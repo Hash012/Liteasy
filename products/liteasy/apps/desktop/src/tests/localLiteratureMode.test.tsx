@@ -1,3 +1,4 @@
+import { confirmedLiterature } from "./fixtures/confirmedLiterature";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, expect, test, vi } from "vitest";
 import { useKnowledgeSyncController } from "../app/controllers/useKnowledgeSyncController";
@@ -9,7 +10,7 @@ import { createSettingsStore } from "../app/features/settings/settings.store";
 vi.mock("../app/features/paper-services/paperServiceTransport", () => ({ paperServiceRequest: vi.fn() }));
 const api = vi.mocked(paperServiceRequest);
 beforeEach(() => { localStorage.clear(); vi.restoreAllMocks(); api.mockReset(); });
-const paper = { id: "paper-a", title: "Graph neural networks" };
+const paper = { id: "paper-a", title: "Graph neural networks", literature: confirmedLiterature("Graph neural networks") };
 const params = { accountSession: null, controlPlaneEndpoint: "https://liteasy.invalid", documents: [paper], selectedPapers: [paper],
   recommendationsEnabled: true, recommendationSortMode: "relevance" as const, recommendationStyle: "balanced" as const,
   personalizationEnabled: true, workspaceRevision: 0, workspaceSourceKey: "local_library:/papers", localMode: true,

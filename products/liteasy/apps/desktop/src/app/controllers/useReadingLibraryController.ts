@@ -6,6 +6,7 @@ import { createReadingLibraryRepository, MAX_LIBRARY_FILE_BYTES, type ReadingLib
 import type { ParsedReadingDocument } from "../features/reading-library/readingDocument.types";
 import type { ReadingCatalogEntry } from "../features/library/readingCatalog.types";
 import { loadPaperFileMetadata, savePaperFileMetadata } from "../features/library/paperFileMetadata";
+import { inferAssetType } from "../features/library/libraryAssetMetadata";
 import { liteasyPath, type ResourceTarget } from "../features/resource-filesystem/liteasyPath";
 import { displayPath } from "../features/resource-filesystem/displayPath";
 import type { Paper } from "../features/workspace/workspace.types";
@@ -67,7 +68,8 @@ export function useReadingLibraryController(input: {
         const batch = input.papers.slice(offset, offset + 8);
         await Promise.all(batch.map(async (paper) => {
           const value = await loadPaperFileMetadata(paper.id);
-          next[paper.id] = { collection: value.category, tags: value.tags };
+          const { category, version: _version, ...metadata } = value;
+          next[paper.id] = { ...metadata, collection: category };
         }));
       }
       if (!cancelled && current()) setLegacyMetadata(next);
@@ -81,6 +83,7 @@ export function useReadingLibraryController(input: {
       const year = Number(paper.literature?.year ?? paper.year);
       return {
         id: paper.id, title: paper.literature?.title ?? paper.title, format: "pdf", authors,
+        assetType: inferAssetType("pdf", paper.literature?.documentType),
         year: Number.isInteger(year) && year >= 1000 ? year : undefined,
         doi: paper.doi ?? paper.literature?.identifiers.find((identifier) => identifier.kind === "doi")?.value,
         fileName: paper.sourcePath?.split(/[\\/]/).at(-1),
@@ -98,10 +101,10 @@ export function useReadingLibraryController(input: {
   }, [input.papers, input.scopeId, stateScope, files, metadata, legacyMetadata]);
   async function updateMetadata(id: string, patch: ReadingMetadata) {
     const value = await repository.updateMetadata(id, patch);
-    if (latest.current.papers.some((paper) => paper.id === id) && (patch.tags || patch.collection !== undefined)) {
+    if (latest.current.papers.some((paper) => paper.id === id)) {
       const old = await loadPaperFileMetadata(id);
       if (!current()) return;
-      await savePaperFileMetadata(id, { category: patch.collection ?? old.category, tags: patch.tags ?? old.tags });
+      await savePaperFileMetadata(id, { ...old, ...patch, category: patch.collection ?? old.category, tags: patch.tags ?? old.tags });
     }
     if (current()) setMetadata((previous) => ({ ...previous, [id]: value }));
   }

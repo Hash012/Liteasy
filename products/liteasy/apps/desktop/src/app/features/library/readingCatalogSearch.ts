@@ -1,4 +1,5 @@
 import type { ReadingCatalogEntry, ReadingCatalogFormat, ReadingCatalogStatus } from "./readingCatalog.types";
+import { assetTypeLabels, inferAssetType } from "./libraryAssetMetadata";
 
 export type ReadingCatalogSort = "added" | "title" | "author" | "year-desc" | "year-asc";
 
@@ -9,6 +10,10 @@ export type ReadingCatalogFilters = {
   collection: string;
   year: string;
   sort: ReadingCatalogSort;
+  assetType?: string;
+  author?: string;
+  subject?: string;
+  tags?: string[];
 };
 
 const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
@@ -25,7 +30,8 @@ export function indexReadingCatalog(entries: readonly ReadingCatalogEntry[]) {
       entry.title, ...(entry.authors ?? []), entry.publication, entry.doi,
       entry.identifier, entry.language, entry.publishedAt,
       entry.abstract, ...(entry.tags ?? []), entry.collection, entry.year,
-      entry.format, entry.fileName, entry.physicalPath, entry.liteasyPath
+      entry.format, entry.fileName, entry.physicalPath, entry.liteasyPath,
+      entry.assetType, assetTypeLabels[entry.assetType || inferAssetType(entry.format)], ...(entry.subjects ?? [])
     ].filter((value) => value !== undefined).join(" ")),
     added: Math.max(0, Date.parse(entry.addedAt ?? "") || 0)
   }));
@@ -39,6 +45,10 @@ export function queryReadingCatalog(index: ReturnType<typeof indexReadingCatalog
     && (filters.status === "all" || (entry.readingStatus ?? "unread") === filters.status)
     && (!filters.collection || entry.collection === filters.collection)
     && (!filters.year || String(entry.year ?? "unknown") === filters.year)
+    && (!filters.assetType || (entry.assetType || inferAssetType(entry.format)) === filters.assetType)
+    && (!filters.author || (entry.authors ?? []).some((author) => normalize(author).includes(normalize(filters.author!))))
+    && (!filters.subject || (entry.subjects ?? []).some((subject) => normalize(subject).includes(normalize(filters.subject!))))
+    && (filters.tags ?? []).every((tag) => (entry.tags ?? []).some((value) => normalize(value) === normalize(tag)))
     && terms.every((term) => search.includes(term))
   ));
   rows.sort((left, right) => {

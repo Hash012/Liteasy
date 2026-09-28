@@ -73,7 +73,7 @@ export type LiteratureCandidate = {
     artifactHash: `sha256:${string}`;
     artifactUrl: string;
     entryKey: string;
-    sourceKind: "official_volume_bibtex";
+    sourceKind: "official_volume_bibtex" | "official_article_page";
     volume: number;
   };
 };

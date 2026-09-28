@@ -161,3 +161,30 @@ test("title queries omit publisher banners and retain a useful hint without embe
   expect(request?.query).toBe("Graph Learning for Scientific Discovery");
   expect(request?.hints?.title).toBe(request?.query);
 });
+
+test("bounds metadata reads and promotes a repeated manual request ahead of queued imports", async () => {
+  const workspaceStore = createWorkspaceStore();
+  const papers = [1, 2, 3, 4].map((id) => ({ id: `paper-${id}`, title: `Paper ${id}`, sourcePath: `/library/${id}.pdf` }));
+  workspaceStore.openWorkspace(papers, { rootPath: "/library", type: "local_library" });
+  const started: string[] = [];
+  const releases = new Map<string, () => void>();
+  const recognize = createPdfMetadataImportController({ workspaceStore,
+    literatureClient: { resolveLiterature: vi.fn(), confirmLiterature: vi.fn() }, persistLiterature: vi.fn(), moveResource: vi.fn(),
+    onHint: vi.fn(), onChanged: vi.fn(), stageIdentity: vi.fn(),
+    readEvidence: async (paper) => {
+      started.push(paper.id);
+      await new Promise<void>((resolve) => releases.set(paper.id, resolve));
+      return { firstPageText: "" };
+    } });
+  const jobs = papers.map((paper) => recognize({ paper, firstPageText: "" }));
+  expect(recognize({ paper: papers[3], firstPageText: "", manual: true })).toBe(jobs[3]);
+  await vi.waitFor(() => expect(started).toEqual(["paper-1", "paper-2"]));
+  releases.get("paper-1")!();
+  await vi.waitFor(() => expect(started).toEqual(["paper-1", "paper-2", "paper-4"]));
+  // A queued request must retain its original workspace even if the same PDF is present elsewhere.
+  workspaceStore.openWorkspace(papers, { rootPath: "/other", type: "local_library" });
+  releases.get("paper-2")!();
+  releases.get("paper-4")!();
+  await Promise.all(jobs);
+  expect(started).toEqual(["paper-1", "paper-2", "paper-4"]);
+});

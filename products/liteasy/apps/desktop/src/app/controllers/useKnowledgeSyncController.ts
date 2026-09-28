@@ -1,4 +1,5 @@
 import { useLocalRecommendations } from "../features/recommendations/useLocalRecommendations";
+import { useRecommendationMetadataController } from "./useRecommendationMetadataController";
 import type { PaperServiceConfig } from "../features/paper-services/paperServiceTransport";
 import type { RecommendationRuntimeInput } from "../features/recommendations/recommendationRuntime";
 import { useDocumentMetadataSync } from "../features/metadata/useDocumentMetadataSync";
@@ -48,6 +49,7 @@ type UseKnowledgeSyncControllerInput = {
   personalizationEnabled: boolean;
   researchProfile?: RecommendationResearchProfile;
   selectedPapers: Paper[];
+  prepareRecommendationPaper?: (paper: Paper) => Promise<Paper | undefined>;
   workspaceRevision: number;
   workspaceSourceKey: string;
 };
@@ -70,10 +72,13 @@ export function useKnowledgeSyncController({
   personalizationEnabled,
   researchProfile,
   selectedPapers,
+  prepareRecommendationPaper,
   workspaceRevision,
   workspaceSourceKey
 }: UseKnowledgeSyncControllerInput) {
   const directRecommendations = localMode || Boolean(localService);
+  const metadata = useRecommendationMetadataController({ enabled: recommendationsEnabled,
+    papers: selectedPapers, workspace: workspaceSourceKey, prepare: prepareRecommendationPaper });
   const cloudRecommendations = useRecommendations({
     accountSession,
     controlPlaneEndpoint,
@@ -82,17 +87,17 @@ export function useKnowledgeSyncController({
     recommendationFeedbackTransport,
     recommendationGeneratorDeps,
     recommendationTransport,
-    recommendationsEnabled: recommendationsEnabled && !directRecommendations,
+    recommendationsEnabled: recommendationsEnabled && !directRecommendations && !metadata.blocked,
     recommendationSortMode,
     recommendationStyle,
     personalizationVersion,
     researchProfile,
-    selectedPapers,
+    selectedPapers: metadata.papers,
     workspaceRevision,
     workspaceSourceKey
   });
-  const localRecommendations = useLocalRecommendations({ enabled: directRecommendations && recommendationsEnabled, config: localService,
-    papers: selectedPapers, profile: researchProfile, workspace: workspaceSourceKey, style: recommendationStyle ?? "balanced", sort: recommendationSortMode });
+  const localRecommendations = useLocalRecommendations({ enabled: directRecommendations && recommendationsEnabled && !metadata.blocked, config: localService,
+    papers: metadata.papers, profile: researchProfile, workspace: workspaceSourceKey, style: recommendationStyle ?? "balanced", sort: recommendationSortMode });
   const recommendations = directRecommendations ? localRecommendations : cloudRecommendations;
   const documentMetadataSync = useDocumentMetadataSync({
     accountSession,
@@ -106,7 +111,7 @@ export function useKnowledgeSyncController({
   return {
     actions: {
       clearRecommendationCache: recommendations.clearRecommendationCache,
-      refreshRecommendations: recommendations.refreshRecommendations,
+      refreshRecommendations: () => metadata.blocked ? metadata.retry() : recommendations.refreshRecommendations(),
       recordRecommendationSaved: (recommendation: RecommendationItem) =>
         recommendations.recordRecommendationFeedback(recommendation, "saved"),
       dismissRecommendation: (recommendation: RecommendationItem) =>
@@ -118,10 +123,10 @@ export function useKnowledgeSyncController({
       documentMetadataSyncMessage: documentMetadataSync.message,
       documentMetadataSyncResult: documentMetadataSync.lastResult,
       documentMetadataSyncStatus: documentMetadataSync.status,
-      recommendationItems: recommendations.recommendationItems,
-      recommendationMessage: recommendations.recommendationMessage,
-      recommendationPending: recommendations.recommendationPending,
-      recommendationStatus: recommendations.recommendationStatus
+      recommendationItems: metadata.blocked ? [] : recommendations.recommendationItems,
+      recommendationMessage: metadata.blocked ? metadata.message : recommendations.recommendationMessage,
+      recommendationPending: metadata.blocked ? metadata.pending : recommendations.recommendationPending,
+      recommendationStatus: metadata.blocked ? metadata.pending ? "loading" as const : "error" as const : recommendations.recommendationStatus
     }
   };
 }

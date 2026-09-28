@@ -109,7 +109,7 @@ export function LiteratureResolutionDialog({
                       const pmlrEvidence = candidate.provider === "pmlr" ? candidate.sourceEvidence : undefined;
                       const pmlrDigest = pmlrEvidence?.artifactHash.slice("sha256:".length);
                       const pmlrAuditLabel = pmlrEvidence && pmlrDigest
-                        ? ` · 官方卷 BibTeX v${pmlrEvidence.volume} · SHA-256 ${pmlrDigest.slice(0, 8)}…${pmlrDigest.slice(-8)}`
+                        ? ` · ${pmlrEvidence.sourceKind === "official_article_page" ? "官方论文题录" : "官方卷 BibTeX"} v${pmlrEvidence.volume} · SHA-256 ${pmlrDigest.slice(0, 8)}…${pmlrDigest.slice(-8)}`
                         : "";
                       const byline = [
                         candidate.record.authors.join("、"),

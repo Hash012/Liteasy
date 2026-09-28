@@ -1,7 +1,9 @@
 import { libraryFileDragType, libraryFolderKey } from "./libraryFolderMembership";
 import { useMemo, useState, useEffect } from "react";
 import { LibraryItemIcon, LibraryIconMenuItem } from "./LibraryItemIcon";
-import { Button, Menu, MenuTrigger, MenuPopover, MenuList } from "@fluentui/react-components";
+import { Button, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem } from "@fluentui/react-components";
+import { TagRegular } from "@fluentui/react-icons";
+import { LibraryTagChips } from "./LibraryTagChips";
 import type { ReadingCatalogEntry, ReadingCatalogMetadataPatch } from "./readingCatalog.types";
 import { readingCatalogFormatLabels } from "./readingCatalog.types";
 import { indexReadingCatalog, queryReadingCatalog, type ReadingCatalogFilters } from "./readingCatalogSearch";
@@ -20,7 +22,7 @@ export type LibraryFileAccess = {
 };
 
 /** Non-PDF assets share the existing library search and selection inspector. */
-export function LibraryFileList({ access, query, category, filters, folderPath, libraryRootPath = "", rootEntries, depth = 0 }: { access: LibraryFileAccess; query: string; category: string; filters: ReadingCatalogFilters; folderPath?: string; libraryRootPath?: string; rootEntries?: Set<string>; depth?: number }) {
+export function LibraryFileList({ access, query, category, filters, folderPath, libraryRootPath = "", rootEntries, depth = 0, onEditMetadata }: { access: LibraryFileAccess; query: string; category: string; filters: ReadingCatalogFilters; folderPath?: string; libraryRootPath?: string; rootEntries?: Set<string>; depth?: number; onEditMetadata?: (entry: ReadingCatalogEntry) => void }) {
   const [limit, setLimit] = useState(50);
   const index = useMemo(() => indexReadingCatalog(access.entries.filter((entry) => entry.format !== "pdf" && (rootEntries ? rootEntries.has(entry.id)
     : libraryFolderKey(`${libraryRootPath}/${entry.folderPath ?? ""}`) === libraryFolderKey(`${libraryRootPath}/${folderPath ?? ""}`)))), [access.entries, folderPath, libraryRootPath, rootEntries]);
@@ -49,10 +51,11 @@ export function LibraryFileList({ access, query, category, filters, folderPath, 
             }
           }}>
           <LibraryItemIcon itemKey={`file:local:${entry.id}`} kind={entry.format} fileName={entry.fileName} />
-          <span className="library-file-name">{entry.title}<small>{[entry.authors?.join(" · "), entry.collection, entry.tags?.join(" · ")].filter(Boolean).join(" · ")}</small></span>
+          <span className="library-file-name">{entry.title}<LibraryTagChips entry={entry} /></span>
           <small>{entry.format === "other" ? entry.fileName?.split(".").pop()?.toUpperCase() : readingCatalogFormatLabels[entry.format]}</small>
         </button></MenuTrigger><MenuPopover><MenuList>
           <LibraryIconMenuItem itemKey={`file:local:${entry.id}`} title={entry.title} />
+          {onEditMetadata && access.onMetadataChange ? <MenuItem icon={<TagRegular />} onClick={() => onEditMetadata(entry)}>编辑分类与标签</MenuItem> : null}
         </MenuList></MenuPopover></Menu>
       </li>)}
     </ul>

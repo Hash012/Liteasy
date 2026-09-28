@@ -246,7 +246,7 @@ const literatureSourceEvidenceSchema = z.object({
   artifactHash: z.string().regex(/^sha256:[a-f0-9]{64}$/),
   artifactUrl: z.string().url().refine((value) => new URL(value).protocol === "https:"),
   entryKey: z.string().regex(/^pmlr-v[1-9]\d{0,3}-[a-z0-9][a-z0-9._-]{0,199}$/),
-  sourceKind: z.literal("official_volume_bibtex"),
+  sourceKind: z.enum(["official_volume_bibtex", "official_article_page"]),
   volume: z.number().int().positive().max(9999)
 }).strict();
 
@@ -298,7 +298,9 @@ export const literatureCandidateSchema = z.object({
     artifactUrlMatches = artifactUrl.protocol === "https:" && artifactUrl.hostname === "proceedings.mlr.press" &&
       !artifactUrl.username && !artifactUrl.password &&
       !artifactUrl.search && !artifactUrl.hash &&
-      artifactUrl.pathname.endsWith(`/v${expectedVolume}/assets/bib/bibliography.bib`);
+      (value.sourceEvidence.sourceKind === "official_article_page"
+        ? artifactUrl.href === expectedRecordUrl
+        : artifactUrl.pathname === `/v${expectedVolume}/assets/bib/bibliography.bib`);
   } catch {
     artifactUrlMatches = false;
   }

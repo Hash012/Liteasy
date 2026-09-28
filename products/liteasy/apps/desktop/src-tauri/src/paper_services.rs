@@ -88,7 +88,12 @@ pub async fn request_paper_service(
     content_type: Option<String>,
     authenticate: bool,
     max_response_bytes: Option<usize>,
+    timeout_ms: Option<u64>,
 ) -> Result<ServiceResponse, String> {
+    let timeout = timeout_ms.unwrap_or(120_000);
+    if timeout == 0 || timeout > 120_000 {
+        return Err("请求超时设置无效。".into());
+    }
     let response_limit = max_response_bytes.unwrap_or(200 * 1024 * 1024);
     if response_limit == 0 || response_limit > 200 * 1024 * 1024 {
         return Err("响应大小限制无效。".into());
@@ -120,8 +125,8 @@ pub async fn request_paper_service(
         }
     }
     let client = reqwest::Client::builder()
-        .connect_timeout(Duration::from_secs(15))
-        .timeout(Duration::from_secs(120))
+        .connect_timeout(Duration::from_millis(timeout.min(15_000)))
+        .timeout(Duration::from_millis(timeout))
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|_| "网络初始化失败。")?;
@@ -205,6 +210,7 @@ mod tests {
                 None,
                 false,
                 Some(limit),
+                None,
             ));
             server.join().unwrap();
             match result {

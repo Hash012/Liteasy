@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
+import { larimarTitle, prepareMetadataFixture, useBrowserMetadataStore } from "./literatureServicesFixture";
 
 test("expanded library creates persistent paper notes and boards and accepts joined emoji icons", async ({ page }, testInfo) => {
   test.setTimeout(120_000);
@@ -30,6 +31,7 @@ test("expanded library creates persistent paper notes and boards and accepts joi
   await page.reload();
   await activity.dblclick();
   await expect(library).toBeVisible();
+  await library.getByRole("button", { name: /展开 das24a.pdf 的 \d+ 个附件/ }).click();
   const child = library.getByRole("button", { name: "打开论文文件：实验复现", exact: true });
   await expect(child).toBeVisible();
   await child.click({ button: "right" });
@@ -44,6 +46,7 @@ test("expanded library creates persistent paper notes and boards and accepts joi
   await page.getByRole("textbox", { name: "论文附件名称" }).fill("论证画布");
   await page.getByRole("button", { name: "创建", exact: true }).click();
   await expect(page.locator(".object-workbench")).toBeVisible();
+  await page.getByRole("region", { name: "本地文献库", exact: true }).getByRole("button", { name: /展开 das24a.pdf 的 \d+ 个附件/ }).click();
   await expect(page.getByRole("button", { name: "打开论文文件：论证画布", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "打开论文文件：实验复现", exact: true }).click();
   await expect(editor).toBeVisible();
@@ -60,11 +63,13 @@ test("local recommendations work without login and profile data can be exported"
   await page.route("https://api.crossref.org/works?**", (route) => route.fulfill({ json: { message: { items: [
     { DOI: "10.1234/graph", title: ["Graph neural networks for research"], published: { "date-parts": [[2026]] }, "is-referenced-by-count": 42 },
   ] } } }));
-  const pdf = await readFile(new URL("../../../../../../../development/test-data/pdf-selection/glyph-boundaries.pdf", import.meta.url));
-  await page.route("**/manual-preview/das24a.pdf", (route) => route.fulfill({ body: pdf, contentType: "application/pdf" }));
+  await prepareMetadataFixture(page);
   await page.goto("/?pdf-highlight-fixture#importable");
+  await useBrowserMetadataStore(page);
   const library = page.getByRole("region", { name: "本地文献库", exact: true });
-  await library.getByRole("button", { name: "das24a.pdf", exact: true }).click();
+  await library.getByRole("button", { name: "das24a.pdf", exact: true }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "获取元数据", exact: true }).click();
+  await library.getByRole("button", { name: larimarTitle, exact: true }).dblclick();
   const recs = page.getByRole("region", { name: "关联推荐", exact: true });
   await expect(recs.getByText("Graph neural networks for research", { exact: true })).toBeVisible({ timeout: 20_000 });
   await expect(recs.getByRole("button", { name: "刷新推荐" })).toBeEnabled();

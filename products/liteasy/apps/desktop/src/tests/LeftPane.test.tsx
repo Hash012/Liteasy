@@ -513,6 +513,8 @@ describe("LeftPane", () => {
 
     expect(screen.getByRole("checkbox", { name: "选择 Paper" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Paper" }));
+    expect(onOpenPaper).not.toHaveBeenCalled();
+    await user.dblClick(screen.getByRole("button", { name: "Paper" }));
     expect(onOpenPaper).toHaveBeenCalledWith("paper-1");
     expect(onToggleSelection).not.toHaveBeenCalled();
   });

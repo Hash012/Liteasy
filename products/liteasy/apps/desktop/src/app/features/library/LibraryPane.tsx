@@ -3,6 +3,11 @@ import { libraryFileDragType, libraryFolderKey, normalizedLibraryPath, relativeL
 import { buildMovedFolderPath, buildRenamedFolderPath } from "../workspace/workspacePathOperations";
 import { indexReadingCatalog, queryReadingCatalog, type ReadingCatalogFilters } from "./readingCatalogSearch";
 import { readingCatalogFormatLabels, readingCatalogStatusLabels } from "./readingCatalog.types";
+import { LibraryTagChips } from "./LibraryTagChips";
+import { LibraryMetadataEditor } from "./LibraryMetadataEditor";
+import { LibraryFacetFilters } from "./LibraryFacetFilters";
+import { inferAssetType, type LibraryTag } from "./libraryAssetMetadata";
+import type { ReadingCatalogEntry, ReadingCatalogMetadataPatch } from "./readingCatalog.types";
 import { LibraryFileList, type LibraryFileAccess } from "./LibraryFileList";
 import { ARTIFACT_CONTEXT_MIME } from "../object-transfer/contextTransfer";
 import { ResourceLocationButton } from "../resource-filesystem/ResourceLocationButton";
@@ -552,11 +557,8 @@ function LibraryPaneContent({
   const [selectedCategory, setSelectedCategory] = useState("");
   const [fileFilters, setFileFilters] = useState<ReadingCatalogFilters>({ query: "", collection: "", format: "all", status: "all", year: "", sort: "added" });
   const [paperMetadataById, setPaperMetadataById] = useState<Record<string, PaperFileMetadata>>({});
-  const [metadataEditorEntry, setMetadataEditorEntry] = useState<ExplorerEntry | null>(null);
-  const [metadataCategoryDraft, setMetadataCategoryDraft] = useState("");
-  const [metadataTagsDraft, setMetadataTagsDraft] = useState("");
-  const [metadataEditorError, setMetadataEditorError] = useState("");
-  const [metadataEditorPending, setMetadataEditorPending] = useState(false);
+  const [metadataEditorEntry, setMetadataEditorEntry] = useState<ReadingCatalogEntry | null>(null);
+  const [expandedPaperChildren, setExpandedPaperChildren] = useState<string[]>([]);
   const [newChild, setNewChild] = useState<{ paper: Paper; kind: "note" | "board" }>();
   const [childTitle, setChildTitle] = useState("");
   const [creatingChild, setCreatingChild] = useState(false);
@@ -594,7 +596,7 @@ function LibraryPaneContent({
     for (const entry of fileLibrary?.entries ?? []) {
       if (entry.format !== "pdf" || (entry.collection === undefined && entry.tags === undefined)) continue;
       result[entry.id] = normalizePaperFileMetadata({
-        category: entry.collection ?? result[entry.id]?.category,
+        ...result[entry.id], ...entry, category: entry.collection ?? result[entry.id]?.category,
         tags: entry.tags ?? result[entry.id]?.tags
       });
     }
@@ -603,19 +605,38 @@ function LibraryPaneContent({
   const categories = useMemo(() => Array.from(new Set(
     [...Object.values(visiblePaperMetadata).map((metadata) => metadata.category), ...(fileLibrary?.entries.map((entry) => entry.collection ?? "") ?? [])].filter(Boolean)
   )).sort((left, right) => left.localeCompare(right)), [visiblePaperMetadata, fileLibrary?.entries]);
-  const fileIndex = useMemo(() => {
-    const knownIds = new Set(fileLibrary?.entries.map((entry) => entry.id));
-    return indexReadingCatalog([
-    ...(fileLibrary?.entries ?? []),
-    ...(localLibrarySnapshot?.entries ?? []).filter((entry) => !knownIds.has(entry.id)).map((entry) => ({
-      id: entry.id, title: entry.title, format: "pdf" as const,
-      collection: paperMetadataById[entry.id]?.category, tags: paperMetadataById[entry.id]?.tags
-    }))
-  ]);
-  }, [fileLibrary?.entries, localLibrarySnapshot, paperMetadataById]);
-  const filteredIds = useMemo(() => fileLibrary && (query || selectedCategory || fileFilters.format !== "all" || fileFilters.status !== "all" || fileFilters.year)
+  const catalogEntries = useMemo<ReadingCatalogEntry[]>(() => {
+    const entries = new Map((fileLibrary?.entries ?? []).map((entry) => [entry.id, entry]));
+    const paperById = new Map(papers.map((paper) => [paper.id, paper]));
+    for (const source of localLibrarySnapshot?.entries ?? []) {
+      const paper = paperById.get(source.id);
+      const metadata = visiblePaperMetadata[source.id];
+      const previous = entries.get(source.id);
+      entries.set(source.id, { ...previous, id: source.id, format: "pdf", title: paper?.literature?.title || paper?.title || source.title,
+        authors: metadata?.authors ?? paper?.literature?.authors ?? (typeof paper?.authors === "string" ? [paper.authors] : paper?.authors ? [...paper.authors] : previous?.authors),
+        year: metadata?.year ?? paper?.literature?.year ?? (paper?.year ? Number(paper.year) : previous?.year),
+        assetType: metadata?.assetType || previous?.assetType || inferAssetType("pdf", paper?.literature?.documentType),
+        subjects: metadata?.subjects, tags: metadata?.tags, collection: metadata?.category,
+        fileName: source.relativePath ?? undefined, physicalPath: source.path ?? undefined, available: source.path !== null
+      });
+    }
+    return [...entries.values()];
+  }, [fileLibrary?.entries, localLibrarySnapshot, papers, visiblePaperMetadata]);
+  const catalogById = useMemo(() => new Map(catalogEntries.map((entry) => [entry.id, entry])), [catalogEntries]);
+  const fileIndex = useMemo(() => indexReadingCatalog(catalogEntries), [catalogEntries]);
+  const hasFilters = Boolean(query || selectedCategory || fileFilters.format !== "all" || fileFilters.status !== "all" || fileFilters.year || fileFilters.assetType || fileFilters.author || fileFilters.subject || fileFilters.tags?.length);
+  const filteredIds = useMemo(() => hasFilters
     ? new Set(queryReadingCatalog(fileIndex, { ...fileFilters, query: search, collection: selectedCategory }).map((entry) => entry.id)) : undefined,
-    [fileIndex, query, selectedCategory, fileFilters, Boolean(fileLibrary)]);
+    [fileIndex, hasFilters, search, selectedCategory, fileFilters]);
+  function selectTag(tag: LibraryTag) {
+    if (tag.kind === "collection") setSelectedCategory(tag.value);
+    else setFileFilters((value) => ({ ...value, ...(tag.kind === "tag" ? { tags: [...new Set([...(value.tags ?? []), tag.value])] }
+      : { [tag.kind === "type" ? "assetType" : tag.kind]: tag.value }) }));
+  }
+  function resetFilters() {
+    setSelectedCategory("");
+    setFileFilters({ query: "", collection: "", format: "all", status: "all", year: "", sort: "added" });
+  }
   const fileFolders = useMemo(() => {
     const paths = new Set<string>();
     const root = normalizedLibraryPath(localLibrarySnapshot?.rootPath ?? "");
@@ -679,37 +700,16 @@ function LibraryPaneContent({
   }, [localLibrarySnapshot?.libraryId, localLibrarySnapshot?.revision]);
 
   function openMetadataEditor(entry: ExplorerEntry) {
-    const metadata = entry.metadata ?? normalizePaperFileMetadata(undefined);
-    setMetadataEditorEntry(entry);
-    setMetadataCategoryDraft(metadata.category);
-    setMetadataTagsDraft(metadata.tags.join(", "));
-    setMetadataEditorError("");
+    setMetadataEditorEntry(catalogById.get(entry.id) ?? { id: entry.id, title: entry.label, format: "pdf", ...entry.metadata, collection: entry.metadata?.category });
   }
-
-  async function submitMetadataEditor() {
-    if (!metadataEditorEntry || metadataEditorPending) return;
-    const previousCategory = paperMetadataById[metadataEditorEntry.id]?.category
-      ?? metadataEditorEntry.metadata?.category
-      ?? "";
-    setMetadataEditorPending(true);
-    setMetadataEditorError("");
-    try {
-      const draft = normalizePaperFileMetadata({ category: metadataCategoryDraft, tags: metadataTagsDraft.split(/[,，\n]/u) });
-      if (fileLibrary?.onMetadataChange) {
-        await fileLibrary.onMetadataChange(metadataEditorEntry.id, { collection: draft.category, tags: draft.tags });
-      } else {
-        await savePaperFileMetadata(metadataEditorEntry.id, draft);
-      }
-      const metadata = draft;
-      setPaperMetadataById((current) => ({ ...current, [metadataEditorEntry.id]: metadata }));
-      setSelectedCategory((current) => current === previousCategory ? metadata.category : current);
-      setMessage("论文分类与标签已保存。");
-      setMetadataEditorEntry(null);
-    } catch (error) {
-      setMetadataEditorError(error instanceof Error ? error.message : "论文分类与标签保存失败。");
-    } finally {
-      setMetadataEditorPending(false);
-    }
+  async function submitMetadataEditor(patch: ReadingCatalogMetadataPatch) {
+    if (!metadataEditorEntry) return;
+    const draft = normalizePaperFileMetadata({ ...paperMetadataById[metadataEditorEntry.id], ...patch, category: patch.collection });
+    if (fileLibrary?.onMetadataChange) await fileLibrary.onMetadataChange(metadataEditorEntry.id, patch);
+    else await savePaperFileMetadata(metadataEditorEntry.id, draft);
+    if (metadataEditorEntry.format === "pdf") setPaperMetadataById((current) => ({ ...current, [metadataEditorEntry.id]: draft }));
+    setSelectedCategory((current) => current === metadataEditorEntry.collection ? draft.category : current);
+    setMessage("资产分类与标签已保存。");
   }
 
   function expandedStorageKey(area: LibraryResourceArea) {
@@ -1036,6 +1036,7 @@ function LibraryPaneContent({
     const selected = area === "local" && selectedPaperIds.includes(entry.id);
     const sourcePaper = papers.find((paper) => paper.id === entry.id);
     const children = sourcePaper ? paperChildren[sourcePaper.id] ?? [] : [];
+    const childrenExpanded = expandedPaperChildren.includes(entry.id);
     const pending = pendingNodeIds.includes(entry.id);
     const canAttachPdf = entry.source.area !== "local" &&
       entry.source.entry.entryKind === "metadata_only" &&
@@ -1058,11 +1059,18 @@ function LibraryPaneContent({
       if (entry.source.area === "local") onOpenPaper?.(entry.id);
       else void onOpenCloudEntry?.(entry.source.scope, entry.source.entry);
     };
+    const selectEntry = (event: { ctrlKey: boolean; metaKey: boolean }) => {
+      inspectEntry();
+      if (area !== "local" || selectionLocked) return;
+      if (event.ctrlKey || event.metaKey) { onToggleSelection(entry.id); return; }
+      selectedPaperIds.filter((id) => id !== entry.id).forEach(onToggleSelection);
+      if (!selected) onToggleSelection(entry.id);
+    };
     const row = (
       <div
         aria-busy={pending}
         className="library-paper-row"
-        onClick={inspectEntry}
+        onClick={(event) => { if (!(event.target as HTMLElement).closest("button,input")) selectEntry(event); }}
         onFocus={inspectEntry}
         draggable={!pending && canStartResourceDrag(entry.source)}
         onDragStart={(event) => {
@@ -1086,6 +1094,11 @@ function LibraryPaneContent({
             type="checkbox"
           />
         ) : <span className="library-disclosure-spacer" />}
+        {children.length ? <Tooltip content={childrenExpanded ? "收起论文附件" : `展开 ${children.length} 个论文附件`} relationship="description">
+          <button className="library-attachment-count" type="button" aria-label={`${childrenExpanded ? "收起" : "展开"} ${entry.label} 的 ${children.length} 个附件`}
+            aria-expanded={childrenExpanded} onClick={(event) => { event.stopPropagation(); setExpandedPaperChildren((current) => current.includes(entry.id)
+              ? current.filter((id) => id !== entry.id) : [...current, entry.id]); }}>+{children.length}</button>
+        </Tooltip> : null}
         <span aria-hidden="true" className="library-paper-icon">
           <LibraryItemIcon itemKey={`file:${area}:${entry.id}`} kind={entry.bodyAvailable ? "pdf" : "text"} />
         </span>
@@ -1093,8 +1106,10 @@ function LibraryPaneContent({
           <Menu openOnContext>
             <MenuTrigger disableButtonEnhancement>
               <button
-                onClick={openEntry}
-                onKeyDown={fileLibrary ? (event) => { if (event.key === "Enter") { event.preventDefault(); openEntry(); } } : undefined}
+                onClick={selectEntry}
+                onDoubleClick={openEntry}
+                onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); openEntry(); } }}
+                aria-pressed={selected}
                 className="library-paper-title"
                 disabled={pending}
                 title={entry.bodyAvailable ? entry.label : `${entry.label}（仅元数据）`}
@@ -1153,27 +1168,17 @@ function LibraryPaneContent({
               </MenuList>
             </MenuPopover>
           </Menu>
-          {entry.metadata?.category || entry.metadata?.tags.length ? (
-            <div aria-label={`${entry.label} 的分类与标签`} className="library-paper-metadata">
-              {entry.metadata.category ? (
-                <span className="library-paper-category">{entry.metadata.category}</span>
-              ) : null}
-              {entry.metadata.tags.map((tag) => (
-                <span className="library-paper-tag" key={tag}>{tag}</span>
-              ))}
-            </div>
-          ) : null}
+          <LibraryTagChips entry={catalogById.get(entry.id) ?? { id: entry.id, title: entry.label, format: "pdf" }} onSelect={selectTag} />
         </div>
         {!entry.bodyAvailable ? <span className="library-entry-status">仅元数据</span> : null}
         {sourcePaper ? <ResourceLocationButton target={{ kind: "paper", paperId: sourcePaper.id }} /> : null}
       </div>
     );
     return (
-      <li className={`library-paper-node${activePaperId === entry.id ? " active" : ""}`} key={entry.id}>
+      <li className={`library-paper-node${selected ? " active" : ""}`} key={entry.id}>
         {row}
-        {sourcePaper && children.length > 0 ? (
-          <details className="library-paper-children" style={{ marginLeft: `${depth * 12 + 30}px` }} open={activePaperId === entry.id || undefined}>
-            <summary>{`论文文件（${children.length}）`}</summary>
+        {sourcePaper && children.length > 0 && childrenExpanded ? (
+          <div className="library-paper-children" style={{ marginLeft: `${depth * 12 + 50}px` }}>
             <ul aria-label={`${entry.label} 的论文文件`}>
               {children.map((child) => (
                 <li key={child.id}>
@@ -1198,7 +1203,7 @@ function LibraryPaneContent({
                 </li>
               ))}
             </ul>
-          </details>
+          </div>
         ) : null}
       </li>
     );
@@ -1294,7 +1299,7 @@ function LibraryPaneContent({
           <ul className="library-tree-children">
             {folder.children.map((child) => renderFolder(area, child, depth + 1))}
             {folder.entries.map((entry) => renderEntry(area, entry, depth + 1))}
-            {area === "local" && folder.localPath && fileLibrary ? <li className="library-folder-files"><LibraryFileList access={fileLibrary} query={search} category={selectedCategory} filters={fileFilters}
+            {area === "local" && folder.localPath && fileLibrary ? <li className="library-folder-files"><LibraryFileList onEditMetadata={setMetadataEditorEntry} access={fileLibrary} query={search} category={selectedCategory} filters={fileFilters}
               libraryRootPath={localLibrarySnapshot?.rootPath} folderPath={relativeLibraryFolder(localLibrarySnapshot?.rootPath, folder.localPath)} depth={depth + 1} /></li> : null}
           </ul>
         ) : null}
@@ -1441,7 +1446,7 @@ function LibraryPaneContent({
           size="small"
           value={search}
         />
-        {fileLibrary ? <Popover positioning="below-start">
+        <Popover positioning="below-start">
           <PopoverTrigger disableButtonEnhancement><Tooltip content="筛选本地文件" relationship="description"><Button appearance="subtle" size="small" aria-label="筛选本地文件" icon={<FilterRegular />} /></Tooltip></PopoverTrigger>
           <PopoverSurface className="library-file-filters">
             <Field label="格式"><Select aria-label="筛选文件格式" value={fileFilters.format} onChange={(_, data) => setFileFilters((value) => ({ ...value, format: data.value as ReadingCatalogFilters["format"] }))}>
@@ -1451,9 +1456,10 @@ function LibraryPaneContent({
               <option value="all">全部状态</option>{Object.entries(readingCatalogStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </Select></Field>
             <Field label="年份"><Input aria-label="筛选发表年份" placeholder="例如 2024" value={fileFilters.year} onChange={(_, data) => setFileFilters((value) => ({ ...value, year: data.value }))} /></Field>
-            <Button appearance="subtle" onClick={() => { setSelectedCategory(""); setFileFilters((value) => ({ ...value, format: "all", status: "all", year: "" })); }}>重置筛选</Button>
+            <LibraryFacetFilters entries={catalogEntries} filters={fileFilters} onChange={setFileFilters} />
+            <Button appearance="subtle" onClick={resetFilters}>重置筛选</Button>
           </PopoverSurface>
-        </Popover> : null}
+        </Popover>
         {categories.length > 0 ? (
           <Select
             aria-label="按论文分类筛选"
@@ -1469,6 +1475,8 @@ function LibraryPaneContent({
           </Select>
         ) : null}
       </div>
+      {hasFilters ? <div className="library-active-filters" role="status">筛选结果：{filteredIds?.size ?? 0} 个资产
+        <Button appearance="subtle" size="small" onClick={() => { resetFilters(); setSearch(""); }}>清除筛选</Button></div> : null}
       <p className="library-drag-help">将文件拖到目录名称上导入；拖动库内条目可整理位置。</p>
       {message || fileLibrary?.message ? <div aria-live="polite" className="library-resource-action-message">{message || fileLibrary?.message}</div> : null}
 
@@ -1592,7 +1600,7 @@ function LibraryPaneContent({
                 />
               </>
             )}
-            {fileLibrary ? <LibraryFileList access={fileLibrary} query={search} category={selectedCategory} filters={fileFilters} rootEntries={rootFileIds} /> : null}
+            {fileLibrary ? <LibraryFileList onEditMetadata={setMetadataEditorEntry} access={fileLibrary} query={search} category={selectedCategory} filters={fileFilters} rootEntries={rootFileIds} /> : null}
           </div>
         ) : null}
       </section>
@@ -1778,64 +1786,8 @@ function LibraryPaneContent({
           </form>
         </DialogSurface>
       </Dialog>
-      <Dialog
-        modalType="modal"
-        onOpenChange={(_, data) => {
-          if (!data.open && !metadataEditorPending) setMetadataEditorEntry(null);
-        }}
-        open={metadataEditorEntry !== null}
-      >
-        <DialogSurface aria-label="编辑论文分类与标签">
-          <form onSubmit={(event) => {
-            event.preventDefault();
-            void submitMetadataEditor();
-          }}>
-            <DialogBody>
-              <DialogTitle>分类与标签</DialogTitle>
-              <DialogContent className="library-metadata-editor">
-                <strong>{metadataEditorEntry?.label}</strong>
-                <label>
-                  <span>分类</span>
-                  <Input
-                    aria-label="论文分类"
-                    autoFocus
-                    disabled={metadataEditorPending}
-                    maxLength={80}
-                    onChange={(_, data) => setMetadataCategoryDraft(data.value)}
-                    placeholder="例如：机器学习 / 待读"
-                    value={metadataCategoryDraft}
-                  />
-                </label>
-                <label>
-                  <span>标签</span>
-                  <Textarea
-                    aria-label="论文标签"
-                    disabled={metadataEditorPending}
-                    maxLength={900}
-                    onChange={(_, data) => setMetadataTagsDraft(data.value)}
-                    placeholder="用逗号或换行分隔，例如：RAG, 向量检索"
-                    resize="vertical"
-                    value={metadataTagsDraft}
-                  />
-                </label>
-                <small>最多保存 20 个标签；搜索框可直接按分类或标签查找论文。</small>
-                {metadataEditorError ? (
-                  <div className="library-error-state" role="alert">{metadataEditorError}</div>
-                ) : null}
-              </DialogContent>
-              <DialogActions>
-                <Button
-                  appearance="secondary"
-                  disabled={metadataEditorPending}
-                  onClick={() => setMetadataEditorEntry(null)}
-                  type="button"
-                >取消</Button>
-                <Button appearance="primary" disabled={metadataEditorPending} type="submit">保存</Button>
-              </DialogActions>
-            </DialogBody>
-          </form>
-        </DialogSurface>
-      </Dialog>
+      {metadataEditorEntry ? <LibraryMetadataEditor key={metadataEditorEntry.id} entry={metadataEditorEntry}
+        onSave={submitMetadataEditor} onClose={() => setMetadataEditorEntry(null)} /> : null}
     </div>
   );
 }

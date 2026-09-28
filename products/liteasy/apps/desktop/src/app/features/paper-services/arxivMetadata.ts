@@ -11,7 +11,7 @@ function matchesArxivId(resolved: string, requested: string) {
 
 async function readArxivPageMetadata(config: PaperServiceConfig, id: string): Promise<LiteratureCandidate | undefined> {
   const url = `https://arxiv.org/abs/${id}`;
-  const response = await paperServiceRequest(config, url, { authenticate: false });
+  const response = await paperServiceRequest(config, url, { authenticate: false, timeoutMs: 10_000, maxResponseBytes: 2 * 1024 * 1024 });
   if (response.status === 404) return undefined;
   if (!response.ok) throw new Error(`arXiv 题录页面请求失败（HTTP ${response.status}）。`);
   const page = new DOMParser().parseFromString(await response.text(), "text/html");
@@ -46,7 +46,7 @@ export function readArxivMetadata(config: PaperServiceConfig, id: string): Promi
     url.searchParams.set("id_list", id);
     let xml: Document;
     try {
-      const response = await paperServiceRequest(config, url.href, { authenticate: false });
+      const response = await paperServiceRequest(config, url.href, { authenticate: false, timeoutMs: 10_000, maxResponseBytes: 2 * 1024 * 1024 });
       if (!response.ok) throw new Error(`arXiv 元数据请求失败（HTTP ${response.status}）。`);
       xml = new DOMParser().parseFromString(await response.text(), "application/xml");
       if (xml.querySelector("parsererror")) throw new Error("arXiv 元数据格式无效。");

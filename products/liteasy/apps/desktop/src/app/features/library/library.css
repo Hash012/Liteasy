@@ -454,7 +454,12 @@
 }
 
 .library-paper-row:hover {
-  background: rgba(231, 241, 250, 0.72);
+  background: var(--colorNeutralBackground1Hover);
+}
+
+.library-paper-node.active > .library-paper-row {
+  background: var(--colorSubtleBackgroundSelected);
+  box-shadow: inset 2px 0 var(--colorBrandStroke1);
 }
 
 .library-paper-icon {
@@ -1220,3 +1225,37 @@
 .library-expanded-dialog > div { height: 100%; min-height: 0; }
 .library-expanded-dialog .library-pane { margin: 0; }
 .library-expanded-dialog .library-paper-title { white-space: normal; }
+
+.library-attachment-count {
+  flex: 0 0 auto;
+  min-width: 26px;
+  padding: 1px 4px;
+  font-size: 11px;
+  line-height: 17px;
+  font-variant-numeric: tabular-nums;
+  color: var(--colorNeutralForeground2);
+  background: var(--colorNeutralBackground3);
+  border: 1px solid var(--colorNeutralStroke2);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.library-attachment-count:hover,
+.library-attachment-count[aria-expanded="true"] { background: var(--colorBrandBackground2); color: var(--colorBrandForeground1); border-color: var(--colorBrandStroke2); }
+.library-tag-chips { display: flex; gap: 4px; align-items: center; min-width: 0; max-width: 100%; overflow: hidden; margin-top: 3px; }
+.library-tag-chip { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 160px; padding: 1px 5px; border: 1px solid transparent; border-radius: 4px; font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; }
+button.library-tag-chip { cursor: pointer; }
+button.library-tag-chip:hover { border-color: currentColor; }
+.library-tag-type { background: var(--colorPaletteBlueBackground2); color: var(--colorPaletteBlueForeground2); }
+.library-tag-year { background: var(--colorPalettePurpleBackground2); color: var(--colorPalettePurpleForeground2); }
+.library-tag-author { background: var(--colorNeutralBackground4); color: var(--colorNeutralForeground2); }
+.library-tag-subject { background: var(--colorPaletteTealBackground2); color: var(--colorPaletteTealForeground2); }
+.library-tag-tag { background: var(--colorPaletteMarigoldBackground2); color: var(--colorPaletteMarigoldForeground2); }
+.library-tag-collection { background: var(--colorPalettePinkBackground2); color: var(--colorPalettePinkForeground2); }
+.library-tags-overflow { color: var(--colorNeutralForeground3); font-size: 11px; flex: 0 0 auto; }
+.library-tag-selector { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 5px; max-height: 150px; overflow-y: auto; }
+.library-tag-selector [aria-pressed="true"] { outline: 2px solid var(--colorBrandStroke1); outline-offset: -2px; font-weight: 600; }
+.library-active-filters { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12px; color: var(--colorNeutralForeground2); }
+.library-file-filters { width: min(320px, calc(100vw - 32px)); max-height: min(650px, 85vh); overflow-y: auto; }
+.library-metadata-dialog { width: min(520px, calc(100vw - 32px)); }
+.library-metadata-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.library-file-name > .library-tag-chips { font-weight: normal; }

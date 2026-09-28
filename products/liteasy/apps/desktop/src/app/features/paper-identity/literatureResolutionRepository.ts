@@ -60,7 +60,7 @@ const candidateSchema = z.object({
       .transform((value) => value as `sha256:${string}`),
     artifactUrl: z.string().trim().url().max(2000),
     entryKey: z.string().regex(/^pmlr-v[1-9]\d{0,3}-[a-z0-9][a-z0-9._-]{0,199}$/),
-    sourceKind: z.literal("official_volume_bibtex"),
+    sourceKind: z.enum(["official_volume_bibtex", "official_article_page"]),
     volume: z.number().int().positive().max(9999)
   }).strict().optional()
 }).strict().superRefine((value, context) => {
@@ -78,7 +78,9 @@ const candidateSchema = z.object({
     artifactUrlMatches = artifactUrl.protocol === "https:" && artifactUrl.hostname === "proceedings.mlr.press" &&
       !artifactUrl.username && !artifactUrl.password &&
       !artifactUrl.search && !artifactUrl.hash &&
-      artifactUrl.pathname.endsWith(`/v${expectedVolume}/assets/bib/bibliography.bib`);
+      (value.sourceEvidence?.sourceKind === "official_article_page"
+        ? artifactUrl.href === expectedRecordUrl
+        : artifactUrl.pathname === `/v${expectedVolume}/assets/bib/bibliography.bib`);
   } catch {
     artifactUrlMatches = false;
   }
@@ -88,7 +90,7 @@ const candidateSchema = z.object({
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["sourceEvidence"],
-      message: "PMLR 审计证据必须与来源内 ID 和卷级 BibTeX 一致。"
+      message: "PMLR 审计证据必须与来源内 ID 和官方题录一致。"
     });
   }
 });

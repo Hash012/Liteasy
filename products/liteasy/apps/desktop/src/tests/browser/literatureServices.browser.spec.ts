@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
+import { larimarTitle, prepareMetadataFixture, useBrowserMetadataStore } from "./literatureServicesFixture";
 
 test("default public recommendations refresh without login or explicit local-mode configuration", async ({ page }) => {
   test.setTimeout(90_000);
@@ -8,14 +8,14 @@ test("default public recommendations refresh without login or explicit local-mod
   await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
   let requests = 0;
   await page.route("https://api.crossref.org/works?**", (route) => {
+    expect(new URL(route.request().url()).searchParams.get("query.bibliographic")).toBe(larimarTitle);
     requests += 1;
     return route.fulfill({ json: { message: { items: [{ DOI: "10.1234/public", title: ["Public API Research"], author: [{ given: "Alice", family: "Smith" }] }] } } });
   });
-  const pdf = await readFile(new URL("../../../../../../../development/test-data/pdf-selection/glyph-boundaries.pdf", import.meta.url));
-  await page.route("**/manual-preview/das24a.pdf", (route) => route.fulfill({ body: pdf, contentType: "application/pdf" }));
+  await prepareMetadataFixture(page);
   await page.goto("/?pdf-highlight-fixture#importable");
+  await useBrowserMetadataStore(page);
   await page.getByRole("region", { name: "本地文献库", exact: true }).getByRole("button", { name: "das24a.pdf", exact: true }).click();
-  await page.getByRole("checkbox", { name: "选择 das24a.pdf", exact: true }).check();
   const recommendations = page.getByRole("region", { name: "关联推荐", exact: true });
   await expect(recommendations.getByText("Public API Research", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem("liteasy.local-literature.v1"))).toBeNull();
@@ -30,25 +30,96 @@ test("default public recommendations refresh without login or explicit local-mod
 test("retrieving metadata for the real das24a PDF renames its library display to Larimar", async ({ page }) => {
   test.setTimeout(90_000);
   await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
-  const bibliography = await readFile(new URL("../../../../../../../development/test-data/literature/larimar-pmlr.bib", import.meta.url));
   let lookups = 0;
-  await page.route("https://proceedings.mlr.press/v235/assets/bib/bibliography.bib", (route) => {
-    lookups++;
-    return route.fulfill({ body: bibliography, contentType: "text/plain" });
-  });
+  page.on("request", (request) => { if (request.url() === "https://proceedings.mlr.press/v235/das24a.html") lookups++; });
+  await prepareMetadataFixture(page);
   await page.goto("/?pdf-highlight-fixture#importable");
-  // This browser fixture has no Tauri artifact store. Keep that native boundary
-  // in memory while exercising the real PDF, recognition controller and library UI.
-  await page.evaluate(async () => {
-    const modulePath = "/src/app/features/paper-identity/literatureMetadataRepository.ts";
-    const { literatureMetadataRepository } = await import(/* @vite-ignore */ modulePath);
-    const records = new Map();
-    literatureMetadataRepository.load = async (id: string) => records.get(id);
-    literatureMetadataRepository.save = async (id: string, record: unknown) => { records.set(id, record); };
-  });
+  await useBrowserMetadataStore(page);
   const library = page.getByRole("region", { name: "本地文献库", exact: true });
   await library.getByRole("button", { name: "das24a.pdf", exact: true }).click({ button: "right" });
   await page.getByRole("menuitem", { name: "获取元数据", exact: true }).click();
   await expect(library.getByRole("button", { name: "Larimar: Large Language Models with Episodic Memory Control", exact: true })).toBeVisible({ timeout: 30_000 });
   expect(lookups).toBe(1);
+});
+
+test("library selects before opening, keeps attachments compact and persists searchable asset facets", async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.addInitScript(() => {
+    localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true");
+    // This test covers library interactions, independent of recommendation traffic.
+    localStorage.setItem("liteasy.local-literature.v1", JSON.stringify({ "papers.local_mode": true }));
+  });
+  await prepareMetadataFixture(page);
+  await page.route("https://api.crossref.org/works?**", (route) => route.fulfill({ json: { message: { items: [] } } }));
+  await page.goto("/?pdf-highlight-fixture#importable");
+  await useBrowserMetadataStore(page);
+  const library = page.getByRole("region", { name: "本地文献库", exact: true });
+  await library.getByRole("button", { name: "das24a.pdf", exact: true }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "获取元数据", exact: true }).click();
+  const paper = library.getByRole("button", { name: larimarTitle, exact: true });
+  await expect(paper).toBeVisible();
+  await paper.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "新建 Markdown 笔记", exact: true }).click();
+  await page.getByRole("textbox", { name: "论文附件名称" }).fill("实验记录");
+  await page.getByRole("button", { name: "创建", exact: true }).click();
+  const editor = page.getByRole("region", { name: "论文 Markdown 笔记" });
+  await expect(editor).toBeVisible();
+  const counter = library.getByRole("button", { name: new RegExp(`展开 ${larimarTitle} 的 \\d+ 个附件`) });
+  await expect(counter).toBeVisible();
+  await expect(counter).toHaveText(/^\+\d+$/);
+  await expect(library.getByRole("button", { name: "打开论文文件：实验记录", exact: true })).toHaveCount(0);
+  await paper.click();
+  await expect(paper).toHaveAttribute("aria-pressed", "true");
+  await expect(editor).toBeVisible();
+  await paper.dblclick();
+  await expect(page.getByRole("region", { name: "PDF 阅读器", exact: true })).toBeVisible();
+  await counter.click();
+  await expect(library.getByRole("button", { name: "打开论文文件：实验记录", exact: true })).toBeVisible();
+  await library.getByRole("button", { name: new RegExp(`收起 ${larimarTitle} 的`) }).click();
+  await paper.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "编辑分类与标签", exact: true }).click();
+  const metadata = page.getByRole("dialog", { name: "编辑资产分类与标签" });
+  await metadata.getByRole("combobox", { name: "资产类别" }).selectOption("conference-paper");
+  await metadata.getByRole("textbox", { name: "资产年份" }).fill("2024");
+  await metadata.getByRole("textbox", { name: "资产学科" }).fill("机器学习");
+  await metadata.getByRole("textbox", { name: "资产标签" }).fill("必读, 记忆控制");
+  await metadata.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(metadata).toBeHidden();
+  const chips = library.getByLabel(`${larimarTitle} 的分类与标签`, { exact: true });
+  await expect(chips.getByText("会议论文", { exact: true })).toBeVisible();
+  await expect(chips.getByText("必读", { exact: true })).toBeVisible();
+  expect(await chips.getByText("必读", { exact: true }).evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
+  const chooser = page.waitForEvent("filechooser");
+  await library.getByRole("button", { name: "导入文件", exact: true }).click();
+  await (await chooser).setFiles({ name: "notes.md", mimeType: "text/markdown", buffer: Buffer.from("# Field Notes\n\nA notebook for the project.") });
+  const note = page.getByRole("button", { name: "选择文件 Field Notes", exact: true });
+  await expect(note).toBeVisible();
+  await note.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "编辑分类与标签", exact: true }).click();
+  await metadata.getByRole("textbox", { name: "资产标签" }).fill("复现");
+  await metadata.getByRole("button", { name: "保存", exact: true }).click();
+  await chips.getByText("必读", { exact: true }).click();
+  await expect(note).toBeHidden();
+  await expect(paper).toBeVisible();
+  await page.getByRole("button", { name: "清除筛选", exact: true }).click();
+  await expect(note).toBeVisible();
+  await page.getByRole("button", { name: "筛选本地文件", exact: true }).click();
+  await page.getByRole("textbox", { name: "筛选学科" }).fill("机器学习");
+  await page.getByRole("textbox", { name: "筛选作者" }).fill("Payel Das");
+  await page.keyboard.press("Escape");
+  await expect(paper).toBeVisible();
+  await expect(note).toBeHidden();
+  await page.getByRole("button", { name: "清除筛选", exact: true }).click();
+  await page.getByRole("navigation", { name: "左边栏导航" }).getByRole("button", { name: "文献库", exact: true }).dblclick();
+  await page.getByRole("dialog", { name: "文献库", exact: true }).screenshot({ path: testInfo.outputPath("library-tags-light.png") });
+  await page.getByRole("button", { name: "关闭文献库浮窗", exact: true }).click();
+  await page.getByRole("navigation", { name: "左边栏导航" }).getByRole("button", { name: "设置", exact: true }).click();
+  await page.getByRole("textbox", { name: "搜索设置" }).fill("主题");
+  await page.getByRole("radio", { name: "深色", exact: true }).check();
+  await page.getByRole("navigation", { name: "左边栏导航" }).getByRole("button", { name: "文献库", exact: true }).dblclick();
+  await page.getByRole("dialog", { name: "文献库", exact: true }).screenshot({ path: testInfo.outputPath("library-tags-dark.png") });
+  await page.reload();
+  await expect(page.getByRole("button", { name: "选择文件 Field Notes", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Field Notes 的分类与标签", { exact: true }).getByText("复现", { exact: true })).toBeVisible();
 });
