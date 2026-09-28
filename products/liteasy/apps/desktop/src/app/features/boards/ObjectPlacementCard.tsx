@@ -316,7 +316,7 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
           aria-description={
             selected
               ? "已选择；右键或 Shift+F10 打开菜单"
-              : "拖动移动或加入对话；单击编辑；右键或 Shift+F10 打开菜单"
+              : "拖动移动或加入对话；单击选中，双击编辑；右键或 Shift+F10 打开菜单"
           }
           tabIndex={0}
           draggable={!editing && !moving && !!object}
@@ -353,10 +353,15 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
               )
             )
               return;
-            if (event.ctrlKey || event.metaKey) {
+            if (event.ctrlKey || event.metaKey || event.shiftKey) {
               toggleSelection();
               return;
             }
+            setSelected([p.placementId]);
+          }}
+          onDoubleClick={(event) => {
+            if ((event.target as Element).closest("button,a,input,textarea,.object-card-editor")) return;
+            event.stopPropagation();
             if (canEdit && !moving) startEditing();
           }}
           onPointerDown={(event) => {
@@ -428,6 +433,7 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
             <ObjectSurface
               object={object}
               presentation="canvas"
+              editOnDoubleClick
               sourceText={sourceText}
               onEdit={canEdit && !moving ? startEditing : undefined}
               editor={

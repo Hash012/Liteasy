@@ -40,3 +40,16 @@ test("a failed native recovery never saves an empty fallback over disk; retry re
     snapshot: { annotations: [annotation], autoPublic: false, version: 2 },
   }));
 });
+
+test("future native annotation versions remain untouched and never enable autosave", async () => {
+  native.save.mockClear();
+  const future = { version: 3, annotations: [], extension: { preserved: true } };
+  native.load.mockImplementation(async ({ artifactKind }) => artifactKind === "annotations" ? future : undefined);
+  const paper = { id: "future-version-paper", title: "Future data", sourcePath: "/papers/future.pdf" };
+  render(<PdfReader selectedPapers={[paper]} zoom={100} />);
+  expect(await screen.findByRole("alert")).toHaveTextContent("数据版本");
+  fireEvent.click(screen.getByRole("button", { name: "重试恢复批注" }));
+  await waitFor(() => expect(native.load.mock.calls.filter(([input]) => input.artifactKind === "annotations" && input.paperId === paper.id)).toHaveLength(2));
+  expect(native.save.mock.calls.filter(([input]) => input.artifactKind === "annotations" && input.paperId === paper.id)).toHaveLength(0);
+  expect(future).toEqual({ version: 3, annotations: [], extension: { preserved: true } });
+});

@@ -1,3 +1,4 @@
+import { PaperSelectionTools } from "./PaperSelectionTools";
 import { resolveReadingQuoteRects } from "./readingAnnotationGeometry";
 import type { ReadingMarkStyle } from "./pdfReadingAnnotations";
 import { pdfCanvasSize } from "./pdfRenderBudget";
@@ -2019,10 +2020,10 @@ export function PdfReader({
     })
       .then((snapshot) => {
         if (cancelled) return;
-        readSucceeded = true;
         const stored = snapshot === undefined
           ? browserState
           : recoverPdfAnnotationPrivateState(snapshot, fallbackPaperIdentity);
+        readSucceeded = true;
         setAnnotations(stored.annotations);
         annotationsRef.current = stored.annotations;
         setAutoPublicAnnotations(stored.autoPublic);
@@ -2751,6 +2752,40 @@ export function PdfReader({
     clearBrowserSelection();
   }
 
+  async function answerSelectionQuestion(anchor: Pick<PdfSelection, "page" | "excerpt" | "rects" | "normalizedStart">, question: string, signal: AbortSignal) {
+    assertReadingAnnotationsReady();
+    if (!activePaper || !onQuickAsk) throw new Error("速问暂不可用。");
+    const paper = activePaper;
+    async function readPage(page: number) {
+      if (pageTexts[page]?.trim()) return pageTexts[page];
+      if (!pdfDocument) return "";
+      const pdfPage = await pdfDocument.getPage(page);
+      return normalizePdfPageText(joinPdfTextItems((await pdfPage.getTextContent()).items));
+    }
+    const [pageText, ...openingPages] = await Promise.all([
+      readPage(anchor.page),
+      ...Array.from({ length: Math.min(pdfDocument?.numPages ?? pageCount, 3) }, (_, index) => readPage(index + 1))
+    ]);
+    signal.throwIfAborted();
+    const abstractText = extractQuickAskAbstract(openingPages.join("\n\n"));
+    if (!pageText.trim() || !abstractText.trim()) throw new Error("页面或摘要文本尚未就绪，请先完成论文解析后重试。");
+    const answer = await onQuickAsk({ paper, page: anchor.page, excerpt: anchor.excerpt,
+      question, pageText, abstractText, signal });
+    signal.throwIfAborted();
+    if (!answer.trim()) throw new Error("未收到回答，请重试。");
+    const now = new Date().toISOString();
+    const annotation: PdfAnnotationV2 = {
+      id: `quick-ask-${crypto.randomUUID()}`, kind: anchor.rects.length ? "underline" : "note", page: anchor.page,
+      excerpt: anchor.excerpt, rects: anchor.rects, normalizedStart: anchor.normalizedStart,
+      text: `速问 · 第 ${anchor.page} 页`, createdAt: now, updatedAt: now,
+      paperIdentity: resolvePaperIdentity(paper), revision: 1,
+      publication: { desiredVisibility: "private", state: "not_published" },
+      quickAsk: { question, answer, pageText, abstractText }
+    };
+    assertReadingAnnotationsReady();
+    return annotation;
+  }
+
   async function submitQuickAsk() {
     if (!quickAskSelection || !activePaper || !onQuickAsk || quickAskAbortRef.current ||
       !quickAskQuestion.trim() || hydratedAnnotationStorageKey !== annotationStorageKey) return;
@@ -2762,32 +2797,7 @@ export function PdfReader({
     const paper = activePaper;
     const question = quickAskQuestion.trim();
     try {
-      async function readPage(page: number) {
-        if (pageTexts[page]?.trim()) return pageTexts[page];
-        if (!pdfDocument) return "";
-        const pdfPage = await pdfDocument.getPage(page);
-        return normalizePdfPageText(joinPdfTextItems((await pdfPage.getTextContent()).items));
-      }
-      const [pageText, ...openingPages] = await Promise.all([
-        readPage(anchor.page),
-        ...Array.from({ length: Math.min(pdfDocument?.numPages ?? pageCount, 3) }, (_, index) => readPage(index + 1))
-      ]);
-      if (abort.signal.aborted) return;
-      const abstractText = extractQuickAskAbstract(openingPages.join("\n\n"));
-      if (!pageText.trim() || !abstractText.trim()) throw new Error("页面或摘要文本尚未就绪，请先完成论文解析后重试。");
-      const answer = await onQuickAsk({ paper, page: anchor.page, excerpt: anchor.excerpt,
-        question, pageText, abstractText, signal: abort.signal });
-      if (abort.signal.aborted) return;
-      if (!answer.trim()) throw new Error("未收到回答，请重试。");
-      const now = new Date().toISOString();
-      const annotation: PdfAnnotationV2 = {
-        id: `quick-ask-${crypto.randomUUID()}`, kind: "underline", page: anchor.page,
-        excerpt: anchor.excerpt, rects: anchor.rects, normalizedStart: anchor.normalizedStart,
-        text: `速问 · 第 ${anchor.page} 页`, createdAt: now, updatedAt: now,
-        paperIdentity: resolvePaperIdentity(paper), revision: 1,
-        publication: { desiredVisibility: "private", state: "not_published" },
-        quickAsk: { question, answer, pageText, abstractText }
-      };
+      const annotation = await answerSelectionQuestion(anchor, question, abort.signal);
       setCurrentAnnotations((current) => [...current, annotation]);
       setQuickAskSelection(null);
       setActiveAnnotationId(annotation.id);
@@ -2995,6 +3005,15 @@ export function PdfReader({
     setCurrentAnnotations((current) => [...current, annotation]);
     setReadingAnnotationId(annotation.id);
     await persistReadingAnnotations();
+  }
+
+  async function readingSelectionGeometry(input: { page: number; excerpt: string }) {
+    assertReadingAnnotationsReady();
+    if (!Number.isInteger(input.page) || input.page < 1 || input.page > pageCount || !input.excerpt.trim()) throw new Error("请先选择原文与页码。");
+    let rects = readingQuoteRects(pageCharModelsRef.current.get(input.page), input.excerpt);
+    if (!rects.length && pdfDocument) rects = await resolveReadingQuoteRects(pdfDocument, input.page, input.excerpt);
+    assertReadingAnnotationsReady();
+    return { ...input, rects };
   }
 
   async function updateReadingAnnotation(id: string, revision: number, note: string, style: ReadingMarkStyle = {}) {
@@ -3337,6 +3356,25 @@ export function PdfReader({
         error: annotationLoadError || annotationSaveError, annotations: hydratedAnnotationStorageKey === annotationStorageKey ? annotationsInReadingOrder : [],
         pageTexts, pageCount, focusedPage, selectedId: readingAnnotationId,
         create: createReadingAnnotation, update: updateReadingAnnotation,
+        capture: async (input, target) => {
+          assertReadingAnnotationsReady();
+          if (target === "conversation") {
+            onAddSelectionToConversation?.({ ...input, paperId: activePaper!.id, paperTitle: activePaper!.title, source: "pdf_selection" }); return;
+          }
+          if (!objectWorkbench) throw new Error("研究白板暂不可用。");
+          const anchor = await readingSelectionGeometry(input);
+          await objectWorkbench.capturePdf({ paper: activePaper!, ...anchor }, target);
+        },
+        quickAsk: onQuickAsk ? async (input, signal) => {
+          const anchor = await readingSelectionGeometry(input);
+          const annotation = await answerSelectionQuestion(anchor, input.question.trim(), signal);
+          signal.throwIfAborted(); assertReadingAnnotationsReady();
+          setCurrentAnnotations((current) => [...current, annotation]);
+          setReadingAnnotationId(annotation.id);
+          await persistReadingAnnotations();
+        } : undefined,
+        annotationTools: (annotation) => <>{renderAnnotationReviewButton(annotation)}{renderAnnotationReview(annotation)}
+          {objectWorkbench?.captureAnnotation ? <Button size="small" onClick={() => void objectWorkbench.captureAnnotation!(annotationCaptureInput(annotation), "board").catch((failure) => setStatus(String(failure)))}>加入白板</Button> : null}</>,
         remove: async (id) => {
           assertReadingAnnotationsReady();
           const annotation = annotationsRef.current.find((item) => item.id === id);
@@ -3891,10 +3929,6 @@ export function PdfReader({
                 className={`pdf-selection-menu is-${selection.menuPlacement}`}
                 style={{ left: selection.menuLeft, top: selection.menuTop }}
               >
-                <div className="selection-menu-row">
-                  <button onClick={() => addAnnotation("highlight")} title="高亮选中文段" type="button">
-                    高亮
-                  </button>
                   <div className="color-selector">
                     {(["yellow", "red", "blue", "green", "pink"] as HighlightColor[]).map((color) => (
                       <button
@@ -3907,44 +3941,14 @@ export function PdfReader({
                       />
                     ))}
                   </div>
-                </div>
-                <div className="selection-menu-row">
-                  <button onClick={() => void copySelectedText()} title="复制选中的 PDF 内容" type="button">
-                    <CopyRegular aria-hidden="true" />
-                    复制
-                  </button>
-                </div>
-                <div className="selection-menu-row">
-                  <button
-                    draggable
-                    onClick={addSelectionToWhiteboard}
-                    onDragStart={handleSelectionWhiteboardDragStart}
-                    title="点击直接加入，或拖到右侧白板的指定位置"
-                    type="button"
-                  >
-                    <WhiteboardRegular aria-hidden="true" />
-                    加入白板
-                  </button>
-                </div>
-                {objectWorkbench ? <div className="selection-menu-row"><Tooltip content="将摘录加入所选内容对话" relationship="description"><Button size="small" onClick={() => { if (activePaper) void objectWorkbench.capturePdf({ paper: activePaper, ...selection }, "tray").catch((e) => setStatus(e.message)); }}>加入摘录对话</Button></Tooltip></div> : null}
-                <div className="selection-menu-row">
-                  <button onClick={() => addAnnotation("underline")} title="给选中文段添加下划线" type="button">
-                    划线
-                  </button>
-                </div>
-                {onQuickAsk ? <div className="selection-menu-row">
-                  <button type="button" title="结合当前页和摘要提问" onClick={() => {
+                <PaperSelectionTools highlight={() => addAnnotation("highlight")} underline={() => addAnnotation("underline")}
+                  copy={() => void copySelectedText()} board={addSelectionToWhiteboard} dragBoard={handleSelectionWhiteboardDragStart}
+                  tray={objectWorkbench ? () => { if (activePaper) void objectWorkbench.capturePdf({ paper: activePaper, ...selection }, "tray").catch((e) => setStatus(e.message)); } : undefined}
+                  conversation={addSelectionToConversation} quickAsk={onQuickAsk ? () => {
                     quickAskAbortRef.current?.abort(); quickAskAbortRef.current = null;
                     setQuickAskPending(false); setQuickAskSelection(selection); setQuickAskQuestion("");
-                    setQuickAskError(""); setSelection(null); setSelectionPreview(null); clearBrowserSelection();
-                    setAnnotationPopup(null);
-                  }}>速问</button>
-                </div> : null}
-                <div className="selection-menu-row">
-                  <button onClick={addSelectionToConversation} title="把选中文段加入右侧对话上下文" type="button" className="add-to-conversation">
-                    加入对话
-                  </button>
-                </div>
+                    setQuickAskError(""); setSelection(null); setSelectionPreview(null); clearBrowserSelection(); setAnnotationPopup(null);
+                  } : undefined} />
               </div>
             ) : null}
             {quickAskSelection ? (

@@ -213,3 +213,12 @@ test("stores opaque file formats without parsing or changing their bytes", async
     format: "other", title: "再次导入.bin", authors: [], chapters: [], resources: [], toc: [], warnings: []
   })).duplicate).toBe(true);
 });
+
+
+test("metadata edits preserve additive fields from a newer compatible writer", async () => {
+  const f = fixture();
+  const key = "reading-library/metadata/file-1";
+  await f.storage.commit([{ key, expected: null, row: { key, version: "before", value: { tags: ["old"], futureExtension: { preserved: true } } } }]);
+  await f.repository.updateMetadata("file-1", { tags: ["new"] });
+  expect((await f.storage.get(key))?.value).toEqual({ tags: ["new"], futureExtension: { preserved: true } });
+});

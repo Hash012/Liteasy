@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
-import { Button, Dialog, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogActions, Input, MenuItem, Tooltip } from "@fluentui/react-components";
+import { Button, Tab, TabList, Dialog, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogActions, Input, MenuItem, Tooltip } from "@fluentui/react-components";
 import {
   FolderRegular, DocumentRegular, DocumentPdfRegular, DocumentTextRegular, ImageRegular,
   ImageMultipleRegular, DocumentImageRegular, BookOpenRegular, CodeRegular, TableRegular,
@@ -24,7 +24,14 @@ const choices = [
 ] as const;
 type IconId = typeof choices[number][0];
 const validIds = new Set<string>(choices.map(([id]) => id));
-type Preferences = Record<string, IconId>;
+type IconValue = IconId | `emoji:${string}`;
+type Preferences = Record<string, IconValue>;
+export function isSingleEmoji(value: string) {
+  if (!value || value.length > 64 || value !== value.trim()) return false;
+  const segments = [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(value)];
+  return segments.length === 1 && /[\p{Extended_Pictographic}\p{Regional_Indicator}\u20e3]/u.test(value);
+}
+const emojiChoices = [["📚", "书籍"], ["📄", "文献"], ["📝", "笔记"], ["🔬", "实验"], ["🧠", "思考"], ["🧪", "研究"], ["📊", "数据"], ["🧮", "数学"], ["🌍", "地球"], ["💡", "灵感"], ["⭐", "星标"], ["❤️", "喜爱"], ["🎯", "目标"], ["🗂️", "归档"], ["✅", "完成"]];
 const IconContext = createContext({
   preferences: {} as Preferences,
   pick: (_key: string, _title: string) => {},
@@ -36,6 +43,7 @@ export function defaultLibraryIcon(kind: string, fileName = ""): IconId {
   if (kind === "pdf") return "pdf";
   if (kind === "figures") return "images";
   if (kind === "multimodal" || kind === "artifact") return "multimodal";
+  if (kind === "board") return "diagram";
   if (kind === "note") return "note";
   if (["epub", "mobi", "fb2"].includes(kind)) return "book";
   if (["markdown", "html"].includes(kind)) return "code";
@@ -55,7 +63,7 @@ function readPreferences(key: string): Preferences {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(key) ?? "{}");
     if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-    return Object.fromEntries(Object.entries(value).filter(([, id]) => typeof id === "string" && validIds.has(id))) as Preferences;
+    return Object.fromEntries(Object.entries(value).filter(([, id]) => typeof id === "string" && (validIds.has(id) || (id.startsWith("emoji:") && isSingleEmoji(id.slice(6)))))) as Preferences;
   } catch { return {}; }
 }
 
@@ -63,6 +71,8 @@ export function LibraryIconProvider({ scope, children }: { scope: string; childr
   const storageKey = `liteasy.library.icons.v1:${scope}`;
   const [preferences, setPreferences] = useState(() => readPreferences(storageKey));
   const [target, setTarget] = useState<{ key: string; title: string } | null>(null);
+  const [tab, setTab] = useState("icons");
+  const [emoji, setEmoji] = useState("");
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
   function persist(next: Preferences) {
@@ -73,7 +83,7 @@ export function LibraryIconProvider({ scope, children }: { scope: string; childr
       return true;
     } catch { setError("图标设置未能保存，请检查本地存储空间后重试。"); return false; }
   }
-  function choose(id?: IconId) {
+  function choose(id?: IconValue) {
     if (!target) return;
     const next = { ...preferences };
     if (id) next[target.key] = id; else delete next[target.key];
@@ -89,18 +99,22 @@ export function LibraryIconProvider({ scope, children }: { scope: string; childr
     }
     persist(next);
   }
-  return <IconContext.Provider value={{ preferences, pick: (key, title) => { setQuery(""); setError(""); setTarget({ key, title }); }, relocate }}>
+  return <IconContext.Provider value={{ preferences, pick: (key, title) => { setQuery(""); setEmoji(""); setError(""); setTarget({ key, title }); }, relocate }}>
     {children}
     <Dialog open={Boolean(target)} onOpenChange={(_, data) => { if (!data.open) setTarget(null); }}>
       <DialogSurface className="library-icon-dialog"><DialogBody>
         <DialogTitle>更换图标 · {target?.title}</DialogTitle>
         <DialogContent>
+          <TabList selectedValue={tab} onTabSelect={(_, data) => setTab(String(data.value))}><Tab value="icons">图标</Tab><Tab value="emoji">Emoji</Tab></TabList>
           <Input aria-label="搜索图标" placeholder="搜索图标" value={query} onChange={(_, data) => setQuery(data.value)} />
           <div className="library-icon-grid" aria-label="可选图标">
-            {choices.filter(([id, label]) => `${id} ${label}`.toLowerCase().includes(query.trim().toLowerCase())).map(([id, label, Icon]) =>
+            {tab === "icons" ? choices.filter(([id, label]) => `${id} ${label}`.toLowerCase().includes(query.trim().toLowerCase())).map(([id, label, Icon]) =>
               <Tooltip key={id} content={label} relationship="description"><Button appearance={target && preferences[target.key] === id ? "primary" : "subtle"}
-                aria-label={label} aria-pressed={Boolean(target && preferences[target.key] === id)} icon={<Icon />} onClick={() => choose(id)} /></Tooltip>)}
+                aria-label={label} aria-pressed={Boolean(target && preferences[target.key] === id)} icon={<Icon />} onClick={() => choose(id)} /></Tooltip>) : emojiChoices.filter(([value, label]) => `${value} ${label}`.includes(query.trim())).map(([value, label]) =>
+              <Tooltip key={value} content={label} relationship="description"><Button aria-label={`Emoji ${label}`} aria-pressed={Boolean(target && preferences[target.key] === `emoji:${value}`)} appearance={target && preferences[target.key] === `emoji:${value}` ? "primary" : "subtle"} onClick={() => choose(`emoji:${value}`)}>{value}</Button></Tooltip>)}
           </div>
+          {tab === "emoji" ? <div className="library-emoji-input"><Input aria-label="自定义 Emoji" placeholder="粘贴一个 Emoji，如 👩🏽‍🔬" value={emoji} maxLength={64} onChange={(_, data) => setEmoji(data.value)} />
+            <Button disabled={!isSingleEmoji(emoji)} onClick={() => choose(`emoji:${emoji}`)}>使用 Emoji</Button></div> : null}
           {error ? <p role="alert">{error}</p> : null}
         </DialogContent>
         <DialogActions><Button onClick={() => choose()}>恢复默认图标</Button><Button onClick={() => setTarget(null)}>取消</Button></DialogActions>
@@ -117,6 +131,7 @@ export function LibraryIconMenuItem({ itemKey, title }: { itemKey: string; title
 export function LibraryItemIcon({ itemKey, kind, fileName }: { itemKey: string; kind: string; fileName?: string }) {
   const { preferences } = useLibraryIcons();
   const id = preferences[itemKey] ?? defaultLibraryIcon(kind, fileName);
+  if (id.startsWith("emoji:")) return <span className="library-item-icon library-item-emoji" data-icon="emoji" aria-hidden="true">{id.slice(6)}</span>;
   const Icon = choices.find(([candidate]) => candidate === id)![2];
   return <span className="library-item-icon" data-icon={id} aria-hidden="true"><Icon /></span>;
 }

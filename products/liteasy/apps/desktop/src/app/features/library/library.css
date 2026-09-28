@@ -1213,3 +1213,10 @@
 .library-icon-dialog { max-width: 380px; }
 .library-icon-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 12px; }
 .library-icon-grid button { width: 100%; min-width: 32px; height: 40px; }
+
+.library-item-emoji { overflow: hidden; white-space: nowrap; flex-shrink: 0; font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; line-height: 1.2; }
+.library-emoji-input { display: flex; gap: 6px; margin-top: 12px; }
+.library-expanded-dialog.fui-DialogSurface { width: min(1100px, 94vw); max-width: 94vw; height: min(820px, 90vh); max-height: 90vh; }
+.library-expanded-dialog > div { height: 100%; min-height: 0; }
+.library-expanded-dialog .library-pane { margin: 0; }
+.library-expanded-dialog .library-paper-title { white-space: normal; }

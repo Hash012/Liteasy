@@ -1,3 +1,4 @@
+import { SystemFontPicker } from "./SystemFontPicker";
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import { Button, Tooltip, Field, Input, Option, Radio, RadioGroup, Dropdown } from "@fluentui/react-components";
 import type { SettingsState, UpdateSettingCommand } from "./settings.types";
@@ -44,17 +45,7 @@ export function ViewSettingsPanel({ onUpdateSetting, settings }: ViewSettingsPan
       </Field>
 
       <Field label={<span>界面字体 {workbench ? <Tooltip content="解释此设置" relationship="description"><Button size="small" appearance="subtle" onClick={() => workbench.explain({ type: "setting", key: "view.font_family" })}>解释</Button></Tooltip> : null}</span>}>
-        <Dropdown
-          aria-label="界面字体"
-          onOptionSelect={(_, data) => data.optionValue && update("view.font_family", data.optionValue)}
-          selectedOptions={[fontFamily]}
-          size="small"
-          value={viewFontOptions.find((option) => option.value === fontFamily)?.label ?? "自定义字体"}
-        >
-          {viewFontOptions.map((option) => (
-            <Option key={option.value} value={option.value}>{option.label}</Option>
-          ))}
-        </Dropdown>
+        <SystemFontPicker label="界面字体" value={fontFamily} options={viewFontOptions} onChange={(value) => update("view.font_family", value)} />
       </Field>
 
       <Field label={<span>界面字号 {workbench ? <Tooltip content="解释此设置" relationship="description"><Button size="small" appearance="subtle" onClick={() => workbench.explain({ type: "setting", key: "view.font_size" })}>解释</Button></Tooltip> : null}</span>}>

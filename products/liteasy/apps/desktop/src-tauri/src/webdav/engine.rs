@@ -96,8 +96,7 @@ pub(super) async fn sync_library(
     let checkpoint =
         local::state_directory(&root)?.join(format!("baseline-{}.json", connection_key));
     let mut baseline: Manifest = if checkpoint.exists() {
-        serde_json::from_slice(&fs::read(&checkpoint).map_err(|e| e.to_string())?)
-            .map_err(|_| "同步记录损坏，请保留记录并检查本地数据。")?
+        Manifest::from_bytes(&fs::read(&checkpoint).map_err(|e| e.to_string())?)?
     } else {
         Manifest::default()
     };
@@ -394,6 +393,39 @@ mod tests {
             );
         });
     }
+    #[test]
+    fn webdav_class_one_server_syncs_without_etags_or_conditional_puts() {
+        let server = Server::start();
+        {
+            let mut state = server.state.lock().unwrap();
+            state.no_etag = true;
+            state.ignore_conditions = true;
+        }
+        let a = Library::new();
+        let b = Library::new();
+        fs::write(a.0.join("paper.pdf"), b"%PDF-1.7 original").unwrap();
+        runtime().block_on(async {
+            server.remote.verify().await.unwrap();
+            assert_eq!(a.sync(&server, vec![]).await.unwrap().uploaded, 1);
+            assert_eq!(b.sync(&server, vec![]).await.unwrap().downloaded, 1);
+            fs::write(a.0.join("paper.pdf"), b"%PDF-1.7 updated").unwrap();
+            a.sync(&server, vec![]).await.unwrap();
+            b.sync(&server, vec![]).await.unwrap();
+            assert_eq!(
+                fs::read(b.0.join("paper.pdf")).unwrap(),
+                b"%PDF-1.7 updated"
+            );
+            fs::write(a.0.join("paper.pdf"), b"%PDF-1.7 device A edit").unwrap();
+            fs::write(b.0.join("paper.pdf"), b"%PDF-1.7 device B edit").unwrap();
+            a.sync(&server, vec![]).await.unwrap();
+            assert_eq!(b.sync(&server, vec![]).await.unwrap().conflicts.len(), 1);
+            assert_eq!(
+                fs::read(b.0.join("paper.pdf")).unwrap(),
+                b"%PDF-1.7 device B edit"
+            );
+        });
+    }
+
     #[test]
     fn webdav_edit_delete_conflicts_require_current_explicit_resolution() {
         let server = Server::start();

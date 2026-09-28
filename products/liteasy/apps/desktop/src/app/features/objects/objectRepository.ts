@@ -401,6 +401,7 @@ export function createObjectRepository(
     );
   }
   async function captureObject(input: {
+    position?: Placement["position"];
     draft: ObjectDraft;
     assets?: StagedObjectAsset[];
     boardRef?: ObjectRef;
@@ -465,6 +466,11 @@ export function createObjectRepository(
             refOf(object),
             (await listPlacements(board.objectId)).length,
           );
+          if (input.position) {
+            if (![input.position.x, input.position.y].every((coordinate) => Number.isFinite(coordinate) && coordinate >= 0))
+              throw new ObjectStoreError("unsupported_schema", "卡片位置无效。");
+            p.position = input.position;
+          }
           const memberKey = membershipKey(board.objectId, object.objectId);
           const member = await storage.get(memberKey);
           changes.push(

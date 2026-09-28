@@ -180,3 +180,22 @@ test.each(["crossref", "openalex", "semantic-scholar"] as const)("uses an exact 
   expect(result).toMatchObject({ status: "exact", candidate: { record: { title: "Deep learning" } } });
   expect(fetch).toHaveBeenCalledOnce();
 });
+
+
+test("reconfirms a persisted Crossref candidate after restarting the client", async () => {
+  const entry = { title: ["A Formal Paper Title"], DOI: "10.1234/restored", author: [{ given: "Alice", family: "Smith" }], published: { "date-parts": [[2025]] } };
+  vi.stubGlobal("fetch", vi.fn(async (url: URL) => Response.json({ message: url.pathname === "/works" ? { items: [entry] } : entry })));
+  const config = { provider: "crossref" as const, endpoint: "https://api.crossref.org" };
+  const first = await createMetadataProviderClient(config).resolveLiterature({ purpose: "liteasy_pdf_annotation", query: "Formal Paper" });
+  if (first.status !== "ambiguous") throw new Error("Expected search candidates");
+  const restarted = createMetadataProviderClient(config);
+  const confirmed = await restarted.confirmLiterature({ candidateKey: first.candidates[0].candidateKey, mode: "candidate" });
+  expect(confirmed.literature).toMatchObject({ title: "A Formal Paper Title", authors: ["Alice Smith"], year: 2025 });
+});
+
+test("malformed provider items cannot crash bibliography normalization", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ message: { items: [null, 2, { title: ["Broken"], DOI: 43, author: {} },
+    { title: ["Valid title"], DOI: "10.1234/valid", author: [null, { given: "Alice", family: "Smith" }], published: {} }] } })));
+  const result = await createMetadataProviderClient({ provider: "crossref", endpoint: "https://api.crossref.org" }).resolveLiterature({ purpose: "liteasy_pdf_annotation", query: "Valid" });
+  expect(result).toMatchObject({ status: "ambiguous", candidates: [{ record: { title: "Valid title", authors: ["Alice Smith"] } }] });
+});

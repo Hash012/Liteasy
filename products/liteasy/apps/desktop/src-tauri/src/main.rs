@@ -15,6 +15,7 @@ mod object_store;
 mod paper_cache;
 mod paper_services;
 mod user_paper_store;
+mod system_fonts;
 mod webdav;
 mod workflow_checkpoints;
 
@@ -41,6 +42,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            system_fonts::list_system_fonts,
             webdav::set_webdav_open_documents,
             webdav::get_webdav_settings,
             webdav::save_webdav_settings,

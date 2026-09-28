@@ -322,7 +322,7 @@ export function useRecommendations({
         });
         setRecommendationItems([]);
         setRecommendationStatus("error");
-        setRecommendationMessage(`关联推荐获取失败。详细信息：${detail}`);
+        setRecommendationMessage(`Liteasy 云端推荐服务未能返回结果：${detail} AI 对话使用独立服务；可在设置 → 文献服务选择 Crossref 等公共 API。`);
       })
       .finally(() => {
         if (isActive()) {

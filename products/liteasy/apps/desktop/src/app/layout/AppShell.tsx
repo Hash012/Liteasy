@@ -1,3 +1,5 @@
+import { usePaperAttachmentController } from "../controllers/usePaperAttachmentController";
+import { PaperNoteEditor } from "../features/paper-projects/PaperNoteEditor";
 import { useExternalNoteController } from "../controllers/useExternalNoteController";
 import { ExternalNoteEditor } from "../features/note-files/ExternalNoteEditor";
 import { useWindowControls } from "../controllers/useWindowControls";
@@ -817,18 +819,21 @@ export function AppShell({
     modelTransport: effectiveModelTransport,
     settingsStore: settingsStoreRef.current
   });
+  const localLiteratureMode = settingsState["papers.local_mode"];
+  const profileSamplingEnabled = settingsState[localLiteratureMode ? "profile.local_enabled" : "profile.enabled"];
   const profileActions = useProfileActions({
+    localMode: localLiteratureMode,
     accountSession,
     controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
     onProfileSamplingChanged: (enabled) => {
       settingsStoreRef.current.apply({
         intent: "update_setting",
-        target: "profile.enabled",
+        target: localLiteratureMode ? "profile.local_enabled" : "profile.enabled",
         value: enabled
       });
       setSettingsState(cloneSettingsState(settingsStoreRef.current.getState()));
     },
-    profileSamplingEnabled: settingsState["profile.enabled"],
+    profileSamplingEnabled,
     transport: academicProfileTransport
   });
   function handleProfileExport() {
@@ -1136,6 +1141,10 @@ export function AppShell({
     scopeId: objectWorkbench.repository.scopeId, papers: workspaceState.papers, artifacts: artifactCatalog,
     extractionVersion: projectExtractionVersion, getResources: getPaperMineruResources,
   });
+  const paperAttachments = usePaperAttachmentController({ repository: objectWorkbench.repository, projects: paperProjects.repository,
+    openEditor: () => { setLibraryExpanded(false); workbenchNavigation.open("paper-note"); },
+    openBoard: async (object) => { await objectWorkbench.selectBoard(object); setLibraryExpanded(false); objectWorkbench.setVisible(true); workbenchNavigation.open("board"); },
+  });
   const assistantContextSuggestions = useAssistantContextCatalog({
     artifacts: artifactCatalog,
     objects: objectWorkbench.objects,
@@ -1246,7 +1255,12 @@ export function AppShell({
   async function handleArtifactCanvasAction(action: UIDslActionRef) {
     await executeUIDslActionRef(action, runtimeActionContext);
   }
+  const recommendationProfile = toRecommendationResearchProfile(profileActions.academicProfile) ?? { topics: [], methods: [], datasets: [], languages: [] };
   const knowledgeSync = useKnowledgeSyncController({
+    localMode: localLiteratureMode,
+    localService: settingsState["papers.metadata_provider"] === "cloud" ? undefined : {
+      provider: settingsState["papers.metadata_provider"], endpoint: settingsState["papers.metadata_endpoint"],
+    },
     accountSession,
     controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
     documentMetadataTransport,
@@ -1255,10 +1269,11 @@ export function AppShell({
     recommendationsEnabled: settingsState["network.recommendation.enabled"],
     recommendationSortMode: settingsState["network.recommendation.sort_mode"],
     recommendationStyle: settingsState["network.recommendation.style"],
-    personalizationEnabled: settingsState["profile.enabled"],
+    personalizationEnabled: profileSamplingEnabled,
     personalizationVersion: profileActions.personalizationVersion,
-    researchProfile: settingsState["profile.enabled"]
-      ? toRecommendationResearchProfile(profileActions.academicProfile)
+    researchProfile: profileSamplingEnabled
+      ? { ...recommendationProfile, topics: [...recommendationProfile.topics,
+          ...(localLiteratureMode ? profileActions.profileTags.slice(0, 3).map((tag) => tag.label) : [])] }
       : undefined,
     selectedPapers,
     workspaceRevision: workspaceState.workspaceRevision,
@@ -1347,12 +1362,13 @@ export function AppShell({
     moveResource: moveLocalLibraryResource,
     onChanged: workspaceActions.syncWorkspace,
     onHint: setAnalysisHint,
-    stageIdentity: (paper, request) => pdfAnnotationPublication.actions.stagePaperIdentity(paper, request.hints)
+    stageIdentity: (paper, request, result) => pdfAnnotationPublication.actions.stagePaperIdentity(paper, request.hints, request.query, result)
   });
   stageImportedPaperIdentityRef.current = async (input) => { await retrievePdfMetadata(input); };
   useEffect(() => {
     void pdfAnnotationPublication.actions.hydrateResolutionStates(workspaceStoreRef.current.getState().papers);
   }, [workspacePaperIdentityKey]);
+  const [libraryExpanded, setLibraryExpanded] = useState(false);
   const leftPaneSize = paneLayout.collapsed.left
     ? "0px"
     : `minmax(220px, ${paneLayout.layout.left}fr)`;
@@ -1410,11 +1426,15 @@ export function AppShell({
         label: tab.title,
         meta: tab.createdAt ? new Date(tab.createdAt).toLocaleString() : undefined
       }));
-    entries[paper.id] = [...extractedResources, ...savedArtifacts];
+    const attachments = paperProjects.catalog.find((item) => item.project.paperId === paper.id)?.assets
+      .filter((asset) => (asset.kind === "note" || asset.kind === "board") && asset.ref)
+      .map((asset) => ({ id: asset.assetId, kind: asset.kind as "note" | "board", label: asset.title, objectId: asset.ref!.objectId })) ?? [];
+    entries[paper.id] = [...extractedResources, ...attachments, ...savedArtifacts];
     return entries;
   }, {});
 
   function openPaperInReader(paperId: string) {
+    setLibraryExpanded(false);
     const paper = resolveReaderPaper({
       cachedPapers: cachedReaderPapers,
       libraryPapers: workspaceState.papers,
@@ -1621,6 +1641,7 @@ export function AppShell({
     exportStatus: artifactExports.model.status,
     importJobs: importJobsByDocumentId,
     libraryPaperChildren,
+    localRecommendations: knowledgeSync.model.localRecommendations,
     localLibraryError,
     localLibrarySnapshot,
     literatureHydration: workspaceSelection.model.literatureHydration,
@@ -1747,6 +1768,8 @@ export function AppShell({
         title: entry.title
       });
     },
+    libraryExpanded,
+    onCloseLibraryExpanded: () => setLibraryExpanded(false),
     onOpenPaper: openPaperInReader,
     onRefreshLocalLibrary: async () => {
       await refreshLocalLibrary();
@@ -1759,7 +1782,10 @@ export function AppShell({
     onResolvePaperIdentity: (paper: Paper) => {
       void pdfAnnotationPublication.actions.resolvePaperIdentity(paper, createPdfLiteratureHints(paper, {}));
     },
+    onCreatePaperChild: paperAttachments.create,
     onOpenPaperChild: (item, paper) => {
+      setLibraryExpanded(false);
+      if (item.objectId) { void paperAttachments.open(item, paper).catch((failure) => setAnalysisHint(String(failure))); return; }
       if (item.kind === "artifact") {
         artifactWorkflow.actions.openArtifact(item.id);
         activateArtifactSurface(item.id);
@@ -1812,7 +1838,7 @@ export function AppShell({
     papers: workspaceState.papers,
     profileClearMessage: profileActions.profileClearMessage,
     profileReadPaperCount: workspaceState.papers.length,
-    profileSamplingEnabled: settingsState["profile.enabled"],
+    profileSamplingEnabled,
     profileTags: profileActions.profileTags,
     recommendationItems,
     recommendationMessage,
@@ -1958,6 +1984,7 @@ export function AppShell({
   }
 
   function renderDockItem(itemId: DockItemId, regionId: DockRegionId) {
+    if (itemId === "paper-note") return <PaperNoteEditor model={paperAttachments} />;
     if (itemId === "note-file-reader") return <ExternalNoteEditor model={externalNote} />;
     if (itemId === "document-reader") return <ReadingLibrarySurface
       key={objectWorkbench.repository.scopeId}
@@ -2383,6 +2410,7 @@ export function AppShell({
         }
       >
         <ActivityBar
+          onExpandLibrary={() => { openDockedLeftRailView("library"); setLibraryExpanded(true); }}
           notesOpen={workbenchNavigation.isVisible("notes")}
           onOpenNotes={() => notes.port.open()}
           agentOpen={workbenchNavigation.isVisible("assistant")}

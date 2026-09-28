@@ -1,3 +1,5 @@
+import { SystemFontPicker } from "../settings/SystemFontPicker";
+import { paperReadingFonts } from "../paper-reading/paperReadingPreferences";
 import { memo, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Button, Field, Input, Popover, PopoverSurface, PopoverTrigger, Select, Slider, Tooltip } from "@fluentui/react-components";
 import { ArrowLeftRegular, ArrowRightRegular, BookOpenRegular, DismissRegular, FullScreenMaximizeRegular, SearchRegular, TextFontSizeRegular } from "@fluentui/react-icons";
@@ -6,7 +8,7 @@ import type { ParsedReadingDocument, ReadingChapter } from "./readingDocument.ty
 import { readingAnchorId } from "./parseReadingFile";
 import "./readingDocumentReader.css";
 
-type ReadingPreferences = { fontSize: number; lineHeight: number; width: number; theme: "auto" | "paper" | "warm" | "night" };
+type ReadingPreferences = { fontFamily?: string; fontSize: number; lineHeight: number; width: number; theme: "auto" | "paper" | "warm" | "night" };
 type Position = { chapterId: string; ratio: number };
 type SearchResult = { chapterId: string; chapterTitle: string; excerpt: string; occurrence: number };
 const defaultPreferences: ReadingPreferences = { fontSize: 19, lineHeight: 1.85, width: 760, theme: "auto" };
@@ -18,6 +20,7 @@ function writeStored(key: string, value: unknown) { try { localStorage.setItem(k
 function readPreferences(key: string): ReadingPreferences {
   const value = readStored(key) as Partial<ReadingPreferences> | null;
   return {
+    fontFamily: typeof value?.fontFamily === "string" && value.fontFamily.length <= 512 ? value.fontFamily : undefined,
     fontSize: typeof value?.fontSize === "number" && value.fontSize >= 14 && value.fontSize <= 30 ? value.fontSize : defaultPreferences.fontSize,
     lineHeight: [1.5, 1.85, 2.1, 2.4].includes(value?.lineHeight ?? 0) ? value!.lineHeight! : defaultPreferences.lineHeight,
     width: [640, 760, 960].includes(value?.width ?? 0) ? value!.width! : defaultPreferences.width,
@@ -135,7 +138,7 @@ function ReaderSession({ document, documentId, storageScope, onProgressChange }:
     const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(restore);
     if (articleRef.current) observer?.observe(articleRef.current);
     return () => observer?.disconnect();
-  }, [chapter?.id, preferences.fontSize, preferences.lineHeight, preferences.width]);
+  }, [chapter?.id, preferences.fontSize, preferences.lineHeight, preferences.width, preferences.fontFamily]);
 
   useEffect(() => {
     if (!jump || !articleRef.current) return;
@@ -180,7 +183,7 @@ function ReaderSession({ document, documentId, storageScope, onProgressChange }:
 
   if (!chapter) return <p role="status">这份文档没有可阅读的正文。</p>;
   const label = document.format === "markdown" ? "Markdown" : document.format === "text" ? "TXT" : document.format.toUpperCase();
-  const cssVariables = { "--reading-font-size": `${preferences.fontSize}px`, "--reading-line-height": preferences.lineHeight, "--reading-width": `${preferences.width}px` } as CSSProperties;
+  const cssVariables = { "--reading-font-family": preferences.fontFamily ?? paperReadingFonts.serif.family, "--reading-font-size": `${preferences.fontSize}px`, "--reading-line-height": preferences.lineHeight, "--reading-width": `${preferences.width}px` } as CSSProperties;
 
   return <div className={`reading-document${focus ? " is-focused" : ""}`} data-reading-theme={preferences.theme} ref={rootRef} style={cssVariables}>
     <header className="reading-document__toolbar">
@@ -193,6 +196,9 @@ function ReaderSession({ document, documentId, storageScope, onProgressChange }:
         <Popover positioning="below-end">
           <PopoverTrigger disableButtonEnhancement><Tooltip content="阅读外观" relationship="label"><Button appearance="transparent" aria-label="阅读外观" icon={<TextFontSizeRegular />} /></Tooltip></PopoverTrigger>
           <PopoverSurface className="reading-document__preferences">
+            <Field label="字体"><SystemFontPicker label="电子书字体" value={preferences.fontFamily ?? paperReadingFonts.serif.family}
+              options={Object.values(paperReadingFonts).map((font) => ({ label: font.label, value: font.family }))}
+              onChange={(fontFamily) => setPreferences((current) => ({ ...current, fontFamily }))} /></Field>
             <Field label={`字号 ${preferences.fontSize}`}><Slider aria-label="阅读字号" min={14} max={30} step={1} value={preferences.fontSize} onChange={(_, data) => setPreferences((current) => ({ ...current, fontSize: data.value }))} /></Field>
             <Field label="行距"><Select aria-label="阅读行距" value={preferences.lineHeight} onChange={(_, data) => setPreferences((current) => ({ ...current, lineHeight: Number(data.value) }))}><option value="1.5">紧凑</option><option value="1.85">舒适</option><option value="2.1">宽松</option><option value="2.4">疏朗</option></Select></Field>
             <Field label="页面宽度"><Select aria-label="页面宽度" value={preferences.width} onChange={(_, data) => setPreferences((current) => ({ ...current, width: Number(data.value) }))}><option value="640">窄</option><option value="760">适中</option><option value="960">宽</option></Select></Field>

@@ -1,5 +1,6 @@
 import type { LiteratureCandidate, LiteratureResolveInput, LiteratureResolveResult } from "../paper-identity/literature.types";
 import { inferPaperIdentityMetadataFromPdfText } from "../paper-identity/paperIdentity";
+import { parsePmlrHint } from "../paper-identity/literatureRecord";
 
 export type PdfRecognitionEvidence = { firstPageText: string; embeddedTitle?: string; titleText?: string };
 
@@ -22,18 +23,35 @@ function headingText(text: string) {
   return text.split(/\ba\s*b\s*s\s*t\s*r\s*a\s*c\s*t\b|\breferences\b|\bbibliography\b|摘要|参考文献/i)[0].slice(0, 4000);
 }
 
+function titleFromLines(heading: string): string | undefined {
+  const lines = heading.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  // Keep publisher banners, copyright notices and identifiers out of title queries.
+  const noise = /^(?:https?:|www\.|doi\b|arxiv\b|vol(?:ume)?[ .]|issn\b|isbn\b|copyright|©|received\b|accepted\b|published\b|available online|journal of |proceedings of |research article$|original article$|a preprint$)|@/i;
+  const start = lines.findIndex((line) => !noise.test(line) && normalized(line).length >= 8 && line.length <= 250);
+  if (start < 0) return undefined;
+  const line = lines[start];
+  // Only join a following line when punctuation marks an explicit continuation;
+  // the next ordinary line is often the author list.
+  const next = lines[start + 1];
+  return next && /[-:]$/.test(line) && !noise.test(next) && next.length < 180
+    ? `${line.replace(/-$/, "")} ${next}` : line;
+}
+
 export function buildPdfRecognitionRequest(evidence: PdfRecognitionEvidence): LiteratureResolveInput | undefined {
   const heading = headingText(evidence.firstPageText);
   const identity = inferPaperIdentityMetadataFromPdfText(evidence.firstPageText);
   const identifiers: NonNullable<LiteratureResolveInput["hints"]>["identifiers"] = [];
   if (identity.doi) identifiers.push({ kind: "doi", value: identity.doi });
   if (identity.arxivId) identifiers.push({ kind: "arxiv_id", value: identity.arxivId });
+  const pmlr = parsePmlrHint(evidence.firstPageText.slice(0, 20_000));
   const title = [evidence.embeddedTitle, evidence.titleText].find((value) => value &&
     normalized(value).length >= 8 && normalized(heading).includes(normalized(value)));
   // A bounded bibliographic query is only a search hint, never a title to save directly.
-  const query = title ? readableBibliographicTitle(title).slice(0, 350) : heading.replace(/\s+/g, " ").trim().slice(0, 350);
+  const searchTitle = title || titleFromLines(heading);
+  const query = searchTitle ? readableBibliographicTitle(searchTitle).slice(0, 350) : heading.replace(/\s+/g, " ").trim().slice(0, 350);
   if (!identifiers.length && normalized(query).length < (title ? 8 : 15)) return undefined;
-  return { purpose: "liteasy_pdf_annotation", limit: 5, query, hints: { identifiers, ...(title ? { title: query } : {}) } };
+  return { purpose: "liteasy_pdf_annotation", limit: 5, query, hints: { identifiers,
+    ...(pmlr ? { pmlr, year: pmlr.year } : {}), ...(searchTitle ? { title: query } : {}) } };
 }
 
 export function selectPdfRecognitionCandidate(
@@ -42,8 +60,11 @@ export function selectPdfRecognitionCandidate(
   if (result.status !== "exact" && result.status !== "ambiguous") return undefined;
   const heading = normalized(headingText(evidence.firstPageText));
   const identity = inferPaperIdentityMetadataFromPdfText(evidence.firstPageText);
+  const pmlr = parsePmlrHint(evidence.firstPageText.slice(0, 20_000));
   const candidates = result.status === "exact" ? [result.candidate] : result.candidates;
   const matches = candidates.filter(({ record }) => {
+    if (pmlr && !identity.arxivId && (!record.identifiers.some((id) =>
+      id.kind === "pmlr_id" && id.value.startsWith(`v${pmlr.volume}/`)) || record.year !== pmlr.year)) return false;
     if (identity.arxivId && !record.identifiers.some((id) => id.kind === "arxiv_id" &&
       (/v\d+$/.test(identity.arxivId!) ? id.value === identity.arxivId : id.value.replace(/v\d+$/, "") === identity.arxivId))) return false;
     const title = normalized(record.title);

@@ -1,3 +1,5 @@
+import { useLocalRecommendations } from "../features/recommendations/useLocalRecommendations";
+import type { PaperServiceConfig } from "../features/paper-services/paperServiceTransport";
 import type { RecommendationRuntimeInput } from "../features/recommendations/recommendationRuntime";
 import { useDocumentMetadataSync } from "../features/metadata/useDocumentMetadataSync";
 import type { DocumentMetadataTransport } from "../features/metadata/documentMetadataClient";
@@ -16,6 +18,8 @@ import type { RecommendationCacheScope } from "../features/recommendations/recom
 import type { RecommendationFeedbackTransport } from "../features/recommendations/recommendationFeedbackClient";
 
 type UseKnowledgeSyncControllerInput = {
+  localMode?: boolean;
+  localService?: PaperServiceConfig;
   accountSession: AccountSession | null;
   controlPlaneEndpoint: string;
   documentMetadataTransport?: DocumentMetadataTransport;
@@ -49,6 +53,7 @@ type UseKnowledgeSyncControllerInput = {
 };
 
 export function useKnowledgeSyncController({
+  localMode = false, localService,
   accountSession,
   controlPlaneEndpoint,
   documentMetadataTransport,
@@ -68,7 +73,8 @@ export function useKnowledgeSyncController({
   workspaceRevision,
   workspaceSourceKey
 }: UseKnowledgeSyncControllerInput) {
-  const recommendations = useRecommendations({
+  const directRecommendations = localMode || Boolean(localService);
+  const cloudRecommendations = useRecommendations({
     accountSession,
     controlPlaneEndpoint,
     recommendationCacheDeps,
@@ -76,7 +82,7 @@ export function useKnowledgeSyncController({
     recommendationFeedbackTransport,
     recommendationGeneratorDeps,
     recommendationTransport,
-    recommendationsEnabled,
+    recommendationsEnabled: recommendationsEnabled && !directRecommendations,
     recommendationSortMode,
     recommendationStyle,
     personalizationVersion,
@@ -85,11 +91,14 @@ export function useKnowledgeSyncController({
     workspaceRevision,
     workspaceSourceKey
   });
+  const localRecommendations = useLocalRecommendations({ enabled: directRecommendations && recommendationsEnabled, config: localService,
+    papers: selectedPapers, profile: researchProfile, workspace: workspaceSourceKey, style: recommendationStyle ?? "balanced", sort: recommendationSortMode });
+  const recommendations = directRecommendations ? localRecommendations : cloudRecommendations;
   const documentMetadataSync = useDocumentMetadataSync({
     accountSession,
     controlPlaneEndpoint,
     documents,
-    enabled: personalizationEnabled && workspaceSourceKey.startsWith("local_library:"),
+    enabled: !localMode && personalizationEnabled && workspaceSourceKey.startsWith("local_library:"),
     transport: documentMetadataTransport,
     workspaceRevision
   });
@@ -105,6 +114,7 @@ export function useKnowledgeSyncController({
       retryDocumentMetadataSync: documentMetadataSync.retrySync
     },
     model: {
+      localRecommendations: directRecommendations,
       documentMetadataSyncMessage: documentMetadataSync.message,
       documentMetadataSyncResult: documentMetadataSync.lastResult,
       documentMetadataSyncStatus: documentMetadataSync.status,

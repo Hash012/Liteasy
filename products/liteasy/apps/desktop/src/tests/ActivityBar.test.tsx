@@ -86,3 +86,12 @@ describe("ActivityBar", () => {
     expect(await screen.findByRole("tooltip")).toHaveTextContent("文献库");
   });
 });
+
+
+test("double clicking the library opens the expanded window once", async () => {
+  const expand = vi.fn(); const toggle = vi.fn();
+  render(<ActivityBar activeView="library" onSelectView={vi.fn()} onToggleActiveView={toggle} onExpandLibrary={expand} />);
+  await userEvent.dblClick(screen.getByRole("button", { name: "文献库" }));
+  expect(expand).toHaveBeenCalledOnce();
+  expect(toggle).toHaveBeenCalledOnce();
+});

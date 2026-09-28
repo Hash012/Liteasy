@@ -61,14 +61,13 @@ pub async fn bounded(mut response: Response, limit: u64) -> Result<Vec<u8>, Stri
     }
     Ok(bytes)
 }
-fn strong_etag(response: &Response) -> Result<String, String> {
+fn strong_etag(response: &Response) -> Option<String> {
     response
         .headers()
         .get("etag")
         .and_then(|v| v.to_str().ok())
         .filter(|s| s.starts_with('"') && s.ends_with('"') && s.len() >= 2)
         .map(str::to_owned)
-        .ok_or_else(|| "服务器未提供强 ETag，无法安全同步。".into())
 }
 impl Remote {
     pub fn new(
@@ -154,47 +153,23 @@ impl Remote {
                     .await
                     .map_err(network_error)?,
             )?;
-            let etag = strong_etag(&response)?;
             if bounded(response, 4096).await? != value {
                 return Err("服务器未正确保存验证文件。".into());
             }
-            let response = self
-                .request("PUT", &name)
-                .header("If-None-Match", "*")
-                .body("must-not-overwrite")
+            // Class-1 DAV servers need not expose a strong GET ETag. Verify
+            // exclusive MKCOL instead; all Liteasy manifest writers take this lock.
+            let lock = format!("{name}-lock/");
+            self.acquire_lock(&lock).await?;
+            let second = self
+                .request("MKCOL", &lock)
                 .send()
                 .await
-                .map_err(network_error)?;
-            if response.status().as_u16() != 412 {
-                return Err("服务器不支持条件创建，无法安全同步。".into());
+                .map_err(network_error);
+            let cleanup = self.release_lock(&lock).await;
+            if !matches!(second?.status().as_u16(), 405 | 409 | 423) {
+                return Err("服务器不能独占创建同步目录，无法避免多设备覆盖。".into());
             }
-            let response = self
-                .request("PUT", &name)
-                .header("If-Match", "\"liteasy-impossible-etag\"")
-                .body("must-not-overwrite")
-                .send()
-                .await
-                .map_err(network_error)?;
-            if response.status().as_u16() != 412 {
-                return Err("服务器不支持条件更新，无法安全同步。".into());
-            }
-            success(
-                self.request("PUT", &name)
-                    .header("If-Match", etag)
-                    .body(value.clone())
-                    .send()
-                    .await
-                    .map_err(network_error)?,
-            )?;
-            let response = success(
-                self.request("GET", &name)
-                    .send()
-                    .await
-                    .map_err(network_error)?,
-            )?;
-            if bounded(response, 4096).await? != value {
-                return Err("服务器条件写入验证失败。".into());
-            }
+            cleanup?;
             Ok(())
         }
         .await;
@@ -208,39 +183,92 @@ impl Remote {
         cleanup?;
         Ok(())
     }
-    pub async fn manifest(&self) -> Result<(Manifest, Option<String>), String> {
+    async fn acquire_lock(&self, name: &str) -> Result<(), String> {
+        let response = self
+            .request("MKCOL", name)
+            .send()
+            .await
+            .map_err(network_error)?;
+        if response.status().as_u16() != 201 {
+            return Err(if matches!(response.status().as_u16(), 405 | 409 | 423) {
+                "另一设备正在发布同步结果，请稍后重试。若所有设备已退出仍持续出现，请备份远端数据后移除同步库中的 manifest-write-lock 目录再试。".into()
+            } else {
+                status_error(response.status().as_u16())
+            });
+        }
+        Ok(())
+    }
+    async fn release_lock(&self, name: &str) -> Result<(), String> {
+        success(
+            self.request("DELETE", name)
+                .send()
+                .await
+                .map_err(network_error)?,
+        )?;
+        Ok(())
+    }
+    async fn manifest_bytes(&self) -> Result<Option<(Vec<u8>, String)>, String> {
         let response = self
             .request("GET", "manifest.v1.json")
+            .header("Cache-Control", "no-cache")
             .send()
             .await
             .map_err(network_error)?;
         if response.status().as_u16() == 404 {
-            return Ok((Manifest::default(), None));
+            return Ok(None);
         }
         let response = success(response)?;
-        let etag = strong_etag(&response)?;
-        let manifest: Manifest =
-            serde_json::from_slice(&bounded(response, MAX_MANIFEST_BYTES).await?)
-                .map_err(|_| "远端同步清单损坏。")?;
-        manifest.validate()?;
-        Ok((manifest, Some(etag)))
+        let tag = strong_etag(&response);
+        let bytes = bounded(response, MAX_MANIFEST_BYTES).await?;
+        // The digest is a revision token, never an invented HTTP entity tag.
+        let revision = tag.unwrap_or_else(|| format!("sha256:{}", digest(&bytes)));
+        Ok(Some((bytes, revision)))
     }
-    pub async fn publish(&self, manifest: &Manifest, etag: Option<&str>) -> Result<(), String> {
+    pub async fn manifest(&self) -> Result<(Manifest, Option<String>), String> {
+        let Some((bytes, revision)) = self.manifest_bytes().await? else {
+            return Ok((Manifest::default(), None));
+        };
+        let manifest = Manifest::from_bytes(&bytes)?;
+        Ok((manifest, Some(revision)))
+    }
+    pub async fn publish(&self, manifest: &Manifest, revision: Option<&str>) -> Result<(), String> {
         manifest.validate()?;
         let bytes = serde_json::to_vec(manifest).map_err(|e| e.to_string())?;
         if bytes.len() as u64 > MAX_MANIFEST_BYTES {
             return Err("同步清单超过 16 MiB。".into());
         }
-        let request = self
-            .request("PUT", "manifest.v1.json")
-            .header("Content-Type", "application/json");
-        let request = if let Some(tag) = etag {
-            request.header("If-Match", tag)
-        } else {
-            request.header("If-None-Match", "*")
-        };
-        success(request.body(bytes).send().await.map_err(network_error)?)?;
-        Ok(())
+        let lock = "manifest-write-lock/";
+        self.acquire_lock(lock).await?;
+        let result = async {
+            let current = self.manifest_bytes().await?;
+            if current.as_ref().map(|(_, token)| token.as_str()) != revision {
+                return Err(status_error(412));
+            }
+            let request = self
+                .request("PUT", "manifest.v1.json")
+                .header("Content-Type", "application/json");
+            let request = match revision {
+                Some(tag) if !tag.starts_with("sha256:") => request.header("If-Match", tag),
+                None => request.header("If-None-Match", "*"),
+                _ => request,
+            };
+            success(
+                request
+                    .body(bytes.clone())
+                    .send()
+                    .await
+                    .map_err(network_error)?,
+            )?;
+            let saved = self.manifest_bytes().await?;
+            if saved.as_ref().map(|(value, _)| value.as_slice()) != Some(bytes.as_slice()) {
+                return Err("同步清单写入校验失败，已保留本地同步记录。".into());
+            }
+            Ok(())
+        }
+        .await;
+        let released = self.release_lock(lock).await;
+        result?;
+        released
     }
     pub async fn upload(&self, hash: &str, bytes: Vec<u8>) -> Result<(), String> {
         if digest(&bytes) != hash {
@@ -385,7 +413,14 @@ pub(super) mod test_server {
                         code = 401;
                     } else {
                         match method {
-                            "MKCOL" => code = 201,
+                            "MKCOL" => {
+                                if state.objects.contains_key(&path) {
+                                    code = 405;
+                                } else {
+                                    state.objects.insert(path, (vec![], String::new()));
+                                    code = 201;
+                                }
+                            }
                             "PROPFIND" => {
                                 code = 207;
                                 result = b"<multistatus xmlns=\"DAV:\"/>".to_vec();
@@ -465,7 +500,15 @@ pub(super) mod test_server {
         let server = Server::start();
         runtime().block_on(async {
             server.remote.verify().await.unwrap();
-            assert!(server.state.lock().unwrap().objects.is_empty());
+            assert!(server
+                .state
+                .lock()
+                .unwrap()
+                .objects
+                .keys()
+                .all(|key| key.ends_with('/')
+                    && !key.contains("probe-")
+                    && !key.contains("write-lock")));
             let bytes = b"attachment".to_vec();
             let hash = digest(&bytes);
             server.remote.upload(&hash, bytes.clone()).await.unwrap();
@@ -487,7 +530,13 @@ pub(super) mod test_server {
                 .await
                 .is_err());
             server.state.lock().unwrap().no_etag = true;
-            assert!(server.remote.manifest().await.is_err());
+            let (_, token) = server.remote.manifest().await.unwrap();
+            assert!(token.as_ref().unwrap().starts_with("sha256:"));
+            server
+                .remote
+                .publish(&manifest, token.as_deref())
+                .await
+                .unwrap();
             server.state.lock().unwrap().no_etag = false;
             server
                 .state
@@ -501,12 +550,77 @@ pub(super) mod test_server {
         });
     }
     #[test]
-    fn webdav_rejects_servers_ignoring_conditions_and_cleans_probe() {
+    fn webdav_publication_lock_and_hash_revision_reject_stale_writers() {
+        let server = Server::start();
+        {
+            let mut state = server.state.lock().unwrap();
+            state.no_etag = true;
+            state.ignore_conditions = true;
+        }
+        runtime().block_on(async {
+            let original = Manifest::default();
+            server.remote.publish(&original, None).await.unwrap();
+            let (_, revision) = server.remote.manifest().await.unwrap();
+            server
+                .remote
+                .acquire_lock("manifest-write-lock/")
+                .await
+                .unwrap();
+            assert!(server
+                .remote
+                .publish(&original, revision.as_deref())
+                .await
+                .is_err());
+            server
+                .remote
+                .release_lock("manifest-write-lock/")
+                .await
+                .unwrap();
+            let mut updated = original.clone();
+            updated.files.insert("deleted.pdf".into(), None);
+            server
+                .remote
+                .publish(&updated, revision.as_deref())
+                .await
+                .unwrap();
+            assert!(server
+                .remote
+                .publish(&original, revision.as_deref())
+                .await
+                .is_err());
+            assert!(server
+                .remote
+                .manifest()
+                .await
+                .unwrap()
+                .0
+                .files
+                .contains_key("deleted.pdf"));
+            assert!(!server
+                .state
+                .lock()
+                .unwrap()
+                .objects
+                .contains_key("/liteasy/test/manifest-write-lock/"));
+        });
+    }
+
+    #[test]
+    fn webdav_uses_exclusive_publication_when_http_conditions_are_unavailable() {
         let server = Server::start();
         server.state.lock().unwrap().ignore_conditions = true;
         runtime().block_on(async {
-            assert!(server.remote.verify().await.is_err());
+            server.remote.verify().await.unwrap();
+            let original = Manifest::default();
+            server.remote.publish(&original, None).await.unwrap();
+            assert!(server.remote.publish(&original, None).await.is_err());
         });
-        assert!(server.state.lock().unwrap().objects.is_empty());
+        assert!(server
+            .state
+            .lock()
+            .unwrap()
+            .objects
+            .keys()
+            .all(|key| !key.contains("probe-") && !key.contains("write-lock")));
     }
 }

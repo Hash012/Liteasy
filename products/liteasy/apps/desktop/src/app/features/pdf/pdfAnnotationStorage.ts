@@ -476,7 +476,7 @@ export function normalizePdfAnnotationPrivateState(
     return undefined;
   }
   const candidate = value as { annotations?: unknown; autoPublic?: unknown; version?: unknown };
-  if (!Array.isArray(candidate.annotations)) {
+  if (!Array.isArray(candidate.annotations) || (candidate.version !== undefined && candidate.version !== 1 && candidate.version !== 2)) {
     return undefined;
   }
   return {
@@ -501,8 +501,14 @@ export function recoverPdfAnnotationPrivateState(
   fallbackPaperIdentity?: PaperIdentity
 ): PdfAnnotationRestartRecovery {
   const candidate = value && typeof value === "object" && !Array.isArray(value)
-    ? value as { annotations?: unknown; autoPublic?: unknown }
+    ? value as { annotations?: unknown; autoPublic?: unknown; version?: unknown }
     : {};
+  if (candidate.version !== undefined && candidate.version !== 1 && candidate.version !== 2) {
+    throw new Error("批注由当前应用不支持的数据版本保存，请升级 Liteasy；原始批注未修改。");
+  }
+  if (value !== undefined && (!value || typeof value !== "object" || Array.isArray(value) || !Array.isArray(candidate.annotations))) {
+    throw new Error("批注文件结构无法识别，已停止保存并保留原始数据。");
+  }
   const values = Array.isArray(candidate.annotations) ? candidate.annotations : [];
   const annotations: PdfAnnotationV2[] = [];
   const issues: PdfAnnotationRestartRecovery["issues"] = [];

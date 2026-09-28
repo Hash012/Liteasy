@@ -1,3 +1,4 @@
+import { clearLocalResearchProfile, loadLocalResearchProfile, localProfileTags, recordLocalResearchSignal } from "./localResearchProfile";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AccountSession } from "../account/account.types";
 import type { AcademicProfile } from "./profile.types";
@@ -20,6 +21,7 @@ import {
 } from "../agent-core/agentPersonalization";
 
 type UseProfileActionsInput = {
+  localMode?: boolean;
   accountSession?: AccountSession | null;
   controlPlaneEndpoint?: string;
   onProfileSamplingChanged?: (enabled: boolean) => void;
@@ -32,6 +34,7 @@ function localOnlyProfile(profile: AcademicProfile): AcademicProfile {
 }
 
 export function useProfileActions({
+  localMode = false,
   accountSession = null,
   controlPlaneEndpoint = "http://127.0.0.1:8787",
   onProfileSamplingChanged,
@@ -40,7 +43,7 @@ export function useProfileActions({
 }: UseProfileActionsInput = {}) {
   const [academicArchiveOpen, setAcademicArchiveOpen] = useState(false);
   const [academicProfile, setAcademicProfile] = useState<AcademicProfile>(() =>
-    localOnlyProfile(loadAcademicProfile())
+    localMode ? loadAcademicProfile() : localOnlyProfile(loadAcademicProfile())
   );
   const [clearProfileConfirmOpen, setClearProfileConfirmOpen] = useState(false);
   const [profileClearMessage, setProfileClearMessage] = useState<string | undefined>();
@@ -69,24 +72,30 @@ export function useProfileActions({
   const personalizationVersionRef = useRef(0);
   personalizationVersionRef.current = personalizationVersion;
   const [profileTags, setProfileTags] = useState<UserTag[]>([]);
-  const currentSessionIdRef = useRef(accountSession?.sessionId);
-  currentSessionIdRef.current = accountSession?.sessionId;
+  const currentSessionIdRef = useRef(localMode ? "local" : accountSession?.sessionId);
+  currentSessionIdRef.current = localMode ? "local" : accountSession?.sessionId;
   const client = useMemo(
     () =>
-      accountSession
+      accountSession && !localMode
         ? createAcademicProfileClient({ endpoint: controlPlaneEndpoint, transport })
         : null,
-    [accountSession?.sessionId, controlPlaneEndpoint, transport]
+    [localMode, accountSession?.sessionId, controlPlaneEndpoint, transport]
   );
 
   useEffect(() => {
-    const localProfile = localOnlyProfile(loadAcademicProfile());
+    const localProfile = localMode ? loadAcademicProfile() : localOnlyProfile(loadAcademicProfile());
     setAcademicProfile(localProfile);
     setPersonalizationSummary(undefined);
     setPersonalizationVersion(0);
     setProfileTags([]);
     setProfileClearMessage(undefined);
 
+    if (localMode) {
+      const refresh = () => { const data = loadLocalResearchProfile(); const tags = localProfileTags(data); setProfileTags(tags); setPersonalizationVersion(data.version);
+        setPersonalizationSummary(tags.length ? `近期阅读兴趣：${tags.slice(0, 8).map((tag) => tag.label).join("、")}` : undefined); };
+      refresh(); window.addEventListener("liteasy-local-profile-changed", refresh);
+      return () => window.removeEventListener("liteasy-local-profile-changed", refresh);
+    }
     if (!accountSession || !client) {
       return;
     }
@@ -123,7 +132,7 @@ export function useProfileActions({
     return () => {
       active = false;
     };
-  }, [accountSession?.sessionId, client]);
+  }, [localMode, accountSession?.sessionId, client]);
 
   function openAcademicArchive() {
     setAcademicArchiveOpen(true);
@@ -172,7 +181,7 @@ export function useProfileActions({
   }
 
   async function updateAcademicProfile(nextProfile: AcademicProfile) {
-    saveAcademicProfile(localOnlyProfile(nextProfile));
+    saveAcademicProfile(localMode || !accountSession ? nextProfile : localOnlyProfile(nextProfile));
     if (!accountSession || !client) {
       setAcademicProfile(nextProfile);
       setProfileClearMessage("学术档案已保存到本机。");
@@ -233,6 +242,7 @@ export function useProfileActions({
       return;
     }
 
+    if (localMode) clearLocalResearchProfile();
     clearAcademicProfile();
     setAcademicProfile({ ...defaultAcademicProfile, disciplines: [] });
     setPersonalizationSummary(undefined);
@@ -244,6 +254,11 @@ export function useProfileActions({
   }
 
   async function recordPersonalizationSignal(signal: PersonalizationSignal) {
+    if (profileSamplingEnabled && localMode) {
+      try { recordLocalResearchSignal(signal); window.dispatchEvent(new Event("liteasy-local-profile-changed")); }
+      catch { setProfileClearMessage("本机画像保存失败，可能是存储空间不足。阅读不受影响。"); }
+      return;
+    }
     if (!profileSamplingEnabled || !accountSession || !client) {
       return;
     }

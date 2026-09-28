@@ -86,6 +86,20 @@ pub fn allowed_path(path: &str) -> bool {
 }
 
 impl Manifest {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
+        let value: serde_json::Value =
+            serde_json::from_slice(bytes).map_err(|_| "同步清单损坏，已停止修改并保留原数据。")?;
+        if value.get("schemaVersion").and_then(|v| v.as_u64()) != Some(1) {
+            return Err(
+                "此同步库使用当前应用不支持的数据版本，请升级 Liteasy 后重试；原数据未修改。"
+                    .into(),
+            );
+        }
+        let manifest: Self =
+            serde_json::from_value(value).map_err(|_| "同步清单结构无法识别，已保留原数据。")?;
+        manifest.validate()?;
+        Ok(manifest)
+    }
     pub fn validate(&self) -> Result<(), String> {
         if self.schema_version != 1 || self.files.len() > 100_000 {
             return Err("不支持的同步清单版本或清单过大。".into());
@@ -158,6 +172,20 @@ mod tests {
             document_id: Some("doc-1".into()),
         }
     }
+    #[test]
+    fn future_or_malformed_manifest_returns_an_error_without_panicking() {
+        for bytes in [
+            br#"{"schemaVersion":2,"files":{},"newRequiredField":true}"#.as_slice(),
+            b"null",
+            b"[]",
+            b"{",
+            br#"{"schemaVersion":1,"files":null}"#,
+        ] {
+            assert!(Manifest::from_bytes(bytes).is_err());
+        }
+        assert!(Manifest::from_bytes(br#"{"schemaVersion":1,"files":{}}"#).is_ok());
+    }
+
     #[test]
     fn three_way_merge_handles_edits_deletes_and_first_sync() {
         let a = v(1);

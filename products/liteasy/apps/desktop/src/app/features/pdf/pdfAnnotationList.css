@@ -144,3 +144,5 @@
 .pdf-entry-review [role="alert"] {
   color: var(--colorPaletteRedForeground1);
 }
+
+.paper-selection-tools { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }

@@ -67,6 +67,7 @@ export type LeftPaneProps = {
   onOpenLibraryInFileManager?: () => Promise<void>;
   onSelectLegacyLibraryRoot?: (legacyRootPath: string) => Promise<void>;
   importJobs: Record<string, ImportJob>;
+  localRecommendations?: boolean;
   libraryPaperChildren?: Record<string, LibraryPaperChildItem[]>;
   leftRailView: LeftRailView;
   list: OrganizationList | null;
@@ -99,6 +100,9 @@ export type LeftPaneProps = {
   onOpenPaper?: (paperId: string) => void;
   onResolvePaperIdentity?: (paper: Paper) => void;
   onRetrievePaperMetadata?: (paper: Paper) => Promise<string>;
+  libraryExpanded?: boolean;
+  onCloseLibraryExpanded?: () => void;
+  onCreatePaperChild?: (paper: Paper, kind: "note" | "board", title: string) => Promise<void>;
   onOpenPaperChild?: (item: LibraryPaperChildItem, paper: Paper) => void;
   onRenamePaperChild?: (item: LibraryPaperChildItem, paper: Paper, requestedName: string) => Promise<string>;
   onRefreshLocalLibrary?: () => Promise<void>;
@@ -203,6 +207,7 @@ export function LeftPane({
   onSelectLegacyLibraryRoot,
   importJobs,
   libraryPaperChildren,
+  localRecommendations,
   leftRailView,
   list,
   listMessage,
@@ -231,7 +236,10 @@ export function LeftPane({
   onOpenPaper,
   onResolvePaperIdentity,
   onRetrievePaperMetadata,
+  libraryExpanded,
+  onCloseLibraryExpanded,
   onOpenPaperChild,
+  onCreatePaperChild,
   onRenamePaperChild,
   onRefreshLocalLibrary,
   onMoveLibraryFolder,
@@ -394,6 +402,8 @@ export function LeftPane({
           />
         ) : (
           <LibraryPane
+            expanded={libraryExpanded}
+            onCloseExpanded={onCloseLibraryExpanded}
             fileLibrary={fileLibrary}
             accountScopeId={accountScopeId}
             accountSessionAvailable={accountSession !== null}
@@ -406,6 +416,7 @@ export function LeftPane({
             localLibraryError={localLibraryError}
             localLibrarySnapshot={localLibrarySnapshot}
             literatureHydration={literatureHydration}
+            localRecommendations={localRecommendations}
             paperChildren={libraryPaperChildren}
             onAddExternalPdf={onAddExternalPdf}
             onAddDroppedPdfFiles={onAddDroppedPdfFiles}
@@ -424,6 +435,7 @@ export function LeftPane({
             onResolvePaperIdentity={onResolvePaperIdentity}
             onRetrievePaperMetadata={onRetrievePaperMetadata}
             onOpenPaperChild={onOpenPaperChild}
+            onCreatePaperChild={onCreatePaperChild}
             onRefreshLocalLibrary={onRefreshLocalLibrary}
             onSelectLegacyLibraryRoot={onSelectLegacyLibraryRoot}
             onMoveFolder={onMoveLibraryFolder}

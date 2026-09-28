@@ -81,7 +81,8 @@ test("reading typography persists locally and malformed preferences are bounded"
   await user.click(screen.getByRole("button", { name: "阅读模式", exact: true }));
   await user.click(screen.getByRole("button", { name: "阅读排版", exact: true }));
   fireEvent.change(screen.getByRole("slider", { name: "阅读字号" }), { target: { value: "24" } });
-  await user.selectOptions(screen.getByRole("combobox", { name: "阅读字体" }), "sans");
+  await user.click(screen.getByRole("combobox", { name: "阅读字体" }));
+  await user.click(screen.getByRole("option", { name: "无衬线 · 黑体" }));
   await user.selectOptions(screen.getByRole("combobox", { name: "阅读页面宽度" }), "1080");
   await user.selectOptions(screen.getByRole("combobox", { name: "阅读行距" }), "2.2");
   await user.keyboard("{Escape}");
@@ -122,4 +123,33 @@ test("only an unambiguous quote becomes a PDF mark; repeated or changed text rem
   expect(readingQuoteRects(makeModel("alpha alpha"), "alpha")).toEqual([]);
   expect(readingQuoteRects(makeModel("alpha"), "altered")).toEqual([]);
   expect(readingQuotePages("alpha", { 1: "alpha", 2: "alpha" }, [])).toEqual([1, 2]);
+});
+
+test("reading selections expose the same position-independent tools and cancel outstanding questions on close", async () => {
+  const create = vi.fn().mockResolvedValue(undefined), capture = vi.fn().mockResolvedValue(undefined);
+  const quickAsk = vi.fn().mockImplementation(() => new Promise(() => {}));
+  const session: PdfReadingAnnotations = { scopeKey: "tools", ready: true, annotations: [original], pageTexts: { 2: chunks[0].snippet },
+    pageCount: 2, focusedPage: 2, create, capture, quickAsk, update: vi.fn(), remove: vi.fn(), openPdf: vi.fn(),
+    annotationTools: () => <button>AI review</button> };
+  const view = render(content(session));
+  const paragraph = screen.getByText(chunks[0].snippet);
+  const range = document.createRange(); range.selectNodeContents(paragraph);
+  window.getSelection()?.removeAllRanges();
+  window.getSelection()?.addRange(range);
+  fireEvent.mouseUp(paragraph);
+  const tools = screen.getByRole("toolbar", { name: "选段工具" });
+  await userEvent.click(within(tools).getByRole("button", { name: "高亮", exact: true }));
+  expect(create).toHaveBeenCalledWith(expect.objectContaining({ kind: "highlight", page: 2, excerpt: chunks[0].snippet }));
+  await userEvent.click(within(tools).getByRole("button", { name: "加入白板", exact: true }));
+  expect(capture).toHaveBeenCalledWith({ page: 2, excerpt: chunks[0].snippet }, "board");
+  await userEvent.click(within(tools).getByRole("button", { name: "加入对话", exact: true }));
+  expect(capture).toHaveBeenLastCalledWith({ page: 2, excerpt: chunks[0].snippet }, "conversation");
+  expect(screen.getByRole("button", { name: "AI review" })).toBeInTheDocument();
+  await userEvent.click(within(tools).getByRole("button", { name: "速问", exact: true }));
+  await userEvent.type(screen.getByRole("textbox", { name: "速问问题" }), "如何理解这个实验？");
+  await userEvent.click(screen.getByRole("button", { name: "提问", exact: true }));
+  expect(quickAsk).toHaveBeenCalledWith({ page: 2, excerpt: chunks[0].snippet, question: "如何理解这个实验？" }, expect.any(AbortSignal));
+  const signal = quickAsk.mock.calls[0][1] as AbortSignal;
+  view.unmount();
+  expect(signal.aborted).toBe(true);
 });

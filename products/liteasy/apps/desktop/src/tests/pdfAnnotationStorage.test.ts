@@ -495,3 +495,13 @@ test("merges all legacy account-scoped annotations before making the library acc
   expect(window.localStorage.getItem(corruptAnnotationKey)).toBeNull();
   expect(window.localStorage.getItem(otherAutoPublicKey)).toBeNull();
 });
+
+
+test("future annotation snapshots cannot be normalized into empty writable version-2 data", () => {
+  const future = { version: 3, annotations: [legacyAnnotation()], extension: { important: true } };
+  const before = JSON.stringify(future);
+  expect(normalizePdfAnnotationPrivateState(future, fallbackIdentity)).toBeUndefined();
+  expect(() => recoverPdfAnnotationPrivateState(future, fallbackIdentity)).toThrow("数据版本");
+  expect(() => recoverPdfAnnotationPrivateState({ version: 2, annotations: null })).toThrow("结构");
+  expect(JSON.stringify(future)).toBe(before);
+});

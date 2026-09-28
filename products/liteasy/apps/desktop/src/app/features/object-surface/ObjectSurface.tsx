@@ -50,6 +50,7 @@ export function ObjectSurface({
   onError,
   presentation = "card",
   onEdit,
+  editOnDoubleClick = false,
   editor,
   sourceText,
 }: {
@@ -60,6 +61,7 @@ export function ObjectSurface({
   onDetails(): void;
   onError(message: string): void;
   onEdit?(): void;
+  editOnDoubleClick?: boolean;
   editor?: ReactNode;
   sourceText?: string;
 }) {
@@ -99,8 +101,12 @@ export function ObjectSurface({
                   : "编辑笔记正文"
                 : undefined
             }
+            onDoubleClick={editOnDoubleClick && onEdit ? (event) => {
+              if ((event.target as Element).closest("a,button,input,textarea")) return;
+              event.stopPropagation(); onEdit();
+            } : undefined}
             onClick={
-              onEdit
+              onEdit && !editOnDoubleClick
                 ? (event) => {
                     if (
                       (event.target as Element).closest(

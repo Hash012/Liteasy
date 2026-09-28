@@ -1,0 +1,79 @@
+import { readFile } from "node:fs/promises";
+import { expect, test } from "@playwright/test";
+
+test("expanded library creates persistent paper notes and boards and accepts joined emoji icons", async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
+  const pdf = await readFile(new URL("../../../../../../../development/test-data/pdf-selection/glyph-boundaries.pdf", import.meta.url));
+  await page.route("**/manual-preview/das24a.pdf", (route) => route.fulfill({ body: pdf, contentType: "application/pdf" }));
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto("/?pdf-highlight-fixture#importable");
+  const activity = page.getByRole("navigation", { name: "左边栏导航" }).getByRole("button", { name: "文献库", exact: true });
+  await activity.dblclick();
+  const library = page.getByRole("dialog", { name: "文献库", exact: true });
+  await expect(library).toBeVisible();
+  expect((await library.boundingBox())!.width).toBeGreaterThan(800);
+  const paper = library.getByRole("button", { name: "das24a.pdf", exact: true });
+  await paper.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "新建 Markdown 笔记", exact: true }).click();
+  await page.getByRole("textbox", { name: "论文附件名称" }).fill("实验复现");
+  await page.getByRole("button", { name: "创建", exact: true }).click();
+  const editor = page.getByRole("region", { name: "论文 Markdown 笔记" });
+  await expect(editor).toBeVisible();
+  await editor.getByRole("textbox", { name: "论文笔记 Markdown 源码" }).fill("# 实验复现\n\n**已验证**\n\n$$E=mc^2$$");
+  await editor.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(editor.getByRole("button", { name: "保存", exact: true })).toBeDisabled();
+  await editor.getByRole("button", { name: "阅读", exact: true }).click();
+  await expect(editor.locator(".katex")).toBeVisible();
+  await page.reload();
+  await activity.dblclick();
+  await expect(library).toBeVisible();
+  const child = library.getByRole("button", { name: "打开论文文件：实验复现", exact: true });
+  await expect(child).toBeVisible();
+  await child.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "更换图标", exact: true }).click();
+  await page.getByRole("tab", { name: "Emoji", exact: true }).click();
+  await page.getByRole("textbox", { name: "自定义 Emoji" }).fill("👩🏽‍🔬");
+  await page.getByRole("button", { name: "使用 Emoji", exact: true }).click();
+  await expect(child.locator('[data-icon="emoji"]')).toHaveText("👩🏽‍🔬");
+  await library.screenshot({ path: testInfo.outputPath("expanded-library.png") });
+  await paper.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "新建论文白板", exact: true }).click();
+  await page.getByRole("textbox", { name: "论文附件名称" }).fill("论证画布");
+  await page.getByRole("button", { name: "创建", exact: true }).click();
+  await expect(page.locator(".object-workbench")).toBeVisible();
+  await expect(page.getByRole("button", { name: "打开论文文件：论证画布", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "打开论文文件：实验复现", exact: true }).click();
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole("textbox", { name: "论文笔记 Markdown 源码" })).toHaveValue(/已验证/);
+  expect(errors).toEqual([]);
+});
+
+test("local recommendations work without login and profile data can be exported", async ({ page }, testInfo) => {
+  test.setTimeout(90_000);
+  await page.addInitScript(() => {
+    localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true");
+    localStorage.setItem("liteasy.local-literature.v1", JSON.stringify({ "papers.local_mode": true, "profile.local_enabled": true }));
+  });
+  await page.route("https://api.crossref.org/works?**", (route) => route.fulfill({ json: { message: { items: [
+    { DOI: "10.1234/graph", title: ["Graph neural networks for research"], published: { "date-parts": [[2026]] }, "is-referenced-by-count": 42 },
+  ] } } }));
+  const pdf = await readFile(new URL("../../../../../../../development/test-data/pdf-selection/glyph-boundaries.pdf", import.meta.url));
+  await page.route("**/manual-preview/das24a.pdf", (route) => route.fulfill({ body: pdf, contentType: "application/pdf" }));
+  await page.goto("/?pdf-highlight-fixture#importable");
+  const library = page.getByRole("region", { name: "本地文献库", exact: true });
+  await library.getByRole("button", { name: "das24a.pdf", exact: true }).click();
+  const recs = page.getByRole("region", { name: "关联推荐", exact: true });
+  await expect(recs.getByText("Graph neural networks for research", { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(recs.getByRole("button", { name: "刷新推荐" })).toBeEnabled();
+  await page.getByRole("navigation", { name: "左边栏导航" }).getByRole("button", { name: "设置", exact: true }).click();
+  const settings = page.getByRole("region", { name: "应用设置" });
+  await settings.getByRole("textbox", { name: "搜索设置" }).fill("本地文献");
+  await expect(settings.getByText(/已记录 1 条行为/)).toBeVisible();
+  const download = page.waitForEvent("download");
+  await settings.getByRole("button", { name: "导出测试数据", exact: true }).click();
+  expect((await download).suggestedFilename()).toBe("Liteasy-local-research-profile.json");
+  await settings.screenshot({ path: testInfo.outputPath("local-literature-settings.png") });
+});

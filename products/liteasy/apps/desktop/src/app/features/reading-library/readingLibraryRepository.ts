@@ -12,7 +12,7 @@ const metadataSchema = z.object({
   folderPath: z.string().max(4096).optional(),
   collection: z.string().trim().max(120).optional(),
   readingStatus: z.enum(["unread", "reading", "finished"]).optional()
-});
+}).passthrough();
 export type ReadingMetadata = z.infer<typeof metadataSchema>;
 const entrySchema = z.object({
   id: z.string(), ref: objectRefSchema, assetId: z.string(), fileName: z.string(),
@@ -20,7 +20,7 @@ const entrySchema = z.object({
   language: z.string().optional(), publication: z.string().optional(), publishedAt: z.string().optional(),
   identifier: z.string().optional(), abstract: z.string().optional(), fileSize: z.number().int().nonnegative(),
   addedAt: z.string(), contextTruncated: z.boolean()
-});
+}).passthrough();
 export type ReadingLibraryFile = z.infer<typeof entrySchema>;
 const change = (key: string, value: unknown, previous?: StorageRow | null) => ({
   key, expected: previous?.version ?? null, row: { key, version: crypto.randomUUID(), value }

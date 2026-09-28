@@ -159,8 +159,8 @@
   user-select: text;
 }
 .object-placement.is-selected {
-  outline: 2px dashed var(--colorBrandStroke1, #0f6cbd);
-  outline-offset: 2px;
+  border-color: var(--colorBrandStroke1, #0f6cbd);
+  box-shadow: 0 0 0 1px var(--colorBrandStroke1, #0f6cbd), 0 3px 12px #0001;
 }
 .object-placement.is-editing,
 .object-placement.is-adjusting {
@@ -170,7 +170,7 @@
 }
 .object-placement.is-moving {
   cursor: move;
-  outline: 2px dashed var(--colorNeutralForeground2, #555);
+  border-color: var(--colorBrandStroke1, #0f6cbd);
 }
 .object-placement.is-moving * {
   cursor: move;
@@ -482,3 +482,5 @@
   align-items: center;
   justify-content: center;
 }
+
+.canvas-selection { position: absolute; pointer-events: none; z-index: 5; background: color-mix(in srgb, var(--colorBrandBackground) 12%, transparent); border: 1px solid var(--colorBrandStroke1); border-radius: 3px; }

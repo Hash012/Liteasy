@@ -1,0 +1,4 @@
+.system-font-picker { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+.system-font-picker > small { flex-basis: 100%; }
+.system-font-picker .fui-Combobox { width: 100%; min-width: 0; }
+.system-font-picker .fui-Combobox input { min-width: 0; }

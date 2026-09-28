@@ -5,6 +5,7 @@ export const paperReadingFonts = {
 };
 export type PaperReadingPreferences = {
   fontSize: number;
+  fontFamily?: string;
   font: keyof typeof paperReadingFonts;
   lineHeight: number;
   width: number;
@@ -19,6 +20,7 @@ export function loadPaperReadingPreferences(key: string): PaperReadingPreference
   let value: Partial<PaperReadingPreferences> | null = null;
   try { value = JSON.parse(localStorage.getItem(key) ?? "null"); } catch { /* Use readable defaults. */ }
   return {
+    fontFamily: typeof value?.fontFamily === "string" && value.fontFamily.length <= 512 ? value.fontFamily : undefined,
     fontSize: Number.isFinite(value?.fontSize) && value!.fontSize! >= 14 && value!.fontSize! <= 30 ? value!.fontSize! : 18,
     font: value?.font && Object.prototype.hasOwnProperty.call(paperReadingFonts, value.font) ? value.font : "serif",
     lineHeight: [1.5, 1.85, 2.2].includes(value?.lineHeight ?? 0) ? value!.lineHeight! : 1.85,

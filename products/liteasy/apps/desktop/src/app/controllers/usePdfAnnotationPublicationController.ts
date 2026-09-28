@@ -1,3 +1,4 @@
+import { normalizeLiteratureIdentifier } from "../features/paper-identity/paperIdentity";
 import { useRef, useState } from "react";
 import type {
   ForumAnnotationPublicationOperation
@@ -101,6 +102,12 @@ const busyPublication: PdfAnnotationPublication = {
   state: "failed"
 };
 
+function paperWithLiterature(paper: Paper, literature: LiteratureRecord): Paper {
+  return { ...paper, literature, title: literature.title, authors: literature.authors, year: literature.year,
+    doi: literature.identifiers.find((id) => id.kind === "doi")?.value,
+    arxivId: literature.identifiers.find((id) => id.kind === "arxiv_id")?.value };
+}
+
 export function createPersistPaperLiterature({
   canManageLibraryReference,
   cloudLibraryClient,
@@ -113,7 +120,7 @@ export function createPersistPaperLiterature({
     );
     if (!reference || !persistInCloud) {
       await literatureMetadataRepository.save(paper.id, literature);
-      return { ...paper, literature };
+      return paperWithLiterature(paper, literature);
     }
     const result = await cloudLibraryClient.updateLiterature(
       { scopeId: reference.scopeId, scopeType: reference.scopeType },
@@ -125,7 +132,7 @@ export function createPersistPaperLiterature({
       throw new Error("云端文献元数据写入响应无效。");
     }
     return {
-      ...paper,
+      ...paperWithLiterature(paper, literature),
       libraryReference: { ...reference, revision: result.revision },
       literature
     };
@@ -205,11 +212,12 @@ function boundedHints(
 
 function searchDraftFromRequest(request: LiteratureResolveInput): LiteratureSearchDraft | undefined {
   const hints = request.hints;
-  if (!hints?.title || !hints.authors?.length || !hints.year) return undefined;
+  if (!hints?.title && !request.query && !hints?.identifiers?.length) return undefined;
   return {
-    authors: [...hints.authors],
-    title: hints.title,
-    year: hints.year
+    authors: [...(hints?.authors ?? [])],
+    title: hints?.title ?? request.query ?? "",
+    year: hints?.year,
+    identifier: hints?.identifiers?.find((id) => id.kind === "doi" || id.kind === "arxiv_id")?.value
   };
 }
 
@@ -489,15 +497,18 @@ export function usePdfAnnotationPublicationController({
 
   async function stagePaperIdentity(
     paper: Paper,
-    hints: ChangePdfAnnotationPublicationInput["literatureHints"]
+    hints: ChangePdfAnnotationPublicationInput["literatureHints"],
+    query?: string,
+    result?: LiteratureResolveResult
   ): Promise<LiteratureResolutionState | undefined> {
     if (paper.literature || await literatureMetadataRepository.load(paper.id)) return undefined;
     const request: LiteratureResolveInput = {
       ...(hints ? { hints: boundedHints(hints) } : {}),
+      ...(query?.trim() ? { query: query.trim().slice(0, 1000) } : {}),
       limit: 5,
       purpose: "liteasy_pdf_annotation"
     };
-    const state: LiteratureResolutionState = {
+    const state: LiteratureResolutionState = result ? resolutionStateFromResult(request, result) : {
       request,
       status: "unresolved",
       unavailableProviders: [],
@@ -689,24 +700,24 @@ export function usePdfAnnotationPublicationController({
   function searchLiterature(draft: LiteratureSearchDraft) {
     const active = activeResolutionRef.current;
     if (!active || active.pending) return;
-    const hints = boundedHints(draft);
-    if (!hints?.title || !hints.authors?.length || !hints.year) {
+    const identifier = draft.identifier?.trim();
+    const doi = normalizeLiteratureIdentifier("doi", identifier);
+    const arxiv = normalizeLiteratureIdentifier("arxiv_id", identifier);
+    const identifiers = doi ? [{ kind: "doi" as const, value: doi }] : arxiv ? [{ kind: "arxiv_id" as const, value: arxiv }] : [];
+    const hints = boundedHints({ ...draft, identifiers });
+    if ((!hints?.title && !identifiers.length) || (identifier && !identifiers.length)) {
       setLiteratureDialog((current) => current ? {
         ...current,
-        message: "请填写题名、完整作者和出版年份后检索。"
+        message: "请填写文献标题，或有效的 DOI / arXiv 编号；作者和年份可选。"
       } : current);
       return;
     }
     active.candidates = [];
     active.request = {
-      hints: {
-        authors: hints.authors,
-        title: hints.title,
-        year: hints.year
-      },
+      hints,
       limit: 5,
       purpose: "liteasy_pdf_annotation",
-      query: hints.title
+      query: hints?.title || identifier
     };
     active.unavailableProviders = [];
     setLiteratureDialog({

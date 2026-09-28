@@ -47,6 +47,7 @@ function getDockItemIcon(itemId: DockItemId) {
   switch (itemId) {
     case "board":
       return <WhiteboardRegular />;
+    case "paper-note":
     case "note-file-reader":
     case "notes":
       return <NoteRegular />;

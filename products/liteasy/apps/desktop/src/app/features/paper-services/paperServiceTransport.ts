@@ -15,15 +15,17 @@ export async function savePaperServiceKey(config: PaperServiceConfig, apiKey: st
 export async function hasPaperServiceKey(config: PaperServiceConfig): Promise<boolean> { return isTauri() ? invoke("has_paper_service_key", { config }) : keys.has(scope(config)); }
 export async function deletePaperServiceKey(config: PaperServiceConfig) { if (isTauri()) await invoke("delete_paper_service_key", { config }); else keys.delete(scope(config)); }
 export function encodeBytes(bytes: Uint8Array) { let text = ""; for (let i=0; i<bytes.length; i+=32768) text += String.fromCharCode(...bytes.subarray(i,i+32768)); return btoa(text); }
-export async function paperServiceRequest(configInput: PaperServiceConfig, url: string, options: { method?: "GET" | "POST" | "PUT"; body?: Uint8Array; json?: unknown; authenticate?: boolean } = {}): Promise<Response> {
+export async function paperServiceRequest(configInput: PaperServiceConfig, url: string, options: { method?: "GET" | "POST" | "PUT"; body?: Uint8Array; json?: unknown; authenticate?: boolean; maxResponseBytes?: number } = {}): Promise<Response> {
   const config = validatePaperService(configInput);
   const target = new URL(url);
   const authenticate = options.authenticate !== false;
+  const limit = options.maxResponseBytes;
+  if (limit !== undefined && (!Number.isInteger(limit) || limit <= 0 || limit > 200 * 1024 * 1024)) throw new Error("响应大小限制无效。");
   if (authenticate && (target.origin !== new URL(config.endpoint).origin || !target.pathname.startsWith(new URL(config.endpoint).pathname.replace(/\/$/, "")))) throw new Error("禁止向其他服务发送密钥。");
   const bytes = options.body ?? (options.json === undefined ? undefined : new TextEncoder().encode(JSON.stringify(options.json)));
   const contentType = options.json === undefined ? undefined : "application/json";
   if (isTauri()) {
-    const result = await invoke<{ status: number; bodyBase64: string }>("request_paper_service", { config, url, method: options.method ?? "GET", bodyBase64: bytes ? encodeBytes(bytes) : null, contentType: contentType ?? null, authenticate });
+    const result = await invoke<{ status: number; bodyBase64: string }>("request_paper_service", { config, url, method: options.method ?? "GET", bodyBase64: bytes ? encodeBytes(bytes) : null, contentType: contentType ?? null, authenticate, maxResponseBytes: limit ?? null });
     return new Response(Uint8Array.from(atob(result.bodyBase64), (char) => char.charCodeAt(0)), { status: result.status });
   }
   const key = authenticate ? keys.get(scope(config)) : undefined;
@@ -33,5 +35,26 @@ export async function paperServiceRequest(configInput: PaperServiceConfig, url: 
     else if (config.provider === "semantic-scholar") headers["x-api-key"] = key;
     else headers[config.provider === "crossref" ? "Crossref-Plus-API-Token" : "Authorization"] = `Bearer ${key}`;
   }
-  return fetch(target, { method: options.method ?? "GET", headers, body: bytes as BodyInit | undefined, signal: AbortSignal.timeout(120_000), redirect: "error" });
+  const response = await fetch(target, { method: options.method ?? "GET", headers, body: bytes as BodyInit | undefined, signal: AbortSignal.timeout(120_000), redirect: "error" });
+  if (limit === undefined || !response.body) return response;
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    if (Number(response.headers.get("Content-Length")) > limit) throw new Error("响应超过大小限制。");
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > limit) throw new Error("响应超过大小限制。");
+      chunks.push(value);
+    }
+  } catch (error) {
+    await reader.cancel().catch(() => undefined);
+    throw error;
+  } finally { reader.releaseLock(); }
+  const bounded = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { bounded.set(chunk, offset); offset += chunk.byteLength; }
+  return new Response(bounded, { status: response.status, headers: response.headers });
 }

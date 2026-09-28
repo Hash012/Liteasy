@@ -5,6 +5,7 @@ export type DockItemId =
   | "library"
   | "document-reader"
   | "note-file-reader"
+  | "paper-note"
   | "artifact-library"
   | "organization"
   | "profile"

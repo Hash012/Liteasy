@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import type { createImportStore } from "../features/import/import.store";
 import type { LiteratureAuthorityClient } from "../features/paper-identity/literatureAuthorityClient";
-import type { LiteratureRecord } from "../features/paper-identity/literature.types";
+import type { LiteratureRecord, LiteratureResolveResult } from "../features/paper-identity/literature.types";
 import { buildMetadataPdfFileName, buildPdfRecognitionRequest, selectPdfRecognitionCandidate, type PdfRecognitionEvidence } from "../features/metadata/pdfRecognition";
 import type { Paper } from "../features/workspace/workspace.types";
 import type { createWorkspaceStore } from "../features/workspace/workspace.store";
@@ -17,7 +17,7 @@ type Input = {
   moveResource: MoveLocalLibraryResource;
   onChanged: () => void;
   onHint: (message: string) => void;
-  stageIdentity: (paper: Paper, request: NonNullable<ReturnType<typeof buildPdfRecognitionRequest>>) => Promise<unknown>;
+  stageIdentity: (paper: Paper, request: NonNullable<ReturnType<typeof buildPdfRecognitionRequest>>, result?: LiteratureResolveResult) => Promise<unknown>;
 };
 
 export function createPdfMetadataImportController(input: Input) {
@@ -49,6 +49,7 @@ export function createPdfMetadataImportController(input: Input) {
       if (!request) return "未能从 PDF 中提取可用的元数据线索，请使用“确认文献身份”手动检索。";
       await input.stageIdentity(paper, request);
       let result = await input.literatureClient.resolveLiterature(request);
+      if (unchanged()) await input.stageIdentity(paper, request, result);
       let candidate = selectPdfRecognitionCandidate(result, evidence);
       if (!candidate && unchanged() && (result.status === "not_found" || result.status === "exact" || result.status === "ambiguous") &&
         request.hints?.identifiers?.some((id) => id.kind === "doi") &&
@@ -56,6 +57,7 @@ export function createPdfMetadataImportController(input: Input) {
         const titleRequest = { ...request, hints: { ...request.hints, identifiers: [] } };
         await input.stageIdentity(paper, titleRequest);
         result = await input.literatureClient.resolveLiterature(titleRequest);
+        if (unchanged()) await input.stageIdentity(paper, titleRequest, result);
         candidate = selectPdfRecognitionCandidate(result, evidence);
       }
       if (!unchanged()) return;

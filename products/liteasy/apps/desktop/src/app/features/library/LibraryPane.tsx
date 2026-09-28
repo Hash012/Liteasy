@@ -116,14 +116,18 @@ import {
 
 export type LibraryPaperChildItem = {
   id: string;
-  kind: "artifact" | "note" | PaperResourceKind;
+  kind: "artifact" | "note" | "board" | PaperResourceKind;
+  objectId?: string;
   label: string;
   meta?: string;
 };
 
 type LibraryPaneProps = {
+  expanded?: boolean;
+  onCloseExpanded?: () => void;
   fileLibrary?: LibraryFileAccess;
   accountScopeId?: string;
+  localRecommendations?: boolean;
   accountSessionAvailable?: boolean;
   activePaperId?: string | null;
   canOpenOrganizationWorkspace: boolean;
@@ -164,6 +168,7 @@ type LibraryPaneProps = {
   onOpenPaper?: (paperId: string) => void;
   onResolvePaperIdentity?: (paper: Paper) => void;
   onRetrievePaperMetadata?: (paper: Paper) => Promise<string>;
+  onCreatePaperChild?: (paper: Paper, kind: "note" | "board", title: string) => Promise<void>;
   onOpenPaperChild?: (item: LibraryPaperChildItem, paper: Paper) => void;
   onRefreshLocalLibrary?: () => Promise<void>;
   onRenameFolder?: (folderPath: string, requestedName: string) => Promise<string>;
@@ -253,7 +258,8 @@ function dirname(value: string) {
 
 function localExplorerTree(
   snapshot: LocalLibrarySnapshot | null,
-  metadataByPaperId: Record<string, PaperFileMetadata> = {}
+  metadataByPaperId: Record<string, PaperFileMetadata> = {},
+  papers: readonly Paper[] = []
 ): ExplorerTree {
   if (!snapshot) return { entries: [], folders: [] };
   const byPath = new Map<string, ExplorerFolder>();
@@ -274,13 +280,14 @@ function localExplorerTree(
     if (parent) parent.children.push(node);
     else roots.push(node);
   }
+  const paperById = new Map(papers.map((paper) => [paper.id, paper]));
   const rootEntries: ExplorerEntry[] = [];
   const metadataEntries: ExplorerEntry[] = [];
   for (const entry of snapshot.entries) {
     const explorerEntry: ExplorerEntry = {
       bodyAvailable: entry.path !== null,
       id: entry.id,
-      label: entry.title,
+      label: paperById.get(entry.id)?.title || entry.title,
       metadata: metadataByPaperId[entry.id],
       source: { area: "local", entry }
     };
@@ -447,13 +454,20 @@ function SectionHeader(props: {
 
 export function LibraryPane(props: LibraryPaneProps) {
   const scope = `${props.accountScopeId ?? "guest"}:${props.localLibrarySnapshot?.libraryId ?? "none"}`;
-  return <LibraryIconProvider key={scope} scope={scope}><LibraryPaneContent {...props} /></LibraryIconProvider>;
+  const content = <LibraryIconProvider key={scope} scope={scope}><LibraryPaneContent {...props} /></LibraryIconProvider>;
+  return props.expanded ? <Dialog open onOpenChange={(_, data) => { if (!data.open) props.onCloseExpanded?.(); }}>
+    <DialogSurface className="library-expanded-dialog"><DialogBody>
+      <DialogTitle action={<Button appearance="subtle" aria-label="关闭文献库浮窗" onClick={props.onCloseExpanded}>关闭</Button>}>文献库</DialogTitle>
+      <DialogContent>{content}</DialogContent>
+    </DialogBody></DialogSurface>
+  </Dialog> : content;
 }
 
 function LibraryPaneContent({
   fileLibrary,
   accountScopeId,
   accountSessionAvailable = false,
+  localRecommendations = false,
   activePaperId,
   cloudEndpoint,
   cloudTreeRevision,
@@ -475,6 +489,7 @@ function LibraryPaneContent({
   onResolvePaperIdentity,
   onRetrievePaperMetadata,
   onOpenPaperChild,
+  onCreatePaperChild,
   paperChildren = {},
   papers,
   onRefreshLocalLibrary,
@@ -542,6 +557,9 @@ function LibraryPaneContent({
   const [metadataTagsDraft, setMetadataTagsDraft] = useState("");
   const [metadataEditorError, setMetadataEditorError] = useState("");
   const [metadataEditorPending, setMetadataEditorPending] = useState(false);
+  const [newChild, setNewChild] = useState<{ paper: Paper; kind: "note" | "board" }>();
+  const [childTitle, setChildTitle] = useState("");
+  const [creatingChild, setCreatingChild] = useState(false);
   const [message, setMessage] = useState("");
   const [dropHover, setDropHover] = useState<{ key: string; allowed: boolean; label: string } | null>(null);
   const dragSourceRef = useRef<LibraryResourceTransferSource | null>(null);
@@ -614,8 +632,8 @@ function LibraryPaneContent({
     return new Set(fileLibrary?.entries.filter((entry) => !entry.folderPath || !paths.has(libraryFolderKey(`${root}/${entry.folderPath}`))).map((entry) => entry.id));
   }, [fileLibrary?.entries, localLibrarySnapshot]);
   const localTree = useMemo(
-    () => filterTree(localExplorerTree(localLibrarySnapshot, visiblePaperMetadata), query, selectedCategory, filteredIds, fileFolders),
-    [localLibrarySnapshot, visiblePaperMetadata, query, selectedCategory, filteredIds, fileFolders]
+    () => filterTree(localExplorerTree(localLibrarySnapshot, visiblePaperMetadata, papers), query, selectedCategory, filteredIds, fileFolders),
+    [localLibrarySnapshot, visiblePaperMetadata, papers, query, selectedCategory, filteredIds, fileFolders]
   );
   const collectionTree = useMemo(
     () => filterTree(cloudExplorerTree("collection", collectionScope, collection.tree), query),
@@ -758,7 +776,7 @@ function LibraryPaneContent({
     if (pendingNodeIds.includes(recommendation.id)) return;
     setPendingNodeIds((current) => [...current, recommendation.id]);
     try {
-      await transfer({ area: "recommendation", recommendation }, targetFor("collection"));
+      await transfer({ area: "recommendation", recommendation }, targetFor(localRecommendations ? "local" : "collection"));
     } finally {
       setPendingNodeIds((current) => current.filter((id) => id !== recommendation.id));
     }
@@ -1075,8 +1093,7 @@ function LibraryPaneContent({
           <Menu openOnContext>
             <MenuTrigger disableButtonEnhancement>
               <button
-                onClick={fileLibrary ? inspectEntry : openEntry}
-                onDoubleClick={fileLibrary ? openEntry : undefined}
+                onClick={openEntry}
                 onKeyDown={fileLibrary ? (event) => { if (event.key === "Enter") { event.preventDefault(); openEntry(); } } : undefined}
                 className="library-paper-title"
                 disabled={pending}
@@ -1089,6 +1106,10 @@ function LibraryPaneContent({
             <MenuPopover>
               <MenuList>
                 <LibraryIconMenuItem itemKey={`file:${area}:${entry.id}`} title={entry.label} />
+                {sourcePaper && onCreatePaperChild ? <>
+                  <MenuItem onClick={() => { setNewChild({ paper: sourcePaper, kind: "note" }); setChildTitle(`${sourcePaper.title} · 笔记`); }}>新建 Markdown 笔记</MenuItem>
+                  <MenuItem onClick={() => { setNewChild({ paper: sourcePaper, kind: "board" }); setChildTitle(`${sourcePaper.title} · 白板`); }}>新建论文白板</MenuItem>
+                </> : null}
                 <MenuItem
                   disabled={!entry.bodyAvailable || pending}
                   icon={<OpenRegular />}
@@ -1396,6 +1417,20 @@ function LibraryPaneContent({
 
   return (
     <div className="library-pane">
+      <Dialog open={Boolean(newChild)} onOpenChange={(_, data) => { if (!data.open && !creatingChild) setNewChild(undefined); }}>
+        <DialogSurface><DialogBody><DialogTitle>{newChild?.kind === "board" ? "新建论文白板" : "新建 Markdown 笔记"}</DialogTitle>
+          <DialogContent><Field label="名称"><Input aria-label="论文附件名称" value={childTitle} onChange={(_, data) => setChildTitle(data.value)} maxLength={1000} /></Field>
+            <p>保存到「{newChild?.paper.title}」的论文文件中。</p>{message ? <p role="status">{message}</p> : null}</DialogContent>
+          <DialogActions><Button disabled={creatingChild} onClick={() => setNewChild(undefined)}>取消</Button>
+            <Button appearance="primary" disabled={creatingChild || !childTitle.trim()} onClick={() => {
+              if (!newChild || !onCreatePaperChild) return;
+              setCreatingChild(true);
+              void onCreatePaperChild(newChild.paper, newChild.kind, childTitle.trim()).then(() => setNewChild(undefined))
+                .catch((failure) => setMessage(String(failure))).finally(() => setCreatingChild(false));
+            }}>{creatingChild ? "创建中…" : "创建"}</Button></DialogActions>
+        </DialogBody></DialogSurface>
+      </Dialog>
+
       <div className="library-toolbar">
         <Input
           aria-label="搜索文献资源"
@@ -1598,8 +1633,8 @@ function LibraryPaneContent({
       <section aria-label="关联推荐" className="library-section">
         <SectionHeader
           actions={<>
-            {iconAction("刷新推荐", <ArrowClockwiseRegular />, () => onRefreshRecommendations?.(), !accountSessionAvailable || recommendationPending || !onRefreshRecommendations)}
-            {iconAction("清除推荐缓存", <DeleteDismissRegular />, onClearRecommendations, !accountSessionAvailable)}
+            {iconAction("刷新推荐", <ArrowClockwiseRegular />, () => onRefreshRecommendations?.(), !(accountSessionAvailable || localRecommendations) || recommendationPending || !onRefreshRecommendations)}
+            {iconAction("清除推荐缓存", <DeleteDismissRegular />, onClearRecommendations, !(accountSessionAvailable || localRecommendations))}
           </>}
           count={recommendationItems.length}
           expanded={!collapsedSections.includes("recommendation")}
@@ -1609,18 +1644,18 @@ function LibraryPaneContent({
         />
         {!collapsedSections.includes("recommendation") ? (
           <div className="library-section-content">
-            {accountSessionAvailable ? (
+            {(accountSessionAvailable || localRecommendations) ? (
               <RecommendationStyleControl
                 onChange={onRecommendationStyleChange}
                 value={recommendationStyle}
               />
             ) : null}
-            {accountSessionAvailable && recommendationPending ? (
+            {(accountSessionAvailable || localRecommendations) && recommendationPending ? (
               <div className="library-recommendation-message loading" role="status">
                 {recommendationItems.length > 0 ? "正在更新推荐，仍可浏览已有结果…" : "正在获取推荐…"}
               </div>
             ) : null}
-            {!accountSessionAvailable ? (
+            {!(accountSessionAvailable || localRecommendations) ? (
               <button className="library-inline-button" onClick={onLoginRequired} type="button">登录</button>
             ) : recommendationItems.length === 0 ? (
               !recommendationPending ? <div className="library-empty-collection">{recommendationMessage || "暂无关联推荐"}</div> : null
@@ -1637,7 +1672,7 @@ function LibraryPaneContent({
                     <div className="library-paper-row">
                       <LightbulbRegular aria-hidden="true" />
                       <span className="library-paper-title">{recommendation.title}</span>
-                      <Tooltip content="收藏" relationship="label"><Button appearance="subtle" aria-label={`收藏 ${recommendation.title}`} disabled={!collection.tree || pendingNodeIds.includes(recommendation.id)} icon={<BookmarkRegular />} onClick={() => void saveRecommendation(recommendation)} size="small" /></Tooltip>
+                      <Tooltip content="收藏" relationship="label"><Button appearance="subtle" aria-label={`收藏 ${recommendation.title}`} disabled={(!localRecommendations && !collection.tree) || pendingNodeIds.includes(recommendation.id)} icon={<BookmarkRegular />} onClick={() => void saveRecommendation(recommendation)} size="small" /></Tooltip>
                       <Tooltip content="不感兴趣" relationship="label"><Button appearance="subtle" aria-label={`忽略 ${recommendation.title}`} icon={<DeleteRegular />} onClick={() => onDismissRecommendation(recommendation)} size="small" /></Tooltip>
                     </div>
                     <div className="library-recommendation-metadata">
@@ -1654,6 +1689,7 @@ function LibraryPaneContent({
                 ))}
               </ul>
             )}
+            {localRecommendations && recommendationItems.length > 0 && !recommendationPending && recommendationMessage ? <p role="status" className="library-recommendation-message">{recommendationMessage}</p> : null}
             {recommendationStatus === "error" ? <ErrorState message={recommendationMessage} /> : null}
           </div>
         ) : null}

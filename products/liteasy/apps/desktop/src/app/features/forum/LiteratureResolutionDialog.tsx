@@ -1,3 +1,4 @@
+import { normalizeLiteratureIdentifier } from "../paper-identity/paperIdentity";
 import {
   Button,
   Dialog,
@@ -49,12 +50,14 @@ export function LiteratureResolutionDialog({
   onSearch,
   onSelectCandidate
 }: LiteratureResolutionDialogProps) {
+  const [identifier, setIdentifier] = useState(model.searchDraft?.identifier ?? "");
   const [title, setTitle] = useState(model.searchDraft?.title ?? "");
   const [authors, setAuthors] = useState(model.searchDraft?.authors.join("\n") ?? "");
   const [year, setYear] = useState(model.searchDraft?.year ? String(model.searchDraft.year) : "");
   const canCorrectSearch = new Set(["candidates", "conflict", "unavailable", "unresolved"]).has(model.kind);
 
   useEffect(() => {
+    setIdentifier(model.searchDraft?.identifier ?? "");
     setTitle(model.searchDraft?.title ?? "");
     setAuthors(model.searchDraft?.authors.join("\n") ?? "");
     setYear(model.searchDraft?.year ? String(model.searchDraft.year) : "");
@@ -64,8 +67,9 @@ export function LiteratureResolutionDialog({
     .map((author) => author.replace(/\s+/gu, " ").trim())
     .filter(Boolean);
   const parsedYear = Number(year);
-  const canSearch = Boolean(title.trim() && parsedAuthors.length &&
-    Number.isInteger(parsedYear) && parsedYear >= 1000 && parsedYear <= 9999);
+  const validIdentifier = Boolean(normalizeLiteratureIdentifier("doi", identifier) || normalizeLiteratureIdentifier("arxiv_id", identifier));
+  const canSearch = Boolean((title.trim() || validIdentifier) && (!identifier.trim() || validIdentifier) &&
+    (!year.trim() || (Number.isInteger(parsedYear) && parsedYear >= 1000 && parsedYear <= 9999)));
 
   return (
     <Dialog
@@ -172,14 +176,15 @@ export function LiteratureResolutionDialog({
 
             {canCorrectSearch ? (
               <div className="literature-search-fields">
-                <Field label="文献标题" required>
+                <Field label="DOI / arXiv 编号"><Input aria-label="DOI / arXiv 编号" value={identifier} disabled={model.pending} onChange={(_, data) => setIdentifier(data.value)} /></Field>
+                <Field label="文献标题">
                   <Input
                     disabled={model.pending}
                     onChange={(_, data) => setTitle(data.value)}
                     value={title}
                   />
                 </Field>
-                <Field label="作者" required>
+                <Field label="作者" hint="可选">
                   <Textarea
                     disabled={model.pending}
                     onChange={(_, data) => setAuthors(data.value)}
@@ -187,7 +192,7 @@ export function LiteratureResolutionDialog({
                     value={authors}
                   />
                 </Field>
-                <Field label="出版年份" required>
+                <Field label="出版年份" hint="可选">
                   <Input
                     disabled={model.pending}
                     max={9999}
@@ -203,7 +208,8 @@ export function LiteratureResolutionDialog({
                   onClick={() => onSearch({
                     authors: parsedAuthors,
                     title: title.replace(/\s+/gu, " ").trim(),
-                    year: parsedYear
+                    year: year.trim() ? parsedYear : undefined,
+                    ...(identifier.trim() ? { identifier: identifier.trim() } : {})
                   })}
                 >
                   按修正题录检索

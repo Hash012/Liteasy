@@ -6,7 +6,8 @@ import type {
 export type LiteratureSearchDraft = {
   authors: string[];
   title: string;
-  year: number;
+  year?: number;
+  identifier?: string;
 };
 
 type LiteratureDialogBase = {

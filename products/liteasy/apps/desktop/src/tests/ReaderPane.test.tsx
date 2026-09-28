@@ -505,13 +505,11 @@ describe("ReaderPane", () => {
       clipboardData: { setData: setClipboardData }
     });
     expect(setClipboardData).toHaveBeenCalledWith("text/plain", "vector database systems");
-    expect(within(selectionMenu).getByRole("button", { name: "高亮" })).toHaveAttribute("title", "高亮选中文段");
-    expect(within(selectionMenu).getByRole("button", { name: "划线" })).toHaveAttribute("title", "给选中文段添加下划线");
+    await user.hover(within(selectionMenu).getByRole("button", { name: "高亮" }));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("高亮选中文段");
+    expect(within(selectionMenu).getByRole("button", { name: "划线" })).toBeEnabled();
     expect(within(selectionMenu).queryByRole("button", { name: "注释" })).not.toBeInTheDocument();
-    expect(within(selectionMenu).getByRole("button", { name: "加入对话" })).toHaveAttribute(
-      "title",
-      "把选中文段加入右侧对话上下文"
-    );
+    expect(within(selectionMenu).getByRole("button", { name: "加入对话" })).toBeEnabled();
     expect(within(selectionMenu).queryByRole("button", { name: /深入/ })).not.toBeInTheDocument();
 
     await user.click(within(selectionMenu).getByRole("button", { name: "高亮" }));

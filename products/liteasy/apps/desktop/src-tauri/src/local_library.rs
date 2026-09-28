@@ -79,6 +79,9 @@ fn ensure_library_marker(root: &Path) -> Result<LibraryMarker, String> {
         if marker.library_id.trim().is_empty() || marker.schema_version == 0 {
             return Err("本地文献库标记缺少有效的库标识或版本。".to_string());
         }
+        if marker.schema_version != 1 {
+            return Err("此文献库由更高版本的 Liteasy 创建，请升级应用；原数据未修改。".into());
+        }
         let legacy_marker = root.join(LEGACY_PROFILE_MARKER_FILE_NAME);
         if legacy_marker.is_file() {
             fs::remove_file(legacy_marker)
@@ -199,6 +202,8 @@ pub struct LocalLibraryImportResult {
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct LocalLibraryIndex {
+    #[serde(flatten)]
+    extensions: HashMap<String, serde_json::Value>,
     #[serde(default)]
     committed_trash_operations: Vec<String>,
     entries: Vec<LocalLibraryIndexEntry>,
@@ -1255,6 +1260,13 @@ fn read_index(root: &Path) -> Result<LocalLibraryIndex, String> {
     let serialized = fs::read_to_string(path).map_err(|error| error.to_string())?;
     let mut index: LocalLibraryIndex = serde_json::from_str(&serialized)
         .map_err(|error| format!("本地文献库索引损坏，已停止修改以保护现有数据：{error}"))?;
+    if index
+        .extensions
+        .get("schemaVersion")
+        .is_some_and(|version| version.as_u64() != Some(2))
+    {
+        return Err("本地索引使用当前应用不支持的数据版本，请升级 Liteasy；原数据未修改。".into());
+    }
     index.metadata_only = migrate_index_metadata_entries(root, &index.metadata_only)?;
     Ok(index)
 }
@@ -3995,6 +4007,29 @@ mod tests {
         migrate_legacy_layout(&root).unwrap();
         ensure_library_marker(&root).unwrap();
         root
+    }
+
+    #[test]
+    fn data_versions_preserve_legacy_indexes_and_refuse_future_writes() {
+        let root = initialized_library("data-compatibility");
+        let path = index_path(&root);
+        let legacy = br#"{"entries":[],"revision":7,"extension":{"kept":true}}"#;
+        super::write_bytes_atomically(&path, legacy).unwrap();
+        let current = read_index(&root).unwrap();
+        assert_eq!(current.revision, 7);
+        write_index(&root, &current).unwrap();
+        let value: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(value["extension"]["kept"], true);
+        let future = br#"{"schemaVersion":3,"entries":[],"revision":9}"#;
+        fs::write(&path, future).unwrap();
+        assert!(read_index(&root).unwrap_err().contains("数据版本"));
+        assert_eq!(fs::read(&path).unwrap(), future);
+        let marker = root.join(LIBRARY_MARKER_FILE_NAME);
+        let newer = br#"{"schemaVersion":2,"libraryId":"future-library"}"#;
+        fs::write(&marker, newer).unwrap();
+        assert!(ensure_library_marker(&root).is_err());
+        assert_eq!(fs::read(&marker).unwrap(), newer);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

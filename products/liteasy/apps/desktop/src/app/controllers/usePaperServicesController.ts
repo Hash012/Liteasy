@@ -24,7 +24,7 @@ export function usePaperServicesController(input: {
       const restored: Record<string, Material> = {};
       for (const [key, value] of Object.entries(entries)) {
         const material = value as Material;
-        if (key.startsWith("mineru:") && Array.isArray(material?.chunks) && material.chunks.some((chunk) => chunk.textExtraction === "mineru")) restored[key.slice(7)] = material;
+        if (key.startsWith("mineru:") && Array.isArray(material?.chunks) && Array.isArray(material.figures) && material.chunks.every((chunk) => chunk && typeof chunk === "object" && typeof chunk.snippet === "string" && Number.isInteger(chunk.page)) && material.chunks.some((chunk) => chunk.textExtraction === "mineru")) restored[key.slice(7)] = material;
       }
       setMaterials((current) => ({ ...restored, ...current }));
     }).catch((error) => { if (active) input.onProgress(`无法读取论文解析缓存：${String(error)}`); });

@@ -73,7 +73,7 @@ export function PaperServicesSettingsPanel({ settings, onUpdateSetting }: {
     {provider !== "cloud" ? <>
       <Field label="元信息 API 地址"><Input aria-label="元信息 API 地址" value={settings?.["papers.metadata_endpoint"] ?? endpoints[provider]} onChange={(_, data) => update("papers.metadata_endpoint", data.value)} /></Field>
       <ServiceCredentials config={{ provider, endpoint: settings?.["papers.metadata_endpoint"] ?? endpoints[provider] }} />
-      <p>在文献库中右键论文，选择“确认文献身份”，查询并确认匹配结果。</p>
+      <p>元信息与关联推荐共用此文献服务，无需 Liteasy 登录。Crossref 公共服务无需配置密钥。右键论文可获取元信息或确认文献身份。</p>
     </> : <p>使用当前 Liteasy 云端连接查询文献身份。</p>}
     <Field label="论文内容解析">
       <Select aria-label="论文内容解析" value={mode} onChange={(_, data) => {

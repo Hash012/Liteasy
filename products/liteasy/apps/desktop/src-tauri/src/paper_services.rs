@@ -87,7 +87,12 @@ pub async fn request_paper_service(
     body_base64: Option<String>,
     content_type: Option<String>,
     authenticate: bool,
+    max_response_bytes: Option<usize>,
 ) -> Result<ServiceResponse, String> {
+    let response_limit = max_response_bytes.unwrap_or(200 * 1024 * 1024);
+    if response_limit == 0 || response_limit > 200 * 1024 * 1024 {
+        return Err("响应大小限制无效。".into());
+    }
     let base = validate(&config)?;
     let mut target = Url::parse(&url).map_err(|_| "请求地址无效。")?;
     valid_url(&target)?;
@@ -144,13 +149,19 @@ pub async fn request_paper_service(
         .await
         .map_err(|_| "论文服务连接失败，请检查网络或代理。")?;
     let status = response.status().as_u16();
+    if response
+        .content_length()
+        .is_some_and(|size| size > response_limit as u64)
+    {
+        return Err("响应超过大小限制。".into());
+    }
     let mut bytes = Vec::new();
     while let Some(chunk) = response
         .chunk()
         .await
         .map_err(|_| "论文服务连接中断，可重试。")?
     {
-        if bytes.len() + chunk.len() > 200 * 1024 * 1024 {
+        if bytes.len() + chunk.len() > response_limit {
             return Err("响应超过大小限制。".into());
         }
         bytes.extend_from_slice(&chunk);
@@ -163,6 +174,55 @@ pub async fn request_paper_service(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn bounds_native_responses_without_requiring_content_length() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        for limit in [10, 12] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let endpoint = format!("http://{}", listener.local_addr().unwrap());
+            let server = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut request = [0; 4096];
+                stream.read(&mut request).unwrap();
+                stream.write_all(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\nc\r\nabcdefghijkl\r\n0\r\n\r\n").unwrap();
+            });
+            let result = runtime.block_on(request_paper_service(
+                PaperServiceConfig {
+                    provider: "crossref".into(),
+                    endpoint: endpoint.clone(),
+                },
+                endpoint,
+                "GET".into(),
+                None,
+                None,
+                false,
+                Some(limit),
+            ));
+            server.join().unwrap();
+            match result {
+                Ok(response) => {
+                    assert_eq!(limit, 12);
+                    assert_eq!(
+                        STANDARD.decode(response.body_base64).unwrap(),
+                        b"abcdefghijkl"
+                    );
+                }
+                Err(error) => {
+                    assert_eq!(limit, 10);
+                    assert!(error.contains("大小限制"));
+                }
+            }
+        }
+    }
+
     #[test]
     fn rejects_credential_urls_and_nonlocal_http() {
         for endpoint in [

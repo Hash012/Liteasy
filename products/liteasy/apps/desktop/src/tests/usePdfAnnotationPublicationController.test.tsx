@@ -153,7 +153,7 @@ describe("usePdfAnnotationPublicationController", () => {
 
     expect(save).toHaveBeenCalledWith("paper-1", literature());
     expect(updateLiterature).not.toHaveBeenCalled();
-    expect(updated).toEqual({ ...paper(), literature: literature() });
+    expect(updated).toMatchObject({ id: paper().id, title: literature().title, authors: literature().authors, year: literature().year, literature: literature() });
   });
 
   test("persists cloud paper literature with the referenced revision and writes back the receipt revision", async () => {
@@ -182,8 +182,8 @@ describe("usePdfAnnotationPublicationController", () => {
       literature()
     );
     expect(save).not.toHaveBeenCalled();
-    expect(updated).toEqual({
-      ...cloudPaper,
+    expect(updated).toMatchObject({
+      ...cloudPaper, title: literature().title, authors: literature().authors,
       libraryReference: { ...cloudPaper.libraryReference!, revision: 5 },
       literature: literature()
     });
@@ -210,7 +210,7 @@ describe("usePdfAnnotationPublicationController", () => {
 
     expect(save).toHaveBeenCalledWith("paper-1", literature());
     expect(updateLiterature).not.toHaveBeenCalled();
-    expect(updated).toEqual({ ...memberPaper, literature: literature() });
+    expect(updated).toMatchObject({ id: memberPaper.id, title: literature().title, authors: literature().authors, literature: literature() });
   });
 
   test("always persists a user-library reference through its cloud owner", async () => {

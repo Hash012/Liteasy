@@ -11,6 +11,8 @@ export type SettingKey =
   | "network.recommendation.sort_mode"
   | "network.recommendation.style"
   | "assistant.public_audit.enabled"
+  | "profile.local_enabled"
+  | "papers.local_mode"
   | "profile.enabled"
   | "assistant.default_output_mode"
   | "assistant.language"
@@ -42,6 +44,8 @@ export type SettingsState = {
   "network.recommendation.sort_mode": "relevance" | "retrieved_at";
   "network.recommendation.style": RecommendationStyle;
   "assistant.public_audit.enabled": boolean;
+  "profile.local_enabled": boolean;
+  "papers.local_mode": boolean;
   "profile.enabled": boolean;
   "assistant.default_output_mode": string;
   "assistant.language": string;

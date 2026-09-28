@@ -347,7 +347,7 @@ export function useObjectWorkbenchController(input: {
               })),
               extractor: "liteasy.pdf-text/v1",
               normalization: "liteasy.whitespace/v1",
-              precision: hash ? "exact" : "page",
+              precision: hash && selection.rects.length ? "exact" : "page",
               ...(selection.normalizedStart === undefined
                 ? {}
                 : {
@@ -1172,10 +1172,11 @@ export function useObjectWorkbenchController(input: {
         });
         boardRef.current = object;
       }),
-    createNote: (text: string) =>
+    createNote: (text: string, position?: Placement["position"]) =>
       perform(async () => {
         const board = await ensureBoard();
         return repository.createAndPlace({
+          position,
           operationId: crypto.randomUUID(),
           boardRef: refOf(board),
           draft: {

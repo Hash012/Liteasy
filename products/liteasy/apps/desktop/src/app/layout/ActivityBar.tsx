@@ -14,6 +14,7 @@ import { dockItemMimeType } from "../features/dock/DockRegion";
 import type { LeftRailView } from "./useLeftRailNavigation";
 
 type ActivityBarProps = {
+  onExpandLibrary?: () => void;
   agentOpen?: boolean;
   notesOpen?: boolean;
   onOpenNotes?: () => void;
@@ -41,6 +42,7 @@ const activityItems: Array<{
 ];
 
 export function ActivityBar({
+  onExpandLibrary,
   agentOpen = false,
   notesOpen = false,
   onOpenNotes,
@@ -59,7 +61,7 @@ export function ActivityBar({
 
       {activityItems.map((item) => (
         <Tooltip
-          content={item.label}
+          content={item.view === "library" ? "文献库 · 双击或 Shift+Enter 展开大窗口" : item.label}
           key={item.view}
           positioning="after"
           relationship="description"
@@ -79,11 +81,14 @@ export function ActivityBar({
               event.dataTransfer.effectAllowed = "move";
               event.dataTransfer.setData(dockItemMimeType, item.view);
             }}
-            onClick={() =>
-              activeView === item.view
+            onKeyDown={item.view === "library" ? (event) => { if (event.key === "Enter" && event.shiftKey) { event.preventDefault(); onExpandLibrary?.(); } } : undefined}
+            onDoubleClick={item.view === "library" ? (event) => { event.preventDefault(); onExpandLibrary?.(); } : undefined}
+            onClick={(event) => {
+              if (event.detail > 1 && item.view === "library") return;
+              return activeView === item.view
                 ? onToggleActiveView?.(item.view)
-                : onSelectView(item.view)
-            }
+                : onSelectView(item.view);
+            }}
             type="button"
           >
             {item.view === "profile" && !accountSessionAvailable ? (

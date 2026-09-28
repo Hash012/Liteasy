@@ -1,0 +1,20 @@
+import { FluentProvider, webLightTheme } from "@fluentui/react-components";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { expect, test, vi } from "vitest";
+import { SystemFontPicker } from "../app/features/settings/SystemFontPicker";
+test("queries all system font families only after a browser gesture and filters without loading all options", async () => {
+  const fonts = vi.fn().mockResolvedValue(Array.from({ length: 350 }, (_, index) => ({ family: `Installed Font ${index}` })));
+  Object.defineProperty(window, "queryLocalFonts", { configurable: true, value: fonts });
+  const update = vi.fn();
+  render(<FluentProvider theme={webLightTheme}><SystemFontPicker label="测试字体" options={[]} value="system-ui" onChange={update} /></FluentProvider>);
+  expect(fonts).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "读取系统字体" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "读取系统字体" })).toBeEnabled());
+  const input = screen.getByRole("combobox", { name: "测试字体" });
+  fireEvent.change(input, { target: { value: "Installed Font 349" } });
+  fireEvent.click(input);
+  fireEvent.click(await screen.findByRole("option", { name: "Installed Font 349", exact: true }));
+  expect(update).toHaveBeenCalledWith('"Installed Font 349", sans-serif');
+  expect(fonts).toHaveBeenCalledOnce();
+  delete (window as { queryLocalFonts?: unknown }).queryLocalFonts;
+});

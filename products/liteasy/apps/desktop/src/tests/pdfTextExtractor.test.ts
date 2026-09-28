@@ -5,6 +5,7 @@ import { createCanvas } from "@napi-rs/canvas";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import { vi } from "vitest";
 import { buildPdfRecognitionRequest, selectPdfRecognitionCandidate } from "../app/features/metadata/pdfRecognition";
+import { createMetadataProviderClient } from "../app/features/paper-services/metadataProviderClient";
 import {
   buildPdfChunksFromPages,
   extractPdfChunksForPaper,
@@ -16,6 +17,26 @@ import {
 pdfjsLib.GlobalWorkerOptions.workerSrc = pathToFileURL(
   resolve(process.cwd(), "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs")
 ).href;
+
+test("identifies the actual das24a PDF using its PMLR imprint and official title/authors", async () => {
+  const evidence = await extractPdfRecognitionEvidence(new Uint8Array(readFileSync(
+    resolve(process.cwd(), "public/manual-preview/das24a.pdf")
+  )));
+  const request = buildPdfRecognitionRequest(evidence)!;
+  expect(request.hints).toMatchObject({ title: "Larimar: Large Language Models with Episodic Memory Control",
+    pmlr: { source: "pmlr", volume: 235, year: 2024 } });
+  const bibliography = readFileSync(resolve(process.cwd(), "../../../../development/test-data/literature/larimar-pmlr.bib"), "utf8");
+  const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(bibliography));
+  try {
+    const client = createMetadataProviderClient({ provider: "crossref", endpoint: "https://api.crossref.org" });
+    const result = await client.resolveLiterature(request);
+    const candidate = selectPdfRecognitionCandidate(result, evidence)!;
+    expect(candidate.candidateKey).toBe("pmlr:pmlr_id:v235/das24a");
+    const confirmed = await client.confirmLiterature({ candidateKey: candidate.candidateKey, mode: "candidate" });
+    expect(confirmed.literature).toMatchObject({ title: request.hints!.title, year: 2024 });
+    expect(confirmed.literature.authors).toHaveLength(12);
+  } finally { fetch.mockRestore(); }
+});
 
 test("reads real PDF title-page evidence without extracting the entire document", async () => {
   const evidence = await extractPdfRecognitionEvidence(new Uint8Array(readFileSync(

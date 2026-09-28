@@ -275,7 +275,13 @@ export function createPaperProjectRepository(storage: ObjectStorage, scopeId: st
       ref: refOf(note),
     });
   }
-  return { ensurePaperProject, listProjects, listAssets, syncSources, addAsset, registerSource, createEditableCopy, createNote };
+  async function createBoard(projectId: string, title = "论文白板", operationId = crypto.randomUUID()): Promise<PaperProjectAsset> {
+    await getProject(projectId);
+    const board = await objects.create({ kind: "workspace.board", title: title.trim() || "论文白板",
+      content: { schema: "liteasy.board/v1", payload: { description: "" } } }, `paper-project-board:${projectId}:${operationId}`);
+    return addAsset(projectId, { assetId: `object:${board.objectId}`, title: board.title, kind: "board", role: "derived", ref: refOf(board) });
+  }
+  return { ensurePaperProject, listProjects, listAssets, syncSources, addAsset, registerSource, createEditableCopy, createNote, createBoard };
 }
 
 export type PaperProjectRepository = ReturnType<typeof createPaperProjectRepository>;

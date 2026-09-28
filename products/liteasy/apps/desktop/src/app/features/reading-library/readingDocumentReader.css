@@ -33,7 +33,7 @@
 .reading-document__search-results span { color: var(--reading-muted); margin-top: 5px; overflow-wrap: anywhere; }
 .reading-document__scroll { flex: 1; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; scroll-padding-top: 30px; }
 .reading-document__scroll:focus-visible { outline: 2px solid var(--reading-link); outline-offset: -2px; }
-.reading-document__page { max-width: var(--reading-width); margin: 0 auto; padding: 44px 44px 64px; overflow-wrap: anywhere; font-family: "Charter", "Georgia", "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "SimSun", serif; font-size: var(--reading-font-size); line-height: var(--reading-line-height); letter-spacing: .01em; }
+.reading-document__page { max-width: var(--reading-width); margin: 0 auto; padding: 44px 44px 64px; overflow-wrap: anywhere; font-family: var(--reading-font-family, Georgia, serif); font-size: var(--reading-font-size); line-height: var(--reading-line-height); letter-spacing: .01em; }
 .reading-document__page .markdown-content { color: inherit; font: inherit; line-height: inherit; }
 .reading-document__page .markdown-content p { line-height: inherit; }
 .reading-document__page :is(p, blockquote, pre, figure, table, ul, ol) { margin-block: 1.05em; }

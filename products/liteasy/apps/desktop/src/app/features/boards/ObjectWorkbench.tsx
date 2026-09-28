@@ -1,3 +1,4 @@
+import { useCanvasNavigation } from "./useCanvasNavigation";
 import type { ResolvedObject } from "../objects/objectResolver";
 import {
   useRef,
@@ -81,7 +82,7 @@ export type WorkbenchViewModel = {
   setStatus(value: string): void;
   selectBoard(object: ObjectEnvelope): Promise<void>;
   createBoard(title: string): Promise<unknown>;
-  createNote(text: string): Promise<unknown>;
+  createNote(text: string, position?: Placement["position"]): Promise<unknown>;
   place(refs: ObjectRef[]): Promise<unknown>;
   removePlacement(id: string): Promise<unknown>;
   move(placement: Placement, position: Placement["position"]): Promise<unknown>;
@@ -142,6 +143,9 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
     previousTraySize.current = model.tray.length;
   }, [model.tray.length]);
   const [selected, setSelected] = useState<string[]>([]);
+  const navigation = useCanvasNavigation({ viewport, canvas, zoom, setZoom, visible: model.visible, boardId: model.board?.objectId,
+    placements: model.placements, selected, setSelected, create: (position) => model.createNote("新笔记", position),
+    remove: model.removePlacement, error: (failure) => model.setStatus(String(failure)) });
   const [edges, setEdges] = useState<
     Array<BoardConnection & { semantic?: boolean }>
   >([]);
@@ -404,7 +408,15 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
       <div
         className={`object-board${showGrid ? " has-grid" : ""}`}
         ref={viewport}
+        onKeyDownCapture={navigation.onKeyDownCapture}
+        onPointerDownCapture={navigation.onPointerDownCapture}
+        onPointerMoveCapture={navigation.onPointerMoveCapture}
+        onPointerUpCapture={navigation.onPointerUpCapture}
+        onPointerCancelCapture={navigation.onPointerUpCapture}
+        onDoubleClick={navigation.onDoubleClick}
         onKeyDown={(event) => {
+          navigation.onKeyDown(event);
+          if (event.shiftKey && event.code === "Digit1") { event.preventDefault(); fitView(); }
           if (event.key === "Escape") connectionActions.cancel();
           if (
             (event.ctrlKey || event.metaKey) &&
@@ -497,7 +509,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
               : undefined;
           const bounds = canvas.current?.getBoundingClientRect();
           if (dragged && placement && bounds && !e.ctrlKey && !e.metaKey) {
-            const scale = bounds.width / canvasWidth || 1;
+            const scale = bounds.width / (canvasWidth + 1200) || 1;
             void model
               .move(placement, {
                 x: Math.max(
@@ -537,19 +549,20 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
         <div
           className="object-board-world"
           style={{
-            width: Math.max(canvasWidth * zoom + 80, 1),
-            height: Math.max(canvasHeight * zoom + 64, 1),
+            width: Math.max((canvasWidth + 1200) * zoom + 80, 1),
+            height: Math.max((canvasHeight + 1200) * zoom + 64, 1),
           }}
         >
           <div
             ref={canvas}
             className="object-board-canvas"
             style={{
-              width: canvasWidth,
-              height: canvasHeight,
+              width: canvasWidth + 1200,
+              height: canvasHeight + 1200,
               transform: `scale(${zoom})`,
             }}
           >
+            {navigation.marquee ? <div className="canvas-selection" style={navigation.marquee} /> : null}
             <svg
               className="object-board-edges"
               aria-label="白板关联"

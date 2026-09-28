@@ -143,7 +143,7 @@ test("left-click opens a paper and right-click exposes identity confirmation", a
   expect(resolve).toHaveBeenCalledWith(paper);
 });
 
-test("unifies paper selection, metadata search and file format filters without opening on selection", async () => {
+test("opens papers on a single click while retaining metadata inspection and file filters", async () => {
   const user = userEvent.setup(), inspect = vi.fn(), openPaper = vi.fn();
   const pdf = { id: paper.id, title: paper.title, format: "pdf" as const, authors: ["Lin Researcher"], year: 2024, doi: "10.1234/vector" };
   renderLibraryPane({ onOpenPaper: openPaper, fileLibrary: {
@@ -152,8 +152,7 @@ test("unifies paper selection, metadata search and file format filters without o
   } });
   await user.click(screen.getByRole("button", { name: paper.title, exact: true }));
   expect(inspect).toHaveBeenCalledWith(pdf, expect.any(Function));
-  expect(openPaper).not.toHaveBeenCalled();
-  await user.dblClick(screen.getByRole("button", { name: paper.title, exact: true }));
+  expect(openPaper).toHaveBeenCalledOnce();
   expect(openPaper).toHaveBeenCalledWith(paper.id);
   await user.type(screen.getByRole("textbox", { name: "搜索文献资源" }), '"Lin Researcher" 10.1234/vector');
   expect(screen.getByRole("button", { name: paper.title, exact: true })).toBeInTheDocument();
@@ -294,4 +293,51 @@ test("distinguishes paper derivatives and offers custom icons for ordinary files
   fireEvent.click(await screen.findByRole("menuitem", { name: "更换图标" }));
   fireEvent.click(await screen.findByRole("button", { name: "星标", exact: true }));
   expect(book.querySelector("[data-icon]")).toHaveAttribute("data-icon", "star");
+});
+
+
+test("creates a named Markdown attachment from a paper context menu", async () => {
+  const create = vi.fn().mockResolvedValue(undefined);
+  renderLibraryPane({ onCreatePaperChild: create });
+  fireEvent.contextMenu(screen.getByRole("button", { name: paper.title, exact: true }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "新建 Markdown 笔记" }));
+  const dialog = await screen.findByRole("dialog", { name: "新建 Markdown 笔记" });
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "论文附件名称" }), { target: { value: "实验复现笔记" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "创建", exact: true }));
+  await waitFor(() => expect(create).toHaveBeenCalledWith(paper, "note", "实验复现笔记"));
+});
+
+test("custom emoji icons including skin tone and joined sequences survive reopening", async () => {
+  const view = renderLibraryPane();
+  const paperButton = screen.getByRole("button", { name: paper.title, exact: true });
+  fireEvent.contextMenu(paperButton);
+  fireEvent.click(await screen.findByRole("menuitem", { name: "更换图标" }));
+  fireEvent.click(await screen.findByRole("tab", { name: "Emoji" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "自定义 Emoji" }), { target: { value: "two letters" } });
+  expect(screen.getByRole("button", { name: "使用 Emoji" })).toBeDisabled();
+  fireEvent.change(screen.getByRole("textbox", { name: "自定义 Emoji" }), { target: { value: "👩🏽‍🔬" } });
+  fireEvent.click(screen.getByRole("button", { name: "使用 Emoji" }));
+  expect(paperButton.closest(".library-paper-row")!.querySelector('[data-icon="emoji"]')).toHaveTextContent("👩🏽‍🔬");
+  view.unmount(); renderLibraryPane();
+  expect(screen.getByRole("button", { name: paper.title, exact: true }).closest(".library-paper-row")!.querySelector('[data-icon="emoji"]')).toHaveTextContent("👩🏽‍🔬");
+});
+
+test("expanded library retains search and file actions inside a closable dialog", async () => {
+  const close = vi.fn(), open = vi.fn();
+  renderLibraryPane({ expanded: true, onCloseExpanded: close, onOpenPaper: open });
+  const dialog = await screen.findByRole("dialog", { name: "文献库", exact: true });
+  fireEvent.click(within(dialog).getByRole("button", { name: paper.title, exact: true }));
+  expect(open).toHaveBeenCalledWith(paper.id);
+  fireEvent.click(within(dialog).getByRole("button", { name: "关闭文献库浮窗" }));
+  expect(close).toHaveBeenCalledOnce();
+});
+
+
+test("shows confirmed paper titles immediately even when the physical filename stays unchanged", async () => {
+  const title = "The Official Research Title";
+  renderLibraryPane({ papers: [{ ...paper, title, authors: ["Alice Smith"] }] });
+  expect(screen.getByRole("button", { name: title, exact: true })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: paper.title, exact: true })).not.toBeInTheDocument();
+  await userEvent.type(screen.getByRole("textbox", { name: "搜索文献资源" }), "Official");
+  expect(screen.getByRole("button", { name: title, exact: true })).toBeInTheDocument();
 });

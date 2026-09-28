@@ -127,7 +127,7 @@ test("the close action remains in the board header and also closes an active det
   expect(f.model.closeOpened).toHaveBeenCalledOnce();
 });
 
-test("single click edits the note in place, preserves a failed draft and retries the same placement", async () => {
+test("double click edits the note in place, preserves a failed draft and retries the same placement", async () => {
   const f = await fixture();
   const edit = vi
     .fn()
@@ -143,7 +143,7 @@ test("single click edits the note in place, preserves a failed draft and retries
       actions={{ current: { ...f.model, editPlacement: edit } }}
     />,
   );
-  fireEvent.click(screen.getByRole("button", { name: "编辑笔记正文" }));
+  fireEvent.doubleClick(screen.getByRole("button", { name: "编辑笔记正文" }));
   const editor = screen.getByRole("textbox", { name: "编辑卡片正文" });
   expect(editor).toHaveFocus();
   fireEvent.change(editor, { target: { value: "更新的研究笔记" } });
@@ -179,7 +179,7 @@ test("all four corners and edges resize with actual screen scale, and cancelled 
   expect(
     screen.queryAllByRole("button", { name: /^调整卡片大小/ }),
   ).toHaveLength(8);
-  fireEvent.click(screen.getByRole("button", { name: "编辑笔记正文" }));
+  fireEvent.doubleClick(screen.getByRole("button", { name: "编辑笔记正文" }));
   expect(screen.getAllByRole("button", { name: /^调整卡片大小/ })).toHaveLength(
     8,
   );
@@ -277,7 +277,7 @@ test("a whole card drag moves its existing placement using canvas scale and reta
   vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
     left: 20,
     top: 40,
-    width: 820,
+    width: Number.parseFloat(canvas.style.width) * 2,
   } as DOMRect);
   const payload = new Map<string, string>();
   const data = {
@@ -342,7 +342,7 @@ test("annotation cards show their original quote once, start expanded and keep s
   expect(container.querySelector("details")).toHaveAttribute("open");
   fireEvent.click(screen.getByLabelText("展开或收起原文"));
   expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "编辑摘录为笔记" }));
+  fireEvent.doubleClick(screen.getByRole("button", { name: "编辑摘录为笔记" }));
   expect(screen.getByRole("textbox", { name: "编辑卡片正文" })).toHaveValue(
     "我的理解",
   );
@@ -380,7 +380,7 @@ test("editing a source excerpt explicitly creates a note and Escape keeps the or
       actions={{ current: f.model }}
     />,
   );
-  fireEvent.click(screen.getByRole("button", { name: "编辑摘录为笔记" }));
+  fireEvent.doubleClick(screen.getByRole("button", { name: "编辑摘录为笔记" }));
   expect(screen.getByText("保存为笔记，并保留摘录来源")).toBeInTheDocument();
   expect(
     screen.getByRole("button", { name: "保存为笔记", exact: true }),
@@ -567,4 +567,31 @@ test("card midpoint handles connect by native drag or two clicks without editing
     second,
     "top",
   );
+});
+
+test("canvas supports blank-space creation, selection, panning and cursor zoom without entering edit mode", async () => {
+  const f = await fixture();
+  vi.mocked(f.model.createNote).mockResolvedValue(undefined);
+  const { container } = render(<ObjectWorkbench model={{ ...f.model, placements: [f.placement] }} />);
+  const body = await screen.findByRole("button", { name: "编辑笔记正文" });
+  const host = screen.getByLabelText("白板卡片区域");
+  const canvas = container.querySelector<HTMLElement>(".object-board-canvas")!;
+  fireEvent.click(body);
+  expect(container.querySelector(".object-placement")).toHaveClass("is-selected");
+  expect(screen.queryByRole("textbox", { name: "编辑卡片正文" })).not.toBeInTheDocument();
+  fireEvent.doubleClick(canvas, { clientX: 500, clientY: 400 });
+  expect(f.model.createNote).toHaveBeenCalledWith("新笔记", { x: 500, y: 400 });
+  host.scrollLeft = 100; host.scrollTop = 200;
+  fireEvent.keyDown(body, { code: "Space", key: " " });
+  fireEvent.pointerDown(body, { button: 0, clientX: 100, clientY: 100, pointerId: 1 });
+  fireEvent.pointerMove(host, { clientX: 80, clientY: 70, pointerId: 1 });
+  fireEvent.pointerUp(host, { pointerId: 1 });
+  fireEvent.keyUp(body, { code: "Space", key: " " });
+  expect(host.scrollLeft).toBe(120); expect(host.scrollTop).toBe(230);
+  expect(screen.queryByRole("textbox", { name: "编辑卡片正文" })).not.toBeInTheDocument();
+  fireEvent.wheel(host, { deltaY: -100, ctrlKey: true });
+  expect(canvas.style.transform).toMatch(/scale\(1\.22/);
+  fireEvent.keyDown(host, { key: "a", ctrlKey: true });
+  fireEvent.keyDown(host, { key: "Delete" });
+  expect(f.model.removePlacement).toHaveBeenCalledWith(f.placement.placementId);
 });

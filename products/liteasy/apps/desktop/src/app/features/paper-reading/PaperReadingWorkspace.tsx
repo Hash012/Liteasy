@@ -1,3 +1,5 @@
+import { PaperSelectionTools } from "../pdf/PaperSelectionTools";
+import { SystemFontPicker } from "../settings/SystemFontPicker";
 import { useReadingHighlights } from "./useReadingHighlights";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Button, Field, Popover, PopoverSurface, PopoverTrigger, Select, Slider, Textarea, Tooltip, useFocusFinders, useModalAttributes } from "@fluentui/react-components";
@@ -66,6 +68,10 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
   const [draft, setDraft] = useState<{ excerpt: string; page: string; id?: string; revision?: number }>();
   const [note, setNote] = useState("");
   const [markStyle, setMarkStyle] = useState<ReadingMarkStyle>();
+  const [asking, setAsking] = useState(false);
+  const [question, setQuestion] = useState("");
+  const askAbort = useRef<AbortController>();
+  useEffect(() => () => askAbort.current?.abort(), []);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -146,7 +152,14 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
     finally { if (mounted.current) setBusy(false); }
   }
 
-  const styles = { "--paper-reading-font": paperReadingFonts[preferences.font].family, "--paper-reading-size": `${preferences.fontSize}px`,
+  async function selectionAction(action: () => Promise<unknown>, success: string) {
+    if (busy) return;
+    setBusy(true); setError("");
+    try { await action(); if (mounted.current) setMessage(success); }
+    catch (failure) { if (mounted.current) setError(String(failure)); }
+    finally { if (mounted.current) setBusy(false); }
+  }
+  const styles = { "--paper-reading-font": preferences.fontFamily ?? paperReadingFonts[preferences.font].family, "--paper-reading-size": `${preferences.fontSize}px`,
     "--paper-reading-width": preferences.width ? `${preferences.width}px` : "100%", "--paper-reading-line-height": preferences.lineHeight,
     "--paper-reading-alignment": preferences.alignment, "--paper-reading-paragraph-spacing": `${preferences.paragraphSpacing}em` } as CSSProperties;
   return <div className={`paper-reading-workspace${focus ? " is-focused" : ""}`} ref={rootRef} style={styles} data-reading-theme={preferences.theme} tabIndex={-1}
@@ -175,9 +188,9 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
         <PopoverSurface aria-label="阅读排版设置" className="paper-reading-preferences">
           <Field label={`字号 ${preferences.fontSize} px`}><Slider aria-label="阅读字号" min={14} max={30} step={1} value={preferences.fontSize}
             onChange={(_, data) => changePreferences({ ...preferences, fontSize: data.value })} /></Field>
-          <Field label="字体"><Select aria-label="阅读字体" value={preferences.font} onChange={(_, data) => changePreferences({ ...preferences, font: data.value as PaperReadingPreferences["font"] })}>
-            {Object.entries(paperReadingFonts).map(([value, font]) => <option key={value} value={value}>{font.label}</option>)}
-          </Select></Field>
+          <Field label="字体"><SystemFontPicker label="阅读字体" value={preferences.fontFamily ?? paperReadingFonts[preferences.font].family}
+            options={Object.values(paperReadingFonts).map((font) => ({ label: font.label, value: font.family }))}
+            onChange={(fontFamily) => changePreferences({ ...preferences, fontFamily })} /></Field>
           <Field label="页面宽度"><Select aria-label="阅读页面宽度" value={preferences.width} onChange={(_, data) => changePreferences({ ...preferences, width: Number(data.value) })}>
             <option value="640">窄版</option><option value="800">适中</option><option value="1080">宽版</option><option value="0">填满窗口</option>
           </Select></Field>
@@ -213,6 +226,24 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
         {draft ? <div className="paper-reading-comment-editor">
           <strong>{draft.id ? "编辑批注" : "新建批注"}</strong>
           {draft.excerpt ? <blockquote>{draft.excerpt}</blockquote> : null}
+          {draft.excerpt && !draft.id ? <>
+            <PaperSelectionTools disabled={busy || !session.ready || !draft.page}
+              highlight={() => void selectionAction(() => session.create({ page: Number(draft.page), excerpt: draft.excerpt, note, kind: "highlight", color: markStyle?.color ?? "yellow" }), "高亮已保存。")}
+              underline={() => void selectionAction(() => session.create({ page: Number(draft.page), excerpt: draft.excerpt, note, kind: "underline", color: markStyle?.color ?? "blue" }), "划线已保存。")}
+              copy={() => void selectionAction(() => navigator.clipboard.writeText(draft.excerpt), "已复制选段。")}
+              board={session.capture ? () => void selectionAction(() => session.capture!({ page: Number(draft.page), excerpt: draft.excerpt }, "board"), "摘录已加入白板。") : undefined}
+              tray={session.capture ? () => void selectionAction(() => session.capture!({ page: Number(draft.page), excerpt: draft.excerpt }, "tray"), "摘录已加入所选内容对话。") : undefined}
+              conversation={session.capture ? () => void selectionAction(() => session.capture!({ page: Number(draft.page), excerpt: draft.excerpt }, "conversation"), "选段已加入对话。") : undefined}
+              quickAsk={session.quickAsk ? () => setAsking(true) : undefined} />
+            {asking && session.quickAsk ? <form aria-label="阅读速问" onSubmit={(event) => {
+              event.preventDefault(); if (!question.trim() || busy) return;
+              const abort = new AbortController(); askAbort.current = abort;
+              void selectionAction(() => session.quickAsk!({ page: Number(draft.page), excerpt: draft.excerpt, question }, abort.signal), "速问已保存到批注。PDF 与阅读模式均可查看。");
+            }}><Field label="速问问题"><Textarea aria-label="速问问题" value={question} disabled={busy} onChange={(_, data) => setQuestion(data.value)} maxLength={4000} /></Field>
+              <small>上下文：当前页全文与论文摘要</small>
+              <Button type="submit" disabled={busy || !question.trim() || !draft.page}>提问</Button>
+              <Button onClick={() => { askAbort.current?.abort(); setAsking(false); }}>取消速问</Button></form> : null}
+          </> : null}
           <Field label="PDF 页码"><Select aria-label="批注页码" value={draft.page} disabled={busy || Boolean(draft.id)} onChange={(_, data) => setDraft({ ...draft, page: data.value })}>
             <option value="">请选择页码</option>{pages.map((page) => <option key={page} value={page}>第 {page} 页</option>)}
           </Select></Field>
@@ -233,7 +264,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
           <button type="button" className="paper-reading-comment-source" onClick={() => locate(annotation.id)}>第 {annotation.page} 页 · {annotation.excerpt || (annotation.kind === "ink" ? "手绘批注" : "页批注")}</button>
           <PdfAnnotationMarkdown value={annotation.quickAsk ? `${annotation.quickAsk.question}\n\n${annotation.quickAsk.answer}` : annotation.note || (annotation.kind === "text" ? annotation.text : "")}
             images={annotation.images} emptyLabel={annotation.kind === "ink" ? "手绘笔迹可在 PDF 原页查看。" : "尚无补充评论"} />
-          {annotation.review ? <PdfAnnotationMarkdown value={annotation.review.text} /> : null}
+          {session.annotationTools ? session.annotationTools(annotation) : annotation.review ? <PdfAnnotationMarkdown value={annotation.review.text} /> : null}
           <div className="paper-reading-comment-actions">
             <Button size="small" onClick={() => session.openPdf(annotation.id)}>查看 PDF</Button>
             <Button size="small" disabled={busy || !session.ready || Boolean(draft)} onClick={() => {

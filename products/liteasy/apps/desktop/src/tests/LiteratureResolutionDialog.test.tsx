@@ -200,3 +200,18 @@ describe("LiteratureResolutionDialog", () => {
     expect(screen.getByRole("button", { name: "关闭" })).toBeEnabled();
   });
 });
+
+
+test("can correct a failed lookup using only a title or an identifier", async () => {
+  const callbacks = actions();
+  render(<LiteratureResolutionDialog {...callbacks} model={{ kind: "unresolved", pending: false, unavailableProviders: [] }} />);
+  const search = screen.getByRole("button", { name: "按修正题录检索" });
+  expect(search).toBeDisabled();
+  fireEvent.change(screen.getByRole("textbox", { name: "文献标题" }), { target: { value: "Attention Is All You Need" } });
+  await userEvent.click(search);
+  expect(callbacks.onSearch).toHaveBeenLastCalledWith({ authors: [], title: "Attention Is All You Need", year: undefined });
+  fireEvent.change(screen.getByRole("textbox", { name: "文献标题" }), { target: { value: "" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "DOI / arXiv 编号" }), { target: { value: "https://doi.org/10.1234/test" } });
+  await userEvent.click(search);
+  expect(callbacks.onSearch).toHaveBeenLastCalledWith({ authors: [], title: "", year: undefined, identifier: "https://doi.org/10.1234/test" });
+});

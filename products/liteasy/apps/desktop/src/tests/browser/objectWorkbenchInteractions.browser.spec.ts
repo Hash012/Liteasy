@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
+});
+
 test("resting cards drag by their content, resize from visible edges and keep their position after reopening", async ({
   page,
 }) => {
@@ -55,6 +59,9 @@ test("resting cards drag by their content, resize from visible edges and keep th
   await expect(board).toBeVisible();
   await expect(card).toHaveAttribute("style", saved!);
   await card.click();
+  await expect(card).toHaveClass(/is-selected/);
+  await expect(card.getByRole("textbox")).toHaveCount(0);
+  await card.dblclick();
   await expect(
     card.getByRole("textbox", { name: "编辑卡片正文", exact: true }),
   ).toBeVisible();
@@ -73,7 +80,7 @@ test("board closes from details, notes edit in place, every resize handle works,
   const board = page.locator("section.object-workbench");
   const card = board.locator(".object-placement").first();
   await expect(card).toContainText("单击编辑的研究笔记");
-  await card.getByRole("button", { name: "编辑笔记正文", exact: true }).click();
+  await card.getByRole("button", { name: "编辑笔记正文", exact: true }).dblclick();
   const editor = card.getByRole("textbox", {
     name: "编辑卡片正文",
     exact: true,
@@ -87,7 +94,7 @@ test("board closes from details, notes edit in place, every resize handle works,
   await expect(card.getByRole("button", { name: /^调整卡片大小/ })).toHaveCount(
     8,
   );
-  await card.getByRole("button", { name: "编辑笔记正文", exact: true }).click();
+  await card.getByRole("button", { name: "编辑笔记正文", exact: true }).dblclick();
   const original = (await card.boundingBox())!;
   const edge = card.getByRole("button", {
     name: "调整卡片大小：右下角",

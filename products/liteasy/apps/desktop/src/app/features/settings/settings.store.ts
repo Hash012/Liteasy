@@ -14,6 +14,9 @@ function loadPersistedModelSettings(): Partial<SettingsState> {
   } catch { return {}; }
 }
 
+function loadLocalSetting(key: string) {
+  try { return JSON.parse(globalThis.localStorage?.getItem("liteasy.local-literature.v1") ?? "{}")[key] === true; } catch { return false; }
+}
 function loadRecommendationStyle() {
   try {
     const parsed = JSON.parse(globalThis.localStorage?.getItem(recommendationSettingsStorageKey) ?? "{}");
@@ -102,6 +105,8 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
     "network.recommendation.style": loadRecommendationStyle(),
     "assistant.public_audit.enabled": false,
     "profile.enabled": false,
+    "papers.local_mode": loadLocalSetting("papers.local_mode"),
+    "profile.local_enabled": loadLocalSetting("profile.local_enabled"),
     "assistant.default_output_mode": "mindmap",
     "assistant.language": "zh-CN",
     "import.ocr_language": "eng",
@@ -145,6 +150,9 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
       }
       if (command.target === "view.theme") {
         notifyAppearancePreference(state["view.theme"]);
+      }
+      if (command.target === "papers.local_mode" || command.target === "profile.local_enabled") {
+        try { localStorage.setItem("liteasy.local-literature.v1", JSON.stringify({ "papers.local_mode": state["papers.local_mode"], "profile.local_enabled": state["profile.local_enabled"] })); } catch { /* Keep this session usable. */ }
       }
       if (command.target === "network.recommendation.style") {
         try {

@@ -110,6 +110,7 @@ export function useLibraryResourceTransferController(input: Input) {
           await addMetadataOnlyLibraryEntry(metadata);
         }
         await input.refreshLocalLibrary();
+        await input.onRecommendationSaved(source.recommendation);
         return;
       }
       const client = createCloudLibraryStorageClient({ endpoint: input.endpoint });

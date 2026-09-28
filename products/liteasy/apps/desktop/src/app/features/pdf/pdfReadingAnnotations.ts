@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { PdfAnnotationV2, PdfHighlightColor } from "./pdfAnnotationStorage";
 import { buildPdfSelectionRange, type PageCharModel } from "./pdfSelectionEngine";
 import { compactPdfTextForSearch } from "./pdfTextSearch";
@@ -18,6 +19,10 @@ export type PdfReadingAnnotations = {
   update(id: string, revision: number, note: string, style?: ReadingMarkStyle): Promise<void>;
   remove(id: string): Promise<void>;
   openPdf(id: string): void;
+  capture?: (input: { page: number; excerpt: string }, target: "board" | "tray" | "conversation") => Promise<void>;
+  quickAsk?: (input: { page: number; excerpt: string; question: string }, signal: AbortSignal) => Promise<void>;
+  annotationTools?: (annotation: PdfAnnotationV2) => ReactNode;
+
 };
 
 /** Only one exact folded match may become a geometric PDF mark. */

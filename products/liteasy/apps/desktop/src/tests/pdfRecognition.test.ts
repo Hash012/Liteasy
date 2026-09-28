@@ -15,7 +15,7 @@ const evidence = { firstPageText: "Attention Is All You Need\nAshish Vaswani\ndo
 const exact: LiteratureResolveResult = { status: "exact", candidate, confirmationMode: "candidate", unavailableProviders: [] };
 
 test("uses PDF title only when corroborated by the title page and bounds outgoing text", () => {
-  expect(buildPdfRecognitionRequest({ ...evidence, embeddedTitle: "Microsoft Word - draft" })?.hints?.title).toBeUndefined();
+  expect(buildPdfRecognitionRequest({ ...evidence, embeddedTitle: "Microsoft Word - draft" })?.hints?.title).toBe(candidate.record.title);
   expect(buildPdfRecognitionRequest({ ...evidence, embeddedTitle: candidate.record.title })?.query).toBe(candidate.record.title);
   expect(buildPdfRecognitionRequest(evidence)?.hints?.identifiers).toEqual([{ kind: "doi", value: "10.1234/example" }]);
   expect(buildPdfRecognitionRequest({ firstPageText: "word ".repeat(2000) })!.query!.length).toBeLessThanOrEqual(350);
@@ -153,4 +153,11 @@ describe("automatic import metadata", () => {
     await state.run();
     expect(state.workspaceStore.getState().papers[0]).toMatchObject({ title: "My preferred title", sourcePath: `/library/${buildMetadataPdfFileName(literature)}` });
   });
+});
+
+
+test("title queries omit publisher banners and retain a useful hint without embedded metadata", () => {
+  const request = buildPdfRecognitionRequest({ firstPageText: "Journal of Computing\nVolume 23\nGraph Learning for Scientific Discovery\nAlice Smith, Bob Jones\nAbstract\nBody" });
+  expect(request?.query).toBe("Graph Learning for Scientific Discovery");
+  expect(request?.hints?.title).toBe(request?.query);
 });

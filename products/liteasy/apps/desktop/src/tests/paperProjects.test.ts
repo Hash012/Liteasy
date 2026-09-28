@@ -142,3 +142,19 @@ test("title search exposes current kind and revision while accepting older compa
   const updated = await f.objects.editNote(refOf(note), "编辑会升级索引");
   expect(await f.objects.searchTitles()).toEqual([{ objectId: note.objectId, title: note.title, kind: note.kind, revision: updated.revision }]);
 });
+
+
+test("user notes and boards remain grouped under the paper after reopening without extraction", async () => {
+  const f = fixture();
+  const project = await f.projects.ensurePaperProject({ paperId: "unparsed-pdf", title: "尚未解析的论文" });
+  const note = await f.projects.createNote(project.projectId, "# 阅读笔记\n\n$$E=mc^2$$", "我的笔记");
+  const board = await f.projects.createBoard(project.projectId, "我的白板", "create-board-once");
+  expect(await f.projects.createBoard(project.projectId, "我的白板", "create-board-once")).toEqual(board);
+  const assets = await f.reopen().listAssets(project.projectId);
+  expect(assets).toEqual(expect.arrayContaining([note, board]));
+  expect(assets).toHaveLength(2);
+  expect((await f.objects.get(board.ref!)).kind).toBe("workspace.board");
+  expect(objectText(await f.objects.get(note.ref!))).toContain("E=mc^2");
+  f.switchAccount();
+  await expect(f.projects.createBoard(project.projectId, "不能跨账号创建")).rejects.toThrow();
+});
