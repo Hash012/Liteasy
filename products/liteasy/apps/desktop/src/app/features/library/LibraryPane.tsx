@@ -1,3 +1,4 @@
+import { LibraryIconProvider, LibraryIconMenuItem, LibraryItemIcon, useLibraryIcons } from "./LibraryItemIcon";
 import { libraryFileDragType, libraryFolderKey, normalizedLibraryPath, relativeLibraryFolder } from "./libraryFolderMembership";
 import { buildMovedFolderPath, buildRenamedFolderPath } from "../workspace/workspacePathOperations";
 import { indexReadingCatalog, queryReadingCatalog, type ReadingCatalogFilters } from "./readingCatalogSearch";
@@ -257,7 +258,7 @@ function localExplorerTree(
   if (!snapshot) return { entries: [], folders: [] };
   const byPath = new Map<string, ExplorerFolder>();
   for (const folder of snapshot.folders) {
-    byPath.set(folder.path, {
+    byPath.set(libraryFolderKey(folder.path), {
       children: [],
       entries: [],
       id: folder.path,
@@ -268,8 +269,8 @@ function localExplorerTree(
   }
   const roots: ExplorerFolder[] = [];
   for (const folder of snapshot.folders) {
-    const node = byPath.get(folder.path)!;
-    const parent = folder.parentPath ? byPath.get(folder.parentPath) : undefined;
+    const node = byPath.get(libraryFolderKey(folder.path))!;
+    const parent = folder.parentPath ? byPath.get(libraryFolderKey(folder.parentPath)) : undefined;
     if (parent) parent.children.push(node);
     else roots.push(node);
   }
@@ -287,7 +288,7 @@ function localExplorerTree(
       metadataEntries.push(explorerEntry);
       continue;
     }
-    const parent = byPath.get(dirname(entry.path));
+    const parent = byPath.get(libraryFolderKey(dirname(entry.path)));
     if (parent) parent.entries.push(explorerEntry);
     else rootEntries.push(explorerEntry);
   }
@@ -444,7 +445,12 @@ function SectionHeader(props: {
   );
 }
 
-export function LibraryPane({
+export function LibraryPane(props: LibraryPaneProps) {
+  const scope = `${props.accountScopeId ?? "guest"}:${props.localLibrarySnapshot?.libraryId ?? "none"}`;
+  return <LibraryIconProvider key={scope} scope={scope}><LibraryPaneContent {...props} /></LibraryIconProvider>;
+}
+
+function LibraryPaneContent({
   fileLibrary,
   accountScopeId,
   accountSessionAvailable = false,
@@ -509,6 +515,17 @@ export function LibraryPane({
     scopeId: organizationScope?.scopeId,
     scopeType: "organization"
   });
+  const icons = useLibraryIcons();
+  function folderIconKey(area: string, path: string) {
+    if (area !== "local") return `folder:${area}:${area === "organization" ? organizationId : ""}:${path}`;
+    if (path === "local-metadata-only") return "folder:virtual:metadata";
+    const relative = relativeLibraryFolder(localLibrarySnapshot?.rootPath, path);
+    const windows = /^(?:[a-z]:|\/\/)/i.test(normalizedLibraryPath(localLibrarySnapshot?.rootPath ?? ""));
+    return `folder:local:${windows ? relative.toLowerCase() : relative}`;
+  }
+  function relocateFolderIcons(source: string, target: string) {
+    icons.relocate(folderIconKey("local", source), folderIconKey("local", target));
+  }
   const [collapsedSections, setCollapsedSections] = useState<LibraryResourceArea[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<Record<LibraryResourceArea, string[]>>({
     collection: [],
@@ -806,7 +823,11 @@ export function LibraryPane({
     if (area === "local") {
       if (!folder.localPath || !onRenameFolder) throw new Error("当前本地目录无法重命名。");
       const result = await onRenameFolder(folder.localPath, requested);
-      if (result.startsWith("已将目录")) await fileLibrary?.onRelocateFolder?.(folder.localPath, buildRenamedFolderPath(folder.localPath, requested));
+      if (result.startsWith("已将目录")) {
+        const target = buildRenamedFolderPath(folder.localPath, requested);
+        relocateFolderIcons(folder.localPath, target);
+        await fileLibrary?.onRelocateFolder?.(folder.localPath, target);
+      }
       setMessage(result);
       await onRefreshLocalLibrary?.();
       return;
@@ -936,7 +957,7 @@ export function LibraryPane({
     event.preventDefault(); event.stopPropagation(); setDropHover(null);
     const denied = dropPermission(event, area, folder);
     if (denied) { setMessage(denied); return; }
-    const source = readTransfer(event);
+    const source = dragSourceRef.current ?? readTransfer(event);
     const readingId = event.dataTransfer.getData(libraryFileDragType);
     const files = Array.from(event.dataTransfer.files ?? []);
     const directory = Array.from(event.dataTransfer.items ?? []).some((item) => item.webkitGetAsEntry?.()?.isDirectory);
@@ -954,7 +975,11 @@ export function LibraryPane({
         if ("folder" in source && source.area === "local" && area === "local") {
           if (!onMoveFolder || !target.localFolderPath) throw new Error("当前目录无法移动。");
           const result = await onMoveFolder(source.folder.path, target.localFolderPath);
-          if (result.startsWith("已将目录")) await fileLibrary?.onRelocateFolder?.(source.folder.path, buildMovedFolderPath(source.folder.path, target.localFolderPath));
+          if (result.startsWith("已将目录")) {
+            const destination = buildMovedFolderPath(source.folder.path, target.localFolderPath);
+            relocateFolderIcons(source.folder.path, destination);
+            await fileLibrary?.onRelocateFolder?.(source.folder.path, destination);
+          }
           setMessage(result);
         } else if (source.area === "local" && "entry" in source && source.entry.path && area === "local") {
           if (!onMovePaper || !target.localFolderPath) throw new Error("当前文献无法移动。");
@@ -1044,7 +1069,7 @@ export function LibraryPane({
           />
         ) : <span className="library-disclosure-spacer" />}
         <span aria-hidden="true" className="library-paper-icon">
-          {entry.bodyAvailable ? <DocumentPdfRegular /> : <DocumentTextRegular />}
+          <LibraryItemIcon itemKey={`file:${area}:${entry.id}`} kind={entry.bodyAvailable ? "pdf" : "text"} />
         </span>
         <div className="library-paper-content">
           <Menu openOnContext>
@@ -1063,6 +1088,7 @@ export function LibraryPane({
             </MenuTrigger>
             <MenuPopover>
               <MenuList>
+                <LibraryIconMenuItem itemKey={`file:${area}:${entry.id}`} title={entry.label} />
                 <MenuItem
                   disabled={!entry.bodyAvailable || pending}
                   icon={<OpenRegular />}
@@ -1130,10 +1156,10 @@ export function LibraryPane({
             <ul aria-label={`${entry.label} 的论文文件`}>
               {children.map((child) => (
                 <li key={child.id}>
-                  <Button
+                  <Menu openOnContext><MenuTrigger disableButtonEnhancement><Button
                     appearance="subtle"
                     size="small"
-                    icon={<DocumentTextRegular />}
+                    icon={<LibraryItemIcon itemKey={`child:${sourcePaper.id}:${child.id}`} kind={child.kind} />}
                     title={child.meta ? `${child.label} · ${child.meta}` : child.label}
                     aria-label={`打开论文文件：${child.label}`}
                     draggable={child.kind === "artifact"}
@@ -1145,7 +1171,9 @@ export function LibraryPane({
                       event.dataTransfer.setData("text/plain", child.label);
                     }}
                     onClick={() => onOpenPaperChild?.(child, sourcePaper)}
-                  >{child.label}</Button>
+                  >{child.label}</Button></MenuTrigger><MenuPopover><MenuList>
+                    <LibraryIconMenuItem itemKey={`child:${sourcePaper.id}:${child.id}`} title={child.label} />
+                  </MenuList></MenuPopover></Menu>
                 </li>
               ))}
             </ul>
@@ -1209,7 +1237,7 @@ export function LibraryPane({
             : selectFolder(area, folder.id)}
           type="button"
         >
-          <FolderRegular aria-hidden="true" />
+          <LibraryItemIcon itemKey={folderIconKey(area, folder.localPath ?? folder.id)} kind="folder" />
           <span>{folder.label}{dropHover?.key === dropKey(area, folder) ? <small className="library-drop-feedback" role="status">{dropHover.label}</small> : null}</span>
         </button>
       </div>
@@ -1221,6 +1249,7 @@ export function LibraryPane({
             <MenuTrigger disableButtonEnhancement>{row}</MenuTrigger>
             <MenuPopover>
               <MenuList>
+                <LibraryIconMenuItem itemKey={folderIconKey(area, folder.localPath ?? folder.id)} title={folder.label} />
                 <MenuItem
                   disabled={pending || !canManageFolder}
                   icon={<FolderAddRegular />}

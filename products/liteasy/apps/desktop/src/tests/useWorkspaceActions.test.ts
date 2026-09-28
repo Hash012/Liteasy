@@ -268,6 +268,27 @@ describe("useWorkspaceActions", () => {
     });
   });
 
+  test("moves Windows PDFs on disk and cleans the success path without changing identity", async () => {
+    const root = String.raw`\\?\D:\TJM\Documents\le\LiteasyData\local-library\library`;
+    const paper = { id: "paper-windows", title: "das24a", sourcePath: `${root}\\das24a.pdf` };
+    const move = vi.fn(async () => {});
+    const { result, workspaceStore } = renderWorkspaceActions([paper], { moveLocalLibraryResource: move, workspaceRootPath: root });
+    let message = "";
+    await act(async () => { message = await result.current.movePaper(paper.id, `${root}\\trial`); });
+    expect(move).toHaveBeenCalledExactlyOnceWith({ sourcePath: paper.sourcePath, targetPath: "D:/TJM/Documents/le/LiteasyData/local-library/library/trial/das24a.pdf" });
+    expect(workspaceStore.getState().papers[0]).toMatchObject({ id: paper.id, sourcePath: "D:/TJM/Documents/le/LiteasyData/local-library/library/trial/das24a.pdf" });
+    expect(message).toBe("已将《das24a》移动到 D:/TJM/Documents/le/LiteasyData/local-library/library/trial。");
+  });
+
+  test("does not report a move or change metadata for an out-of-library source", async () => {
+    const paper = { id: "outside", title: "Outside", sourcePath: "D:/Other/paper.pdf" };
+    const move = vi.fn(async () => {});
+    const { result, workspaceStore } = renderWorkspaceActions([paper], { moveLocalLibraryResource: move, workspaceRootPath: "D:/Library" });
+    await act(async () => { expect(await result.current.movePaper(paper.id, "D:/Library/trial")).toContain("移动失败"); });
+    expect(move).not.toHaveBeenCalled();
+    expect(workspaceStore.getState().papers).toEqual([paper]);
+  });
+
   test("moves a directory and updates every descendant only after disk success", async () => {
     const moveLocalLibraryResource = vi.fn(() => Promise.resolve());
     const { result, workspaceStore } = renderWorkspaceActions([

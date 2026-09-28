@@ -22,6 +22,7 @@ import {
   buildRenamedPaper,
   isWorkspacePathWithinRoot,
   normalizeWorkspacePath,
+  workspacePathKey,
   replaceWorkspacePathPrefix
 } from "./workspacePathOperations";
 
@@ -167,14 +168,14 @@ export function useWorkspaceActions({
     const occupiedPaths = new Set(
       state.papers
         .filter((paper) => !changedPaperIds.has(paper.id) && paper.sourcePath)
-        .map((paper) => normalizeWorkspacePath(paper.sourcePath!))
+        .map((paper) => workspacePathKey(paper.sourcePath!))
     );
     const nextPaths = new Set<string>();
     updatedPapers.forEach((paper) => {
       if (!paper.sourcePath) {
         return;
       }
-      const path = normalizeWorkspacePath(paper.sourcePath);
+      const path = workspacePathKey(paper.sourcePath);
       if (occupiedPaths.has(path) || nextPaths.has(path)) {
         throw new Error(`目标位置已存在同名条目：${path}`);
       }
@@ -184,13 +185,12 @@ export function useWorkspaceActions({
 
   async function movePhysicalResourceIfManaged(sourcePath: string, targetPath: string) {
     const state = workspaceStore.getState();
-    if (
-      moveLocalLibraryResource &&
-      isWorkspacePathWithinRoot(sourcePath, state.workspaceSource.rootPath) &&
-      isWorkspacePathWithinRoot(targetPath, state.workspaceSource.rootPath)
-    ) {
-      await moveLocalLibraryResource({ sourcePath, targetPath });
+    const root = state.workspaceSource.rootPath;
+    if (!moveLocalLibraryResource || !isWorkspacePathWithinRoot(root, root)) return;
+    if (!isWorkspacePathWithinRoot(sourcePath, root) || !isWorkspacePathWithinRoot(targetPath, root)) {
+      throw new Error("源文件和目标目录必须位于当前文献库中。");
     }
+    await moveLocalLibraryResource({ sourcePath, targetPath });
   }
 
   async function renamePaper(paperId: string, requestedName: string) {
@@ -225,7 +225,7 @@ export function useWorkspaceActions({
         throw new Error("找不到要移动的文献条目。");
       }
       const updatedPaper = buildMovedPaper(paper, targetFolderPath);
-      if (updatedPaper.sourcePath === paper.sourcePath) {
+      if (workspacePathKey(updatedPaper.sourcePath!) === workspacePathKey(paper.sourcePath!)) {
         return "条目已经位于目标目录。";
       }
       ensureTargetPathsAvailable([updatedPaper], new Set([paper.id]));
@@ -254,7 +254,7 @@ export function useWorkspaceActions({
       }
       const affectedPapers = state.papers.filter((paper) =>
         paper.sourcePath
-          ? normalizeWorkspacePath(paper.sourcePath).startsWith(`${normalizeWorkspacePath(folderPath)}/`)
+          ? workspacePathKey(paper.sourcePath).startsWith(`${workspacePathKey(folderPath)}/`)
           : false
       );
       const updatedPapers = affectedPapers.map((paper) => ({
@@ -270,7 +270,7 @@ export function useWorkspaceActions({
       await movePhysicalResourceIfManaged(folderPath, targetFolderPath);
       workspaceStore.updatePapers(updatedPapers);
       syncWorkspace();
-      const message = `已将目录重命名为 ${targetFolderPath}。`;
+      const message = `已将目录重命名为 ${normalizeWorkspacePath(targetFolderPath)}。`;
       onAnalysisHint(message);
       return message;
     } catch (error) {
@@ -292,7 +292,7 @@ export function useWorkspaceActions({
       }
       const affectedPapers = state.papers.filter((paper) =>
         paper.sourcePath
-          ? normalizeWorkspacePath(paper.sourcePath).startsWith(`${normalizeWorkspacePath(folderPath)}/`)
+          ? workspacePathKey(paper.sourcePath).startsWith(`${workspacePathKey(folderPath)}/`)
           : false
       );
       const updatedPapers = affectedPapers.map((paper) => ({
@@ -304,7 +304,7 @@ export function useWorkspaceActions({
       await movePhysicalResourceIfManaged(folderPath, destinationPath);
       workspaceStore.updatePapers(updatedPapers);
       syncWorkspace();
-      const message = `已将目录移动到 ${destinationPath}。`;
+      const message = `已将目录移动到 ${normalizeWorkspacePath(destinationPath)}。`;
       onAnalysisHint(message);
       return message;
     } catch (error) {

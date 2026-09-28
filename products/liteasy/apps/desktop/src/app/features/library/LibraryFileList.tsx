@@ -1,7 +1,7 @@
 import { libraryFileDragType, libraryFolderKey } from "./libraryFolderMembership";
 import { useMemo, useState, useEffect } from "react";
-import { Button } from "@fluentui/react-components";
-import { DocumentTextRegular } from "@fluentui/react-icons";
+import { LibraryItemIcon, LibraryIconMenuItem } from "./LibraryItemIcon";
+import { Button, Menu, MenuTrigger, MenuPopover, MenuList } from "@fluentui/react-components";
 import type { ReadingCatalogEntry, ReadingCatalogMetadataPatch } from "./readingCatalog.types";
 import { readingCatalogFormatLabels } from "./readingCatalog.types";
 import { indexReadingCatalog, queryReadingCatalog, type ReadingCatalogFilters } from "./readingCatalogSearch";
@@ -29,7 +29,7 @@ export function LibraryFileList({ access, query, category, filters, folderPath, 
   return <>
     <ul className="library-file-list" aria-label="文献库文件">
       {entries.slice(0, limit).map((entry) => <li key={entry.id}>
-        <button type="button" className={`library-file-row${access.selectedId === entry.id ? " active" : ""}`}
+        <Menu openOnContext><MenuTrigger disableButtonEnhancement><button type="button" className={`library-file-row${access.selectedId === entry.id ? " active" : ""}`}
           style={{ paddingLeft: `${depth * 12 + 6}px` }}
           draggable={Boolean(access.onMoveFile) && !access.pending}
           onDragStart={(event) => {
@@ -48,10 +48,12 @@ export function LibraryFileList({ access, query, category, filters, folderPath, 
               next?.querySelector<HTMLButtonElement>("button")?.focus();
             }
           }}>
-          <DocumentTextRegular aria-hidden="true" />
+          <LibraryItemIcon itemKey={`file:local:${entry.id}`} kind={entry.format} fileName={entry.fileName} />
           <span className="library-file-name">{entry.title}<small>{[entry.authors?.join(" · "), entry.collection, entry.tags?.join(" · ")].filter(Boolean).join(" · ")}</small></span>
           <small>{entry.format === "other" ? entry.fileName?.split(".").pop()?.toUpperCase() : readingCatalogFormatLabels[entry.format]}</small>
-        </button>
+        </button></MenuTrigger><MenuPopover><MenuList>
+          <LibraryIconMenuItem itemKey={`file:local:${entry.id}`} title={entry.title} />
+        </MenuList></MenuPopover></Menu>
       </li>)}
     </ul>
     {entries.length > limit ? <Button appearance="subtle" onClick={() => setLimit((value) => value + 50)}>显示更多文件（{entries.length - limit}）</Button> : null}

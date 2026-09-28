@@ -54,3 +54,16 @@ describe("workspacePathOperations", () => {
     expect(isWorkspacePathWithinRoot("fixtures/a.pdf", "fixtures")).toBe(false);
   });
 });
+
+test("matches Windows native, forward, extended and differently cased paths", () => {
+  const root = String.raw`\\?\D:\TJM\LiteasyData\library`;
+  expect(isWorkspacePathWithinRoot("d:/tjm/LiteasyData/library/paper.pdf", root)).toBe(true);
+  expect(isWorkspacePathWithinRoot("//?/D:/TJM/LiteasyData/library/trial/paper.pdf", root)).toBe(true);
+  expect(isWorkspacePathWithinRoot("D:/TJM/LiteasyData/library-copy/paper.pdf", root)).toBe(false);
+  expect(buildMovedPaper({ id: "p", title: "P", sourcePath: `${root}\\paper.pdf` }, `${root}\\trial`).sourcePath)
+    .toBe("D:/TJM/LiteasyData/library/trial/paper.pdf");
+  expect(replaceWorkspacePathPrefix("d:/tjm/liteasydata/library/trial/paper.pdf", `${root}\\Trial`, `${root}\\Archive`))
+    .toBe("D:/TJM/LiteasyData/library/Archive/paper.pdf");
+  expect(() => buildMovedFolderPath(`${root}\\Trial`, "d:/tjm/liteasydata/library/trial/nested")).toThrow();
+  expect(isWorkspacePathWithinRoot(String.raw`\\server\share\library\paper.pdf`, String.raw`\\?\UNC\server\share\library`)).toBe(true);
+});

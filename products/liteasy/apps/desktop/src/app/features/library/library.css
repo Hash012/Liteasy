@@ -1200,3 +1200,16 @@
 .library-file-name small { display: block; overflow: hidden; text-overflow: ellipsis; color: var(--colorNeutralForeground3); }
 .library-file-row > small { color: var(--colorNeutralForeground3); }
 .library-file-filters { display: grid; gap: 10px; width: min(260px, calc(100vw - 24px)); }
+
+/* Keep headings and their actions in one compact row at every panel width. */
+.library-section-header-row { display: flex; align-items: center; min-width: 0; gap: 2px; }
+.library-section-header-row > .library-section-header { flex: 1; min-width: 0; width: auto; padding-right: 4px; }
+.library-section-actions { display: flex; align-items: center; flex: 0 0 auto; gap: 0; padding-right: 6px; }
+.library-section-actions button { min-width: 24px; padding: 3px; }
+.library-item-icon { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; font-size: 18px; color: var(--colorNeutralForeground2); }
+.library-item-icon[data-icon="pdf"] { color: var(--colorPaletteRedForeground1); }
+.library-item-icon[data-icon="images"], .library-item-icon[data-icon="image"] { color: var(--colorPalettePurpleForeground2); }
+.library-item-icon[data-icon="book"], .library-item-icon[data-icon="multimodal"] { color: var(--colorPaletteTealForeground2); }
+.library-icon-dialog { max-width: 380px; }
+.library-icon-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 12px; }
+.library-icon-grid button { width: 100%; min-width: 32px; height: 40px; }

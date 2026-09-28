@@ -11,3 +11,8 @@ test.each([
 ])("displays %s without changing unrelated path syntax", (path, expected) => {
   expect(displayPath(path)).toBe(expected);
 });
+
+test("cleans already slash-normalized Windows drive and UNC display paths", () => {
+  expect(displayPath("//?/D:/Library/trial")).toBe("D:/Library/trial");
+  expect(displayPath("//?/UNC/server/share/trial")).toBe("//server/share/trial");
+});

@@ -1,7 +1,8 @@
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { mockFocusLayout } from "./fixtures/mockFocusLayout";
 import { LibraryPane } from "../app/features/library/LibraryPane";
 import { savePaperFileMetadata } from "../app/features/library/paperFileMetadata";
 
@@ -11,7 +12,10 @@ const paper = {
   title: "Vector Retrieval Survey"
 };
 
+let restoreFocusLayout: () => void;
+beforeEach(() => { restoreFocusLayout = mockFocusLayout(); });
 afterEach(() => {
+  restoreFocusLayout();
   window.localStorage.clear();
   vi.restoreAllMocks();
 });
@@ -234,4 +238,60 @@ test("shows non-PDF files inside their folder, finds them through search, and ke
   expect(book.closest(".library-folder-node")).toHaveTextContent("Topics");
   expect(screen.getAllByRole("button", { name: "选择文件 Research Handbook" })).toHaveLength(1);
   expect(screen.queryByRole("button", { name: "选择文件 Old notes" })).not.toBeInTheDocument();
+});
+
+test("places Windows PDFs under their actual nested folder across slash and prefix variants", async () => {
+  const root = String.raw`\\?\D:\Library`;
+  const snapshot = {
+    ...foldersSnapshot, rootPath: root,
+    folders: [{ name: "trial", path: `${root}\\trial`, parentPath: null },
+      { name: "Nested", path: `${root}\\trial\\Nested`, parentPath: "d:/library/trial" }],
+    entries: [{ id: paper.id, title: paper.title, contentHash: "hash", path: "//?/D:/Library/trial/Nested/paper.pdf", relativePath: "trial/Nested/paper.pdf" }]
+  };
+  renderLibraryPane({ localLibrarySnapshot: snapshot });
+  expect(screen.queryByRole("button", { name: paper.title })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "展开trial" }));
+  fireEvent.click(screen.getByRole("button", { name: "展开Nested" }));
+  const file = screen.getByRole("button", { name: paper.title });
+  expect(file.closest(".library-folder-node")).toHaveTextContent("Nested");
+  expect(screen.getAllByRole("button", { name: paper.title })).toHaveLength(1);
+});
+
+test("persists a custom folder icon, keeps it after rename, and restores its default", async () => {
+  const renamed = vi.fn(async () => "已将目录重命名为 /library/Books。");
+  const view = renderLibraryPane({ localLibrarySnapshot: foldersSnapshot, onRenameFolder: renamed });
+  const folder = screen.getByRole("button", { name: "eBooks", exact: true });
+  fireEvent.contextMenu(folder);
+  fireEvent.click(await screen.findByRole("menuitem", { name: "更换图标" }));
+  fireEvent.click(await screen.findByRole("button", { name: "书籍", exact: true }));
+  expect(folder.querySelector("[data-icon]")).toHaveAttribute("data-icon", "book");
+  vi.spyOn(window, "prompt").mockReturnValue("Books");
+  fireEvent.contextMenu(folder);
+  fireEvent.click(await screen.findByRole("menuitem", { name: "重命名", exact: true }));
+  await waitFor(() => expect(renamed).toHaveBeenCalled());
+  view.unmount();
+  renderLibraryPane({ localLibrarySnapshot: { ...foldersSnapshot, folders: [{ name: "Books", path: "/library/Books", parentPath: null }] } });
+  const bookFolder = screen.getByRole("button", { name: "Books", exact: true });
+  expect(bookFolder.querySelector("[data-icon]")).toHaveAttribute("data-icon", "book");
+  fireEvent.contextMenu(bookFolder);
+  fireEvent.click(await screen.findByRole("menuitem", { name: "更换图标" }));
+  fireEvent.click(await screen.findByRole("button", { name: "恢复默认图标" }));
+  expect(bookFolder.querySelector("[data-icon]")).toHaveAttribute("data-icon", "folder");
+});
+
+test("distinguishes paper derivatives and offers custom icons for ordinary files", async () => {
+  renderLibraryPane({ activePaperId: paper.id, paperChildren: { [paper.id]: [
+    { id: "text", label: "论文文本", kind: "extracted_text" },
+    { id: "figures", label: "论文插图", kind: "figures" },
+    { id: "combined", label: "论文图文", kind: "multimodal" }
+  ] }, fileLibrary: fileAccess({ entries: [{ id: "book", title: "My Book", format: "mobi" }] }) });
+  for (const [label, icon] of [["论文文本", "text"], ["论文插图", "images"], ["论文图文", "multimodal"]]) {
+    expect(screen.getByRole("button", { name: `打开论文文件：${label}` }).querySelector("[data-icon]")).toHaveAttribute("data-icon", icon);
+  }
+  const book = screen.getByRole("button", { name: "选择文件 My Book" });
+  expect(book.querySelector("[data-icon]")).toHaveAttribute("data-icon", "book");
+  fireEvent.contextMenu(book);
+  fireEvent.click(await screen.findByRole("menuitem", { name: "更换图标" }));
+  fireEvent.click(await screen.findByRole("button", { name: "星标", exact: true }));
+  expect(book.querySelector("[data-icon]")).toHaveAttribute("data-icon", "star");
 });

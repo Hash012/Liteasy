@@ -1,11 +1,17 @@
+import { displayPath } from "../resource-filesystem/displayPath";
 import type { Paper } from "./workspace.types";
 
 export function normalizeWorkspacePath(path: string) {
-  const normalized = path.trim().replace(/\\/g, "/");
+  const normalized = displayPath(path.trim()).replace(/\\/g, "/");
   if (normalized === "/") {
     return normalized;
   }
   return normalized.replace(/\/+$/, "");
+}
+
+export function workspacePathKey(path: string) {
+  const normalized = normalizeWorkspacePath(path);
+  return /^(?:[a-z]:|\/\/)/i.test(normalized) ? normalized.toLowerCase() : normalized;
 }
 
 export function getWorkspacePathName(path: string) {
@@ -75,7 +81,7 @@ export function buildMovedFolderPath(folderPath: string, targetFolderPath: strin
   if (!source || source === "/" || !targetFolder) {
     throw new Error("源目录和目标目录必须有效。");
   }
-  if (targetFolder === source || targetFolder.startsWith(`${source}/`)) {
+  if (workspacePathKey(targetFolder) === workspacePathKey(source) || workspacePathKey(targetFolder).startsWith(`${workspacePathKey(source)}/`)) {
     throw new Error("不能把目录移动到自身或其子目录中。");
   }
   return joinWorkspacePath(targetFolder, getWorkspacePathName(source));
@@ -85,18 +91,18 @@ export function replaceWorkspacePathPrefix(path: string, sourcePrefix: string, t
   const normalizedPath = normalizeWorkspacePath(path);
   const source = normalizeWorkspacePath(sourcePrefix);
   const target = normalizeWorkspacePath(targetPrefix);
-  if (normalizedPath === source) {
+  if (workspacePathKey(normalizedPath) === workspacePathKey(source)) {
     return target;
   }
-  if (!normalizedPath.startsWith(`${source}/`)) {
+  if (!workspacePathKey(normalizedPath).startsWith(`${workspacePathKey(source)}/`)) {
     return normalizedPath;
   }
   return `${target}${normalizedPath.slice(source.length)}`;
 }
 
 export function isWorkspacePathWithinRoot(path: string, rootPath: string) {
-  const normalizedPath = normalizeWorkspacePath(path);
-  const normalizedRoot = normalizeWorkspacePath(rootPath);
+  const normalizedPath = workspacePathKey(path);
+  const normalizedRoot = workspacePathKey(rootPath);
   return (
     (normalizedRoot.startsWith("/") || /^[A-Za-z]:\//.test(normalizedRoot)) &&
     (normalizedPath === normalizedRoot || normalizedPath.startsWith(`${normalizedRoot}/`))

@@ -45,4 +45,33 @@ test("folder drops highlight, persist imports, and move files back to root", asy
   await expect(book.locator("xpath=ancestor::li[contains(@class,'library-folder-node')]")).toHaveCount(0);
   await page.reload();
   await expect(book).toBeVisible();
+  // Use a real browser drag of an existing file, then verify its new parent.
+  await book.dragTo(folder);
+  await expect(page.getByText("文件已移入“eBooks”。")).toBeVisible();
+  await expect(book.locator("xpath=ancestor::li[contains(@class,'library-folder-node')]")).toContainText("eBooks");
+  await folder.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "更换图标" }).click();
+  await page.getByRole("button", { name: "书籍", exact: true }).click();
+  await expect(folder.locator("[data-icon]")).toHaveAttribute("data-icon", "book");
+  await book.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "更换图标" }).click();
+  await page.getByRole("button", { name: "星标", exact: true }).click();
+  await expect(book.locator("[data-icon]")).toHaveAttribute("data-icon", "star");
+  await page.reload();
+  await expect(library.getByRole("button", { name: "收起eBooks" })).toBeVisible();
+  await expect(book).toBeVisible();
+  await expect(book.locator("[data-icon]")).toHaveAttribute("data-icon", "star");
+  await expect(folder.locator("[data-icon]")).toHaveAttribute("data-icon", "book");
+  await book.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "更换图标" }).click();
+  await page.getByRole("button", { name: "恢复默认图标" }).click();
+  await expect(book.locator("[data-icon]")).toHaveAttribute("data-icon", "code");
+  for (const name of ["收藏", "关联推荐"]) {
+    const header = page.getByRole("region", { name, exact: true }).locator(".library-section-header-row");
+    const heading = await header.locator(".library-section-header").boundingBox();
+    const actions = await header.locator(".library-section-actions").boundingBox();
+    expect(heading).not.toBeNull(); expect(actions).not.toBeNull();
+    expect(Math.abs((heading!.y + heading!.height / 2) - (actions!.y + actions!.height / 2))).toBeLessThan(2);
+  }
+  await page.screenshot({ path: testInfo.outputPath("library-icons-compact.png") });
 });
