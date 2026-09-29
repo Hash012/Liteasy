@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Button, Menu, MenuItem, MenuItemCheckbox, MenuList, MenuPopover, MenuTrigger, Toolbar, Tooltip, useRestoreFocusTarget } from "@fluentui/react-components";
-import { ArrowLeftRegular, ArrowRightRegular, MoreHorizontalRegular, PanelLeftRegular, SearchRegular, SettingsRegular, SubtractRegular, SquareRegular, SquareMultipleRegular, DismissRegular } from "@fluentui/react-icons";
+import { ArrowLeftRegular, ArrowRightRegular, HistoryRegular, MoreHorizontalRegular, PanelLeftRegular, SearchRegular, SettingsRegular, SubtractRegular, SquareRegular, SquareMultipleRegular, DismissRegular } from "@fluentui/react-icons";
 import type { ToolbarAction, WorkspaceToolbarState, WindowControlsState } from "../features/workspace/workspaceShell.types";
 import "../styles/workspaceShell.css";
 
@@ -51,7 +51,7 @@ export function WorkspaceCommandBar({ state, windowControls, onOpenAi }: { state
   }, []);
   const actions = state.actions ?? [];
   // Reserve navigation, overflow, and a readable title before allocating commands.
-  const capacity = Math.max(0, Math.floor((width - 350 - (onOpenAi ? 64 : 0) - (windowControls?.available ? 138 : 0)) / 38));
+  const capacity = Math.max(0, Math.floor((width - 350 - (state.onOpenPageHistory ? 32 : 0) - (onOpenAi ? 64 : 0) - (windowControls?.available ? 138 : 0)) / 38));
   const visibleIds = new Set([...actions].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0)).slice(0, capacity).map((action) => action.id));
   const overflow = [...actions.filter((action) => !visibleIds.has(action.id)), ...(state.overflowActions ?? [])];
   const title = [...(state.breadcrumb?.map((item) => item.label) ?? []), state.title].filter(Boolean).join(" / ");
@@ -60,6 +60,7 @@ export function WorkspaceCommandBar({ state, windowControls, onOpenAi }: { state
       <div className="shell-navigation">
         <Tooltip content="后退" relationship="description"><Button className="shell-icon-button" appearance="subtle" aria-label="后退" disabled={!state.canGoBack} icon={<ArrowLeftRegular />} onClick={state.onGoBack} /></Tooltip>
         <Tooltip content="前进" relationship="description"><Button className="shell-icon-button" appearance="subtle" aria-label="前进" disabled={!state.canGoForward} icon={<ArrowRightRegular />} onClick={state.onGoForward} /></Tooltip>
+        {state.onOpenPageHistory ? <Tooltip content="页面历史 · Ctrl+H" relationship="description"><Button className="shell-icon-button" appearance="subtle" aria-label="页面历史" icon={<HistoryRegular />} onClick={state.onOpenPageHistory} /></Tooltip> : null}
       </div>
       <div className="shell-workspace-title" data-tauri-drag-region={windowControls?.available ? true : undefined} title={title}>{windowControls?.available && title ? `Liteasy · ${title}` : title || "Liteasy"}</div>
       <div className="shell-commands">

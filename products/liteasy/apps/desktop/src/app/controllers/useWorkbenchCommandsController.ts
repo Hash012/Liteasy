@@ -28,7 +28,7 @@ export function useWorkbenchCommandsController(actions: CommandActions) {
       // Do not navigate behind an import, account or metadata dialog.
       const dialog = [...document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"], [role="alertdialog"]')]
         .find((element) => !element.closest("[hidden]") && element.getAttribute("aria-label") !== "快捷操作");
-      if (dialog) return;
+      if (dialog && !(dialog.getAttribute("aria-label") === "页面切换" && (command === "page-history" || command === "active-pages"))) return;
       event.preventDefault();
       executeRef.current(command);
     };

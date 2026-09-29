@@ -81,3 +81,41 @@ describe("ambient file status", () => {
     expect(noteFileStatus()).toBeUndefined();
   });
 });
+
+it("restores a closed page by locator, resets history on scope changes and reports restoration failures", async () => {
+  const restorePage = vi.fn(async () => undefined);
+  const paper = { ...page("pdf-a", true, "main"), pageTarget: { kind: "paper" as const, id: "a" } };
+  const { result, rerender } = renderHook(({ surfaces, scopeId }) => useWorkspaceShellController({ surfaces, scopeId, restorePage, layoutActions: [], openSettings: vi.fn() }), {
+    initialProps: { surfaces: [paper], scopeId: "user-a" }
+  });
+  rerender({ surfaces: [], scopeId: "user-a" });
+  const closed = result.current.pageSwitcher.options[0];
+  expect(closed).toMatchObject({ open: false, available: true, title: "pdf-a" });
+  act(() => result.current.pageSwitcher.show("history"));
+  await act(async () => result.current.pageSwitcher.select(closed));
+  expect(restorePage).toHaveBeenCalledWith({ kind: "paper", id: "a" });
+  expect(result.current.pageSwitcher.mode).toBeNull();
+  restorePage.mockRejectedValueOnce(new Error("已移除"));
+  act(() => result.current.pageSwitcher.show("history"));
+  await act(async () => result.current.pageSwitcher.select(closed));
+  expect(result.current.pageSwitcher.mode).toBe("history");
+  expect(result.current.pageSwitcher.error).toBe("已移除");
+  rerender({ surfaces: [], scopeId: "user-b" });
+  expect(result.current.pageSwitcher.options).toEqual([]);
+  expect(result.current.pageSwitcher.mode).toBeNull();
+});
+
+it("activates a hidden open page through its latest placement and callback without reopening it", async () => {
+  const input = { layoutActions: [], openSettings: vi.fn(), restorePage: vi.fn() };
+  const a = page("a", true, "main");
+  const old = page("b", false, "right");
+  const moved = { ...old, region: "bar-moved", onActivate: vi.fn() };
+  const { result, rerender } = renderHook(({ surfaces }) => useWorkspaceShellController({ ...input, surfaces }), { initialProps: { surfaces: [a, old] } });
+  act(() => result.current.pageSwitcher.show("active"));
+  const option = result.current.pageSwitcher.options.find((item) => item.key === "b")!;
+  rerender({ surfaces: [a, moved] });
+  await act(async () => result.current.pageSwitcher.select(option));
+  expect(moved.onActivate).toHaveBeenCalledOnce();
+  expect(old.onActivate).not.toHaveBeenCalled();
+  expect(input.restorePage).not.toHaveBeenCalled();
+});

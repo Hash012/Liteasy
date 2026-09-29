@@ -31,6 +31,7 @@ export interface WorkspaceToolbarState {
   canGoForward?: boolean;
   onGoBack?: () => void;
   onGoForward?: () => void;
+  onOpenPageHistory?: () => void;
   actions?: ToolbarAction[];
   overflowActions?: ToolbarAction[];
 }
@@ -41,6 +42,9 @@ export interface WorkspaceSurface {
   region: string;
   active: boolean;
   dynamic?: boolean;
+  pageKey?: string;
+  pageType?: string;
+  pageTarget?: import("./pageHistory").WorkspacePageTarget;
   title: string;
   fileStatus?: FileStatus;
   search?: "library" | "notes" | "pdf" | "reading-catalog" | "reading-document";

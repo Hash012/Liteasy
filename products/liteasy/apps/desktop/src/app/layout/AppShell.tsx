@@ -1,3 +1,7 @@
+import { createWorkspacePageRestorer } from "../controllers/createWorkspacePageRestorer";
+import { WorkspacePageSwitcher } from "../features/workspace/WorkspacePageSwitcher";
+import type { WorkspacePageTarget } from "../features/workspace/pageHistory";
+import { liteasyPath } from "../features/resource-filesystem/liteasyPath";
 import { RecommendationDetails } from "../features/recommendations/RecommendationDetails";
 import { createProfileMemoryGenerator } from "../features/profile/profileMemoryModel";
 import { createAgentAssetNavigator } from "../controllers/agent/createAgentAssetNavigator";
@@ -1137,7 +1141,9 @@ export function AppShell({
     library: () => openDockedLeftRailView("library"),
     assistant: () => workbenchNavigation.open("assistant"),
     settings: () => workbenchNavigation.open("settings"),
-    help: () => help.port.open()
+    help: () => help.port.open(),
+    "page-history": () => workspaceShell.pageSwitcher.show("history"),
+    "active-pages": () => workspaceShell.pageSwitcher.show("active")
   });
   const externalNote = useExternalNoteController({
     scopeId: objectWorkbench.repository.scopeId,
@@ -2412,6 +2418,39 @@ export function AppShell({
     );
   }
 
+  function dockPageTarget(item: DockItemId): WorkspacePageTarget {
+    const scope = objectWorkbench.repository.scopeId;
+    if (item === "recommendation-reader" && recommendationLibrary.preview) return { kind: "recommendation", id: recommendationLibrary.preview.item.id };
+    if (item === "notes" && notes.model.selected) return { kind: "note-selection", key: notes.model.selected.key };
+    if (item === "note-file-reader" && externalNote.session) {
+      const { mountId, path } = externalNote.session.snapshot;
+      return { kind: "resource", path: liteasyPath(scope, { kind: "external-file", mountId, path }) };
+    }
+    if (item === "document-reader" && readingLibrary.active) return { kind: "reading", id: readingLibrary.active.id };
+    const object = item === "paper-note" ? paperAttachments.session?.object : item === "board" ? objectWorkbench.board : undefined;
+    if (object) return { kind: "resource", path: liteasyPath(scope, { kind: "object", ref: refOf(object), followLatest: true }) };
+    return { kind: "dock", itemId: item };
+  }
+  const restoreWorkspacePage = createWorkspacePageRestorer({
+    openAsset: openAgentAsset,
+    recommendations: recommendationItems, openRecommendation: recommendationLibrary.open,
+    notes: notes.model.items, selectNote: notes.model.selectItem,
+    readingEntries: readingLibrary.entries, openReading: readingLibrary.open,
+    hasPaper: (paperId) => Boolean(resolveReaderPaper({ cachedPapers: cachedReaderPapers, libraryPapers: workspaceState.papers, paperId })),
+    hasPaperResource: (paperId, kind) => {
+      const resources = getPaperMineruResources(paperId);
+      return Boolean(resources && (kind === "figures" ? resources.figures.length : kind === "extracted_text" ? resources.textChunks.length : resources.figures.length + resources.textChunks.length));
+    },
+    openPaper: (paperId) => { dock.moveDynamicItem(`pdf-${paperId}`, "main"); openPaperInReader(paperId); },
+    openPaperResource: (paperId, kind) => {
+      dock.moveDynamicItem(paperResourceTabId({ paperId, kind }), "main"); openPaperResource(paperId, kind);
+    },
+    openDock: (item) => {
+      dock.openItem(item);
+      const region = dock.findItemRegion(item) ?? dockItemRegistry[item].preferredRegion;
+      revealDockRegion(region); activateDockItem(region, item);
+    }
+  });
   const readingEntry = readingLibrary.entries.find((entry) => entry.id === readingLibrary.active?.id);
   const shellSurfaces = Object.keys(dock.layout.regions).flatMap((id): WorkspaceSurface[] => {
     const region = id as DockRegionId;
@@ -2421,7 +2460,13 @@ export function AppShell({
     return [
       ...tabs.map((tab): WorkspaceSurface => {
         const paper = openReaderPapers.find((paper) => tab.id === `pdf-${paper.id}`);
+        const resource = openPaperResources.find((item) => paperResourceTabId(item) === tab.id);
+        const artifact = artifactTabs.find((item) => item.artifactId === tab.id);
+        const pageTarget: WorkspacePageTarget | undefined = paper ? { kind: "paper", id: paper.id }
+          : resource ? { kind: "paper-resource", paperId: resource.paperId, resourceKind: resource.kind }
+          : artifact ? { kind: "resource", path: liteasyPath(objectWorkbench.repository.scopeId, { kind: "artifact", artifactId: artifact.artifactId }) } : undefined;
         return {
+          pageTarget, pageType: paper ? "PDF" : resource ? "论文附件" : artifact ? "产物" : "可视化",
           id: tab.id, region, dynamic: true, active: visible && tab === selected, title: tab.title,
           fileStatus: paper ? { ...paperFileStatus(paper, importJobsByDocumentId[paper.id], pdfFileStatus.forPaper(paper)), entry: readingLibrary.entries.find((entry) => entry.id === paper.id) } : undefined,
           search: paper?.sourcePath ? "pdf" : undefined,
@@ -2430,8 +2475,12 @@ export function AppShell({
       }),
       ...dock.layout.regions[region].itemIds.map((item): WorkspaceSurface => ({
         id: item, region,
+        pageKey: JSON.stringify(dockPageTarget(item)), pageTarget: dockPageTarget(item),
+        pageType: item === "document-reader" ? readingLibrary.active?.document.format.toUpperCase() ?? "阅读器"
+          : item === "note-file-reader" ? "Markdown" : item === "paper-note" || item === "notes" ? "笔记"
+          : item === "board" ? "白板" : item === "recommendation-reader" ? "论文详情" : "工作区",
         active: visible && !selected && dock.layout.regions[region].activeItemId === item,
-        title: item === "recommendation-reader" ? recommendationLibrary.preview?.item.title ?? "论文详情" : item === "note-file-reader" ? externalNote.session?.snapshot.name ?? "Markdown" : item === "document-reader" ? readingLibrary.active?.document.title ?? dockItemRegistry[item].title
+        title: item === "paper-note" && paperAttachments.session ? paperAttachments.session.object.title : item === "board" && objectWorkbench.board ? objectWorkbench.board.title : item === "recommendation-reader" ? recommendationLibrary.preview?.item.title ?? "论文详情" : item === "note-file-reader" ? externalNote.session?.snapshot.name ?? "Markdown" : item === "document-reader" ? readingLibrary.active?.document.title ?? dockItemRegistry[item].title
           : item === "notes" ? notes.model.selected?.title ?? dockItemRegistry[item].title : dockItemRegistry[item].title,
         fileStatus: item === "recommendation-reader" && recommendationLibrary.preview ? { name: recommendationLibrary.preview.item.title, type: "推荐文献", recommendation: recommendationLibrary.preview.item } : item === "library" ? recommendationLibrary.selected
           ? { name: recommendationLibrary.selected.title, type: "推荐文献", recommendation: recommendationLibrary.selected }
@@ -2446,6 +2495,8 @@ export function AppShell({
   });
   const workspaceShell = useWorkspaceShellController({
     surfaces: shellSurfaces,
+    scopeId: objectWorkbench.repository.scopeId,
+    restorePage: restoreWorkspacePage,
     layoutActions: [...(["left", "right", "bottom"] as const).map((region) => ({
       id: region,
       label: { left: "左侧栏", right: "右侧栏", bottom: "下栏" }[region],
@@ -2490,6 +2541,10 @@ export function AppShell({
     <div ref={immersive.root} className={appFrameClassName} data-theme-scope={appFrameScope} style={appFrameStyle}
       data-reading-focus={immersive.mode} data-focus-edge={immersive.edge} onClickCapture={immersive.onClickCapture}>
       <ImmersiveReadingControls {...immersive} />
+      {workspaceShell.pageSwitcher.mode ? <WorkspacePageSwitcher mode={workspaceShell.pageSwitcher.mode}
+        options={workspaceShell.pageSwitcher.options} currentKey={workspaceShell.pageSwitcher.currentKey}
+        onModeChange={workspaceShell.pageSwitcher.show} onSelect={workspaceShell.pageSwitcher.select}
+        onClose={workspaceShell.pageSwitcher.close} pending={workspaceShell.pageSwitcher.pending} error={workspaceShell.pageSwitcher.error} /> : null}
       <WorkspaceCommandBar state={workspaceShell.toolbar} windowControls={windowControls} onOpenAi={aiWorkbench.show} />
       {workbenchCommands.open ? <WorkbenchCommandsDialog onClose={workbenchCommands.close} onExecute={workbenchCommands.execute} /> : null}
       <AiWorkbenchDialog open={aiWorkbench.open} papers={aiWorkbench.papers} openedPapers={openReaderPapers}

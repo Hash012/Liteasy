@@ -374,12 +374,13 @@ function SavedArtifactList({
 
   useEffect(() => {
     if (openMenuArtifactId !== null || pendingAction === null) return;
-    setPendingAction(null);
-    if (pendingAction.kind === "rename") {
-      onRename(pendingAction.artifact);
-      return;
-    }
-    onDelete(pendingAction.artifact);
+    // Finish the menu's click and focus restoration before mounting another dismissable layer.
+    const frame = requestAnimationFrame(() => {
+      setPendingAction(null);
+      if (pendingAction.kind === "rename") onRename(pendingAction.artifact);
+      else onDelete(pendingAction.artifact);
+    });
+    return () => cancelAnimationFrame(frame);
   }, [onDelete, onRename, openMenuArtifactId, pendingAction]);
 
   function scheduleDialog(kind: "delete" | "rename", artifact: ArtifactTab) {

@@ -1,11 +1,11 @@
-import { BookRegular, BotRegular, QuestionCircleRegular, SearchRegular, SettingsRegular } from "@fluentui/react-icons";
+import { AppsRegular, HistoryRegular, BookRegular, BotRegular, QuestionCircleRegular, SearchRegular, SettingsRegular } from "@fluentui/react-icons";
 import { LiteasyMark } from "./LiteasyMark";
 import { commandKeys, workbenchCommands, type WorkbenchCommandId } from "./workbenchCommands";
 import { useWorkbenchCommands } from "./workbenchCommandsContext";
 import "./workbenchWelcome.css";
 
 export function WorkbenchCommandIcon({ id }: { id: WorkbenchCommandId }) {
-  const Icon = { library: BookRegular, assistant: BotRegular, settings: SettingsRegular, help: QuestionCircleRegular, commands: SearchRegular }[id];
+  const Icon = { library: BookRegular, assistant: BotRegular, settings: SettingsRegular, help: QuestionCircleRegular, commands: SearchRegular, "page-history": HistoryRegular, "active-pages": AppsRegular }[id];
   return <Icon aria-hidden="true" />;
 }
 export function ShortcutKeys({ id }: { id: WorkbenchCommandId }) {
@@ -23,7 +23,7 @@ export function WorkbenchWelcome({ compact = false }: { compact?: boolean }) {
       {!compact ? <>
         <h1>从这里开始研究</h1>
         <div className="workbench-welcome-actions">
-          {workbenchCommands.filter((command) => command.id !== "commands").map((command) =>
+          {workbenchCommands.filter((command) => !["commands", "page-history", "active-pages"].includes(command.id)).map((command) =>
             <button key={command.id} type="button" className="workbench-welcome-action" disabled={!execute} onClick={() => execute?.(command.id)}>
               <WorkbenchCommandIcon id={command.id} />
               <span className="workbench-welcome-action-copy"><span>{command.title}</span><small>{command.description}</small></span>

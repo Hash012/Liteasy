@@ -1,3 +1,4 @@
+import { pageKey, pageOptions, recordPageVisit, type WorkspacePageOption, type WorkspacePageTarget, type WorkspacePageVisit } from "../features/workspace/pageHistory";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReadingCatalogEntry } from "../features/library/readingCatalog.types";
 import { displayPath } from "../features/resource-filesystem/displayPath";
@@ -62,6 +63,8 @@ export function noteFileStatus(note?: NotesItem): FileStatus | undefined {
 
 export function useWorkspaceShellController(input: {
   surfaces: WorkspaceSurface[];
+  scopeId?: string;
+  restorePage?: (target: WorkspacePageTarget) => void | Promise<void>;
   layoutActions: ToolbarAction[];
   openSettings: () => void;
 }) {
@@ -77,6 +80,47 @@ export function useWorkspaceShellController(input: {
   latest.current = input;
   const [history, setHistory] = useState<{ ids: string[]; index: number }>({ ids: [], index: -1 });
   const navigating = useRef<string>();
+  const scopeId = input.scopeId ?? "local";
+  const [visitState, setVisitState] = useState<{ scope: string; entries: WorkspacePageVisit[] }>({ scope: scopeId, entries: [] });
+  const [pageMode, setPageMode] = useState<"history" | "active" | null>(null);
+  const [pageError, setPageError] = useState("");
+  const [pagePending, setPagePending] = useState(false);
+  const pageOperation = useRef(0);
+  const pageBusy = useRef(false);
+  const activePageKey = active ? pageKey(active) : undefined;
+  useEffect(() => {
+    setPageMode(null); setPageError(""); setPagePending(false); pageBusy.current = false; pageOperation.current++;
+    return () => { pageOperation.current++; };
+  }, [scopeId]);
+  useEffect(() => {
+    if (!active) return;
+    setVisitState((current) => ({ scope: scopeId, entries: recordPageVisit(current.scope === scopeId ? current.entries : [], active) }));
+  }, [activePageKey, scopeId]);
+  function showPages(mode: "history" | "active") { setPageError(""); setPageMode(mode); }
+  async function selectPage(option: WorkspacePageOption) {
+    if (pageBusy.current) return;
+    const operation = ++pageOperation.current;
+    pageBusy.current = true; setPagePending(true); setPageError("");
+    try {
+      const current = latest.current.surfaces.find((surface) => pageKey(surface) === option.key);
+      if (current) { focusRegion(current.region); current.onActivate(); }
+      else if (option.target && latest.current.restorePage) await latest.current.restorePage(option.target);
+      else throw new Error("此页面已关闭，请从文献库或产物库重新打开。");
+      if (operation !== pageOperation.current) return;
+      setPageMode(null);
+      // Fluent restores the launcher focus on dismiss. Let the chosen page win afterwards.
+      requestAnimationFrame(() => {
+        if (operation !== pageOperation.current) return;
+        const opened = latest.current.surfaces.find((surface) => pageKey(surface) === option.key);
+        if (opened) focusRegion(opened.region);
+      });
+    } catch (error) {
+      if (operation === pageOperation.current) setPageError(error instanceof Error ? error.message : "页面打开失败，请重试。");
+    } finally {
+      if (operation === pageOperation.current) { pageBusy.current = false; setPagePending(false); }
+    }
+  }
+
 
   useEffect(() => {
     const hadPrevious = Object.keys(previousActive.current).length > 0;
@@ -150,11 +194,16 @@ export function useWorkspaceShellController(input: {
     canGoForward: historyTarget(1) !== -1,
     onGoBack: () => navigate(-1),
     onGoForward: () => navigate(1),
+    onOpenPageHistory: () => showPages("history"),
     actions: [
       ...(active?.search ? [{ id: "search", label: "搜索", icon: "search" as const, priority: 100, onSelect: search }] : []),
       { id: "layout", label: "布局", icon: "layout", priority: 50, children: input.layoutActions }
     ],
     overflowActions: [{ id: "settings", label: "设置", icon: "settings", onSelect: () => latest.current.openSettings() }]
   };
-  return { toolbar, activeSurfaceId: active?.id, fileStatus: active?.fileStatus, focusRegion, trackInteraction };
+  return { pageSwitcher: {
+    mode: pageMode, show: showPages, close: () => { if (!pageBusy.current) setPageMode(null); },
+    options: pageOptions(input.surfaces, visitState.scope === scopeId ? visitState.entries : [], pageMode ?? "history"),
+    currentKey: activePageKey, select: selectPage, error: pageError, pending: pagePending
+  }, toolbar, activeSurfaceId: active?.id, fileStatus: active?.fileStatus, focusRegion, trackInteraction };
 }

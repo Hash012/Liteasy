@@ -13,6 +13,8 @@ test("matches Windows and Mac shortcuts without taking plain typing, IME, AltGra
   expect(matchWorkbenchShortcut(event({ key: "L", ctrlKey: true, shiftKey: true }), false)).toBe("library");
   expect(matchWorkbenchShortcut(event({ key: "Dead", code: "KeyI", metaKey: true, altKey: true }), true)).toBe("assistant");
   expect(matchWorkbenchShortcut(event({ key: ",", metaKey: true }), true)).toBe("settings");
+  expect(matchWorkbenchShortcut(event({ key: "h", ctrlKey: true }), false)).toBe("page-history");
+  expect(matchWorkbenchShortcut(event({ key: "t", ctrlKey: true }), false)).toBe("active-pages");
   expect(commandKeys("assistant", true)).toEqual(["⌘", "Option", "I"]);
   for (const input of [{ key: "i" }, { key: "p", ctrlKey: true }, { key: "i", ctrlKey: true, altKey: true, isComposing: true },
     { key: "i", ctrlKey: true, altKey: true, repeat: true }, { key: "F1", shiftKey: true }, { key: "i", ctrlKey: true, metaKey: true, altKey: true }]) {
@@ -26,7 +28,7 @@ test("matches Windows and Mac shortcuts without taking plain typing, IME, AltGra
 });
 
 test("uses current navigation callbacks, leaves drafts intact, blocks navigation behind modal dialogs and cleans up", () => {
-  const actions = { library: vi.fn(), assistant: vi.fn(), settings: vi.fn(), help: vi.fn() };
+  const actions = { library: vi.fn(), assistant: vi.fn(), settings: vi.fn(), help: vi.fn(), "page-history": vi.fn(), "active-pages": vi.fn() };
   const hook = renderHook((value) => useWorkbenchCommandsController(value), { initialProps: actions });
   const updated = { ...actions, assistant: vi.fn() }; hook.rerender(updated);
   const view = render(<textarea aria-label="草稿" defaultValue="尚未发送" />);
@@ -38,6 +40,11 @@ test("uses current navigation callbacks, leaves drafts intact, blocks navigation
   view.rerender(<div role="dialog" aria-modal="true" aria-label="元数据"><input /></div>);
   fireEvent.keyDown(window, { key: ",", ctrlKey: true });
   expect(actions.settings).not.toHaveBeenCalled();
+  view.rerender(<div role="dialog" aria-modal="true" aria-label="页面切换"><input /></div>);
+  fireEvent.keyDown(window, { key: "t", ctrlKey: true });
+  expect(actions["active-pages"]).toHaveBeenCalledOnce();
+  fireEvent.keyDown(window, { key: "h", ctrlKey: true });
+  expect(actions["page-history"]).toHaveBeenCalledOnce();
   view.unmount();
   fireEvent.keyDown(window, { key: "P", ctrlKey: true, shiftKey: true });
   expect(hook.result.current.open).toBe(true);
