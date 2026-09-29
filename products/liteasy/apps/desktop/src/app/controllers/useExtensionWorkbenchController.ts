@@ -1,3 +1,4 @@
+import type { ExtensionWorkflowModel } from "../features/workflows/extensionWorkflowModel";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { WorkbenchViewModel } from "../features/boards/ObjectWorkbench";
 import { createObjectStorage } from "../features/objects/objectStorage";
@@ -13,6 +14,7 @@ export function useExtensionWorkbenchController(input: {
   model: WorkbenchViewModel & { extensions: NonNullable<WorkbenchViewModel["extensions"]> };
   openDock(item: DockItemId): void;
   openAsset(path: string): Promise<unknown>;
+  workflows?: ExtensionWorkflowModel;
   runWorkflow?(owner: string, workflow: string, selection: string[]): Promise<void>;
 }): ExtensionWorkbench {
   const latest = useRef(input); latest.current = input;
@@ -72,7 +74,7 @@ export function useExtensionWorkbenchController(input: {
     await model.selectBoard(board); await model.refresh(); latest.current.openDock("board");
   }
   return {
-    packages: input.model.extensions, workspace, views, error, openView, invoke, refreshViews,
+    packages: input.model.extensions, workflows: input.workflows, workspace, views, error, openView, invoke, refreshViews,
     openStudio: () => latest.current.openDock("workflow-studio"),
     async openLink(path) {
       if (path.startsWith("liteasy://extensions/")) {

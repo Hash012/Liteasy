@@ -4,7 +4,7 @@ export type DockRegionId = DockBaseRegionId | `bar-${string}`;
 export type ExtensionDockItemId = `extension:plugin.${string}/${string}/${string}`;
 export type DockItemId = CoreDockItemId | ExtensionDockItemId;
 export type CoreDockItemId =
-  | "extension-library"
+  | "workflow-runs" | "extension-library"
   | "workflow-studio"
   | "library"
   | "document-reader"

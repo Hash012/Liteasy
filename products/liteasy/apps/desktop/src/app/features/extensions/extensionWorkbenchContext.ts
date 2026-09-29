@@ -1,3 +1,4 @@
+import type { ExtensionWorkflowModel } from "../workflows/extensionWorkflowModel";
 import { createContext, useContext } from "react";
 import type { ExtensionPackagesModel } from "./useExtensionPackages";
 import type { ExtensionWorkspaceStore, ExtensionViewInstance } from "./extensionWorkspaceStore";
@@ -5,6 +6,7 @@ import type { JsonObject } from "./extensionSchema";
 
 export type ExtensionWorkbench = {
   packages: ExtensionPackagesModel;
+  workflows?: ExtensionWorkflowModel;
   workspace: ExtensionWorkspaceStore;
   views: ExtensionViewInstance[];
   error: string;

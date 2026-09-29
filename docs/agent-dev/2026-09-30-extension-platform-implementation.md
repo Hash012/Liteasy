@@ -30,3 +30,9 @@ Validation: 67 affected frontend tests, followed by 19 targeted package/Canvas t
 Added dynamic Dock identities, persistent declarative page instances, unavailable-extension placeholders, existing page history/switcher integration, and an extension manager in the activity rail. Dock persistence now writes a distinct v3 key while retaining older layout records. Extension settings use schema forms, searchable categories, global/profile/workspace inheritance, CAS saves, and preservation of unknown configuration versions. Registered library menu actions route through the same extension controller; configuration updates refresh contributed views.
 
 Validation: 30 package/settings/layout tests and 38 workbench/history/library/AppShell integration tests; CI smoke (8); production build. Studio remains for step 5; no arbitrary-code runtime is enabled.
+
+## Step 4 — persistent workflow execution
+
+Added a bounded operation catalog backed by the existing asset service, scope/version-bound host grants, persistent operation intents/receipts, conditional undo, graph compilation, branch/join handling, bounded map execution, budgets, cancellation, single-step and manual-input checkpoints. Runs pin workflow definitions, package digests, configuration values and actual node snapshots. Recorded replay makes no external calls; uncertain interrupted writes require reconciliation. The ordinary paper-comparison package now reads actual selected resources, invokes the existing model connection, and saves a real associated note. The run viewer exposes partial failures and receipts; repeating model execution creates a new run.
+
+Validation: 21 package/workbench/AppShell tests plus 6 focused durable-operation/recovery/branch/map tests; CI smoke (8); production build. Token budgets are explicitly estimated. External writes cannot be claimed atomic with the run store and are kept in reconciliation when the outcome cannot be established.

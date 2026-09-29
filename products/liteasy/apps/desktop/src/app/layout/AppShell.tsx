@@ -1,3 +1,5 @@
+import { useExtensionWorkflowController } from "../controllers/useExtensionWorkflowController";
+import { WorkflowInvocation, WorkflowRuns } from "../features/workflows/WorkflowViews";
 import { useExtensionWorkbenchController } from "../controllers/useExtensionWorkbenchController";
 import { ExtensionWorkbenchContext } from "../features/extensions/extensionWorkbenchContext";
 import { ExtensionLibrary, ExtensionViewHost } from "../features/extensions/ExtensionViews";
@@ -1193,7 +1195,8 @@ export function AppShell({
     openPaper: (paper) => openPaperInReader(paper.id),
     openArtifact: (id) => { artifactWorkflow.actions.openArtifact(id); activateArtifactSurface(id); }
   });
-  const extensionWorkbench = useExtensionWorkbenchController({ model: objectWorkbench, openDock: workbenchNavigation.open, openAsset: async (path) => openAgentAsset(path) });
+  const extensionWorkflows = useExtensionWorkflowController({ scope: objectWorkbench.repository.scopeId, assets: objectWorkbench.agentAssets, packages: objectWorkbench.extensions, settings: settingsState, modelTransport: effectiveModelTransport, open: async (path) => { await openAgentAsset(path); }, showRuns: () => workbenchNavigation.open("workflow-runs") });
+  const extensionWorkbench = useExtensionWorkbenchController({ model: objectWorkbench, openDock: workbenchNavigation.open, openAsset: async (path) => openAgentAsset(path), workflows: extensionWorkflows, runWorkflow: extensionWorkflows.request });
   const assistantContextSuggestions = useAssistantContextCatalog({
     artifacts: artifactCatalog,
     objects: objectWorkbench.objects,
@@ -2077,6 +2080,7 @@ export function AppShell({
   }
 
   function renderDockItem(itemId: DockItemId, regionId: DockRegionId) {
+    if (itemId === "workflow-runs") return <WorkflowRuns />;
     if (itemId === "extension-library" || itemId === "workflow-studio") return <ExtensionLibrary />;
     if (isExtensionDockItemId(itemId)) return <ExtensionViewHost dockId={itemId} />;
     if (itemId === "recommendation-reader") return recommendationLibrary.preview ? <RecommendationDetails
@@ -2546,6 +2550,7 @@ export function AppShell({
     <HelpContext.Provider value={help.port}>
     <ObjectWorkbenchContext.Provider value={objectWorkbench.port}>
     <ExtensionWorkbenchContext.Provider value={extensionWorkbench}>
+    <WorkflowInvocation model={extensionWorkflows} />
     <div ref={immersive.root} className={appFrameClassName} data-theme-scope={appFrameScope} style={appFrameStyle}
       data-reading-focus={immersive.mode} data-focus-edge={immersive.edge} onClickCapture={immersive.onClickCapture}>
       <ImmersiveReadingControls {...immersive} />

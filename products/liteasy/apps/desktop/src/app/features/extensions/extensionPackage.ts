@@ -1,3 +1,4 @@
+import { compileWorkflow } from "../workflows/workflowDefinition";
 import { z } from "zod";
 import { hashText } from "../context/objectContext";
 import { boundedJson, parseDataSchema, schemaDefaults, validateSchemaValue, type DataSchema } from "./extensionSchema";
@@ -83,7 +84,8 @@ export async function validateExtensionPackage(input: unknown): Promise<Validate
     validateComponentTree(read(view.entry.path));
     for (const path of [view.argsSchema, view.stateSchema]) if (path) parseDataSchema(read(path));
   }
-  for (const item of [...manifest.contributes.workflows, ...manifest.contributes.skills]) boundedJson(read(item.path));
+  for (const item of manifest.contributes.workflows) { const plan = compileWorkflow(read(item.path)); if (plan.definition.id !== item.id) throw new Error("工作流 ID 与声明不一致。"); if (plan.capabilities.some((capability) => !manifest.permissions.some((permission) => permission.capability === capability))) throw new Error("工作流能力声明不完整。"); }
+  for (const item of manifest.contributes.skills) boundedJson(read(item.path));
   for (const command of manifest.contributes.commands) {
     if (command.workflow && !manifest.contributes.workflows.some((item) => item.id === command.workflow) || command.view && !manifest.contributes.views.some((item) => item.id === command.view) || command.boardTemplate && !templates.some((item) => item.id === command.boardTemplate)) throw new Error("命令引用不存在的贡献。");
   }

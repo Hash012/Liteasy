@@ -9,6 +9,7 @@ import type {
 const sideToolRegions: DockRegionId[] = ["left", "main", "right", "bottom"];
 
 const coreDockItems: Record<CoreDockItemId, DockItemDescriptor> = {
+  "workflow-runs": { allowedRegions: sideToolRegions, id: "workflow-runs", preferredRegion: "main", title: "运行记录" },
   "extension-library": { allowedRegions: sideToolRegions, id: "extension-library", preferredRegion: "main", title: "扩展" },
   "workflow-studio": { allowedRegions: sideToolRegions, id: "workflow-studio", preferredRegion: "main", title: "制作工作台" },
   "recommendation-reader": { allowedRegions: sideToolRegions, id: "recommendation-reader", preferredRegion: "main", title: "论文详情" },

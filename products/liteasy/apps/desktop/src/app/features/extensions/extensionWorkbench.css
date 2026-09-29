@@ -8,3 +8,10 @@
 .extension-entry-list, .extension-schema-fields { display: grid; gap: 12px; }
 .extension-page > .visual-block-base { overflow: visible; }
 .extension-settings-note { color: var(--colorNeutralForeground3); font-size: 12px; }
+.workflow-resource-picker { display: grid; max-height: 200px; overflow: auto; margin-block: 8px; }
+.workflow-run-layout { display: grid; grid-template-columns: minmax(180px, 25%) minmax(0, 1fr); gap: 16px; }
+.workflow-run-layout nav { display: flex; flex-direction: column; gap: 4px; }
+.workflow-run-layout nav button { display: flex; flex-direction: column; align-items: start; text-align: start; }
+.workflow-run-layout pre { overflow: auto; max-height: 360px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.workflow-run-layout details { border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; padding: 10px; margin-block: 8px; }
+@media(max-width: 700px) { .workflow-run-layout { grid-template-columns: minmax(0, 1fr); } }
