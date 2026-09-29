@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createNoteFileService } from "../features/note-files/noteFileService";
+import { createNoteFileService, subscribeNoteFiles } from "../features/note-files/noteFileService";
 import type { ObjectRepository } from "../features/objects/objectRepository";
 import {
   refOf,
@@ -10,6 +10,7 @@ import {
   parseCanvasFile,
   prepareCanvasImport,
   serializeCanvasFile,
+  canvasExtension,
   type BoardFileBinding,
   type BoardFileSnapshot,
 } from "../features/boards/boardFileFormat";
@@ -32,6 +33,7 @@ export function useBoardFileController(input: {
     [input.repository],
   );
   const [binding, setBinding] = useState<BoardFileBinding>();
+  const [loadedBoardId, setLoadedBoardId] = useState("");
   const [fileBusy, setFileBusy] = useState(false);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   useEffect(() => {
@@ -47,11 +49,12 @@ export function useBoardFileController(input: {
   useEffect(() => {
     let alive = true;
     setBinding(undefined);
+    setLoadedBoardId("");
     if (input.board)
       void input.repository
         .getBoardFileBinding<BoardFileBinding>(input.board.objectId)
         .then((value) => {
-          if (alive) setBinding(value);
+          if (alive) { setBinding(value); setLoadedBoardId(input.board!.objectId); }
         })
         .catch(report);
     return () => {
@@ -132,9 +135,10 @@ export function useBoardFileController(input: {
     });
     // Mark imported references in the preserved document so editing one in
     // Liteasy can become a text card without rewriting its source file.
+    const placements = await input.repository.listPlacements(board.objectId);
     document.nodes = document.nodes.map((node) => ({
       ...node,
-      liteasy: { ref: prepared.nodes.find((item) => item.id === node.id)?.ref },
+      liteasy: { ...canvasExtension(node.liteasy), ref: placements.find((item) => item.placementId === node.id)?.ref },
     }));
     const next: BoardFileBinding = {
       mountId: file.mountId,
@@ -186,14 +190,17 @@ export function useBoardFileController(input: {
             object.objectId,
           );
         const target =
-          choose || !current
+          choose || (!current && !service.managedCanvas)
             ? await service.chooseFile({
                 mode: "save",
                 extension: "canvas",
                 suggestedName: `${object.title.replace(/\.canvas$/i, "")}.canvas`,
               })
-            : current;
+            : current ?? await service.managedCanvas!(object.objectId);
         if (!target || !input.active()) return;
+        if (!current && !choose && service.managedCanvas && target.version !== null) {
+          throw new Error("已有同名白板文件尚未关联，请通过打开白板恢复，或另存为新文件；原文件未覆盖。");
+        }
         const board = await input.repository.resolveLatest(object.objectId);
         const text = await serializeBoardFile(refOf(board), {
           ...target,
@@ -239,6 +246,42 @@ export function useBoardFileController(input: {
     );
     return () => window.clearTimeout(timer);
   }, [input.repository, input.board?.objectId, input.board?.revision, binding]);
+  useEffect(() => {
+    if (!service.managedCanvas || !input.board || loadedBoardId !== input.board.objectId || binding) return;
+    const timer = window.setTimeout(() => void saveRef.current().catch(report), 500);
+    return () => window.clearTimeout(timer);
+  }, [service, loadedBoardId, binding, input.board?.objectId]);
+  const syncRef = useRef(async () => {});
+  syncRef.current = async () => {
+    if (!binding || !input.board || !input.active()) return;
+    await queue.current.catch(() => undefined);
+    const boardId = input.board.objectId;
+    const saved = await input.repository.getBoardFileBinding<BoardFileBinding>(boardId);
+    if (!saved) return;
+    const file = await service.readFile(saved.mountId, saved.path);
+    if (!file || file.version === saved.version || !input.active() || latest.current.board?.objectId !== boardId) return;
+    const ref = await resolveBoardFile(file);
+    if (input.active() && latest.current.board?.objectId === boardId) {
+      await input.select(await input.repository.get(ref));
+      setBinding(await input.repository.getBoardFileBinding<BoardFileBinding>(boardId));
+      input.setStatus(`已更新 ${file.name}`);
+    }
+  };
+  useEffect(() => {
+    if (!binding) return;
+    let running = false;
+    const sync = () => {
+      if (running) return;
+      running = true;
+      void syncRef.current().catch(report).finally(() => { running = false; });
+    };
+    sync();
+    window.addEventListener("focus", sync);
+    const unsubscribe = subscribeNoteFiles(input.repository.scopeId, (change) => {
+      if (change.kind === "file" && change.entry.mountId === binding.mountId && change.entry.path === binding.path) sync();
+    });
+    return () => { window.removeEventListener("focus", sync); unsubscribe(); };
+  }, [input.repository, input.board?.objectId, binding?.mountId, binding?.path]);
   return {
     boardFile: binding,
     fileBusy,

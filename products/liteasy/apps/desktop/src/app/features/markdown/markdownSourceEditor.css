@@ -1,0 +1,45 @@
+.markdown-source-editor {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--colorNeutralStroke2);
+  border-radius: 6px;
+  background: var(--colorNeutralBackground1);
+}
+.markdown-editing-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--colorNeutralStroke2);
+  background: var(--colorNeutralBackground2);
+}
+.markdown-editing-group { display: flex; align-items: center; gap: 2px; }
+.markdown-editing-group + .markdown-editing-group { border-left: 1px solid var(--colorNeutralStroke2); padding-left: 8px; }
+.markdown-source-editor .markdown-source-input {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+}
+/* Override Fluent's size-dependent max-height on the actual textarea, not just its wrapper. */
+.markdown-source-input textarea {
+  box-sizing: border-box;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+  max-height: none;
+  padding: 16px 20px 28px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  font-family: var(--fontFamilyMonospace, monospace);
+  font-size: var(--markdown-font-size, 16px);
+  line-height: 1.7;
+  tab-size: 2;
+}

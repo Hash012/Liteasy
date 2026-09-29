@@ -2,6 +2,7 @@ import { useState } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
+import { insertContextNames } from "../app/features/assistant/inlineContext";
 import { AssistantComposer } from "../app/features/assistant/AssistantComposer";
 
 describe("AssistantComposer", () => {
@@ -109,7 +110,10 @@ test("searches nested paths with spaces and navigates beyond eight results", asy
   function Composer() {
     const [input, setInput] = useState("");
     return <AssistantComposer input={input} modeHint="上下文" onInputChange={setInput}
-      onSend={vi.fn()} onVoiceInput={vi.fn()} onAddContextToken={add}
+      onSend={vi.fn()} onVoiceInput={vi.fn()} onAddContextToken={(token, insertion) => {
+        add(token);
+        if (insertion) setInput((current) => insertContextNames(current, [token], insertion).input);
+      }}
       suggestions={Array.from({ length: 12 }, (_, index) => ({
         id: `paper-${index}`, label: `论文 ${index}`, trigger: "@" as const,
         detail: `/research/Shared Papers/topic-${index}/paper.pdf`,
@@ -121,7 +125,7 @@ test("searches nested paths with spaces and navigates beyond eight results", asy
   expect(screen.getByRole("button", { name: /论文 11/ })).toBeInTheDocument();
   await user.keyboard("{ArrowDown}{ArrowDown}{Tab}");
   expect(add).toHaveBeenCalledWith(expect.objectContaining({ id: "paper-2" }));
-  expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveValue("");
+  expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveValue("论文 2 ");
 });
 
 test("inserts a mention at the caret without deleting the remaining message", async () => {
@@ -130,7 +134,10 @@ test("inserts a mention at the caret without deleting the remaining message", as
   function Composer() {
     const [input, setInput] = useState("请解释 @Paper 后面的结论");
     return <AssistantComposer input={input} modeHint="上下文" onInputChange={setInput}
-      onSend={vi.fn()} onVoiceInput={vi.fn()} onAddContextToken={add}
+      onSend={vi.fn()} onVoiceInput={vi.fn()} onAddContextToken={(token, insertion) => {
+        add(token);
+        if (insertion) setInput((current) => insertContextNames(current, [token], insertion).input);
+      }}
       suggestions={[{ id: "paper", label: "Paper", trigger: "@", token: { id: "paper", label: "Paper", kind: "paper", prompt: "原文" } }]} />;
   }
   render(<Composer />);
@@ -140,7 +147,7 @@ test("inserts a mention at the caret without deleting the remaining message", as
   await user.keyboard("{ArrowLeft}");
   await user.keyboard("{Enter}");
   expect(add).toHaveBeenCalledOnce();
-  expect(input.value).toBe("请解释 后面的结论");
+  expect(input.value).toBe("请解释 Paper 后面的结论");
 });
 
 
@@ -150,14 +157,17 @@ test("recognizes a mention directly after Chinese text", async () => {
   function Composer() {
     const [input, setInput] = useState("");
     return <AssistantComposer input={input} modeHint="上下文" onInputChange={setInput}
-      onSend={vi.fn()} onVoiceInput={vi.fn()} onAddContextToken={add}
+      onSend={vi.fn()} onVoiceInput={vi.fn()} onAddContextToken={(token, insertion) => {
+        add(token);
+        if (insertion) setInput((current) => insertContextNames(current, [token], insertion).input);
+      }}
       suggestions={[{ id: "paper", label: "注意力论文", trigger: "@", token: { id: "paper", label: "注意力论文", kind: "paper", prompt: "原文" } }]} />;
   }
   render(<Composer />);
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "解释一下@注意力");
   await user.keyboard("{Enter}");
   expect(add).toHaveBeenCalledOnce();
-  expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveValue("解释一下");
+  expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveValue("解释一下 注意力论文 ");
 });
 
 test("opens the full asset browser from an empty mention result with the keyboard", async () => {

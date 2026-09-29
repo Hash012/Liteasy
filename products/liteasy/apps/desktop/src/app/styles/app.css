@@ -6462,6 +6462,10 @@ button.pdf-overlay-mark:focus-visible {
   /* Paint heavier strokes without changing the editable text's glyph widths. */
   text-shadow: 0.35px 0 currentColor, -0.35px 0 currentColor;
 }
+
+.assistant-inline-context {
+  color: var(--colorBrandForeground1, #185a97);
+}
 .assistant-command-chip::before {
   content: attr(data-prefix);
   visibility: hidden;

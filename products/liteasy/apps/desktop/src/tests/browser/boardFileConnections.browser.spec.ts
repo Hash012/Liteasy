@@ -53,7 +53,7 @@ test("card midpoint drag creates persistent connections without moving or openin
     board.locator(".object-board-edges g[data-edge-id]"),
   ).toHaveCount(2);
   await expect(
-    board.getByRole("button", { name: "选择白板存储文件", exact: true }),
+    board.getByRole("button", { name: "保存白板文件", exact: true }),
   ).toBeVisible();
   await board
     .getByRole("button", { name: "适配全部卡片", exact: true })
@@ -100,9 +100,10 @@ test("a chosen Canvas file keeps real browser filesystem data and continues auto
   await board.getByRole("button", { name: "新建笔记", exact: true }).click();
   await expect(board.locator(".object-placement")).toHaveCount(1);
   await board.getByRole("button", { name: "收起工具", exact: true }).click();
-  await board
-    .getByRole("button", { name: "选择白板存储文件", exact: true })
-    .click();
+  await expect(board.getByRole("button", { name: "保存白板文件", exact: true })).toBeVisible();
+  await board.getByRole("button", { name: "切换或新建白板", exact: true }).click();
+  await board.getByRole("button", { name: "另存为白板文件", exact: true }).click();
+  await board.getByRole("button", { name: "收起工具", exact: true }).click();
   await expect(
     board.getByRole("button", { name: "保存白板文件", exact: true }),
   ).toBeEnabled();
@@ -120,7 +121,7 @@ test("a chosen Canvas file keeps real browser filesystem data and continues auto
   ).toBeVisible();
   await board
     .getByRole("button", { name: "编辑笔记正文", exact: true })
-    .click();
+    .dblclick();
   await board
     .getByRole("textbox", { name: "编辑卡片正文", exact: true })
     .fill("重启后自动保存的修改");

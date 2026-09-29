@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, expect, test, vi } from "vitest";
 import { useRecommendationLibraryController } from "../app/controllers/useRecommendationLibraryController";
 import type { RecommendationItem } from "../app/features/recommendations/recommendation.types";
+import type { LiteratureAuthorityClient } from "../app/features/paper-identity/literatureAuthorityClient";
 
 const io = vi.hoisted(() => ({ load: vi.fn(), createLocalLibraryFolder: vi.fn(), persistPdfByteStream: vi.fn(), downloadRecommendationPdf: vi.fn() }));
 vi.mock("../app/features/library/localLibraryClient", () => ({ createLocalLibraryClient: () => io.load }));
@@ -73,4 +74,39 @@ test("does not write into a different account after an in-flight download comple
   await rejection;
   expect(io.persistPdfByteStream).not.toHaveBeenCalled();
   expect(io.createLocalLibraryFolder).not.toHaveBeenCalled();
+});
+
+test("downloads into an existing chosen folder and never creates Download as a side effect", async () => {
+  const chosen = { name: "Memory", path: "D:/Library/Research/Memory", parentPath: "D:/Library/Research" };
+  io.load.mockResolvedValue({ ...snapshot, folders: [chosen] });
+  const { result } = renderHook(() => useRecommendationLibraryController({ scopeKey: "local", endpoint: "", refreshLocalLibrary: vi.fn(), onSaved: vi.fn() }));
+  await act(async () => { expect(await result.current.download(item, { targetFolderPath: chosen.path })).toContain(chosen.path); });
+  expect(io.persistPdfByteStream.mock.calls[0][0].targetFolderPath).toBe(chosen.path);
+  expect(io.createLocalLibraryFolder).not.toHaveBeenCalled();
+});
+
+test("creates a named subdirectory under the chosen parent and rejects a removed or external folder", async () => {
+  io.load.mockResolvedValue({ ...snapshot, folders: [folder] });
+  io.createLocalLibraryFolder.mockResolvedValue({ ...snapshot, folders: [folder, { name: "Memory", parentPath: folder.path, path: folder.path + "/Memory" }] });
+  const { result } = renderHook(() => useRecommendationLibraryController({ scopeKey: "local", endpoint: "", refreshLocalLibrary: vi.fn(), onSaved: vi.fn() }));
+  await act(async () => { await result.current.download(item, { targetFolderPath: folder.path, newFolderName: "Memory" }); });
+  expect(io.createLocalLibraryFolder).toHaveBeenCalledWith("Memory", folder.path);
+  expect(io.persistPdfByteStream.mock.calls[0][0].targetFolderPath).toBe(folder.path + "/Memory");
+  io.persistPdfByteStream.mockClear();
+  await expect(result.current.download(item, { targetFolderPath: "C:/Elsewhere" })).rejects.toThrow("目录已不存在");
+  expect(io.persistPdfByteStream).not.toHaveBeenCalled();
+});
+
+test("single selection leaves the open page unchanged, and late metadata cannot replace a newer page", async () => {
+  let finish!: (value: unknown) => void;
+  const metadataClient = { resolveLiterature: vi.fn(() => new Promise((resolve) => { finish = resolve; })) } as unknown as LiteratureAuthorityClient;
+  const { result } = renderHook(() => useRecommendationLibraryController({ scopeKey: "local", endpoint: "", metadataClient,
+    refreshLocalLibrary: vi.fn(), onSaved: vi.fn() }));
+  let request!: Promise<void>;
+  act(() => { request = result.current.open({ ...item, id: "doi:10.1234/first" }); });
+  act(() => result.current.select({ ...item, id: "selected-only" }));
+  expect(result.current.preview?.item.id).toBe("doi:10.1234/first");
+  await act(async () => { await result.current.open({ ...item, id: "no-identifier", title: "Second paper" }); });
+  await act(async () => { finish({ status: "exact", candidate: { record: { title: "Late first", identifiers: [{ kind: "doi", value: "10.1234/first" }] } } }); await request; });
+  expect(result.current.preview?.item.title).toBe("Second paper");
 });

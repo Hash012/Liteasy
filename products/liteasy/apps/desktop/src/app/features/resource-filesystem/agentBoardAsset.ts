@@ -25,7 +25,7 @@ export async function readAgentBoard(repository: ObjectRepository, board: Object
 
 export async function writeAgentBoard(repository: ObjectRepository, board: ObjectEnvelope, text: string, active: () => boolean) {
   const document = parseCanvasFile(text);
-  if (document.nodes.some((node) => node.type === "file")) throw new AgentAssetError("invalid_request", "内部白板请使用文字或链接卡片；文件引用需先在白板中添加。");
+  if (document.nodes.some((node) => node.type === "file" || node.type === "group")) throw new AgentAssetError("invalid_request", "内部白板请使用文字或链接卡片；文件引用与分组请通过 Canvas 文件地址编辑。");
   const placements = new Map((await repository.listPlacements(board.objectId)).map((item) => [item.placementId, item]));
   const nodes = [];
   for (const node of document.nodes) {

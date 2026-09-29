@@ -22,10 +22,10 @@ test("Notes organizes references, edits the source once and persists after reope
   await notes.getByRole("textbox", { name: "目录名称" }).fill("检索研究");
   await notes.getByRole("button", { name: "创建目录", exact: true }).click();
   await expect(
-    notes.getByRole("button", { name: "检索研究", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+    notes.getByRole("treeitem", { name: "检索研究", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
   await notes
-    .getByRole("button", { name: "default/note", exact: true })
+    .getByRole("treeitem", { name: "Liteasy/个人笔记", exact: true })
     .click();
   await entry.click();
   await notes
@@ -38,7 +38,7 @@ test("Notes organizes references, edits the source once and persists after reope
   await expect(
     notes.getByRole("combobox", { name: "复制引用到目录" }),
   ).toHaveCount(0);
-  await notes.getByRole("button", { name: "检索研究", exact: true }).click();
+  await notes.getByRole("treeitem", { name: "检索研究", exact: true }).click();
   await expect(entry).toHaveCount(1);
   await entry.click();
   await notes.getByRole("button", { name: "编辑笔记", exact: true }).click();
@@ -56,7 +56,7 @@ test("Notes organizes references, edits the source once and persists after reope
   });
   await page.reload();
   await expect(notes).toBeVisible();
-  await notes.getByRole("button", { name: "检索研究", exact: true }).click();
+  await notes.getByRole("treeitem", { name: "检索研究", exact: true }).click();
   await expect(entry).toHaveCount(1);
   await entry.click();
   await expect(notes).toContainText("补充：保留失败案例以评估边界。");
@@ -66,7 +66,7 @@ test("Notes organizes references, edits the source once and persists after reope
     .click();
   await expect(entry).toHaveCount(0);
   await notes
-    .getByRole("button", { name: "default/note", exact: true })
+    .getByRole("treeitem", { name: "Liteasy/个人笔记", exact: true })
     .click();
   await expect(entry).toHaveCount(1);
   await entry.click();

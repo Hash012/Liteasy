@@ -30,6 +30,8 @@ import {
   LinkRegular,
   SettingsRegular,
   SelectAllOnRegular,
+  DocumentRegular,
+  MoreHorizontalRegular,
 } from "@fluentui/react-icons";
 import {
   makeObjectTransfer,
@@ -47,6 +49,7 @@ import {
 } from "../objects/object.types";
 import type { WorkbenchViewModel } from "./ObjectWorkbench";
 import { writePlacementDrag } from "./boardPlacementDrag";
+import { canvasColor, canvasNodeText, type CanvasNode } from "./boardFileFormat";
 
 type Geometry = Pick<Placement, "position" | "size">;
 type ResizeDirection = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
@@ -98,9 +101,11 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
   actions,
   setDetails,
   connection,
+  canvasNode,
 }: {
   p: Placement;
   object?: ObjectEnvelope | null;
+  canvasNode?: CanvasNode;
   selected: boolean;
   setSelected: Dispatch<SetStateAction<string[]>>;
   actions: { current: WorkbenchViewModel };
@@ -269,8 +274,9 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
       setSaving(false);
     }
   }
-  const canEdit =
-    object?.kind === "content.note" || object?.kind === "content.fragment";
+  const fileReference = canvasNode?.type === "file" && object && objectText(object) === canvasNodeText(canvasNode);
+  const canEdit = !fileReference &&
+    (object?.kind === "content.note" || object?.kind === "content.fragment");
   function toggleSelection() {
     setSelected((current) =>
       current.includes(p.placementId)
@@ -310,7 +316,7 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
       <MenuTrigger disableButtonEnhancement>
         <div
           ref={cardRef}
-          className={`object-placement${editing ? " is-editing" : ""}${moving ? " is-moving" : ""}${draggingOut ? " is-dragging" : ""}${selected ? " is-selected" : ""}${adjusting ? " is-adjusting" : ""}`}
+          className={`object-placement${canvasNode?.type === "group" ? " is-group" : ""}${editing ? " is-editing" : ""}${moving ? " is-moving" : ""}${draggingOut ? " is-dragging" : ""}${selected ? " is-selected" : ""}${adjusting ? " is-adjusting" : ""}`}
           data-placement-id={p.placementId}
           aria-label={`白板卡片：${object?.title ?? "正在读取"}`}
           aria-description={
@@ -397,8 +403,17 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
             top: geometry.position.y,
             width: geometry.size.width,
             height: geometry.size.height,
+            ...(canvasNode?.color ? { "--canvas-card-color": canvasColor(canvasNode.color) } : {}),
           }}
         >
+          {selected && object && !editing && !moving && !adjusting ? <div className="object-card-toolbar" role="toolbar" aria-label="选中卡片操作"
+            onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
+            {canEdit ? <Tooltip content={canvasNode?.type === "group" ? "编辑分组名称" : "编辑内容"} relationship="label"><Button size="small" appearance="subtle" icon={<EditRegular />} aria-label="编辑内容" onClick={startEditing} /></Tooltip> : null}
+            <Tooltip content="加入对话" relationship="label"><Button size="small" appearance="subtle" icon={<ChatAddRegular />} aria-label="加入对话" onClick={() => actions.current.addToTray([refOf(object)])} /></Tooltip>
+            <Tooltip content="复制内容" relationship="label"><Button size="small" appearance="subtle" icon={<CopyRegular />} aria-label="复制内容" onClick={() => void navigator.clipboard.writeText(objectText(object)).catch(error)} /></Tooltip>
+            <Tooltip content="移除卡片" relationship="label"><Button size="small" appearance="subtle" icon={<DeleteRegular />} aria-label="移除卡片" onClick={() => void actions.current.removePlacement(p.placementId).catch(error)} /></Tooltip>
+            <Tooltip content="更多操作" relationship="label"><Button size="small" appearance="subtle" icon={<MoreHorizontalRegular />} aria-label="更多操作" onClick={() => setMenuOpen(true)} /></Tooltip>
+          </div> : null}
           {moving || adjusting ? (
             <Tooltip
               content={moving ? "完成移动" : "完成调整"}
@@ -429,7 +444,7 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
               ))}
             </div>
           ) : null}
-          {object ? (
+          {fileReference ? <div className="object-file-reference"><DocumentRegular aria-hidden="true" /><strong>{canvasNode!.file?.split("/").at(-1)}</strong><span>{canvasNode!.subpath || "文件引用"}</span><small>{canvasNode!.file}</small></div> : object ? (
             <ObjectSurface
               object={object}
               presentation="canvas"

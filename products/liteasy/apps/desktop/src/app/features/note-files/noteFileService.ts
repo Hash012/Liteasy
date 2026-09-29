@@ -7,6 +7,7 @@ export type NoteFileMount = {
   name: string;
   location: string;
   kind: "directory" | "file";
+  managed?: boolean;
 };
 export type NoteFileEntry = {
   mountId: string;
@@ -31,6 +32,7 @@ export type NoteFileChoice = {
 };
 export type ImportedNoteFile = { name: string; path: string; text: string };
 export interface NoteFileService {
+  managedCanvas?(objectId: string): Promise<NoteFileSnapshot>;
   editingStatus?(mountId: string, path: string): Promise<ExternalEditingStatus>;
   listMounts(): Promise<NoteFileMount[]>;
   chooseFolder(): Promise<NoteFileMount | null>;
@@ -111,6 +113,7 @@ export function createNoteFileService(
   };
   const backend: NoteFileService = isTauri()
     ? {
+        managedCanvas: (objectId) => call("managedCanvas", { objectId }),
         editingStatus: async (mountId, path) => {
           const result = await call<{ workspace: unknown; running: boolean | null }>("workspaceState", { mountId });
           const status = obsidianEditingStatus(result.workspace, path);
@@ -134,6 +137,7 @@ export function createNoteFileService(
     return result;
   };
   return {
+    ...(backend.managedCanvas ? { managedCanvas: (objectId: string) => wrap(() => backend.managedCanvas!(objectId)) } : {}),
     editingStatus: (id, path) => wrap(() => backend.editingStatus?.(id, path) ?? Promise.resolve({ available: false, open: false, editing: false })),
     listMounts: () => wrap(() => backend.listMounts()),
     chooseFolder: async () => {

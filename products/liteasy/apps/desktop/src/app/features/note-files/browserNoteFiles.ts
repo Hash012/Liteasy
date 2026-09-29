@@ -64,7 +64,7 @@ export function createBrowserNoteFiles(
       request.onerror = () => reject(request.error);
     });
   }
-  async function saveHandle(handle: Handle): Promise<SavedMount> {
+  async function saveHandle(handle: Handle, managed = false): Promise<SavedMount> {
     const existing = await rows();
     check();
     for (const row of existing)
@@ -79,6 +79,7 @@ export function createBrowserNoteFiles(
         name: handle.name,
         location: handle.name,
         kind: handle.kind,
+        ...(managed ? { managed: true } : {}),
       },
     };
     const database = await db();
@@ -143,6 +144,19 @@ export function createBrowserNoteFiles(
     };
   }
   return {
+    ...(navigator.storage?.getDirectory ? { managedCanvas: async (objectId: string): Promise<NoteFileSnapshot> => {
+      const root = await navigator.storage.getDirectory();
+      const boards = await root.getDirectoryHandle("boards", { create: true });
+      const directory = await boards.getDirectoryHandle(await noteFileVersion(scope), { create: true });
+      check();
+      const row = await saveHandle(directory, true);
+      const path = `${await noteFileVersion(objectId)}.canvas`;
+      try { return await read(row, path); }
+      catch (error) {
+        if (!(error instanceof DOMException) || error.name !== "NotFoundError") throw error;
+        return { mountId: row.mount.id, path, name: path, kind: "file", text: "", version: null };
+      }
+    } } : {}),
     editingStatus: async (id, path) => {
       const row = await grant(id);
       if (row.handle.kind !== "directory") return obsidianEditingStatus(null, path);

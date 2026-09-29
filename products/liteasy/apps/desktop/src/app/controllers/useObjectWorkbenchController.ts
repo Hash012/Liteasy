@@ -30,6 +30,7 @@ import {
   type StagedObjectAsset,
 } from "../features/objects/objectAssets";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { BoardFileBinding } from "../features/boards/boardFileFormat";
 import { createObjectStorage } from "../features/objects/objectStorage";
 import {
   createObjectRepository,
@@ -1323,12 +1324,20 @@ export function useObjectWorkbenchController(input: {
       perform(async () => {
         const board = boardRef.current;
         if (!board) return;
+        const binding = await repository.getBoardFileBinding<BoardFileBinding>(board.objectId);
+        const moves = [{ placementId: p.placementId, revision: p.revision, position }];
+        if (binding?.document.nodes.find((node) => node.id === p.placementId)?.type === "group") {
+          for (const child of await repository.listPlacements(board.objectId)) {
+            if (child.placementId === p.placementId || child.position.x < p.position.x || child.position.y < p.position.y ||
+              child.position.x + child.size.width > p.position.x + p.size.width || child.position.y + child.size.height > p.position.y + p.size.height) continue;
+            moves.push({ placementId: child.placementId, revision: child.revision,
+              position: { x: child.position.x + position.x - p.position.x, y: child.position.y + position.y - p.position.y } });
+          }
+        }
         await repository.applyBoardPatch({
           boardRef: refOf(board),
           operationId: crypto.randomUUID(),
-          move: [
-            { placementId: p.placementId, revision: p.revision, position },
-          ],
+          move: moves,
         });
       }),
     resize: (p: Placement, geometry: Pick<Placement, "position" | "size">) =>

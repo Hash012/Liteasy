@@ -15,9 +15,9 @@ import type {
 } from "../objects/objectRepository";
 
 // JSON Canvas 1.0: https://jsoncanvas.org/spec/1.0/
-// Keep extension fields when writing an opened file; unsupported visual types
-// are rejected before import so a save never quietly discards their contents.
+// Keep extension fields and references, including media we cannot render inline.
 const side = z.enum(["top", "right", "bottom", "left"]);
+const color = z.string().regex(/^(#[0-9a-f]{6}|[1-6])$/i).optional();
 const nodeSchema = z
   .object({
     id: z.string().min(1).max(512),
@@ -30,6 +30,10 @@ const nodeSchema = z
     file: z.string().optional(),
     url: z.string().optional(),
     subpath: z.string().optional(),
+    label: z.string().optional(),
+    color,
+    background: z.string().optional(),
+    backgroundStyle: z.enum(["cover", "ratio", "repeat"]).optional(),
   })
   .passthrough();
 const edgeSchema = z
@@ -42,6 +46,7 @@ const edgeSchema = z
     fromEnd: z.enum(["none", "arrow"]).optional(),
     toEnd: z.enum(["none", "arrow"]).optional(),
     label: z.string().optional(),
+    color,
   })
   .passthrough();
 const canvasSchema = z
@@ -51,6 +56,17 @@ const canvasSchema = z
   })
   .passthrough();
 export type CanvasDocument = z.infer<typeof canvasSchema>;
+export type CanvasNode = CanvasDocument["nodes"][number];
+export function canvasExtension(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+export function canvasNodeText(node: CanvasNode) {
+  return node.type === "group" ? node.label ?? "" : node.type === "file" ? `${node.file ?? ""}${node.subpath ?? ""}` : node.type === "link" ? node.url ?? "" : node.text ?? "";
+}
+export function canvasColor(value?: string) {
+  const palette: Record<string, string> = { "1": "#d45c5c", "2": "#d38a44", "3": "#bca040", "4": "#60a36a", "5": "#4c9fa8", "6": "#9271be" };
+  return value && /^(#[0-9a-f]{6}|[1-6])$/i.test(value) ? palette[value] ?? value : undefined;
+}
 export type BoardFileBinding = {
   mountId: string;
   path: string;
@@ -80,16 +96,9 @@ export function parseCanvasFile(text: string): CanvasDocument {
   for (const node of document.nodes) {
     if (ids.has(node.id)) throw new Error("白板包含重复的卡片编号。");
     ids.add(node.id);
-    if (node.type === "group")
-      throw new Error("此白板包含分组卡片，暂不能导入；原文件未修改。");
     if (node.type === "text" && node.text === undefined)
       throw new Error("文字卡片缺少正文。");
-    if (node.type === "file" && (!node.file || !/\.md$/i.test(node.file)))
-      throw new Error(
-        "此白板包含非 Markdown 文件卡片，暂不能导入；原文件未修改。",
-      );
-    if (node.type === "file" && node.subpath)
-      throw new Error("此白板包含文件标题或块引用，暂不能导入；原文件未修改。");
+    if (node.type === "file" && !node.file) throw new Error("文件卡片缺少路径。");
     if (node.type === "link" && !node.url)
       throw new Error("链接卡片缺少地址。");
   }
@@ -143,7 +152,7 @@ export async function prepareCanvasImport(input: {
   const readings = new Map<string, Promise<BoardFileSnapshot>>();
   const files = await Promise.all(
     input.document.nodes.map(async (node) => {
-      if (node.type !== "file") return undefined;
+      if (node.type !== "file" || !/\.(md|markdown)$/i.test(node.file!) || node.subpath) return undefined;
       let reading = readings.get(node.file!);
       if (!reading) {
         reading = input.readFile(input.file.mountId, node.file!);
@@ -194,8 +203,7 @@ export async function prepareCanvasImport(input: {
             // A modified portable text node is user-authored content. Its old
             // extension must not hide an edit made in Obsidian.
             if (
-              node.type !== "text" ||
-              (await portableText(existing, input.repository)) === node.text
+              (node.type === "text" ? await portableText(existing, input.repository) : objectText(existing)) === canvasNodeText(node)
             )
               ref = candidate.data;
           } catch {
@@ -203,10 +211,10 @@ export async function prepareCanvasImport(input: {
           }
         }
       }
-      const text = node.type === "link" ? node.url! : (node.text ?? "");
+      const text = canvasNodeText(node);
       const draft: ObjectDraft = {
         kind: "content.note",
-        title: text.split("\n")[0].slice(0, 80) || "笔记",
+        title: text.split("\n")[0].slice(0, 80) || (node.type === "group" ? "分组" : "笔记"),
         content: {
           schema: "liteasy.note/v1",
           payload: { text, origin: "user" },
@@ -247,8 +255,9 @@ export async function serializeCanvasFile(input: {
     x: Math.min(0, ...(original?.nodes.map((node) => node.x) ?? [])),
     y: Math.min(0, ...(original?.nodes.map((node) => node.y) ?? [])),
   };
+  const order = new Map(original?.nodes.map((node, index) => [node.id, index]));
   const nodes = await Promise.all(
-    input.placements.map(async (placement) => {
+    [...input.placements].sort((a, b) => (order.get(a.placementId) ?? Infinity) - (order.get(b.placementId) ?? Infinity)).map(async (placement) => {
       const object = await input.repository.get(placement.ref);
       const previous = original?.nodes.find(
         (node) => node.id === placement.placementId,
@@ -276,7 +285,11 @@ export async function serializeCanvasFile(input: {
         y: Math.round(placement.position.y + origin.y),
         width: Math.round(placement.size.width),
         height: Math.round(placement.size.height),
-        ...(canUseFile
+        ...(previous?.type === "group"
+          ? { type: "group" as const, label: objectText(object) }
+          : previous?.type === "file" && objectText(object) === canvasNodeText(previous)
+            ? { type: "file" as const, file: previous.file, ...(previous.subpath ? { subpath: previous.subpath } : {}) }
+          : canUseFile
           ? { type: "file" as const, file: file.path }
           : previous?.type === "link" && previous.url === objectText(object)
             ? { type: "link" as const, url: previous.url }
@@ -284,7 +297,7 @@ export async function serializeCanvasFile(input: {
                 type: "text" as const,
                 text: await portableText(object, input.repository),
               }),
-        liteasy: { ref: placement.ref, title: object.title },
+        liteasy: { ...canvasExtension(previous?.liteasy), ref: placement.ref, title: object.title },
       };
     }),
   );
@@ -299,7 +312,7 @@ export async function serializeCanvasFile(input: {
     toEnd: edge.toEnd,
     label: edge.label,
   }));
-  return `${JSON.stringify({ ...original, nodes, edges, liteasy: { boardRef: refOf(input.board), title: input.board.title } }, null, 2)}\n`;
+  return `${JSON.stringify({ ...original, nodes, edges, liteasy: { ...canvasExtension(original?.liteasy), boardRef: refOf(input.board), title: input.board.title } }, null, 2)}\n`;
 }
 export function connectionPoint(
   placement: Pick<Placement, "position" | "size">,

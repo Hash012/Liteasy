@@ -2,6 +2,7 @@ import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import { formatModelExecutionLabel } from "../models/modelExecution";
 import type {
   AssistantConfirmationRequest,
+  AssistantContextToken,
   AssistantMessage,
   AssistantMode
 } from "./assistant.types";
@@ -30,8 +31,9 @@ import { useEffect, useRef, useState } from "react";
 import { getAnswerDisplayText } from "./answerFormatter";
 import type { Paper } from "../workspace/workspace.types";
 import type { Citation } from "../retrieval/retrieval.types";
+import { inlineContextParts } from "./inlineContext";
 
-function ExpandableUserMessage({ value }: { value: string }) {
+function ExpandableUserMessage({ value, contextTokens = [] }: { value: string; contextTokens?: AssistantContextToken[] }) {
   const contentRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [foldable, setFoldable] = useState(
@@ -58,7 +60,9 @@ function ExpandableUserMessage({ value }: { value: string }) {
         className={`assistant-answer-text assistant-user-message-content${foldable && !expanded ? " collapsed" : ""}`}
         ref={contentRef}
       >
-        {value}
+        {inlineContextParts(value, contextTokens).map((part, index) => part.token
+          ? <strong className="assistant-inline-context" title={part.token.detail} key={index}>{part.text}</strong>
+          : part.text)}
       </div>
       {foldable ? (
         <Button
@@ -189,7 +193,7 @@ export function AssistantMessageList({
                     streaming={message.agentActivity?.status === "working"}
                     value={getAnswerDisplayText(message.content)} />
                 ) : (
-                  <ExpandableUserMessage value={message.content} />
+                  <ExpandableUserMessage value={message.content} contextTokens={message.contextTokens} />
                 )
               ) : null}
               {message.contextCoverage ? <details className="assistant-context-coverage">

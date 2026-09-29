@@ -99,6 +99,12 @@ export function createNotesRepository(storage: ObjectStorage) {
   return {
     listFolders,
     listReferences,
+    async importedObjectIds(): Promise<Set<string>> {
+      return new Set((await rows("notes/imported/")).flatMap((row) => {
+        const value = row.value as { objectId?: unknown } | null;
+        return typeof value?.objectId === "string" ? [value.objectId] : [];
+      }));
+    },
     async createFolder(parentId: string, rawName: string) {
       await requireFolder(parentId);
       const name = rawName.trim();
@@ -152,7 +158,7 @@ export function createNotesRepository(storage: ObjectStorage) {
             : []),
         ]);
     },
-    async collect(target: NotesTarget, folderId: string) {
+    async collect(target: NotesTarget, folderId: string, imported = false) {
       notesTargetSchema.parse(target);
       await requireFolder(folderId);
       const key = `notes/reference/${encodeURIComponent(folderId)}/${encodeURIComponent(notesTargetKey(target))}`;
@@ -167,6 +173,7 @@ export function createNotesRepository(storage: ObjectStorage) {
       try {
         await storage.commit([
           change(key, entry),
+          ...(imported && target.kind === "object" ? [change(`notes/imported/${encodeURIComponent(target.ref.objectId)}`, { objectId: target.ref.objectId })] : []),
           ...(await protectFolder(folderId)),
         ]);
       } catch (error) {

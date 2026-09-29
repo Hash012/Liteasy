@@ -19,6 +19,7 @@ import { loadPdfNotes } from "../app/features/notes/pdfNotesSource";
 import { pdfAnnotationStorageKey } from "../app/features/pdf/pdfAnnotationStorage";
 import { resolvePaperIdentity } from "../app/features/paper-identity/paperIdentity";
 import { artifactAnnotationNotes } from "../app/features/notes/artifactNotesSource";
+import { createPaperProjectRepository } from "../app/features/paper-projects/paperProjectRepository";
 import type { AgentArtifactResult } from "../app/features/artifacts/artifact.types";
 
 function fixture() {
@@ -61,6 +62,29 @@ const note = (text: string) => ({
 });
 
 describe("Notes reference directories", () => {
+  it("collecting an internal note in extern does not change its origin", async () => {
+    const f = fixture();
+    const object = await f.repository.create(note("个人笔记"));
+    await f.notes.collect({ kind: "object", ref: refOf(object), followLatest: true }, "extern");
+    const { result } = renderHook(() => useNotesController(f.input));
+    await waitFor(() => expect(result.current.model.items).toHaveLength(1));
+    expect(result.current.model.items[0]).toMatchObject({ defaultFolderId: "default/note", automaticallyListed: true });
+  });
+  it("classifies project notes and notes derived from generated artifacts by their actual origin", async () => {
+    const f = fixture();
+    const projects = createPaperProjectRepository(f.storage, f.scope);
+    const project = await projects.ensurePaperProject({ paperId: "paper-1", title: "Cicada" });
+    const paperNote = await projects.createNote(project.projectId, "我的论文笔记", "读后思考");
+    const artifact = await f.repository.create({ kind: "artifact.document", title: "Cicada 薄读",
+      content: { schema: "liteasy.document/v1", payload: { blocks: [{ blockId: "intro", type: "markdown", text: "薄读内容", sourceRefs: [] }] } } });
+    const derived = await f.repository.create({ ...note("基于薄读的思考"), sourceRefs: [refOf(artifact)] });
+    const { result } = renderHook(() => useNotesController(f.input));
+    await waitFor(() => expect(result.current.model.items).toHaveLength(2));
+    expect(result.current.model.items.find((item) => item.object?.objectId === paperNote.ref?.objectId))
+      .toMatchObject({ defaultFolderId: "default/paper", source: "论文笔记 · Cicada" });
+    expect(result.current.model.items.find((item) => item.object?.objectId === derived.objectId))
+      .toMatchObject({ defaultFolderId: "default/artifact", source: "产物笔记 · Cicada 薄读" });
+  });
   it("enforces sibling folder names atomically for simultaneous root and default creations", async () => {
     const f = fixture();
     for (const parentId of ["root", "default/paper"]) {
@@ -256,8 +280,8 @@ describe("Notes reference directories", () => {
     await user.click(
       screen.getByRole("button", { name: "创建目录", exact: true }),
     );
-    await screen.findByRole("button", { name: "我的专题", exact: true });
-    await user.click(screen.getByRole("button", { name: "Note", exact: true }));
+    await screen.findByRole("treeitem", { name: "我的专题", exact: true });
+    await user.click(screen.getByRole("button", { name: "所有笔记", exact: true }));
     await user.click(
       await screen.findByRole("button", { name: "查看笔记 可组织的文字" }),
     );
@@ -278,7 +302,7 @@ describe("Notes reference directories", () => {
       expect(await f.notes.listReferences()).toHaveLength(1),
     );
     await user.click(
-      screen.getByRole("button", { name: "我的专题", exact: true }),
+      screen.getByRole("treeitem", { name: "我的专题", exact: true }),
     );
     await screen.findByRole("button", { name: "查看笔记 可组织的文字" });
     expect((await f.repository.search()).objects).toHaveLength(1);

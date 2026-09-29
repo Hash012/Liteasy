@@ -155,7 +155,7 @@ type LibraryPaneProps = {
   recommendationItems: RecommendationItem[];
   selectedRecommendationId?: string;
   onInspectRecommendation?: (item: RecommendationItem) => void;
-  onDownloadRecommendation?: (item: RecommendationItem) => Promise<string>;
+  onOpenRecommendation?: (item: RecommendationItem) => void;
   recommendationMessage: string;
   recommendationPending: boolean;
   recommendationStatus: RecommendationStatus;
@@ -503,7 +503,7 @@ function LibraryPaneContent({
   recommendationItems,
   selectedRecommendationId,
   onInspectRecommendation,
-  onDownloadRecommendation,
+  onOpenRecommendation,
   recommendationMessage,
   recommendationPending,
   recommendationStatus,
@@ -1676,7 +1676,7 @@ function LibraryPaneContent({
               <RecommendationList items={recommendationItems} selectedId={selectedRecommendationId}
                 pendingIds={pendingNodeIds} canSave={localRecommendations || Boolean(collection.tree)}
                 onInspect={onInspectRecommendation}
-                onDownload={onDownloadRecommendation ? (item) => void runNodeAction(item.id, `正在下载《${item.title}》…`, () => onDownloadRecommendation(item)) : undefined}
+                onOpen={onOpenRecommendation}
                 onSave={(item) => void saveRecommendation(item)} onDismiss={onDismissRecommendation} />
             )}
             {localRecommendations && recommendationItems.length > 0 && !recommendationPending && recommendationMessage ? <p role="status" className="library-recommendation-message">{recommendationMessage}</p> : null}

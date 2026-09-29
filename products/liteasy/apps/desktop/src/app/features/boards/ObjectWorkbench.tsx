@@ -35,6 +35,7 @@ import {
 import {
   connectionPath,
   connectionPoint,
+  canvasColor,
   type BoardFileBinding,
 } from "./boardFileFormat";
 import { ObjectPlacementCard } from "./ObjectPlacementCard";
@@ -578,7 +579,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
                   refY="4"
                   orient="auto-start-reverse"
                 >
-                  <path d="M0,0 L8,4 L0,8" fill="currentColor" />
+                  <path d="M0,0 L8,4 L0,8" fill="context-stroke" />
                 </marker>
               </defs>
               {edges.map((edge) => {
@@ -592,7 +593,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
                 const a = connectionPoint(from, edge.fromSide ?? "bottom");
                 const b = connectionPoint(to, edge.toSide ?? "top");
                 return (
-                  <g key={edge.edgeId} data-edge-id={edge.edgeId}>
+                  <g key={edge.edgeId} data-edge-id={edge.edgeId} style={{ color: canvasColor(model.boardFile?.document.edges.find((item) => item.id === edge.edgeId)?.color) }}>
                     <path
                       d={connectionPath(
                         a,
@@ -603,6 +604,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
                       )}
                       fill="none"
                       stroke="currentColor"
+                      strokeWidth={1.4}
                       markerStart={
                         edge.fromEnd === "arrow"
                           ? "url(#object-arrow)"
@@ -644,6 +646,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
                 key={p.placementId}
                 p={p}
                 object={cards[p.placementId]}
+                canvasNode={model.boardFile?.document.nodes.find((node) => node.id === p.placementId)}
                 selected={selected.includes(p.placementId)}
                 setSelected={setSelected}
                 actions={actions}

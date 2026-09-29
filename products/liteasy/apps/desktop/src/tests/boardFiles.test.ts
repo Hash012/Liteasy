@@ -287,14 +287,26 @@ test("portable text edits supersede a stale embedded Liteasy reference", async (
     "在 Obsidian 更新了正文",
   );
 });
-test("unsupported Canvas group or media cards are rejected before mutating the source", () => {
-  for (const node of [
-    { ...raw.nodes[0], type: "group" },
-    { ...raw.nodes[0], type: "file", file: "image.png" },
-  ])
-    expect(() => parseCanvasFile(JSON.stringify({ nodes: [node] }))).toThrow(
-      "原文件未修改",
-    );
+test("Canvas groups, media references, blocks and plugin extensions round-trip without flattening or reordering", async () => {
+  const nodes = [
+    { id: "z-group", type: "group", x: -320, y: -60, width: 600, height: 420, label: "研究分组", color: "#aa77cc", background: "assets/paper.png", backgroundStyle: "ratio", plugin: { keep: true } },
+    { ...raw.nodes[0], id: "image", type: "file", text: undefined, file: "assets/image.png", liteasy: { custom: "keep me" } },
+    { ...raw.nodes[1], id: "block", type: "file", text: undefined, file: "papers/note.md", subpath: "#^finding" },
+  ];
+  const document = parseCanvasFile(JSON.stringify({ ...raw, nodes, edges: [{ ...raw.edges[0], fromNode: "image", toNode: "block" }], liteasy: { pluginVersion: 12 } }));
+  const f = await fixture(document);
+  const saved = JSON.parse(await serializeCanvasFile({ board: f.board, repository: f.repository,
+    placements: (await f.repository.listPlacements(f.board.objectId)).reverse(), edges: await f.repository.listEdges(f.board.objectId),
+    binding: { ...f.file, document, savedRevision: f.board.revision }, destinationMountId: "vault" }));
+  expect(saved.nodes.map((node: { id: string }) => node.id)).toEqual(nodes.map((node) => node.id));
+  for (let i = 0; i < nodes.length; i++) expect(saved.nodes[i]).toMatchObject(JSON.parse(JSON.stringify(nodes[i])));
+  expect(saved.liteasy.pluginVersion).toBe(12);
+  expect(saved.edges[0].color).toBe("3");
+  expect(parseCanvasFile(JSON.stringify(saved)).nodes).toHaveLength(3);
+});
+test("invalid Canvas remains rejected before import", () => {
+  for (const node of [{ ...raw.nodes[0], type: "file" }, { ...raw.nodes[0], color: "url(bad)" }, { ...raw.nodes[0], width: -1 }])
+    expect(() => parseCanvasFile(JSON.stringify({ nodes: [node] }))).toThrow();
   expect(
     connectionPoint(
       { position: { x: 20, y: 30 }, size: { width: 100, height: 80 } },

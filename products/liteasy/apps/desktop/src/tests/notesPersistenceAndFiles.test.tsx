@@ -385,6 +385,7 @@ it("imports a dragged Vault hierarchy while omitting hidden settings and non-Mar
   const folders = await f.notes.listFolders();
   const root = folders.find((folder) => folder.name === "Vault")!;
   const topic = folders.find((folder) => folder.name === "Topic")!;
+  expect(root.parentId).toBe("extern");
   expect(topic.parentId).toBe(root.folderId);
   const objects = (await f.repository.search()).objects;
   expect(objects).toHaveLength(1);
@@ -393,6 +394,23 @@ it("imports a dragged Vault hierarchy while omitting hidden settings and non-Mar
 });
 
 describe("Markdown files and connected Vaults", () => {
+  it("keeps the Vault below extern and lists direct files until the user searches descendants", async () => {
+    const f = fixture();
+    fileSystem.mountNow();
+    await fileSystem.service.createDirectory("vault", "Topic");
+    await fileSystem.service.createDirectory("vault", "Topic/Methods");
+    fileSystem.put("Home.md", "home");
+    fileSystem.put("Topic/Methods/Deep.md", "deep");
+    const { result } = renderHook(() => useNotesController(f.input));
+    await waitFor(() => expect(result.current.model.items).toHaveLength(2));
+    expect(result.current.model.folders.find((folder) => folder.folderId === "external:vault:"))?.toMatchObject({ parentId: "extern" });
+    expect(result.current.model.folders.find((folder) => folder.folderId === "external:vault:Topic/Methods"))?.toMatchObject({ parentId: "external:vault:Topic" });
+    act(() => result.current.model.selectFolder("external:vault:"));
+    expect(result.current.model.items.map((item) => item.title)).toEqual(["Home.md"]);
+    act(() => result.current.model.search("Deep"));
+    expect(result.current.model.items.map((item) => item.title)).toEqual(["Deep.md"]);
+    expect(fileSystem.service.readFile).not.toHaveBeenCalled();
+  });
   it("lists a large Vault without reading or projecting any Markdown bodies", async () => {
     const f = fixture();
     fileSystem.mountNow();
@@ -519,6 +537,8 @@ describe("Markdown files and connected Vaults", () => {
     expect(within(list).queryByText("Original external body")).toBeNull();
     expect(within(list).getByText("Source.md")).toBeTruthy();
     await user.click(entry);
+    expect(screen.queryByRole("region", { name: "Markdown 文件阅读与编辑" })).toBeNull();
+    await user.dblClick(entry);
     expect(
       await screen.findByRole("region", { name: "Markdown 文件阅读与编辑" }),
     ).toHaveTextContent("Original external body");

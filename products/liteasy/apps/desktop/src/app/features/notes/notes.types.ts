@@ -43,6 +43,7 @@ export type NotesItem = {
   file?: NoteFileSnapshot;
 };
 export type NotesViewModel = {
+  scopeId?: string;
   folders: NotesFolder[];
   folderId: string;
   items: NotesItem[];
@@ -68,14 +69,16 @@ export type NotesViewModel = {
   drop(data: DataTransfer, folderId: string): Promise<void>;
 };
 export const NOTES_ROOT = "root";
+export const NOTES_EXTERN = "extern";
 export const DEFAULT_NOTES_FOLDERS: NotesFolder[] = [
-  { folderId: "default", parentId: NOTES_ROOT, name: "default", system: true },
-  ...["paper", "board", "note", "artifact"].map((name) => ({
-    folderId: `default/${name}`,
+  { folderId: "default", parentId: NOTES_ROOT, name: "Liteasy", system: true },
+  ...[["note", "个人笔记"], ["paper", "论文笔记"], ["artifact", "产物笔记"], ["board", "白板"]].map(([id, name]) => ({
+    folderId: `default/${id}`,
     parentId: "default",
     name,
     system: true,
   })),
+  { folderId: NOTES_EXTERN, parentId: NOTES_ROOT, name: "extern", system: true },
 ];
 export function notesTargetKey(target: NotesTarget): string {
   return target.kind === "object"

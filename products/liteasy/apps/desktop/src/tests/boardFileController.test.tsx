@@ -11,13 +11,16 @@ const files = vi.hoisted(() => ({
   chooseFile: vi.fn(),
   writeFile: vi.fn(),
   readFile: vi.fn(),
+  managedCanvas: undefined as undefined | ReturnType<typeof vi.fn>,
 }));
 vi.mock("../app/features/note-files/noteFileService", () => ({
   createNoteFileService: () => files,
+  subscribeNoteFiles: () => () => undefined,
 }));
 beforeEach(() => {
   vi.stubGlobal("crypto", webcrypto);
   vi.clearAllMocks();
+  files.managedCanvas = undefined;
 });
 async function fixture() {
   const scope = crypto.randomUUID();
@@ -188,5 +191,32 @@ test("neutral file resolution reuses a board and imports external changes into i
   await expect(
     result.current.resolveBoardFile({ ...changed, version: "v3" }),
   ).rejects.toThrow("都有修改");
+  unmount();
+});
+
+test("new and legacy unbound boards automatically acquire a Canvas file without invoking a picker", async () => {
+  const f = await fixture();
+  const target = { mountId: "managed", path: "board.canvas", name: "board.canvas", text: "", version: null };
+  files.managedCanvas = vi.fn().mockResolvedValue(target);
+  files.writeFile.mockImplementation(async (input) => ({ ...target, text: input.text, version: "auto-v1" }));
+  const status = vi.fn();
+  const { result, unmount } = renderHook(() => useBoardFileController({ repository: f.repository, board: f.board,
+    active: () => true, select: vi.fn(), setStatus: status }));
+  await waitFor(() => expect(result.current.boardFile?.version).toBe("auto-v1"), { timeout: 2500 });
+  expect(files.chooseFile).not.toHaveBeenCalled();
+  expect(files.managedCanvas).toHaveBeenCalledWith(f.board.objectId);
+  expect(JSON.parse(files.writeFile.mock.calls[0][0].text).nodes[0].text).toBe("持久化内容");
+  expect((await f.repository.getBoardFileBinding<BoardFileBinding>(f.board.objectId))?.savedRevision).toBe(f.board.revision);
+  unmount();
+});
+
+test("a recovered managed file is never silently overwritten when its binding is missing", async () => {
+  const f = await fixture();
+  files.managedCanvas = vi.fn().mockResolvedValue({ mountId: "managed", path: "board.canvas", name: "board.canvas", text: "external contents", version: "existing" });
+  const status = vi.fn();
+  const { unmount } = renderHook(() => useBoardFileController({ repository: f.repository, board: f.board,
+    active: () => true, select: vi.fn(), setStatus: status }));
+  await waitFor(() => expect(status).toHaveBeenCalledWith(expect.stringContaining("原文件未覆盖")), { timeout: 2500 });
+  expect(files.writeFile).not.toHaveBeenCalled();
   unmount();
 });

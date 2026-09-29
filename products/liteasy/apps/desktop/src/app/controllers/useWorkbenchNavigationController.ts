@@ -26,9 +26,9 @@ export function useWorkbenchNavigationController(input: {
   activeDynamicItems: Partial<Record<DockRegionId, string | null>>;
 }) {
   return {
-    open(item: "assistant" | "help" | "notes" | "board" | "document-reader" | "note-file-reader" | "paper-note" | "settings") {
+    open(item: "assistant" | "help" | "notes" | "board" | "document-reader" | "note-file-reader" | "paper-note" | "settings" | "recommendation-reader") {
       // Settings is a workspace page, including for users with an old sidebar layout.
-      if (item === "settings") {
+      if (item === "settings" || item === "recommendation-reader") {
         input.dock.moveItem(item, "main");
         input.activate("main", item);
         return;

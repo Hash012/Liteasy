@@ -16,6 +16,8 @@ pub struct Mount {
     pub name: String,
     pub location: String,
     pub kind: String,
+    #[serde(default)]
+    pub managed: bool,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,6 +37,7 @@ pub struct Snapshot {
 pub struct FileStore {
     connection: Connection,
     scope: String,
+    managed_root: PathBuf,
 }
 fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
@@ -127,6 +130,7 @@ impl FileStore {
         Ok(Self {
             connection,
             scope: scope.into(),
+            managed_root: app_data.join("boards").join(hash(scope.as_bytes())),
         })
     }
     pub fn workspace_state(&self, id: &str) -> Result<serde_json::Value, String> {
@@ -176,6 +180,8 @@ impl FileStore {
                 .to_string_lossy()
                 .into_owned();
             Ok(Mount {
+                managed: fs::canonicalize(&self.managed_root)
+                    .is_ok_and(|root| root == Path::new(&location)),
                 id,
                 location,
                 kind,
@@ -219,6 +225,7 @@ impl FileStore {
             return Ok(existing);
         }
         let mount = Mount {
+            managed: fs::canonicalize(&self.managed_root).is_ok_and(|root| root == absolute),
             id: hash(nonce().as_bytes()),
             name: absolute
                 .file_name()
@@ -235,6 +242,31 @@ impl FileStore {
             )
             .map_err(|e| e.to_string())?;
         Ok(mount)
+    }
+    /// Application-owned Canvas files live under the configured data root and
+    /// account. The renderer cannot nominate an absolute path or another account.
+    pub fn managed_canvas(&self, object_id: &str) -> Result<Snapshot, String> {
+        if object_id.is_empty() || object_id.len() > 512 {
+            return Err("白板标识无效。".into());
+        }
+        fs::create_dir_all(&self.managed_root).map_err(|e| e.to_string())?;
+        let mount = self.register(&self.managed_root, "directory")?;
+        let path = format!("{}.canvas", hash(object_id.as_bytes()));
+        let target = self.resolve(&mount.id, &path, true)?;
+        if target.exists() {
+            self.read(&mount.id, &path)
+        } else {
+            Ok(Snapshot {
+                entry: Entry {
+                    mount_id: mount.id,
+                    name: path.clone(),
+                    path,
+                    kind: "file".into(),
+                },
+                text: String::new(),
+                version: None,
+            })
+        }
     }
     pub fn location(&self, id: &str, path: &str) -> Result<PathBuf, String> {
         let result = self.resolve(id, path, true)?;
@@ -533,6 +565,49 @@ mod tests {
         let root = std::env::temp_dir().join(format!("liteasy-notefiles-{}", nonce()));
         fs::create_dir_all(root.join("vault")).unwrap();
         root
+    }
+    #[test]
+    fn managed_canvas_is_durable_scope_isolated_and_checks_external_edits() {
+        let root = workspace();
+        let store = FileStore::open(&root, "alice").unwrap();
+        let initial = store.managed_canvas("board-id").unwrap();
+        assert!(initial.version.is_none());
+        let saved = store
+            .write(
+                &initial.entry.mount_id,
+                &initial.entry.path,
+                "{\"nodes\":[],\"edges\":[]}\n",
+                None,
+            )
+            .unwrap();
+        assert!(store.mounts().unwrap()[0].managed);
+        let path = store
+            .location(&saved.entry.mount_id, &saved.entry.path)
+            .unwrap();
+        assert!(path.starts_with(fs::canonicalize(root.join("boards")).unwrap()));
+        drop(store);
+        let store = FileStore::open(&root, "alice").unwrap();
+        assert_eq!(
+            store.managed_canvas("board-id").unwrap().version,
+            saved.version
+        );
+        let other = FileStore::open(&root, "bob").unwrap();
+        assert!(other
+            .read(&saved.entry.mount_id, &saved.entry.path)
+            .is_err());
+        assert!(other.managed_canvas("board-id").unwrap().version.is_none());
+        fs::write(path, "{\"nodes\":[],\"edges\":[],\"external\":true}").unwrap();
+        assert!(store
+            .write(
+                &saved.entry.mount_id,
+                &saved.entry.path,
+                "{}",
+                saved.version.as_deref()
+            )
+            .is_err());
+        drop(other);
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
     }
     #[test]
     fn workspace_probe_is_bounded_and_scope_isolated() {

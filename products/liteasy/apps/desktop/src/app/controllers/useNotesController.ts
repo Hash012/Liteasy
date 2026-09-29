@@ -12,6 +12,8 @@ import {
   type ObjectRef,
 } from "../features/objects/object.types";
 import type { ObjectRepository } from "../features/objects/objectRepository";
+import { createPaperProjectRepository } from "../features/paper-projects/paperProjectRepository";
+import { notesAncestors } from "../features/notes/notesHierarchy";
 import {
   PENDING_CAPTURE_MIME,
   makeObjectTransfer,
@@ -44,6 +46,7 @@ import {
 import {
   DEFAULT_NOTES_FOLDERS,
   NOTES_ROOT,
+  NOTES_EXTERN,
   notesTargetKey,
   type NotesFolder,
   type NotesItem,
@@ -51,6 +54,11 @@ import {
   type NotesTarget,
   type NotesViewModel,
 } from "../features/notes/notes.types";
+
+function segmentsHaveDirectory(path: string) {
+  const normalized = path.replace(/\\/g, "/");
+  return !normalized.startsWith("/") && !/^[a-z]:/i.test(normalized) && normalized.includes("/");
+}
 
 export function useNotesController(input: {
   scopeId: string;
@@ -86,6 +94,9 @@ export function useNotesController(input: {
     () => createNoteFileService(input.scopeId, () => latest.current.scopeId),
     [input.scopeId],
   );
+  const projects = useMemo(() => createPaperProjectRepository(
+    createObjectStorage(input.scopeId, () => latest.current.scopeId), input.scopeId,
+  ), [input.scopeId]);
   const externalCache = useRef<{ folders: NotesFolder[]; items: NotesItem[] }>({
     folders: [],
     items: [],
@@ -93,6 +104,7 @@ export function useNotesController(input: {
   const externalFolderId = (mountId: string, path = "") =>
     `external:${mountId}:${path}`;
   const [folders, setFolders] = useState<NotesFolder[]>(DEFAULT_NOTES_FOLDERS);
+  const folderIndex = useMemo(() => new Map(folders.map((folder) => [folder.folderId, folder])), [folders]);
   const [sources, setSources] = useState<NotesItem[]>([]);
   const [references, setReferences] = useState<NotesReference[]>([]);
   const [folderId, setFolderId] = useState(NOTES_ROOT);
@@ -217,10 +229,11 @@ export function useNotesController(input: {
     const nextItems: NotesItem[] = [];
     let unavailable = false;
     for (const mount of mounts) {
+      if (mount.managed) continue; // Already represented by the Liteasy board objects.
       if (mount.kind === "directory")
         nextFolders.push({
           folderId: externalFolderId(mount.id),
-          parentId: NOTES_ROOT,
+          parentId: NOTES_EXTERN,
           name: mount.name,
           system: true,
           external: { mountId: mount.id, path: "" },
@@ -242,8 +255,8 @@ export function useNotesController(input: {
           } else if (/\.(md|markdown|canvas)$/i.test(entry.name)) {
             const target: NotesTarget = { kind: "external-file", mountId: mount.id, path: entry.path };
             nextItems.push({
-              key: notesTargetKey(target), target, title: entry.name, text: "", source: entry.path,
-              defaultFolderId: mount.kind === "file" ? NOTES_ROOT : externalFolderId(mount.id, entry.path.split("/").slice(0, -1).join("/")),
+              key: notesTargetKey(target), target, title: entry.name, text: "", source: `extern/${mount.kind === "directory" ? `${mount.name}/` : ""}${entry.path}`,
+              defaultFolderId: mount.kind === "file" ? NOTES_EXTERN : externalFolderId(mount.id, entry.path.split("/").slice(0, -1).join("/")),
               updatedAt: "", editable: /\.(md|markdown)$/i.test(entry.name), automaticallyListed: true,
             });
           }
@@ -392,7 +405,10 @@ export function useNotesController(input: {
           );
           continue;
         }
-        let parent = destination;
+        // Imported copies share the same external namespace as connected vaults.
+        // A user's explicit custom destination remains available for individual files.
+        let parent = ((incoming || dropped) && segmentsHaveDirectory(file.path)) ||
+          destination === NOTES_ROOT || destination.startsWith("default") ? NOTES_EXTERN : destination;
         const segments = file.path.replace(/\\/g, "/").split("/");
         // Only browser directory drops supply a relative hierarchy; a native
         // picker may supply an absolute path, which is never an import target.
@@ -425,6 +441,7 @@ export function useNotesController(input: {
           await notes.collect(
             { kind: "object", ref: refOf(object), followLatest: true },
             parent,
+            true,
           );
       }
       await refreshFiles();
@@ -450,6 +467,32 @@ export function useNotesController(input: {
         for (const placement of await repository.listPlacements(board.objectId))
           boardMembers.set(placement.ref.objectId, board.title);
       const objectMap = new Map(all.map((object) => [object.objectId, object]));
+      const [nextFolders, nextReferences, paperProjects, importedObjects] = await Promise.all([
+        notes.listFolders(), notes.listReferences(), projects.listProjects(), notes.importedObjectIds(),
+      ]);
+      const paperMembership = new Map<string, string>();
+      for (const project of paperProjects) {
+        for (const asset of await projects.listAssets(project.projectId)) {
+          if (asset.ref) paperMembership.set(asset.ref.objectId, project.title);
+        }
+      }
+      const sourceOf = (object: ObjectEnvelope) => {
+        const pending = [...object.provenance.sourceRefs];
+        const seen = new Set<string>();
+        let paper = paperMembership.get(object.objectId);
+        let artifact: string | undefined;
+        while (pending.length && seen.size < 100) {
+          const ref = pending.shift()!;
+          if (seen.has(ref.objectId)) continue;
+          seen.add(ref.objectId);
+          const source = objectMap.get(ref.objectId);
+          if (!source) continue;
+          if (source.kind === "artifact.document") artifact ??= source.title;
+          if (source.kind === "source.document" || (source.kind === "content.fragment" && source.content.payload.anchors.some((anchor) => anchor.type === "pdf"))) paper ??= source.title;
+          pending.push(...source.provenance.sourceRefs);
+        }
+        return { paper, artifact };
+      };
       const byDefault = all
         .filter(
           (object) =>
@@ -459,32 +502,26 @@ export function useNotesController(input: {
               object.content.payload.origin !== "external"),
         )
         .map((object) => {
-          const paperSource = object.provenance.sourceRefs.some((ref) => {
-            const source = objectMap.get(ref.objectId);
-            return (
-              source?.kind === "source.document" ||
-              (source?.kind === "content.fragment" &&
-                source.content.payload.anchors.some(
-                  (anchor) => anchor.type === "pdf",
-                ))
-            );
-          });
+          const source = sourceOf(object);
           const folder =
             object.kind === "workspace.board" ||
             boardMembers.has(object.objectId)
               ? "default/board"
-              : paperSource
+              : source.artifact ? "default/artifact" : source.paper
                 ? "default/paper"
                 : "default/note";
           const item = fromObject(object, folder);
+          if (source.artifact) item.source = `产物笔记 · ${source.artifact}`;
+          else if (source.paper) item.source = `论文笔记 · ${source.paper}`;
           if (boardMembers.has(object.objectId))
             item.source = `研究白板 · ${boardMembers.get(object.objectId)}`;
+          if (importedObjects.has(object.objectId)) {
+            item.defaultFolderId = NOTES_EXTERN;
+            item.automaticallyListed = !nextReferences.some((entry) => entry.target.kind === "object" && entry.target.ref.objectId === object.objectId);
+            item.source = "extern · 导入笔记";
+          }
           return item;
         });
-      const [nextFolders, nextReferences] = await Promise.all([
-        notes.listFolders(),
-        notes.listReferences(),
-      ]);
       const publish = async () => {
         const indexed = new Map(
           [
@@ -715,13 +752,8 @@ export function useNotesController(input: {
   };
   const folderMatches = (itemFolder: string) => {
     if (folderId === NOTES_ROOT) return true;
-    let candidate = itemFolder;
-    while (candidate && candidate !== NOTES_ROOT) {
-      if (candidate === folderId) return true;
-      candidate =
-        folders.find((folder) => folder.folderId === candidate)?.parentId ?? "";
-    }
-    return false;
+    if (!query.trim() && notesAncestors(folderId, folderIndex).some((folder) => folder.folderId === NOTES_EXTERN)) return itemFolder === folderId;
+    return notesAncestors(itemFolder, folderIndex).some((folder) => folder.folderId === folderId);
   };
   const visibleItems = new Map<string, NotesItem>();
   for (const item of sources)
@@ -751,6 +783,7 @@ export function useNotesController(input: {
     )
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const model: NotesViewModel = {
+    scopeId: input.scopeId,
     folders,
     folderId,
     items,

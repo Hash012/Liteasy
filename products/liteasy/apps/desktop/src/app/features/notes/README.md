@@ -4,18 +4,19 @@ Notes is a personal directory view over existing sources, with an optional conne
 
 ## Sources and directory references
 
-- `default/paper` reads PDF comments, text boxes, and entries with saved AI reviews. A plain highlight can be collected explicitly. Its native annotation identity is retained, so later comment/review edits appear in the same Note entry.
+- `default/paper` (论文笔记) includes paper-project notes (even without explicit source refs), PDF comments, text boxes, and entries with saved AI reviews. A plain highlight can be collected explicitly. Its native annotation identity is retained, so later comment/review edits appear in the same Note entry.
 - `default/board` lists board files and user notes placed on boards. Board files open their actual canvas.
-- `default/note` contains other user-created or imported Markdown notes.
-- `default/artifact` collects thin-reading annotations and explicitly saved generated pages.
+- `default/note` (个人笔记) contains other user-created notes. Imported copies are classified separately under `extern`. Existing custom folders and references retain their IDs.
+- `default/artifact` (产物笔记) collects thin-reading annotations, explicitly saved generated pages, and notes derived from generated artifacts. A bounded, cycle-safe provenance walk resolves indirect origins.
+- `extern` contains connected folder roots and newly imported Markdown hierarchies. Mount paths are not flattened into top-level folder buttons. Managed Canvas files are represented by their board objects under Liteasy, not duplicated under extern.
 
 Creating a personal directory, copying a reference, and removing a reference do not modify or delete the source. User-note and board directory references follow the latest object revision. Generated pages retain the exact revision captured when collected. PDF and thin-reading annotations resolve by native identity. Missing sources remain manageable as unavailable references. Empty user folders can be deleted; built-in and connected folders are not deleted by this view.
 
-The list displays filenames. Selecting one opens its contents separately. Imported Markdown filenames remain stable when the body is edited. Native PDF/thin-reading entries are edited through **打开来源**; generated artifacts have no edit action in Notes. Editing a user object note advances its current head, while existing pinned board placements, evidence, and history retain their recorded revision.
+The list displays titles/filenames and a compact source label. One click selects an item; double-click opens its source in the workspace. External-file selection shows an open action without loading every file body. Folder and item menus support account-persisted custom icons. The directory tree preserves indentation at narrow widths, expands ancestors of the current selection, and supports arrow-key navigation. External directories list direct files; searching includes descendants and their paths. Imported Markdown filenames remain stable when the body is edited. Native PDF/thin-reading entries are edited through **打开来源**; generated artifacts have no edit action in Notes. Editing a user object note advances its current head, while existing pinned board placements, evidence, and history retain their recorded revision.
 
 ## Markdown import and connected folders
 
-**导入 Markdown 文件** accepts `.md` and `.markdown` files and creates editable, durable user notes. Dragging a folder imports its Markdown hierarchy; hidden directories such as `.obsidian` and non-Markdown attachments are omitted. Markdown text, frontmatter, and links are preserved verbatim. Import does not resolve Obsidian plugins or wiki links into Liteasy objects.
+**导入 Markdown 文件** accepts `.md` and `.markdown` files and creates editable, durable user notes. Dragging a folder imports its Markdown hierarchy beneath `extern`; hidden directories such as `.obsidian` and non-Markdown attachments are omitted. Markdown text, frontmatter, and links are preserved verbatim. Import does not resolve Obsidian plugins or wiki links into Liteasy objects.
 
 **连接文件夹 / Obsidian Vault** uses `note-files/noteFileService` to retain a user-selected filesystem grant for this account. The service owns native/browser access, relative-path validation, version checks, and mount persistence. Connected `.md`, `.markdown`, and `.canvas` files appear by filename. A Canvas file opens through the board controller and can be dragged through the workbench's trusted capture ticket.
 
@@ -31,4 +32,4 @@ Local objects, directory references, and successful saves are published before o
 
 Features collect references through `useNotes()?.collect(target, folderId)` and call `notifyNotesSourcesChanged()` after successful native source saves. `subscribeObjectStorage` and `subscribeNoteFiles` provide local change notifications. File refresh also occurs when Notes is opened, the application regains focus, or the user selects refresh; this is not a filesystem watch daemon.
 
-This module implements personal views and selected Markdown/Canvas folders. The broader virtual resource filesystem remains a separate proposal.
+Sources retain their existing unified Liteasy resource paths and context-transfer identities.

@@ -6,7 +6,7 @@ import type { FileStatus } from "../features/workspace/workspaceShell.types";
 import "../styles/workspaceShell.css";
 import { RecommendationDetails } from "../features/recommendations/RecommendationDetails";
 import { recommendationDateLabel } from "../features/recommendations/RecommendationList";
-import type { RecommendationItem } from "../features/recommendations/recommendation.types";
+import type { DownloadRecommendation, RecommendationLocations } from "../features/recommendations/RecommendationDownload";
 
 function fileSize(size?: number) {
   if (size === undefined || !Number.isFinite(size) || size < 0) return undefined;
@@ -16,7 +16,7 @@ function fileSize(size?: number) {
   return `${Number((size / 1024 ** exponent).toFixed(1))} ${units[exponent - 1]}`;
 }
 
-export function FileStatusBar({ status, actions, onDownloadRecommendation }: { status?: FileStatus; actions?: ReadingCatalogActions; onDownloadRecommendation?: (item: RecommendationItem) => Promise<string> }) {
+export function FileStatusBar({ status, actions, onDownloadRecommendation, recommendationLocations }: { status?: FileStatus; actions?: ReadingCatalogActions; onDownloadRecommendation?: DownloadRecommendation; recommendationLocations?: RecommendationLocations | null }) {
   const modified = status?.modifiedAt && Number.isFinite(status.modifiedAt.getTime()) ? status.modifiedAt.toLocaleString() : undefined;
   const details = [
     status?.type,
@@ -49,7 +49,7 @@ export function FileStatusBar({ status, actions, onDownloadRecommendation }: { s
       </div>
       {status?.recommendation ? <Popover key={status.recommendation.id} positioning="above-end">
         <PopoverTrigger disableButtonEnhancement><Button appearance="subtle" size="small" aria-label="展开推荐元信息">元信息</Button></PopoverTrigger>
-        <PopoverSurface><RecommendationDetails item={status.recommendation} onDownload={onDownloadRecommendation} /></PopoverSurface>
+        <PopoverSurface><RecommendationDetails item={status.recommendation} onDownload={onDownloadRecommendation} locations={recommendationLocations} /></PopoverSurface>
       </Popover> : null}
       {status?.entry && actions ? <Popover key={status.entry.id} positioning="above-end">
         <PopoverTrigger disableButtonEnhancement><Button appearance="subtle" size="small" aria-label="展开文件元信息">元信息</Button></PopoverTrigger>

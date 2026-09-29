@@ -1,6 +1,6 @@
 import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
 import { ResourceLocationButton } from "../resource-filesystem/ResourceLocationButton";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Button,
   Input,
@@ -22,10 +22,8 @@ import {
   CopyRegular,
   DeleteRegular,
   DismissRegular,
-  DocumentRegular,
   EditRegular,
   FolderAddRegular,
-  FolderRegular,
   MoreHorizontalRegular,
   NoteRegular,
   SaveRegular,
@@ -44,6 +42,9 @@ import {
 } from "./notes.types";
 import { MarkdownContent } from "../markdown/MarkdownContent";
 import { PdfAnnotationMarkdown } from "../pdf/PdfAnnotationMarkdown";
+import { LibraryIconProvider, LibraryIconMenuItem, LibraryItemIcon } from "../library/LibraryItemIcon";
+import { NotesFolderTree } from "./NotesFolderTree";
+import { notesFolderChildren, notesFolderPath } from "./notesHierarchy";
 import "./notes.css";
 
 function IconButton({
@@ -71,6 +72,13 @@ function IconButton({
   );
 }
 export function NotesPanel({ model }: { model: NotesViewModel }) {
+  const scope = model.scopeId ?? "local";
+  return <LibraryIconProvider key={scope} scope={scope}><NotesPanelContent model={model} /></LibraryIconProvider>;
+}
+function noteIconKey(item: NotesItem) {
+  return item.object ? `object:${item.object.objectId}` : item.key;
+}
+function NotesPanelContent({ model }: { model: NotesViewModel }) {
   const [visibleCount, setVisibleCount] = useState(100);
   useEffect(() => setVisibleCount(100), [model.folderId, model.query]);
   const [folderName, setFolderName] = useState<string>();
@@ -86,12 +94,11 @@ export function NotesPanel({ model }: { model: NotesViewModel }) {
   const run = (action: Promise<void>) => {
     void action.catch(() => undefined);
   };
-  const path = (folder: NotesFolder): string => {
-    const parent = model.folders.find(
-      (candidate) => candidate.folderId === folder.parentId,
-    );
-    return parent ? `${path(parent)}/${folder.name}` : folder.name;
-  };
+  const paths = useMemo(() => {
+    const byId = new Map(model.folders.map((folder) => [folder.folderId, folder]));
+    return new Map(model.folders.map((folder) => [folder.folderId, notesFolderPath(folder.folderId, byId)]));
+  }, [model.folders]);
+  const path = (folder: NotesFolder) => paths.get(folder.folderId) ?? folder.name;
   const folders = [...model.folders].sort((a, b) =>
     path(a).localeCompare(path(b)),
   );
@@ -203,42 +210,7 @@ export function NotesPanel({ model }: { model: NotesViewModel }) {
         </form>
       )}
       <div className="notes-body">
-        <nav className="notes-folders" aria-label="Note 目录">
-          <Button
-            appearance={model.folderId === NOTES_ROOT ? "secondary" : "subtle"}
-            icon={<FolderRegular />}
-            aria-pressed={model.folderId === NOTES_ROOT}
-            onClick={() => model.selectFolder(NOTES_ROOT)}
-            onDragOver={onDragOver}
-            onDrop={(event) => {
-              event.preventDefault();
-              run(model.drop(event.dataTransfer, NOTES_ROOT));
-            }}
-          >
-            Note
-          </Button>
-          {folders.map((item) => (
-            <Button
-              key={item.folderId}
-              className="notes-folder"
-              appearance={
-                model.folderId === item.folderId ? "secondary" : "subtle"
-              }
-              icon={<FolderRegular />}
-              aria-pressed={model.folderId === item.folderId}
-              aria-label={path(item)}
-              title={`Note/${path(item)}`}
-              onClick={() => model.selectFolder(item.folderId)}
-              onDragOver={onDragOver}
-              onDrop={(event) => {
-                event.preventDefault();
-                run(model.drop(event.dataTransfer, item.folderId));
-              }}
-            >
-              {item.name}
-            </Button>
-          ))}
-        </nav>
+        <NotesFolderTree model={model} onDragOver={onDragOver} />
         <div
           className="notes-content"
           onDragOver={onDragOver}
@@ -248,9 +220,16 @@ export function NotesPanel({ model }: { model: NotesViewModel }) {
           }}
         >
           <div className="notes-breadcrumb">
-            Note{folder ? `/${path(folder)}` : ""}
+            {folder ? path(folder) : "所有笔记"}
             <span>{model.items.length}</span>
           </div>
+          {notesFolderChildren(model.folderId, model.folders).length > 0 && (
+            <div className="notes-child-folders" aria-label="子目录">
+              {notesFolderChildren(model.folderId, model.folders).map((child) => <Button key={child.folderId} appearance="subtle"
+                icon={<LibraryItemIcon itemKey={`notes-folder:${child.folderId}`} kind="folder" />}
+                onClick={() => model.selectFolder(child.folderId)}>{child.name}</Button>)}
+            </div>
+          )}
           {collecting && (
             <form
               className="notes-collect"
@@ -341,23 +320,16 @@ export function NotesPanel({ model }: { model: NotesViewModel }) {
                   className="notes-item-content"
                   onClick={() => {
                     model.selectItem(item);
-                    if (
-                      item.object?.kind === "workspace.board" ||
-                      item.target.kind === "external-file"
-                    )
-                      model.openSource(item);
                   }}
+                  onDoubleClick={() => model.openSource(item)}
                   aria-label={`查看笔记 ${item.title}`}
                   aria-expanded={model.selected?.key === item.key}
                 >
                   <span className="notes-item-title">
-                    {item.target.kind === "pdf-annotation" ? (
-                      <DocumentRegular aria-hidden="true" />
-                    ) : (
-                      <NoteRegular aria-hidden="true" />
-                    )}
-                    <strong title={filename(item)}>{filename(item)}</strong>
+                    <LibraryItemIcon itemKey={noteIconKey(item)} kind={item.object?.kind === "workspace.board" || /\.canvas$/i.test(item.title) ? "board" : item.target.kind === "pdf-annotation" ? "pdf" : "note"} />
+                    <strong title={item.title}>{item.title}</strong>
                   </span>
+                  <span className="notes-item-source" title={item.source}>{item.source}</span>
                 </button>
                 <Menu>
                   <MenuTrigger disableButtonEnhancement>
@@ -372,6 +344,7 @@ export function NotesPanel({ model }: { model: NotesViewModel }) {
                   </MenuTrigger>
                   <MenuPopover>
                     <MenuList>
+                      <LibraryIconMenuItem itemKey={noteIconKey(item)} title={item.title} />
                       <MenuItem
                         icon={<ArrowUpRightRegular />}
                         disabled={item.unavailable}
@@ -435,7 +408,7 @@ export function NotesPanel({ model }: { model: NotesViewModel }) {
                     <strong>{filename(item)}</strong>
                     <span>{item.source}</span>
                   </header>
-                  {item.annotation ? <PdfAnnotationMarkdown value={item.text} images={item.annotation.images} />
+                  {item.target.kind === "external-file" ? <Button appearance="subtle" icon={<ArrowUpRightRegular />} onClick={() => model.openSource(item)}>在阅读区打开</Button> : item.annotation ? <PdfAnnotationMarkdown value={item.text} images={item.annotation.images} />
                     : <MarkdownContent value={item.text} paperAnchors={item.paperAnchors ?? item.object?.paperAnchors} />}
                   <PaperAnchorReferences anchors={item.paperAnchors ?? item.object?.paperAnchors ?? []} />
                   {quote && !item.text.includes(quote) && (

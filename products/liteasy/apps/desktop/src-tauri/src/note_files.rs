@@ -54,7 +54,7 @@ pub fn note_files_dispatch(app: AppHandle, scope: String, request: Value) -> Res
     };
     check()?;
     let action = request["action"].as_str().ok_or("文件操作无效")?;
-    // A system picker is the only operation that grants a new absolute path.
+    // External paths require a system picker; managed Canvas stays in app data.
     let selected = match action {
         "chooseFolder" => FileDialog::new()
             .set_title("连接笔记文件夹 / Obsidian Vault")
@@ -109,6 +109,7 @@ pub fn note_files_dispatch(app: AppHandle, scope: String, request: Value) -> Res
             .ok_or_else(|| format!("缺少文件参数：{key}"))
     };
     match action {
+        "managedCanvas" => Ok(json!(files.managed_canvas(value("objectId")?)?)),
         "chooseFolder" => selected
             .map(|path| {
                 files

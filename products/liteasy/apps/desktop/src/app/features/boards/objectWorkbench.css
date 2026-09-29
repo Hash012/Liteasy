@@ -8,7 +8,7 @@
   flex-direction: column;
   color: var(--colorNeutralForeground1, #242424);
   background: var(--colorNeutralBackground2, #f7f7f7);
-  border: 1px solid var(--colorNeutralStroke2, #ddd);
+  border: 0;
   border-radius: 8px;
   overflow: hidden;
 }
@@ -48,8 +48,8 @@
 .object-board.has-grid {
   background-image: radial-gradient(
     circle,
-    var(--colorNeutralStroke1, #c9c9c9) 1px,
-    transparent 1px
+    color-mix(in srgb, var(--colorNeutralStroke1, #c9c9c9) 65%, transparent) 0.8px,
+    transparent 0.8px
   );
   background-size: 20px 20px;
 }
@@ -58,7 +58,7 @@
   min-width: 100%;
   min-height: 100%;
   box-sizing: border-box;
-  padding: 24px 24px 40px 56px;
+  padding: 56px 24px 40px 56px;
 }
 .object-board-canvas {
   position: relative;
@@ -77,9 +77,9 @@
   box-shadow: 0 2px 6px #0001;
 }
 .object-tool-rail {
-  top: 50px;
-  left: 8px;
-  flex-direction: column;
+  bottom: 12px;
+  left: 12px;
+  flex-direction: row;
 }
 .object-canvas-navigation {
   right: 12px;
@@ -141,11 +141,12 @@
   flex-direction: column;
   gap: 6px;
   box-sizing: border-box;
-  padding: 12px;
-  border: 1px solid var(--colorNeutralStroke1, #ddd);
-  border-radius: 6px;
+  padding: 18px 20px;
+  border: 1px solid var(--canvas-card-color, var(--colorNeutralStroke1, #ddd));
+  border-radius: 8px;
   background: var(--colorNeutralBackground1, white);
-  box-shadow: 0 1px 3px #0001;
+  box-shadow: 0 1px 2px #00000008;
+  z-index: 2;
   overflow: visible;
   cursor: grab;
   user-select: none;
@@ -160,7 +161,8 @@
 }
 .object-placement.is-selected {
   border-color: var(--colorBrandStroke1, #0f6cbd);
-  box-shadow: 0 0 0 1px var(--colorBrandStroke1, #0f6cbd), 0 3px 12px #0001;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--colorBrandStroke1, #0f6cbd) 45%, transparent);
+  z-index: 3;
 }
 .object-placement.is-editing,
 .object-placement.is-adjusting {
@@ -196,8 +198,8 @@
 }
 .object-body {
   overflow: auto;
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: calc(14px * var(--app-font-ratio, 1));
+  line-height: 1.6;
 }
 .object-body p {
   margin: 0 0 8px;
@@ -263,7 +265,7 @@
   margin: 0;
   border: 0;
   border-radius: 2px;
-  background: var(--colorBrandStroke1, #0f6cbd);
+  background: transparent;
   touch-action: none;
   opacity: 0;
 }
@@ -320,8 +322,10 @@
 .object-resize-se,
 .object-resize-sw,
 .object-resize-nw {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--colorNeutralStroke1);
+  background: var(--colorNeutralBackground1);
 }
 .object-resize-ne {
   top: -5px;
@@ -394,9 +398,13 @@
 }
 .object-workbench footer {
   position: absolute;
-  bottom: 12px;
+  bottom: 55px;
   left: 12px;
-  max-width: calc(100% - 180px);
+  max-width: calc(100% - 24px);
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--colorNeutralBackground1);
+  z-index: 3;
   font-size: calc(11px * var(--app-font-ratio, 1));
   color: var(--colorNeutralForeground3, #666);
 }
@@ -418,7 +426,8 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  color: var(--colorBrandForeground1, #0f6cbd);
+  color: var(--colorNeutralForeground3, #888);
+  z-index: 1;
   overflow: visible;
   font-size: calc(11px * var(--app-font-ratio, 1));
 }
@@ -444,7 +453,7 @@
   height: 12px;
   min-width: 0;
   padding: 0;
-  border: 2px solid var(--colorBrandStroke1, #0f6cbd);
+  border: 1px solid var(--colorBrandStroke1, #0f6cbd);
   border-radius: 50%;
   background: var(--colorNeutralBackground1, white);
   cursor: crosshair;
@@ -484,3 +493,21 @@
 }
 
 .canvas-selection { position: absolute; pointer-events: none; z-index: 5; background: color-mix(in srgb, var(--colorBrandBackground) 12%, transparent); border: 1px solid var(--colorBrandStroke1); border-radius: 3px; }
+
+.object-workbench { container: board / inline-size; }
+.object-card-toolbar {
+  position: absolute; left: 0; top: -42px; display: flex; gap: 2px; padding: 3px;
+  border: 1px solid var(--colorNeutralStroke2); border-radius: 6px;
+  background: var(--colorNeutralBackground1); box-shadow: 0 2px 8px #00000012;
+  white-space: nowrap; cursor: default; z-index: 6;
+}
+.object-card-toolbar .fui-Button { min-width: 28px; width: 28px; height: 28px; }
+.object-placement.is-group { z-index: 0; background: color-mix(in srgb, var(--canvas-card-color, var(--colorNeutralBackground3)) 9%, transparent); box-shadow: none; }
+.object-placement.is-group.is-selected { border-color: var(--colorBrandStroke1); }
+.object-placement.is-group > .object-surface:not(.has-editor) { position: absolute; bottom: calc(100% + 8px); left: 2px; max-height: 52px; max-width: 100%; font-weight: 600; color: var(--canvas-card-color, var(--colorNeutralForeground2)); }
+.object-placement.is-group.is-editing { z-index: 4; background: var(--colorNeutralBackground1); }
+.object-placement.is-group .object-card-toolbar { top: auto; bottom: -42px; }
+.object-file-reference { display: flex; flex: 1; min-height: 0; overflow: auto; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; overflow-wrap: anywhere; }
+.object-file-reference > svg { font-size: 30px; color: var(--colorNeutralForeground3); }
+.object-file-reference > span, .object-file-reference > small { font-size: 11px; color: var(--colorNeutralForeground3); }
+@container board (max-width: 440px) { .object-tool-rail { bottom: 48px; } .object-canvas-navigation { left: 12px; right: auto; } .object-workbench footer { bottom: 88px; } }

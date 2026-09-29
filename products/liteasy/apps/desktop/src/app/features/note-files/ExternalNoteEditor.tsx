@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Select, Textarea } from "@fluentui/react-components";
+import { Button, Select } from "@fluentui/react-components";
 import { BookOpenRegular, EditRegular, SaveRegular } from "@fluentui/react-icons";
 import { MarkdownContent } from "../markdown/MarkdownContent";
 import { MarkdownFontControl, useMarkdownFontSize } from "../markdown/MarkdownFontControl";
+import { MarkdownSourceEditor } from "../markdown/MarkdownSourceEditor";
 import { textChapters } from "../reading-library/readingTextChapters";
 import type { NoteFileSnapshot } from "./noteFileService";
 import type { ExternalEditingStatus } from "./obsidianWorkspace";
@@ -50,8 +51,8 @@ export function ExternalNoteEditor({ model }: { model: ExternalNoteModel }) {
     {confirmReload ? <div role="group" aria-label="重新载入确认"><p>重新载入会放弃当前未保存的修改。</p>
       <Button disabled={model.busy} onClick={() => { setConfirmReload(false); void model.reload(); }}>放弃修改并载入</Button>
       <Button onClick={() => setConfirmReload(false)}>保留草稿</Button></div> : null}
-    {session.editing ? <Textarea className="external-note-source" aria-label="Markdown 源码" value={session.draft} resize="none"
-      onChange={(_, data) => model.setDraft(data.value)} /> : <>
+    {session.editing ? <MarkdownSourceEditor className="external-note-source" value={session.draft}
+      documentKey={`${session.snapshot.mountId}:${session.snapshot.path}`} onChange={model.setDraft} /> : <>
       {preview.chapters.length > 1 ? <Select aria-label="Markdown 章节" value={selectedPart} onChange={(_, data) => setPart(Number(data.value))}>
         {preview.chapters.map((chapter, index) => <option key={chapter.id} value={index}>{chapter.title}</option>)}
       </Select> : null}

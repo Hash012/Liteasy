@@ -1,3 +1,4 @@
+import { RecommendationDetails } from "../features/recommendations/RecommendationDetails";
 import { createProfileMemoryGenerator } from "../features/profile/profileMemoryModel";
 import { createAgentAssetNavigator } from "../controllers/agent/createAgentAssetNavigator";
 import { createNoteFileService } from "../features/note-files/noteFileService";
@@ -1351,13 +1352,17 @@ export function AppShell({
     transport: modelTransport
   });
   const recommendationLibrary = useRecommendationLibraryController({
+    metadataClient: paperServices.literatureClient,
     scopeKey: `${objectWorkbench.repository.scopeId}:${localLibrarySnapshot?.libraryId ?? ""}:${localLibrarySnapshot?.rootPath ?? ""}`,
     endpoint: externalKnowledgeEndpoint,
     transport: modelTransport,
     refreshLocalLibrary,
     onSaved: async (item) => { await knowledgeSync.actions.recordRecommendationSaved(item); },
     onImportedMetadata: (paperId, item) => readingLibrary.updateMetadata(paperId, {
-      authors: item.authors, year: item.publishedYear, subjects: item.subjects,
+      title: item.title, authors: item.authors, year: item.publishedYear,
+      subjects: item.subjects?.slice(0, 20).map((subject) => subject.slice(0, 60)),
+      abstract: item.abstract, publication: item.venue, publishedAt: item.publishedAt,
+      doi: item.identityResolution?.doi ?? (item.canonicalId?.startsWith("doi:") ? item.canonicalId.slice(4) : undefined),
     }),
   });
   const {
@@ -1674,7 +1679,7 @@ export function AppShell({
     contextScopeId: objectWorkbench.repository.scopeId,
     selectedRecommendationId: recommendationLibrary.selected?.id,
     onInspectRecommendation: (item) => { recommendationLibrary.select(item); workspaceShell.focusRegion(dock.findItemRegion("library") ?? "left"); },
-    onDownloadRecommendation: recommendationLibrary.download,
+    onOpenRecommendation: (item) => { void recommendationLibrary.open(item); workbenchNavigation.open("recommendation-reader"); workspaceShell.focusRegion("main"); },
     fileLibrary: {
       entries: readingLibrary.entries, selectedId: readingLibrary.selected?.id,
       pending: readingLibrary.pending, message: readingLibrary.message,
@@ -2047,6 +2052,12 @@ export function AppShell({
   }
 
   function renderDockItem(itemId: DockItemId, regionId: DockRegionId) {
+    if (itemId === "recommendation-reader") return recommendationLibrary.preview ? <RecommendationDetails
+      key={`${objectWorkbench.repository.scopeId}:${recommendationLibrary.preview.item.id}`} page
+      item={recommendationLibrary.preview.item} loading={recommendationLibrary.preview.loading} message={recommendationLibrary.preview.message}
+      onRefresh={() => { if (recommendationLibrary.preview) void recommendationLibrary.open(recommendationLibrary.preview.item, true); }}
+      onDownload={recommendationLibrary.download} locations={localLibrarySnapshot} />
+      : <div className="recommendation-page"><p>在关联推荐中双击论文，查看摘要、来源与全文获取方式。</p></div>;
     if (itemId === "paper-note") return <PaperNoteEditor model={paperAttachments} />;
     if (itemId === "note-file-reader") return <ExternalNoteEditor model={externalNote} />;
     if (itemId === "document-reader") return <ReadingLibrarySurface
@@ -2405,9 +2416,9 @@ export function AppShell({
       ...dock.layout.regions[region].itemIds.map((item): WorkspaceSurface => ({
         id: item, region,
         active: visible && !selected && dock.layout.regions[region].activeItemId === item,
-        title: item === "note-file-reader" ? externalNote.session?.snapshot.name ?? "Markdown" : item === "document-reader" ? readingLibrary.active?.document.title ?? dockItemRegistry[item].title
+        title: item === "recommendation-reader" ? recommendationLibrary.preview?.item.title ?? "论文详情" : item === "note-file-reader" ? externalNote.session?.snapshot.name ?? "Markdown" : item === "document-reader" ? readingLibrary.active?.document.title ?? dockItemRegistry[item].title
           : item === "notes" ? notes.model.selected?.title ?? dockItemRegistry[item].title : dockItemRegistry[item].title,
-        fileStatus: item === "library" ? recommendationLibrary.selected
+        fileStatus: item === "recommendation-reader" && recommendationLibrary.preview ? { name: recommendationLibrary.preview.item.title, type: "推荐文献", recommendation: recommendationLibrary.preview.item } : item === "library" ? recommendationLibrary.selected
           ? { name: recommendationLibrary.selected.title, type: "推荐文献", recommendation: recommendationLibrary.selected }
           : readingFileStatus(readingLibrary.selected)
           : item === "document-reader" ? readingFileStatus(readingEntry)
@@ -2621,7 +2632,7 @@ export function AppShell({
           </section>
         ) : null}
       </div>
-      <FileStatusBar key={objectWorkbench.repository.scopeId} status={workspaceShell.fileStatus} onDownloadRecommendation={recommendationLibrary.download}
+      <FileStatusBar key={objectWorkbench.repository.scopeId} status={workspaceShell.fileStatus} recommendationLocations={localLibrarySnapshot} onDownloadRecommendation={recommendationLibrary.download}
         actions={{ onOpen: readingLibrary.openInspected,
           onMetadataChange: readingLibrary.entries.some((entry) => entry.id === workspaceShell.fileStatus?.entry?.id) ? readingLibrary.updateMetadata : undefined,
           onExport: readingLibrary.exportFile, onDelete: readingLibrary.remove,

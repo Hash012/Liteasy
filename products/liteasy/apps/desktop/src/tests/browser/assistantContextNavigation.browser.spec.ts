@@ -10,7 +10,13 @@ test("drags a saved thin-reading entry into chat, sends its body, and scrolls a 
     const body = route.request().postDataJSON();
     const prompt = body.messages.map((message: { content: string }) => message.content).join("\n");
     prompts.push(prompt);
-    const content = prompt.includes("确认你已准备好") ? "连接测试响应。" : prompt.includes("目录甲正文") ? "已读取目录甲文件。" : answer;
+    let content = prompt.includes("确认你已准备好") ? "连接测试响应。" : prompt.includes("目录甲正文") ? "已读取目录甲文件。" : answer;
+    if (prompt.includes("真实工具结果（数据）：")) {
+      const observations = JSON.parse(prompt.split("真实工具结果（数据）：")[1].split("\n")[0]);
+      const attached = JSON.parse(prompt.split("附加资产（仅元信息）：")[1].split("\n")[0]);
+      content = JSON.stringify({ action: observations.length ? "answer" : "read", message: content,
+        query: "", path: observations.length ? "" : attached[0].path, text: "", expectedRevision: "", mode: "append", offset: 0 });
+    }
     if (body.stream) await route.fulfill({ contentType: "text/event-stream", body: `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\ndata: [DONE]\n\n` });
     else await route.fulfill({ json: { choices: [{ message: { content } }] } });
   });
@@ -35,14 +41,30 @@ test("drags a saved thin-reading entry into chat, sends its body, and scrolls a 
   await page.getByRole("button", { name: "保存并测试", exact: true }).click();
   await expect(page.getByLabel("测试响应")).toHaveValue("连接测试响应。");
   await page.getByRole("button", { name: "文献库", exact: true }).click();
+  await page.getByRole("button", { name: "展开 das24a.pdf 的 1 个附件", exact: true }).click();
   const source = page.getByRole("button", { name: "打开论文文件：注意力薄读", exact: true });
   await expect(source).toBeVisible();
+  const input = page.getByPlaceholder("输入你的问题或命令");
+  await input.fill("往 里面写入 hello");
+  await input.evaluate((element: HTMLTextAreaElement) => { element.setSelectionRange(2, 2); });
   await source.dragTo(page.locator(".assistant-input-wrap"));
   await expect(page.getByRole("button", { name: "移除上下文：注意力薄读", exact: true })).toBeVisible();
-  await page.getByPlaceholder("输入你的问题或命令").fill("请结合这份薄读解释注意力");
+  await expect(input).toHaveValue("往 注意力薄读 里面写入 hello");
+  await expect.poll(() => input.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(8);
+  const inlineName = page.locator(".assistant-input-highlight .assistant-inline-context");
+  await expect(inlineName).toHaveText("注意力薄读");
+  await expect(inlineName).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  const lightColor = await inlineName.evaluate((element) => getComputedStyle(element).color);
+  await page.screenshot({ path: testInfo.outputPath("inline-context-light.png"), animations: "disabled" });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect.poll(() => inlineName.evaluate((element) => getComputedStyle(element).color)).not.toBe(lightColor);
+  await page.screenshot({ path: testInfo.outputPath("inline-context-dark.png"), animations: "disabled" });
+  await page.emulateMedia({ colorScheme: "light" });
   await page.getByRole("button", { name: "发送", exact: true }).click();
   await expect(page.getByText(/第 60 段：/)).toBeVisible({ timeout: 30_000 });
   expect(prompts.some((prompt) => prompt.includes("文库薄读原始内容：注意力归一化保留相对权重"))).toBe(true);
+  expect(prompts.some((prompt) => prompt.includes("往 注意力薄读 里面写入 hello"))).toBe(true);
+  await expect(page.locator(".assistant-user-message-content .assistant-inline-context")).toHaveText("注意力薄读");
   const messages = page.locator(".assistant-messages");
   const metrics = await messages.evaluate((element) => {
     const before = element.scrollTop;
@@ -73,11 +95,16 @@ test("drags a saved thin-reading entry into chat, sends its body, and scrolls a 
         text: folder === "project-a" ? "目录甲正文：只对这一份方法笔记做解释。" : "目录乙正文：不应被选入这次问题。" });
     }
   });
-  await page.getByPlaceholder("输入你的问题或命令").fill("@context-paths/project-a/review.md");
+  await input.fill("请根据 @context-paths/project-a/review.md 解释方法笔记");
+  await input.evaluate((element: HTMLTextAreaElement) => {
+    element.setSelectionRange("请根据 @context-paths/project-a/review.md".length, "请根据 @context-paths/project-a/review.md".length);
+  });
+  await input.press("ArrowRight");
+  await input.press("ArrowLeft");
   await expect(page.getByRole("button", { name: /review.md.*context-paths\/project-a/ })).toBeVisible();
   await page.getByPlaceholder("输入你的问题或命令").press("Enter");
   await expect(page.getByRole("button", { name: "移除上下文：review.md", exact: true })).toBeVisible();
-  await page.getByPlaceholder("输入你的问题或命令").fill("解释所选方法笔记");
+  await expect(input).toHaveValue("请根据 review.md 解释方法笔记");
   await page.getByRole("button", { name: "发送", exact: true }).click();
   await expect(page.getByText("已读取目录甲文件。", { exact: true })).toBeVisible();
   expect(prompts.at(-1)).toContain("目录甲正文");

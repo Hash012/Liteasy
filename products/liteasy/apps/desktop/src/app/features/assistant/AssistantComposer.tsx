@@ -7,6 +7,7 @@ import type { AgentContextUsage, AssistantComposerSuggestion, AssistantContextTo
 import { createAssistantSuggestionIndex, getAssistantReadOnlyLabel } from "./assistantSuggestionIndex";
 import { ContextAssetBrowser } from "./ContextAssetBrowser";
 import { ContextUsageIndicator } from "./ContextUsageIndicator";
+import { inlineContextParts, insertContextNames, type ContextInsertion } from "./inlineContext";
 
 const emptySuggestions: AssistantComposerSuggestion[] = [];
 
@@ -30,10 +31,10 @@ type AssistantComposerProps = {
   inputRef?: RefObject<HTMLTextAreaElement>;
   modeHint: string;
   onCancelEdit?: () => void;
-  onAddContextToken?: (token: AssistantContextToken) => void;
+  onAddContextToken?: (token: AssistantContextToken, insertion?: ContextInsertion) => void;
   onInputChange: (value: string) => void;
   onPasteLiteasyPath?: (path: string) => void;
-  onResolveContextToken?: (resolve: () => Promise<AssistantContextToken>) => void | Promise<boolean | void>;
+  onResolveContextToken?: (resolve: () => Promise<AssistantContextToken>, insertion?: ContextInsertion) => void | Promise<boolean | void>;
   onRemoveContextToken?: (tokenId: string) => void;
   onSend: () => void;
   onVoiceInput: () => void;
@@ -87,6 +88,7 @@ export function AssistantComposer({
   const [browserQuery, setBrowserQuery] = useState<string | null>(null);
   const [browserPreviewId, setBrowserPreviewId] = useState<string>();
   const insertionCaret = useRef<number>();
+  const browserInsertion = useRef<ContextInsertion>();
   useEffect(() => { setBrowserQuery(null); }, [contextScopeId]);
   useEffect(() => { setDismissed(false); setActiveIndex(0); }, [input]);
   useEffect(() => {
@@ -102,20 +104,27 @@ export function AssistantComposer({
   const highlightRef = useRef<HTMLDivElement>(null);
   const suggestionIndex = useMemo(() => createAssistantSuggestionIndex(suggestions), [suggestions]);
   const highlightedInput = useMemo(() => {
-    if (!input.includes("/")) return input;
-    const highlighted = [];
-    let offset = 0;
-    while (offset < input.length) {
-      const command = suggestionIndex.commands.find((value) => input.startsWith(value, offset) &&
-        (offset === 0 || /\s/.test(input[offset - 1])) &&
-        (offset + value.length === input.length || /[\s，。！？,!?;；]/.test(input[offset + value.length])));
-      if (command) {
-        highlighted.push(<mark className="assistant-command-chip" data-prefix="/" key={offset}>{command.slice(1)}</mark>);
-        offset += command.length;
-      } else highlighted.push(input[offset++]);
-    }
-    return highlighted;
-  }, [input, suggestionIndex]);
+    return inlineContextParts(input, contextTokens).map((part, index) => {
+      if (part.token) return <mark className="assistant-command-chip assistant-inline-context" key={index}>{part.text}</mark>;
+      if (!part.text.includes("/")) return part.text;
+      const highlighted = [];
+      let offset = 0;
+      let plainStart = 0;
+      while (offset < part.text.length) {
+        const command = suggestionIndex.commands.find((value) => part.text.startsWith(value, offset) &&
+          (offset === 0 || /\s/.test(part.text[offset - 1])) &&
+          (offset + value.length === part.text.length || /[\s，。！？,!?;；]/.test(part.text[offset + value.length])));
+        if (command) {
+          if (offset > plainStart) highlighted.push(part.text.slice(plainStart, offset));
+          highlighted.push(<mark className="assistant-command-chip" data-prefix="/" key={offset}>{command.slice(1)}</mark>);
+          offset += command.length;
+          plainStart = offset;
+        } else offset++;
+      }
+      if (plainStart < part.text.length) highlighted.push(part.text.slice(plainStart));
+      return <span key={index}>{highlighted}</span>;
+    });
+  }, [input, contextTokens, suggestionIndex]);
   const activeTrigger = dismissed ? null : getActiveTrigger(input, Math.min(caret, input.length));
   const visibleSuggestions = activeTrigger
     ? suggestionIndex.search(activeTrigger.trigger, activeTrigger.query)
@@ -127,8 +136,11 @@ export function AssistantComposer({
     setBrowserPreviewId(previewId);
     setBrowserQuery(activeTrigger?.trigger === "@" ? activeTrigger.query.trim() : "");
     if (activeTrigger?.trigger === "@") {
-      onInputChange(`${input.slice(0, activeTrigger.start)}${input.slice(activeTrigger.end)}`.replace(/\s{2,}/g, " "));
-    }
+      const nextInput = `${input.slice(0, activeTrigger.start)}${input.slice(activeTrigger.end)}`;
+      browserInsertion.current = { input: nextInput, start: activeTrigger.start, end: activeTrigger.start };
+      onInputChange(nextInput);
+    } else browserInsertion.current = { input, start: editorRef.current?.selectionStart ?? input.length,
+      end: editorRef.current?.selectionEnd ?? input.length };
     setDismissed(true);
   }
 
@@ -136,6 +148,20 @@ export function AssistantComposer({
     const index = Math.min(activeIndex, menuItemCount - 1);
     if (index === visibleSuggestions.length && showBrowseEntry) openAssetBrowser();
     else if (visibleSuggestions[index]) selectSuggestion(visibleSuggestions[index]);
+  }
+
+  function advanceBrowserInsertion(token: AssistantContextToken) {
+    const insertion = browserInsertion.current;
+    if (!insertion) return;
+    const next = insertContextNames(insertion.input, [token], insertion);
+    browserInsertion.current = { input: next.input, start: next.caret, end: next.caret };
+  }
+
+  async function resolveBrowserToken(resolve: () => Promise<AssistantContextToken>) {
+    let token: AssistantContextToken | undefined;
+    const result = await onResolveContextToken?.(async () => { token = await resolve(); return token; }, browserInsertion.current);
+    if (result !== false && token) advanceBrowserInsertion(token);
+    return result;
   }
 
   function selectSuggestion(suggestion: AssistantComposerSuggestion) {
@@ -146,9 +172,10 @@ export function AssistantComposer({
     const beforeTrigger = input.slice(0, activeTrigger.start);
     const afterTrigger = input.slice(activeTrigger.end);
     if (suggestion.token || suggestion.resolveToken) {
-      if (suggestion.resolveToken) onResolveContextToken?.(suggestion.resolveToken);
-      else if (suggestion.token) onAddContextToken?.(suggestion.token);
-      onInputChange(`${beforeTrigger}${afterTrigger}`.replace(/\s{2,}/g, " "));
+      const insertion = { input, start: activeTrigger.start, end: activeTrigger.end };
+      if (suggestion.resolveToken) void onResolveContextToken?.(suggestion.resolveToken, insertion);
+      else if (suggestion.token) onAddContextToken?.(suggestion.token, insertion);
+      setDismissed(true);
       editorRef.current?.focus();
       return;
     }
@@ -357,7 +384,11 @@ export function AssistantComposer({
       </div>
       {contextUsage ? <ContextUsageIndicator usage={contextUsage} /> : null}
       {browserQuery !== null ? <ContextAssetBrowser key={contextScopeId} suggestions={suggestions} contextTokens={contextTokens} initialPreviewId={browserPreviewId}
-        initialQuery={browserQuery} onAddContextToken={onAddContextToken} onResolveContextToken={onResolveContextToken}
+        initialQuery={browserQuery} onAddContextToken={onAddContextToken ? (token) => {
+          onAddContextToken(token, browserInsertion.current);
+          advanceBrowserInsertion(token);
+        } : undefined}
+        onResolveContextToken={onResolveContextToken ? resolveBrowserToken : undefined}
         onClose={() => { setBrowserQuery(null); editorRef.current?.focus(); }} /> : null}
     </div>
   );

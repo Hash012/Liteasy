@@ -9,7 +9,8 @@ import { readerContextDragMime, readDraggedReaderContext } from "./readerContext
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import { hasResourceContextTransfer, readContextPaper } from "../object-transfer/contextTransfer";
 import { contextRefSchema, type ContextRef } from "../context/objectContext";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { contextInstructionText, insertContextNames, type ContextInsertion } from "./inlineContext";
 import { Tooltip, Button, Input } from "@fluentui/react-components";
 import { AddRegular, DismissRegular, HistoryRegular } from "@fluentui/react-icons";
 import { AssistantComposer } from "./AssistantComposer";
@@ -385,6 +386,15 @@ export function AssistantPane({
   const [historyLoadAttempt, setHistoryLoadAttempt] = useState(0);
   const draftRef = useRef({ input, tokens: composerContextTokens, readerContexts });
   draftRef.current = { input, tokens: composerContextTokens, readerContexts };
+  const contextCaretRef = useRef<{ input: string; caret: number; sessionId: string }>();
+  useLayoutEffect(() => {
+    const pending = contextCaretRef.current;
+    if (!pending) return;
+    contextCaretRef.current = undefined;
+    if (pending.input === input && pending.sessionId === activeSessionId) {
+      inputRef.current?.setSelectionRange(pending.caret, pending.caret);
+    }
+  }, [input, activeSessionId, composerContextTokens]);
 
   function persistConversation() {
     if (!historyPersistence || !historyReadyRef.current || !mountedRef.current) return;
@@ -492,21 +502,18 @@ export function AssistantPane({
       : readerConversationContext.source === "extracted_text"
         ? "论文提取文本"
         : "PDF 选区";
-    setComposerContextTokens((currentTokens) => [
-      ...currentTokens.filter((token) => token.id !== `pdf-selection-${contextKey}`),
-      {
-        detail: `第 ${readerConversationContext.page} 页`,
-        id: `pdf-selection-${contextKey}`,
-        kind: "pdf_selection",
-        label: readerConversationContext.paperTitle ?? sourceLabel,
-        prompt: [
-          `${sourceLabel}：${readerConversationContext.paperTitle ?? "当前文档"} 第 ${
-            readerConversationContext.page
-          } 页`,
-          readerConversationContext.excerpt
-        ].join("\n")
-      }
-    ]);
+    addComposerContextToken({
+      detail: `第 ${readerConversationContext.page} 页`,
+      id: `pdf-selection-${contextKey}`,
+      kind: "pdf_selection",
+      label: readerConversationContext.paperTitle ?? sourceLabel,
+      prompt: [
+        `${sourceLabel}：${readerConversationContext.paperTitle ?? "当前文档"} 第 ${
+          readerConversationContext.page
+        } 页`,
+        readerConversationContext.excerpt
+      ].join("\n")
+    });
     inputRef.current?.focus();
   }
 
@@ -661,21 +668,36 @@ export function AssistantPane({
     void connect().catch(() => undefined);
   }
 
-  function addComposerContextToken(token: AssistantContextToken) {
-    setComposerContextTokens((currentTokens) => [
-      ...currentTokens.filter((currentToken) => currentToken.id !== token.id),
-      token
-    ]);
+  function captureContextInsertion(): ContextInsertion {
+    const value = draftRef.current.input;
+    const pending = contextCaretRef.current;
+    if (pending?.input === value && pending.sessionId === activeSessionIdRef.current)
+      return { input: value, start: pending.caret, end: pending.caret };
+    return { input: value, start: inputRef.current?.selectionStart ?? value.length,
+      end: inputRef.current?.selectionEnd ?? value.length };
   }
 
-  async function resolveComposerContextToken(resolve: () => Promise<AssistantContextToken>) {
+  function addComposerContextTokens(tokens: AssistantContextToken[], insertion = captureContextInsertion()) {
+    const nextTokens = [...new Map([...draftRef.current.tokens, ...tokens].map((token) => [token.id, token])).values()];
+    const next = insertContextNames(draftRef.current.input, tokens, insertion);
+    draftRef.current = { ...draftRef.current, input: next.input, tokens: nextTokens };
+    contextCaretRef.current = { ...next, sessionId: activeSessionIdRef.current };
+    setComposerContextTokens(nextTokens);
+    setInput(next.input);
+  }
+
+  function addComposerContextToken(token: AssistantContextToken, insertion?: ContextInsertion) {
+    addComposerContextTokens([token], insertion);
+  }
+
+  async function resolveComposerContextToken(resolve: () => Promise<AssistantContextToken>, insertion = captureContextInsertion()) {
     const sessionId = activeSessionIdRef.current;
     setContextDropCount((count) => count + 1);
     setContextDropMessage("");
     try {
       const token = await resolve();
       if (!mountedRef.current || activeSessionIdRef.current !== sessionId) return false;
-      addComposerContextToken(token);
+      addComposerContextToken(token, insertion);
       return true;
     } catch (error) {
       if (mountedRef.current && activeSessionIdRef.current === sessionId)
@@ -688,6 +710,7 @@ export function AssistantPane({
 
   async function addDroppedResources(data: DataTransfer) {
     const sessionId = activeSessionIdRef.current;
+    const insertion = captureContextInsertion();
     setContextDropCount((count) => count + 1);
     setContextDropMessage("");
     try {
@@ -701,11 +724,7 @@ export function AssistantPane({
       }));
       if (!tokens.length) throw new Error("当前内容不能加入对话。");
       if (!mountedRef.current || activeSessionIdRef.current !== sessionId) return;
-      setComposerContextTokens((current) => {
-        const next = [...new Map([...current, ...tokens].map((token) => [token.id, token])).values()];
-        draftRef.current = { ...draftRef.current, tokens: next };
-        return next;
-      });
+      addComposerContextTokens(tokens, insertion);
       inputRef.current?.focus();
     } catch (error) {
       if (mountedRef.current && activeSessionIdRef.current === sessionId)
@@ -717,6 +736,7 @@ export function AssistantPane({
 
   async function addLiteasyPath(path: string) {
     const sessionId = activeSessionIdRef.current;
+    const insertion = captureContextInsertion();
     setContextDropCount((count) => count + 1);
     setContextDropMessage("");
     try {
@@ -732,11 +752,7 @@ export function AssistantPane({
         detail: attachment.detail, prompt: "", contextRefs: attachment.refs,
       }));
       if (!tokens.length) throw new Error("此路径没有可分析的内容。");
-      setComposerContextTokens((current) => {
-        const next = [...new Map([...current, ...tokens].map((token) => [token.id, token])).values()];
-        draftRef.current = { ...draftRef.current, tokens: next };
-        return next;
-      });
+      addComposerContextTokens(tokens, insertion);
       inputRef.current?.focus();
       return true;
     } catch (error) {
@@ -1814,7 +1830,7 @@ export function AssistantPane({
     updateQueuedMessagePolicy(turn.userMessageId, undefined);
     syncAssistant();
 
-    const artifactType = requestedArtifactType(turn.message);
+    const artifactType = requestedArtifactType(contextInstructionText(turn.message, turn.contextTokens));
     // The artifact workflow creates a task, submits its artifactType to the main Agent,
     // and saves the specialist result. Keep slash shortcuts on that complete path.
     if (artifactType && (artifactType === "thin_reading" || getActivePublicAgentClient())) {
@@ -1847,7 +1863,6 @@ export function AssistantPane({
     if (turn.mode === "command") {
       commandPaperIdsRef.current = turn.referencedPaperIds;
       try {
-        const artifactType = requestedArtifactType(turn.message);
         if (artifactType && turn.referencedPaperIds.length > 0) {
           const message = onGenerateArtifact(artifactType, turn.referencedPaperIds, [turn.message, turn.attachedContextPrompt].filter(Boolean).join("\n\n"));
           assistantStoreRef.current.addMessage(createMessage("assistant", message));
@@ -1944,7 +1959,7 @@ export function AssistantPane({
       return;
     }
 
-    const requestedType = requestedArtifactType(adapted.runtimeInput.message);
+    const requestedType = requestedArtifactType(contextInstructionText(adapted.runtimeInput.message, contextTokensForTurn));
     if (composerContextTokens.some((token) => token.contextRefs?.length) &&
       requestedType !== "ppt" && requestedType !== "tree" && (adapted.runtimeInput.mode === "command" || requestedType)) {
       setContextDropMessage("已加入的内容支持提问、审阅、生成演示文稿和大纲；当前命令尚不支持这些资源。");

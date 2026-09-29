@@ -1,5 +1,7 @@
 export type RecommendationStyle = "balanced" | "frontier" | "classic" | "exploratory";
 
+export type RecommendationDownloadOptions = { targetFolderPath?: string; newFolderName?: string };
+
 export type RecommendationItem = {
   citationCount?: number;
   publishedAt?: string;

@@ -44,7 +44,7 @@ export type LeftPaneProps = {
   contextScopeId?: string;
   selectedRecommendationId?: string;
   onInspectRecommendation?: (item: RecommendationItem) => void;
-  onDownloadRecommendation?: (item: RecommendationItem) => Promise<string>;
+  onOpenRecommendation?: (item: RecommendationItem) => void;
   fileLibrary?: LibraryFileAccess;
   accountScopeId?: string;
   activePaperId?: string | null;
@@ -285,7 +285,7 @@ export function LeftPane({
   contextScopeId,
   selectedRecommendationId,
   onInspectRecommendation,
-  onDownloadRecommendation,
+  onOpenRecommendation,
   recommendationMessage,
   recommendationPending,
   recommendationStatus,
@@ -446,7 +446,7 @@ export function LeftPane({
             contextScopeId={contextScopeId}
             selectedRecommendationId={selectedRecommendationId}
             onInspectRecommendation={onInspectRecommendation}
-            onDownloadRecommendation={onDownloadRecommendation}
+            onOpenRecommendation={onOpenRecommendation}
             recommendationMessage={recommendationMessage}
             recommendationPending={recommendationPending}
             recommendationStatus={recommendationStatus}

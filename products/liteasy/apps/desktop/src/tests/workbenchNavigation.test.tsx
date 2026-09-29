@@ -75,3 +75,12 @@ test("settings opens in the center and relocates old sidebar placements without 
   expect(result.current.dock.layout.regions.left.itemIds).not.toContain("settings");
   expect(result.current.dock.layout.regions.right.itemIds).toContain("assistant");
 });
+
+test("recommendation previews open in the main region while retaining the library and reader", () => {
+  const { result } = renderHook(useFixture);
+  act(() => result.current.navigation.open("document-reader"));
+  act(() => result.current.navigation.open("recommendation-reader"));
+  expect(result.current.dock.layout.regions.main.activeItemId).toBe("recommendation-reader");
+  expect(result.current.dock.layout.regions.main.itemIds).toContain("document-reader");
+  expect(result.current.dock.layout.regions.left.itemIds).toContain("library");
+});

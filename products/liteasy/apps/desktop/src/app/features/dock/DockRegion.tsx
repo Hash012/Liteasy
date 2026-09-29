@@ -58,6 +58,7 @@ function getDockItemIcon(itemId: DockItemId) {
       return <FolderOpenRegular />;
     case "library":
     case "document-reader":
+    case "recommendation-reader":
       return <BookRegular />;
     case "organization":
       return <PeopleRegular />;
