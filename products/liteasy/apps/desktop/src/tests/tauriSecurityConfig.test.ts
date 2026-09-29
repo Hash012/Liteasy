@@ -20,7 +20,7 @@ test("keeps the Tauri main window behind a restrictive CSP", () => {
   expect(csp).not.toContain("script-src 'unsafe-eval'");
 });
 
-test("limits main window permissions to host events, deep links, zoom and title-bar controls", () => {
+test("limits main window permissions to host events, deep links, zoom, fullscreen and title-bar controls", () => {
   const capability = JSON.parse(
     fs.readFileSync(path.resolve(process.cwd(), "src-tauri/capabilities/main.json"), "utf8")
   );
@@ -32,6 +32,8 @@ test("limits main window permissions to host events, deep links, zoom and title-
     "deep-link:allow-get-current",
     "core:webview:allow-set-webview-zoom",
     "core:window:allow-is-maximized",
+    "core:window:allow-is-fullscreen",
+    "core:window:allow-set-fullscreen",
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-internal-toggle-maximize",
