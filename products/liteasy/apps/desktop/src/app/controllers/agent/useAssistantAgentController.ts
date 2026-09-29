@@ -47,6 +47,9 @@ export type AssistantAgentControllerInput = {
   agentAssets?: import("../../features/resource-filesystem/agentAssetService").AgentAssetService;
   resolveObjectContext?: import("./createDesktopAgentService").DesktopAgentServiceOptions["resolveObjectContext"];
   academicProfile?: AcademicProfile;
+  profileEnabled?: boolean;
+  responsePreferences?: string;
+  onConversationCompleted?: (input: import("../../features/profile/useProfileMemory").CompletedProfileTurn) => void;
   getAgentMemories?: () => AgentMemoryEntry[];
   getAllPapers?: () => Paper[];
   getArtifactTasks?: () => readonly ArtifactTask[];
@@ -127,8 +130,12 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
   }
 
   if (!apiRef.current) {
+    const owner = input.principalId;
     apiRef.current = createDesktopAgentService({
       getPrincipalId: () => inputRef.current.principalId ?? "local",
+      onConversationCompleted: (turn) => {
+        if (inputRef.current.principalId === owner) inputRef.current.onConversationCompleted?.(turn);
+      },
       resolveObjectContext: input.resolveObjectContext ? (request) => inputRef.current.resolveObjectContext!(request) : undefined,
       createCoreSession() {
         return createAgentCoreSession(undefined, {
@@ -157,7 +164,7 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
           academicProfile: current.academicProfile,
           importedCount: current.importedSelectedCount,
           organizationName: current.runtimeOrganizationName,
-          profileEnabled: Boolean(current.settingsStore.getState()["profile.enabled"]),
+          profileEnabled: current.profileEnabled ?? Boolean(current.settingsStore.getState()["profile.enabled"]),
           profilePersonalizationSummary: current.profilePersonalizationSummary,
           profileUnlocked: current.profileUnlocked,
           selectedCount: current.selectedPaperCount,
@@ -166,6 +173,7 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
         });
 
         return {
+          personalization: current.profileEnabled ? { summary: current.profilePersonalizationSummary, response: current.responsePreferences } : undefined,
           assets: current.agentAssets,
           assetScopeId: current.principalId ?? "local",
           activity: {

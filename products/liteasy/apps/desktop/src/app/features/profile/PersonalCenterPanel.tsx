@@ -1,32 +1,25 @@
 import type { AccountSession } from "../account/account.types";
 import { useState } from "react";
-import { Dropdown, Input, Option, Tooltip } from "@fluentui/react-components";
-import {
-  AddRegular,
-  ArchiveRegular,
-  BotRegular,
-  ChevronDownRegular,
-  ChevronRightRegular,
-  DeleteRegular,
-  EyeOffRegular,
-  EyeRegular,
-  PersonRegular,
-  SignOutRegular
-} from "@fluentui/react-icons";
+import { Button, Switch, Tab, TabList, Tooltip } from "@fluentui/react-components";
+import { ArchiveRegular, DeleteRegular, PersonRegular, SignOutRegular, SparkleRegular, BookOpenRegular } from "@fluentui/react-icons";
 import type { OrganizationSummary } from "../organization/organization.types";
 import type { AgentMemoryEntry } from "../agent-core/agentCoreConfig";
 import { AcademicProfileForm } from "./AcademicProfileForm";
 import type { AcademicProfile } from "./profile.types";
-import { formatAcademicProfile, formatAcademicResearchProfile } from "./profile.types";
 import type { UserTag } from "./academicProfileClient";
+import type { ProfileMemoryController } from "./useProfileMemory";
+import { ProfileMemoryPanel } from "./ProfileMemoryPanel";
+import "./personalCenter.css";
 
 type PersonalCenterPanelProps = {
   academicProfile: AcademicProfile;
   agentMemories?: AgentMemoryEntry[];
   agentRecentState?: string;
+  profileMemory?: ProfileMemoryController;
   accountSession: AccountSession | null;
   onClearProfile: () => void;
   onLogout: () => void;
+  onLoginRequired?: () => void;
   onOpenAcademicArchive: () => void;
   onToggleProfileSampling: () => void;
   onUpdateAcademicProfile: (profile: AcademicProfile) => void;
@@ -38,179 +31,36 @@ type PersonalCenterPanelProps = {
   profileTags: UserTag[];
   readPaperCount: number;
 };
-
-export function PersonalCenterPanel({
-  academicProfile,
-  agentMemories = [],
-  agentRecentState = "",
-  accountSession,
-  onClearProfile,
-  onLogout,
-  onOpenAcademicArchive,
-  onToggleProfileSampling,
-  onUpdateAcademicProfile,
-  onUpdateAgentMemories,
-  onUpdateAgentRecentState,
-  organizationSummary,
-  profileClearMessage,
-  profileSamplingEnabled,
-  profileTags,
-  readPaperCount
-}: PersonalCenterPanelProps) {
-  const [expandedSections, setExpandedSections] = useState<string[]>(["profile", "academic"]);
-  const displayName = accountSession?.name ?? "未连接云账号";
-  const teamName = organizationSummary?.name ?? "未加入组织";
-  const isExpanded = (section: string) => expandedSections.includes(section);
-  const toggleSection = (section: string) => {
-    setExpandedSections((current) => current.includes(section)
-      ? current.filter((item) => item !== section)
-      : [...current, section]);
-  };
-  const updateMemory = (memoryId: string, patch: Partial<AgentMemoryEntry>) => {
-    onUpdateAgentMemories?.(
-      agentMemories.map((memory) => memory.id === memoryId ? { ...memory, ...patch } : memory)
-    );
-  };
-  const addMemory = () => {
-    onUpdateAgentMemories?.([
-      ...agentMemories,
-      {
-        id: `memory-${Date.now()}`,
-        importance: "中",
-        namespace: "local-user",
-        summary: "",
-        type: "偏好"
-      }
-    ]);
-  };
-  const removeMemory = (memoryId: string) => {
-    onUpdateAgentMemories?.(agentMemories.filter((memory) => memory.id !== memoryId));
-  };
-
-  return (
-    <section aria-label="左边栏个人中心" className="personal-center-panel">
-      <div className="personal-center-header">
-        <Tooltip content="退出登录" positioning="below" relationship="description">
-          <button aria-label="退出登录" className="personal-center-logout icon-only" onClick={onLogout} title="断开当前云账号会话" type="button">
-            <SignOutRegular />
-          </button>
-        </Tooltip>
-      </div>
-
-      <div className="personal-center-identity">
-        <div className="personal-center-avatar">{displayName.slice(0, 1).toUpperCase()}</div>
-        <div className="personal-center-facts">
-          <div>{displayName}</div>
-          <div>{teamName}</div>
-        </div>
-      </div>
-
-      <section className="sidebar-section personal-center-section">
-        <button aria-expanded={isExpanded("profile")} aria-label={`${isExpanded("profile") ? "收起" : "展开"}画像配置`} className="sidebar-section-header" onClick={() => toggleSection("profile")} type="button">
-          <span aria-hidden="true" className="sidebar-section-disclosure">{isExpanded("profile") ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
-          <PersonRegular />
-          <span>学术档案配置</span>
-        </button>
-        {isExpanded("profile") ? <div className="sidebar-section-content">
-        <div className="personal-center-row">{formatAcademicProfile(academicProfile)}</div>
-        <div className="personal-center-row">研究学科：{formatAcademicResearchProfile(academicProfile)}</div>
-        <AcademicProfileForm academicProfile={academicProfile} onSave={onUpdateAcademicProfile} />
-        {profileClearMessage ? <div className="personal-center-row">{profileClearMessage}</div> : null}
-        <div className="personal-center-row">个性化行为信号：{profileSamplingEnabled ? "开启" : "关闭"}</div>
-        <Tooltip content={profileSamplingEnabled ? "停止记录阅读和推荐行为信号" : "允许记录阅读和推荐行为信号"} positioning="below" relationship="description">
-          <button aria-label={profileSamplingEnabled ? "关闭个性化行为信号" : "开启个性化行为信号"} className="left-rail-button icon-only" onClick={onToggleProfileSampling} type="button">
-            {profileSamplingEnabled ? <EyeOffRegular /> : <EyeRegular />}
-          </button>
-        </Tooltip>
-        <div className="personal-center-row personal-center-tags">
-          <span className="personal-center-tags-label">阅读 tag：</span>
-          {profileTags.length > 0
-            ? profileTags.map((tag) => (
-              <span key={tag.label} className="profile-tag-chip" title={`权重 ${tag.weight.toFixed(2)} · 证据 ${tag.evidenceCount}`}>
-                {tag.label}
-              </span>
-            ))
-            : <span className="personal-center-tags-empty">暂无（阅读文献后自动总结）</span>}
-        </div>
-        </div> : null}
-      </section>
-
-      <section className="sidebar-section personal-center-section">
-        <button aria-expanded={isExpanded("memory")} aria-label={`${isExpanded("memory") ? "收起" : "展开"} Agent Memory`} className="sidebar-section-header" onClick={() => toggleSection("memory")} type="button">
-          <span aria-hidden="true" className="sidebar-section-disclosure">{isExpanded("memory") ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
-          <BotRegular />
-          <span>Agent Memory</span>
-        </button>
-        {isExpanded("memory") ? <div className="sidebar-section-content agent-memory-section">
-          <div className="personal-center-footnote">按相关性加入后续 Agent 的系统上下文。</div>
-          <div className="agent-memory-list">
-            {agentMemories.map((memory) => (
-              <div className="agent-memory-item" key={memory.id}>
-                <Input
-                  aria-label={`Memory 内容：${memory.id}`}
-                  onChange={(_, data) => updateMemory(memory.id, { summary: data.value })}
-                  size="small"
-                  value={memory.summary}
-                />
-                <div className="agent-memory-controls">
-                  <Dropdown
-                    aria-label={`Memory 类型：${memory.id}`}
-                    onOptionSelect={(_, data) => data.optionValue && updateMemory(memory.id, { type: data.optionValue as AgentMemoryEntry["type"] })}
-                    selectedOptions={[memory.type]}
-                    size="small"
-                    value={memory.type}
-                  >
-                    {(["偏好", "画像", "项目", "经历"] as const).map((type) => <Option key={type} value={type}>{type}</Option>)}
-                  </Dropdown>
-                  <Dropdown
-                    aria-label={`Memory 重要性：${memory.id}`}
-                    onOptionSelect={(_, data) => data.optionValue && updateMemory(memory.id, { importance: data.optionValue as AgentMemoryEntry["importance"] })}
-                    selectedOptions={[memory.importance]}
-                    size="small"
-                    value={`${memory.importance}优先级`}
-                  >
-                    {(["高", "中", "低"] as const).map((importance) => <Option key={importance} text={`${importance}优先级`} value={importance}>{importance}优先级</Option>)}
-                  </Dropdown>
-                  <Tooltip content="删除这条 Memory" positioning="below" relationship="description">
-                    <button aria-label={`删除 Memory：${memory.id}`} className="left-rail-button danger icon-only" onClick={() => removeMemory(memory.id)} type="button"><DeleteRegular /></button>
-                  </Tooltip>
-                </div>
-              </div>
-            ))}
-          </div>
-          <button aria-label="新增 Agent Memory" className="agent-memory-add" onClick={addMemory} type="button"><AddRegular />新增</button>
-          <label className="agent-state-label" htmlFor="agent-recent-state">近期状态摘要</label>
-          <textarea
-            aria-label="Agent 近期状态摘要"
-            id="agent-recent-state"
-            maxLength={1200}
-            onChange={(event) => onUpdateAgentRecentState?.(event.target.value)}
-            placeholder="留空时，由当前工作区状态自动生成。"
-            rows={4}
-            value={agentRecentState}
-          />
-          <button className="agent-state-reset" onClick={() => onUpdateAgentRecentState?.("")} type="button">恢复自动摘要</button>
-        </div> : null}
-      </section>
-
-      <section className="sidebar-section personal-center-section">
-          <button aria-expanded={isExpanded("academic")} aria-label={`${isExpanded("academic") ? "收起" : "展开"}学术档案`} className="sidebar-section-header" onClick={() => toggleSection("academic")} type="button">
-            <span aria-hidden="true" className="sidebar-section-disclosure">{isExpanded("academic") ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
-            <ArchiveRegular />
-            <span>学术档案</span>
-          </button>
-          {isExpanded("academic") ? <div className="sidebar-section-content">
-          <div className="personal-center-row">已阅读 {readPaperCount} 篇</div>
-          <div className="personal-center-actions">
-            <Tooltip content="学术档案" positioning="below" relationship="description">
-              <button aria-label="学术档案" className="left-rail-button icon-only" onClick={onOpenAcademicArchive} type="button"><ArchiveRegular /></button>
-            </Tooltip>
-            <Tooltip content="清空学术档案和个性化数据" positioning="below" relationship="description">
-              <button aria-label="清空学术档案和个性化数据" className="left-rail-button danger icon-only" onClick={onClearProfile} type="button"><DeleteRegular /></button>
-            </Tooltip>
-          </div>
-          </div> : null}
-      </section>
-    </section>
-  );
+export function PersonalCenterPanel(props: PersonalCenterPanelProps) {
+  const [section, setSection] = useState("research");
+  const { accountSession, profileMemory: memory } = props;
+  return <section aria-label="左边栏个人中心" className="personal-center-panel profile-page">
+    <header className="profile-identity">
+      <div className="profile-avatar" aria-hidden="true"><PersonRegular /></div>
+      <div className="profile-identity-text"><strong>{accountSession?.name ?? "本机研究者"}</strong><span>{accountSession ? props.organizationSummary?.name ?? "个人工作区" : "未登录 · 本机档案可用"}</span></div>
+      {accountSession ? <Tooltip content="退出登录" relationship="label"><Button appearance="subtle" icon={<SignOutRegular />} aria-label="退出登录" onClick={props.onLogout} /></Tooltip>
+        : <Button size="small" onClick={props.onLoginRequired}>登录</Button>}
+    </header>
+    <div className="profile-personalization">
+      <Switch label="使用画像个性化" checked={props.profileSamplingEnabled} onChange={props.onToggleProfileSampling} />
+      <p className="profile-muted">用于论文推荐和 AI 回答。关闭后停止采集和使用，已有条目保留。</p>
+    </div>
+    <TabList selectedValue={section} onTabSelect={(_, data) => setSection(String(data.value))} size="small" aria-label="个人中心分类">
+      <Tab value="research" icon={<BookOpenRegular />}>研究档案</Tab><Tab value="memory" icon={<SparkleRegular />}>已记偏好{memory?.data.pending.length ? ` · ${memory.data.pending.length}` : ""}</Tab><Tab value="data" icon={<ArchiveRegular />}>数据管理</Tab>
+    </TabList>
+    <div className="profile-section" role="region" aria-label={section === "research" ? "研究档案" : section === "memory" ? "已记偏好" : "数据管理"}>
+      {section === "research" ? <><h3>你的研究方向</h3><p className="profile-muted">填写主题、方法和阅读语言，让推荐更贴近当前研究。</p><AcademicProfileForm academicProfile={props.academicProfile} onSave={props.onUpdateAcademicProfile} /></> : null}
+      {section === "memory" && memory ? <ProfileMemoryPanel memory={memory} enabled={props.profileSamplingEnabled} /> : null}
+      {section === "memory" && !memory ? <p className="profile-muted">暂无已保存的偏好。</p> : null}
+      {section === "data" ? <>
+        <h3>本机画像与阅读记录</h3>
+        <div className="profile-stats"><span><strong>{props.readPaperCount}</strong>已阅读论文</span><span><strong>{memory?.data.entries.length ?? 0}</strong>已记偏好</span></div>
+        <p className="profile-muted">研究档案与明确偏好优先；阅读记录中的词语仅作为辅助兴趣，不会自动变成确定的个人事实。</p>
+        <div className="profile-interest-tags" aria-label="阅读兴趣">{props.profileTags.length ? props.profileTags.map((tag) => <span key={tag.label} title={`阅读证据 ${tag.evidenceCount} 次`}>{tag.label}</span>) : <p className="profile-muted">暂无阅读兴趣记录。</p>}</div>
+        <div className="profile-actions"><Button icon={<ArchiveRegular />} onClick={props.onOpenAcademicArchive}>查看与导出档案</Button><Button icon={<DeleteRegular />} onClick={props.onClearProfile}>清空画像数据</Button></div>
+      </> : null}
+    </div>
+    {memory?.error ? <p role="alert" className="profile-notice">{memory.error}</p> : null}
+    {memory?.notice || props.profileClearMessage ? <p role="status" className="profile-notice">{memory?.notice || props.profileClearMessage}</p> : null}
+  </section>;
 }

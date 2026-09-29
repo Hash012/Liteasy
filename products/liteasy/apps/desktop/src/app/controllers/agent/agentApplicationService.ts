@@ -130,6 +130,7 @@ export type AgentApplicationPorts = {
   listCapabilities?: () => AgentCapability[];
   now?: () => Date;
   onPersistenceError?: (error: Error) => void;
+  onConversationCompleted?: (input: { message: string; sessionId: string; requestId: string }) => void;
   resolveContext?: (input: {
     request: SubmitAgentTurnRequest;
     session: AgentSession;
@@ -920,6 +921,11 @@ export function createAgentApplicationService(
         }
       }
       await persistState();
+      if (run.status === "completed") {
+        // Side work receives only the submitted user text, never tool output or attachments.
+        try { ports.onConversationCompleted?.({ message: request.input.message, sessionId: request.sessionId, requestId: run.runId }); }
+        catch { /* Optional personalization cannot change a completed answer. */ }
+      }
       return { data: run, ok: true };
     },
 

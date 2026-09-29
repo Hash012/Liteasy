@@ -1,9 +1,9 @@
 import { MAX_NOTE_FILE_BYTES } from "../note-files/noteFileService";
 import { validateModelImages } from "../models/modelImages";
-import { AgentAssetError, type AgentAsset, type AgentAssetAdapter, type AgentAssetReadOptions, type AgentAssetSearch, type AgentAssetWriteOptions } from "./agentAsset.types";
+import { AgentAssetError, type AgentAsset, type AgentAssetAdapter, type AgentAssetCreate, type AgentAssetReadOptions, type AgentAssetSearch, type AgentAssetWriteOptions } from "./agentAsset.types";
 
 /** One discovery/read/write/context boundary shared by the assistant and asset UI. */
-export function createAgentAssetService(input: { scopeId: string; active(): boolean; adapters?: AgentAssetAdapter[] }) {
+export function createAgentAssetService(input: { scopeId: string; active(): boolean; adapters?: AgentAssetAdapter[]; create?(options: AgentAssetCreate): Promise<AgentAsset> }) {
   const adapters = new Map<string, AgentAssetAdapter>();
   const check = (signal?: AbortSignal) => {
     signal?.throwIfAborted();
@@ -28,6 +28,15 @@ export function createAgentAssetService(input: { scopeId: string; active(): bool
   };
   return {
     registerAdapter,
+    async create(options: AgentAssetCreate) {
+      check(options.signal);
+      if (!input.create) throw new AgentAssetError("unavailable", "此工作区不支持创建资产。");
+      if (!["note", "board"].includes(options.kind) || !options.title.trim() || options.title.length > 240 ||
+        !options.operationId || options.operationId.length > 128 ||
+        (options.text !== undefined && (typeof options.text !== "string" || new TextEncoder().encode(options.text).byteLength > MAX_NOTE_FILE_BYTES)) ||
+        (options.kind === "board" && options.text)) throw new AgentAssetError("invalid_request", "创建资产参数无效；白板创建后使用 write 写入 JSON Canvas。");
+      return input.create(options);
+    },
     async search(options: AgentAssetSearch) {
       check(options.signal);
       const limit = Math.max(1, Math.min(100, Math.floor(options.limit ?? 30)));

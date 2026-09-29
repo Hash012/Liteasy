@@ -218,3 +218,23 @@ describe("DockRegion", () => {
     expect(onMoveDynamicTab).toHaveBeenCalledWith("artifact-1", "right");
   });
 });
+
+test("keyboard navigation crosses tool and document tabs and moves focus to the selected target", async () => {
+  const user = userEvent.setup();
+  const onActivateItem = vi.fn();
+  const onActivateDocument = vi.fn();
+  render(<DockRegion regionId="main" layout={{ itemIds: ["settings"], activeItemId: "settings" }}
+    onActivateItem={onActivateItem} onCloseItem={vi.fn()} onMoveItem={vi.fn()} renderItem={() => <div>Settings</div>}
+    dynamicTabs={[{ id: "document", title: "Cicada.pdf", kind: "document", selected: false,
+      onActivate: onActivateDocument, render: () => <div>PDF</div> }]} />);
+  const settings = screen.getByRole("tab", { name: "设置" });
+  const document = screen.getByRole("tab", { name: "Cicada.pdf" });
+  expect(within(settings).getByText("设置")).toBeVisible();
+  settings.focus();
+  await user.keyboard("{ArrowRight}");
+  expect(onActivateDocument).toHaveBeenCalledOnce();
+  expect(document).toHaveFocus();
+  await user.keyboard("{Home}");
+  expect(onActivateItem).toHaveBeenLastCalledWith("settings");
+  expect(settings).toHaveFocus();
+});

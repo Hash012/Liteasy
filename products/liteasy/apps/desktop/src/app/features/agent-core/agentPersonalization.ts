@@ -1,3 +1,4 @@
+import { resolveLocalAccountKey } from "../library/localAccountKey";
 import { defaultAgentCoreConfig, type AgentMemoryEntry } from "./agentCoreConfig";
 
 const personalizationStorageKey = "liteasy.agent-personalization.v1";
@@ -22,20 +23,30 @@ function isMemoryEntry(value: unknown): value is AgentMemoryEntry {
 
 export function createDefaultAgentPersonalization(): AgentPersonalization {
   return {
-    memories: cloneMemories(defaultAgentCoreConfig.memories),
+    memories: [],
     recentStateOverride: ""
   };
 }
 
-export function loadAgentPersonalization(): AgentPersonalization {
+export function loadAgentPersonalization(scope = resolveLocalAccountKey()): AgentPersonalization {
   const fallback = createDefaultAgentPersonalization();
   try {
-    const serialized = globalThis.localStorage?.getItem(personalizationStorageKey);
+    const key = `${personalizationStorageKey}:${scope}`;
+    let serialized = globalThis.localStorage?.getItem(key);
+    // Legacy unscoped data belongs only to this device's guest, never to the
+    // first cloud account that happens to sign in after an upgrade.
+    if (!serialized && scope === "guest") {
+      serialized = globalThis.localStorage?.getItem(personalizationStorageKey);
+      if (serialized) {
+        globalThis.localStorage.setItem(key, serialized);
+        globalThis.localStorage.removeItem(personalizationStorageKey);
+      }
+    }
     if (!serialized) return fallback;
     const parsed = JSON.parse(serialized) as Partial<AgentPersonalization>;
     return {
       memories: Array.isArray(parsed.memories) && parsed.memories.every(isMemoryEntry)
-        ? cloneMemories(parsed.memories)
+        ? cloneMemories(parsed.memories.filter((entry) => !defaultAgentCoreConfig.memories.some((sample) => sample.id === entry.id && sample.summary === entry.summary))).slice(0, 48)
         : fallback.memories,
       recentStateOverride: typeof parsed.recentStateOverride === "string"
         ? parsed.recentStateOverride.slice(0, 1200)
@@ -46,10 +57,10 @@ export function loadAgentPersonalization(): AgentPersonalization {
   }
 }
 
-export function saveAgentPersonalization(personalization: AgentPersonalization) {
+export function saveAgentPersonalization(personalization: AgentPersonalization, scope = resolveLocalAccountKey()) {
   try {
     globalThis.localStorage?.setItem(
-      personalizationStorageKey,
+      `${personalizationStorageKey}:${scope}`,
       JSON.stringify({
         memories: cloneMemories(personalization.memories),
         recentStateOverride: personalization.recentStateOverride.slice(0, 1200)

@@ -9,7 +9,7 @@ export function ClearProfileConfirmDialog({ onCancel, onConfirm }: ClearProfileC
       <div aria-label="清空学术档案确认" className="workspace-modal-panel clear-profile-dialog" role="dialog">
         <div className="academic-archive-header">
           <div>
-            <div className="personal-center-kicker">需鉴权操作</div>
+            <div className="personal-center-kicker">数据管理</div>
             <div className="academic-archive-title">清空学术档案确认</div>
           </div>
           <button className="organization-dialog-close" onClick={onCancel} type="button">
@@ -17,7 +17,7 @@ export function ClearProfileConfirmDialog({ onCancel, onConfirm }: ClearProfileC
           </button>
         </div>
         <div className="academic-archive-card">
-          将清空学术档案、行为聚合、推荐反馈和历史推荐缓存；昵称、用户 ID 和头像会保留。
+          将清空学术档案、阅读画像、已记偏好和待确认变更，并暂停自动整理。昵称、用户 ID 和头像会保留。
         </div>
         <div className="clear-profile-actions">
           <button className="left-rail-button" onClick={onCancel} type="button">

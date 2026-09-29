@@ -1,3 +1,4 @@
+import { createProfileMemoryGenerator } from "../features/profile/profileMemoryModel";
 import { createAgentAssetNavigator } from "../controllers/agent/createAgentAssetNavigator";
 import { createNoteFileService } from "../features/note-files/noteFileService";
 import { usePaperAttachmentController } from "../controllers/usePaperAttachmentController";
@@ -44,6 +45,8 @@ import { HelpContext } from "../features/help/helpContext";
 import { builtinHelpProviders } from "../features/help/builtinHelpProvider";
 import type { HelpContentProvider } from "../features/help/help.types";
 import { ObjectWorkbenchContext } from "../features/objects/objectWorkbenchPort";
+import { LocalMcpContext } from "../features/local-mcp/localMcpContext";
+import { useLocalAssetMcp } from "../controllers/agent/useLocalAssetMcp";
 import { ObjectWorkbench } from "../features/boards/ObjectWorkbench";
 import { usePdfQuickAskController } from "../controllers/usePdfQuickAskController";
 import { usePaperServicesController } from "../controllers/usePaperServicesController";
@@ -69,7 +72,6 @@ import {
   createAcademicProfileExport,
   downloadAcademicProfileExport
 } from "../features/profile/profileExport";
-import { toRecommendationResearchProfile } from "../features/profile/profile.types";
 import type { ControlPlaneTransport } from "../features/models/controlPlaneClient";
 import {
   createBearerModelTransport,
@@ -826,15 +828,17 @@ export function AppShell({
     settingsStore: settingsStoreRef.current
   });
   const localLiteratureMode = settingsState["papers.local_mode"];
-  const profileSamplingEnabled = settingsState[localLiteratureMode ? "profile.local_enabled" : "profile.enabled"];
+  const localProfileMode = localLiteratureMode || cloudAccount.model.cloudAvailabilityStatus !== "available";
+  const profileSamplingEnabled = settingsState[localProfileMode ? "profile.local_enabled" : "profile.enabled"];
   const profileActions = useProfileActions({
-    localMode: localLiteratureMode,
+    generateProfileMemory: createProfileMemoryGenerator(() => settingsStoreRef.current.getState(), effectiveModelTransport),
+    localMode: localProfileMode,
     accountSession,
     controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
     onProfileSamplingChanged: (enabled) => {
       settingsStoreRef.current.apply({
         intent: "update_setting",
-        target: localLiteratureMode ? "profile.local_enabled" : "profile.enabled",
+        target: localProfileMode ? "profile.local_enabled" : "profile.enabled",
         value: enabled
       });
       setSettingsState(cloneSettingsState(settingsStoreRef.current.getState()));
@@ -844,7 +848,7 @@ export function AppShell({
   });
   function handleProfileExport() {
     downloadAcademicProfileExport(
-      createAcademicProfileExport({ academicProfile: profileActions.academicProfile })
+      createAcademicProfileExport({ academicProfile: profileActions.academicProfile, memory: profileActions.memory.data })
     );
     profileActions.markProfileExported();
   }
@@ -1085,7 +1089,7 @@ export function AppShell({
     `用户正在“${workspaceLabel}”中工作。`,
     `当前打开 ${openReaderPaperIds.length} 篇 PDF。`,
     `当前选中 ${workspaceState.selectedPaperIds.length} 篇文献${workspaceState.selectionLocked ? "，且已锁定为任务上下文" : ""}。`,
-    profileActions.academicProfile.researchTopics
+    profileSamplingEnabled && profileActions.academicProfile.researchTopics
       ? `研究主题偏好：${profileActions.academicProfile.researchTopics}。`
       : ""
   ].filter(Boolean).join(" ");
@@ -1106,6 +1110,7 @@ export function AppShell({
     getSettings: () => settingsStoreRef.current.getState(),
     openEvidence: openEvidenceInReader
   });
+  const localMcp = useLocalAssetMcp(objectWorkbench.repository.scopeId, objectWorkbench.agentAssets);
   const workbenchNavigation = useWorkbenchNavigationController({
     dock,
     collapsed: paneLayout.collapsed,
@@ -1224,6 +1229,9 @@ export function AppShell({
     agentAssets: objectWorkbench.agentAssets,
     academicProfile: profileActions.academicProfile,
     getAgentMemories: () => profileActions.agentMemories,
+    profileEnabled: profileSamplingEnabled,
+    responsePreferences: profileActions.responsePreferences,
+    onConversationCompleted: (turn) => { void profileActions.memory.observeTurn(turn); },
     getAllPapers: () => workspaceStoreRef.current.getState().papers,
     getArtifactTasks: () => artifactTasks,
     getImportedChunksByPaperId: workspaceActions.getImportedChunksByPaperId,
@@ -1285,7 +1293,7 @@ export function AppShell({
   async function handleArtifactCanvasAction(action: UIDslActionRef) {
     await executeUIDslActionRef(action, runtimeActionContext);
   }
-  const recommendationProfile = toRecommendationResearchProfile(profileActions.academicProfile) ?? { topics: [], methods: [], datasets: [], languages: [] };
+  const recommendationProfile = profileActions.recommendationProfile;
   const knowledgeSync = useKnowledgeSyncController({
     localMode: localLiteratureMode,
     localService: settingsState["papers.metadata_provider"] === "cloud" ? undefined : {
@@ -1680,6 +1688,7 @@ export function AppShell({
     activePaperId: activeReaderPaper?.id ?? null,
     academicProfile: profileActions.academicProfile,
     agentMemories: profileActions.agentMemories,
+    profileMemory: profileActions.memory,
     agentRecentState,
     artifactCatalog,
     artifactCatalogLoadState,
@@ -2064,6 +2073,8 @@ export function AppShell({
         <AssistantSidebar
           key={assistantScopeId}
           historyPersistence={assistantHistoryRef.current}
+          memoryNotice={profileActions.memory.notice}
+          profileEnabled={profileSamplingEnabled}
           onOpenCitation={(citation) => openEvidenceInReader(paperCitationOpenRequest(citation))}
           agentClient={assistantAgent.agentClient}
           academicProfile={profileActions.academicProfile}
@@ -2440,6 +2451,7 @@ export function AppShell({
     runtimeTheme.kind === "generated" ? runtimeTheme.theme.scope.join(" ") : undefined;
 
   return (
+    <LocalMcpContext.Provider value={localMcp}>
     <WorkbenchCommandsContext.Provider value={workbenchCommands.execute}>
     <NotesContext.Provider value={notes.port}>
     <HelpContext.Provider value={help.port}>
@@ -2620,5 +2632,6 @@ export function AppShell({
     </HelpContext.Provider>
     </NotesContext.Provider>
     </WorkbenchCommandsContext.Provider>
+    </LocalMcpContext.Provider>
   );
 }

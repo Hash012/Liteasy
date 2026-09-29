@@ -15,7 +15,7 @@ export const settingsRegistry: Record<SettingKey, { label: string; help?: string
     restartRequirement: "none"
   },
   "assistant.public_audit.enabled": { label: "公开审计过程" },
-  "profile.local_enabled": { label: "本机画像记录" },
+  "profile.local_enabled": { label: "本机画像个性化" },
   "papers.local_mode": { label: "本地文献模式", help: "无需 Liteasy 登录，直连自备文献 API；断网使用缓存，画像仅在本机记录。" },
   "profile.enabled": { label: "用户画像" },
   "assistant.context_window": { label: "Agent 上下文上限", help: "每次请求的上下文预算（token），应不超过所用模型支持的窗口。正文按需读取，预留输出空间。", restartRequirement: "next-run" },

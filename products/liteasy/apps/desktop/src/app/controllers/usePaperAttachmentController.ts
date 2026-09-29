@@ -4,6 +4,7 @@ import type { ObjectRepository } from "../features/objects/objectRepository";
 import type { PaperProjectRepository } from "../features/paper-projects/paperProjectRepository";
 import type { LibraryPaperChildItem } from "../features/library/LibraryPane";
 import type { Paper } from "../features/workspace/workspace.types";
+import { subscribeObjectStorage } from "../features/objects/objectStorage";
 
 type NoteSession = { object: ObjectEnvelope; draft: string; saved: string; projectId: string; assetId: string };
 export function usePaperAttachmentController(input: { repository: ObjectRepository; projects: PaperProjectRepository;
@@ -17,6 +18,29 @@ export function usePaperAttachmentController(input: { repository: ObjectReposito
   const request = useRef(0);
   useEffect(() => { request.current += 1; setSessions({}); setSelected(""); setError(""); setBusy(false); }, [scope]);
   const active = () => latest.current.repository.scopeId === scope;
+  const sessionsRef = useRef(sessions); sessionsRef.current = sessions;
+  useEffect(() => {
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stop = subscribeObjectStorage(scope, () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        void (async () => {
+          for (const session of Object.values(sessionsRef.current)) {
+            const object = await input.repository.resolveLatest(session.object.objectId);
+            if (disposed || !active()) return;
+            if (object.kind !== "content.note" || object.revision === session.object.revision) continue;
+            setSessions((current) => {
+              const item = current[object.objectId];
+              if (!item || item.object.revision !== session.object.revision || item.draft !== item.saved) return current;
+              return { ...current, [object.objectId]: { ...item, object, saved: object.content.payload.text, draft: object.content.payload.text } };
+            });
+          }
+        })().catch(() => undefined);
+      }, 100);
+    });
+    return () => { disposed = true; clearTimeout(timer); stop(); };
+  }, [input.repository, scope]);
   async function open(item: LibraryPaperChildItem, paper: Paper) {
     if (!item.objectId) return;
     const ticket = ++request.current;

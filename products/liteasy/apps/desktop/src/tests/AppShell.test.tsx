@@ -199,3 +199,15 @@ test("opens settings in the main workspace while retaining the library sidebar",
   await user.click(screen.getByRole("button", { name: "设置", exact: true }));
   expect(screen.getByRole("region", { name: "应用设置" })).toBeVisible();
 });
+
+test("persists the local personalization switch from the logged-out personal center", async () => {
+  const user = userEvent.setup();
+  render(<AppShell initialPapers={[]} localLibraryLoader={async () => localLibrarySnapshot} />);
+  await enterLocalWorkbench(user);
+  await user.click(screen.getByRole("button", { name: "个人中心", exact: true }));
+  const profile = screen.getByRole("region", { name: "左边栏个人中心" });
+  await user.click(within(profile).getByRole("switch", { name: "使用画像个性化" }));
+  await waitFor(() => expect(JSON.parse(localStorage.getItem("liteasy.local-literature.v1") ?? "{}")["profile.local_enabled"]).toBe(true));
+  await user.click(within(profile).getByRole("tab", { name: "已记偏好", exact: true }));
+  expect(within(profile).getByRole("switch", { name: "从对话自动整理偏好" })).toBeEnabled();
+});

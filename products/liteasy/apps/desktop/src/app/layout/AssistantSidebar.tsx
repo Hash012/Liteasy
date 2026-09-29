@@ -21,6 +21,7 @@ type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 type AssistantSidebarProps = {
   agentClient: FrontendAgentClient;
   historyPersistence?: AssistantHistoryPersistence;
+  memoryNotice?: string;
   academicProfile?: AcademicProfile;
   artifactTasks?: ArtifactTask[];
   artifactSessionOpenRequest?: ArtifactSessionOpenRequest;
@@ -50,6 +51,7 @@ type AssistantSidebarProps = {
   onSettingsChanged?: (settings: SettingsState) => void;
   profilePersonalizationSummary?: string;
   profileUnlocked?: boolean;
+  profileEnabled?: boolean;
   registrationWelcomeMessage?: { content: string; id: number };
   readerConversationContext?: ReaderConversationContext | null;
   regionId?: Exclude<DockRegionId, "main">;
@@ -68,6 +70,7 @@ type AssistantSidebarProps = {
 export function AssistantSidebar({
   agentClient,
   historyPersistence,
+  memoryNotice,
   academicProfile,
   artifactTasks = [],
   artifactSessionOpenRequest,
@@ -96,6 +99,7 @@ export function AssistantSidebar({
   onSettingsChanged,
   profilePersonalizationSummary,
   profileUnlocked = false,
+  profileEnabled,
   registrationWelcomeMessage,
   readerConversationContext = null,
   regionId = "right",
@@ -116,6 +120,7 @@ export function AssistantSidebar({
   return (
     <section aria-label={regionLabel} className={`pane ${regionId} assistant-only-pane`}>
       <div className="pane-header">AI 对话</div>
+      {memoryNotice ? <div role="status" className="assistant-memory-notice">{memoryNotice} 可在个人中心查看。</div> : null}
       <div className="pane-body">
         <AssistantPane
           agentClient={agentClient}
@@ -147,6 +152,7 @@ export function AssistantSidebar({
           onSettingsChanged={onSettingsChanged}
           profilePersonalizationSummary={profilePersonalizationSummary}
           profileUnlocked={profileUnlocked}
+          profileEnabled={profileEnabled}
           registrationWelcomeMessage={registrationWelcomeMessage}
           readerConversationContext={readerConversationContext}
           runtimeOrganizationName={runtimeOrganizationName}

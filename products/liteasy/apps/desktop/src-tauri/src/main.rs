@@ -10,6 +10,7 @@ mod data_location;
 mod desktop_identity;
 mod direct_model;
 mod local_library;
+mod local_mcp;
 mod note_files;
 mod object_store;
 mod paper_cache;
@@ -20,6 +21,17 @@ mod webdav;
 mod workflow_checkpoints;
 
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("--local-mcp") {
+        let result = std::env::args()
+            .nth(2)
+            .ok_or_else(|| "Missing MCP connection file".to_string())
+            .and_then(|path| local_mcp::run_stdio(std::path::Path::new(&path)));
+        if let Err(error) = result {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     if let Some(exit_code) = agent_host::run_external_mode() {
         std::process::exit(exit_code);
     }
@@ -28,6 +40,7 @@ fn main() {
         .plugin(tauri_plugin_single_instance::init(|_app, _argv, _cwd| {}))
         .plugin(tauri_plugin_deep_link::init())
         .manage(agent_host::AgentHostState::default())
+        .manage(local_mcp::LocalMcpState::default())
         .manage(direct_model::DirectModelState::default())
         .manage(local_library::LocalLibraryWatchState::default())
         .setup(|app| {
@@ -62,6 +75,9 @@ fn main() {
             direct_model::request_direct_model,
             direct_model::cancel_direct_model_request,
             agent_host::agent_host_reply,
+            local_mcp::local_mcp_info,
+            local_mcp::local_mcp_configure,
+            local_mcp::local_mcp_reply,
             assistant_history::load_assistant_history,
             assistant_history::save_assistant_history,
             paper_services::request_paper_service,

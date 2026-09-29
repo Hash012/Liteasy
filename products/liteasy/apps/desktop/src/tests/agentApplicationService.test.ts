@@ -318,3 +318,30 @@ test("keeps only the current reasoning activity in replay while delivering every
   const sequences = result.data.events.map((event) => event.sequence);
   expect(sequences.every((value, index) => index === 0 || value > sequences[index - 1])).toBe(true);
 });
+
+test("notifies profile curation once after successful completion with direct user text only", async () => {
+  const onConversationCompleted = vi.fn(() => { throw new Error("optional side work failed"); });
+  const api = createAgentApplicationService({
+    executeCommand: () => ({ events: [], settingsChanged: false }),
+    executeKnowledge: () => ({ message: "private tool result" }), onConversationCompleted
+  });
+  const session = await api.createSession({ consumer: "frontend" });
+  if (!session.ok) throw new Error("session");
+  const request = { sessionId: session.data.sessionId, idempotencyKey: "profile-once", input: { mode: "qa" as const, message: "我主要研究分布式数据库" } };
+  const run = await api.submitTurn(request);
+  await api.submitTurn(request);
+  expect(run.ok && run.data.status).toBe("completed");
+  expect(onConversationCompleted).toHaveBeenCalledOnce();
+  expect(onConversationCompleted.mock.calls[0][0]).toEqual({ sessionId: request.sessionId, message: request.input.message, requestId: expect.any(String) });
+  api.dispose();
+});
+
+test("does not curate failed or cancelled turns", async () => {
+  const onConversationCompleted = vi.fn();
+  const api = createAgentApplicationService({ executeCommand: () => ({ events: [], settingsChanged: false }),
+    executeKnowledge: () => { throw new Error("model unavailable"); }, onConversationCompleted });
+  const session = await api.createSession({ consumer: "frontend" });
+  if (!session.ok) throw new Error("session");
+  await api.submitTurn({ sessionId: session.data.sessionId, idempotencyKey: "failed", input: { mode: "qa", message: "我偏好简短回答" } });
+  expect(onConversationCompleted).not.toHaveBeenCalled(); api.dispose();
+});

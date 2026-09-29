@@ -27,6 +27,7 @@ export const settingsSections = [
     keys: ["models.connection_mode", "models.direct_provider", "models.direct_endpoint", "models.direct_model", "models.direct_protocol", "models.direct_output_format"] },
   { id: "assistant", category: "ai", title: "助手偏好", description: "设置生成语言、过程展示，查看助手扩展能力。", keywords: "Agent 技能 Skill Plugin MCP 插件 工具 扩展 安全 中文 English",
     keys: ["assistant.context_window", "assistant.language", "assistant.public_audit.enabled"] },
+  { id: "local-mcp", category: "ai", title: "本机 MCP · Codex", description: "将 Liteasy 研究资产接入自己的 AI 工作流。", keywords: "Windows MCP Codex 本机 连接 读写 笔记 白板 资产 STDIO", keys: [] },
   { id: "papers", category: "papers", title: "论文解析与薄读", description: "选择薄读方式、元信息来源和扫描件识别语言。", keywords: "OCR 识别 扫描 PDF 元数据 DOI Crossref OpenAlex Semantic Scholar MinerU 提取 快速 严谨",
     keys: ["thin_reading.mode", "papers.metadata_provider", "papers.metadata_endpoint", "papers.mineru_mode", "papers.mineru_endpoint", "import.ocr_language"] },
   { id: "recommendations", category: "papers", title: "论文推荐", description: "按研究习惯发现前沿进展、经典文献和相邻领域。", keywords: "联网推荐 风格 前沿 经典 均衡 跨域 探索 离线 本地 自备 API 画像",

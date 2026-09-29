@@ -85,9 +85,14 @@
 .shell-file-progress.has-error { color: var(--colorStatusDangerForeground1); }
 .file-status-bar.is-idle { color: var(--colorNeutralForeground3); }
 
-/* The existing dock remains the sizing owner. Flatten only its outer chrome
-   so its tabs and the shell read as one continuous desktop workspace. */
-.workspace-frame > .app-shell { min-width: 0; }
+/* A narrow workspace gutter separates rounded surfaces; the existing grid
+   and full-height resize hit targets continue to own pane sizing. */
+.workspace-frame > .app-shell {
+  min-width: 0;
+  padding: 4px 4px 4px 0;
+  column-gap: 4px;
+  background: var(--colorNeutralBackground3);
+}
 .workspace-frame > .app-shell > .activity-bar {
   border: 0;
   border-right: 1px solid var(--colorNeutralStroke2);
@@ -96,11 +101,15 @@
 }
 .workspace-frame .dock-workspace-columns > .dock-region,
 .workspace-frame .dock-bottom-columns > .dock-region {
-  border: 0;
-  border-radius: 0;
+  border: 1px solid var(--colorNeutralStroke2);
+  border-radius: 8px;
+  background: var(--colorNeutralBackground1);
   box-shadow: none;
 }
-.workspace-frame .dock-region-tab-row {
+.workspace-frame .pane-resizer { background: transparent; border-radius: 4px; }
+.workspace-frame .pane-resizer:hover,
+.workspace-frame .pane-resizer:focus-visible { background: var(--colorBrandStroke1); }
+.workspace-frame .dock-region > .dock-region-tab-row {
   background: var(--colorNeutralBackground2);
   border-bottom-color: var(--colorNeutralStroke2);
 }

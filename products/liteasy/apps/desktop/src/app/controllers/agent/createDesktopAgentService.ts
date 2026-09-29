@@ -72,6 +72,7 @@ type KnowledgeEnvironment = Omit<
 >;
 
 export type DesktopAgentEnvironment = {
+  personalization?: { summary?: string; response?: string };
   assets?: AgentAssetService;
   assetScopeId?: string;
   activity?: {
@@ -124,6 +125,7 @@ export type DesktopAgentServiceOptions = Pick<
   | "listCapabilities"
   | "now"
   | "onPersistenceError"
+  | "onConversationCompleted"
   | "stateStore"
 > & {
   resolveObjectContext?: (request: SubmitAgentTurnRequest) => Promise<ContextSnapshot>;
@@ -287,6 +289,7 @@ export function createDesktopAgentService(
 ): AgentPublicApi & { dispose(): void } {
   return createAgentApplicationService({
     supportsObjectContext: !!options.resolveObjectContext,
+    onConversationCompleted: options.onConversationCompleted,
     getPrincipalId: options.getPrincipalId,
     createCoreSession: options.createCoreSession,
     createId: options.createId,

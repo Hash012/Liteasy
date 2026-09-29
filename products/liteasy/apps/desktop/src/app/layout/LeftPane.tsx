@@ -1,3 +1,4 @@
+import type { ProfileMemoryController } from "../features/profile/useProfileMemory";
 import { type LibraryFileAccess } from "../features/library/LibraryFileList";
 import {
   LibraryPane,
@@ -48,6 +49,7 @@ export type LeftPaneProps = {
   accountScopeId?: string;
   activePaperId?: string | null;
   academicProfile: AcademicProfile;
+  profileMemory?: ProfileMemoryController;
   agentMemories: AgentMemoryEntry[];
   agentRecentState: string;
   artifactCatalog: ArtifactTab[];
@@ -187,6 +189,7 @@ export function LeftPane({
   accountScopeId,
   activePaperId,
   academicProfile,
+  profileMemory,
   agentMemories,
   agentRecentState,
   artifactCatalog,
@@ -350,9 +353,10 @@ export function LeftPane({
             summaryStatus={organizationSummaryStatus}
           />
         ) : leftRailView === "profile" ? (
-          accountSession ? (
             <PersonalCenterPanel
               academicProfile={academicProfile}
+              profileMemory={profileMemory}
+              onLoginRequired={onLoginRequired}
               agentMemories={agentMemories}
               agentRecentState={agentRecentState}
               accountSession={accountSession}
@@ -369,29 +373,6 @@ export function LeftPane({
               profileTags={profileTags}
               readPaperCount={profileReadPaperCount}
             />
-          ) : (
-            <section aria-label="左边栏个人能力说明" className="organization-sidebar-panel">
-              <div className="organization-sidebar-header">
-                <div>
-                  <div className="organization-sidebar-kicker">Activity · Profile</div>
-                  <div className="organization-sidebar-title-row">
-                    <div className="organization-sidebar-title">个人中心</div>
-                    <span className="profile-login-status">未登录</span>
-                  </div>
-                </div>
-              </div>
-              <div className="organization-sidebar-actions">
-                <button
-                  className="policy-button sync"
-                  onClick={onLoginRequired}
-                  title="当前已退化为本地阅读器，个人画像、学术档案与云端身份信息不可用。登录后将自动恢复。"
-                  type="button"
-                >
-                  登录后查看个人能力
-                </button>
-              </div>
-            </section>
-          )
         ) : leftRailView === "settings" ? (
           <SettingsPane
             documentMetadataSyncMessage={documentMetadataSyncMessage}

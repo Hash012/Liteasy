@@ -1,0 +1,51 @@
+import { expect, test } from "@playwright/test";
+for (const theme of ["light", "dark"]) test(`rounded panels and readable tabs handle overflow in ${theme}`, async ({ page }, info) => {
+  await page.setViewportSize({ width: 1200, height: 650 });
+  await page.goto(`/src/tests/browser/fixtures/dock-tabs.html?${theme}`);
+  const left = page.getByRole("region", { name: "左栏 Dock 区域", exact: true });
+  const main = page.getByRole("region", { name: "主内容区 Dock 区域", exact: true });
+  await expect(left).toHaveCSS("border-radius", "8px");
+  const leftBox = (await left.boundingBox())!;
+  const mainBox = (await main.boundingBox())!;
+  expect(mainBox.x - leftBox.x - leftBox.width).toBeCloseTo(4, 0);
+  for (const label of ["文献库", "笔记", "个人中心"]) {
+    const tab = left.getByRole("tab", { name: label, exact: true });
+    await expect(tab.locator(".dock-tab-title")).toBeVisible();
+    expect((await tab.boundingBox())!.width).toBeGreaterThan(100);
+  }
+  const allTabs = main.getByRole("button", { name: "主内容区所有标签页" });
+  await expect(allTabs).toBeVisible();
+  await allTabs.click();
+  await page.getByRole("menuitem", { name: "实验记录.md", exact: true }).click();
+  const last = main.getByRole("tab", { name: "实验记录.md", exact: true });
+  await expect(last).toHaveAttribute("aria-selected", "true");
+  const strip = main.getByRole("tablist");
+  const inViewport = () => last.evaluate((tab) => {
+    const item = tab.parentElement!.getBoundingClientRect();
+    const view = tab.closest('[role="tablist"]')!.getBoundingClientRect();
+    return item.left >= view.left - 1 && item.right <= view.right + 1;
+  });
+  await expect.poll(inViewport).toBe(true);
+  await last.focus();
+  await page.keyboard.press("Home");
+  const settings = main.getByRole("tab", { name: "设置", exact: true });
+  await expect(settings).toBeFocused();
+  await expect(settings).toHaveAttribute("aria-selected", "true");
+  await expect.poll(() => strip.evaluate((element) => element.scrollLeft)).toBe(0);
+  const close = left.getByRole("button", { name: "关闭 文献库", exact: true });
+  await page.mouse.move(0, 0);
+  await expect(close).toHaveCSS("opacity", "0");
+  await left.getByRole("tab", { name: "文献库", exact: true }).hover();
+  await expect(close).toHaveCSS("opacity", "1");
+  await left.getByRole("tab", { name: "个人中心", exact: true }).click();
+  await settings.click();
+  await page.mouse.move(0, 0);
+  await page.screenshot({ path: info.outputPath(`dock-tabs-${theme}.png`), animations: "disabled" });
+  await left.getByRole("button", { name: "关闭 个人中心", exact: true }).click();
+  await expect(left.getByRole("tab", { name: "个人中心", exact: true })).toHaveCount(0);
+  await page.setViewportSize({ width: 720, height: 650 });
+  await allTabs.click();
+  await page.getByRole("menuitem", { name: "实验记录.md", exact: true }).click();
+  await expect.poll(inViewport).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});

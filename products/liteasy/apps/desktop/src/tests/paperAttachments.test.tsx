@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { webcrypto } from "node:crypto";
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, expect, test, vi } from "vitest";
 import { createObjectStorage } from "../app/features/objects/objectStorage";
 import { createObjectRepository } from "../app/features/objects/objectRepository";
@@ -11,6 +11,22 @@ import { createAgentAssetNavigator } from "../app/controllers/agent/createAgentA
 import { liteasyPath } from "../app/features/resource-filesystem/liteasyPath";
 import { createNoteFileService } from "../app/features/note-files/noteFileService";
 beforeEach(() => vi.stubGlobal("crypto", webcrypto));
+test("external MCP edits refresh clean open notes but retain unsaved editor drafts", async () => {
+  const scope = crypto.randomUUID(), storage = createObjectStorage(scope, () => scope);
+  const repository = createObjectRepository(storage, scope), projects = createPaperProjectRepository(storage, scope);
+  const { result } = renderHook(() => usePaperAttachmentController({ repository, projects, openEditor: vi.fn(), openBoard: vi.fn() }));
+  await act(() => result.current.create({ id: "paper", title: "Paper" }, "note", "CicN"));
+  let saved = result.current.session!.object;
+  await act(async () => { saved = await repository.editNote(refOf(saved), "Saved from Codex"); });
+  await waitFor(() => expect(result.current.session!.draft).toBe("Saved from Codex"));
+  act(() => result.current.setDraft("Unsaved user thoughts"));
+  await act(async () => { saved = await repository.editNote(refOf(saved), "Another Codex edit"); });
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 150)); });
+  expect(result.current.session!.draft).toBe("Unsaved user thoughts");
+  await act(() => result.current.save());
+  expect(result.current.error).toContain("草稿仍保留");
+  expect(objectText(await repository.resolveLatest(saved.objectId))).toBe("Another Codex edit");
+});
 test("attachment editor saves Markdown revisions and preserves the draft when another editor changes the note", async () => {
   const scope = crypto.randomUUID(), storage = createObjectStorage(scope, () => scope);
   const repository = createObjectRepository(storage, scope), projects = createPaperProjectRepository(storage, scope);

@@ -739,11 +739,12 @@ describe("LeftPane", () => {
     expect(screen.getByLabelText("文献元数据同步")).toBeInTheDocument();
   });
 
-  test("does not expose the personal center while logged out", () => {
+  test("keeps the local personal center editable while logged out", () => {
     render(<LeftPane {...createProps({ accountSession: null, leftRailView: "profile" })} />);
-    expect(screen.queryByLabelText("左边栏个人中心")).not.toBeInTheDocument();
-    expect(screen.getByText("未登录")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "登录后查看个人能力" })).toBeInTheDocument();
+    expect(screen.getByLabelText("左边栏个人中心")).toBeInTheDocument();
+    expect(screen.getByText("未登录 · 本机档案可用")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "登录", exact: true })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "保存学术档案" })).toBeEnabled();
   });
 
   test("forwards logout from the authenticated personal center", async () => {

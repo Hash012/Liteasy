@@ -1,0 +1,21 @@
+import { expect, test } from "@playwright/test";
+for (const theme of ["light", "dark"]) test(`MCP connection settings stay readable and control access in ${theme}`, async ({ page }, info) => {
+  await page.setViewportSize({ width: 850, height: 850 });
+  await page.goto(`/src/tests/browser/fixtures/local-mcp.html?${theme}`);
+  const enabled = page.getByRole("switch", { name: "启用本机 MCP", exact: true });
+  const writable = page.getByRole("switch", { name: "允许创建和修改资产", exact: true });
+  const copy = page.getByRole("button", { name: "复制配置" });
+  await expect(writable).toBeDisabled(); await expect(copy).toBeDisabled();
+  await enabled.check();
+  await expect(copy).toBeEnabled(); await expect(writable).not.toBeChecked();
+  await writable.check();
+  await expect(page.getByRole("status")).toContainText("可读写");
+  await expect(page.getByRole("textbox", { name: "Codex MCP 配置" })).toHaveValue(/args = \["--local-mcp"/);
+  expect(await page.getByRole("textbox", { name: "Codex MCP 配置" }).evaluate((element) => element.clientHeight)).toBeGreaterThan(140);
+  await page.screenshot({ path: info.outputPath(`mcp-${theme}.png`), fullPage: true, animations: "disabled" });
+  await page.setViewportSize({ width: 360, height: 850 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(361);
+  await expect(copy).toBeVisible();
+  await enabled.uncheck();
+  await expect(writable).not.toBeChecked(); await expect(writable).toBeDisabled();
+});

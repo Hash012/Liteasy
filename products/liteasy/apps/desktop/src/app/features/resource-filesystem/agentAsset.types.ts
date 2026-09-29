@@ -36,6 +36,14 @@ export type AgentAssetWriteReceipt = {
   removedLines: number;
   warnings?: string[];
 };
+export type AgentAssetCreate = {
+  kind: "note" | "board";
+  title: string;
+  text?: string;
+  paperPath?: string;
+  operationId: string;
+  signal?: AbortSignal;
+};
 
 /** Register a trusted adapter to add asset kinds without changing model tools. */
 export type AgentAssetAdapter = {

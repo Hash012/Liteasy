@@ -153,3 +153,16 @@ test("reads and writes an attached note through equivalent URLs while exposing r
   expect(fixture.getText()).toContain("hello");
   fixture.api.dispose();
 });
+
+test("applies local profile preferences to actual workspace model requests, and only response preferences to greetings", async () => {
+  const fixture = setup([action({ message: "先给结论。" }), "Hello!"]);
+  fixture.environment.personalization = { summary: "研究主题：分布式数据库；回答方式：先给结论", response: "回答语言：English" };
+  await fixture.submit("介绍事务隔离", false);
+  expect(fixture.prompts[0]).toContain("分布式数据库");
+  expect(fixture.prompts[0]).toContain("先给结论");
+  await fixture.submit("hello", false);
+  expect(fixture.prompts[1]).toContain("English");
+  expect(fixture.prompts[1]).not.toContain("分布式数据库");
+  expect(fixture.read).not.toHaveBeenCalled();
+  fixture.api.dispose();
+});

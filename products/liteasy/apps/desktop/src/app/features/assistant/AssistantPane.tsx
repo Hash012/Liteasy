@@ -162,6 +162,7 @@ type AssistantPaneProps = {
   onSettingsChanged?: (settings: SettingsState) => void;
   profilePersonalizationSummary?: string;
   profileUnlocked?: boolean;
+  profileEnabled?: boolean;
   registrationWelcomeMessage?: { content: string; id: number };
   readerConversationContext?: ReaderConversationContext | null;
   runtimeOrganizationName?: string;
@@ -313,6 +314,7 @@ export function AssistantPane({
   onSettingsChanged,
   profilePersonalizationSummary,
   profileUnlocked = false,
+  profileEnabled,
   registrationWelcomeMessage,
   readerConversationContext = null,
   runtimeOrganizationName,
@@ -450,7 +452,7 @@ export function AssistantPane({
     academicProfile,
     importedCount: selectedSetStatus.importedCount,
     organizationName: runtimeOrganizationName,
-    profileEnabled: Boolean(settingsStoreRef.current.getState()["profile.enabled"]),
+    profileEnabled: profileEnabled ?? Boolean(settingsStoreRef.current.getState()["profile.enabled"]),
     profilePersonalizationSummary,
     profileUnlocked,
     selectedCount: selectedSetStatus.selectedCount,

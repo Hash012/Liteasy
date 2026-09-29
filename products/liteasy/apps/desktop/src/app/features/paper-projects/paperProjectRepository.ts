@@ -258,7 +258,7 @@ export function createPaperProjectRepository(storage: ObjectStorage, scopeId: st
       description: `来自「${source.title}」的独立副本，修改不会改变论文来源。`.slice(0, 12000),
     });
   }
-  async function createNote(projectId: string, text: string, title = "项目笔记", sourceRefs: ObjectRef[] = [], operationId = crypto.randomUUID()): Promise<PaperProjectAsset> {
+  async function createNote(projectId: string, text: string, title = "项目笔记", sourceRefs: ObjectRef[] = [], operationId: string = crypto.randomUUID()): Promise<PaperProjectAsset> {
     await getProject(projectId);
     const note = await objects.create({
       kind: "content.note",
@@ -267,19 +267,21 @@ export function createPaperProjectRepository(storage: ObjectStorage, scopeId: st
       ...(sourceRefs.length ? { derivedFrom: sourceRefs } : {}),
       content: { schema: "liteasy.note/v1", payload: { text, origin: sourceRefs.length ? "derived" : "user" } },
     }, `paper-project-note:${projectId}:${operationId}`);
+    const latest = await objects.resolveLatest(note.objectId);
     return addAsset(projectId, {
       assetId: `object:${note.objectId}`,
-      title: note.title,
+      title: latest.title,
       kind: "note",
       role: "derived",
-      ref: refOf(note),
+      ref: refOf(latest),
     });
   }
-  async function createBoard(projectId: string, title = "论文白板", operationId = crypto.randomUUID()): Promise<PaperProjectAsset> {
+  async function createBoard(projectId: string, title = "论文白板", operationId: string = crypto.randomUUID()): Promise<PaperProjectAsset> {
     await getProject(projectId);
     const board = await objects.create({ kind: "workspace.board", title: title.trim() || "论文白板",
       content: { schema: "liteasy.board/v1", payload: { description: "" } } }, `paper-project-board:${projectId}:${operationId}`);
-    return addAsset(projectId, { assetId: `object:${board.objectId}`, title: board.title, kind: "board", role: "derived", ref: refOf(board) });
+    const latest = await objects.resolveLatest(board.objectId);
+    return addAsset(projectId, { assetId: `object:${board.objectId}`, title: latest.title, kind: "board", role: "derived", ref: refOf(latest) });
   }
   return { ensurePaperProject, listProjects, listAssets, syncSources, addAsset, registerSource, createEditableCopy, createNote, createBoard };
 }

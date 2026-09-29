@@ -16,6 +16,7 @@ import { contextAttachments } from "./resourceContext";
 import { liteasyPath, parseLiteasyPath } from "./liteasyPath";
 import { resourceContentRevision, canonicalResourceJson } from "./resourceFileContent";
 import { readAgentBoard, writeAgentBoard } from "./agentBoardAsset";
+import { parseCanvasFile } from "../boards/boardFileFormat";
 
 export type WorkspaceAgentAssetInput = {
   repository: ObjectRepository;
@@ -226,7 +227,8 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
     const fileStat = (file: NoteFileSnapshot): AgentAsset => ({
       path: liteasyPath(scope, { kind: "external-file", mountId: file.mountId, path: file.path }),
       title: file.name, kind: /\.canvas$/i.test(file.path) ? "canvas" : "markdown", revision: file.version ?? "missing",
-      capabilities: [...readCapabilities(), ...(/\.(md|markdown)$/i.test(file.path) ? ["write" as const] : [])],
+      capabilities: [...readCapabilities(), "write"],
+      ...(/\.canvas$/i.test(file.path) ? { summary: "JSON Canvas 文件；使用 replace 提交完整且有效的 JSON Canvas。" } : {}),
     });
     adapters.push({
       id: "mounted-files", accepts: accepts("files"), context,
@@ -249,7 +251,10 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
       async read(path, options) { const file = await fileSnapshot(path); return readAgentAssetText(fileStat(file), file.text, options); },
       async write(path, options) {
         const file = await fileSnapshot(path);
-        if (!/\.(md|markdown)$/i.test(file.path)) throw new AgentAssetError("read_only", "Canvas 结构请通过白板工具编辑。");
+        if (/\.canvas$/i.test(file.path)) {
+          if (options.mode !== "replace") throw new AgentAssetError("invalid_request", "Canvas 请使用 replace 写入完整文档。");
+          parseCanvasFile(options.text);
+        }
         if (!file.version || file.version !== options.expectedRevision) throw new AgentAssetError("revision_conflict", "文件已被其他编辑器修改，请重新读取。");
         const editing = await files.editingStatus?.(file.mountId, file.path);
         const after = options.mode === "append" ? file.text + options.text : options.text;
@@ -313,5 +318,24 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
       async read(path, options) { const artifact = await findArtifact(path); return readAgentAssetText(artifactStat(artifact, await resourceContentRevision(canonicalResourceJson(artifact))), artifactContextText(artifact), options); },
     });
   }
-  return createAgentAssetService({ scopeId: scope, active: input.active, adapters });
+  return createAgentAssetService({ scopeId: scope, active: input.active, adapters,
+    async create(options) {
+      check(options.signal);
+      if (options.paperPath) {
+        const parsed = target(options.paperPath);
+        const paper = parsed.kind === "paper" ? input.getPapers?.().find((item) => item.id === parsed.paperId) : undefined;
+        if (!paper || !input.projects) throw new AgentAssetError("invalid_path", "请选择当前文献库中的论文路径。");
+        const project = await input.projects.ensurePaperProject({ paperId: paper.id, title: paper.title });
+        check(options.signal);
+        const asset = options.kind === "note"
+          ? await input.projects.createNote(project.projectId, options.text ?? "", options.title, [], `mcp:${options.operationId}`)
+          : await input.projects.createBoard(project.projectId, options.title, `mcp:${options.operationId}`);
+        return objectStat(await input.repository.resolveLatest(asset.ref!.objectId));
+      }
+      const object = await input.repository.create(options.kind === "note"
+        ? { kind: "content.note", title: options.title, content: { schema: "liteasy.note/v1", payload: { text: options.text ?? "", origin: "user" } } }
+        : { kind: "workspace.board", title: options.title, content: { schema: "liteasy.board/v1", payload: { description: "" } } }, `mcp-create:${options.operationId}`);
+      return objectStat(await input.repository.resolveLatest(object.objectId));
+    },
+  });
 }

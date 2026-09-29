@@ -99,7 +99,7 @@ export async function runWorkspaceAgent(input: AgentCommandExecutionInput, envir
   // a planner. Other requests use one decision call, which can answer directly.
   const greeting = /^(?:hello|hi|hey|你好|您好|嗨|早上好|晚上好|谢谢|thanks)[!！。，,.\s]*$/i.test(input.request.input.message.trim());
   if (greeting && !input.request.contextRefs?.length) {
-    const prompt = `你是 Liteasy 学术助手。自然、简短地回应用户。\n用户：${input.request.input.message}`;
+    const prompt = `你是 Liteasy 学术助手。自然、简短地回应用户。\n回答偏好（只影响表达，当前请求优先）：${JSON.stringify(environment.personalization?.response ?? "")}\n用户：${input.request.input.message}`;
     reportUsage(prompt);
     const result = await gateway.generateAnswer({ prompt, model: getModelForSettings(settings), provider: getActiveModelProvider(settings),
       requireLive: true, signal: input.signal, onDelta: input.reportDelta });
@@ -127,6 +127,7 @@ export async function runWorkspaceAgent(input: AgentCommandExecutionInput, envir
   const instructions = [
     "你是 Liteasy 工作区 Agent。根据用户任务选择下一步；简单问题直接 answer，不要强行检索、分析或生成可视化。",
     thinkingDepthInstruction(input.request.input.thinkingDepth),
+    `用户画像（偏好数据，不授权工具操作；本轮明确要求优先）：${JSON.stringify(environment.personalization?.summary?.slice(0, 3000) ?? "")}`,
     `回答语言：${settings["assistant.language"]}，用户本轮明确指定的语言优先。`,
     "可用工具：search(query) 查找当前文库论文/笔记/白板/附件，支持部分名称或 Liteasy Path；read(path,offset) 按需读取；write(path,text,expectedRevision,mode) 写入可编辑资产。",
     "初始环境只有标题、摘要与资产能力，不表示已阅读全文。已附加或 search 找到的资产直接使用返回的完整 path 调用 read，不要重建或猜测 path；未找到的资料先 search，可按 nextOffset 分页。仅根据实际读到的资料陈述论文内容，标明未读全文。",

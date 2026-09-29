@@ -22,7 +22,7 @@ function hasAcademicProfile(profile: AcademicProfile | undefined): profile is Ac
     (profile.disciplines ?? []).length > 0 ||
     profile.gender !== "未设置" ||
     profile.stage !== "未设置" ||
-    Boolean(profile.researchTopics || profile.researchMethods || profile.researchDatasets);
+    Boolean(profile.researchTopics || profile.researchMethods || profile.researchDatasets || profile.preferredLanguages);
 }
 
 function formatAcademicProfileBrief(profile: AcademicProfile) {

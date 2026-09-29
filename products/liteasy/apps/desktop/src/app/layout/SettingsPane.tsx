@@ -16,6 +16,7 @@ import type { DocumentMetadataSyncResult, DocumentMetadataSyncStatus } from "../
 import type { SettingsState, UpdateSettingCommand } from "../features/settings/settings.types";
 import { matchesSettingsSearch, settingsCategories, settingsSections, type SettingsCategory, type SettingsSectionId } from "../features/settings/settingsNavigation";
 import "../features/settings/settingsPage.css";
+import { LocalMcpSettingsPanel } from "../features/local-mcp/LocalMcpSettingsPanel";
 
 type SettingsPaneProps = {
   documentMetadataSyncMessage?: string;
@@ -55,6 +56,7 @@ export function SettingsPane(props: SettingsPaneProps) {
     appearance: <ViewSettingsPanel {...shared} />,
     models: <ModelConnectionPanel {...shared} expandAdvanced={searching} />,
     assistant: <AgentSettingsPanel {...shared} expandCapabilities={searching} onOpenSkillDocument={props.onOpenSkillDocument} />,
+    "local-mcp": <LocalMcpSettingsPanel />,
     papers: <PaperServicesSettingsPanel {...shared} />,
     recommendations: <RecommendationSettingsPanel {...shared} />,
     data: <DataLocationSettings embedded />,

@@ -1,16 +1,20 @@
+import type { ProfileMemory } from "./profileMemory";
 import type { AcademicProfile } from "./profile.types";
 
 export type AcademicProfileExport = {
   academicProfile: AcademicProfile;
+  memory?: ProfileMemory;
   exportedAt: string;
 };
 
 export function createAcademicProfileExport(input: {
   academicProfile: AcademicProfile;
+  memory?: ProfileMemory;
   exportedAt?: string;
 }): AcademicProfileExport {
   return {
     academicProfile: input.academicProfile,
+    ...(input.memory ? { memory: input.memory } : {}),
     exportedAt: input.exportedAt ?? new Date().toISOString()
   };
 }

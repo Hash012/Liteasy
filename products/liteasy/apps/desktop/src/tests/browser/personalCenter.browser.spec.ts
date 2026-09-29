@@ -1,0 +1,24 @@
+import { expect, test } from "@playwright/test";
+for (const theme of ["light", "dark"]) test(`offline personal center edits structured preferences at sidebar width in ${theme}`, async ({ page }, info) => {
+  await page.setViewportSize({ width: 360, height: 820 });
+  await page.goto(`/src/tests/browser/fixtures/personal-center.html?${theme}`);
+  await expect(page.getByText("本机研究者")).toBeVisible();
+  await page.getByLabel("研究主题", { exact: true }).fill("分布式数据库");
+  await page.getByRole("button", { name: "保存学术档案" }).click();
+  await page.getByRole("tab", { name: "已记偏好", exact: true }).click();
+  await page.getByRole("button", { name: "添加偏好" }).click();
+  await page.getByLabel("偏好类别").selectOption("response_style");
+  await page.getByLabel("偏好内容").fill("先给结论，再说明依据");
+  await page.getByRole("button", { name: "保存偏好" }).click();
+  await expect(page.getByLabel("已记住的偏好")).toContainText("先给结论");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath(`profile-${theme}.png`), fullPage: true });
+  await page.reload();
+  await page.getByRole("tab", { name: "已记偏好", exact: true }).click();
+  await page.getByRole("button", { name: "编辑偏好：先给结论，再说明依据" }).click();
+  await page.getByLabel("偏好内容").fill("优先列出关键结论");
+  await page.getByRole("button", { name: "保存偏好" }).click();
+  await expect(page.getByLabel("已记住的偏好")).toContainText("优先列出关键结论");
+  await page.getByRole("button", { name: "删除偏好：优先列出关键结论" }).click();
+  await expect(page.getByLabel("已记住的偏好")).not.toContainText("优先列出关键结论");
+});

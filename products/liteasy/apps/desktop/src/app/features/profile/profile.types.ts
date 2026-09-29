@@ -67,7 +67,9 @@ export function buildAcademicProfileAssistantSummary(profile: AcademicProfile) {
       ? `研究学科：${formatAcademicResearchProfile(profile)}`
       : "",
     profile.researchTopics ? `研究主题：${profile.researchTopics}` : "",
-    profile.researchMethods ? `常用方法：${profile.researchMethods}` : ""
+    profile.researchMethods ? `常用方法：${profile.researchMethods}` : "",
+    profile.researchDatasets ? `关注数据集：${profile.researchDatasets}` : "",
+    profile.preferredLanguages ? `阅读语言：${profile.preferredLanguages}` : ""
   ].filter(Boolean);
   return parts.length > 0 ? parts.join("；") : undefined;
 }

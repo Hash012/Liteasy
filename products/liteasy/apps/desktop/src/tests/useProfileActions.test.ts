@@ -328,3 +328,15 @@ describe("useProfileActions", () => {
   });
 
 });
+
+test("local structured preferences feed recommendations and AI without a cloud session", async () => {
+  const { result, rerender } = renderHook(({ enabled }) => useProfileActions({ localMode: true, profileSamplingEnabled: enabled }), { initialProps: { enabled: true } });
+  act(() => result.current.memory.saveEntry("research_topic", "database transactions"));
+  act(() => result.current.memory.saveEntry("response_style", "先给结论"));
+  expect(result.current.recommendationProfile.topics).toContain("database transactions");
+  expect(result.current.assistantProfileSummary).toContain("先给结论");
+  rerender({ enabled: false });
+  expect(result.current.assistantProfileSummary).toBeUndefined();
+  expect(result.current.agentMemories).toEqual([]);
+  expect(result.current.responsePreferences).toBe("");
+});

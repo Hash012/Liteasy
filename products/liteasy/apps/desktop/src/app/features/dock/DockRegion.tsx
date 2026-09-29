@@ -9,6 +9,8 @@ import {
 } from "@fluentui/react-components";
 import {
   BookRegular,
+  ChevronDownRegular,
+  CheckmarkRegular,
   MoreHorizontalRegular,
   NoteRegular,
   WhiteboardRegular,
@@ -26,6 +28,7 @@ import {
 import {
   useState,
   useEffect,
+  useLayoutEffect,
   useRef,
   type DragEvent,
   type KeyboardEvent,
@@ -151,6 +154,34 @@ export function DockRegion({
 }: DockRegionProps) {
   const [dropActive, setDropActive] = useState(false);
   const regionElement = useRef<HTMLElement>(null);
+  const tabStrip = useRef<HTMLDivElement>(null);
+  const [tabsOverflow, setTabsOverflow] = useState(false);
+  const tabSignature = JSON.stringify([layout.itemIds, dynamicTabs.map(({ id, title }) => [id, title])]);
+  const selectedTabId = dynamicTabs.find((tab) => tab.selected)?.id ?? layout.activeItemId;
+  function measureOverflow() {
+    const strip = tabStrip.current;
+    setTabsOverflow(!!strip && strip.scrollWidth > strip.clientWidth + 1);
+  }
+  function revealTab(tab: HTMLElement | null) {
+    const strip = tabStrip.current;
+    if (!strip || !tab) return;
+    const bounds = strip.getBoundingClientRect();
+    const item = (tab.closest(".dock-dynamic-tab") ?? tab).getBoundingClientRect();
+    if (item.left < bounds.left) strip.scrollLeft -= bounds.left - item.left;
+    else if (item.right > bounds.right) strip.scrollLeft += item.right - bounds.right;
+  }
+  useLayoutEffect(() => {
+    const strip = tabStrip.current;
+    if (!strip) return;
+    const update = () => {
+      measureOverflow();
+      revealTab(strip.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]'));
+    };
+    update();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    observer?.observe(strip);
+    return () => observer?.disconnect();
+  }, [selectedTabId, tabSignature]);
   useEffect(() => {
     const element = regionElement.current;
     if (!element) return;
@@ -230,11 +261,34 @@ export function DockRegion({
     onMoveItem(itemId, regionId);
   }
 
+  const tabOptions = [
+    ...layout.itemIds.map((itemId) => ({ id: itemId, title: dockItemRegistry[itemId].title,
+      icon: getDockItemIcon(itemId), selected: !activeDynamicTab && layout.activeItemId === itemId,
+      activate: () => onActivateItem(itemId) })),
+    ...dynamicTabs.map((tab) => ({ id: tab.id, title: tab.title, icon: tab.icon,
+      selected: tab.selected, activate: tab.onActivate }))
+  ];
+  function navigateTabs(event: KeyboardEvent<HTMLButtonElement>, id: string) {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const index = tabOptions.findIndex((tab) => tab.id === id);
+    if (index < 0) return;
+    const next = event.key === "ArrowRight" ? (index + 1) % tabOptions.length
+      : event.key === "ArrowLeft" ? (index - 1 + tabOptions.length) % tabOptions.length
+        : event.key === "Home" ? 0 : event.key === "End" ? tabOptions.length - 1 : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    tabOptions[next].activate();
+    const button = tabStrip.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next];
+    button?.focus({ preventScroll: true });
+    revealTab(button ?? null);
+  }
+
   function handleDynamicTabKeyDown(
     event: KeyboardEvent<HTMLButtonElement>,
     tabId: string,
   ) {
     if (!event.altKey || !event.shiftKey || !onMoveDynamicTab) {
+      navigateTabs(event, tabId);
       return;
     }
     const targetByKey: Partial<Record<string, DockRegionId>> = {
@@ -270,27 +324,7 @@ export function DockRegion({
       }
     }
 
-    const itemIndex = layout.itemIds.indexOf(itemId);
-    if (itemIndex === -1 || layout.itemIds.length < 2) {
-      return;
-    }
-
-    let nextIndex: number | null = null;
-    if (event.key === "ArrowRight") {
-      nextIndex = (itemIndex + 1) % layout.itemIds.length;
-    } else if (event.key === "ArrowLeft") {
-      nextIndex =
-        (itemIndex - 1 + layout.itemIds.length) % layout.itemIds.length;
-    } else if (event.key === "Home") {
-      nextIndex = 0;
-    } else if (event.key === "End") {
-      nextIndex = layout.itemIds.length - 1;
-    }
-
-    if (nextIndex !== null) {
-      event.preventDefault();
-      onActivateItem(layout.itemIds[nextIndex]);
-    }
+    navigateTabs(event, itemId);
   }
 
   return (
@@ -320,6 +354,7 @@ export function DockRegion({
             <div
               aria-label={`${regionLabel}标签页`}
               className="dock-tab-strip"
+              ref={tabStrip}
               role="tablist"
             >
               {layout.itemIds.map((itemId) => {
@@ -331,7 +366,7 @@ export function DockRegion({
                     ? `${descriptor.title} · 可拖动到其他区域`
                     : descriptor.title;
                 return (
-                  <div className="dock-dynamic-tab" key={itemId}>
+                  <div className={`dock-dynamic-tab has-close ${active ? "is-active" : ""}`} key={itemId}>
                     <Tooltip
                       content={tooltipContent}
                       positioning="below"
@@ -340,7 +375,7 @@ export function DockRegion({
                       <button
                         aria-label={descriptor.title}
                         aria-selected={active}
-                        className={`dock-tab dock-tab-icon-only ${active ? "active" : ""}`}
+                        className={`dock-tab ${active ? "active" : ""}`}
                         draggable={descriptor.allowedRegions.length > 1}
                         id={`dock-tab-${regionId}-${itemId}`}
                         onClick={() => onActivateItem(itemId)}
@@ -358,6 +393,7 @@ export function DockRegion({
                         <span aria-hidden="true" className="dock-tab-icon">
                           {getDockItemIcon(itemId)}
                         </span>
+                        <span className="dock-tab-title">{descriptor.title}</span>
                       </button>
                     </Tooltip>
                     <button
@@ -368,15 +404,16 @@ export function DockRegion({
                         onCloseItem(itemId);
                       }}
                       title={`关闭 ${descriptor.title}`}
+                      tabIndex={active ? 0 : -1}
                       type="button"
                     >
-                      ×
+                      <DismissRegular />
                     </button>
                   </div>
                 );
               })}
               {dynamicTabs.map((tab) => (
-                <div className="dock-dynamic-tab" key={tab.id}>
+                <div className={`dock-dynamic-tab ${tab.onClose ? "has-close" : ""} ${tab.selected ? "is-active" : ""} ${tab.kind === "document" ? "is-document" : ""}`} key={tab.id}>
                   <button
                     aria-selected={tab.selected}
                     className={`dock-tab ${tab.kind === "document" ? "dock-document-tab" : ""} ${tab.selected ? "active" : ""}`}
@@ -420,9 +457,10 @@ export function DockRegion({
                         tab.onClose?.();
                       }}
                       title={`关闭 ${tab.title}`}
+                      tabIndex={tab.selected ? 0 : -1}
                       type="button"
                     >
-                      ×
+                      <DismissRegular />
                     </button>
                   ) : null}
                 </div>
@@ -430,6 +468,23 @@ export function DockRegion({
             </div>
           ) : null}
           <div className="dock-region-actions">
+            {tabsOverflow ? (
+              <Menu>
+                <MenuTrigger disableButtonEnhancement>
+                  <Tooltip content="所有标签页" relationship="label">
+                    <Button appearance="subtle" size="small" aria-label={`${regionLabel}所有标签页`} icon={<ChevronDownRegular />} />
+                  </Tooltip>
+                </MenuTrigger>
+                <MenuPopover className="dock-tabs-menu">
+                  <MenuList>
+                    {tabOptions.map((tab) => <MenuItem key={tab.id} icon={tab.selected ? <CheckmarkRegular /> : tab.icon ? <span>{tab.icon}</span> : undefined}
+                      aria-current={tab.selected ? "page" : undefined} onClick={tab.activate} title={tab.title}>
+                      {tab.title}
+                    </MenuItem>)}
+                  </MenuList>
+                </MenuPopover>
+              </Menu>
+            ) : null}
             {regionActions}
             {onSplitRegion || onCloseRegion ? (
               <Menu>
