@@ -2,7 +2,8 @@ import { createDefaultDockLayout, normalizeDockLayout } from "./dockLayout";
 import { isDockRegionId } from "./dockRegistry";
 import type { DockLayout, DockRegionId } from "./dock.types";
 
-const storageKey = "liteasy.ui.dock-layout.v1";
+const legacyStorageKey = "liteasy.ui.dock-layout.v1";
+const storageKey = "liteasy.ui.dock-layout.v3";
 const dynamicPlacementStorageKey = "liteasy.ui.dynamic-dock-placement.v1";
 const dockRegionIds = new Set<DockRegionId>([
   "bottom",
@@ -14,7 +15,7 @@ const dockRegionIds = new Set<DockRegionId>([
 export type DynamicDockPlacements = Record<string, DockRegionId>;
 
 export function loadDockLayout(): DockLayout {
-  const rawValue = window.localStorage.getItem(storageKey);
+  const rawValue = window.localStorage.getItem(storageKey) ?? window.localStorage.getItem(legacyStorageKey);
   if (!rawValue) {
     return createDefaultDockLayout();
   }
@@ -27,11 +28,13 @@ export function loadDockLayout(): DockLayout {
 }
 
 export function saveDockLayout(layout: DockLayout) {
-  window.localStorage.setItem(storageKey, JSON.stringify(layout));
+  // Preserve the legacy record for older applications; their writes cannot erase extension pages.
+  window.localStorage.setItem(storageKey, JSON.stringify({ ...layout, version: 3 }));
 }
 
 export function clearDockLayout() {
   window.localStorage.removeItem(storageKey);
+  window.localStorage.removeItem(legacyStorageKey);
   window.localStorage.removeItem(dynamicPlacementStorageKey);
 }
 

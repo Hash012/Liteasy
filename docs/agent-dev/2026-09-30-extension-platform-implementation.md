@@ -24,3 +24,9 @@ Validation: 63 affected frontend tests; 12 native note-file tests; CI smoke (8 t
 Implemented bounded JSON/schema evaluation, five inherited block families, typed composition trees, immutable content-verified v2 packages, explicit enable/disable/uninstall/rollback, and native/browser persistent installation records. Whiteboards now expose component creation, package import and an ordinary installable paper-comparison template. Structured fields are stored against content revisions with readable Markdown fallback; Canvas imports respect externally edited text instead of restoring stale structured values.
 
 Validation: 67 affected frontend tests, followed by 19 targeted package/Canvas tests after the external-edit correction; CI smoke (8); production build. Current package execution is declarative. Host code remains disabled pending the specification's isolation gate. Workflow payload semantics, contributed views/settings and SDK authoring are addressed in the remaining steps.
+
+## Step 3 — contributed workbench pages and settings
+
+Added dynamic Dock identities, persistent declarative page instances, unavailable-extension placeholders, existing page history/switcher integration, and an extension manager in the activity rail. Dock persistence now writes a distinct v3 key while retaining older layout records. Extension settings use schema forms, searchable categories, global/profile/workspace inheritance, CAS saves, and preservation of unknown configuration versions. Registered library menu actions route through the same extension controller; configuration updates refresh contributed views.
+
+Validation: 30 package/settings/layout tests and 38 workbench/history/library/AppShell integration tests; CI smoke (8); production build. Studio remains for step 5; no arbitrary-code runtime is enabled.

@@ -7,7 +7,16 @@ import { safeMarkdownUrl } from "../markdown/MarkdownContent";
 export function ComponentTreeView({ tree, data, openPath }: { tree: ComponentTree; data: JsonObject; openPath?(path: string): Promise<void> }) {
   const read = (key: string): JsonValue | undefined => {
     const value = tree.props?.[key];
-    return value && typeof value === "object" && !Array.isArray(value) && typeof value.$field === "string" ? data[value.$field] : value;
+    if (value && typeof value === "object" && !Array.isArray(value) && typeof value.$field === "string") {
+      let current: JsonValue = data;
+      if (value.$field.split(".").length > 12) return undefined;
+      for (const key of value.$field.split(".")) {
+        if (["__proto__", "constructor", "prototype"].includes(key) || !current || typeof current !== "object" || Array.isArray(current)) return undefined;
+        current = current[key];
+      }
+      return current;
+    }
+    return value;
   };
   const text = (key: string) => { const value = read(key); return typeof value === "string" ? value : value == null ? "" : JSON.stringify(value); };
   const children = tree.children?.map((child, index) => <ComponentTreeView key={index} tree={child} data={data} openPath={openPath} />);

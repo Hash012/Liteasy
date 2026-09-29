@@ -1,3 +1,7 @@
+import { useExtensionWorkbenchController } from "../controllers/useExtensionWorkbenchController";
+import { ExtensionWorkbenchContext } from "../features/extensions/extensionWorkbenchContext";
+import { ExtensionLibrary, ExtensionViewHost } from "../features/extensions/ExtensionViews";
+import { AppsListRegular } from "@fluentui/react-icons";
 import { createWorkspacePageRestorer } from "../controllers/createWorkspacePageRestorer";
 import { WorkspacePageSwitcher } from "../features/workspace/WorkspacePageSwitcher";
 import type { WorkspacePageTarget } from "../features/workspace/pageHistory";
@@ -43,7 +47,7 @@ import { NotesContext } from "../features/notes/notesPort";
 import { refOf, objectLink } from "../features/objects/object.types";
 import { makeObjectTransfer, writeObjectTransfer } from "../features/object-transfer/objectTransfer";
 import { PAPER_CONTEXT_MIME } from "../features/object-transfer/contextTransfer";
-import { dockItemRegistry, isBaseDockRegionId } from "../features/dock/dockRegistry";
+import { dockItemRegistry, isBaseDockRegionId, isExtensionDockItemId } from "../features/dock/dockRegistry";
 import { useHelpController } from "../controllers/useHelpController";
 import { useWorkbenchCommandsController } from "../controllers/useWorkbenchCommandsController";
 import { WorkbenchCommandsContext } from "../features/workbench/workbenchCommandsContext";
@@ -1189,6 +1193,7 @@ export function AppShell({
     openPaper: (paper) => openPaperInReader(paper.id),
     openArtifact: (id) => { artifactWorkflow.actions.openArtifact(id); activateArtifactSurface(id); }
   });
+  const extensionWorkbench = useExtensionWorkbenchController({ model: objectWorkbench, openDock: workbenchNavigation.open, openAsset: async (path) => openAgentAsset(path) });
   const assistantContextSuggestions = useAssistantContextCatalog({
     artifacts: artifactCatalog,
     objects: objectWorkbench.objects,
@@ -2072,6 +2077,8 @@ export function AppShell({
   }
 
   function renderDockItem(itemId: DockItemId, regionId: DockRegionId) {
+    if (itemId === "extension-library" || itemId === "workflow-studio") return <ExtensionLibrary />;
+    if (isExtensionDockItemId(itemId)) return <ExtensionViewHost dockId={itemId} />;
     if (itemId === "recommendation-reader") return recommendationLibrary.preview ? <RecommendationDetails
       key={`${objectWorkbench.repository.scopeId}:${recommendationLibrary.preview.item.id}`} page
       item={recommendationLibrary.preview.item} loading={recommendationLibrary.preview.loading} message={recommendationLibrary.preview.message}
@@ -2538,6 +2545,7 @@ export function AppShell({
     <NotesContext.Provider value={notes.port}>
     <HelpContext.Provider value={help.port}>
     <ObjectWorkbenchContext.Provider value={objectWorkbench.port}>
+    <ExtensionWorkbenchContext.Provider value={extensionWorkbench}>
     <div ref={immersive.root} className={appFrameClassName} data-theme-scope={appFrameScope} style={appFrameStyle}
       data-reading-focus={immersive.mode} data-focus-edge={immersive.edge} onClickCapture={immersive.onClickCapture}>
       <ImmersiveReadingControls {...immersive} />
@@ -2577,7 +2585,7 @@ export function AppShell({
           helpOpen={workbenchNavigation.isVisible("help")}
           onOpenAgent={() => workbenchCommands.execute("assistant")}
           onOpenHelp={() => help.port.open()}
-          layoutControls={<><Tooltip content={objectWorkbench.visible ? "关闭研究白板" : "研究白板"} relationship="description"><Button appearance="subtle" aria-label="研究白板" aria-pressed={objectWorkbench.visible} icon={<WhiteboardRegular />} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData(dockItemMimeType, "board"); }} onClick={() => { if (workbenchNavigation.isVisible("board")) objectWorkbench.setVisible(false); else { objectWorkbench.setVisible(true); if (dock.findItemRegion("board")) workbenchNavigation.open("board"); } }} /></Tooltip><DockLayoutControls
+          layoutControls={<><Tooltip content="扩展" relationship="description"><Button appearance="subtle" aria-label="扩展" icon={<AppsListRegular />} onClick={() => workbenchNavigation.open("extension-library")} /></Tooltip><Tooltip content={objectWorkbench.visible ? "关闭研究白板" : "研究白板"} relationship="description"><Button appearance="subtle" aria-label="研究白板" aria-pressed={objectWorkbench.visible} icon={<WhiteboardRegular />} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData(dockItemMimeType, "board"); }} onClick={() => { if (workbenchNavigation.isVisible("board")) objectWorkbench.setVisible(false); else { objectWorkbench.setVisible(true); if (dock.findItemRegion("board")) workbenchNavigation.open("board"); } }} /></Tooltip><DockLayoutControls
             collapsed={paneLayout.collapsed}
             onToggleBottom={() => paneLayout.setCollapsed("bottom", !paneLayout.collapsed.bottom)}
             onToggleLeft={() => paneLayout.setCollapsed("left", !paneLayout.collapsed.left)}
@@ -2716,6 +2724,7 @@ export function AppShell({
           renderLocation: (entry) => readingLibrary.entries.some((item) => item.id === entry.id) ? <ResourceLocationButton target={readingLibrary.target(entry)} /> : null }} />
     </div>
     {createPortal(renderAssistantSurface(dock.findItemRegion("assistant") ?? "right"), assistantSurfaceHost)}
+    </ExtensionWorkbenchContext.Provider>
     </ObjectWorkbenchContext.Provider>
     </HelpContext.Provider>
     </NotesContext.Provider>

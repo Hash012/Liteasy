@@ -1,4 +1,6 @@
 import type {
+  CoreDockItemId,
+  ExtensionDockItemId,
   DockItemDescriptor,
   DockItemId,
   DockRegionId,
@@ -6,7 +8,9 @@ import type {
 
 const sideToolRegions: DockRegionId[] = ["left", "main", "right", "bottom"];
 
-export const dockItemRegistry: Record<DockItemId, DockItemDescriptor> = {
+const coreDockItems: Record<CoreDockItemId, DockItemDescriptor> = {
+  "extension-library": { allowedRegions: sideToolRegions, id: "extension-library", preferredRegion: "main", title: "扩展" },
+  "workflow-studio": { allowedRegions: sideToolRegions, id: "workflow-studio", preferredRegion: "main", title: "制作工作台" },
   "recommendation-reader": { allowedRegions: sideToolRegions, id: "recommendation-reader", preferredRegion: "main", title: "论文详情" },
   "paper-note": { allowedRegions: sideToolRegions, id: "paper-note", preferredRegion: "main", title: "论文笔记" },
   "note-file-reader": { allowedRegions: sideToolRegions, id: "note-file-reader", preferredRegion: "main", title: "Markdown" },
@@ -78,6 +82,27 @@ export const dockItemRegistry: Record<DockItemId, DockItemDescriptor> = {
   },
 };
 
+const extensionItems = new Map<ExtensionDockItemId, DockItemDescriptor>();
+export function isExtensionDockItemId(value: unknown): value is ExtensionDockItemId {
+  return typeof value === "string" && value.length <= 300 && /^extension:plugin\.[a-z0-9][a-z0-9.-]*\/[a-zA-Z][a-zA-Z0-9.-]*\/[a-zA-Z0-9-]{1,80}$/.test(value);
+}
+export function registerExtensionDockItem(descriptor: DockItemDescriptor) {
+  if (!isExtensionDockItemId(descriptor.id)) throw new Error("扩展页面标识无效。");
+  const key = descriptor.id;
+  if (extensionItems.has(key)) throw new Error("页面已注册。");
+  extensionItems.set(key, descriptor);
+  return () => { if (extensionItems.get(key) === descriptor) extensionItems.delete(key); };
+}
+// Valid missing extensions get a placeholder descriptor so layouts/history remain intact.
+export const dockItemRegistry = new Proxy(coreDockItems as Record<DockItemId, DockItemDescriptor>, {
+  get(target, key) {
+    if (isExtensionDockItemId(key)) return extensionItems.get(key) ?? { id: key, title: "扩展页面", preferredRegion: "main", allowedRegions: sideToolRegions };
+    return Reflect.get(target, key);
+  },
+  ownKeys(target) { return [...Reflect.ownKeys(target), ...extensionItems.keys()]; },
+  getOwnPropertyDescriptor(target, key) { return isExtensionDockItemId(key) && extensionItems.has(key) ? { configurable: true, enumerable: true, value: extensionItems.get(key) } : Reflect.getOwnPropertyDescriptor(target, key); },
+});
+
 export const dockRegionLabels: Record<DockRegionId, string> = {
   bottom: "下栏",
   left: "左栏",
@@ -86,7 +111,7 @@ export const dockRegionLabels: Record<DockRegionId, string> = {
 };
 
 export function isDockItemId(value: unknown): value is DockItemId {
-  return typeof value === "string" && Object.prototype.hasOwnProperty.call(dockItemRegistry, value);
+  return isExtensionDockItemId(value) || (typeof value === "string" && Object.prototype.hasOwnProperty.call(coreDockItems, value));
 }
 
 export function isDockRegionId(value: unknown): value is DockRegionId {

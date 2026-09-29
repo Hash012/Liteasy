@@ -1,0 +1,61 @@
+import "fake-indexeddb/auto";
+import { webcrypto } from "node:crypto";
+import { beforeEach, expect, test, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { createObjectStorage } from "../app/features/objects/objectStorage";
+import { createExtensionWorkspaceStore } from "../app/features/extensions/extensionWorkspaceStore";
+import { parseDataSchema } from "../app/features/extensions/extensionSchema";
+import { dockItemRegistry, isDockItemId, registerExtensionDockItem } from "../app/features/dock/dockRegistry";
+import { normalizeDockLayout } from "../app/features/dock/dockLayout";
+import { SchemaFields } from "../app/features/extensions/SchemaFields";
+import { ComponentTreeView } from "../app/features/visual-blocks/ComponentTreeView";
+
+beforeEach(() => vi.stubGlobal("crypto", webcrypto));
+const dockId = "extension:plugin.test/overview/default" as const;
+function fixture() { const scope = crypto.randomUUID(); const storage = createObjectStorage(scope, () => scope); return { storage, store: createExtensionWorkspaceStore(storage) }; }
+test("dynamic pages restore as placeholders after disposal and retain navigation identity", async () => {
+  const f = fixture();
+  const view = await f.store.saveView({ schema: "liteasy.extension-view/v1", dockId, extensionId: "plugin.test", viewId: "overview", instanceId: "default", title: "论文比较", args: { paper: "p1" }, state: { tab: "evidence" }, hostState: { scrollTop: 250 } }, null);
+  const release = registerExtensionDockItem({ id: dockId, title: view.title, preferredRegion: "main", allowedRegions: ["main", "left"] });
+  expect(dockItemRegistry[dockId].title).toBe("论文比较");
+  expect(isDockItemId(dockId)).toBe(true);
+  expect(isDockItemId("extension:plugin.test/../../bad")).toBe(false);
+  const layout = normalizeDockLayout({ version: 3, regions: { main: { itemIds: [dockId, "settings"], activeItemId: dockId } } });
+  expect(layout.regions.main.itemIds).toContain(dockId);
+  release(); release();
+  expect(dockItemRegistry[dockId].title).toBe("扩展页面");
+  const reopened = await createExtensionWorkspaceStore(f.storage).getView(dockId);
+  expect(reopened?.state).toEqual({ tab: "evidence" });
+  expect(reopened?.hostState?.scrollTop).toBe(250);
+  await expect(f.store.saveView({ ...view, title: "并发覆盖" }, null)).rejects.toThrow();
+});
+test("configuration layers inherit and reset, reject stale edits, preserve unknown versions", async () => {
+  const f = fixture();
+  const schema = parseDataSchema({ type: "object", properties: { size: { type: "integer", minimum: 10, default: 16 }, style: { type: "string", default: "brief" } }, additionalProperties: false });
+  const changed = vi.fn(); const dispose = f.store.subscribeConfiguration(changed);
+  await f.store.saveConfiguration("plugin.test", "reading", schema, "global", { size: 22 }, null);
+  await f.store.saveConfiguration("plugin.test", "reading", schema, "profile", { style: "detailed" }, null);
+  let config = await f.store.readConfiguration("plugin.test", "reading", schema);
+  expect(config.effective).toEqual({ size: 22, style: "detailed" });
+  expect(config.sources).toEqual({ size: "global", style: "profile" });
+  await expect(f.store.saveConfiguration("plugin.test", "reading", schema, "profile", {}, null)).rejects.toThrow();
+  await f.store.saveConfiguration("plugin.test", "reading", schema, "profile", {}, config.revision);
+  config = await f.store.readConfiguration("plugin.test", "reading", schema);
+  expect(config.effective.style).toBe("brief");
+  expect(changed).toHaveBeenCalledTimes(3); dispose();
+  const key = "extension-config/plugin.test/reading/profile";
+  await f.storage.commit([{ key, expected: config.revision, row: { key, version: "future", value: { schema: "liteasy.extension-config/v9", values: { size: 40 } } } }]);
+  await expect(f.store.saveConfiguration("plugin.test", "reading", schema, "profile", {}, "future")).rejects.toThrow();
+  expect((await f.storage.get(key))?.version).toBe("future");
+});
+test("invalid structured field drafts cannot report valid and view bindings resolve configuration", () => {
+  const valid = vi.fn();
+  const schema = parseDataSchema({ type: "object", properties: { rows: { type: "array", title: "表格", items: { type: "string" } } }, additionalProperties: false });
+  const { unmount } = render(<SchemaFields schema={schema} value={{ rows: [] }} onChange={vi.fn()} onValidityChange={valid} />);
+  fireEvent.change(screen.getByRole("textbox", { name: "表格" }), { target: { value: "[" } });
+  expect(valid).toHaveBeenLastCalledWith(false);
+  fireEvent.change(screen.getByRole("textbox", { name: "表格" }), { target: { value: '["来源"]' } });
+  expect(valid).toHaveBeenLastCalledWith(true); unmount();
+  render(<ComponentTreeView tree={{ component: "MarkdownView", props: { text: { $field: "settings.reading.style" } } }} data={{ settings: { reading: { style: "## 实际设置" } } }} />);
+  expect(screen.getByRole("heading", { name: "实际设置" })).toBeInTheDocument();
+});

@@ -71,7 +71,11 @@ function getDockItemIcon(itemId: DockItemId) {
     case "help":
       return <QuestionCircleRegular />;
     case "artifacts":
+    case "extension-library":
+    case "workflow-studio":
       return <SparkleRegular />;
+    default:
+      return <WhiteboardRegular />;
   }
 }
 

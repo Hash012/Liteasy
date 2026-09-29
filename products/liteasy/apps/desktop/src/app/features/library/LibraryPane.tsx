@@ -1,3 +1,4 @@
+import { ExtensionActions } from "../extensions/ExtensionActions";
 import { RecommendationList } from "../recommendations/RecommendationList";
 import { LibraryIconProvider, LibraryIconMenuItem, LibraryItemIcon, useLibraryIcons } from "./LibraryItemIcon";
 import { libraryFileDragType, libraryFolderKey, normalizedLibraryPath, relativeLibraryFolder } from "./libraryFolderMembership";
@@ -1121,6 +1122,7 @@ function LibraryPaneContent({
             <MenuPopover>
               <MenuList>
                 <LibraryIconMenuItem itemKey={`file:${area}:${entry.id}`} title={entry.label} />
+                {sourcePaper ? <ExtensionActions menu location="library.item.context" paperCount={1} selection={[liteasyPath(contextScopeId, { kind: "paper", paperId: sourcePaper.id })]} /> : null}
                 {sourcePaper && onCreatePaperChild ? <>
                   <MenuItem onClick={() => { setNewChild({ paper: sourcePaper, kind: "note" }); setChildTitle(`${sourcePaper.title} · 笔记`); }}>新建 Markdown 笔记</MenuItem>
                   <MenuItem onClick={() => { setNewChild({ paper: sourcePaper, kind: "board" }); setChildTitle(`${sourcePaper.title} · 白板`); }}>新建论文白板</MenuItem>

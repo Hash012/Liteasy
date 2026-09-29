@@ -7,7 +7,8 @@ export const settingsCategories = [
   { id: "ai", label: "AI 与助手" },
   { id: "papers", label: "论文与推荐" },
   { id: "storage", label: "文件与存储" },
-  { id: "sync", label: "同步与备份" }
+  { id: "sync", label: "同步与备份" },
+  { id: "extensions", label: "扩展" }
 ] as const;
 
 export type SettingsCategory = typeof settingsCategories[number]["id"];

@@ -121,7 +121,7 @@ export function normalizeDockLayout(value: unknown): DockLayout {
     !value ||
     typeof value !== "object" ||
     !("version" in value) ||
-    (value.version !== 1 && value.version !== 2) ||
+    (value.version !== 1 && value.version !== 2 && value.version !== 3) ||
     !("regions" in value) ||
     !value.regions
   ) {

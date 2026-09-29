@@ -1,4 +1,6 @@
-import { useId, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { ExtensionSettings, extensionSettingsMatch } from "../features/extensions/ExtensionSettings";
+import { useExtensionWorkbench } from "../features/extensions/extensionWorkbenchContext";
+import { useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { Button, Input, Tooltip } from "@fluentui/react-components";
 import { AppsListRegular, BotRegular, CloudSyncRegular, DismissRegular, DocumentSearchRegular, FolderRegular, PaintBrushRegular, SearchRegular } from "@fluentui/react-icons";
 import { PaperServicesSettingsPanel } from "../features/paper-services/PaperServicesSettingsPanel";
@@ -36,13 +38,19 @@ type SettingsPaneProps = {
 
 
 const categoryIcons: Record<SettingsCategory, ReactElement> = {
+  extensions: <AppsListRegular />,
   all: <AppsListRegular />, appearance: <PaintBrushRegular />, ai: <BotRegular />,
   papers: <DocumentSearchRegular />, storage: <FolderRegular />, sync: <CloudSyncRegular />
 };
 
 export function SettingsPane(props: SettingsPaneProps) {
+  const extensions = useExtensionWorkbench();
   const [category, setCategory] = useState<SettingsCategory>("all");
   const [query, setQuery] = useState("");
+  useEffect(() => {
+    const show = (event: Event) => { const detail = (event as CustomEvent<{ owner: string; group: string }>).detail; const pkg = extensions?.packages.snapshot.packages.find((item) => item.manifest.id === detail.owner); const group = pkg?.manifest.contributes.settings.find((item) => item.id === detail.group); if (group) { setCategory("extensions"); setQuery(group.title); } };
+    window.addEventListener("liteasy:extension-settings", show); return () => window.removeEventListener("liteasy:extension-settings", show);
+  }, [extensions?.packages.snapshot]);
   const contentRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const id = useId();
@@ -50,6 +58,7 @@ export function SettingsPane(props: SettingsPaneProps) {
   const visibleSections = settingsSections.filter((section) => searching
     ? matchesSettingsSearch(section, query)
     : category === "all" || section.category === category);
+  const visibleExtensionCount = extensions?.packages.snapshot.packages.flatMap((pkg) => pkg.manifest.contributes.settings.filter((group) => extensionSettingsMatch(pkg, group.id, query))).length ?? 0;
   const visibleIds = new Set<SettingsSectionId>(visibleSections.map((section) => section.id));
   const shared = { settings: props.settings, onUpdateSetting: props.onUpdateSetting };
   const panels: Record<SettingsSectionId, ReactNode> = {
@@ -99,12 +108,13 @@ export function SettingsPane(props: SettingsPaneProps) {
         </Button>)}
       </nav>
       <div className="settings-content" ref={contentRef}>
-        {searching ? <p className="settings-search-summary" role="status">找到 {visibleSections.length} 个设置分组 · 搜索全部分类</p> : null}
-        {searching && visibleSections.length === 0 ? <div className="settings-empty">
+        {searching ? <p className="settings-search-summary" role="status">找到 {visibleSections.length + visibleExtensionCount} 个设置分组 · 搜索全部分类</p> : null}
+        {searching && visibleSections.length + visibleExtensionCount === 0 ? <div className="settings-empty">
           <SearchRegular aria-hidden="true" /><h2>没有找到相关设置</h2>
           <p>试试“API”“字体”或“同步”等关键词。</p>
           <Button onClick={clearSearch}>清除搜索</Button>
         </div> : null}
+        <ExtensionSettings query={query} category={category} />
         {/* Keep forms mounted so switching categories or searching never discards unsaved input. */}
         {settingsSections.map((section) => <section key={section.id}
           aria-label={section.id === "recommendations" ? "论文推荐设置" : section.title}

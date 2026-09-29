@@ -1,7 +1,11 @@
 export type DockBaseRegionId = "left" | "main" | "right" | "bottom";
 export type DockRegionId = DockBaseRegionId | `bar-${string}`;
 
-export type DockItemId =
+export type ExtensionDockItemId = `extension:plugin.${string}/${string}/${string}`;
+export type DockItemId = CoreDockItemId | ExtensionDockItemId;
+export type CoreDockItemId =
+  | "extension-library"
+  | "workflow-studio"
   | "library"
   | "document-reader"
   | "recommendation-reader"

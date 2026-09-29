@@ -15,7 +15,7 @@ export const extensionManifestSchema = z.strictObject({
   permissions: z.array(extensionPermissionSchema).max(30).default([]),
   contributes: z.strictObject({
     blockTypes: z.array(contribution).max(50).default([]), boardTemplates: z.array(contribution).max(30).default([]),
-    views: z.array(z.strictObject({ id: localId, title: z.string().min(1).max(120), icon: z.string().max(80).default("BoardRegular"), placement: z.enum(["main", "left", "right", "bottom"]).default("main"), allowedPlacements: z.array(z.enum(["main", "left", "right", "bottom"])).optional(), entry: z.strictObject({ kind: z.literal("declarative"), path: relativePath }), instancePolicy: z.enum(["singleton", "per-resource", "per-resource-set", "multiple"]).default("singleton") })).max(30).default([]),
+    views: z.array(z.strictObject({ id: localId, title: z.string().min(1).max(120), icon: z.string().max(80).default("BoardRegular"), placement: z.enum(["main", "left", "right", "bottom"]).default("main"), allowedPlacements: z.array(z.enum(["main", "left", "right", "bottom"])).optional(), entry: z.strictObject({ kind: z.literal("declarative"), path: relativePath }), argsSchema: relativePath.optional(), stateSchema: relativePath.optional(), instancePolicy: z.enum(["singleton", "per-resource", "per-resource-set", "multiple"]).default("singleton") })).max(30).default([]),
     settings: z.array(z.strictObject({ id: localId, title: z.string().min(1).max(120), category: z.enum(["extensions", "reading", "ai"]).default("extensions"), schema: relativePath })).max(30).default([]),
     commands: z.array(z.strictObject({ id: localId, title: z.string().min(1).max(120), workflow: localId.optional(), view: localId.optional(), boardTemplate: localId.optional() }).refine((value) => [value.workflow, value.view, value.boardTemplate].filter(Boolean).length === 1)).max(50).default([]),
     menus: z.array(z.strictObject({ location: z.enum(["library.item.context", "reader.selection", "board.context"]), command: localId, when: z.strictObject({ op: z.literal("gte"), left: z.strictObject({ context: z.enum(["selection.paperCount", "selection.resourceCount"]) }), right: z.number().int().min(0).max(1000) }).optional() })).max(50).default([]),
@@ -79,7 +79,10 @@ export async function validateExtensionPackage(input: unknown): Promise<Validate
     if (schema.type !== "object") throw new Error("设置必须使用对象 schema。");
     validateSchemaValue(schema, schemaDefaults(schema)); settings[item.id] = schema;
   }
-  for (const view of manifest.contributes.views) validateComponentTree(read(view.entry.path));
+  for (const view of manifest.contributes.views) {
+    validateComponentTree(read(view.entry.path));
+    for (const path of [view.argsSchema, view.stateSchema]) if (path) parseDataSchema(read(path));
+  }
   for (const item of [...manifest.contributes.workflows, ...manifest.contributes.skills]) boundedJson(read(item.path));
   for (const command of manifest.contributes.commands) {
     if (command.workflow && !manifest.contributes.workflows.some((item) => item.id === command.workflow) || command.view && !manifest.contributes.views.some((item) => item.id === command.view) || command.boardTemplate && !templates.some((item) => item.id === command.boardTemplate)) throw new Error("命令引用不存在的贡献。");
