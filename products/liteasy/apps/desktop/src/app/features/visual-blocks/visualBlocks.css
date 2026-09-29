@@ -7,3 +7,11 @@
 .object-card-appearance { position: absolute; z-index: 20; left: 0; top: 30px; width: 260px; max-height: 420px; overflow: auto; background: var(--colorNeutralBackground1); border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; box-shadow: var(--shadow8); }
 .object-layer-list { display: grid; gap: 4px; max-height: 45vh; overflow: auto; }
 .object-layer-list button { justify-content: flex-start; text-align: left; }
+
+.block-composer { display: grid; gap: 10px; }
+.block-composer textarea { min-height: 140px; font-family: monospace; }
+.extension-package-card { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; }
+.extension-package-card strong { width: 100%; }
+.visual-component-card { border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; padding: 8px; }
+.visual-block-table { overflow: auto; }
+.visual-block-table td { min-width: 80px; padding: 6px; border: 1px solid var(--colorNeutralStroke2); vertical-align: top; }

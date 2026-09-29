@@ -1,5 +1,6 @@
+import { projectBlockText } from "../visual-blocks/blockRegistry";
 import { z } from "zod";
-import { parseBlockPresentation } from "../objects/visualBlock.types";
+import { structuredBlockSchema, parseBlockPresentation } from "../objects/visualBlock.types";
 import {
   objectRefSchema,
   objectText,
@@ -213,6 +214,7 @@ export async function prepareCanvasImport(input: {
         }
       }
       const text = canvasNodeText(node);
+      const structured = structuredBlockSchema.safeParse(canvasExtension(node.liteasy).block).data;
       const draft: ObjectDraft = {
         kind: "content.note",
         title: text.split("\n")[0].slice(0, 80) || (node.type === "group" ? "分组" : "笔记"),
@@ -224,6 +226,7 @@ export async function prepareCanvasImport(input: {
       return {
         id: node.id,
         presentation: parseBlockPresentation(canvasExtension(node.liteasy).presentation),
+        structured: structured && projectBlockText(structured.data) === text ? structured : undefined,
         ref,
         draft: ref ? undefined : draft,
         position: { x: node.x - origin.x, y: node.y - origin.y },
@@ -262,6 +265,7 @@ export async function serializeCanvasFile(input: {
     [...input.placements].sort((a, b) => (order.get(a.placementId) ?? Infinity) - (order.get(b.placementId) ?? Infinity)).map(async (placement) => {
       const object = await input.repository.get(placement.ref);
       const presentation = await input.repository.getBlockPresentation(input.board.objectId, placement.placementId);
+      const block = await input.repository.getStructuredBlock(placement.ref);
       const previous = original?.nodes.find(
         (node) => node.id === placement.placementId,
       );
@@ -276,6 +280,12 @@ export async function serializeCanvasFile(input: {
           object.revision &&
         (!previousRef ||
           JSON.stringify(previousRef) === JSON.stringify(placement.ref));
+      const extension = { ...canvasExtension(previous?.liteasy) };
+      const previousBlock = structuredBlockSchema.safeParse(extension.block).data;
+      if (!block && previousBlock && projectBlockText(previousBlock.data) !== objectText(object)) {
+        extension.previousBlock = extension.block;
+        delete extension.block;
+      }
       const base = { ...previous };
       delete base.file;
       delete base.subpath;
@@ -300,7 +310,7 @@ export async function serializeCanvasFile(input: {
                 type: "text" as const,
                 text: await portableText(object, input.repository),
               }),
-        liteasy: { ...canvasExtension(previous?.liteasy), ref: placement.ref, title: object.title, ...(presentation.version ? { presentation: presentation.value } : {}) },
+        liteasy: { ...extension, ref: placement.ref, title: object.title, ...(block ? { block } : {}), ...(presentation.version ? { presentation: presentation.value } : {}) },
       };
     }),
   );

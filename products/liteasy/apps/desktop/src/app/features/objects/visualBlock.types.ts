@@ -22,3 +22,11 @@ export function parseBlockPresentation(value: unknown): BlockPresentation | unde
   const result = blockPresentationSchema.safeParse(value);
   return result.success ? result.data : undefined;
 }
+
+/** Structured data has its own version, leaving existing note objects readable. */
+export const structuredBlockSchema = z.strictObject({
+  schema: z.literal("liteasy.visual-block/v1"),
+  type: z.strictObject({ id: z.string().regex(/^(?:liteasy|plugin\.[a-z0-9][a-z0-9.-]*)\/[a-zA-Z][a-zA-Z0-9.-]*$/), version: z.string().regex(/^\d+\.\d+\.\d+$/) }),
+  data: z.record(z.string(), z.json()),
+});
+export type StructuredBlock = z.infer<typeof structuredBlockSchema>;

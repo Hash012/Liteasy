@@ -1,4 +1,4 @@
-import { blockPresentationSchema, defaultBlockPresentation, type BlockPresentation, type BlockPresentationRecord } from "./visualBlock.types";
+import { structuredBlockSchema, type StructuredBlock, blockPresentationSchema, defaultBlockPresentation, type BlockPresentation, type BlockPresentationRecord } from "./visualBlock.types";
 import { hashText } from "../context/objectContext";
 import type { StagedObjectAsset } from "./objectAssets";
 import {
@@ -707,6 +707,7 @@ export function createObjectRepository(
   async function editPlacement(input: {
     boardRef: ObjectRef;
     placement: Placement;
+    structured?: StructuredBlock;
     text: string;
     operationId: string;
   }) {
@@ -782,6 +783,7 @@ export function createObjectRepository(
         ...objectChanges(nextBoard, boardHead),
         change(key, { ...p, ref: refOf(next), revision: id() }, row!.version),
       ];
+      if (input.structured) changes.push(change(`visual-block/${next.objectId}/${next.revision}`, structuredBlockSchema.parse(input.structured)));
       const memberKey = membershipKey(board.objectId, next.objectId);
       const member = await storage.get(memberKey);
       changes.push(
@@ -943,6 +945,40 @@ export function createObjectRepository(
     scopeId,
     getBlockPresentation,
     setBlockPresentation,
+    async getStructuredBlock(ref: ObjectRef): Promise<StructuredBlock | undefined> {
+      await get(ref);
+      const row = await storage.get(`visual-block/${ref.objectId}/${ref.revision}`);
+      return row ? structuredBlockSchema.parse(row.value) : undefined;
+    },
+    async createStructuredBlock(input: { title: string; text: string; block: StructuredBlock; boardRef?: ObjectRef; position?: Placement["position"]; operationId: string }) {
+      const block = structuredBlockSchema.parse(input.block);
+      const result = await commitOperation(input.operationId, input, async () => {
+        const object = make({ title: input.title, kind: "content.note", content: { schema: "liteasy.note/v1", payload: { text: input.text, origin: "user" } } });
+        const changes = [...objectChanges(object), change(`visual-block/${object.objectId}/${object.revision}`, block)];
+        if (input.boardRef) {
+          const head = await storage.get(headKey(input.boardRef.objectId));
+          const board = readObject(head);
+          if (board.kind !== "workspace.board" || board.lifecycle !== "active" || board.revision !== input.boardRef.revision) throw new ObjectStoreError("revision_conflict", "白板已变化。");
+          const next = make({ ...board, sourceRefs: board.provenance.sourceRefs }, board);
+          const p = placement(board.objectId, refOf(object), (await listPlacements(board.objectId)).length);
+          if (input.position) p.position = input.position;
+          changes.push(...objectChanges(next, head), change(`placement/${board.objectId}/${p.placementId}`, p), change(membershipKey(board.objectId, object.objectId), membership(next, refOf(object))));
+        }
+        return { changes, result: [refOf(object)] };
+      });
+      return get(result[0]);
+    },
+    async updateStructuredBlock(input: { ref: ObjectRef; title: string; text: string; block: StructuredBlock; operationId: string }) {
+      const block = structuredBlockSchema.parse(input.block);
+      const result = await commitOperation(input.operationId, input, async () => {
+        const head = await storage.get(headKey(input.ref.objectId));
+        const previous = readObject(head);
+        if (previous.kind !== "content.note" || previous.lifecycle !== "active" || previous.revision !== input.ref.revision) throw new ObjectStoreError("revision_conflict", "内容已变化。");
+        const next = make({ ...previous, title: input.title, sourceRefs: previous.provenance.sourceRefs, content: { schema: "liteasy.note/v1", payload: { ...previous.content.payload, text: input.text } } }, previous);
+        return { changes: [...objectChanges(next, head), change(`visual-block/${next.objectId}/${next.revision}`, block)], result: [refOf(next)] };
+      });
+      return get(result[0]);
+    },
     /** Lightweight current-head metadata; old indexes safely fall back to their existing object. */
     async describeObject(objectId: string) {
       const row = await storage.get(`title/${objectId}`);
@@ -1208,6 +1244,7 @@ export function createObjectRepository(
         id: string;
         draft?: ObjectDraft;
         presentation?: BlockPresentation;
+        structured?: StructuredBlock;
         ref?: ObjectRef;
         position: Placement["position"];
         size: Placement["size"];
@@ -1290,6 +1327,7 @@ export function createObjectRepository(
                 "白板卡片缺少内容。",
               );
             if (!node.ref) changes.push(...objectChanges(object));
+            if (node.structured && !node.ref) changes.push(change(`visual-block/${object.objectId}/${object.revision}`, structuredBlockSchema.parse(node.structured)));
             const p: Placement = {
               ...placement(board.objectId, refOf(object)),
               placementId: node.id,

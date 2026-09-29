@@ -18,3 +18,9 @@ Progress and evidence will be recorded below as work completes. Experimental cod
 Implemented host-owned rich-content/failure boundary, inherited typography controls, independent versioned block presentation, layout locking and a layer list for obscured cards. Presentation changes preserve content revisions and round-trip through Canvas extension metadata. Added bounded image reads through existing directory grants (browser/native), including cancellation-safe URL disposal. Existing context transfer, source identity, editing and placement services are retained.
 
 Validation: 63 affected frontend tests; 12 native note-file tests; CI smoke (8 tests); production frontend build; `cargo check --locked --all-targets --no-default-features`. Local Rust is 1.98.0; Windows CI pins 1.98.1, so this is not Windows installer evidence. Arbitrary derived types, authoring, durable runs, broader media/context integration and performance gates continue in subsequent steps.
+
+## Step 2 — derived types and local packages
+
+Implemented bounded JSON/schema evaluation, five inherited block families, typed composition trees, immutable content-verified v2 packages, explicit enable/disable/uninstall/rollback, and native/browser persistent installation records. Whiteboards now expose component creation, package import and an ordinary installable paper-comparison template. Structured fields are stored against content revisions with readable Markdown fallback; Canvas imports respect externally edited text instead of restoring stale structured values.
+
+Validation: 67 affected frontend tests, followed by 19 targeted package/Canvas tests after the external-edit correction; CI smoke (8); production build. Current package execution is declarative. Host code remains disabled pending the specification's isolation gate. Workflow payload semantics, contributed views/settings and SDK authoring are addressed in the remaining steps.

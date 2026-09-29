@@ -1,3 +1,5 @@
+import { createExtensionPackageStore } from "../features/extensions/extensionPackageStore";
+import { useExtensionPackages } from "../features/extensions/useExtensionPackages";
 import { liteasyPath } from "../features/resource-filesystem/liteasyPath";
 import { paperAnchorsForArtifact } from "../features/paper-anchors/paperAnchorAdapters";
 import { createNoteFileService } from "../features/note-files/noteFileService";
@@ -99,6 +101,8 @@ export function useObjectWorkbenchController(input: {
       ),
     [input.scopeId],
   );
+  const extensionStore = useMemo(() => createExtensionPackageStore(createObjectStorage(input.scopeId, () => latest.current.scopeId)), [input.scopeId]);
+  const extensions = useExtensionPackages(extensionStore);
   const [opened, setOpened] = useState<ResolvedObject>();
   const [visible, setVisible] = useState(false);
   const closeGeneration = useRef(0);
@@ -1042,6 +1046,7 @@ export function useObjectWorkbenchController(input: {
   }), [repository]);
   return {
     ...boardFiles,
+    extensions,
     agentAssets,
     repository,
     port,
@@ -1352,13 +1357,14 @@ export function useObjectWorkbenchController(input: {
           ],
         });
       }, true),
-    editPlacement: (p: Placement, text: string) =>
+    editPlacement: (p: Placement, text: string, structured?: import("../features/objects/visualBlock.types").StructuredBlock) =>
       perform(async () => {
         const board = boardRef.current;
         if (!board) throw new Error("白板已关闭或不可用。");
         return repository.editPlacement({
           boardRef: refOf(board),
           placement: p,
+          structured,
           text,
           operationId: crypto.randomUUID(),
         });

@@ -1,3 +1,6 @@
+import { DerivedBlockContent } from "../visual-blocks/DerivedBlockContent";
+import { projectBlockText, type createBlockRegistry } from "../visual-blocks/blockRegistry";
+import type { StructuredBlock } from "../objects/visualBlock.types";
 import { GrantedImage } from "../visual-blocks/GrantedImage";
 import { VisualBlockBase } from "../visual-blocks/VisualBlockBase";
 import { BlockAppearanceEditor } from "../visual-blocks/BlockAppearanceEditor";
@@ -106,7 +109,9 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
   setDetails,
   connection,
   canvasNode,
+  blockRegistry,
 }: {
+  blockRegistry?: ReturnType<typeof createBlockRegistry>;
   p: Placement;
   object?: ObjectEnvelope | null;
   canvasNode?: CanvasNode;
@@ -121,6 +126,8 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
     cancel(): void;
   };
 }) {
+  const [structured, setStructured] = useState<StructuredBlock>();
+  useEffect(() => { let alive = true; setStructured(undefined); if (object && actions.current.repository.getStructuredBlock) void actions.current.repository.getStructuredBlock(refOf(object)).then((value) => { if (alive) setStructured(value); }).catch(() => {}); return () => { alive = false; }; }, [object?.objectId, object?.revision]);
   const appearance = useBlockPresentation(actions.current.repository, p.boardId, p.placementId);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -260,7 +267,7 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
     if (!object || editing) return;
     setMoving(false);
     setAdjusting(false);
-    setDraft(objectText(object));
+    setDraft(structured ? JSON.stringify(structured.data, null, 2) : objectText(object));
     setEditorError("");
     setEditing(true);
   }
@@ -269,7 +276,10 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
     setSaving(true);
     setEditorError("");
     try {
-      await actions.current.editPlacement(p, draft);
+      if (structured && blockRegistry) {
+        const data = blockRegistry.instantiate(structured.type.id, structured.type.version, JSON.parse(draft));
+        await actions.current.editPlacement(p, projectBlockText(data), { ...structured, data });
+      } else await actions.current.editPlacement(p, draft);
       setEditing(false);
       setAdjusting(false);
     } catch (e) {
@@ -463,7 +473,7 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
               sourceText={sourceText}
               onEdit={canEdit && !moving ? startEditing : undefined}
               editor={
-                editing ? (
+                !editing && structured && blockRegistry && object ? <DerivedBlockContent object={object} repository={actions.current.repository} registry={blockRegistry} openPath={actions.current.openLink} /> : editing ? (
                   <div className="object-card-editor">
                     {object.kind === "content.fragment" ? (
                       <span className="object-meta">

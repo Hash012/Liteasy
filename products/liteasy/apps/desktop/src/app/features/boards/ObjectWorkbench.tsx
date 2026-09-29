@@ -1,3 +1,5 @@
+import { BlockComposer } from "../visual-blocks/BlockComposer";
+import type { ExtensionPackagesModel } from "../extensions/useExtensionPackages";
 import { BlockAppearanceEditor } from "../visual-blocks/BlockAppearanceEditor";
 import { useBlockPresentation } from "../visual-blocks/useBlockPresentation";
 import { useCanvasNavigation } from "./useCanvasNavigation";
@@ -63,6 +65,7 @@ import { AssistantMarkdown } from "../assistant/AssistantMarkdown";
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import "./objectWorkbench.css";
 export type WorkbenchViewModel = {
+  extensions?: ExtensionPackagesModel;
   opened?: ResolvedObject;
   openLink(link: string): Promise<void>;
   closeOpened(): void;
@@ -93,7 +96,7 @@ export type WorkbenchViewModel = {
     placement: Placement,
     geometry: Pick<Placement, "position" | "size">,
   ): Promise<unknown>;
-  editPlacement(placement: Placement, text: string): Promise<unknown>;
+  editPlacement(placement: Placement, text: string, structured?: import("../objects/visualBlock.types").StructuredBlock): Promise<unknown>;
   drop(data: DataTransfer): Promise<void>;
   addToTray(refs: ContextRef[]): void;
   previewContext(): Promise<void>;
@@ -127,7 +130,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
     };
   }, [model.visible]);
   const [panel, setPanel] = useState<
-    "boards" | "note" | "library" | "relations" | "context" | "view"
+    "boards" | "note" | "library" | "relations" | "context" | "view" | "components"
   >();
   const [zoom, setZoom] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
@@ -312,6 +315,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
     host.scrollTo?.({ top: 0, left: 0, behavior: "smooth" });
   }
   const panelLabels = {
+    components: "组件与扩展",
     boards: "白板",
     note: "笔记",
     library: "内容库",
@@ -654,6 +658,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
                 setSelected={setSelected}
                 actions={actions}
                 setDetails={setDetails}
+                blockRegistry={model.extensions?.snapshot.registry}
                 connection={model.connect ? connectionActions : undefined}
               />
             ))}
@@ -668,6 +673,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
       <div className="object-tool-rail" role="toolbar" aria-label="白板工具">
         {tool("boards", "切换或新建白板", <BoardRegular />)}
         {tool("note", "添加笔记", <AddRegular />)}
+        {model.extensions ? tool("components", "添加组件与扩展", <BoardRegular />) : null}
         {tool("library", "已保存的内容", <LibraryRegular />)}
         {tool("relations", "连接内容", <LinkRegular />)}
         {tool("context", "白板对话", <ChatRegular />)}
@@ -724,6 +730,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
           />
         </Tooltip>
       </div>
+      {panel === "components" && model.extensions ? <div className="object-tool-panel" role="region" aria-label="组件与扩展">{panelHeader}<BlockComposer model={model} /></div> : null}
       {panel === "boards" ? (
         <div className="object-tool-panel" role="region" aria-label="白板列表">
           {panelHeader}
