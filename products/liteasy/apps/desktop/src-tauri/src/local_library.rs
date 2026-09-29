@@ -1367,6 +1367,7 @@ where
         .write_all(bytes)
         .and_then(|_| temporary.sync_all())
         .map_err(|error| format!("无法写入临时文件：{error}"))?;
+    drop(temporary);
 
     let result = publisher(&temporary_path, path).map_err(|error| format!("无法发布文件：{error}"));
     if result.is_err() && temporary_path.exists() {
@@ -1383,6 +1384,23 @@ fn publish_atomic_file(temporary_path: &Path, path: &Path) -> std::io::Result<()
 
 #[cfg(windows)]
 fn publish_atomic_file(temporary_path: &Path, path: &Path) -> std::io::Result<()> {
+    // std::fs accepts long paths, but the raw Win32 call below needs verbatim
+    // paths too. Canonicalize the parent because the destination may be new;
+    // do not canonicalize/follow an existing destination file itself.
+    let temporary_path = fs::canonicalize(temporary_path)?;
+    let parent = path.parent().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "missing destination parent",
+        )
+    })?;
+    let name = path.file_name().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "missing destination filename",
+        )
+    })?;
+    let path = fs::canonicalize(parent)?.join(name);
     let temporary_wide = temporary_path
         .as_os_str()
         .encode_wide()
@@ -4049,6 +4067,30 @@ mod tests {
 
         assert!(observed_existing.get());
         assert_eq!(fs::read(&path).unwrap(), b"new");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn atomic_publish_creates_and_replaces_files_in_long_nested_paths() {
+        // Keep the original (non-canonical) temp path, as a first sync does.
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("liteasy-long-{}-{nonce}", std::process::id()));
+        let directory = root
+            .join("a".repeat(64))
+            .join("b".repeat(64))
+            .join("c".repeat(64))
+            .join("d".repeat(64));
+        let path = directory.join("研究笔记.md");
+        assert!(path.as_os_str().len() > 260);
+        super::write_bytes_atomically(&path, b"first").unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"first");
+        super::write_bytes_atomically(&path, b"updated").unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"updated");
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
         fs::remove_dir_all(root).unwrap();
     }
 
