@@ -7,6 +7,8 @@ import { PaperNoteEditor } from "../features/paper-projects/PaperNoteEditor";
 import { useExternalNoteController } from "../controllers/useExternalNoteController";
 import { ExternalNoteEditor } from "../features/note-files/ExternalNoteEditor";
 import { useWindowControls } from "../controllers/useWindowControls";
+import { useImmersiveReadingController } from "../controllers/useImmersiveReadingController";
+import { ImmersiveReadingControls } from "./ImmersiveReadingControls";
 import { WorkspaceCommandBar } from "./WorkspaceCommandBar";
 import { FileStatusBar } from "./FileStatusBar";
 import { useRecommendationLibraryController } from "../controllers/useRecommendationLibraryController";
@@ -312,6 +314,7 @@ export function AppShell({
   } = useLocalLibrary(localLibraryLoader);
   const pdfFileStatus = usePdfFileStatus();
   const windowControls = useWindowControls();
+  const immersive = useImmersiveReadingController();
   const paneLayout = usePaneLayout();
   const dock = useDockLayout();
   const assistantSurfaceHost = useMemo(createDockSurfaceHost, []);
@@ -1434,8 +1437,8 @@ export function AppShell({
   const leftPaneUtilitySize = paneLayout.collapsed.left ? "0px" : "4px";
   const rightPaneSize = paneLayout.collapsed.right ? "0px" : `minmax(0, ${paneLayout.layout.right}fr)`;
   const rightPaneUtilitySize = paneLayout.collapsed.right ? "0px" : "4px";
-  const bottomPaneVisible = !paneLayout.collapsed.bottom;
-  const visibleHorizontalRegions = dock.layout.horizontalOrder.filter((region) => !isBaseDockRegionId(region) || region === "main" || !paneLayout.collapsed[region]);
+  const bottomPaneVisible = immersive.active || !paneLayout.collapsed.bottom;
+  const visibleHorizontalRegions = dock.layout.horizontalOrder.filter((region) => immersive.active || !isBaseDockRegionId(region) || region === "main" || !paneLayout.collapsed[region]);
   const defaultRegionWeights = { main: paneLayout.layout.center, left: paneLayout.layout.left, right: paneLayout.layout.right };
   function regionWeight(region: DockRegionId) {
     return dock.layout.regionWidths[region] ?? defaultRegionWeights[region as keyof typeof defaultRegionWeights] ?? 32;
@@ -2431,12 +2434,15 @@ export function AppShell({
   });
   const workspaceShell = useWorkspaceShellController({
     surfaces: shellSurfaces,
-    layoutActions: (["left", "right", "bottom"] as const).map((region) => ({
+    layoutActions: [...(["left", "right", "bottom"] as const).map((region) => ({
       id: region,
       label: { left: "左侧栏", right: "右侧栏", bottom: "下栏" }[region],
       checked: !paneLayout.collapsed[region],
       onSelect: () => paneLayout.setCollapsed(region, !paneLayout.collapsed[region])
     })),
+      { id: "immersive-reading", label: immersive.active ? "退出沉浸阅读（Esc）" : "沉浸阅读（三击文件）", onSelect: immersive.active ? immersive.exit : immersive.enter },
+      { id: "fullscreen-focus", label: "全屏专注（F11）", checked: immersive.mode === "fullscreen", onSelect: immersive.toggleFullscreen }
+    ],
     openSettings: () => openDockedLeftRailView("settings")
   });
 
@@ -2459,7 +2465,7 @@ export function AppShell({
   } as CSSProperties;
   const appFrameClassName = `app-frame workspace-frame${
     runtimeTheme.kind === "preset" && runtimeTheme.preset === "playful" ? " theme-playful" : ""
-  }${runtimeTheme.kind === "generated" ? " theme-generated" : ""}`;
+  }${runtimeTheme.kind === "generated" ? " theme-generated" : ""}${immersive.active ? " is-immersive" : ""}`;
   const appFrameScope =
     runtimeTheme.kind === "generated" ? runtimeTheme.theme.scope.join(" ") : undefined;
 
@@ -2469,7 +2475,9 @@ export function AppShell({
     <NotesContext.Provider value={notes.port}>
     <HelpContext.Provider value={help.port}>
     <ObjectWorkbenchContext.Provider value={objectWorkbench.port}>
-    <div className={appFrameClassName} data-theme-scope={appFrameScope} style={appFrameStyle}>
+    <div ref={immersive.root} className={appFrameClassName} data-theme-scope={appFrameScope} style={appFrameStyle}
+      data-reading-focus={immersive.mode} data-focus-edge={immersive.edge} onClickCapture={immersive.onClickCapture}>
+      <ImmersiveReadingControls {...immersive} />
       <WorkspaceCommandBar state={workspaceShell.toolbar} windowControls={windowControls} onOpenAi={aiWorkbench.show} />
       {workbenchCommands.open ? <WorkbenchCommandsDialog onClose={workbenchCommands.close} onExecute={workbenchCommands.execute} /> : null}
       <AiWorkbenchDialog open={aiWorkbench.open} papers={aiWorkbench.papers} openedPapers={openReaderPapers}

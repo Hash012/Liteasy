@@ -64,6 +64,11 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
   const [commentsVisible, setCommentsVisible] = useState(true);
   const [panel, setPanel] = useState<ReadingPanel | null>(null);
   const [focus, setFocus] = useState(false);
+  useEffect(() => {
+    const releaseLocalFocus = () => setFocus(false);
+    window.addEventListener("liteasy:immersive-reading-enter", releaseLocalFocus);
+    return () => window.removeEventListener("liteasy:immersive-reading-enter", releaseLocalFocus);
+  }, []);
   const { modalAttributes } = useModalAttributes({ trapFocus: focus, legacyTrapFocus: true });
   const { findFirstFocusable } = useFocusFinders();
   const [draft, setDraft] = useState<{ excerpt: string; page: string; id?: string; revision?: number }>();

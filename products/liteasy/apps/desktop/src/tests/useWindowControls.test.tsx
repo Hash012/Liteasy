@@ -54,7 +54,7 @@ test("the undecorated window grants exactly the commands required by the title b
   const config = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8"));
   const capability = JSON.parse(readFileSync("src-tauri/capabilities/main.json", "utf8"));
   expect(config.app.windows[0].decorations).toBe(false);
-  for (const command of ["is-maximized", "minimize", "toggle-maximize", "internal-toggle-maximize", "close", "start-dragging"]) {
+  for (const command of ["is-maximized", "is-fullscreen", "set-fullscreen", "minimize", "toggle-maximize", "internal-toggle-maximize", "close", "start-dragging"]) {
     expect(capability.permissions).toContain(`core:window:allow-${command}`);
   }
   expect(capability.windows).toEqual(["main"]);

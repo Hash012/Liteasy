@@ -1,0 +1,58 @@
+/* Keep reader DOM, drafts and layout preferences intact while hiding chrome. */
+.app-frame.workspace-frame.is-immersive { position: relative; grid-template-rows: minmax(0, 1fr); }
+.workspace-frame.is-immersive > .app-shell { grid-area: 1 / 1; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); padding: 0; gap: 0; }
+.is-immersive .dock-workspace-columns { grid-area: 1 / 1; grid-template-columns: minmax(0, 1fr) !important; }
+.is-immersive .dock-workspace-columns > [data-region="main"] { grid-area: 1 / 1; border: 0; border-radius: 0; }
+.is-immersive :is(.dock-workspace-columns > .pane-resizer, .pane-utility-row) { display: none; }
+.is-immersive .dock-workspace-columns > .dock-region:not([data-region="main"]) {
+  position: absolute; visibility: hidden; pointer-events: none; z-index: 65;
+  top: 8px; bottom: 8px; width: min(420px, calc(100% - 80px)); box-shadow: var(--shadow16);
+}
+.is-immersive [data-region="left"] { left: 64px; }
+.is-immersive [data-region="right"] { right: 8px; }
+.workspace-frame.is-immersive > .workspace-command-bar {
+  position: absolute; z-index: 70; inset: 0 0 auto; visibility: hidden; pointer-events: none;
+}
+.workspace-frame.is-immersive > .file-status-bar {
+  position: absolute; z-index: 70; inset: auto 0 0; visibility: hidden; pointer-events: none;
+}
+.workspace-frame.is-immersive .activity-bar {
+  position: absolute; z-index: 65; inset: 0 auto 0 0; width: 60px; visibility: hidden; pointer-events: none;
+  background: var(--colorNeutralBackground2);
+}
+.is-immersive .dock-bottom-columns {
+  position: absolute; z-index: 65; left: 8px; right: 8px; bottom: 26px; height: min(36vh, 360px);
+  visibility: hidden; pointer-events: none; box-shadow: var(--shadow16);
+}
+.is-immersive[data-focus-edge="left"] :is(.activity-bar, .dock-workspace-columns > [data-region="left"]),
+.is-immersive[data-focus-edge="right"] .dock-workspace-columns > [data-region="right"],
+.is-immersive[data-focus-edge="bottom"] :is(.dock-bottom-columns, .file-status-bar),
+.is-immersive[data-focus-edge="top"] > .workspace-command-bar { visibility: visible; pointer-events: auto; }
+.is-immersive [data-region="main"] { grid-template-rows: minmax(0, 1fr); }
+.is-immersive [data-region="main"] > .dock-region-tab-row { display: none; }
+.is-immersive[data-focus-edge="top"] [data-region="main"] { grid-template-rows: auto minmax(0, 1fr); padding-top: var(--shell-top-height); }
+.is-immersive[data-focus-edge="top"] [data-region="main"] > .dock-region-tab-row { display: flex; padding-right: 250px; }
+.is-immersive:not([data-focus-edge="top"]) [data-region="main"] :is(.pdf-reader-top, .paper-reading-toolbar, .paper-resource-tab__header, .reading-document__toolbar, .external-note-editor > header) { display: none; }
+.is-immersive:not([data-focus-edge="top"]) [data-region="main"] :is(.reading-library-toolbar, .reader-reading-surface > button, .reader-reading-surface > .reader-ai-feedback) { display: none !important; }
+.is-immersive:not([data-focus-edge="bottom"]) [data-region="main"] :is(.paper-reading-progress, .reading-document__footer) { display: none; }
+.is-immersive:not([data-focus-edge="top"]) [data-region="main"] :is(.pdf-left-sidebar, .pdf-whiteboard-pane, .paper-reading-comments, .paper-reading-navigation, .reading-document__sidebar) { display: none; }
+.is-immersive:not([data-focus-edge="top"]) [data-region="main"] :is(.pdf-workspace, .paper-reading-body) { grid-template-columns: minmax(0, 1fr) !important; }
+.is-immersive [data-region="main"] .pdf-main-stage { grid-template-rows: minmax(0, 1fr); }
+.is-immersive[data-focus-edge="top"] [data-region="main"] .pdf-main-stage { grid-template-rows: auto minmax(0, 1fr); }
+.is-immersive [data-region="main"] .paper-reading-workspace.is-focused { position: relative; inset: auto; z-index: auto; }
+
+.immersive-edge { position: absolute; z-index: 80; border: 0; padding: 0; opacity: 0; background: transparent; }
+.immersive-edge-top { top: 0; left: 6px; right: 6px; height: 5px; }
+.immersive-edge-bottom { bottom: 0; left: 6px; right: 6px; height: 5px; }
+.immersive-edge-left { left: 0; top: 6px; bottom: 6px; width: 5px; }
+.immersive-edge-right { right: 0; top: 6px; bottom: 6px; width: 5px; }
+.immersive-edge:focus-visible { opacity: 1; background: var(--colorBrandStroke1); outline: none; }
+.immersive-controls {
+  position: absolute; z-index: 75; top: 46px; right: 12px; display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--colorNeutralForeground2); background: var(--colorNeutralBackground2);
+  border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; padding: 3px 6px;
+  visibility: hidden; pointer-events: none;
+}
+[data-focus-edge="top"] .immersive-controls, .immersive-controls:focus-within { visibility: visible; pointer-events: auto; }
+.immersive-error { position: absolute; z-index: 90; top: 88px; right: 12px; max-width: min(400px, 90vw); padding: 10px; border-radius: 6px; background: var(--colorNeutralBackground1); box-shadow: var(--shadow16); }
+@media (max-width: 700px) { .immersive-controls > span { display: none; } .is-immersive[data-focus-edge="top"] [data-region="main"] > .dock-region-tab-row { padding-right: 86px; } }

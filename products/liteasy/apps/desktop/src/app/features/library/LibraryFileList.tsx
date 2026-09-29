@@ -46,6 +46,7 @@ export function LibraryFileList({ access, query, category, filters, folderPath, 
             }
           }}
           aria-label={`选择文件 ${entry.title}`} aria-pressed={access.selectedId === entry.id}
+          data-reading-entry={entry.format !== "other" ? "true" : undefined}
           onClick={() => access.onInspect(entry)} onFocus={() => access.onInspect(entry)}
           onDoubleClick={() => access.onOpen(entry)} onKeyDown={(event) => {
             if (event.key === "Enter") { event.preventDefault(); access.onOpen(entry); }

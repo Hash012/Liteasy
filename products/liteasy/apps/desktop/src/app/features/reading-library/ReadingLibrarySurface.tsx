@@ -18,7 +18,7 @@ export function ReadingLibrarySurface(props: {
   const activeEntry = props.entries.find((entry) => entry.id === props.active?.id);
   return <section className="reading-library-surface" aria-label="文件阅读器" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
     {props.active ? <>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderBottom: "1px solid var(--line-1)" }}>
+      <div className="reading-library-toolbar" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderBottom: "1px solid var(--line-1)" }}>
         <Button appearance="subtle" icon={<ArrowLeftRegular />} onClick={props.onCloseReader}>返回文献库</Button>
         {activeEntry ? props.renderLocation(activeEntry) : null}
       </div>

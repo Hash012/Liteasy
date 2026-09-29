@@ -1107,6 +1107,7 @@ function LibraryPaneContent({
               <button
                 onClick={selectEntry}
                 onDoubleClick={openEntry}
+                data-reading-entry={entry.bodyAvailable ? "true" : undefined}
                 onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); openEntry(); } }}
                 aria-pressed={selected}
                 className="library-paper-title"
@@ -1187,6 +1188,7 @@ function LibraryPaneContent({
                     icon={<LibraryItemIcon itemKey={`child:${sourcePaper.id}:${child.id}`} kind={child.kind} />}
                     title={child.meta ? `${child.label} · ${child.meta}` : child.label}
                     aria-label={`打开论文文件：${child.label}`}
+                    data-reading-entry="true"
                     draggable
                     onDragStart={(event) => {
                       event.stopPropagation();

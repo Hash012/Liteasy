@@ -322,6 +322,7 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
                     model.selectItem(item);
                   }}
                   onDoubleClick={() => model.openSource(item)}
+                  data-reading-entry={!item.unavailable ? "true" : undefined}
                   aria-label={`查看笔记 ${item.title}`}
                   aria-expanded={model.selected?.key === item.key}
                 >

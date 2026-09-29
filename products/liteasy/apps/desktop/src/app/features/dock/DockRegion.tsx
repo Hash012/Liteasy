@@ -333,6 +333,7 @@ export function DockRegion({
       aria-label={`${regionLabel} Dock 区域`}
       className={`dock-region dock-region-${regionId} ${dropActive ? "drop-active" : ""}`}
       data-region={regionId}
+      tabIndex={-1}
       ref={regionElement}
       onDragLeave={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
@@ -380,6 +381,7 @@ export function DockRegion({
                         draggable={descriptor.allowedRegions.length > 1}
                         id={`dock-tab-${regionId}-${itemId}`}
                         onClick={() => onActivateItem(itemId)}
+                        data-reading-entry={regionId === "main" && ["reader", "paper-note", "note-file-reader", "document-reader", "recommendation-reader", "board"].includes(itemId) ? "true" : undefined}
                         onDragEnd={() => setDropActive(false)}
                         onDragStart={(event) => {
                           event.dataTransfer.effectAllowed = "move";
@@ -421,6 +423,7 @@ export function DockRegion({
                     draggable={tab.draggable && Boolean(onMoveDynamicTab)}
                     id={`dock-tab-${regionId}-${tab.id}`}
                     onClick={tab.onActivate}
+                    data-reading-entry={regionId === "main" ? "true" : undefined}
                     onDragEnd={() => setDropActive(false)}
                     onDragStart={(event) => {
                       event.dataTransfer.effectAllowed = "move";

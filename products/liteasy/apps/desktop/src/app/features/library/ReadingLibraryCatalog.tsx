@@ -105,6 +105,7 @@ export function ReadingLibraryCatalog({ entries, loading = false, message, onImp
               tabIndex={entry.id === selected?.id || (!visibleEntries.some((item) => item.id === selected?.id) && offset === 0) ? 0 : -1}
               aria-selected={entry.id === selected?.id} onClick={() => setSelectedId(entry.id)} onFocus={() => setSelectedId(entry.id)}
               onDoubleClick={() => void open(entry)} onKeyDown={(event) => navigateRows(event, offset)}
+              data-reading-entry={entry.format !== "other" ? "true" : undefined}
             >
               <td><div className="reading-catalog-row-main"><span className="reading-catalog-format-icon" aria-hidden="true"><FormatIcon format={entry.format} /></span><div>
                 <strong>{entry.title}</strong><span className="reading-catalog-authors">{entry.authors?.join(" · ") || entry.fileName || "作者未提供"}</span>
