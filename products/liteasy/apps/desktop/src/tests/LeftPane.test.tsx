@@ -212,17 +212,18 @@ describe("LeftPane", () => {
       render(<LeftPane {...createProps({ leftRailView: "library", recommendationItems: [paper] })} />);
     });
     const panel = within(screen.getByRole("region", { name: "关联推荐" }));
-    expect(panel.getByText(dateLabel)).toBeInTheDocument();
+    const row = within(panel.getByRole("button", { name: `查看推荐 ${paper.title}` }));
+    expect(row.getByText(dateLabel)).toBeInTheDocument();
     expect(panel.queryByText(/^引用 /)).not.toBeInTheDocument();
     expect(panel.queryByText(paper.reason)).not.toBeInTheDocument();
     expect(panel.queryByText(/2026-09-21|2024-02-29|2024-02-30|invalid-date|NaN/)).not.toBeInTheDocument();
   });
 
-  test("keeps recommendation rows compact and forwards inspect and download with their full metadata", async () => {
+  test("keeps recommendation rows compact and forwards inspection and detail opening with full metadata", async () => {
     const user = userEvent.setup();
     const onRecommendationStyleChange = vi.fn();
     const onInspectRecommendation = vi.fn();
-    const onDownloadRecommendation = vi.fn(async () => "已下载到文献库 / Download。");
+    const onOpenRecommendation = vi.fn();
     const recommendation: RecommendationItem = {
       id: "classic-paper",
       title: "Foundations of attention",
@@ -241,7 +242,7 @@ describe("LeftPane", () => {
       leftRailView: "library",
       onRecommendationStyleChange,
       onInspectRecommendation,
-      onDownloadRecommendation,
+      onOpenRecommendation,
       recommendationStyle: "balanced",
       recommendationStatus: "ready",
       recommendationItems: [recommendation]
@@ -249,16 +250,16 @@ describe("LeftPane", () => {
     const panel = within(screen.getByRole("region", { name: "关联推荐" }));
     await user.selectOptions(panel.getByRole("combobox", { name: "推荐风格" }), "classic");
     expect(onRecommendationStyleChange).toHaveBeenCalledWith("classic");
-    expect(panel.getByText("2017")).toBeInTheDocument();
+    const row = panel.getByRole("button", { name: `查看推荐 ${recommendation.title}` });
+    expect(within(row).getByText("2017")).toBeInTheDocument();
     expect(panel.queryByText("引用 1,200")).not.toBeInTheDocument();
     expect(panel.queryByText(recommendation.reason)).not.toBeInTheDocument();
     expect(panel.queryByRole("link", { name: "Crossref" })).not.toBeInTheDocument();
-    const row = panel.getByRole("button", { name: `查看推荐 ${recommendation.title}` });
     await user.click(row);
     expect(onInspectRecommendation).toHaveBeenCalledExactlyOnceWith(recommendation);
-    expect(onDownloadRecommendation).not.toHaveBeenCalled();
+    expect(onOpenRecommendation).not.toHaveBeenCalled();
     await user.dblClick(row);
-    expect(onDownloadRecommendation).toHaveBeenCalledExactlyOnceWith(recommendation);
+    expect(onOpenRecommendation).toHaveBeenCalledExactlyOnceWith(recommendation);
   });
 
   test("uses task-specific pane headers", () => {

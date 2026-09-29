@@ -53,10 +53,11 @@ test("chat sends dropped resources through the public context resolver and prese
   first.unmount();
   render(<Harness />);
   expect(await screen.findByRole("button", { name: "移除上下文：研究记录" })).toBeInTheDocument();
-  await waitFor(() => expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveValue("请审阅这段内容"));
+  await waitFor(() => expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveValue("研究记录 请审阅这段内容"));
   await user.click(screen.getByRole("button", { name: "发送" }));
   await waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
   expect(submit.mock.calls[0][0].contextRefs).toEqual([refOf(note!)]);
+  expect(submit.mock.calls[0][0].input.message).toBe("研究记录 请审阅这段内容");
   expect(submit.mock.calls[0][0].attachments).toBeUndefined();
   expect(await screen.findByText("读到：这段是用户的真实笔记内容")).toBeInTheDocument();
   expect(workbench!.visible).toBe(false);

@@ -138,11 +138,12 @@ test("a pasted Liteasy Path becomes fixed object context in the public Agent req
   const composer = screen.getByPlaceholderText("输入你的问题或命令");
   fireEvent.paste(composer, { clipboardData: { getData: () => "liteasy://objects/note-methods?scope=device&revision=note-revision-3" } });
   expect(await screen.findByRole("button", { name: "移除上下文：路径笔记" })).toBeInTheDocument();
-  expect(composer).toHaveValue("");
+  expect(composer).toHaveValue("路径笔记 ");
   await user.type(composer, "分析这份笔记");
   await user.click(screen.getByRole("button", { name: "发送" }));
   await waitFor(() => expect(submit).toHaveBeenCalledWith(expect.objectContaining({
-    contextRefs: [noteRef]
+    contextRefs: [noteRef],
+    input: expect.objectContaining({ message: "路径笔记 分析这份笔记" })
   })));
 });
 

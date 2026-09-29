@@ -417,7 +417,14 @@ test("projects public Agent streaming events into the expandable work status car
 
   expect(await screen.findByText(/^已完成 ·/)).toBeInTheDocument();
   expect(screen.getAllByLabelText("AI 回复")).toHaveLength(1);
-  expect(screen.getByText("上下文 约 25% · 上限 16,384 tokens")).toBeVisible();
+  const contextUsage = screen.getByRole("meter", { name: "上下文占用" });
+  expect(contextUsage).toHaveAttribute("aria-valuenow", "4096");
+  expect(contextUsage).toHaveAttribute("aria-valuemax", "16384");
+  await user.hover(contextUsage);
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("上下文占用 约 25%");
+  expect(screen.getByRole("tooltip")).toHaveTextContent("4,096 tokens");
+  expect(screen.getByRole("tooltip")).toHaveTextContent("16,384 tokens");
+  await user.unhover(contextUsage);
   expect(screen.getByLabelText("已保存的资产修改")).toHaveTextContent("已更新 CicN");
   await user.click(screen.getByRole("button", { name: "查看 Agent 执行过程" }));
   const streamStep = screen.getByRole("button", { name: "理解用户问题" });
