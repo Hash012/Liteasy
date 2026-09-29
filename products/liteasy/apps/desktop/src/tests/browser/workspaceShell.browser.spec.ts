@@ -11,7 +11,13 @@ async function expectGeometry(page: Page) {
   const workspace = (await page.getByTestId("workbench-layout").boundingBox())!;
   expect(top.y).toBe(0);
   expect(top.height).toBe(40);
-  expect(bottom.height).toBe(26);
+  const fileName = page.locator(".shell-file-name");
+  if (await fileName.count()) {
+    expect(bottom.height).toBeGreaterThanOrEqual(26);
+    expect(await fileName.evaluate((element) => element.scrollWidth <= element.clientWidth && element.scrollHeight <= element.clientHeight)).toBe(true);
+  } else {
+    expect(bottom.height).toBe(26);
+  }
   expect(bottom.y + bottom.height).toBe(page.viewportSize()!.height);
   expect(workspace.y).toBe(top.height);
   expect(workspace.y + workspace.height).toBe(bottom.y);

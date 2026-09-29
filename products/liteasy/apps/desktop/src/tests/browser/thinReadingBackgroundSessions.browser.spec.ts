@@ -31,6 +31,7 @@ test("generates reading layers in the background and opens their session only fr
     await expect(page.getByLabel("测试响应")).toHaveValue("连接测试响应。");
     await page.getByRole("button", { name: "文献库", exact: true }).click();
     await page.getByLabel("选择 das24a.pdf").check();
+    await page.getByRole("button", { name: "das24a.pdf", exact: true }).dblclick();
     await page.getByRole("button", { name: "关闭 Liteasy Chat", exact: true }).click();
     await expect(page.locator(".assistant-pane")).not.toBeVisible();
     await page.getByRole("button", { name: "AI 薄读", exact: true }).click();
@@ -45,8 +46,10 @@ test("generates reading layers in the background and opens their session only fr
     await page.getByPlaceholder("输入你的问题或命令").fill("保留当前草稿");
     releases[0]();
     await expect(page.locator(".thin-reading").getByRole("heading", { name: "当前层概览", exact: true })).toBeVisible();
-    await expect(page.getByLabel("当前会话")).toContainText("普通对话");
+    await expect(page.getByLabel("当前会话")).toHaveAttribute("data-session-kind", "conversation");
     await expect(page.getByPlaceholder("输入你的问题或命令")).toHaveValue("保留当前草稿");
+    // Streamed text can be visible before the current generation is committed.
+    await expect(status).toHaveCount(0);
     await page.getByRole("button", { name: "关闭 Liteasy Chat", exact: true }).click();
     await page.getByRole("button", { name: "深入阅读“外部记忆”", exact: true }).click();
     await expect(status).toContainText("生成中");

@@ -130,14 +130,14 @@ test.each([false, true])("creates a background thin-reading session without chan
   const input = screen.getByPlaceholderText("输入你的问题或命令");
   await user.type(input, "当前对话的草稿");
   rerender(<AssistantPane {...props} artifactTasks={[task]} />);
-  await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("普通对话新对话"));
+  await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("新对话"));
   expect(input).toHaveValue("当前对话的草稿");
   expect(screen.queryByText(/正在规划薄读路径与证据范围/)).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "历史" }));
   expect(screen.getByRole("button", { name: "打开会话：生成：薄读" })).toBeInTheDocument();
   rerender(<AssistantPane {...props} artifactTasks={[task]}
     artifactSessionOpenRequest={{ requestId: "details-1", taskId: task.id }} />);
-  await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("产物生成生成：薄读"));
+  await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("生成：薄读"));
   expect(screen.getAllByText(/正在规划薄读路径与证据范围/).length).toBeGreaterThan(0);
   expect(screen.getByRole("button", { name: "中断薄读" })).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "查看 Agent 执行过程" }));
@@ -150,12 +150,12 @@ test.each([false, true])("creates a background thin-reading session without chan
   rerender(<AssistantPane {...props} developerDiagnostics={!developerDiagnostics}
     artifactTasks={[{ ...task, artifactId: "thin-paper", message: "正在核验薄读证据" }]}
     artifactSessionOpenRequest={{ requestId: "details-2", taskId: task.id }} />);
-  await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("产物生成生成：薄读"));
+  await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("生成：薄读"));
   expect(screen.getAllByText(/正在核验薄读证据/).length).toBeGreaterThan(0);
   await user.click(screen.getByRole("button", { name: "新建" }));
   rerender(<AssistantPane {...props} artifactTasks={[{ ...task, artifactId: "thin-paper", progress: 70 }]}
     artifactSessionOpenRequest={{ requestId: "details-2", taskId: task.id }} />);
-  await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("普通对话"));
+  await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveAttribute("data-session-kind", "conversation"));
   expect(screen.queryByRole("button", { name: "中断薄读" })).not.toBeInTheDocument();
 });
 
@@ -170,7 +170,7 @@ test("preserves a question asked from generation details when task progress chan
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "解释这一段");
   await user.click(screen.getByRole("button", { name: "发送", exact: true }));
   await screen.findByText(/云端回答：解释这一段/);
-  expect(screen.getByLabelText("当前会话")).toHaveTextContent("普通对话");
+  expect(screen.getByLabelText("当前会话")).toHaveAttribute("data-session-kind", "conversation");
   rerender(<AssistantPane {...props} artifactTasks={[{ ...task, progress: 60 }]} />);
   expect(screen.getAllByText("解释这一段", { exact: true }).length).toBeGreaterThan(0);
   expect(screen.getByText(/云端回答：解释这一段/)).toBeInTheDocument();
@@ -215,7 +215,7 @@ test("keeps thin-reading branch progress on the active reading page", async () =
   );
 
   await waitFor(() => {
-    expect(screen.getByLabelText("当前会话")).toHaveTextContent("普通对话新对话");
+    expect(screen.getByLabelText("当前会话")).toHaveTextContent("新对话");
   });
 });
 
@@ -911,7 +911,7 @@ test("restores an archived assistant session from history", async () => {
   await user.click(screen.getByRole("button", { name: "打开会话：/关闭联网推荐" }));
 
   expect(screen.queryByLabelText("历史会话面板")).not.toBeInTheDocument();
-  expect(screen.getByLabelText("当前会话")).toHaveTextContent("普通对话");
+  expect(screen.getByLabelText("当前会话")).toHaveAttribute("data-session-kind", "conversation");
   expect(screen.getAllByText("/关闭联网推荐").length).toBeGreaterThan(0);
   expect(await screen.findByText(/已更新 联网推荐：false/)).toBeInTheDocument();
 });
@@ -964,7 +964,7 @@ test("keeps session actions separate from the unified composer command entry", a
   const sessionActions = screen.getByLabelText("会话操作");
 
   expect(within(sessionActions).getByRole("button", { name: "新建" })).toBeInTheDocument();
-  expect(within(sessionActions).getByRole("button", { name: "历史" })).toBeInTheDocument();
+  expect(within(screen.getByRole("group", { name: "对话顶栏" })).getByRole("button", { name: "历史" })).toBeInTheDocument();
   expect(within(sessionActions).queryByRole("button", { name: "命令" })).not.toBeInTheDocument();
   expect(screen.queryByLabelText("对话模式切换")).not.toBeInTheDocument();
   expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveAttribute(
@@ -1711,4 +1711,15 @@ test.each([["生成PPT", "ppt"], ["/制作提纲", "tree"]] as const)("lazy pape
   expect(fixture.captureFulltext).toHaveBeenCalledWith(["cicada"]);
   expect(fixture.captureMetadata).not.toHaveBeenCalled();
   expect(fixture.submit).not.toHaveBeenCalled();
+});
+
+test("opens settings from the single conversation toolbar without creating a message", async () => {
+  const onApplyPanelAction = vi.fn(() => "已打开设置");
+  render(<AssistantPane onGenerateArtifact={() => "unused"} onApplyPanelAction={onApplyPanelAction}
+    selectedSetStatus={{ importedCount: 0, selectedCount: 0, selectionLocked: false }} />);
+  const header = screen.getByRole("group", { name: "对话顶栏" });
+  expect(within(header).queryByText("普通对话")).not.toBeInTheDocument();
+  await userEvent.setup().click(within(header).getByRole("button", { name: "对话设置" }));
+  expect(onApplyPanelAction).toHaveBeenCalledExactlyOnceWith({ operation: "open", panel: "settings" });
+  expect(screen.getByLabelText("AI助手初始消息区")).toBeInTheDocument();
 });

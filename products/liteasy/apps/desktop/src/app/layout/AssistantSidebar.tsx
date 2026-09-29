@@ -119,7 +119,6 @@ export function AssistantSidebar({
 
   return (
     <section aria-label={regionLabel} className={`pane ${regionId} assistant-only-pane`}>
-      <div className="pane-header">AI 对话</div>
       {memoryNotice ? <div role="status" className="assistant-memory-notice">{memoryNotice} 可在个人中心查看。</div> : null}
       <div className="pane-body">
         <AssistantPane

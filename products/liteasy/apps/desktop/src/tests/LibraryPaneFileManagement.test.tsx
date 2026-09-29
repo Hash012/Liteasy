@@ -377,3 +377,16 @@ test("displays compact facet chips and combines quick tag selection with author 
   fireEvent.click(screen.getByRole("button", { name: "重置筛选" }));
   expect(screen.getByRole("button", { name: paper.title })).toBeInTheDocument();
 });
+
+test("shows a short author label while filtering with the full stored name", async () => {
+  await savePaperFileMetadata(paper.id, { authors: ["Ada Lovelace"], year: 2024 });
+  renderLibraryPane();
+  const chips = await screen.findByLabelText(`${paper.title} 的分类与标签`);
+  const author = within(chips).getByRole("button", { name: "作者：Ada Lovelace" });
+  expect(author).toHaveTextContent(/^Lovelace$/);
+  expect(author).toHaveAttribute("title", "作者：Ada Lovelace");
+  fireEvent.click(author);
+  fireEvent.click(screen.getByRole("button", { name: "筛选本地文件" }));
+  expect(screen.getByRole("textbox", { name: "筛选作者" })).toHaveValue("Ada Lovelace");
+  expect(screen.getByRole("button", { name: paper.title })).toBeInTheDocument();
+});

@@ -6,7 +6,7 @@
   --shell-icon-size: 16px;
   --shell-icon-button: 30px;
   --shell-status-font-size: 12px;
-  grid-template-rows: var(--shell-top-height) minmax(0, 1fr) var(--shell-bottom-height);
+  grid-template-rows: var(--shell-top-height) minmax(0, 1fr) auto;
   padding: 0;
   background: var(--colorNeutralBackground1);
 }
@@ -67,17 +67,20 @@
 }
 
 .file-status-bar {
-  height: var(--shell-bottom-height);
+  min-height: var(--shell-bottom-height, 26px);
+  height: auto;
+  flex-shrink: 0;
+  padding-block: 3px;
+  white-space: normal;
   background: var(--colorNeutralBackground2);
   border-top: 1px solid var(--colorNeutralStroke2);
   font-size: var(--shell-status-font-size);
-  line-height: 1;
+  line-height: 18px;
 }
 
-.shell-file-details { display: flex; align-items: center; flex: 1 1 auto; min-width: 0; gap: var(--shell-horizontal-gap); }
-.shell-file-name { flex: 0 1 auto; max-width: min(24vw, 240px); }
-.shell-file-metadata { flex: 0 1 auto; }
-.shell-file-name,
+.shell-file-details { display: flex; flex-wrap: wrap; align-items: center; flex: 1 1 auto; min-width: 0; column-gap: var(--shell-horizontal-gap, 8px); }
+.shell-file-name { flex: 0 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; color: var(--colorNeutralForeground1); }
+.shell-file-metadata { flex: 0 1 auto; min-width: 0; max-width: 100%; white-space: nowrap; color: var(--colorNeutralForeground3); }
 .shell-file-metadata,
 .shell-file-progress { overflow: hidden; text-overflow: ellipsis; }
 .shell-file-name:focus-visible { outline: 1px solid var(--colorStrokeFocus2); outline-offset: 2px; }

@@ -11,8 +11,8 @@ import { hasResourceContextTransfer, readContextPaper } from "../object-transfer
 import { contextRefSchema, type ContextRef } from "../context/objectContext";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { contextInstructionText, insertContextNames, type ContextInsertion } from "./inlineContext";
-import { Tooltip, Button, Input } from "@fluentui/react-components";
-import { AddRegular, DismissRegular, HistoryRegular } from "@fluentui/react-icons";
+import { Button, Input } from "@fluentui/react-components";
+import { AssistantSessionToolbar } from "./AssistantSessionToolbar";
 import { AssistantComposer } from "./AssistantComposer";
 import { AssistantHistoryPanel } from "./AssistantHistoryPanel";
 import { AssistantMessageList } from "./AssistantMessageList";
@@ -2207,72 +2207,24 @@ export function AssistantPane({
         if (context) addReaderContext(context);
       }}
     >
-      <div className="assistant-session-toolbar">
-        <div className="assistant-active-session" aria-label="当前会话" draggable
-          onDragStart={(event) => {
-            persistConversation();
-            event.dataTransfer.effectAllowed = "move";
-            event.dataTransfer.setData("application/x-liteasy-dock-item", "assistant");
-          }}>
-          <span className="assistant-active-session-kind">
-            {activeSession?.kind === "artifact_generation"
-              ? "产物生成"
-              : "普通对话"}
-          </span>
-          <span className="assistant-active-session-title">
-            {activeSession?.title ?? "新对话"}
-          </span>
-          {activeSession?.artifactId ? (
-            <button
-              className="assistant-session-open-artifact"
-              onClick={() => onOpenArtifact?.(activeSession.artifactId!)}
-              type="button"
-            >
-              打开产物
-            </button>
-          ) : null}
-        </div>
-        <div aria-label="会话操作" className="assistant-session-actions">
-          {activeSessionRunning ? (
-            <Tooltip content={cancellingSession ? "正在终止 AI 运行" : "终止当前 AI 运行"} positioning="below" relationship="description">
-              <button
-                aria-label={cancellingSession ? "终止中" : "终止"}
-                className="assistant-session-button assistant-icon-button danger"
-                disabled={cancellingSession}
-                onClick={() => void cancelActiveSession()}
-                title="终止当前 AI 运行"
-                type="button"
-              >
-                <DismissRegular />
-              </button>
-            </Tooltip>
-          ) : null}
-          <Tooltip content="新建对话" positioning="below" relationship="description">
-            <button
-              aria-label="新建"
-              className="assistant-session-button assistant-icon-button"
-              disabled={assistantState.pending}
-              onClick={() => startNewSession()}
-              title="开始一个新的 AI 对话"
-              type="button"
-            >
-              <AddRegular />
-            </button>
-          </Tooltip>
-          <Tooltip content={historyOpen ? "隐藏历史会话" : "查看历史会话"} positioning="below" relationship="description">
-            <button
-              aria-expanded={historyOpen}
-              aria-label={historyOpen ? "隐藏历史" : "历史"}
-              className="assistant-session-button assistant-icon-button"
-              onClick={() => setHistoryOpen((current) => !current)}
-              title="查看历史会话"
-              type="button"
-            >
-              <HistoryRegular />
-            </button>
-          </Tooltip>
-        </div>
-      </div>
+      <AssistantSessionToolbar
+        title={activeSession?.title ?? "新对话"}
+        kind={activeSession?.kind ?? "conversation"}
+        historyOpen={historyOpen}
+        running={activeSessionRunning}
+        cancelling={cancellingSession}
+        newSessionDisabled={assistantState.pending}
+        onToggleHistory={() => setHistoryOpen((current) => !current)}
+        onNewSession={() => startNewSession()}
+        onCancel={() => void cancelActiveSession()}
+        onOpenArtifact={activeSession?.artifactId && onOpenArtifact ? () => onOpenArtifact(activeSession.artifactId!) : undefined}
+        onOpenSettings={onApplyPanelAction ? () => onApplyPanelAction({ operation: "open", panel: "settings" }) : undefined}
+        onDragStart={(event) => {
+          persistConversation();
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("application/x-liteasy-dock-item", "assistant");
+        }}
+      />
 
       {historyOpen ? (
         <AssistantHistoryPanel

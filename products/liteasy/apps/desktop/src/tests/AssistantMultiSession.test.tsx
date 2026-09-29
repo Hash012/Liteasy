@@ -322,7 +322,7 @@ describe("AssistantPane multi-session registry", () => {
       />
     );
 
-    expect(await screen.findByText("产物生成")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveAttribute("data-session-kind", "artifact_generation"));
     expect(screen.getAllByText("生成：文献树").length).toBeGreaterThan(0);
     expect(screen.getByText(/正在检索论文证据/)).toBeInTheDocument();
     expect(screen.getByText(/late interaction/)).toBeInTheDocument();
@@ -354,7 +354,7 @@ describe("AssistantPane multi-session registry", () => {
 
     await user.click(screen.getByRole("button", { name: "新建" }));
     expect(closeAgentSession).not.toHaveBeenCalled();
-    expect(screen.getByLabelText("当前会话")).toHaveTextContent("普通对话");
+    expect(screen.getByLabelText("当前会话")).toHaveAttribute("data-session-kind", "conversation");
     expect(screen.queryByText(/正在生成树形结构/)).not.toBeInTheDocument();
 
     rerender(
@@ -382,13 +382,13 @@ describe("AssistantPane multi-session registry", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByLabelText("当前会话")).toHaveTextContent("普通对话");
+      expect(screen.getByLabelText("当前会话")).toHaveAttribute("data-session-kind", "conversation");
     });
     await user.click(screen.getByRole("button", { name: "历史" }));
     expect(screen.getByText("产物生成 · 已完成")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "打开会话：生成：文献树" }));
 
-    expect(screen.getByLabelText("当前会话")).toHaveTextContent("产物生成");
+    expect(screen.getByLabelText("当前会话")).toHaveAttribute("data-session-kind", "artifact_generation");
     expect(screen.getByText(/树形产物已保存/)).toBeInTheDocument();
     expect(screen.getByText(/完整树形结果/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "打开产物" }));

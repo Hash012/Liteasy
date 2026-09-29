@@ -767,71 +767,41 @@ body {
 }
 
 .assistant-session-toolbar {
-  display: grid;
-  gap: 10px;
-}
-
-.assistant-active-session {
   display: flex;
   align-items: center;
+  gap: 4px;
   min-width: 0;
-  gap: 8px;
+  min-height: 36px;
 }
 
-.assistant-active-session-kind {
-  flex: none;
-  border-radius: 999px;
-  background: rgba(222, 237, 248, 0.86);
-  color: #35627f;
-  font-size: calc(11px * var(--app-font-ratio, 1));
-  font-weight: 800;
-  padding: 4px 8px;
-}
-
+.assistant-active-session { display: flex; align-items: center; flex: 1 1 auto; min-width: 0; }
 .assistant-active-session-title {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  color: #4d6983;
-  font-size: calc(12px * var(--app-font-ratio, 1));
-  font-weight: 800;
+  color: var(--colorNeutralForeground1);
+  font-size: calc(14px * var(--app-font-ratio, 1));
+  font-weight: 500;
+  line-height: 24px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.assistant-session-open-artifact {
-  border: 1px solid #b9d3e6;
-  border-radius: 7px;
-  background: #eef7ff;
-  color: #1b66a2;
-  cursor: pointer;
+.assistant-active-session-title:focus-visible { outline: 1px solid var(--colorStrokeFocus2); outline-offset: -1px; border-radius: 4px; }
+.assistant-session-actions { display: flex; align-items: center; flex: 0 0 auto; gap: 2px; }
+.assistant-session-toolbar .assistant-toolbar-button {
   flex: 0 0 auto;
-  font-size: calc(11px * var(--app-font-ratio, 1));
-  font-weight: 800;
-  padding: 5px 8px;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 6px;
+  color: var(--colorNeutralForeground2);
 }
-
-.assistant-session-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
+.assistant-session-toolbar .assistant-toolbar-button.danger { color: var(--colorStatusDangerForeground1); }
 
 .assistant-mode-controls {
   display: flex;
   justify-content: stretch;
-}
-
-.assistant-session-button {
-  border: 1px solid var(--line-1);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.82);
-  color: var(--ink-2);
-  cursor: pointer;
-  font-size: calc(12px * var(--app-font-ratio, 1));
-  font-weight: 700;
-  min-height: 32px;
-  padding: 7px 11px;
 }
 
 .assistant-icon-button {
@@ -846,17 +816,6 @@ body {
 .assistant-icon-button svg {
   width: 18px;
   height: 18px;
-}
-
-.assistant-session-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.assistant-session-button.danger {
-  border-color: #dfb8b4;
-  background: #fff5f3;
-  color: #a33f37;
 }
 
 .assistant-history-panel {
@@ -6177,7 +6136,7 @@ button.pdf-overlay-mark:focus-visible {
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
-  padding: 14px;
+  padding: 6px 12px 12px;
 }
 
 .assistant-pane {

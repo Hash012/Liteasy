@@ -44,7 +44,6 @@ export function FileStatusBar({ status, actions, onDownloadRecommendation, recom
         {status?.name ? <Tooltip content={status.path ? `${status.name}\n${displayPath(status.path)}` : status.name} relationship="description">
           <span className="shell-file-name" tabIndex={0}>{status.name}</span>
         </Tooltip> : null}
-        {status?.name && details ? <span aria-hidden="true">·</span> : null}
         <span className="shell-file-metadata">{details || (!status?.name ? "Liteasy · 就绪" : "")}</span>
       </div>
       {status?.recommendation ? <Popover key={status.recommendation.id} positioning="above-end">
