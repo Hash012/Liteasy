@@ -1,3 +1,4 @@
+import type { ExtensionStudioService } from "../workflow-studio/extensionStudioService";
 import { z } from "zod";
 import { paperImportSchema, type PaperImportJobs } from "./paperImportJobs";
 import type { AgentAssetService } from "../resource-filesystem/agentAssetService";
@@ -53,8 +54,9 @@ const rpcResult = (id: unknown, result: unknown) => ({ jsonrpc: "2.0", id, resul
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 const toolResult = (result: unknown) => ({ content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: { result } });
 
-export function createLocalAssetMcp(assets: AgentAssetService, imports?: PaperImportJobs) {
+export function createLocalAssetMcp(assets: AgentAssetService, imports?: PaperImportJobs, studio?: ExtensionStudioService) {
   async function call(name: string, args: unknown, policy: LocalMcpPolicy) {
+    if (studio && Object.prototype.hasOwnProperty.call(studio.tools, name)) return toolResult(await studio.call(name, args, policy));
     const definition = definitions[name as keyof typeof definitions];
     if (!Object.prototype.hasOwnProperty.call(definitions, name) || !definition) throw new AgentAssetError("invalid_request", `Unknown tool: ${name}`);
     policy.signal?.throwIfAborted();
@@ -103,10 +105,10 @@ export function createLocalAssetMcp(assets: AgentAssetService, imports?: PaperIm
         case "initialize": result = { protocolVersion: protocolVersions.includes(String(params?.protocolVersion)) ? params!.protocolVersion : protocolVersions[0],
           serverInfo: { name: "liteasy-assets", version: "1.0.0" }, capabilities: { tools: {} }, instructions }; break;
         case "ping": result = {}; break;
-        case "tools/list": result = { tools: Object.entries(definitions).filter(([, tool]) => (policy.writable || !("write" in tool)) && (imports || !("imports" in tool))).map(([name, tool]) => ({
+        case "tools/list": result = { tools: [...Object.entries(studio?.tools ?? {}).filter(([, tool]) => policy.writable || !tool.write).map(([name, tool]) => ({ name, description: tool.description, inputSchema: z.toJSONSchema(tool.schema), annotations: { readOnlyHint: !tool.write, openWorldHint: false } })), ...Object.entries(definitions).filter(([, tool]) => (policy.writable || !("write" in tool)) && (imports || !("imports" in tool))).map(([name, tool]) => ({
           name, description: tool.description, inputSchema: z.toJSONSchema(tool.schema),
           annotations: { readOnlyHint: !("write" in tool), destructiveHint: name === "liteasy_write", idempotentHint: true, openWorldHint: name === "liteasy_import_papers" },
-        })) }; break;
+        }))] }; break;
         case "tools/call": {
           if (typeof params?.name !== "string" || (params.arguments !== undefined && !record(params.arguments))) return JSON.stringify(rpcError(id, -32602, "tools/call requires name and object arguments"));
           try { result = await call(params.name, params.arguments ?? {}, policy); }

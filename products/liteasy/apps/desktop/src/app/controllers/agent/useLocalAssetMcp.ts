@@ -1,3 +1,4 @@
+import type { ExtensionStudioService } from "../../features/workflow-studio/extensionStudioService";
 import { useEffect, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -15,7 +16,7 @@ function configureHost(args: { enabled: boolean; writable: boolean; scopeId: str
 }
 type Request = { requestId: string; scopeId: string; generation: string; writable: boolean; line: string };
 
-export function useLocalAssetMcp(scopeId: string, assets: AgentAssetService, importer?: { scopeKey: string; importPaper: ImportPaper }): LocalMcpModel {
+export function useLocalAssetMcp(scopeId: string, assets: AgentAssetService, importer?: { scopeKey: string; importPaper: ImportPaper }, studio?: ExtensionStudioService): LocalMcpModel {
   const [policy, setPolicy] = useState({ scopeId, enabled: false, writable: false });
   const [info, setInfo] = useState<LocalMcpInfo>();
   const [busy, setBusy] = useState(false);
@@ -41,7 +42,7 @@ export function useLocalAssetMcp(scopeId: string, assets: AgentAssetService, imp
         throw new Error("账号、目录或 MCP 权限已变化，导入已停止。");
       return current.current.importer!.importPaper(item, options, signal);
     }) : undefined;
-    const mcp = createLocalAssetMcp(assets, imports);
+    const mcp = createLocalAssetMcp(assets, imports, studio);
     setBusy(true); setError("");
     const active = () => !disposed && current.current.scopeId === scopeId && current.current.policy === policy;
     void (async () => {
@@ -76,7 +77,7 @@ export function useLocalAssetMcp(scopeId: string, assets: AgentAssetService, imp
       stop?.(); stopCancel?.();
       void configureHost({ enabled: false, writable: false, scopeId }).catch(() => undefined);
     };
-  }, [scopeId, assets, policy, importer?.scopeKey]);
+  }, [scopeId, assets, policy, importer?.scopeKey, studio]);
   return { info: info?.scopeId && info.scopeId !== scopeId ? undefined : info, busy, error, recent,
     configure: (enabled, writable) => setPolicy({ scopeId, enabled, writable: enabled && writable }) };
 }

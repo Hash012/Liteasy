@@ -1,0 +1,50 @@
+import "fake-indexeddb/auto";
+import { webcrypto } from "node:crypto";
+import { beforeEach, expect, test, vi } from "vitest";
+import { createObjectStorage } from "../app/features/objects/objectStorage";
+import { createExtensionDraftStore } from "../app/features/workflow-studio/extensionDraftStore";
+import { createExtensionPackageStore } from "../app/features/extensions/extensionPackageStore";
+import { paperLensPackage } from "../app/features/extensions/paperLensPackage";
+import { trialExtension } from "../app/features/workflow-studio/extensionTrial";
+import { createLocalAssetMcp } from "../app/features/local-mcp/localAssetMcp";
+import { createExtensionStudioService } from "../app/features/workflow-studio/extensionStudioService";
+import { createObjectRepository } from "../app/features/objects/objectRepository";
+import { createAgentAssetService } from "../app/features/resource-filesystem/agentAssetService";
+import { createWorkflowRunner } from "../app/features/workflows/workflowRunner";
+import { createOperationHost } from "../app/features/workflows/operationHost";
+
+beforeEach(() => vi.stubGlobal("crypto", webcrypto));
+function fixture() { const scope = crypto.randomUUID(), storage = createObjectStorage(scope, () => scope); return { scope, storage, drafts: createExtensionDraftStore(storage), packages: createExtensionPackageStore(storage) }; }
+test("draft CAS and AI fixture protection preserve user edits; actual isolated trials gate immutable publication", async () => {
+  const f = fixture(); const draft = await f.drafts.create("比较", (await paperLensPackage()).files);
+  await expect(f.drafts.publish(draft.id, f.packages)).rejects.toThrow("试跑");
+  const updated = await f.drafts.patch(draft.id, draft.revision, [{ path: "README.md", text: "用户的说明" }], "user");
+  await expect(f.drafts.patch(draft.id, draft.revision, [{ path: "README.md", text: "过时覆盖" }])).rejects.toThrow("合并");
+  await expect(f.drafts.patch(draft.id, updated.revision, [{ path: "fixtures/case-0.json", text: null }])).rejects.toThrow("验收");
+  const report = await trialExtension(updated, () => true);
+  expect(report.cases).toHaveLength(3); expect(report.cases.every((item) => item.passed)).toBe(true);
+  await f.drafts.saveReport(draft.id, report);
+  const published = await f.drafts.publish(draft.id, f.packages);
+  expect(published.bundle.files["extension.lock.json"]).toContain(published.manifest.version);
+  expect((await f.packages.list())[0].enabled).toBe(false);
+  const changed = await f.drafts.patch(draft.id, updated.revision, [{ path: "README.md", text: "新内容需要重新测试" }], "user");
+  await expect(f.drafts.publish(changed.id, f.packages)).rejects.toThrow("试跑");
+  expect((await f.drafts.get(changed.id)).files["fixtures/case-0.json"]).toBe(updated.files["fixtures/case-0.json"]);
+});
+test("failed fixture assertions are real failures, and MCP projects the same authoring service without granting activation", async () => {
+  const f = fixture(), repository = createObjectRepository(f.storage, f.scope);
+  const assets = createAgentAssetService({ scopeId: f.scope, active: () => true });
+  const runner = createWorkflowRunner(f.storage, createOperationHost({ storage: f.storage, assets, scope: f.scope, enabled: () => true }), f.scope);
+  const studio = createExtensionStudioService({ drafts: f.drafts, packages: f.packages, runner, repository, active: () => true, refresh: async () => undefined });
+  const mcp = createLocalAssetMcp(assets, undefined, studio);
+  const list = JSON.parse((await mcp.handleLine(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }), { writable: false }))!);
+  expect(list.result.tools.some((tool: { name: string }) => tool.name === "liteasy_extension_catalog")).toBe(true);
+  expect(list.result.tools.some((tool: { name: string }) => tool.name === "liteasy_extension_patch")).toBe(false);
+  const response = JSON.parse((await mcp.handleLine(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "liteasy_extension_create", arguments: { title: "从 MCP 开始" } } }), { writable: true }))!);
+  expect(response.result.isError).toBeUndefined();
+  const draft = response.result.structuredContent.result;
+  const caseData = JSON.parse(draft.files["fixtures/case-0.json"]); caseData.assertions[0].equals = "错误的预期";
+  const changed = await f.drafts.patch(draft.id, draft.revision, [{ path: "fixtures/case-0.json", text: JSON.stringify(caseData) }], "user");
+  const report = await trialExtension(changed, () => true); expect(report.passed).toBe(false); expect(report.cases[0].error).toContain("验收");
+  expect((await f.packages.list()).length).toBe(0);
+});

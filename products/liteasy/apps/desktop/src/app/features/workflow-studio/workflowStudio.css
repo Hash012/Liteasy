@@ -1,0 +1,10 @@
+.workflow-studio { gap: 12px; }
+.studio-graph { height: 380px; min-height: 220px; border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; overflow: hidden; background: var(--colorNeutralBackground2); }
+.studio-graph .react-flow__node { color: var(--colorNeutralForeground1); background: var(--colorNeutralBackground1); border-color: var(--colorNeutralStroke2); border-radius: 8px; }
+.studio-source { width: 100%; min-height: 260px; }
+.studio-source textarea { font-family: ui-monospace, monospace; font-size: 13px; min-height: 250px; line-height: 1.6; }
+.studio-step-list { display: flex; flex-wrap: wrap; gap: 6px; margin-block: 8px; }
+.studio-type-preview, .studio-preview { border: 1px solid var(--colorNeutralStroke2); padding: 12px; border-radius: 8px; }
+.studio-diff { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.studio-diff pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 300px; overflow: auto; }
+@media(max-width: 700px) { .studio-diff { grid-template-columns: 1fr; } .studio-graph { height: 280px; } }

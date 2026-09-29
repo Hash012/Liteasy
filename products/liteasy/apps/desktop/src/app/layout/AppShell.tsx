@@ -1,3 +1,5 @@
+import { useExtensionStudioController } from "../controllers/useExtensionStudioController";
+import { WorkflowStudio } from "../features/workflow-studio/WorkflowStudio";
 import { useExtensionWorkflowController } from "../controllers/useExtensionWorkflowController";
 import { WorkflowInvocation, WorkflowRuns } from "../features/workflows/WorkflowViews";
 import { useExtensionWorkbenchController } from "../controllers/useExtensionWorkbenchController";
@@ -1196,7 +1198,8 @@ export function AppShell({
     openArtifact: (id) => { artifactWorkflow.actions.openArtifact(id); activateArtifactSurface(id); }
   });
   const extensionWorkflows = useExtensionWorkflowController({ scope: objectWorkbench.repository.scopeId, assets: objectWorkbench.agentAssets, packages: objectWorkbench.extensions, settings: settingsState, modelTransport: effectiveModelTransport, open: async (path) => { await openAgentAsset(path); }, showRuns: () => workbenchNavigation.open("workflow-runs") });
-  const extensionWorkbench = useExtensionWorkbenchController({ model: objectWorkbench, openDock: workbenchNavigation.open, openAsset: async (path) => openAgentAsset(path), workflows: extensionWorkflows, runWorkflow: extensionWorkflows.request });
+  const extensionStudio = useExtensionStudioController({ model: objectWorkbench, runner: extensionWorkflows.runner, settings: settingsState, modelTransport: effectiveModelTransport });
+  const extensionWorkbench = useExtensionWorkbenchController({ model: objectWorkbench, openDock: workbenchNavigation.open, openAsset: async (path) => openAgentAsset(path), workflows: extensionWorkflows, studio: extensionStudio, runWorkflow: extensionWorkflows.request });
   const assistantContextSuggestions = useAssistantContextCatalog({
     artifacts: artifactCatalog,
     objects: objectWorkbench.objects,
@@ -1245,6 +1248,7 @@ export function AppShell({
     principalId: objectWorkbench.repository.scopeId,
     resolveObjectContext: objectWorkbench.resolveContext,
     agentAssets: objectWorkbench.agentAssets,
+    extensionStudio: extensionStudio.service,
     academicProfile: profileActions.academicProfile,
     getAgentMemories: () => profileActions.agentMemories,
     profileEnabled: profileSamplingEnabled,
@@ -1392,7 +1396,7 @@ export function AppShell({
     }),
   });
   const localMcp = useLocalAssetMcp(objectWorkbench.repository.scopeId, objectWorkbench.agentAssets,
-    { scopeKey: recommendationScopeKey, importPaper: recommendationLibrary.importPaper });
+    { scopeKey: recommendationScopeKey, importPaper: recommendationLibrary.importPaper }, extensionStudio.service);
   const {
     actionMessage: organizationActionMessage,
     actionPending: organizationActionPending,
@@ -2081,7 +2085,8 @@ export function AppShell({
 
   function renderDockItem(itemId: DockItemId, regionId: DockRegionId) {
     if (itemId === "workflow-runs") return <WorkflowRuns />;
-    if (itemId === "extension-library" || itemId === "workflow-studio") return <ExtensionLibrary />;
+    if (itemId === "workflow-studio") return <WorkflowStudio />;
+    if (itemId === "extension-library") return <ExtensionLibrary />;
     if (isExtensionDockItemId(itemId)) return <ExtensionViewHost dockId={itemId} />;
     if (itemId === "recommendation-reader") return recommendationLibrary.preview ? <RecommendationDetails
       key={`${objectWorkbench.repository.scopeId}:${recommendationLibrary.preview.item.id}`} page

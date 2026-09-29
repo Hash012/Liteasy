@@ -1,3 +1,5 @@
+import { useExtensionWorkbench } from "../extensions/extensionWorkbenchContext";
+import { liteasyPath } from "../resource-filesystem/liteasyPath";
 import { useEffect, useRef, useState } from "react";
 import { Button, Field, Input, Select, Textarea } from "@fluentui/react-components";
 import type { WorkbenchViewModel } from "../boards/ObjectWorkbench";
@@ -8,6 +10,7 @@ import { paperLensPackage } from "../extensions/paperLensPackage";
 import type { ExtensionInstallation } from "../extensions/extensionPackageStore";
 
 export function BlockComposer({ model }: { model: WorkbenchViewModel }) {
+  const host = useExtensionWorkbench();
   const extensions = model.extensions!;
   const types = extensions.snapshot.registry.list();
   const [typeKey, setTypeKey] = useState("liteasy/RichTextBlock@1.0.0");
@@ -38,6 +41,7 @@ export function BlockComposer({ model }: { model: WorkbenchViewModel }) {
       await model.selectBoard(await model.repository.resolveLatest(board.objectId));
     })}>添加到白板</Button>
     <h4>组合模板</h4>
+    {host?.studio && model.board ? <Button disabled={busy} onClick={() => void run(async () => { await host.studio!.service.call("liteasy_board_template", { path: liteasyPath(model.repository.scopeId, { kind: "object", ref: refOf(model.board!) }), title: model.board!.title }, { writable: true }); host.openStudio(); })}>将当前白板保存为模板</Button> : null}
     {extensions.snapshot.packages.flatMap((pkg) => pkg.templates.map((template) => <Button key={`${pkg.manifest.id}/${template.id}`} disabled={busy} onClick={() => void run(async () => {
       const board = await model.repository.importBoardFile({ title: template.title, operationId: crypto.randomUUID(), edges: [], nodes: template.cards.map((card) => {
         const value = extensions.snapshot.registry.instantiate(card.type.id, card.type.version, card.data);

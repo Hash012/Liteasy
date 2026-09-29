@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Input } from "@fluentui/react-components";
-import { ArrowDownloadRegular, ArrowUploadRegular } from "@fluentui/react-icons";
+import { AddRegular, ArrowDownloadRegular, ArrowUploadRegular } from "@fluentui/react-icons";
 import { useExtensionWorkbench } from "./extensionWorkbenchContext";
 import { validateExtensionPackage, type ValidatedExtension } from "./extensionPackage";
 import type { ExtensionInstallation } from "./extensionPackageStore";
@@ -36,7 +36,7 @@ export function ExtensionLibrary() {
   if (!host) return <p role="status">正在加载扩展…</p>;
   async function run(action: () => Promise<unknown>) { setBusy(true); setMessage(""); try { await action(); await load(); } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); } finally { setBusy(false); } }
   return <section className="extension-page" aria-label="扩展">
-    <header><div><h1>扩展</h1><p>用基础组件组合适合自己的阅读与研究方式。</p></div></header>
+    <header><div><h1>扩展</h1><p>用基础组件组合适合自己的阅读与研究方式。</p></div><div className="extension-toolbar"><Button icon={<AddRegular />} onClick={host.openStudio}>制作扩展</Button><Button onClick={host.openRuns}>运行记录</Button></div></header>
     <div className="extension-toolbar"><Input aria-label="搜索扩展" placeholder="搜索扩展、页面或命令" value={query} onChange={(_, data) => setQuery(data.value)} /><Button icon={<ArrowUploadRegular />} disabled={busy} onClick={() => file.current?.click()}>导入本地包</Button><Button disabled={busy} onClick={() => void run(async () => { const previous = items.find((item) => item.state.id === "plugin.paper-lens"); await host.packages.store.install(await paperLensPackage(), previous?.state.revision ?? null); })}>添加论文比较板</Button></div>
     <input hidden ref={file} type="file" accept=".json" onChange={(event) => { const selected = event.target.files?.[0]; event.target.value = ""; if (selected) void run(async () => {
       if (selected.size > 24 * 1024 * 1024) throw new Error("包文件超过 24 MB。");

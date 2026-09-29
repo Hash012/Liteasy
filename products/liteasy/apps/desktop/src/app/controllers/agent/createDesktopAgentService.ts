@@ -74,6 +74,7 @@ type KnowledgeEnvironment = Omit<
 export type DesktopAgentEnvironment = {
   personalization?: { summary?: string; response?: string };
   assets?: AgentAssetService;
+  extensionStudio?: import("../../features/workflow-studio/extensionStudioService").ExtensionStudioService;
   assetScopeId?: string;
   activity?: {
     artifactTasks: readonly ArtifactTask[];

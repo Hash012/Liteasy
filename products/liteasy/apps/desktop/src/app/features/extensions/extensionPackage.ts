@@ -1,3 +1,4 @@
+import { extensionSkillSchema } from "./extensionSkill";
 import { compileWorkflow } from "../workflows/workflowDefinition";
 import { z } from "zod";
 import { hashText } from "../context/objectContext";
@@ -85,7 +86,7 @@ export async function validateExtensionPackage(input: unknown): Promise<Validate
     for (const path of [view.argsSchema, view.stateSchema]) if (path) parseDataSchema(read(path));
   }
   for (const item of manifest.contributes.workflows) { const plan = compileWorkflow(read(item.path)); if (plan.definition.id !== item.id) throw new Error("工作流 ID 与声明不一致。"); if (plan.capabilities.some((capability) => !manifest.permissions.some((permission) => permission.capability === capability))) throw new Error("工作流能力声明不完整。"); }
-  for (const item of manifest.contributes.skills) boundedJson(read(item.path));
+  for (const item of manifest.contributes.skills) { const skill = extensionSkillSchema.parse(read(item.path)); const workflow = manifest.contributes.workflows.find((workflow) => workflow.id === skill.workflow.id); if (skill.id !== item.id || !workflow || compileWorkflow(read(workflow.path)).definition.version !== skill.workflow.version) throw new Error("skill 必须引用已声明的精确工作流版本。"); }
   for (const command of manifest.contributes.commands) {
     if (command.workflow && !manifest.contributes.workflows.some((item) => item.id === command.workflow) || command.view && !manifest.contributes.views.some((item) => item.id === command.view) || command.boardTemplate && !templates.some((item) => item.id === command.boardTemplate)) throw new Error("命令引用不存在的贡献。");
   }

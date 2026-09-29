@@ -44,6 +44,7 @@ type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 
 export type AssistantAgentControllerInput = {
   principalId?: string;
+  extensionStudio?: import("../../features/workflow-studio/extensionStudioService").ExtensionStudioService;
   agentAssets?: import("../../features/resource-filesystem/agentAssetService").AgentAssetService;
   resolveObjectContext?: import("./createDesktopAgentService").DesktopAgentServiceOptions["resolveObjectContext"];
   academicProfile?: AcademicProfile;
@@ -175,6 +176,7 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
         return {
           personalization: current.profileEnabled ? { summary: current.profilePersonalizationSummary, response: current.responsePreferences } : undefined,
           assets: current.agentAssets,
+          extensionStudio: current.extensionStudio,
           assetScopeId: current.principalId ?? "local",
           activity: {
             artifactTasks: current.getArtifactTasks?.() ?? []

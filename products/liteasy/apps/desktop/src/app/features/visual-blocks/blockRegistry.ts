@@ -86,3 +86,5 @@ export function createBlockRegistry(definitions: DerivedBlockDefinition[] = []) 
 export function projectBlockText(data: JsonObject): string {
   return Object.entries(data).map(([key, value]) => key === "text" && typeof value === "string" ? value : `### ${key}\n\n${typeof value === "string" ? value : JSON.stringify(value, null, 2)}`).filter(Boolean).join("\n\n");
 }
+
+export const blockRegistryCapabilities = ["typography", "markdown", "math", "diagram", "images", "liteasy-path", "drag", "context", "versioned-content", "independent-layout", "readable-fallback"] as const;
