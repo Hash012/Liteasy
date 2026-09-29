@@ -49,8 +49,13 @@ export type LiteratureProvider =
   | "pmlr";
 
 export type LiteratureDisplayRecord = {
+  abstract?: string;
   authors: string[];
   documentType?: string;
+  keywords?: string[];
+  publishedAt?: string;
+  subjects?: string[];
+  venue?: string;
   identifiers: LiteratureIdentifier[];
   title: string;
   year?: number;

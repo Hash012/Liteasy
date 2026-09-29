@@ -1,3 +1,4 @@
+import { hasReadableRecommendationMetadata } from "./recommendationMetadataValidation";
 import type { ModelTransportResponse } from "../models/modelHttpClient";
 import type { RecommendationItem } from "./recommendation.types";
 import type {
@@ -28,6 +29,7 @@ function buildCacheUrl(endpoint: string, action: "get" | "put" | "clear") {
 }
 
 function isRecommendationItem(item: unknown): item is RecommendationItem {
+  if (!hasReadableRecommendationMetadata(item)) return false;
   const sourceKind = item &&
     typeof item === "object" &&
     "sourceKind" in item

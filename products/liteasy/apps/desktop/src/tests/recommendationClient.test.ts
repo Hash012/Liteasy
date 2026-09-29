@@ -233,3 +233,11 @@ test("rejects recommendation payloads without explicit source provenance", async
     sessionId: "demo-session-1"
   })).rejects.toThrow("关联推荐返回格式无效");
 });
+
+test.each([{ authors: "One author" }, { abstract: { text: "bad shape" } }, { subjects: [null] }, { openAccessPdfUrl: 123 }])("rejects malformed optional bibliography before rendering an inspector: %j", async (invalid) => {
+  const client = createRecommendationClient({ endpoint: "https://liteasy.example.com", transport: async () => ({
+    json: async () => ({ recommendations: [{ discoveredAt: "2026-09-29", id: "paper", title: "Paper", relatedDocumentTitle: "Seed",
+      relevanceBand: "high", relevanceScore: 0.9, reason: "Related", source: "Crossref", sourceKind: "live", sourceUrl: "https://doi.org/10.1234/paper", ...invalid }] }), ok: true, status: 200
+  }) });
+  await expect(client({ selectedDocuments: [], sessionId: "session" })).rejects.toThrow("关联推荐返回格式无效");
+});

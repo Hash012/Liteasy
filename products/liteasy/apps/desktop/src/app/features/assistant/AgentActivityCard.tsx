@@ -31,7 +31,7 @@ function elapsedLabel(activity: AgentActivity, now: number) {
 }
 
 /** A compact work summary; details are real public events, never an invented plan. */
-export function AgentActivityCard({ activity }: { activity: AgentActivity }) {
+export function AgentActivityCard({ activity, onOpenAsset }: { activity: AgentActivity; onOpenAsset?: (path: string) => void | Promise<void> }) {
   const regionId = useId();
   const [expanded, setExpanded] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
@@ -44,7 +44,7 @@ export function AgentActivityCard({ activity }: { activity: AgentActivity }) {
   }, [activity.status, activity.startedAt]);
 
   const entries = activity.entries.map((entry) => ({ ...entry, label: entryLabel(entry),
-    content: entry.content ? toUserVisibleAgentActivityText(entry.content.replace(/(^|\n)liteasy:\/\/[^\n]+(?=\n|$)/g, "")) : undefined }));
+    content: entry.content ? toUserVisibleAgentActivityText(entry.content) : undefined }));
   const current = [...entries].reverse().find((entry) => entry.status === "running");
   const duration = elapsedLabel(activity, now);
   const statusText = activity.status === "working" ? current?.label ?? "正在处理…"
@@ -86,7 +86,7 @@ export function AgentActivityCard({ activity }: { activity: AgentActivity }) {
               ? activity.status === "cancelled" ? "已停止" : "未完成"
               : { completed: "完成", failed: "失败", running: "进行中", waiting: "等待" }[entry.status]}</span>
             {entry.content && opened ? <div className="assistant-agent-step-detail" id={detailId}>
-              <AssistantMarkdown streaming={entry.status === "running"} value={entry.content} />
+              <AssistantMarkdown onOpenLiteasyPath={onOpenAsset} streaming={entry.status === "running"} value={entry.content} />
             </div> : null}
           </li>;
         })}

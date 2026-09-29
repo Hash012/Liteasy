@@ -1,0 +1,14 @@
+.markdown-font-control { width: 240px; max-width: calc(100vw - 32px); }
+.external-note-editor .external-note-preview,
+.external-note-editor .external-note-source textarea,
+.paper-resource-tab .mineru-markdown {
+  font-size: var(--markdown-font-size, 16px);
+}
+.external-note-preview .markdown-content h1,
+.paper-resource-tab .mineru-markdown h1 { font-size: 1.75em; }
+.external-note-preview .markdown-content h2,
+.paper-resource-tab .mineru-markdown h2 { font-size: 1.4em; }
+.external-note-preview .markdown-content h3,
+.paper-resource-tab .mineru-markdown h3 { font-size: 1.2em; }
+.external-note-preview .markdown-content__code-block code,
+.paper-resource-tab .markdown-content__code-block code { font-size: .85em; }

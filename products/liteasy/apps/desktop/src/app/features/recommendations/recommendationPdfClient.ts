@@ -5,6 +5,7 @@ import {
 } from "../library/externalPdfDownload";
 import type { ModelTransport, ModelTransportResponse } from "../models/modelHttpClient";
 import type { RecommendationItem } from "./recommendation.types";
+import { paperServiceRequest } from "../paper-services/paperServiceTransport";
 
 type RecommendationPdfGrant = {
   fullTextGrantId: string;
@@ -37,6 +38,20 @@ export async function downloadRecommendationPdf(input: {
   recommendation: RecommendationItem;
   transport?: ModelTransport;
 }): Promise<DownloadedExternalPdf | null> {
+  if (input.recommendation.openAccessPdfUrl) {
+    const url = new URL(input.recommendation.openAccessPdfUrl);
+    if (url.protocol !== "https:" || url.username || url.password) throw new Error("开放全文地址无效。");
+    const response = await paperServiceRequest({ provider: "crossref", endpoint: url.origin }, url.href, {
+      authenticate: false, maxResponseBytes: 32 * 1024 * 1024, timeoutMs: 45_000,
+      followPublicRedirects: true,
+    });
+    if (!response.ok) throw new Error(`开放全文下载失败（${response.status}），可从元信息中的来源页面查看获取方式。`);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (new TextDecoder().decode(bytes.slice(0, 5)) !== "%PDF-") throw new Error("来源返回的不是 PDF，未向文献库写入文件。");
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+    return { bytes, contentHash: Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join(""),
+      finalUrl: response.url || url.href, sourceId: input.recommendation.id };
+  }
   if (!input.recommendation.openAccessAvailable) return null;
   const transport = input.transport ?? defaultTransport;
   const grantResponse = await transport({

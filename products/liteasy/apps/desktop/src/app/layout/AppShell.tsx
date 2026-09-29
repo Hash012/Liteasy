@@ -7,6 +7,7 @@ import { ExternalNoteEditor } from "../features/note-files/ExternalNoteEditor";
 import { useWindowControls } from "../controllers/useWindowControls";
 import { WorkspaceCommandBar } from "./WorkspaceCommandBar";
 import { FileStatusBar } from "./FileStatusBar";
+import { useRecommendationLibraryController } from "../controllers/useRecommendationLibraryController";
 import { noteFileStatus, paperFileStatus, readingFileStatus, usePdfFileStatus, useWorkspaceShellController } from "../controllers/useWorkspaceShellController";
 import type { WorkspaceSurface } from "../features/workspace/workspaceShell.types";
 import { useWebDavSyncController } from "../controllers/useWebDavSyncController";
@@ -1307,7 +1308,7 @@ export function AppShell({
     selectedPapers,
     workspaceRevision: workspaceState.workspaceRevision,
     prepareRecommendationPaper: async (paper) => {
-      const message = await retrievePdfMetadata({ paper, firstPageText: "", manual: false });
+      const message = await retrievePdfMetadata({ paper, firstPageText: "", manual: Boolean(paper.literature) });
       const updated = workspaceStoreRef.current.getState().papers.find((item) => item.id === paper.id);
       if (!updated?.literature && message) throw new Error(message);
       return updated;
@@ -1340,6 +1341,16 @@ export function AppShell({
     refreshCloudTrees: () => setCloudTreeRevision((current) => current + 1),
     refreshLocalLibrary,
     transport: modelTransport
+  });
+  const recommendationLibrary = useRecommendationLibraryController({
+    scopeKey: `${objectWorkbench.repository.scopeId}:${localLibrarySnapshot?.libraryId ?? ""}:${localLibrarySnapshot?.rootPath ?? ""}`,
+    endpoint: externalKnowledgeEndpoint,
+    transport: modelTransport,
+    refreshLocalLibrary,
+    onSaved: async (item) => { await knowledgeSync.actions.recordRecommendationSaved(item); },
+    onImportedMetadata: (paperId, item) => readingLibrary.updateMetadata(paperId, {
+      authors: item.authors, year: item.publishedYear, subjects: item.subjects,
+    }),
   });
   const {
     actionMessage: organizationActionMessage,
@@ -1652,11 +1663,17 @@ export function AppShell({
   }
 
   const leftPaneProps: Omit<LeftPaneProps, "leftRailView"> = {
+    contextScopeId: objectWorkbench.repository.scopeId,
+    selectedRecommendationId: recommendationLibrary.selected?.id,
+    onInspectRecommendation: (item) => { recommendationLibrary.select(item); workspaceShell.focusRegion(dock.findItemRegion("library") ?? "left"); },
+    onDownloadRecommendation: recommendationLibrary.download,
     fileLibrary: {
       entries: readingLibrary.entries, selectedId: readingLibrary.selected?.id,
       pending: readingLibrary.pending, message: readingLibrary.message,
       onMoveFile: readingLibrary.moveFile, onRelocateFolder: readingLibrary.relocateFolder,
-      onImport: readingLibrary.importFiles, onInspect: readingLibrary.inspect, onOpen: readingLibrary.open,
+      onImport: readingLibrary.importFiles,
+      onInspect: (entry) => { recommendationLibrary.clear(); readingLibrary.inspect(entry); },
+      onOpen: (entry) => { recommendationLibrary.clear(); return readingLibrary.open(entry); },
       onMetadataChange: readingLibrary.updateMetadata
     },
     accountScopeId: accountSession?.userId,
@@ -1766,10 +1783,11 @@ export function AppShell({
     },
     onAddExternalPdf: externalPapers.promoteExternalPaperToLibrary,
     onClearProfile: profileActions.openClearProfileConfirm,
-    onClearRecommendations: knowledgeSync.actions.clearRecommendationCache,
+    onClearRecommendations: () => { recommendationLibrary.clear(); knowledgeSync.actions.clearRecommendationCache(); },
     onRefreshRecommendations: knowledgeSync.actions.refreshRecommendations,
     onDeleteArtifact: deleteArtifact,
     onDismissRecommendation: async (recommendation) => {
+      if (recommendationLibrary.selected?.id === recommendation.id) recommendationLibrary.clear();
       await knowledgeSync.actions.dismissRecommendation(recommendation);
       await profileActions.recordPersonalizationSignal({
         kind: "recommendation_dismissed",
@@ -1806,7 +1824,7 @@ export function AppShell({
     },
     libraryExpanded,
     onCloseLibraryExpanded: () => setLibraryExpanded(false),
-    onOpenPaper: openPaperInReader,
+    onOpenPaper: (id) => { recommendationLibrary.clear(); openPaperInReader(id); },
     onRefreshLocalLibrary: async () => {
       await refreshLocalLibrary();
       setAnalysisHint("本地文献库已从磁盘重新扫描。");
@@ -1858,7 +1876,7 @@ export function AppShell({
     onSelectOrganization: organizationShell.actions.selectOrganization,
     onToggleLock: workspaceActions.toggleSelectionLock,
     onToggleProfileSampling: profileActions.toggleProfileSampling,
-    onToggleSelection: workspaceActions.toggleSelection,
+    onToggleSelection: (id) => { recommendationLibrary.clear(); workspaceActions.toggleSelection(id); },
     onUpdateSetting: (command) => {
       settingsStoreRef.current.apply(command);
       setSettingsState(cloneSettingsState(settingsStoreRef.current.getState()));
@@ -2378,7 +2396,9 @@ export function AppShell({
         active: visible && !selected && dock.layout.regions[region].activeItemId === item,
         title: item === "note-file-reader" ? externalNote.session?.snapshot.name ?? "Markdown" : item === "document-reader" ? readingLibrary.active?.document.title ?? dockItemRegistry[item].title
           : item === "notes" ? notes.model.selected?.title ?? dockItemRegistry[item].title : dockItemRegistry[item].title,
-        fileStatus: item === "library" ? readingFileStatus(readingLibrary.selected)
+        fileStatus: item === "library" ? recommendationLibrary.selected
+          ? { name: recommendationLibrary.selected.title, type: "推荐文献", recommendation: recommendationLibrary.selected }
+          : readingFileStatus(readingLibrary.selected)
           : item === "document-reader" ? readingFileStatus(readingEntry)
           : item === "notes" ? noteFileStatus(notes.model.selected) : undefined,
         search: item === "document-reader" ? readingLibrary.active ? "reading-document" : undefined
@@ -2589,7 +2609,7 @@ export function AppShell({
           </section>
         ) : null}
       </div>
-      <FileStatusBar key={objectWorkbench.repository.scopeId} status={workspaceShell.fileStatus}
+      <FileStatusBar key={objectWorkbench.repository.scopeId} status={workspaceShell.fileStatus} onDownloadRecommendation={recommendationLibrary.download}
         actions={{ onOpen: readingLibrary.openInspected,
           onMetadataChange: readingLibrary.entries.some((entry) => entry.id === workspaceShell.fileStatus?.entry?.id) ? readingLibrary.updateMetadata : undefined,
           onExport: readingLibrary.exportFile, onDelete: readingLibrary.remove,

@@ -134,3 +134,22 @@ test("a stale write fails visibly and cannot produce a successful receipt", asyn
   expect(run.events).toContainEqual(expect.objectContaining({ type: "assistant.message", metadata: expect.objectContaining({ assetWrites: [] }) }));
   fixture.api.dispose();
 });
+
+test("reads and writes an attached note through equivalent URLs while exposing real action details", async () => {
+  const fixture = setup([
+    action({ action: "read", path: "liteasy://objects/cicn?revision=v1", message: "先读取笔记，保留已有内容。" }),
+    action({ action: "write", path: "liteasy://objects/cicn", expectedRevision: "v1", text: "\nhello", message: "将 hello 追加到笔记末尾。" }),
+    action({ message: `已更新 [《CicN》](${notePath})。` })
+  ]);
+  const run = await fixture.submit("往这里写入 hello");
+  expect(fixture.read).toHaveBeenCalledWith(notePath, expect.anything());
+  expect(fixture.write).toHaveBeenCalledWith(notePath, expect.objectContaining({ expectedRevision: "v1" }));
+  expect(fixture.search).not.toHaveBeenCalled();
+  expect(run.events).not.toContainEqual(expect.objectContaining({ type: "manager.activity", status: "failed" }));
+  const read = run.events.find((event) => event.type === "manager.activity" && event.label === "读取 · CicN" && event.status === "completed");
+  expect(read).toMatchObject({ detail: expect.stringContaining("先读取笔记，保留已有内容。") });
+  expect(read).toMatchObject({ detail: expect.stringContaining(`[《CicN》](${notePath})`) });
+  expect(read).toMatchObject({ detail: expect.stringContaining("内容预览") });
+  expect(fixture.getText()).toContain("hello");
+  fixture.api.dispose();
+});

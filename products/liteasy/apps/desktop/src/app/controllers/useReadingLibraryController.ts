@@ -84,6 +84,10 @@ export function useReadingLibraryController(input: {
       return {
         id: paper.id, title: paper.literature?.title ?? paper.title, format: "pdf", authors,
         assetType: inferAssetType("pdf", paper.literature?.documentType),
+        abstract: paper.literature?.abstract,
+        subjects: paper.literature?.subjects,
+        publishedAt: paper.literature?.publishedAt,
+        publication: paper.literature?.venue,
         year: Number.isInteger(year) && year >= 1000 ? year : undefined,
         doi: paper.doi ?? paper.literature?.identifiers.find((identifier) => identifier.kind === "doi")?.value,
         fileName: paper.sourcePath?.split(/[\\/]/).at(-1),

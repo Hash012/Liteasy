@@ -71,3 +71,25 @@ test("skips retrieval for confirmed records and never sends an unconfirmed selec
   await waitFor(() => expect(cloudHook.result.current.model.recommendationStatus).toBe("error"));
   expect(cloud).not.toHaveBeenCalled();
 });
+
+test("re-enriches old confirmed short titles before requesting recommendations", async () => {
+  const request = fetchMock();
+  const insufficient = { ...paper, literature: confirmedLiterature("Cicada") };
+  const enriched = { ...paper, literature: { ...insufficient.literature, subjects: ["Database concurrency"],
+    abstract: "Timestamp ordering and multicore transactions enable serializable database execution." } };
+  const prepare = vi.fn().mockResolvedValue(enriched);
+  renderHook(() => useKnowledgeSyncController({ ...input, selectedPapers: [insufficient], prepareRecommendationPaper: prepare }));
+  await waitFor(() => expect(request).toHaveBeenCalledOnce(), { timeout: 3000 });
+  expect(prepare).toHaveBeenCalledWith(insufficient);
+  expect((request.mock.calls[0][0] as unknown as URL).searchParams.get("query.bibliographic")).toContain("database");
+});
+
+test("does not run a stale filename interest query beside a selected paper's verified metadata", async () => {
+  const request = fetchMock();
+  const enriched = { ...paper, literature: { ...confirmedLiterature("Cicada"), subjects: ["Database concurrency"] } };
+  const hook = renderHook(() => useKnowledgeSyncController({ ...input, selectedPapers: [enriched], personalizationEnabled: true,
+    researchProfile: { topics: ["Cicada"], methods: [], datasets: [], languages: [] } }));
+  await waitFor(() => expect(hook.result.current.model.recommendationPending).toBe(false));
+  await waitFor(() => expect(request).toHaveBeenCalledOnce());
+  expect((request.mock.calls[0][0] as unknown as URL).searchParams.get("query.bibliographic")).toContain("database");
+});

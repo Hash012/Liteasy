@@ -1,5 +1,6 @@
 import type { ReadingCatalogEntry } from "../library/readingCatalog.types";
 export interface FileStatus {
+  recommendation?: import("../recommendations/recommendation.types").RecommendationItem;
   entry?: ReadingCatalogEntry;
   name?: string;
   path?: string;

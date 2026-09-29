@@ -40,6 +40,10 @@ import type {
 import type { LeftRailView } from "./useLeftRailNavigation";
 
 export type LeftPaneProps = {
+  contextScopeId?: string;
+  selectedRecommendationId?: string;
+  onInspectRecommendation?: (item: RecommendationItem) => void;
+  onDownloadRecommendation?: (item: RecommendationItem) => Promise<string>;
   fileLibrary?: LibraryFileAccess;
   accountScopeId?: string;
   activePaperId?: string | null;
@@ -275,6 +279,10 @@ export function LeftPane({
   profileSamplingEnabled,
   profileTags,
   recommendationItems,
+  contextScopeId,
+  selectedRecommendationId,
+  onInspectRecommendation,
+  onDownloadRecommendation,
   recommendationMessage,
   recommendationPending,
   recommendationStatus,
@@ -454,6 +462,10 @@ export function LeftPane({
             } : undefined}
             papers={papers}
             recommendationItems={recommendationItems}
+            contextScopeId={contextScopeId}
+            selectedRecommendationId={selectedRecommendationId}
+            onInspectRecommendation={onInspectRecommendation}
+            onDownloadRecommendation={onDownloadRecommendation}
             recommendationMessage={recommendationMessage}
             recommendationPending={recommendationPending}
             recommendationStatus={recommendationStatus}

@@ -1,6 +1,7 @@
 import type { LiteratureCandidate } from "../paper-identity/literature.types";
 import { normalizeLiteratureIdentifier } from "../paper-identity/paperIdentity";
 import { paperServiceRequest, type PaperServiceConfig } from "./paperServiceTransport";
+import { bibliographicDate } from "./bibliographicMetadata";
 
 let queue = Promise.resolve();
 let lastRequest = 0;
@@ -29,9 +30,13 @@ async function readArxivPageMetadata(config: PaperServiceConfig, id: string): Pr
   }).filter(Boolean);
   if (!title || !authors.length) return undefined;
   const year = Number(meta("citation_date").slice(0, 4));
+  const abstract = page.querySelector("blockquote.abstract")?.textContent?.replace(/^\s*Abstract:\s*/i, "").replace(/\s+/g, " ").trim().slice(0, 12000);
+  const subjects = page.querySelector(".subjects")?.textContent?.split(";").map((subject) => subject.trim().slice(0, 200)).filter(Boolean).slice(0, 30);
   return {
     candidateKey: `arxiv:${pageId}`, provider: "arxiv", recordUrl: url,
     record: { title, authors, ...(year > 0 ? { year } : {}),
+      ...(abstract ? { abstract } : {}), ...(subjects?.length ? { subjects } : {}),
+      ...(bibliographicDate(meta("citation_date")) ? { publishedAt: bibliographicDate(meta("citation_date")) } : {}),
       identifiers: [{ kind: "arxiv_id", source: "public_registry", value: pageId }] }
   };
 }
@@ -71,6 +76,9 @@ export function readArxivMetadata(config: PaperServiceConfig, id: string): Promi
           title, authors: Array.from(entry.getElementsByTagNameNS(atom, "author"))
             .map((author) => author.getElementsByTagNameNS(atom, "name")[0]?.textContent?.trim() ?? "").filter(Boolean),
           ...(year > 0 ? { year } : {}),
+          ...(text("summary") ? { abstract: text("summary").slice(0, 12000) } : {}),
+          ...(bibliographicDate(text("published")) ? { publishedAt: bibliographicDate(text("published")) } : {}),
+          subjects: Array.from(entry.getElementsByTagNameNS(atom, "category")).map((category) => category.getAttribute("term")?.slice(0, 200) ?? "").filter(Boolean).slice(0, 30),
           identifiers: [{ kind: "arxiv_id", source: "public_registry", value: resolvedId }]
         }
       } satisfies LiteratureCandidate;

@@ -137,3 +137,16 @@ test("survives a partial lane failure without inventing results", async () => {
   assert.equal(candidates[0].canonicalId, "doi:10.1000/live");
   assert.equal(candidates[0].retrievalLane, "relevance");
 });
+
+test("preserves a known publication month and descriptive bibliography for display and topical matching", async () => {
+  const provider = new CrossrefRecommendationProvider(config, {
+    fetch: async () => ({ ok: true, json: async () => ({ message: { items: [{ DOI: "10.1000/month", title: ["Database paper"],
+      issued: { "date-parts": [[2024, 6]] }, abstract: "<jats:p>Concurrent database transactions</jats:p>",
+      subject: ["Computer science"], "container-title": ["Database Research"] }] } }) })
+  });
+  const [item] = await provider.search("database");
+  assert.equal(item.publishedAt, "2024-06");
+  assert.equal(item.abstract, "Concurrent database transactions");
+  assert.deepEqual(item.subjects, ["Computer science"]);
+  assert.equal(item.venue, "Database Research");
+});

@@ -6,6 +6,7 @@ import { TagRegular } from "@fluentui/react-icons";
 import { LibraryTagChips } from "./LibraryTagChips";
 import type { ReadingCatalogEntry, ReadingCatalogMetadataPatch } from "./readingCatalog.types";
 import { readingCatalogFormatLabels } from "./readingCatalog.types";
+import { writeAssetContextTransfer } from "../object-transfer/assetContextTransfer";
 import { indexReadingCatalog, queryReadingCatalog, type ReadingCatalogFilters } from "./readingCatalogSearch";
 
 export type LibraryFileAccess = {
@@ -32,12 +33,17 @@ export function LibraryFileList({ access, query, category, filters, folderPath, 
     <ul className="library-file-list" aria-label="文献库文件">
       {entries.slice(0, limit).map((entry) => <li key={entry.id}>
         <Menu openOnContext><MenuTrigger disableButtonEnhancement><button type="button" className={`library-file-row${access.selectedId === entry.id ? " active" : ""}`}
-          style={{ paddingLeft: `${depth * 12 + 6}px` }}
-          draggable={Boolean(access.onMoveFile) && !access.pending}
+          data-library-depth={depth}
+          style={{ paddingInlineStart: `${depth * 18 + 6}px` }}
+          draggable={!access.pending && Boolean(entry.liteasyPath || access.onMoveFile)}
           onDragStart={(event) => {
             event.stopPropagation();
-            event.dataTransfer.effectAllowed = "move";
-            event.dataTransfer.setData(libraryFileDragType, entry.id);
+            event.dataTransfer.effectAllowed = access.onMoveFile ? "copyMove" : "copy";
+            if (access.onMoveFile) event.dataTransfer.setData(libraryFileDragType, entry.id);
+            if (entry.liteasyPath) {
+              const scope = new URL(entry.liteasyPath).searchParams.get("scope") ?? "local";
+              writeAssetContextTransfer(event.dataTransfer, scope, { kind: "path", path: entry.liteasyPath }, entry.title);
+            }
           }}
           aria-label={`选择文件 ${entry.title}`} aria-pressed={access.selectedId === entry.id}
           onClick={() => access.onInspect(entry)} onFocus={() => access.onInspect(entry)}

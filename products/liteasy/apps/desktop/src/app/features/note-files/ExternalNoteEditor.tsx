@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Select, Textarea } from "@fluentui/react-components";
 import { BookOpenRegular, EditRegular, SaveRegular } from "@fluentui/react-icons";
 import { MarkdownContent } from "../markdown/MarkdownContent";
+import { MarkdownFontControl, useMarkdownFontSize } from "../markdown/MarkdownFontControl";
 import { textChapters } from "../reading-library/readingTextChapters";
 import type { NoteFileSnapshot } from "./noteFileService";
 import type { ExternalEditingStatus } from "./obsidianWorkspace";
@@ -15,6 +16,7 @@ export type ExternalNoteModel = {
   save(copy?: boolean): Promise<void>; reload(): Promise<void>;
 };
 export function ExternalNoteEditor({ model }: { model: ExternalNoteModel }) {
+  const font = useMarkdownFontSize();
   const session = model.session;
   const [part, setPart] = useState(0);
   const [confirmReload, setConfirmReload] = useState(false);
@@ -28,11 +30,12 @@ export function ExternalNoteEditor({ model }: { model: ExternalNoteModel }) {
   if (!session) return <section className="external-note-editor"><p>在笔记目录中选择 Markdown 文件，即可在此阅读和编辑。</p></section>;
   const dirty = session.draft !== session.snapshot.text;
   const selectedPart = Math.min(part, Math.max(0, preview.chapters.length - 1));
-  return <section className="external-note-editor" aria-label="Markdown 文件阅读与编辑" onKeyDown={(event) => {
+  return <section className="external-note-editor" style={font.style} aria-label="Markdown 文件阅读与编辑" onKeyDown={(event) => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") { event.preventDefault(); void model.save(); }
   }}>
     <header>
       <div><strong>{session.snapshot.name}{dirty ? " · 未保存" : ""}</strong><small>{session.snapshot.path}</small></div>
+      <MarkdownFontControl {...font} />
       <Button icon={session.editing ? <BookOpenRegular /> : <EditRegular />} onClick={() => model.setEditing(!session.editing)}>{session.editing ? "阅读" : "编辑"}</Button>
       <Button appearance="primary" icon={<SaveRegular />} disabled={model.busy || !dirty} onClick={() => void model.save()}>保存</Button>
       <Button disabled={model.busy} onClick={() => dirty ? setConfirmReload(true) : void model.reload()}>重新载入</Button>

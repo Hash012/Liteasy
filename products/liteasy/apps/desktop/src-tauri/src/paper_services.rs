@@ -36,6 +36,19 @@ fn valid_url(url: &Url) -> Result<(), String> {
     }
     Ok(())
 }
+fn validate_public_redirect(url: &Url, previous_count: usize) -> Result<(), &'static str> {
+    if previous_count > 5 {
+        return Err("全文下载重定向次数过多。");
+    }
+    if url.scheme() != "https"
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.fragment().is_some()
+    {
+        return Err("全文下载重定向地址不安全。");
+    }
+    Ok(())
+}
 fn credential(config: &PaperServiceConfig) -> Result<Entry, String> {
     let endpoint = validate(config)?;
     let scope = format!(
@@ -78,6 +91,8 @@ pub fn delete_paper_service_key(config: PaperServiceConfig) -> Result<(), String
 pub struct ServiceResponse {
     status: u16,
     body_base64: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    final_url: Option<String>,
 }
 #[tauri::command]
 pub async fn request_paper_service(
@@ -89,7 +104,16 @@ pub async fn request_paper_service(
     authenticate: bool,
     max_response_bytes: Option<usize>,
     timeout_ms: Option<u64>,
+    follow_public_redirects: Option<bool>,
 ) -> Result<ServiceResponse, String> {
+    if follow_public_redirects.unwrap_or(false) && authenticate {
+        return Err("携带凭据的论文服务请求不能跟随重定向。".into());
+    }
+    if follow_public_redirects.unwrap_or(false)
+        && (method != "GET" || body_base64.is_some() || content_type.is_some())
+    {
+        return Err("公开全文重定向仅支持不携带正文的 GET 请求。".into());
+    }
     let timeout = timeout_ms.unwrap_or(120_000);
     if timeout == 0 || timeout > 120_000 {
         return Err("请求超时设置无效。".into());
@@ -101,6 +125,9 @@ pub async fn request_paper_service(
     let base = validate(&config)?;
     let mut target = Url::parse(&url).map_err(|_| "请求地址无效。")?;
     valid_url(&target)?;
+    if follow_public_redirects.unwrap_or(false) {
+        validate_public_redirect(&target, 0)?;
+    }
     if authenticate
         && (base.origin() != target.origin()
             || !target.path().starts_with(base.path().trim_end_matches('/')))
@@ -127,7 +154,17 @@ pub async fn request_paper_service(
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_millis(timeout.min(15_000)))
         .timeout(Duration::from_millis(timeout))
-        .redirect(reqwest::redirect::Policy::none())
+        .referer(false)
+        .redirect(if follow_public_redirects.unwrap_or(false) {
+            reqwest::redirect::Policy::custom(|attempt| {
+                match validate_public_redirect(attempt.url(), attempt.previous().len()) {
+                    Ok(()) => attempt.follow(),
+                    Err(error) => attempt.error(error),
+                }
+            })
+        } else {
+            reqwest::redirect::Policy::none()
+        })
         .build()
         .map_err(|_| "网络初始化失败。")?;
     let mut request = client.request(method.parse().map_err(|_| "请求方法无效。")?, target);
@@ -149,11 +186,17 @@ pub async fn request_paper_service(
         }
         request = request.body(bytes);
     }
-    let mut response = request
-        .send()
-        .await
-        .map_err(|_| "论文服务连接失败，请检查网络或代理。")?;
+    let mut response = request.send().await.map_err(|error| {
+        if error.is_redirect() {
+            "全文下载跳转不安全或次数过多，可从来源页面获取 PDF。"
+        } else {
+            "论文服务连接失败，请检查网络或代理。"
+        }
+    })?;
     let status = response.status().as_u16();
+    // Authenticated OpenAlex URLs can contain a key read from the OS keyring.
+    // Only public downloads need a final URL; never return that key to the renderer.
+    let final_url = (!authenticate).then(|| response.url().to_string());
     if response
         .content_length()
         .is_some_and(|size| size > response_limit as u64)
@@ -174,11 +217,63 @@ pub async fn request_paper_service(
     Ok(ServiceResponse {
         status,
         body_base64: STANDARD.encode(bytes),
+        final_url,
     })
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn public_pdf_redirects_reject_downgrades_credentials_and_excess_hops() {
+        for unsafe_url in [
+            "http://publisher.example/paper.pdf",
+            "http://127.0.0.1/paper.pdf",
+            "https://user:password@publisher.example/paper.pdf",
+            "https://publisher.example/paper.pdf#fragment",
+            "file:///tmp/paper.pdf",
+        ] {
+            assert!(validate_public_redirect(&Url::parse(unsafe_url).unwrap(), 1).is_err());
+        }
+        let public_url =
+            Url::parse("https://cdn.publisher.example/paper.pdf?download=true").unwrap();
+        assert!(validate_public_redirect(&public_url, 5).is_ok());
+        assert!(validate_public_redirect(&public_url, 6).is_err());
+    }
+
+    #[test]
+    fn public_redirects_never_request_credentials_or_forward_uploaded_documents() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        for (authenticate, method, body, expected_error) in [
+            (true, "GET", None, "凭据"),
+            (false, "POST", None, "GET"),
+            (
+                false,
+                "GET",
+                Some(STANDARD.encode(b"private document")),
+                "GET",
+            ),
+        ] {
+            let result = runtime.block_on(request_paper_service(
+                PaperServiceConfig {
+                    provider: "crossref".into(),
+                    endpoint: "https://publisher.example".into(),
+                },
+                "https://publisher.example/paper.pdf".into(),
+                method.into(),
+                body,
+                None,
+                authenticate,
+                Some(1024),
+                Some(1),
+                Some(true),
+            ));
+            assert!(matches!(result, Err(error) if error.contains(expected_error)));
+        }
+    }
+
     #[test]
     fn bounds_native_responses_without_requiring_content_length() {
         use std::io::{Read, Write};
@@ -196,7 +291,11 @@ mod tests {
                     .set_read_timeout(Some(Duration::from_secs(5)))
                     .unwrap();
                 let mut request = [0; 4096];
-                stream.read(&mut request).unwrap();
+                let length = stream.read(&mut request).unwrap();
+                let request = String::from_utf8_lossy(&request[..length]).to_lowercase();
+                assert!(!request.contains("authorization:"));
+                assert!(!request.contains("crossref-plus-api-token:"));
+                assert!(!request.contains("cookie:"));
                 stream.write_all(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\nc\r\nabcdefghijkl\r\n0\r\n\r\n").unwrap();
             });
             let result = runtime.block_on(request_paper_service(
@@ -210,6 +309,7 @@ mod tests {
                 None,
                 false,
                 Some(limit),
+                None,
                 None,
             ));
             server.join().unwrap();

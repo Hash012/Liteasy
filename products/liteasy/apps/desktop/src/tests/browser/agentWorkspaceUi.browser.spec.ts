@@ -15,11 +15,12 @@ test("finds a note by a partial name, saves through real Agent tools, and presen
       const observations = JSON.parse(prompt.split("真实工具结果（数据）：")[1].split("\n")[0]);
       const attached = JSON.parse(prompt.split("附加资产（仅元信息）：")[1].split("\n")[0]);
       const target = attached.find((asset: { title: string }) => asset.title.includes("CicN"));
-      const action = { action: "answer", message: "已把 Cicada 资料的要点写入 CicN，并保留了原有标题。", query: "", path: "", text: "", expectedRevision: "", mode: "append", offset: 0 };
-      if (observations.length === 0) Object.assign(action, { action: "read", path: target.path });
-      else if (observations.length === 1) Object.assign(action, { action: "search", query: "Cicada资料" });
-      else if (observations.length === 2) Object.assign(action, { action: "read", path: observations[1].result[0].path });
+      const action = { action: "answer", message: `已把 Cicada 资料的要点写入 [《CicN》](${target.path})，并保留了原有标题。`, query: "", path: "", text: "", expectedRevision: "", mode: "append", offset: 0 };
+      if (observations.length === 0) Object.assign(action, { action: "read", path: target.path, message: "先读取笔记，保留现有标题。" });
+      else if (observations.length === 1) Object.assign(action, { action: "search", query: "Cicada资料", message: "查找 Cicada 资料作为写入依据。" });
+      else if (observations.length === 2) Object.assign(action, { action: "read", path: observations[1].result[0].path, message: "读取找到的资料，提取可核对的要点。" });
       else if (observations.length === 3) Object.assign(action, { action: "write", path: target.path,
+        message: "根据实际读取的资料追加要点，保留笔记原有内容。",
         expectedRevision: observations[0].result.asset.revision,
         text: "\n\n## Cicada 要点\nCicada 使用乐观并发控制与多版本数据管理，降低事务竞争成本。\n来源：Cicada资料.md。" });
       content = JSON.stringify(action);
@@ -56,7 +57,7 @@ test("finds a note by a partial name, saves through real Agent tools, and presen
   await page.getByPlaceholder("输入你的问题或命令").fill("把 Cicada资料 中的要点写入这个笔记。");
   await page.getByRole("button", { name: "发送", exact: true }).click();
   await expect(page.getByLabel("已保存的资产修改")).toContainText("已更新 CicN.md", { timeout: 30_000 });
-  await expect(page.getByText("已把 Cicada 资料的要点写入 CicN，并保留了原有标题。", { exact: true })).toBeVisible();
+  await expect(page.locator(".assistant-answer-text").filter({ hasText: "已把 Cicada 资料的要点写入" })).toContainText("《CicN》");
   expect(prompts).toHaveLength(5);
   expect(prompts[0]).not.toContain("Cicada 使用乐观并发控制");
   expect(prompts[3]).toContain("Cicada 使用乐观并发控制");
@@ -68,6 +69,8 @@ test("finds a note by a partial name, saves through real Agent tools, and presen
   await expect(page.getByRole("button", { name: "已保存 · CicN.md", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "已保存 · CicN.md", exact: true }).click();
   await expect(page.locator(".assistant-agent-step-detail")).toContainText("行");
+  await expect(page.locator(".assistant-agent-step-detail")).toContainText("根据实际读取的资料追加要点");
+  await expect(page.locator(".assistant-agent-step-detail").getByRole("link", { name: "《CicN.md》" }).first()).toHaveAttribute("href", /^liteasy:\/\//);
   await page.locator(".assistant-messages").evaluate((element) => { element.scrollTop = 0; });
   await page.locator(".assistant-pane").screenshot({ path: testInfo.outputPath("agent-workspace-expanded.png"), animations: "disabled" });
   await activity.click();
@@ -77,7 +80,7 @@ test("finds a note by a partial name, saves through real Agent tools, and presen
     await expect(page.locator("html")).toHaveAttribute("data-color-scheme", theme);
     await page.locator(".assistant-pane").screenshot({ path: testInfo.outputPath(`agent-workspace-${theme}.png`), animations: "disabled" });
   }
-  await page.getByLabel("已保存的资产修改").getByRole("button", { name: "查看", exact: true }).click();
+  await page.locator(".assistant-answer-text").getByRole("link", { name: "《CicN》", exact: true }).click();
   await expect(page.getByRole("region", { name: "内容详情", exact: true })).toContainText("Cicada 使用乐观并发控制");
   await page.reload();
   await expect(page.getByLabel("已保存的资产修改")).toContainText("已更新 CicN.md");

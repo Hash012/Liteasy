@@ -595,6 +595,19 @@
 .is-drop-blocked .library-drop-feedback { color: var(--colorPaletteRedForeground1); }
 .library-file-row[draggable="true"] { cursor: grab; }
 .library-file-row[draggable="true"]:active { cursor: grabbing; }
+.library-paper-children [draggable="true"] { cursor: grab; }
+.library-paper-children [draggable="true"]:active { cursor: grabbing; }
+
+/* Absolute row indents keep full-width selection; guides reveal folder nesting. */
+.library-tree-children { position: relative; }
+.library-tree-children::before {
+  content: "";
+  position: absolute;
+  inset-block: 0 5px;
+  inset-inline-start: var(--library-guide-offset, 9px);
+  border-inline-start: 1px solid var(--colorNeutralStroke2);
+  pointer-events: none;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .library-folder-row { transition: none; }

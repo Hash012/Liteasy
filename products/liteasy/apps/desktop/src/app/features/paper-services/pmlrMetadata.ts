@@ -5,7 +5,7 @@ import { paperServiceRequest, type PaperServiceConfig } from "./paperServiceTran
 
 const MAX_BYTES = 20 * 1024 * 1024;
 const MAX_ENTRIES = 20_000;
-const wantedFields = new Set(["title", "author", "year", "volume", "publisher", "url", "doi"]);
+const wantedFields = new Set(["title", "author", "year", "volume", "publisher", "url", "doi", "abstract", "booktitle"]);
 const titleKey = (title: string) => title.normalize("NFKD").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 
 // PMLR's generated bibliography uses braced literal fields. Scan balanced braces
@@ -81,7 +81,9 @@ export async function parsePmlrBibliography(bytes: Uint8Array<ArrayBuffer>, volu
     entries.set(id, {
       candidateKey: `pmlr:pmlr_id:${id}`, provider: "pmlr", recordUrl: fields.url,
       sourceEvidence: { artifactHash, artifactUrl, entryKey, sourceKind: "official_volume_bibtex", volume },
-      record: { title: fields.title, authors, year, documentType: "conference-paper", identifiers: [
+      record: { title: fields.title, authors, year, documentType: "conference-paper",
+        ...(fields.abstract ? { abstract: fields.abstract.slice(0, 12000) } : {}),
+        ...(fields.booktitle ? { venue: fields.booktitle.slice(0, 500) } : {}), identifiers: [
         { kind: "pmlr_id", value: id, source: "public_registry" },
         ...(doi ? [{ kind: "doi" as const, value: doi, source: "public_registry" as const }] : [])
       ] }
@@ -122,7 +124,7 @@ export async function readPmlrArticle(config: PaperServiceConfig, id: string): P
 }
 
 export function createPmlrMetadataReader(config: PaperServiceConfig) {
-  // Keep one compact, parsed volume only; release downloaded text/abstracts.
+  // Keep one bounded parsed volume; release the raw bibliography and retain only bounded descriptions.
   let cache: { volume: number; expires: number; entries: Promise<LiteratureCandidate[]> } | undefined;
   const articles = new Map<string, { expires: number; result: Promise<LiteratureCandidate | undefined> }>();
   return async (input: LiteratureResolveInput): Promise<LiteratureResolveResult | undefined> => {

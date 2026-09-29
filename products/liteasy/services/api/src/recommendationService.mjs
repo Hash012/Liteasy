@@ -41,8 +41,24 @@ function documents(value) {
     }
     const id = normalizedText(document.id, 300);
     const title = normalizedText(document.title, 500);
-    return { id, title };
+    const strings = (value, limit = 30) => Array.isArray(value)
+      ? [...new Set(value.slice(0, limit).map((item) => normalizedText(item, 200)).filter(Boolean))] : [];
+    const authors = strings(document.authors, 12);
+    const subjects = strings(document.subjects);
+    const keywords = strings(document.keywords);
+    const abstract = normalizedText(document.abstract, 12000);
+    const venue = normalizedText(document.venue, 500);
+    const doi = normalizedText(document.doi, 300).replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "").toLowerCase();
+    return { id, title, authors, subjects, keywords, abstract, venue,
+      doi: /^10\.\d{4,9}\/\S+$/.test(doi) ? doi : undefined };
   });
+}
+
+function documentQuery(document) {
+  const topic = [...document.keywords.slice(0, 4), ...document.subjects.slice(0, 3), document.venue].filter(Boolean).join(" ");
+  // Full text is never part of a discovery request. A bounded abstract excerpt
+  // supplies topic context for records whose title is an acronym or a short name.
+  return normalizedText([document.title, topic || document.abstract.slice(0, 250)].filter(Boolean).join(" "), 500);
 }
 
 function pdfGrantInput(value) {
@@ -79,14 +95,15 @@ export class RecommendationService {
     const requestedProfile = profile(input.researchProfile);
     const context = await this.repository.context(subject);
     const researchProfile = context.enabled ? requestedProfile : undefined;
+    const hasDescriptiveSelection = selectedDocuments.some((document) => document.abstract || document.subjects.length || document.keywords.length);
     const explicitQueries = [
-      ...selectedDocuments.map((document) => ({ label: document.title, query: document.title })),
-      ...(researchProfile ? [{
+      ...selectedDocuments.map((document) => ({ label: document.title, query: documentQuery(document), document })),
+      ...(researchProfile && !hasDescriptiveSelection ? [{
         label: "研究画像",
         query: [...researchProfile.topics.slice(0, 2), ...researchProfile.methods.slice(0, 1)].join(" ")
       }] : [])
     ].filter((item) => item.query);
-    const personalizedQueries = context.enabled
+    const personalizedQueries = context.enabled && !hasDescriptiveSelection
       ? context.terms.slice(0, 3).map((item) => ({ label: `tag:${item.term}`, query: item.term }))
       : [];
     const seenQueries = new Set();
@@ -108,7 +125,7 @@ export class RecommendationService {
     const completed = settled.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
     if (completed.length === 0) throw settled[0].reason;
     const selectedTitles = new Set(selectedDocuments.map((document) => titleKey(document.title)));
-    const selectedIds = new Set(selectedDocuments.map((document) => documentIdentity(document.id)));
+    const selectedIds = new Set(selectedDocuments.flatMap((document) => [documentIdentity(document.id), ...(document.doi ? [`doi:${document.doi}`] : [])]));
     const suppressed = new Set(context.suppressions);
     const candidates = new Map();
     const timestamp = this.now();
@@ -118,7 +135,13 @@ export class RecommendationService {
         if (suppressed.has(source.id) || selectedTitles.has(titleKey(source.title)) ||
           selectedIds.has(source.canonicalId ? documentIdentity(source.canonicalId) : undefined) ||
           selectedIds.has(documentIdentity(source.id))) continue;
-        const lexical = similarity(group.query, source.title);
+        const candidateText = [source.title, source.abstract ?? "", ...(source.subjects ?? []), source.venue ?? ""].join(" ");
+        const lexical = similarity(group.query, candidateText);
+        if (group.document) {
+          const topic = [group.document.abstract, ...group.document.subjects, ...group.document.keywords, group.document.venue].filter(Boolean).join(" ");
+          // A matching short name on its own cannot establish the field of work.
+          if (topic && titleKey(group.document.title).split(" ").length < 3 && similarity(topic, candidateText) < 0.12) continue;
+        }
         const termRelevance = context.enabled
           ? Math.max(0, ...context.terms.map((term) => similarity(term.term, source.title) * Math.min(1, term.weight / 3)))
           : 0;
@@ -140,6 +163,9 @@ export class RecommendationService {
         // topical relevance; citations/recency alone cannot lift a weak title match.
         const finalScore = score(relevance * (1 - styleWeight + evidence.styleScore * styleWeight));
         const item = {
+          ...(source.abstract ? { abstract: source.abstract } : {}),
+          ...(source.subjects?.length ? { subjects: source.subjects } : {}),
+          ...(source.venue ? { venue: source.venue } : {}),
           ...(source.authors.length ? { authors: source.authors } : {}),
           canonicalId: source.canonicalId,
           ...(Number.isSafeInteger(source.citationCount) && source.citationCount >= 0

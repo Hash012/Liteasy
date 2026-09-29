@@ -1,6 +1,7 @@
 import { OBJECT_TRANSFER_MIME, PENDING_CAPTURE_MIME } from "./objectTransfer";
 import type { ObjectRef } from "../objects/object.types";
 import type { Paper } from "../workspace/workspace.types";
+import { ASSET_CONTEXT_MIME } from "./assetContextTransfer";
 
 export const ARTIFACT_CONTEXT_MIME = "application/x-liteasy-artifact-context";
 
@@ -16,12 +17,14 @@ export type ResourceContextAttachment = {
 };
 
 export function hasResourceContextTransfer(data: Pick<DataTransfer, "types">) {
-  return [OBJECT_TRANSFER_MIME, PENDING_CAPTURE_MIME, PAPER_CONTEXT_MIME, LIBRARY_RESOURCE_MIME, ARTIFACT_CONTEXT_MIME]
+  return [OBJECT_TRANSFER_MIME, PENDING_CAPTURE_MIME, PAPER_CONTEXT_MIME, LIBRARY_RESOURCE_MIME, ARTIFACT_CONTEXT_MIME, ASSET_CONTEXT_MIME]
     .some((type) => data.types.includes(type));
 }
 
 /** A drag supplies a locator only; resolve it against this workspace's papers. */
 export function readContextPaper(data: Pick<DataTransfer, "getData">, papers: Paper[]) {
+  // File movement and chat attachment can coexist on one drag. Prefer its precise asset locator.
+  if (data.getData(ASSET_CONTEXT_MIME)) return null;
   let id = data.getData(PAPER_CONTEXT_MIME);
   if (!id) {
     const raw = data.getData(LIBRARY_RESOURCE_MIME);

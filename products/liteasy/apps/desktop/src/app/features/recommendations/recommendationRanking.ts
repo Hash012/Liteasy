@@ -1,6 +1,6 @@
 import type { RecommendationItem, RecommendationRequestDocument, RecommendationStyle } from "./recommendation.types";
 
-export const recommendationRankingVersion = "reading-discovery-v2";
+export const recommendationRankingVersion = "reading-discovery-v3";
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 const normalizedTitle = (value: string) => value.normalize("NFKC").toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const stopWords = new Set(["the", "and", "for", "with", "from", "using", "study", "based", "approach", "analysis", "research"]);

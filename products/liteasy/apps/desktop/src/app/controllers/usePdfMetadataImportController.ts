@@ -7,6 +7,7 @@ import type { Paper } from "../features/workspace/workspace.types";
 import type { createWorkspaceStore } from "../features/workspace/workspace.store";
 import type { MoveLocalLibraryResource } from "../features/library/libraryFileSystemClient";
 import { getWorkspaceParentPath, isWorkspacePathWithinRoot, joinWorkspacePath, normalizeWorkspacePath } from "../features/workspace/workspacePathOperations";
+import { pdfDescriptiveMetadata } from "../features/paper-services/bibliographicMetadata";
 
 type Input = {
   workspaceStore: ReturnType<typeof createWorkspaceStore>;
@@ -84,12 +85,16 @@ export function createPdfMetadataImportController(input: Input) {
       if (!candidate) return result.status === "not_found"
         ? `未检索到${request.hints?.title ? `《${request.hints.title}》的` : "对应"}题录，已保留原文件名。可在“确认文献身份”中补充 DOI 或 arXiv 编号。`
         : "检索结果的标题、作者或版本尚不能与 PDF 首页唯一对应，已保留原文件名。可在“确认文献身份”中查看候选。";
-      const { literature } = await input.literatureClient.confirmLiterature({
+      const { literature: confirmedLiterature } = await input.literatureClient.confirmLiterature({
         candidateKey: candidate.candidateKey,
         mode: result.status === "exact" ? result.confirmationMode : "candidate"
       });
       const current = unchanged();
       if (!current) return;
+      const pdfMetadata = pdfDescriptiveMetadata(evidence.firstPageText);
+      const literature = { ...confirmedLiterature,
+        ...(!confirmedLiterature.abstract && pdfMetadata.abstract ? { abstract: pdfMetadata.abstract } : {}),
+        ...(!confirmedLiterature.keywords?.length && pdfMetadata.keywords?.length ? { keywords: pdfMetadata.keywords } : {}) };
       // Save the bibliographic record before attempting a filesystem operation.
       const persisted = await input.persistLiterature(current, literature);
       const latest = input.workspaceStore.getState().papers.find((item) => item.id === paper.id);

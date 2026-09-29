@@ -6,6 +6,9 @@ export type RecommendationItem = {
   rankingStyle?: RecommendationStyle;
   styleScore?: number;
   abstract?: string;
+  keywords?: string[];
+  subjects?: string[];
+  venue?: string;
   authors?: string[];
   canonicalId?: string;
   discoveredAt: string;
@@ -42,6 +45,7 @@ export type RecommendationItem = {
     version: string;
   };
   openAccessAvailable?: boolean;
+  openAccessPdfUrl?: string;
   publishedYear?: number;
   relatedDocumentTitle: string;
   relatedDocumentTitles?: string[];
@@ -108,6 +112,13 @@ export type RecommendationStatus =
   | "error";
 
 export type RecommendationRequestDocument = {
+  abstract?: string;
+  authors?: string[];
+  doi?: string;
+  keywords?: string[];
+  subjects?: string[];
+  venue?: string;
+  year?: number;
   id: string;
   title: string;
 };

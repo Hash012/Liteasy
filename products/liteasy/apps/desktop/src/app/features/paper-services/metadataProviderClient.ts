@@ -7,6 +7,7 @@ import { loadDurableEntries, putDurableEntry } from "../persistence/durableJsonS
 import { readArxivMetadata } from "./arxivMetadata";
 import { createPmlrMetadataReader } from "./pmlrMetadata";
 import { readableBibliographicTitle } from "../metadata/pdfRecognition";
+import { readBibliographicMetadata } from "./bibliographicMetadata";
 
 export function createMetadataProviderClient(config: PaperServiceConfig): LiteratureAuthorityClient {
   const candidates = new Map<string, LiteratureCandidate>();
@@ -43,10 +44,10 @@ export function createMetadataProviderClient(config: PaperServiceConfig): Litera
       const exactPath = config.provider === "semantic-scholar" ? `/paper/DOI:${encodeURIComponent(doi)}`
         : config.provider === "openalex" ? `/works/doi:${encodeURIComponent(doi)}` : `/works/${encodeURIComponent(doi)}`;
       const url = new URL(config.endpoint.replace(/\/+$/, "") + (doi ? exactPath : config.provider === "semantic-scholar" ? "/paper/search" : "/works"));
-      if (doi) { if (config.provider === "semantic-scholar") url.searchParams.set("fields", "title,authors,year,externalIds,url"); }
+      if (doi) { if (config.provider === "semantic-scholar") url.searchParams.set("fields", "title,authors,year,externalIds,url,abstract,fieldsOfStudy,publicationDate,venue"); }
       else if (config.provider === "crossref") { url.searchParams.set("query.bibliographic", query); url.searchParams.set("rows", String(Math.max(5, Math.min(20, input.limit ?? 10)))); if (input.hints?.title) url.searchParams.set("query.title", input.hints.title); if (input.hints?.authors?.length) url.searchParams.set("query.author", input.hints.authors.join(" ")); }
       else if (config.provider === "openalex") { url.searchParams.set("search", query); url.searchParams.set("per-page", "5"); }
-      else { url.searchParams.set("query", query); url.searchParams.set("limit", "5"); url.searchParams.set("fields", "title,authors,year,externalIds,url"); }
+      else { url.searchParams.set("query", query); url.searchParams.set("limit", "5"); url.searchParams.set("fields", "title,authors,year,externalIds,url,abstract,fieldsOfStudy,publicationDate,venue"); }
       const payload = await read(url);
       if (!payload) return { status: "not_found", candidates: [], unavailableProviders: [] };
       const items = doi ? [config.provider === "crossref" ? payload.message : payload]
@@ -64,7 +65,7 @@ export function createMetadataProviderClient(config: PaperServiceConfig): Litera
         const provider = config.provider === "semantic-scholar" ? "semantic_scholar" : config.provider as "crossref" | "openalex";
         const candidate: LiteratureCandidate = {
           candidateKey: `${provider}:${identifiers[0].value}`, provider,
-          record: { title, identifiers,
+          record: { title, identifiers, ...readBibliographicMetadata(item),
             documentType: typeof item.type === "string" ? item.type.slice(0, 100) : undefined,
             authors: config.provider === "crossref" ? (Array.isArray(item.author) ? item.author : []).filter(Boolean).map((author: any) => [author.given, author.family].filter(Boolean).join(" ")).filter(Boolean)
               : config.provider === "openalex" ? (Array.isArray(item.authorships) ? item.authorships : []).filter(Boolean).map((author: any) => author.author?.display_name).filter(Boolean)

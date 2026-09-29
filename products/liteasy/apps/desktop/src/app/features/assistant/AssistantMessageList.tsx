@@ -171,7 +171,7 @@ export function AssistantMessageList({
                   ))}
                 </div>
               ) : null}
-              {message.agentActivity ? <AgentActivityCard activity={message.agentActivity} /> : null}
+              {message.agentActivity ? <AgentActivityCard activity={message.agentActivity} onOpenAsset={onOpenAsset} /> : null}
               {message.artifactTask?.artifactId && message.artifactTask.status === "completed" ? (
                 <Button onClick={() => onOpenArtifact?.(message.artifactTask!.artifactId!)} size="small">打开薄读</Button>
               ) : message.artifactTask && ["queued", "running"].includes(message.artifactTask.status) ? (
@@ -183,6 +183,8 @@ export function AssistantMessageList({
               (!message.uiDsl || message.citations?.length || message.audit || message.executionTrace) ? (
                 message.role === "assistant" ? (
                   <AssistantMarkdown className="assistant-answer-text assistant-markdown"
+                    onOpenLiteasyPath={onOpenAsset}
+                    liteasyLinkTitles={new Map(message.assetWrites?.map((asset) => [asset.path, asset.title]))}
                     paperAnchors={paperAnchors}
                     streaming={message.agentActivity?.status === "working"}
                     value={getAnswerDisplayText(message.content)} />

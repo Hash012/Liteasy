@@ -1,3 +1,4 @@
+import { RecommendationList } from "../recommendations/RecommendationList";
 import { LibraryIconProvider, LibraryIconMenuItem, LibraryItemIcon, useLibraryIcons } from "./LibraryItemIcon";
 import { libraryFileDragType, libraryFolderKey, normalizedLibraryPath, relativeLibraryFolder } from "./libraryFolderMembership";
 import { buildMovedFolderPath, buildRenamedFolderPath } from "../workspace/workspacePathOperations";
@@ -9,7 +10,8 @@ import { LibraryFacetFilters } from "./LibraryFacetFilters";
 import { inferAssetType, type LibraryTag } from "./libraryAssetMetadata";
 import type { ReadingCatalogEntry, ReadingCatalogMetadataPatch } from "./readingCatalog.types";
 import { LibraryFileList, type LibraryFileAccess } from "./LibraryFileList";
-import { ARTIFACT_CONTEXT_MIME } from "../object-transfer/contextTransfer";
+import { writeAssetContextTransfer } from "../object-transfer/assetContextTransfer";
+import { liteasyPath } from "../resource-filesystem/liteasyPath";
 import { ResourceLocationButton } from "../resource-filesystem/ResourceLocationButton";
 import {
   useEffect,
@@ -17,6 +19,7 @@ import {
   useRef,
   useState,
   type DragEvent as ReactDragEvent,
+  type CSSProperties,
   type ReactElement,
   type ReactNode
 } from "react";
@@ -132,6 +135,7 @@ type LibraryPaneProps = {
   onCloseExpanded?: () => void;
   fileLibrary?: LibraryFileAccess;
   accountScopeId?: string;
+  contextScopeId?: string;
   localRecommendations?: boolean;
   accountSessionAvailable?: boolean;
   activePaperId?: string | null;
@@ -149,6 +153,9 @@ type LibraryPaneProps = {
   paperChildren?: Record<string, LibraryPaperChildItem[]>;
   papers: Paper[];
   recommendationItems: RecommendationItem[];
+  selectedRecommendationId?: string;
+  onInspectRecommendation?: (item: RecommendationItem) => void;
+  onDownloadRecommendation?: (item: RecommendationItem) => Promise<string>;
   recommendationMessage: string;
   recommendationPending: boolean;
   recommendationStatus: RecommendationStatus;
@@ -236,19 +243,6 @@ type CreateFolderTarget = {
 
 const resourceTransferMimeType = "application/x-liteasy-library-resource-v2";
 const sectionIds: LibraryResourceArea[] = ["local", "collection", "recommendation", "organization"];
-
-function recommendationPublicationLabel(recommendation: RecommendationItem) {
-  const publishedAt = recommendation.publishedAt;
-  if (typeof publishedAt === "string" && /^\d{4}-\d{2}-\d{2}(?:T|$)/.test(publishedAt)) {
-    const date = publishedAt.slice(0, 10);
-    const parsed = new Date(`${date}T00:00:00.000Z`);
-    if (Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date) return date;
-  }
-  const year = recommendation.publishedYear;
-  return typeof year === "number" && Number.isInteger(year) && year >= 1000 && year <= 9999
-    ? `${year} 年`
-    : null;
-}
 
 export function personalLibraryScopeId(accountScopeId?: string) {
   if (!accountScopeId) return "";
@@ -471,6 +465,7 @@ export function LibraryPane(props: LibraryPaneProps) {
 function LibraryPaneContent({
   fileLibrary,
   accountScopeId,
+  contextScopeId = "local",
   accountSessionAvailable = false,
   localRecommendations = false,
   activePaperId,
@@ -506,6 +501,9 @@ function LibraryPaneContent({
   organizationStorageAccess,
   organizationWorkspaceLabel = "组织文献库",
   recommendationItems,
+  selectedRecommendationId,
+  onInspectRecommendation,
+  onDownloadRecommendation,
   recommendationMessage,
   recommendationPending,
   recommendationStatus,
@@ -1083,7 +1081,8 @@ function LibraryPaneContent({
           dragSourceRef.current = entry.source;
           event.dataTransfer.setData(resourceTransferMimeType, JSON.stringify(entry.source));
         }}
-        style={{ paddingLeft: `${depth * 12 + 6}px` }}
+        data-library-depth={depth}
+        style={{ paddingInlineStart: `${depth * 18 + 6}px` }}
       >
         {area === "local" ? (
           <input
@@ -1178,7 +1177,7 @@ function LibraryPaneContent({
       <li className={`library-paper-node${selected ? " active" : ""}`} key={entry.id}>
         {row}
         {sourcePaper && children.length > 0 && childrenExpanded ? (
-          <div className="library-paper-children" style={{ marginLeft: `${depth * 12 + 50}px` }}>
+          <div className="library-paper-children" style={{ marginInlineStart: `${depth * 18 + 50}px` }}>
             <ul aria-label={`${entry.label} 的论文文件`}>
               {children.map((child) => (
                 <li key={child.id}>
@@ -1188,13 +1187,18 @@ function LibraryPaneContent({
                     icon={<LibraryItemIcon itemKey={`child:${sourcePaper.id}:${child.id}`} kind={child.kind} />}
                     title={child.meta ? `${child.label} · ${child.meta}` : child.label}
                     aria-label={`打开论文文件：${child.label}`}
-                    draggable={child.kind === "artifact"}
+                    draggable
                     onDragStart={(event) => {
-                      if (child.kind !== "artifact") return;
                       event.stopPropagation();
                       event.dataTransfer.effectAllowed = "copy";
-                      event.dataTransfer.setData(ARTIFACT_CONTEXT_MIME, child.id);
-                      event.dataTransfer.setData("text/plain", child.label);
+                      if (child.objectId) writeAssetContextTransfer(event.dataTransfer, contextScopeId, {
+                        kind: "path", path: liteasyPath(contextScopeId, { kind: "object", ref: { objectId: child.objectId, revision: "latest" }, followLatest: true }),
+                      }, child.label);
+                      else if (child.kind === "artifact") {
+                        writeAssetContextTransfer(event.dataTransfer, contextScopeId, { kind: "path", path: liteasyPath(contextScopeId, { kind: "artifact", artifactId: child.id }) }, child.label);
+                      } else if (child.kind === "extracted_text" || child.kind === "figures" || child.kind === "multimodal") {
+                        writeAssetContextTransfer(event.dataTransfer, contextScopeId, { kind: "paper-resource", paperId: sourcePaper.id, resourceKind: child.kind }, child.label);
+                      } else event.preventDefault();
                     }}
                     onClick={() => onOpenPaperChild?.(child, sourcePaper)}
                   >{child.label}</Button></MenuTrigger><MenuPopover><MenuList>
@@ -1244,7 +1248,8 @@ function LibraryPaneContent({
         onDragOver={(event) => hoverTarget(event, area, folder)}
         onDragLeave={(event) => leaveTarget(event, area, folder)}
         onDrop={(event) => void dropOnTarget(event, area, folder)}
-        style={{ paddingLeft: `${depth * 12}px` }}
+        data-library-depth={depth}
+        style={{ paddingInlineStart: `${depth * 18}px` }}
       >
         <button
           aria-expanded={expanded}
@@ -1296,7 +1301,7 @@ function LibraryPaneContent({
           </Menu>
         )}
         {expanded ? (
-          <ul className="library-tree-children">
+          <ul className="library-tree-children" style={{ "--library-guide-offset": `${depth * 18 + 9}px` } as CSSProperties}>
             {folder.children.map((child) => renderFolder(area, child, depth + 1))}
             {folder.entries.map((entry) => renderEntry(area, entry, depth + 1))}
             {area === "local" && folder.localPath && fileLibrary ? <li className="library-folder-files"><LibraryFileList onEditMetadata={setMetadataEditorEntry} access={fileLibrary} query={search} category={selectedCategory} filters={fileFilters}
@@ -1653,7 +1658,7 @@ function LibraryPaneContent({
         {!collapsedSections.includes("recommendation") ? (
           <div className="library-section-content">
             {(accountSessionAvailable || localRecommendations) ? (
-              <RecommendationStyleControl
+              <RecommendationStyleControl compact
                 onChange={onRecommendationStyleChange}
                 value={recommendationStyle}
               />
@@ -1668,34 +1673,11 @@ function LibraryPaneContent({
             ) : recommendationItems.length === 0 ? (
               !recommendationPending ? <div className="library-empty-collection">{recommendationMessage || "暂无关联推荐"}</div> : null
             ) : (
-              <ul className="library-resource-tree">
-                {recommendationItems.map((recommendation) => (
-                  <li className="library-recommendation-item" draggable key={recommendation.id} onDragStart={(event) => {
-                    event.dataTransfer.effectAllowed = "copy";
-                    event.dataTransfer.setData(resourceTransferMimeType, JSON.stringify({
-                      area: "recommendation",
-                      recommendation
-                    } satisfies LibraryResourceTransferSource));
-                  }}>
-                    <div className="library-paper-row">
-                      <LightbulbRegular aria-hidden="true" />
-                      <span className="library-paper-title">{recommendation.title}</span>
-                      <Tooltip content="收藏" relationship="label"><Button appearance="subtle" aria-label={`收藏 ${recommendation.title}`} disabled={(!localRecommendations && !collection.tree) || pendingNodeIds.includes(recommendation.id)} icon={<BookmarkRegular />} onClick={() => void saveRecommendation(recommendation)} size="small" /></Tooltip>
-                      <Tooltip content="不感兴趣" relationship="label"><Button appearance="subtle" aria-label={`忽略 ${recommendation.title}`} icon={<DeleteRegular />} onClick={() => onDismissRecommendation(recommendation)} size="small" /></Tooltip>
-                    </div>
-                    <div className="library-recommendation-metadata">
-                      {recommendationPublicationLabel(recommendation) ? <span>{recommendationPublicationLabel(recommendation)}</span> : null}
-                      {typeof recommendation.citationCount === "number" && Number.isSafeInteger(recommendation.citationCount) && recommendation.citationCount >= 0 ? (
-                        <span title="数据源记录的引用次数，仅供参考">引用 {recommendation.citationCount.toLocaleString("zh-CN")}</span>
-                      ) : null}
-                      {recommendation.sourceUrl && /^https?:\/\//i.test(recommendation.sourceUrl) ? (
-                        <a href={recommendation.sourceUrl} rel="noopener noreferrer" target="_blank">{recommendation.source}</a>
-                      ) : <span>{recommendation.source}</span>}
-                    </div>
-                    <div className="library-recommendation-reason">{recommendation.reason}</div>
-                  </li>
-                ))}
-              </ul>
+              <RecommendationList items={recommendationItems} selectedId={selectedRecommendationId}
+                pendingIds={pendingNodeIds} canSave={localRecommendations || Boolean(collection.tree)}
+                onInspect={onInspectRecommendation}
+                onDownload={onDownloadRecommendation ? (item) => void runNodeAction(item.id, `正在下载《${item.title}》…`, () => onDownloadRecommendation(item)) : undefined}
+                onSave={(item) => void saveRecommendation(item)} onDismiss={onDismissRecommendation} />
             )}
             {localRecommendations && recommendationItems.length > 0 && !recommendationPending && recommendationMessage ? <p role="status" className="library-recommendation-message">{recommendationMessage}</p> : null}
             {recommendationStatus === "error" ? <ErrorState message={recommendationMessage} /> : null}

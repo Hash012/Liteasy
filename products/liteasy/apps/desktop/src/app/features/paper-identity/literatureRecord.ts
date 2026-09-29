@@ -49,7 +49,21 @@ const literatureIdentifierSchema = z.union([
   confirmableLiteratureIdentifierSchema,
   candidateLiteratureAliasSchema
 ]);
+// Descriptive additions remain optional: old identity snapshots are still valid,
+// and a malformed optional provider field must not discard a confirmed identity.
+export const descriptiveMetadataSchema = {
+  abstract: z.string().trim().min(1).max(12000).optional().catch(undefined),
+  keywords: z.array(z.string().trim().min(1).max(200)).max(30).optional().catch(undefined),
+  publishedAt: z.string().regex(/^\d{4}(?:-\d{2}(?:-\d{2})?)?$/).refine((value) => {
+    const [year, month, day] = value.split("-").map(Number);
+    return year >= 1000 && (month === undefined || month >= 1 && month <= 12) &&
+      (day === undefined || day >= 1 && day <= new Date(Date.UTC(year, month, 0)).getUTCDate());
+  }).optional().catch(undefined),
+  subjects: z.array(z.string().trim().min(1).max(200)).max(30).optional().catch(undefined),
+  venue: z.string().trim().min(1).max(500).optional().catch(undefined)
+};
 const literatureRecordSchema = z.object({
+  ...descriptiveMetadataSchema,
   authors: z.array(z.string().trim().min(1).max(300)).max(200),
   documentType: z.string().trim().min(1).max(100).optional(),
   identifiers: z.array(literatureIdentifierSchema).min(1).max(20),
@@ -96,6 +110,7 @@ const literatureSnapshotSchema = z.object({
   version: z.literal(1)
 }).strict();
 const legacyLiteratureRecordSchema = z.object({
+  ...descriptiveMetadataSchema,
   authors: z.array(z.string().trim().min(1).max(300)).max(200).default([]),
   documentType: z.string().trim().min(1).max(100).optional(),
   identifiers: z.array(z.object({

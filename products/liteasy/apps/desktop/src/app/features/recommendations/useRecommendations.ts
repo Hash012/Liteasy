@@ -4,6 +4,7 @@ import type { AccountSession } from "../account/account.types";
 import type { SettingsState } from "../settings/settings.types";
 import { fetchCloudRecommendations, type RecommendationRuntimeInput } from "./recommendationRuntime";
 import { rankRecommendations, recommendationRankingVersion } from "./recommendationRanking";
+import { recommendationDocument } from "./recommendationSeed";
 import {
   clearCloudRecommendationCache,
   getCloudRecommendationCache,
@@ -68,7 +69,7 @@ function buildSelectionCacheKey(
   style: RecommendationStyle = "balanced"
 ) {
   const paperKey = selectedPapers
-    .map((paper) => `${paper.id}:${paper.title}`)
+    .map((paper) => JSON.stringify(recommendationDocument(paper)))
     .sort()
     .join("|");
   const serializedProfile = researchProfile ? JSON.stringify(researchProfile) : "";
@@ -120,7 +121,7 @@ export function useRecommendations({
   const scopeRef = useRef(scopeKey);
   const displayedScope = useRef("");
   scopeRef.current = scopeKey;
-  const sortItems = (items: RecommendationItem[]) => rankRecommendations(items.filter((item) => !hidden.current.ids.has(item.canonicalId ?? item.id)), { style: recommendationStyle, sortMode: recommendationSortMode, selectedDocuments: selectedPapers });
+  const sortItems = (items: RecommendationItem[]) => rankRecommendations(items.filter((item) => !hidden.current.ids.has(item.canonicalId ?? item.id)), { style: recommendationStyle, sortMode: recommendationSortMode, selectedDocuments: selectedPapers.map(recommendationDocument) });
   const currentScope = accountSession
       ? {
         personalizationVersion,
@@ -253,10 +254,7 @@ export function useRecommendations({
           controlPlaneEndpoint,
           researchProfile,
           sortMode: recommendationSortMode,
-          selectedDocuments: selectedPapers.map((paper) => ({
-            id: paper.id,
-            title: paper.title
-          })),
+          selectedDocuments: selectedPapers.map(recommendationDocument),
           sessionId: session.sessionId
         });
       } catch (error) {

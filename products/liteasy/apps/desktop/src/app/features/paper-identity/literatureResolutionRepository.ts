@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { descriptiveMetadataSchema } from "./literatureRecord";
 
 import {
   isUserPaperArtifactStoreAvailable,
@@ -39,6 +40,7 @@ const candidateSchema = z.object({
     "pmlr"
   ]),
   record: z.object({
+    ...descriptiveMetadataSchema,
     authors: z.array(z.string().trim().min(1).max(300)).max(200),
     documentType: z.string().trim().min(1).max(100).optional(),
     identifiers: z.array(identifierSchema).max(20),

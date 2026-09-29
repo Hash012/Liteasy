@@ -309,3 +309,20 @@ test("bounds and deduplicates personalized query fanout with at most two active 
   assert.equal(new Set(calls).size, calls.length);
   assert.equal(maximumActive, 2);
 });
+
+test("uses descriptive metadata for an ambiguous paper and excludes same-name unrelated work and the seed DOI", async () => {
+  const queries = [];
+  const service = new RecommendationService({
+    async context() { return { enabled: false, feedback: [], suppressions: [], terms: [] }; },
+    async saveCandidates() {}
+  }, { async search(query) {
+    queries.push(query);
+    return [candidate("insect", "Cicada insect taxonomy"),
+      { ...candidate("source", "Original transaction study"), canonicalId: "doi:10.1234/source" },
+      candidate("related", "Timestamp ordering for multicore database transactions")];
+  } });
+  const result = await service.generate("user", { selectedDocuments: [{ id: "local-file", title: "Cicada", doi: "10.1234/source",
+    subjects: ["Database transactions"], abstract: "Timestamp ordering for concurrent database execution" }] });
+  assert.match(queries[0], /Database transactions/);
+  assert.deepEqual(result.recommendations.map((item) => item.id), ["reading-candidate:doi:10.1000/related"]);
+});

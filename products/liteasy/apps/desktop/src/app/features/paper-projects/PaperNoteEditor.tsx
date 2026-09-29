@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, Select, Textarea } from "@fluentui/react-components";
 import { MarkdownContent } from "../markdown/MarkdownContent";
+import { MarkdownFontControl, useMarkdownFontSize } from "../markdown/MarkdownFontControl";
 import { textChapters } from "../reading-library/readingTextChapters";
 import "../note-files/externalNoteEditor.css";
 
 type Session = { object: { objectId: string; title: string }; draft: string; saved: string };
 type Model = { session?: Session; drafts: Session[]; busy: boolean; error: string; save(): Promise<void>; reload(): Promise<void>; select(id: string): void; setDraft(text: string): void };
 export function PaperNoteEditor({ model }: { model: Model }) {
+  const font = useMarkdownFontSize();
   const [editing, setEditing] = useState(true);
   const [part, setPart] = useState(0);
   const [confirm, setConfirm] = useState(false);
@@ -16,9 +18,10 @@ export function PaperNoteEditor({ model }: { model: Model }) {
     catch (failure) { return { chapters: [], error: String(failure) }; } }, [editing, note?.draft]);
   if (!note) return <p>从文献库打开或新建论文笔记。</p>;
   const dirty = note.draft !== note.saved;
-  return <section className="external-note-editor" aria-label="论文 Markdown 笔记" onKeyDown={(event) => {
+  return <section className="external-note-editor" style={font.style} aria-label="论文 Markdown 笔记" onKeyDown={(event) => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") { event.preventDefault(); void model.save(); }
   }}><header><strong>{note.object.title}{dirty ? " · 未保存" : ""}</strong>
+    <MarkdownFontControl {...font} />
     <Button onClick={() => setEditing(!editing)}>{editing ? "阅读" : "编辑"}</Button>
     <Button appearance="primary" disabled={!dirty || model.busy} onClick={() => void model.save()}>保存</Button>
     <Button disabled={model.busy} onClick={() => dirty ? setConfirm(true) : void model.reload()}>重新载入</Button></header>

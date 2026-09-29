@@ -9,6 +9,8 @@ import { extractQuickAskAbstract } from "../features/pdf/pdfQuickAsk";
 import type { RetrievalChunk } from "../features/retrieval/retrieval.types";
 import { paperAnchorOpenRequest } from "../features/paper-anchors/paperAnchorEntity";
 import { ARTIFACT_CONTEXT_MIME } from "../features/object-transfer/contextTransfer";
+import { readAssetContextTransfer } from "../features/object-transfer/assetContextTransfer";
+import { paperResourceContext } from "../features/resource-filesystem/paperResourceContext";
 import { artifactContextText } from "../features/artifacts/artifactContext";
 import { useBoardFileController } from "./useBoardFileController";
 import { loadUserPaperArtifact } from "../features/library/userPaperArtifactClient";
@@ -621,6 +623,14 @@ export function useObjectWorkbenchController(input: {
       const ticket = data.getData(PENDING_CAPTURE_MIME);
       const transfer = readObjectTransfer(data);
       const artifactId = data.getData(ARTIFACT_CONTEXT_MIME);
+      const asset = readAssetContextTransfer(data, repository.scopeId);
+      if (asset?.kind === "path") return port.resolveLiteasyPath!(asset.path);
+      if (asset?.kind === "paper-resource") {
+        const paper = latest.current.getPapers().find((item) => item.id === asset.paperId);
+        if (!paper) throw new Error("来源论文在当前文献库不可用。");
+        const projects = createPaperProjectRepository(createObjectStorage(repository.scopeId, () => latest.current.scopeId), repository.scopeId);
+        return paperResourceContext({ repository, projects, paper, kind: asset.resourceKind, active });
+      }
       let refs = ticket ? await tickets.consume(ticket) : transfer?.refs;
       if (!refs?.length && artifactId) {
         if (artifactId.length > 2048) throw new Error("产物标识无效。");

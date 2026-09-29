@@ -14,6 +14,7 @@ import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { Paper } from "../workspace/workspace.types";
 import type { MineruFigure } from "./import.types";
 import { MineruMarkdown } from "./MineruMarkdown";
+import { MarkdownFontControl, useMarkdownFontSize } from "../markdown/MarkdownFontControl";
 import { resolveMineruImageSource } from "./mineruImageSources";
 import type { PersistedPaperTranslation } from "./paperTranslationRepository";
 import type { PaperResourceKind } from "./paperResource.types";
@@ -299,6 +300,7 @@ export function PaperResourceTab({
   paper,
   textChunks
 }: PaperResourceTabProps) {
+  const font = useMarkdownFontSize();
   const isFigureCollection = kind === "figures";
   const isMultimodal = kind === "multimodal";
   const orderedFigures = useMemo(() => [...figures].sort((left, right) => (
@@ -449,7 +451,7 @@ export function PaperResourceTab({
   }
 
   return (
-    <main className="paper-resource-tab" aria-label={`${paper.title} ${isFigureCollection ? "论文插图" : isMultimodal ? "提取图文版" : "提取文本"}`}>
+    <main className="paper-resource-tab" style={font.style} aria-label={`${paper.title} ${isFigureCollection ? "论文插图" : isMultimodal ? "提取图文版" : "提取文本"}`}>
       <header className="paper-resource-tab__header">
         <div>
           <span className="paper-resource-tab__eyebrow">
@@ -460,6 +462,7 @@ export function PaperResourceTab({
           <p title={paper.title}>{paper.title}</p>
         </div>
         <div className="paper-resource-tab__actions">
+          {!isFigureCollection ? <MarkdownFontControl {...font} /> : null}
           {!isFigureCollection ? <Button
             appearance="secondary"
             disabled={itemCount === 0 || translating || (!onTranslate && savedTranslations.length === 0)}

@@ -4,6 +4,9 @@ import { displayPath } from "../features/resource-filesystem/displayPath";
 import { Button, Popover, PopoverSurface, PopoverTrigger, Tooltip } from "@fluentui/react-components";
 import type { FileStatus } from "../features/workspace/workspaceShell.types";
 import "../styles/workspaceShell.css";
+import { RecommendationDetails } from "../features/recommendations/RecommendationDetails";
+import { recommendationDateLabel } from "../features/recommendations/RecommendationList";
+import type { RecommendationItem } from "../features/recommendations/recommendation.types";
 
 function fileSize(size?: number) {
   if (size === undefined || !Number.isFinite(size) || size < 0) return undefined;
@@ -13,10 +16,13 @@ function fileSize(size?: number) {
   return `${Number((size / 1024 ** exponent).toFixed(1))} ${units[exponent - 1]}`;
 }
 
-export function FileStatusBar({ status, actions }: { status?: FileStatus; actions?: ReadingCatalogActions }) {
+export function FileStatusBar({ status, actions, onDownloadRecommendation }: { status?: FileStatus; actions?: ReadingCatalogActions; onDownloadRecommendation?: (item: RecommendationItem) => Promise<string> }) {
   const modified = status?.modifiedAt && Number.isFinite(status.modifiedAt.getTime()) ? status.modifiedAt.toLocaleString() : undefined;
   const details = [
     status?.type,
+    status?.recommendation?.authors?.join(" · "),
+    status?.recommendation ? recommendationDateLabel(status.recommendation) : undefined,
+    status?.recommendation?.venue,
     status?.entry?.authors?.join(" · "),
     status?.entry?.year,
     status?.entry?.publication,
@@ -41,6 +47,10 @@ export function FileStatusBar({ status, actions }: { status?: FileStatus; action
         {status?.name && details ? <span aria-hidden="true">·</span> : null}
         <span className="shell-file-metadata">{details || (!status?.name ? "Liteasy · 就绪" : "")}</span>
       </div>
+      {status?.recommendation ? <Popover key={status.recommendation.id} positioning="above-end">
+        <PopoverTrigger disableButtonEnhancement><Button appearance="subtle" size="small" aria-label="展开推荐元信息">元信息</Button></PopoverTrigger>
+        <PopoverSurface><RecommendationDetails item={status.recommendation} onDownload={onDownloadRecommendation} /></PopoverSurface>
+      </Popover> : null}
       {status?.entry && actions ? <Popover key={status.entry.id} positioning="above-end">
         <PopoverTrigger disableButtonEnhancement><Button appearance="subtle" size="small" aria-label="展开文件元信息">元信息</Button></PopoverTrigger>
         <PopoverSurface className="shell-file-inspector"><ReadingCatalogDetails key={status.entry.id} entry={status.entry} {...actions} /></PopoverSurface>

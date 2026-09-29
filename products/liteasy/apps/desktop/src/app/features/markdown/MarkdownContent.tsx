@@ -1,12 +1,13 @@
 import {
-  Children, Component, createContext, isValidElement, lazy, memo, Suspense, useContext, useMemo,
-  type ReactNode
+  Children, Component, createContext, createElement, isValidElement, lazy, memo, Suspense, useContext, useMemo,
+  useState, type ReactNode
 } from "react";
 import ReactMarkdown, { type Components, type Options, type UrlTransform } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { remarkPaperAnchorReferences, type PaperAnchorEntity } from "../paper-anchors/paperAnchorEntity";
+import { remarkLiteasyLinks, safeLiteasyMarkdownUrl } from "./liteasyMarkdownLinks";
 import "katex/dist/katex.min.css";
 import "./markdownContent.css";
 
@@ -26,6 +27,9 @@ export type MarkdownContentProps = {
   html?: "text" | "skip" | "sanitized";
   inline?: boolean;
   normalizeMath?: boolean;
+  /** Explicit application navigation; never hand a local resource to the browser or OS. */
+  onOpenLiteasyPath?: (path: string) => void | Promise<void>;
+  liteasyLinkTitles?: ReadonlyMap<string, string>;
   paperAnchors?: readonly PaperAnchorEntity[];
   rehypePluginsBeforeMath?: NonNullable<Options["rehypePlugins"]>;
   remarkPlugins?: NonNullable<Options["remarkPlugins"]>;
@@ -156,13 +160,30 @@ const inlineComponents: Components = {
 export const MarkdownContent = memo(function MarkdownContent({
   className = "", components, emptyLabel, html = "skip", inline = false, normalizeMath = true,
   paperAnchors = emptyAnchors, rehypePluginsBeforeMath = emptyPlugins, remarkPlugins = emptyPlugins, streaming = false,
-  urlTransform = markdownUrlTransform, value
+  urlTransform = markdownUrlTransform, onOpenLiteasyPath, liteasyLinkTitles, value
 }: MarkdownContentProps) {
+  const [navigationError, setNavigationError] = useState<string>();
   const markdown = useMemo(() => normalizeMath ? normalizeMarkdownMathDelimiters(value) : value, [normalizeMath, value]);
-  const mergedComponents = useMemo(() => ({ ...markdownComponents, ...(inline ? inlineComponents : {}), ...components }), [components, inline]);
-  const remark = useMemo(() => [...baseRemarkPlugins, ...remarkPlugins, remarkPaperAnchorReferences(paperAnchors)], [paperAnchors, remarkPlugins]);
+  const mergedComponents = useMemo<Components>(() => {
+    const merged = { ...markdownComponents, ...(inline ? inlineComponents : {}), ...components };
+    if (!onOpenLiteasyPath) return merged;
+    const DefaultLink = merged.a!;
+    return { ...merged, a: (props) => {
+      if (!props.href || !safeLiteasyMarkdownUrl(props.href)) return typeof DefaultLink === "string" ? createElement(DefaultLink, props) : <DefaultLink {...props} />;
+      return <a href={props.href} onClick={(event) => {
+        event.preventDefault();
+        setNavigationError(undefined);
+        void Promise.resolve().then(() => onOpenLiteasyPath(props.href!)).catch((error: unknown) => {
+          setNavigationError(error instanceof Error ? error.message : "暂时无法打开此资产。");
+        });
+      }}>{props.children}</a>;
+    } };
+  }, [components, inline, onOpenLiteasyPath]);
+  const remark = useMemo(() => [...baseRemarkPlugins, ...remarkPlugins, remarkLiteasyLinks(liteasyLinkTitles), remarkPaperAnchorReferences(paperAnchors)], [liteasyLinkTitles, paperAnchors, remarkPlugins]);
   const rehype = useMemo(() => [...rehypePluginsBeforeMath, ...mathPlugin], [rehypePluginsBeforeMath]);
-  const resolveUrl = useMemo<UrlTransform>(() => (url, key, node) => safeResolvedUrl(urlTransform(url, key, node), key), [urlTransform]);
+  const resolveUrl = useMemo<UrlTransform>(() => (url, key, node) =>
+    key === "href" && onOpenLiteasyPath && safeLiteasyMarkdownUrl(url) ? url
+      : safeResolvedUrl(urlTransform(url, key, node), key), [onOpenLiteasyPath, urlTransform]);
   const Root = inline ? "span" : "div";
   if (!value.trim()) return emptyLabel ? <Root className={`markdown-content ${className} is-empty`}>{emptyLabel}</Root> : null;
   return (
@@ -174,6 +195,7 @@ export const MarkdownContent = memo(function MarkdownContent({
           </ReactMarkdown>
         </InlineContext.Provider>
       </StreamingContext.Provider>
+      {navigationError ? <span role="status">{navigationError}</span> : null}
     </Root>
   );
 });

@@ -1,3 +1,4 @@
+import { hasReadableRecommendationMetadata } from "./recommendationMetadataValidation";
 import type { ModelTransportResponse } from "../models/modelHttpClient";
 import { readCloudServiceError } from "../network/cloudErrorMessage";
 import type {
@@ -49,6 +50,7 @@ function hasValidFinalScore(item: object) {
 }
 
 function isRecommendationItem(item: unknown): item is RecommendationItem {
+  if (!hasReadableRecommendationMetadata(item)) return false;
   const sourceKind = item &&
     typeof item === "object" &&
     "sourceKind" in item

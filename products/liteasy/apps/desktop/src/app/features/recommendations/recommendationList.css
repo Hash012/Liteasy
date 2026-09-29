@@ -1,0 +1,20 @@
+.recommendation-compact-list { list-style: none; margin: 4px 0; padding: 0; }
+.recommendation-compact-item { position: relative; display: flex; min-width: 0; border-radius: 4px; }
+.recommendation-compact-item:hover { background: var(--colorSubtleBackgroundHover); }
+.recommendation-compact-item.selected { background: var(--colorSubtleBackgroundSelected); box-shadow: inset 2px 0 var(--colorBrandStroke1); }
+.recommendation-compact-row { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; padding: 6px 5px; border: 0; border-radius: 4px; background: transparent; color: var(--colorNeutralForeground1); text-align: left; font: inherit; cursor: pointer; }
+.recommendation-compact-row > svg { flex-shrink: 0; color: var(--colorNeutralForeground3); }
+.recommendation-compact-title { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.recommendation-compact-date { flex-shrink: 0; color: var(--colorNeutralForeground3); font-size: 11px; font-variant-numeric: tabular-nums; }
+.recommendation-compact-actions { display: none; align-items: center; }
+.recommendation-compact-item:hover .recommendation-compact-actions, .recommendation-compact-item:focus-within .recommendation-compact-actions { display: flex; }
+.recommendation-compact-row:focus-visible { outline: 2px solid var(--colorBrandStroke1); outline-offset: -2px; }
+.recommendation-style-control.compact { margin: 4px 0; display: flex; align-items: center; gap: 8px; }
+.recommendation-style-control.compact > label { flex-shrink: 0; margin: 0; }
+.recommendation-style-control.compact > span { flex: 1; min-width: 0; }
+.recommendation-detail { width: min(480px, calc(100vw - 32px)); max-height: min(600px, 75vh); overflow: auto; }
+.recommendation-detail h3 { margin: 0 0 8px; font-size: 16px; }
+.recommendation-detail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; }
+.recommendation-detail dt { color: var(--colorNeutralForeground3); }
+.recommendation-detail dd { margin: 0; overflow-wrap: anywhere; }
+.recommendation-detail p { margin: 8px 0; line-height: 1.5; }

@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { Paper } from "../features/workspace/workspace.types";
+import { hasRecommendationDescription, recommendationDocument } from "../features/recommendations/recommendationSeed";
 
 export function hasRecommendationMetadata(paper: Paper) {
   return paper.literature?.status === "confirmed" && Boolean(paper.literature.title.trim()) &&
-    paper.literature.identifiers.some((id) => id.source === "public_registry" && id.kind !== "title_authors_year_hash");
+    paper.literature.identifiers.some((id) => id.source === "public_registry" && id.kind !== "title_authors_year_hash") &&
+    hasRecommendationDescription(recommendationDocument(paper));
 }
 function bibliographicPaper(paper: Paper): Paper {
   return { ...paper, title: paper.literature!.title, authors: paper.literature!.authors, year: paper.literature!.year };
@@ -48,7 +50,9 @@ export function useRecommendationMetadataController(input: {
             void task.finally(() => pending.current.delete(key)).catch(() => undefined);
           }
           resolved = await task;
-          if (!resolved || !hasRecommendationMetadata(resolved)) throw new Error("元数据尚未确认，请右键论文选择“获取元数据”或“确认文献身份”。");
+          if (!resolved || !hasRecommendationMetadata(resolved)) throw new Error(resolved?.literature?.status === "confirmed"
+            ? "题名过短且缺少摘要或学科信息，无法可靠区分同名主题。请获取完整元数据后再推荐。"
+            : "元数据尚未确认，请右键论文选择“获取元数据”或“确认文献身份”。");
         } catch (failure) { error = failure instanceof Error ? failure.message : String(failure); }
         if (!active()) return;
         setState((current) => {

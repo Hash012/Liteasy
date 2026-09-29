@@ -59,24 +59,32 @@ test("makes portable UTF-8 filenames while leaving the bibliographic title intac
   expect(new TextEncoder().encode(name).length).toBeLessThan(255);
 });
 
-function setup(rootPath = "/library") {
+function setup(rootPath = "/library", firstPageText = evidence.firstPageText) {
   const paper = { id: "paper-1", title: "download", sourcePath: `${rootPath}/download.pdf` };
   const workspaceStore = createWorkspaceStore();
   workspaceStore.openWorkspace([paper], { rootPath, type: "local_library" });
   const resolveLiterature = vi.fn(async (): Promise<LiteratureResolveResult> => exact);
   const confirmLiterature = vi.fn(async () => ({ literature }));
-  const persistLiterature = vi.fn(async (value: typeof paper) => ({ ...value, literature }));
+  const persistLiterature = vi.fn(async (value: typeof paper, record: LiteratureRecord) => ({ ...value, literature: record }));
   const moveResource = vi.fn(async () => {});
   const onHint = vi.fn();
   const recognize = createPdfMetadataImportController({ workspaceStore,
     literatureClient: { resolveLiterature, confirmLiterature }, persistLiterature, moveResource,
     onHint, onChanged: vi.fn(), stageIdentity: vi.fn(async () => {}) });
   return { paper, workspaceStore, resolveLiterature, confirmLiterature, persistLiterature, moveResource, onHint,
-    run: () => recognize({ paper, firstPageText: evidence.firstPageText }),
+    run: () => recognize({ paper, firstPageText }),
     runManual: () => recognize({ paper: workspaceStore.getState().papers[0], firstPageText: evidence.firstPageText, manual: true }) };
 }
 
 describe("automatic import metadata", () => {
+  test("persists the verified PDF abstract when the registry does not supply one", async () => {
+    const abstract = "Multicore database transactions use timestamp ordering to improve concurrency and serializable execution.";
+    const text = `${evidence.firstPageText.split(/Abstract/i)[0]}\nAbstract\n${abstract}\nKeywords: databases; transactions\n1 Introduction\nBody`;
+    const state = setup("/library", text);
+    await state.run();
+    expect(state.persistLiterature).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ abstract, keywords: ["databases", "transactions"] }));
+    expect(state.workspaceStore.getState().papers[0].literature).toMatchObject({ abstract, keywords: ["databases", "transactions"] });
+  });
   test("explicit metadata retrieval refreshes an already confirmed paper", async () => {
     const state = setup();
     await state.run();

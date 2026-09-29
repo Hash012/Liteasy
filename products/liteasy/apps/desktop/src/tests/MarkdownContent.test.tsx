@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 
 const diagramRender = vi.hoisted(() => vi.fn());
@@ -80,5 +81,39 @@ describe("shared MarkdownContent", () => {
     render(<MarkdownContent value={"结论 evidence-private-42。\n\n`evidence-private-42`"} />);
     expect(screen.getByText(/结论/)).toHaveTextContent("来源待关联");
     expect(screen.getByText("evidence-private-42").tagName).toBe("CODE");
+  });
+
+  test("opens named Liteasy links only through the application and retains external link behavior", async () => {
+    const user = userEvent.setup();
+    const open = vi.fn();
+    const path = "liteasy://objects/e953fded-1707-4792-94f2-92480b1f95ac?scope=user%3Alocal";
+    render(<MarkdownContent onOpenLiteasyPath={open} value={`已保存 [《CicN》](${path})，参考 [网站](https://example.com)。`} />);
+    const link = screen.getByRole("link", { name: "《CicN》" });
+    expect(link).toHaveAttribute("href", path);
+    expect(link).not.toHaveAttribute("target");
+    await user.click(link);
+    expect(open).toHaveBeenCalledWith(path);
+    expect(screen.getByRole("link", { name: "网站" })).toHaveAttribute("target", "_blank");
+  });
+
+  test("turns legacy bare paths into readable links while leaving literal code unchanged", async () => {
+    const path = "liteasy://objects/cicn?scope=local";
+    const open = vi.fn();
+    const view = render(<MarkdownContent onOpenLiteasyPath={open} liteasyLinkTitles={new Map([[path, "CicN"]])} value={`已保存（${path}）\n\n\`${path}\``} />);
+    expect(screen.getByRole("link", { name: "《CicN》" })).toHaveAttribute("href", path);
+    expect(view.container.querySelector("code")).toHaveTextContent(path);
+    expect(view.container.querySelector("a")).not.toHaveTextContent("liteasy://");
+  });
+
+  test("blocks unhandled, malformed and image Liteasy URLs and presents navigation errors", async () => {
+    const path = "liteasy://objects/cicn?scope=local";
+    const view = render(<MarkdownContent value={`[笔记](${path})`} />);
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    const open = vi.fn(async () => { throw new Error("此资产属于其他账号。"); });
+    view.rerender(<MarkdownContent onOpenLiteasyPath={open} value={`[笔记](${path}) [无效](liteasy://objects/cicn?scope=a&scope=b) ![图片](${path})`} />);
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("link", { name: "笔记" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("此资产属于其他账号。");
   });
 });

@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import type { AgentEvent } from "../app/features/agent-api/agentApi.types";
 import { AgentActivityCard } from "../app/features/assistant/AgentActivityCard";
 import { applyAgentActivityEvent, completeAgentActivity, createAgentActivity } from "../app/features/assistant/agentActivity";
@@ -55,4 +55,21 @@ test("does not invent steps for a simple response", async () => {
   await user.click(screen.getByRole("button", { name: "查看 Agent 执行过程" }));
   expect(screen.getByText("本轮没有使用工具。")).toBeVisible();
   expect(screen.queryByRole("list", { name: "Agent 执行步骤" })).not.toBeInTheDocument();
+});
+
+test("preserves public operation explanations and clickable asset links through activity redaction", async () => {
+  const user = userEvent.setup();
+  const open = vi.fn();
+  const path = "liteasy://objects/e953fded-1707-4792-94f2-92480b1f95ac?scope=user%3A915ac7dc-b007-4c7b-b9ee-d4e1a570643d";
+  const activity = completeAgentActivity(applyAgentActivityEvent(createAgentActivity(), event({
+    activityId: "read-1", detail: `**操作说明**\n\n读取笔记后保留已有内容。\n\n**调用**：读取 [《CicN》](${path})\n\n**结果**\n\n读取 8 / 8 字符。`,
+    kind: "tool_result", label: "读取 · CicN", status: "completed", type: "manager.activity"
+  })), "completed");
+  render(<AgentActivityCard activity={activity} onOpenAsset={open} />);
+  await user.click(screen.getByRole("button", { name: "查看 Agent 执行过程" }));
+  await user.click(screen.getByRole("button", { name: "读取 · CicN" }));
+  expect(screen.getByText("读取笔记后保留已有内容。")).toBeVisible();
+  await user.click(screen.getByRole("link", { name: "《CicN》" }));
+  expect(open).toHaveBeenCalledWith(path);
+  expect(screen.queryByText(/内部引用/)).not.toBeInTheDocument();
 });

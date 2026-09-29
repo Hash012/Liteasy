@@ -30,6 +30,11 @@ test("the original library stores all formats and shows selection metadata in th
   ]);
   const files = library.getByRole("list", { name: "文献库文件" });
   await expect(files.getByRole("listitem")).toHaveCount(4);
+  const chat = page.locator(".assistant-pane");
+  await files.getByRole("button", { name: "选择文件 Research Field Guide", exact: true }).dragTo(chat);
+  await expect(page.getByRole("button", { name: "移除上下文：Research Field Guide", exact: true })).toBeVisible();
+  await files.getByRole("button", { name: "选择文件 Research Notes", exact: true }).dragTo(chat);
+  await expect(page.getByRole("button", { name: "移除上下文：Research Notes", exact: true })).toBeVisible();
   const search = page.getByRole("textbox", { name: "搜索文献资源" });
   await search.fill("9781234567897");
   await expect(files.getByRole("listitem")).toHaveCount(1);

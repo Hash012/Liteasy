@@ -1,3 +1,4 @@
+import { hasReadableRecommendationMetadata } from "./recommendationMetadataValidation";
 import { useEffect, useRef, useState } from "react";
 import type { PaperServiceConfig } from "../paper-services/paperServiceTransport";
 import type { RecommendationItem, RecommendationResearchProfile, RecommendationStatus, RecommendationStyle } from "./recommendation.types";
@@ -6,13 +7,17 @@ import type { SettingsState } from "../settings/settings.types";
 import { rankRecommendations } from "./recommendationRanking";
 import { fetchLocalRecommendations } from "./localRecommendationClient";
 import { resolveLocalAccountKey } from "../library/localAccountKey";
+import { hasRecommendationDescription, recommendationDocument } from "./recommendationSeed";
 function read<T>(key: string, fallback: T): T { try { const value: unknown = JSON.parse(localStorage.getItem(key) ?? "null"); return (Array.isArray(value) ? value : fallback) as T; } catch { return fallback; } }
 export function useLocalRecommendations(input: { enabled: boolean; config?: PaperServiceConfig; papers: Paper[]; profile?: RecommendationResearchProfile;
   workspace: string; style: RecommendationStyle; sort: SettingsState["network.recommendation.sort_mode"] }) {
   const scope = `${resolveLocalAccountKey()}:${input.workspace}`;
   const cacheKey = `liteasy.local-recommendations.v1:${scope}`;
   const feedbackKey = `liteasy.local-recommendation-feedback.v1:${scope}`;
-  const queries = [...new Set([...input.papers.slice(0, 2).map((paper) => paper.title), ...(input.profile?.topics ?? []).slice(0, 3), ...(input.profile?.methods ?? []).slice(0, 1)])].filter((query) => query.trim()).slice(0, 3);
+  const documents = input.papers.slice(0, 2).map(recommendationDocument).filter(hasRecommendationDescription);
+  // Saved reading-interest words can themselves be old filenames/acronyms. They
+  // must not reopen a broad, unrelated search beside a selected verified paper.
+  const queries = documents.length ? documents : [...new Set([...(input.profile?.topics ?? []).slice(0, 3), ...(input.profile?.methods ?? []).slice(0, 1)].filter((query) => query.trim()))].slice(0, 3);
   const signature = JSON.stringify([scope, input.enabled, input.config, queries, input.style, input.sort]);
   const latest = useRef(signature); latest.current = signature;
   const controller = useRef<AbortController>();
@@ -24,14 +29,14 @@ export function useLocalRecommendations(input: { enabled: boolean; config?: Pape
     const update = (next: Partial<typeof state>) => { if (active()) setState((current) => ({ ...current, signature, ...next })); };
     const filter = (items: RecommendationItem[]) => {
       const hidden = new Set(read<string[]>(feedbackKey, []));
-      return rankRecommendations(items.filter((item) => !hidden.has(item.canonicalId ?? item.id)), { style: input.style, sortMode: input.sort, selectedDocuments: input.papers });
+      return rankRecommendations(items.filter((item) => !hidden.has(item.canonicalId ?? item.id)), { style: input.style, sortMode: input.sort, selectedDocuments: input.papers.map(recommendationDocument) });
     };
     if (!input.enabled) { update({ items: [], pending: false, status: "disabled", message: "联网推荐已关闭。" }); return () => abort.abort(); }
     if (!queries.length) { update({ items: [], pending: false, status: "idle", message: "勾选论文或在个人中心填写研究兴趣；开启本机画像后也可根据阅读记录推荐。" }); return () => abort.abort(); }
     const cache = read<{ key: string; items: RecommendationItem[] }[]>(cacheKey, []);
-    const cacheId = JSON.stringify([input.config, queries, input.style]);
+    const cacheId = JSON.stringify(["bibliographic-v3", input.config, queries, input.style]);
     const rawCached = cache.find((entry) => entry?.key === cacheId)?.items;
-    const cached = Array.isArray(rawCached) ? rawCached.filter((item) => item && typeof item.id === "string" && typeof item.title === "string" && typeof item.relevanceScore === "number") : [];
+    const cached = Array.isArray(rawCached) ? rawCached.filter((item) => hasReadableRecommendationMetadata(item) && item && typeof item.id === "string" && typeof item.title === "string" && typeof item.relevanceScore === "number") : [];
     update({ items: filter(cached), pending: true, status: cached.length ? "ready" : "loading", message: cached.length ? "已显示本机缓存，正在更新…" : "正在直连文献 API…" });
     const timer = setTimeout(() => { void (async () => {
       try {

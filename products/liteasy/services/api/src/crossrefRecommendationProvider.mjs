@@ -26,8 +26,8 @@ function publication(item, now) {
       day > new Date(Date.UTC(year, month, 0)).getUTCDate())) return [];
     return [{
       publishedYear: year,
-      ...(month !== undefined && day !== undefined ? {
-        publishedAt: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+      ...(month !== undefined ? {
+        publishedAt: `${year}-${String(month).padStart(2, "0")}${day !== undefined ? `-${String(day).padStart(2, "0")}` : ""}`
       } : {}),
       order: Date.UTC(year, (month ?? 1) - 1, day ?? 1)
     }];
@@ -82,7 +82,7 @@ export class CrossrefRecommendationProvider {
     const url = new URL(this.endpoint);
     url.searchParams.set("query.bibliographic", query);
     url.searchParams.set("rows", String(Math.min(12, Math.max(1, limit))));
-    url.searchParams.set("select", "DOI,URL,title,author,issued,published-print,published-online,is-referenced-by-count,score,link,type");
+    url.searchParams.set("select", "DOI,URL,title,author,issued,published-print,published-online,is-referenced-by-count,score,link,type,abstract,subject,container-title");
     url.searchParams.set("mailto", this.mailto);
     // https://github.com/CrossRef/rest-api-doc#sorting
     // https://www.crossref.org/documentation/retrieve-metadata/rest-api/rest-api-filters/
@@ -140,6 +140,9 @@ export class CrossrefRecommendationProvider {
       const providerScore = Number.isFinite(Number(item?.score)) ? Number(item.score) : 0;
       const pdfUrl = fullTextUrl(item);
       return [{
+        ...(typeof item.abstract === "string" ? { abstract: normalizedText(item.abstract.replace(/<[^>]*>/g, " "), 12000) } : {}),
+        ...(Array.isArray(item.subject) ? { subjects: item.subject.map((value) => normalizedText(value, 200)).filter(Boolean).slice(0, 30) } : {}),
+        ...(Array.isArray(item["container-title"]) && typeof item["container-title"][0] === "string" ? { venue: normalizedText(item["container-title"][0]) } : {}),
         authors: authors(item),
         canonicalId: `doi:${doi}`,
         ...(Number.isSafeInteger(item?.["is-referenced-by-count"]) && item["is-referenced-by-count"] >= 0
