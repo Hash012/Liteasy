@@ -1,3 +1,5 @@
+import { BlockAppearanceEditor } from "../visual-blocks/BlockAppearanceEditor";
+import { useBlockPresentation } from "../visual-blocks/useBlockPresentation";
 import { useCanvasNavigation } from "./useCanvasNavigation";
 import type { ResolvedObject } from "../objects/objectResolver";
 import {
@@ -113,6 +115,7 @@ export type WorkbenchViewModel = {
   removeConnection?(edgeId: string): Promise<unknown>;
 };
 export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
+  const boardAppearance = useBlockPresentation(model.repository, model.board?.objectId);
   useEffect(() => {
     if (!model.visible) return;
     const opener =
@@ -1062,6 +1065,18 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
           <p>当前缩放 {Math.round(zoom * 100)}%</p>
           <Button onClick={fitView}>适配全部卡片</Button>
           <Button onClick={() => setZoom(1)}>恢复 100%</Button>
+          <h4>白板默认字体与布局</h4>
+          <BlockAppearanceEditor value={boardAppearance.record.value} onSave={async (value) => { await boardAppearance.save(value); await model.refresh(); }} />
+          <h4>所有卡片（包括被遮挡的内容）</h4>
+          <div className="object-layer-list">{model.placements.map((p) => <Button key={p.placementId} appearance={selected.includes(p.placementId) ? "primary" : "subtle"} onClick={() => {
+            setSelected([p.placementId]);
+            viewport.current?.scrollTo?.({ left: Math.max(0, p.position.x * zoom - 40), top: Math.max(0, p.position.y * zoom - 40), behavior: "smooth" });
+            void model.repository.getBlockPresentation(p.boardId, p.placementId).then(async (record) => {
+              const board = await model.repository.resolveLatest(p.boardId);
+              await model.repository.setBlockPresentation({ boardRef: refOf(board), placementId: p.placementId, expectedVersion: record.version, value: { ...record.value, layer: 10000 }, operationId: crypto.randomUUID() });
+              await model.refresh();
+            }).catch(error);
+          }}>{cards[p.placementId]?.title || `卡片 ${model.placements.indexOf(p) + 1}`}</Button>)}</div>
         </div>
       ) : null}{" "}
       <footer

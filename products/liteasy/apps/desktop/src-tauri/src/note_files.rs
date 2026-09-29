@@ -129,6 +129,7 @@ pub fn note_files_dispatch(app: AppHandle, scope: String, request: Value) -> Res
         ),
         "listMounts" => Ok(json!(files.mounts()?)),
         "listEntries" => Ok(json!(files.entries(value("mountId")?)?)),
+        "readImage" => files.read_image(value("mountId")?, value("path")?),
         "readFile" => Ok(json!(files.read(value("mountId")?, value("path")?)?)),
         "locateFile" | "revealFile" => {
             let path = files.location(value("mountId")?, value("path")?)?;

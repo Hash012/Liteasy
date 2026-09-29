@@ -31,7 +31,9 @@ export type NoteFileChoice = {
   suggestedName?: string;
 };
 export type ImportedNoteFile = { name: string; path: string; text: string };
+export type NoteImage = { mediaType: string; base64: string; byteLength: number };
 export interface NoteFileService {
+  readImage?(mountId: string, path: string): Promise<NoteImage>;
   managedCanvas?(objectId: string): Promise<NoteFileSnapshot>;
   editingStatus?(mountId: string, path: string): Promise<ExternalEditingStatus>;
   listMounts(): Promise<NoteFileMount[]>;
@@ -113,6 +115,7 @@ export function createNoteFileService(
   };
   const backend: NoteFileService = isTauri()
     ? {
+        readImage: (mountId, path) => call("readImage", { mountId, path }),
         managedCanvas: (objectId) => call("managedCanvas", { objectId }),
         editingStatus: async (mountId, path) => {
           const result = await call<{ workspace: unknown; running: boolean | null }>("workspaceState", { mountId });
@@ -137,6 +140,11 @@ export function createNoteFileService(
     return result;
   };
   return {
+    readImage: (mountId, path) => {
+      validateNotePath(path, false);
+      if (!/\.(png|jpe?g|gif|webp)$/i.test(path)) return Promise.reject(new Error("不支持的图片格式。"));
+      return wrap(() => { if (!backend.readImage) throw new Error("此环境无法读取图片。"); return backend.readImage(mountId, path); });
+    },
     ...(backend.managedCanvas ? { managedCanvas: (objectId: string) => wrap(() => backend.managedCanvas!(objectId)) } : {}),
     editingStatus: (id, path) => wrap(() => backend.editingStatus?.(id, path) ?? Promise.resolve({ available: false, open: false, editing: false })),
     listMounts: () => wrap(() => backend.listMounts()),

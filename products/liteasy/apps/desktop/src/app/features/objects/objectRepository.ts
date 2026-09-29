@@ -1,3 +1,4 @@
+import { blockPresentationSchema, defaultBlockPresentation, type BlockPresentation, type BlockPresentationRecord } from "./visualBlock.types";
 import { hashText } from "../context/objectContext";
 import type { StagedObjectAsset } from "./objectAssets";
 import {
@@ -236,6 +237,43 @@ export function createObjectRepository(
     basis: { type: "operation", reason: "加入白板" },
     reviewStatus: "accepted",
   });
+  async function getBlockPresentation(boardId: string, placementId = "$board"): Promise<BlockPresentationRecord> {
+    const board = await resolveLatest(boardId);
+    if (board.kind !== "workspace.board") throw new ObjectStoreError("capability_denied", "该资源不是白板。");
+    const row = await storage.get(`block-presentation/${boardId}/${placementId}`);
+    return { version: row?.version ?? null, value: row ? blockPresentationSchema.parse(row.value) : defaultBlockPresentation };
+  }
+  async function setBlockPresentation(input: {
+    boardRef: ObjectRef; placementId?: string; expectedVersion: string | null;
+    value: BlockPresentation; operationId: string;
+  }) {
+    const value = blockPresentationSchema.parse(input.value);
+    return commitOperation(input.operationId, input, async () => {
+      const head = await storage.get(headKey(input.boardRef.objectId));
+      const board = readObject(head);
+      if (board.kind !== "workspace.board" || board.lifecycle !== "active") throw new ObjectStoreError("capability_denied", "白板不可编辑。");
+      if (board.revision !== input.boardRef.revision) throw new ObjectStoreError("revision_conflict", "白板已变化，请刷新后重试。");
+      if (input.placementId && !(await listPlacements(board.objectId)).some((p) => p.placementId === input.placementId)) throw new ObjectStoreError("object_not_found", "卡片已移除。");
+      const key = `block-presentation/${board.objectId}/${input.placementId ?? "$board"}`;
+      const row = await storage.get(key);
+      if ((row?.version ?? null) !== input.expectedVersion) throw new ObjectStoreError("revision_conflict", "卡片显示设置已变化，请重新打开设置。");
+      if (row) blockPresentationSchema.parse(row.value); // Never overwrite unknown newer formats.
+      const next = make({ ...board, sourceRefs: board.provenance.sourceRefs }, board);
+      const layers: StorageChange[] = [];
+      if (value.layer === 10000) {
+        for (const item of await storage.list(`block-presentation/${board.objectId}/`, "", 1000)) {
+          if (item.key === key) continue;
+          const previous = blockPresentationSchema.safeParse(item.value);
+          if (previous.success && previous.data.layer === 10000) layers.push(change(item.key, { ...previous.data, layer: 9999 }, item.version));
+        }
+      }
+      return { changes: [...objectChanges(next, head), ...layers, change(key, value, input.expectedVersion)], result: [refOf(next)] };
+    });
+  }
+  async function checkLayoutUnlocked(boardId: string, placementId: string) {
+    const [board, block] = await Promise.all([getBlockPresentation(boardId), getBlockPresentation(boardId, placementId)]);
+    if (block.value.locked ?? board.value.locked) throw new ObjectStoreError("capability_denied", "卡片布局已锁定，请先解锁。");
+  }
   async function applyBoardPatch(input: {
     boardRef: ObjectRef;
     operationId: string;
@@ -313,6 +351,7 @@ export function createObjectRepository(
           }
         }
         for (const move of input.move ?? []) {
+          await checkLayoutUnlocked(board.objectId, move.placementId);
           const key = `placement/${board.objectId}/${move.placementId}`;
           const row = await storage.get(key);
           const p = row?.value as Placement | undefined;
@@ -327,6 +366,7 @@ export function createObjectRepository(
           );
         }
         for (const resize of input.resize ?? []) {
+          await checkLayoutUnlocked(board.objectId, resize.placementId);
           const key = `placement/${board.objectId}/${resize.placementId}`;
           const row = await storage.get(key);
           const p = row?.value as Placement | undefined;
@@ -901,6 +941,8 @@ export function createObjectRepository(
   }
   return {
     scopeId,
+    getBlockPresentation,
+    setBlockPresentation,
     /** Lightweight current-head metadata; old indexes safely fall back to their existing object. */
     async describeObject(objectId: string) {
       const row = await storage.get(`title/${objectId}`);
@@ -1160,10 +1202,12 @@ export function createObjectRepository(
     },
     importBoardFile: async (input: {
       title: string;
+      presentation?: BlockPresentation;
       replaceRef?: ObjectRef;
       nodes: Array<{
         id: string;
         draft?: ObjectDraft;
+        presentation?: BlockPresentation;
         ref?: ObjectRef;
         position: Placement["position"];
         size: Placement["size"];
@@ -1205,6 +1249,7 @@ export function createObjectRepository(
           const oldRows = new Map<string, StorageRow>();
           if (previous) {
             for (const prefix of [
+              `block-presentation/${board.objectId}/`,
               `placement/${board.objectId}/`,
               `edge/${board.objectId}/`,
               `relation/board-link/${board.objectId}/`,
@@ -1214,6 +1259,7 @@ export function createObjectRepository(
                 oldRows.set(row.key, row);
             }
           }
+          if (input.presentation) changes.push(change(`block-presentation/${board.objectId}/$board`, blockPresentationSchema.parse(input.presentation)));
           const nodes = new Map<string, Placement>();
           const memberships = new Set<string>();
           for (const node of input.nodes) {
@@ -1250,6 +1296,7 @@ export function createObjectRepository(
               position: node.position,
               size: node.size,
             };
+            if (node.presentation) changes.push(change(`block-presentation/${board.objectId}/${node.id}`, blockPresentationSchema.parse(node.presentation)));
             nodes.set(node.id, p);
             changes.push(
               change(`placement/${board.objectId}/${p.placementId}`, p),

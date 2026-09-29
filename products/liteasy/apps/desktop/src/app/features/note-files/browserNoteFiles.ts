@@ -1,3 +1,4 @@
+import { stageImage } from "../objects/objectAssets";
 import { obsidianEditingStatus } from "./obsidianWorkspace";
 import {
   MAX_NOTE_FILE_BYTES,
@@ -108,8 +109,8 @@ export function createBrowserNoteFiles(
       );
     return row;
   }
-  async function fileHandle(row: SavedMount, path: string, create = false) {
-    validateNotePath(path);
+  async function fileHandle(row: SavedMount, path: string, create = false, image = false) {
+    validateNotePath(path, !image);
     if (row.handle.kind === "file") {
       if (path !== row.handle.name)
         throw new Error("请选择此文件所在的 Vault 文件夹，以读取其中的引用。");
@@ -221,6 +222,16 @@ export function createBrowserNoteFiles(
       }
       await walk(row.handle as Directory, "", 0);
       return entries.sort((a, b) => a.path.localeCompare(b.path));
+    },
+    readImage: async (id, path) => {
+      validateNotePath(path, false);
+      const mediaType = ({ png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp" } as Record<string, string>)[path.split(".").at(-1)!.toLowerCase()];
+      if (!mediaType) throw new Error("不支持的图片格式。");
+      const file = await (await fileHandle(await grant(id), path, false, true)).getFile();
+      if (file.size > MAX_NOTE_FILE_BYTES) throw new Error("图片不能超过 8 MB。");
+      const asset = await stageImage(new Uint8Array(await file.arrayBuffer()), mediaType);
+      check();
+      return { mediaType, base64: asset.base64, byteLength: asset.byteLength };
     },
     readFile: async (id, path) => read(await grant(id), path),
     writeFile: async (input) => {

@@ -1,0 +1,9 @@
+.visual-block-base { min-width: 0; min-height: 0; flex: 1; overflow: auto; }
+.visual-block-base .object-surface, .visual-block-base .object-body, .visual-block-base .markdown-content,
+.visual-block-base .object-source-quote, .visual-block-base textarea { font-family: inherit; font-size: inherit; line-height: inherit; }
+.visual-block-base img { max-width: 100%; height: auto; object-fit: contain; }
+.visual-block-base pre { white-space: pre-wrap; overflow: auto; }
+.block-appearance-editor { display: grid; gap: 10px; min-width: 220px; padding: 8px; }
+.object-card-appearance { position: absolute; z-index: 20; left: 0; top: 30px; width: 260px; max-height: 420px; overflow: auto; background: var(--colorNeutralBackground1); border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; box-shadow: var(--shadow8); }
+.object-layer-list { display: grid; gap: 4px; max-height: 45vh; overflow: auto; }
+.object-layer-list button { justify-content: flex-start; text-align: left; }

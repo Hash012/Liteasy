@@ -1,3 +1,7 @@
+import { GrantedImage } from "../visual-blocks/GrantedImage";
+import { VisualBlockBase } from "../visual-blocks/VisualBlockBase";
+import { BlockAppearanceEditor } from "../visual-blocks/BlockAppearanceEditor";
+import { useBlockPresentation } from "../visual-blocks/useBlockPresentation";
 import {
   memo,
   useEffect,
@@ -117,6 +121,8 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
     cancel(): void;
   };
 }) {
+  const appearance = useBlockPresentation(actions.current.repository, p.boardId, p.placementId);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const gesture = useRef<{
     pointerId: number;
@@ -190,7 +196,7 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
     event: PointerEvent<HTMLElement>,
     direction: ResizeDirection | "move",
   ) {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || appearance.value.locked) return;
     event.preventDefault();
     event.stopPropagation();
     const scale =
@@ -298,7 +304,7 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
       ArrowDown: [0, 20],
     };
     const d = delta[key];
-    if (!d) return false;
+    if (!d || appearance.value.locked) return false;
     void actions.current
       .move(p, {
         x: Math.max(0, p.position.x + d[0]),
@@ -403,11 +409,14 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
             top: geometry.position.y,
             width: geometry.size.width,
             height: geometry.size.height,
+            zIndex: appearance.value.layer,
             ...(canvasNode?.color ? { "--canvas-card-color": canvasColor(canvasNode.color) } : {}),
           }}
         >
           {selected && object && !editing && !moving && !adjusting ? <div className="object-card-toolbar" role="toolbar" aria-label="选中卡片操作"
             onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
+            <Tooltip content="拖动卡片位置" relationship="label"><Button size="small" appearance="subtle" aria-label="拖动卡片位置" icon={<ArrowMoveRegular />} disabled={!!appearance.value.locked} onPointerDown={(event) => begin(event, "move")} onKeyDown={(event) => { if (moveByKey(event.key)) event.preventDefault(); }} /></Tooltip>
+            <Tooltip content="字体与布局" relationship="label"><Button size="small" appearance="subtle" aria-label="字体与布局" icon={<SettingsRegular />} onClick={() => setAppearanceOpen(!appearanceOpen)} /></Tooltip>
             {canEdit ? <Tooltip content={canvasNode?.type === "group" ? "编辑分组名称" : "编辑内容"} relationship="label"><Button size="small" appearance="subtle" icon={<EditRegular />} aria-label="编辑内容" onClick={startEditing} /></Tooltip> : null}
             <Tooltip content="加入对话" relationship="label"><Button size="small" appearance="subtle" icon={<ChatAddRegular />} aria-label="加入对话" onClick={() => actions.current.addToTray([refOf(object)])} /></Tooltip>
             <Tooltip content="复制内容" relationship="label"><Button size="small" appearance="subtle" icon={<CopyRegular />} aria-label="复制内容" onClick={() => void navigator.clipboard.writeText(objectText(object)).catch(error)} /></Tooltip>
@@ -431,6 +440,8 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
               />
             </Tooltip>
           ) : null}
+          {appearanceOpen ? <aside className="object-card-appearance" aria-label="卡片显示设置" onClick={(event) => event.stopPropagation()}><Button size="small" onClick={() => setAppearanceOpen(false)}>关闭设置</Button><BlockAppearanceEditor value={appearance.record.value} onSave={async (value) => { await appearance.save(value); await actions.current.refresh(); }} /></aside> : null}
+          <VisualBlockBase presentation={appearance.value} identity={`${p.ref.objectId}:${p.ref.revision}`} fallback={object ? objectText(object) : "内容不可用，引用仍保留。"}>
           {object?.assets.length ? (
             <div className="object-placement-assets">
               {object.assets.map((asset) => (
@@ -444,7 +455,7 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
               ))}
             </div>
           ) : null}
-          {fileReference ? <div className="object-file-reference"><DocumentRegular aria-hidden="true" /><strong>{canvasNode!.file?.split("/").at(-1)}</strong><span>{canvasNode!.subpath || "文件引用"}</span><small>{canvasNode!.file}</small></div> : object ? (
+          {fileReference && canvasNode?.file && /\.(png|jpe?g|gif|webp)$/i.test(canvasNode.file) && actions.current.boardFile ? <GrantedImage scope={actions.current.repository.scopeId} mountId={actions.current.boardFile.mountId} path={canvasNode.file} alt={object?.title || "图片"} /> : fileReference ? <div className="object-file-reference"><DocumentRegular aria-hidden="true" /><strong>{canvasNode!.file?.split("/").at(-1)}</strong><span>{canvasNode!.subpath || "文件引用"}</span><small>{canvasNode!.file}</small></div> : object ? (
             <ObjectSurface
               object={object}
               presentation="canvas"
@@ -531,6 +542,7 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
               {object === null ? "内容不可用，引用仍保留。" : "正在读取内容…"}
             </p>
           )}
+          </VisualBlockBase>
           {connection &&
             (["top", "right", "bottom", "left"] as BoardSide[]).map((side) => {
               const label = {
@@ -608,6 +620,7 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
                 type="button"
                 className={`object-resize-handle object-resize-${direction}`}
                 aria-label={`调整卡片大小：${resizeLabels[direction]}`}
+                disabled={!!appearance.value.locked}
                 onPointerDown={(event) => begin(event, direction)}
                 onPointerMove={drag}
                 onPointerUp={finish}
@@ -636,6 +649,8 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
       </MenuTrigger>
       <MenuPopover>
         <MenuList>
+          <MenuItem icon={<SettingsRegular />} onClick={() => setAppearanceOpen(true)}>字体与布局</MenuItem>
+          <MenuItem onClick={() => void appearance.save({ ...appearance.record.value, layer: 10000 }).then(() => actions.current.refresh()).catch(error)}>置于上层</MenuItem>
           <MenuItem
             icon={<EditRegular />}
             disabled={!canEdit}
@@ -651,7 +666,7 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
           </MenuItem>
           <MenuItem
             icon={<ArrowMoveRegular />}
-            disabled={editing}
+            disabled={editing || !!appearance.value.locked}
             onClick={startMoving}
           >
             移动卡片

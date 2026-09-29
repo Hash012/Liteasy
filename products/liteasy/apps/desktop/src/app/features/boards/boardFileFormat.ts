@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseBlockPresentation } from "../objects/visualBlock.types";
 import {
   objectRefSchema,
   objectText,
@@ -222,6 +223,7 @@ export async function prepareCanvasImport(input: {
       };
       return {
         id: node.id,
+        presentation: parseBlockPresentation(canvasExtension(node.liteasy).presentation),
         ref,
         draft: ref ? undefined : draft,
         position: { x: node.x - origin.x, y: node.y - origin.y },
@@ -240,7 +242,7 @@ export async function prepareCanvasImport(input: {
     label: edge.label,
     kind: "related_to",
   }));
-  return { nodes, edges };
+  return { nodes, edges, presentation: parseBlockPresentation(canvasExtension(input.document.liteasy).presentation) };
 }
 export async function serializeCanvasFile(input: {
   board: ObjectEnvelope;
@@ -259,6 +261,7 @@ export async function serializeCanvasFile(input: {
   const nodes = await Promise.all(
     [...input.placements].sort((a, b) => (order.get(a.placementId) ?? Infinity) - (order.get(b.placementId) ?? Infinity)).map(async (placement) => {
       const object = await input.repository.get(placement.ref);
+      const presentation = await input.repository.getBlockPresentation(input.board.objectId, placement.placementId);
       const previous = original?.nodes.find(
         (node) => node.id === placement.placementId,
       );
@@ -297,7 +300,7 @@ export async function serializeCanvasFile(input: {
                 type: "text" as const,
                 text: await portableText(object, input.repository),
               }),
-        liteasy: { ...canvasExtension(previous?.liteasy), ref: placement.ref, title: object.title },
+        liteasy: { ...canvasExtension(previous?.liteasy), ref: placement.ref, title: object.title, ...(presentation.version ? { presentation: presentation.value } : {}) },
       };
     }),
   );
@@ -312,7 +315,8 @@ export async function serializeCanvasFile(input: {
     toEnd: edge.toEnd,
     label: edge.label,
   }));
-  return `${JSON.stringify({ ...original, nodes, edges, liteasy: { ...canvasExtension(original?.liteasy), boardRef: refOf(input.board), title: input.board.title } }, null, 2)}\n`;
+  const presentation = await input.repository.getBlockPresentation(input.board.objectId);
+  return `${JSON.stringify({ ...original, nodes, edges, liteasy: { ...canvasExtension(original?.liteasy), boardRef: refOf(input.board), title: input.board.title, ...(presentation.version ? { presentation: presentation.value } : {}) } }, null, 2)}\n`;
 }
 export function connectionPoint(
   placement: Pick<Placement, "position" | "size">,

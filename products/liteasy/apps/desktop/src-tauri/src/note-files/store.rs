@@ -1,4 +1,5 @@
 //! User-selected grants and UTF-8 files. No renderer-provided absolute path is accepted.
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -399,6 +400,47 @@ impl FileStore {
         result.sort_by(|a, b| a.path.cmp(&b.path));
         Ok(result)
     }
+    pub fn read_image(&self, id: &str, path: &str) -> Result<serde_json::Value, String> {
+        let media_type = match Path::new(path)
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "png" => "image/png",
+            "jpg" | "jpeg" => "image/jpeg",
+            "gif" => "image/gif",
+            "webp" => "image/webp",
+            _ => return Err("仅支持 PNG、JPEG、GIF 和 WebP 图片。".into()),
+        };
+        // Directory grants only. Reuse canonical-root and symlink checks; never expand a file grant to siblings.
+        let target = self.resolve(id, path, false)?;
+        let file = fs::File::open(target).map_err(|e| e.to_string())?;
+        if file.metadata().map_err(|e| e.to_string())?.len() > MAX_BYTES {
+            return Err("图片不能超过 8 MB。".into());
+        }
+        let mut bytes = Vec::new();
+        file.take(MAX_BYTES + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|e| e.to_string())?;
+        if bytes.len() as u64 > MAX_BYTES {
+            return Err("图片不能超过 8 MB。".into());
+        }
+        let valid = match media_type {
+            "image/png" => bytes.starts_with(b"\x89PNG\r\n\x1a\n"),
+            "image/jpeg" => bytes.starts_with(&[255, 216, 255]),
+            "image/gif" => bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a"),
+            "image/webp" => bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP"),
+            _ => false,
+        };
+        if !valid {
+            return Err("图片格式与内容不一致。".into());
+        }
+        Ok(
+            serde_json::json!({ "mediaType": media_type, "base64": STANDARD.encode(&bytes), "byteLength": bytes.len() }),
+        )
+    }
     pub fn read(&self, id: &str, path: &str) -> Result<Snapshot, String> {
         let target = self.resolve(id, path, true)?;
         let text = read_text(&target)?;
@@ -570,6 +612,25 @@ mod tests {
         let root = std::env::temp_dir().join(format!("liteasy-notefiles-{}", nonce()));
         fs::create_dir_all(root.join("vault")).unwrap();
         root
+    }
+    #[test]
+    fn images_require_directory_grants_valid_content_and_bounded_paths() {
+        let root = workspace();
+        let files = FileStore::open(&root, "image-user").unwrap();
+        fs::write(root.join("vault/figure.png"), b"\x89PNG\r\n\x1a\nimage").unwrap();
+        fs::write(root.join("vault/invalid.png"), b"not an image").unwrap();
+        fs::write(root.join("vault/note.md"), "a note").unwrap();
+        let directory = files.register(&root.join("vault"), "directory").unwrap();
+        assert_eq!(
+            files.read_image(&directory.id, "figure.png").unwrap()["mediaType"],
+            "image/png"
+        );
+        assert!(files.read_image(&directory.id, "invalid.png").is_err());
+        assert!(files.read_image(&directory.id, "../figure.png").is_err());
+        assert!(files.read_image(&directory.id, "note.md").is_err());
+        let single = files.register(&root.join("vault/note.md"), "file").unwrap();
+        assert!(files.read_image(&single.id, "figure.png").is_err());
+        fs::remove_dir_all(root).ok();
     }
     #[test]
     fn sync_restores_external_hierarchy_and_managed_canvas_without_original_paths() {
