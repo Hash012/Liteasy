@@ -1,5 +1,5 @@
 #[path = "note-files/store.rs"]
-mod store;
+pub(crate) mod store;
 use rfd::FileDialog;
 use serde_json::{json, Value};
 use std::sync::Mutex;
@@ -158,4 +158,17 @@ pub fn note_files_dispatch(app: AppHandle, scope: String, request: Value) -> Res
         }
         _ => Err("不支持的笔记文件操作。".into()),
     }
+}
+
+pub(crate) fn sync_managed_mounts(
+    app: &AppHandle,
+    scope: &str,
+) -> Result<std::collections::HashSet<String>, String> {
+    let root = crate::data_location::root(app).map_err(|e| e.to_string())?;
+    Ok(store::FileStore::open(&root, scope)?
+        .mounts()?
+        .into_iter()
+        .filter(|m| m.managed)
+        .map(|m| m.id)
+        .collect())
 }

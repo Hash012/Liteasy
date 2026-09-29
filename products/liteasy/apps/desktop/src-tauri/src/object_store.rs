@@ -272,6 +272,203 @@ fn asset_path(app: &AppHandle, scope: &str, hash: &str) -> Result<std::path::Pat
         .join(hash))
 }
 
+// Portable logical snapshots: never copy a live WAL database or local absolute paths.
+pub(crate) fn sync_export(app: &AppHandle, scope: &str, external: bool) -> Result<Value, String> {
+    let _guard = WRITE_LOCK.lock().map_err(|_| "对象存储忙碌")?;
+    let connection = open(app, scope)?;
+    let mut statement = connection
+        .prepare("SELECT key,version,value FROM object_records WHERE scope=?1 ORDER BY key")
+        .map_err(|e| e.to_string())?;
+    let rows = statement
+        .query_map(params![scope], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+    let mut records = Vec::new();
+    let mut size = 0usize;
+    for row in rows {
+        let (key, version, value) = row.map_err(|e| e.to_string())?;
+        size += value.len();
+        if size > 96 * 1024 * 1024 || records.len() >= 100_000 {
+            return Err("笔记同步数据过大，请分库同步。".into());
+        }
+        records.push(ObjectRow {
+            key,
+            version,
+            value: serde_json::from_str(&value).map_err(|e| e.to_string())?,
+        });
+    }
+    let managed_mounts = crate::note_files::sync_managed_mounts(app, scope)?;
+    let external_ids: std::collections::HashSet<String> = records
+        .iter()
+        .filter(|r| r.key.starts_with("object-file/") || r.key.starts_with("board-file/"))
+        .filter(|r| !managed_mounts.contains(r.value["mountId"].as_str().unwrap_or("")))
+        .map(|r| r.key.split_once('/').unwrap().1.to_owned())
+        .collect();
+    records.retain(|r| {
+        !r.key.starts_with("asset/") && (external == sync_external_record(r, &external_ids))
+    });
+    let mut hashes = std::collections::BTreeSet::new();
+    fn hashes_in(value: &Value, hashes: &mut std::collections::BTreeSet<String>) {
+        match value {
+            Value::Object(map) => {
+                if let Some(hash) = map.get("sha256").and_then(Value::as_str) {
+                    hashes.insert(hash.to_owned());
+                }
+                for v in map.values() {
+                    hashes_in(v, hashes);
+                }
+            }
+            Value::Array(items) => {
+                for v in items {
+                    hashes_in(v, hashes);
+                }
+            }
+            _ => (),
+        }
+    }
+    for row in &records {
+        hashes_in(&row.value, &mut hashes);
+    }
+    for hash in hashes {
+        if let Some(mut row) = get(&connection, scope, &format!("asset/{hash}"))? {
+            let bytes = std::fs::read(asset_path(app, scope, &hash)?).map_err(|e| e.to_string())?;
+            size += bytes.len() * 4 / 3;
+            if size > 128 * 1024 * 1024 {
+                return Err("笔记附件同步数据超过 128 MiB。".into());
+            }
+            if format!("{:x}", Sha256::digest(&bytes)) != hash {
+                return Err("笔记附件校验失败。".into());
+            }
+            row.value["base64"] = Value::String(STANDARD.encode(bytes));
+            records.push(row);
+        }
+    }
+    records.sort_by(|a, b| a.key.cmp(&b.key));
+    Ok(serde_json::json!({"version":1,"scope":scope,"external":external,"records":records}))
+}
+fn sync_external_record(row: &ObjectRow, ids: &std::collections::HashSet<String>) -> bool {
+    fn references_external(value: &Value, ids: &std::collections::HashSet<String>) -> bool {
+        match value {
+            Value::String(s) => ids.contains(s) || s.starts_with("note-file-"),
+            Value::Object(map) => {
+                map.get("kind").and_then(Value::as_str) == Some("external-file")
+                    || map.values().any(|v| references_external(v, ids))
+            }
+            Value::Array(items) => items.iter().any(|v| references_external(v, ids)),
+            _ => false,
+        }
+    }
+    row.key.contains("note-file-")
+        || references_external(&row.value, ids)
+        || ids
+            .iter()
+            .any(|id| row.key.split('/').any(|part| part == id))
+}
+pub(crate) fn sync_import(
+    app: &AppHandle,
+    scope: &str,
+    value: &Value,
+    previous: Option<&Value>,
+) -> Result<(), String> {
+    if value["version"] != 1 || value["scope"].as_str() != Some(scope) {
+        return Err("笔记同步版本或账号不匹配。".into());
+    }
+    let mut rows: Vec<ObjectRow> =
+        serde_json::from_value(value["records"].clone()).map_err(|_| "笔记同步格式无效")?;
+    if rows.len() > 100_000 {
+        return Err("笔记同步条目过多。".into());
+    }
+    let _guard = WRITE_LOCK.lock().map_err(|_| "对象存储忙碌")?;
+    let mut connection = open(app, scope)?;
+    let mut keys = std::collections::HashSet::new();
+    for row in &mut rows {
+        if row.key.is_empty()
+            || row.key.len() > 2048
+            || row.version.is_empty()
+            || !keys.insert(row.key.clone())
+        {
+            return Err("笔记同步记录无效。".into());
+        }
+        if row.key.starts_with("head/") || row.key.starts_with("revision/") {
+            if row.value["scopeId"].as_str() != Some(scope)
+                || row.value["schemaVersion"] != "liteasy.object/v1"
+                || row.value["objectId"].as_str() != row.key.split('/').nth(1)
+                || (row.key.starts_with("revision/")
+                    && row.value["revision"].as_str() != row.key.split('/').nth(2))
+            {
+                return Err("同步对象的账号、版本或身份无效。".into());
+            }
+        }
+        if row.key.starts_with("asset/") {
+            let hash = row.value["sha256"]
+                .as_str()
+                .ok_or("附件缺少校验值")?
+                .to_owned();
+            let bytes = STANDARD
+                .decode(row.value["base64"].as_str().ok_or("附件内容缺失")?)
+                .map_err(|_| "附件编码无效")?;
+            if row.key != format!("asset/{hash}")
+                || row.value["assetId"].as_str() != Some(hash.as_str())
+                || crate::webdav::model::digest(&bytes) != hash
+                || row.value["byteLength"].as_u64() != Some(bytes.len() as u64)
+            {
+                return Err("附件校验失败。".into());
+            }
+            crate::local_library::write_bytes_atomically(&asset_path(app, scope, &hash)?, &bytes)?;
+            row.value
+                .as_object_mut()
+                .ok_or("附件格式无效")?
+                .remove("base64");
+        }
+    }
+    let previous_rows: Vec<ObjectRow> = previous
+        .map(|v| serde_json::from_value(v["records"].clone()).map_err(|_| "旧笔记快照无效"))
+        .transpose()?
+        .unwrap_or_default();
+    sync_merge(&mut connection, scope, rows, &previous_rows)
+}
+fn sync_merge(
+    connection: &mut Connection,
+    scope: &str,
+    rows: Vec<ObjectRow>,
+    previous: &[ObjectRow],
+) -> Result<(), String> {
+    let keys: std::collections::HashSet<_> = rows.iter().map(|row| row.key.as_str()).collect();
+    let tx = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| e.to_string())?;
+    for row in previous {
+        if !keys.contains(row.key.as_str())
+            && !row.key.starts_with("revision/")
+            && !row.key.starts_with("asset/")
+        {
+            tx.execute(
+                "DELETE FROM object_records WHERE scope=?1 AND key=?2",
+                params![scope, row.key],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+    }
+    // Retain immutable history and attachments; mutable records follow the selected snapshot.
+    for row in rows {
+        if row.key.starts_with("revision/") {
+            if let Some(old) = get(&tx, scope, &row.key)? {
+                if old.value != row.value || old.version != row.version {
+                    return Err("不可变笔记版本冲突。".into());
+                }
+                continue;
+            }
+        }
+        tx.execute("INSERT INTO object_records(scope,key,version,value) VALUES(?1,?2,?3,?4) ON CONFLICT(scope,key) DO UPDATE SET version=excluded.version,value=excluded.value", params![scope,row.key,row.version,serde_json::to_string(&row.value).map_err(|e| e.to_string())?]).map_err(|e| e.to_string())?;
+    }
+    tx.commit().map_err(|e| e.to_string())
+}
+
 /// Only old unreferenced files are reclaimed; active staging and committed attachments survive.
 pub fn recover(app: &AppHandle) -> Result<(), String> {
     let scope = crate::desktop_identity::local_object_scope()?;
@@ -320,6 +517,70 @@ mod tests {
                 value: serde_json::json!({"text":"saved"}),
             }),
         }
+    }
+    #[test]
+    fn sync_filters_linked_notes_and_merges_atomically_without_changing_revisions() {
+        let mut db = Connection::open_in_memory().unwrap();
+        initialize(&db).unwrap();
+        let row = |key: &str, version: &str, value: Value| ObjectRow {
+            key: key.into(),
+            version: version.into(),
+            value,
+        };
+        let old = row(
+            "revision/note/r1",
+            "r1",
+            serde_json::json!({"text":"original"}),
+        );
+        let edge = row(
+            "edge/board/removed",
+            "e1",
+            serde_json::json!({"from":"note"}),
+        );
+        let external = row(
+            "head/imported",
+            "ext",
+            serde_json::json!({"text":"external"}),
+        );
+        sync_merge(
+            &mut db,
+            "local",
+            vec![old.clone(), edge.clone(), external.clone()],
+            &[],
+        )
+        .unwrap();
+        let bad = row(
+            "revision/note/r1",
+            "bad",
+            serde_json::json!({"text":"rewritten"}),
+        );
+        assert!(sync_merge(&mut db, "local", vec![bad], std::slice::from_ref(&edge)).is_err());
+        assert!(get(&db, "local", &edge.key).unwrap().is_some());
+        sync_merge(
+            &mut db,
+            "local",
+            vec![old.clone()],
+            std::slice::from_ref(&edge),
+        )
+        .unwrap();
+        assert!(get(&db, "local", &edge.key).unwrap().is_none());
+        assert!(get(&db, "local", &external.key).unwrap().is_some());
+        assert_eq!(
+            get(&db, "local", &old.key).unwrap().unwrap().value,
+            old.value
+        );
+        assert!(get(&db, "other", &old.key).unwrap().is_none());
+        let ids = std::collections::HashSet::from(["imported".to_string()]);
+        assert!(sync_external_record(&external, &ids));
+        assert!(!sync_external_record(&old, &ids));
+        assert!(sync_external_record(
+            &row(
+                "notes/reference/id/encoded",
+                "v",
+                serde_json::json!({"target":{"kind":"external-file","mountId":"vault","path":"private.md"}})
+            ),
+            &ids
+        ));
     }
     #[test]
     fn conflict_rolls_back_all_records_and_scopes_are_isolated() {

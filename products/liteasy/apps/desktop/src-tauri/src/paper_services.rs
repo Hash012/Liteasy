@@ -49,7 +49,7 @@ fn validate_public_redirect(url: &Url, previous_count: usize) -> Result<(), &'st
     }
     Ok(())
 }
-fn credential(config: &PaperServiceConfig) -> Result<Entry, String> {
+pub(crate) fn credential(config: &PaperServiceConfig) -> Result<Entry, String> {
     let endpoint = validate(config)?;
     let scope = format!(
         "{}:{}",

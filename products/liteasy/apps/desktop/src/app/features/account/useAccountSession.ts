@@ -1,3 +1,4 @@
+import { restoreWebDavPreferences, reportWebDavRestoreError } from "../webdav/webdavPreferences";
 import { formatCloudConnectionError } from "../network/cloudErrorMessage";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -85,7 +86,9 @@ export function useAccountSession({
         fetchImpl: desktopIdentityFetch,
         invoke: desktopIdentityInvoke
       })
-        .then((restoredSession) => {
+        .then(async (restoredSession) => {
+          storeAccountSession(restoredSession);
+          await restoreWebDavPreferences().catch(reportWebDavRestoreError);
           setAccountSession(storeAccountSession(restoredSession));
           setAuthenticationMode("oauth");
           setAccountMessage("登录会话已从操作系统安全存储恢复。");
@@ -110,6 +113,8 @@ export function useAccountSession({
         fetchImpl: desktopIdentityFetch,
         invoke: desktopIdentityInvoke
       });
+      storeAccountSession(session);
+      await restoreWebDavPreferences().catch(reportWebDavRestoreError);
       setAccountSession(storeAccountSession(session));
       setAuthenticationMode("oauth");
       setAccountMessage("登录成功；刷新凭据已保存在操作系统安全存储中。");

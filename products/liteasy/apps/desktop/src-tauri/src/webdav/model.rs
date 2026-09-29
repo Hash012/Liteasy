@@ -80,16 +80,30 @@ pub fn allowed_path(path: &str) -> bool {
     let parts: Vec<_> = path.split('/').collect();
     if parts[0] == ".liteasy" {
         return (parts.len() == 3 && parts[1] == "metadata-entries" && path.ends_with(".json"))
-            || (parts.len() == 4 && parts[1] == "paper-artifacts" && path.ends_with(".v1.json"));
+            || (parts.len() == 4 && parts[1] == "paper-artifacts" && path.ends_with(".v1.json"))
+            || (parts.len() == 5
+                && parts[1] == "paper-artifacts"
+                && parts[3] == "agent-results"
+                && path.ends_with(".json"))
+            || (parts.len() >= 4
+                && parts[1] == "sync-data"
+                && matches!(
+                    parts[2],
+                    "objects" | "boards" | "external" | "history" | "preferences" | "keys"
+                )
+                && parts[3..].iter().all(|p| !p.starts_with('.')));
     }
-    parts.iter().all(|p| !p.starts_with('.')) && path.to_ascii_lowercase().ends_with(".pdf")
+    parts.iter().all(|p| !p.starts_with('.'))
 }
 
 impl Manifest {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
         let value: serde_json::Value =
             serde_json::from_slice(bytes).map_err(|_| "同步清单损坏，已停止修改并保留原数据。")?;
-        if value.get("schemaVersion").and_then(|v| v.as_u64()) != Some(1) {
+        if !matches!(
+            value.get("schemaVersion").and_then(|v| v.as_u64()),
+            Some(1 | 2)
+        ) {
             return Err(
                 "此同步库使用当前应用不支持的数据版本，请升级 Liteasy 后重试；原数据未修改。"
                     .into(),
@@ -101,7 +115,7 @@ impl Manifest {
         Ok(manifest)
     }
     pub fn validate(&self) -> Result<(), String> {
-        if self.schema_version != 1 || self.files.len() > 100_000 {
+        if !matches!(self.schema_version, 1 | 2) || self.files.len() > 100_000 {
             return Err("不支持的同步清单版本或清单过大。".into());
         }
         let mut names = std::collections::HashSet::new();
@@ -120,7 +134,8 @@ impl Manifest {
                 {
                     return Err("同步文件校验信息无效或文件超过 256 MiB。".into());
                 }
-                let pdf = path.to_ascii_lowercase().ends_with(".pdf");
+                let pdf =
+                    !path.starts_with(".liteasy/") && path.to_ascii_lowercase().ends_with(".pdf");
                 if pdf != v.document_id.is_some() {
                     return Err("同步文件缺少文献身份信息。".into());
                 }
@@ -175,7 +190,7 @@ mod tests {
     #[test]
     fn future_or_malformed_manifest_returns_an_error_without_panicking() {
         for bytes in [
-            br#"{"schemaVersion":2,"files":{},"newRequiredField":true}"#.as_slice(),
+            br#"{"schemaVersion":3,"files":{}}"#.as_slice(),
             b"null",
             b"[]",
             b"{",
@@ -226,6 +241,9 @@ mod tests {
         }
         for p in [
             "中文目录/文章.pdf",
+            "电子书/书籍.epub",
+            "附件/data.bin",
+            ".liteasy/paper-artifacts/workspace-artifacts/agent-results/slides.json",
             ".liteasy/metadata-entries/doc-1.json",
             ".liteasy/paper-artifacts/doc-1/annotations.v1.json",
         ] {
@@ -242,7 +260,7 @@ mod tests {
         m.files.remove("b.pdf");
         m.files.get_mut("a.pdf").unwrap().as_mut().unwrap().hash = "../x".into();
         assert!(m.validate().is_err());
-        m.schema_version = 2;
+        m.schema_version = 3;
         assert!(m.validate().is_err());
     }
 }

@@ -5431,6 +5431,14 @@ pub(crate) fn apply_webdav_file_at(
             if value.is_null() {
                 return Err("远端阅读产物不能为 null。".into());
             }
+            if relative.split('/').nth(3) == Some("agent-results")
+                && (value["version"] != "liteasy.agent-artifact/v1"
+                    || value["agent"]["status"] != "completed"
+                    || Path::new(relative).file_stem().and_then(|s| s.to_str())
+                        != value["artifactId"].as_str())
+            {
+                return Err("远端 AI 产物版本或身份无效。".into());
+            }
         }
     }
     let current = local::current_hash(root, relative)?;

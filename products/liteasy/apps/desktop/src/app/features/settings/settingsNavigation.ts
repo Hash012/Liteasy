@@ -34,7 +34,7 @@ export const settingsSections = [
     keys: ["papers.local_mode", "profile.local_enabled", "network.recommendation.enabled", "network.recommendation.style"] },
   { id: "data", category: "storage", title: "数据保存位置", description: "查看和迁移 Liteasy 的本地数据目录。", keywords: "路径 文件夹 安装目录 LiteasyData 重启 聊天 笔记 生成内容", keys: [] },
   { id: "library", category: "storage", title: "文献库与备份", description: "管理文献库目录、导入旧库或创建本地备份。", keywords: "路径 保存位置 文件夹 迁移 备份 backup library 本地", keys: [] },
-  { id: "webdav", category: "sync", title: "WebDAV 同步", description: "连接自己的存储服务，在设备之间同步文献库。", keywords: "WebDAV 服务器 账号 密码 自动同步 备份 冲突", keys: [] },
+  { id: "webdav", category: "sync", title: "WebDAV 同步", description: "选择同步文献、笔记、白板、画像、外部目录与密钥。", keywords: "WebDAV 服务器 账号 密码 自动同步 备份 冲突 笔记 白板 画像 API key 外部目录", keys: [] },
   { id: "metadata", category: "sync", title: "文献元数据同步", description: "查看文献元信息的云端同步状态。", keywords: "云端 账号 元信息 重试 同步", keys: [] },
   { id: "annotations", category: "sync", title: "共享批注", description: "设置公开批注的同步服务。", keywords: "Intuecho 高亮 批注 同步 端点 HTTPS",
     keys: ["thin_reading.intuecho_endpoint"] }

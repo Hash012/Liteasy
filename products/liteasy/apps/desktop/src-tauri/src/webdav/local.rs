@@ -14,7 +14,7 @@ pub fn safe_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
     checked_path(root, relative)
 }
 
-fn checked_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
+pub(crate) fn checked_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
     let mut path = root.to_path_buf();
     for part in relative.split('/') {
         path.push(part);
@@ -65,7 +65,16 @@ pub fn read_file(path: &Path) -> Result<Option<Vec<u8>>, String> {
 pub fn current_hash(root: &Path, relative: &str) -> Result<Option<String>, String> {
     Ok(read_file(&safe_path(root, relative)?)?.map(|b| digest(&b)))
 }
+#[cfg(test)]
 pub fn collect(root: &Path, directory: &Path, files: &mut Files) -> Result<(), String> {
+    collect_selected(root, directory, files, &|_| true)
+}
+pub fn collect_selected(
+    root: &Path,
+    directory: &Path,
+    files: &mut Files,
+    includes: &impl Fn(&str) -> bool,
+) -> Result<(), String> {
     match fs::symlink_metadata(directory) {
         Ok(_) => (),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
@@ -87,12 +96,14 @@ pub fn collect(root: &Path, directory: &Path, files: &mut Files) -> Result<(), S
                 || relative == ".liteasy/metadata-entries"
                 || relative == ".liteasy/paper-artifacts"
                 || relative.starts_with(".liteasy/paper-artifacts/")
+                || relative == ".liteasy/sync-data"
+                || relative.starts_with(".liteasy/sync-data/")
                 || relative.split('/').all(|p| !p.starts_with('.'))
             {
                 checked_path(root, &relative)?;
-                collect(root, &path, files)?;
+                collect_selected(root, &path, files, includes)?;
             }
-        } else if allowed_path(&relative) {
+        } else if allowed_path(&relative) && includes(&relative) {
             let bytes = read_file(&safe_path(root, &relative)?)?
                 .ok_or("扫描时文件已被移除，请重新同步。")?;
             files.insert(
@@ -103,7 +114,9 @@ pub fn collect(root: &Path, directory: &Path, files: &mut Files) -> Result<(), S
                     document_id: None,
                 }),
             );
-        } else if relative.to_ascii_lowercase().ends_with(".pdf")
+        } else if !allowed_path(&relative)
+            && includes(&relative)
+            && relative.to_ascii_lowercase().ends_with(".pdf")
             && !relative.starts_with(".liteasy/")
         {
             return Err(format!("文件名不适合跨设备同步：{relative}"));

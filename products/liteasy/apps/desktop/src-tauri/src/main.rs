@@ -15,8 +15,8 @@ mod note_files;
 mod object_store;
 mod paper_cache;
 mod paper_services;
-mod user_paper_store;
 mod system_fonts;
+mod user_paper_store;
 mod webdav;
 mod workflow_checkpoints;
 
@@ -62,6 +62,8 @@ fn main() {
             webdav::disconnect_webdav,
             webdav::verify_webdav,
             webdav::sync_webdav,
+            webdav::workspace::restore_webdav_preferences,
+            webdav::workspace::acknowledge_webdav_preferences,
             note_files::note_files_dispatch,
             data_location::get_data_location,
             data_location::choose_data_location,

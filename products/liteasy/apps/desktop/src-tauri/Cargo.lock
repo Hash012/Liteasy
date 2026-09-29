@@ -2475,6 +2475,7 @@ dependencies = [
  "notify",
  "openidconnect",
  "rfd",
+ "ring",
  "rusqlite",
  "serde",
  "serde_json",

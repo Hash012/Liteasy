@@ -38,6 +38,7 @@ pub struct FileStore {
     connection: Connection,
     scope: String,
     managed_root: PathBuf,
+    mirrored_root: PathBuf,
 }
 fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
@@ -131,6 +132,7 @@ impl FileStore {
             connection,
             scope: scope.into(),
             managed_root: app_data.join("boards").join(hash(scope.as_bytes())),
+            mirrored_root: app_data.join("synced-boards").join(hash(scope.as_bytes())),
         })
     }
     pub fn workspace_state(&self, id: &str) -> Result<serde_json::Value, String> {
@@ -181,7 +183,9 @@ impl FileStore {
                 .into_owned();
             Ok(Mount {
                 managed: fs::canonicalize(&self.managed_root)
-                    .is_ok_and(|root| root == Path::new(&location)),
+                    .is_ok_and(|root| Path::new(&location).starts_with(&root))
+                    || fs::canonicalize(&self.mirrored_root)
+                        .is_ok_and(|root| Path::new(&location).starts_with(&root)),
                 id,
                 location,
                 kind,
@@ -225,7 +229,8 @@ impl FileStore {
             return Ok(existing);
         }
         let mount = Mount {
-            managed: fs::canonicalize(&self.managed_root).is_ok_and(|root| root == absolute),
+            managed: fs::canonicalize(&self.managed_root)
+                .is_ok_and(|root| absolute.starts_with(&root)),
             id: hash(nonce().as_bytes()),
             name: absolute
                 .file_name()
@@ -567,6 +572,75 @@ mod tests {
         root
     }
     #[test]
+    fn sync_restores_external_hierarchy_and_managed_canvas_without_original_paths() {
+        let a = workspace();
+        let b = workspace();
+        let source = FileStore::open(&a, "alice").unwrap();
+        let target = FileStore::open(&b, "alice").unwrap();
+        fs::create_dir_all(a.join("vault/research/deep")).unwrap();
+        fs::create_dir_all(a.join("vault/.obsidian")).unwrap();
+        fs::write(a.join("vault/research/deep/CicN.md"), "# A note").unwrap();
+        fs::write(a.join("vault/research/figure.png"), b"image").unwrap();
+        fs::write(a.join("vault/.obsidian/workspace.json"), b"private state").unwrap();
+        let mount = source.register(&a.join("vault"), "directory").unwrap();
+        let snapshot = source.sync_export(&mount.id).unwrap();
+        assert!(!snapshot.to_string().contains(&mount.location));
+        assert!(!snapshot.to_string().contains(".obsidian"));
+        target.sync_import(&b, &snapshot, None).unwrap();
+        assert_eq!(
+            target
+                .read(&mount.id, "research/deep/CicN.md")
+                .unwrap()
+                .text,
+            "# A note"
+        );
+        assert_eq!(target.sync_export(&mount.id).unwrap(), snapshot);
+        let mirrored = target.mount(&mount.id).unwrap();
+        assert!(Path::new(&mirrored.location).starts_with(b.canonicalize().unwrap()));
+        assert!(!mirrored.managed);
+        let board = source.managed_canvas("board").unwrap();
+        source
+            .write(
+                &board.entry.mount_id,
+                &board.entry.path,
+                "{\"nodes\":[],\"edges\":[]}",
+                None,
+            )
+            .unwrap();
+        // A device with its own managed root can also register the remote grant.
+        target.managed_canvas("local board").unwrap();
+        let canvas = source.sync_export(&board.entry.mount_id).unwrap();
+        target.sync_import(&b, &canvas, None).unwrap();
+        assert!(target.mount(&board.entry.mount_id).unwrap().managed);
+        assert_eq!(target.sync_export(&board.entry.mount_id).unwrap(), canvas);
+        fs::remove_file(a.join("vault/research/figure.png")).unwrap();
+        fs::write(a.join("vault/research/deep/CicN.md"), "# Updated").unwrap();
+        let updated = source.sync_export(&mount.id).unwrap();
+        target.sync_import(&b, &updated, Some(&snapshot)).unwrap();
+        assert_eq!(target.sync_export(&mount.id).unwrap(), updated);
+        fs::write(
+            Path::new(&mirrored.location).join("research/deep/CicN.md"),
+            "local Obsidian edit",
+        )
+        .unwrap();
+        assert!(target.sync_import(&b, &snapshot, Some(&updated)).is_err());
+        assert_eq!(
+            target
+                .read(&mount.id, "research/deep/CicN.md")
+                .unwrap()
+                .text,
+            "local Obsidian edit"
+        );
+        let mut hostile = snapshot.clone();
+        hostile["files"]["../escape.md"] = serde_json::json!("eA==");
+        assert!(target.sync_import(&b, &hostile, None).is_err());
+        assert!(!b.join("escape.md").exists());
+        drop(source);
+        drop(target);
+        fs::remove_dir_all(a).unwrap();
+        fs::remove_dir_all(b).unwrap();
+    }
+    #[test]
     fn managed_canvas_is_durable_scope_isolated_and_checks_external_edits() {
         let root = workspace();
         let store = FileStore::open(&root, "alice").unwrap();
@@ -782,5 +856,191 @@ mod tests {
         assert!(store.entries(&mount.id).unwrap().is_empty());
         drop(store);
         fs::remove_dir_all(root).unwrap();
+    }
+}
+
+impl FileStore {
+    /// Export a grant without its machine-specific location or Obsidian state.
+    pub(crate) fn sync_export(&self, id: &str) -> Result<serde_json::Value, String> {
+        use base64::{engine::general_purpose::STANDARD, Engine};
+        let mount = self.mount(id)?;
+        let mut files = std::collections::BTreeMap::new();
+        let mut total = 0usize;
+        fn walk(
+            root: &Path,
+            dir: &Path,
+            files: &mut std::collections::BTreeMap<String, String>,
+            total: &mut usize,
+        ) -> Result<(), String> {
+            for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
+                let entry = entry.map_err(|e| e.to_string())?;
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if name.starts_with('.') {
+                    continue;
+                }
+                let path = entry.path();
+                let relative = path
+                    .strip_prefix(root)
+                    .map_err(|e| e.to_string())?
+                    .to_string_lossy()
+                    .replace(std::path::MAIN_SEPARATOR, "/");
+                // This also rejects symlinks and Windows reparse points, including directories.
+                let checked = crate::webdav::local::checked_path(root, &relative)?;
+                if entry.file_type().map_err(|e| e.to_string())?.is_dir() {
+                    walk(root, &checked, files, total)?;
+                } else if crate::webdav::model::allowed_path(&relative) {
+                    let bytes =
+                        crate::webdav::local::read_file(&checked)?.ok_or("笔记已移除，请重试")?;
+                    *total += bytes.len() * 4 / 3;
+                    if *total > 128 * 1024 * 1024 || files.len() >= 100_000 {
+                        return Err("单个外部目录同步内容超过 128 MiB，请拆分目录。".into());
+                    }
+                    files.insert(relative, STANDARD.encode(bytes));
+                }
+            }
+            Ok(())
+        }
+        let location = Path::new(&mount.location);
+        if fs::canonicalize(location).map_err(|e| e.to_string())? != location {
+            return Err("连接目录位置已变化，请重新连接后同步。".into());
+        }
+        if mount.kind == "directory" {
+            walk(location, location, &mut files, &mut total)?;
+        } else if let Some(bytes) = crate::webdav::local::read_file(location)? {
+            files.insert(mount.name.clone(), STANDARD.encode(bytes));
+        }
+        Ok(
+            serde_json::json!({"version":1,"id":mount.id,"name":if mount.managed {"Boards"} else {&mount.name},"kind":mount.kind,"managed":mount.managed,"files":files}),
+        )
+    }
+    pub(crate) fn sync_import(
+        &self,
+        app_data: &Path,
+        value: &serde_json::Value,
+        previous: Option<&serde_json::Value>,
+    ) -> Result<(), String> {
+        use base64::{engine::general_purpose::STANDARD, Engine};
+        let id = value["id"].as_str().ok_or("缺少笔记目录标识")?;
+        let name = value["name"].as_str().ok_or("缺少笔记目录名称")?;
+        let kind = value["kind"].as_str().ok_or("缺少目录类型")?;
+        if value["version"] != 1
+            || id.len() != 64
+            || !id.bytes().all(|b| b.is_ascii_hexdigit())
+            || !matches!(kind, "file" | "directory")
+        {
+            return Err("笔记目录同步格式无效。".into());
+        }
+        validate_path(name, false)?;
+        if name.contains('/') {
+            return Err("笔记目录名称无效。".into());
+        }
+        let files = value["files"].as_object().ok_or("缺少笔记文件")?;
+        let managed = value["managed"].as_bool().ok_or("缺少目录来源")?;
+        let existing = self.mounts()?.into_iter().find(|m| m.id == id);
+        let target = existing
+            .as_ref()
+            .map(|m| PathBuf::from(&m.location))
+            .unwrap_or_else(|| {
+                if managed {
+                    self.mirrored_root.join(id)
+                } else {
+                    app_data
+                        .join("synced-external")
+                        .join(hash(self.scope.as_bytes()))
+                        .join(id)
+                        .join(name)
+                }
+            });
+        if existing
+            .as_ref()
+            .is_some_and(|m| m.kind != kind || m.managed != managed)
+        {
+            return Err("笔记同步目录类型冲突。".into());
+        }
+        if existing.is_some() {
+            if fs::canonicalize(&target).map_err(|e| e.to_string())? != target {
+                return Err("连接目录位置已变化，请重新连接后同步。".into());
+            }
+        } else {
+            let relative = target
+                .strip_prefix(app_data)
+                .map_err(|_| "恢复目录必须位于 Liteasy 数据目录")?
+                .to_string_lossy()
+                .replace(std::path::MAIN_SEPARATOR, "/");
+            crate::webdav::local::checked_path(app_data, &relative)?;
+        }
+        // Validate the entire payload before touching any user file.
+        if files.len() > 100_000 {
+            return Err("笔记同步文件过多".into());
+        }
+        let mut names = std::collections::HashSet::new();
+        let mut decoded = Vec::new();
+        for (path, encoded) in files {
+            if !crate::webdav::model::allowed_path(path)
+                || path.starts_with('.')
+                || !names.insert(path.to_lowercase())
+                || (kind == "file" && path != name)
+            {
+                return Err("笔记同步路径无效。".into());
+            }
+            let bytes = STANDARD
+                .decode(encoded.as_str().ok_or("笔记编码无效")?)
+                .map_err(|_| "笔记编码无效")?;
+            let destination = if kind == "file" {
+                target.clone()
+            } else {
+                crate::webdav::local::safe_path(&target, path)?
+            };
+            let actual = crate::webdav::local::read_file(&destination)?;
+            let expected = previous
+                .and_then(|p| p["files"].get(path))
+                .and_then(|v| v.as_str())
+                .map(|s| STANDARD.decode(s).map_err(|_| "旧笔记编码无效"))
+                .transpose()?;
+            if actual != expected && actual.as_deref() != Some(bytes.as_slice()) {
+                return Err(format!("笔记在恢复期间被编辑，已保留：{path}"));
+            }
+            decoded.push((destination, bytes));
+        }
+        if kind == "directory" {
+            fs::create_dir_all(&target).map_err(|e| e.to_string())?;
+        } else {
+            fs::create_dir_all(target.parent().ok_or("笔记路径无效")?)
+                .map_err(|e| e.to_string())?;
+        }
+        for (path, bytes) in decoded {
+            crate::local_library::write_bytes_atomically(&path, &bytes)?;
+        }
+        if let Some(old_files) = previous.and_then(|p| p["files"].as_object()) {
+            for (path, encoded) in old_files
+                .iter()
+                .filter(|(path, _)| !files.contains_key(*path))
+            {
+                if !crate::webdav::model::allowed_path(path) || path.starts_with('.') {
+                    return Err("旧笔记路径无效".into());
+                }
+                let destination = if kind == "file" {
+                    target.clone()
+                } else {
+                    crate::webdav::local::safe_path(&target, path)?
+                };
+                if let Some(actual) = crate::webdav::local::read_file(&destination)? {
+                    let expected = STANDARD
+                        .decode(encoded.as_str().ok_or("旧笔记编码无效")?)
+                        .map_err(|_| "旧笔记编码无效")?;
+                    if actual != expected {
+                        return Err(format!("笔记删除前被编辑，已保留：{path}"));
+                    }
+                    fs::remove_file(destination).map_err(|e| e.to_string())?;
+                }
+            }
+        }
+        // Register only our restored location; never trust an absolute path from a peer.
+        let location = fs::canonicalize(&target)
+            .map_err(|e| e.to_string())?
+            .to_string_lossy()
+            .into_owned();
+        self.connection.execute("INSERT INTO grants(scope,id,path,kind) VALUES(?1,?2,?3,?4) ON CONFLICT(scope,id) DO UPDATE SET path=excluded.path,kind=excluded.kind",params![self.scope,id,location,kind]).map_err(|e| e.to_string())?;
+        Ok(())
     }
 }

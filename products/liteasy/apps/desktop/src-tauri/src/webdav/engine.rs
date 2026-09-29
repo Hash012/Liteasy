@@ -84,6 +84,7 @@ fn identity_conflicts(
     Ok(conflicts)
 }
 
+#[cfg(test)]
 pub(super) async fn sync_library(
     root: &Path,
     connection_key: &str,
@@ -93,6 +94,30 @@ pub(super) async fn sync_library(
     apply: impl Fn(&str, Option<&str>, Option<&model::FileVersion>, Option<&[u8]>) -> Result<(), String>,
     progress: impl Fn(Progress),
 ) -> Result<SyncResult, String> {
+    sync_selected(
+        root,
+        connection_key,
+        remote,
+        current,
+        resolutions,
+        |_| true,
+        apply,
+        progress,
+    )
+    .await
+}
+
+pub(super) async fn sync_selected(
+    root: &Path,
+    connection_key: &str,
+    remote: &Remote,
+    mut current: Manifest,
+    resolutions: Option<Vec<Resolution>>,
+    includes: impl Fn(&str) -> bool,
+    apply: impl Fn(&str, Option<&str>, Option<&model::FileVersion>, Option<&[u8]>) -> Result<(), String>,
+    progress: impl Fn(Progress),
+) -> Result<SyncResult, String> {
+    current.files.retain(|path, _| includes(path));
     let checkpoint =
         local::state_directory(&root)?.join(format!("baseline-{}.json", connection_key));
     let mut baseline: Manifest = if checkpoint.exists() {
@@ -102,6 +127,8 @@ pub(super) async fn sync_library(
     };
     baseline.validate()?;
     let (mut manifest, etag) = remote.manifest().await?;
+    manifest.schema_version = manifest.schema_version.max(current.schema_version);
+    baseline.schema_version = baseline.schema_version.max(current.schema_version);
     // Once a device has synced, a missing manifest is an error, never a mass deletion.
     if etag.is_none() && checkpoint.exists() {
         return Err("远端同步清单已丢失，已停止同步以保护本地数据。".into());
@@ -114,11 +141,32 @@ pub(super) async fn sync_library(
     {
         return Err("远端清单缺少已同步的记录，已停止同步以保护数据。".into());
     }
+    // Disabled categories retain their remote records and previous baseline; absence
+    // from today's scan is never a deletion. Re-enabling resumes the three-way merge.
+    let selected_base = Manifest {
+        schema_version: baseline.schema_version,
+        files: baseline
+            .files
+            .iter()
+            .filter(|(path, _)| includes(path))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect(),
+    };
+    let selected_remote = Manifest {
+        schema_version: manifest.schema_version,
+        files: manifest
+            .files
+            .iter()
+            .filter(|(path, _)| includes(path))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect(),
+    };
     let keys: BTreeSet<String> = baseline
         .files
         .keys()
         .chain(current.files.keys())
         .chain(manifest.files.keys())
+        .filter(|path| includes(path))
         .cloned()
         .collect();
     let resolutions: BTreeMap<_, _> = resolutions
@@ -131,7 +179,7 @@ pub(super) async fn sync_library(
     let mut acknowledgements = Files::new();
     let mut changed = false;
     let mut identity_paths = BTreeSet::new();
-    for group in identity_conflicts(&baseline, &current, &manifest)? {
+    for group in identity_conflicts(&selected_base, &current, &selected_remote)? {
         identity_paths.extend(group.paths.iter().cloned());
         let resolution = resolutions
             .get(&group.conflict.path)
@@ -343,6 +391,45 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+    #[test]
+    fn disabled_categories_are_never_deleted_and_resume_three_way_conflicts() {
+        let server = Server::start();
+        let a = Library::new();
+        let b = Library::new();
+        let path = ".liteasy/sync-data/objects/guest/records.json";
+        crate::local_library::write_bytes_atomically(&a.0.join(path), b"native note").unwrap();
+        fs::write(a.0.join("book.epub"), b"ebook").unwrap();
+        let generated = ".liteasy/paper-artifacts/workspace-artifacts/agent-results/slides.json";
+        crate::local_library::write_bytes_atomically(&a.0.join(generated),br#"{"version":"liteasy.agent-artifact/v1","artifactId":"slides","agent":{"status":"completed"},"papers":[]}"#).unwrap();
+        runtime().block_on(async {
+            assert_eq!(a.sync(&server, vec![]).await.unwrap().uploaded, 3);
+            assert_eq!(b.sync(&server, vec![]).await.unwrap().downloaded, 3);
+            assert!(b.0.join(generated).is_file());
+            fs::remove_file(a.0.join(path)).unwrap();
+            let result = sync_selected(
+                &a.0,
+                "test",
+                &server.remote,
+                a.current(),
+                None,
+                |p| !p.starts_with(".liteasy/sync-data/objects/"),
+                |p, e, v, b| crate::local_library::apply_webdav_file_at(&a.0, p, e, v, b),
+                |_| {},
+            )
+            .await
+            .unwrap();
+            assert_eq!(result.deleted + result.uploaded + result.downloaded, 0);
+            assert!(server.remote.manifest().await.unwrap().0.files[path].is_some());
+            crate::local_library::write_bytes_atomically(&a.0.join(path), b"device A edit")
+                .unwrap();
+            crate::local_library::write_bytes_atomically(&b.0.join(path), b"device B edit")
+                .unwrap();
+            b.sync(&server, vec![]).await.unwrap();
+            let result = a.sync(&server, vec![]).await.unwrap();
+            assert_eq!(result.conflicts.len(), 1);
+            assert_eq!(fs::read(a.0.join(path)).unwrap(), b"device A edit");
+        });
     }
     #[test]
     fn webdav_two_devices_preserve_document_identity_annotations_and_incremental_sync() {

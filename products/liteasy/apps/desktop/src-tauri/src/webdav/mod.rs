@@ -1,9 +1,12 @@
 mod engine;
 pub(crate) mod local;
 pub(crate) mod model;
+mod options;
+mod secrets;
 mod transport;
+pub(crate) mod workspace;
 
-use engine::sync_library;
+use engine::sync_selected;
 use model::{Files, Manifest};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fs, path::Path};
@@ -65,6 +68,8 @@ pub struct Settings {
     pub collection: String,
     #[serde(default)]
     pub auto_sync: bool,
+    #[serde(default)]
+    pub sync: options::SyncOptions,
 }
 impl Settings {
     fn validate(&mut self) -> Result<(), String> {
@@ -133,6 +138,7 @@ pub async fn save_webdav_settings(
     app: AppHandle,
     mut settings: Settings,
     password: Option<String>,
+    encryption_password: Option<String>,
 ) -> Result<(), String> {
     let _guard = OPERATION.try_lock().map_err(|_| "WebDAV 操作正在进行。")?;
     settings.validate()?;
@@ -152,6 +158,7 @@ pub async fn save_webdav_settings(
             .get_password()
             .map_err(|_| "首次连接或更换连接时请输入密码。")?;
     }
+    secrets::save_password(&settings, &root, encryption_password)?;
     local::save_json(&settings_path(&root)?, &settings)?;
     if !old.endpoint.is_empty() && old.key() != settings.key() {
         old.credential(&root)?
@@ -190,6 +197,7 @@ pub struct SyncResult {
     pub deleted: usize,
     pub conflicts: Vec<Conflict>,
     pub deferred: Vec<String>,
+    pub restart_required: bool,
 }
 #[derive(Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -225,6 +233,7 @@ struct Progress {
 pub async fn sync_webdav(
     app: AppHandle,
     resolutions: Option<Vec<Resolution>>,
+    browser: Option<workspace::BrowserData>,
 ) -> Result<SyncResult, String> {
     let _guard = OPERATION.try_lock().map_err(|_| "WebDAV 操作正在进行。")?;
     let root = crate::local_library::library_root(&app)?;
@@ -244,8 +253,12 @@ pub async fn sync_webdav(
     if Path::new(&snapshot.root_path) != root {
         return Err("文献库位置已改变，请重新同步。".into());
     }
+    let scope = crate::desktop_identity::local_object_scope()?;
+    workspace::prepare(&app, &root, &settings, &browser.unwrap_or_default())?;
     let mut files = Files::new();
-    local::collect(&root, &root, &mut files)?;
+    local::collect_selected(&root, &root, &mut files, &|p| {
+        workspace::includes(&settings.sync, &scope, p)
+    })?;
     for entry in snapshot.entries {
         if let Some(path) = entry.relative_path {
             if let Some(Some(version)) = files.get_mut(&path) {
@@ -254,22 +267,34 @@ pub async fn sync_webdav(
         }
     }
     let current = Manifest {
-        schema_version: 1,
+        schema_version: 2,
         files,
     };
     current.validate()?;
-    sync_library(
+    let mut result = sync_selected(
         &root,
         &settings.key(),
         &remote,
         current,
         resolutions,
+        |path| workspace::includes(&settings.sync, &scope, path),
         |path, expected, version, bytes| {
+            if path.starts_with(".liteasy/sync-data/") {
+                workspace::queue(&root, &settings, &scope, path, expected, bytes)?;
+                let target = local::safe_path(&root, path)?;
+                return match bytes {
+                    Some(bytes) => crate::local_library::write_bytes_atomically(&target, bytes),
+                    None if target.exists() => fs::remove_file(target).map_err(|e| e.to_string()),
+                    None => Ok(()),
+                };
+            }
             crate::local_library::apply_webdav_file(&app, &root, path, expected, version, bytes)
         },
         |value| {
             let _ = app.emit("webdav-progress", value);
         },
     )
-    .await
+    .await?;
+    result.restart_required = workspace::has_pending(&root, &scope)?;
+    Ok(result)
 }

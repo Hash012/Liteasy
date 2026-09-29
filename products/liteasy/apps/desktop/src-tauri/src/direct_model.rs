@@ -53,7 +53,7 @@ fn credential_name(config: &DirectModelConfig) -> Result<String, String> {
     Ok(format!("{:x}", Sha256::digest(scope.as_bytes())))
 }
 
-fn credential(config: &DirectModelConfig) -> Result<Entry, String> {
+pub(crate) fn credential(config: &DirectModelConfig) -> Result<Entry, String> {
     Entry::new("com.liteasy.desktop.model-api", &credential_name(config)?)
         .map_err(|_| "系统凭据库不可用，无法安全保存或读取 API key。".into())
 }
