@@ -43,5 +43,6 @@ test("never invents a publication month when only the year is known", () => {
   expect(recommendationDateLabel({ ...item, publishedAt: "2024" })).toBe("2024");
   expect(recommendationDateLabel({ ...item, publishedAt: undefined })).toBe("2024");
   expect(recommendationDateLabel({ ...item, publishedAt: "2024-99" })).toBe("2024");
+  expect(recommendationDateLabel({ ...item, publishedAt: "2024-02-30" })).toBe("2024");
   expect(recommendationDateLabel({ ...item, publishedAt: undefined, publishedYear: undefined })).toBe("日期未知");
 });

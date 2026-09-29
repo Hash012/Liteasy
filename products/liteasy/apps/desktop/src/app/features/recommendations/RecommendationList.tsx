@@ -1,14 +1,12 @@
 import { Button, Tooltip } from "@fluentui/react-components";
 import { BookmarkRegular, DeleteRegular, DocumentRegular } from "@fluentui/react-icons";
 import type { RecommendationItem } from "./recommendation.types";
+import { bibliographicDate } from "../paper-services/bibliographicMetadata";
 import "./recommendationList.css";
 
 export function recommendationDateLabel(item: RecommendationItem) {
-  const match = item.publishedAt?.match(/^(\d{4})(?:-(\d{2}))?(?:-\d{2}(?:T.*)?)?$/);
-  if (match && Number(match[1]) >= 1000) {
-    if (match[2] && Number(match[2]) >= 1 && Number(match[2]) <= 12) return `${match[1]}-${match[2]}`;
-    if (!match[2]) return match[1];
-  }
+  const date = bibliographicDate(item.publishedAt);
+  if (date) return date.slice(0, 7);
   return Number.isInteger(item.publishedYear) && item.publishedYear! >= 1000 && item.publishedYear! <= 9999
     ? String(item.publishedYear) : "日期未知";
 }

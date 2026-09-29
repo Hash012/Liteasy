@@ -199,10 +199,10 @@ describe("LeftPane", () => {
   });
 
   test.each([
-    { publishedAt: "2024-02-29T00:00:00Z", publishedYear: 2024, citationCount: 0, dateLabel: "2024-02-29", citationLabel: "引用 0" },
-    { publishedAt: "2024-02-30", publishedYear: 2024, citationCount: -1, dateLabel: "2024 年", citationLabel: null },
-    { publishedAt: "invalid-date", publishedYear: Number.NaN, citationCount: Number.NaN, dateLabel: null, citationLabel: null }
-  ])("uses publication metadata safely: $publishedAt", async ({ dateLabel, citationLabel, ...metadata }) => {
+    { publishedAt: "2024-02-29T00:00:00Z", publishedYear: 2024, citationCount: 0, dateLabel: "2024-02" },
+    { publishedAt: "2024-02-30", publishedYear: 2024, citationCount: -1, dateLabel: "2024" },
+    { publishedAt: "invalid-date", publishedYear: Number.NaN, citationCount: Number.NaN, dateLabel: "日期未知" }
+  ])("uses compact publication dates safely: $publishedAt", async ({ dateLabel, ...metadata }) => {
     const paper: RecommendationItem = {
       id: "dated-paper", title: "Publication date paper", discoveredAt: "2026-09-21T00:00:00Z",
       relatedDocumentTitle: "Attention methods", relevanceBand: "high", relevanceScore: 0.8,
@@ -212,43 +212,53 @@ describe("LeftPane", () => {
       render(<LeftPane {...createProps({ leftRailView: "library", recommendationItems: [paper] })} />);
     });
     const panel = within(screen.getByRole("region", { name: "关联推荐" }));
-    if (dateLabel) expect(panel.getByText(dateLabel)).toBeInTheDocument();
-    else expect(panel.queryByText(/年|invalid-date/)).not.toBeInTheDocument();
-    if (citationLabel) expect(panel.getByText(citationLabel)).toBeInTheDocument();
-    else expect(panel.queryByText(/^引用 /)).not.toBeInTheDocument();
-    expect(panel.queryByText(/2026-09-21|NaN/)).not.toBeInTheDocument();
+    expect(panel.getByText(dateLabel)).toBeInTheDocument();
+    expect(panel.queryByText(/^引用 /)).not.toBeInTheDocument();
+    expect(panel.queryByText(paper.reason)).not.toBeInTheDocument();
+    expect(panel.queryByText(/2026-09-21|2024-02-29|2024-02-30|invalid-date|NaN/)).not.toBeInTheDocument();
   });
 
-  test("exposes recommendation styles beside papers with publication and citation context", async () => {
+  test("keeps recommendation rows compact and forwards inspect and download with their full metadata", async () => {
     const user = userEvent.setup();
     const onRecommendationStyleChange = vi.fn();
+    const onInspectRecommendation = vi.fn();
+    const onDownloadRecommendation = vi.fn(async () => "已下载到文献库 / Download。");
+    const recommendation: RecommendationItem = {
+      id: "classic-paper",
+      title: "Foundations of attention",
+      publishedYear: 2017,
+      citationCount: 1200,
+      discoveredAt: "2026-09-21T00:00:00.000Z",
+      relatedDocumentTitle: "Attention methods",
+      relevanceBand: "high",
+      relevanceScore: 0.8,
+      reason: "主题相关，并有长期引用积累。",
+      source: "Crossref",
+      sourceKind: "live",
+      sourceUrl: "https://doi.org/10.1234/example"
+    };
     render(<LeftPane {...createProps({
       leftRailView: "library",
       onRecommendationStyleChange,
+      onInspectRecommendation,
+      onDownloadRecommendation,
       recommendationStyle: "balanced",
       recommendationStatus: "ready",
-      recommendationItems: [{
-        id: "classic-paper",
-        title: "Foundations of attention",
-        publishedYear: 2017,
-        citationCount: 1200,
-        discoveredAt: "2026-09-21T00:00:00.000Z",
-        relatedDocumentTitle: "Attention methods",
-        relevanceBand: "high",
-        relevanceScore: 0.8,
-        reason: "主题相关，并有长期引用积累。",
-        source: "Crossref",
-        sourceKind: "live",
-        sourceUrl: "https://doi.org/10.1234/example"
-      }]
+      recommendationItems: [recommendation]
     })} />);
     const panel = within(screen.getByRole("region", { name: "关联推荐" }));
     await user.selectOptions(panel.getByRole("combobox", { name: "推荐风格" }), "classic");
     expect(onRecommendationStyleChange).toHaveBeenCalledWith("classic");
-    expect(panel.getByText("2017 年")).toBeInTheDocument();
-    expect(panel.getByText("引用 1,200")).toBeInTheDocument();
-    expect(panel.getByText("主题相关，并有长期引用积累。")).toBeInTheDocument();
-    expect(panel.getByRole("link", { name: "Crossref" })).toHaveAttribute("href", "https://doi.org/10.1234/example");
+    expect(panel.getByText("2017")).toBeInTheDocument();
+    expect(panel.queryByText("引用 1,200")).not.toBeInTheDocument();
+    expect(panel.queryByText(recommendation.reason)).not.toBeInTheDocument();
+    expect(panel.queryByRole("link", { name: "Crossref" })).not.toBeInTheDocument();
+    const row = panel.getByRole("button", { name: `查看推荐 ${recommendation.title}` });
+    await user.click(row);
+    expect(onInspectRecommendation).toHaveBeenCalledExactlyOnceWith(recommendation);
+    expect(onDownloadRecommendation).not.toHaveBeenCalled();
+    await user.dblClick(row);
+    expect(onDownloadRecommendation).toHaveBeenCalledExactlyOnceWith(recommendation);
   });
 
   test("uses task-specific pane headers", () => {
