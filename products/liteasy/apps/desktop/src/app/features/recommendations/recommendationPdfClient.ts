@@ -5,7 +5,8 @@ import {
 } from "../library/externalPdfDownload";
 import type { ModelTransport, ModelTransportResponse } from "../models/modelHttpClient";
 import type { RecommendationItem } from "./recommendation.types";
-import { paperServiceRequest } from "../paper-services/paperServiceTransport";
+import type { PaperServiceConfig } from "../paper-services/paperServiceTransport";
+import { resolvePaperPdf, type ResolvedPaperPdf } from "../paper-services/paperPdfResolver";
 
 type RecommendationPdfGrant = {
   fullTextGrantId: string;
@@ -37,27 +38,35 @@ export async function downloadRecommendationPdf(input: {
   endpoint: string;
   recommendation: RecommendationItem;
   transport?: ModelTransport;
-}): Promise<DownloadedExternalPdf | null> {
-  if (input.recommendation.openAccessPdfUrl) {
-    const url = new URL(input.recommendation.openAccessPdfUrl);
-    if (url.protocol !== "https:" || url.username || url.password) throw new Error("开放全文地址无效。");
-    const response = await paperServiceRequest({ provider: "crossref", endpoint: url.origin }, url.href, {
-      authenticate: false, maxResponseBytes: 32 * 1024 * 1024, timeoutMs: 45_000,
-      followPublicRedirects: true,
-    });
-    if (!response.ok) throw new Error(`开放全文下载失败（${response.status}），可从元信息中的来源页面查看获取方式。`);
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (new TextDecoder().decode(bytes.slice(0, 5)) !== "%PDF-") throw new Error("来源返回的不是 PDF，未向文献库写入文件。");
-    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
-    return { bytes, contentHash: Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join(""),
-      finalUrl: response.url || url.href, sourceId: input.recommendation.id };
+  service?: PaperServiceConfig;
+  signal?: AbortSignal;
+}): Promise<ResolvedPaperPdf | null> {
+  const signal = input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(90_000)]) : AbortSignal.timeout(90_000);
+  signal.throwIfAborted();
+  const item = input.recommendation;
+  // Keep authenticated cloud grants working, but their availability is no longer
+  // the gate for public papers or users who are not signed in.
+  if (!item.openAccessPdfUrl && item.openAccessAvailable && input.endpoint && (input.transport || loadStoredAccountSession()?.sessionId)) {
+    try {
+      const granted = await downloadGrantedPdf({ ...input, signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]) });
+      signal.throwIfAborted();
+      if (granted) return granted;
+    } catch { signal.throwIfAborted(); }
   }
-  if (!input.recommendation.openAccessAvailable) return null;
-  const transport = input.transport ?? defaultTransport;
+  return resolvePaperPdf({ id: item.canonicalId || item.id, doi: item.identityResolution?.doi,
+    arxivId: item.identityResolution?.arxivId, url: item.sourceUrl, pdfUrl: item.openAccessPdfUrl }, { service: input.service, signal })
+    .then((pdf) => pdf ? { ...pdf, sourceId: item.id } : null);
+}
+
+async function downloadGrantedPdf(input: {
+  endpoint: string; recommendation: RecommendationItem; transport?: ModelTransport; signal?: AbortSignal;
+}): Promise<DownloadedExternalPdf | null> {
+  const transport: ModelTransport = (request) => (input.transport ?? defaultTransport)({ ...request, signal: input.signal });
   const grantResponse = await transport({
     body: JSON.stringify({ candidateId: input.recommendation.id }),
     headers: { "Content-Type": "application/json" },
     method: "POST",
+    signal: input.signal,
     url: `${input.endpoint.replace(/\/+$/, "")}/v1/recommendations/pdf-grant`
   });
   const grantPayload = await grantResponse.json();

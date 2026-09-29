@@ -6,6 +6,8 @@ import { displayPath } from "../features/resource-filesystem/displayPath";
 import { libraryFolderKey } from "../features/library/libraryFolderMembership";
 import { downloadRecommendationPdf } from "../features/recommendations/recommendationPdfClient";
 import type { RecommendationDownloadOptions, RecommendationItem } from "../features/recommendations/recommendation.types";
+import type { PaperServiceConfig } from "../features/paper-services/paperServiceTransport";
+import type { ImportedPaper } from "../features/library/paperImport.types";
 import type { ModelTransport } from "../features/models/modelHttpClient";
 import type { LiteratureAuthorityClient } from "../features/paper-identity/literatureAuthorityClient";
 import { loadRecommendationMetadata } from "../features/recommendations/recommendationPresentation";
@@ -14,6 +16,7 @@ export function useRecommendationLibraryController(input: {
   endpoint: string;
   scopeKey: string;
   transport?: ModelTransport;
+  service?: PaperServiceConfig;
   metadataClient?: LiteratureAuthorityClient;
   refreshLocalLibrary: () => void | Promise<void>;
   onSaved: (item: RecommendationItem) => void | Promise<void>;
@@ -56,19 +59,17 @@ export function useRecommendationLibraryController(input: {
     }
   }
 
-  function download(item: RecommendationItem, options: RecommendationDownloadOptions = {}): Promise<string> {
+  function importPaper(item: RecommendationItem, options: RecommendationDownloadOptions = {}, signal?: AbortSignal): Promise<ImportedPaper> {
     const scopeKey = input.scopeKey;
-    const pendingKey = `${scopeKey}:${item.id}`;
-    const assertCurrent = () => { if (currentScope.current !== scopeKey) throw new Error("账号或数据目录已切换，已停止后续下载写入。请在当前文献库重新下载。"); };
-    const existing = pending.current.get(pendingKey);
-    if (existing) return existing;
+    const assertCurrent = (committed = false) => { if (!committed) signal?.throwIfAborted(); if (currentScope.current !== scopeKey) throw new Error("账号或数据目录已切换，已停止后续下载写入。请在当前文献库重新下载。"); };
     const task = queue.current.catch(() => undefined).then(async () => {
       assertCurrent();
       const initialSnapshot = await createLocalLibraryClient()();
       assertCurrent();
-      const pdf = await downloadRecommendationPdf({ endpoint: input.endpoint, transport: input.transport, recommendation: item });
+      const pdf = await downloadRecommendationPdf({ endpoint: input.endpoint, transport: input.transport, service: input.service, recommendation: item, signal });
       assertCurrent();
-      if (!pdf) throw new Error("这篇文献暂未提供可下载的开放 PDF。可在底部元信息中打开来源页面查看获取方式。");
+      if (!pdf) throw new Error("已查询全文源，暂未提供可下载的开放 PDF。可打开论文网站查看机构订阅或作者提供的版本。");
+      const importedItem = { ...item, ...pdf.metadata };
       let snapshot = await createLocalLibraryClient()();
       assertCurrent();
       if (snapshot.libraryId !== initialSnapshot.libraryId || snapshot.rootPath !== initialSnapshot.rootPath) throw new Error("文献库目录已切换，下载未写入新目录，请重试。");
@@ -86,30 +87,39 @@ export function useRecommendationLibraryController(input: {
       assertCurrent();
       if (!folder) throw new Error("无法建立保存目录，请刷新文献库后重试。");
       const wasExisting = snapshot.entries.some((entry) => entry.contentHash?.replace(/^sha256:/, "") === pdf.contentHash);
-      const imported = await persistPdfByteStream({ fileName: sanitizeExternalPdfFileName(item.title),
+      const imported = await persistPdfByteStream({ fileName: sanitizeExternalPdfFileName(importedItem.title),
         stream: new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(pdf.bytes); controller.close(); } }),
-        targetFolderPath: folder.path, onDuplicate: () => false });
-      assertCurrent();
+        signal, targetFolderPath: folder.path, onDuplicate: () => false });
+      assertCurrent(true);
       await input.refreshLocalLibrary();
-      assertCurrent();
+      assertCurrent(true);
       const entry = imported.entries.find((entry) => entry.contentHash?.replace(/^sha256:/, "") === pdf.contentHash);
       let metadataWarning = "";
-      if (entry && !wasExisting && input.onImportedMetadata) {
-        try { await input.onImportedMetadata(entry.id, item); }
+      if (entry && !wasExisting && !signal?.aborted && input.onImportedMetadata) {
+        try { await input.onImportedMetadata(entry.id, importedItem); }
         catch { metadataWarning = "题录信息暂未保存，可右键获取元信息。"; }
       }
       // Feedback is best effort; an already saved PDF must never be reported as lost.
-      await Promise.resolve().then(() => input.onSaved(item)).catch(() => undefined);
-      return wasExisting && entry?.path
+      if (!signal?.aborted) await Promise.resolve().then(() => input.onSaved(item)).catch(() => undefined);
+      if (!entry) throw new Error("PDF 已保存，但未能读取新条目，请刷新文献库确认。");
+      const message = wasExisting && entry.path
         ? `文献已在本地库中：${displayPath(entry.path)}`
-        : `已下载《${item.title}》到 ${displayPath(folder.path)}。${metadataWarning}`;
-    }).finally(() => pending.current.delete(pendingKey));
-    pending.current.set(pendingKey, task);
+        : `已下载《${importedItem.title}》到 ${displayPath(folder.path)}。${metadataWarning}`;
+      return { paperId: entry.id, title: importedItem.title, filePath: displayPath(entry.path || folder.path), duplicate: wasExisting, message };
+    });
     queue.current = task;
+    return task;
+  }
+  function download(item: RecommendationItem, options: RecommendationDownloadOptions = {}): Promise<string> {
+    const key = JSON.stringify([input.scopeKey, item.id, options]);
+    const existing = pending.current.get(key);
+    if (existing) return existing;
+    const task = importPaper(item, options).then((result) => result.message).finally(() => pending.current.delete(key));
+    pending.current.set(key, task);
     return task;
   }
   return { selected: selection?.scopeKey === input.scopeKey ? selection.item : undefined,
     preview: preview?.scopeKey === input.scopeKey ? preview : undefined, open,
     select: (item: RecommendationItem) => setSelection({ scopeKey: input.scopeKey, item }),
-    clear: () => setSelection(undefined), download };
+    clear: () => setSelection(undefined), download, importPaper };
 }

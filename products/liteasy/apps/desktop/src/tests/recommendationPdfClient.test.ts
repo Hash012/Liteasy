@@ -1,4 +1,4 @@
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { deletePaperServiceKey, savePaperServiceKey } from "../app/features/paper-services/paperServiceTransport";
 import { downloadRecommendationPdf } from "../app/features/recommendations/recommendationPdfClient";
 import type { RecommendationItem } from "../app/features/recommendations/recommendation.types";
@@ -18,6 +18,10 @@ const recommendation: RecommendationItem = {
   title: "Recommended paper"
 };
 
+beforeEach(() => {
+  vi.stubGlobal("fetch", vi.fn(async (url: URL) => url.hostname === "doi.org"
+    ? new Response("<html>No public download</html>") : new Response(null, { status: 404 })));
+});
 afterEach(() => { vi.unstubAllGlobals(); });
 
 test("reissues a recommendation grant and downloads the subject-bound PDF", async () => {
@@ -68,7 +72,7 @@ test("reissues a recommendation grant and downloads the subject-bound PDF", asyn
   });
 });
 
-test("returns metadata fallback only for an explicit unavailable-PDF response", async () => {
+test("falls back to public lookup when a cloud grant has no PDF", async () => {
   const transport = vi.fn(async () => ({
     json: async () => ({
       code: "recommendation_pdf_unavailable",
@@ -86,7 +90,7 @@ test("returns metadata fallback only for an explicit unavailable-PDF response", 
   expect(transport).toHaveBeenCalledOnce();
 });
 
-test("does not contact the grant service for metadata-only recommendations", async () => {
+test("resolves metadata-only recommendations without contacting the grant service", async () => {
   const transport = vi.fn();
   await expect(downloadRecommendationPdf({
     endpoint: "https://cloud.example.test",
@@ -94,6 +98,7 @@ test("does not contact the grant service for metadata-only recommendations", asy
     transport
   })).resolves.toBeNull();
   expect(transport).not.toHaveBeenCalled();
+  expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("api.crossref.org/works/"))).toBe(true);
 });
 
 test("downloads an openly linked PDF without a cloud account or saved provider credentials", async () => {
@@ -122,9 +127,9 @@ test("downloads an openly linked PDF without a cloud account or saved provider c
   } finally { await deletePaperServiceKey(config); }
 });
 
-test("rejects publisher HTML even when the link and content type claim to be a PDF", async () => {
+test("never treats publisher HTML as a PDF, even with a PDF content type", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response("<html>Access denied</html>", { headers: { "Content-Type": "application/pdf" } })));
-  await expect(downloadRecommendationPdf({ endpoint: "", recommendation: { ...recommendation, openAccessPdfUrl: "https://publisher.example/open.pdf" } })).rejects.toThrow("不是 PDF");
+  await expect(downloadRecommendationPdf({ endpoint: "", recommendation: { ...recommendation, openAccessPdfUrl: "https://publisher.example/open.pdf" } })).resolves.toBeNull();
 });
 
 test.each(["http://publisher.example/open.pdf", "https://user:password@publisher.example/open.pdf"])("rejects unsafe openly linked PDF URLs before requesting them: %s", async (openAccessPdfUrl) => {

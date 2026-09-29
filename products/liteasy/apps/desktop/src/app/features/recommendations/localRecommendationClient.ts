@@ -14,7 +14,7 @@ function httpsUrl(value: unknown) {
 }
 function pdfUrl(item: Record<string, unknown>, provider: PaperServiceConfig["provider"]) {
   if (provider === "crossref") return array(item.link).map(record).flatMap((link) => link["content-type"] === "application/pdf" ? [httpsUrl(link.URL)] : []).find(Boolean);
-  if (provider === "openalex") return httpsUrl(record(item.best_oa_location).pdf_url);
+  if (provider === "openalex") return [item.best_oa_location, ...array(item.locations)].map((location) => httpsUrl(record(location).pdf_url)).find(Boolean);
   if (provider === "semantic-scholar") return httpsUrl(record(item.openAccessPdf).url);
   return undefined;
 }

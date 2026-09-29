@@ -87,8 +87,11 @@ test("shows a readable paper page and saves to the chosen library directory", as
   expect(await screen.findByText("已下载到 Research。")).toBeInTheDocument();
 });
 
-test("does not offer a misleading download when there is no PDF and rejects unsafe source links", () => {
-  render(<RecommendationDetails page item={{ ...item, sourceUrl: "javascript:alert(1)" }} onDownload={vi.fn()} />);
-  expect(screen.getByRole("button", { name: "下载 PDF 并保存" })).toBeDisabled();
+test("allows full-text lookup without a prefilled PDF URL and rejects unsafe source links", async () => {
+  const download = vi.fn().mockResolvedValue("已查找并下载");
+  render(<RecommendationDetails page item={{ ...item, sourceUrl: "javascript:alert(1)" }} onDownload={download} />);
+  await userEvent.setup().click(screen.getByRole("button", { name: "下载 PDF 并保存" }));
+  expect(download).toHaveBeenCalledOnce();
+  expect(await screen.findByText("已查找并下载")).toBeInTheDocument();
   expect(screen.queryByRole("link", { name: "打开论文网站" })).not.toBeInTheDocument();
 });

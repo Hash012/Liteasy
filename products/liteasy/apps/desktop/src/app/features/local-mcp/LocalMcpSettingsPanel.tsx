@@ -26,6 +26,7 @@ export function LocalMcpSettingsPanel() {
       <ol className="settings-policy-list">
         <li>将配置合并到 Windows 用户目录的 <code>.codex/config.toml</code>；已有同名 liteasy 配置时替换该段。</li>
         <li>在 Codex 的 MCP 设置中重启连接，或重启 Codex。</li>
+        <li>批量导入：把论文 DOI、arXiv 编号或论文网址交给 AI，使用导入工具保存到文献库；需要开启资产写入。</li>
         <li>试试：“在 Liteasy 查找 CicN，读完后将我的分析追加到笔记。”</li>
       </ol>
       <p>只访问当前账号的 Liteasy 资产和已连接文件夹。写入检查内容版本，冲突时需重新读取；论文原文和来源摘录保持只读，可在论文下创建分析笔记或白板。</p>

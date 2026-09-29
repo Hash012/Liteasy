@@ -36,6 +36,7 @@ export type PersistDroppedPdfFiles = (
 ) => Promise<LocalLibrarySnapshot>;
 
 export type PersistPdfByteStreamInput = {
+  signal?: AbortSignal;
   fileName: string;
   onDuplicate?: PersistDroppedPdfFilesInput["onDuplicate"];
   stream: ReadableStream<Uint8Array>;
@@ -122,6 +123,7 @@ async function stagePdfImport(file: File, targetFolderPath?: string) {
 }
 
 export async function persistPdfByteStream({
+  signal,
   fileName,
   onDuplicate,
   stream,
@@ -131,6 +133,7 @@ export async function persistPdfByteStream({
   let started = false;
   const reader = stream.getReader();
   try {
+    signal?.throwIfAborted();
     await invoke<void>("begin_local_library_pdf_import", {
       importId,
       name: fileName,
@@ -138,10 +141,12 @@ export async function persistPdfByteStream({
     });
     started = true;
     while (true) {
+      signal?.throwIfAborted();
       const { done, value } = await reader.read();
       if (done) break;
       if (!value || value.byteLength === 0) continue;
       for (let offset = 0; offset < value.byteLength; offset += importChunkBytes) {
+        signal?.throwIfAborted();
         const chunk = value.subarray(offset, Math.min(value.byteLength, offset + importChunkBytes));
         await invoke<void>("append_local_library_pdf_import", {
           bytes: Array.from(chunk),
@@ -149,6 +154,7 @@ export async function persistPdfByteStream({
         });
       }
     }
+    signal?.throwIfAborted();
     let result = await finishStagedPdfImport(importId);
     if (result.status === "duplicate") {
       const saveCopy = onDuplicate
@@ -165,6 +171,7 @@ export async function persistPdfByteStream({
     }
     throw error;
   } finally {
+    await reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
 }

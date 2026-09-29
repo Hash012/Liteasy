@@ -16,7 +16,6 @@ export function RecommendationDownload({ item, locations, onDownload }: {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [failed, setFailed] = useState(false);
-  const available = Boolean(item.openAccessPdfUrl || item.openAccessAvailable);
   return <section className="recommendation-download" aria-label="保存推荐论文">
     {locations ? <>
       <label>保存到<Select aria-label="论文保存目录" value={target} disabled={busy} onChange={(event) => { setTarget(event.target.value); setFolder(""); }}>
@@ -29,13 +28,13 @@ export function RecommendationDownload({ item, locations, onDownload }: {
       {target ? <Input aria-label="新建论文保存子目录" placeholder="在所选目录下新建文件夹（可选）" value={folder} disabled={busy}
         onChange={(_, data) => setFolder(data.value)} /> : null}
     </> : null}
-    <Button appearance="primary" icon={<ArrowDownloadRegular />} disabled={busy || !available} onClick={() => {
-      setBusy(true); setFailed(false); setMessage("正在下载 PDF…");
+    <Button appearance="primary" icon={<ArrowDownloadRegular />} disabled={busy} onClick={() => {
+      setBusy(true); setFailed(false); setMessage("正在查找可用全文并下载 PDF…");
       void onDownload(item, { targetFolderPath: target || undefined, newFolderName: folder.trim() || undefined })
         .then(setMessage, (error: unknown) => { setFailed(true); setMessage(error instanceof Error ? error.message : "下载失败，请重试。"); })
         .finally(() => setBusy(false));
     }}>{busy ? "正在下载…" : "下载 PDF 并保存"}</Button>
-    {!available ? <p className="recommendation-muted">暂未找到可直接下载的 PDF，可从论文网站查看获取方式。</p> : null}
+    <p className="recommendation-muted">自动查找论文网站与开放全文源，下载后保存到本地文献库。</p>
     {message ? <p role={failed ? "alert" : "status"}>{message}</p> : null}
   </section>;
 }

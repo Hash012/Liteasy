@@ -70,3 +70,30 @@ test("revoking access aborts an in-flight asset operation", async () => {
   await waitFor(() => expect(result.current.info?.enabled).toBe(false));
   unmount();
 });
+
+test("keeps import jobs across normal renders but aborts them when library scope or write permission changes", async () => {
+  const assets = {} as AgentAssetService;
+  let signal: AbortSignal | undefined;
+  const importPaper = vi.fn((_item, _options, abort: AbortSignal) => {
+    signal = abort;
+    return new Promise<never>((_resolve, reject) => abort.addEventListener("abort", () => reject(new Error("Stopped")), { once: true }));
+  });
+  const { result, rerender } = renderHook(({ library }) => useLocalAssetMcp("a", assets, { scopeKey: library, importPaper }), { initialProps: { library: "one" } });
+  await waitFor(() => expect(result.current.busy).toBe(false));
+  act(() => result.current.configure(true, true));
+  await waitFor(() => expect(result.current.info?.writable).toBe(true));
+  await deliver({ requestId: "batch", scopeId: "a", generation: result.current.info!.generation, writable: true,
+    line: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "liteasy_import_papers", arguments: { operationId: "batch", papers: [{ doi: "10.1234/memory" }] } } }) });
+  expect(importPaper).toHaveBeenCalledOnce();
+  rerender({ library: "one" });
+  expect(signal?.aborted).toBe(false);
+  rerender({ library: "two" });
+  expect(signal?.aborted).toBe(true);
+  await waitFor(() => expect(result.current.busy).toBe(false));
+  await deliver({ requestId: "batch2", scopeId: "a", generation: result.current.info!.generation, writable: true,
+    line: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "liteasy_import_papers", arguments: { operationId: "batch2", papers: [{ doi: "10.1234/second" }] } } }) });
+  expect(signal?.aborted).toBe(false);
+  act(() => result.current.configure(true, false));
+  expect(signal?.aborted).toBe(true);
+  await waitFor(() => expect(result.current.busy).toBe(false));
+});

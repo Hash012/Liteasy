@@ -199,3 +199,15 @@ test("rejects unsupported or unsafe directory selections", async () => {
   })).rejects.toThrow("无效路径");
   expect(invokeMock).not.toHaveBeenCalled();
 });
+
+test("cancels staged PDF bytes before committing when an MCP import is revoked", async () => {
+  const abort = new AbortController();
+  invokeMock.mockImplementation(async (command: string) => {
+    if (command === "append_local_library_pdf_import") abort.abort();
+    return undefined;
+  });
+  const stream = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode("%PDF-1.7")); controller.close(); } });
+  await expect(persistPdfByteStream({ fileName: "Cancelled.pdf", stream, signal: abort.signal })).rejects.toThrow();
+  expect(invokeMock.mock.calls.some(([command]) => command === "cancel_local_library_pdf_import")).toBe(true);
+  expect(invokeMock.mock.calls.some(([command]) => command === "finish_local_library_pdf_import")).toBe(false);
+});

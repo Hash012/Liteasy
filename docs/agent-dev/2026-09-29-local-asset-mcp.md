@@ -49,6 +49,9 @@ Codex 的 STDIO、配置文件位置和桌面连接设置参见 [OpenAI 官方 M
 
 | 工具 | 行为 |
 | --- | --- |
+| `liteasy_import_papers` | 最多 50 篇论文，以 DOI、arXiv 编号、HTTPS 论文页面或 PDF URL 导入本地库；立即返回后台任务。需开启写入。 |
+| `liteasy_import_status` | 查询任务的逐篇状态、错误、实际保存位置与 Liteasy Path。 |
+| `liteasy_cancel_import` | 停止未完成的批次；保留已保存文献。 |
 | `liteasy_search` | 标题 / Liteasy Path 搜索；空查询浏览最多 100 条；大库请缩小关键词。只返回元信息。 |
 | `liteasy_stat` | 路径、名称、类型、修订、能力、关联论文。 |
 | `liteasy_read` | 默认 12,000、最多 80,000 个 UTF-16 字符，使用 `nextOffset` 翻页。 |
@@ -86,3 +89,25 @@ node scripts/check-local-mcp-stdio.mjs .\src-tauri\target\release\liteasy-deskto
 ```
 
 脚本临时启动模拟的内部桥接端点，使用真实桌面程序的 `--local-mcp` 入口检查继承的标准输入/输出、中文配置路径、JSON 消息、通知无回包和进程正常退出。它验证传输，不替代与 Codex 和真实 Liteasy 资料库的集成验收。
+
+## 批量论文导入
+
+`liteasy_import_papers` 复用推荐论文的全文解析、分块保存、内容去重和题录保存流程，不返回 PDF 字节，也不让 MCP 调用一直等到整批下载结束。未设置路径时保存到文献库的 `Download`；`targetFolderPath` 须属于当前文献库，`newFolderName` 可指定新子目录。此次支持在线论文标识与网址，不扫描外部磁盘目录。
+
+```json
+{
+  "operationId": "memory-review-2026-09-29",
+  "newFolderName": "Memory review",
+  "papers": [
+    { "url": "https://proceedings.mlr.press/v235/das24a.html" },
+    { "doi": "10.18653/v1/2025.findings-acl.706" },
+    { "arxivId": "2402.12482", "title": "Larimar: Large Language Models with Episodic Memory Control" }
+  ]
+}
+```
+
+返回 `jobId` 后每隔数秒调用 `liteasy_import_status({jobId})`，直到任务完成且无 `running` 条目。每行状态为 queued/running/imported/duplicate/failed/cancelled。成功结果包含 `paperId`、`filePath`、可直接用于读取/关联笔记的 `path`（Liteasy Path）以及说明；失败不会让其他论文停止。
+
+同一 MCP 会话内，同一 `operationId` 与相同参数返回同一任务，不重复排队；换参数须换 ID。会话结束后不保留任务历史，但再次导入仍按 PDF 内容哈希去重，不覆盖已有题录。最多同时排队 3 个任务、每会话保留 100 个任务，下载保存串行执行以控制 WebView 内存。关闭 MCP、撤销写入、切换账号或数据目录会取消待执行工作；已经提交的文件保留，提交中的保存可能先完成，不能把取消回执当成文件已删除。
+
+全文来源需要公开可访问。解析不需要 Liteasy 云端账号；配置的文献 API 密钥仅发送至对应注册服务，论文页面与 PDF 跳转不携带这些凭据。找不到 PDF、限流、服务不可达或订阅限制会记录为该条失败，不把 HTML 或仅题录当作 PDF 导入。

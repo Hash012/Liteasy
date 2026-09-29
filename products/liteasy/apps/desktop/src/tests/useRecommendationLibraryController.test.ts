@@ -110,3 +110,18 @@ test("single selection leaves the open page unchanged, and late metadata cannot 
   await act(async () => { finish({ status: "exact", candidate: { record: { title: "Late first", identifiers: [{ kind: "doi", value: "10.1234/first" }] } } }); await request; });
   expect(result.current.preview?.item.title).toBe("Second paper");
 });
+
+test("batch imports return persisted identity and resolver metadata, and cancelled downloads never save", async () => {
+  const onImportedMetadata = vi.fn();
+  const { result } = renderHook(() => useRecommendationLibraryController({ scopeKey: "local", endpoint: "", refreshLocalLibrary: vi.fn(), onSaved: vi.fn(), onImportedMetadata }));
+  io.downloadRecommendationPdf.mockResolvedValue({ bytes: new TextEncoder().encode("%PDF-1.7"), contentHash: "hash", metadata: { title: "Resolved paper", authors: ["Ada"] } });
+  const imported = await result.current.importPaper({ ...item, title: "doi:10.1234/memory" }, {}, new AbortController().signal);
+  expect(imported).toMatchObject({ paperId: "paper", title: "Resolved paper", duplicate: false, filePath: "D:/Library/Download/Paper one.pdf" });
+  expect(onImportedMetadata).toHaveBeenCalledWith("paper", expect.objectContaining({ title: "Resolved paper", authors: ["Ada"] }));
+  expect(io.persistPdfByteStream.mock.calls[0][0].fileName).toBe("Resolved paper.pdf");
+  io.persistPdfByteStream.mockClear();
+  const abort = new AbortController();
+  io.downloadRecommendationPdf.mockImplementation(async () => { abort.abort(); return { bytes: new Uint8Array(), contentHash: "hash" }; });
+  await expect(result.current.importPaper(item, {}, abort.signal)).rejects.toThrow();
+  expect(io.persistPdfByteStream).not.toHaveBeenCalled();
+});

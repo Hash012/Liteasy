@@ -1115,7 +1115,6 @@ export function AppShell({
     getSettings: () => settingsStoreRef.current.getState(),
     openEvidence: openEvidenceInReader
   });
-  const localMcp = useLocalAssetMcp(objectWorkbench.repository.scopeId, objectWorkbench.agentAssets);
   const workbenchNavigation = useWorkbenchNavigationController({
     dock,
     collapsed: paneLayout.collapsed,
@@ -1360,9 +1359,13 @@ export function AppShell({
     refreshLocalLibrary,
     transport: modelTransport
   });
+  const recommendationScopeKey = `${objectWorkbench.repository.scopeId}:${localLibrarySnapshot?.libraryId ?? ""}:${localLibrarySnapshot?.rootPath ?? ""}`;
   const recommendationLibrary = useRecommendationLibraryController({
+    service: settingsState["papers.metadata_provider"] === "cloud" ? undefined : {
+      provider: settingsState["papers.metadata_provider"], endpoint: settingsState["papers.metadata_endpoint"],
+    },
     metadataClient: paperServices.literatureClient,
-    scopeKey: `${objectWorkbench.repository.scopeId}:${localLibrarySnapshot?.libraryId ?? ""}:${localLibrarySnapshot?.rootPath ?? ""}`,
+    scopeKey: recommendationScopeKey,
     endpoint: externalKnowledgeEndpoint,
     transport: modelTransport,
     refreshLocalLibrary,
@@ -1374,6 +1377,8 @@ export function AppShell({
       doi: item.identityResolution?.doi ?? (item.canonicalId?.startsWith("doi:") ? item.canonicalId.slice(4) : undefined),
     }),
   });
+  const localMcp = useLocalAssetMcp(objectWorkbench.repository.scopeId, objectWorkbench.agentAssets,
+    { scopeKey: recommendationScopeKey, importPaper: recommendationLibrary.importPaper });
   const {
     actionMessage: organizationActionMessage,
     actionPending: organizationActionPending,

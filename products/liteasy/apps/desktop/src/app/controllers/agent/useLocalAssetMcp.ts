@@ -4,6 +4,8 @@ import { listen } from "@tauri-apps/api/event";
 import { createLocalAssetMcp } from "../../features/local-mcp/localAssetMcp";
 import type { LocalMcpInfo, LocalMcpModel } from "../../features/local-mcp/localMcpContext";
 import type { AgentAssetService } from "../../features/resource-filesystem/agentAssetService";
+import { createPaperImportJobs } from "../../features/local-mcp/paperImportJobs";
+import type { ImportPaper } from "../../features/library/paperImport.types";
 
 let configurationQueue: Promise<unknown> = Promise.resolve();
 function configureHost(args: { enabled: boolean; writable: boolean; scopeId: string }) {
@@ -13,14 +15,14 @@ function configureHost(args: { enabled: boolean; writable: boolean; scopeId: str
 }
 type Request = { requestId: string; scopeId: string; generation: string; writable: boolean; line: string };
 
-export function useLocalAssetMcp(scopeId: string, assets: AgentAssetService): LocalMcpModel {
+export function useLocalAssetMcp(scopeId: string, assets: AgentAssetService, importer?: { scopeKey: string; importPaper: ImportPaper }): LocalMcpModel {
   const [policy, setPolicy] = useState({ scopeId, enabled: false, writable: false });
   const [info, setInfo] = useState<LocalMcpInfo>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [recent, setRecent] = useState<LocalMcpModel["recent"]>();
-  const current = useRef({ scopeId, policy });
-  current.current = { scopeId, policy };
+  const current = useRef({ scopeId, policy, importer });
+  current.current = { scopeId, policy, importer };
   // Explicit opt-in per app run; account switches revoke access until re-enabled.
   useEffect(() => {
     setRecent(undefined);
@@ -33,7 +35,13 @@ export function useLocalAssetMcp(scopeId: string, assets: AgentAssetService): Lo
     let stopCancel: (() => void) | undefined;
     let host: LocalMcpInfo | undefined;
     const requests = new Map<string, AbortController>();
-    const mcp = createLocalAssetMcp(assets);
+    const imports = importer ? createPaperImportJobs(scopeId, (item, options, signal) => {
+      signal.throwIfAborted();
+      if (disposed || current.current.scopeId !== scopeId || current.current.policy !== policy || current.current.importer?.scopeKey !== importer.scopeKey)
+        throw new Error("账号、目录或 MCP 权限已变化，导入已停止。");
+      return current.current.importer!.importPaper(item, options, signal);
+    }) : undefined;
+    const mcp = createLocalAssetMcp(assets, imports);
     setBusy(true); setError("");
     const active = () => !disposed && current.current.scopeId === scopeId && current.current.policy === policy;
     void (async () => {
@@ -63,11 +71,12 @@ export function useLocalAssetMcp(scopeId: string, assets: AgentAssetService): Lo
     })().catch((e) => { if (active()) { setInfo(undefined); setError(String(e)); } }).finally(() => { if (active()) setBusy(false); });
     return () => {
       disposed = true;
+      imports?.dispose();
       requests.forEach((abort) => abort.abort());
       stop?.(); stopCancel?.();
       void configureHost({ enabled: false, writable: false, scopeId }).catch(() => undefined);
     };
-  }, [scopeId, assets, policy]);
+  }, [scopeId, assets, policy, importer?.scopeKey]);
   return { info: info?.scopeId && info.scopeId !== scopeId ? undefined : info, busy, error, recent,
     configure: (enabled, writable) => setPolicy({ scopeId, enabled, writable: enabled && writable }) };
 }
