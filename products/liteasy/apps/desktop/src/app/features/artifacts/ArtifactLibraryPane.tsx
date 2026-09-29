@@ -15,6 +15,7 @@ import {
   MenuPopover,
   MenuTrigger,
   Spinner,
+  Select,
   Tab,
   TabList,
   Tooltip
@@ -23,6 +24,8 @@ import {
   ArrowClockwiseRegular,
   DeleteRegular,
   DocumentBulletListRegular,
+  DocumentRegular,
+  BookOpenRegular,
   EditRegular,
   FolderOpenRegular,
   MoreHorizontalRegular,
@@ -40,9 +43,13 @@ import type {
   ArtifactTab,
   ArtifactType
 } from "./artifact.types";
+import { artifactDateValue, artifactSearchText, artifactTypeLabels, groupArtifactsByPaper, indexArtifactPapers, matchesArtifactPaper, normalizeArtifactSearch, unlinkedPaperFilter } from "./artifactLibraryIndex";
 import "./artifactLibrary.css";
 
 type ArtifactLibraryPaneProps = {
+  activePaperId?: string | null;
+  onOpenPaper?: (paperId: string) => void;
+  availablePaperIds?: string[];
   accountAvailable: boolean;
   artifactCatalog: ArtifactTab[];
   artifactCatalogLoadState: ArtifactCatalogLoadState;
@@ -64,25 +71,11 @@ type ArtifactLibraryPaneProps = {
   onRevealExport: (recordId: string) => unknown | Promise<unknown>;
 };
 
-const artifactTypeLabels: Record<ArtifactType, string> = {
-  comparison_table: "文献对比",
-  layered_graph: "分层关系图",
-  mindmap: "思维导图",
-  ppt: "演示文稿",
-  skill_doc: "Skill 文档",
-  thin_reading: "薄读",
-  tree: "树形分析"
-};
-
 const formatLabels: Record<ArtifactExportRecord["format"], string> = {
   html: "HTML",
   markdown: "Markdown",
   pdf: "PDF"
 };
-
-function normalized(value: string) {
-  return value.trim().toLocaleLowerCase();
-}
 
 function displayDate(value?: string) {
   if (!value) return "日期未知";
@@ -95,6 +88,9 @@ function messageFrom(error: unknown) {
 }
 
 export function ArtifactLibraryPane({
+  activePaperId,
+  onOpenPaper,
+  availablePaperIds = [],
   accountAvailable,
   artifactCatalog,
   artifactCatalogLoadState,
@@ -117,27 +113,26 @@ export function ArtifactLibraryPane({
   const [query, setQuery] = useState("");
   const [renameName, setRenameName] = useState("");
   const [renameTarget, setRenameTarget] = useState<ArtifactTab | null>(null);
-  const searchQuery = normalized(query);
-
-  const filteredArtifacts = useMemo(() => artifactCatalog.filter((artifact) => {
-    if (!searchQuery) return true;
-    return normalized([
-      artifact.title,
-      artifactTypeLabels[artifact.type],
-      ...(artifact.papers ?? []).map((paper) => paper.title)
-    ].join(" ")).includes(searchQuery);
-  }), [artifactCatalog, searchQuery]);
-
+  const [paperFilter, setPaperFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [sort, setSort] = useState("recent");
+  const searchQuery = normalizeArtifactSearch(query);
+  const visibleCatalog = useMemo(() => accountAvailable ? artifactCatalog : [], [accountAvailable, artifactCatalog]);
+  const catalogById = useMemo(() => new Map(visibleCatalog.map((artifact) => [artifact.artifactId, artifact])), [visibleCatalog]);
+  const papers = useMemo(() => indexArtifactPapers(visibleCatalog), [visibleCatalog]);
+  const filterActive = Boolean(searchQuery || paperFilter || typeFilter);
+  const filteredArtifacts = useMemo(() => visibleCatalog.filter((artifact) =>
+    matchesArtifactPaper(artifact, paperFilter) && (!typeFilter || artifact.type === typeFilter) &&
+    normalizeArtifactSearch(artifactSearchText(artifact)).includes(searchQuery)
+  ).sort((a, b) => sort === "title" ? a.title.localeCompare(b.title) : artifactDateValue(b.createdAt) - artifactDateValue(a.createdAt)),
+  [visibleCatalog, paperFilter, typeFilter, searchQuery, sort]);
   const filteredExports = useMemo(() => exportRecords.filter((record) => {
-    if (!searchQuery) return true;
-    const path = record.location === "desktop" ? record.path : "";
-    return normalized([
-      record.title,
-      record.fileName,
-      formatLabels[record.format],
-      path
-    ].join(" ")).includes(searchQuery);
-  }), [exportRecords, searchQuery]);
+    const artifact = catalogById.get(record.artifactId);
+    return matchesArtifactPaper(artifact, paperFilter) && (!typeFilter || artifact?.type === typeFilter) &&
+      normalizeArtifactSearch([record.title, record.fileName, formatLabels[record.format],
+        record.location === "desktop" ? record.path : "", artifact ? artifactSearchText(artifact) : ""].join(" ")).includes(searchQuery);
+  }).sort((a, b) => sort === "title" ? a.fileName.localeCompare(b.fileName) : artifactDateValue(b.exportedAt) - artifactDateValue(a.exportedAt)),
+  [exportRecords, catalogById, paperFilter, typeFilter, searchQuery, sort]);
 
   function beginRename(artifact: ArtifactTab) {
     setDialogError(undefined);
@@ -199,32 +194,54 @@ export function ArtifactLibraryPane({
           <Tab value="saved">已保存</Tab>
           <Tab value="exported">已导出</Tab>
         </TabList>
-        {activeView === "exported" ? (
-          <Tooltip content="刷新导出记录" relationship="label">
-            <Button
-              appearance="subtle"
-              aria-label="刷新导出记录"
-              icon={<ArrowClockwiseRegular />}
-              onClick={() => void onRefreshExports()}
-              size="small"
-            />
-          </Tooltip>
-        ) : null}
+        <Tooltip content={activeView === "saved" ? "刷新已保存产物" : "刷新导出记录"} relationship="label">
+          <Button appearance="subtle" aria-label={activeView === "saved" ? "刷新已保存产物" : "刷新导出记录"}
+            icon={<ArrowClockwiseRegular />} size="small"
+            onClick={() => void (activeView === "saved" ? onReloadArtifactCatalog() : onRefreshExports())} />
+        </Tooltip>
       </div>
+      <div className="artifact-library-filters">
       <Input
         aria-label="搜索产物"
         className="artifact-library-search"
         contentBefore={<SearchRegular aria-hidden="true" />}
         onChange={(_, data) => setQuery(data.value)}
-        placeholder="搜索产物"
+        placeholder="搜索名称、论文、作者或 DOI"
         type="search"
         value={query}
       />
 
+      <Select aria-label="按来源论文筛选" value={paperFilter} onChange={(_, data) => setPaperFilter(data.value)} size="small">
+        <option value="">全部来源论文</option>
+        {papers.map(({ paper, count }) => <option key={paper.id} value={paper.id}>{paper.title}（{count}）</option>)}
+        <option value={unlinkedPaperFilter}>未关联论文</option>
+      </Select>
+      <div className="artifact-library-filter-row">
+        <Select aria-label="按产物类型筛选" value={typeFilter} onChange={(_, data) => setTypeFilter(data.value)} size="small">
+          <option value="">全部类型</option>
+          {Object.entries(artifactTypeLabels).map(([type, label]) => <option key={type} value={type}>{label}</option>)}
+        </Select>
+        <Select aria-label="产物排序" value={sort} onChange={(_, data) => setSort(data.value)} size="small">
+          <option value="recent">最近生成</option><option value="title">名称排序</option>
+        </Select>
+      </div>
+      <div className="artifact-library-filter-summary">
+        <span role="status">{activeView === "saved" ? filteredArtifacts.length : filteredExports.length} 项</span>
+        {activePaperId && papers.some(({ paper }) => paper.id === activePaperId) ? <Button size="small" appearance="subtle"
+          aria-pressed={paperFilter === activePaperId} icon={<BookOpenRegular />}
+          onClick={() => setPaperFilter(paperFilter === activePaperId ? "" : activePaperId)}>当前论文</Button> : null}
+        {filterActive ? <Button size="small" appearance="subtle" onClick={() => { setQuery(""); setPaperFilter(""); setTypeFilter(""); }}>清除筛选</Button> : null}
+      </div>
+      </div>
+      <div className="artifact-library-results">
       {activeView === "saved" ? (
         <SavedArtifactList
           accountAvailable={accountAvailable}
           artifacts={filteredArtifacts}
+          paperFilter={paperFilter}
+          onFilterPaper={setPaperFilter}
+          onOpenPaper={onOpenPaper}
+          availablePaperIds={availablePaperIds}
           loadState={artifactCatalogLoadState}
           onDelete={(artifact) => {
             setDialogError(undefined);
@@ -233,20 +250,25 @@ export function ArtifactLibraryPane({
           onOpen={onOpenArtifact}
           onRename={beginRename}
           onRetry={onReloadArtifactCatalog}
-          queryActive={Boolean(searchQuery)}
+          queryActive={filterActive}
         />
       ) : (
         <ExportRecordList
+          catalogById={catalogById}
+          onFilterPaper={setPaperFilter}
+          onOpenArtifact={onOpenArtifact}
           error={exportError}
           onOpen={onOpenExport}
           onRemove={onRemoveExport}
           onRetry={onRefreshExports}
           onReveal={onRevealExport}
-          queryActive={Boolean(searchQuery)}
+          queryActive={filterActive}
           records={filteredExports}
           status={exportStatus}
         />
       )}
+
+      </div>
 
       <Dialog
         modalType="modal"
@@ -321,6 +343,7 @@ export function ArtifactLibraryPane({
 }
 
 function SavedArtifactList({
+  paperFilter, onFilterPaper, onOpenPaper, availablePaperIds,
   accountAvailable,
   artifacts,
   loadState,
@@ -332,6 +355,10 @@ function SavedArtifactList({
 }: {
   accountAvailable: boolean;
   artifacts: ArtifactTab[];
+  paperFilter: string;
+  onFilterPaper: (paperId: string) => void;
+  onOpenPaper?: (paperId: string) => void;
+  availablePaperIds: string[];
   loadState: ArtifactCatalogLoadState;
   onDelete: (artifact: ArtifactTab) => void;
   onOpen: (artifactId: string) => unknown;
@@ -394,7 +421,11 @@ function SavedArtifactList({
   }
   return (
     <ul aria-label="已保存产物" className="artifact-library-list">
-      {artifacts.map((artifact) => (
+      {groupArtifactsByPaper(artifacts, paperFilter).map((group) => <li className="artifact-library-group" key={group.id}>
+        <details open>
+          <summary title={group.title}><DocumentRegular aria-hidden="true" /><span>{group.title}</span><small>{group.artifacts.length}</small></summary>
+          <ul className="artifact-library-list">
+      {group.artifacts.map((artifact) => (
         <li className="artifact-library-row artifact-library-saved-row" key={artifact.artifactId}>
           <Button
             appearance="transparent"
@@ -415,11 +446,6 @@ function SavedArtifactList({
               <span className="artifact-library-meta">
                 {artifactTypeLabels[artifact.type]} · {displayDate(artifact.createdAt)}
               </span>
-              {artifact.papers?.length ? (
-                <span className="artifact-library-source">
-                  {artifact.papers.map((paper) => paper.title).join("；")}
-                </span>
-              ) : null}
             </span>
           </Button>
           <Menu
@@ -442,19 +468,27 @@ function SavedArtifactList({
             <MenuPopover>
               <MenuList>
                 <MenuItem icon={<OpenRegular />} onClick={() => onOpen(artifact.artifactId)}>打开</MenuItem>
+                {onOpenPaper ? artifact.papers?.filter((paper) => availablePaperIds.includes(paper.id)).map((paper) =>
+                  <MenuItem key={paper.id} icon={<BookOpenRegular />} onClick={() => onOpenPaper(paper.id)}>阅读来源：{paper.title}</MenuItem>
+                ) : null}
                 <MenuItem icon={<EditRegular />} onClick={() => scheduleDialog("rename", artifact)}>重命名</MenuItem>
                 <MenuItem icon={<DeleteRegular />} onClick={() => scheduleDialog("delete", artifact)}>删除</MenuItem>
               </MenuList>
             </MenuPopover>
           </Menu>
           <ResourceLocationButton target={{ kind: "artifact", artifactId: artifact.artifactId }} />
+          {(artifact.papers?.length ?? 0) > 1 ? <ArtifactSourceLinks artifact={artifact} onFilterPaper={onFilterPaper} /> : null}
         </li>
       ))}
+          </ul>
+        </details>
+      </li>)}
     </ul>
   );
 }
 
 function ExportRecordList({
+  catalogById, onFilterPaper, onOpenArtifact,
   error,
   onOpen,
   onRemove,
@@ -464,6 +498,9 @@ function ExportRecordList({
   records,
   status
 }: {
+  catalogById: Map<string, ArtifactTab>;
+  onFilterPaper: (paperId: string) => void;
+  onOpenArtifact: (artifactId: string) => unknown;
   error?: string;
   onOpen: (recordId: string) => unknown;
   onRemove: (recordId: string) => unknown;
@@ -511,6 +548,9 @@ function ExportRecordList({
                     ? "由浏览器管理"
                     : missing ? "文件不可用" : "文件可用"}
                 </span>
+                <ArtifactSourceLinks artifact={catalogById.get(record.artifactId)} onFilterPaper={onFilterPaper} />
+                {catalogById.has(record.artifactId) ? <Button appearance="subtle" size="small" className="artifact-library-original"
+                  onClick={() => onOpenArtifact(record.artifactId)}>查看原产物</Button> : null}
                 {record.location === "desktop" ? (
                   <span className="artifact-library-path" title={record.path}>{record.path}</span>
                 ) : null}
@@ -556,4 +596,15 @@ function ExportRecordList({
       </ul>
     </>
   );
+}
+
+function ArtifactSourceLinks({ artifact, onFilterPaper }: { artifact?: ArtifactTab; onFilterPaper: (paperId: string) => void }) {
+  if (!artifact?.papers?.length) return null;
+  return <div className="artifact-library-source-links" aria-label="来源论文">
+    {artifact.papers.map((paper) => <Tooltip key={paper.id} content={`筛选此论文的产物：${paper.title}`} relationship="description">
+      <button type="button" onClick={() => onFilterPaper(paper.id)} aria-label={`筛选来源：${paper.title}`}>
+        <DocumentRegular aria-hidden="true" /><span>{paper.title}</span>
+      </button>
+    </Tooltip>)}
+  </div>;
 }

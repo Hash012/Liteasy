@@ -172,7 +172,7 @@ describe("AppDialogs", () => {
     );
 
     expect(screen.getByTestId("workspace-dialog-layer")).toHaveClass("workspace-dialog-layer");
-    expect(screen.getByTestId("workspace-dialog-backdrop")).toHaveClass("workspace-dialog-backdrop");
+    expect(screen.getByRole("dialog", { name: "组织窗口" })).toHaveAttribute("aria-modal", "true");
     expect(screen.getByRole("dialog", { name: "组织窗口" })).toHaveClass("workspace-modal-panel");
 
     rerender(<AppDialogs {...createProps({ academicArchiveOpen: true })} />);
@@ -281,7 +281,7 @@ describe("AppDialogs", () => {
     await user.click(within(dialog).getByRole("button", { name: "打开 Liteasy AI Reading Lab 详情" }));
     expect(onSelectOrganization).toHaveBeenCalledWith("org-demo-1");
 
-    await user.click(within(dialog).getByRole("button", { name: "在工作区打开共享文献库" }));
+    await user.click(within(dialog).getByRole("button", { name: "打开共享文献库" }));
     expect(onOpenSharedLibrary).toHaveBeenCalledWith(summary);
   });
 });

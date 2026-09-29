@@ -1,20 +1,8 @@
+import { useState } from "react";
+import { Button, Dialog, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Tooltip } from "@fluentui/react-components";
+import { DismissRegular, SearchRegular } from "@fluentui/react-icons";
 import type { OrganizationList, OrganizationSummary } from "./organization.types";
-
-function getOrganizationRoleLabel(role: string) {
-  if (role === "owner") {
-    return "所有者";
-  }
-
-  if (role === "admin") {
-    return "管理员";
-  }
-
-  if (role === "member") {
-    return "研究员";
-  }
-
-  return role;
-}
+import { OrganizationOverview, organizationRoleLabel } from "./OrganizationOverview";
 
 type OrganizationEntryDialogProps = {
   list: OrganizationList | null;
@@ -24,108 +12,32 @@ type OrganizationEntryDialogProps = {
   onSelectOrganization: (organizationId: string) => void;
   summary: OrganizationSummary | null;
 };
-
-function getNotificationTypeLabel(type: string) {
-  if (type === "announcement") {
-    return "公告";
-  }
-
-  if (type === "document_upload") {
-    return "文献上传";
-  }
-
-  return "文献库变更";
-}
-
-export function OrganizationEntryDialog({
-  list,
-  listMessage,
-  onClose,
-  onOpenSharedLibrary,
-  onSelectOrganization,
-  summary
-}: OrganizationEntryDialogProps) {
-  return (
-    <div className="workspace-dialog-backdrop organization-dialog-backdrop" data-testid="workspace-dialog-backdrop">
-      <div aria-label="组织窗口" className="workspace-modal-panel organization-dialog" role="dialog">
-        <div className="organization-dialog-header">
-          <div>
-            <div className="organization-dialog-kicker">左边栏 · 组织</div>
-            <div className="organization-dialog-title">组织窗口</div>
+export function OrganizationEntryDialog({ list, listMessage, onClose, onOpenSharedLibrary, onSelectOrganization, summary }: OrganizationEntryDialogProps) {
+  const [query, setQuery] = useState("");
+  const organizations = list?.organizations.filter((item) => item.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) ?? [];
+  return <Dialog open onOpenChange={(_, data) => { if (!data.open) onClose(); }}>
+    <DialogSurface aria-label="组织窗口" className="workspace-modal-panel organization-dialog">
+      <DialogBody>
+        <DialogTitle action={<Tooltip content="关闭" relationship="label"><Button appearance="subtle" aria-label="关闭" icon={<DismissRegular />} onClick={onClose} /></Tooltip>}>组织</DialogTitle>
+        <DialogContent className="organization-dialog-grid">
+          <nav className="organization-directory" aria-label="组织列表">
+            <Input aria-label="搜索组织" placeholder="搜索组织" contentBefore={<SearchRegular />} value={query} onChange={(_, data) => setQuery(data.value)} />
+            <div className="organization-list-stack">
+              {organizations.map((item) => <Button appearance="subtle" key={item.organizationId}
+                aria-label={`打开 ${item.name} 详情`} aria-pressed={summary?.organizationId === item.organizationId}
+                className="organization-list-card" onClick={() => onSelectOrganization(item.organizationId)}>
+                <span className="organization-list-name">{item.name}</span>
+                <span className="organization-list-meta">{organizationRoleLabel(item.myRole)} · {item.memberCount} 位成员</span>
+              </Button>)}
+              {!organizations.length ? <p className="organization-muted">{query ? "没有匹配的组织" : listMessage || "尚未加入组织"}</p> : null}
+            </div>
+          </nav>
+          <div className="organization-dialog-detail">
+            {summary ? <OrganizationOverview key={summary.organizationId} summary={summary} onOpenSharedLibrary={onOpenSharedLibrary} />
+              : <p className="organization-muted">选择组织，查看成员、通知和共享文献库。</p>}
           </div>
-          <button className="organization-dialog-close" onClick={onClose} type="button">
-            关闭
-          </button>
-        </div>
-
-        <div className="organization-dialog-grid">
-          <section className="organization-dialog-section">
-            <div className="organization-dialog-section-title">组织列表</div>
-            {list ? (
-              <div className="organization-list-stack">
-                {list.organizations.map((organization) => (
-                  <button
-                    aria-label={`打开 ${organization.name} 详情`}
-                    className={
-                      summary?.organizationId === organization.organizationId
-                        ? "organization-list-card active"
-                        : "organization-list-card"
-                    }
-                    key={organization.organizationId}
-                    onClick={() => onSelectOrganization(organization.organizationId)}
-                    type="button"
-                  >
-                    <span className="organization-list-name">{organization.name}</span>
-                    <span className="organization-list-meta">
-                      {organization.name} · {getOrganizationRoleLabel(organization.myRole)} · {organization.memberCount} 人 · {organization.sharedLibraryName}
-                    </span>
-                    <span className="organization-list-action">打开 {organization.name} 详情</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="organization-dialog-empty">{listMessage}</div>
-            )}
-          </section>
-
-          <section className="organization-dialog-section detail">
-            {summary ? (
-              <>
-                <div className="organization-dialog-section-title">组织详情：{summary.name}</div>
-                <div className="organization-detail-row">角色：{getOrganizationRoleLabel(summary.myRole)} · 成员 {summary.memberCount} 人</div>
-                {summary.members.length > 0 ? (
-                  <div className="organization-detail-row">
-                    成员：{summary.members.map((member) => `${member.name}（${getOrganizationRoleLabel(member.role)}）`).join("、")}
-                  </div>
-                ) : null}
-                <div className="organization-detail-row">
-                  共享文献库：{summary.sharedLibrary.name} · {summary.sharedLibrary.documentCount} 篇
-                </div>
-                {summary.notifications.map((notification) => (
-                  <div className="organization-detail-row" key={notification.id}>
-                    通知：{getNotificationTypeLabel(notification.type)} · {notification.message}
-                  </div>
-                ))}
-                <div className="organization-detail-row">
-                  {summary.quota.configured
-                    ? `配额：${summary.quota.storageUsedGb} / ${summary.quota.storageLimitGb} GB${summary.quota.periodEndsAt ? `，到期 ${summary.quota.periodEndsAt}` : ""}`
-                    : `存储已用：${summary.quota.storageUsedGb} GB · 尚未分配组织配额`}
-                </div>
-                <button
-                  className="policy-button sync"
-                  disabled={summary.sharedLibrary.status !== "available"}
-                  onClick={() => onOpenSharedLibrary?.(summary)}
-                  type="button"
-                >
-                  在工作区打开共享文献库
-                </button>
-              </>
-            ) : (
-              <div className="organization-dialog-empty">选择组织后会显示成员、通知和共享文献库详情。</div>
-            )}
-          </section>
-        </div>
-      </div>
-    </div>
-  );
+        </DialogContent>
+      </DialogBody>
+    </DialogSurface>
+  </Dialog>;
 }

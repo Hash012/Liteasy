@@ -314,6 +314,9 @@ export function LeftPane({
       <div className={leftRailView === "settings" ? "settings-host-body" : "pane-body"}>
         {leftRailView === "artifact-library" ? (
           <ArtifactLibraryPane
+            activePaperId={activePaperId}
+            availablePaperIds={papers.map((paper) => paper.id)}
+            onOpenPaper={onOpenPaper}
             accountAvailable={accountSession !== null}
             artifactCatalog={artifactCatalog}
             artifactCatalogLoadState={artifactCatalogLoadState}

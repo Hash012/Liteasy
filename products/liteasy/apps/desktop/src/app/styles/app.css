@@ -5124,119 +5124,6 @@ button.pdf-overlay-mark:focus-visible {
   }
 }
 
-.organization-dialog-backdrop {
-  background: rgba(44, 67, 88, 0.28);
-}
-
-.organization-dialog {
-  width: min(920px, 94vw);
-  max-height: 86vh;
-  overflow: auto;
-  border: 1px solid #c7d8e7;
-  border-radius: 22px;
-  background: linear-gradient(180deg, rgba(253, 254, 255, 0.98) 0%, rgba(236, 245, 251, 0.98) 100%);
-  box-shadow: 0 24px 54px rgba(70, 98, 126, 0.22);
-  padding: 22px;
-}
-
-.organization-dialog-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-
-.organization-dialog-kicker {
-  color: #6c8195;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.organization-dialog-title {
-  color: #244b6d;
-  font-size: 24px;
-  font-weight: 800;
-}
-
-.organization-dialog-close {
-  border: 1px solid #b7d0e5;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
-  color: #2f5575;
-  cursor: pointer;
-  padding: 8px 14px;
-}
-
-.organization-dialog-grid {
-  display: grid;
-  grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.1fr);
-  gap: 16px;
-}
-
-.organization-dialog-section {
-  border: 1px solid #d1dfeb;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.76);
-  padding: 16px;
-}
-
-.organization-dialog-section-title {
-  color: #294f70;
-  font-size: 16px;
-  font-weight: 800;
-  margin-bottom: 12px;
-}
-
-.organization-list-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.organization-list-card {
-  border: 1px solid #d1dfeb;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.84);
-  color: #42576b;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px;
-  text-align: left;
-}
-
-.organization-list-card.active {
-  border-color: #8fb3d3;
-  background: linear-gradient(180deg, #ffffff 0%, #e7f1f9 100%);
-}
-
-.organization-list-name {
-  color: #244b6d;
-  font-weight: 800;
-}
-
-.organization-list-meta,
-.organization-list-action,
-.organization-detail-row,
-.organization-dialog-empty {
-  color: #5b7186;
-  font-size: 13px;
-}
-
-.organization-list-action {
-  font-weight: 700;
-}
-
-.organization-dialog-section.detail {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
 .left-rail-button.active {
   border-color: #8fb3d3;
   background: linear-gradient(180deg, #ffffff 0%, #dbeaf6 100%);
@@ -6017,91 +5904,6 @@ button.pdf-overlay-mark:focus-visible {
   resize: vertical;
 }
 
-.organization-sidebar-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.organization-sidebar-header {
-  align-items: flex-start;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.organization-sidebar-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.organization-action-feedback {
-  border-left: 2px solid rgba(71, 124, 167, 0.5);
-  background: transparent;
-  color: #244b6d;
-  line-height: 1.45;
-  padding: 4px 0 4px 10px;
-}
-
-.organization-action-feedback-title {
-  color: #16344f;
-  font-size: 12px;
-  font-weight: 850;
-  letter-spacing: 0.08em;
-  margin-bottom: 4px;
-}
-
-.organization-action-feedback-message {
-  font-size: 13px;
-  font-weight: 750;
-}
-
-.organization-member-governance-row {
-  border-bottom: 1px solid #d8e2eb;
-  display: grid;
-  gap: 6px;
-  padding: 8px 0;
-}
-
-.organization-member-governance-actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-height: 32px;
-}
-
-.organization-member-governance-confirm {
-  border-left: 2px solid #c54141;
-  display: grid;
-  gap: 8px;
-  margin-top: 8px;
-  padding: 6px 0 6px 10px;
-}
-
-.organization-sidebar-kicker {
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.organization-sidebar-title {
-  color: #5f584d;
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-}
-
-.organization-sidebar-title-row {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
 .profile-login-status {
   border: 1px solid #ead7bd;
   border-radius: 999px;
@@ -6115,15 +5917,6 @@ button.pdf-overlay-mark:focus-visible {
 .left-rail-button.subtle {
   background: #eef2f5;
   color: #384858;
-}
-
-.organization-notification-item {
-  border-left: 2px solid #d4dde7;
-  padding-left: 10px;
-}
-
-.organization-notification-item .model-policy-footnote {
-  color: #7b8a99;
 }
 
 .assistant-only-pane {
@@ -6368,29 +6161,6 @@ button.pdf-overlay-mark:focus-visible {
   opacity: 0.75;
   overflow-wrap: anywhere;
 }
-.organization-storage-policy-panel {
-  display: grid;
-  gap: 8px;
-  padding: 10px 12px;
-  border-top: 1px solid var(--colorNeutralStroke2);
-}
-
-.organization-storage-policy-header {
-  display: flex;
-  min-height: 28px;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.organization-storage-policy-message {
-  margin: 0;
-  color: var(--colorNeutralForeground2);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
 /* Keep textarea and mirror advances identical for selection, IME and wrapping. */
 .assistant-input-editor { position: relative; }
 .assistant-input-editor .assistant-input,

@@ -1,0 +1,50 @@
+.organization-sidebar-panel, .organization-space-panel, .organization-overview {
+  display: flex; flex-direction: column; gap: 12px; min-width: 0;
+  color: var(--colorNeutralForeground1);
+}
+.organization-sidebar-panel { padding: 4px; }
+.organization-sidebar-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; padding-bottom: 8px; border-bottom: 1px solid var(--colorNeutralStroke2); }
+.organization-sidebar-actions > .fui-Button { min-width: 30px; }
+.organization-empty { display: grid; justify-items: start; gap: 12px; padding: 20px 8px; }
+.organization-empty > svg { width: 32px; height: 32px; color: var(--colorBrandForeground1); }
+.organization-empty h2 { font-size: 18px; margin: 0; }
+.organization-empty p { color: var(--colorNeutralForeground2); margin: 0; line-height: 1.6; }
+.organization-identity { display: flex; gap: 12px; align-items: center; padding: 4px 0; }
+.organization-identity > div { min-width: 0; }
+.organization-identity h2 { font-size: 18px; line-height: 1.4; overflow-wrap: anywhere; margin: 0 0 4px; font-weight: 600; }
+.organization-identity span, .organization-muted, .organization-list-meta { color: var(--colorNeutralForeground3); font-size: 12px; }
+.organization-surface { border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; background: var(--colorNeutralBackground1); padding: 12px; min-width: 0; }
+.organization-surface p { font-size: 13px; line-height: 1.5; margin: 8px 0; overflow-wrap: anywhere; }
+.organization-section-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.organization-section-heading h3 { font-size: 13px; font-weight: 600; flex: 1; margin: 0; }
+.organization-disclosure > summary { cursor: pointer; font-size: 13px; font-weight: 600; line-height: 24px; overflow-wrap: anywhere; }
+.organization-disclosure > summary svg { margin: 0 6px; vertical-align: middle; }
+.organization-count { float: right; margin-left: 8px; font-size: 12px; font-weight: 400; color: var(--colorNeutralForeground3); }
+.organization-member-list, .organization-notice-list { list-style: none; padding: 0; margin: 8px 0 0; }
+.organization-member-list li { display: flex; gap: 8px; align-items: center; padding: 6px 0; }
+.organization-member-list li > span:not(.fui-Avatar) { flex: 1; overflow-wrap: anywhere; min-width: 0; }
+.organization-member-list small { color: var(--colorNeutralForeground3); white-space: nowrap; }
+.organization-notice-list li + li { border-top: 1px solid var(--colorNeutralStroke2); padding-top: 8px; }
+.organization-notice-list li > div { display: flex; align-items: center; gap: 8px; color: var(--colorNeutralForeground3); }
+.organization-feedback, .organization-action-feedback { border-radius: 6px; padding: 8px; color: var(--colorNeutralForeground2); background: var(--colorNeutralBackground3); font-size: 12px; overflow-wrap: anywhere; }
+.organization-sidebar-panel .organization-storage-policy-panel { padding: 8px 0 0; border: 0; background: transparent; }
+.organization-sidebar-panel .organization-governance-card { margin: 0; border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; padding: 8px; }
+.organization-sidebar-panel .model-policy-summary, .organization-sidebar-panel .model-policy-footnote { color: var(--colorNeutralForeground2); }
+.organization-member-governance-row { border-bottom: 1px solid var(--colorNeutralStroke2); display: grid; gap: 6px; padding: 8px 0; }
+.organization-member-governance-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+.organization-member-governance-confirm { border: 1px solid var(--colorStatusDangerBorder1); border-radius: 6px; padding: 8px; margin-top: 8px; }
+.organization-dialog.fui-DialogSurface { width: min(860px, 94vw); max-width: 94vw; padding: 20px; border-radius: 8px; background: var(--colorNeutralBackground1); color: var(--colorNeutralForeground1); }
+.organization-dialog .organization-dialog-grid { display: grid; grid-template-columns: minmax(180px, 0.65fr) minmax(0, 1.35fr); gap: 20px; padding-top: 16px; }
+.organization-directory, .organization-dialog-detail { min-width: 0; }
+.organization-directory { display: flex; flex-direction: column; gap: 8px; }
+.organization-directory .fui-Input { width: 100%; min-width: 0; }
+.organization-list-stack { display: grid; gap: 4px; }
+.organization-list-card.fui-Button { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left; padding: 10px; border-radius: 6px; min-width: 0; }
+.organization-list-card[aria-pressed="true"] { background: var(--colorBrandBackground2); border-color: var(--colorBrandStroke2); }
+.organization-list-name { color: var(--colorNeutralForeground1); overflow-wrap: anywhere; }
+@media (max-width: 600px) { .organization-dialog .organization-dialog-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.organization-member-action.fui-Button { width: 30px; min-width: 30px; height: 30px; padding: 0; }
+.organization-storage-policy-panel { display: grid; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--colorNeutralStroke2); }
+.organization-storage-policy-header { display: flex; min-height: 28px; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 600; }
+.organization-storage-policy-message { margin: 0; color: var(--colorNeutralForeground2); font-size: 12px; line-height: 1.4; }

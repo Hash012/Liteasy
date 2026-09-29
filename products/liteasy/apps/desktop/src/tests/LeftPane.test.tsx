@@ -278,6 +278,7 @@ describe("LeftPane", () => {
   test("composes saved and exported artifact models and forwards actions", async () => {
     const user = userEvent.setup();
     const onOpenArtifact = vi.fn();
+    const onOpenPaper = vi.fn();
     const onOpenExport = vi.fn(async () => undefined);
     const exportRecord: ArtifactExportRecord = {
       artifactId: "artifact-saved",
@@ -299,6 +300,9 @@ describe("LeftPane", () => {
       }],
       exportRecords: [exportRecord],
       leftRailView: "artifact-library",
+      activePaperId: "paper-1",
+      papers: [{ id: "paper-1", title: "Attention Is All You Need" }],
+      onOpenPaper,
       onOpenArtifact,
       onOpenExport
     })} />);
@@ -307,6 +311,11 @@ describe("LeftPane", () => {
     await user.click(screen.getByRole("button", { name: "打开产物：Saved artifact" }));
     expect(onOpenArtifact).toHaveBeenCalledWith("artifact-saved");
 
+    await user.click(screen.getByRole("button", { name: "当前论文" }));
+    expect(screen.getByRole("combobox", { name: "按来源论文筛选" })).toHaveValue("paper-1");
+    await user.click(screen.getByRole("button", { name: "产物操作：Saved artifact" }));
+    await user.click(screen.getByRole("menuitem", { name: "阅读来源：Attention Is All You Need" }));
+    expect(onOpenPaper).toHaveBeenCalledWith("paper-1");
     await user.click(screen.getByRole("tab", { name: "已导出" }));
     await user.click(screen.getByRole("button", { name: "打开文件：Saved artifact.md" }));
     expect(onOpenExport).toHaveBeenCalledWith("export-1");

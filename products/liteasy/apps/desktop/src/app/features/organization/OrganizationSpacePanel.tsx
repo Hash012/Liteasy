@@ -1,27 +1,6 @@
-import { useState } from "react";
-import { ChevronDownRegular, ChevronRightRegular, PeopleRegular } from "@fluentui/react-icons";
-import type {
-  OrganizationList,
-  OrganizationListStatus,
-  OrganizationSummary,
-  OrganizationSummaryStatus
-} from "./organization.types";
-
-function getOrganizationRoleLabel(role: string) {
-  if (role === "owner") {
-    return "所有者";
-  }
-
-  if (role === "admin") {
-    return "管理员";
-  }
-
-  if (role === "member") {
-    return "研究员";
-  }
-
-  return role;
-}
+import { Field, Select, Spinner } from "@fluentui/react-components";
+import { OrganizationOverview } from "./OrganizationOverview";
+import type { OrganizationList, OrganizationListStatus, OrganizationSummary, OrganizationSummaryStatus } from "./organization.types";
 
 type OrganizationSpacePanelProps = {
   list: OrganizationList | null;
@@ -35,189 +14,19 @@ type OrganizationSpacePanelProps = {
   status: OrganizationSummaryStatus;
   summary: OrganizationSummary | null;
 };
-
-function getNotificationTypeLabel(type: string) {
-  if (type === "announcement") {
-    return "公告";
-  }
-
-  if (type === "document_upload") {
-    return "文献上传";
-  }
-
-  return "文献库变更";
-}
-
-function getNotificationReadKey(organizationId: string, notificationId: string) {
-  return `${organizationId}:${notificationId}`;
-}
-
-function getSharedLibraryOpenMessage(summary: OrganizationSummary) {
-  if (summary.sharedLibrary.status === "syncing") {
-    return "共享文献库状态：同步中，暂时不能打开。请稍后重试。";
-  }
-
-  if (summary.sharedLibrary.status === "unavailable") {
-    return "共享文献库状态：不可用，请联系组织管理员或稍后重试。";
-  }
-
-  if (summary.sharedLibrary.documentCount === 0) {
-    return "共享文献库状态：暂无可打开文献，请等待组织同步完成。";
-  }
-
-  return "共享文献库状态：可打开，会像 VSCode 打开文件夹一样切换当前工作区。";
-}
-
-function getStatusLabel(status: OrganizationSummaryStatus, summary: OrganizationSummary | null) {
-  if (status === "success" && summary) {
-    return `组织空间：${summary.name}`;
-  }
-
-  if (status === "loading") {
-    return "组织空间：加载中";
-  }
-
-  if (status === "error") {
-    return "组织空间：加载失败";
-  }
-
-  if (status === "idle") {
-    return "组织空间：尚未加入组织";
-  }
-
-  return "组织空间：未连接云账号";
-}
-
-export function OrganizationSpacePanel({
-  list,
-  listMessage,
-  listStatus,
-  message,
-  onMarkNotificationsRead,
-  onOpenSharedLibrary,
-  onSelectOrganization,
-  readNotificationIds,
-  status,
-  summary
-}: OrganizationSpacePanelProps) {
-  const [expanded, setExpanded] = useState(true);
-  const latestNotification = summary?.notifications[0];
-  const latestAuditEvent = summary?.auditEvents[0];
-  const readNotificationIdSet = new Set(readNotificationIds);
-  const unreadNotificationCount = summary
-    ? summary.notifications.filter(
-        (notification) =>
-          !readNotificationIdSet.has(
-            getNotificationReadKey(summary.organizationId, notification.id)
-          )
-      ).length
-    : 0;
-
-  return (
-    <section className="sidebar-section organization-space-card">
-      <button
-        aria-expanded={expanded}
-        aria-label={`${expanded ? "收起" : "展开"}组织空间`}
-        className="sidebar-section-header"
-        onClick={() => setExpanded((current) => !current)}
-        type="button"
-      >
-        <span aria-hidden="true" className="sidebar-section-disclosure">
-          {expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}
-        </span>
-        <PeopleRegular />
-        <span>组织空间</span>
-      </button>
-      {expanded ? <div className="sidebar-section-content">
-        <div className={`model-policy-status ${status}`}>{getStatusLabel(status, summary)}</div>
-      {list ? (
-        <>
-          <div className="model-policy-summary">
-            已加入组织：{list.organizations.map((organization) => organization.name).join("、")}
-          </div>
-          {list.organizations.map((organization) => (
-            <button
-              className="policy-button ghost"
-              disabled={summary?.organizationId === organization.organizationId}
-              key={organization.organizationId}
-              onClick={() => onSelectOrganization?.(organization.organizationId)}
-              type="button"
-            >
-              查看 {organization.name}
-            </button>
-          ))}
-        </>
-      ) : listStatus === "loading" || listStatus === "error" ? (
-        <div className="model-policy-footnote">{listMessage}</div>
-      ) : null}
-      {summary ? (
-        <>
-          <div className="model-policy-summary">
-            角色：{getOrganizationRoleLabel(summary.myRole)} · 成员 {summary.memberCount} 人
-          </div>
-          {summary.members.length > 0 ? (
-            <div className="model-policy-summary">
-              组织成员：{summary.members
-                .map((member) => `${member.name}（${getOrganizationRoleLabel(member.role)}）`)
-                .join("、")}
-            </div>
-          ) : null}
-          <div className="model-policy-summary">
-            共享文献库：{summary.sharedLibrary.name} · {summary.sharedLibrary.documentCount} 篇
-          </div>
-          {latestNotification ? (
-            <div className="model-policy-summary">通知：{latestNotification.message}</div>
-          ) : null}
-          <div className="model-policy-summary">未读通知：{unreadNotificationCount} 条</div>
-          {summary.notifications.length > 0 ? (
-            <button
-              className="policy-button ghost"
-              disabled={unreadNotificationCount === 0}
-              onClick={() => onMarkNotificationsRead?.(summary)}
-              type="button"
-            >
-              全部标记已读
-            </button>
-          ) : null}
-          {summary.notifications.map((notification) => (
-            <div className="organization-notification-item" key={notification.id}>
-              <div className="model-policy-summary">
-                通知：{getNotificationTypeLabel(notification.type)} · {notification.message}
-              </div>
-              <div className="model-policy-footnote">
-                通知状态：{notification.message} · {readNotificationIdSet.has(getNotificationReadKey(summary.organizationId, notification.id)) ? "已读" : "未读"}
-              </div>
-            </div>
-          ))}
-          <div className="model-policy-summary">
-            {summary.quota.configured
-              ? `配额：${summary.quota.storageUsedGb} / ${summary.quota.storageLimitGb} GB${summary.quota.periodEndsAt ? `，到期 ${summary.quota.periodEndsAt}` : ""}`
-              : `存储已用：${summary.quota.storageUsedGb} GB · 尚未分配组织配额`}
-          </div>
-          {summary.taskSummary ? (
-            <div className="model-policy-summary">
-              治理：运行任务 {summary.taskSummary.running} 个，失败任务 {summary.taskSummary.failed} 个
-            </div>
-          ) : null}
-          {latestAuditEvent ? (
-            <div className="model-policy-summary">
-              最近审计：{latestAuditEvent.actor} {latestAuditEvent.description}
-            </div>
-          ) : null}
-          <button
-            className="policy-button sync"
-            disabled={summary.sharedLibrary.status !== "available" || summary.sharedLibrary.documentCount === 0}
-            onClick={() => onOpenSharedLibrary?.(summary)}
-            title={getSharedLibraryOpenMessage(summary)}
-            type="button"
-          >
-            打开共享文献库
-          </button>
-        </>
-      ) : (
-        <div className="model-policy-footnote">{message}</div>
-      )}
-      </div> : null}
-    </section>
-  );
+export function OrganizationSpacePanel(props: OrganizationSpacePanelProps) {
+  const { list, listStatus, listMessage, summary, status, message } = props;
+  return <section className="organization-space-panel" aria-label="组织空间">
+    {list?.organizations.length ? <Field label="当前组织">
+      <Select aria-label="切换组织" value={list.activeOrganizationId || summary?.organizationId || ""}
+        disabled={status === "loading"} onChange={(_, data) => props.onSelectOrganization?.(data.value)}>
+        {list.organizations.map((item) => <option key={item.organizationId} value={item.organizationId}>{item.name}</option>)}
+      </Select>
+    </Field> : null}
+    {listStatus === "loading" || status === "loading" ? <Spinner label="正在加载组织" size="tiny" /> : null}
+    {listStatus === "error" || status === "error" ? <div className="organization-feedback" role="alert">{status === "error" ? message : listMessage}</div> : null}
+    {summary ? <OrganizationOverview key={summary.organizationId} summary={summary} onOpenSharedLibrary={props.onOpenSharedLibrary}
+      onMarkNotificationsRead={props.onMarkNotificationsRead} readNotificationIds={props.readNotificationIds} />
+      : status !== "loading" && status !== "error" ? <p className="organization-muted">{message || "加入或创建组织，与团队共享文献和研究进展。"}</p> : null}
+  </section>;
 }

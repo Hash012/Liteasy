@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Tooltip } from "@fluentui/react-components";
+import { Button, Tooltip } from "@fluentui/react-components";
 import {
   ArrowSwapRegular,
   CheckmarkCircleRegular,
@@ -101,7 +101,7 @@ export function OrganizationMemberGovernancePanel({
   const governedMembers = summary.members.filter((member) => member.role !== "owner");
   return (
     <section className="sidebar-section organization-governance-card">
-      <button
+      <Button appearance="subtle"
         aria-expanded={expanded}
         aria-label={`${expanded ? "收起" : "展开"}成员治理`}
         className="sidebar-section-header"
@@ -113,7 +113,7 @@ export function OrganizationMemberGovernancePanel({
         </span>
         <ShieldPersonRegular />
         <span>成员治理</span>
-      </button>
+      </Button>
       {expanded ? (
         <div className="sidebar-section-content">
           {governedMembers.map((member) => {
@@ -127,9 +127,9 @@ export function OrganizationMemberGovernancePanel({
                   <div className="organization-member-governance-actions">
                     {summary.myRole === "owner" ? (
                       <Tooltip content={member.role === "admin" ? "撤销管理员" : "设为管理员"} relationship="label">
-                        <button
+                        <Button appearance="subtle"
                           aria-label={`${member.role === "admin" ? "撤销管理员" : "设为管理员"} ${member.name}`}
-                          className="policy-button ghost icon-only"
+                          className="organization-member-action"
                           disabled={submitting || member.status === "suspended"}
                           onClick={() => setPendingAction({
                             kind: member.role === "admin" ? "demote" : "promote",
@@ -138,13 +138,13 @@ export function OrganizationMemberGovernancePanel({
                           type="button"
                         >
                           <ShieldPersonRegular />
-                        </button>
+                        </Button>
                       </Tooltip>
                     ) : null}
                     <Tooltip content={member.status === "suspended" ? "恢复成员" : "暂停成员"} relationship="label">
-                      <button
+                      <Button appearance="subtle"
                         aria-label={`${member.status === "suspended" ? "恢复成员" : "暂停成员"} ${member.name}`}
-                        className="policy-button ghost icon-only"
+                        className="organization-member-action"
                         disabled={submitting}
                         onClick={() => setPendingAction({
                           kind: member.status === "suspended" ? "activate" : "suspend",
@@ -153,30 +153,30 @@ export function OrganizationMemberGovernancePanel({
                         type="button"
                       >
                         {member.status === "suspended" ? <CheckmarkCircleRegular /> : <DismissCircleRegular />}
-                      </button>
+                      </Button>
                     </Tooltip>
                     <Tooltip content="移除成员" relationship="label">
-                      <button
+                      <Button appearance="subtle"
                         aria-label={`移除成员 ${member.name}`}
-                        className="left-rail-button danger icon-only"
+                        className="organization-member-action"
                         disabled={submitting}
                         onClick={() => setPendingAction({ kind: "remove", member })}
                         type="button"
                       >
                         <DismissCircleRegular />
-                      </button>
+                      </Button>
                     </Tooltip>
                     {summary.myRole === "owner" && member.status === "active" ? (
                       <Tooltip content="转移所有权" relationship="label">
-                        <button
+                        <Button appearance="subtle"
                           aria-label={`转移所有权给 ${member.name}`}
-                          className="policy-button ghost icon-only"
+                          className="organization-member-action"
                           disabled={submitting}
                           onClick={() => setPendingAction({ kind: "transfer", member })}
                           type="button"
                         >
                           <ArrowSwapRegular />
-                        </button>
+                        </Button>
                       </Tooltip>
                     ) : null}
                   </div>
@@ -191,22 +191,22 @@ export function OrganizationMemberGovernancePanel({
             <div aria-label="确认成员治理操作" className="organization-member-governance-confirm" role="alertdialog">
               <div className="model-policy-summary">确认{actionLabel(pendingAction)}？</div>
               <div className="organization-member-governance-actions">
-                <button
-                  className="policy-button ghost"
+                <Button appearance="subtle"
+
                   disabled={submitting}
                   onClick={() => setPendingAction(null)}
                   type="button"
                 >
                   取消
-                </button>
-                <button
-                  className="left-rail-button danger"
+                </Button>
+                <Button appearance="subtle"
+
                   disabled={submitting}
                   onClick={() => void execute(pendingAction)}
                   type="button"
                 >
                   {submitting ? "正在处理" : "确认"}
-                </button>
+                </Button>
               </div>
             </div>
           ) : null}

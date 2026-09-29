@@ -98,12 +98,12 @@ describe("ArtifactLibraryPane", () => {
 
     await user.type(search, "Attention");
     expect(screen.getByRole("button", { name: "打开产物：薄读" })).toBeInTheDocument();
-    expect(screen.queryByText("Other Paper Map")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "打开产物：Other Paper Map" })).not.toBeInTheDocument();
 
     await user.clear(search);
     await user.type(search, "思维导图");
     expect(screen.getByRole("button", { name: "打开产物：Other Paper Map" })).toBeInTheDocument();
-    expect(screen.queryByText("薄读")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "打开产物：薄读" })).not.toBeInTheDocument();
   });
 
   test("opens saved artifacts from the row and action menu", async () => {
@@ -256,4 +256,47 @@ describe("ArtifactLibraryPane", () => {
     expect(screen.getByRole("button", { name: "移除导出记录：网页产物.html" }))
       .toBeInTheDocument();
   });
+});
+
+test("links multi-paper artifacts to each source without duplicating rows and opens an available paper", async () => {
+  const user = userEvent.setup();
+  const onOpenPaper = vi.fn();
+  const comparison: ArtifactTab = { artifactId: "comparison", title: "两篇论文对比", type: "comparison_table", papers: savedArtifacts.flatMap((artifact) => artifact.papers ?? []) };
+  render(<ArtifactLibraryPane {...props()} artifactCatalog={[...savedArtifacts, comparison]}
+    activePaperId="paper-other" availablePaperIds={["paper-other"]} onOpenPaper={onOpenPaper} />);
+  expect(screen.getAllByRole("button", { name: "打开产物：两篇论文对比" })).toHaveLength(1);
+  await user.click(screen.getByRole("button", { name: "当前论文" }));
+  expect(screen.getByRole("combobox", { name: "按来源论文筛选" })).toHaveValue("paper-other");
+  expect(screen.queryByRole("button", { name: "打开产物：薄读" })).not.toBeInTheDocument();
+  await user.selectOptions(screen.getByRole("combobox", { name: "按产物类型筛选" }), "comparison_table");
+  expect(screen.queryByRole("button", { name: "打开产物：Other Paper Map" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "产物操作：两篇论文对比" }));
+  expect(screen.queryByRole("menuitem", { name: "阅读来源：Attention Is All You Need" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("menuitem", { name: "阅读来源：Other Paper" }));
+  expect(onOpenPaper).toHaveBeenCalledWith("paper-other");
+  await user.click(screen.getByRole("button", { name: "清除筛选" }));
+  expect(screen.getByRole("button", { name: "打开产物：薄读" })).toBeInTheDocument();
+});
+
+test("searches saved and exported artifacts through their source metadata and preserves orphan exports", async () => {
+  const user = userEvent.setup();
+  const paneProps = props();
+  const enriched = { ...savedArtifacts[0], papers: [{ id: "paper-attention", title: "Attention Is All You Need", authors: ["Ashish Vaswani"], doi: "10.1000/attention" }] };
+  render(<ArtifactLibraryPane {...paneProps} artifactCatalog={[enriched]} exportRecords={[desktopExport, { ...desktopExport, id: "orphan", artifactId: "removed", fileName: "独立导出.md" }]} />);
+  const search = screen.getByRole("searchbox", { name: "搜索产物" });
+  await user.type(search, "Vaswani");
+  expect(screen.getByRole("button", { name: "打开产物：薄读" })).toBeInTheDocument();
+  await user.click(screen.getByRole("tab", { name: "已导出" }));
+  expect(screen.getByText("薄读.md")).toBeInTheDocument();
+  expect(screen.queryByText("独立导出.md")).not.toBeInTheDocument();
+  await user.clear(search);
+  await user.type(search, "10.1000/attention");
+  expect(screen.getByText("薄读.md")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "查看原产物" }));
+  expect(paneProps.onOpenArtifact).toHaveBeenCalledWith("artifact-thin-reading");
+  await user.click(screen.getByRole("button", { name: "清除筛选" }));
+  await user.selectOptions(screen.getByRole("combobox", { name: "按来源论文筛选" }), "__unlinked__");
+  expect(screen.getByText("独立导出.md")).toBeInTheDocument();
+  expect(screen.queryByText("薄读.md")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "查看原产物" })).not.toBeInTheDocument();
 });
