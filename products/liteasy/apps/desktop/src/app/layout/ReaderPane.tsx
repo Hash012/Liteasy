@@ -43,6 +43,7 @@ import type { PaneCollapseState } from "./paneLayout.types";
 import type { ThinReadingVisualizationStatus } from "../features/artifacts/artifact.types";
 
 type ReaderPaneProps = {
+  onGenerateGuide?: import("../features/paper-reading/literatureGuide").GuideGenerator;
   onDocumentInfo?: (info: import("../features/pdf/pdfDocumentInfo").PdfDocumentInfo) => void;
   onQuickAsk?: (request: PdfQuickAskRequest) => Promise<string>;
   readingContent?: ReactNode | ((annotations: PdfReadingAnnotations) => ReactNode);
@@ -124,6 +125,7 @@ const defaultLayoutCollapsed: PaneCollapseState = {
 export function ReaderPane({
   onDocumentInfo,
   onQuickAsk,
+  onGenerateGuide,
   readingContent, extractingPaper, onExtractPaper,
   allowServerPdfParsing = false,
   analysisHint,
@@ -211,6 +213,7 @@ export function ReaderPane({
         >
           <div className="reader-pdf-surface">
           <PdfReader
+            onGenerateGuide={onGenerateGuide}
             onEnterReadingMode={readingContent ? () => setReadingMode(true) : undefined}
             onExitReadingMode={() => setReadingMode(false)}
             readingView={readingVisible ? (annotations) => <section aria-label="论文阅读模式" className="reader-reading-surface">

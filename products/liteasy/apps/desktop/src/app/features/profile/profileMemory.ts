@@ -7,7 +7,7 @@ import { toRecommendationResearchProfile } from "./profile.types";
 export const memoryFields = {
   research_topic: "研究主题", research_method: "常用方法", dataset: "关注数据集",
   reading_language: "阅读语言", response_language: "回答语言", response_style: "回答方式",
-  research_stage: "研究阶段", project: "当前研究项目", context: "其他偏好"
+  research_stage: "研究阶段", research_familiarity: "领域熟悉度", project: "当前研究项目", context: "其他偏好"
 } as const;
 export type MemoryField = keyof typeof memoryFields;
 const fieldSchema = z.enum(Object.keys(memoryFields) as [MemoryField, ...MemoryField[]]);

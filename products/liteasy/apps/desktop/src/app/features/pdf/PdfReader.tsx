@@ -11,6 +11,11 @@ import { canGroupPdfInkStroke, pdfInkGroupBounds, pdfInkStrokes, type PdfInkMode
 import { PdfPaneResizeHandle } from "./PdfPaneResizeHandle";
 import { extractQuickAskAbstract, type PdfQuickAskRequest } from "./pdfQuickAsk";
 import { readerContextDragMime } from "../assistant/readerContextDrag";
+import { LiteratureGuideControls } from "../paper-reading/LiteratureGuideControls";
+import { useLiteratureGuide } from "../paper-reading/useLiteratureGuide";
+import type { GuideGenerator } from "../paper-reading/literatureGuide";
+import { guideCategories } from "../paper-reading/literatureGuide.types";
+import { isUntouchedGuide, mergePdfGuides } from "./pdfGuideAnnotations";
 import {
   useCallback,
   useEffect,
@@ -235,6 +240,7 @@ export type PdfAnnotationPublicationChange = {
 type PdfReaderProps = {
   onDocumentInfo?: (info: import("./pdfDocumentInfo").PdfDocumentInfo) => void;
   onQuickAsk?: (request: PdfQuickAskRequest) => Promise<string>;
+  onGenerateGuide?: GuideGenerator;
   readingControls?: ReactNode;
   readingView?: (annotations: PdfReadingAnnotations) => ReactNode;
   onEnterReadingMode?: () => void;
@@ -1382,8 +1388,8 @@ function PdfPageView({
           ) : null
         ) : annotation.rects.map((rect, index) => (
             <button
-              aria-label={`${(annotation.quickAsk ? "速问" : getOverlayLabel(annotation.kind))}：第 ${annotation.page} 页：${annotation.excerpt}`}
-              className={`pdf-overlay-mark ${annotation.kind} ${annotation.quickAsk ? "quick-ask" : ""}`}
+              aria-label={`${annotation.aiGuide ? "AI 讲解" : (annotation.quickAsk ? "速问" : getOverlayLabel(annotation.kind))}：第 ${annotation.page} 页：${annotation.excerpt}`}
+              className={`pdf-overlay-mark ${annotation.kind} ${annotation.quickAsk ? "quick-ask" : ""} ${annotation.aiGuide ? "ai-guide" : ""}`}
               draggable={Boolean(onAnnotationDrag) || annotation.kind === "highlight" || annotation.kind === "underline"}
               onDragStart={(event) => {
                 if (!activePaper) { event.preventDefault(); return; }
@@ -1408,7 +1414,7 @@ function PdfPageView({
                 annotation.kind,
                 rect,
                 annotation.color
-              ), ...(annotation.quickAsk ? { borderBottomStyle: "dashed" } : {}) }}
+              ), ...(annotation.quickAsk || annotation.aiGuide ? { borderBottomStyle: "dashed" } : {}) }}
               title={`第 ${annotation.page} 页：${annotation.excerpt}`}
               type="button"
             />
@@ -1497,6 +1503,7 @@ export function PdfReader({
   zoom,
   onZoomChange,
   onQuickAsk,
+  onGenerateGuide,
   onAddSelectionToConversation,
   onSelectionChanged,
   canModerateOrganizationAnnotations = false,
@@ -3036,6 +3043,57 @@ export function PdfReader({
     await persistReadingAnnotations();
   }
 
+  const guide = useLiteratureGuide({
+    scope: annotationStorageKey, title: activePaper?.title ?? "", pageCount,
+    ready: Boolean(pdfDocument && annotationStorageKey && hydratedAnnotationStorageKey === annotationStorageKey && !annotationLoadError),
+    count: annotations.filter((annotation) => annotation.aiGuide).length, generate: onGenerateGuide,
+    readPage: async (page) => {
+      if (pageTexts[page]?.trim()) return pageTexts[page];
+      if (!pdfDocument) throw new Error("PDF 文本尚未就绪。");
+      const source = await pdfDocument.getPage(page);
+      return normalizePdfPageText(joinPdfTextItems((await source.getTextContent()).items));
+    },
+    save: async (batch, pages, mode, runId, signal) => {
+      assertReadingAnnotationsReady();
+      const scope = annotationStorageKey;
+      const now = new Date().toISOString();
+      const additions: PdfAnnotationV2[] = [];
+      for (const item of batch.items) {
+        signal.throwIfAborted();
+        const anchor = await readingSelectionGeometry({ page: item.page, excerpt: item.quote });
+        signal.throwIfAborted();
+        if (!anchor.rects.length) continue;
+        additions.push({ id: `ai-guide-${crypto.randomUUID()}`, kind: "underline", color: "blue", page: item.page,
+          excerpt: item.quote, rects: anchor.rects, text: item.title, note: item.explanation,
+          aiGuide: { mode, level: batch.level, category: item.category, runId },
+          createdAt: now, updatedAt: now, revision: 1, paperIdentity: resolvePaperIdentity(activePaper!),
+          publication: { desiredVisibility: "private", state: "not_published" } });
+      }
+      signal.throwIfAborted(); assertReadingAnnotationsReady();
+      if (scope !== annotationScopeRef.current) throw new Error("论文已切换，未保存标注。");
+      if (batch.items.length && !additions.length) throw new Error("未能在 PDF 原文定位本批讲解，原有标注已保留。");
+      // Regeneration only replaces untouched AI marks on successfully processed pages.
+      // User highlights and edited/published explanations remain intact.
+      const invalidPages = batch.items.filter((item) => !additions.some((mark) => mark.page === item.page && mark.excerpt === item.quote)).map((item) => item.page);
+      const replacePages = batch.rejected ? [] : pages.filter((page) => !invalidPages.includes(page));
+      let savedCount = 0;
+      setCurrentAnnotations((current) => {
+        const merged = mergePdfGuides(current, additions, replacePages);
+        savedCount = additions.filter((mark) => merged.includes(mark)).length;
+        return merged;
+      });
+      await persistReadingAnnotations();
+      return savedCount;
+    },
+    clear: async () => {
+      assertReadingAnnotationsReady();
+      setCurrentAnnotations((current) => current.filter((mark) => !isUntouchedGuide(mark)));
+      await persistReadingAnnotations();
+    }
+  });
+  const guideControls = onGenerateGuide ? <LiteratureGuideControls guide={guide} /> : null;
+  const visibleAnnotations = guide.visible ? annotations : annotations.filter((annotation) => !annotation.aiGuide);
+
   function createInkAnnotation(page: number, ink: PdfInkStroke) {
     if (!activePaper || hydratedAnnotationStorageKey !== annotationStorageKey) return;
     setFocusedPage(page);
@@ -3354,7 +3412,7 @@ export function PdfReader({
       style={{ "--pdf-reading-background": pdfBackground } as CSSProperties}
     >
       {readingView?.({ scopeKey: annotationStorageKey ?? "", ready: Boolean(annotationStorageKey && hydratedAnnotationStorageKey === annotationStorageKey && !annotationLoadError),
-        error: annotationLoadError || annotationSaveError, annotations: hydratedAnnotationStorageKey === annotationStorageKey ? annotationsInReadingOrder : [],
+        error: annotationLoadError || annotationSaveError, annotations: hydratedAnnotationStorageKey === annotationStorageKey ? annotationsInReadingOrder.filter((annotation) => guide.visible || !annotation.aiGuide) : [], guideControls,
         pageTexts, pageCount, focusedPage, selectedId: readingAnnotationId,
         create: createReadingAnnotation, update: updateReadingAnnotation,
         capture: async (input, target) => {
@@ -3771,7 +3829,7 @@ export function PdfReader({
         >
           <div className="pdf-reader-top">
             <PdfReaderToolbar
-              readingControls={readingControls}
+              readingControls={<>{readingControls}{guideControls}</>}
               activeSearchIndex={activeSearchIndex}
               currentPage={focusedPage}
               layoutMode={layoutMode}
@@ -3885,7 +3943,7 @@ export function PdfReader({
                     onAnnotationDrag={objectWorkbench ? dragAnnotation : undefined}
                     activeTextAnnotationId={activeTextAnnotationId}
                     activePaper={activePaper}
-                    annotations={annotations}
+                    annotations={visibleAnnotations}
                     focused={pageNumber === focusedPage}
                     key={pageNumber}
                     layoutVisible={visiblePageNumbers.has(pageNumber)}
@@ -3959,9 +4017,9 @@ export function PdfReader({
                 </form>
               </aside>
             ) : null}
-            {annotationPopup && popupAnnotation ? (
+            {annotationPopup && popupAnnotation && (guide.visible || !popupAnnotation.aiGuide) ? (
               <aside
-                aria-label={`${popupAnnotation.quickAsk ? "速问回答" : `${getAnnotationLabel(popupAnnotation.kind)}注释编辑器`}：${popupAnnotation.excerpt}`}
+                aria-label={`${popupAnnotation.aiGuide ? "AI 讲解" : popupAnnotation.quickAsk ? "速问回答" : `${getAnnotationLabel(popupAnnotation.kind)}注释编辑器`}：${popupAnnotation.excerpt}`}
                 className={`pdf-annotation-popover pdf-annotation-fluent is-${annotationPopup.placement}`}
                 onKeyDown={(event) => {
                   if (event.key === "Escape") cancelAnnotationEditing();
@@ -3969,13 +4027,19 @@ export function PdfReader({
                 style={{ left: annotationPopup.left, top: annotationPopup.top }}
               >
                 <header>
-                  <strong>{popupAnnotation.quickAsk ? "速问" : getAnnotationLabel(popupAnnotation.kind)} · 第 {popupAnnotation.page} 页</strong>
+                  <strong>{popupAnnotation.aiGuide ? guideCategories[popupAnnotation.aiGuide.category] : popupAnnotation.quickAsk ? "速问" : getAnnotationLabel(popupAnnotation.kind)} · 第 {popupAnnotation.page} 页</strong>
                   <Tooltip content="关闭注释编辑器" relationship="description"><Button aria-label="关闭注释编辑器" appearance="subtle" size="small" icon={<DismissRegular />} onClick={cancelAnnotationEditing} /></Tooltip>
                 </header>
                 <p className="pdf-annotation-popover-excerpt">{popupAnnotation.excerpt}</p>
-                {renderAnnotationReviewButton(popupAnnotation)}
+                {!popupAnnotation.aiGuide && renderAnnotationReviewButton(popupAnnotation)}
                 {renderAnnotationReview(popupAnnotation)}
-                {popupAnnotation.quickAsk ? <>
+                {popupAnnotation.aiGuide ? <>
+                  <strong>{popupAnnotation.text}</strong>
+                  <PdfAnnotationMarkdown value={popupAnnotation.note ?? ""} />
+                  <small>AI 讲解 · 请结合原文判断</small>
+                  <details><summary>编辑讲解</summary><PdfAnnotationEditor inline value={annotationNoteDraft} onChange={setAnnotationNoteDraft}
+                    onSave={saveAnnotationNote} onCancel={cancelAnnotationEditing} /></details>
+                </> : popupAnnotation.quickAsk ? <>
                   <strong>{popupAnnotation.quickAsk.question}</strong>
                   <PdfAnnotationMarkdown value={popupAnnotation.quickAsk.answer} />
                 </> : <>

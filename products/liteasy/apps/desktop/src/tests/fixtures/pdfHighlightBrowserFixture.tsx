@@ -40,13 +40,14 @@ function ImportablePdfBrowserFixture() {
     folders: [], libraryId: "pdf-preview-library", revision: 1,
     rootPath: "/preview-library", trashEntries: []
   }), [paper]);
-  return sourcePath ? <AppShell localLibraryLoader={loader} initialOpenReaderPaperIds={[paper.id]} initialPapers={[paper]} /> : null;
+  return sourcePath ? <AppShell localLibraryLoader={loader} initialOpenReaderPaperIds={[paper.id]} initialPapers={[paper]}
+    modelTransport={window.location.hash === "#literature-guide" ? ({ body, signal }) => fetch("/literature-guide-model", { method: "POST", body, signal }) : undefined} /> : null;
 }
 
 export default function PdfHighlightBrowserFixture() {
   if (window.location.hash === "#ai-workbench") return <AppShell localLibraryLoader={loadAiFixture} initialPapers={aiPapers} initialOpenReaderPaperIds={aiPapers.slice(0, 2).map((paper) => paper.id)} />;
   if (window.location.hash === "#library-folders") return <AppShell localLibraryLoader={loadFolderFixture} initialPapers={[]} />;
-  if (window.location.hash === "#importable") return <ImportablePdfBrowserFixture />;
+  if (["#importable", "#literature-guide"].includes(window.location.hash)) return <ImportablePdfBrowserFixture />;
   const previewPaper: Paper = {
     id: "manual-das24a-preview",
     sourcePath: new URL("/manual-preview/das24a.pdf", window.location.origin).href,

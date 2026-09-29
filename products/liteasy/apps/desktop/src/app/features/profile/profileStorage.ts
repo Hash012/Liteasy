@@ -50,7 +50,9 @@ export function loadAcademicProfile(scope = resolveLocalAccountKey()): AcademicP
       loadScopedAcademicProfileValue(scope) ?? "null"
     );
     return isAcademicProfile(parsed)
-      ? { ...defaultAcademicProfile, ...parsed, disciplines: parsed.disciplines ?? [] }
+      ? { ...defaultAcademicProfile, ...parsed, disciplines: parsed.disciplines ?? [],
+        readingExplanation: ["auto", "detailed", "balanced", "advanced"].includes(parsed.readingExplanation ?? "") ? parsed.readingExplanation : undefined,
+        researchFamiliarity: typeof parsed.researchFamiliarity === "string" ? parsed.researchFamiliarity.slice(0, 600) : undefined }
       : { ...defaultAcademicProfile, disciplines: [] };
   } catch {
     return { ...defaultAcademicProfile };

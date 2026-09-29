@@ -4,7 +4,8 @@ import { defaultReadingFontCss, readingFontOptions } from "../settings/readingFo
 import { useReadingHighlights } from "./useReadingHighlights";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Button, Field, Popover, PopoverSurface, PopoverTrigger, Select, Slider, Textarea, Tooltip, useFocusFinders, useModalAttributes } from "@fluentui/react-components";
-import { AddRegular, ArrowUndoRegular, BookOpenRegular, BookmarkRegular, CommentRegular, FullScreenMaximizeRegular, FullScreenMinimizeRegular, SearchRegular, TextFontSizeRegular } from "@fluentui/react-icons";
+import { AddRegular, ArrowUndoRegular, BookOpenRegular, BookmarkRegular, CommentRegular, DismissRegular, FullScreenMaximizeRegular, FullScreenMinimizeRegular, SearchRegular, TextFontSizeRegular } from "@fluentui/react-icons";
+import { guideCategories } from "./literatureGuide.types";
 import type { PdfReadingAnnotations, ReadingMarkStyle } from "../pdf/pdfReadingAnnotations";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import { compactPdfTextForSearch } from "../pdf/pdfTextSearch";
@@ -15,6 +16,7 @@ import { usePaperReadingNavigation } from "./usePaperReadingNavigation";
 import { PaperReadingNavigator, type ReadingPanel } from "./PaperReadingNavigator";
 import { readingMinutes } from "./paperReadingNavigation";
 import "./paperReading.css";
+import "./literatureGuide.css";
 
 export function readingQuotePages(quote: string, pageTexts: Record<number, string>, chunks: readonly RetrievalChunk[]) {
   const needle = compactPdfTextForSearch(quote);
@@ -64,6 +66,8 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
   const [commentsVisible, setCommentsVisible] = useState(true);
   const [panel, setPanel] = useState<ReadingPanel | null>(null);
   const [focus, setFocus] = useState(false);
+  const [guideId, setGuideId] = useState<string>();
+  const explanation = session.annotations.find((annotation) => annotation.id === guideId && annotation.aiGuide);
   useEffect(() => {
     const releaseLocalFocus = () => setFocus(false);
     window.addEventListener("liteasy:immersive-reading-enter", releaseLocalFocus);
@@ -127,7 +131,10 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
   }
   useEffect(() => { if (session.selectedId) locate(session.selectedId); }, [session.selectedId]);
 
-  useReadingHighlights(contentRef, session.annotations, locate);
+  useReadingHighlights(contentRef, session.annotations, (id) => {
+    if (session.annotations.some((annotation) => annotation.id === id && annotation.aiGuide)) setGuideId(id);
+    else locate(id);
+  });
 
   function captureSelection() {
     if (draft || busy) return;
@@ -180,7 +187,8 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
       } else if ((event.ctrlKey || event.metaKey) && event.shiftKey && key === "b") {
         event.preventDefault(); event.stopPropagation(); navigation.addBookmark(); openPanel("bookmarks");
       } else if (event.key === "Escape" && !((event.target as HTMLElement).closest("textarea, [contenteditable=true]"))) {
-        if (panel) { event.preventDefault(); event.stopPropagation(); closePanel(); }
+        if (explanation) { event.preventDefault(); event.stopPropagation(); setGuideId(undefined); }
+        else if (panel) { event.preventDefault(); event.stopPropagation(); closePanel(); }
         else if (focus) { event.preventDefault(); event.stopPropagation(); toggleFocus(); }
       }
     }}>
@@ -221,9 +229,18 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
       }}>添加页批注</Button>
       <Button icon={<CommentRegular />} aria-pressed={showComments} onClick={() => { navigation.rememberPosition(); if (showComments) setCommentsVisible(false); else openComments(); }}>批注（{session.annotations.length}）</Button>
       <Tooltip content="专注阅读（Ctrl / ⌘ + Shift + F）；Esc 退出" relationship="description"><Button icon={focus ? <FullScreenMinimizeRegular /> : <FullScreenMaximizeRegular />} aria-pressed={focus} onClick={toggleFocus}>{focus ? "退出专注" : "专注阅读"}</Button></Tooltip>
+      {session.guideControls}
     </div>
     <div className={`paper-reading-body${showComments || panel ? " with-comments" : ""}`}>
       <div className="paper-reading-content" ref={contentRef} onMouseUp={captureSelection} onKeyUp={(event) => { if (event.key === "Shift") captureSelection(); }}>{children}</div>
+      {explanation?.aiGuide ? <aside className="literature-guide-explanation" aria-label="AI 讲解">
+        <header><strong>{explanation.text || guideCategories[explanation.aiGuide.category]}</strong>
+          <Tooltip content="关闭讲解（Esc）" relationship="description"><Button appearance="subtle" icon={<DismissRegular />} aria-label="关闭 AI 讲解" onClick={() => setGuideId(undefined)} /></Tooltip>
+        </header>
+        <PdfAnnotationMarkdown value={explanation.note ?? ""} />
+        <small>AI 讲解 · {guideCategories[explanation.aiGuide.category]} · 请结合原文判断</small>
+        <Button appearance="subtle" size="small" onClick={() => { setGuideId(undefined); locate(explanation.id); }}>查看或编辑批注</Button>
+      </aside> : null}
       {panel ? <PaperReadingNavigator panel={panel} onPanelChange={openPanel} onClose={closePanel} navigation={navigation} /> : null}
       {showComments ? <aside aria-label="阅读模式批注" className="paper-reading-comments">
         <strong>批注 · 与 PDF 共用</strong>
@@ -268,6 +285,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
         </div> : null}
         {!session.annotations.length && !draft && session.ready ? <p>选中原文后添加批注，或记录整页想法。</p> : null}
         {session.annotations.map((annotation) => <article className="paper-reading-comment" key={annotation.id} data-reading-annotation-id={annotation.id}>
+          {annotation.aiGuide ? <Button size="small" appearance="subtle" onClick={() => setGuideId(annotation.id)}>AI 讲解 · {annotation.text || guideCategories[annotation.aiGuide.category]}</Button> : null}
           <button type="button" className="paper-reading-comment-source" onClick={() => locate(annotation.id)}>第 {annotation.page} 页 · {annotation.excerpt || (annotation.kind === "ink" ? "手绘批注" : "页批注")}</button>
           <PdfAnnotationMarkdown value={annotation.quickAsk ? `${annotation.quickAsk.question}\n\n${annotation.quickAsk.answer}` : annotation.note || (annotation.kind === "text" ? annotation.text : "")}
             images={annotation.images} emptyLabel={annotation.kind === "ink" ? "手绘笔迹可在 PDF 原页查看。" : "尚无补充评论"} />

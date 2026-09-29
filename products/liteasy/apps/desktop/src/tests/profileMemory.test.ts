@@ -110,3 +110,16 @@ test("does not automatically store a positive fragment of a negative preference"
   expect(result.saved).toBe(0);
   expect(result.pending).toBe(1);
 });
+
+test("familiarity retains the user's entire domain statement and negation, rather than inferring expertise from a degree or question", () => {
+  const quote = "我对数据库很熟悉，但对机器学习不熟悉";
+  expect(memoryCandidateSentences(quote)).toEqual([quote]);
+  const full = proposal({ field: "research_familiarity", value: quote, evidence: quote });
+  expect(applyMemoryProposals(emptyProfileMemory(), answer([full]), [quote], "s", at).saved).toBe(1);
+  for (const value of ["熟悉", "我对数据库很熟悉", "机器学习不熟悉"]) {
+    expect(applyMemoryProposals(emptyProfileMemory(), answer([{ ...full, value }]), [quote], "s", at).saved).toBe(0);
+  }
+  const degree = "我是数据库方向的博士";
+  expect(applyMemoryProposals(emptyProfileMemory(), answer([proposal({ field: "research_familiarity", value: "精通数据库", evidence: degree })]), [degree], "s", at).saved).toBe(0);
+  expect(memoryCandidateSentences("什么是分布式时间戳？")).toEqual([]);
+});

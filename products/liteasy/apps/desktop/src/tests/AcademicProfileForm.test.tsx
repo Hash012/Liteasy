@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vitest";
 import { AcademicProfileForm } from "../app/features/profile/AcademicProfileForm";
 import { defaultAcademicProfile } from "../app/features/profile/profile.types";
+import { loadAcademicProfile, saveAcademicProfile } from "../app/features/profile/profileStorage";
 
 test("limits an academic profile to 12 selected disciplines", async () => {
   const user = userEvent.setup();
@@ -33,4 +34,21 @@ test("limits discipline descriptions to 240 characters", async () => {
   await user.click(description);
   await user.paste("a".repeat(241));
   expect(description).toHaveValue("a".repeat(240));
+});
+
+test("reading preferences are optional and persist without changing legacy or other accounts' profiles", async () => {
+  const user = userEvent.setup();
+  const onSave = vi.fn((profile) => saveAcademicProfile(profile, "user:reader"));
+  render(<AcademicProfileForm academicProfile={defaultAcademicProfile} onSave={onSave} />);
+  const summary = screen.getByText("阅读讲解（可选）");
+  expect(summary.closest("details")).not.toHaveAttribute("open");
+  await user.click(summary);
+  await user.selectOptions(screen.getByLabelText("自动标注的讲解深度"), "advanced");
+  await user.type(screen.getByLabelText("领域熟悉度"), "熟悉数据库，机器学习刚入门");
+  await user.click(screen.getByRole("button", { name: "保存学术档案" }));
+  expect(loadAcademicProfile("user:reader")).toMatchObject({ readingExplanation: "advanced", researchFamiliarity: "熟悉数据库，机器学习刚入门" });
+  expect(loadAcademicProfile("user:other").readingExplanation).toBeUndefined();
+  saveAcademicProfile(defaultAcademicProfile, "legacy");
+  expect(loadAcademicProfile("legacy").stage).toBe(defaultAcademicProfile.stage);
+  localStorage.clear();
 });

@@ -1,4 +1,5 @@
 import type { PaperIdentity } from "../paper-identity/paperIdentity";
+import { isGuideAnnotation, type GuideAnnotation } from "../paper-reading/literatureGuide.types";
 import { isPdfInkStroke, isPdfInkStrokeGroup, type PdfInkStroke } from "./pdfInk";
 import { isPdfTextBoxImages, type PdfTextBoxImages } from "./pdfTextBoxImages";
 import { resolveLocalAccountKey } from "../library/localAccountKey";
@@ -58,6 +59,7 @@ type PdfAnnotationBase = {
   inkLastStrokeAt?: string;
   review?: PdfAnnotationReview;
   quickAsk?: { question: string; answer: string; pageText: string; abstractText: string };
+  aiGuide?: GuideAnnotation;
   normalizedStart?: number;
   opacity?: number;
   manualSize?: boolean;
@@ -250,6 +252,7 @@ function hasAnnotationFields(value: unknown) {
     typeof candidate.page === "number" && Number.isInteger(candidate.page) && candidate.page > 0 &&
     Array.isArray(candidate.rects) && candidate.rects.every(isAnnotationRect) &&
     (candidate.note === undefined || typeof candidate.note === "string") &&
+    (candidate.aiGuide === undefined || isGuideAnnotation(candidate.aiGuide)) &&
     (candidate.quickAsk === undefined || (candidate.quickAsk !== null &&
       typeof candidate.quickAsk.question === "string" && typeof candidate.quickAsk.answer === "string" &&
       typeof candidate.quickAsk.pageText === "string" && typeof candidate.quickAsk.abstractText === "string")) &&
@@ -377,6 +380,11 @@ export function normalizePdfAnnotations(value: unknown, fallbackPaperIdentity?: 
   const now = new Date().toISOString();
   return value.flatMap((annotation) => {
     // Damage to optional generated content must never discard the user's entry.
+    if (annotation && typeof annotation === "object" && !Array.isArray(annotation) &&
+      "aiGuide" in annotation && !isGuideAnnotation(annotation.aiGuide)) {
+      const { aiGuide: _aiGuide, ...entry } = annotation;
+      annotation = entry;
+    }
     if (annotation && typeof annotation === "object" && !Array.isArray(annotation) &&
       "review" in annotation && !isPdfAnnotationReview(annotation.review)) {
       const { review: _review, ...entry } = annotation;

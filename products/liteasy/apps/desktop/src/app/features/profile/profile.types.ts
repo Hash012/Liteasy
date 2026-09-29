@@ -18,6 +18,8 @@ export type AcademicProfile = {
   researchMethods: string;
   researchTopics: string;
   stage: string;
+  readingExplanation?: "auto" | "detailed" | "balanced" | "advanced";
+  researchFamiliarity?: string;
 };
 
 export type RecommendationResearchProfile = {
@@ -69,7 +71,8 @@ export function buildAcademicProfileAssistantSummary(profile: AcademicProfile) {
     profile.researchTopics ? `研究主题：${profile.researchTopics}` : "",
     profile.researchMethods ? `常用方法：${profile.researchMethods}` : "",
     profile.researchDatasets ? `关注数据集：${profile.researchDatasets}` : "",
-    profile.preferredLanguages ? `阅读语言：${profile.preferredLanguages}` : ""
+    profile.preferredLanguages ? `阅读语言：${profile.preferredLanguages}` : "",
+    profile.researchFamiliarity ? `领域熟悉度：${profile.researchFamiliarity}` : ""
   ].filter(Boolean);
   return parts.length > 0 ? parts.join("；") : undefined;
 }

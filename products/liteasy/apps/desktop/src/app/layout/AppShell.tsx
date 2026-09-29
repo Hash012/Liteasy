@@ -8,6 +8,7 @@ import { useExternalNoteController } from "../controllers/useExternalNoteControl
 import { ExternalNoteEditor } from "../features/note-files/ExternalNoteEditor";
 import { useWindowControls } from "../controllers/useWindowControls";
 import { useImmersiveReadingController } from "../controllers/useImmersiveReadingController";
+import { useLiteratureGuideController } from "../controllers/useLiteratureGuideController";
 import { ImmersiveReadingControls } from "./ImmersiveReadingControls";
 import { WorkspaceCommandBar } from "./WorkspaceCommandBar";
 import { FileStatusBar } from "./FileStatusBar";
@@ -1275,6 +1276,11 @@ export function AppShell({
     capture: objectWorkbench.captureQuickAsk,
     ask: objectWorkbench.ask
   });
+  const generateLiteratureGuide = useLiteratureGuideController({
+    getSettings: () => settingsStoreRef.current.getState(), profile: profileActions.academicProfile,
+    memory: profileActions.memory.data, samplingEnabled: profileActions.profileSamplingEnabled,
+    transport: effectiveModelTransport
+  });
   agentArtifactRunnerRef.current = async (artifactType, onProgress, options) => {
     return runAgentArtifactAnalysis(
       assistantAgent.agentClient,
@@ -2182,6 +2188,7 @@ export function AppShell({
       <ReaderPane
         onDocumentInfo={pdfFileStatus.onDocumentInfo}
         onQuickAsk={askPdfQuestion}
+        onGenerateGuide={generateLiteratureGuide}
         {...teamAnnotations.readerBindings(paper)}
         allowServerPdfParsing={false}
         readingContent={getPaperMineruResources(paper.id)?.textChunks.some((chunk) => chunk.textExtraction === "mineru")

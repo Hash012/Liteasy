@@ -21,7 +21,9 @@ export function normalizeAcademicProfileDraft(profile: AcademicProfile): Academi
     researchDatasets: normalizeResearchField(profile.researchDatasets),
     researchMethods: normalizeResearchField(profile.researchMethods),
     researchTopics: normalizeResearchField(profile.researchTopics),
-    stage: profile.stage
+    stage: profile.stage,
+    ...(profile.readingExplanation ? { readingExplanation: profile.readingExplanation } : {}),
+    ...(profile.researchFamiliarity !== undefined ? { researchFamiliarity: profile.researchFamiliarity.trim().slice(0, 600) } : {})
   };
 }
 

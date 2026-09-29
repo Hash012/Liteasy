@@ -12,10 +12,10 @@ export function useReadingHighlights(root: RefObject<HTMLElement>, annotations: 
     if (!content || typeof CSS === "undefined" || !("highlights" in CSS) || typeof Highlight === "undefined") return;
     const style = document.createElement("style");
     const names: string[] = [];
-    for (const kind of ["highlight", "underline"]) for (const [color, hex] of Object.entries(colors)) {
+    for (const kind of ["highlight", "underline", "guide"]) for (const [color, hex] of Object.entries(colors)) {
       const name = `${prefix}${kind}${color}`;
       names.push(name);
-      style.textContent += `::highlight(${name}) { ${kind === "highlight" ? `background-color: ${hex}70;` : `text-decoration: underline solid ${hex} 2px;`} }\n`;
+      style.textContent += `::highlight(${name}) { ${kind === "highlight" ? `background-color: ${hex}70;` : `text-decoration: underline ${kind === "guide" ? "dashed" : "solid"} ${hex} 2px;`} }\n`;
     }
     document.head.appendChild(style);
     let marked: { id: string; range: Range }[] = [];
@@ -30,7 +30,7 @@ export function useReadingHighlights(root: RefObject<HTMLElement>, annotations: 
         const range = readingHighlightRange(index, annotation.excerpt, annotation.page);
         if (!range) continue;
         marked.push({ id: annotation.id, range });
-        const name = `${prefix}${annotation.kind}${annotation.color ?? (annotation.kind === "underline" ? "default" : "yellow")}`;
+        const name = `${prefix}${annotation.aiGuide ? "guide" : annotation.kind}${annotation.color ?? (annotation.kind === "underline" ? "default" : "yellow")}`;
         groups.set(name, [...(groups.get(name) ?? []), range]);
       }
       for (const [name, ranges] of groups) CSS.highlights.set(name, new Highlight(...ranges));

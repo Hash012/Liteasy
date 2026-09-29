@@ -182,6 +182,20 @@ export function AcademicProfileForm({ academicProfile, onSave }: AcademicProfile
           </div>
         ) : null}
       </div>
+      <details className="profile-optional"><summary>阅读讲解（可选）</summary>
+        <label className="personal-profile-field">自动标注的讲解深度
+          <select className="personal-profile-control" value={draftProfile.readingExplanation ?? "auto"}
+            onChange={(event) => updateDraftProfile("readingExplanation", event.target.value as AcademicProfile["readingExplanation"])}>
+            <option value="auto">根据领域熟悉度调整</option><option value="detailed">详细 · 补足背景与推理</option>
+            <option value="balanced">均衡 · 讲清关键概念</option><option value="advanced">高阶 · 评析精妙之处</option>
+          </select>
+        </label>
+        <label className="personal-profile-field">领域熟悉度
+          <textarea className="personal-profile-control personal-profile-textarea" rows={2} maxLength={600}
+            placeholder="例如：熟悉数据库并发控制；机器学习还在入门。留空时默认均衡讲解。"
+            value={draftProfile.researchFamiliarity ?? ""} onChange={(event) => updateDraftProfile("researchFamiliarity", event.target.value)} />
+        </label>
+      </details>
       <details className="profile-optional"><summary>其他个人信息（可选）</summary>
       <label className="personal-profile-field">
         性别
