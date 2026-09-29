@@ -2970,7 +2970,7 @@ body {
   border-radius: 0;
   background: transparent;
   color: var(--ink-1);
-  min-height: 88px;
+  min-height: 64px;
   padding: 2px;
   resize: none;
   outline: none;
@@ -2983,7 +2983,9 @@ body {
 
 .assistant-composer-actions {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
   justify-content: flex-end;
 }
 
@@ -6656,12 +6658,18 @@ button.pdf-overlay-mark:focus-visible {
 .assistant-thinking-depth { display: flex; flex-direction: column; width: 180px; max-width: 60%; margin-right: auto; font-size: 12px; }
 .assistant-thinking-labels { display: flex; justify-content: space-between; color: #616161; }
 
-.assistant-context-usage { display: flex; align-items: center; justify-content: flex-end; gap: 7px; margin-top: 6px; min-width: 0; color: var(--colorNeutralForeground3); font-size: calc(10px * var(--app-font-ratio, 1)); }
-.assistant-context-usage > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.assistant-context-usage-track { width: 38px; height: 4px; border-radius: 2px; overflow: hidden; flex-shrink: 0; background: var(--colorNeutralStroke2); }
-.assistant-context-usage-track > span { display: block; height: 100%; background: var(--colorBrandForeground1); transition: width 150ms ease; }
+.assistant-context-usage { display: grid; place-items: center; flex: 0 0 28px; width: 28px; height: 32px; border-radius: 6px; color: var(--colorBrandForeground1); cursor: help; }
+.assistant-context-usage:hover { background: var(--colorNeutralBackground1Hover); }
+.assistant-context-usage:focus-visible { outline: 2px solid var(--colorStrokeFocus2); outline-offset: 1px; }
+.assistant-context-usage svg { display: block; width: 24px; height: 24px; fill: none; stroke-width: 2.5px; }
+.assistant-context-ring-track { stroke: var(--colorNeutralStroke2); }
+.assistant-context-ring-fill { stroke: currentColor; transition: stroke-dasharray 150ms ease; }
 .assistant-context-usage.near-limit { color: var(--colorStatusWarningForeground1); }
-.assistant-context-usage.near-limit .assistant-context-usage-track > span { background: currentColor; }
+.assistant-context-usage-detail { display: grid; gap: 8px; min-width: 180px; font-size: 12px; }
+.assistant-context-usage-detail dl { display: grid; gap: 4px; margin: 0; }
+.assistant-context-usage-detail dl > div { display: flex; justify-content: space-between; gap: 20px; }
+.assistant-context-usage-detail dd { margin: 0; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .assistant-context-ring-fill { transition: none; } }
 
 .assistant-asset-writes { display: grid; gap: 8px; width: 100%; }
 .assistant-asset-write { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px; border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; background: var(--colorNeutralBackground2); }

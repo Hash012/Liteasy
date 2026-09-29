@@ -261,13 +261,25 @@ test("moves the caret past a clicked command and closes the candidate menu", asy
 });
 
 
-test("keeps the estimated context percentage and configured limit visible while running", () => {
+test("shows context details on ring hover and focus, including actual usage above the limit", async () => {
+  const user = userEvent.setup();
   const { rerender } = render(<AssistantComposer input="" modeHint="上下文" onInputChange={vi.fn()}
     onSend={vi.fn()} onVoiceInput={vi.fn()} pending contextUsage={{ usedTokens: 8192, maxTokens: 32768, estimated: true }} />);
-  expect(screen.getByRole("meter", { name: "上下文占用" })).toHaveAttribute("aria-valuenow", "8192");
-  expect(screen.getByText("上下文 约 25% · 上限 32,768 tokens")).toBeVisible();
+  const ring = screen.getByRole("meter", { name: "上下文占用" });
+  expect(ring).toHaveAttribute("aria-valuenow", "8192");
+  expect(ring.textContent).toBe("");
+  await user.hover(ring);
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("上下文占用 约 25%");
+  expect(screen.getByRole("tooltip")).toHaveTextContent("已用（估算）8,192 tokens");
+  expect(screen.getByRole("tooltip")).toHaveTextContent("上限32,768 tokens");
   rerender(<AssistantComposer input="" modeHint="上下文" onInputChange={vi.fn()}
     onSend={vi.fn()} onVoiceInput={vi.fn()} pending contextUsage={{ usedTokens: 50000, maxTokens: 32768, estimated: true }} />);
-  expect(screen.getByRole("meter", { name: "上下文占用" })).toHaveAttribute("aria-valuemax", "32768");
-  expect(screen.getByText("上下文 约 153% · 上限 32,768 tokens")).toBeVisible();
+  expect(ring).toHaveAttribute("aria-valuemax", "32768");
+  expect(ring).toHaveAttribute("aria-valuenow", "32768");
+  expect(ring).toHaveAttribute("aria-valuetext", expect.stringContaining("50,000 tokens"));
+  expect(screen.getByRole("tooltip")).toHaveTextContent("约 153%");
+  expect(screen.getByRole("tooltip")).toHaveTextContent("已超出上下文上限");
+  await user.unhover(ring);
+  fireEvent.focus(ring);
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("50,000 tokens");
 });

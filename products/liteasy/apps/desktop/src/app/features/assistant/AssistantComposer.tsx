@@ -330,7 +330,7 @@ export function AssistantComposer({
           if (!contextLoading) onSend();
         }}
         placeholder="输入你的问题或命令"
-        rows={4}
+        rows={3}
         title={modeHint}
         value={input}
       />
@@ -338,7 +338,7 @@ export function AssistantComposer({
       <div className="assistant-composer-actions">
         {modelPicker}
         <Tooltip content="按类别和项目浏览资料，组合添加到上下文" relationship="description">
-          <Button appearance="subtle" className="assistant-add-context" icon={<AddRegular />} onClick={() => openAssetBrowser()}>添加上下文</Button>
+          <Button appearance="subtle" aria-label="添加上下文" className="assistant-add-context" icon={<AddRegular />} onClick={() => openAssetBrowser()} />
         </Tooltip>
         {onThinkingDepthChange ? <Popover positioning="above" trapFocus>
           <PopoverTrigger disableButtonEnhancement>
@@ -358,6 +358,7 @@ export function AssistantComposer({
             </div>
           </PopoverSurface>
         </Popover> : null}
+        {contextUsage ? <ContextUsageIndicator usage={contextUsage} /> : null}
         <Tooltip content="语音输入（预留）" positioning="above" relationship="description">
           <button
             aria-label="语音输入（预留）"
@@ -382,7 +383,6 @@ export function AssistantComposer({
           </button>
         </Tooltip>
       </div>
-      {contextUsage ? <ContextUsageIndicator usage={contextUsage} /> : null}
       {browserQuery !== null ? <ContextAssetBrowser key={contextScopeId} suggestions={suggestions} contextTokens={contextTokens} initialPreviewId={browserPreviewId}
         initialQuery={browserQuery} onAddContextToken={onAddContextToken ? (token) => {
           onAddContextToken(token, browserInsertion.current);
