@@ -400,6 +400,7 @@ mod tests {
             let mut state = server.state.lock().unwrap();
             state.no_etag = true;
             state.ignore_conditions = true;
+            state.existing_collection_status = Some(201);
         }
         let a = Library::new();
         let b = Library::new();

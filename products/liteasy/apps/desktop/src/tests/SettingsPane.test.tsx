@@ -137,6 +137,14 @@ describe("SettingsPane", () => {
     const pane = screen.getByLabelText("应用设置");
     await user.click(within(pane).getByRole("button", { name: "外观与阅读" }));
 
+    const readerFont = within(pane).getByRole("combobox", { name: "非 PDF 阅读字体" });
+    await user.clear(readerFont);
+    await user.type(readerFont, "Research Serif");
+    await user.click(screen.getByRole("option", { name: "使用字体：Research Serif" }));
+    expect(onUpdateSetting).toHaveBeenLastCalledWith({
+      intent: "update_setting", target: "view.reader_font_family", value: '"Research Serif", sans-serif'
+    });
+
     await user.click(within(pane).getByRole("combobox", { name: "显示比例" }));
     await user.click(screen.getByRole("option", { name: "125%" }));
     expect(onUpdateSetting).toHaveBeenLastCalledWith({

@@ -2453,6 +2453,8 @@ export function AppShell({
       ? (createGeneratedThemeStyle(runtimeTheme.theme) as CSSProperties)
       : {}),
     fontFamily: settingsState["view.font_family"],
+    "--reader-font-family": settingsState["view.reader_font_family"] === "inherit"
+      ? settingsState["view.font_family"] : settingsState["view.reader_font_family"],
     fontSize: `${settingsState["view.font_size"]}px`
   } as CSSProperties;
   const appFrameClassName = `app-frame workspace-frame${

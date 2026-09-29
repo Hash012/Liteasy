@@ -156,20 +156,6 @@ impl Remote {
             if bounded(response, 4096).await? != value {
                 return Err("服务器未正确保存验证文件。".into());
             }
-            // Class-1 DAV servers need not expose a strong GET ETag. Verify
-            // exclusive MKCOL instead; all Liteasy manifest writers take this lock.
-            let lock = format!("{name}-lock/");
-            self.acquire_lock(&lock).await?;
-            let second = self
-                .request("MKCOL", &lock)
-                .send()
-                .await
-                .map_err(network_error);
-            let cleanup = self.release_lock(&lock).await;
-            if !matches!(second?.status().as_u16(), 405 | 409 | 423) {
-                return Err("服务器不能独占创建同步目录，无法避免多设备覆盖。".into());
-            }
-            cleanup?;
             Ok(())
         }
         .await;
@@ -181,30 +167,6 @@ impl Remote {
             .and_then(success);
         result?;
         cleanup?;
-        Ok(())
-    }
-    async fn acquire_lock(&self, name: &str) -> Result<(), String> {
-        let response = self
-            .request("MKCOL", name)
-            .send()
-            .await
-            .map_err(network_error)?;
-        if response.status().as_u16() != 201 {
-            return Err(if matches!(response.status().as_u16(), 405 | 409 | 423) {
-                "另一设备正在发布同步结果，请稍后重试。若所有设备已退出仍持续出现，请备份远端数据后移除同步库中的 manifest-write-lock 目录再试。".into()
-            } else {
-                status_error(response.status().as_u16())
-            });
-        }
-        Ok(())
-    }
-    async fn release_lock(&self, name: &str) -> Result<(), String> {
-        success(
-            self.request("DELETE", name)
-                .send()
-                .await
-                .map_err(network_error)?,
-        )?;
         Ok(())
     }
     async fn manifest_bytes(&self) -> Result<Option<(Vec<u8>, String)>, String> {
@@ -237,38 +199,33 @@ impl Remote {
         if bytes.len() as u64 > MAX_MANIFEST_BYTES {
             return Err("同步清单超过 16 MiB。".into());
         }
-        let lock = "manifest-write-lock/";
-        self.acquire_lock(lock).await?;
-        let result = async {
-            let current = self.manifest_bytes().await?;
-            if current.as_ref().map(|(_, token)| token.as_str()) != revision {
-                return Err(status_error(412));
-            }
-            let request = self
-                .request("PUT", "manifest.v1.json")
-                .header("Content-Type", "application/json");
-            let request = match revision {
-                Some(tag) if !tag.starts_with("sha256:") => request.header("If-Match", tag),
-                None => request.header("If-None-Match", "*"),
-                _ => request,
-            };
-            success(
-                request
-                    .body(bytes.clone())
-                    .send()
-                    .await
-                    .map_err(network_error)?,
-            )?;
-            let saved = self.manifest_bytes().await?;
-            if saved.as_ref().map(|(value, _)| value.as_slice()) != Some(bytes.as_slice()) {
-                return Err("同步清单写入校验失败，已保留本地同步记录。".into());
-            }
-            Ok(())
+        // Basic WebDAV servers may accept repeated MKCOLs and omit ETags.
+        // Upload without requiring a remote lock directory. Compare known
+        // revisions and use HTTP conditions when available, then read back.
+        let current = self.manifest_bytes().await?;
+        if current.as_ref().map(|(_, token)| token.as_str()) != revision {
+            return Err(status_error(412));
         }
-        .await;
-        let released = self.release_lock(lock).await;
-        result?;
-        released
+        let request = self
+            .request("PUT", "manifest.v1.json")
+            .header("Content-Type", "application/json");
+        let request = match revision {
+            Some(tag) if !tag.starts_with("sha256:") => request.header("If-Match", tag),
+            None => request.header("If-None-Match", "*"),
+            _ => request,
+        };
+        success(
+            request
+                .body(bytes.clone())
+                .send()
+                .await
+                .map_err(network_error)?,
+        )?;
+        let saved = self.manifest_bytes().await?;
+        if saved.as_ref().map(|(value, _)| value.as_slice()) != Some(bytes.as_slice()) {
+            return Err("同步清单写入校验失败，已保留本地同步记录。".into());
+        }
+        Ok(())
     }
     pub async fn upload(&self, hash: &str, bytes: Vec<u8>) -> Result<(), String> {
         if digest(&bytes) != hash {
@@ -345,6 +302,7 @@ pub(super) mod test_server {
         pub ignore_conditions: bool,
         pub fail_manifest_put: bool,
         pub no_etag: bool,
+        pub existing_collection_status: Option<u16>,
         pub revision: usize,
     }
     pub struct Server {
@@ -415,7 +373,7 @@ pub(super) mod test_server {
                         match method {
                             "MKCOL" => {
                                 if state.objects.contains_key(&path) {
-                                    code = 405;
+                                    code = state.existing_collection_status.unwrap_or(405);
                                 } else {
                                     state.objects.insert(path, (vec![], String::new()));
                                     code = 201;
@@ -550,32 +508,21 @@ pub(super) mod test_server {
         });
     }
     #[test]
-    fn webdav_publication_lock_and_hash_revision_reject_stale_writers() {
+    fn webdav_hash_revision_rejects_stale_writers_without_requiring_a_lock() {
         let server = Server::start();
         {
             let mut state = server.state.lock().unwrap();
             state.no_etag = true;
             state.ignore_conditions = true;
+            state.objects.insert(
+                "/liteasy/test/manifest-write-lock/".into(),
+                (vec![], String::new()),
+            );
         }
         runtime().block_on(async {
             let original = Manifest::default();
             server.remote.publish(&original, None).await.unwrap();
             let (_, revision) = server.remote.manifest().await.unwrap();
-            server
-                .remote
-                .acquire_lock("manifest-write-lock/")
-                .await
-                .unwrap();
-            assert!(server
-                .remote
-                .publish(&original, revision.as_deref())
-                .await
-                .is_err());
-            server
-                .remote
-                .release_lock("manifest-write-lock/")
-                .await
-                .unwrap();
             let mut updated = original.clone();
             updated.files.insert("deleted.pdf".into(), None);
             server
@@ -596,7 +543,8 @@ pub(super) mod test_server {
                 .0
                 .files
                 .contains_key("deleted.pdf"));
-            assert!(!server
+            // Old lock directories neither block upload nor get removed.
+            assert!(server
                 .state
                 .lock()
                 .unwrap()
@@ -606,21 +554,29 @@ pub(super) mod test_server {
     }
 
     #[test]
-    fn webdav_uses_exclusive_publication_when_http_conditions_are_unavailable() {
-        let server = Server::start();
-        server.state.lock().unwrap().ignore_conditions = true;
-        runtime().block_on(async {
-            server.remote.verify().await.unwrap();
-            let original = Manifest::default();
-            server.remote.publish(&original, None).await.unwrap();
-            assert!(server.remote.publish(&original, None).await.is_err());
-        });
-        assert!(server
-            .state
-            .lock()
-            .unwrap()
-            .objects
-            .keys()
-            .all(|key| !key.contains("probe-") && !key.contains("write-lock")));
+    fn webdav_verifies_basic_io_without_directory_exclusivity_or_etags() {
+        for existing_status in [200, 201] {
+            let server = Server::start();
+            {
+                let mut state = server.state.lock().unwrap();
+                state.ignore_conditions = true;
+                state.no_etag = true;
+                state.existing_collection_status = Some(existing_status);
+            }
+            runtime().block_on(async {
+                server.remote.verify().await.unwrap();
+                server.remote.verify().await.unwrap();
+                let original = Manifest::default();
+                server.remote.publish(&original, None).await.unwrap();
+                assert!(server.remote.publish(&original, None).await.is_err());
+            });
+            assert!(server
+                .state
+                .lock()
+                .unwrap()
+                .objects
+                .keys()
+                .all(|key| !key.contains("probe-") && !key.contains("write-lock")));
+        }
     }
 }

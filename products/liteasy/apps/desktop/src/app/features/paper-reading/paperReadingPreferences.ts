@@ -1,8 +1,5 @@
-export const paperReadingFonts = {
-  serif: { label: "衬线 · 宋体", family: '"Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", SimSun, Georgia, serif' },
-  sans: { label: "无衬线 · 黑体", family: '"Segoe UI", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif' },
-  system: { label: "跟随界面", family: "inherit" },
-};
+import { readingFonts as paperReadingFonts } from "../settings/readingFonts";
+export { paperReadingFonts };
 export type PaperReadingPreferences = {
   fontSize: number;
   fontFamily?: string;

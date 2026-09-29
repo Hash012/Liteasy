@@ -89,6 +89,10 @@ test("reading typography persists locally and malformed preferences are bounded"
   view.unmount(); render(<ReaderPane {...props} readingContent={content} />);
   await user.click(screen.getByRole("button", { name: "阅读模式", exact: true }));
   expect(document.querySelector(".paper-reading-workspace")).toHaveStyle({ "--paper-reading-size": "24px", "--paper-reading-width": "1080px", "--paper-reading-line-height": "2.2" });
+  await user.click(screen.getByRole("button", { name: "阅读排版", exact: true }));
+  await user.click(screen.getByRole("combobox", { name: "阅读字体" }));
+  await user.click(screen.getByRole("option", { name: "跟随阅读设置" }));
+  expect((document.querySelector(".paper-reading-workspace") as HTMLElement).style.getPropertyValue("--paper-reading-font")).toContain("var(--reader-font-family,");
 });
 
 test("an old reading session cannot write after switching papers", async () => {

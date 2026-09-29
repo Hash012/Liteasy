@@ -21,8 +21,8 @@ type SettingsSection = {
 };
 
 export const settingsSections = [
-  { id: "appearance", category: "appearance", title: "外观与阅读", description: "调整主题、界面大小和 PDF 阅读底色。", keywords: "light dark theme 字体 字号 护眼 缩放 浅色 深色 暖黄",
-    keys: ["view.theme", "view.font_family", "view.font_size", "view.display_scale", "view.pdf_background", "view.pdf_custom_background"] },
+  { id: "appearance", category: "appearance", title: "外观与阅读", description: "调整主题、界面大小、阅读字体和 PDF 阅读底色。", keywords: "light dark theme 字体 字号 护眼 缩放 浅色 深色 暖黄 电子书 EPUB MOBI Markdown TXT",
+    keys: ["view.theme", "view.font_family", "view.reader_font_family", "view.font_size", "view.display_scale", "view.pdf_background", "view.pdf_custom_background"] },
   { id: "models", category: "ai", title: "模型与连接", description: "连接自己的 API，验证模型后可在对话中切换。", keywords: "服务商 供应商 provider API key 密钥 OpenAI Claude Anthropic DeepSeek Ollama Gemini 云代理 AI 接入 协议 结构化输出 已验证模型",
     keys: ["models.connection_mode", "models.direct_provider", "models.direct_endpoint", "models.direct_model", "models.direct_protocol", "models.direct_output_format"] },
   { id: "assistant", category: "ai", title: "助手偏好", description: "设置生成语言、过程展示，查看助手扩展能力。", keywords: "Agent 技能 Skill Plugin MCP 插件 工具 扩展 安全 中文 English",

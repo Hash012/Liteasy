@@ -6,4 +6,4 @@
 .external-note-notice { padding: 10px; background: var(--colorNeutralBackground3); border-left: 3px solid var(--colorBrandStroke1); border-radius: 4px; }
 .external-note-source, .external-note-preview { flex: 1 1 0; min-height: 0; min-width: 0; overflow: auto; }
 .external-note-source { overflow: hidden; }
-.external-note-preview { width: 100%; max-width: 900px; align-self: center; padding: 12px; line-height: 1.8; }
+.external-note-preview { width: 100%; max-width: 900px; align-self: center; padding: 12px; line-height: 1.8; font-family: var(--reader-font-family, inherit); }

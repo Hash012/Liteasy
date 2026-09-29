@@ -30,7 +30,7 @@ export function SystemFontPicker({ label, value, options, onChange }: { label: s
   const custom = query.trim().length > 0 && query.trim().length <= 256 && !/[\x00-\x1f]/.test(query);
   return <div className="system-font-picker">
     <Combobox aria-label={label} value={query} selectedOptions={[value]} freeform
-      onChange={(event) => setQuery(event.target.value)} onOptionSelect={(_, data) => data.optionValue && onChange(data.optionValue)}>
+      onChange={(event) => setQuery(event.target.value)} onOptionSelect={(_, data) => data.optionValue !== undefined && onChange(data.optionValue)}>
       {matches.slice(0, 100).map((font) => <Option key={font.value} value={font.value} style={{ fontFamily: font.value }}>{font.label}</Option>)}
       {custom && !choices.some((font) => font.label === query.trim()) ? <Option text={`使用字体：${query.trim()}`} value={fontFamilyCss(query.trim())}>使用字体：{query.trim()}</Option> : null}
     </Combobox>

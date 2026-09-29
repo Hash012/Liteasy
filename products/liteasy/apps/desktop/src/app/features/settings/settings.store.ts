@@ -1,4 +1,5 @@
 import { agentContextLimit } from "../context/modelContextBudget";
+import { defaultReadingFontFamily, normalizeReadingFontFamily } from "./readingFonts";
 import type { SettingsState, UpdateSettingCommand } from "./settings.types";
 import { normalizeDisplayScale, normalizeViewFontSize } from "./viewSettings";
 import { isRecommendationStyle, normalizeRecommendationStyle } from "../recommendations/recommendationStyle";
@@ -60,6 +61,7 @@ function loadPersistedViewSettings(): Partial<SettingsState> {
     return Object.fromEntries(Object.entries({
       "view.theme": normalizeAppearancePreference(parsed["view.theme"]),
       "view.font_family": typeof parsed["view.font_family"] === "string" ? parsed["view.font_family"] : undefined,
+      "view.reader_font_family": normalizeReadingFontFamily(parsed["view.reader_font_family"]),
       "view.font_size": normalizeViewFontSize(parsed["view.font_size"]),
       "view.display_scale": normalizeDisplayScale(parsed["view.display_scale"]),
       "view.pdf_background": ["paper", "warm", "mint", "custom"].includes(String(parsed["view.pdf_background"]))
@@ -81,6 +83,7 @@ function persistViewSettings(state: SettingsState) {
       JSON.stringify({
         "view.theme": state["view.theme"],
         "view.font_family": state["view.font_family"],
+        "view.reader_font_family": state["view.reader_font_family"],
         "view.font_size": state["view.font_size"],
         "view.display_scale": state["view.display_scale"],
         "view.pdf_background": state["view.pdf_background"],
@@ -127,6 +130,7 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
     ...loadPersistedModelSettings(),
     "view.theme": "system",
     "view.font_family": '"Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", sans-serif',
+    "view.reader_font_family": defaultReadingFontFamily,
     "view.font_size": "14",
     "view.display_scale": "100",
     "view.pdf_background": "paper",
@@ -148,7 +152,9 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
       if (command.target === "network.recommendation.style" && !isRecommendationStyle(command.value)) {
         throw new Error("invalid_recommendation_style");
       }
-      state[command.target] = (command.target === "view.display_scale"
+      state[command.target] = (command.target === "view.reader_font_family"
+        ? normalizeReadingFontFamily(command.value)
+        : command.target === "view.display_scale"
         ? normalizeDisplayScale(command.value)
         : command.target === "view.font_size"
           ? normalizeViewFontSize(command.value)

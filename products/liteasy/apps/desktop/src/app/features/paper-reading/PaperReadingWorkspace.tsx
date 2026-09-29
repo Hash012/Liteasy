@@ -1,5 +1,6 @@
 import { PaperSelectionTools } from "../pdf/PaperSelectionTools";
 import { SystemFontPicker } from "../settings/SystemFontPicker";
+import { defaultReadingFontCss, readingFontOptions } from "../settings/readingFonts";
 import { useReadingHighlights } from "./useReadingHighlights";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Button, Field, Popover, PopoverSurface, PopoverTrigger, Select, Slider, Textarea, Tooltip, useFocusFinders, useModalAttributes } from "@fluentui/react-components";
@@ -159,7 +160,8 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
     catch (failure) { if (mounted.current) setError(String(failure)); }
     finally { if (mounted.current) setBusy(false); }
   }
-  const styles = { "--paper-reading-font": preferences.fontFamily ?? paperReadingFonts[preferences.font].family, "--paper-reading-size": `${preferences.fontSize}px`,
+  const fontOverride = preferences.fontFamily ?? (preferences.font === "serif" ? "" : paperReadingFonts[preferences.font].family);
+  const styles = { "--paper-reading-font": fontOverride || defaultReadingFontCss, "--paper-reading-size": `${preferences.fontSize}px`,
     "--paper-reading-width": preferences.width ? `${preferences.width}px` : "100%", "--paper-reading-line-height": preferences.lineHeight,
     "--paper-reading-alignment": preferences.alignment, "--paper-reading-paragraph-spacing": `${preferences.paragraphSpacing}em` } as CSSProperties;
   return <div className={`paper-reading-workspace${focus ? " is-focused" : ""}`} ref={rootRef} style={styles} data-reading-theme={preferences.theme} tabIndex={-1}
@@ -188,9 +190,9 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
         <PopoverSurface aria-label="阅读排版设置" className="paper-reading-preferences">
           <Field label={`字号 ${preferences.fontSize} px`}><Slider aria-label="阅读字号" min={14} max={30} step={1} value={preferences.fontSize}
             onChange={(_, data) => changePreferences({ ...preferences, fontSize: data.value })} /></Field>
-          <Field label="字体"><SystemFontPicker label="阅读字体" value={preferences.fontFamily ?? paperReadingFonts[preferences.font].family}
-            options={Object.values(paperReadingFonts).map((font) => ({ label: font.label, value: font.family }))}
-            onChange={(fontFamily) => changePreferences({ ...preferences, fontFamily })} /></Field>
+          <Field label="字体"><SystemFontPicker label="阅读字体" value={fontOverride}
+            options={[{ label: "跟随阅读设置", value: "" }, ...readingFontOptions]}
+            onChange={(fontFamily) => changePreferences({ ...preferences, fontFamily: fontFamily || undefined, font: "serif" })} /></Field>
           <Field label="页面宽度"><Select aria-label="阅读页面宽度" value={preferences.width} onChange={(_, data) => changePreferences({ ...preferences, width: Number(data.value) })}>
             <option value="640">窄版</option><option value="800">适中</option><option value="1080">宽版</option><option value="0">填满窗口</option>
           </Select></Field>

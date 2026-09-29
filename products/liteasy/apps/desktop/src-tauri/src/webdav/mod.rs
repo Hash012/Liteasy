@@ -238,7 +238,7 @@ pub async fn sync_webdav(
             total: 0,
         },
     );
-    // Verify conditional requests on every run: a changed server/proxy must not bypass CAS.
+    // Verify basic read/write access; directory exclusivity is not required.
     remote.verify().await?;
     let snapshot = crate::local_library::load_local_library_snapshot(app.clone())?;
     if Path::new(&snapshot.root_path) != root {

@@ -1,4 +1,5 @@
 import { SystemFontPicker } from "./SystemFontPicker";
+import { normalizeReadingFontFamily, readingFontOptions } from "./readingFonts";
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import { Button, Tooltip, Field, Input, Option, Radio, RadioGroup, Dropdown } from "@fluentui/react-components";
 import type { SettingsState, UpdateSettingCommand } from "./settings.types";
@@ -46,6 +47,11 @@ export function ViewSettingsPanel({ onUpdateSetting, settings }: ViewSettingsPan
 
       <Field label={<span>界面字体 {workbench ? <Tooltip content="解释此设置" relationship="description"><Button size="small" appearance="subtle" onClick={() => workbench.explain({ type: "setting", key: "view.font_family" })}>解释</Button></Tooltip> : null}</span>}>
         <SystemFontPicker label="界面字体" value={fontFamily} options={viewFontOptions} onChange={(value) => update("view.font_family", value)} />
+      </Field>
+
+      <Field label="非 PDF 阅读字体" hint="用于论文阅读模式、电子书和 Markdown/TXT。文档内可单独设置字体，选择“跟随阅读设置”可恢复统一字体。">
+        <SystemFontPicker label="非 PDF 阅读字体" value={normalizeReadingFontFamily(settings?.["view.reader_font_family"])}
+          options={readingFontOptions} onChange={(value) => update("view.reader_font_family", value)} />
       </Field>
 
       <Field label={<span>界面字号 {workbench ? <Tooltip content="解释此设置" relationship="description"><Button size="small" appearance="subtle" onClick={() => workbench.explain({ type: "setting", key: "view.font_size" })}>解释</Button></Tooltip> : null}</span>}>

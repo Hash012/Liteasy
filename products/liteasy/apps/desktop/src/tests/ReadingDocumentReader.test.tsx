@@ -1,4 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { defaultReadingFontCss, readingFonts } from "../app/features/settings/readingFonts";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { ReadingDocumentReader } from "../app/features/reading-library/ReadingDocumentReader";
@@ -18,6 +20,22 @@ const reader = (documentId = "book-a", storageScope = "account-a", document = bo
 
 describe("ReadingDocumentReader", () => {
   beforeEach(() => localStorage.clear());
+
+  test("follows the shared reader font, persists an override and can return to settings", async () => {
+    const user = userEvent.setup();
+    const view = render(reader());
+    expect(view.container.querySelector(".reading-document")).toHaveStyle({ "--reading-font-family": defaultReadingFontCss });
+    await user.click(screen.getByRole("button", { name: "阅读外观" }));
+    await user.click(screen.getByRole("combobox", { name: "电子书字体" }));
+    await user.click(screen.getByRole("option", { name: "无衬线 · 黑体" }));
+    view.unmount();
+    const reopened = render(reader());
+    expect(reopened.container.querySelector(".reading-document")).toHaveStyle({ "--reading-font-family": readingFonts.sans.family });
+    await user.click(screen.getByRole("button", { name: "阅读外观" }));
+    await user.click(screen.getByRole("combobox", { name: "电子书字体" }));
+    await user.click(screen.getByRole("option", { name: "跟随阅读设置" }));
+    expect(reopened.container.querySelector(".reading-document")).toHaveStyle({ "--reading-font-family": defaultReadingFontCss });
+  });
 
   test("renders only the active chapter with math, follows contents and renders diagrams", async () => {
     const { container } = render(reader());
