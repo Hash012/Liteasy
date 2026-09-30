@@ -12,4 +12,24 @@ button { touch-action: manipulation; }
 .empty-state { margin: 12vh auto; max-width: 420px; text-align: center; color: #616161; }
 .empty-state > svg { font-size: 48px; color: #075ea8; }
 h1 { font-size: 22px; color: #242424; }
+.section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.section-heading h1 { margin: 0; }
+.toolbar { display: flex; gap: 8px; }
+.toolbar button { min-width: 44px; min-height: 44px; }
+.library-search { width: 100%; min-height: 44px; }
+.library-filters { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 12px 0; }
+.library-filters select { max-width: 65%; min-height: 40px; padding: 6px 10px; border: 1px solid #d1d1d1; border-radius: 4px; background: white; }
+.resource-list { list-style: none; margin: 0; padding: 0; border: 1px solid #e0e3e8; border-radius: 8px; overflow: hidden; background: white; }
+.resource-list li { display: flex; align-items: center; padding-right: 8px; border-bottom: 1px solid #eceef1; }
+.resource-list li:last-child { border-bottom: 0; }
+.resource-open { border: 0; background: none; flex: 1; min-width: 0; display: flex; align-items: center; padding: 16px 12px; gap: 12px; text-align: left; color: inherit; cursor: pointer; }
+.resource-open:focus-visible { outline: 2px solid #075ea8; outline-offset: -3px; }
+.resource-icon { font-size: 28px; color: #075ea8; }
+.resource-description { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.resource-description strong { overflow-wrap: anywhere; font-size: 15px; }
+.resource-description small { color: #616161; font-size: 12px; }
+.resource-details { max-width: 720px; margin: auto; }
+.form-stack { display: flex; flex-direction: column; gap: 16px; }
+.captured-text { white-space: pre-wrap; line-height: 1.7; overflow-wrap: anywhere; }
+.error-message { color: #8c1d18; background: #fff1ef; border: 1px solid #efc4bf; border-radius: 6px; padding: 12px; }
 @media (min-width: 800px) { .app-content { padding: 24px; } .app-navigation { justify-content: center; } .app-navigation button { flex: 0 1 160px; flex-direction: row; font-size: 14px; } }

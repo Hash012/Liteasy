@@ -49,10 +49,17 @@ Implementation in progress. Completed commits and validation outcomes are append
 - ARM64 and x86_64 debug APK builds passed with locked Cargo dependencies. The checked-in Gradle wrapper has a pinned distribution checksum; Android platform 36, Build Tools 35.0.0, NDK 27.2.12479018, minimum API 26, Java 17.
 - Local Node 22.23.2 / Rust 1.98.0; CI reads the desktop Node version and uses the repository's Windows-workflow Rust version, 1.98.1. No Windows build result is implied.
 - Workflow lint and 76 existing CI-script tests passed. Production npm dependency audit reports no known advisories. Mobile PDF.js uses 6.3.289; desktop dependencies are unchanged.
-- Runtime acceptance remains open: the host cannot access KVM. The software Android 35 emulator booted but repeatedly hit system watchdog timeouts before app installation. A slow-hardware timeout multiplier is being used to retry; this cannot provide representative device performance evidence.
+- Runtime acceptance remains open: the host cannot access KVM. The software Android 35 emulator booted but repeatedly hit system watchdog timeouts before app installation. The emulator ignored the attempted `ro.hw_timeout_multiplier` override; installation is being retried after increasing its watchdog timeout. This cannot provide representative device performance evidence.
 
 ### 2. Shared reading core
 
 - Extracted literature identity/types, annotation validation/migration/publication types, ink geometry and guide metadata into `packages/reading-core`; desktop feature entry points preserve their public exports. Account lookup and persistence remain in desktop.
 - 81 affected desktop tests passed across identity, persistence, publication, guide, drawing/annotation workbench and review behavior; 8 desktop smoke tests passed.
 - Desktop production build passed (157 assets verified). `ci:contracts` passed in an isolated clean checkout of the refactor commit; dependency locks and generated schemas did not drift.
+
+### 3. Offline mobile library
+
+- Native SQLite metadata and private attachment storage support chunked imports, SHA-256 deduplication, classification, tags, notes, reading position and trash/restore. A file is fully copied and synced before its item is published; incomplete transfers never appear as saved items.
+- Browser development uses IndexedDB with an atomic metadata/attachment transaction. Both repositories partition data by account scope and reject stale edits.
+- Five mobile tests passed, covering the shell, reopen durability, concurrent deduplication, account isolation, trash/restore, stale edits and malformed imports. Android x86_64 debug APK and instrumentation APK builds passed. Locked Linux Rust all-target checks passed.
+- Four Android instrumentation tests cover SQLite reopen/file integrity, duplicate import preservation, incomplete transfers and JSON value types. They compile successfully; device execution is pending the software emulator installation. Native runtime acceptance remains explicitly open.

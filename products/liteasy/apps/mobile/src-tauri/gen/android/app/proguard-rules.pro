@@ -19,3 +19,5 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+# The Rust host discovers this native bridge by its class name.
+-keep class com.liteasy.mobile.MobilePlugin { *; }

@@ -1,6 +1,9 @@
 import { useState } from "react";
-import { Button, Tooltip } from "@fluentui/react-components";
+import { Button, Tooltip, Spinner } from "@fluentui/react-components";
 import { LibraryRegular, ArrowDownloadRegular, DesktopRegular, SettingsRegular } from "@fluentui/react-icons";
+import { useLibraryController } from "../controllers/useLibraryController";
+import { LibraryView } from "../features/library/LibraryView";
+import { ResourceDetails } from "../features/library/ResourceDetails";
 
 const destinations = [
   { id: "library", label: "资料库", icon: <LibraryRegular /> },
@@ -11,14 +14,21 @@ const destinations = [
 
 export function AppShell() {
   const [tab, setTab] = useState<string>("library");
+  const library = useLibraryController();
   return <div className="app-shell">
     <header className="app-header"><span className="brand">Liteasy</span><span>{destinations.find((item) => item.id === tab)?.label}</span></header>
     <main className="app-content">
-      <div className="empty-state"><LibraryRegular /><h1>随身携带你的资料</h1><p>收集文献、记录想法，随时继续阅读。</p></div>
+      {library.error ? <p className="error-message" role="alert">{library.error}</p> : null}
+      {library.busy ? <Spinner size="tiny" label="正在保存资料…" /> : null}
+      {library.selected ? <ResourceDetails item={library.selected} onSave={library.update} onClose={library.close} /> :
+        tab === "library" || tab === "inbox" ? <LibraryView items={library.items} inbox={tab === "inbox"} busy={library.busy}
+          onImport={library.importFiles} onAdd={library.importResource} onOpen={library.open} onUpdate={library.update} /> :
+          tab === "tasks" ? <section><h1>桌面任务</h1><p>在这里查看发送给桌面设备的任务。</p></section> :
+            <section><h1>设置</h1><p>资料和附件保存在此设备。卸载应用前请先备份。</p></section>}
     </main>
     <nav className="app-navigation" aria-label="主导航">{destinations.map((item) =>
       <Tooltip key={item.id} content={item.label} relationship="label"><Button appearance={tab === item.id ? "primary" : "subtle"} icon={item.icon}
-        aria-current={tab === item.id ? "page" : undefined} onClick={() => setTab(item.id)}>{item.label}</Button></Tooltip>
+        aria-current={tab === item.id ? "page" : undefined} onClick={() => { library.close(); setTab(item.id); }}>{item.label}</Button></Tooltip>
     )}</nav>
   </div>;
 }
