@@ -5,6 +5,7 @@ import { Button, Input, Tooltip } from "@fluentui/react-components";
 import { AppsListRegular, BotRegular, CloudSyncRegular, DismissRegular, DocumentSearchRegular, FolderRegular, PaintBrushRegular, SearchRegular } from "@fluentui/react-icons";
 import { PaperServicesSettingsPanel } from "../features/paper-services/PaperServicesSettingsPanel";
 import { WebDavSettingsPanel } from "../features/webdav/WebDavSettingsPanel";
+import { DeviceControlPanel } from "../features/device-control/DeviceControlPanel";
 import { DataLocationSettings } from "../features/settings/DataLocationSettings";
 import { RecommendationSettingsPanel } from "../features/settings/RecommendationSettingsPanel";
 import { AnnotationSyncSettingsPanel } from "../features/settings/AnnotationSyncSettingsPanel";
@@ -77,6 +78,7 @@ export function SettingsPane(props: SettingsPaneProps) {
       onChangeRoot={props.onChangeLibraryRoot} onOpenInFileManager={props.onOpenLibraryInFileManager}
       onSelectLegacyRoot={props.onSelectLegacyLibraryRoot} rootPath={props.libraryRootPath} />,
     webdav: <WebDavSettingsPanel key={props.libraryRootPath ?? "default"} embedded />,
+    devices: <DeviceControlPanel />,
     metadata: <DocumentMetadataSyncPanel lastResult={props.documentMetadataSyncResult}
       message={props.documentMetadataSyncMessage ?? ""} onRetrySync={props.onRetryDocumentMetadataSync}
       status={props.documentMetadataSyncStatus} />,

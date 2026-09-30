@@ -8,6 +8,7 @@ mod artifact_export;
 mod assistant_history;
 mod data_location;
 mod desktop_identity;
+mod device_control;
 mod direct_model;
 mod local_library;
 mod local_mcp;
@@ -55,6 +56,8 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            device_control::device_control_request,
+            device_control::device_control_journal,
             system_fonts::list_system_fonts,
             webdav::set_webdav_open_documents,
             webdav::get_webdav_settings,

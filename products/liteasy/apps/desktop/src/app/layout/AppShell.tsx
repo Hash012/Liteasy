@@ -29,6 +29,8 @@ import { useRecommendationLibraryController } from "../controllers/useRecommenda
 import { noteFileStatus, paperFileStatus, readingFileStatus, usePdfFileStatus, useWorkspaceShellController } from "../controllers/useWorkspaceShellController";
 import type { WorkspaceSurface } from "../features/workspace/workspaceShell.types";
 import { useWebDavSyncController } from "../controllers/useWebDavSyncController";
+import { useDeviceControlController } from "../controllers/useDeviceControlController";
+import { DeviceControlContext } from "../features/device-control/DeviceControlPanel";
 import { useReadingLibraryController } from "../controllers/useReadingLibraryController";
 import { ReadingLibrarySurface } from "../features/reading-library/ReadingLibrarySurface";
 import { ResourceLocationButton } from "../features/resource-filesystem/ResourceLocationButton";
@@ -835,6 +837,10 @@ export function AppShell({
     );
   }
   cloudAccessTokenRef.current = accountSession?.sessionId;
+  const deviceControl = useDeviceControlController({ session: accountSession, endpoint: cloudAccount.model.controlPlaneEndpoint,
+    libraryRoot: localLibrarySnapshot?.rootPath ?? null,
+    getPapers: () => workspaceStoreRef.current.getState().papers, getSettings: () => settingsStoreRef.current.getState(),
+    getTransport: () => effectiveModelTransport, openPaper: openPaperInReader, refreshLibrary: refreshLocalLibrary });
   usePolicySync({
     applyModelPolicySnapshot: modelSettings.applyModelPolicySnapshot,
     controlPlaneTransport,
@@ -2551,6 +2557,7 @@ export function AppShell({
 
   return (
     <LocalMcpContext.Provider value={localMcp}>
+    <DeviceControlContext.Provider value={deviceControl}>
     <WorkbenchCommandsContext.Provider value={workbenchCommands.execute}>
     <NotesContext.Provider value={notes.port}>
     <HelpContext.Provider value={help.port}>
@@ -2742,6 +2749,7 @@ export function AppShell({
     </HelpContext.Provider>
     </NotesContext.Provider>
     </WorkbenchCommandsContext.Provider>
+    </DeviceControlContext.Provider>
     </LocalMcpContext.Provider>
   );
 }
