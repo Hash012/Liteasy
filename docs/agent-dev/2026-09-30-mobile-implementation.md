@@ -77,3 +77,10 @@ Implementation in progress. Completed commits and validation outcomes are append
 - PDF.js uses its legacy distribution for older Android WebViews. CMaps, fonts, image decoders and ICC resources ship locally with their licenses, so rendering does not need a CDN. PDF scripting/forms are not enabled.
 - Seven mobile unit/integration tests passed. Two Chromium tests passed at a phone viewport with touch enabled: text/image rendering, outline/search, zoom, persisted page after reload, and page jumps in a 120-page PDF with one bounded canvas. Fixtures are original generated text/bitmap PDFs.
 - Frontend production and Android x86_64 debug APK builds passed. Native emulator installation subsequently failed with a package-service broken pipe and the activity was unavailable, so the earlier install success did not establish runtime acceptance. A single-core software emulator retry is in progress; browser evidence is recorded separately from Android runtime evidence.
+
+### 6. PDF annotations and ink
+
+- Added text-selection highlights/underlines, placed notes/text boxes, pen/finger ink, erasing, a cross-page annotation list and durable undo/redo. Page percentages and the shared ink/annotation validators retain desktop-compatible geometry and version-2 records.
+- Writes serialize before publishing saved state. Undo/redo advances record revisions. Unsupported/corrupt snapshots and mismatched document hashes stop editing without overwriting stored data. Account scopes also isolate annotation records.
+- Eleven mobile tests passed; additional guard checks passed after tightening unsupported-version handling. Three browser flows passed; the annotation flow was then checked with trusted Chromium pen input, verifying highlight creation, handwriting, undo/redo, zoom-coordinate stability, notes, restart recovery and absence of page errors.
+- Frontend production and Android x86_64 debug APK builds passed. A subsequent controller refinement queues rapid pen strokes while earlier writes are pending; its production frontend build passed. Step 5's locked Linux Rust check also passed. Native instrumentation remains pending the slow emulator package installation.

@@ -5,10 +5,16 @@ import type { LibraryItem } from "../library/library.types";
 import type { PdfReaderState } from "./pdfReader.types";
 import { PdfPage } from "./PdfPage";
 import { searchPdf, type SearchMatch } from "./pdfEngine";
+import type { AnnotationControls, AnnotationMode } from "../annotations/annotation.types";
+import { AnnotationLayer } from "../annotations/AnnotationLayer";
+import { AnnotationTools, type AnnotationEditor } from "../annotations/AnnotationTools";
 
-export default function PdfReader({ item, reader, onClose, onDetails }: {
-  item: LibraryItem; reader: PdfReaderState; onClose: () => void; onDetails: () => void;
+export default function PdfReader({ item, reader, annotations, onClose, onDetails }: {
+  item: LibraryItem; reader: PdfReaderState; annotations: AnnotationControls; onClose: () => void; onDetails: () => void;
 }) {
+  const readerRef = useRef<HTMLElement>(null);
+  const [mode, setMode] = useState<AnnotationMode>("select");
+  const [editor, setEditor] = useState<AnnotationEditor>();
   const [panel, setPanel] = useState<"search" | "outline">();
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<SearchMatch[]>([]);
@@ -34,7 +40,7 @@ export default function PdfReader({ item, reader, onClose, onDetails }: {
     } catch (reason) { if (!controller.signal.aborted) setSearchError(String(reason)); }
     finally { if (!controller.signal.aborted) setSearching(false); }
   };
-  return <section className="pdf-reader" aria-label={`阅读 ${item.title}`}>
+  return <section ref={readerRef} className="pdf-reader" aria-label={`阅读 ${item.title}`}>
     <div className="reader-heading">
       <Tooltip content="返回资料库" relationship="label"><Button icon={<ArrowLeftRegular />} aria-label="返回资料库" onClick={onClose} /></Tooltip>
       <strong>{item.title}</strong>
@@ -72,7 +78,12 @@ export default function PdfReader({ item, reader, onClose, onDetails }: {
         {searchError ? <p role="alert">{searchError}</p> : null}
         <ul>{matches.map((match, index) => <li key={index}><button onClick={() => { reader.navigate(match.page); setPanel(undefined); }}>第 {match.page} 页：{match.excerpt}</button></li>)}</ul>
       </section> : null}
-      <PdfPage document={reader.document} pageNumber={reader.page} zoom={reader.zoom} />
+      <AnnotationTools controls={annotations} mode={mode} setMode={setMode} page={reader.page} readerRef={readerRef} editor={editor} setEditor={setEditor} navigate={reader.navigate} />
+      <PdfPage document={reader.document} pageNumber={reader.page} zoom={reader.zoom}>
+        <AnnotationLayer key={reader.page} page={reader.page} mode={mode} controls={annotations}
+          onPlace={(point) => setEditor({ point, page: reader.page, kind: mode === "text" ? "text" : "note" })}
+          onEdit={(existing) => setEditor({ existing, page: existing.page, kind: existing.kind === "text" ? "text" : "note" })} />
+      </PdfPage>
     </> : null}
     <Dialog open={reader.passwordRequired}><DialogSurface><DialogBody><DialogTitle>此 PDF 需要密码</DialogTitle>
       <DialogContent><Field label="PDF 密码"><Input type="password" value={password} onChange={(_, data) => setPassword(data.value)} /></Field></DialogContent>

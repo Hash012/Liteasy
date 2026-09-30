@@ -11,6 +11,7 @@ for (const folder of ["cmaps", "standard_fonts", "wasm", "iccs"]) {
 
 export default defineConfig({
   plugins: [react()],
+  resolve: { alias: { "@liteasy/reading-core": fileURLToPath(new URL("../../packages/reading-core/src", import.meta.url)) } },
   publicDir: fileURLToPath(assetRoot),
   clearScreen: false,
   server: { port: 1421, strictPort: true, host: "0.0.0.0" },
