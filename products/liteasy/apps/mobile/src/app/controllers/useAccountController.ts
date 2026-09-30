@@ -4,6 +4,7 @@ import { notifyLibraryChanged } from "../features/library/libraryEvents";
 
 export function useAccountController() {
   const [account, setAccount] = useState<AccountStatus>(guestAccount);
+  const [ready, setReady] = useState(false);
   const [guest, setGuest] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -14,6 +15,7 @@ export function useAccountController() {
     if (!mounted.current) return;
     if (scope.current !== next.scope) { setGuest(false); setNotice(""); scope.current = next.scope; }
     setAccount(next);
+    setReady(true);
   }, []);
   const refresh = useCallback(async () => { update(await accountClient.status()); }, [update]);
   useEffect(() => {
@@ -36,7 +38,7 @@ export function useAccountController() {
     if (mounted.current && next.scope === original) { setGuest(false); setNotice(`已复制 ${result.copied} 份资料，跳过 ${result.skipped} 份重复资料。本机原件仍保留。`); }
     return next;
   });
-  return { account, busy, error: error || account.error || "", notice, scope: guest ? "local" : account.scope, guest,
+  return { account, ready, refresh: () => refresh().catch((reason) => setError(String(reason))), busy, error: error || account.error || "", notice, scope: guest ? "local" : account.scope, guest,
     setGuest, available: accountClient.available(), begin: (url: string) => run(() => accountClient.begin(url)),
     cancel: () => run(accountClient.cancel), logout: () => run(accountClient.logout), copyGuest };
 }

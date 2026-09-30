@@ -28,6 +28,7 @@ export function useTasksController(scope: string) {
     finally { if (active.current === scope) setBusy(false); }
   };
   return { snapshot: loaded.current === scope ? snapshot : empty, available, error, busy, pair: (code: string) => run(() => taskClient.pair(scope, code)),
+    loadResult: async (task: RemoteTask) => { const result = await taskClient.result(scope, task); if (active.current !== scope) throw new Error("账号已切换。"); return result; },
     unpair: (id: string) => run(() => taskClient.unpair(scope, id)), cancel: (task: RemoteTask) => run(() => taskClient.cancel(scope, task)),
     retry: () => run(() => taskClient.retry(scope)),
     enqueue: (desktopId: string, kind: TaskKind, item?: LibraryItem) => run(() => taskClient.enqueue(scope, { operationId: crypto.randomUUID(), desktopId, kind,

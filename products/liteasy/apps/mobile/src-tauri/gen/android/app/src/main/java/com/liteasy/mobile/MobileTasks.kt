@@ -42,6 +42,18 @@ class MobileTasks(private val context: Context, private val scope: String, priva
         snapshot
     }
     fun pair(code: String): JSONObject = synchronized(mutex) { call("pairs", "POST", JSONObject().put("code", code)); snapshot() }
+    fun result(taskId: String, updatedAt: Long): JSONObject = synchronized(mutex) {
+        assertScope(); require(Regex("[a-f0-9-]{36}").matches(taskId))
+        val cached = (local.record("task-results") as? JSONObject) ?: JSONObject()
+        val prior = cached.optJSONObject(taskId)
+        if (prior != null && prior.optLong("updatedAt") == updatedAt && prior.optString("status") in listOf("succeeded", "failed", "cancelled")) return@synchronized prior
+        val task = try { call("tasks/$taskId").getJSONObject("task") }
+        catch (error: Exception) { if (prior != null && prior.optLong("updatedAt") == updatedAt) return@synchronized prior else throw error }
+        cached.put(taskId, task)
+        val ids = cached.keys().asSequence().toList().sortedByDescending { cached.getJSONObject(it).optLong("updatedAt") }
+        ids.drop(20).forEach { cached.remove(it) }
+        local.record("task-results", cached); task
+    }
     fun unpair(pairId: String): JSONObject = synchronized(mutex) {
         require(Regex("[a-f0-9-]{36}").matches(pairId))
         val previous = local.record("device-snapshot") as? JSONObject

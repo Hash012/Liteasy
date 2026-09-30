@@ -50,6 +50,8 @@ export function useDeviceControlController(input: Omit<DeviceTaskActions, "curre
     finally { if (activeScope.current === scope) setBusy(false); }
   }
   return { available, journal: available ? executor!.journal : emptyDeviceJournal(), snapshot: available ? snapshot : emptySnapshot(), error, busy, code: available ? code : undefined,
+    loadResult: async (task) => { if (!available || activeScope.current !== scope || !clientRef.current) throw new Error("账号已切换。");
+      const value = await clientRef.current.request<{ task: typeof task }>(`tasks/${task.taskId}`); if (activeScope.current !== scope) throw new Error("账号已切换。"); return value.task; },
     configure: (enabled, summary, name) => action(async (value) => { await value.configure(enabled, summary, name); }),
     pair: () => action(async (_, client) => { const value = await client.request<{ code: string; expiresAt: number }>("devices/pair-code", {}); if (activeScope.current === scope) setCode(value); }),
     unpair: (id) => action(async (_, client) => { await client.request(`pairs/${id}`, undefined, "DELETE"); const value = await client.request<DeviceSnapshot>("devices"); if (activeScope.current === scope) setSnapshot(value); }),

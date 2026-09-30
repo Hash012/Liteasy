@@ -2,7 +2,7 @@ export type DeviceTaskKind = "open-document" | "extract-text" | "summarize-docum
 export type DeviceTask = { taskId: string; operationId: string; kind: DeviceTaskKind; status: string; leaseToken?: string;
   document?: { documentId: string; contentHash: string; title: string }; cancelRequested?: boolean; progress?: number;
   result?: TaskResult; error?: string };
-export type TaskResult = { text?: string; message: string; pages?: number };
+export type TaskResult = { text?: string; hasText?: boolean; message: string; pages?: number };
 export type TaskReceipt = { status: "succeeded" | "failed" | "cancelled" | "uncertain"; result?: TaskResult; error?: string };
 export type DeviceSnapshot = { devices: { deviceId: string; name: string; online: boolean }[]; pairs: { pairId: string; mobileId: string }[]; tasks: DeviceTask[] };
 export type DeviceJournal = { version: 1; enabled: boolean; allowSummary: boolean; name?: string;

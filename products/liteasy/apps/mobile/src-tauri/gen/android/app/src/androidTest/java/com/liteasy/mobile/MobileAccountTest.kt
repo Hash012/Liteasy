@@ -99,6 +99,27 @@ class MobileAccountTest {
         val persisted = context.noBackupFilesDir.walkTopDown().filter { it.isFile }.map { it.readText() }.toList()
         assertFalse(persisted.any { it.contains("secret-refresh") || it.contains("secret-access") })
     }
+    @Test fun completedTaskResultsRemainAvailableOfflineAfterRecreation() {
+        val context = isolatedContext(); val provider = Provider(); provider.subject = "result-${UUID.randomUUID()}"
+        val account = MobileAccount(context, provider)
+        val scope = account.complete(callback(account.begin("https://api.example"))).getString("scope")
+        val taskId = UUID.randomUUID().toString(); var fetched = 0
+        provider.deviceHandler = { request ->
+            when (request.url.encodedPath) {
+                "/v1/mobile/devices/register" -> JSONObject()
+                "/v1/mobile/tasks/$taskId" -> {
+                    fetched++; JSONObject().put("task", JSONObject().put("taskId", taskId).put("updatedAt", 123)
+                        .put("status", "succeeded").put("result", JSONObject().put("text", "第 1 页正文")))
+                }
+                else -> error("Unexpected endpoint")
+            }
+        }
+        assertEquals("第 1 页正文", MobileTasks(context, scope, account).result(taskId, 123).getJSONObject("result").getString("text"))
+        provider.deviceHandler = { throw java.io.IOException("Offline") }
+        assertEquals("第 1 页正文", MobileTasks(context, scope, MobileAccount(context, provider)).result(taskId, 123).getJSONObject("result").getString("text"))
+        assertEquals(1, fetched)
+        try { MobileTasks(context, scope, account).result(taskId, 124); fail("Stale cache must not replace a newer receipt") } catch (_: java.io.IOException) { }
+    }
     @Test fun refreshRotationIsDurableAndLogoutRevokesAndReturnsToGuest() {
         val context = isolatedContext(); val provider = Provider(); val account = MobileAccount(context, provider)
         val status = account.complete(callback(account.begin("https://api.example")))

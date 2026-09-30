@@ -51,7 +51,8 @@ fn valid_route(method: &str, route: &str) -> bool {
                 id.len() == 36 && id.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
             });
             valid_id
-                && ((method == "DELETE" && parts.len() == 2 && parts[0] == "pairs")
+                && ((method == "GET" && parts.len() == 2 && parts[0] == "tasks")
+                    || (method == "DELETE" && parts.len() == 2 && parts[0] == "pairs")
                     || (method == "POST"
                         && parts.len() == 3
                         && parts[0] == "tasks"
@@ -112,7 +113,7 @@ async fn response(mut response: reqwest::Response) -> Result<Value, String> {
         .await
         .map_err(|_| "设备服务连接中断，任务将保留。")?
     {
-        if bytes.len() + chunk.len() > 32 * 1024 * 1024 {
+        if bytes.len() + chunk.len() > 4 * 1024 * 1024 {
             return Err("设备服务响应过大。".into());
         }
         bytes.extend_from_slice(&chunk);
@@ -250,6 +251,7 @@ mod tests {
     fn restricts_routes_and_credentials_to_the_device_service() {
         for (method, route) in [
             ("GET", "devices"),
+            ("GET", "tasks/01234567-0123-4123-8123-0123456789ab"),
             ("POST", "tasks/claim"),
             ("POST", "tasks/01234567-0123-4123-8123-0123456789ab/receipt"),
         ] {

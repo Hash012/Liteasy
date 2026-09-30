@@ -1,13 +1,15 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { Button, Checkbox, Field, Input } from "@fluentui/react-components";
-import { taskKindLabels, taskStatusLabels, type DeviceJournal, type DeviceSnapshot } from "./deviceControl.types";
+import { Button, Checkbox, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Spinner } from "@fluentui/react-components";
+import { taskKindLabels, taskStatusLabels, type DeviceJournal, type DeviceSnapshot, type DeviceTask } from "./deviceControl.types";
 
 export type DeviceControlModel = { available: boolean; journal: DeviceJournal; snapshot: DeviceSnapshot; error: string; busy: boolean;
   code?: { code: string; expiresAt: number }; configure: (enabled: boolean, summary: boolean, name: string) => Promise<void>;
-  pair: () => Promise<void>; unpair: (id: string) => Promise<void>; refresh: () => Promise<void> };
+  pair: () => Promise<void>; unpair: (id: string) => Promise<void>; refresh: () => Promise<void>; loadResult: (task: DeviceTask) => Promise<DeviceTask> };
 export const DeviceControlContext = createContext<DeviceControlModel | null>(null);
 export function DeviceControlPanel() {
   const model = useContext(DeviceControlContext); const [name, setName] = useState(""); const [unpair, setUnpair] = useState<string>();
+  const [resultId, setResultId] = useState<string>();
+  const resultTask = model?.snapshot.tasks.find((task) => task.taskId === resultId);
   useEffect(() => { setName(model?.journal.name ?? "Liteasy 桌面"); }, [model?.journal.name]);
   const [, clock] = useState(0);
   useEffect(() => { const timer = setInterval(() => clock((value) => value + 1), 10_000); return () => clearInterval(timer); }, []);
@@ -27,7 +29,16 @@ export function DeviceControlPanel() {
     <h3>手机任务记录</h3><Button onClick={() => void model.refresh()} disabled={model.busy}>刷新任务</Button>
     <ul>{model.snapshot.tasks.map((task) => <li key={task.taskId}>{taskKindLabels[task.kind]} · {task.document?.title} · {taskStatusLabels[task.status] ?? "状态待确认"}
       {task.result?.message ? <p>{task.result.message}</p> : null}
-      {task.result?.text ? <details><summary>查看结果</summary><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{task.result.text}</pre></details> : null}
+      {task.result?.text || task.result?.hasText ? <Button onClick={() => setResultId(task.taskId)}>查看结果</Button> : null}
       {task.status === "uncertain" ? <p>请核查实际结果；系统不会自动重跑此任务。</p> : null}</li>)}</ul>
+    {resultTask ? <DeviceTaskResult key={resultTask.taskId} task={resultTask} load={model.loadResult} onClose={() => setResultId(undefined)} /> : null}
   </div>;
+}
+
+function DeviceTaskResult({ task, load, onClose }: { task: DeviceTask; load: DeviceControlModel["loadResult"]; onClose: () => void }) {
+  const [value, setValue] = useState<DeviceTask>(); const [error, setError] = useState("");
+  useEffect(() => { let active = true; void load(task).then((result) => { if (active) setValue(result); }).catch(() => { if (active) setError("结果暂时无法读取，请稍后重试。"); }); return () => { active = false; }; }, [task.taskId]);
+  return <Dialog open onOpenChange={(_, data) => { if (!data.open) onClose(); }}><DialogSurface><DialogBody><DialogTitle>手机任务结果</DialogTitle><DialogContent>
+    {error ? <p role="alert">{error}</p> : value ? <><p>{value.result?.message}</p><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{value.result?.text}</pre></> : <Spinner label="正在读取结果…" />}
+  </DialogContent><DialogActions><Button onClick={onClose}>关闭结果</Button></DialogActions></DialogBody></DialogSurface></Dialog>;
 }

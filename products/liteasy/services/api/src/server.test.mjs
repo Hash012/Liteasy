@@ -69,6 +69,8 @@ test("device routes bind audience, client, account and per-device proof before p
   assert.equal((await invoke("desktop", "tasks/claim", {}, desktop, "liteasy-mobile")).status, 403);
   assert.equal((await invoke("desktop", "tasks/claim", {}, { ...desktop, secret: mobile.secret })).status, 403);
   const claimed = jsonBody(await invoke("desktop", "tasks/claim", {}, desktop)); assert.equal(claimed.task.taskId, jsonBody(created).task.taskId);
+  assert.equal(jsonBody(await invoke("mobile", `tasks/${claimed.task.taskId}`, undefined, mobile)).task.taskId, claimed.task.taskId);
+  assert.equal((await invoke("mobile", `tasks/${claimed.task.taskId}`, undefined, { ...mobile, secret: "invalid" })).status, 403);
   const listed = jsonBody(await invoke("mobile", "tasks", undefined, mobile));
   assert.equal("leaseToken" in listed.tasks[0], false); assert.equal(JSON.stringify(listed).includes(desktop.secret), false);
 });

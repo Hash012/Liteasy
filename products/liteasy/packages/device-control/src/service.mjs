@@ -22,9 +22,17 @@ function capabilities(values, kind) {
 export function emptyDeviceState() { return { version: 1, devices: {}, pairs: {}, tasks: {}, pairAttempts: { at: 0, count: 0 } }; }
 function publicDevice(device, now) { return { deviceId: device.deviceId, name: device.name, kind: device.kind, capabilities: device.capabilities,
   online: !device.revokedAt && now - device.lastSeen < 90_000, lastSeen: device.lastSeen, revokedAt: device.revokedAt ?? null }; }
-function publicTask(task) {
+function publicTask(task, compact = false) {
   const { leaseToken: _token, requestHash: _hash, ...value } = task;
-  return structuredClone(value);
+  const result = structuredClone(value);
+  if (compact) {
+    if (result.document) result.document.title = result.document.title.slice(0, 256);
+    if (result.error) result.error = result.error.slice(0, 300);
+    if (result.result) result.result = { message: typeof result.result.message === "string" ? result.result.message.slice(0, 600) : "",
+      hasText: typeof result.result.text === "string" && result.result.text.length > 0,
+      ...(Number.isInteger(result.result.pages) ? { pages: result.result.pages } : {}) };
+  }
+  return result;
 }
 function expire(state, now) {
   for (const device of Object.values(state.devices)) if (device.challenge?.expiresAt <= now) delete device.challenge;
@@ -123,7 +131,10 @@ export class DeviceControlService {
     const pairs = Object.values(state.pairs).filter((pair) => !pair.revokedAt && (kind === "mobile" ? pair.mobileId : pair.desktopId) === device.deviceId);
     const peers = new Set(pairs.map((pair) => kind === "mobile" ? pair.desktopId : pair.mobileId));
     return { device: publicDevice(device, now), pairs: structuredClone(pairs), devices: Object.values(state.devices).filter((peer) => peers.has(peer.deviceId)).map((peer) => publicDevice(peer, now)),
-      tasks: Object.values(state.tasks).filter((task) => task[kind === "mobile" ? "mobileId" : "desktopId"] === device.deviceId).sort((a,b) => b.createdAt - a.createdAt).map(publicTask) };
+      tasks: Object.values(state.tasks).filter((task) => task[kind === "mobile" ? "mobileId" : "desktopId"] === device.deviceId).sort((a,b) => b.createdAt - a.createdAt).map((task) => publicTask(task, true)) };
+  }); }
+  getTask(subject, kind, auth, taskId) { return this.transaction(subject, (state, now) => {
+    const device = deviceFor(state, auth, kind, now); return { task: publicTask(taskFor(state, taskId, device, kind)) };
   }); }
   revokePair(subject, kind, auth, pairId) { return this.transaction(subject, (state, now) => {
     const device = deviceFor(state, auth, kind, now); const pair = state.pairs[id(pairId)];
@@ -186,6 +197,8 @@ export class DeviceControlService {
       requireValue(["running", "uncertain"].includes(task.status), "task_receipt_rejected", 409);
       requireValue(["succeeded", "failed", "cancelled", "uncertain"].includes(input.status), "task_receipt_invalid");
       requireValue(input.result === undefined || (input.result && typeof input.result === "object" && !Array.isArray(input.result) && Buffer.byteLength(JSON.stringify(input.result)) <= 128 * 1024), "task_result_too_large", 413);
+      if (input.result) requireValue(["text", "message", "artifactId"].every((key) => input.result[key] === undefined || typeof input.result[key] === "string") &&
+        (input.result.pages === undefined || Number.isSafeInteger(input.result.pages) && input.result.pages >= 0), "task_result_invalid");
       task.status = input.status; task.result = input.result ?? null; task.error = input.error ? text(input.error, 2000, "task_error_invalid") : null; task.finishedAt = now;
     } else fail("task_action_invalid");
     task.updatedAt = now;

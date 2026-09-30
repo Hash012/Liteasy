@@ -25,8 +25,9 @@ class MobileAccount(private val context: Context, private val http: AccountHttp 
     client.newCall(request).execute().use { response ->
         if (!response.isSuccessful) throw AccountHttpError(response.code)
         val body = response.body ?: error("账号服务没有返回内容。")
-        require(body.contentLength() <= 1024 * 1024) { "账号服务响应过大。" }
-        val bytes = body.byteStream().use { it.readBytesBounded(1024 * 1024) }
+        val limit = if (request.url.encodedPath.endsWith("/v1/mobile/devices")) 4 * 1024 * 1024 else 1024 * 1024
+        require(body.contentLength() <= limit) { "账号服务响应过大。" }
+        val bytes = body.byteStream().use { it.readBytesBounded(limit) }
         if (bytes.isEmpty()) JSONObject() else JSONObject(String(bytes))
     }
 }) {

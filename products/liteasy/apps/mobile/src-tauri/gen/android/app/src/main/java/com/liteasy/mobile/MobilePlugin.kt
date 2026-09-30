@@ -21,6 +21,7 @@ class MobilePlugin(private val activity: Activity) : Plugin(activity) {
                 val account = MobileAccount(activity)
                 require(scope == "local" || scope == account.activeScope()) { "账号已切换，请返回当前资料库重试。" }
                 val value = when (request.getString("operation")) {
+                    "backgroundApp" -> { activity.runOnUiThread { activity.moveTaskToBack(true) }; null }
                     "accountStatus" -> account.status()
                     "beginLogin" -> {
                         val url = account.begin(request.getString("apiBaseUrl"))
@@ -32,6 +33,7 @@ class MobilePlugin(private val activity: Activity) : Plugin(activity) {
                     "logout" -> account.logout()
                     "accountRequest" -> account.request(request.getString("path"), request.optString("method", "GET"), request.optJSONObject("body"))
                     "tasksSnapshot" -> MobileTasks(activity, scope).snapshot()
+                    "taskResult" -> MobileTasks(activity, scope).result(request.getString("taskId"), request.optLong("updatedAt"))
                     "pairDesktop" -> MobileTasks(activity, scope).pair(request.getString("code"))
                     "unpairDesktop" -> MobileTasks(activity, scope).unpair(request.getString("pairId"))
                     "enqueueTask" -> MobileTasks(activity, scope).enqueue(request.getJSONObject("input"))

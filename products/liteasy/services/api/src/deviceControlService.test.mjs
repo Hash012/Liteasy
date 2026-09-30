@@ -93,3 +93,19 @@ test("an old offline request cannot recreate a task after retained receipts expi
   await assert.rejects(() => f.enqueue({ createdAt: 1_000_000 - 8 * 86_400_000 }), /task_request_expired/);
   assert.equal((await f.service.claim("owner", f.desktop)).task, null);
 });
+
+test("polling omits large result text and only a task's paired participants can fetch it", async () => {
+  const f = await fixture(); await f.enqueue(); const task = (await f.service.claim("owner", f.desktop)).task;
+  await f.service.updateTask("owner", f.desktop, task.taskId, "start", task);
+  const result = { message: "提取完成", text: "正文".repeat(20_000) };
+  await assert.rejects(() => f.service.updateTask("owner", f.desktop, task.taskId, "receipt", { ...task, status: "succeeded", result: { message: {} } }), /task_result_invalid/);
+  await f.service.updateTask("owner", f.desktop, task.taskId, "receipt", { ...task, status: "succeeded", result });
+  const snapshot = await f.service.list("owner", "mobile", f.mobile);
+  assert.equal(snapshot.tasks[0].result.hasText, true); assert.equal(snapshot.tasks[0].result.text, undefined);
+  assert.ok(Buffer.byteLength(JSON.stringify(snapshot)) < 10_000);
+  assert.deepEqual((await f.service.getTask("owner", "mobile", f.mobile, task.taskId)).task.result, result);
+  assert.deepEqual((await f.service.getTask("owner", "desktop", f.desktop, task.taskId)).task.result, result);
+  const other = { ...f.mobile, deviceId: randomUUID(), secret: randomBytes(32).toString("base64url") };
+  await f.service.register("owner", "mobile", other);
+  await assert.rejects(() => f.service.getTask("owner", "mobile", other, task.taskId), /task_not_found/);
+});

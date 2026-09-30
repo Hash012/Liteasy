@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Button, Input, Textarea, Field, Dialog, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions, Tooltip } from "@fluentui/react-components";
 import { AddRegular, FolderAddRegular, DocumentPdfRegular, ImageRegular, LinkRegular, DocumentTextRegular, DeleteRegular, ArrowUndoRegular } from "@fluentui/react-icons";
 import type { ImportResource, LibraryItem } from "./library.types";
+import { useBackHandler } from "../navigation/backNavigation";
 
 const resourceIcons = { pdf: <DocumentPdfRegular />, image: <ImageRegular />, link: <LinkRegular />, text: <DocumentTextRegular />, file: <DocumentTextRegular /> };
 
@@ -17,6 +18,7 @@ export function LibraryView({ items, inbox, busy, onImport, onAdd, onOpen, onUpd
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  useBackHandler(trash, () => setTrash(false), 5);
   const filtered = items.filter((item) => Boolean(item.deletedAt) === trash && (!inbox || item.collection === "收件箱") &&
     (!collection || item.collection === collection) && `${item.title} ${item.note} ${item.tags.join(" ")}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
     .sort((a, b) => (b.lastReadAt ?? b.updatedAt).localeCompare(a.lastReadAt ?? a.updatedAt));

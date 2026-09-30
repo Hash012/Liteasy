@@ -12,4 +12,6 @@ One desktop may lease one task at a time. Unstarted 90-second leases can be retr
 
 Limits per account: 20 active / 100 total registered devices, 50 nonterminal / 200 retained tasks, 24-hour queued-task lifetime, terminal retention of 14 days, and 128 KiB per result. Mobile holds at most 50 pending sends. Unknown outcomes require inspection or an explicit new operation; cancellation cannot undo completed effects.
 
+Polling snapshots contain bounded result summaries and a `hasText` marker. Either participant may request its own full task at `GET /v1/{mobile|desktop}/tasks/{taskId}`; another device cannot read it even within the same account. Android caches the last 20 opened results in its account-local SQLite records, keeping completed results available offline without polling their full text.
+
 The API migration is `028_device_control.sql`. Opt-in PostgreSQL integration tests use `LITEASY_DEVICE_CONTROL_TEST_DATABASE_URL` and create/drop an isolated schema; they do not migrate an existing production schema. Deployment, live identity-provider validation and network reachability remain operator responsibilities.

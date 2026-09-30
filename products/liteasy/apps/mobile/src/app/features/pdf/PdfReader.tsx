@@ -8,6 +8,8 @@ import { searchPdf, type SearchMatch } from "./pdfEngine";
 import type { AnnotationControls, AnnotationMode } from "../annotations/annotation.types";
 import { AnnotationLayer } from "../annotations/AnnotationLayer";
 import { AnnotationTools, type AnnotationEditor } from "../annotations/AnnotationTools";
+import { useBackHandler } from "../navigation/backNavigation";
+import { ReflowPage } from "./ReflowPage";
 
 export default function PdfReader({ item, reader, annotations, onClose, onDetails }: {
   item: LibraryItem; reader: PdfReaderState; annotations: AnnotationControls; onClose: () => void; onDetails: () => void;
@@ -16,6 +18,10 @@ export default function PdfReader({ item, reader, annotations, onClose, onDetail
   const [mode, setMode] = useState<AnnotationMode>("select");
   const [editor, setEditor] = useState<AnnotationEditor>();
   const [panel, setPanel] = useState<"search" | "outline">();
+  const [reflow, setReflow] = useState(false);
+  useBackHandler(Boolean(panel), () => setPanel(undefined), 40);
+  useBackHandler(mode !== "select", () => setMode("select"), 30);
+  useBackHandler(reflow, () => setReflow(false), 35);
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<SearchMatch[]>([]);
   const [searching, setSearching] = useState(false);
@@ -62,6 +68,7 @@ export default function PdfReader({ item, reader, annotations, onClose, onDetail
         <Tooltip content="放大" relationship="label"><Button aria-label="放大" icon={<ZoomInRegular />} disabled={reader.zoom >= 4} onClick={() => reader.setZoom(Math.min(4, reader.zoom + 0.25))} /></Tooltip>
         <Tooltip content="搜索 PDF" relationship="label"><Button aria-label="搜索 PDF" icon={<SearchRegular />} aria-pressed={panel === "search"} onClick={() => setPanel(panel === "search" ? undefined : "search")} /></Tooltip>
         <Tooltip content="目录" relationship="label"><Button aria-label="目录" icon={<BookOpenRegular />} aria-pressed={panel === "outline"} onClick={() => setPanel(panel === "outline" ? undefined : "outline")} /></Tooltip>
+        <Button aria-pressed={reflow} onClick={() => { setReflow(!reflow); setMode("select"); }}>{reflow ? "原页阅读" : "文本重排"}</Button>
       </div>
       {panel === "outline" ? <section className="reader-panel" aria-label="PDF 目录"><h2>目录</h2>
         {!reader.outline.length ? <p>此 PDF 未提供目录。</p> : <ul>{reader.outline.map((entry, index) => <li key={index} style={{ marginLeft: `${entry.depth * 12}px` }}>
@@ -78,14 +85,14 @@ export default function PdfReader({ item, reader, annotations, onClose, onDetail
         {searchError ? <p role="alert">{searchError}</p> : null}
         <ul>{matches.map((match, index) => <li key={index}><button onClick={() => { reader.navigate(match.page); setPanel(undefined); }}>第 {match.page} 页：{match.excerpt}</button></li>)}</ul>
       </section> : null}
-      <AnnotationTools controls={annotations} mode={mode} setMode={setMode} page={reader.page} readerRef={readerRef} editor={editor} setEditor={setEditor} navigate={reader.navigate} />
-      <PdfPage document={reader.document} pageNumber={reader.page} zoom={reader.zoom}>
+      {!reflow ? <AnnotationTools controls={annotations} mode={mode} setMode={setMode} page={reader.page} readerRef={readerRef} editor={editor} setEditor={setEditor} navigate={reader.navigate} /> : null}
+      {reflow ? <ReflowPage document={reader.document} page={reader.page} onOriginal={() => setReflow(false)} /> : <PdfPage document={reader.document} pageNumber={reader.page} zoom={reader.zoom} onZoom={reader.setZoom} pinchEnabled={mode === "select"}>
         <AnnotationLayer key={reader.page} page={reader.page} mode={mode} controls={annotations}
           onPlace={(point) => setEditor({ point, page: reader.page, kind: mode === "text" ? "text" : "note" })}
           onEdit={(existing) => setEditor({ existing, page: existing.page, kind: existing.kind === "text" ? "text" : "note" })} />
-      </PdfPage>
+      </PdfPage>}
     </> : null}
-    <Dialog open={reader.passwordRequired}><DialogSurface><DialogBody><DialogTitle>此 PDF 需要密码</DialogTitle>
+    <Dialog open={reader.passwordRequired} onOpenChange={(_, data) => { if (!data.open) onClose(); }}><DialogSurface><DialogBody><DialogTitle>此 PDF 需要密码</DialogTitle>
       <DialogContent><Field label="PDF 密码"><Input type="password" value={password} onChange={(_, data) => setPassword(data.value)} /></Field></DialogContent>
       <DialogActions><Button onClick={onClose}>关闭文档</Button><Button appearance="primary" onClick={() => { reader.unlock(password); setPassword(""); }}>打开</Button></DialogActions>
     </DialogBody></DialogSurface></Dialog>

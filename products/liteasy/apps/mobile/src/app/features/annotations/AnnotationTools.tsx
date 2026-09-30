@@ -5,6 +5,7 @@ import type { PdfAnnotationV2 } from "@liteasy/reading-core/pdfAnnotations";
 import type { PdfInkPoint } from "@liteasy/reading-core/pdfInk";
 import type { AnnotationControls, AnnotationMode } from "./annotation.types";
 import { selectedPageText } from "./annotationGeometry";
+import { useBackHandler } from "../navigation/backNavigation";
 
 export type AnnotationEditor = { existing?: PdfAnnotationV2; point?: PdfInkPoint; kind: "note" | "text"; page: number };
 export function AnnotationTools({ controls, mode, setMode, page, readerRef, editor, setEditor, navigate }: {
@@ -13,6 +14,7 @@ export function AnnotationTools({ controls, mode, setMode, page, readerRef, edit
 }) {
   const [list, setList] = useState(false);
   const [message, setMessage] = useState("");
+  useBackHandler(list, () => setList(false), 50);
   const modes = [{ mode: "select", title: "选择与滚动", icon: <CursorRegular /> }, { mode: "draw", title: "手写", icon: <DrawShapeRegular /> },
     { mode: "erase", title: "擦除批注", icon: <EraserRegular /> }, { mode: "note", title: "添加便签", icon: <NoteRegular /> }, { mode: "text", title: "添加文本框", icon: <TextboxRegular /> }] as const;
   const selection = async (kind: "highlight" | "underline") => {

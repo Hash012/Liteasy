@@ -84,3 +84,44 @@ h1 { font-size: 22px; color: #242424; }
 .task-list { list-style: none; padding: 0; }
 .task-list > li { border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; padding: 12px; margin-block: 8px; }
 .task-result { white-space: pre-wrap; overflow-wrap: anywhere; padding-block: 12px; }
+.app-shell { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.library-master, .library-document { min-width: 0; }
+.library-master { max-width: 900px; margin-inline: auto; }
+.settings-view, .tasks-view { max-width: 900px; margin-inline: auto; }
+.app-content button, .app-content input, .app-content select { min-height: 44px; }
+.app-content input, .app-content textarea { font-size: 16px; }
+.reader-heading { position: sticky; top: 0; z-index: 5; min-height: 52px; margin: 0; padding: 4px; background: var(--colorNeutralBackground1); }
+.reader-toolbar { position: sticky; top: 52px; z-index: 4; flex-wrap: nowrap; overflow-x: auto; min-height: 52px; margin: 0; padding: 4px; background: var(--colorNeutralBackground1); }
+.reader-toolbar > *, .annotation-toolbar > * { flex-shrink: 0; }
+.annotation-toolbar { position: sticky; top: 104px; z-index: 4; flex-wrap: nowrap; overflow-x: auto; min-height: 52px; padding: 4px; background: var(--colorNeutralBackground1); }
+.annotation-status { padding: 6px 8px; }
+.reader-panel { margin: 8px; }
+.reader-panel button { min-height: 44px; }
+.reader-panel li { overflow-wrap: anywhere; }
+.pdf-scroll { overscroll-behavior-x: contain; }
+.reflow-page { max-width: 72ch; padding: 16px; margin: auto; background: var(--colorNeutralBackground1); border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; }
+.reflow-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.reflow-controls label { display: flex; align-items: center; gap: 12px; }
+.reflow-controls input { max-width: 140px; }
+.reflow-text { line-height: 1.9; overflow-wrap: anywhere; user-select: text; }
+.reading-hint { color: var(--colorNeutralForeground2); font-size: 13px; }
+.resource-details { padding: 12px; }
+.task-list > li > strong { overflow-wrap: anywhere; }
+.capture-alert { position: fixed; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 8; max-width: calc(100vw - 24px); }
+@media (max-width: 839px) {
+  .has-document .app-header, .has-document .app-navigation, .has-selection .library-master { display: none; }
+  .has-document .app-content { padding: 0 0 env(safe-area-inset-bottom); }
+  .annotation-list-item { flex-wrap: wrap; }
+}
+@media (min-width: 840px) {
+  .app-shell { display: grid; grid-template-columns: 92px minmax(0, 1fr); grid-template-rows: 56px minmax(0, 1fr); }
+  .app-header { grid-column: 1 / -1; grid-row: 1; }
+  .app-content { grid-column: 2; grid-row: 2; padding: 16px; }
+  .app-navigation { grid-column: 1; grid-row: 2; flex-direction: column; justify-content: start; padding: 12px 4px; border-top: 0; border-right: 1px solid #e0e3e8; }
+  .app-navigation button { flex: 0 0 68px; flex-direction: column; font-size: 12px; width: 100%; }
+  .has-document .app-content { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .has-selection.library-workspace { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(260px, 30%) minmax(0, 1fr); }
+  .has-selection .library-master { width: 100%; padding: 12px; overflow: auto; border-right: 1px solid #e0e3e8; }
+  .library-document { overflow: auto; padding: 0 8px env(safe-area-inset-bottom); }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }

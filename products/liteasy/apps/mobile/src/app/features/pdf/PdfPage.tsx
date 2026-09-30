@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { canvasOutput, pdfjs, type PDFDocumentProxy } from "./pdfEngine";
 
-export function PdfPage({ document, pageNumber, zoom, children, onText }: {
+export function PdfPage({ document, pageNumber, zoom, children, onText, onZoom, pinchEnabled = true }: {
   document: PDFDocumentProxy; pageNumber: number; zoom: number; children?: ReactNode; onText?: (text: string) => void;
+  onZoom?: (zoom: number) => void; pinchEnabled?: boolean;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(360);
@@ -16,6 +17,24 @@ export function PdfPage({ document, pageNumber, zoom, children, onText }: {
     observer.observe(element); return () => observer.disconnect();
   }, []);
   const stage = useRef<HTMLDivElement>(null);
+  const scroll = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const element = scroll.current; const page = stage.current;
+    if (!element || !page || !onZoom || !pinchEnabled) return;
+    let gesture: { distance: number; zoom: number } | undefined;
+    const distance = (event: TouchEvent) => Math.hypot(event.touches[0].clientX - event.touches[1].clientX, event.touches[0].clientY - event.touches[1].clientY);
+    const start = (event: TouchEvent) => { if (event.touches.length === 2) { event.preventDefault(); gesture = { distance: Math.max(1, distance(event)), zoom }; } };
+    const move = (event: TouchEvent) => {
+      if (!gesture || event.touches.length !== 2) return;
+      event.preventDefault(); gesture.zoom = Math.min(4, Math.max(0.5, zoom * distance(event) / gesture.distance));
+      page.style.transformOrigin = "0 0"; page.style.transform = `scale(${gesture.zoom / zoom})`;
+    };
+    const end = () => { if (!gesture) return; const value = gesture.zoom; gesture = undefined; page.style.transform = ""; onZoom(Math.round(value * 20) / 20); };
+    const cancel = () => { gesture = undefined; page.style.transform = ""; };
+    element.addEventListener("touchstart", start, { passive: false }); element.addEventListener("touchmove", move, { passive: false });
+    element.addEventListener("touchend", end); element.addEventListener("touchcancel", cancel);
+    return () => { cancel(); element.removeEventListener("touchstart", start); element.removeEventListener("touchmove", move); element.removeEventListener("touchend", end); element.removeEventListener("touchcancel", cancel); };
+  }, [zoom, onZoom, pinchEnabled]);
   useEffect(() => {
     const parent = stage.current;
     if (!parent) return;
@@ -59,7 +78,7 @@ export function PdfPage({ document, pageNumber, zoom, children, onText }: {
   }, [document, pageNumber, zoom, width, onText]);
   return <div className="pdf-page-host" ref={host}>
     {error ? <p role="alert" className="error-message">此页无法显示：{error}</p> : null}
-    <div className="pdf-scroll"><div ref={stage} className="pdf-page" data-page={pageNumber} style={size} aria-busy={rendering}>{children}</div></div>
+    <div ref={scroll} className="pdf-scroll" style={{ touchAction: pinchEnabled ? "pan-x pan-y" : undefined }}><div ref={stage} className="pdf-page" data-page={pageNumber} style={size} aria-busy={rendering}>{children}</div></div>
     {rendering ? <p role="status">正在显示第 {pageNumber} 页…</p> : null}
   </div>;
 }
