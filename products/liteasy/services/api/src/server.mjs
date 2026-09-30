@@ -7,7 +7,8 @@ import {
   loadCloudConfig,
   publicAdminIdentityConfig,
   publicCloudConfig,
-  publicDesktopIdentityConfig
+  publicDesktopIdentityConfig,
+  publicMobileIdentityConfig
 } from "./config.mjs";
 import { AccountLifecycleError } from "./accountLifecycleError.mjs";
 import { ExternalRetrievalError } from "./externalRetrievalConnectors.mjs";
@@ -305,6 +306,18 @@ export function createCloudRequestHandler(runtime, config) {
       }
       if (request.method === "GET" && url.pathname === "/v1/identity/admin-config") {
         sendJson(response, 200, publicAdminIdentityConfig(config));
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/v1/identity/mobile-config") {
+        const mobile = publicMobileIdentityConfig(config);
+        if (!mobile) throw new IdentityError("mobile_identity_unavailable", 503);
+        sendJson(response, 200, mobile);
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/v1/mobile/session") {
+        if (!config.identity.mobileClientId) throw new IdentityError("mobile_identity_unavailable", 503);
+        const identity = await runtime.identityVerifier.verifyAuthorizationHeader(request.headers.authorization, "liteasy-mobile", config.identity.mobileClientId);
+        sendJson(response, 200, { subject: identity.subject, issuer: config.identity.issuer, audience: "liteasy-mobile" });
         return;
       }
 

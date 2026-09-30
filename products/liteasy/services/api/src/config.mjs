@@ -262,6 +262,11 @@ export function loadCloudConfig(env = process.env) {
       visualizationServiceClientId
     ]
   );
+  const mobileClientId = env.LITEASY_IDP_MOBILE_CLIENT_ID?.trim()
+    ? requirePublicClientId(env, "LITEASY_IDP_MOBILE_CLIENT_ID", identityClientId) : null;
+  if (mobileClientId && [desktopClientId, adminClientId, managementClientId, intuechoServiceClientId, visualizationServiceClientId, literatureServiceClientId].includes(mobileClientId)) {
+    throw new Error("cloud_config_invalid: LITEASY_IDP_MOBILE_CLIENT_ID must be a distinct public client");
+  }
   const modelProviders = Object.fromEntries(
     ["openai", "deepseek"].flatMap((provider) => {
       const configured = optionalModelProvider(env, provider, environment);
@@ -281,6 +286,7 @@ export function loadCloudConfig(env = process.env) {
       clientId: identityClientId,
       clientSecret: required(env, "LITEASY_IDP_CLIENT_SECRET"),
       desktopClientId,
+      mobileClientId,
       discoveryUrl: requireHttpUrl(env, "LITEASY_IDP_DISCOVERY_URL", environment),
       introspectionUrl: requireHttpUrl(env, "LITEASY_IDP_INTROSPECTION_URL", environment),
       intuechoServiceClientId,
@@ -430,5 +436,17 @@ export function publicAdminIdentityConfig(config) {
     authorizationFlow: "authorization_code_pkce",
     clientId: config.identity.adminClientId,
     issuer: config.identity.issuer
+  });
+}
+
+export function publicMobileIdentityConfig(config) {
+  if (!config.identity.mobileClientId) return null;
+  return Object.freeze({
+    audience: "liteasy-mobile",
+    authorizationFlow: "authorization_code_pkce",
+    clientId: config.identity.mobileClientId,
+    issuer: config.identity.issuer,
+    redirectUri: "com.liteasy.mobile://oauth/callback",
+    revocationUrl: config.identity.revocationUrl
   });
 }

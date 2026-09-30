@@ -9,6 +9,7 @@ class DavSyncWorker(context: Context, parameters: WorkerParameters) : Worker(con
     override fun onStopped() { sync?.cancelRequests() }
     override fun doWork(): Result {
         val scope = inputData.getString("scope") ?: return Result.failure()
+        if (scope != "local" && MobileAccount(applicationContext).activeScope() != scope) return Result.failure()
         return try { val operation = DavSync(applicationContext, scope); sync = operation; operation.run { isStopped }; Result.success() }
         catch (error: Exception) {
             if (error is DavHttpException && error.status in listOf(401, 403, 507)) Result.failure()
@@ -34,6 +35,11 @@ class DavSyncWorker(context: Context, parameters: WorkerParameters) : Worker(con
         fun cancel(context: Context, scope: String) {
             val name = "webdav-${LibraryStore.digest(scope.toByteArray())}"
             WorkManager.getInstance(context).cancelUniqueWork("$name-now")
+        }
+        fun suspend(context: Context, scope: String) {
+            val name = "webdav-${LibraryStore.digest(scope.toByteArray())}"
+            val manager = WorkManager.getInstance(context)
+            manager.cancelUniqueWork(name); manager.cancelUniqueWork("$name-now")
         }
     }
 }

@@ -789,6 +789,26 @@ test("publishes only audience-specific desktop and admin public-client OIDC conf
   assert.equal(instance.calls.length, 0);
 });
 
+test("mobile identity is optional and its session response is audience/client bound without returning tokens", async () => {
+  const instance = runtime(); const config = internalConfig();
+  const disabled = response(); await createCloudRequestHandler(instance, config)(request("GET", "/v1/identity/mobile-config"), disabled);
+  assert.equal(disabled.status, 503);
+  config.identity = { ...config.identity, mobileClientId: "mobile-public", issuer: "https://identity.example", revocationUrl: "https://identity.example/revoke" };
+  instance.identityVerifier.verifyAuthorizationHeader = async (header, audience, clientId) => {
+    assert.equal(audience, "liteasy-mobile"); assert.equal(clientId, "mobile-public");
+    if (header !== "Bearer mobile") throw new IdentityError("access_token_audience_mismatch", 403);
+    return { subject: "mobile-user", token: "must-not-leak" };
+  };
+  const handler = createCloudRequestHandler(instance, config);
+  const settings = response(); await handler(request("GET", "/v1/identity/mobile-config"), settings);
+  assert.equal(jsonBody(settings).redirectUri, "com.liteasy.mobile://oauth/callback");
+  const denied = response(); await handler(request("GET", "/v1/mobile/session", undefined, "Bearer desktop"), denied);
+  assert.equal(denied.status, 403);
+  const session = response(); await handler(request("GET", "/v1/mobile/session", undefined, "Bearer mobile"), session);
+  assert.deepEqual(jsonBody(session), { subject: "mobile-user", issuer: "https://identity.example", audience: "liteasy-mobile" });
+  assert.equal(session.body.includes("must-not-leak"), false);
+});
+
 test("enables desktop diagnostics only outside production after a database role check", async () => {
   const productionRuntime = runtime();
   const productionHandler = createCloudRequestHandler(productionRuntime, {

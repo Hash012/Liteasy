@@ -168,6 +168,16 @@ liteasy-keycloak-admin|$LITEASY_IDENTITY_ADMIN_CLIENT_SECRET
 liteasy-visualization-service|$LITEASY_VISUALIZATION_SERVICE_CLIENT_SECRET
 CLIENTS
 
+mobile_client_id=$(client_id liteasy-mobile-public)
+if [[ ! "$mobile_client_id" =~ $uuid_pattern ]]; then
+  "$kcadm" create clients --config "$config_file" -r liteasy \
+    -s clientId=liteasy-mobile-public -s 'name=Liteasy Android' -s publicClient=true \
+    -s standardFlowEnabled=true -s directAccessGrantsEnabled=false -s serviceAccountsEnabled=false \
+    -s protocol=openid-connect -s 'redirectUris=["com.liteasy.mobile://oauth/callback"]' \
+    -s 'attributes={"pkce.code.challenge.method":"S256"}' \
+    -s 'protocolMappers=[{"name":"liteasy-mobile-audience","protocol":"openid-connect","protocolMapper":"oidc-audience-mapper","consentRequired":false,"config":{"access.token.claim":"true","id.token.claim":"false","included.custom.audience":"liteasy-mobile","introspection.token.claim":"true"}}]' >/dev/null
+fi
+
 while IFS='|' read -r public_client redirect_uris web_origins logout_uris; do
   public_client_id=$(client_id "$public_client")
   if [[ ! "$public_client_id" =~ $uuid_pattern ]]; then
@@ -182,6 +192,7 @@ while IFS='|' read -r public_client redirect_uris web_origins logout_uris; do
     -s "attributes.\"post.logout.redirect.uris\"=$logout_uris" >/dev/null
 done <<CLIENTS
 liteasy-desktop-public|["$LITEASY_DESKTOP_LOOPBACK_REDIRECT_URI","$LITEASY_DESKTOP_LOCALHOST_REDIRECT_URI"]|["$LITEASY_DESKTOP_WEB_ORIGIN"]|$LITEASY_DESKTOP_LOOPBACK_REDIRECT_URI##$LITEASY_DESKTOP_LOCALHOST_REDIRECT_URI
+liteasy-mobile-public|["com.liteasy.mobile://oauth/callback"]|[]|com.liteasy.mobile://oauth/callback
 intuecho-web|["$INTUECHO_WEB_LOOPBACK_REDIRECT_URI","$INTUECHO_WEB_REDIRECT_URI"]|["$INTUECHO_WEB_LOOPBACK_ORIGIN","$INTUECHO_WEB_ORIGIN"]|$INTUECHO_WEB_LOOPBACK_REDIRECT_URI##$INTUECHO_WEB_REDIRECT_URI
 liteasy-admin-public|["$LITEASY_ADMIN_LOOPBACK_REDIRECT_URI","$LITEASY_ADMIN_REDIRECT_URI"]|["$LITEASY_ADMIN_LOOPBACK_ORIGIN","$LITEASY_ADMIN_WEB_ORIGIN"]|$LITEASY_ADMIN_LOOPBACK_REDIRECT_URI##$LITEASY_ADMIN_REDIRECT_URI
 CLIENTS

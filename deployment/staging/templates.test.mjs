@@ -28,14 +28,15 @@ test("service templates satisfy the production configuration parsers", () => {
   loadIdentityManagementConfig(environment("identity-management"));
 });
 
-test("the staging realm has three PKCE clients and separated service identities", () => {
+test("the staging realm has four PKCE clients and separated service identities", () => {
   const source = fs.readFileSync(new URL("keycloak/liteasy-staging-realm.json", directory), "utf8");
   const realm = JSON.parse(source);
   const publicClients = realm.clients.filter((client) => client.publicClient);
   assert.deepEqual(publicClients.map((client) => client.clientId).sort(), [
     "intuecho-web",
     "liteasy-admin-public",
-    "liteasy-desktop-public"
+    "liteasy-desktop-public",
+    "liteasy-mobile-public"
   ]);
   assert.equal(publicClients.every((client) =>
     client.attributes?.["pkce.code.challenge.method"] === "S256" &&

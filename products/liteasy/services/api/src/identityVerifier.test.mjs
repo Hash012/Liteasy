@@ -49,6 +49,17 @@ test("derives the user identity from a signed, active audience-bound token", asy
   });
 });
 
+test("mobile sessions require both their audience and the configured public client", async () => {
+  const mobile = verifier({ fetchImpl: async () => ({ ok: true, async json() {
+    return { active: true, aud: "liteasy-mobile", sub: "user_1", client_id: "mobile-public" };
+  } }), verifyJwt: async (_token, _jwks, options) => {
+    assert.equal(options.audience, "liteasy-mobile");
+    return { payload: { aud: "liteasy-mobile", sub: "user_1", iss: "https://identity.example" } };
+  } });
+  assert.equal((await mobile.verifyAuthorizationHeader("Bearer token", "liteasy-mobile", "mobile-public")).subject, "user_1");
+  await assert.rejects(() => mobile.verifyAuthorizationHeader("Bearer token", "liteasy-mobile", "different-client"), /public_client_mismatch/);
+});
+
 test("rejects missing, invalid, revoked and cross-audience tokens", async () => {
   await assert.rejects(() => verifier().verifyAuthorizationHeader(undefined, "liteasy-desktop"), /authentication_required/);
   await assert.rejects(

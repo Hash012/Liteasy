@@ -18,7 +18,23 @@ class MobilePlugin(private val activity: Activity) : Plugin(activity) {
         executor.execute {
             try {
                 val scope = request.optString("scope", "local")
+                val account = MobileAccount(activity)
+                require(scope == "local" || scope == account.activeScope()) { "账号已切换，请返回当前资料库重试。" }
                 val value = when (request.getString("operation")) {
+                    "accountStatus" -> account.status()
+                    "beginLogin" -> {
+                        val url = account.begin(request.getString("apiBaseUrl"))
+                        activity.runOnUiThread { try { activity.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
+                            catch (_: Exception) { account.browserUnavailable() } }
+                        account.status()
+                    }
+                    "cancelLogin" -> { account.cancelLogin(); account.status() }
+                    "logout" -> account.logout()
+                    "accountRequest" -> account.request(request.getString("path"), request.optString("method", "GET"), request.optJSONObject("body"))
+                    "copyGuestLibrary" -> {
+                        val destination = account.activeScope(); require(destination != "local") { "请先登录账号。" }
+                        LibraryStore.get(activity).copyGuestLibrary(destination)
+                    }
                     "syncSettings" -> DavSync(activity, scope).publicSettings()
                     "configureSync" -> { DavSync(activity, scope).configure(request.getJSONObject("settings")); null }
                     "syncStatus" -> DavSync(activity, scope).status()

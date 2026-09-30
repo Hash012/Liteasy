@@ -29,7 +29,7 @@ test("disables a user, logs out every Keycloak session, and confirms the state",
   ], calls) });
   const result = await client.setStatus("subject-1", "disabled");
   assert.equal(result.allSessionsRevoked, true);
-  assert.deepEqual(result.revokedAudiences, ["intuecho-web", "liteasy-admin", "liteasy-desktop"]);
+  assert.deepEqual(result.revokedAudiences, ["intuecho-web", "liteasy-admin", "liteasy-desktop", "liteasy-mobile"]);
   assert.equal(calls[3].url, `${config.apiUrl}/users/subject-1/logout`);
   assert.equal(calls[3].options.method, "POST");
 });

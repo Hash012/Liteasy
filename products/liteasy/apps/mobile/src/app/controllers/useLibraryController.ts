@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { libraryRepository } from "../features/library/libraryRepository";
 import type { ImportResource, LibraryItem, LibraryRepository } from "../features/library/library.types";
 import { hasNativeHost, nativeRequest } from "../platform/native";
+import { subscribeLibraryChanged } from "../features/library/libraryEvents";
 
 export function useLibraryController(scope = "local", repository: LibraryRepository = libraryRepository()) {
   const [items, setItems] = useState<LibraryItem[]>([]);
@@ -9,6 +10,7 @@ export function useLibraryController(scope = "local", repository: LibraryReposit
   const [busy, setBusy] = useState(false);
   const [selectedId, setSelectedId] = useState<string>();
   const activeScope = useRef(scope);
+  const loadedScope = useRef(scope);
   const mounted = useRef(false);
   activeScope.current = scope;
   useEffect(() => {
@@ -19,17 +21,18 @@ export function useLibraryController(scope = "local", repository: LibraryReposit
 
   const refresh = useCallback(async () => {
     const list = await repository.list(scope);
-    if (mounted.current && activeScope.current === scope) setItems(list);
+    if (mounted.current && activeScope.current === scope) { loadedScope.current = scope; setItems(list); }
   }, [scope, repository]);
 
   useEffect(() => {
     mounted.current = true;
-    setItems([]); setSelectedId(undefined); setError("");
+    setItems([]); setSelectedId(undefined); setError(""); setBusy(false);
     const onError = (reason: unknown) => { if (mounted.current && activeScope.current === scope) setError(String(reason)); };
     void refresh().catch(onError);
     const onFocus = () => void refresh().catch(onError);
+    const unsubscribe = subscribeLibraryChanged(scope, onFocus);
     window.addEventListener("focus", onFocus);
-    return () => { mounted.current = false; window.removeEventListener("focus", onFocus); };
+    return () => { mounted.current = false; unsubscribe(); window.removeEventListener("focus", onFocus); };
   }, [refresh, scope]);
 
   const run = async (operation: () => Promise<unknown>) => {
@@ -56,8 +59,9 @@ export function useLibraryController(scope = "local", repository: LibraryReposit
     setSelectedId(item.id);
     void update({ ...item, lastReadAt: new Date().toISOString() });
   };
-  return { items, error, busy, refresh, importResource, importFiles, update, open, selectedId,
-    selected: items.find((item) => item.id === selectedId), close: () => {
+  const visibleItems = loadedScope.current === scope ? items : [];
+  return { items: visibleItems, error, busy, refresh, importResource, importFiles, update, open, selectedId,
+    selected: visibleItems.find((item) => item.id === selectedId), close: () => {
       setSelectedId(undefined); void refresh().catch((reason) => { if (mounted.current) setError(String(reason)); });
     }, repository, scope };
 }

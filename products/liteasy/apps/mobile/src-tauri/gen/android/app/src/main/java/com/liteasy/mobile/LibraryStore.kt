@@ -67,6 +67,44 @@ class LibraryStore private constructor(private val context: Context) : SQLiteOpe
             while (it.moveToNext()) result.put(JSONObject(it.getString(0)))
         } }
     }
+    /** Explicit copy keeps the guest originals; account secrets and sync baselines are never copied. */
+    fun copyGuestLibrary(destination: String): JSONObject = copyLibrary("local", destination)
+    @Synchronized internal fun copyLibrary(sourceScope: String, destination: String): JSONObject {
+        require(destination.startsWith("account:")) { "目标必须是已登录的账号资料库。" }
+        var copied = 0; var skipped = 0
+        val db = writableDatabase; db.beginTransaction()
+        try {
+            val source = list(sourceScope)
+            for (index in 0 until source.length()) {
+                val original = source.getJSONObject(index)
+                if (original.has("deletedAt")) continue
+                val duplicate = db.rawQuery("SELECT id FROM items WHERE scope=? AND hash=? AND kind=?", arrayOf(destination, original.getString("contentHash"), original.getString("kind"))).use { it.moveToFirst() }
+                if (duplicate) { skipped++; continue }
+                val sourceId = original.getString("id")
+                val id = if (find(destination, sourceId) == null) sourceId else UUID.randomUUID().toString()
+                val item = file(sourceScope, original.getString("contentHash")).inputStream().use { importStream(destination, original, it, id) }
+                for (key in listOf("tags", "note", "collection", "page", "lastReadAt", "createdAt", "pinned")) if (original.has(key)) item.put(key, original.get(key))
+                save(destination, item)
+                val annotations = dispatch(sourceScope, JSONObject().put("operation", "readRecord").put("key", "annotations:$sourceId")) as? JSONObject
+                if (annotations != null) {
+                    annotations.put("documentId", id)
+                    val entries = annotations.getJSONArray("annotations")
+                    for (annotationIndex in 0 until entries.length()) {
+                        val entry = entries.getJSONObject(annotationIndex)
+                        entry.optJSONObject("paperIdentity")?.put("paperId", id)
+                        // Guest publication credentials/receipts must never be adopted by another account.
+                        entry.put("publication", JSONObject().put("desiredVisibility", "private").put("state", "not_published"))
+                        entry.remove("visibility"); entry.remove("syncState")
+                    }
+                    annotations.put("autoPublic", false)
+                    dispatch(destination, JSONObject().put("operation", "importAnnotations").put("key", "annotations:$id").put("value", annotations))
+                }
+                copied++
+            }
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+        return JSONObject().put("copied", copied).put("skipped", skipped)
+    }
     private fun save(scope: String, item: JSONObject) {
         val values = ContentValues().apply {
             put("scope", scope); put("id", item.getString("id")); put("hash", item.getString("contentHash"))

@@ -34,7 +34,7 @@ function harness(overrides = {}) {
       calls.push(["identity", input.status]);
       return {
         allSessionsRevoked: input.status !== "active",
-        revokedAudiences: input.status === "active" ? [] : ["intuecho-web", "liteasy-admin", "liteasy-desktop"],
+        revokedAudiences: input.status === "active" ? [] : ["intuecho-web", "liteasy-admin", "liteasy-desktop", "liteasy-mobile"],
         status: input.status,
         subjectId: input.subjectId,
         updatedAt: "2026-08-07T00:00:00.000Z"
