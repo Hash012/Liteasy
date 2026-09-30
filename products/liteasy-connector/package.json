@@ -1,0 +1,32 @@
+{
+  "name": "liteasy-connector",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "setup:upstream": "node scripts/setupUpstream.mjs",
+    "build": "tsc --noEmit && node scripts/build.mjs",
+    "test": "node --test tests/reading/*.test.cjs && tsx --test tests/*.test.ts",
+    "test:browser": "playwright test",
+    "package": "npm run build && node scripts/package.mjs"
+  },
+  "dependencies": {
+    "@fluentui/react-components": "9.74.4",
+    "@fluentui/react-icons": "2.0.333",
+    "fflate": "0.8.2",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.0",
+    "@types/chrome": "0.1.24",
+    "@types/node": "22.19.11",
+    "@types/react": "18.3.28",
+    "@types/react-dom": "18.3.7",
+    "esbuild": "0.25.12",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,24 +1,65 @@
-import { Button, Select, Tooltip } from "@fluentui/react-components";
-import { SparkleRegular, DismissRegular, EyeRegular, EyeOffRegular, DeleteRegular } from "@fluentui/react-icons";
-import { guideModes, type GuideMode } from "./literatureGuide.types";
+import { useState } from "react";
+import { Button, Checkbox, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Select, Spinner, Textarea, Tooltip } from "@fluentui/react-components";
+import { SparkleRegular, DismissRegular, EyeRegular, EyeOffRegular, DeleteRegular, ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
+import { guideCategories, guideModes, type GuideCategory, type GuideMode, type GuideOptions } from "./literatureGuide.types";
 import "./literatureGuide.css";
 
-export type LiteratureGuideState = { mode: GuideMode; busy: boolean; visible: boolean; count: number; resume: boolean; message: string; error: string;
-  ready: boolean; setMode(value: GuideMode): void; start(): void; cancel(): void; toggle(): void; clear(): void };
+export type LiteratureGuideState = { mode: GuideMode; options: GuideOptions; busy: boolean; visible: boolean; count: number; resume: boolean; message: string; error: string;
+  ready: boolean; setMode(value: GuideMode): void; setOptions(value: GuideOptions): void; start(): void; cancel(): void; toggle(): void; clear(): void };
+const modeDescriptions: Record<GuideMode, string> = {
+  detailed: "补足必要背景，解释术语、关键论断和推理步骤。",
+  balanced: "略过常见概念，重点讲清影响理解的概念与因果。",
+  advanced: "评析精妙设计、隐含假设、推理转折与适用边界。",
+  auto: "参考你的研究熟悉度选择深度；缺少相关画像时采用均衡。"
+};
 export function LiteratureGuideControls({ guide }: { guide: LiteratureGuideState }) {
+  const [open, setOpen] = useState(false);
+  const [focusOpen, setFocusOpen] = useState(false);
   return <div className="literature-guide-controls" role="group" aria-label="文献 AI 标注">
-    <Tooltip content="为术语、论断与推理添加简明讲解；点击虚线查看。每次最多处理 60 页，可继续或停止。" relationship="description">
-      <Button size="small" appearance="subtle" icon={<SparkleRegular />} disabled={!guide.ready || guide.busy} onClick={guide.start}>{guide.resume ? "继续标注" : guide.count ? "重新标注" : "AI 标注"}</Button>
+    <Tooltip content={guide.error || guide.message || "设置讲解深度、重点与提示词，为原文添加可点击的虚线讲解"} relationship="description">
+      <Button size="small" appearance="subtle" icon={guide.busy ? <Spinner size="extra-tiny" /> : <SparkleRegular />} onClick={() => setOpen(true)}>AI 标注{guide.count ? <span className="literature-guide-count">{guide.count}</span> : null}{guide.error ? " · 未完成" : ""}</Button>
     </Tooltip>
-    <Select size="small" aria-label="AI 标注模式" value={guide.mode} disabled={guide.busy} onChange={(_, data) => guide.setMode(data.value as GuideMode)}>
-      {Object.entries(guideModes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-    </Select>
-    {guide.busy ? <Tooltip content="停止生成，保留已完成标注" relationship="description"><Button size="small" appearance="subtle" aria-label="停止 AI 标注" icon={<DismissRegular />} onClick={guide.cancel} /></Tooltip> : null}
-    {guide.count ? <>
-      <Tooltip content={guide.visible ? "隐藏 AI 标注" : "显示 AI 标注"} relationship="description"><Button size="small" appearance="subtle" aria-label={guide.visible ? "隐藏 AI 标注" : "显示 AI 标注"} aria-pressed={guide.visible} icon={guide.visible ? <EyeRegular /> : <EyeOffRegular />} onClick={guide.toggle} /></Tooltip>
-      <Tooltip content="删除自动标注，保留已手动修改的讲解和其他批注" relationship="description"><Button size="small" appearance="subtle" aria-label="删除 AI 标注" disabled={guide.busy} icon={<DeleteRegular />} onClick={guide.clear} /></Tooltip>
-    </> : null}
-    {guide.message ? <span className="literature-guide-status" role="status" title={guide.message}>{guide.message}</span> : null}
-    {guide.error ? <span className="literature-guide-error" role="alert">{guide.error}</span> : null}
+    <Dialog open={open} onOpenChange={(_, data) => setOpen(data.open)}>
+      <DialogSurface className="literature-guide-dialog">
+        <DialogBody>
+          <DialogTitle action={<Button appearance="subtle" aria-label="关闭 AI 标注设置" icon={<DismissRegular />} onClick={() => setOpen(false)} />}>AI 标注</DialogTitle>
+          <DialogContent className="literature-guide-options">
+            <p className="literature-guide-hint">为论文添加简明讲解，点击原文虚线即可查看。关闭此窗口后，任务仍会继续。</p>
+            <Field label="讲解深度" hint={modeDescriptions[guide.mode]}>
+              <Select aria-label="AI 标注模式" value={guide.mode} disabled={guide.busy} onChange={(_, data) => guide.setMode(data.value as GuideMode)}>
+                {Object.entries(guideModes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </Select>
+            </Field>
+            <section className="literature-guide-focus">
+              <Button appearance="subtle" icon={focusOpen ? <ChevronDownRegular /> : <ChevronRightRegular />} aria-expanded={focusOpen} onClick={() => setFocusOpen(!focusOpen)}>讲解重点 · 已选 {guide.options.categories.length} 类</Button>
+              {focusOpen ? <div role="group" aria-label="讲解重点" className="literature-guide-categories">
+                {Object.entries(guideCategories).map(([key, label]) => <Checkbox key={key} label={label} disabled={guide.busy} checked={guide.options.categories.includes(key as GuideCategory)} onChange={(_, data) => guide.setOptions({ ...guide.options, categories: data.checked ? [...guide.options.categories, key as GuideCategory] : guide.options.categories.filter((value) => value !== key) })} />)}
+              </div> : null}
+              {!guide.options.categories.length ? <p role="alert">请至少选择一类讲解重点。</p> : null}
+            </section>
+            <Field label="自定义系统提示词" hint="可选：说明你的背景、关心的问题或期望的讲解风格。最多 4,000 字符。">
+              <Textarea aria-label="自定义系统提示词" value={guide.options.systemPrompt} disabled={guide.busy} maxLength={4000} rows={4} resize="vertical" placeholder="例如：我熟悉数据库基础，请重点讲解并发控制中的假设，以及公式每一项的含义。" onChange={(_, data) => guide.setOptions({ ...guide.options, systemPrompt: data.value })} />
+            </Field>
+            <Field label="已有标注" hint="只处理所选类别；手动批注、已修改或已发布的讲解始终保留。">
+              <Select aria-label="已有标注处理方式" disabled={guide.busy} value={guide.options.existing} onChange={(_, data) => guide.setOptions({ ...guide.options, existing: data.value as GuideOptions["existing"] })}>
+                <option value="replace">更新已有 AI 标注</option><option value="append">保留已有，仅补充新标注</option>
+              </Select>
+            </Field>
+            <p className="literature-guide-hint">每次最多处理 60 页，可继续或随时停止。无法唯一定位原文的内容会跳过。</p>
+            {guide.count ? <div className="literature-guide-management"><span>已有 {guide.count} 处讲解</span>
+              <Button size="small" appearance="subtle" icon={guide.visible ? <EyeRegular /> : <EyeOffRegular />} onClick={guide.toggle}>{guide.visible ? "隐藏 AI 标注" : "显示 AI 标注"}</Button>
+              <Tooltip content="删除未修改的自动标注，保留手动修改和已发布的讲解" relationship="description"><Button size="small" appearance="subtle" disabled={guide.busy} icon={<DeleteRegular />} onClick={guide.clear}>删除 AI 标注</Button></Tooltip>
+            </div> : null}
+            {guide.message ? <p className="literature-guide-status" role="status">{guide.message}</p> : null}
+            {guide.error ? <p className="literature-guide-error" role="alert">{guide.error}</p> : null}
+            {!guide.ready ? <p className="literature-guide-hint">请等待论文与批注加载完成后开始。</p> : null}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpen(false)}>返回阅读</Button>
+            {guide.busy ? <Button appearance="primary" onClick={guide.cancel}>停止 AI 标注</Button> : <Button appearance="primary" disabled={!guide.ready || !guide.options.categories.length} onClick={guide.start}>{guide.resume ? "继续标注" : "开始标注"}</Button>}
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
   </div>;
 }

@@ -28,3 +28,13 @@ test("annotation persistence preserves guide metadata, old annotations and edite
   expect(normalizePdfAnnotations([edited])[0]).toMatchObject({ note: "保留我的修改", revision: 2, aiGuide: marks[0].aiGuide });
   expect(normalizePdfAnnotations([{ ...edited, aiGuide: { mode: "future" } }])[0]).toMatchObject({ id: "ai", note: "保留我的修改" });
 });
+
+test("append avoids duplicates; replace only updates selected categories on completed pages", () => {
+  const term = guide("term");
+  const formula = guide("formula", { aiGuide: { mode: "auto", level: "balanced", category: "formula", runId: "old" } });
+  const next = guide("new-term");
+  const options = { systemPrompt: "", categories: ["term" as const], existing: "append" as const };
+  expect(mergePdfGuides([term, formula], [next, guide("dupe", { excerpt: "term" })], [1], options).map((mark) => mark.id)).toEqual(["term", "formula", "new-term"]);
+  expect(mergePdfGuides([term, formula], [next], [1], { ...options, existing: "replace" }).map((mark) => mark.id)).toEqual(["formula", "new-term"]);
+  expect(normalizePdfAnnotations([formula])[0].aiGuide?.category).toBe("formula");
+});

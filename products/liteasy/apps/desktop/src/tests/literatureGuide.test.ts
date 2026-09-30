@@ -74,3 +74,16 @@ test("sampling opt-out excludes conversation memories while manual reading prefe
   rerender({ enabled: true }); await result.current(input);
   expect(JSON.parse(transport.mock.calls[1][0].body).prompt).toContain("我熟悉事务处理");
 });
+
+test("passes custom instructions to the live request and enforces selected formula/chart categories even in advanced mode", async () => {
+  const transport = vi.fn(async (_request: ModelTransportRequest) => ({ ok: true, status: 200, json: async () => ({
+    answer: answer([item({ category: "term" }), item({ quote: "beta", category: "formula" }), item({ quote: "gamma", category: "figure" })]), execution: { mode: "live", provider: "openai" }
+  }) }));
+  const generate = createGuideGenerator(() => createSettingsStore().getState(), () => ({ level: "auto", context: "" }), transport);
+  const result = await generate({ ...input, mode: "advanced", categories: ["formula", "figure"], systemPrompt: "请解释公式的边界条件，并区分相关与因果。" });
+  const request = JSON.parse(transport.mock.calls[0][0].body);
+  expect(request.prompt).toContain("请解释公式的边界条件，并区分相关与因果。");
+  expect(request.prompt).toContain("本次只标注以下重点类别：formula（公式）、figure（图表与数据）");
+  expect(result.items.map((entry) => entry.category)).toEqual(["formula", "figure"]);
+  expect(result.rejected).toBe(1);
+});

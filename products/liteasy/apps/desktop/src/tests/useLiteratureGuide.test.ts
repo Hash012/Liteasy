@@ -85,3 +85,20 @@ test("limits a pass to sixty pages, skips image-only text, and continues explici
   act(() => result.current.start());
   await waitFor(() => expect(result.current.message).toContain("65/65 页"));
 });
+
+test("captures options for every batch and save, resets resume on changes, and refuses an empty focus selection", async () => {
+  const generate = vi.fn<GuideGenerator>().mockResolvedValueOnce(batch).mockRejectedValueOnce(new Error("retry"));
+  const props = setup(generate);
+  const { result } = renderHook(() => useLiteratureGuide(props));
+  const options = { systemPrompt: "只讲关键假设", categories: ["reasoning" as const], existing: "append" as const };
+  act(() => result.current.setOptions(options));
+  act(() => result.current.start());
+  await waitFor(() => expect(result.current.error).toBe("retry"));
+  expect(result.current.resume).toBe(true);
+  expect(generate.mock.calls[0][0]).toMatchObject(options);
+  expect(props.save.mock.calls[0].at(-1)).toEqual(options);
+  act(() => result.current.setOptions({ ...options, categories: [] }));
+  expect(result.current.resume).toBe(false);
+  act(() => result.current.start());
+  expect(generate).toHaveBeenCalledTimes(2);
+});

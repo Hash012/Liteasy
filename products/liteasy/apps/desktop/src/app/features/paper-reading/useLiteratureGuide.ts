@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import type { GuideBatch, GuideGenerator, GuideMode, GuidePage } from "./literatureGuide";
-import { guideModes } from "./literatureGuide.types";
+import { defaultGuideOptions, guideCategories, guideModes, type GuideOptions } from "./literatureGuide.types";
 import type { LiteratureGuideState } from "./LiteratureGuideControls";
 
 export function useLiteratureGuide(input: {
   scope: string | null; title: string; pageCount: number; ready: boolean; count: number;
   generate?: GuideGenerator; readPage(page: number): Promise<string>;
-  save(batch: GuideBatch, pages: number[], mode: GuideMode, runId: string, signal: AbortSignal): Promise<number>;
+  save(batch: GuideBatch, pages: number[], mode: GuideMode, runId: string, signal: AbortSignal, options: GuideOptions): Promise<number>;
   clear(): Promise<void>;
 }): LiteratureGuideState {
   const [mode, setMode] = useState<GuideMode>("auto");
+  const [options, setOptions] = useState<GuideOptions>(defaultGuideOptions);
   const [busy, setBusy] = useState(false);
   const [visible, setVisible] = useState(true);
   const [message, setMessage] = useState("");
@@ -24,7 +25,7 @@ export function useLiteratureGuide(input: {
 
   async function start() {
     const request = latest.current;
-    if (!request.ready || !request.generate || running.current) return;
+    if (!request.ready || !request.generate || !options.categories.length || running.current) return;
     const controller = new AbortController(); running.current = controller;
     const { signal } = controller;
     setBusy(true); setVisible(true); setError("");
@@ -42,10 +43,10 @@ export function useLiteratureGuide(input: {
       setMessage(`正在标注 ${pages[0].page}–${pages.at(-1)!.page} / ${request.pageCount} 页…`);
       const timeout = setTimeout(() => controller.abort(new Error("模型响应超时，请重试。")), 90_000);
       try {
-        const batch = await request.generate!({ title: request.title, abstract, mode, pages, signal });
+        const batch = await request.generate!({ title: request.title, abstract, mode, pages, signal, ...options });
         check();
         if (batch.rejected && !batch.items.length) throw new Error("本批讲解未能对应原文，原有标注已保留，请重试。");
-        const saved = await request.save(batch, pages.map((page) => page.page), mode, runId, signal);
+        const saved = await request.save(batch, pages.map((page) => page.page), mode, runId, signal, options);
         added += saved;
         check(); rejected += batch.rejected + Math.max(0, batch.items.length - saved);
         cursor.current = pages.at(-1)!.page + 1;
@@ -75,7 +76,13 @@ export function useLiteratureGuide(input: {
       if (running.current === controller) { running.current = undefined; setBusy(false); }
     }
   }
-  return { mode, busy, visible, count: input.count, resume: cursor.current > 1 && cursor.current <= input.pageCount, message, error, ready: input.ready && Boolean(input.generate),
+  return { mode, options, busy, visible, count: input.count, resume: cursor.current > 1 && cursor.current <= input.pageCount, message, error, ready: input.ready && Boolean(input.generate),
+    setOptions: (value) => {
+      if (running.current) return;
+      setOptions({ ...value, systemPrompt: value.systemPrompt.slice(0, 4000),
+        categories: [...new Set(value.categories)].filter((key) => Object.prototype.hasOwnProperty.call(guideCategories, key)) });
+      cursor.current = 1; setMessage(""); setError("");
+    },
     setMode: (value) => { if (!Object.prototype.hasOwnProperty.call(guideModes, value) || running.current) return; setMode(value); cursor.current = 1; setMessage(""); },
     start: () => { void start(); }, cancel: () => running.current?.abort(), toggle: () => setVisible((value) => !value),
     clear: () => {

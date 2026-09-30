@@ -595,6 +595,18 @@ export function buildPageCharModelFromTextLayer(input: {
     }
   }
 
+  return finalizePageCharModel(measured, input.pageIndex);
+}
+
+/** Native glyph coordinates do not depend on WebView fonts, zoom, or DOM visibility. */
+export function buildPageCharModelFromGlyphs(glyphs: PdfGlyphGeometry[], pageIndex: number): PageCharModel {
+  return finalizePageCharModel(glyphs.map((glyph, sourceIndex) => ({
+    c: glyph.text, rect: glyph.rect, inlineRect: glyph.rect, pageIndex, sourceIndex,
+    ignorable: glyph.text === "\u00ad"
+  })), pageIndex);
+}
+
+function finalizePageCharModel(measured: MeasuredPdfChar[], pageIndex: number): PageCharModel {
   for (let index = 0; index < measured.length; index += 1) {
     const current = measured[index];
     const next = measured[index + 1];
@@ -622,7 +634,7 @@ export function buildPageCharModelFromTextLayer(input: {
   return {
     chars,
     lines: buildPdfCharLines(chars),
-    pageIndex: input.pageIndex,
+    pageIndex,
     viewBox: [0, 0, 100, 100]
   };
 }

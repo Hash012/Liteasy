@@ -94,6 +94,7 @@ import type { PdfPageText } from "./citationAttribution";
 import { resolvePdfSelectionMenuPosition } from "./pdfSelectionPosition";
 import {
   buildPageCharModelFromTextLayer,
+  buildPageCharModelFromGlyphs,
   buildPdfSelectionRange,
   buildPdfSelectionText,
   clientPointToPdfPoint,
@@ -1110,6 +1111,7 @@ function PdfPageView({
   targetEvidence,
   zoom
 }: PdfPageViewProps) {
+  const [nativeCharModel, setNativeCharModel] = useState<PageCharModel>();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const pageShellRef = useRef<HTMLElement | null>(null);
   const textLayerRef = useRef<HTMLDivElement | null>(null);
@@ -1192,6 +1194,7 @@ function PdfPageView({
         }
         setSearchHighlightRects([]);
         setTargetHighlightRects([]);
+        setNativeCharModel(undefined);
         onPageCharModelRendered?.(pageNumber, null);
         if (focused && targetEvidence?.paperId === activePaper?.id) {
           onEvidenceHighlightResolved?.(false);
@@ -1245,6 +1248,7 @@ function PdfPageView({
         const textContent = await page.getTextContent();
         const glyphs = await loadPdfGlyphGeometry(page);
         if (cancelled) return;
+        setNativeCharModel(buildPageCharModelFromGlyphs(glyphs, pageNumber));
         layer = new pdfjsLib.TextLayer({
           container: textLayer,
           textContentSource: textContent,
@@ -1316,7 +1320,13 @@ function PdfPageView({
     return () => window.cancelAnimationFrame(frame);
   }, [activeSearchMatch, pageNumber, pageSize.height, pageSize.width, searchMatches, searchQuery, textLayerRevision]);
 
-  const pageAnnotations = annotations.filter((annotation) => annotation.page === pageNumber);
+  // Re-anchor existing AI marks from their complete source quote when a page is rendered.
+  // This also repairs previously saved partial geometry without changing notes or revisions.
+  const pageAnnotations = useMemo(() => annotations.filter((annotation) => annotation.page === pageNumber).map((annotation) => {
+    if (!annotation.aiGuide || !renderActive) return annotation;
+    const rects = readingQuoteRects(nativeCharModel, annotation.excerpt);
+    return rects.length ? { ...annotation, rects } : annotation;
+  }), [annotations, pageNumber, nativeCharModel, renderActive]);
   const marginComments = marginCommentsVisible ? layoutPdfMarginComments(pageAnnotations) : [];
 
   return (
@@ -3019,8 +3029,9 @@ export function PdfReader({
   async function readingSelectionGeometry(input: { page: number; excerpt: string }) {
     assertReadingAnnotationsReady();
     if (!Number.isInteger(input.page) || input.page < 1 || input.page > pageCount || !input.excerpt.trim()) throw new Error("请先选择原文与页码。");
-    let rects = readingQuoteRects(pageCharModelsRef.current.get(input.page), input.excerpt);
-    if (!rects.length && pdfDocument) rects = await resolveReadingQuoteRects(pdfDocument, input.page, input.excerpt);
+    const rects = pdfDocument ? await resolveReadingQuoteRects(pdfDocument, input.page, input.excerpt) : [];
+    // The complete quote is matched against native glyphs, with a text-layer fallback for
+    // unsupported fonts. Do not prefer a cached, potentially distorted DOM measurement.
     assertReadingAnnotationsReady();
     return { ...input, rects };
   }
@@ -3054,7 +3065,7 @@ export function PdfReader({
       const source = await pdfDocument.getPage(page);
       return normalizePdfPageText(joinPdfTextItems((await source.getTextContent()).items));
     },
-    save: async (batch, pages, mode, runId, signal) => {
+    save: async (batch, pages, mode, runId, signal, options) => {
       assertReadingAnnotationsReady();
       const scope = annotationStorageKey;
       const now = new Date().toISOString();
@@ -3079,7 +3090,7 @@ export function PdfReader({
       const replacePages = batch.rejected ? [] : pages.filter((page) => !invalidPages.includes(page));
       let savedCount = 0;
       setCurrentAnnotations((current) => {
-        const merged = mergePdfGuides(current, additions, replacePages);
+        const merged = mergePdfGuides(current, additions, replacePages, options);
         savedCount = additions.filter((mark) => merged.includes(mark)).length;
         return merged;
       });

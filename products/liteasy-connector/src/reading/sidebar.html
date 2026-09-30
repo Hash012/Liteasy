@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>阅读批注 · ChatGPT</title><link rel="stylesheet" href="sidebar.css"><link rel="stylesheet" href="whiteboard.css"></head>
+<body>
+<header class="topbar"><div><p class="eyebrow">READ · REFLECT · REMEMBER</p><h1>阅读批注 <span class="version">0.5</span></h1></div><button id="settings" class="icon-button" title="进度备份与设置" aria-label="进度备份与设置">设置</button></header>
+<div class="context-bar"><span class="dot"></span><span id="context-title">正在连接当前会话…</span></div>
+<nav class="app-modes" role="tablist" aria-label="工作区模式"><button id="app-notes" role="tab" aria-selected="true">批注 · Notes</button><button id="app-whiteboard" role="tab" aria-selected="false">Whiteboard · 白板</button></nav>
+<nav class="main-actions" aria-label="批注工具"><button id="new-note" class="primary">＋ 新建批注</button><button id="export-toggle">导入 / 导出</button><button id="drafts-toggle">恢复草稿</button><button id="help-toggle" aria-label="Markdown 语法帮助">?</button></nav>
+<section id="export-tools" class="utility" hidden><h2>把批注带走</h2><p>Markdown 适合阅读、归档；JSON 可重新导入，保留来源、标签与删除状态。</p><div class="button-grid"><button id="export-md">当前筛选 · Markdown</button><button id="export-json">当前筛选 · JSON</button><button id="export-all">全部批注 · JSON</button><button id="export-current">当前编辑内容 · Markdown</button></div><label class="file-button">导入批注 JSON<input id="import-notes" type="file" accept=".json,application/json"></label><p class="muted">全部 JSON 包括回收站，不包含阅读进度和未保存草稿。进度在“设置”中单独备份。备份含私人批注、摘录及会话链接，请妥善保存。</p></section>
+<main class="workspace">
+<section class="library" aria-label="批注列表"><div class="filters"><input id="search" type="search" placeholder="搜索标题、正文、标签…" aria-label="搜索批注"><div class="filter-row"><select id="scope-filter" aria-label="会话范围"><option value="current">当前对话</option><option value="all">全部对话</option></select><select id="status-filter" aria-label="批注状态"><option value="active">全部批注</option><option value="pinned">已置顶</option><option value="trash">回收站</option></select><button id="refresh-list" title="刷新列表" aria-label="刷新列表">刷新</button></div></div>
+<div id="section-filter" class="section-filter" hidden><span id="section-filter-text"></span><button id="clear-section" aria-label="取消章节筛选">×</button></div>
+<div id="note-list" class="note-list" aria-live="polite"></div><div class="pagination"><button id="prev-page" disabled>上一页</button><span id="list-status">读取中…</span><button id="next-page" disabled>下一页</button></div></section>
+<section class="editor-pane" aria-label="批注编辑器"><div id="editor-empty" class="empty-state"><span class="empty-glyph" aria-hidden="true">✎</span><h2>把理解写下来</h2><p>点击 ChatGPT 章节右侧的批注图标，记录一个自己的例子、一处疑问，或一条与旧知识的联系。</p><p class="muted">也可以在这里新建独立批注。未打开预览时，不加载 Markdown 解析器。</p></div>
+<div id="editor" hidden>
+<div class="editor-heading"><span id="editor-kind" class="eyebrow">章节批注</span><span id="save-status-top" class="save-mini" title="保存状态"></span><button id="pin-note" aria-pressed="false">置顶</button><button id="locate-note">回到原文</button><button id="note-to-board" title="把当前编辑的 Markdown 快照放入白板">放入白板</button></div>
+<label class="sr-only" for="note-title">批注标题</label><input id="note-title" class="title-input" maxlength="300" placeholder="给这段理解起个名字">
+<label class="sr-only" for="note-tags">标签，用逗号分隔</label><input id="note-tags" class="tags-input" placeholder="标签：例如 数据库, 待验证（最多 12 个）">
+<details id="source-details" class="source"><summary id="source-heading">原文摘录</summary><p id="source-conversation"></p><blockquote id="source-quote"></blockquote></details>
+<div class="mode-bar" role="group" aria-label="编辑模式"><button data-mode="write">编辑</button><button data-mode="split" class="selected">编辑 + 预览</button><button data-mode="preview">阅读</button><button id="force-preview" title="手动重新渲染，包括超长批注">刷新预览</button></div>
+<div id="write-area"><div class="format-bar" aria-label="插入 Markdown"><button data-format="bold" title="粗体" aria-label="粗体">B</button><button data-format="italic" title="斜体" aria-label="斜体">I</button><button data-format="code" title="行内代码">` `</button><button data-format="fence" title="代码块">代码</button><button data-format="task" title="任务列表">任务</button><button data-format="link" title="链接">链接</button><button data-format="table" title="表格">表格</button><button data-format="math" title="数学公式">公式</button></div><label class="sr-only" for="note-body">Markdown 批注正文</label><textarea id="note-body" spellcheck="false" maxlength="262144" placeholder="我理解的核心是……&#10;&#10;## 自己的例子&#10;&#10;## 还没有想明白的地方"></textarea></div>
+<div id="preview-area"><p class="preview-label">MARKDOWN PREVIEW</p><article id="preview" class="markdown-body" aria-label="Markdown 渲染预览"></article></div>
+<div id="conflict" class="conflict" hidden><strong>另一窗口已修改这条批注。</strong><p>没有覆盖任一份正文。可将当前内容另存为副本，或读取最新版本；当前内容会保留为恢复草稿。</p><button id="conflict-copy">把我的编辑另存为副本</button><button id="conflict-reload">读取最新版本</button></div>
+<footer class="editor-footer"><span id="save-status" role="status" aria-live="polite">尚未修改</span><span id="char-count">0 字符</span><button id="save-note" class="primary">保存</button><button id="delete-note" class="danger-text">移入回收站</button><button id="restore-note" hidden>恢复批注</button></footer>
+</div></section></main>
+<section id="wb-workspace" class="wb-workspace" hidden aria-label="Whiteboard 知识白板">
+  <div class="wb-toolbar">
+    <select id="wb-board-select" aria-label="选择白板"></select><button id="wb-new" title="新建白板">新建</button><button id="wb-more" hidden>更多白板</button><button id="wb-rename" title="重命名当前白板">命名</button>
+    <button id="wb-wide" title="在独立标签页打开同一白板">宽屏 ↗</button>
+  </div>
+  <div class="wb-tools" role="toolbar" aria-label="白板操作">
+    <button id="wb-add" class="primary">＋ 卡片</button><button id="wb-group">分组</button><button id="wb-connect" aria-pressed="false">连线</button><button id="wb-materials-toggle">批注素材</button><button id="wb-files-toggle">导入 / 导出</button><button id="wb-help">?</button>
+  </div>
+  <section id="wb-files" class="wb-utility" hidden><strong>Obsidian Canvas · 可携带的知识图</strong><div class="button-grid"><button id="wb-export">当前白板 · .canvas</button><button id="wb-backup">全部白板 · JSON 备份</button><label class="file-button">导入 .canvas / 白板备份<input id="wb-import" type="file" accept=".canvas,.json,application/json"></label><button id="wb-recovery">恢复草稿</button><button id="wb-trash">移入回收站</button><button id="wb-show-trash">查看回收站</button></div><p class="muted">.canvas 保留卡片、Markdown、坐标、尺寸、颜色和连线。JSON 还保留插件来源信息；文件卡片的 Vault 附件不会被打包。</p></section>
+  <section id="wb-materials" class="wb-materials" hidden aria-label="可拖拽的批注素材"><div class="filter-row"><input id="wb-note-search" type="search" placeholder="搜索批注…" aria-label="搜索白板素材"><select id="wb-note-scope" aria-label="素材会话范围"><option value="current">当前对话</option><option value="all">全部对话</option></select><button id="wb-note-refresh">刷新</button></div><div id="wb-note-list"></div><div class="pagination"><button id="wb-note-prev">上一页</button><span id="wb-note-page"></span><button id="wb-note-next">下一页</button></div></section>
+  <div class="wb-stage-wrap">
+    <div id="wb-stage" class="wb-stage" tabindex="0" role="region" aria-label="无限白板；双击空白新建卡片，拖动标题移动，拖动连接点连线">
+      <div id="wb-world" class="wb-world"><svg id="wb-edges" class="wb-edges" xmlns="http://www.w3.org/2000/svg" aria-label="卡片关系连线"></svg><div id="wb-nodes" class="wb-nodes"></div></div>
+      <div id="wb-empty" class="wb-empty"><span>✦</span><h2>把片段连成理解</h2><p>从 ChatGPT 拖入选中的文字，或拖动章节右侧的 ⠿。<br>也可以展开「批注素材」，把自己的理解放到这里。</p><p class="muted">双击空白新建卡片 · 拖动卡片边缘圆点连线</p></div>
+    </div>
+    <div id="wb-selection-tools" class="wb-selection-tools" hidden><span id="wb-selection-count"></span><button id="wb-edit">编辑</button><select id="wb-color" aria-label="卡片或连线颜色"><option value="">默认色</option><option value="1">红色</option><option value="2">橙色</option><option value="3">黄色</option><option value="4">绿色</option><option value="5">青色</option><option value="6">紫色</option></select><button id="wb-source">原文 ↗</button><button id="wb-delete">删除</button></div>
+    <div class="wb-view-tools"><button id="wb-undo" title="撤销 Ctrl+Z">↶</button><button id="wb-redo" title="重做 Ctrl+Shift+Z">↷</button><button id="wb-zoom-out" aria-label="缩小">−</button><button id="wb-zoom-reset" title="重置缩放">100%</button><button id="wb-zoom-in" aria-label="放大">＋</button><button id="wb-fit">适应</button></div>
+  </div>
+  <div id="wb-conflict" class="conflict" hidden><strong>另一窗口修改了这块白板，未覆盖任一版本。</strong><p>当前版本已保留恢复草稿。可另存副本，或先导出 .canvas 后读取最新版本。</p><button id="wb-conflict-copy">我的版本另存为副本</button><button id="wb-conflict-reload">读取最新</button></div>
+  <footer class="wb-status"><span id="wb-save-status" role="status">读取中…</span><button id="wb-save">保存 / 重试</button><span id="wb-count">0 卡片 · 0 连线</span></footer>
+</section>
+<dialog id="wb-edit-dialog"><div class="dialog-title"><h2 id="wb-editor-title">编辑卡片</h2><button id="wb-editor-close" aria-label="关闭卡片编辑器">×</button></div><label id="wb-field-label" for="wb-text">Markdown 正文</label><textarea id="wb-text" spellcheck="false" maxlength="262144"></textarea><div id="wb-edge-options" hidden><label>起点<select id="wb-from-end"><option value="none">无线头</option><option value="arrow">箭头</option></select></label><label>终点<select id="wb-to-end"><option value="arrow">箭头</option><option value="none">无线头</option></select></label></div><div class="wb-editor-actions"><span class="muted">点击保存后写入白板。Esc 关闭前会检查未保存修改。</span><button id="wb-card-preview-button">预览</button><button id="wb-editor-save" class="primary">保存卡片</button></div><article id="wb-card-preview" class="markdown-body" hidden></article></dialog>
+<dialog id="wb-help-dialog"><div class="dialog-title"><h2>Whiteboard 操作</h2><button data-close="wb-help-dialog">×</button></div><p>拖拽：将 ChatGPT 选中文字、章节 ⠿ 按钮、批注素材、链接、.md / .txt 文件拖到画布。浏览器不允许跨侧栏拖放时，点击章节 ⠿ 可直接发送到白板；批注也有“放入白板”按钮。</p><p>移动：拖动卡片标题；Shift 点选多张卡片。分组后拖动分组标题会带动包含的卡片。右下角拖柄调整尺寸。</p><p>连线：拖动卡片四边圆点到另一张卡片；也可以点击“连线”后依次点击两个卡片。双击连线编辑文字与箭头方向。删除卡片会同步删除关联边。</p><p>视图：拖动空白 / 空格拖动 / 中键拖动以平移，滚轮平移，Ctrl / ⌘ + 滚轮缩放。适应按钮显示全图；双击空白新建卡片。</p><p>快捷键：Delete 删除选中对象；Ctrl / ⌘ + Z 撤销，Shift + Z 重做；Ctrl / ⌘ + S 保存；Esc 退出连线或取消选中。</p><p>兼容性：遵循 JSON Canvas 1.0。文本、链接、分组可编辑；导入的 Vault 文件与分组背景仅保留路径，不读取本机文件或加载网页。导出 .canvas 放入 Obsidian Vault 即可打开；相关附件需自行保留在对应路径。</p><p>资源限制：每块最多 1,000 卡片 / 3,000 连线 / 5 MiB 内容；仅挂载附近卡片，预览仅显示前 12,000 字符（完整正文保存与导出不截断）。撤销历史最多 30 步且估算不超过 8 MiB。页面关闭后撤销历史不保留。</p></dialog>
+<dialog id="wb-recovery-dialog"><div class="dialog-title"><h2>白板恢复草稿与回收站</h2><button data-close="wb-recovery-dialog">×</button></div><div id="wb-recovery-list"></div></dialog>
+
+<p id="notice" role="status" aria-live="polite"></p><footer class="privacy">本地保存 · 无云端同步 · 外部图片需点击才加载</footer>
+<dialog id="draft-dialog"><div class="dialog-title"><h2>可恢复的草稿</h2><button data-close="draft-dialog" aria-label="关闭草稿列表">×</button></div><p class="muted">这里保留尚未成功保存、发生冲突或意外关闭前已写入本地的编辑。</p><div id="draft-list"></div><div class="pagination"><button id="draft-prev" disabled>上一页</button><span id="draft-page"></span><button id="draft-next" disabled>下一页</button></div></dialog>
+<dialog id="help-dialog"><div class="dialog-title"><h2>Markdown 语法</h2><button data-close="help-dialog" aria-label="关闭语法帮助">×</button></div><p>支持 CommonMark 核心语法、GFM 表格 / 任务列表 / 删除线 / 自动链接，另支持脚注、定义列表、高亮、数学公式和常见语言代码高亮。</p><pre># 标题
+**粗体**、*斜体*、~~删除线~~、`行内代码`
+==高亮==、++插入++
+
+- 列表
+  - 嵌套列表
+- [x] 已完成
+- [ ] 待验证
+
+&gt; 引用
+
+[链接](https://example.com)
+![图片说明](https://example.com/image.png)
+
+| 方法 | 代价 |
+| --- | ---: |
+| A | 10 |
+
+```rust
+let answer = 42;
+```
+
+行内公式 $E=mc^2$
+
+$$
+\sum_{i=1}^{n} i = \frac{n(n+1)}{2}
+$$
+
+一个需要补充的观点[^1]。
+
+[^1]: 脚注内容，可缩进续写。
+
+术语
+: 定义内容</pre><p>原始 HTML 仅保留安全排版标签，如 &lt;details&gt;、&lt;kbd&gt;、&lt;sub&gt;。脚本、内嵌网页和任意 CSS 不执行。Mermaid 等专有方言保留为代码块，不运行。</p><p>Ctrl / ⌘ + S 保存；Ctrl / ⌘ + B 加粗；Ctrl / ⌘ + I 斜体。单篇上限 262,144 字符；超过 40,000 字符手动刷新预览。</p></dialog>
+<script src="shared.js"></script><script src="notes-core.js"></script><script src="markdown-view.js"></script><script src="sidebar.js"></script><script src="canvas-core.js"></script><script src="whiteboard.js"></script>
+</body></html>

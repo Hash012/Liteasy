@@ -1,0 +1,9 @@
+.cgr3-control:focus-within { outline-color: #0f6cbd; }
+.cgr3-checkbox { accent-color: #0f6cbd; }
+.cgr3-preview { outline-color: #0f6cbd; }
+.cgr4-note-button:hover, .cgr4-note-button:focus-visible,
+.cgr5-board-button:hover, .cgr5-board-button:focus-visible { outline-color: #0f6cbd; }
+.cgr4-note-button.has-notes { color: #0f6cbd; }
+.cgr4-note-button[data-count]:not([data-count=""])::after { background: #0f6cbd; }
+.cgr4-located { outline-color: #0f6cbd !important; }
+.cgr5-board-button svg { width: 16px; height: 16px; vertical-align: middle; }

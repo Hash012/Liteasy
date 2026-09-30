@@ -1,0 +1,47 @@
+/* A constant gutter prevents text reflow when a virtual checkbox mounts/unmounts.
+   These are semantic selectors, not generated Tailwind class names. */
+main :is([data-message-author-role="assistant"],[data-role="assistant"],[data-author="assistant"])
+  :is(h1,h2,h3,h4,h5,h6) {
+  position: relative;
+  padding-inline-end: 2.3rem !important;
+}
+.cgr3-heading { position: relative !important; }
+.cgr3-control {
+  position: absolute; inset-inline-end: 0; top: .02em;
+  z-index: 2; display: inline-flex; align-items: center; justify-content: center;
+  width: 1.75rem; height: 1.75rem; border-radius: .5rem;
+  border: 1px solid color-mix(in srgb,currentColor 22%,transparent);
+  background: Canvas; color: CanvasText; color-scheme: light dark;
+  cursor: pointer; opacity: .78;
+}
+.cgr3-control:hover, .cgr3-control:focus-within { opacity: 1; }
+.cgr3-control:focus-within { outline: 2px solid #10a37f; outline-offset: 2px; }
+.cgr3-checkbox { width: 1rem; height: 1rem; margin: 0; accent-color: #10a37f; cursor: pointer; }
+.cgr3-checkbox:disabled { cursor: progress; opacity: .4; }
+.cgr3-heading[data-cgr3-read] {
+  text-decoration: underline; text-decoration-color: #10a37f;
+  text-decoration-thickness: .1em; text-underline-offset: .22em;
+}
+[data-cgr3-read]:not(.cgr3-heading) { opacity: .64; }
+.cgr3-preview { outline: 1px dashed #10a37f; outline-offset: .2rem; }
+@media print {
+  .cgr3-control, #cgr3-summary { display: none !important; }
+  [data-cgr3-read] { opacity: 1 !important; }
+}
+
+/* Note controls contain no label text, preserving heading identities. */
+.cgr3-control{display:inline-flex!important;align-items:center;gap:5px!important}
+.cgr4-note-button{position:relative;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;padding:4px;border:1px solid transparent;border-radius:6px;background:transparent;color:inherit;cursor:pointer;vertical-align:middle;opacity:.65}
+.cgr4-note-button:hover,.cgr4-note-button:focus-visible{opacity:1;background:color-mix(in srgb,currentColor 8%,transparent);outline:2px solid #10a37f;outline-offset:1px}
+.cgr4-note-button.has-notes{color:#10a37f;opacity:1}
+.cgr4-note-button[data-count]:not([data-count=""])::after{content:attr(data-count);position:absolute;right:-6px;top:-6px;font:9px/1 system-ui;padding:2px 3px;border-radius:6px;color:white;background:#12795e}
+.cgr4-located{outline:3px solid #10a37f!important;outline-offset:7px;border-radius:3px}
+main :is([data-message-author-role="assistant"],[data-role="assistant"],[data-author="assistant"]) :is(h1,h2,h3,h4,h5,h6){padding-inline-end:4rem!important}
+.cgr3-control{width:3.4rem;height:1.8rem;padding-inline:4px}
+
+/* v0.5: drag/add-to-whiteboard handle, no layout jump on virtualization. */
+.cgr5-board-button{border:0;background:transparent;color:inherit;cursor:grab;font:20px/1 system-ui;padding:1px 3px;border-radius:4px;touch-action:none}
+.cgr5-board-button:hover,.cgr5-board-button:focus-visible{outline:2px solid #10a37f;background:color-mix(in srgb,currentColor 9%,transparent)}
+.cgr5-board-button:active{cursor:grabbing}
+.cgr3-control{width:5.1rem;gap:4px!important}
+main :is([data-message-author-role="assistant"],[data-role="assistant"],[data-author="assistant"]) :is(h1,h2,h3,h4,h5,h6){padding-inline-end:5.8rem!important}

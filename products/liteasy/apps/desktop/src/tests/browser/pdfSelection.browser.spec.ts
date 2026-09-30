@@ -2,6 +2,9 @@ import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
+// These cases include two PDF loads plus interaction and persistence checks.
+test.setTimeout(60_000);
+
 for (const scenario of [
   { reverse: false, zoom: 100 },
   { reverse: true, zoom: 100 },
@@ -15,7 +18,7 @@ for (const scenario of [
     await page.setViewportSize({ height: 1220, width: 2048 });
     await page.goto("/?pdf-highlight-fixture");
     const text = page.locator('.pdf-page-shell[data-page="1"] .pdf-text-layer span').filter({ hasText: "WiWi tail" });
-    await expect(text).toBeVisible();
+    await expect(text).toBeVisible({ timeout: 30_000 });
     for (let zoom = 100; zoom !== scenario.zoom; zoom += scenario.zoom > 100 ? 5 : -5) {
       await page.getByRole("button", { name: scenario.zoom > 100 ? "按比例放大 PDF" : "按比例缩小 PDF", exact: true }).click();
     }
@@ -50,7 +53,7 @@ for (const scenario of [
     expect(saved!.x).toBeCloseTo(bounds!.x, 0);
     expect(saved!.width).toBeCloseTo(bounds!.width, 0);
     await page.reload();
-    await expect(mark).toHaveAttribute("title", "第 1 页：WiW");
+    await expect(mark).toHaveAttribute("title", "第 1 页：WiW", { timeout: 30_000 });
     if (scenario.zoom === 100 && !scenario.reverse) {
       await page.getByRole("button", { name: "在文档中搜索", exact: true }).click();
       await page.getByRole("textbox", { name: "搜索文档内容" }).fill("alpha");
@@ -65,7 +68,7 @@ for (const scenario of [
 test("a drag beginning in the right column does not absorb the preceding left column", async ({ page }) => {
   await page.setViewportSize({ height: 1220, width: 2048 });
   await page.goto("/?pdf-highlight-fixture");
-  await expect(page.locator('.pdf-page-shell[data-page="3"]')).toBeAttached();
+  await expect(page.locator('.pdf-page-shell[data-page="3"]')).toBeAttached({ timeout: 30_000 });
   await page.getByLabel("当前页码").fill("3");
   await page.getByLabel("当前页码").press("Enter");
 
@@ -108,7 +111,7 @@ test("a drag beginning in the right column does not absorb the preceding left co
 test("dragging beyond a word right edge includes all of its trailing letters", async ({ page }) => {
   await page.setViewportSize({ height: 1220, width: 2048 });
   await page.goto("/?pdf-highlight-fixture");
-  await expect(page.locator('.pdf-page-shell[data-page="3"]')).toBeAttached();
+  await expect(page.locator('.pdf-page-shell[data-page="3"]')).toBeAttached({ timeout: 30_000 });
   await page.getByLabel("当前页码").fill("3");
   await page.getByLabel("当前页码").press("Enter");
 

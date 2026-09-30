@@ -1,0 +1,18 @@
+{
+  "repository": "https://github.com/zotero/zotero-connectors.git",
+  "commit": "876e41ad15139077f2e07b2f71a0fa94742e0b4a",
+  "license": "AGPL-3.0-or-later",
+  "translators": {
+    "repository": "https://github.com/zotero/translators.git",
+    "commit": "979cac8d089438e860959e56a6099f17c46a94ef"
+  },
+  "submodules": {
+    "src/translate": "485ac36edbd66459e2aa3bad4d4b36921be2c7c2",
+    "src/utilities": "cccf1235a318c259345fc623d5e9d6770ba19df7",
+    "src/zotero": "01ebeb183439bbd79797bbcd4a41e99aad099ab8",
+    "src/zotero-google-docs-integration": "a46413151134ad699c351ac42ecbbe9c76c8e6cc",
+    "src/zotero-schema": "b5b3f51217a99b3c41585d468ee1dc0837233d13"
+  },
+  "readingSource": "chatgpt-reading-progress-v0.5.0.zip",
+  "readingSourceSha256": "06df9d427479a86b9edbde2cdee906b432c997dcaa0459852406771c2efabb31"
+}

@@ -1,0 +1,9 @@
+:root { color-scheme: light dark; font: 15px/1.75 system-ui,sans-serif; }
+body { margin:0; color:CanvasText; background:Canvas; }
+main { max-width:800px; padding:42px 24px 64px; margin:auto; }
+header { margin-bottom:32px; }.eyebrow { font-size:11px; letter-spacing:.14em; color:#148167; }
+h1 { font-size:30px; letter-spacing:-.025em; line-height:1.4; margin:10px 0 16px; }h2 { font-size:19px; margin:0 0 10px; }
+p { margin:10px 0; }section { padding:23px 0; border-top:1px solid color-mix(in srgb,CanvasText 16%,transparent); }
+.hint,footer { color:GrayText; font-size:13px; }button,.file { font:inherit; padding:8px 16px; border-radius:8px; border:1px solid color-mix(in srgb,CanvasText 22%,transparent); color:inherit; background:color-mix(in srgb,CanvasText 5%,Canvas); cursor:pointer; display:inline-block; }
+button:disabled { opacity:.5;cursor:wait; }.primary { background:#147d63; color:#fff; border-color:#147d63; }.actions { display:flex;gap:12px;flex-wrap:wrap;margin:18px 0; }.file input { display:block;font-size:12px;max-width:260px;margin-top:4px; }
+.danger button { color:#c04a32; }#status { white-space:pre-wrap;overflow-wrap:anywhere;padding:14px 0;color:#148167; }#status.error { color:#c04a32; }footer { padding-top:20px; }#stats { font-weight:600; }

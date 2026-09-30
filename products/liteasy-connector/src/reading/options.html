@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>阅读进度 · 备份与存储管理</title><link rel="stylesheet" href="options.css"></head>
+<body><main>
+<header><p class="eyebrow">CHATGPT READING PROGRESS · v0.5.0</p><h1>把读过的内容，稳妥地留下来。</h1>
+<p>进度仅存于此浏览器的扩展空间；不读取账户令牌，不上传批注或聊天内容，也不自动跨设备同步。</p></header>
+<section><h2>批注管理</h2><p>批注保存在此扩展的 IndexedDB 中，与下面的阅读进度独立。打开管理器可搜索、编辑、导出批注，或恢复回收站与未完成草稿。</p><div id="notes-stats">正在读取批注统计…</div><button id="open-notes" class="primary">打开完整批注管理器</button></section>
+<section><h2>阅读进度存储</h2><div id="stats" aria-live="polite">正在读取…</div>
+<p class="hint">已取消的勾选也保留小型记录，以免多标签页同步或导入旧备份时让旧勾选重新出现。不会因超过 5,000 节而自动删除旧进度。</p>
+<button id="refresh">刷新统计</button></section>
+<section><h2>阅读进度备份与恢复</h2><p>导出 JSON 后可保存到自己的备份位置。导入按每一节的修改时间合并，不覆盖其他较新的记录。备份只包含标记及散列标识；兼容旧版的历史备份可能包含标题文字。</p>
+<div class="actions"><button id="export" class="primary">导出全部进度</button><label class="file">导入备份<input id="import" type="file" accept=".json,application/json"></label></div>
+<p class="hint">升级请覆盖原扩展目录后重新加载，不要先卸载。更换安装目录可能产生不同扩展 ID；卸载通常会删除该扩展的本地数据。换设备或安装目录前先导出。</p></section>
+<section><h2>性能与统计口径</h2><p>页面默认保留附近 24 个助手消息、240 组章节控件，数据缓存最多 64 条消息。24 / 240 为软上限：视野内或正在操作的回复和整节正文优先保留，不为限额强制卸载。远处卸载控件时保留已读样式，重载进度前显示读取中。远处正文仍由 ChatGPT 自己管理，插件不会删除、折叠或重建原文。隐藏标签页时暂停观察并释放页面节点引用。</p>
+<p>页面右下角“附近回复”不是整场对话的总章节数。点击“工具 → 刷新诊断”可查看当前挂载数、扫描次数与任务切片耗时；这里的毫秒值是当前设备实测，不是承诺的延迟上限。</p></section>
+<section class="danger"><h2>清空全部进度</h2><p>这会删除本扩展的新旧阅读记录和兼容迁移数据，不删除批注、回收站和批注草稿。请先导出备份。不会修改 ChatGPT 的聊天记录。</p><button id="clear">清空全部本地进度…</button></section>
+<p id="status" role="status" aria-live="polite"></p>
+<footer>无远程脚本 · 无云端同步 · 本地 Markdown 依赖 · storage / sidePanel 权限 · 仅注入 chatgpt.com</footer>
+</main><script src="options.js"></script></body></html>
