@@ -9,8 +9,17 @@ export function useTasksController(scope: string) {
   const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
   const active = useRef(scope); active.current = scope;
   const loaded = useRef(scope);
+  const changes = useRef(0);
+  const refreshing = useRef<{ scope: string; promise: Promise<void> }>();
   const available = scope !== "local" && hasNativeHost();
-  const refresh = useCallback(async () => { if (!available) return; const value = await taskClient.snapshot(scope); if (active.current === scope) { loaded.current = scope; setSnapshot(value); } }, [scope, available]);
+  const refresh = useCallback(() => {
+    if (!available) return Promise.resolve();
+    if (refreshing.current?.scope === scope) return refreshing.current.promise;
+    const revision = changes.current;
+    const promise = taskClient.snapshot(scope).then((value) => { if (active.current === scope && changes.current === revision) { loaded.current = scope; setSnapshot(value); } })
+      .finally(() => { if (refreshing.current?.promise === promise) refreshing.current = undefined; });
+    refreshing.current = { scope, promise }; return promise;
+  }, [scope, available]);
   useEffect(() => {
     active.current = scope; setSnapshot(empty); setError(""); setBusy(false); let live = true; let polling = false;
     const check = async () => {
@@ -23,7 +32,18 @@ export function useTasksController(scope: string) {
   }, [available, refresh, scope]);
   const run = async (action: () => Promise<unknown>) => {
     setBusy(true); setError("");
-    try { await action(); await refresh(); }
+    try {
+      const value = await action();
+      if (active.current !== scope) return;
+      changes.current++;
+      if (value && typeof value === "object" && "outbox" in value) { loaded.current = scope; setSnapshot(value as TaskSnapshot); }
+      else if (value && typeof value === "object" && "operationId" in value) {
+        const task = value as RemoteTask; loaded.current = scope;
+        setSnapshot((previous) => ({ ...previous, outbox: [...previous.outbox.filter((entry) => entry.operationId !== task.operationId), task] }));
+      }
+      // The durable local send/cancel has completed; a slow status poll must not keep the UI busy.
+      void refresh().catch((reason) => { if (active.current === scope) setError(String(reason)); });
+    }
     catch (reason) { if (active.current === scope) setError(reason instanceof Error ? reason.message : String(reason)); }
     finally { if (active.current === scope) setBusy(false); }
   };

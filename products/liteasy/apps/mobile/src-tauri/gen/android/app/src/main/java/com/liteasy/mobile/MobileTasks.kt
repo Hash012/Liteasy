@@ -12,56 +12,66 @@ import java.util.concurrent.TimeUnit
 
 /** The account owns this credential/outbox. No device secret is returned to JavaScript or WebDAV. */
 class MobileTasks(private val context: Context, private val scope: String, private val account: MobileAccount = MobileAccount(context)) {
-    companion object { private val locks = java.util.concurrent.ConcurrentHashMap<String, Any>() }
+    companion object {
+        private val locks = java.util.concurrent.ConcurrentHashMap<String, Any>()
+        private val sendLocks = java.util.concurrent.ConcurrentHashMap<String, Any>()
+    }
     private val mutex = locks.getOrPut(scope) { Any() }
     private val local = DavLocal(context, scope)
     private val secure = SecureStore(context)
     private val key = "device:$scope"
     private fun assertScope() { require(scope != "local" && account.activeScope() == scope) { "请先登录对应账号。" } }
-    private fun credential(): JSONObject {
+    private fun credential(): JSONObject = synchronized(mutex) {
         assertScope()
-        return secure.read(key)?.let(::JSONObject) ?: JSONObject().put("deviceId", UUID.randomUUID().toString())
+        secure.read(key)?.let(::JSONObject) ?: JSONObject().put("deviceId", UUID.randomUUID().toString())
             .put("secret", Base64.encodeToString(ByteArray(32).also { SecureRandom().nextBytes(it) }, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP))
             .put("name", "${Build.MANUFACTURER} ${Build.MODEL}".take(100)).put("capabilities", JSONArray()).also { secure.write(key, it.toString()) }
     }
     private fun call(path: String, method: String = "GET", body: JSONObject? = null): JSONObject {
         val device = credential()
         if (!device.optBoolean("registered")) {
-            account.request("/v1/mobile/devices/register", "POST", device, expectedScope = scope)
+            val registered = account.request("/v1/mobile/devices/register", "POST", device, expectedScope = scope)
+            require(registered.getJSONObject("device").getString("deviceId") == device.getString("deviceId")) { "设备注册响应不匹配。" }
             device.put("registered", true); secure.write(key, device.toString())
         }
         return account.request("/v1/mobile/$path", method, body, mapOf("X-Liteasy-Device-Id" to device.getString("deviceId"), "X-Liteasy-Device-Secret" to device.getString("secret")), scope)
     }
     private fun outbox() = (local.record("task-outbox") as? JSONArray) ?: JSONArray()
-    fun snapshot(): JSONObject = synchronized(mutex) {
-        assertScope()
-        var error: String? = null
-        val snapshot = try { call("devices").also { local.record("device-snapshot", it) } }
-        catch (_: Exception) { error = "暂时无法刷新桌面状态，待发送任务仍保存在本机。"; (local.record("device-snapshot") as? JSONObject) ?: JSONObject().put("devices", JSONArray()).put("pairs", JSONArray()).put("tasks", JSONArray()) }
+    private fun cachedSnapshot(error: String? = null): JSONObject = synchronized(mutex) {
+        val snapshot = (local.record("device-snapshot") as? JSONObject) ?: JSONObject().put("devices", JSONArray()).put("pairs", JSONArray()).put("tasks", JSONArray())
         snapshot.put("outbox", outbox()); snapshot.put("offline", error != null); if (error != null) snapshot.put("error", error)
         snapshot
     }
-    fun pair(code: String): JSONObject = synchronized(mutex) { call("pairs", "POST", JSONObject().put("code", code)); snapshot() }
-    fun result(taskId: String, updatedAt: Long): JSONObject = synchronized(mutex) {
-        assertScope(); require(Regex("[a-f0-9-]{36}").matches(taskId))
-        val cached = (local.record("task-results") as? JSONObject) ?: JSONObject()
-        val prior = cached.optJSONObject(taskId)
-        if (prior != null && prior.optLong("updatedAt") == updatedAt && prior.optString("status") in listOf("succeeded", "failed", "cancelled")) return@synchronized prior
-        val task = try { call("tasks/$taskId").getJSONObject("task") }
-        catch (error: Exception) { if (prior != null && prior.optLong("updatedAt") == updatedAt) return@synchronized prior else throw error }
-        cached.put(taskId, task)
-        val ids = cached.keys().asSequence().toList().sortedByDescending { cached.getJSONObject(it).optLong("updatedAt") }
-        ids.drop(20).forEach { cached.remove(it) }
-        local.record("task-results", cached); task
+    fun snapshot(): JSONObject {
+        assertScope()
+        var error: String? = null
+        try { val response = call("devices"); synchronized(mutex) { local.record("device-snapshot", response) } }
+        catch (_: Exception) { error = "暂时无法刷新桌面状态，待发送任务仍保存在本机。" }
+        assertScope(); return cachedSnapshot(error)
     }
-    fun unpair(pairId: String): JSONObject = synchronized(mutex) {
+    fun pair(code: String): JSONObject { call("pairs", "POST", JSONObject().put("code", code)); return snapshot() }
+    fun result(taskId: String, updatedAt: Long): JSONObject {
+        assertScope(); require(Regex("[a-f0-9-]{36}").matches(taskId))
+        val prior = synchronized(mutex) { (local.record("task-results") as? JSONObject)?.optJSONObject(taskId) }
+        if (prior != null && prior.optLong("updatedAt") == updatedAt && prior.optString("status") in listOf("succeeded", "failed", "cancelled")) return prior
+        val task = try { call("tasks/$taskId").getJSONObject("task") }
+        catch (error: Exception) { if (prior != null && prior.optLong("updatedAt") == updatedAt) return prior else throw error }
+        synchronized(mutex) {
+            val cached = (local.record("task-results") as? JSONObject) ?: JSONObject()
+            cached.put(taskId, task)
+            val ids = cached.keys().asSequence().toList().sortedByDescending { cached.getJSONObject(it).optLong("updatedAt") }
+            ids.drop(20).forEach { cached.remove(it) }; local.record("task-results", cached)
+        }
+        return task
+    }
+    fun unpair(pairId: String): JSONObject {
         require(Regex("[a-f0-9-]{36}").matches(pairId))
         val previous = local.record("device-snapshot") as? JSONObject
         val pairs = previous?.optJSONArray("pairs") ?: JSONArray()
         val desktop = (0 until pairs.length()).map { pairs.getJSONObject(it) }.find { it.getString("pairId") == pairId }?.getString("desktopId")
         call("pairs/$pairId", "DELETE")
-        if (desktop != null) local.record("task-outbox", JSONArray((0 until outbox().length()).map { outbox().getJSONObject(it) }.filter { it.getString("desktopId") != desktop }))
-        snapshot()
+        if (desktop != null) synchronized(mutex) { val queue = outbox(); local.record("task-outbox", JSONArray((0 until queue.length()).map { queue.getJSONObject(it) }.filter { it.getString("desktopId") != desktop })) }
+        return snapshot()
     }
     fun enqueue(input: JSONObject): JSONObject = synchronized(mutex) {
         assertScope()
@@ -80,33 +90,49 @@ class MobileTasks(private val context: Context, private val scope: String, priva
         queue.put(value); local.record("task-outbox", queue); TaskOutboxWorker.schedule(context, scope)
         value
     }
-    fun cancel(operationId: String, taskId: String?): JSONObject = synchronized(mutex) {
+    fun cancel(operationId: String, taskId: String?): JSONObject {
         assertScope()
-        val queue = outbox(); val pending = (0 until queue.length()).map { queue.getJSONObject(it) }.find { it.getString("operationId") == operationId }
-        if (pending != null) {
-            // Resolving an unknown send and requesting cancellation happen in one server transaction.
-            pending.put("cancelRequested", true); local.record("task-outbox", queue); TaskOutboxWorker.schedule(context, scope)
+        val pending = synchronized(mutex) {
+            val queue = outbox(); val value = (0 until queue.length()).map { queue.getJSONObject(it) }.find { it.getString("operationId") == operationId }
+            if (value != null) { value.put("cancelRequested", true); local.record("task-outbox", queue) }
+            value != null
+        }
+        if (pending) {
+            TaskOutboxWorker.schedule(context, scope); return cachedSnapshot()
         } else {
             require(taskId != null && Regex("[a-f0-9-]{36}").matches(taskId)) { "任务不存在。" }
             call("tasks/$taskId/cancel", "POST", JSONObject())
         }
-        snapshot()
+        return snapshot()
     }
-    fun flush(stopped: () -> Boolean = { false }): Int = synchronized(mutex) {
+    fun flush(stopped: () -> Boolean = { false }): Int = synchronized(sendLocks.getOrPut(scope) { Any() }) {
         assertScope()
-        var sent = 0; val queue = outbox()
-        while (queue.length() > 0 && sent < 5 && !stopped()) {
-            val pending = queue.getJSONObject(0)
+        var sent = 0
+        while (sent < 5 && !stopped()) {
+            val pending = synchronized(mutex) { outbox().optJSONObject(0)?.let { JSONObject(it.toString()) } } ?: break
             try {
-                call("tasks", "POST", pending)
-                queue.remove(0); local.record("task-outbox", queue); sent++
+                val receipt = call("tasks", "POST", pending).getJSONObject("task")
+                require(receipt.getString("operationId") == pending.getString("operationId") && Regex("[a-f0-9-]{36}").matches(receipt.getString("taskId")) &&
+                    receipt.getString("status") in listOf("queued", "leased", "waiting-input", "running", "uncertain", "succeeded", "failed", "cancelled")) { "任务尚未收到有效回执，将保留并重试。" }
+                synchronized(mutex) {
+                    val queue = outbox(); val index = (0 until queue.length()).find { queue.getJSONObject(it).getString("operationId") == pending.getString("operationId") }
+                    if (index != null) {
+                        // A cancellation saved while the send was in flight must still reach the server.
+                        if (!queue.getJSONObject(index).optBoolean("cancelRequested") || pending.optBoolean("cancelRequested")) queue.remove(index)
+                        local.record("task-outbox", queue)
+                    }
+                }
+                sent++
             } catch (error: Exception) {
-                pending.put("error", "任务尚未确认送达，将使用同一操作编号重试。")
-                local.record("task-outbox", queue); throw error
+                synchronized(mutex) {
+                    val queue = outbox(); (0 until queue.length()).map { queue.getJSONObject(it) }.find { it.getString("operationId") == pending.getString("operationId") }
+                        ?.put("error", "任务尚未确认送达，将使用同一操作编号重试。")
+                    local.record("task-outbox", queue)
+                }
+                throw error
             }
         }
-        if (sent > 0) snapshot()
-        queue.length()
+        synchronized(mutex) { outbox().length() }
     }
 }
 

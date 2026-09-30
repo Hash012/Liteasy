@@ -12,10 +12,13 @@ import java.util.concurrent.Executors
 @TauriPlugin
 class MobilePlugin(private val activity: Activity) : Plugin(activity) {
     private val executor = Executors.newSingleThreadExecutor()
+    private val network = Executors.newFixedThreadPool(2)
     @Command
     fun dispatch(invoke: Invoke) {
         val request = invoke.getArgs().getJSONObject("request")
-        executor.execute {
+        val operation = request.getString("operation")
+        val queue = if (operation in setOf("beginLogin", "cancelLogin", "logout", "accountRequest", "tasksSnapshot", "taskResult", "pairDesktop", "unpairDesktop", "cancelTask")) network else executor
+        queue.execute {
             try {
                 val scope = request.optString("scope", "local")
                 val account = MobileAccount(activity)

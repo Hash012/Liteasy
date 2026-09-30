@@ -156,10 +156,18 @@ pub async fn device_control_request(
         .map_err(|_| "设备网络连接不可用。")?;
     let mut device = credential(&scope)?;
     if !device.registered {
-        response(client.post(format!("{endpoint}/v1/desktop/devices/register")).bearer_auth(&session_id)
+        let registered = response(client.post(format!("{endpoint}/v1/desktop/devices/register")).bearer_auth(&session_id)
             .header("Content-Type", "application/json")
             .body(json!({ "deviceId": device.device_id, "secret": device.secret, "name": "Liteasy 桌面", "capabilities": [] }).to_string())
             .send().await.map_err(|_| "无法连接设备服务。")?).await?;
+        if registered
+            .get("device")
+            .and_then(|value| value.get("deviceId"))
+            .and_then(Value::as_str)
+            != Some(device.device_id.as_str())
+        {
+            return Err("设备注册响应不匹配。".into());
+        }
         account_scope(&endpoint, &subject)?;
         device.registered = true;
         keyring::Entry::new(SERVICE, &scope)

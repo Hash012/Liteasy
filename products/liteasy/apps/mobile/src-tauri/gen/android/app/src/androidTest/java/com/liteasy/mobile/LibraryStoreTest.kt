@@ -58,4 +58,30 @@ class LibraryStoreTest {
         store.dispatch(scope, JSONObject().put("operation", "writeRecord").put("key", "preference").put("value", "true"))
         assertEquals("true", store.dispatch(scope, JSONObject().put("operation", "readRecord").put("key", "preference")))
     }
+
+    @Test fun versionOneUpgradePreservesMetadataAndRecordsAndAllowsSharedBytes() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val path = java.io.File(context.cacheDir, "upgrade-${UUID.randomUUID()}.db")
+        try {
+            android.database.sqlite.SQLiteDatabase.openOrCreateDatabase(path, null).use { db ->
+                db.execSQL("CREATE TABLE items (scope TEXT NOT NULL, id TEXT NOT NULL, hash TEXT NOT NULL, kind TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(scope,id), UNIQUE(scope,hash))")
+                db.execSQL("CREATE TABLE records (scope TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(scope,key))")
+                val value = JSONObject().put("title", "升级前资料").put("note", "保留备注").put("page", 8).toString()
+                db.execSQL("INSERT INTO items VALUES (?,?,?,?,?)", arrayOf("local", "original", "same-hash", "pdf", value))
+                db.execSQL("INSERT INTO records VALUES (?,?,?)", arrayOf("local", "annotations:original", "{\"version\":2,\"annotations\":[{\"id\":\"ink\"}]}"))
+                db.beginTransaction()
+                try { store.onUpgrade(db, 1, 2); db.version = 2; db.setTransactionSuccessful() } finally { db.endTransaction() }
+            }
+            android.database.sqlite.SQLiteDatabase.openDatabase(path.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READWRITE).use { db ->
+                assertEquals(2, db.version)
+                db.rawQuery("SELECT value FROM items WHERE id='original'", null).use { cursor ->
+                    assertTrue(cursor.moveToFirst()); val item = JSONObject(cursor.getString(0))
+                    assertEquals("升级前资料", item.getString("title")); assertEquals("保留备注", item.getString("note")); assertEquals(8, item.getInt("page"))
+                }
+                db.rawQuery("SELECT value FROM records", null).use { cursor -> assertTrue(cursor.moveToFirst()); assertTrue(cursor.getString(0).contains("ink")) }
+                db.execSQL("INSERT INTO items VALUES (?,?,?,?,?)", arrayOf("local", "another-document", "same-hash", "pdf", "{}"))
+                db.rawQuery("SELECT COUNT(*) FROM items", null).use { cursor -> cursor.moveToFirst(); assertEquals(2, cursor.getInt(0)) }
+            }
+        } finally { android.database.sqlite.SQLiteDatabase.deleteDatabase(path) }
+    }
 }

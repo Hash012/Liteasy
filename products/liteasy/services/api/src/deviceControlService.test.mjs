@@ -92,6 +92,10 @@ test("an old offline request cannot recreate a task after retained receipts expi
   const f = await fixture();
   await assert.rejects(() => f.enqueue({ createdAt: 1_000_000 - 8 * 86_400_000 }), /task_request_expired/);
   assert.equal((await f.service.claim("owner", f.desktop)).task, null);
+  const stopped = await f.enqueue({ createdAt: 1_000_000 - 20 * 86_400_000, cancelRequested: true });
+  assert.equal(stopped.task.status, "uncertain"); assert.equal((await f.service.claim("owner", f.desktop)).task, null);
+  f.advance(15 * 86_400_000);
+  assert.equal((await f.service.list("owner", "mobile", f.mobile)).tasks.length, 0);
 });
 
 test("polling omits large result text and only a task's paired participants can fetch it", async () => {

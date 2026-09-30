@@ -42,6 +42,10 @@ class MobileAccountTest {
                     JSONObject().put("subject", subject).put("issuer", "https://identity.example").put("audience", "liteasy-mobile")
                 }
                 "/revoke" -> { revoked = true; JSONObject() }
+                "/v1/mobile/devices/register" -> {
+                    val buffer = Buffer(); request.body!!.writeTo(buffer)
+                    JSONObject().put("device", JSONObject().put("deviceId", JSONObject(buffer.readUtf8()).getString("deviceId")))
+                }
                 else -> deviceHandler?.invoke(request) ?: error("Unexpected endpoint")
             }
         }
@@ -60,7 +64,7 @@ class MobileAccountTest {
                     assertNotNull(request.header("X-Liteasy-Device-Secret"))
                     val buffer = Buffer(); request.body!!.writeTo(buffer); received.add(JSONObject(buffer.readUtf8()))
                     if (loseReceipt) { loseReceipt = false; throw java.io.IOException("Lost response after server commit") }
-                    JSONObject().put("replayed", true)
+                    JSONObject().put("replayed", true).put("task", JSONObject().put("taskId", UUID.randomUUID().toString()).put("operationId", received.last().getString("operationId")).put("status", "queued"))
                 }
                 else -> error("Unexpected device endpoint")
             }
@@ -120,6 +124,39 @@ class MobileAccountTest {
         assertEquals(1, fetched)
         try { MobileTasks(context, scope, account).result(taskId, 124); fail("Stale cache must not replace a newer receipt") } catch (_: java.io.IOException) { }
     }
+    @Test fun slowNetworkDoesNotBlockLocalAccessAndPreservesCancellationDuringSend() {
+        val context = isolatedContext(); val provider = Provider(); provider.subject = "slow-${UUID.randomUUID()}"
+        val account = MobileAccount(context, provider)
+        val scope = account.complete(callback(account.begin("https://api.example"))).getString("scope")
+        val blocked = java.util.concurrent.CountDownLatch(1); val release = java.util.concurrent.CountDownLatch(1)
+        val requests = java.util.Collections.synchronizedList(mutableListOf<JSONObject>())
+        provider.deviceHandler = { request ->
+            if (request.url.encodedPath == "/v1/mobile/tasks") {
+                val buffer = Buffer(); request.body!!.writeTo(buffer); requests.add(JSONObject(buffer.readUtf8()))
+                if (requests.size == 1) { blocked.countDown(); check(release.await(40, java.util.concurrent.TimeUnit.SECONDS)) }
+                JSONObject().put("task", JSONObject().put("taskId", UUID.randomUUID().toString()).put("operationId", requests.last().getString("operationId")).put("status", "queued"))
+            } else JSONObject()
+        }
+        val tasks = MobileTasks(context, scope, account); val first = UUID.randomUUID().toString(); val desktop = UUID.randomUUID().toString()
+        tasks.enqueue(JSONObject().put("operationId", first).put("desktopId", desktop).put("kind", "sync-library"))
+        val threads = java.util.concurrent.Executors.newFixedThreadPool(2)
+        try {
+            val sending = threads.submit<Int> { tasks.flush() }
+            assertTrue(blocked.await(20, java.util.concurrent.TimeUnit.SECONDS))
+            val local = threads.submit<Boolean> {
+                assertEquals(scope, account.status().getString("scope")); assertEquals(scope, account.activeScope())
+                val item = "本机内容".byteInputStream().use { LibraryStore.get(context).importStream(scope, JSONObject().put("title", "离线文字").put("text", "本机内容"), it) }
+                assertEquals("离线文字", item.getString("title"))
+                tasks.cancel(first, null)
+                tasks.enqueue(JSONObject().put("operationId", UUID.randomUUID().toString()).put("desktopId", desktop).put("kind", "sync-library"))
+                true
+            }
+            assertTrue(local.get(10, java.util.concurrent.TimeUnit.SECONDS))
+            release.countDown(); assertEquals(0, sending.get(20, java.util.concurrent.TimeUnit.SECONDS))
+            assertEquals(3, requests.size); assertEquals(first, requests[0].getString("operationId")); assertFalse(requests[0].optBoolean("cancelRequested"))
+            assertEquals(first, requests[1].getString("operationId")); assertTrue(requests[1].getBoolean("cancelRequested"))
+        } finally { release.countDown(); threads.shutdownNow() }
+    }
     @Test fun refreshRotationIsDurableAndLogoutRevokesAndReturnsToGuest() {
         val context = isolatedContext(); val provider = Provider(); val account = MobileAccount(context, provider)
         val status = account.complete(callback(account.begin("https://api.example")))
@@ -131,6 +168,33 @@ class MobileAccountTest {
         assertEquals(status.getString("scope"), account.activeScope())
         try { account.request("/v1/mobile/../../outside"); fail("Path escape") } catch (_: IllegalArgumentException) { }
         assertEquals("local", account.logout().getString("scope")); assertTrue(provider.revoked); assertNull(secure.read("account-session"))
+    }
+    @Test fun lateUnauthorizedResponseCannotClearANewerLogin() {
+        val context = isolatedContext(); val provider = Provider(); val account = MobileAccount(context, provider)
+        val oldScope = account.complete(callback(account.begin("https://api.example"))).getString("scope")
+        val blocked = java.util.concurrent.CountDownLatch(1); val release = java.util.concurrent.CountDownLatch(1)
+        provider.deviceHandler = { blocked.countDown(); check(release.await(30, java.util.concurrent.TimeUnit.SECONDS)); throw AccountHttpError(401) }
+        val thread = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            val old = thread.submit<Boolean> { try { account.request("/v1/mobile/devices", expectedScope = oldScope); false } catch (_: AccountHttpError) { true } }
+            assertTrue(blocked.await(10, java.util.concurrent.TimeUnit.SECONDS))
+            provider.subject = "new-${UUID.randomUUID()}"
+            val current = account.complete(callback(account.begin("https://api.example"))).getString("scope")
+            release.countDown(); assertTrue(old.get(10, java.util.concurrent.TimeUnit.SECONDS))
+            assertNotEquals(oldScope, current); assertEquals(current, account.activeScope())
+        } finally { release.countDown(); thread.shutdownNow() }
+    }
+    @Test fun malformedAcknowledgementKeepsDurableOutbox() {
+        val context = isolatedContext(); val provider = Provider(); provider.subject = "malformed-${UUID.randomUUID()}"
+        val account = MobileAccount(context, provider); val scope = account.complete(callback(account.begin("https://api.example"))).getString("scope")
+        val operation = UUID.randomUUID().toString(); val tasks = MobileTasks(context, scope, account)
+        tasks.enqueue(JSONObject().put("operationId", operation).put("desktopId", UUID.randomUUID().toString()).put("kind", "sync-library"))
+        provider.deviceHandler = { request ->
+            if (request.url.encodedPath.endsWith("/tasks")) JSONObject().put("task", JSONObject().put("operationId", "wrong-operation").put("taskId", UUID.randomUUID().toString()).put("status", "queued"))
+            else JSONObject().put("tasks", org.json.JSONArray()).put("devices", org.json.JSONArray()).put("pairs", org.json.JSONArray())
+        }
+        try { tasks.flush(); fail("Wrong operation receipt") } catch (_: IllegalArgumentException) { }
+        assertEquals(operation, MobileTasks(context, scope, account).snapshot().getJSONArray("outbox").getJSONObject(0).getString("operationId"))
     }
     @Test fun expiredAndCancelledCallbacksNeverExchangeCredentials() {
         val context = isolatedContext(); val provider = Provider(); val account = MobileAccount(context, provider)

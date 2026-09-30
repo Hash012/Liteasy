@@ -45,7 +45,7 @@ function expire(state, now) {
     } else if (["queued", "waiting-input"].includes(task.status) && task.expiresAt <= now) {
       task.status = "failed"; task.error = "task_expired"; task.updatedAt = now;
     }
-    if (terminal.has(task.status) && now - task.updatedAt > 14 * 86_400_000) delete state.tasks[task.taskId];
+    if ((terminal.has(task.status) || task.status === "uncertain") && now - task.updatedAt > 14 * 86_400_000) delete state.tasks[task.taskId];
   }
 }
 function deviceFor(state, auth, kind, now) {
@@ -161,10 +161,12 @@ export class DeviceControlService {
       requireValue(pair, "device_pair_required", 403);
       const desktop = state.devices[input.desktopId]; requireValue(desktop && !desktop.revokedAt && desktop.capabilities.includes(request.kind), "desktop_capability_unavailable", 409);
       // An offline outbox must not recreate a task after its retained receipt was purged.
-      requireValue(input.createdAt === undefined || (Number.isFinite(input.createdAt) && now - input.createdAt < 7 * 86_400_000 && input.createdAt <= now + 300_000), "task_request_expired", 409);
-      requireValue(Object.keys(state.tasks).length < 200 && Object.values(state.tasks).filter((task) => !terminal.has(task.status)).length < 50, "task_queue_full", 409);
+      const stale = input.createdAt !== undefined && !(Number.isFinite(input.createdAt) && now - input.createdAt < 7 * 86_400_000 && input.createdAt <= now + 300_000);
+      requireValue(input.cancelRequested === true || !stale, "task_request_expired", 409);
+      requireValue(Object.keys(state.tasks).length < 200 && (input.cancelRequested === true || Object.values(state.tasks).filter((task) => !terminal.has(task.status) && task.status !== "uncertain").length < 50), "task_queue_full", 409);
       const task = { taskId: randomUUID(), operationId: input.operationId, pairId: pair.pairId, mobileId: mobile.deviceId, desktopId: desktop.deviceId,
-        ...request, requestHash, status: input.cancelRequested === true ? "cancelled" : "queued", attempt: 0, cancelRequested: input.cancelRequested === true, createdAt: now, updatedAt: now, expiresAt: now + 86_400_000 };
+        ...request, requestHash, status: input.cancelRequested === true ? stale ? "uncertain" : "cancelled" : "queued", attempt: 0, cancelRequested: input.cancelRequested === true, createdAt: now, updatedAt: now, expiresAt: now + 86_400_000,
+        ...(input.cancelRequested === true && stale ? { result: { message: "已停止发送。此请求过旧，无法确认先前是否执行。" } } : {}) };
       state.tasks[task.taskId] = task; return { task: publicTask(task), replayed: false };
     });
   }

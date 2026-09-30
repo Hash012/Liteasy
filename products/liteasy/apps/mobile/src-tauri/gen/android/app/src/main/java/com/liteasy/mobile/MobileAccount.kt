@@ -61,18 +61,19 @@ class MobileAccount(private val context: Context, private val http: AccountHttp 
     private fun form(url: String, fields: Map<String, String>) = http.execute(Request.Builder().url(endpoint(url))
         .post(FormBody.Builder().apply { fields.forEach { (key, value) -> add(key, value) } }.build()).build())
     private fun scope(session: JSONObject) = "account:${LibraryStore.digest("${session.getString("apiBaseUrl")}\n${session.getString("issuer")}\n${session.getString("subject")}".toByteArray())}"
-    fun activeScope(): String = synchronized(lock) { credential()?.let { scope(it) } ?: "local" }
-    fun status(): JSONObject = synchronized(lock) {
+    // SecureStore serializes atomic file access independently; local reads never wait for network I/O.
+    fun activeScope(): String = credential()?.let { scope(it) } ?: "local"
+    fun status(): JSONObject {
         val result = JSONObject().put("scope", "local").put("apiBaseUrl", preferences.getString("apiBaseUrl", ""))
             .put("error", preferences.getString("error", ""))
         secure.read(PENDING)?.let { value ->
             val pending = JSONObject(value)
             if (pending.getLong("expiresAt") > System.currentTimeMillis()) result.put("pending", true)
-            else { secure.remove(PENDING); result.put("error", "登录已超时，请重新开始。"); }
+            else result.put("error", "登录已超时，请重新开始。")
         }
         credential()?.let { value -> result.put("scope", scope(value)).put("subject", value.getString("subject"))
             .put("apiBaseUrl", value.getString("apiBaseUrl")).put("expiresAt", value.getLong("expiresAt")) }
-        result
+        return result
     }
     fun begin(base: String): String = synchronized(lock) {
         val apiBase = endpoint(base).toString().trimEnd('/')
@@ -151,7 +152,8 @@ class MobileAccount(private val context: Context, private val http: AccountHttp 
             throw error
         }
     }
-    fun request(path: String, method: String = "GET", body: JSONObject? = null, deviceHeaders: Map<String, String> = emptyMap(), expectedScope: String? = null): JSONObject = synchronized(lock) {
+    fun request(path: String, method: String = "GET", body: JSONObject? = null, deviceHeaders: Map<String, String> = emptyMap(), expectedScope: String? = null): JSONObject {
+      val authorized = synchronized(lock) {
         require(expectedScope == null || expectedScope == activeScope()) { "账号已切换，请返回当前资料库重试。" }
         require(path.startsWith("/v1/mobile/") && !path.contains("..") && !path.contains('\\') && !path.contains('#')) { "账号请求路径无效。" }
         val session = token(); val base = endpoint(session.getString("apiBaseUrl"))
@@ -163,7 +165,18 @@ class MobileAccount(private val context: Context, private val http: AccountHttp 
             require(name in listOf("X-Liteasy-Device-Id", "X-Liteasy-Device-Secret")); builder.header(name, value)
         }
         if (method != "GET") builder.method(method, (body ?: JSONObject()).toString().toRequestBody("application/json".toMediaType()))
-        try { http.execute(builder.build()) } catch (error: AccountHttpError) { if (error.status == 401) clear(); throw error }
+        Pair(builder.build(), session)
+      }
+      val result = try { http.execute(authorized.first) }
+      catch (error: AccountHttpError) {
+        if (error.status == 401) synchronized(lock) {
+          val current = credential()
+          if (current != null && current.optString("accessToken") == authorized.second.optString("accessToken") && scope(current) == scope(authorized.second)) clear()
+        }
+        throw error
+      }
+      require(expectedScope == null || expectedScope == activeScope()) { "账号已切换，请返回当前资料库重试。" }
+      return result
     }
     fun cancelLogin() = synchronized(lock) { secure.remove(PENDING); preferences.edit().remove("error").apply() }
     fun browserUnavailable() = synchronized(lock) { secure.remove(PENDING); preferences.edit().putString("error", "无法打开系统浏览器，请安装或启用浏览器后重试。").apply() }
