@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Liteasy",
+  "version": "0.1.0",
+  "identifier": "com.liteasy.mobile",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1421",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [{ "label": "main", "title": "Liteasy", "width": 420, "height": 860 }],
+    "security": { "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost https:; img-src 'self' asset: http://asset.localhost blob: data:; script-src 'self'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; object-src 'none'; frame-src 'none'" }
+  },
+  "bundle": { "active": true, "icon": ["icons/icon.png"], "android": { "minSdkVersion": 26 } }
+}
