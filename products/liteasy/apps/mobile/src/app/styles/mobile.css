@@ -32,4 +32,11 @@ h1 { font-size: 22px; color: #242424; }
 .form-stack { display: flex; flex-direction: column; gap: 16px; }
 .captured-text { white-space: pre-wrap; line-height: 1.7; overflow-wrap: anywhere; }
 .error-message { color: #8c1d18; background: #fff1ef; border: 1px solid #efc4bf; border-radius: 6px; padding: 12px; }
+.capture-inbox { padding: 12px; border: 1px solid #c4dff4; background: #f0f7ff; border-radius: 8px; margin-bottom: 16px; }
+.capture-inbox h2 { font-size: 18px; margin: 0 0 12px; }
+.capture-list { margin: 0; padding: 0; list-style: none; }
+.capture-list li { display: flex; gap: 8px; align-items: center; padding: 8px 0; flex-wrap: wrap; }
+.capture-list li > div { flex: 1 1 150px; overflow-wrap: anywhere; }
+.capture-list p { margin: 4px 0; font-size: 13px; }
+.capture-preview { max-height: 160px; overflow: auto; white-space: pre-wrap; }
 @media (min-width: 800px) { .app-content { padding: 24px; } .app-navigation { justify-content: center; } .app-navigation button { flex: 0 1 160px; flex-direction: row; font-size: 14px; } }

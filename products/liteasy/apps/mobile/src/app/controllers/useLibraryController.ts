@@ -8,29 +8,32 @@ export function useLibraryController(scope = "local", repository: LibraryReposit
   const [busy, setBusy] = useState(false);
   const [selectedId, setSelectedId] = useState<string>();
   const activeScope = useRef(scope);
+  const mounted = useRef(false);
   activeScope.current = scope;
 
   const refresh = useCallback(async () => {
     const list = await repository.list(scope);
-    if (activeScope.current === scope) setItems(list);
+    if (mounted.current && activeScope.current === scope) setItems(list);
   }, [scope, repository]);
 
   useEffect(() => {
+    mounted.current = true;
     setItems([]); setSelectedId(undefined); setError("");
-    void refresh().catch((reason) => { if (activeScope.current === scope) setError(String(reason)); });
-    const onFocus = () => void refresh().catch((reason) => setError(String(reason)));
+    const onError = (reason: unknown) => { if (mounted.current && activeScope.current === scope) setError(String(reason)); };
+    void refresh().catch(onError);
+    const onFocus = () => void refresh().catch(onError);
     window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
+    return () => { mounted.current = false; window.removeEventListener("focus", onFocus); };
   }, [refresh, scope]);
 
   const run = async (operation: () => Promise<unknown>) => {
     setBusy(true); setError("");
     let success = true;
     try { await operation(); }
-    catch (reason) { success = false; if (activeScope.current === scope) setError(reason instanceof Error ? reason.message : String(reason)); }
+    catch (reason) { success = false; if (mounted.current && activeScope.current === scope) setError(reason instanceof Error ? reason.message : String(reason)); }
     try { await refresh(); }
-    catch (reason) { success = false; if (activeScope.current === scope) setError(String(reason)); }
-    finally { setBusy(false); }
+    catch (reason) { success = false; if (mounted.current && activeScope.current === scope) setError(String(reason)); }
+    finally { if (mounted.current && activeScope.current === scope) setBusy(false); }
     return success;
   };
 

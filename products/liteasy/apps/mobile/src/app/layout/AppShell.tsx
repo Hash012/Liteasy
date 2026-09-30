@@ -4,6 +4,8 @@ import { LibraryRegular, ArrowDownloadRegular, DesktopRegular, SettingsRegular }
 import { useLibraryController } from "../controllers/useLibraryController";
 import { LibraryView } from "../features/library/LibraryView";
 import { ResourceDetails } from "../features/library/ResourceDetails";
+import { useCaptureController } from "../controllers/useCaptureController";
+import { ShareInboxView } from "../features/capture/ShareInboxView";
 
 const destinations = [
   { id: "library", label: "资料库", icon: <LibraryRegular /> },
@@ -15,9 +17,11 @@ const destinations = [
 export function AppShell() {
   const [tab, setTab] = useState<string>("library");
   const library = useLibraryController();
+  const capture = useCaptureController(library.scope, library.refresh);
   return <div className="app-shell">
     <header className="app-header"><span className="brand">Liteasy</span><span>{destinations.find((item) => item.id === tab)?.label}</span></header>
     <main className="app-content">
+      <ShareInboxView captures={capture.captures} busy={capture.busy} error={capture.error} onSave={capture.save} onDiscard={capture.discard} />
       {library.error ? <p className="error-message" role="alert">{library.error}</p> : null}
       {library.busy ? <Spinner size="tiny" label="正在保存资料…" /> : null}
       {library.selected ? <ResourceDetails item={library.selected} onSave={library.update} onClose={library.close} /> :

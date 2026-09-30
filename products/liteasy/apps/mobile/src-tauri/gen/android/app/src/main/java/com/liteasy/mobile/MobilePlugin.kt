@@ -18,7 +18,12 @@ class MobilePlugin(private val activity: Activity) : Plugin(activity) {
         executor.execute {
             try {
                 val scope = request.optString("scope", "local")
-                val value = LibraryStore.get(activity).dispatch(scope, request)
+                val value = when (request.getString("operation")) {
+                    "listShares" -> ShareInbox(activity).list()
+                    "importShare" -> ShareInbox(activity).import(scope, request.getString("id"), request.getJSONObject("input"))
+                    "discardShare" -> { ShareInbox(activity).discard(request.getString("id")); null }
+                    else -> LibraryStore.get(activity).dispatch(scope, request)
+                }
                 invoke.resolve(JSObject().putValue("value", value ?: JSONObject.NULL))
             } catch (error: Exception) {
                 invoke.reject(error.message ?: "操作失败，请重试。")

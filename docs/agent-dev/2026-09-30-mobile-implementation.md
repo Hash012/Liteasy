@@ -63,3 +63,10 @@ Implementation in progress. Completed commits and validation outcomes are append
 - Browser development uses IndexedDB with an atomic metadata/attachment transaction. Both repositories partition data by account scope and reject stale edits.
 - Five mobile tests passed, covering the shell, reopen durability, concurrent deduplication, account isolation, trash/restore, stale edits and malformed imports. Android x86_64 debug APK and instrumentation APK builds passed. Locked Linux Rust all-target checks passed.
 - Four Android instrumentation tests cover SQLite reopen/file integrity, duplicate import preservation, incomplete transfers and JSON value types. They compile successfully; device execution is pending the software emulator installation. Native runtime acceptance remains explicitly open.
+
+### 4. Android share capture
+
+- `ACTION_SEND` and `ACTION_SEND_MULTIPLE` enter the same durable inbox from cold or already-running activities. Content URIs are copied into private files while permission is available; atomic capture metadata survives a restart. Interrupted captures remain visible as errors. Each item can be reviewed with title/category/note and archived independently.
+- The inbox is unassigned until the user confirms the destination library. Archival removes a capture only after its library transaction succeeds; retrying after a crash uses content deduplication. Limits are 16 attachments per share, 256 MiB per attachment and 512 MiB of pending attachments.
+- Seven mobile tests and frontend production build passed. Android debug app and instrumentation APK builds passed. Three additional native tests cover source-file removal, multiple attachments, retry retention, text/links and unsupported URIs. Native runtime results will be appended once emulator installation completes.
+- Fixed asynchronous library updates after component teardown, exposed by the expanded test run.
