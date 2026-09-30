@@ -6,6 +6,7 @@ import { LibraryView } from "../features/library/LibraryView";
 import { ResourceDetails } from "../features/library/ResourceDetails";
 import { useCaptureController } from "../controllers/useCaptureController";
 import { ShareInboxView } from "../features/capture/ShareInboxView";
+import { SyncSettingsView } from "../features/sync/SyncSettingsView";
 const ReadingWorkspace = lazy(() => import("../controllers/ReadingWorkspace"));
 
 const destinations = [
@@ -32,7 +33,7 @@ export function AppShell() {
         tab === "library" || tab === "inbox" ? <LibraryView items={library.items} inbox={tab === "inbox"} busy={library.busy}
           onImport={library.importFiles} onAdd={library.importResource} onOpen={(item) => { setDetails(false); library.open(item); }} onUpdate={library.update} /> :
           tab === "tasks" ? <section><h1>桌面任务</h1><p>在这里查看发送给桌面设备的任务。</p></section> :
-            <section><h1>设置</h1><p>资料和附件保存在此设备。卸载应用前请先备份。</p></section>}
+            <section><h1>设置</h1><SyncSettingsView scope={library.scope} onChanged={library.refresh} /><p>资料和附件保存在此设备。卸载应用前请先同步。</p></section>}
     </main>
     <nav className="app-navigation" aria-label="主导航">{destinations.map((item) =>
       <Tooltip key={item.id} content={item.label} relationship="label"><Button appearance={tab === item.id ? "primary" : "subtle"} icon={item.icon}

@@ -72,4 +72,9 @@ h1 { font-size: 22px; color: #242424; }
 .annotation-note.text { background: #fffffff0; border-color: #b5bdca; }
 .annotation-list-item { display: flex; align-items: center; gap: 8px; }
 .annotation-list-item > button:first-child { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.sync-settings { max-width: 680px; }
+.sync-settings h2 { font-size: 20px; }
+.sync-actions { display: flex; gap: 8px; margin: 16px 0; flex-wrap: wrap; }
+.sync-conflict { padding: 12px; margin: 12px 0; border: 1px solid #d5bd77; border-radius: 6px; background: #fff9e8; overflow-wrap: anywhere; }
+.sync-conflict button { margin: 4px 8px 4px 0; }
 @media (min-width: 800px) { .app-content { padding: 24px; } .app-navigation { justify-content: center; } .app-navigation button { flex: 0 1 160px; flex-direction: row; font-size: 14px; } }

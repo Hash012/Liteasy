@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { libraryRepository } from "../features/library/libraryRepository";
 import type { ImportResource, LibraryItem, LibraryRepository } from "../features/library/library.types";
+import { hasNativeHost, nativeRequest } from "../platform/native";
 
 export function useLibraryController(scope = "local", repository: LibraryRepository = libraryRepository()) {
   const [items, setItems] = useState<LibraryItem[]>([]);
@@ -10,6 +11,11 @@ export function useLibraryController(scope = "local", repository: LibraryReposit
   const activeScope = useRef(scope);
   const mounted = useRef(false);
   activeScope.current = scope;
+  useEffect(() => {
+    if (!hasNativeHost()) return;
+    void nativeRequest("setOpenDocument", { scope, id: selectedId ?? null }).catch(() => {});
+    return () => { void nativeRequest("setOpenDocument", { scope, id: null }).catch(() => {}); };
+  }, [scope, selectedId]);
 
   const refresh = useCallback(async () => {
     const list = await repository.list(scope);

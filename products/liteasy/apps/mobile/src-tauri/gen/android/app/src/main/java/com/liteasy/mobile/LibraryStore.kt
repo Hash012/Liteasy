@@ -18,7 +18,9 @@ import java.time.Instant
 import java.util.UUID
 
 /** All callers, including Android workers, share the same transaction/attachment boundary. */
-class LibraryStore private constructor(private val context: Context) : SQLiteOpenHelper(context, "library.db", null, 1) {
+class LibraryStore private constructor(private val context: Context) : SQLiteOpenHelper(context, "library.db", null, 2) {
+    private val openDocuments = mutableMapOf<String, String>()
+    @Synchronized fun openDocument(scope: String): String? = openDocuments[scope]
     companion object {
         const val MAX_BYTES = 256L * 1024 * 1024
         @Volatile private var instance: LibraryStore? = null
@@ -30,11 +32,16 @@ class LibraryStore private constructor(private val context: Context) : SQLiteOpe
 
     override fun onConfigure(db: SQLiteDatabase) { db.setForeignKeyConstraintsEnabled(true) }
     override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("CREATE TABLE items (scope TEXT NOT NULL, id TEXT NOT NULL, hash TEXT NOT NULL, kind TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(scope,id), UNIQUE(scope,kind,hash))")
+        db.execSQL("CREATE TABLE items (scope TEXT NOT NULL, id TEXT NOT NULL, hash TEXT NOT NULL, kind TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(scope,id))")
         db.execSQL("CREATE TABLE records (scope TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(scope,key))")
     }
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        throw IllegalStateException("资料库版本不受支持，请升级 Liteasy。")
+        if (oldVersion == 1 && newVersion == 2) {
+            db.execSQL("ALTER TABLE items RENAME TO items_v1")
+            db.execSQL("CREATE TABLE items (scope TEXT NOT NULL, id TEXT NOT NULL, hash TEXT NOT NULL, kind TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(scope,id))")
+            db.execSQL("INSERT INTO items SELECT scope,id,hash,kind,value FROM items_v1")
+            db.execSQL("DROP TABLE items_v1")
+        } else throw IllegalStateException("资料库版本不受支持，请升级 Liteasy。")
     }
 
     fun directory(scope: String): File {
@@ -84,7 +91,8 @@ class LibraryStore private constructor(private val context: Context) : SQLiteOpe
         }
     }
 
-    @Synchronized fun importStream(scope: String, input: JSONObject, stream: InputStream): JSONObject {
+    @Synchronized fun importStream(scope: String, input: JSONObject, stream: InputStream, documentId: String? = null): JSONObject {
+        require(documentId == null || Regex("[a-zA-Z0-9-]{1,128}").matches(documentId)) { "文献标识无效。" }
         validate(input)
         val temporary = File(transfers(scope), "${UUID.randomUUID()}.pending")
         try {
@@ -107,7 +115,7 @@ class LibraryStore private constructor(private val context: Context) : SQLiteOpe
             val db = writableDatabase
             db.beginTransaction()
             try {
-                val existing = db.rawQuery("SELECT value FROM items WHERE scope=? AND kind=? AND hash=?", arrayOf(scope, resourceKind, contentHash)).use {
+                val existing = if (documentId != null) find(scope, documentId) else db.rawQuery("SELECT value FROM items WHERE scope=? AND kind=? AND hash=?", arrayOf(scope, resourceKind, contentHash)).use {
                     if (it.moveToFirst()) JSONObject(it.getString(0)) else null
                 }
                 if (existing != null) {
@@ -117,11 +125,15 @@ class LibraryStore private constructor(private val context: Context) : SQLiteOpe
                     val target = file(scope, contentHash)
                     if (!target.exists()) check(temporary.renameTo(target)) { "无法保存附件。" }
                     existing.put("downloaded", true); save(scope, existing)
+                    if (documentId != null && existing.getString("contentHash") != contentHash) {
+                        existing.put("contentHash", contentHash).put("size", size).put("updatedAt", now()).put("revision", existing.getInt("revision") + 1)
+                        save(scope, existing)
+                    }
                     db.setTransactionSuccessful(); return existing
                 }
                 val date = now()
                 val item = JSONObject().apply {
-                    put("id", UUID.randomUUID().toString()); put("kind", resourceKind); put("title", input.getString("title").trim())
+                    put("id", documentId ?: UUID.randomUUID().toString()); put("kind", resourceKind); put("title", input.getString("title").trim())
                     put("filename", input.optString("filename")); put("mimeType", input.optString("mimeType", "text/plain")); put("size", size); put("contentHash", contentHash)
                     for (key in listOf("sourceUrl", "text")) if (input.has(key)) put(key, input.get(key))
                     put("collection", input.optString("collection", "收件箱")); put("note", input.optString("note")); put("tags", JSONArray())
@@ -134,9 +146,19 @@ class LibraryStore private constructor(private val context: Context) : SQLiteOpe
         } finally { temporary.delete() }
     }
 
+    @Synchronized fun syncItem(scope: String, id: String): JSONObject? = find(scope, id)
+    @Synchronized fun syncSaveItem(scope: String, item: JSONObject) { validate(item); save(scope, item) }
+    @Synchronized fun <T> syncTransaction(action: () -> T): T {
+        val db = writableDatabase; db.beginTransaction()
+        try { val result = action(); db.setTransactionSuccessful(); return result }
+        finally { db.endTransaction() }
+    }
+    fun attachment(scope: String, hash: String): File = file(scope, hash)
+
     @Synchronized fun dispatch(scope: String, request: JSONObject): Any? {
         directory(scope)
         return when (request.getString("operation")) {
+            "setOpenDocument" -> { if (request.isNull("id")) openDocuments.remove(scope) else openDocuments[scope] = request.getString("id"); null }
             "list" -> list(scope)
             "update" -> {
                 val edit = request.getJSONObject("item")

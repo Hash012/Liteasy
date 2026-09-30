@@ -61,6 +61,8 @@ rust {
 }
 
 dependencies {
+    implementation("androidx.work:work-runtime:2.11.2")
+    implementation("com.squareup.okhttp3:okhttp:5.4.0")
     implementation("androidx.webkit:webkit:1.14.0")
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.activity:activity-ktx:1.10.1")

@@ -19,6 +19,12 @@ class MobilePlugin(private val activity: Activity) : Plugin(activity) {
             try {
                 val scope = request.optString("scope", "local")
                 val value = when (request.getString("operation")) {
+                    "syncSettings" -> DavSync(activity, scope).publicSettings()
+                    "configureSync" -> { DavSync(activity, scope).configure(request.getJSONObject("settings")); null }
+                    "syncStatus" -> DavSync(activity, scope).status()
+                    "startSync" -> { DavSyncWorker.schedule(activity, scope, true); null }
+                    "cancelSync" -> { DavSyncWorker.cancel(activity, scope); null }
+                    "resolveSync" -> { DavSync(activity, scope).resolve(request); null }
                     "listShares" -> ShareInbox(activity).list()
                     "importShare" -> ShareInbox(activity).import(scope, request.getString("id"), request.getJSONObject("input"))
                     "discardShare" -> { ShareInbox(activity).discard(request.getString("id")); null }
