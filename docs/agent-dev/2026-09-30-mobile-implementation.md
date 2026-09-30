@@ -50,3 +50,9 @@ Implementation in progress. Completed commits and validation outcomes are append
 - Local Node 22.23.2 / Rust 1.98.0; CI reads the desktop Node version and uses the repository's Windows-workflow Rust version, 1.98.1. No Windows build result is implied.
 - Workflow lint and 76 existing CI-script tests passed. Production npm dependency audit reports no known advisories. Mobile PDF.js uses 6.3.289; desktop dependencies are unchanged.
 - Runtime acceptance remains open: the host cannot access KVM. The software Android 35 emulator booted but repeatedly hit system watchdog timeouts before app installation. A slow-hardware timeout multiplier is being used to retry; this cannot provide representative device performance evidence.
+
+### 2. Shared reading core
+
+- Extracted literature identity/types, annotation validation/migration/publication types, ink geometry and guide metadata into `packages/reading-core`; desktop feature entry points preserve their public exports. Account lookup and persistence remain in desktop.
+- 81 affected desktop tests passed across identity, persistence, publication, guide, drawing/annotation workbench and review behavior; 8 desktop smoke tests passed.
+- Desktop production build passed (157 assets verified). `ci:contracts` passed in an isolated clean checkout of the refactor commit; dependency locks and generated schemas did not drift.

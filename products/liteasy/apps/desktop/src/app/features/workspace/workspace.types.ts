@@ -1,25 +1,5 @@
-import type { LiteratureRecord } from "../paper-identity/literature.types";
-
-export type Paper = {
-  contentHash?: string;
-  forumTopicId?: string;
-  forumWorkId?: string;
-  arxivId?: string;
-  authors?: readonly string[] | string;
-  doi?: string;
-  id: string;
-  libraryReference?: {
-    documentId: string;
-    revision: number;
-    scopeId: string;
-    scopeType: "organization" | "user";
-  };
-  literature?: LiteratureRecord;
-  semanticScholarId?: string;
-  title: string;
-  sourcePath?: string;
-  year?: number | string;
-};
+import type { Paper } from "../../../../../../packages/reading-core/src/paper";
+export type { Paper } from "../../../../../../packages/reading-core/src/paper";
 
 export type WorkspaceSourceType = "local_library" | "organization_shared";
 

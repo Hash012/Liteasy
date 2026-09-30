@@ -1,3 +1,6 @@
+import type { ForumAnnotationPublicationOperation } from "../../../../../../packages/reading-core/src/annotationPublication";
+export type { ForumAnnotationPublicationOperation } from "../../../../../../packages/reading-core/src/annotationPublication";
+
 export type ForumPaperIdentity = {
   id: string;
   kind: "doi" | "arxiv_id" | "semantic_scholar_id" | "openalex_id" | "openreview_id" | "dblp_key" | "pmlr_id" | "title_authors_year_hash";
@@ -67,30 +70,6 @@ export type ForumPost = {
   viewer_saved: boolean;
   work_id: string | null;
 };
-
-type ForumAnnotationPublicationOperationBase = {
-  annotationId: string;
-  queueKey: string;
-  revision: number;
-  updatedAt: string;
-};
-
-export type ForumAnnotationPublicationOperation =
-  | (ForumAnnotationPublicationOperationBase & {
-      body: string;
-      literatureId: string;
-      operation: "upsert";
-      sourcePassage: {
-        anchorHash: string;
-        excerpt: string;
-        page?: number;
-        rects: Array<{ height: number; left: number; top: number; width: number }>;
-      };
-    })
-  | (ForumAnnotationPublicationOperationBase & {
-      operation: "retract";
-      remoteAnnotationId: string;
-    });
 
 export type ForumAnnotationPublicationReceipt = {
   annotationId: string;
