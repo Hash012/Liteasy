@@ -51,5 +51,7 @@ export function useLibraryController(scope = "local", repository: LibraryReposit
     void update({ ...item, lastReadAt: new Date().toISOString() });
   };
   return { items, error, busy, refresh, importResource, importFiles, update, open, selectedId,
-    selected: items.find((item) => item.id === selectedId), close: () => setSelectedId(undefined), repository, scope };
+    selected: items.find((item) => item.id === selectedId), close: () => {
+      setSelectedId(undefined); void refresh().catch((reason) => { if (mounted.current) setError(String(reason)); });
+    }, repository, scope };
 }

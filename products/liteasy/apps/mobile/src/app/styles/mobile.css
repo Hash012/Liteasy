@@ -39,4 +39,28 @@ h1 { font-size: 22px; color: #242424; }
 .capture-list li > div { flex: 1 1 150px; overflow-wrap: anywhere; }
 .capture-list p { margin: 4px 0; font-size: 13px; }
 .capture-preview { max-height: 160px; overflow: auto; white-space: pre-wrap; }
+.pdf-reader { max-width: 1200px; margin: auto; }
+.reader-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.reader-heading strong { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.reader-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 12px; }
+.reader-toolbar button, .reader-heading button { min-width: 44px; min-height: 44px; }
+.page-jump { display: flex; gap: 4px; align-items: center; }
+.page-jump > span:first-child { width: 52px; }
+.page-jump input { width: 32px; padding: 0; text-align: center; }
+.reader-panel { border: 1px solid #e0e3e8; border-radius: 6px; background: white; padding: 12px; margin-bottom: 12px; max-height: 45vh; overflow: auto; }
+.reader-panel h2 { font-size: 18px; margin-top: 0; }
+.reader-panel ul { list-style: none; margin: 8px 0; padding: 0; }
+.reader-panel li button { background: none; border: 0; border-bottom: 1px solid #eee; padding: 12px 4px; width: 100%; text-align: left; color: #075ea8; }
+.reader-search { display: flex; gap: 8px; flex-wrap: wrap; }
+.reader-search > span { flex: 1; }
+.pdf-page-host { width: 100%; min-width: 0; }
+.pdf-scroll { overflow: auto; padding: 8px; background: #e7e9ed; border-radius: 6px; }
+.pdf-page { position: relative; margin: 0 auto; background: white; box-shadow: 0 1px 3px #0002; }
+.pdf-page canvas { position: absolute; inset: 0; }
+/* PDF.js text-layer geometry, matching the locked 6.x distribution. */
+.textLayer { position: absolute; inset: 0; text-align: initial; overflow: clip; line-height: 1; letter-spacing: normal; word-spacing: normal; text-size-adjust: none; forced-color-adjust: none; transform-origin: 0 0; z-index: 1; --min-font-size: 1; --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size)); --min-font-size-inv: calc(1 / var(--min-font-size)); }
+.textLayer :is(span, br) { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; user-select: text; -webkit-user-select: text; }
+.textLayer > :not(.markedContent), .textLayer .markedContent span:not(.markedContent) { --font-height: 0; font-size: calc(var(--text-scale-factor) * var(--font-height)); --scale-x: 1; --rotate: 0deg; transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv)); }
+.textLayer .markedContent { display: contents; }
+.textLayer ::selection { background: #0089ff55; }
 @media (min-width: 800px) { .app-content { padding: 24px; } .app-navigation { justify-content: center; } .app-navigation button { flex: 0 1 160px; flex-direction: row; font-size: 14px; } }

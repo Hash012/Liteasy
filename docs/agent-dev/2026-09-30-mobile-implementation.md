@@ -70,3 +70,10 @@ Implementation in progress. Completed commits and validation outcomes are append
 - The inbox is unassigned until the user confirms the destination library. Archival removes a capture only after its library transaction succeeds; retrying after a crash uses content deduplication. Limits are 16 attachments per share, 256 MiB per attachment and 512 MiB of pending attachments.
 - Seven mobile tests and frontend production build passed. Android debug app and instrumentation APK builds passed. Three additional native tests cover source-file removal, multiple attachments, retry retention, text/links and unsupported URIs. Native runtime results will be appended once emulator installation completes.
 - Fixed asynchronous library updates after component teardown, exposed by the expanded test run.
+
+### 5. Mobile PDF reading
+
+- Added a lazy-loaded PDF reader with page navigation, width-fit/zoom, outline navigation, cancellable full-document search (first 100 matches), password prompting and durable reading position. It renders only the visible page, with a 4-million-pixel canvas cap and cancellation-safe canvas ownership.
+- PDF.js uses its legacy distribution for older Android WebViews. CMaps, fonts, image decoders and ICC resources ship locally with their licenses, so rendering does not need a CDN. PDF scripting/forms are not enabled.
+- Seven mobile unit/integration tests passed. Two Chromium tests passed at a phone viewport with touch enabled: text/image rendering, outline/search, zoom, persisted page after reload, and page jumps in a 120-page PDF with one bounded canvas. Fixtures are original generated text/bitmap PDFs.
+- Frontend production and Android x86_64 debug APK builds passed. Native emulator installation subsequently failed with a package-service broken pipe and the activity was unavailable, so the earlier install success did not establish runtime acceptance. A single-core software emulator retry is in progress; browser evidence is recorded separately from Android runtime evidence.
