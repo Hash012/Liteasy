@@ -24,6 +24,10 @@ class LibraryStoreTest {
         assertEquals(0, store.list(scope()).length())
         val read = store.dispatch(scope, JSONObject().put("operation", "readFile").put("id", item.getString("id")).put("offset", 0).put("length", bytes.size)) as String
         assertArrayEquals(bytes, Base64.decode(read, Base64.DEFAULT))
+        try {
+            store.dispatch(scope, JSONObject().put("operation", "fileInfo").put("id", item.getString("id")).put("expectedHash", "b".repeat(64)))
+            fail("A stale reader must not receive different PDF bytes")
+        } catch (expected: IllegalArgumentException) { assertTrue(expected.message!!.contains("资料版本已更新")) }
     }
 
     @Test fun duplicateImportPreservesUserEditsAndRestoresTrash() {

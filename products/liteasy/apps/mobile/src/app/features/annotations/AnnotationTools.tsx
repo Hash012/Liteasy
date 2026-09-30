@@ -40,6 +40,7 @@ export function AnnotationTools({ controls, mode, setMode, page, readerRef, edit
     {controls.error ? <p role="alert" className="error-message">{controls.error}</p> : null}
     {list ? <section className="reader-panel" aria-label="批注列表"><h2>批注（{controls.annotations.length}）</h2><ul>
       {controls.annotations.map((value) => <li key={value.id} className="annotation-list-item"><button onClick={() => navigate(value.page)}>第 {value.page} 页 · {value.text || value.excerpt || (value.kind === "ink" ? "手写批注" : "批注")}</button>
+        {value.conflictOf ? <span>同步冲突副本 · 比较后可编辑或删除</span> : null}
         <Button onClick={() => setEditor({ existing: value, kind: "note", page: value.page })}>编辑</Button><Button disabled={controls.busy} onClick={() => void controls.remove(value.id)}>删除</Button>
       </li>)}
     </ul></section> : null}

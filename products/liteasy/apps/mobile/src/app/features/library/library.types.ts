@@ -38,7 +38,7 @@ export interface LibraryRepository {
   list(scope: string): Promise<LibraryItem[]>;
   importResource(scope: string, input: ImportResource): Promise<LibraryItem>;
   update(scope: string, item: LibraryItem): Promise<LibraryItem>;
-  readBytes(scope: string, id: string): Promise<Uint8Array>;
+  readBytes(scope: string, id: string, expectedHash?: string): Promise<Uint8Array>;
   readRecord<T>(scope: string, key: string): Promise<T | undefined>;
   writeRecord<T>(scope: string, key: string, value: T): Promise<void>;
 }

@@ -14,6 +14,7 @@ describe("offline library", () => {
     const reopened = new BrowserLibraryRepository(name);
     expect((await reopened.list("local"))[0].contentHash).toHaveLength(64);
     expect(Array.from(await reopened.readBytes("local", item.id))).toEqual(Array.from(bytes));
+    await expect(reopened.readBytes("local", item.id, "b".repeat(64))).rejects.toThrow("资料版本已更新");
     expect(await reopened.list("other-account")).toEqual([]);
     await expect(reopened.readBytes("other-account", item.id)).rejects.toThrow("尚未下载");
   });

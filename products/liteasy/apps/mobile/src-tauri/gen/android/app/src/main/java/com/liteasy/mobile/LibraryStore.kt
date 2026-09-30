@@ -204,6 +204,7 @@ class LibraryStore private constructor(private val context: Context) : SQLiteOpe
             }
             "fileInfo", "readFile" -> {
                 val item = find(scope, request.getString("id")) ?: error("资料不存在。")
+                require(!request.has("expectedHash") || request.isNull("expectedHash") || request.getString("expectedHash") == item.getString("contentHash")) { "资料版本已更新，请返回资料库刷新后再打开。" }
                 val path = file(scope, item.getString("contentHash")); require(path.exists()) { "此文件尚未下载到本机。" }
                 if (request.getString("operation") == "fileInfo") JSONObject().put("size", path.length()) else {
                     val offset = request.getLong("offset"); val length = request.getInt("length")
@@ -217,10 +218,21 @@ class LibraryStore private constructor(private val context: Context) : SQLiteOpe
                     if (it.moveToFirst()) JSONObject(it.getString(0)).get("value") else null
                 }
             }
-            "writeRecord" -> {
+            "writeRecord", "importAnnotations" -> {
                 val key = request.getString("key"); require(key.length in 1..512) { "记录标识无效。" }
-                val value = JSONObject().put("value", request.get("value")).toString(); require(value.length <= 32 * 1024 * 1024) { "记录超过容量限制。" }
+                val importing = request.getString("operation") == "importAnnotations"
+                if (importing) {
+                    require(key.startsWith("annotations:"))
+                    val item = find(scope, key.removePrefix("annotations:")) ?: error("文献不存在。")
+                    ReadingCore.validate(item.getString("id"), item.getString("contentHash"), request.getJSONObject("value"))
+                }
+                val incoming = if (!importing && key.startsWith("annotations:")) ReadingCore.prepare(key.removePrefix("annotations:"),
+                    dispatch(scope, JSONObject().put("operation", "readRecord").put("key", key)), request.get("value")) else request.get("value")
+                val value = JSONObject().put("value", incoming).toString(); require(value.length <= 32 * 1024 * 1024) { "记录超过容量限制。" }
                 check(writableDatabase.insertWithOnConflict("records", null, ContentValues().apply { put("scope", scope); put("key", key); put("value", value) }, SQLiteDatabase.CONFLICT_REPLACE) != -1L) { "无法保存记录。" }; null
+            }
+            "removeRecord" -> {
+                writableDatabase.delete("records", "scope=? AND key=?", arrayOf(scope, request.getString("key"))); null
             }
             else -> error("不支持的资料操作。")
         }

@@ -69,7 +69,9 @@ class DavSync(private val context: Context, private val scope: String, private v
                 original.value.files.filter { it.value?.documentId == openId && openId != null }.keys +
                 setOfNotNull(openId?.let { LibraryStore.get(context).syncItem(scope, it)?.optString("syncPath") }) +
                 if (openId != null) setOf("${DavLocal.METADATA_PREFIX}$openId.json", DavLocal.annotationPath(openId)) else emptySet()
-            val decisions = DavPlan.create(base, current, original.value, original.revision != null, { DavLocal.selected(it) && it !in blocked }, resolutions)
+            val knownAnnotations = (current.files.values + original.value.files.values).mapNotNull { it?.documentId }.map { DavLocal.annotationPath(it) }.toSet() + files.keys.filter { DavLocal.isAnnotation(it) }
+            val decisions = DavPlan.create(base, current, original.value, original.revision != null,
+                { DavLocal.selected(it) && it !in blocked && (!DavLocal.isAnnotation(it) || it in knownAnnotations) }, resolutions).toMutableList()
             // Renames sharing an ID are applied as one document; divergent paths require explicit conflict handling.
             val target = DavManifest(maxOf(2, original.value.schemaVersion), original.value.files.toSortedMap())
             val downloads = mutableMapOf<String, File>(); var uploaded = 0
@@ -88,6 +90,28 @@ class DavSync(private val context: Context, private val scope: String, private v
                             remote.download(version, file)
                         }
                         downloads[decision.path] = file
+                    }
+                    DavAction.CONFLICT -> if (DavLocal.isAnnotation(decision.path) && decision.local != null && decision.remote != null) {
+                        // Merge only when both manifests identify exactly the same PDF bytes.
+                        val source = current.files.values.filterNotNull().find { it.documentId != null && DavLocal.annotationPath(it.documentId) == decision.path }
+                        val other = original.value.files.values.filterNotNull().find { it.documentId != null && DavLocal.annotationPath(it.documentId) == decision.path }
+                        if (source != null && other != null && source.hash == other.hash) {
+                            try {
+                                fun snapshot(version: DavVersion): JSONObject {
+                                    require(version.size <= 32L * 1024 * 1024)
+                                    val file = File(downloadCache, version.hash)
+                                    if (!file.exists() || file.length() != version.size || DavTransport.hash(file) != version.hash) remote.download(version, file)
+                                    return JSONObject(file.readText())
+                                }
+                                val merged = ReadingCore.merge(source.documentId!!, source.hash, base?.files?.get(decision.path)?.let { snapshot(it) },
+                                    JSONObject(files[decision.path]!!.file.readText()), snapshot(decision.remote))
+                                val file = File(operation, "merged-$index").apply { writeText(DavLocal.canonical(merged).toString()) }
+                                val version = DavVersion(DavTransport.hash(file), file.length())
+                                remote.upload(version, file, File(operation, "verify")); uploaded++
+                                target.files[decision.path] = version; downloads[decision.path] = file
+                                decisions[index] = decision.copy(action = DavAction.DOWNLOAD, remote = version)
+                            } catch (_: IllegalArgumentException) { /* Leave unsupported/corrupt snapshots as explicit file conflicts. */ }
+                        }
                     }
                     else -> Unit
                 }

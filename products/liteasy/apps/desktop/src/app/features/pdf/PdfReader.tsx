@@ -2174,6 +2174,7 @@ export function PdfReader({
           annotationStorageKey,
           autoPublicStorageKey,
           paperId: activePaper.id,
+          contentHash: activePaper.contentHash,
           snapshot: { annotations, autoPublic: autoPublicAnnotations, version: 2 }
         })
           .then(() => { if (annotationScopeRef.current === annotationStorageKey) setAnnotationSaveError(""); })
@@ -2946,6 +2947,7 @@ export function PdfReader({
       annotationStorageKey,
       autoPublicStorageKey,
       paperId: activePaper.id,
+      contentHash: activePaper.contentHash,
       snapshot: { annotations: next, autoPublic: autoPublicAnnotations, version: 2 }
     });
     setStatus("AI review 已随批注保存。");
@@ -3001,7 +3003,7 @@ export function PdfReader({
   async function persistReadingAnnotations() {
     assertReadingAnnotationsReady();
     await persistPdfAnnotationState({ annotationStorageKey: annotationStorageKey!, autoPublicStorageKey,
-      paperId: activePaper!.id, snapshot: { annotations: annotationsRef.current, autoPublic: autoPublicAnnotations, version: 2 } });
+      paperId: activePaper!.id, contentHash: activePaper!.contentHash, snapshot: { annotations: annotationsRef.current, autoPublic: autoPublicAnnotations, version: 2 } });
   }
 
   async function createReadingAnnotation(input: { page: number; excerpt: string; note: string } & ReadingMarkStyle) {
@@ -3650,6 +3652,7 @@ export function PdfReader({
                             </Tooltip>
                             <span className="pdf-annotation-summary-content">
                               <span className="pdf-annotation-excerpt">{getAnnotationSummaryText(annotation)}</span>
+                              {annotation.conflictOf ? <span className="pdf-annotation-type">同步冲突副本</span> : null}
                               {annotation.kind !== "text" && annotation.kind !== "ink" && activeAnnotationId !== annotation.id && (annotation.quickAsk?.question || annotation.note) ?
                                 <span className="pdf-annotation-summary-note"><CommentRegular /><span>{annotation.quickAsk?.question ?? annotation.note}</span></span> : null}
                             </span>

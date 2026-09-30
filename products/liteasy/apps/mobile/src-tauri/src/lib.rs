@@ -2,6 +2,9 @@
 use tauri::Manager;
 
 #[cfg(target_os = "android")]
+mod reading_core;
+
+#[cfg(target_os = "android")]
 struct MobileHandle(tauri::plugin::PluginHandle<tauri::Wry>);
 
 #[tauri::command]

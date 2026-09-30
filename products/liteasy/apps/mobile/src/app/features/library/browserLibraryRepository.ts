@@ -92,10 +92,15 @@ export class BrowserLibraryRepository implements LibraryRepository {
     return next;
   }
 
-  async readBytes(scope: string, id: string) {
+  async readBytes(scope: string, id: string, expectedHash?: string) {
     const db = await this.database;
-    const bytes = await request<Uint8Array | undefined>(db.transaction("blobs").objectStore("blobs").get([scope, id]));
+    const tx = db.transaction(["blobs", "items"]);
+    const [bytes, item] = await Promise.all([
+      request<Uint8Array | undefined>(tx.objectStore("blobs").get([scope, id])),
+      request<LibraryItem | undefined>(tx.objectStore("items").get([scope, id]))
+    ]);
     if (!bytes) throw new Error("此文件尚未下载到本机。");
+    if (expectedHash && expectedHash !== item?.contentHash) throw new Error("资料版本已更新，请返回资料库刷新后再打开。");
     return new Uint8Array(bytes);
   }
 

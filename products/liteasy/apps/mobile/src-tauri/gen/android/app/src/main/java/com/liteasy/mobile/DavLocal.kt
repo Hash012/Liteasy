@@ -15,7 +15,8 @@ class DavLocal(context: Context, private val scope: String) {
     companion object {
         const val METADATA_PREFIX = ".liteasy/sync-data/objects/mobile-library/"
         fun annotationPath(id: String) = ".liteasy/paper-artifacts/${DavModel.artifactDirectory(id)}/annotations.v1.json"
-        fun selected(path: String) = !path.startsWith('.') || path.startsWith(METADATA_PREFIX)
+        fun selected(path: String) = !path.startsWith('.') || path.startsWith(METADATA_PREFIX) || isAnnotation(path)
+        fun isAnnotation(path: String) = path.startsWith(".liteasy/paper-artifacts/") && path.endsWith("/annotations.v1.json") && path.count { it == '/' } == 3
         fun canonical(value: Any?): Any? = when (value) {
             is JSONObject -> JSONObject().also { target -> value.keys().asSequence().sorted().forEach { target.put(it, canonical(value.get(it))) } }
             is JSONArray -> JSONArray().also { target -> for (index in 0 until value.length()) target.put(canonical(value.get(index))) }
@@ -54,6 +55,7 @@ class DavLocal(context: Context, private val scope: String) {
                 if (item.has(key)) metadata.put(key, item.get(key)) else metadata.remove(key)
             }
             result["$METADATA_PREFIX$id.json"] = materialize("$METADATA_PREFIX$id.json", metadata)
+            (record("annotations:$id") as? JSONObject)?.let { result[annotationPath(id)] = materialize(annotationPath(id), it) }
         }
         result
     }
@@ -96,14 +98,19 @@ class DavLocal(context: Context, private val scope: String) {
             record("sync-metadata:${item.getString("id")}", metadata); return
         }
         if (path.startsWith(".liteasy/paper-artifacts/")) {
-            if (bytes == null || version == null) return
-            require(bytes.length() <= 32L * 1024 * 1024) { "批注文件过大。" }
             val items = store.list(scope)
             val item = (0 until items.length()).map { items.getJSONObject(it) }.find { annotationPath(it.getString("id")) == path }
                 ?: throw IllegalStateException("批注对应的文献尚未下载，请先同步文献。")
+            val key = "annotations:${item.getString("id")}"
+            if (bytes == null || version == null) {
+                record(key)?.let { record("annotation-backup:${item.getString("id")}:${System.currentTimeMillis()}", it) }
+                store.dispatch(scope, JSONObject().put("operation", "removeRecord").put("key", key)); return
+            }
+            require(bytes.length() <= 32L * 1024 * 1024) { "批注文件过大。" }
             val value = JSONObject(bytes.readText())
             require(value.optInt("version", 1) in 1..2 && value.optJSONArray("annotations") != null) { "批注版本不受支持，原记录未修改。" }
-            record("annotations:${item.getString("id")}", value); return
+            require(!value.has("contentHash") || value.getString("contentHash") == item.getString("contentHash")) { "PDF 文件版本不同，原批注已保留。" }
+            store.dispatch(scope, JSONObject().put("operation", "importAnnotations").put("key", key).put("value", value)); return
         }
         val items = store.list(scope)
         val existing = (0 until items.length()).map { items.getJSONObject(it) }.find { it.optString("syncPath") == path }

@@ -24,12 +24,12 @@ class NativeLibraryRepository implements LibraryRepository {
     }
   }
 
-  async readBytes(scope: string, id: string) {
-    const { size } = await nativeRequest<{ size: number }>("fileInfo", { scope, id });
+  async readBytes(scope: string, id: string, expectedHash?: string) {
+    const { size } = await nativeRequest<{ size: number }>("fileInfo", { scope, id, expectedHash });
     if (!Number.isSafeInteger(size) || size < 0 || size > maxImportBytes) throw new Error("文件大小无效。");
     const bytes = new Uint8Array(size);
     for (let offset = 0; offset < size; offset += 256 * 1024) {
-      const chunk = decodeBytes(await nativeRequest<string>("readFile", { scope, id, offset, length: Math.min(256 * 1024, size - offset) }));
+      const chunk = decodeBytes(await nativeRequest<string>("readFile", { scope, id, expectedHash, offset, length: Math.min(256 * 1024, size - offset) }));
       if (chunk.length !== Math.min(256 * 1024, size - offset)) throw new Error("文件读取不完整，请重新下载。");
       bytes.set(chunk, offset);
     }

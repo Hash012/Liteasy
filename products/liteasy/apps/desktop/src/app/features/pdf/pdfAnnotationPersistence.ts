@@ -16,6 +16,7 @@ export function persistPdfAnnotationState(input: {
   annotationStorageKey: string;
   autoPublicStorageKey: string | null;
   paperId: string;
+  contentHash?: string;
   snapshot: PdfAnnotationPrivateState;
 }): Promise<void> {
   const scope = resolveLocalAccountKey();
@@ -26,7 +27,7 @@ export function persistPdfAnnotationState(input: {
       await saveUserPaperArtifact({
         artifactKind: "annotations",
         paperId: input.paperId,
-        snapshot: input.snapshot,
+        snapshot: { ...input.snapshot, documentId: input.paperId, ...(input.contentHash ? { contentHash: input.contentHash } : {}) },
       });
       clearMigratedPdfAnnotationBrowserCache(input.annotationStorageKey, input.autoPublicStorageKey);
     } else {

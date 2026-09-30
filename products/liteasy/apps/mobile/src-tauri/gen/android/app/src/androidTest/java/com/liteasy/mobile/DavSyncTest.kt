@@ -91,6 +91,24 @@ class DavSyncTest {
             try { DavJson.decode(text.toByteArray()); fail("Invalid field type must fail") } catch (_: IllegalArgumentException) { }
         }
     }
+    @Test fun backgroundAnnotationMergeRetainsConcurrentNotesAndDeletionHistory() {
+        val remote = FakeRemote(); val (a, first) = device(remote); val (b, second) = device(remote)
+        val item = pdf(a); val id = item.getString("id"); val key = "annotations:$id"
+        fun snapshot(text: String, revision: Int) = JSONObject().put("version", 2).put("autoPublic", false)
+            .put("documentId", id).put("contentHash", item.getString("contentHash")).put("annotations", org.json.JSONArray().put(JSONObject()
+                .put("id", "note").put("kind", "note").put("page", 1).put("rects", org.json.JSONArray()).put("text", text).put("revision", revision)
+                .put("paperIdentity", JSONObject().put("paperId", id)).put("publication", JSONObject().put("desiredVisibility", "private").put("state", "not_published"))))
+        fun write(scope: String, value: JSONObject) { store.dispatch(scope, JSONObject().put("operation", "writeRecord").put("key", key).put("value", value)) }
+        fun read(scope: String) = store.dispatch(scope, JSONObject().put("operation", "readRecord").put("key", key)) as JSONObject
+        write(a, snapshot("original", 1)); first.run(); second.run()
+        write(a, snapshot("desktop edit", 2)); write(b, snapshot("phone edit", 2)); first.run()
+        assertEquals("complete", second.run().getString("state")); first.run()
+        assertEquals(2, read(a).getJSONArray("annotations").length())
+        assertEquals(DavLocal.canonical(read(a)).toString(), DavLocal.canonical(read(b)).toString())
+        write(a, read(a).put("annotations", org.json.JSONArray())); first.run(); second.run()
+        assertEquals(0, read(b).getJSONArray("annotations").length())
+        assertTrue(read(b).getJSONObject("sync").getJSONObject("tombstones").has("note"))
+    }
     private class FakeRemote : DavRemote {
         var value = DavManifest(); var exists = false; var revision = 0; var failPublish = false
         var duringDownload: (() -> Unit)? = null

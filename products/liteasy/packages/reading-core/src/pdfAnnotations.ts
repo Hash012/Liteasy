@@ -45,6 +45,8 @@ export type PdfAnnotationReview = {
 };
 
 type PdfAnnotationBase = {
+  conflictOf?: string;
+  conflictReason?: "concurrent-edit" | "delete-edit";
   color?: PdfHighlightColor;
   createdAt: string;
   excerpt: string;
@@ -89,6 +91,9 @@ export type PdfAnnotationV1 = PdfAnnotation & {
 };
 
 export type PdfAnnotationPrivateState = {
+  documentId?: string;
+  contentHash?: string;
+  sync?: { version: 1; tombstones: Record<string, number> };
   annotations: PdfAnnotationV2[];
   autoPublic: boolean;
   version: 2;

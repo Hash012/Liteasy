@@ -37,7 +37,7 @@ test("a failed native recovery never saves an empty fallback over disk; retry re
   expect(await screen.findByText("Durable review")).toBeVisible();
   await waitFor(() => expect(native.save).toHaveBeenCalledWith({
     artifactKind: "annotations", paperId: paper.id,
-    snapshot: { annotations: [annotation], autoPublic: false, version: 2 },
+    snapshot: { annotations: [annotation], autoPublic: false, version: 2, documentId: paper.id },
   }));
 });
 

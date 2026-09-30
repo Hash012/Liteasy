@@ -19,7 +19,7 @@ export function usePdfController(item: LibraryItem, scope: string, repository: L
     let task: ReturnType<typeof loadPdf> | undefined;
     setDocument(undefined); setError(""); setOutline([]); setPage(initialPage.current); setZoom(1);
     void (async () => {
-      const bytes = await repository.readBytes(scope, item.id);
+      const bytes = await repository.readBytes(scope, item.id, item.contentHash);
       if (!active) return;
       task = loadPdf(bytes);
       task.onPassword = (callback: (value: string) => void) => {
