@@ -78,3 +78,9 @@ h1 { font-size: 22px; color: #242424; }
 .sync-conflict { padding: 12px; margin: 12px 0; border: 1px solid #d5bd77; border-radius: 6px; background: #fff9e8; overflow-wrap: anywhere; }
 .sync-conflict button { margin: 4px 8px 4px 0; }
 @media (min-width: 800px) { .app-content { padding: 24px; } .app-navigation { justify-content: center; } .app-navigation button { flex: 0 1 160px; flex-direction: row; font-size: 14px; } }
+.task-create, .task-pair { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-block: 16px; }
+.task-create > div { flex: 1 1 200px; }
+.task-create > p { flex-basis: 100%; }
+.task-list { list-style: none; padding: 0; }
+.task-list > li { border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; padding: 12px; margin-block: 8px; }
+.task-result { white-space: pre-wrap; overflow-wrap: anywhere; padding-block: 12px; }

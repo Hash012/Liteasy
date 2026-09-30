@@ -1,4 +1,7 @@
 import { buildAdminConsoleHtml } from "./adminConsole.mjs";
+import { DeviceControlService, DeviceControlError } from "../../products/liteasy/packages/device-control/src/service.mjs";
+import { handleDeviceControl } from "../../products/liteasy/packages/device-control/src/routes.mjs";
+import { SqliteDeviceControlRepository } from "./db/deviceControlRepository.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import { AuthError, createAuthService } from "./auth/authService.mjs";
@@ -315,7 +318,9 @@ function buildCorsHeaders(request) {
       "X-Liteasy-Folder-Id",
       "X-Liteasy-Scope-Id",
       "X-Liteasy-Scope-Type",
-      "X-Liteasy-Session-Id"
+      "X-Liteasy-Session-Id",
+      "X-Liteasy-Device-Id",
+      "X-Liteasy-Device-Secret"
     ].join(", "),
     "Access-Control-Allow-Methods": "DELETE,GET,PATCH,POST,OPTIONS",
     Vary: "Origin"
@@ -1002,6 +1007,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
   const database = customConfig.database ?? createDatabase({
     databasePath: customConfig.databasePath
   });
+  const deviceControlService = customConfig.deviceControlService ?? new DeviceControlService(new SqliteDeviceControlRepository(database));
   const externalKnowledgeRunRepository =
     customConfig.externalKnowledgeRunRepository ?? createExternalKnowledgeRunRepository(database);
   const externalPdfGrantRepository =
@@ -1122,6 +1128,23 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     if (method === "OPTIONS") {
       writeCorsPreflight(request, response);
       return;
+    }
+    try {
+      if (await handleDeviceControl({ request, url, service: deviceControlService,
+        authenticate: async (kind) => {
+          const token = request.headers.authorization?.match(/^Bearer ([^\s]+)$/i)?.[1] ?? "";
+          const session = authService.validateSession(token, `liteasy-${kind}`);
+          return { subject: session.userId };
+        }, readBody: async () => {
+          const body = await readJsonOrWriteError(request, response);
+          if (body === null) throw new DeviceControlError("request_json_invalid");
+          return body;
+        }, send: (value) => writeJson(request, response, 200, value)
+      })) return;
+    } catch (error) {
+      if (response.headersSent || writeAuthError(request, response, error)) return;
+      if (error instanceof DeviceControlError) { writeJson(request, response, error.status, { code: error.code, message: "设备请求未完成，请检查配对和任务状态。" }); return; }
+      throw error;
     }
 
     if (method === "GET" && url.pathname === "/healthz") {

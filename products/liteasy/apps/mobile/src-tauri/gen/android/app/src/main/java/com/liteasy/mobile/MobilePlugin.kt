@@ -31,6 +31,12 @@ class MobilePlugin(private val activity: Activity) : Plugin(activity) {
                     "cancelLogin" -> { account.cancelLogin(); account.status() }
                     "logout" -> account.logout()
                     "accountRequest" -> account.request(request.getString("path"), request.optString("method", "GET"), request.optJSONObject("body"))
+                    "tasksSnapshot" -> MobileTasks(activity, scope).snapshot()
+                    "pairDesktop" -> MobileTasks(activity, scope).pair(request.getString("code"))
+                    "unpairDesktop" -> MobileTasks(activity, scope).unpair(request.getString("pairId"))
+                    "enqueueTask" -> MobileTasks(activity, scope).enqueue(request.getJSONObject("input"))
+                    "cancelTask" -> MobileTasks(activity, scope).cancel(request.getString("operationId"), request.optString("taskId").ifEmpty { null })
+                    "retryTaskOutbox" -> { TaskOutboxWorker.schedule(activity, scope); null }
                     "copyGuestLibrary" -> {
                         val destination = account.activeScope(); require(destination != "local") { "请先登录账号。" }
                         LibraryStore.get(activity).copyGuestLibrary(destination)

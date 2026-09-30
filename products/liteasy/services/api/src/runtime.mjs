@@ -43,6 +43,8 @@ import { VisualizationService } from "./visualizationService.mjs";
 import { productionVisualizationProviderAdapters } from "./visualizationStructuredProviderAdapter.mjs";
 import { ThinReadingVisualizationSourceResolver } from "./thinReadingVisualizationSource.mjs";
 import { LocalTesseractRasterOcr } from "./visualizationRasterOcr.mjs";
+import { PostgresDeviceControlRepository } from "./deviceControlRepository.mjs";
+import { DeviceControlService } from "../../../packages/device-control/src/service.mjs";
 
 export async function startCloudRuntime(config, dependencies = {}) {
   const pool = dependencies.pool ?? createPostgresPool(config.database);
@@ -63,6 +65,7 @@ export async function startCloudRuntime(config, dependencies = {}) {
     new PostgresAccountLifecycleRepository(pool);
   const agentArtifactRepository = dependencies.agentArtifactRepository ??
     new PostgresAgentArtifactRepository(pool);
+  const deviceControlService = dependencies.deviceControlService ?? new DeviceControlService(new PostgresDeviceControlRepository(pool));
   const accountLifecycleService = dependencies.accountLifecycleService ?? new AccountLifecycleService(
     accountLifecycleRepository,
     identityAdminClient,
@@ -210,6 +213,7 @@ export async function startCloudRuntime(config, dependencies = {}) {
     return {
       accountLifecycleService,
       agentArtifactRepository,
+      deviceControlService,
       close: async () => {
         try {
           await visualizationOrchestrationService.close?.();

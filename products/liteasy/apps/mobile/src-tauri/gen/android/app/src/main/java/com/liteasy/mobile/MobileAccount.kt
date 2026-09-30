@@ -112,8 +112,9 @@ class MobileAccount(private val context: Context, private val http: AccountHttp 
                 "redirect_uri" to REDIRECT, "client_id" to pending.getString("clientId"), "code_verifier" to pending.getString("verifier")))
             val session = verified(pending, tokens, null)
             val oldScope = activeScope(); secure.write(SESSION, session.toString())
-            if (oldScope != scope(session)) DavSyncWorker.suspend(context, oldScope)
+            if (oldScope != scope(session)) { DavSyncWorker.suspend(context, oldScope); TaskOutboxWorker.suspend(context, oldScope) }
             if (DavSync(context, scope(session)).settings() != null) DavSyncWorker.schedule(context, scope(session), false)
+            TaskOutboxWorker.schedule(context, scope(session))
             preferences.edit().remove("error").apply(); status()
         } catch (error: Exception) {
             preferences.edit().putString("error", safeError(error)).apply(); throw IllegalStateException(safeError(error))
@@ -149,19 +150,23 @@ class MobileAccount(private val context: Context, private val http: AccountHttp 
             throw error
         }
     }
-    fun request(path: String, method: String = "GET", body: JSONObject? = null): JSONObject = synchronized(lock) {
+    fun request(path: String, method: String = "GET", body: JSONObject? = null, deviceHeaders: Map<String, String> = emptyMap(), expectedScope: String? = null): JSONObject = synchronized(lock) {
+        require(expectedScope == null || expectedScope == activeScope()) { "账号已切换，请返回当前资料库重试。" }
         require(path.startsWith("/v1/mobile/") && !path.contains("..") && !path.contains('\\') && !path.contains('#')) { "账号请求路径无效。" }
         val session = token(); val base = endpoint(session.getString("apiBaseUrl"))
         val url = "${session.getString("apiBaseUrl")}$path".toHttpUrl()
         require(url.host == base.host && url.port == base.port && url.encodedPath.startsWith("${base.encodedPath.trimEnd('/')}/v1/mobile/")) { "账号请求地址无效。" }
         require(method in listOf("GET", "POST", "DELETE"))
         val builder = Request.Builder().url(url).header("Authorization", "Bearer ${session.getString("accessToken")}")
+        for ((name, value) in deviceHeaders) {
+            require(name in listOf("X-Liteasy-Device-Id", "X-Liteasy-Device-Secret")); builder.header(name, value)
+        }
         if (method != "GET") builder.method(method, (body ?: JSONObject()).toString().toRequestBody("application/json".toMediaType()))
         try { http.execute(builder.build()) } catch (error: AccountHttpError) { if (error.status == 401) clear(); throw error }
     }
     fun cancelLogin() = synchronized(lock) { secure.remove(PENDING); preferences.edit().remove("error").apply() }
     fun browserUnavailable() = synchronized(lock) { secure.remove(PENDING); preferences.edit().putString("error", "无法打开系统浏览器，请安装或启用浏览器后重试。").apply() }
-    private fun clear() { val old = credential()?.let { scope(it) }; secure.remove(SESSION); secure.remove(PENDING); old?.let { DavSyncWorker.suspend(context, it) } }
+    private fun clear() { val old = credential()?.let { scope(it) }; secure.remove(SESSION); secure.remove(PENDING); old?.let { DavSyncWorker.suspend(context, it); TaskOutboxWorker.suspend(context, it) } }
     fun logout(): JSONObject = synchronized(lock) {
         val previous = credential(); clear(); preferences.edit().remove("error").apply()
         if (previous != null) try { form(previous.getString("revocationUrl"), mapOf("token" to previous.optString("refreshToken", previous.getString("accessToken")),

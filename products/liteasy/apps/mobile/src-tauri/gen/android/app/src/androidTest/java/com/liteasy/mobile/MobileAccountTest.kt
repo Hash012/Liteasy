@@ -25,6 +25,7 @@ class MobileAccountTest {
     }
     private class Provider : AccountHttp {
         var exchanges = 0; var revoked = false; var subject = "user-a"; var reject = false; var lastForm = ""
+        var deviceHandler: ((Request) -> JSONObject)? = null
         override fun execute(request: Request): JSONObject {
             return when (request.url.encodedPath) {
                 "/v1/identity/mobile-config" -> JSONObject().put("audience", "liteasy-mobile").put("authorizationFlow", "authorization_code_pkce")
@@ -41,11 +42,45 @@ class MobileAccountTest {
                     JSONObject().put("subject", subject).put("issuer", "https://identity.example").put("audience", "liteasy-mobile")
                 }
                 "/revoke" -> { revoked = true; JSONObject() }
-                else -> error("Unexpected endpoint")
+                else -> deviceHandler?.invoke(request) ?: error("Unexpected endpoint")
             }
         }
     }
     private fun callback(url: String) = Uri.parse("${MobileAccount.REDIRECT}?code=test-code&state=${Uri.parse(url).getQueryParameter("state")}")
+    @Test fun outboxSurvivesUnknownDeliveryAndRetriesSameOperation() {
+        val context = isolatedContext(); val provider = Provider(); val account = MobileAccount(context, provider)
+        provider.subject = "outbox-${UUID.randomUUID()}"
+        val scope = account.complete(callback(account.begin("https://api.example"))).getString("scope")
+        val received = mutableListOf<JSONObject>(); var loseReceipt = true
+        provider.deviceHandler = { request ->
+            when (request.url.encodedPath) {
+                "/v1/mobile/devices/register" -> JSONObject()
+                "/v1/mobile/devices" -> JSONObject().put("devices", org.json.JSONArray()).put("pairs", org.json.JSONArray()).put("tasks", org.json.JSONArray())
+                "/v1/mobile/tasks" -> {
+                    assertNotNull(request.header("X-Liteasy-Device-Secret"))
+                    val buffer = Buffer(); request.body!!.writeTo(buffer); received.add(JSONObject(buffer.readUtf8()))
+                    if (loseReceipt) { loseReceipt = false; throw java.io.IOException("Lost response after server commit") }
+                    JSONObject().put("replayed", true)
+                }
+                else -> error("Unexpected device endpoint")
+            }
+        }
+        val operation = UUID.randomUUID().toString()
+        val tasks = MobileTasks(context, scope, account)
+        tasks.enqueue(JSONObject().put("operationId", operation).put("desktopId", UUID.randomUUID().toString()).put("kind", "sync-library"))
+        try { tasks.flush(); fail("Lost response") } catch (_: java.io.IOException) { }
+        val restored = MobileTasks(context, scope, MobileAccount(context, provider))
+        assertEquals(1, restored.snapshot().getJSONArray("outbox").length())
+        assertEquals(0, restored.flush())
+        assertEquals(listOf(operation, operation), received.map { it.getString("operationId") })
+        assertFalse(restored.snapshot().toString().contains("secret"))
+        val cancelled = UUID.randomUUID().toString()
+        restored.enqueue(JSONObject().put("operationId", cancelled).put("desktopId", UUID.randomUUID().toString()).put("kind", "sync-library"))
+        restored.cancel(cancelled, null); restored.flush()
+        assertTrue(received.last().getBoolean("cancelRequested"))
+        account.logout()
+        try { restored.snapshot(); fail("Old account") } catch (_: IllegalArgumentException) { }
+    }
     @Test fun pkceCallbackIsSingleUseAndSecretsStayOutOfPublicStatus() {
         val context = isolatedContext(); val provider = Provider(); val account = MobileAccount(context, provider)
         val url = account.begin("https://api.example")
