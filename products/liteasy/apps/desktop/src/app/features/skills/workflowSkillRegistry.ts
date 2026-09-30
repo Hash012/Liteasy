@@ -488,6 +488,16 @@ export function loadWorkflowSkill(id: string, version?: string): WorkflowSkillPa
   return clonePackage(workflowPackage);
 }
 
+/** Explicit linear plan preserves v1 order, bindings, versions and its existing validator. */
+export function compileLegacyWorkflowPlan(value: unknown) {
+  const pkg = parseWorkflowSkillPackage(value), { manifest } = pkg;
+  return { schema: "liteasy.workflow-linear-plan/v1" as const, id: manifest.id, version: manifest.version,
+    inputSchema: manifest.inputSchema, outputSchema: manifest.outputSchema, output: manifest.output,
+    permissions: [...manifest.permissions], instructions: pkg.instructions,
+    nodes: manifest.steps.map((step, index) => ({ ...step, dependsOn: index ? [manifest.steps[index - 1].id] : [] })),
+    original: pkg };
+}
+
 export async function executeWorkflowSkill<T = unknown>(
   invocation: WorkflowSkillInvocation,
   runtime: WorkflowOperatorRuntime
@@ -496,9 +506,10 @@ export async function executeWorkflowSkill<T = unknown>(
   const { manifest } = workflowPackage;
   assertSchema(invocation.input, manifest.inputSchema, "workflow_input");
 
+  const plan = compileLegacyWorkflowPlan(workflowPackage);
   const stepOutputs = new Map<string, unknown>();
   const completedSteps: WorkflowSkillExecutionResult["trace"]["steps"] = [];
-  for (const step of manifest.steps) {
+  for (const step of plan.nodes) {
     const operator = operatorsByKey.get(workflowKey(step.operator.id, step.operator.version));
     if (!operator) throw new Error("workflow_skill_operator_not_found");
     const stepInput = Object.fromEntries(

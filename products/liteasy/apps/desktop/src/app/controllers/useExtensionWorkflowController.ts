@@ -1,3 +1,8 @@
+import { compileExtensionWorkflow } from "../features/extensions/extensionPackage";
+import { withModelContextBudget, agentContextLimit } from "../features/context/modelContextBudget";
+import { createObjectRepository } from "../features/objects/objectRepository";
+import { createBlockRegistry } from "../features/visual-blocks/blockRegistry";
+import { createWorkflowTriggers } from "../features/workflows/workflowTriggers";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createExtensionWorkspaceStore } from "../features/extensions/extensionWorkspaceStore";
 import { createObjectStorage } from "../features/objects/objectStorage";
@@ -20,14 +25,14 @@ export function useExtensionWorkflowController(input: { scope: string; assets: A
   const connection = () => `${getActiveModelProvider(latest.current.settings)}/${getModelForSettings(latest.current.settings)}`;
   const runner = useMemo(() => {
     const storage = createObjectStorage(input.scope, () => latest.current.scope);
-    return createWorkflowRunner(storage, createOperationHost({ storage, assets: input.assets, scope: input.scope,
+    return createWorkflowRunner(storage, createOperationHost({ storage, assets: input.assets, scope: input.scope, repository: createObjectRepository(storage, input.scope), registry: (owner) => createBlockRegistry(latest.current.packages.snapshot.packages.find((pkg) => pkg.manifest.id === owner)?.blocks ?? []),
       enabled: (owner, digest) => latest.current.packages.snapshot.packages.some((pkg) => pkg.manifest.id === owner && pkg.digest === digest),
       open: (path) => latest.current.open(path),
       async model(options) {
         if (options.connection !== connection()) throw new OperationError("permission_denied", "所用模型连接已变化，请重新绑定后开始新运行。");
         const settings = latest.current.settings;
         const model = getModelForSettings(settings), provider = getActiveModelProvider(settings);
-        const result = await createModelGatewayFromSettings(settings, { cloudTransport: latest.current.modelTransport }).generateAnswer({
+        const result = await withModelContextBudget(createModelGatewayFromSettings(settings, { cloudTransport: latest.current.modelTransport }), agentContextLimit(settings["assistant.context_window"])).generateAnswer({
           model, provider, prompt: `${options.prompt}\n\n输出上限约 ${options.maxOutputTokens} tokens。`, signal: options.signal, requireLive: true,
           outputFormat: options.schema ? { name: "workflow_result", strict: true, schema: options.schema as Record<string, unknown> } : undefined,
         });
@@ -39,11 +44,14 @@ export function useExtensionWorkflowController(input: { scope: string; assets: A
     }), input.scope);
   }, [input.scope, input.assets]);
   useEffect(() => { setPending(undefined); setError(""); return () => { void runner.list().then((runs) => Promise.all(runs.filter((run) => run.status === "running").map((run) => runner.stop(run.id, "paused")))).catch(() => undefined); }; }, [runner]);
+  const triggers = useMemo(() => createWorkflowTriggers(createObjectStorage(input.scope, () => latest.current.scope), runner, input.assets, () => latest.current.scope === input.scope && latest.current.packages.snapshot.packages.length > 0), [runner, input.scope, input.assets]);
+  useEffect(() => { let active = true; const tick = () => { if (active) void triggers.tick().catch((e) => setError(String(e))); }; tick(); const timer = setInterval(tick, 30000); return () => { active = false; clearInterval(timer); }; }, [triggers]);
+  useEffect(() => { void runner.list().then((runs) => Promise.all(runs.filter((run) => run.status === "running" && !input.packages.snapshot.packages.some((pkg) => pkg.manifest.id === run.owner && pkg.digest === run.digest)).map((run) => runner.stop(run.id, "paused")))).catch(() => undefined); }, [runner, input.packages.snapshot]);
   async function request(owner: string, workflowId: string, selection: string[] = []) {
     const pkg = latest.current.packages.snapshot.packages.find((pkg) => pkg.manifest.id === owner);
     const file = pkg?.manifest.contributes.workflows.find((item) => item.id === workflowId);
     if (!pkg || !file) throw new Error("工作流所属扩展未启用。");
-    const plan = compileWorkflow(JSON.parse(pkg.bundle.files[file.path]));
+    const plan = compileExtensionWorkflow(pkg, file.path);
     if (plan.capabilities.some((capability) => !pkg.manifest.permissions.some((entry) => entry.capability === capability))) throw new Error("工作流所需能力未完整声明。");
     const args = schemaDefaults(plan.inputSchema) as JsonObject;
     if (plan.inputSchema.properties?.selection) args.selection = selection;
@@ -64,6 +72,6 @@ export function useExtensionWorkflowController(input: { scope: string; assets: A
     void runner.execute(run.id).catch((error) => setError(String(error)));
     return run;
   }
-  return { runner, pending, error, request, start, connection: connection(), close: () => setPending(undefined), assets: input.assets };
+  return { runner, triggers, pending, error, request, start, connection: connection(), close: () => setPending(undefined), assets: input.assets };
 }
 

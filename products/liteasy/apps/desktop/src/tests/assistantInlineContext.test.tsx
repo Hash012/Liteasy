@@ -66,7 +66,10 @@ test("batch additions preserve order at the original caret and do not duplicate 
   await user.click(screen.getByRole("checkbox", { name: "选择 Cicada" }));
   await user.click(screen.getByRole("button", { name: "添加所选（2）" }));
   await waitFor(() => expect(input).toHaveValue("比较 CicN Cicada 的内容"));
-  expect(screen.getAllByRole("button", { name: /^移除上下文：/ })).toHaveLength(2);
+  // The picker remains modal for batch additions; the composer is deliberately
+  // hidden from the accessibility tree until the user returns to the chat.
+  await user.click(screen.getAllByRole("button", { name: "返回对话" })[0]);
+  await waitFor(() => expect(screen.getAllByRole("button", { name: /^移除上下文：/ })).toHaveLength(2));
 });
 
 test("resolving a mention retains text typed while waiting and inserts nothing on failure", async () => {

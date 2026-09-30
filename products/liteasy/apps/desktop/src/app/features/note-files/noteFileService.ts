@@ -38,7 +38,7 @@ export interface NoteFileService {
   editingStatus?(mountId: string, path: string): Promise<ExternalEditingStatus>;
   listMounts(): Promise<NoteFileMount[]>;
   chooseFolder(): Promise<NoteFileMount | null>;
-  listEntries(mountId: string): Promise<NoteFileEntry[]>;
+  listEntries(mountId: string, includeImages?: boolean): Promise<NoteFileEntry[]>;
   readFile(mountId: string, path: string): Promise<NoteFileSnapshot>;
   writeFile(input: NoteFileWrite): Promise<NoteFileSnapshot>;
   createDirectory(mountId: string, path: string): Promise<void>;
@@ -124,7 +124,7 @@ export function createNoteFileService(
         },
         listMounts: () => call("listMounts"),
         chooseFolder: () => call("chooseFolder"),
-        listEntries: (mountId) => call("listEntries", { mountId }),
+        listEntries: (mountId, includeImages = false) => call("listEntries", { mountId, includeImages }),
         readFile: (mountId, path) => call("readFile", { mountId, path }),
         writeFile: (input) => call("writeFile", input),
         createDirectory: (mountId, path) =>
@@ -154,7 +154,7 @@ export function createNoteFileService(
       if (mount) changed({ kind: "mount", mount });
       return mount;
     },
-    listEntries: (id) => wrap(() => backend.listEntries(id)),
+    listEntries: (id, includeImages) => wrap(() => backend.listEntries(id, includeImages)),
     readFile: (id, path) => {
       validateNotePath(path);
       return wrap(() => backend.readFile(id, path));

@@ -187,7 +187,7 @@ export function createBrowserNoteFiles(
         throw error;
       }
     },
-    listEntries: async (id) => {
+    listEntries: async (id, includeImages = false) => {
       const row = await grant(id);
       const entries: NoteFileEntry[] = [];
       if (row.handle.kind === "file")
@@ -206,7 +206,7 @@ export function createBrowserNoteFiles(
           check();
           if (child.name.startsWith(".")) continue;
           const path = parent + child.name;
-          if (child.kind === "file" && !/\.(md|markdown|canvas)$/i.test(path))
+          if (child.kind === "file" && !/\.(md|markdown|canvas)$/i.test(path) && !(includeImages && /\.(png|jpe?g|gif|webp)$/i.test(path)))
             continue;
           if (entries.length >= 10000)
             throw new Error("文件夹超过 10000 个条目，请连接较小的子目录。");

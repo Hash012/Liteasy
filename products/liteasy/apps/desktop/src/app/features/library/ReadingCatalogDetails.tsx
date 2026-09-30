@@ -1,3 +1,4 @@
+import { ExtensionMetadataSections } from "../extensions/ExtensionMetadata";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button, Field, Input, Select, Tooltip } from "@fluentui/react-components";
 import { ArrowDownloadRegular, CopyRegular, DeleteRegular, FolderOpenRegular, OpenRegular } from "@fluentui/react-icons";
@@ -126,5 +127,6 @@ export function ReadingCatalogDetails({ entry, ...actions }: { entry: ReadingCat
     </section> : null}
     {actions.onDelete && entry.canRemove !== false ? <Button icon={<DeleteRegular />} disabled={busy} onClick={() => void invoke(() => actions.onDelete!(entry))}>移出文献库</Button> : null}
     <p role="status" className="reading-catalog-action-status">{message}</p>
+    <ExtensionMetadataSections entry={entry} />
   </aside>;
 }

@@ -22,6 +22,8 @@ const emptyAnchors: readonly PaperAnchorEntity[] = [];
 export type MarkdownContentProps = {
   className?: string;
   components?: Components;
+  allowRelativeImages?: boolean;
+  renderResourceImage?: (source: string, alt: string) => ReactNode;
   emptyLabel?: string;
   /** HTML is omitted by default. Sanitized mode requires an explicit sanitizer pipeline. */
   html?: "text" | "skip" | "sanitized";
@@ -158,14 +160,14 @@ const inlineComponents: Components = {
 
 /** Shared rich-text foundation. Adapters add source links, attachment lookup and domain AST marks. */
 export const MarkdownContent = memo(function MarkdownContent({
-  className = "", components, emptyLabel, html = "skip", inline = false, normalizeMath = true,
+  className = "", components, renderResourceImage, allowRelativeImages = false, emptyLabel, html = "skip", inline = false, normalizeMath = true,
   paperAnchors = emptyAnchors, rehypePluginsBeforeMath = emptyPlugins, remarkPlugins = emptyPlugins, streaming = false,
   urlTransform = markdownUrlTransform, onOpenLiteasyPath, liteasyLinkTitles, value
 }: MarkdownContentProps) {
   const [navigationError, setNavigationError] = useState<string>();
   const markdown = useMemo(() => normalizeMath ? normalizeMarkdownMathDelimiters(value) : value, [normalizeMath, value]);
   const mergedComponents = useMemo<Components>(() => {
-    const merged = { ...markdownComponents, ...(inline ? inlineComponents : {}), ...components };
+    const merged = { ...markdownComponents, ...(inline ? inlineComponents : {}), ...components, ...(renderResourceImage ? { img: (props: { src?: string; alt?: string }) => props.src ? renderResourceImage(props.src, props.alt ?? "图片") : <img src={props.src} alt={props.alt ?? ""} loading="lazy" decoding="async" /> } : {}) };
     if (!onOpenLiteasyPath) return merged;
     const DefaultLink = merged.a!;
     return { ...merged, a: (props) => {
@@ -178,12 +180,12 @@ export const MarkdownContent = memo(function MarkdownContent({
         });
       }}>{props.children}</a>;
     } };
-  }, [components, inline, onOpenLiteasyPath]);
+  }, [components, inline, onOpenLiteasyPath, renderResourceImage]);
   const remark = useMemo(() => [...baseRemarkPlugins, ...remarkPlugins, remarkLiteasyLinks(liteasyLinkTitles), remarkPaperAnchorReferences(paperAnchors)], [liteasyLinkTitles, paperAnchors, remarkPlugins]);
   const rehype = useMemo(() => [...rehypePluginsBeforeMath, ...mathPlugin], [rehypePluginsBeforeMath]);
   const resolveUrl = useMemo<UrlTransform>(() => (url, key, node) =>
-    key === "href" && onOpenLiteasyPath && safeLiteasyMarkdownUrl(url) ? url
-      : safeResolvedUrl(urlTransform(url, key, node), key), [onOpenLiteasyPath, urlTransform]);
+    key === "src" && renderResourceImage && (safeLiteasyMarkdownUrl(url) || allowRelativeImages && !/^[a-z][a-z0-9+.-]*:|^[\/\\]/i.test(url)) ? url : key === "href" && onOpenLiteasyPath && safeLiteasyMarkdownUrl(url) ? url
+      : safeResolvedUrl(urlTransform(url, key, node), key), [onOpenLiteasyPath, urlTransform, renderResourceImage, allowRelativeImages]);
   const Root = inline ? "span" : "div";
   if (!value.trim()) return emptyLabel ? <Root className={`markdown-content ${className} is-empty`}>{emptyLabel}</Root> : null;
   return (

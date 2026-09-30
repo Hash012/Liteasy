@@ -128,7 +128,10 @@ pub fn note_files_dispatch(app: AppHandle, scope: String, request: Value) -> Res
             json!({ "workspace": files.workspace_state(value("mountId")?)?, "running": obsidian_running() }),
         ),
         "listMounts" => Ok(json!(files.mounts()?)),
-        "listEntries" => Ok(json!(files.entries(value("mountId")?)?)),
+        "listEntries" => Ok(json!(files.asset_entries(
+            value("mountId")?,
+            request["includeImages"].as_bool().unwrap_or(false)
+        )?)),
         "readImage" => files.read_image(value("mountId")?, value("path")?),
         "readFile" => Ok(json!(files.read(value("mountId")?, value("path")?)?)),
         "locateFile" | "revealFile" => {

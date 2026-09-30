@@ -32,8 +32,9 @@ fn object_snapshot(
     app: &AppHandle,
     scope: &str,
     external: bool,
+    category: &str,
 ) -> Result<Option<Vec<u8>>, String> {
-    let value = crate::object_store::sync_export(app, scope, external)?;
+    let value = crate::object_store::sync_export(app, scope, external, category)?;
     if value["records"].as_array().is_some_and(Vec::is_empty) {
         Ok(None)
     } else {
@@ -118,13 +119,31 @@ pub fn prepare(
         Ok(())
     };
     if settings.sync.workspace {
-        if let Some(bytes) = object_snapshot(app, &scope, false)? {
+        if let Some(bytes) = object_snapshot(app, &scope, false, "objects")? {
             stage(scoped_path("objects", &scope, "records.json"), bytes)?;
         }
     }
     if settings.sync.external_folders {
-        if let Some(bytes) = object_snapshot(app, &scope, true)? {
+        if let Some(bytes) = object_snapshot(app, &scope, true, "external")? {
             stage(scoped_path("external", &scope, "records.json"), bytes)?;
+        }
+    }
+    for (category, enabled) in [
+        ("extension-packages", settings.sync.extension_packages),
+        (
+            "extension-configuration",
+            settings.sync.extension_configuration,
+        ),
+        ("extension-workflows", settings.sync.extension_workflows),
+        ("extension-runs", settings.sync.extension_runs),
+        ("extension-snapshots", settings.sync.extension_snapshots),
+    ] {
+        if enabled {
+            if let Some(bytes) =
+                object_snapshot(app, &scope, settings.sync.external_folders, category)?
+            {
+                stage(scoped_path(category, &scope, "records.json"), bytes)?;
+            }
         }
     }
     let files = store(app, &scope)?;
@@ -252,8 +271,25 @@ fn source(
     let parts: Vec<_> = path.split('/').collect();
     let name = parts[4];
     let category = parts[2];
-    if name == "records.json" && matches!(category, "objects" | "external") {
-        return object_snapshot(app, scope, category == "external");
+    if name == "records.json"
+        && matches!(
+            category,
+            "objects"
+                | "external"
+                | "extension-packages"
+                | "extension-configuration"
+                | "extension-workflows"
+                | "extension-runs"
+                | "extension-snapshots"
+        )
+    {
+        return object_snapshot(
+            app,
+            scope,
+            category == "external"
+                || (category.starts_with("extension-") && settings.sync.external_folders),
+            category,
+        );
     }
     if let Some(id) = name
         .strip_prefix("mount-")
@@ -333,7 +369,26 @@ fn apply(
         .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
     let parts: Vec<_> = path.split('/').collect();
     match (parts[2], parts[4]) {
-        ("objects" | "external", "records.json") => {
+        (
+            "objects"
+            | "external"
+            | "extension-packages"
+            | "extension-configuration"
+            | "extension-workflows"
+            | "extension-runs"
+            | "extension-snapshots",
+            "records.json",
+        ) => {
+            let category = value["category"].as_str().unwrap_or(
+                if value["external"].as_bool() == Some(true) {
+                    "external"
+                } else {
+                    "objects"
+                },
+            );
+            if category != parts[2] {
+                return Err("同步记录分类不匹配".into());
+            }
             crate::object_store::sync_import(app, scope, &value, previous.as_ref())
         }
         ("boards" | "external", name) if name.starts_with("mount-") => {
@@ -554,7 +609,16 @@ fn validate_record(
     }
     let value: Value = serde_json::from_slice(bytes).map_err(|_| "同步记录不是有效 JSON")?;
     match (parts[2], parts[4]) {
-        ("objects" | "external", "records.json") => {
+        (
+            "objects"
+            | "external"
+            | "extension-packages"
+            | "extension-configuration"
+            | "extension-workflows"
+            | "extension-runs"
+            | "extension-snapshots",
+            "records.json",
+        ) => {
             if value["version"] != 1
                 || value["scope"].as_str() != Some(scope)
                 || value["external"].as_bool() != Some(parts[2] == "external")

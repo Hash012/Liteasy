@@ -1,6 +1,6 @@
 import { Button, Tooltip } from "@fluentui/react-components";
 import { CheckmarkRegular, CopyRegular, HighlightRegular, TextUnderlineRegular, WhiteboardRegular, ChatRegular, SparkleRegular, TextQuoteRegular } from "@fluentui/react-icons";
-import type { DragEventHandler } from "react";
+import type { DragEventHandler, ReactNode } from "react";
 import { getHighlightColor } from "./pdfAnnotationAppearance";
 import type { PdfHighlightColor } from "./pdfAnnotationStorage";
 import "./paperSelectionTools.css";
@@ -12,6 +12,7 @@ const highlightColors: { value: PdfHighlightColor; label: string }[] = [
 ];
 
 export function PaperSelectionTools(props: {
+  extensionActions?: ReactNode;
   disabled?: boolean;
   highlight(): void;
   underline(): void;
@@ -47,5 +48,6 @@ export function PaperSelectionTools(props: {
       {props.quickAsk ? <Tooltip content="结合当前页和摘要提问" relationship="description"><Button appearance="subtle" size="small" disabled={props.disabled} icon={<SparkleRegular />} onClick={props.quickAsk}>速问</Button></Tooltip> : null}
       {props.conversation ? <Tooltip content="将选段加入 AI 对话上下文" relationship="description"><Button appearance="subtle" size="small" disabled={props.disabled} icon={<ChatRegular />} onClick={props.conversation}>加入对话</Button></Tooltip> : null}
     </div> : null}
+    {props.extensionActions}
   </div>;
 }

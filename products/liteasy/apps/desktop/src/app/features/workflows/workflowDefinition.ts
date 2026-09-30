@@ -1,3 +1,4 @@
+import { expandSubflows } from "./workflowSubflows";
 import { z } from "zod";
 import { boundedJson, parseDataSchema, validateSchemaValue, type JsonObject, type JsonValue } from "../extensions/extensionSchema";
 import { operationCatalog, operationIds, type OperationId } from "./operationCatalog";
@@ -23,7 +24,7 @@ export const workflowSchema = z.strictObject({
 export type WorkflowDefinition = z.infer<typeof workflowSchema>;
 export function compileWorkflow(value: unknown) {
   boundedJson(value);
-  const definition = workflowSchema.parse(value);
+  const definition = workflowSchema.parse(expandSubflows(value));
   const inputSchema = parseDataSchema(definition.inputSchema), outputSchema = parseDataSchema(definition.outputSchema);
   if (inputSchema.type !== "object") throw new Error("inputSchema: 工作流参数必须是对象。");
   const nodes = new Map(definition.nodes.map((node) => [node.id, node]));

@@ -1,6 +1,6 @@
 {
   "name": "liteasy-desktop",
-  "version": "0.1.24",
+  "version": "0.1.25",
   "private": true,
   "type": "module",
   "scripts": {
@@ -30,7 +30,7 @@
     "schema:objects": "vite-node scripts/write-object-schemas.ts",
     "ci:smoke": "vitest run src/tests/sourceModuleCasing.test.ts src/tests/tauriResourceConfig.test.ts",
     "ci:contracts": "npm run verify:tauri-resources -- --require-git-tracked && npm run schema:visualization && npm run schema:objects && npm run schema:resources && tsc --noEmit && node ../../../../.github/scripts/check-clean.mjs package-lock.json src-tauri/Cargo.lock ../../packages/shared",
-    "schema:resources": "vite-node scripts/write-resource-schemas.ts"
+    "schema:resources": "vite-node scripts/write-resource-schemas.ts && vite-node scripts/write-extension-schemas.ts"
   },
   "dependencies": {
     "@fluentui/react-components": "^9.74.4",

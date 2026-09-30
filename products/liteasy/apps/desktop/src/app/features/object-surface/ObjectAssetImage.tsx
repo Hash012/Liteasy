@@ -1,3 +1,4 @@
+import { decodedMediaBytes, reserveVisualMedia, readVisualMedia } from "../visual-blocks/mediaBudget";
 import { useEffect, useState } from "react";
 import type { ObjectRepository } from "../objects/objectRepository";
 export function ObjectAssetImage({
@@ -14,15 +15,18 @@ export function ObjectAssetImage({
   const [url, setUrl] = useState("");
   const [error, setError] = useState("");
   useEffect(() => {
+    const abort = new AbortController();
+    let release: (() => void) | undefined;
+    setUrl(""); setError("");
     let active = true,
       objectUrl = "";
-    void repository
-      .readAsset(assetId)
+    void readVisualMedia(() => repository.readAsset(assetId), abort.signal)
       .then((asset) => {
         if (!active) return;
         const bytes = Uint8Array.from(atob(asset.base64), (c) =>
           c.charCodeAt(0),
         );
+        release = reserveVisualMedia(decodedMediaBytes(bytes, asset.mediaType));
         objectUrl = URL.createObjectURL(
           new Blob([bytes], { type: asset.mediaType }),
         );
@@ -32,8 +36,9 @@ export function ObjectAssetImage({
         if (active) setError("图片不可用，文字内容仍保留。");
       });
     return () => {
-      active = false;
+      active = false; abort.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
+      release?.();
     };
   }, [repository, assetId]);
   return url ? (

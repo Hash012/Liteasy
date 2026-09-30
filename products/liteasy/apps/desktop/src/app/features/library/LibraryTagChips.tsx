@@ -1,3 +1,4 @@
+import { ExtensionLibraryColumns } from "../extensions/ExtensionMetadata";
 import { Tooltip } from "@fluentui/react-components";
 import type { ReadingCatalogEntry } from "./readingCatalog.types";
 import { libraryEntryTags, type LibraryTag } from "./libraryAssetMetadata";
@@ -15,7 +16,6 @@ export function compactAuthorName(fullName: string) {
 
 export function LibraryTagChips({ entry, onSelect, limit = 4 }: { entry: ReadingCatalogEntry; onSelect?: (tag: LibraryTag) => void; limit?: number }) {
   const tags = libraryEntryTags(entry);
-  if (!tags.length) return null;
   return <span className="library-tag-chips" aria-label={`${entry.title} 的分类与标签`}>
     {tags.slice(0, limit).map((tag) => {
       const title = `${kindLabel[tag.kind]}：${tag.label}`;
@@ -28,5 +28,6 @@ export function LibraryTagChips({ entry, onSelect, limit = 4 }: { entry: Reading
       return <Tooltip key={key} content={title} relationship="description">{chip}</Tooltip>;
     })}
     {tags.length > limit ? <span className="library-tags-overflow" title={tags.slice(limit).map((tag) => `${kindLabel[tag.kind]}：${tag.label}`).join("\n")}>+{tags.length - limit}</span> : null}
+    <ExtensionLibraryColumns entry={entry} />
   </span>;
 }

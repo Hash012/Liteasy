@@ -102,3 +102,54 @@ test("interrupted external writes require reconciliation; cancellation retains c
   expect((await f.runner.execute(run.id)).status).toBe("cancelled");
   expect((await f.assets.read(f.source.path)).text).toBe("原文x");
 });
+
+test("pure recomputation uses fixed snapshots without tools, and interrupted reservations are not charged twice", async () => {
+  const f = await fixture();
+  const flow = definition([{ id: "save", title: "保存值", operation: { id: "core.template", version: "1.0.0" }, input: { template: literal("original {{name}}"), values: literal({ name: "snapshot" }) } }]);
+  flow.budget.maxOperations = 1;
+  const run = await f.runner.create({ owner: "plugin.test", digest: "abc", definition: flow, input: {}, grantId: f.grant.id });
+  await f.runner.execute(run.id);
+  const row = await f.storage.get(`workflow-run/${run.id}`), saved = row!.value as typeof run;
+  // Simulate loss of only the node checkpoint after its operation receipt committed.
+  await f.storage.commit([{ key: row!.key, expected: row!.version, row: { ...row!, version: "crash", value: JSON.parse(JSON.stringify({ ...saved, status: "running", leaseUntil: 0, nodes: { save: { ...saved.nodes.save, status: "running", outputKey: undefined } } })) } }]);
+  const resumed = await createWorkflowRunner(f.storage, f.host, f.scope).execute(run.id);
+  expect(resumed.status).toBe("succeeded"); expect(resumed.operations).toBe(1);
+  const before = await f.storage.list("extension-operation/", "", 100);
+  expect((await f.runner.recompute(run.id)).checks).toEqual([{ node: "save", mode: "recomputed", matches: true }]);
+  expect(await f.storage.list("extension-operation/", "", 100)).toEqual(before);
+  expect(f.model).not.toHaveBeenCalled();
+});
+
+test("resource triggers pin fresh content, deduplicate events and startup waits for a later session", async () => {
+  const { createWorkflowTriggers } = await import("../app/features/workflows/workflowTriggers");
+  const f = await fixture();
+  const flow = compileWorkflow({ schema: "liteasy.workflow/v2", id: "trigger", title: "跟进资料", version: "1.0.0", inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"], additionalProperties: false }, outputSchema: { type: "string" }, nodes: [{ id: "read", title: "读取", operation: { id: "resources.read", version: "1.0.0" }, input: { path: { source: "input", path: "path" } } }], output: { source: "node", nodeId: "read", path: "text" } }).definition;
+  const run = await f.runner.create({ owner: "plugin.test", digest: "abc", definition: flow, input: { path: f.source.path }, grantId: f.grant.id });
+  await f.runner.execute(run.id);
+  const scheduler = createWorkflowTriggers(f.storage, f.runner, f.assets, () => true);
+  await scheduler.add(run.id, "resource");
+  await f.assets.write(f.source.path, { expectedRevision: f.source.revision!, mode: "append", text: "更新后的正文" });
+  await scheduler.tick(Date.now() + 61000);
+  await vi.waitFor(async () => expect((await f.runner.list()).filter((item) => item.parentRunId === run.id && item.status === "succeeded")).toHaveLength(1));
+  const generated = (await f.runner.list()).find((item) => item.parentRunId === run.id)!;
+  expect(generated.input.path).toContain("revision=");
+  expect((await f.runner.replay(generated.id)).nodes.read).toMatchObject({ text: "原文更新后的正文" });
+  await scheduler.tick(Date.now() + 122000); expect(await f.runner.list()).toHaveLength(2);
+  const startup = await scheduler.add(run.id, "startup");
+  await scheduler.tick(Date.now() + 183000); expect(await f.runner.list()).toHaveLength(2);
+  const restarted = createWorkflowTriggers(f.storage, f.runner, f.assets, () => true);
+  await restarted.tick(Date.now() + 244000);
+  await vi.waitFor(async () => expect((await f.runner.list()).filter((item) => item.status === "succeeded")).toHaveLength(3));
+  await restarted.tick(Date.now() + 305000); expect(await f.runner.list()).toHaveLength(3);
+  await restarted.setEnabled(startup.id, false);
+});
+
+test("embedded versioned subflows compile to the same bounded executor and reject recursive growth", async () => {
+  const f = await fixture();
+  const child = { schema: "liteasy.workflow/v2", id: "child", title: "子流程", version: "1.0.0", inputSchema: { type: "object", properties: { name: { type: "string" } }, required: ["name"], additionalProperties: false }, outputSchema: { type: "string" }, nodes: [{ id: "format", title: "格式化", operation: { id: "core.template", version: "1.0.0" }, input: { template: literal("你好 {{name}}"), values: { source: "input", path: "" } } }], output: { source: "node", nodeId: "format", path: "" } };
+  const flow = definition([{ id: "save", title: "调用", operation: { id: "core.subflow", version: "1.0.0" }, input: { definition: literal(child), value: literal({ name: "研究者" }) } }]);
+  expect(flow.nodes.some((node) => node.id === "save.format")).toBe(true);
+  const run = await f.runner.create({ owner: "plugin.test", digest: "abc", definition: flow, input: {}, grantId: f.grant.id });
+  expect((await f.runner.execute(run.id)).status).toBe("succeeded");
+  expect((await f.runner.replay(run.id)).nodes.save).toBe("你好 研究者");
+});

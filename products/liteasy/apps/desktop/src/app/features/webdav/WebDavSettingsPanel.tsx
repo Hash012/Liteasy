@@ -51,6 +51,11 @@ export function WebDavSettingsPanel({ embedded = false }: { embedded?: boolean }
             ["history", "AI 对话历史", "会话和消息，不包含正在执行的任务"],
             ["preferences", "偏好设置与用户画像", "阅读外观、模型配置、研究画像与记忆"],
             ["externalFolders", "外部链接目录", "包含已连接的 Obsidian / Markdown 目录及文件；保留层次，不同步 .obsidian 等隐藏配置"],
+            ["extensionPackages", "扩展包", "同步声明式扩展；新设备收到后默认停用，需在本机启用"],
+            ["extensionConfiguration", "扩展设置与页面", "同步配置和页面状态；不复制执行授权或模型密钥"],
+            ["extensionWorkflows", "工作流与制作草稿", "包括源文件、版本记录和样例报告"],
+            ["extensionRuns", "工作流运行记录", "执行状态和版本；新设备继续执行前需要重新授权"],
+            ["extensionSnapshots", "运行正文快照", "包括实际读取片段、模型输出及写入回执；可能包含私人资料"],
             ["apiKeys", "API key", "加密同步模型与论文服务密钥，不同步登录凭证或 WebDAV 密码"]
           ] as const).map(([key, label, hint]) => <div key={key}>
             <Checkbox label={label} checked={(settings.sync ?? defaultSyncOptions)[key]} disabled={disabled} onChange={(_, data) => setSettings({ ...settings, sync: { ...defaultSyncOptions, ...settings.sync, [key]: data.checked === true } })} />

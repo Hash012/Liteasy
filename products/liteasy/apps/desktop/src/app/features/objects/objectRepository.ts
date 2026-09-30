@@ -6,6 +6,7 @@ import {
   parseObject,
   refOf,
   objectText,
+  objectLink,
   isPaperMetadataReference,
   ObjectStoreError,
   type ObjectContent,
@@ -274,6 +275,36 @@ export function createObjectRepository(
     const [board, block] = await Promise.all([getBlockPresentation(boardId), getBlockPresentation(boardId, placementId)]);
     if (block.value.locked ?? board.value.locked) throw new ObjectStoreError("capability_denied", "卡片布局已锁定，请先解锁。");
   }
+  type Geometry = { placementId: string; position: Placement["position"]; size: Placement["size"] };
+  type LayoutEdit = { before: Geometry[]; after: Geometry[] };
+  type LayoutHistory = { schema: "liteasy.board-layout-history/v1"; undo: LayoutEdit[]; redo: LayoutEdit[] };
+  async function layoutHistory(boardId: string) {
+    const key = `board-layout-history/${boardId}`, row = await storage.get(key);
+    const value = row?.value as LayoutHistory | undefined;
+    if (value && value.schema !== "liteasy.board-layout-history/v1") throw new Error("此布局历史来自更新版本，已保留。");
+    return { key, row, value: value ?? { schema: "liteasy.board-layout-history/v1" as const, undo: [], redo: [] } };
+  }
+  async function restoreBoardLayout(boardRef: ObjectRef, direction: "undo" | "redo", operationId: string) {
+    return commitOperation(operationId, { boardRef, direction }, async () => {
+      const head = await storage.get(headKey(boardRef.objectId)), board = readObject(head);
+      if (board.revision !== boardRef.revision) throw new ObjectStoreError("revision_conflict", "白板已变化。");
+      const history = await layoutHistory(board.objectId), edit = history.value[direction].at(-1);
+      if (!edit) throw new Error(direction === "undo" ? "没有可撤销的布局调整。" : "没有可重做的布局调整。");
+      const expected = direction === "undo" ? edit.after : edit.before, target = direction === "undo" ? edit.before : edit.after;
+      const changes: StorageChange[] = [];
+      for (const item of target) {
+        await checkLayoutUnlocked(board.objectId, item.placementId);
+        const key = `placement/${board.objectId}/${item.placementId}`, row = await storage.get(key), current = row?.value as Placement | undefined;
+        const previous = expected.find((entry) => entry.placementId === item.placementId)!;
+        if (!current || JSON.stringify(current.position) !== JSON.stringify(previous.position) || JSON.stringify(current.size) !== JSON.stringify(previous.size)) throw new ObjectStoreError("revision_conflict", "卡片已被另一次编辑调整，无法覆盖后续布局。");
+        changes.push(change(key, { ...current, position: item.position, size: item.size, revision: id() }, row!.version));
+      }
+      const opposite = direction === "undo" ? "redo" : "undo";
+      changes.push(change(history.key, { ...history.value, [direction]: history.value[direction].slice(0, -1), [opposite]: [...history.value[opposite], edit].slice(-32) }, history.row?.version ?? null));
+      const next = make({ ...board, sourceRefs: board.provenance.sourceRefs }, board);
+      return { changes: [...changes, ...objectChanges(next, head)], result: [refOf(next)] };
+    });
+  }
   async function applyBoardPatch(input: {
     boardRef: ObjectRef;
     operationId: string;
@@ -435,6 +466,13 @@ export function createObjectRepository(
             changes.push(
               change(key, membership(next, ref), row?.version ?? null),
             );
+        }
+        const adjusted = changes.filter((item) => item.row && item.key.startsWith(`placement/${board.objectId}/`) && current.some((p) => p.placementId === (item.row!.value as Placement).placementId));
+        if (adjusted.length) {
+          const geometry = (p: Placement): Geometry => ({ placementId: p.placementId, position: p.position, size: p.size });
+          const history = await layoutHistory(board.objectId);
+          const edit = { before: adjusted.map((item) => geometry(current.find((p) => p.placementId === (item.row!.value as Placement).placementId)!)), after: adjusted.map((item) => geometry(item.row!.value as Placement)) };
+          changes.push(change(history.key, { schema: "liteasy.board-layout-history/v1", undo: [...history.value.undo, edit].slice(-32), redo: [] }, history.row?.version ?? null));
         }
         return {
           changes: [...changes, ...objectChanges(next, head)],
@@ -654,6 +692,7 @@ export function createObjectRepository(
     return { objects, cursor: undefined as string | undefined };
   }
   async function editNote(ref: ObjectRef, text: string, title?: string) {
+    if (await storage.get(`visual-block/${ref.objectId}/${ref.revision}`)) throw new ObjectStoreError("capability_denied", "此卡片包含结构化字段，请用组件编辑器或 liteasy_block_update 保存；普通笔记写入不会破坏其类型。");
     const head = await storage.get(headKey(ref.objectId));
     const current = readObject(head);
     if (current.revision !== ref.revision)
@@ -945,6 +984,7 @@ export function createObjectRepository(
     scopeId,
     getBlockPresentation,
     setBlockPresentation,
+    async getAttachmentBase(objectId: string): Promise<{ mountId: string; path: string } | undefined> { await resolveLatest(objectId); return (await storage.get(`object-attachment/${objectId}`))?.value as { mountId: string; path: string } | undefined; },
     async getStructuredBlock(ref: ObjectRef): Promise<StructuredBlock | undefined> {
       await get(ref);
       const row = await storage.get(`visual-block/${ref.objectId}/${ref.revision}`);
@@ -954,7 +994,7 @@ export function createObjectRepository(
       const block = structuredBlockSchema.parse(input.block);
       const result = await commitOperation(input.operationId, input, async () => {
         const object = make({ title: input.title, kind: "content.note", content: { schema: "liteasy.note/v1", payload: { text: input.text, origin: "user" } } });
-        const changes = [...objectChanges(object), change(`visual-block/${object.objectId}/${object.revision}`, block)];
+        const changes = [...objectChanges(object), change(`visual-block/${object.objectId}/${object.revision}`, block), change(`visual-block-type/${object.objectId}`, block.type)];
         if (input.boardRef) {
           const head = await storage.get(headKey(input.boardRef.objectId));
           const board = readObject(head);
@@ -975,9 +1015,50 @@ export function createObjectRepository(
         const previous = readObject(head);
         if (previous.kind !== "content.note" || previous.lifecycle !== "active" || previous.revision !== input.ref.revision) throw new ObjectStoreError("revision_conflict", "内容已变化。");
         const next = make({ ...previous, title: input.title, sourceRefs: previous.provenance.sourceRefs, content: { schema: "liteasy.note/v1", payload: { ...previous.content.payload, text: input.text } } }, previous);
-        return { changes: [...objectChanges(next, head), change(`visual-block/${next.objectId}/${next.revision}`, block)], result: [refOf(next)] };
+        // Advance live placements to the new content revision; geometry and style are untouched.
+        const changes: StorageChange[] = [...objectChanges(next, head), change(`visual-block/${next.objectId}/${next.revision}`, block), change(`visual-block-type/${next.objectId}`, block.type, (await storage.get(`visual-block-type/${next.objectId}`))?.version ?? null)];
+        const affectedBoards = new Set<string>();
+        let cursor = "";
+        do {
+          const rows = await storage.list("placement/", cursor, 200);
+          for (const row of rows) {
+            const p = row.value as Placement;
+            if (p.ref.objectId === previous.objectId && p.ref.revision === previous.revision) {
+              changes.push(change(row.key, { ...p, ref: refOf(next), revision: id() }, row.version));
+              affectedBoards.add(p.boardId);
+            }
+          }
+          if (rows.length < 200) break;
+          cursor = rows.at(-1)!.key;
+        } while (cursor);
+        for (const boardId of affectedBoards) {
+          const boardHead = await storage.get(headKey(boardId)), board = readObject(boardHead);
+          if (board.kind !== "workspace.board" || board.lifecycle !== "active") continue;
+          const updated = make({ ...board, sourceRefs: board.provenance.sourceRefs }, board);
+          const memberKey = membershipKey(boardId, next.objectId), member = await storage.get(memberKey);
+          changes.push(...objectChanges(updated, boardHead), change(memberKey, membership(updated, refOf(next)), member?.version ?? null));
+        }
+        return { changes, result: [refOf(next)] };
       });
       return get(result[0]);
+    },
+    async groupPlacements(boardRef: ObjectRef, selected: string[], operationId: string) {
+      return commitOperation(operationId, { boardRef, selected }, async () => {
+        const head = await storage.get(headKey(boardRef.objectId)), board = readObject(head);
+        if (board.kind !== "workspace.board" || board.lifecycle !== "active" || board.revision !== boardRef.revision) throw new ObjectStoreError("revision_conflict", "白板已变化。");
+        const items = (await listPlacements(board.objectId)).filter((item) => selected.includes(item.placementId));
+        if (!items.length || items.length > 100 || items.length !== selected.length) throw new Error("请选择 1 至 100 张有效卡片。");
+        for (const item of items) await checkLayoutUnlocked(board.objectId, item.placementId);
+        const sources = await Promise.all(items.map((item) => get(item.ref)));
+        const object = make({ kind: "content.note", title: "分组", sourceRefs: items.map((item) => item.ref), content: { schema: "liteasy.note/v1", payload: { text: sources.map((source) => `[${source.title.replace(/[\[\]]/g, "")}](${objectLink(refOf(source))}&scope=${encodeURIComponent(scopeId)})`).join("\n\n"), origin: "user" } } });
+        const p = placement(board.objectId, refOf(object), 0);
+        p.position = { x: Math.max(0, Math.min(...items.map((item) => item.position.x)) - 24), y: Math.max(0, Math.min(...items.map((item) => item.position.y)) - 48) };
+        p.size = { width: Math.max(...items.map((item) => item.position.x + item.size.width)) - p.position.x + 24, height: Math.max(...items.map((item) => item.position.y + item.size.height)) - p.position.y + 24 };
+        const changes = [...objectChanges(object), change(`placement/${board.objectId}/${p.placementId}`, p), change(membershipKey(board.objectId, object.objectId), membership(board, refOf(object))), change(`block-presentation/${board.objectId}/${p.placementId}`, { ...defaultBlockPresentation, group: true, layer: 0 })];
+        for (const item of items) { const style = await getBlockPresentation(board.objectId, item.placementId); changes.push(change(`block-presentation/${board.objectId}/${item.placementId}`, { ...style.value, groupId: p.placementId }, style.version)); }
+        const next = make({ ...board, sourceRefs: board.provenance.sourceRefs }, board);
+        return { changes: [...changes, ...objectChanges(next, head)], result: [refOf(next)] };
+      });
     },
     /** Lightweight current-head metadata; old indexes safely fall back to their existing object. */
     async describeObject(objectId: string) {
@@ -990,7 +1071,7 @@ export function createObjectRepository(
       if (description.lifecycle !== "active") throw new ObjectStoreError("object_not_found", "内容已归档或删除。");
       const binding = description.kind === "content.note" ? await storage.get(`object-file/${objectId}`)
         : description.kind === "workspace.board" ? await storage.get(`board-file/${objectId}`) : undefined;
-      return { ...description, fileBinding: binding?.value as { mountId: string; path: string } | undefined };
+      return { ...description, structuredType: (await storage.get(`visual-block-type/${objectId}`))?.value as { id: string; version: string } | undefined, fileBinding: binding?.value as { mountId: string; path: string } | undefined };
     },
     migrateBoard,
     readRaw: async (ref: { objectId: string; revision?: string }) => {
@@ -1244,6 +1325,7 @@ export function createObjectRepository(
         id: string;
         draft?: ObjectDraft;
         presentation?: BlockPresentation;
+        attachmentBase?: { mountId: string; path: string };
         structured?: StructuredBlock;
         ref?: ObjectRef;
         position: Placement["position"];
@@ -1327,7 +1409,8 @@ export function createObjectRepository(
                 "白板卡片缺少内容。",
               );
             if (!node.ref) changes.push(...objectChanges(object));
-            if (node.structured && !node.ref) changes.push(change(`visual-block/${object.objectId}/${object.revision}`, structuredBlockSchema.parse(node.structured)));
+            if (node.attachmentBase && !node.ref) changes.push(change(`object-attachment/${object.objectId}`, { mountId: node.attachmentBase.mountId, path: node.attachmentBase.path, external: true }));
+            if (node.structured && !node.ref) changes.push(change(`visual-block/${object.objectId}/${object.revision}`, structuredBlockSchema.parse(node.structured)), change(`visual-block-type/${object.objectId}`, node.structured.type));
             const p: Placement = {
               ...placement(board.objectId, refOf(object)),
               placementId: node.id,
@@ -1420,6 +1503,7 @@ export function createObjectRepository(
     captureFragment: captureObject,
     createAndPlace: captureObject,
     applyBoardPatch,
+    restoreBoardLayout,
     listPlacements,
     commitOperation,
     editNote,

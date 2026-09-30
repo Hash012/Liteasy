@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "liteasy.block-presentation/v1"
+    },
+    "fontFamily": {
+      "type": "string",
+      "maxLength": 512
+    },
+    "fontSize": {
+      "type": "number",
+      "minimum": 10,
+      "maximum": 72
+    },
+    "lineHeight": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "wrap": {
+      "type": "boolean"
+    },
+    "locked": {
+      "type": "boolean"
+    },
+    "group": {
+      "type": "boolean"
+    },
+    "groupId": {
+      "type": "string",
+      "maxLength": 128
+    },
+    "layer": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000
+    }
+  },
+  "required": [
+    "schema"
+  ],
+  "additionalProperties": false,
+  "$id": "https://schemas.liteasy.app/blockPresentation.v1.schema.json"
+}

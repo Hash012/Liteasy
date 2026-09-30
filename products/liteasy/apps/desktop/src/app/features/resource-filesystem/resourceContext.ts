@@ -1,3 +1,4 @@
+import { stageImage } from "../objects/objectAssets";
 import type { ObjectRepository } from "../objects/objectRepository";
 import { isPaperMetadataReference, refOf, type ObjectRef } from "../objects/object.types";
 import type { ResourceContextAttachment } from "../object-transfer/contextTransfer";
@@ -69,6 +70,14 @@ export async function resolveLiteasyContext(input: {
   } else if (target.kind === "paper") {
     refs = await input.capturePapers([target.paperId]);
   } else if (target.kind === "external-file") {
+    if (/\.(png|jpe?g|gif|webp)$/i.test(target.path)) {
+      if (!input.files.readImage) throw new Error("当前文件服务不支持图片读取。");
+      const image = await input.files.readImage(target.mountId, target.path);
+      const asset = await stageImage(Uint8Array.from(atob(image.base64), (char) => char.charCodeAt(0)), image.mediaType);
+      if (!input.active()) throw new Error("账号已切换。");
+      const object = await repository.createImage(asset, target.path.split("/").at(-1) ?? "图片");
+      return contextAttachments(repository, [refOf(object)], input.active);
+    }
     const file = await input.files.readFile(target.mountId, target.path);
     if (/\.canvas$/i.test(file.path)) refs = [await input.resolveBoard(file)];
     else {

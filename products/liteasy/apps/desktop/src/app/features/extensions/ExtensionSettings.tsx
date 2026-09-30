@@ -1,3 +1,4 @@
+import { downloadExtensionJson } from "./ExtensionViews";
 import { useEffect, useState } from "react";
 import { Button, Select } from "@fluentui/react-components";
 import { useExtensionWorkbench } from "./extensionWorkbenchContext";
@@ -22,6 +23,7 @@ function ExtensionSettingsGroup({ pkg, id }: { pkg: ValidatedExtension; id: stri
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [valid, setValid] = useState(true);
+  const [migration, setMigration] = useState<{ revision: string; values: JsonObject; dropped: string[] }>();
   const [dirty, setDirty] = useState(false);
   const [source, setSource] = useState<Record<string, string>>({});
   useEffect(() => {
@@ -46,6 +48,9 @@ function ExtensionSettingsGroup({ pkg, id }: { pkg: ValidatedExtension; id: stri
     {loaded ? <SchemaFields schema={schema} value={value} onChange={(value) => { setValue(value); setDirty(true); }} onValidityChange={setValid} /> : null}
     <p className="extension-settings-note">{Object.values(source).some((entry) => entry === "profile") ? "包含当前用户覆盖值" : "继承默认值"} · 来自 {pkg.manifest.name}</p>
     <div className="extension-toolbar"><Button appearance="primary" disabled={!loaded || busy || !valid} onClick={() => void save()}>应用设置</Button><Button disabled={!loaded || busy} onClick={() => void save(true)}>恢复继承</Button><Button onClick={() => void navigator.clipboard.writeText(`liteasy://extensions/${pkg.manifest.id}/settings/${id}`).catch((e) => setMessage(String(e)))}>复制设置链接</Button></div>
+    <Button onClick={() => void host.workspace.exportConfiguration(pkg.manifest.id, id, level).then((value) => downloadExtensionJson(`${pkg.manifest.id}-settings.json`, value)).catch((e) => setMessage(String(e)))}>导出原配置</Button>
+    {!loaded ? <Button onClick={() => void host.workspace.previewMigration(pkg.manifest.id, id, schema, level).then(setMigration).catch((e) => setMessage(String(e)))}>预览兼容迁移</Button> : null}
+    {migration ? <div><p>以下设置将在保存旧版本备份后应用。不再适用的字段：{migration.dropped.join("、") || "无"}</p><pre>{JSON.stringify(migration.values, null, 2)}</pre><Button onClick={() => void host.workspace.saveConfiguration(pkg.manifest.id, id, schema, level, migration.values, migration.revision).then(() => { setValue(migration.values); setLoaded(true); setMigration(undefined); return host.workspace.readConfiguration(pkg.manifest.id, id, schema, level); }).then((saved) => setRevision(saved.revision)).catch((e) => setMessage(String(e)))}>备份并应用迁移</Button></div> : null}
     {message ? <p role="status">{message}</p> : null}
   </div>;
 }

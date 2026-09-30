@@ -82,7 +82,7 @@ function setup(responses: string[], options: {
     if (!result.ok) throw new Error(result.error.message);
     return result.data;
   };
-  return { api, createApi, requestFor, submit, requests, stat, read, write, search, getText: () => text, getPersisted: () => persisted };
+  return { environment, api, createApi, requestFor, submit, requests, stat, read, write, search, getText: () => text, getPersisted: () => persisted };
 }
 
 test("a committed write stays visible and survives restart when cancellation precedes its receipt", async () => {
@@ -177,4 +177,32 @@ test("a user write request does not make immutable paper assets writable", async
   expect(run.events).toContainEqual(expect.objectContaining({ type: "manager.activity", status: "failed", detail: expect.stringContaining("只读") }));
   expect(run.events.some((event) => event.type === "asset.written")).toBe(false);
   fixture.api.dispose();
+});
+
+
+test("structured edits cannot bypass target discovery and reading the complete typed revision", async () => {
+  const options = { path: notePath, expectedRevision: "v1", data: { text: "Updated" }, operationId: "edit-block" };
+  const fixture = setup([
+    action({ action: "extension", query: "liteasy_block_update", text: JSON.stringify(options) }),
+    action({ action: "extension", query: "liteasy_block_read", text: JSON.stringify({ path: notePath }) }),
+    action({ action: "extension", query: "liteasy_block_update", text: JSON.stringify(options) }),
+    action({ message: "Done" })
+  ]);
+  const call = vi.fn(async (name: string) => name === "liteasy_block_read" ? { path: notePath, revision: "v1", block: { data: { text: "Original" } } } : { path: notePath, revision: "v2" });
+  fixture.environment.extensionStudio = { tools: { liteasy_block_read: { description: "Read a block" }, liteasy_block_update: { description: "Update a block" } }, call } as unknown as NonNullable<DesktopAgentEnvironment["extensionStudio"]>;
+  await fixture.submit("修改这份笔记组件的内容");
+  expect(call.mock.calls.map(([name]) => name)).toEqual(["liteasy_block_read", "liteasy_block_update"]);
+  expect(fixture.requests[1].prompt).toContain("读取完整结构");
+});
+
+test("explicit workflow execution can request host binding without granting ordinary file writes", async () => {
+  const fixture = setup([
+    action({ action: "extension", query: "liteasy_workflow_request", text: JSON.stringify({ owner: "plugin.method", workflow: "run", selection: [notePath] }) }),
+    action({ message: "请确认工作台中的资料范围。" })
+  ]);
+  const call = vi.fn(async () => ({ status: "awaiting_user" }));
+  fixture.environment.extensionStudio = { tools: { liteasy_workflow_request: { description: "Request host binding" } }, call } as unknown as NonNullable<DesktopAgentEnvironment["extensionStudio"]>;
+  await fixture.submit("运行这个工作流");
+  expect(call).toHaveBeenCalledWith("liteasy_workflow_request", expect.objectContaining({ selection: [notePath] }), expect.objectContaining({ writable: true }));
+  expect(fixture.write).not.toHaveBeenCalled();
 });

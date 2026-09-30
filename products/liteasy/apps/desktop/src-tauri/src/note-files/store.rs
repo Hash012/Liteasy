@@ -326,6 +326,9 @@ impl FileStore {
         Ok(target)
     }
     pub fn entries(&self, id: &str) -> Result<Vec<Entry>, String> {
+        self.asset_entries(id, false)
+    }
+    pub fn asset_entries(&self, id: &str, include_images: bool) -> Result<Vec<Entry>, String> {
         let mount = self.mount(id)?;
         if mount.kind == "file" {
             return Ok(vec![Entry {
@@ -353,6 +356,7 @@ impl FileStore {
             id: &str,
             depth: usize,
             out: &mut Vec<Entry>,
+            include_images: bool,
         ) -> Result<(), String> {
             if depth > 64 {
                 return Err("文件夹层级超过 64 层，请连接较小的子目录。".into());
@@ -366,7 +370,18 @@ impl FileStore {
                 }
                 let file_type = item.file_type().map_err(|e| e.to_string())?;
                 if file_type.is_symlink()
-                    || !(file_type.is_dir() || file_type.is_file() && supported(&item.path()))
+                    || !(file_type.is_dir()
+                        || file_type.is_file()
+                            && (supported(&item.path())
+                                || include_images
+                                    && matches!(
+                                        item.path()
+                                            .extension()
+                                            .and_then(|value| value.to_str())
+                                            .map(str::to_ascii_lowercase)
+                                            .as_deref(),
+                                        Some("png" | "jpg" | "jpeg" | "gif" | "webp")
+                                    )))
                 {
                     continue;
                 }
@@ -391,12 +406,12 @@ impl FileStore {
                     .into(),
                 });
                 if file_type.is_dir() {
-                    walk(root, &item.path(), id, depth + 1, out)?;
+                    walk(root, &item.path(), id, depth + 1, out, include_images)?;
                 }
             }
             Ok(())
         }
-        walk(root, root, id, 0, &mut result)?;
+        walk(root, root, id, 0, &mut result, include_images)?;
         result.sort_by(|a, b| a.path.cmp(&b.path));
         Ok(result)
     }
@@ -901,6 +916,7 @@ mod tests {
             mount.id
         );
         assert_eq!(store.entries(&mount.id).unwrap().len(), 1);
+        assert_eq!(store.asset_entries(&mount.id, true).unwrap().len(), 2);
         drop(store);
         fs::remove_dir_all(root).unwrap();
     }

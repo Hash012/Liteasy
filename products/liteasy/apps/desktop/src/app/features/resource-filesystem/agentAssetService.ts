@@ -83,9 +83,10 @@ export function createAgentAssetService(input: { scopeId: string; active(): bool
       // A committed write has a receipt even if cancellation arrives after commit.
       return adapter.write(path, options);
     },
-    async resolveImages(path: string, options: { signal?: AbortSignal } = {}) {
+    async resolveImages(path: string, options: { signal?: AbortSignal; relativePath?: string } = {}) {
       check(options.signal);
-      const images = await resolve(path).resolveImages?.(path, options) ?? [];
+      const adapter = resolve(path);
+      const images = options.relativePath ? await adapter.resolveRelativeImages?.(path, options.relativePath, options) ?? [] : await adapter.resolveImages?.(path, options) ?? [];
       check(options.signal);
       validateModelImages(images);
       return images;

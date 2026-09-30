@@ -1,3 +1,7 @@
+import { compileExtensionWorkflow } from "../extensions/extensionPackage";
+import { createTrialStorage, clearTrialStorage } from "./trialStorage";
+import type { ObjectStorage } from "../objects/objectStorage";
+import { createBlockRegistry } from "../visual-blocks/blockRegistry";
 import { z } from "zod";
 import { createObjectStorage } from "../objects/objectStorage";
 import { createObjectRepository } from "../objects/objectRepository";
@@ -17,19 +21,21 @@ function substitute(value: JsonValue, paths: Map<string, string>): JsonValue {
   if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, substitute(item, paths)]));
   return value;
 }
-export async function trialExtension(draft: ExtensionDraft, active: () => boolean): Promise<TrialReport> {
+export async function trialExtension(draft: ExtensionDraft, active: () => boolean, parentScope?: string): Promise<TrialReport> {
   const pkg = await validateExtensionPackage(await buildExtensionPackage(draft.files));
   const cases: TrialReport["cases"] = [];
   const fixturePaths = Object.keys(draft.files).filter((path) => /^fixtures\/.+\.json$/.test(path));
   for (const path of fixturePaths) {
     let workflow = "unknown", name = path;
+    let trialStorage: ObjectStorage | undefined;
     try {
       const fixture = fixtureSchema.parse(JSON.parse(draft.files[path])); workflow = fixture.workflow; name = fixture.name;
       const entry = pkg.manifest.contributes.workflows.find((item) => item.id === workflow);
       if (!entry) throw new Error("样例引用未声明的工作流。");
-      const plan = compileWorkflow(JSON.parse(draft.files[entry.path]));
-      const scope = `dev:${draft.id}:${crypto.randomUUID()}`;
-      const storage = createObjectStorage(scope, () => active() ? scope : "closed"), repository = createObjectRepository(storage, scope);
+      const plan = compileExtensionWorkflow(pkg, entry.path);
+      const trialId = crypto.randomUUID(), scope = `dev:${draft.id}:${trialId}`, accountScope = parentScope ?? scope;
+      const storage = createTrialStorage(createObjectStorage(accountScope, () => active() ? accountScope : "closed"), trialId), repository = createObjectRepository(storage, scope);
+      trialStorage = storage;
       const paths = new Map<string, string>();
       const asset = (object: Awaited<ReturnType<typeof repository.get>>) => ({ path: liteasyPath(scope, { kind: "object" as const, ref: { objectId: object.objectId, revision: "latest" }, followLatest: true }), title: object.title, kind: object.kind, revision: object.revision, capabilities: ["read", "write", "search", "add_context"] as Array<"read" | "write" | "search" | "add_context"> });
       const find = async (path: string) => { const target = parseLiteasyPath(path, scope); if (target.kind !== "object") throw new Error("试跑只能操作样例副本。"); return repository.resolveLatest(target.ref.objectId); };
@@ -38,7 +44,7 @@ export async function trialExtension(draft: ExtensionDraft, active: () => boolea
       });
       for (const resource of fixture.resources) { if (paths.has(resource.id)) throw new Error("样例资源 ID 重复。"); const item = await assets.create({ kind: "note", title: resource.title, text: resource.text, operationId: `fixture:${resource.id}` }); paths.set(resource.id, item.path); }
       let modelCalls = 0;
-      const host = createOperationHost({ storage, assets, scope, enabled: () => active(), model: async () => { if (modelCalls >= fixture.modelResponses.length) throw new Error("缺少本次模型 mock 响应。"); return { value: substitute(fixture.modelResponses[modelCalls++], paths), usage: { tokens: 0, estimated: false }, model: "fixture", provider: "mock" }; }, open: async () => undefined });
+      const host = createOperationHost({ storage, assets, scope, repository, registry: () => createBlockRegistry(pkg.blocks), enabled: () => active(), model: async () => { if (modelCalls >= fixture.modelResponses.length) throw new Error("缺少本次模型 mock 响应。"); return { value: substitute(fixture.modelResponses[modelCalls++], paths), usage: { tokens: 0, estimated: false }, model: "fixture", provider: "mock" }; }, open: async () => undefined });
       const grant = await host.grants.issue({ owner: pkg.manifest.id, digest: pkg.digest, capabilities: plan.capabilities, selection: [...paths.values()], output: true, modelConnection: "mock/fixture" });
       const runner = createWorkflowRunner(storage, host, scope);
       const run = await runner.create({ owner: pkg.manifest.id, digest: pkg.digest, definition: plan.definition, input: substitute(fixture.input, paths) as JsonObject, grantId: grant.id });
@@ -52,6 +58,7 @@ export async function trialExtension(draft: ExtensionDraft, active: () => boolea
       }
       cases.push({ name, workflow, passed: true, runId: run.id });
     } catch (e) { cases.push({ name, workflow, passed: false, error: e instanceof Error ? e.message : String(e) }); }
+    finally { if (trialStorage) await clearTrialStorage(trialStorage).catch(() => undefined); }
   }
   for (const workflow of pkg.manifest.contributes.workflows) if (!cases.some((item) => item.workflow === workflow.id)) cases.push({ name: "缺少可执行样例", workflow: workflow.id, passed: false, error: "发布前至少提供一个 fixtures/*.json 真实执行样例。" });
   // Pure UI packages are validated and rendered by the preview; no fabricated process success.

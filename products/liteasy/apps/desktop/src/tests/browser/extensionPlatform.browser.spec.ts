@@ -1,0 +1,30 @@
+import { expect, test } from "@playwright/test";
+
+test("a personal extension can be authored, actually trialled, published and reopened from the workbench", async ({ page }, info) => {
+  test.setTimeout(90000);
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
+  await page.goto("/");
+  await page.getByRole("button", { name: "扩展", exact: true }).click();
+  await page.getByRole("button", { name: "制作扩展", exact: true }).click();
+  await page.getByRole("button", { name: "从论文比较模板开始", exact: true }).click();
+  await expect(page.getByText("草稿已保存", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "校验与预览", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "实际组件预览" })).toBeVisible();
+  await page.getByRole("button", { name: "隔离样例试跑", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "样例报告 · 通过" })).toBeVisible({ timeout: 20000 });
+  await page.getByRole("button", { name: "发布本地版本", exact: true }).click();
+  await expect(page.getByText(/已发布 1.0.0/)).toBeVisible();
+  await page.getByRole("button", { name: "扩展", exact: true }).click();
+  await page.getByRole("button", { name: "启用", exact: true }).click();
+  await page.getByRole("button", { name: "论文比较台", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "我的论文比较台" })).toBeVisible();
+  await page.getByRole("tabpanel", { name: "论文比较台", exact: true }).getByRole("button", { name: "新建论文比较板", exact: true }).click();
+  const board = page.locator("section.object-workbench");
+  await board.getByRole("button", { name: "适配全部卡片", exact: true }).click();
+  await expect(board.locator(".object-placement")).toHaveCount(4);
+  await page.screenshot({ path: info.outputPath("extension-comparison-board.png"), fullPage: true });
+  await page.reload();
+  await board.getByRole("button", { name: "适配全部卡片", exact: true }).click();
+  await expect(board.locator(".object-placement")).toHaveCount(4);
+});

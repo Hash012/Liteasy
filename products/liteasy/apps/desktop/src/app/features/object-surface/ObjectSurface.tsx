@@ -1,3 +1,5 @@
+import { AssetImage } from "../visual-blocks/AssetImage";
+import { liteasyPath } from "../resource-filesystem/liteasyPath";
 import { formatPaperAnchorText } from "../paper-anchors/paperAnchorEntity";
 import { ResourceLocationButton } from "../resource-filesystem/ResourceLocationButton";
 import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
@@ -130,7 +132,7 @@ export function ObjectSurface({
                 : undefined
             }
           >
-            <MarkdownContent value={text} paperAnchors={object.paperAnchors} />
+            <MarkdownContent allowRelativeImages renderResourceImage={(source, alt) => <AssetImage source={source} alt={alt} basePath={liteasyPath(object.scopeId, { kind: "object", ref: refOf(object) })} />} value={text} paperAnchors={object.paperAnchors} />
           </div>
         ) : null)}
       {object.lifecycle !== "tombstoned" ? <PaperAnchorReferences anchors={object.paperAnchors ?? []} /> : null}
@@ -257,7 +259,7 @@ export function ObjectDetails({
     <section className="object-details" aria-label="内容详情">
       <Button onClick={onClose}>关闭详情</Button>
       <h3>{object.title}</h3>
-      <MarkdownContent value={objectDisplayText(object)} paperAnchors={object.paperAnchors} />
+      <MarkdownContent allowRelativeImages renderResourceImage={(source, alt) => <AssetImage source={source} alt={alt} basePath={liteasyPath(object.scopeId, { kind: "object", ref: refOf(object) })} />} value={objectDisplayText(object)} paperAnchors={object.paperAnchors} />
       <PaperAnchorReferences anchors={object.paperAnchors ?? []} />
       {object.assets.map((asset) => (
         <ObjectAssetImage

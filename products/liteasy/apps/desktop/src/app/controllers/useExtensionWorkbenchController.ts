@@ -23,6 +23,7 @@ export function useExtensionWorkbenchController(input: {
   const scope = input.model.repository.scopeId;
   const workspace = useMemo(() => createExtensionWorkspaceStore(createObjectStorage(scope, () => latest.current.model.repository.scopeId)), [scope]);
   const [views, setViews] = useState<ExtensionViewInstance[]>([]);
+  const [settingsRequest, setSettingsRequest] = useState<{ owner: string; group: string; nonce: number }>();
   const [error, setError] = useState("");
   const registrations = useRef<Array<() => void>>([]);
   const generation = useRef(0);
@@ -46,10 +47,11 @@ export function useExtensionWorkbenchController(input: {
     const pkg = latest.current.model.extensions.snapshot.packages.find((entry) => entry.manifest.id === owner);
     const definition = pkg?.manifest.contributes.views.find((entry) => entry.id === viewId);
     if (!pkg || !definition) throw new Error("页面所属扩展未启用，请在扩展中启用或重新导入。");
-    if (definition.argsSchema) validateSchemaValue(parseDataSchema(JSON.parse(pkg.bundle.files[definition.argsSchema])), args);
+
     const instanceId = requestedInstance ?? (definition.instancePolicy === "singleton" ? "default" : definition.instancePolicy === "multiple" ? crypto.randomUUID() : (await hashText(JSON.stringify(Object.keys(args).sort().map((key) => [key, args[key]])))).slice(0, 32));
     const dockId: ExtensionDockItemId = `extension:${pkg.manifest.id as `plugin.${string}`}/${viewId}/${instanceId}`;
     const existing = await workspace.getView(dockId);
+    if (definition.argsSchema) validateSchemaValue(parseDataSchema(JSON.parse(pkg.bundle.files[definition.argsSchema])), requestedInstance && existing ? existing.args : args);
     if (!existing) {
       if ((await workspace.listViews()).length >= 200) throw new Error("已保存页面达到上限，请先移除不用的页面记录。");
       await workspace.saveView({ schema: "liteasy.extension-view/v1", dockId, extensionId: owner, viewId, instanceId, title: definition.title, args, state: definition.stateSchema ? schemaDefaults(parseDataSchema(JSON.parse(pkg.bundle.files[definition.stateSchema]))) as JsonObject : {} }, null);
@@ -76,14 +78,14 @@ export function useExtensionWorkbenchController(input: {
     await model.selectBoard(board); await model.refresh(); latest.current.openDock("board");
   }
   return {
-    packages: input.model.extensions, workflows: input.workflows, studio: input.studio, openRuns: () => latest.current.openDock("workflow-runs"), workspace, views, error, openView, invoke, refreshViews,
+    packages: input.model.extensions, workflows: input.workflows, studio: input.studio, openRuns: () => latest.current.openDock("workflow-runs"), workspace, views, error, settingsRequest, openView, invoke, refreshViews,
     openStudio: () => latest.current.openDock("workflow-studio"),
     async openLink(path) {
       if (path.startsWith("liteasy://extensions/")) {
         const url = new URL(path), parts = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
         if (parts.length === 3 && parts[1] === "settings") {
           latest.current.openDock("settings");
-          window.dispatchEvent(new CustomEvent("liteasy:extension-settings", { detail: { owner: parts[0], group: parts[2] } }));
+          setSettingsRequest({ owner: parts[0], group: parts[2], nonce: Date.now() });
           return;
         }
         if (parts.length !== 3 || parts[1] !== "views") throw new Error("扩展链接无效。");

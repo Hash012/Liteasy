@@ -1,3 +1,4 @@
+import { ReaderExtensionActions } from "../extensions/ReaderExtensionActions";
 import { PaperSelectionTools } from "./PaperSelectionTools";
 import { PdfSelectionMenu } from "./PdfSelectionMenu";
 import { resolveReadingQuoteRects } from "./readingAnnotationGeometry";
@@ -3415,6 +3416,7 @@ export function PdfReader({
         error: annotationLoadError || annotationSaveError, annotations: hydratedAnnotationStorageKey === annotationStorageKey ? annotationsInReadingOrder.filter((annotation) => guide.visible || !annotation.aiGuide) : [], guideControls,
         pageTexts, pageCount, focusedPage, selectedId: readingAnnotationId,
         create: createReadingAnnotation, update: updateReadingAnnotation,
+        extensionActions: activePaper ? (input) => <ReaderExtensionActions input={{ paper: activePaper, ...input, rects: [] }} resolve={async () => ({ paper: activePaper, ...await readingSelectionGeometry(input) })} /> : undefined,
         capture: async (input, target) => {
           assertReadingAnnotationsReady();
           if (target === "conversation") {
@@ -3984,7 +3986,7 @@ export function PdfReader({
             </div>}
             {selection ? (
               <PdfSelectionMenu stageRef={stageRef} anchor={{ left: selection.menuLeft, top: selection.menuTop, placement: selection.menuPlacement }}>
-                <PaperSelectionTools color={selectedColor} onColorChange={setSelectedColor}
+                <PaperSelectionTools extensionActions={activePaper ? <ReaderExtensionActions input={{ paper: activePaper, ...selection }} /> : undefined} color={selectedColor} onColorChange={setSelectedColor}
                   highlight={() => addAnnotation("highlight")} underline={() => addAnnotation("underline")}
                   copy={() => void copySelectedText()} board={addSelectionToWhiteboard} dragBoard={handleSelectionWhiteboardDragStart}
                   tray={objectWorkbench ? () => { if (activePaper) void objectWorkbench.capturePdf({ paper: activePaper, ...selection }, "tray").catch((e) => setStatus(e.message)); } : undefined}

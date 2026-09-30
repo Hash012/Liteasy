@@ -1,3 +1,4 @@
+import { hashText } from "../context/objectContext";
 import { projectBlockText } from "../visual-blocks/blockRegistry";
 import { z } from "zod";
 import { structuredBlockSchema, parseBlockPresentation } from "../objects/visualBlock.types";
@@ -226,7 +227,8 @@ export async function prepareCanvasImport(input: {
       return {
         id: node.id,
         presentation: parseBlockPresentation(canvasExtension(node.liteasy).presentation),
-        structured: structured && projectBlockText(structured.data) === text ? structured : undefined,
+        structured: structured && (projectBlockText(structured.data) === text || canvasExtension(node.liteasy).portableTextHash === await hashText(text)) ? structured : undefined,
+        attachmentBase: { mountId: input.file.mountId, path: input.file.path },
         ref,
         draft: ref ? undefined : draft,
         position: { x: node.x - origin.x, y: node.y - origin.y },
@@ -298,7 +300,7 @@ export async function serializeCanvasFile(input: {
         y: Math.round(placement.position.y + origin.y),
         width: Math.round(placement.size.width),
         height: Math.round(placement.size.height),
-        ...(previous?.type === "group"
+        ...(previous?.type === "group" || presentation.value.group
           ? { type: "group" as const, label: objectText(object) }
           : previous?.type === "file" && objectText(object) === canvasNodeText(previous)
             ? { type: "file" as const, file: previous.file, ...(previous.subpath ? { subpath: previous.subpath } : {}) }

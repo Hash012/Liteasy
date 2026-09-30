@@ -48,3 +48,23 @@ test("failed fixture assertions are real failures, and MCP projects the same aut
   const report = await trialExtension(changed, () => true); expect(report.passed).toBe(false); expect(report.cases[0].error).toContain("验收");
   expect((await f.packages.list()).length).toBe(0);
 });
+
+test("SDK and MCP workflow requests use host binding and control actual persisted runs", async () => {
+  const f = fixture(), repository = createObjectRepository(f.storage, f.scope);
+  const assets = createAgentAssetService({ scopeId: f.scope, active: () => true });
+  const host = createOperationHost({ storage: f.storage, assets, scope: f.scope, enabled: () => true });
+  const runner = createWorkflowRunner(f.storage, host, f.scope), requestWorkflow = vi.fn(async () => undefined);
+  const service = createExtensionStudioService({ ...f, repository, runner, active: () => true, refresh: async () => undefined, requestWorkflow });
+  await expect(service.call("liteasy_workflow_request", { owner: "plugin.test", workflow: "run" }, { writable: false })).rejects.toThrow("未授权");
+  expect(await service.call("liteasy_workflow_request", { owner: "plugin.test", workflow: "run" }, { writable: true })).toMatchObject({ status: "awaiting_user" });
+  expect(requestWorkflow).toHaveBeenCalledWith("plugin.test", "run", []);
+  expect(await runner.list()).toEqual([]);
+  const { compileWorkflow } = await import("../app/features/workflows/workflowDefinition");
+  const definition = compileWorkflow({ schema: "liteasy.workflow/v2", id: "method", title: "Method", version: "1.0.0", inputSchema: { type: "object", properties: {}, additionalProperties: false }, outputSchema: { type: "string" }, nodes: [{ id: "end", title: "完成", operation: { id: "core.end", version: "1.0.0" }, input: { value: { source: "literal", value: "result" } } }], output: { source: "node", nodeId: "end", path: "" } }).definition;
+  const grant = await host.grants.issue({ owner: "plugin.test", digest: "version", capabilities: [], selection: [], output: false, modelConnection: null });
+  const run = await runner.create({ owner: "plugin.test", digest: "version", definition, grantId: grant.id, input: {} });
+  expect(await service.call("liteasy_workflow_control", { id: run.id, action: "pause" }, { writable: true })).toMatchObject({ status: "paused" });
+  expect(await service.call("liteasy_workflow_control", { id: run.id, action: "resume" }, { writable: true })).toMatchObject({ status: "succeeded" });
+  expect(await service.call("liteasy_workflow_inspect", { id: run.id }, { writable: false })).toMatchObject({ status: "succeeded" });
+  expect((await runner.replay(run.id)).nodes.end).toBe("result");
+});

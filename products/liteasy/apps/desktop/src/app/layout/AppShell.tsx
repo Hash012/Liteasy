@@ -1,3 +1,4 @@
+import { VisualAssetContext } from "../features/visual-blocks/AssetImage";
 import { useExtensionStudioController } from "../controllers/useExtensionStudioController";
 import { WorkflowStudio } from "../features/workflow-studio/WorkflowStudio";
 import { useExtensionWorkflowController } from "../controllers/useExtensionWorkflowController";
@@ -1198,7 +1199,7 @@ export function AppShell({
     openArtifact: (id) => { artifactWorkflow.actions.openArtifact(id); activateArtifactSurface(id); }
   });
   const extensionWorkflows = useExtensionWorkflowController({ scope: objectWorkbench.repository.scopeId, assets: objectWorkbench.agentAssets, packages: objectWorkbench.extensions, settings: settingsState, modelTransport: effectiveModelTransport, open: async (path) => { await openAgentAsset(path); }, showRuns: () => workbenchNavigation.open("workflow-runs") });
-  const extensionStudio = useExtensionStudioController({ model: objectWorkbench, runner: extensionWorkflows.runner, settings: settingsState, modelTransport: effectiveModelTransport });
+  const extensionStudio = useExtensionStudioController({ model: objectWorkbench, runner: extensionWorkflows.runner, requestWorkflow: extensionWorkflows.request, settings: settingsState, modelTransport: effectiveModelTransport });
   const extensionWorkbench = useExtensionWorkbenchController({ model: objectWorkbench, openDock: workbenchNavigation.open, openAsset: async (path) => openAgentAsset(path), workflows: extensionWorkflows, studio: extensionStudio, runWorkflow: extensionWorkflows.request });
   const assistantContextSuggestions = useAssistantContextCatalog({
     artifacts: artifactCatalog,
@@ -2555,6 +2556,7 @@ export function AppShell({
     <HelpContext.Provider value={help.port}>
     <ObjectWorkbenchContext.Provider value={objectWorkbench.port}>
     <ExtensionWorkbenchContext.Provider value={extensionWorkbench}>
+    <VisualAssetContext.Provider value={objectWorkbench.agentAssets}>
     <WorkflowInvocation model={extensionWorkflows} />
     <div ref={immersive.root} className={appFrameClassName} data-theme-scope={appFrameScope} style={appFrameStyle}
       data-reading-focus={immersive.mode} data-focus-edge={immersive.edge} onClickCapture={immersive.onClickCapture}>
@@ -2734,6 +2736,7 @@ export function AppShell({
           renderLocation: (entry) => readingLibrary.entries.some((item) => item.id === entry.id) ? <ResourceLocationButton target={readingLibrary.target(entry)} /> : null }} />
     </div>
     {createPortal(renderAssistantSurface(dock.findItemRegion("assistant") ?? "right"), assistantSurfaceHost)}
+    </VisualAssetContext.Provider>
     </ExtensionWorkbenchContext.Provider>
     </ObjectWorkbenchContext.Provider>
     </HelpContext.Provider>

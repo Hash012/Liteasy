@@ -1,3 +1,4 @@
+import { evaluatePureOperation } from "./pureOperations";
 import type { ObjectStorage } from "../objects/objectStorage";
 import { hashText } from "../context/objectContext";
 import { boundedJson, validateSchemaValue, type JsonObject, type JsonValue } from "../extensions/extensionSchema";
@@ -66,7 +67,7 @@ export function createWorkflowRunner(storage: ObjectStorage, host: OperationHost
       let completed = 0;
       const outputPaths = new Set<string>();
       const collectPaths = (value: JsonValue) => { if (!value || typeof value !== "object") return; if (Array.isArray(value)) { value.forEach(collectPaths); return; } if (typeof value.path === "string" && value.path.startsWith("liteasy://")) outputPaths.add(value.path); if (value.asset) collectPaths(value.asset); };
-      for (const [nodeId, value] of Object.entries(outputs)) if (plan.definition.nodes.find((node) => node.id === nodeId)?.operation.id === "resources.create") collectPaths(value);
+      for (const [nodeId, value] of Object.entries(outputs)) if (plan.definition.nodes.find((node) => node.id === nodeId)?.operation.id && ["resources.create", "boards.compose"].includes(plan.definition.nodes.find((node) => node.id === nodeId)!.operation.id)) collectPaths(value);
       try {
         while (true) {
           controller.signal.throwIfAborted();
@@ -95,7 +96,9 @@ export function createWorkflowRunner(storage: ObjectStorage, host: OperationHost
             if (node.operation.id === "core.join") args.values = Object.fromEntries([...plan.dependencies.get(nodeId)!].filter((dependency) => run.nodes[dependency].status === "succeeded").map((dependency) => [dependency, outputs[dependency]]));
             const items = node.map ? resolveBinding(node.map.items, { input: run.input, settings: run.settings, outputs }) : [null];
             if (!Array.isArray(items) || items.length > (node.map?.maxItems ?? 1)) throw new OperationError("budget_exceeded", `${nodeId}: map 数量超限。`);
-            const calls = items.length;
+            const state = run.nodes[nodeId];
+            // Durable reservations survive process interruption and are charged only once.
+            const calls = Math.max(0, items.length - state.operations.length);
             if (run.operations + calls > plan.definition.budget.maxOperations) throw new OperationError("budget_exceeded", "达到操作次数上限。");
             run.operations += calls;
             if (node.operation.id === "model.generate") {
@@ -103,7 +106,7 @@ export function createWorkflowRunner(storage: ObjectStorage, host: OperationHost
               if (run.modelCalls + calls > plan.definition.budget.maxModelCalls || run.tokens + reserved * calls > plan.definition.budget.maxTokens) throw new OperationError("budget_exceeded", "模型调用或 token 预算不足。");
               run.modelCalls += calls; run.tokens += reserved * calls; run.estimatedTokens = true;
             }
-            const state = run.nodes[nodeId]; state.status = "running"; state.startedAt = new Date().toISOString();
+            state.status = "running"; state.startedAt = new Date().toISOString();
             state.operations = items.map((_, index) => `${run.id}:${nodeId}:${index}`);
             return { node, args, items };
           });
@@ -131,7 +134,7 @@ export function createWorkflowRunner(storage: ObjectStorage, host: OperationHost
                 outputs[node.id] = node.map ? results : results[0] ?? null;
               }
               state.outputKey = await snapshot(run.id, node.id, outputs[node.id]); state.status = "succeeded"; state.finishedAt = new Date().toISOString();
-              if (node.operation.id === "resources.create") collectPaths(outputs[node.id]);
+              if (["resources.create", "boards.compose"].includes(node.operation.id)) collectPaths(outputs[node.id]);
             } catch (error) { state.status = controller.signal.aborted ? "cancelled" : "failed"; state.error = error instanceof Error ? error.message : String(error); }
           }));
           completed += jobs.length;
@@ -158,9 +161,10 @@ export function createWorkflowRunner(storage: ObjectStorage, host: OperationHost
     host, get, execute,
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     async list() { return (await storage.list("workflow-run/", "", 200)).flatMap((row) => (row.value as WorkflowRun).schema === "liteasy.workflow-run/v2" ? [{ ...row.value as WorkflowRun, revision: row.version }] : []); },
-    async create(options: { owner: string; digest: string; definition: WorkflowDefinition; grantId: string; input: JsonObject; settings?: JsonObject; parentRunId?: string }) {
+    async create(options: { owner: string; digest: string; definition: WorkflowDefinition; grantId: string; input: JsonObject; settings?: JsonObject; parentRunId?: string; id?: string }) {
       const plan = compileWorkflow(options.definition); validateWorkflowInput(plan, options.input);
-      const run: WorkflowRun = { schema: "liteasy.workflow-run/v2", id: crypto.randomUUID(), ...options, settings: options.settings ?? {}, workflowDigest: await hashText(JSON.stringify(plan.definition)), definition: plan.definition, status: "queued", nodes: Object.fromEntries(plan.order.map((id) => [id, { status: "pending", attempts: 0, operations: [] }])), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), elapsedMs: 0, operations: 0, modelCalls: 0, tokens: 0, estimatedTokens: true, revision: "" };
+      if (options.id) { if (!/^[a-zA-Z0-9-]{1,128}$/.test(options.id)) throw new Error("运行 ID 无效。"); const previous = await storage.get(key(options.id)); if (previous) { const existing = await get(options.id); if (existing.owner !== options.owner || existing.digest !== options.digest || existing.grantId !== options.grantId || JSON.stringify(existing.input) !== JSON.stringify(options.input) || JSON.stringify(existing.settings) !== JSON.stringify(options.settings ?? {}) || existing.workflowDigest !== await hashText(JSON.stringify(plan.definition))) throw new Error("运行标识对应不同的调用。"); return existing; } }
+      const run: WorkflowRun = { schema: "liteasy.workflow-run/v2", ...options, id: options.id ?? crypto.randomUUID(), settings: options.settings ?? {}, workflowDigest: await hashText(JSON.stringify(plan.definition)), definition: plan.definition, status: "queued", nodes: Object.fromEntries(plan.order.map((id) => [id, { status: "pending", attempts: 0, operations: [] }])), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), elapsedMs: 0, operations: 0, modelCalls: 0, tokens: 0, estimatedTokens: true, revision: "" };
       await save(run); return run;
     },
     async stop(id: string, status: "paused" | "cancelled") {
@@ -174,6 +178,27 @@ export function createWorkflowRunner(storage: ObjectStorage, host: OperationHost
       const receipts: Record<string, OperationReceipt> = {};
       for (const node of Object.values(run.nodes)) for (const operation of node.operations) { const receipt = await host.receipt(operation); if (receipt) receipts[operation] = receipt; }
       return { run, nodes, missing, receipts, mode: "recorded" as const };
+    },
+    async recompute(id: string) {
+      const recorded = await this.replay(id);
+      if (recorded.run.snapshotsCleared || recorded.missing.length) throw new Error("缺少原始快照，无法按固定条件重算。");
+      const { run } = recorded, plan = compileWorkflow(run.definition), outputs: Record<string, JsonValue> = {};
+      const checks: Array<{ node: string; mode: "recomputed" | "recorded"; matches: boolean }> = [];
+      for (const id of plan.order) {
+        if (run.nodes[id].status !== "succeeded") continue;
+        const node = plan.definition.nodes.find((item) => item.id === id)!;
+        if (operationCatalog[node.operation.id].effect !== "pure" || node.operation.id === "core.wait") {
+          outputs[id] = recorded.nodes[id]; checks.push({ node: id, mode: "recorded", matches: true }); continue;
+        }
+        const args = Object.fromEntries(Object.entries(node.input).map(([key, binding]) => [key, resolveBinding(binding, { input: run.input, settings: run.settings, outputs })])) as JsonObject;
+        if (node.operation.id === "core.join") args.values = Object.fromEntries([...plan.dependencies.get(id)!].filter((dependency) => run.nodes[dependency].status === "succeeded").map((dependency) => [dependency, outputs[dependency]]));
+        const items = node.map ? resolveBinding(node.map.items, { input: run.input, settings: run.settings, outputs }) : [null];
+        if (!Array.isArray(items) || items.length > (node.map?.maxItems ?? 1)) throw new Error("固定输入超出映射限制。");
+        const values = items.map((item) => evaluatePureOperation(node.operation.id, node.map ? { ...args, [node.map.itemField]: item } : args));
+        outputs[id] = node.map ? values : values[0];
+        checks.push({ node: id, mode: "recomputed", matches: await hashText(JSON.stringify(outputs[id])) === await hashText(JSON.stringify(recorded.nodes[id])) });
+      }
+      return { runId: id, mode: "deterministic" as const, checks };
     },
     async clearSnapshots(id: string) {
       const run = await get(id); if (activeRuns.has(`${scope}/${id}`)) throw new Error("请先停止运行。");

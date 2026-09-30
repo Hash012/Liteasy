@@ -1,0 +1,586 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "liteasy.workflow/v2"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z][a-zA-Z0-9.-]{0,79}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "inputSchema": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "outputSchema": {
+      "$ref": "#/$defs/__schema1"
+    },
+    "nodes": {
+      "minItems": 1,
+      "maxItems": 100,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z][a-zA-Z0-9.-]{0,79}$"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "operation": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "enum": [
+                  "core.value",
+                  "core.template",
+                  "core.branch",
+                  "core.validate",
+                  "core.wait",
+                  "core.join",
+                  "core.end",
+                  "core.comparison",
+                  "boards.compose",
+                  "resources.search",
+                  "resources.stat",
+                  "resources.read",
+                  "resources.create",
+                  "resources.write",
+                  "model.generate",
+                  "ui.open"
+                ]
+              },
+              "version": {
+                "type": "string",
+                "const": "1.0.0"
+              }
+            },
+            "required": [
+              "id",
+              "version"
+            ],
+            "additionalProperties": false
+          },
+          "input": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": "string",
+                      "const": "literal"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": "string",
+                      "const": "input"
+                    },
+                    "path": {
+                      "type": "string",
+                      "maxLength": 240
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "path"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": "string",
+                      "const": "settings"
+                    },
+                    "path": {
+                      "type": "string",
+                      "maxLength": 240
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "path"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": "string",
+                      "const": "node"
+                    },
+                    "nodeId": {
+                      "type": "string",
+                      "pattern": "^[a-zA-Z][a-zA-Z0-9.-]{0,79}$"
+                    },
+                    "path": {
+                      "default": "",
+                      "type": "string",
+                      "maxLength": 240
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "nodeId",
+                    "path"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "retries": {
+            "default": 0,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2
+          },
+          "breakpoint": {
+            "default": false,
+            "type": "boolean"
+          },
+          "map": {
+            "type": "object",
+            "properties": {
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "source": {
+                        "type": "string",
+                        "const": "literal"
+                      },
+                      "value": {
+                        "$ref": "#/$defs/__schema2"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "source": {
+                        "type": "string",
+                        "const": "input"
+                      },
+                      "path": {
+                        "type": "string",
+                        "maxLength": 240
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "path"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "source": {
+                        "type": "string",
+                        "const": "settings"
+                      },
+                      "path": {
+                        "type": "string",
+                        "maxLength": 240
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "path"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "source": {
+                        "type": "string",
+                        "const": "node"
+                      },
+                      "nodeId": {
+                        "type": "string",
+                        "pattern": "^[a-zA-Z][a-zA-Z0-9.-]{0,79}$"
+                      },
+                      "path": {
+                        "default": "",
+                        "type": "string",
+                        "maxLength": 240
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "nodeId",
+                      "path"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "itemField": {
+                "type": "string",
+                "pattern": "^[a-zA-Z][a-zA-Z0-9.-]{0,79}$"
+              },
+              "maxItems": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              "concurrency": {
+                "default": 1,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2
+              }
+            },
+            "required": [
+              "items",
+              "itemField",
+              "maxItems",
+              "concurrency"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "operation",
+          "input",
+          "retries",
+          "breakpoint"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "edges": {
+      "default": [],
+      "maxItems": 400,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "pattern": "^[a-zA-Z][a-zA-Z0-9.-]{0,79}$"
+          },
+          "to": {
+            "type": "string",
+            "pattern": "^[a-zA-Z][a-zA-Z0-9.-]{0,79}$"
+          },
+          "when": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "output": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "const": "literal"
+            },
+            "value": {
+              "$ref": "#/$defs/__schema2"
+            }
+          },
+          "required": [
+            "source",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "const": "input"
+            },
+            "path": {
+              "type": "string",
+              "maxLength": 240
+            }
+          },
+          "required": [
+            "source",
+            "path"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "const": "settings"
+            },
+            "path": {
+              "type": "string",
+              "maxLength": 240
+            }
+          },
+          "required": [
+            "source",
+            "path"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "const": "node"
+            },
+            "nodeId": {
+              "type": "string",
+              "pattern": "^[a-zA-Z][a-zA-Z0-9.-]{0,79}$"
+            },
+            "path": {
+              "default": "",
+              "type": "string",
+              "maxLength": 240
+            }
+          },
+          "required": [
+            "source",
+            "nodeId",
+            "path"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "budget": {
+      "default": {
+        "maxMilliseconds": 300000,
+        "maxOperations": 100,
+        "maxModelCalls": 3,
+        "maxTokens": 32000,
+        "concurrency": 1
+      },
+      "type": "object",
+      "properties": {
+        "maxMilliseconds": {
+          "default": 300000,
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 3600000
+        },
+        "maxOperations": {
+          "default": 100,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 400
+        },
+        "maxModelCalls": {
+          "default": 3,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30
+        },
+        "maxTokens": {
+          "default": 32000,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 200000
+        },
+        "concurrency": {
+          "default": 1,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        }
+      },
+      "required": [
+        "maxMilliseconds",
+        "maxOperations",
+        "maxModelCalls",
+        "maxTokens",
+        "concurrency"
+      ],
+      "additionalProperties": false
+    },
+    "layout": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "id",
+    "title",
+    "version",
+    "inputSchema",
+    "outputSchema",
+    "nodes",
+    "edges",
+    "output",
+    "budget",
+    "layout"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema0"
+          }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema0"
+          }
+        }
+      ]
+    },
+    "__schema1": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema1"
+          }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema1"
+          }
+        }
+      ]
+    },
+    "__schema2": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema2"
+          }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema2"
+          }
+        }
+      ]
+    }
+  },
+  "$id": "https://schemas.liteasy.app/compiledWorkflow.v2.schema.json"
+}

@@ -15,3 +15,9 @@
 .visual-component-card { border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; padding: 8px; }
 .visual-block-table { overflow: auto; }
 .visual-block-table td { min-width: 80px; padding: 6px; border: 1px solid var(--colorNeutralStroke2); vertical-align: top; }
+.visual-component-status, .visual-component-emptystate, .visual-component-evidencecard { padding: 12px; border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; }
+.visual-component-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.visual-timeline { margin-inline-start: 12px; padding-inline-start: 20px; border-inline-start: 1px solid var(--colorNeutralStroke2); }
+.visual-timeline li { padding-block: 8px; }
+.studio-binding-editor { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 12px; margin-block: 12px; }
+.studio-binding-editor h3, .studio-binding-editor > p { grid-column: 1 / -1; }

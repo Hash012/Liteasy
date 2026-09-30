@@ -1,3 +1,9 @@
+import { acquireExecutionSlot } from "./executionQuota";
+import type { ObjectRepository } from "../objects/objectRepository";
+import { refOf } from "../objects/object.types";
+import { liteasyPath } from "../resource-filesystem/liteasyPath";
+import { createBlockRegistry, projectBlockText } from "../visual-blocks/blockRegistry";
+import { evaluatePureOperation } from "./pureOperations";
 import { z } from "zod";
 import type { ObjectStorage } from "../objects/objectStorage";
 import type { AgentAssetService } from "../resource-filesystem/agentAssetService";
@@ -25,6 +31,8 @@ export type OperationModelResult = { value: JsonValue; usage: { tokens: number; 
 export function createOperationHost(input: {
   storage: ObjectStorage; assets: AgentAssetService; scope: string;
   enabled(owner: string, digest: string): boolean;
+  repository?: ObjectRepository;
+  registry?(owner: string): ReturnType<typeof createBlockRegistry>;
   model?: (options: { prompt: string; schema?: JsonValue; maxOutputTokens: number; signal: AbortSignal; connection: string }) => Promise<OperationModelResult>;
   open?(path: string): Promise<void>;
 }) {
@@ -45,8 +53,9 @@ export function createOperationHost(input: {
     const checkPath = (path: string) => { if (!allowed.has(identity(path))) throw new OperationError("permission_denied", "资源未包含在本轮授权范围。"); };
     if (typeof args.path === "string") checkPath(args.path);
     if (typeof args.paperPath === "string") checkPath(args.paperPath);
-    if (request.operation === "resources.create" && !grant.output) throw new OperationError("permission_denied", "尚未绑定输出位置。");
+    if (["resources.create", "boards.compose"].includes(request.operation) && !grant.output) throw new OperationError("permission_denied", "尚未绑定输出位置。");
     if (request.operation === "resources.create" && grant.outputKinds && !grant.outputKinds.includes(args.kind === "note" ? "content.note" : "workspace.board")) throw new OperationError("permission_denied", "此资产类型未包含在创建授权中。");
+    if (request.operation === "boards.compose" && grant.outputKinds && (!grant.outputKinds.includes("workspace.board") || !grant.outputKinds.includes("content.note"))) throw new OperationError("permission_denied", "组合白板需要白板与内容卡片的创建授权。");
     if (request.operation === "model.generate" && !grant.modelConnection) throw new OperationError("permission_denied", "尚未绑定模型连接。");
     const fingerprint = await hashText(JSON.stringify({ operation: request.operation, input: args, owner: request.owner, digest: request.digest, grant: grant.id }));
     const key = keyFor(request.operationId);
@@ -65,11 +74,7 @@ export function createOperationHost(input: {
     try {
       let result: JsonValue = null, undo: OperationReceipt["undo"];
       switch (request.operation) {
-        case "core.value": case "core.end": result = args.value; break;
-        case "core.join": result = args.values; break;
-        case "core.branch": result = JSON.stringify(args.value) === JSON.stringify(args.equals); break;
-        case "core.template": result = String(args.template).replace(/\{\{([a-zA-Z0-9_.-]+)\}\}/g, (_, key: string) => { const value = (args.values as JsonObject)[key]; if (value === undefined) throw new OperationError("invalid_input", `模板缺少值：${key}`); return typeof value === "string" ? value : JSON.stringify(value); }); break;
-        case "core.validate": result = validateSchemaValue(parseDataSchema(args.schema), args.value); break;
+        case "core.value": case "core.end": case "core.join": case "core.branch": case "core.template": case "core.validate": case "core.comparison": result = evaluatePureOperation(request.operation, args); break;
         case "core.wait": throw new OperationError("waiting_input", String(args.message));
         case "resources.search": {
           const values = []; for (const path of grant.selection.slice(0, 200)) { request.signal.throwIfAborted(); values.push(await input.assets.stat(path, { signal: request.signal })); }
@@ -77,6 +82,12 @@ export function createOperationHost(input: {
         }
         case "resources.stat": result = JSON.parse(JSON.stringify(await input.assets.stat(String(args.path), { signal: request.signal }))); break;
         case "resources.read": result = JSON.parse(JSON.stringify(await input.assets.read(String(args.path), { offset: Number(args.offset), maxCharacters: Number(args.maxCharacters), signal: request.signal }))); break;
+        case "boards.compose": {
+          if (!input.repository) throw new OperationError("dependency_unavailable", "白板存储尚未就绪。");
+          const value = operationCatalog["boards.compose"].input.parse(args), registry = input.registry?.(request.owner) ?? createBlockRegistry();
+          const board = await input.repository.importBoardFile({ title: value.title, operationId: `flow:${(await hashText(request.operationId)).slice(0, 64)}`, edges: [], nodes: value.cards.map((card, index) => { const data = registry.instantiate(card.type.id, card.type.version, card.data); return { id: `card-${index}`, position: { x: (index % 4) * 370 + 24, y: Math.floor(index / 4) * 500 + 24 }, size: { width: 340, height: 460 }, structured: { schema: "liteasy.visual-block/v1" as const, type: card.type, data }, draft: { kind: "content.note" as const, title: card.title, content: { schema: "liteasy.note/v1" as const, payload: { text: projectBlockText(data), origin: "derived" as const } } } }; }) });
+          result = { path: liteasyPath(input.scope, { kind: "object", ref: refOf(board), followLatest: true }), title: board.title, kind: board.kind, revision: board.revision, capabilities: ["read", "write", "add_context"] }; break;
+        }
         case "resources.create": result = JSON.parse(JSON.stringify(await input.assets.create({ kind: args.kind as "note" | "board", title: String(args.title), text: args.text as string | undefined, paperPath: args.paperPath as string | undefined, operationId: `flow:${(await hashText(request.operationId)).slice(0, 64)}`, signal: request.signal }))); break;
         case "resources.write": {
           const before = await input.assets.read(String(args.path), { maxCharacters: 80000, signal: request.signal });
@@ -108,7 +119,7 @@ export function createOperationHost(input: {
     async call(request: Parameters<typeof execute>[0]) {
       // Deduplicate locally, then revalidate the caller/fingerprint on every request.
       const pending = running.get(request.operationId); if (pending) await pending;
-      const promise = execute(request); running.set(request.operationId, promise);
+      const promise = (async () => { const release = await acquireExecutionSlot(`${input.scope}/${request.owner}`, request.signal); try { return await execute(request); } finally { release(); } })(); running.set(request.operationId, promise);
       try { return await promise; } finally { if (running.get(request.operationId) === promise) running.delete(request.operationId); }
     },
     async receipt(id: string) { return (await input.storage.get(keyFor(id)))?.value as OperationReceipt | undefined; },

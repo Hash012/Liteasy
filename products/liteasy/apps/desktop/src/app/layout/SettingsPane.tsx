@@ -48,9 +48,12 @@ export function SettingsPane(props: SettingsPaneProps) {
   const [category, setCategory] = useState<SettingsCategory>("all");
   const [query, setQuery] = useState("");
   useEffect(() => {
-    const show = (event: Event) => { const detail = (event as CustomEvent<{ owner: string; group: string }>).detail; const pkg = extensions?.packages.snapshot.packages.find((item) => item.manifest.id === detail.owner); const group = pkg?.manifest.contributes.settings.find((item) => item.id === detail.group); if (group) { setCategory("extensions"); setQuery(group.title); } };
-    window.addEventListener("liteasy:extension-settings", show); return () => window.removeEventListener("liteasy:extension-settings", show);
-  }, [extensions?.packages.snapshot]);
+    const detail = extensions?.settingsRequest;
+    if (!detail) return;
+    const pkg = extensions?.packages.snapshot.packages.find((item) => item.manifest.id === detail.owner);
+    const group = pkg?.manifest.contributes.settings.find((item) => item.id === detail.group);
+    if (group) { setCategory("extensions"); setQuery(group.title); }
+  }, [extensions?.settingsRequest, extensions?.packages.snapshot]);
   const contentRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const id = useId();

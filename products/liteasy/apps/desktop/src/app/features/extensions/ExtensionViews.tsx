@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Button, Input } from "@fluentui/react-components";
+import { Button, Input, Select } from "@fluentui/react-components";
 import { AddRegular, ArrowDownloadRegular, ArrowUploadRegular } from "@fluentui/react-icons";
 import { useExtensionWorkbench } from "./extensionWorkbenchContext";
 import { validateExtensionPackage, type ValidatedExtension } from "./extensionPackage";
@@ -20,6 +20,7 @@ export function downloadExtensionJson(name: string, value: unknown) {
 export function ExtensionLibrary() {
   const host = useExtensionWorkbench();
   const [items, setItems] = useState<Array<{ state: ExtensionInstallation; pkg?: ValidatedExtension; error?: string }>>([]);
+  const [versions, setVersions] = useState<Record<string, string[]>>({});
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -30,7 +31,8 @@ export function ExtensionLibrary() {
     const current = ++generation.current;
     const states = await host.packages.store.list();
     const results = await Promise.all(states.map(async (state) => { try { return { state, pkg: await host.packages.store.get(state.id, state.version) }; } catch (e) { return { state, error: String(e) }; } }));
-    if (current === generation.current) setItems(results);
+    const versions = Object.fromEntries(await Promise.all(states.map(async (state) => [state.id, await host.packages.store.versions(state.id)])));
+    if (current === generation.current) { setItems(results); setVersions(versions); }
   };
   useEffect(() => { void load(); return () => { generation.current++; }; }, [host?.packages.store, host?.packages.snapshot]);
   if (!host) return <p role="status">正在加载扩展…</p>;
@@ -51,6 +53,7 @@ export function ExtensionLibrary() {
       {pkg?.manifest.permissions.length ? <details><summary>请求的能力</summary><ul>{pkg.manifest.permissions.map((permission, i) => <li key={i}>{permission.capability} · {permission.scopeRef}</li>)}</ul><p>实际执行时还需绑定本轮资料、保存位置和模型连接。</p></details> : <p>声明式组件与本地组合。</p>}
       {error ? <p role="alert">{error}</p> : null}
       <div className="extension-toolbar"><Button disabled={busy || !!error} onClick={() => void run(() => host.packages.store.enable(state.id, !state.enabled, state.revision))}>{state.enabled ? "停用" : "启用"}</Button><Button disabled={!pkg} icon={<ArrowDownloadRegular />} onClick={() => pkg && downloadExtensionJson(`${state.id}-${state.version}.liteasy-extension.json`, pkg.bundle)}>导出</Button><Button disabled={busy} onClick={() => void run(() => host.packages.store.uninstall(state.id, state.revision))}>卸载</Button></div>
+      {(versions[state.id]?.length ?? 0) > 1 ? <Select aria-label={`切换 ${pkg?.manifest.name ?? state.id} 的版本`} value={state.version} disabled={busy} onChange={(_, data) => void run(() => host.packages.store.rollback(state.id, data.value, state.revision))}>{versions[state.id].map((version) => <option key={version} value={version}>{version}</option>)}</Select> : null}
       {state.enabled && pkg ? <div className="extension-entry-list">{pkg.manifest.contributes.views.map((view) => <Button key={view.id} appearance="subtle" onClick={() => void run(() => host.openView(state.id, view.id))}>{view.title}</Button>)}{pkg.manifest.contributes.commands.map((command) => <Button key={command.id} appearance="subtle" onClick={() => void run(() => host.invoke(state.id, command.id))}>{command.title}</Button>)}</div> : null}
     </article>)}</div>
     {!items.length ? <p>可以从论文比较板开始，也可以导入自己或 AI 制作的扩展包。</p> : null}

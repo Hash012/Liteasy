@@ -28,7 +28,7 @@ export function liteasyPath(scope: string, raw: ResourceTarget) {
     case "paper": host = "papers"; parts = [target.paperId]; break;
     case "artifact": host = "agent-artifacts"; parts = [target.artifactId]; break;
     case "external-file":
-      validateNotePath(target.path); host = "files"; parts = [target.mountId, ...target.path.split("/")]; break;
+      validateNotePath(target.path, !/\.(png|jpe?g|gif|webp)$/i.test(target.path)); host = "files"; parts = [target.mountId, ...target.path.split("/")]; break;
     case "pdf-annotation": host = "paper-annotations"; parts = [target.paperId, target.annotationId]; break;
     case "artifact-annotation": host = "artifact-annotations"; parts = [target.artifactId, target.annotationId]; break;
   }
@@ -62,7 +62,7 @@ export function parseLiteasyPath(value: string, scope: string): ResourceTarget {
   else if (url.hostname === "files" && parts.length >= 2) {
     if (parts.slice(1).some((part) => part.includes("/"))) throw new Error("文件路径编码无效。");
     target = { kind: "external-file", mountId: parts[0], path: parts.slice(1).join("/") };
-    validateNotePath(target.path);
+    validateNotePath(target.path, !/\.(png|jpe?g|gif|webp)$/i.test(target.path));
   } else if (url.hostname === "paper-annotations" && parts.length === 2) target = { kind: "pdf-annotation", paperId: parts[0], annotationId: parts[1] };
   else if (url.hostname === "artifact-annotations" && parts.length === 2) target = { kind: "artifact-annotation", artifactId: parts[0], annotationId: parts[1] };
   else throw new Error("此 Liteasy Path 类型尚不可读取，请从资源的“位置与 Liteasy Path”复制地址。");

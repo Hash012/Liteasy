@@ -13,6 +13,7 @@ export type ExtensionWorkbench = {
   workspace: ExtensionWorkspaceStore;
   views: ExtensionViewInstance[];
   error: string;
+  settingsRequest?: { owner: string; group: string; nonce: number };
   openView(owner: string, viewId: string, args?: JsonObject, instanceId?: string): Promise<void>;
   openLink(path: string): Promise<void>;
   openStudio(): void;

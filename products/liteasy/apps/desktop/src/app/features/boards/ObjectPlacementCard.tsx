@@ -1,3 +1,4 @@
+import { liteasyPath } from "../resource-filesystem/liteasyPath";
 import { DerivedBlockContent } from "../visual-blocks/DerivedBlockContent";
 import { projectBlockText, type createBlockRegistry } from "../visual-blocks/blockRegistry";
 import type { StructuredBlock } from "../objects/visualBlock.types";
@@ -332,7 +333,7 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
       <MenuTrigger disableButtonEnhancement>
         <div
           ref={cardRef}
-          className={`object-placement${canvasNode?.type === "group" ? " is-group" : ""}${editing ? " is-editing" : ""}${moving ? " is-moving" : ""}${draggingOut ? " is-dragging" : ""}${selected ? " is-selected" : ""}${adjusting ? " is-adjusting" : ""}`}
+          className={`object-placement${(canvasNode?.type === "group" || appearance.value.group) ? " is-group" : ""}${editing ? " is-editing" : ""}${moving ? " is-moving" : ""}${draggingOut ? " is-dragging" : ""}${selected ? " is-selected" : ""}${adjusting ? " is-adjusting" : ""}`}
           data-placement-id={p.placementId}
           aria-label={`白板卡片：${object?.title ?? "正在读取"}`}
           aria-description={
@@ -451,7 +452,7 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
             </Tooltip>
           ) : null}
           {appearanceOpen ? <aside className="object-card-appearance" aria-label="卡片显示设置" onClick={(event) => event.stopPropagation()}><Button size="small" onClick={() => setAppearanceOpen(false)}>关闭设置</Button><BlockAppearanceEditor value={appearance.record.value} onSave={async (value) => { await appearance.save(value); await actions.current.refresh(); }} /></aside> : null}
-          <VisualBlockBase presentation={appearance.value} identity={`${p.ref.objectId}:${p.ref.revision}`} fallback={object ? objectText(object) : "内容不可用，引用仍保留。"}>
+          <VisualBlockBase resourcePath={liteasyPath(actions.current.repository.scopeId, { kind: "object", ref: p.ref })} presentation={appearance.value} identity={`${p.ref.objectId}:${p.ref.revision}`} fallback={object ? objectText(object) : "内容不可用，引用仍保留。"}>
           {object?.assets.length ? (
             <div className="object-placement-assets">
               {object.assets.map((asset) => (

@@ -42,6 +42,7 @@ export function createExtensionPackageStore(storage: ObjectStorage) {
   }
   return {
     list, get, active,
+    async versions(id: string) { return (await storage.list(`extension-package/${encodeURIComponent(id)}/`, "", 200)).map((row) => decodeURIComponent(row.key.split("/").at(-1)!)); },
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     async install(input: unknown, expectedRevision: string | null = null) {
       const pkg = await validateExtensionPackage(input);

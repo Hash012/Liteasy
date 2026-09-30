@@ -1,3 +1,4 @@
+import { createCanvasArchive } from "../features/boards/canvasArchive";
 import { createExtensionPackageStore } from "../features/extensions/extensionPackageStore";
 import { useExtensionPackages } from "../features/extensions/useExtensionPackages";
 import { liteasyPath } from "../features/resource-filesystem/liteasyPath";
@@ -1048,6 +1049,7 @@ export function useObjectWorkbenchController(input: {
     ...boardFiles,
     extensions,
     agentAssets,
+    exportBoardBundle: async () => { if (!board) throw new Error("请先选择白板。"); return createCanvasArchive(board, repository, agentAssets); },
     repository,
     port,
     opened,
@@ -1331,7 +1333,8 @@ export function useObjectWorkbenchController(input: {
         if (!board) return;
         const binding = await repository.getBoardFileBinding<BoardFileBinding>(board.objectId);
         const moves = [{ placementId: p.placementId, revision: p.revision, position }];
-        if (binding?.document.nodes.find((node) => node.id === p.placementId)?.type === "group") {
+        const presentation = await repository.getBlockPresentation(board.objectId, p.placementId);
+        if (presentation.value.group || binding?.document.nodes.find((node) => node.id === p.placementId)?.type === "group") {
           for (const child of await repository.listPlacements(board.objectId)) {
             if (child.placementId === p.placementId || child.position.x < p.position.x || child.position.y < p.position.y ||
               child.position.x + child.size.width > p.position.x + p.size.width || child.position.y + child.size.height > p.position.y + p.size.height) continue;

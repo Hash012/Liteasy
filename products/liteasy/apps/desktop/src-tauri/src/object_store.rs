@@ -272,8 +272,56 @@ fn asset_path(app: &AppHandle, scope: &str, hash: &str) -> Result<std::path::Pat
         .join(hash))
 }
 
+// Local activation and grants never cross device boundaries.
+fn sync_record_category(key: &str) -> Option<&'static str> {
+    if [
+        "extension-grant/",
+        "extension-installation/",
+        "extension-trigger/",
+        "extension-trigger-event/",
+        "extension-trial-data/",
+        "object-attachment/",
+    ]
+    .iter()
+    .any(|prefix| key.starts_with(prefix))
+    {
+        return None;
+    }
+    if key.starts_with("extension-package/") {
+        return Some("extension-packages");
+    }
+    if key.starts_with("extension-config/")
+        || key.starts_with("extension-config-history/")
+        || key.starts_with("extension-view/")
+    {
+        return Some("extension-configuration");
+    }
+    if [
+        "extension-draft/",
+        "extension-draft-history/",
+        "extension-trial/",
+    ]
+    .iter()
+    .any(|prefix| key.starts_with(prefix))
+    {
+        return Some("extension-workflows");
+    }
+    if key.starts_with("workflow-run/") {
+        return Some("extension-runs");
+    }
+    if key.starts_with("workflow-snapshot/") || key.starts_with("extension-operation/") {
+        return Some("extension-snapshots");
+    }
+    Some("objects")
+}
+
 // Portable logical snapshots: never copy a live WAL database or local absolute paths.
-pub(crate) fn sync_export(app: &AppHandle, scope: &str, external: bool) -> Result<Value, String> {
+pub(crate) fn sync_export(
+    app: &AppHandle,
+    scope: &str,
+    external: bool,
+    category: &str,
+) -> Result<Value, String> {
     let _guard = WRITE_LOCK.lock().map_err(|_| "对象存储忙碌")?;
     let connection = open(app, scope)?;
     let mut statement = connection
@@ -292,6 +340,17 @@ pub(crate) fn sync_export(app: &AppHandle, scope: &str, external: bool) -> Resul
     let mut size = 0usize;
     for row in rows {
         let (key, version, value) = row.map_err(|e| e.to_string())?;
+        // Filter by stable record kind before parsing/loading unrelated large snapshots.
+        let selected = sync_record_category(&key)
+            == Some(if category == "external" {
+                "objects"
+            } else {
+                category
+            });
+        let binding = key.starts_with("object-file/") || key.starts_with("board-file/");
+        if key.starts_with("asset/") || (!selected && !binding) {
+            continue;
+        }
         size += value.len();
         if size > 96 * 1024 * 1024 || records.len() >= 100_000 {
             return Err("笔记同步数据过大，请分库同步。".into());
@@ -310,7 +369,18 @@ pub(crate) fn sync_export(app: &AppHandle, scope: &str, external: bool) -> Resul
         .map(|r| r.key.split_once('/').unwrap().1.to_owned())
         .collect();
     records.retain(|r| {
-        !r.key.starts_with("asset/") && (external == sync_external_record(r, &external_ids))
+        !r.key.starts_with("asset/")
+            && sync_record_category(&r.key)
+                == Some(if category == "external" {
+                    "objects"
+                } else {
+                    category
+                })
+            && (if category == "objects" || category == "external" {
+                external == sync_external_record(r, &external_ids)
+            } else {
+                external || !sync_external_record(r, &external_ids)
+            })
     });
     let mut hashes = std::collections::BTreeSet::new();
     fn hashes_in(value: &Value, hashes: &mut std::collections::BTreeSet<String>) {
@@ -349,12 +419,16 @@ pub(crate) fn sync_export(app: &AppHandle, scope: &str, external: bool) -> Resul
         }
     }
     records.sort_by(|a, b| a.key.cmp(&b.key));
-    Ok(serde_json::json!({"version":1,"scope":scope,"external":external,"records":records}))
+    Ok(
+        serde_json::json!({"version":1,"scope":scope,"external":external,"category":category,"records":records}),
+    )
 }
 fn sync_external_record(row: &ObjectRow, ids: &std::collections::HashSet<String>) -> bool {
     fn references_external(value: &Value, ids: &std::collections::HashSet<String>) -> bool {
         match value {
-            Value::String(s) => ids.contains(s) || s.starts_with("note-file-"),
+            Value::String(s) => {
+                ids.contains(s) || s.starts_with("note-file-") || s.starts_with("liteasy://files/")
+            }
             Value::Object(map) => {
                 map.get("kind").and_then(Value::as_str) == Some("external-file")
                     || map.values().any(|v| references_external(v, ids))
@@ -378,8 +452,26 @@ pub(crate) fn sync_import(
     if value["version"] != 1 || value["scope"].as_str() != Some(scope) {
         return Err("笔记同步版本或账号不匹配。".into());
     }
+    let category =
+        value["category"]
+            .as_str()
+            .unwrap_or(if value["external"].as_bool() == Some(true) {
+                "external"
+            } else {
+                "objects"
+            });
+    let admitted = |key: &str| {
+        sync_record_category(key)
+            == Some(if category == "external" {
+                "objects"
+            } else {
+                category
+            })
+            || key.starts_with("asset/")
+    };
     let mut rows: Vec<ObjectRow> =
         serde_json::from_value(value["records"].clone()).map_err(|_| "笔记同步格式无效")?;
+    rows.retain(|row| admitted(&row.key));
     if rows.len() > 100_000 {
         return Err("笔记同步条目过多。".into());
     }
@@ -426,10 +518,11 @@ pub(crate) fn sync_import(
                 .remove("base64");
         }
     }
-    let previous_rows: Vec<ObjectRow> = previous
+    let mut previous_rows: Vec<ObjectRow> = previous
         .map(|v| serde_json::from_value(v["records"].clone()).map_err(|_| "旧笔记快照无效"))
         .transpose()?
         .unwrap_or_default();
+    previous_rows.retain(|row| admitted(&row.key));
     sync_merge(&mut connection, scope, rows, &previous_rows)
 }
 fn sync_merge(
@@ -446,6 +539,7 @@ fn sync_merge(
         if !keys.contains(row.key.as_str())
             && !row.key.starts_with("revision/")
             && !row.key.starts_with("asset/")
+            && !row.key.starts_with("extension-package/")
         {
             tx.execute(
                 "DELETE FROM object_records WHERE scope=?1 AND key=?2",
@@ -456,12 +550,35 @@ fn sync_merge(
     }
     // Retain immutable history and attachments; mutable records follow the selected snapshot.
     for row in rows {
-        if row.key.starts_with("revision/") {
+        if row.key.starts_with("revision/") || row.key.starts_with("extension-package/") {
             if let Some(old) = get(&tx, scope, &row.key)? {
                 if old.value != row.value || old.version != row.version {
                     return Err("不可变笔记版本冲突。".into());
                 }
                 continue;
+            }
+        }
+        if row.key.starts_with("extension-package/") {
+            if let Some(manifest) = row.value["files"]["liteasy.extension.json"]
+                .as_str()
+                .and_then(|text| serde_json::from_str::<Value>(text).ok())
+            {
+                if let (Some(id), Some(version)) =
+                    (manifest["id"].as_str(), manifest["version"].as_str())
+                {
+                    if id.starts_with("plugin.")
+                        && id.len() <= 80
+                        && id
+                            .bytes()
+                            .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-')
+                    {
+                        let key = format!("extension-installation/{id}");
+                        if get(&tx, scope, &key)?.is_none() {
+                            let value = serde_json::json!({"schema":"liteasy.extension-installation/v1","id":id,"version":version,"digest":row.version,"enabled":false,"installedAt":"synced"});
+                            tx.execute("INSERT INTO object_records(scope,key,version,value) VALUES(?1,?2,?3,?4)", params![scope,key,format!("synced-{}", row.version),value.to_string()]).map_err(|e| e.to_string())?;
+                        }
+                    }
+                }
             }
         }
         tx.execute("INSERT INTO object_records(scope,key,version,value) VALUES(?1,?2,?3,?4) ON CONFLICT(scope,key) DO UPDATE SET version=excluded.version,value=excluded.value", params![scope,row.key,row.version,serde_json::to_string(&row.value).map_err(|e| e.to_string())?]).map_err(|e| e.to_string())?;
@@ -581,6 +698,57 @@ mod tests {
             ),
             &ids
         ));
+    }
+    #[test]
+    fn extension_sync_never_transfers_activation_and_keeps_packages_immutable() {
+        for prefix in [
+            "extension-grant/",
+            "extension-installation/",
+            "extension-trigger/",
+            "extension-trigger-event/",
+            "extension-trial-data/",
+        ] {
+            assert_eq!(sync_record_category(&format!("{prefix}id")), None);
+        }
+        assert_eq!(
+            sync_record_category("extension-package/plugin.example/1.0.0"),
+            Some("extension-packages")
+        );
+        assert_eq!(
+            sync_record_category("workflow-run/id"),
+            Some("extension-runs")
+        );
+        assert_eq!(
+            sync_record_category("workflow-snapshot/id/step"),
+            Some("extension-snapshots")
+        );
+        let mut db = Connection::open_in_memory().unwrap();
+        initialize(&db).unwrap();
+        let pkg = ObjectRow {
+            key: "extension-package/plugin.example/1.0.0".into(),
+            version: "digest".into(),
+            value: serde_json::json!({"files":{"liteasy.extension.json": "{\"id\":\"plugin.example\",\"version\":\"1.0.0\"}"}}),
+        };
+        sync_merge(&mut db, "local", vec![pkg.clone()], &[]).unwrap();
+        let installation = get(&db, "local", "extension-installation/plugin.example")
+            .unwrap()
+            .unwrap();
+        assert_eq!(installation.value["enabled"], false);
+        let mut corrupt = pkg.clone();
+        corrupt.version = "changed".into();
+        assert!(sync_merge(&mut db, "local", vec![corrupt], &[]).is_err());
+        assert_eq!(
+            get(&db, "local", &pkg.key).unwrap().unwrap().version,
+            "digest"
+        );
+        sync_merge(&mut db, "local", vec![pkg], &[]).unwrap();
+        assert_eq!(
+            get(&db, "local", &installation.key)
+                .unwrap()
+                .unwrap()
+                .version,
+            installation.version
+        );
     }
     #[test]
     fn conflict_rolls_back_all_records_and_scopes_are_isolated() {

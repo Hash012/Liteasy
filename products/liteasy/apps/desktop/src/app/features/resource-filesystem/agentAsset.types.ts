@@ -11,6 +11,7 @@ export type AgentAsset = {
   capabilities: AgentAssetCapability[];
   summary?: string;
   relatedPaperIds?: string[];
+  structuredType?: { id: string; version: string };
 };
 export type AgentAssetSearch = { query: string; limit?: number; signal?: AbortSignal };
 export type AgentAssetReadOptions = { offset?: number; maxCharacters?: number; signal?: AbortSignal };
@@ -52,6 +53,7 @@ export type AgentAssetAdapter = {
   search(input: AgentAssetSearch): Promise<AgentAsset[]>;
   stat(path: string, options?: { signal?: AbortSignal }): Promise<AgentAsset>;
   read(path: string, options: AgentAssetReadOptions): Promise<AgentAssetRead>;
+  resolveRelativeImages?(path: string, relativePath: string, options?: { signal?: AbortSignal }): Promise<ModelImageInput[]>;
   resolveImages?(path: string, options?: { signal?: AbortSignal }): Promise<ModelImageInput[]>;
   write?(path: string, input: AgentAssetWriteOptions): Promise<AgentAssetWriteReceipt>;
   context?(path: string): Promise<ResourceContextAttachment[]>;

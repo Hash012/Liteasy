@@ -11,6 +11,8 @@ export const operationCatalog = {
   "core.wait": operation(z.strictObject({ message: z.string().max(2000) }), null, "pure", "never"),
   "core.join": operation(z.strictObject({ values: z.record(z.string(), z.json()).default({}) }), null, "pure", "safe"),
   "core.end": operation(z.strictObject({ value: z.json() }), null, "pure", "safe"),
+  "core.comparison": operation(z.strictObject({ value: z.json(), evidence: z.array(z.json()).max(8), cardType: z.strictObject({ id: z.string().max(160), version: z.string().max(32) }) }), null, "pure", "safe"),
+  "boards.compose": operation(z.strictObject({ title: z.string().min(1).max(120), cards: z.array(z.strictObject({ title: z.string().max(120), type: z.strictObject({ id: z.string().max(180), version: z.string().max(32) }), data: z.record(z.string(), z.json()) })).min(1).max(100) }), "resources.create", "write", "idempotent"),
   "resources.search": operation(z.strictObject({ query: z.string().max(2048).default(""), limit: z.number().int().min(1).max(200).default(50) }), "resources.metadata.read", "read", "safe", "array"),
   "resources.stat": operation(z.strictObject({ path }), "resources.metadata.read", "read", "safe"),
   "resources.read": operation(z.strictObject({ path, offset: z.number().int().nonnegative().default(0), maxCharacters: z.number().int().min(1).max(80000).default(12000) }), "resources.content.read", "read", "safe"),

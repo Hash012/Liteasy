@@ -8,6 +8,8 @@ export const blockPresentationSchema = z.strictObject({
   lineHeight: z.number().finite().min(1).max(3).optional(),
   wrap: z.boolean().optional(),
   locked: z.boolean().optional(),
+  group: z.boolean().optional(),
+  groupId: z.string().max(128).optional(),
   layer: z.number().int().min(0).max(10000).optional(),
 });
 export type BlockPresentation = z.infer<typeof blockPresentationSchema>;

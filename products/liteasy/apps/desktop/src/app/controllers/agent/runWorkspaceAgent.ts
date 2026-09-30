@@ -74,6 +74,7 @@ export async function runWorkspaceAgent(input: AgentCommandExecutionInput, envir
   const inputLimit = maxTokens - reserve;
   const known = new Map<string, AgentAsset>();
   const reads = new Map<string, AgentAssetRead>();
+  const blockReads = new Map<string, string>();
   const readCoverage = new Map<string, { revision?: string; ranges: Array<[number, number]>; total: number }>();
   const writes: AgentAssetWriteReceipt[] = [];
   const imageInputs = new Map<string, ModelImageInput[]>();
@@ -124,7 +125,7 @@ export async function runWorkspaceAgent(input: AgentCommandExecutionInput, envir
   const explicitDescriptions = input.context.objectSnapshot?.entries.filter((entry) => !("objectId" in entry.ref))
     .map((entry) => ({ title: entry.title, text: entry.text.slice(0, 2400) }));
   const mayWrite = /写|记入|记到|保存|补充|更新|修改|编辑|记录|添加到|放到|整理到|填入|\b(?:write|save|edit|update|append|replace|revise|put|add|record|fix)\b/i.test(input.request.input.message);
-  const develop = !!environment.extensionStudio && /扩展|组件|组合|工作流|白板|extension|workflow|component|canvas|skill/i.test(input.request.input.message);
+  const develop = !!environment.extensionStudio && (mayWrite || /扩展|组件|组合|工作流|白板|extension|workflow|component|canvas|skill/i.test(input.request.input.message));
   const studioDirectory = develop ? Object.entries(environment.extensionStudio!.tools).map(([name, tool]) => ({ name, description: tool.description })) : [];
   const instructions = [
     ...(develop ? [`扩展制作与基础块工具摘要：${JSON.stringify(studioDirectory)}。需要时先用 action=extension, query=工具名, text=JSON 参数调用 catalog 查询能力，然后按需读取草稿。优先继承基类；不能从零生成临时 HTML 页面。只编辑用户要求的草稿或资产；启用扩展由用户在工作台完成。`] : []),
@@ -184,7 +185,17 @@ export async function runWorkspaceAgent(input: AgentCommandExecutionInput, envir
       let result: unknown;
       if (action.action === "extension") {
         if (!develop || !environment.extensionStudio) throw new Error("本轮未请求扩展制作或组件操作。");
-        result = await environment.extensionStudio.call(action.query, JSON.parse(action.text || "{}"), { writable: mayWrite || /创建|制作|生成|组装|设计|create|build|design/i.test(input.request.input.message), signal: input.signal });
+        const args = JSON.parse(action.text || "{}") as Record<string, unknown>;
+        if (action.query === "liteasy_workflow_request" && Array.isArray(args.selection) && args.selection.some((path) => typeof path !== "string" || !findKnownAgentAsset(path, known.values(), scope))) throw new Error("请先搜索或附加工作流所需资料，不能猜测资料地址。");
+        const assetPath = action.query === "liteasy_block_create" ? args.boardPath : ["liteasy_block_read", "liteasy_block_update", "liteasy_board_template"].includes(action.query) ? args.path : undefined;
+        const asset = typeof assetPath === "string" ? findKnownAgentAsset(assetPath, known.values(), scope) : undefined;
+        if (assetPath !== undefined && !asset) throw new Error("请先搜索或使用已附加的资产，不能猜测组件或白板地址。");
+        if (action.query === "liteasy_block_update" && (!asset || blockReads.get(asset.path) !== args.expectedRevision)) throw new Error("更新组件前必须使用 liteasy_block_read 读取完整结构，并使用返回的版本。");
+        const requestedWorkflowControl = ["liteasy_workflow_request", "liteasy_workflow_control"].includes(action.query) && /运行|执行|启动|暂停|继续|恢复|取消|停止|\b(?:run|start|pause|resume|cancel|stop)\b/i.test(input.request.input.message);
+        result = await environment.extensionStudio.call(action.query, args, { writable: mayWrite || requestedWorkflowControl || /创建|制作|生成|组装|设计|create|build|design/i.test(input.request.input.message), signal: input.signal });
+        if (action.query === "liteasy_block_read" && asset && result && typeof result === "object" && "revision" in result) blockReads.set(asset.path, String(result.revision));
+        if (action.query === "liteasy_block_update" && asset) blockReads.delete(asset.path);
+        if (["liteasy_block_create", "liteasy_block_update"].includes(action.query) && result && typeof result === "object" && "path" in result) remember(await assets.stat(String(result.path), { signal: input.signal }));
       } else if (action.action === "search") {
         result = (await assets.search({ query: action.query, limit: 12, signal: input.signal })).map(remember);
       } else {

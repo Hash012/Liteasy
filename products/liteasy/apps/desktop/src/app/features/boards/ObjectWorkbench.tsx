@@ -1,3 +1,7 @@
+import { ExtensionActions } from "../extensions/ExtensionActions";
+import { liteasyPath } from "../resource-filesystem/liteasyPath";
+import { BoardLayoutTools } from "./BoardLayoutTools";
+import { useVisiblePlacements } from "./useVisiblePlacements";
 import { BlockComposer } from "../visual-blocks/BlockComposer";
 import type { ExtensionPackagesModel } from "../extensions/useExtensionPackages";
 import { BlockAppearanceEditor } from "../visual-blocks/BlockAppearanceEditor";
@@ -20,6 +24,7 @@ import {
   Tooltip,
 } from "@fluentui/react-components";
 import {
+  ArrowDownloadRegular,
   DismissRegular,
   ArrowMoveRegular,
   AddRegular,
@@ -109,6 +114,7 @@ export type WorkbenchViewModel = {
   fileBusy?: boolean;
   chooseBoardFile?(): Promise<void>;
   saveBoardFile?(choose?: boolean): Promise<void>;
+  exportBoardBundle?(): Promise<Blob>;
   connect?(
     from: Placement,
     fromSide: BoardSide,
@@ -133,6 +139,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
     "boards" | "note" | "library" | "relations" | "context" | "view" | "components"
   >();
   const [zoom, setZoom] = useState(1);
+  const [layerPage, setLayerPage] = useState(0);
   const [showGrid, setShowGrid] = useState(true);
   const viewport = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
@@ -150,6 +157,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
     previousTraySize.current = model.tray.length;
   }, [model.tray.length]);
   const [selected, setSelected] = useState<string[]>([]);
+  const visiblePlacements = useVisiblePlacements(model.placements, viewport, zoom, selected, model.visible);
   const navigation = useCanvasNavigation({ viewport, canvas, zoom, setZoom, visible: model.visible, boardId: model.board?.objectId,
     placements: model.placements, selected, setSelected, create: (position) => model.createNote("新笔记", position),
     remove: model.removePlacement, error: (failure) => model.setStatus(String(failure)) });
@@ -263,7 +271,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
   useEffect(() => {
     let alive = true;
     void Promise.all(
-      model.placements.map(async (p) => {
+      visiblePlacements.map(async (p) => {
         try {
           const cached = cachedCards.current[p.placementId];
           const object =
@@ -283,7 +291,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
     return () => {
       alive = false;
     };
-  }, [model.repository, model.placements]);
+  }, [model.repository, visiblePlacements]);
   if (!model.visible) return null;
   const refs = selected.flatMap((id) => {
     const p = model.placements.find((p) => p.placementId === id);
@@ -397,6 +405,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
               />
             </Tooltip>
           ) : null}
+          {model.exportBoardBundle ? <Tooltip content="导出白板与附件" relationship="description"><Button size="small" appearance="subtle" aria-label="导出白板与附件" icon={<ArrowDownloadRegular />} disabled={!model.board || model.busy} onClick={() => void model.exportBoardBundle!().then((blob) => { const url = URL.createObjectURL(blob), link = document.createElement("a"); link.href = url; link.download = "Liteasy-Canvas.zip"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }).catch(error)} /></Tooltip> : null}
           <Tooltip content="关闭白板" relationship="description">
             <Button
               appearance="subtle"
@@ -589,7 +598,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
                   <path d="M0,0 L8,4 L0,8" fill="context-stroke" />
                 </marker>
               </defs>
-              {edges.map((edge) => {
+              {edges.filter((edge) => visiblePlacements.some((p) => p.placementId === edge.from || p.placementId === edge.to)).slice(0, 400).map((edge) => {
                 const from = model.placements.find(
                   (p) => p.placementId === edge.from,
                 );
@@ -648,7 +657,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
                 />
               ) : null}
             </svg>
-            {model.placements.map((p) => (
+            {visiblePlacements.map((p) => (
               <ObjectPlacementCard
                 key={p.placementId}
                 p={p}
@@ -1072,10 +1081,13 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
           <p>当前缩放 {Math.round(zoom * 100)}%</p>
           <Button onClick={fitView}>适配全部卡片</Button>
           <Button onClick={() => setZoom(1)}>恢复 100%</Button>
+          <BoardLayoutTools model={model} selected={selected} />
+          <ExtensionActions location="board.context" selection={refs.map((ref) => liteasyPath(model.repository.scopeId, { kind: "object", ref }))} />
           <h4>白板默认字体与布局</h4>
           <BlockAppearanceEditor value={boardAppearance.record.value} onSave={async (value) => { await boardAppearance.save(value); await model.refresh(); }} />
           <h4>所有卡片（包括被遮挡的内容）</h4>
-          <div className="object-layer-list">{model.placements.map((p) => <Button key={p.placementId} appearance={selected.includes(p.placementId) ? "primary" : "subtle"} onClick={() => {
+          <div><Button disabled={!layerPage} onClick={() => setLayerPage((page) => page - 1)}>上一页</Button><span>{layerPage + 1} / {Math.max(1, Math.ceil(model.placements.length / 50))}</span><Button disabled={(layerPage + 1) * 50 >= model.placements.length} onClick={() => setLayerPage((page) => page + 1)}>下一页</Button></div>
+          <div className="object-layer-list">{model.placements.slice(layerPage * 50, (layerPage + 1) * 50).map((p) => <Button key={p.placementId} appearance={selected.includes(p.placementId) ? "primary" : "subtle"} onClick={() => {
             setSelected([p.placementId]);
             viewport.current?.scrollTo?.({ left: Math.max(0, p.position.x * zoom - 40), top: Math.max(0, p.position.y * zoom - 40), behavior: "smooth" });
             void model.repository.getBlockPresentation(p.boardId, p.placementId).then(async (record) => {

@@ -2,7 +2,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { exportWebDavPreferences, webDavCredentialDescriptors } from "./webdavPreferences";
 import { listen } from "@tauri-apps/api/event";
 
-export const defaultSyncOptions = { library: true, annotations: true, workspace: true, history: true, preferences: true, externalFolders: false, apiKeys: false };
+export const defaultSyncOptions = { library: true, annotations: true, workspace: true, history: true, preferences: true, externalFolders: false, apiKeys: false, extensionPackages: false, extensionConfiguration: false, extensionWorkflows: false, extensionRuns: false, extensionSnapshots: false };
 export type SyncOptions = typeof defaultSyncOptions;
 export type WebDavSettings = { endpoint: string; username: string; collection: string; autoSync: boolean; sync?: SyncOptions };
 export type FileVersion = { hash: string; size: number; documentId: string | null };

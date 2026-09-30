@@ -15,6 +15,18 @@ export function createExtensionWorkspaceStore(storage: ObjectStorage) {
   const viewKey = (id: string) => `extension-view/${encodeURIComponent(id)}`;
   const configKey = (owner: string, group: string, level: ConfigurationLevel) => `extension-config/${encodeURIComponent(owner)}/${encodeURIComponent(group)}/${encodeURIComponent(level)}`;
   return {
+    async exportConfiguration(owner: string, group: string, level: ConfigurationLevel) { return storage.get(configKey(owner, group, level)); },
+    async previewMigration(owner: string, group: string, schema: DataSchema, level: ConfigurationLevel) {
+      const row = await storage.get(configKey(owner, group, level));
+      if (!row) throw new Error("没有需要迁移的配置。");
+      const stored = configurationSchema.parse(row.value).values; // future formats remain read-only
+      const values = schemaDefaults(schema) as JsonObject, dropped: string[] = [];
+      for (const [key, value] of Object.entries(stored)) {
+        try { if (!schema.properties?.[key]) throw new Error("removed"); validateSchemaValue(schema.properties[key], value); values[key] = value; } catch { dropped.push(key); }
+      }
+      validateSchemaValue(schema, values);
+      return { revision: row.version, values, dropped };
+    },
     subscribeConfiguration(listener: () => void) { configurationListeners.add(listener); return () => { configurationListeners.delete(listener); }; },
     async listViews(): Promise<ExtensionViewInstance[]> {
       return (await storage.list("extension-view/", "", 200)).flatMap((row) => { const result = viewSchema.safeParse(row.value); return result.success ? [{ ...result.data, dockId: result.data.dockId as ExtensionDockItemId, revision: row.version }] : []; });
@@ -57,7 +69,8 @@ export function createExtensionWorkspaceStore(storage: ObjectStorage) {
       const key = configKey(owner, group, level);
       const old = await storage.get(key);
       if (old) configurationSchema.parse(old.value); // preserve unrecognized newer data
-      await storage.commit([{ key, expected: expectedRevision, row: { key, version: crypto.randomUUID(), value: { schema: "liteasy.extension-config/v1", values } } }]);
+      const backup = `extension-config-history/${encodeURIComponent(owner)}/${encodeURIComponent(group)}/${old?.version}`;
+      await storage.commit([...(old ? [{ key: backup, expected: null, row: { ...old, key: backup } }] : []), { key, expected: expectedRevision, row: { key, version: crypto.randomUUID(), value: { schema: "liteasy.extension-config/v1", values } } }]);
       for (const listener of configurationListeners) listener();
     },
   };

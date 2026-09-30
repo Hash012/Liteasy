@@ -3,7 +3,7 @@ import { boundedJson, parseDataSchema, schemaDefaults, validateSchemaValue, type
 
 export const blockVersion = z.string().regex(/^\d+\.\d+\.\d+$/);
 export const blockTypeId = z.string().regex(/^(?:liteasy|plugin\.[a-z0-9][a-z0-9.-]*)\/[a-zA-Z][a-zA-Z0-9.-]*$/).max(160);
-export const componentNames = ["Stack", "Grid", "Card", "MarkdownView", "Image", "ResourceCard", "Table", "Divider"] as const;
+export const componentNames = ["Stack", "Grid", "Card", "MarkdownView", "Image", "ResourceCard", "Table", "Divider", "Split", "Toolbar", "Tabs", "Status", "EmptyState", "Field", "Dialog", "EvidenceCard", "CitationList", "Timeline", "TreeOutline", "Visualization", "MarkdownEditor", "ResourcePicker"] as const;
 export type BlockComponent = typeof componentNames[number];
 export type ComponentTree = { component: BlockComponent; props?: Record<string, JsonValue>; children?: ComponentTree[] };
 export type DerivedBlockDefinition = {
@@ -22,7 +22,32 @@ export const builtinBlockTypes: ResolvedBlockType[] = ["RichTextBlock", "MediaBl
     templates: [{ component: "MarkdownView", props: { text: { $field: "text" } } }, ...(family === "MediaBlock" ? [{ component: "Image" as const, props: { source: { $field: "image" } } }] : family === "ResourceBlock" ? [{ component: "ResourceCard" as const, props: { path: { $field: "path" } } }] : family === "CollectionBlock" ? [{ component: "Table" as const, props: { rows: { $field: "rows" } } }] : [])] };
 });
 
-const componentProps: Record<BlockComponent, string[]> = { Stack: ["gap"], Grid: ["columns", "gap"], Card: ["title"], MarkdownView: ["text"], Image: ["source", "alt"], ResourceCard: ["path", "title"], Table: ["rows"], Divider: [] };
+const componentProps: Record<BlockComponent, string[]> = { Stack: ["gap"], Grid: ["columns", "gap"], Card: ["title"], MarkdownView: ["text"], Image: ["source", "alt"], ResourceCard: ["path", "title"], Table: ["rows"], Divider: [], Split: [], Toolbar: ["title"], Tabs: ["labels"], Status: ["title", "text"], EmptyState: ["title", "text"], Field: ["title", "text"], Dialog: ["title"], EvidenceCard: ["title", "text", "source"], CitationList: ["title", "items"], Timeline: ["title", "items"], TreeOutline: ["title", "items"], Visualization: ["artifact"], MarkdownEditor: ["path"], ResourcePicker: [] };
+const fieldBinding = z.strictObject({ $field: z.string().regex(/^[a-zA-Z][a-zA-Z0-9_.-]*$/).max(240) });
+const bindable = <T extends z.ZodType>(schema: T) => z.union([schema, fieldBinding]);
+const componentSchemas = {
+  Stack: z.strictObject({ gap: bindable(z.number().min(0).max(32)).optional() }),
+  Grid: z.strictObject({ columns: bindable(z.number().int().min(1).max(6)).optional(), gap: bindable(z.number().min(0).max(32)).optional() }),
+  Card: z.strictObject({ title: bindable(z.string().max(2000)).optional() }),
+  MarkdownView: z.strictObject({ text: bindable(z.string().max(100000)) }),
+  Image: z.strictObject({ source: bindable(z.string().max(8192)), alt: bindable(z.string().max(2000)).optional() }),
+  ResourceCard: z.strictObject({ path: bindable(z.string().max(8192)), title: bindable(z.string().max(2000)).optional() }),
+  Table: z.strictObject({ rows: bindable(z.array(z.array(z.string().max(8000)).max(12)).max(200)) }),
+  Divider: z.strictObject({}), Split: z.strictObject({}), ResourcePicker: z.strictObject({}),
+  Toolbar: z.strictObject({ title: bindable(z.string().max(120)).optional() }),
+  Tabs: z.strictObject({ labels: bindable(z.array(z.string().max(120)).min(1).max(12)) }),
+  Status: z.strictObject({ title: bindable(z.string().max(120)).optional(), text: bindable(z.string().max(8000)) }),
+  EmptyState: z.strictObject({ title: bindable(z.string().max(120)).optional(), text: bindable(z.string().max(8000)) }),
+  Field: z.strictObject({ title: bindable(z.string().max(120)), text: bindable(z.string().max(8000)) }),
+  Dialog: z.strictObject({ title: bindable(z.string().min(1).max(120)) }),
+  EvidenceCard: z.strictObject({ title: bindable(z.string().max(120)), text: bindable(z.string().max(80000)), source: bindable(z.string().max(8192)) }),
+  CitationList: z.strictObject({ title: bindable(z.string().max(120)).optional(), items: bindable(z.array(z.string().max(8000)).max(200)) }),
+  Timeline: z.strictObject({ title: bindable(z.string().max(120)).optional(), items: bindable(z.array(z.string().max(8000)).max(200)) }),
+  TreeOutline: z.strictObject({ title: bindable(z.string().max(120)).optional(), items: bindable(z.array(z.string().max(8000)).max(200)) }),
+  Visualization: z.strictObject({ artifact: bindable(z.json()) }),
+  MarkdownEditor: z.strictObject({ path: bindable(z.string().max(8192)) }),
+};
+export function componentCatalog() { return componentNames.map((id) => ({ id, version: "1.0.0", propsSchema: z.toJSONSchema(componentSchemas[id]), surfaces: ["board", "page", "preview"], keyboard: "Tab traverses host actions; Enter opens links; card handles provide arrow-key movement.", capabilities: ["theme", "typography", "readable-fallback"], budget: { maxTreeNodes: 200, maxDepth: 12 }, events: id === "ResourceCard" || id === "ResourcePicker" ? { open: { path: "LiteasyPath" } } : id === "Tabs" ? { select: { index: "integer" } } : {}, themeTokens: ["colorNeutralForeground1", "colorNeutralBackground1", "colorNeutralStroke2"], fallback: "readable structured data", export: ["markdown", "json"], example: id === "MarkdownView" ? { component: id, props: { text: "$x^2$" } } : id === "Image" ? { component: id, props: { source: { $field: "image" }, alt: "证据图" } } : { component: id, props: Object.fromEntries(componentProps[id].map((key) => [key, { $field: key }])) } })); }
 export function validateComponentTree(value: unknown, fields?: Set<string>): ComponentTree {
   boundedJson(value, 64 * 1024);
   let count = 0;
@@ -37,6 +62,7 @@ export function validateComponentTree(value: unknown, fields?: Set<string>): Com
         if (Object.keys(prop).length !== 1 || typeof prop.$field !== "string" || (fields && !fields.has(prop.$field))) throw new Error("组件绑定指向未知字段。");
       }
     }
+    componentSchemas[node.component].parse(node.props ?? {});
     if (node.children && !Array.isArray(node.children)) throw new Error("children 必须是数组。");
     node.children?.forEach((child) => visit(child, depth + 1)); return node;
   }
@@ -57,6 +83,7 @@ export function createBlockRegistry(definitions: DerivedBlockDefinition[] = []) 
   const pending = new Map<string, DerivedBlockDefinition>();
   for (const definition of definitions) {
     const key = `${definition.id}@${definition.version}`;
+    if (pending.has(key) && JSON.stringify(pending.get(key)) === JSON.stringify(definition)) continue;
     if (pending.has(key) || resolved.has(key)) throw new Error(`组件重复：${key}`);
     pending.set(key, definition);
   }

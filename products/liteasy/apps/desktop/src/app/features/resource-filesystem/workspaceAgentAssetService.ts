@@ -1,3 +1,4 @@
+import { relativeImagePath } from "./attachmentPath";
 import type { AgentArtifactResult } from "../artifacts/artifact.types";
 import { artifactContextText } from "../artifacts/artifactContext";
 import { boardContextSnapshotSchema } from "../context/objectContext";
@@ -39,6 +40,14 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
     signal?.throwIfAborted();
     if (!input.active()) throw new AgentAssetError("scope_changed", "账号已切换，请重新选择资产。");
   };
+  async function relativeImages(basePath: string, relative: string, options?: { signal?: AbortSignal }) {
+    check(options?.signal);
+    const parsed = parseLiteasyPath(basePath, scope);
+    const binding = parsed.kind === "external-file" ? parsed : parsed.kind === "object" ? (await input.repository.getObjectFileBinding(parsed.ref.objectId) ?? await input.repository.getAttachmentBase(parsed.ref.objectId)) : undefined;
+    if (!binding || !input.files?.readImage) throw new AgentAssetError("unavailable", "此资源没有可解析的相对附件目录。");
+    const path = relativeImagePath(binding.path, relative), image = await input.files.readImage(binding.mountId, path);
+    check(options?.signal); return [{ base64: image.base64, mediaType: image.mediaType, label: path.split("/").at(-1) ?? "图片" }];
+  }
   const accepts = (host: string) => (path: string) => new URL(path).hostname === host;
   const readCapabilities = (): AgentAsset["capabilities"] => ["search", "read", ...(input.resolveContext ? ["add_context" as const] : [])];
   const context = input.resolveContext ? (path: string) => input.resolveContext!(path) : undefined;
@@ -64,13 +73,13 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
     return found;
   };
   const describedObjectStat = async (object: Pick<ObjectEnvelope, "objectId" | "title" | "kind" | "revision"> & {
-    paperId?: string; summary?: string; fileBinding?: { mountId: string; path: string };
+    paperId?: string; summary?: string; structuredType?: { id: string; version: string }; fileBinding?: { mountId: string; path: string };
   }, requestedPath?: string): Promise<AgentAsset> => {
     const related = await memberships(new Set([object.objectId]));
     const binding = object.fileBinding;
     const requested = requestedPath ? target(requestedPath) : undefined;
     const selector = requested?.kind === "object" ? requested.ref.selectorId : undefined;
-    return { path: requestedPath ?? objectPath(object.objectId), title: object.title, kind: object.kind, revision: object.revision,
+    return { path: requestedPath ?? objectPath(object.objectId), title: object.title, kind: object.kind, revision: object.revision, ...(object.structuredType ? { structuredType: object.structuredType, summary: "结构化组件：通过 liteasy_block_read 读取字段，liteasy_block_update 按版本修改，保留布局。" } : {}),
       capabilities: ["search", "read", "add_context", ...(["content.note", "workspace.board"].includes(object.kind) && !binding && !selector ? ["write" as const] : [])],
       ...(object.kind === "source.document" ? { summary: object.summary || "摘要尚未提取；正文按需读取。" } : {}),
       ...(object.kind === "workspace.board" ? { summary: "JSON Canvas 白板：read 返回节点与连接；write 使用 replace 提交完整 JSON。保留节点 id 可保持未修改的原始引用；修改卡片会创建派生笔记，原始内容不变。" } : {}),
@@ -84,6 +93,47 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
       summary: [isPaperMetadataReference(object) ? "题录已固定；正文按需读取。" : "", object.content.payload.abstractText?.slice(0, 4000)].filter(Boolean).join("\n") } : {}),
     fileBinding: (await input.repository.describeObject(object.objectId)).fileBinding,
   }, path);
+  const imageExtension = /\.(png|jpe?g|gif|webp)$/i;
+  async function resolveObjectImages(path: string, options?: { signal?: AbortSignal }, resolvingImages = new Set<string>()): Promise<ModelImageInput[]> {
+      const parsed = target(path);
+      if (parsed.kind === "object" && parsed.ref.selectorId) return [];
+      const object = await findObject(path);
+      const descriptors = object.assets.filter((asset) => asset.mediaType.startsWith("image/"));
+      if (descriptors.length > MODEL_IMAGE_LIMITS.count || descriptors.some((asset) => asset.byteLength > MODEL_IMAGE_LIMITS.imageBytes) ||
+        descriptors.reduce((total, asset) => total + asset.byteLength, 0) > MODEL_IMAGE_LIMITS.totalBytes) {
+        throw new AgentAssetError("invalid_request", "图片超出本轮上限，请分批添加或缩小图片。");
+      }
+      const result: ModelImageInput[] = [];
+      for (const descriptor of descriptors) {
+        check(options?.signal);
+        const stored = await input.repository.readAsset(descriptor.assetId);
+        const image = { base64: stored.base64, mediaType: descriptor.mediaType, label: `资料图片：${object.title}`.slice(0, 1000) };
+        validateModelImages([...result, image]);
+        const verified = await stageImage(Uint8Array.from(atob(stored.base64), (character) => character.charCodeAt(0)), descriptor.mediaType);
+        if (verified.sha256 !== descriptor.sha256 || verified.byteLength !== descriptor.byteLength || stored.mediaType !== descriptor.mediaType) {
+          throw new AgentAssetError("revision_conflict", "图片与固定的资产版本不一致，请重新添加。");
+        }
+        result.push(image);
+      }
+      const block = await input.repository.getStructuredBlock(refOf(object));
+      const source = block?.data.image;
+      if (typeof source === "string" && source && !resolvingImages.has(path) && resolvingImages.size < 8) {
+        resolvingImages.add(path);
+        try {
+          if (source.startsWith("liteasy://")) {
+            const imageTarget = target(source);
+            if (imageTarget.kind === "object" && source !== path) result.push(...await resolveObjectImages(source, options, resolvingImages));
+            else if (imageTarget.kind === "external-file" && input.files?.readImage) {
+              const image = await input.files.readImage(imageTarget.mountId, imageTarget.path);
+              result.push({ base64: image.base64, mediaType: image.mediaType, label: object.title });
+            }
+          } else if (!/^[a-z][a-z0-9+.-]*:/i.test(source)) result.push(...await relativeImages(path, source, options));
+        } finally { resolvingImages.delete(path); }
+      }
+      check(options?.signal);
+      validateModelImages(result);
+      return result;
+    }
   const objects: AgentAssetAdapter = {
     id: "workspace-objects", accepts: accepts("objects"),
     async search({ query, limit = 30, signal }) {
@@ -153,30 +203,8 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
       check(options.signal);
       return readAgentAssetText(await objectStat(object, path), text, options);
     },
-    async resolveImages(path, options) {
-      const parsed = target(path);
-      if (parsed.kind === "object" && parsed.ref.selectorId) return [];
-      const object = await findObject(path);
-      const descriptors = object.assets.filter((asset) => asset.mediaType.startsWith("image/"));
-      if (descriptors.length > MODEL_IMAGE_LIMITS.count || descriptors.some((asset) => asset.byteLength > MODEL_IMAGE_LIMITS.imageBytes) ||
-        descriptors.reduce((total, asset) => total + asset.byteLength, 0) > MODEL_IMAGE_LIMITS.totalBytes) {
-        throw new AgentAssetError("invalid_request", "图片超出本轮上限，请分批添加或缩小图片。");
-      }
-      const result: ModelImageInput[] = [];
-      for (const descriptor of descriptors) {
-        check(options?.signal);
-        const stored = await input.repository.readAsset(descriptor.assetId);
-        const image = { base64: stored.base64, mediaType: descriptor.mediaType, label: `资料图片：${object.title}`.slice(0, 1000) };
-        validateModelImages([...result, image]);
-        const verified = await stageImage(Uint8Array.from(atob(stored.base64), (character) => character.charCodeAt(0)), descriptor.mediaType);
-        if (verified.sha256 !== descriptor.sha256 || verified.byteLength !== descriptor.byteLength || stored.mediaType !== descriptor.mediaType) {
-          throw new AgentAssetError("revision_conflict", "图片与固定的资产版本不一致，请重新添加。");
-        }
-        result.push(image);
-      }
-      check(options?.signal);
-      return result;
-    },
+    resolveRelativeImages: relativeImages,
+    resolveImages: resolveObjectImages,
     async write(path, options) {
       const parsed = target(path);
       if (parsed.kind === "object" && parsed.ref.selectorId) throw new AgentAssetError("read_only", "选区是只读引用，请通过笔记完整地址写入。");
@@ -226,18 +254,28 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
     };
     const fileStat = (file: NoteFileSnapshot): AgentAsset => ({
       path: liteasyPath(scope, { kind: "external-file", mountId: file.mountId, path: file.path }),
-      title: file.name, kind: /\.canvas$/i.test(file.path) ? "canvas" : "markdown", revision: file.version ?? "missing",
-      capabilities: [...readCapabilities(), "write"],
+      title: file.name, kind: imageExtension.test(file.path) ? "image" : /\.canvas$/i.test(file.path) ? "canvas" : "markdown", ...(file.version ? { revision: file.version } : {}),
+      capabilities: [...readCapabilities(), ...(!imageExtension.test(file.path) ? ["write" as const] : [])],
       ...(/\.canvas$/i.test(file.path) ? { summary: "JSON Canvas 文件；使用 replace 提交完整且有效的 JSON Canvas。" } : {}),
     });
+    const describeFile = async (path: string) => {
+      const parsed = target(path);
+      if (parsed.kind !== "external-file") throw new AgentAssetError("invalid_path", "请选择文件资产。");
+      if (!imageExtension.test(parsed.path)) return fileSnapshot(path);
+      const file = (await files.listEntries(parsed.mountId, true)).find((entry) => entry.kind === "file" && entry.path === parsed.path);
+      if (!file) throw new AgentAssetError("unavailable", "图片不在已授权的目录中。");
+      return { ...file, version: null, text: `图片：${file.name}\n图片内容通过图像接口按需读取。` };
+    };
     adapters.push({
       id: "mounted-files", accepts: accepts("files"), context,
+      resolveRelativeImages: relativeImages,
+      async resolveImages(path, options) { const parsed = target(path); if (parsed.kind !== "external-file" || !/\.(png|jpe?g|gif|webp)$/i.test(parsed.path) || !files.readImage) return []; check(options?.signal); const image = await files.readImage(parsed.mountId, parsed.path); check(options?.signal); return [{ base64: image.base64, mediaType: image.mediaType, label: parsed.path.split("/").at(-1) ?? "图片" }]; },
       async search({ query, limit = 30, signal }) {
         const rows: AgentAsset[] = [];
         for (const mount of await files.listMounts()) {
           check(signal);
-          for (const file of await files.listEntries(mount.id).catch(() => [])) {
-            if (file.kind !== "file" || !/\.(md|markdown|canvas)$/i.test(file.path)) continue;
+          for (const file of await files.listEntries(mount.id, true).catch(() => [])) {
+            if (file.kind !== "file" || !/\.(md|markdown|canvas|png|jpe?g|gif|webp)$/i.test(file.path)) continue;
             const path = liteasyPath(scope, { kind: "external-file", mountId: mount.id, path: file.path });
             if (!`${file.name} ${file.path} ${path}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())) continue;
             const { revision: _revision, ...asset } = fileStat({ ...file, version: null, text: "" });
@@ -247,9 +285,10 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
         }
         return rows;
       },
-      async stat(path) { return fileStat(await fileSnapshot(path)); },
-      async read(path, options) { const file = await fileSnapshot(path); return readAgentAssetText(fileStat(file), file.text, options); },
+      async stat(path) { return fileStat(await describeFile(path)); },
+      async read(path, options) { const file = await describeFile(path); return readAgentAssetText(fileStat(file), file.text, options); },
       async write(path, options) {
+        if (imageExtension.test(target(path).kind === "external-file" ? new URL(path).pathname : "")) throw new AgentAssetError("read_only", "图片支持读取与加入上下文，请创建派生笔记保存解释。" );
         const file = await fileSnapshot(path);
         if (/\.canvas$/i.test(file.path)) {
           if (options.mode !== "replace") throw new AgentAssetError("invalid_request", "Canvas 请使用 replace 写入完整文档。");

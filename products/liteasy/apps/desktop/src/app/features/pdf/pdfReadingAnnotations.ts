@@ -16,6 +16,7 @@ export type PdfReadingAnnotations = {
   focusedPage: number;
   selectedId?: string;
   guideControls?: ReactNode;
+  extensionActions?(input: { page: number; excerpt: string }): ReactNode;
   create(input: { page: number; excerpt: string; note: string } & ReadingMarkStyle): Promise<void>;
   update(id: string, revision: number, note: string, style?: ReadingMarkStyle): Promise<void>;
   remove(id: string): Promise<void>;

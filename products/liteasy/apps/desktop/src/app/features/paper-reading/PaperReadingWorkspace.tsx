@@ -251,7 +251,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
           <strong>{draft.id ? "编辑批注" : "新建批注"}</strong>
           {draft.excerpt ? <blockquote>{draft.excerpt}</blockquote> : null}
           {draft.excerpt && !draft.id ? <>
-            <PaperSelectionTools disabled={busy || !session.ready || !draft.page}
+            <PaperSelectionTools extensionActions={session.extensionActions?.({ page: Number(draft.page), excerpt: draft.excerpt })} disabled={busy || !session.ready || !draft.page}
               highlight={() => void selectionAction(() => session.create({ page: Number(draft.page), excerpt: draft.excerpt, note, kind: "highlight", color: markStyle?.color ?? "yellow" }), "高亮已保存。")}
               underline={() => void selectionAction(() => session.create({ page: Number(draft.page), excerpt: draft.excerpt, note, kind: "underline", color: markStyle?.color ?? "blue" }), "划线已保存。")}
               copy={() => void selectionAction(() => navigator.clipboard.writeText(draft.excerpt), "已复制选段。")}

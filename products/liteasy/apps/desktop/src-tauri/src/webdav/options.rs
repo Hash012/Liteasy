@@ -20,6 +20,16 @@ pub struct SyncOptions {
     pub external_folders: bool,
     #[serde(default)]
     pub api_keys: bool,
+    #[serde(default)]
+    pub extension_packages: bool,
+    #[serde(default)]
+    pub extension_configuration: bool,
+    #[serde(default)]
+    pub extension_workflows: bool,
+    #[serde(default)]
+    pub extension_runs: bool,
+    #[serde(default)]
+    pub extension_snapshots: bool,
 }
 impl Default for SyncOptions {
     fn default() -> Self {
@@ -31,6 +41,11 @@ impl Default for SyncOptions {
             preferences: true,
             external_folders: false,
             api_keys: false,
+            extension_packages: false,
+            extension_configuration: false,
+            extension_workflows: false,
+            extension_runs: false,
+            extension_snapshots: false,
         }
     }
 }
@@ -38,6 +53,11 @@ impl SyncOptions {
     pub fn includes(&self, path: &str) -> bool {
         if let Some(path) = path.strip_prefix(".liteasy/sync-data/") {
             return match path.split('/').next().unwrap_or("") {
+                "extension-packages" => self.extension_packages,
+                "extension-configuration" => self.extension_configuration,
+                "extension-workflows" => self.extension_workflows,
+                "extension-runs" => self.extension_runs,
+                "extension-snapshots" => self.extension_snapshots,
                 "objects" | "boards" => self.workspace,
                 "external" => self.external_folders,
                 "history" => self.history,
