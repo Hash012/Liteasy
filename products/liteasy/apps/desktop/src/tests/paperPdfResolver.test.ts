@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { discoverPaperPdfUrl, knownPaperPdfUrl, paperPdfIdentity, resolvePaperPdf } from "../app/features/paper-services/paperPdfResolver";
+import { discoverPaperPdfUrl, knownPaperPdfUrl, paperPdfIdentity, resolvePaperPdf, probePaperPdf } from "../app/features/paper-services/paperPdfResolver";
 import { deletePaperServiceKey, savePaperServiceKey } from "../app/features/paper-services/paperServiceTransport";
 
 const doi = "10.1234/memory";
@@ -84,7 +84,7 @@ test("uses configured provider credentials only for the registry, never for PDF 
 
 test("bounded page discovery stops loops, rejects HTML-as-PDF, and cancellation prevents further requests", async () => {
   const fetch = network(() => new Response('<meta name="citation_pdf_url" content="https://publisher.test/paper.pdf">', { headers: { "Content-Type": "application/pdf" } }));
-  expect(await resolvePaperPdf({ id: "paper", pdfUrl: "https://publisher.test/paper.pdf" })).toBeNull();
+  await expect(resolvePaperPdf({ id: "paper", pdfUrl: "https://publisher.test/paper.pdf" })).rejects.toThrow("未返回有效 PDF");
   expect(fetch).toHaveBeenCalledOnce();
   const abort = new AbortController(); abort.abort();
   await expect(resolvePaperPdf({ id: `doi:${doi}` }, { signal: abort.signal })).rejects.toThrow();
@@ -111,4 +111,23 @@ test("availability discovery resolves repository and registry links without down
 test("a partial metadata outage is unknown availability, not a definitive missing PDF", async () => {
   network((url) => url.hostname === "api.crossref.org" ? Response.json({ message: { DOI: doi } }) : new Response(null, { status: 503 }));
   await expect(discoverPaperPdfUrl({ id: `doi:${doi}` })).rejects.toThrow("暂不可用");
+});
+
+
+test.each([403, 429, 503])("does not turn HTTP %s into missing full text", async (status) => {
+  network(() => new Response(null, { status }));
+  const result = await probePaperPdf({ id: "paper", pdfUrl: "https://repo.test/paper.pdf?token=private" });
+  expect(result.status).toBe(status === 503 ? "error" : "blocked");
+  expect(result.attempts?.[0]).toMatchObject({ httpStatus: status, stage: "probe", source: "repo.test", url: "https://repo.test/paper.pdf" });
+  expect(JSON.stringify(result.attempts)).not.toContain("private");
+});
+
+test("probe stops a server that ignores Range and never buffers a whole paper", async () => {
+  const cancel = vi.fn(); let pulls = 0;
+  network((_url, init) => {
+    expect(init?.headers).toMatchObject({ Range: "bytes=0-2097151" });
+    return new Response(new ReadableStream({ pull(controller) { pulls++; const data = new Uint8Array(512 * 1024); if (pulls === 1) data.set(new TextEncoder().encode("%PDF-1.7")); controller.enqueue(data); }, cancel }), { headers: { "Content-Length": "100000000" } });
+  });
+  expect((await probePaperPdf({ id: "arxiv:2402.12482" })).status).toBe("available");
+  expect(cancel).toHaveBeenCalledOnce(); expect(pulls).toBeLessThanOrEqual(6);
 });

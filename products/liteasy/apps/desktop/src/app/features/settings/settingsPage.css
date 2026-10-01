@@ -77,3 +77,9 @@
 .settings-page .agent-settings-badge { border-color: var(--colorNeutralStroke2); border-radius: 4px; background: var(--colorNeutralBackground3); color: var(--colorNeutralForeground2); font-weight: 400; }
 .settings-page .agent-settings-doc-button { border-radius: 4px; background: transparent; border: 0; color: var(--colorBrandForegroundLink); font-weight: 400; }
 .settings-page .agent-settings-doc-button:hover { background: var(--colorNeutralBackground1Hover); }
+
+.recommendation-intelligence-settings { display: grid; gap: 8px; margin: 16px 0; padding: 16px; border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; }
+.recommendation-intelligence-settings p { margin: 0; font-size: 12px; line-height: 1.6; color: var(--colorNeutralForeground2); }
+.recommendation-intelligence-settings summary { cursor: pointer; padding: 8px 0; }
+.recommendation-service-fields { display: grid; gap: 10px; padding: 8px 0; }
+.recommendation-service-fields > div:last-child { display: flex; gap: 8px; flex-wrap: wrap; }

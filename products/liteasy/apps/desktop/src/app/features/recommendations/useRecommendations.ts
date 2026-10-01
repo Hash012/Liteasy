@@ -12,6 +12,7 @@ import {
 } from "./recommendationCacheRuntime";
 import type {
   RecommendationItem,
+  RecommendationRequestDocument,
   RecommendationStyle,
   RecommendationResearchProfile,
   RecommendationStatus
@@ -59,17 +60,18 @@ type UseRecommendationsInput = {
   personalizationVersion?: number;
   researchProfile?: RecommendationResearchProfile;
   selectedPapers: Paper[];
+  selectedDocuments?: RecommendationRequestDocument[];
   workspaceRevision: number;
   workspaceSourceKey: string;
 };
 
 function buildSelectionCacheKey(
-  selectedPapers: Paper[],
+  selectedDocuments: RecommendationRequestDocument[],
   researchProfile?: RecommendationResearchProfile,
   style: RecommendationStyle = "balanced"
 ) {
-  const paperKey = selectedPapers
-    .map((paper) => JSON.stringify(recommendationDocument(paper)))
+  const paperKey = selectedDocuments
+    .map((document) => JSON.stringify(document))
     .sort()
     .join("|");
   const serializedProfile = researchProfile ? JSON.stringify(researchProfile) : "";
@@ -106,11 +108,13 @@ export function useRecommendations({
   personalizationVersion = 0,
   researchProfile,
   selectedPapers,
+  selectedDocuments,
   workspaceRevision,
   workspaceSourceKey
 }: UseRecommendationsInput) {
   const suppressNextCachedMessageRef = useRef(false);
-  const selectionKey = buildSelectionCacheKey(selectedPapers, researchProfile, recommendationStyle);
+  const documents = selectedDocuments ?? selectedPapers.map(recommendationDocument);
+  const selectionKey = buildSelectionCacheKey(documents, researchProfile, recommendationStyle);
   const requestController = useRef<AbortController>();
   const cacheWrites = useRef(new Set<{ key: string; promise: Promise<unknown> }>());
   const [refreshVersion, setRefreshVersion] = useState(0);
@@ -121,7 +125,7 @@ export function useRecommendations({
   const scopeRef = useRef(scopeKey);
   const displayedScope = useRef("");
   scopeRef.current = scopeKey;
-  const sortItems = (items: RecommendationItem[]) => rankRecommendations(items.filter((item) => !hidden.current.ids.has(item.canonicalId ?? item.id)), { style: recommendationStyle, sortMode: recommendationSortMode, selectedDocuments: selectedPapers.map(recommendationDocument) });
+  const sortItems = (items: RecommendationItem[]) => rankRecommendations(items.filter((item) => !hidden.current.ids.has(item.canonicalId ?? item.id)), { style: recommendationStyle, sortMode: recommendationSortMode, selectedDocuments: documents });
   const currentScope = accountSession
       ? {
         personalizationVersion,
@@ -155,7 +159,7 @@ export function useRecommendations({
       return;
     }
 
-    if (selectedPapers.length === 0 && ![...(researchProfile?.topics ?? []), ...(researchProfile?.methods ?? [])].some((term) => term.trim())) {
+    if (documents.length === 0 && ![...(researchProfile?.topics ?? []), ...(researchProfile?.methods ?? [])].some((term) => term.trim())) {
       setRecommendationItems([]);
       setRecommendationPending(false);
       setRecommendationStatus("idle");
@@ -254,7 +258,7 @@ export function useRecommendations({
           controlPlaneEndpoint,
           researchProfile,
           sortMode: recommendationSortMode,
-          selectedDocuments: selectedPapers.map(recommendationDocument),
+          selectedDocuments: documents,
           sessionId: session.sessionId
         });
       } catch (error) {

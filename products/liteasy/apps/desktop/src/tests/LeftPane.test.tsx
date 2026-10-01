@@ -256,10 +256,10 @@ describe("LeftPane", () => {
     expect(panel.queryByText(recommendation.reason)).not.toBeInTheDocument();
     expect(panel.queryByRole("link", { name: "Crossref" })).not.toBeInTheDocument();
     await user.click(row);
-    expect(onInspectRecommendation).toHaveBeenCalledExactlyOnceWith(recommendation);
+    expect(onInspectRecommendation).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ ...recommendation, fullText: { status: "unknown" } }));
     expect(onOpenRecommendation).not.toHaveBeenCalled();
     await user.dblClick(row);
-    expect(onOpenRecommendation).toHaveBeenCalledExactlyOnceWith(recommendation);
+    expect(onOpenRecommendation).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ ...recommendation, fullText: { status: "unknown" } }));
   });
 
   test("uses task-specific pane headers", () => {
@@ -632,7 +632,7 @@ describe("LeftPane", () => {
     await user.click(screen.getByRole("button", { name: "收藏 Recommended paper" }));
 
     expect(onResourceTransfer).toHaveBeenCalledWith(
-      { area: "recommendation", recommendation },
+      { area: "recommendation", recommendation: expect.objectContaining({ ...recommendation, fullText: { status: "unknown" } }) },
       {
         area: "collection",
         expectedRevision: 3,
@@ -728,7 +728,7 @@ describe("LeftPane", () => {
     })} />);
 
     await user.click(screen.getByRole("button", { name: "忽略 Candidate Paper" }));
-    expect(onDismissRecommendation).toHaveBeenCalledWith(recommendation);
+    expect(onDismissRecommendation).toHaveBeenCalledWith(expect.objectContaining({ ...recommendation, fullText: { status: "unknown" } }));
   });
 
   test("disables organization writes when policy state is unavailable", () => {

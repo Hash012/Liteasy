@@ -129,7 +129,7 @@ test("downloads an openly linked PDF without a cloud account or saved provider c
 
 test("never treats publisher HTML as a PDF, even with a PDF content type", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response("<html>Access denied</html>", { headers: { "Content-Type": "application/pdf" } })));
-  await expect(downloadRecommendationPdf({ endpoint: "", recommendation: { ...recommendation, openAccessPdfUrl: "https://publisher.example/open.pdf" } })).resolves.toBeNull();
+  await expect(downloadRecommendationPdf({ endpoint: "", recommendation: { ...recommendation, openAccessPdfUrl: "https://publisher.example/open.pdf" } })).rejects.toThrow("未返回有效 PDF");
 });
 
 test.each(["http://publisher.example/open.pdf", "https://user:password@publisher.example/open.pdf"])("rejects unsafe openly linked PDF URLs before requesting them: %s", async (openAccessPdfUrl) => {

@@ -30,7 +30,7 @@ test("local mode bypasses cloud authentication and metadata upload, caches resul
   const offline = renderHook(() => useKnowledgeSyncController(params));
   await waitFor(() => expect(offline.result.current.model.recommendationPending).toBe(false), { timeout: 3000 });
   expect(offline.result.current.model.recommendationItems).toHaveLength(1);
-  expect(offline.result.current.model.recommendationMessage).toContain("保留本机缓存");
+  expect(offline.result.current.model.recommendationMessage).toContain("显示本机缓存");
   expect(api).not.toHaveBeenCalled();
   await act(async () => { await offline.result.current.actions.dismissRecommendation(offline.result.current.model.recommendationItems[0]); });
   expect(offline.result.current.model.recommendationItems).toHaveLength(0);

@@ -1,3 +1,4 @@
+import { bm25TokenScorer, rrfContribution } from "../../../products/liteasy/packages/recommendation-core/index.mjs";
 import { rankRecommendationStyle, recommendationPublicationDate } from "./recommendationStyle.mjs";
 
 function normalizeRecommendationTitle(value) {
@@ -65,39 +66,11 @@ function normalizeRankingScores(scores) {
 function bm25RankingScores(candidates) {
   if (candidates.length === 0) return new Map();
   const documents = candidates.map((candidate) => rankingTokens(candidate.rankingText));
-  const averageLength = documents.reduce((sum, tokens) => sum + tokens.length, 0) /
-    Math.max(1, documents.length);
-  const documentFrequency = new Map();
-  for (const tokens of documents) {
-    for (const token of new Set(tokens)) {
-      documentFrequency.set(token, (documentFrequency.get(token) ?? 0) + 1);
-    }
-  }
-  const scores = new Map();
-  const k1 = 1.2;
-  const b = 0.75;
-  candidates.forEach((candidate, index) => {
-    const documentTokens = documents[index];
-    const frequencies = new Map();
-    documentTokens.forEach((token) => frequencies.set(token, (frequencies.get(token) ?? 0) + 1));
-    let score = 0;
-    for (const query of candidate.rankingQueries) {
-      for (const token of new Set(rankingTokens(query))) {
-        const frequency = frequencies.get(token) ?? 0;
-        if (frequency === 0) continue;
-        const frequencyAcrossDocuments = documentFrequency.get(token) ?? 0;
-        const inverseDocumentFrequency = Math.log(
-          1 + (candidates.length - frequencyAcrossDocuments + 0.5) /
-            (frequencyAcrossDocuments + 0.5)
-        );
-        const lengthNormalization = frequency + k1 * (
-          1 - b + b * documentTokens.length / Math.max(1, averageLength)
-        );
-        score += inverseDocumentFrequency * frequency * (k1 + 1) / lengthNormalization;
-      }
-    }
-    scores.set(candidate.id, score);
-  });
+  const scorer = bm25TokenScorer(documents);
+  const scores = new Map(candidates.map((candidate, index) => [
+    candidate.id,
+    candidate.rankingQueries.reduce((sum, query) => sum + scorer.scoreAt(index, rankingTokens(query)), 0)
+  ]));
   return normalizeRankingScores(scores);
 }
 
@@ -176,7 +149,7 @@ function fuseRecommendationRanks(candidates) {
         const ranked = route.ranks.get(candidate.id);
         if (!ranked) return [];
         return [{
-          contribution: Number((route.weight / (recommendationRrfK + ranked.rank)).toFixed(6)),
+          contribution: Number((rrfContribution(route.weight, ranked.rank, recommendationRrfK)).toFixed(6)),
           id: route.id,
           rank: ranked.rank,
           score: ranked.score,
@@ -185,7 +158,7 @@ function fuseRecommendationRanks(candidates) {
       });
       const rawScore = candidateRoutes.reduce((sum, route) => sum + route.contribution, 0);
       const maximumScore = candidateRoutes.reduce(
-        (sum, route) => sum + route.weight / (recommendationRrfK + 1),
+        (sum, route) => sum + rrfContribution(route.weight, 1, recommendationRrfK),
         0
       );
       const fusionScore = Number((maximumScore > 0 ? rawScore / maximumScore : 0).toFixed(3));

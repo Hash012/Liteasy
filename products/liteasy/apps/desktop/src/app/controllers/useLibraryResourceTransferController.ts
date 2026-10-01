@@ -1,3 +1,4 @@
+import { importDownloadedPdf, releaseDownloadedPdf } from "../features/paper-services/paperFullTextTransport";
 import { useCallback } from "react";
 import type { RecommendationItem } from "../features/recommendations/recommendation.types";
 import { downloadRecommendationPdf } from "../features/recommendations/recommendationPdfClient";
@@ -89,6 +90,7 @@ export function useLibraryResourceTransferController(input: Input) {
       const pdf = await downloadRecommendationPdf({
         endpoint: input.endpoint,
         recommendation: source.recommendation,
+        nativeDownload: target.area === "local",
         transport: input.transport
       });
       const metadata = {
@@ -100,7 +102,10 @@ export function useLibraryResourceTransferController(input: Input) {
         title: source.recommendation.title
       };
       if (target.area === "local") {
-        if (pdf) {
+        try {
+        if (pdf?.downloadId) {
+          await importDownloadedPdf(pdf.downloadId, sanitizeExternalPdfFileName(source.recommendation.title), target.localFolderPath);
+        } else if (pdf) {
           await persistPdfByteStream({
             fileName: sanitizeExternalPdfFileName(source.recommendation.title),
             stream: new Blob([pdf.bytes.slice().buffer], { type: "application/pdf" }).stream(),
@@ -111,6 +116,7 @@ export function useLibraryResourceTransferController(input: Input) {
         }
         await input.refreshLocalLibrary();
         await input.onRecommendationSaved(source.recommendation);
+        } finally { if (pdf?.downloadId) await releaseDownloadedPdf(pdf.downloadId); }
         return;
       }
       const client = createCloudLibraryStorageClient({ endpoint: input.endpoint });

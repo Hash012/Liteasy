@@ -1,5 +1,5 @@
 import { ExtensionLibraryColumns } from "../extensions/ExtensionMetadata";
-import { Tooltip } from "@fluentui/react-components";
+import { ResourceTagChips } from "../resource-tags/ResourceTagChips";
 import type { ReadingCatalogEntry } from "./readingCatalog.types";
 import { libraryEntryTags, type LibraryTag } from "./libraryAssetMetadata";
 
@@ -15,19 +15,9 @@ export function compactAuthorName(fullName: string) {
 }
 
 export function LibraryTagChips({ entry, onSelect, limit = 4 }: { entry: ReadingCatalogEntry; onSelect?: (tag: LibraryTag) => void; limit?: number }) {
-  const tags = libraryEntryTags(entry);
-  return <span className="library-tag-chips" aria-label={`${entry.title} 的分类与标签`}>
-    {tags.slice(0, limit).map((tag) => {
-      const title = `${kindLabel[tag.kind]}：${tag.label}`;
-      const className = `library-tag-chip library-tag-${tag.kind}`;
-      const label = tag.kind === "author" ? compactAuthorName(tag.label) : tag.label;
-      const key = `${tag.kind}:${tag.value}`;
-      const chip = onSelect ? <button type="button" className={className} title={title} aria-label={title}
-        onClick={(event) => { event.stopPropagation(); onSelect(tag); }}>{label}</button>
-        : <span className={className} title={title} tabIndex={tag.kind === "author" ? 0 : undefined}>{label}</span>;
-      return <Tooltip key={key} content={title} relationship="description">{chip}</Tooltip>;
-    })}
-    {tags.length > limit ? <span className="library-tags-overflow" title={tags.slice(limit).map((tag) => `${kindLabel[tag.kind]}：${tag.label}`).join("\n")}>+{tags.length - limit}</span> : null}
+  const tags = libraryEntryTags(entry).map((tag) => ({ ...tag,
+    description: `${kindLabel[tag.kind]}：${tag.label}`, compactLabel: tag.kind === "author" ? compactAuthorName(tag.label) : tag.label }));
+  return <ResourceTagChips className="library-tag-chips" label={`${entry.title} 的分类与标签`} tags={tags} limit={limit} onSelect={onSelect}>
     <ExtensionLibraryColumns entry={entry} />
-  </span>;
+  </ResourceTagChips>;
 }

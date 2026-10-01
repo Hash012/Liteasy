@@ -36,7 +36,7 @@ export const settingsSections = [
   { id: "local-mcp", category: "ai", title: "本机 MCP · Codex", description: "将 Liteasy 研究资产接入自己的 AI 工作流。", keywords: "Windows MCP Codex 本机 连接 读写 笔记 白板 资产 STDIO", keys: [] },
   { id: "papers", category: "papers", title: "论文解析与薄读", description: "选择薄读方式、元信息来源和扫描件识别语言。", keywords: "OCR 识别 扫描 PDF 元数据 DOI Crossref OpenAlex Semantic Scholar MinerU 提取 快速 严谨",
     keys: ["thin_reading.mode", "papers.metadata_provider", "papers.metadata_endpoint", "papers.mineru_mode", "papers.mineru_endpoint", "import.ocr_language"] },
-  { id: "recommendations", category: "papers", title: "论文推荐", description: "按研究习惯发现前沿进展、经典文献和相邻领域。", keywords: "联网推荐 风格 前沿 经典 均衡 跨域 探索 离线 本地 自备 API 画像",
+  { id: "recommendations", category: "papers", title: "论文推荐", description: "按研究习惯发现前沿进展、经典文献和相邻领域。", keywords: "联网推荐 风格 前沿 经典 均衡 跨域 探索 离线 本地 自备 API 画像 批注 向量 embedding reranker 重排 隐私 索引",
     keys: ["papers.local_mode", "profile.local_enabled", "network.recommendation.enabled", "network.recommendation.style"] },
   { id: "data", category: "storage", title: "数据保存位置", description: "查看和迁移 Liteasy 的本地数据目录。", keywords: "路径 文件夹 安装目录 LiteasyData 重启 聊天 笔记 生成内容", keys: [] },
   { id: "library", category: "storage", title: "文献库与备份", description: "管理文献库目录、导入旧库或创建本地备份。", keywords: "路径 保存位置 文件夹 迁移 备份 backup library 本地", keys: [] },

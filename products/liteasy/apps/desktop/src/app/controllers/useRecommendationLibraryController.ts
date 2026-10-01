@@ -1,3 +1,4 @@
+import { importDownloadedPdf, releaseDownloadedPdf } from "../features/paper-services/paperFullTextTransport";
 import { useEffect, useRef, useState } from "react";
 import { createLocalLibraryClient } from "../features/library/localLibraryClient";
 import { createLocalLibraryFolder, persistPdfByteStream } from "../features/library/libraryFileSystemClient";
@@ -66,9 +67,10 @@ export function useRecommendationLibraryController(input: {
       assertCurrent();
       const initialSnapshot = await createLocalLibraryClient()();
       assertCurrent();
-      const pdf = await downloadRecommendationPdf({ endpoint: input.endpoint, transport: input.transport, service: input.service, recommendation: item, signal });
-      assertCurrent();
+      const pdf = await downloadRecommendationPdf({ endpoint: input.endpoint, transport: input.transport, service: input.service, recommendation: item, signal, nativeDownload: true, onProgress: options.onProgress });
       if (!pdf) throw new Error("已查询全文源，暂未提供可下载的开放 PDF。可打开论文网站查看机构订阅或作者提供的版本。");
+      try {
+      assertCurrent();
       const importedItem = { ...item, ...pdf.metadata };
       let snapshot = await createLocalLibraryClient()();
       assertCurrent();
@@ -87,7 +89,7 @@ export function useRecommendationLibraryController(input: {
       assertCurrent();
       if (!folder) throw new Error("无法建立保存目录，请刷新文献库后重试。");
       const wasExisting = snapshot.entries.some((entry) => entry.contentHash?.replace(/^sha256:/, "") === pdf.contentHash);
-      const imported = await persistPdfByteStream({ fileName: sanitizeExternalPdfFileName(importedItem.title),
+      const imported = pdf.downloadId ? await importDownloadedPdf(pdf.downloadId, sanitizeExternalPdfFileName(importedItem.title), folder.path) : await persistPdfByteStream({ fileName: sanitizeExternalPdfFileName(importedItem.title),
         stream: new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(pdf.bytes); controller.close(); } }),
         signal, targetFolderPath: folder.path, onDuplicate: () => false });
       assertCurrent(true);
@@ -106,6 +108,7 @@ export function useRecommendationLibraryController(input: {
         ? `文献已在本地库中：${displayPath(entry.path)}`
         : `已下载《${importedItem.title}》到 ${displayPath(folder.path)}。${metadataWarning}`;
       return { paperId: entry.id, title: importedItem.title, filePath: displayPath(entry.path || folder.path), duplicate: wasExisting, message };
+      } finally { if (pdf.downloadId) await releaseDownloadedPdf(pdf.downloadId); }
     });
     queue.current = task;
     return task;
@@ -114,7 +117,7 @@ export function useRecommendationLibraryController(input: {
     const key = JSON.stringify([input.scopeKey, item.id, options]);
     const existing = pending.current.get(key);
     if (existing) return existing;
-    const task = importPaper(item, options).then((result) => result.message).finally(() => pending.current.delete(key));
+    const task = importPaper(item, options, options.signal).then((result) => result.message).finally(() => pending.current.delete(key));
     pending.current.set(key, task);
     return task;
   }

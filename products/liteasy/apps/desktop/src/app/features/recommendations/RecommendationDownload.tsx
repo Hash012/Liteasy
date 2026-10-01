@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, Input, Select } from "@fluentui/react-components";
 import { ArrowDownloadRegular } from "@fluentui/react-icons";
 import type { LocalLibrarySnapshot } from "../library/localLibrary.types";
@@ -11,6 +11,8 @@ export type DownloadRecommendation = (item: RecommendationItem, options?: Recomm
 export function RecommendationDownload({ item, locations, onDownload }: {
   item: RecommendationItem; locations?: RecommendationLocations | null; onDownload: DownloadRecommendation;
 }) {
+  const task = useRef<AbortController>();
+  useEffect(() => () => task.current?.abort(), []);
   const [target, setTarget] = useState("");
   const [folder, setFolder] = useState("");
   const [busy, setBusy] = useState(false);
@@ -29,11 +31,14 @@ export function RecommendationDownload({ item, locations, onDownload }: {
         onChange={(_, data) => setFolder(data.value)} /> : null}
     </> : null}
     <Button appearance="primary" icon={<ArrowDownloadRegular />} disabled={busy} onClick={() => {
+      task.current = new AbortController();
       setBusy(true); setFailed(false); setMessage("正在查找可用全文并下载 PDF…");
-      void onDownload(item, { targetFolderPath: target || undefined, newFolderName: folder.trim() || undefined })
+      void onDownload(item, { targetFolderPath: target || undefined, newFolderName: folder.trim() || undefined, signal: task.current.signal,
+        onProgress: ({ received, total }) => setMessage(`已接收 ${(received / 1048576).toFixed(1)} MB${total ? ` / ${(total / 1048576).toFixed(1)} MB` : ""}`) })
         .then(setMessage, (error: unknown) => { setFailed(true); setMessage(error instanceof Error ? error.message : "下载失败，请重试。"); })
         .finally(() => setBusy(false));
     }}>{busy ? "正在下载…" : "下载 PDF 并保存"}</Button>
+    {busy ? <Button appearance="subtle" onClick={() => task.current?.abort()}>取消下载</Button> : null}
     <p className="recommendation-muted">自动查找论文网站与开放全文源，下载后保存到本地文献库。</p>
     {message ? <p role={failed ? "alert" : "status"}>{message}</p> : null}
   </section>;

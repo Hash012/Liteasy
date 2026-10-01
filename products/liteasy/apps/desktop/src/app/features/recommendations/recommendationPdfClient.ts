@@ -1,7 +1,6 @@
 import { loadStoredAccountSession } from "../account/accountSessionStorage";
 import {
   downloadExternalPdf,
-  type DownloadedExternalPdf
 } from "../library/externalPdfDownload";
 import type { ModelTransport, ModelTransportResponse } from "../models/modelHttpClient";
 import type { RecommendationItem } from "./recommendation.types";
@@ -40,6 +39,8 @@ export async function downloadRecommendationPdf(input: {
   transport?: ModelTransport;
   service?: PaperServiceConfig;
   signal?: AbortSignal;
+  nativeDownload?: boolean;
+  onProgress?: (value: import("../paper-services/paperFullTextTransport").FullTextProgress) => void;
 }): Promise<ResolvedPaperPdf | null> {
   const signal = input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(90_000)]) : AbortSignal.timeout(90_000);
   signal.throwIfAborted();
@@ -48,25 +49,26 @@ export async function downloadRecommendationPdf(input: {
   // the gate for public papers or users who are not signed in.
   if (!item.openAccessPdfUrl && item.openAccessAvailable && input.endpoint && (input.transport || loadStoredAccountSession()?.sessionId)) {
     try {
-      const granted = await downloadGrantedPdf({ ...input, signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]) });
+      const granted = await downloadGrantedPdf({ ...input, signal });
       signal.throwIfAborted();
       if (granted) return granted;
     } catch { signal.throwIfAborted(); }
   }
   return resolvePaperPdf({ id: item.canonicalId || item.id, doi: item.identityResolution?.doi,
-    arxivId: item.identityResolution?.arxivId, url: item.sourceUrl, pdfUrl: item.openAccessPdfUrl }, { service: input.service, signal })
+    arxivId: item.identityResolution?.arxivId, url: item.sourceUrl, pdfUrl: item.openAccessPdfUrl }, { service: input.service, signal, nativeDownload: input.nativeDownload, onProgress: input.onProgress })
     .then((pdf) => pdf ? { ...pdf, sourceId: item.id } : null);
 }
 
 async function downloadGrantedPdf(input: {
   endpoint: string; recommendation: RecommendationItem; transport?: ModelTransport; signal?: AbortSignal;
-}): Promise<DownloadedExternalPdf | null> {
-  const transport: ModelTransport = (request) => (input.transport ?? defaultTransport)({ ...request, signal: input.signal });
+  service?: PaperServiceConfig; nativeDownload?: boolean; onProgress?: (value: import("../paper-services/paperFullTextTransport").FullTextProgress) => void;
+}): Promise<ResolvedPaperPdf | null> {
+  const transport: ModelTransport = (request) => (input.transport ?? defaultTransport)({ ...request, signal: request.signal ?? input.signal });
   const grantResponse = await transport({
     body: JSON.stringify({ candidateId: input.recommendation.id }),
     headers: { "Content-Type": "application/json" },
     method: "POST",
-    signal: input.signal,
+    signal: input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000),
     url: `${input.endpoint.replace(/\/+$/, "")}/v1/recommendations/pdf-grant`
   });
   const grantPayload = await grantResponse.json();
@@ -84,6 +86,7 @@ async function downloadGrantedPdf(input: {
   if (!isGrant(grantPayload) || grantPayload.sourceId !== input.recommendation.id) {
     throw new Error("开放全文授权返回的数据无效。");
   }
+  if (input.nativeDownload) return resolvePaperPdf({ id: input.recommendation.id, pdfUrl: grantPayload.fullTextUrl }, { nativeDownload: true, service: input.service, signal: input.signal, onProgress: input.onProgress });
   return downloadExternalPdf({
     endpoint: input.endpoint,
     source: {

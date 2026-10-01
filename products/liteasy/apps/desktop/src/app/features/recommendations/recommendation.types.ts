@@ -1,8 +1,14 @@
 export type RecommendationStyle = "balanced" | "frontier" | "classic" | "exploratory";
 
-export type RecommendationDownloadOptions = { targetFolderPath?: string; newFolderName?: string };
+export type RecommendationDownloadOptions = { targetFolderPath?: string; newFolderName?: string; signal?: AbortSignal; onProgress?: (value: { received: number; total?: number }) => void };
 
 export type RecommendationItem = {
+  saved?: boolean;
+  resourcePath?: string;
+  resourceRevision?: string;
+  keywordScores?: Record<string, number>;
+  contextEvidence?: import("../../../../../../packages/recommendation-core/index.mjs").Evidence[];
+  fullText?: import("../paper-services/paperPdfResolver").PaperFullTextAvailability;
   citationCount?: number;
   publishedAt?: string;
   rankingStyle?: RecommendationStyle;
@@ -126,6 +132,8 @@ export type RecommendationRequestDocument = {
 };
 
 export type RecommendationResearchProfile = {
+  projects?: string[];
+  familiarity?: string[];
   datasets: string[];
   languages: string[];
   methods: string[];

@@ -635,3 +635,17 @@ describe("useRecommendations", () => {
     expect(result.current.recommendationStatus).toBe("ready");
   });
 });
+
+test("generic asset revisions use bounded production-compatible cache keys without exposing note text", async () => {
+  const get = vi.fn(async (_scope: RecommendationCacheScope) => ({ cacheHit: false, recommendations: [] }));
+  const fetch = vi.fn(async () => [recommendation("one")]);
+  const input = recommendationInput({ recommendationCacheDeps: { get, clear: vi.fn(), put: vi.fn(async () => ({ cachedAt: "", ok: true })) }, recommendationGeneratorDeps: { fetch } });
+  const hook = renderHook(({ abstract }) => useRecommendations({ ...input, selectedDocuments: [{ id: "asset", title: "Database note", abstract }] }), { initialProps: { abstract: "private note revision one" } });
+  await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+  const first = get.mock.calls[0][0].selectionKey;
+  expect(first).toMatch(/^selection:[a-f0-9]{8}$/);
+  hook.rerender({ abstract: "private note revision two" });
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  expect(get.mock.calls[1][0].selectionKey).toMatch(/^selection:[a-f0-9]{8}$/);
+  expect(get.mock.calls[1][0].selectionKey).not.toBe(first);
+});

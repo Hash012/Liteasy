@@ -1,6 +1,6 @@
 [package]
 name = "liteasy-desktop"
-version = "0.1.27"
+version = "0.1.28"
 edition = "2021"
 
 [build-dependencies]
@@ -11,7 +11,7 @@ liteasy-annotation-sync = { path = "../../../packages/annotation-sync" }
 ring = "0.17.14"
 tauri-plugin-deep-link = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.32", features = ["bundled", "hooks"] }
 base64 = "0.22"
 chrono = "0.4.44"
 keyring = "4.1.6"
@@ -25,6 +25,7 @@ notify = "8"
 rfd = "0.15"
 url = "2.5.8"
 webbrowser = { version = "1.2.4", features = ["hardened"] }
+sqlite-vec = "=0.1.9"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }

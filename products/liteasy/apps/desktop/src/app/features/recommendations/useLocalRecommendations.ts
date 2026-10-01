@@ -1,3 +1,4 @@
+import type { AgentAssetService } from "../resource-filesystem/agentAssetService";
 import { personalizeRecommendationOrder } from "./recommendationPersonalization";
 import { hasReadableRecommendationMetadata } from "./recommendationMetadataValidation";
 import { useEffect, useRef, useState } from "react";
@@ -9,17 +10,24 @@ import { rankRecommendations } from "./recommendationRanking";
 import { fetchLocalRecommendations } from "./localRecommendationClient";
 import { resolveLocalAccountKey } from "../library/localAccountKey";
 import { hasRecommendationDescription, recommendationDocument } from "./recommendationSeed";
+import type { RecommendationContext } from "./recommendationContext";
+import { defaultRecommendationPreferences, type RecommendationPreferences } from "./recommendationPreferences";
+import { rankContextRecommendations } from "./recommendationHybridPipeline";
 function read<T>(key: string, fallback: T): T { try { const value: unknown = JSON.parse(localStorage.getItem(key) ?? "null"); return (Array.isArray(value) ? value : fallback) as T; } catch { return fallback; } }
-export function useLocalRecommendations(input: { enabled: boolean; config?: PaperServiceConfig; papers: Paper[]; profile?: RecommendationResearchProfile;
+type Feedback = { id: string; action: "saved" | "dismissed"; at: number };
+export function useLocalRecommendations(input: { assets?: AgentAssetService; enabled: boolean; config?: PaperServiceConfig; papers: Paper[]; profile?: RecommendationResearchProfile;
+  context?: RecommendationContext; contextPending?: boolean; preferences?: RecommendationPreferences; scopeId?: string;
   workspace: string; style: RecommendationStyle; sort: SettingsState["network.recommendation.sort_mode"] }) {
+  const preferences = input.preferences ?? defaultRecommendationPreferences;
   const scope = `${resolveLocalAccountKey()}:${input.workspace}`;
   const cacheKey = `liteasy.local-recommendations.v1:${scope}`;
-  const feedbackKey = `liteasy.local-recommendation-feedback.v1:${scope}`;
-  const documents = input.papers.slice(0, 2).map(recommendationDocument).filter(hasRecommendationDescription);
-  // Saved reading-interest words can themselves be old filenames/acronyms. They
-  // must not reopen a broad, unrelated search beside a selected verified paper.
-  const queries = documents.length ? documents : [...new Set([...(input.profile?.topics ?? []).slice(0, 3), ...(input.profile?.methods ?? []).slice(0, 1), ...(input.profile?.datasets ?? []).slice(0, 1)].filter((query) => query.trim()))].slice(0, 3);
-  const signature = JSON.stringify([scope, input.enabled, input.config, queries, input.style, input.sort, input.profile]);
+  const feedbackKey = `liteasy.local-recommendation-feedback.v2:${scope}`;
+  const oldFeedbackKey = `liteasy.local-recommendation-feedback.v1:${scope}`;
+  const documents = (input.context?.documents ?? input.papers.map(recommendationDocument)).filter(hasRecommendationDescription);
+  const publicDocuments = documents.filter((document) => !input.context?.views.find((view) => view.id === document.id)?.private || preferences.sendPrivateText);
+  const queries = publicDocuments.length ? [...publicDocuments, ...(preferences.sendPrivateText && preferences.useAnnotations ? input.context?.views.filter((view) => view.kind === "annotation" && view.provenance === "user-note").slice(0, 3).map((view) => ({ id: view.id, title: view.title, abstract: view.text })) ?? [] : [])]
+    : documents.length || !preferences.useProfile || !preferences.sendPrivateText ? [] : [...new Set([...(input.profile?.topics ?? []).slice(0, 3), ...(input.profile?.methods ?? []).slice(0, 1), ...(input.profile?.datasets ?? []).slice(0, 1)].filter((query) => query.trim()))].slice(0, 3);
+  const signature = JSON.stringify([scope, input.enabled, input.contextPending, input.config, queries, input.style, input.sort, input.profile, input.context, preferences]);
   const latest = useRef(signature); latest.current = signature;
   const controller = useRef<AbortController>();
   const [refresh, setRefresh] = useState(0);
@@ -28,30 +36,44 @@ export function useLocalRecommendations(input: { enabled: boolean; config?: Pape
     const abort = new AbortController(); controller.current = abort;
     const active = () => !abort.signal.aborted && latest.current === signature;
     const update = (next: Partial<typeof state>) => { if (active()) setState((current) => ({ ...current, signature, ...next })); };
+    const feedback = () => read<Feedback[]>(feedbackKey, []).filter((row) => row && typeof row.id === "string" && ["saved", "dismissed"].includes(row.action));
     const filter = (items: RecommendationItem[]) => {
-      const hidden = new Set(read<string[]>(feedbackKey, []));
-      const ranked = rankRecommendations(items.filter((item) => !hidden.has(item.canonicalId ?? item.id)), { style: input.style, sortMode: input.sort, selectedDocuments: input.papers.map(recommendationDocument) });
-      return input.sort === "retrieved_at" ? ranked : personalizeRecommendationOrder(ranked, input.profile);
+      const history = feedback(), hidden = new Set([...read<string[]>(oldFeedbackKey, []), ...history.filter((row) => row.action === "dismissed").map((row) => row.id)]);
+      const saved = new Set(history.filter((row) => row.action === "saved").map((row) => row.id));
+      const ranked = rankRecommendations(items.filter((item) => !hidden.has(item.canonicalId ?? item.id)).map((item) => saved.has(item.canonicalId ?? item.id) ? { ...item, saved: true } : item), { style: input.style, sortMode: input.sort, selectedDocuments: documents });
+      return preferences.hybridEnabled || input.sort === "retrieved_at" ? ranked : personalizeRecommendationOrder(ranked, preferences.useProfile ? input.profile : undefined);
     };
     if (!input.enabled) { update({ items: [], pending: false, status: "disabled", message: "联网推荐已关闭。" }); return () => abort.abort(); }
-    if (!queries.length) { update({ items: [], pending: false, status: "idle", message: "勾选论文或在个人中心填写研究兴趣；开启本机画像后也可根据阅读记录推荐。" }); return () => abort.abort(); }
+    if (input.contextPending) { update({ items: [], pending: true, status: "loading", message: "正在准备文献与相关批注…" }); return () => abort.abort(); }
+    if (!queries.length && !input.context?.views.length) { update({ items: [], pending: false, status: "idle", message: "选择文献或在个人中心填写研究兴趣，即可获取关联推荐。" }); return () => abort.abort(); }
     const cache = read<{ key: string; items: RecommendationItem[] }[]>(cacheKey, []);
-    const cacheId = JSON.stringify(["bibliographic-v3", input.config, queries, input.style]);
+    const cacheId = JSON.stringify(["bibliographic-v4", input.config, queries, input.style]);
     const rawCached = cache.find((entry) => entry?.key === cacheId)?.items;
-    const cached = Array.isArray(rawCached) ? rawCached.filter((item) => hasReadableRecommendationMetadata(item) && item && typeof item.id === "string" && typeof item.title === "string" && typeof item.relevanceScore === "number") : [];
-    update({ items: filter(cached), pending: true, status: cached.length ? "ready" : "loading", message: cached.length ? "已显示本机缓存，正在更新…" : "正在直连文献 API…" });
+    const valid = (items: unknown) => Array.isArray(items) ? items.filter((item) => hasReadableRecommendationMetadata(item) && item && typeof item.id === "string" && typeof item.title === "string" && typeof item.relevanceScore === "number") as RecommendationItem[] : [];
+    const cached = valid(rawCached);
+    update({ items: filter(cached), pending: true, status: cached.length ? "ready" : "loading", message: cached.length ? "已显示本机缓存，正在更新…" : "正在查找关联文献…" });
     const timer = setTimeout(() => { void (async () => {
+      let items = cached, notice = "";
       try {
-        if (!input.config) throw new Error("请在设置 → 文献服务选择自备 API，并填写地址与密钥。云端元信息不适用于本地文献模式。");
-        if (navigator.onLine === false) throw new Error("当前没有网络连接");
-        const items = await fetchLocalRecommendations(input.config, queries, input.style, abort.signal);
+        if (queries.length && navigator.onLine !== false) {
+          if (!input.config) throw new Error("请在设置 → 文献服务选择自备 API，并填写地址与密钥。");
+          items = await fetchLocalRecommendations(input.config, queries, input.style, abort.signal, { citations: preferences.hybridEnabled, onCandidates: (partial) => update({ items: filter(partial), status: "ready", message: "正在补充引用关系与关联匹配…" }) });
+          if (!active()) return;
+          try { localStorage.setItem(cacheKey, JSON.stringify([{ key: cacheId, items }, ...cache.filter((entry) => entry?.key !== cacheId)].slice(0, 8))); }
+          catch { notice = "本机缓存保存失败，请检查存储空间。"; }
+        } else notice = queries.length ? "当前离线，显示本机缓存。" : "笔记正文仅用于本地匹配；可在推荐设置中允许发送个性化内容以扩展联网检索。";
+      } catch (error) { if (!active()) return; notice = `联网更新暂不可用，已保留缓存。${String(error)}`; }
+      update({ items: filter(items), status: items.length ? "ready" : "loading", message: preferences.hybridEnabled ? "题录已就绪，正在结合阅读关注排序…" : notice });
+      try {
+        if (preferences.hybridEnabled && input.context?.views.length) {
+          const result = await rankContextRecommendations({ assets: input.assets, items: filter(items), context: input.context, preferences, scope: input.scopeId || "local", workspace: input.workspace, style: input.style, signal: abort.signal, active });
+          items = result.items; notice = [notice, result.warning].filter(Boolean).join(" ");
+        }
         if (!active()) return;
-        let notice = "";
-        try { localStorage.setItem(cacheKey, JSON.stringify([{ key: cacheId, items }, ...cache.filter((entry) => entry?.key !== cacheId)].slice(0, 8))); }
-        catch { notice = "本机缓存保存失败，请检查存储空间。"; }
-        update({ items: filter(items), status: "ready", message: `已获取 ${items.length} 条推荐。${notice}` });
-      } catch (failure) { update({ items: filter(cached), status: cached.length ? "ready" : "error", message: `${cached.length ? "已保留本机缓存；" : ""}${String(failure)}` }); }
-      finally { update({ pending: false }); }
+        const selected = filter(items);
+        update({ items: selected, status: selected.length || !notice ? "ready" : "error", pending: false,
+          message: [`已获取 ${selected.length} 条推荐。`, notice, ...(input.context?.warnings ?? [])].filter(Boolean).join(" ") });
+      } catch (error) { update({ items: filter(items), pending: false, status: items.length ? "ready" : "error", message: String(error) }); }
     })(); }, 350);
     return () => { clearTimeout(timer); abort.abort(); };
   }, [signature, refresh]);
@@ -59,11 +81,11 @@ export function useLocalRecommendations(input: { enabled: boolean; config?: Pape
   return { recommendationItems: current.items, recommendationStatus: current.status, recommendationPending: current.pending, recommendationMessage: current.message,
     refreshRecommendations: () => setRefresh((value) => value + 1),
     clearRecommendationCache: async () => { controller.current?.abort(); localStorage.removeItem(cacheKey); setState({ signature, items: [], pending: false, status: "idle", message: "已清除本机推荐缓存。" }); },
-    recordRecommendationFeedback: async (candidate: RecommendationItem, _action: "saved" | "dismissed") => {
-      const ids = read<string[]>(feedbackKey, []); const id = candidate.canonicalId ?? candidate.id;
-      try { localStorage.setItem(feedbackKey, JSON.stringify([...ids.filter((value) => value !== id), id].slice(-500))); }
+    recordRecommendationFeedback: async (candidate: RecommendationItem, action: "saved" | "dismissed") => {
+      const rows = read<Feedback[]>(feedbackKey, []); const id = candidate.canonicalId ?? candidate.id;
+      try { localStorage.setItem(feedbackKey, JSON.stringify([...rows.filter((value) => value.id !== id), { id, action, at: Date.now() }].slice(-500))); }
       catch { setState((current) => ({ ...current, message: "推荐反馈保存失败，请检查存储空间。" })); return false; }
-      setState((current) => ({ ...current, items: current.items.filter((item) => (item.canonicalId ?? item.id) !== id), message: "反馈已保存到本机。" }));
+      setState((current) => ({ ...current, items: action === "dismissed" ? current.items.filter((item) => (item.canonicalId ?? item.id) !== id) : current.items.map((item) => (item.canonicalId ?? item.id) === id ? { ...item, saved: true } : item), message: "反馈已保存到本机。" }));
       return true;
     },
   };

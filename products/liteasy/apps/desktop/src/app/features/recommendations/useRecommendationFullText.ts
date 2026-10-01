@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { discoverPaperPdfUrl, knownPaperPdfUrl, type PaperPdfSource } from "../paper-services/paperPdfResolver";
+import { probePaperPdf, knownPaperPdfUrl, type PaperFullTextAvailability, type PaperPdfSource } from "../paper-services/paperPdfResolver";
 import type { PaperServiceConfig } from "../paper-services/paperServiceTransport";
+import { resolveLocalAccountKey } from "../library/localAccountKey";
 import type { RecommendationItem } from "./recommendation.types";
 
 function sourceOf(item: RecommendationItem): PaperPdfSource {
@@ -9,47 +10,52 @@ function sourceOf(item: RecommendationItem): PaperPdfSource {
 }
 export function withKnownRecommendationPdf(item: RecommendationItem) {
   const url = knownPaperPdfUrl(sourceOf(item));
-  return url ? { ...item, openAccessAvailable: true, openAccessPdfUrl: url } : item;
+  return url ? { ...item, openAccessPdfUrl: url } : item;
 }
 
-/** Availability is a lazy, bounded metadata lookup, not a batch PDF download. */
+/** Verify prefixes only, with bounded concurrency and an explicit budget for offscreen rows. */
 export function useRecommendationFullText(items: RecommendationItem[], enabled: boolean, service?: PaperServiceConfig) {
-  const [resolved, setResolved] = useState<Record<string, string | null>>({});
+  const [resolved, setResolved] = useState<Record<string, PaperFullTextAvailability>>({});
   const cache = useRef(resolved);
   const [pending, setPending] = useState(0);
-  const [failed, setFailed] = useState(0);
-  const [retry, setRetry] = useState(0);
-  const key = (item: RecommendationItem) => JSON.stringify(sourceOf(item));
-  const sources = JSON.stringify(items.filter((item) => !item.openAccessAvailable && !knownPaperPdfUrl(sourceOf(item))).map(sourceOf));
-  const serviceKey = JSON.stringify(service);
+  const [revision, setRevision] = useState(0);
+  const [budget, setBudget] = useState(12);
+  const scope = JSON.stringify([resolveLocalAccountKey(), service]);
+  const sourceKey = (source: PaperPdfSource) => `${scope}:${JSON.stringify(source)}`;
+  const sources = JSON.stringify(items.slice(0, budget).map(sourceOf));
   useEffect(() => {
     if (!enabled) { setPending(0); return; }
     const abort = new AbortController();
-    const queue = (JSON.parse(sources) as PaperPdfSource[]).filter((source) => cache.current[JSON.stringify(source)] === undefined);
-    const config = serviceKey ? JSON.parse(serviceKey) as PaperServiceConfig : undefined;
-    setPending(queue.length); setFailed(0);
+    const queue = (JSON.parse(sources) as PaperPdfSource[]).filter((source) => {
+      const cached = cache.current[sourceKey(source)];
+      return !cached?.checkedAt || Date.now() - cached.checkedAt > (cached.status === "available" ? 600_000 : 60_000);
+    });
+    setPending(queue.length);
     let index = 0;
     const run = async () => {
       while (index < queue.length && !abort.signal.aborted) {
         const source = queue[index++];
         try {
-          const url = await discoverPaperPdfUrl(source, { service: config, signal: abort.signal });
+          const result = await probePaperPdf(source, { service, signal: abort.signal });
           if (abort.signal.aborted) return;
-          cache.current = { ...cache.current, [JSON.stringify(source)]: url || null };
+          cache.current = Object.fromEntries([...Object.entries(cache.current).filter(([key]) => key !== sourceKey(source)), [sourceKey(source), result]].slice(-300));
           setResolved(cache.current);
-        } catch {
-          if (abort.signal.aborted) return;
-          setFailed((count) => count + 1);
-        }
+        } catch { if (abort.signal.aborted) return; }
         if (!abort.signal.aborted) setPending((count) => Math.max(0, count - 1));
       }
     };
     for (let worker = 0; worker < Math.min(3, queue.length); worker++) void run();
     return () => abort.abort();
-  }, [enabled, sources, serviceKey, retry]);
+  }, [enabled, sources, scope, revision]);
   const enriched = useMemo(() => items.map((item) => {
-    const url = resolved[key(item)];
-    return url ? { ...item, openAccessAvailable: true, openAccessPdfUrl: url } : withKnownRecommendationPdf(item);
-  }), [items, resolved]);
-  return { items: enriched, pending: enabled ? pending : 0, failed: enabled ? failed : 0, retry: () => setRetry((value) => value + 1) };
+    const result = resolved[sourceKey(sourceOf(item))];
+    const fullText = result?.checkedAt && Date.now() - result.checkedAt < 600_000 ? result : { status: "unknown" as const };
+    return { ...withKnownRecommendationPdf(item), fullText, ...(fullText.status === "available" ? { openAccessPdfUrl: fullText.url } : {}) };
+  }), [items, resolved, scope]);
+  return { items: enriched, pending: enabled ? pending : 0,
+    failed: enabled ? enriched.filter((item) => ["error", "blocked"].includes(item.fullText.status)).length : 0,
+    unknown: enabled ? enriched.filter((item) => item.fullText.status === "unknown").length : 0,
+    checkMore: () => { setBudget((value) => Math.min(items.length, value + 12)); setRevision((value) => value + 1); },
+    retry: () => { cache.current = Object.fromEntries(Object.entries(cache.current).filter(([, value]) => value.status === "available")); setResolved(cache.current); setRevision((value) => value + 1); },
+  };
 }

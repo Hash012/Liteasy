@@ -1,3 +1,4 @@
+import { RecommendationIntelligenceSettings } from "../recommendations/RecommendationIntelligenceSettings";
 import { useState } from "react";
 import { clearLocalResearchProfile, exportLocalResearchProfile, loadLocalResearchProfile, localProfileTags } from "../profile/localResearchProfile";
 import { Button, Switch } from "@fluentui/react-components";
@@ -36,6 +37,7 @@ export function RecommendationSettingsPanel({ onUpdateSetting, settings }: {
           value: data.checked
         })}
       />
+      <RecommendationIntelligenceSettings />
       <RecommendationStyleControl
         onChange={onUpdateSetting ? (value) => onUpdateSetting({
           intent: "update_setting",

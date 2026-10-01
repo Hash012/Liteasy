@@ -1354,6 +1354,8 @@ export function AppShell({
           ...(localLiteratureMode ? profileActions.profileTags.slice(0, 3).map((tag) => tag.label) : [])] }
       : undefined,
     selectedPapers,
+    recommendationResources: { scope: objectWorkbench.repository.scopeId, repository: objectWorkbench.repository, assets: objectWorkbench.agentAssets, projects: paperProjects.repository,
+      selected: readingLibrary.selected?.liteasyPath && readingLibrary.selected.format !== "pdf" ? [{ path: readingLibrary.selected.liteasyPath, title: readingLibrary.selected.title, abstract: readingLibrary.selected.abstract, revision: readingLibrary.selected.updatedAt }] : [] },
     workspaceRevision: workspaceState.workspaceRevision,
     prepareRecommendationPaper: async (paper) => {
       const message = await retrievePdfMetadata({ paper, firstPageText: "", manual: Boolean(paper.literature) });
@@ -1735,7 +1737,7 @@ export function AppShell({
     contextScopeId: objectWorkbench.repository.scopeId,
     selectedRecommendationId: recommendationLibrary.selected?.id,
     onInspectRecommendation: (item) => { recommendationLibrary.select(item); workspaceShell.focusRegion(dock.findItemRegion("library") ?? "left"); },
-    onOpenRecommendation: (item) => { void recommendationLibrary.open(item); workbenchNavigation.open("recommendation-reader"); workspaceShell.focusRegion("main"); },
+    onOpenRecommendation: (item) => { if (item.resourcePath) { void openAgentAsset(item.resourcePath); return; } void recommendationLibrary.open(item); workbenchNavigation.open("recommendation-reader"); workspaceShell.focusRegion("main"); },
     fileLibrary: {
       entries: readingLibrary.entries, selectedId: readingLibrary.selected?.id,
       pending: readingLibrary.pending, message: readingLibrary.message,
@@ -2117,7 +2119,7 @@ export function AppShell({
     if (isExtensionDockItemId(itemId)) return <ExtensionViewHost dockId={itemId} />;
     if (itemId === "recommendation-reader") return recommendationLibrary.preview ? <RecommendationDetails
       key={`${objectWorkbench.repository.scopeId}:${recommendationLibrary.preview.item.id}`} page
-      item={recommendationLibrary.preview.item} loading={recommendationLibrary.preview.loading} message={recommendationLibrary.preview.message}
+      onOpenAsset={openAgentAsset} item={recommendationLibrary.preview.item} loading={recommendationLibrary.preview.loading} message={recommendationLibrary.preview.message}
       onRefresh={() => { if (recommendationLibrary.preview) void recommendationLibrary.open(recommendationLibrary.preview.item, true); }}
       onDownload={recommendationLibrary.download} locations={localLibrarySnapshot} />
       : <div className="recommendation-page"><p>在关联推荐中双击论文，查看摘要、来源与全文获取方式。</p></div>;
@@ -2758,7 +2760,7 @@ export function AppShell({
           </section>
         ) : null}
       </div>
-      <FileStatusBar key={objectWorkbench.repository.scopeId} status={workspaceShell.fileStatus} recommendationLocations={localLibrarySnapshot} onDownloadRecommendation={recommendationLibrary.download}
+      <FileStatusBar onOpenAsset={openAgentAsset} key={objectWorkbench.repository.scopeId} status={workspaceShell.fileStatus} recommendationLocations={localLibrarySnapshot} onDownloadRecommendation={recommendationLibrary.download}
         actions={{ onOpen: readingLibrary.openInspected,
           onMetadataChange: readingLibrary.entries.some((entry) => entry.id === workspaceShell.fileStatus?.entry?.id) ? readingLibrary.updateMetadata : undefined,
           onExport: readingLibrary.exportFile, onDelete: readingLibrary.remove,

@@ -1,10 +1,13 @@
+import { requestPaperDocument, type FullTextProgress } from "./paperFullTextTransport";
 import { readableBibliographicTitle } from "../metadata/pdfRecognition";
 import { normalizeLiteratureIdentifier } from "../paper-identity/paperIdentity";
 import type { DownloadedExternalPdf } from "../library/externalPdfDownload";
-import { paperServiceRequest, type PaperServiceConfig } from "./paperServiceTransport";
+import { hasPaperServiceKey, paperServiceRequest, type PaperServiceConfig } from "./paperServiceTransport";
 
 export type PaperPdfSource = { id: string; doi?: string; arxivId?: string; url?: string; pdfUrl?: string };
-export type ResolvedPaperPdf = DownloadedExternalPdf & { metadata?: { canonicalId?: string; title?: string; authors?: string[]; publishedYear?: number } };
+export type FullTextAttempt = { stage: "discovery" | "probe" | "download"; source: string; url: string; finalUrl?: string; httpStatus?: number; elapsedMs: number; outcome: string };
+function diagnosticUrl(value: string) { try { const url = new URL(value); url.search = ""; url.hash = ""; url.username = ""; url.password = ""; return url.href; } catch { return ""; } }
+export type ResolvedPaperPdf = DownloadedExternalPdf & { attempts?: FullTextAttempt[]; downloadId?: string; byteLength?: number; metadata?: { canonicalId?: string; title?: string; authors?: string[]; publishedYear?: number } };
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const list = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
 const text = (value: unknown) => typeof value === "string" ? value : "";
@@ -86,6 +89,10 @@ async function discoverPdfMetadata(source: PaperPdfSource, options: { service?: 
         for (const raw of list(row.link)) { const link = object(raw); if (text(link["content-type"]).includes("pdf") || /\.pdf(?:$|\?)/i.test(text(link.URL))) add(link.URL); }
         landingPages.push(object(object(row.resource).primary).URL);
       } else if (provider === "openalex") {
+        if (object(row.has_content).pdf === true && options.service?.provider === "openalex" && await hasPaperServiceKey(options.service).catch(() => false)) {
+          const contentUrl = publicUrl(object(row.content_urls).pdf);
+          if (contentUrl && new URL(contentUrl).hostname === "content.openalex.org") add(contentUrl);
+        }
         const locations = [row.best_oa_location, ...list(row.locations)].map(object);
         for (const location of locations) add(location.pdf_url);
         for (const location of locations) if (location.is_oa === true) landingPages.push(location.landing_page_url);
@@ -118,15 +125,15 @@ export async function discoverPaperPdfUrl(source: PaperPdfSource, options: { ser
   return undefined;
 }
 
-export async function resolvePaperPdf(source: PaperPdfSource, options: { service?: PaperServiceConfig; signal?: AbortSignal } = {}): Promise<ResolvedPaperPdf | null> {
+export async function resolvePaperPdf(source: PaperPdfSource, options: { service?: PaperServiceConfig; signal?: AbortSignal; probe?: boolean; nativeDownload?: boolean; onProgress?: (value: FullTextProgress) => void } = {}): Promise<ResolvedPaperPdf | null> {
   if (source.pdfUrl && !publicUrl(source.pdfUrl)) throw new Error("开放全文地址无效。");
-  const signal = options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(90_000)]) : AbortSignal.timeout(90_000);
+  const signal = options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(options.probe ? 25_000 : 90_000)]) : AbortSignal.timeout(options.probe ? 25_000 : 90_000);
   const { doi, arxivId } = paperPdfIdentity(source);
   const queue: string[] = [];
   const visited = new Set<string>();
   let metadata: ResolvedPaperPdf["metadata"];
-  let reachedSource = false;
   const failures: string[] = [];
+  const attempts: FullTextAttempt[] = [];
   const add = (value: unknown, base?: string) => { const url = publicUrl(text(value).replace(/^http:/i, "https:"), base); if (url && !visited.has(url) && !queue.includes(url)) queue.push(url); };
   add(source.pdfUrl);
   if (arxivId) add(`https://arxiv.org/pdf/${arxivId}`);
@@ -141,18 +148,24 @@ export async function resolvePaperPdf(source: PaperPdfSource, options: { service
       const url = queue.shift()!;
       if (visited.has(url)) continue;
       visited.add(url);
+      const started = Date.now();
+      let attempt: FullTextAttempt | undefined;
       try {
-        const response = await paperServiceRequest({ provider: "crossref", endpoint: new URL(url).origin }, url, {
-          authenticate: false, followPublicRedirects: true, maxResponseBytes: 32 * 1024 * 1024, timeoutMs: 25_000, signal,
-        });
-        if (!response.ok) { failures.push(`HTTP ${response.status}`); continue; }
-        reachedSource = true;
+        const { response, native } = await requestPaperDocument(url, { ...options, signal });
+        attempt = { stage: options.probe ? "probe" : "download", source: new URL(url).hostname, url: diagnosticUrl(url), finalUrl: diagnosticUrl(response.url || url), httpStatus: response.status, elapsedMs: Date.now() - started, outcome: response.ok ? "received" : "http-error" };
+        attempts.push(attempt);
+        if (!response.ok) { if (![404, 410].includes(response.status)) failures.push(`HTTP ${response.status}`); continue; }
+        if (native) { attempt.outcome = "pdf"; return { attempts, bytes: new Uint8Array(), ...native, finalUrl: response.url || url, sourceId: source.id,
+          ...((metadata || doi) ? { metadata: { ...metadata, ...(doi ? { canonicalId: `doi:${doi}` } : {}) } } : {}) }; }
         const bytes = new Uint8Array(await response.arrayBuffer());
         signal.throwIfAborted();
         if (new TextDecoder().decode(bytes.subarray(0, 5)) === "%PDF-") {
+          attempt.outcome = "pdf";
           const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
-          return { bytes, contentHash: Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join(""), finalUrl: response.url || url, sourceId: source.id, ...((metadata || doi) ? { metadata: { ...metadata, ...(doi ? { canonicalId: `doi:${doi}` } : {}) } } : {}) };
+          return { attempts, bytes, contentHash: Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join(""), finalUrl: response.url || url, sourceId: source.id, ...((metadata || doi) ? { metadata: { ...metadata, ...(doi ? { canonicalId: `doi:${doi}` } : {}) } } : {}) };
         }
+        attempt.outcome = "html";
+        if (url === source.pdfUrl || /\.pdf(?:$|\?)/i.test(url)) failures.push("来源返回网页或登录页，未返回有效 PDF");
         // Parse a bounded, inert page. Never render scripts or follow arbitrary article links.
         if (bytes.length > 2 * 1024 * 1024) continue;
         const page = new DOMParser().parseFromString(new TextDecoder().decode(bytes), "text/html");
@@ -173,23 +186,51 @@ export async function resolvePaperPdf(source: PaperPdfSource, options: { service
           const label = link.textContent?.trim() || "";
           if (/^(?:download\s+)?(?:full[ -]?text\s+)?pdf(?:\s+download)?$/i.test(label)) add(link.getAttribute("href"), base);
         }
-      } catch (error) { signal.throwIfAborted(); failures.push(error instanceof Error ? error.message : String(error)); }
+      } catch (error) {
+        signal.throwIfAborted();
+        const message = (error instanceof Error ? error.message : String(error)).replace(/https?:\/\/[^\s)]+/g, diagnosticUrl);
+        failures.push(message);
+        if (attempt) attempt.outcome = "error";
+        else attempts.push({ stage: options.probe ? "probe" : "download", source: new URL(url).hostname, url: diagnosticUrl(url), elapsedMs: Date.now()-started, outcome: "error" });
+      }
     }
     return null;
   }
   const immediate = await drain();
   if (immediate) return immediate;
+  const discoveryStarted = Date.now();
   const discovered = await discoverPdfMetadata(source, { ...options, signal });
+  attempts.push({ stage: "discovery", source: options.service?.provider || "public registries", url: "", elapsedMs: Date.now()-discoveryStarted, outcome: discovered.urls.length ? "candidates" : discovered.failures.length ? "partial-error" : "no-links" });
   metadata ??= discovered.metadata;
-  reachedSource ||= discovered.reachedSource;
   failures.push(...discovered.failures);
-  discovered.urls.forEach((url) => add(url));
+  discovered.urls.forEach((url) => { if (!options.probe) visited.delete(url); add(url); });
   discovered.pages.forEach((url) => add(url));
   add(source.url);
   if (doi) add(`https://doi.org/${doi}`);
   const resolved = await drain();
   if (resolved) return resolved;
   signal.throwIfAborted();
-  if (!reachedSource && failures.length) throw new Error(`全文服务暂时未能连接或拒绝访问（${failures[0].slice(0, 180)}）。请稍后重试或打开论文网站。`);
+  if (failures.length) throw new PaperFullTextError(failures.some((message) => /HTTP (401|403|429)/.test(message)) ? "blocked" : "error", failures, attempts);
+
   return null;
+}
+
+export class PaperFullTextError extends Error {
+  constructor(readonly status: "blocked" | "error", readonly diagnostics: string[], readonly attempts: FullTextAttempt[] = []) {
+    super(`全文服务暂时未能连接或拒绝访问（${diagnostics[0]?.slice(0, 180)}）。请稍后重试或打开论文网站。`);
+  }
+}
+export type PaperFullTextAvailability = {
+  status: "unknown" | "checking" | "available" | "unavailable" | "blocked" | "error";
+  checkedAt?: number; url?: string; reason?: string; attempts?: FullTextAttempt[];
+};
+export async function probePaperPdf(source: PaperPdfSource, options: { service?: PaperServiceConfig; signal?: AbortSignal } = {}): Promise<PaperFullTextAvailability> {
+  try {
+    const pdf = await resolvePaperPdf(source, { ...options, probe: true });
+    return pdf ? { status: "available", attempts: pdf.attempts, url: pdf.finalUrl, checkedAt: Date.now() }
+      : { status: "unavailable", checkedAt: Date.now(), reason: "来源尚未提供开放 PDF。" };
+  } catch (error) {
+    options.signal?.throwIfAborted();
+    return { status: error instanceof PaperFullTextError ? error.status : "error", checkedAt: Date.now(), ...(error instanceof PaperFullTextError ? { attempts: error.attempts } : {}), reason: error instanceof Error ? error.message : String(error) };
+  }
 }

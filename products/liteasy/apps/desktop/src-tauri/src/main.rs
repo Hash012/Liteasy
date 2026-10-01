@@ -8,6 +8,7 @@ mod artifact_export;
 mod assistant_history;
 mod data_location;
 mod desktop_identity;
+mod external_navigation;
 mod device_control;
 mod direct_model;
 mod local_library;
@@ -16,7 +17,9 @@ mod note_files;
 mod object_store;
 mod paper_cache;
 mod paper_services;
+mod paper_fulltext;
 mod selection_lookup;
+mod semantic_index;
 mod system_fonts;
 mod user_paper_store;
 mod webdav;
@@ -45,6 +48,8 @@ fn main() {
         .manage(local_mcp::LocalMcpState::default())
         .manage(direct_model::DirectModelState::default())
         .manage(selection_lookup::SelectionLookupState::default())
+        .manage(paper_fulltext::FullTextState::default())
+        .manage(semantic_index::SemanticIndexState::default())
         .manage(local_library::LocalLibraryWatchState::default())
         .setup(|app| {
             data_location::initialize(app.handle()).map_err(std::io::Error::other)?;
@@ -58,9 +63,14 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            external_navigation::open_external_url,
             device_control::device_control_request,
             device_control::device_control_journal,
             system_fonts::list_system_fonts,
+            semantic_index::semantic_index_dispatch,
+            semantic_index::semantic_index_cancel,
+            semantic_index::semantic_index_clear_scope,
+            semantic_index::request_semantic_service,
             webdav::set_webdav_open_documents,
             webdav::get_webdav_settings,
             webdav::save_webdav_settings,
@@ -88,6 +98,11 @@ fn main() {
             assistant_history::load_assistant_history,
             assistant_history::save_assistant_history,
             paper_services::request_paper_service,
+            paper_services::request_paper_service_task,
+            paper_fulltext::request_public_document,
+            paper_fulltext::cancel_public_document,
+            paper_fulltext::release_downloaded_pdf,
+            paper_fulltext::import_downloaded_pdf,
             paper_services::save_paper_service_key,
             paper_services::has_paper_service_key,
             paper_services::delete_paper_service_key,

@@ -70,6 +70,6 @@ export function profileRecommendationPreferences(academic: AcademicProfile, memo
   const base = toRecommendationResearchProfile(academic) ?? { topics: [], methods: [], datasets: [], languages: [] };
   const values = (field: MemoryField) => memory.entries.filter((entry) => entry.field === field).map((entry) => entry.value);
   const merge = (a: string[], b: string[]) => [...new Set([...a, ...b])].slice(0, 12);
-  return { topics: merge(base.topics, values("research_topic")), methods: merge(base.methods, values("research_method")),
+  return { projects: values("project"), familiarity: values("research_familiarity"), topics: merge(base.topics, values("research_topic")), methods: merge(base.methods, values("research_method")),
     datasets: merge(base.datasets, values("dataset")), languages: merge(base.languages, values("reading_language")) };
 }

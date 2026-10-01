@@ -21,3 +21,13 @@ test("loads real transport recommendations and applies the selected sort", async
   expect(recommendations.map((item) => item.id)).toEqual(["rec-high", "rec-low"]);
   expect(transport).toHaveBeenCalledOnce();
 });
+
+test("cloud requests preserve the three-document API contract while covering every selected asset", async () => {
+  const bodies: { selectedDocuments: { id: string }[] }[] = [];
+  await fetchCloudRecommendations({ controlPlaneEndpoint: "https://cloud.test", sessionId: "session", sortMode: "relevance",
+    selectedDocuments: Array.from({ length: 8 }, (_, index) => ({ id: index === 7 ? "liteasy://" + "long-path".repeat(100) : `asset-${index}`, title: `Database research ${index}`, abstract: "transaction concurrency control" })),
+  }, { transport: async (request) => { bodies.push(JSON.parse(request.body)); return { ok: true, status: 200, json: async () => ({ recommendations: [] }) }; } });
+  expect(bodies).toHaveLength(3);
+  expect(bodies.flatMap((body) => body.selectedDocuments)).toHaveLength(8);
+  expect(bodies.every((body) => body.selectedDocuments.length <= 3 && body.selectedDocuments.every((doc) => doc.id.length <= 300))).toBe(true);
+});

@@ -16,7 +16,7 @@ function fileSize(size?: number) {
   return `${Number((size / 1024 ** exponent).toFixed(1))} ${units[exponent - 1]}`;
 }
 
-export function FileStatusBar({ status, actions, onDownloadRecommendation, recommendationLocations }: { status?: FileStatus; actions?: ReadingCatalogActions; onDownloadRecommendation?: DownloadRecommendation; recommendationLocations?: RecommendationLocations | null }) {
+export function FileStatusBar({ status, actions, onDownloadRecommendation, recommendationLocations, onOpenAsset }: { onOpenAsset?: (path: string) => Promise<unknown>; status?: FileStatus; actions?: ReadingCatalogActions; onDownloadRecommendation?: DownloadRecommendation; recommendationLocations?: RecommendationLocations | null }) {
   const modified = status?.modifiedAt && Number.isFinite(status.modifiedAt.getTime()) ? status.modifiedAt.toLocaleString() : undefined;
   const details = [
     status?.type,
@@ -48,7 +48,7 @@ export function FileStatusBar({ status, actions, onDownloadRecommendation, recom
       </div>
       {status?.recommendation ? <Popover key={status.recommendation.id} positioning="above-end">
         <PopoverTrigger disableButtonEnhancement><Button appearance="subtle" size="small" aria-label="展开推荐元信息">元信息</Button></PopoverTrigger>
-        <PopoverSurface><RecommendationDetails item={status.recommendation} onDownload={onDownloadRecommendation} locations={recommendationLocations} /></PopoverSurface>
+        <PopoverSurface><RecommendationDetails onOpenAsset={onOpenAsset} item={status.recommendation} onDownload={onDownloadRecommendation} locations={recommendationLocations} /></PopoverSurface>
       </Popover> : null}
       {status?.entry && actions ? <Popover key={status.entry.id} positioning="above-end">
         <PopoverTrigger disableButtonEnhancement><Button appearance="subtle" size="small" aria-label="展开文件元信息">元信息</Button></PopoverTrigger>

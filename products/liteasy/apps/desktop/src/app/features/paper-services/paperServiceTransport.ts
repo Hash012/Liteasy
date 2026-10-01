@@ -1,5 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-export type PaperServiceConfig = { provider: "crossref" | "openalex" | "semantic-scholar" | "mineru"; endpoint: string };
+export type PaperServiceConfig = { provider: "crossref" | "openalex" | "semantic-scholar" | "mineru" | "embedding" | "reranker"; endpoint: string };
 const keys = new Map<string, string>();
 export function validatePaperService(config: PaperServiceConfig) {
   const url = new URL(config.endpoint);
@@ -18,11 +18,11 @@ function preserveResponseUrl(response: Response, url: string) {
   if (!response.url) Object.defineProperty(response, "url", { value: url });
   return response;
 }
-async function fetchPublicResponse(target: URL, signal: AbortSignal) {
+async function fetchPublicResponse(target: URL, signal: AbortSignal, prefixOnly = false) {
   let current = target;
   for (let redirects = 0; ; redirects += 1) {
     validateRequestUrl(current, true);
-    const response = await fetch(current, { method: "GET", signal, redirect: "manual", credentials: "omit", referrerPolicy: "no-referrer" });
+    const response = await fetch(current, { method: "GET", signal, ...(prefixOnly ? { headers: { Range: "bytes=0-2097151" } } : {}), redirect: "manual", credentials: "omit", referrerPolicy: "no-referrer" });
     // Browsers hide cross-origin Location headers. Never follow an uninspectable
     // redirect automatically; the desktop transport can validate every hop.
     if (response.type === "opaqueredirect") throw new Error("浏览器无法安全检查全文跳转，请在 Liteasy 桌面端下载，或从来源页面获取 PDF。");
@@ -45,7 +45,7 @@ export async function savePaperServiceKey(config: PaperServiceConfig, apiKey: st
 export async function hasPaperServiceKey(config: PaperServiceConfig): Promise<boolean> { return isTauri() ? invoke("has_paper_service_key", { config }) : keys.has(scope(config)); }
 export async function deletePaperServiceKey(config: PaperServiceConfig) { if (isTauri()) await invoke("delete_paper_service_key", { config }); else keys.delete(scope(config)); }
 export function encodeBytes(bytes: Uint8Array) { let text = ""; for (let i=0; i<bytes.length; i+=32768) text += String.fromCharCode(...bytes.subarray(i,i+32768)); return btoa(text); }
-export async function paperServiceRequest(configInput: PaperServiceConfig, url: string, options: { method?: "GET" | "POST" | "PUT"; body?: Uint8Array; json?: unknown; authenticate?: boolean; maxResponseBytes?: number; timeoutMs?: number; followPublicRedirects?: boolean; signal?: AbortSignal } = {}): Promise<Response> {
+export async function paperServiceRequest(configInput: PaperServiceConfig, url: string, options: { method?: "GET" | "POST" | "PUT"; body?: Uint8Array; json?: unknown; authenticate?: boolean; maxResponseBytes?: number; timeoutMs?: number; followPublicRedirects?: boolean; prefixOnly?: boolean; signal?: AbortSignal } = {}): Promise<Response> {
   options.signal?.throwIfAborted();
   const config = validatePaperService(configInput);
   const target = new URL(url);
@@ -61,7 +61,14 @@ export async function paperServiceRequest(configInput: PaperServiceConfig, url: 
   const bytes = options.body ?? (options.json === undefined ? undefined : new TextEncoder().encode(JSON.stringify(options.json)));
   const contentType = options.json === undefined ? undefined : "application/json";
   if (isTauri()) {
-    const result = await invoke<{ status: number; bodyBase64: string; finalUrl?: string }>("request_paper_service", { config, url, method: options.method ?? "GET", bodyBase64: bytes ? encodeBytes(bytes) : null, contentType: contentType ?? null, authenticate, maxResponseBytes: limit ?? null, timeoutMs: timeout, ...(options.followPublicRedirects ? { followPublicRedirects: true } : {}) });
+    const args = { config, url, method: options.method ?? "GET", bodyBase64: bytes ? encodeBytes(bytes) : null, contentType: contentType ?? null, authenticate, maxResponseBytes: limit ?? null, timeoutMs: timeout, ...(options.followPublicRedirects ? { followPublicRedirects: true } : {}) };
+    type Reply = { status: number; bodyBase64: string; finalUrl?: string };
+    const requestId = crypto.randomUUID();
+    const cancel = () => { void invoke("cancel_public_document", { requestId }).catch(() => undefined); };
+    const task = options.signal ? invoke<Reply>("request_paper_service_task", { requestId, input: args }) : invoke<Reply>("request_paper_service", args);
+    options.signal?.addEventListener("abort", cancel, { once: true });
+    let result: Reply;
+    try { result = await task; } finally { options.signal?.removeEventListener("abort", cancel); }
     options.signal?.throwIfAborted();
     return preserveResponseUrl(new Response(Uint8Array.from(atob(result.bodyBase64), (char) => char.charCodeAt(0)), { status: result.status }), result.finalUrl ?? target.href);
   }
@@ -73,17 +80,21 @@ export async function paperServiceRequest(configInput: PaperServiceConfig, url: 
     else headers[config.provider === "crossref" ? "Crossref-Plus-API-Token" : "Authorization"] = `Bearer ${key}`;
   }
   const signal = options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(timeout)]) : AbortSignal.timeout(timeout);
-  const response = options.followPublicRedirects ? await fetchPublicResponse(target, signal)
+  const response = options.followPublicRedirects ? await fetchPublicResponse(target, signal, options.prefixOnly)
     : await fetch(target, { method: options.method ?? "GET", headers, body: bytes as BodyInit | undefined, signal, redirect: "error", credentials: "omit", referrerPolicy: "no-referrer" });
   if (limit === undefined || !response.body) return response;
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
   try {
-    if (Number(response.headers.get("Content-Length")) > limit) throw new Error("响应超过大小限制。");
+    if (!options.prefixOnly && Number(response.headers.get("Content-Length")) > limit) throw new Error("响应超过大小限制。");
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      if (options.prefixOnly && total + value.byteLength >= limit) {
+        chunks.push(value.subarray(0, limit - total)); total = limit;
+        await reader.cancel().catch(() => undefined); break;
+      }
       total += value.byteLength;
       if (total > limit) throw new Error("响应超过大小限制。");
       chunks.push(value);

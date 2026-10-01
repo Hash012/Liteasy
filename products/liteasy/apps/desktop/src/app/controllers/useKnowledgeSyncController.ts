@@ -1,3 +1,5 @@
+import { useContextRankedRecommendations } from "./useContextRankedRecommendations";
+import { useRecommendationContextController, type RecommendationResourceInput } from "./useRecommendationContextController";
 import { useLocalRecommendations } from "../features/recommendations/useLocalRecommendations";
 import { useRecommendationMetadataController } from "./useRecommendationMetadataController";
 import type { PaperServiceConfig } from "../features/paper-services/paperServiceTransport";
@@ -49,6 +51,7 @@ type UseKnowledgeSyncControllerInput = {
   personalizationEnabled: boolean;
   researchProfile?: RecommendationResearchProfile;
   selectedPapers: Paper[];
+  recommendationResources?: RecommendationResourceInput;
   prepareRecommendationPaper?: (paper: Paper) => Promise<Paper | undefined>;
   workspaceRevision: number;
   workspaceSourceKey: string;
@@ -72,13 +75,15 @@ export function useKnowledgeSyncController({
   personalizationEnabled,
   researchProfile,
   selectedPapers,
+  recommendationResources,
   prepareRecommendationPaper,
   workspaceRevision,
   workspaceSourceKey
 }: UseKnowledgeSyncControllerInput) {
   const directRecommendations = localMode || Boolean(localService);
   const metadata = useRecommendationMetadataController({ enabled: recommendationsEnabled,
-    papers: selectedPapers, workspace: workspaceSourceKey, prepare: prepareRecommendationPaper });
+    papers: recommendationResources?.selected?.length ? [] : selectedPapers, workspace: workspaceSourceKey, prepare: prepareRecommendationPaper });
+  const context = useRecommendationContextController({ enabled: recommendationsEnabled, papers: metadata.papers, resources: recommendationResources, profile: researchProfile });
   const cloudRecommendations = useRecommendations({
     accountSession,
     controlPlaneEndpoint,
@@ -87,18 +92,24 @@ export function useKnowledgeSyncController({
     recommendationFeedbackTransport,
     recommendationGeneratorDeps,
     recommendationTransport,
-    recommendationsEnabled: recommendationsEnabled && !directRecommendations && !metadata.blocked,
+    recommendationsEnabled: recommendationsEnabled && !directRecommendations && !metadata.blocked && !context.pending,
     recommendationSortMode,
     recommendationStyle,
     personalizationVersion,
-    researchProfile,
+    researchProfile: context.preferences.sendPrivateText && context.preferences.useProfile ? researchProfile : undefined,
+    selectedDocuments: context.context.documents.filter((doc) => context.preferences.sendPrivateText || !context.context.views.find((view) => view.id === doc.id)?.private),
     selectedPapers: metadata.papers,
     workspaceRevision,
     workspaceSourceKey
   });
-  const localRecommendations = useLocalRecommendations({ enabled: directRecommendations && recommendationsEnabled && !metadata.blocked, config: localService,
-    papers: metadata.papers, profile: researchProfile, workspace: workspaceSourceKey, style: recommendationStyle ?? "balanced", sort: recommendationSortMode });
-  const recommendations = directRecommendations ? localRecommendations : cloudRecommendations;
+  const localRecommendations = useLocalRecommendations({ assets: recommendationResources?.assets, enabled: directRecommendations && recommendationsEnabled && !metadata.blocked, config: localService,
+    papers: metadata.papers, profile: researchProfile, context: context.pending ? undefined : context.context, contextPending: context.pending, preferences: context.preferences, scopeId: recommendationResources?.scope ?? "local", workspace: workspaceSourceKey, style: recommendationStyle ?? "balanced", sort: recommendationSortMode });
+  const cloudRanking = useContextRankedRecommendations({ assets: recommendationResources?.assets, enabled: !directRecommendations && recommendationsEnabled && context.preferences.hybridEnabled && !context.pending,
+    items: cloudRecommendations.recommendationItems, context: context.context, preferences: context.preferences,
+    scope: recommendationResources?.scope ?? "local", workspace: workspaceSourceKey, style: recommendationStyle ?? "balanced" });
+  const recommendations = directRecommendations ? localRecommendations : context.preferences.hybridEnabled ? { ...cloudRecommendations,
+    recommendationItems: cloudRanking.items, recommendationPending: cloudRecommendations.recommendationPending || cloudRanking.pending,
+    recommendationMessage: [cloudRecommendations.recommendationMessage, cloudRanking.warning].filter(Boolean).join(" ") } : cloudRecommendations;
   const documentMetadataSync = useDocumentMetadataSync({
     accountSession,
     controlPlaneEndpoint,

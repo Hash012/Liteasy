@@ -53,7 +53,7 @@ export async function loadRecommendationMetadata(item: RecommendationItem, clien
 export type RecommendationSort = "recommended" | "newest" | "citations";
 export function filterRecommendations(items: RecommendationItem[], query: string, access: boolean, year: string, sort: RecommendationSort) {
   const terms = query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
-  const result = items.filter((item) => (!access || item.openAccessAvailable || item.openAccessPdfUrl) &&
+  const result = items.filter((item) => (!access || item.fullText?.status === "available") &&
     (!year || recommendationDateLabel(item).slice(0, 4) === year) && terms.every((term) =>
       [item.title, ...(item.authors ?? []), item.venue, ...(item.subjects ?? []), ...(item.keywords ?? []), item.abstract]
         .filter(Boolean).join(" ").toLocaleLowerCase().includes(term)));

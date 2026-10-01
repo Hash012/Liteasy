@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
+export const PAPER_ANNOTATIONS_SAVED_EVENT = "liteasy:paper-annotations-saved";
 export const PAPER_FULLTEXT_SAVED_EVENT = "liteasy:paper-fulltext-saved";
 
 /** Observe successful reader/OCR writes without subscribing to unrelated paper settings. */
@@ -55,6 +56,7 @@ export async function saveUserPaperArtifact(input: {
   await invoke("save_user_paper_artifact", {
     ...input
   });
+  if (input.artifactKind === "annotations") window.dispatchEvent(new CustomEvent(PAPER_ANNOTATIONS_SAVED_EVENT, { detail: input.paperId }));
   if (input.artifactKind === "fulltext") {
     window.dispatchEvent(new CustomEvent(PAPER_FULLTEXT_SAVED_EVENT, { detail: input.paperId }));
   }

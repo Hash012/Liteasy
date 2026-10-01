@@ -54,3 +54,13 @@
 .recommendation-download select { width: 100%; min-width: 0; }
 .recommendation-download > button { justify-self: start; }
 .recommendation-download > p { overflow-wrap: anywhere; margin: 0; }
+
+.recommendation-title-line { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.recommendation-title-line > .recommendation-compact-title { flex: 1; min-width: 0; }
+.recommendation-title-line > time { flex-shrink: 0; font-size: 11px; color: var(--colorNeutralForeground3); font-variant-numeric: tabular-nums; }
+.recommendation-keywords { padding: 0 65px 8px 34px; min-height: 20px; }
+.recommendation-compact-row { padding-bottom: 3px; }
+.recommendation-row-meta:empty { display: none; }
+.recommendation-keywords .resource-tag-chip { flex: 0 1 auto; }
+.recommendation-keywords .resource-tags-overflow { flex-shrink: 0; }
+.recommendation-filter-row:has(.fui-Checkbox) { flex-wrap: wrap; }

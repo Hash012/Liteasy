@@ -7,13 +7,13 @@ use std::time::Duration;
 use url::Url;
 #[derive(Deserialize)]
 pub struct PaperServiceConfig {
-    provider: String,
-    endpoint: String,
+    pub(crate) provider: String,
+    pub(crate) endpoint: String,
 }
 fn validate(config: &PaperServiceConfig) -> Result<Url, String> {
     if !matches!(
         config.provider.as_str(),
-        "crossref" | "openalex" | "semantic-scholar" | "mineru"
+        "crossref" | "openalex" | "semantic-scholar" | "mineru" | "embedding" | "reranker"
     ) {
         return Err("未知论文服务。".into());
     }
@@ -348,4 +348,60 @@ mod tests {
         })
         .is_ok());
     }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceTask {
+    config: PaperServiceConfig,
+    url: String,
+    method: String,
+    body_base64: Option<String>,
+    content_type: Option<String>,
+    authenticate: bool,
+    max_response_bytes: Option<usize>,
+    timeout_ms: Option<u64>,
+    follow_public_redirects: Option<bool>,
+}
+#[tauri::command]
+pub async fn request_paper_service_task(
+    state: tauri::State<'_, crate::paper_fulltext::FullTextState>,
+    request_id: String,
+    input: ServiceTask,
+) -> Result<ServiceResponse, String> {
+    if request_id.len() > 100 {
+        return Err("论文请求标识无效。".into());
+    }
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    {
+        let mut tasks = state.requests.lock().map_err(|_| "论文请求队列不可用。")?;
+        if tasks.len() >= 16 || tasks.contains_key(&request_id) {
+            return Err("论文请求队列已满，请稍后重试。".into());
+        }
+        tasks.insert(
+            request_id.clone(),
+            tauri::async_runtime::spawn(async move {
+                let result = request_paper_service(
+                    input.config,
+                    input.url,
+                    input.method,
+                    input.body_base64,
+                    input.content_type,
+                    input.authenticate,
+                    input.max_response_bytes,
+                    input.timeout_ms,
+                    input.follow_public_redirects,
+                )
+                .await;
+                let _ = sender.send(result);
+            }),
+        );
+    }
+    let result = receiver
+        .await
+        .unwrap_or_else(|_| Err("论文请求已取消。".into()));
+    if let Ok(mut tasks) = state.requests.lock() {
+        tasks.remove(&request_id);
+    }
+    result
 }

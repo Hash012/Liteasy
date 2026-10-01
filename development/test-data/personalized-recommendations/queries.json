@@ -1,0 +1,2639 @@
+{
+  "version": 1,
+  "review": {
+    "status": "pending-human-review",
+    "labelOrigin": "engineering-authored synthetic relevance judgments; not a human evaluation"
+  },
+  "queries": [
+    {
+      "id": "cicada-0",
+      "assetKind": "paper",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Cicada database transactions concurrency control",
+          "text": "Cicada database transactions concurrency control"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "cicada-noise",
+          "title": "Cicada insect periodical brood emergence",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Cicada database transactions concurrency control"
+        },
+        {
+          "id": "cicada-b",
+          "title": "optimistic validation transaction abort contention",
+          "abstract": "optimistic validation transaction abort contention. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Cicada database transactions concurrency control"
+        },
+        {
+          "id": "cicada-a",
+          "title": "transaction ordering serializable snapshot isolation",
+          "abstract": "transaction ordering serializable snapshot isolation. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Cicada database transactions concurrency control"
+        },
+        {
+          "id": "cicada-survey",
+          "title": "Cicada database transactions concurrency control survey",
+          "abstract": "Cicada database transactions concurrency control. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Cicada database transactions concurrency control"
+        },
+        {
+          "id": "cicada-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Cicada database transactions concurrency control"
+        }
+      ],
+      "relevance": {
+        "cicada-noise": 0,
+        "cicada-unrelated": 0,
+        "cicada-a": 2,
+        "cicada-b": 2,
+        "cicada-survey": 3
+      }
+    },
+    {
+      "id": "cicada-1",
+      "assetKind": "markdown",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Cicada database transactions concurrency control",
+          "text": "Cicada database transactions concurrency control"
+        },
+        {
+          "id": "question",
+          "kind": "annotation",
+          "title": "Reading question",
+          "text": "transaction ordering serializable snapshot isolation",
+          "path": "liteasy://fixtures/cicada/question"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "cicada-noise",
+          "title": "Cicada insect periodical brood emergence",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Cicada database transactions concurrency control"
+        },
+        {
+          "id": "cicada-b",
+          "title": "optimistic validation transaction abort contention",
+          "abstract": "optimistic validation transaction abort contention. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Cicada database transactions concurrency control"
+        },
+        {
+          "id": "cicada-a",
+          "title": "transaction ordering serializable snapshot isolation",
+          "abstract": "transaction ordering serializable snapshot isolation. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Cicada database transactions concurrency control"
+        },
+        {
+          "id": "cicada-survey",
+          "title": "Cicada database transactions concurrency control survey",
+          "abstract": "Cicada database transactions concurrency control. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Cicada database transactions concurrency control"
+        },
+        {
+          "id": "cicada-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Cicada database transactions concurrency control"
+        }
+      ],
+      "relevance": {
+        "cicada-noise": 0,
+        "cicada-unrelated": 0,
+        "cicada-a": 3,
+        "cicada-b": 2,
+        "cicada-survey": 1
+      }
+    },
+    {
+      "id": "cicada-2",
+      "assetKind": "ebook",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Cicada database transactions concurrency control",
+          "text": "Cicada database transactions concurrency control"
+        },
+        {
+          "id": "question",
+          "kind": "annotation",
+          "title": "Reading question",
+          "text": "optimistic validation transaction abort contention",
+          "path": "liteasy://fixtures/cicada/question"
+        },
+        {
+          "id": "profile:method",
+          "kind": "profile",
+          "title": "Confirmed method interest",
+          "text": "database"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "cicada-noise",
+          "title": "Cicada insect periodical brood emergence",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Cicada database transactions concurrency control"
+        },
+        {
+          "id": "cicada-b",
+          "title": "optimistic validation transaction abort contention",
+          "abstract": "optimistic validation transaction abort contention. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Cicada database transactions concurrency control"
+        },
+        {
+          "id": "cicada-a",
+          "title": "transaction ordering serializable snapshot isolation",
+          "abstract": "transaction ordering serializable snapshot isolation. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Cicada database transactions concurrency control"
+        },
+        {
+          "id": "cicada-survey",
+          "title": "Cicada database transactions concurrency control survey",
+          "abstract": "Cicada database transactions concurrency control. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Cicada database transactions concurrency control"
+        },
+        {
+          "id": "cicada-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Cicada database transactions concurrency control"
+        }
+      ],
+      "relevance": {
+        "cicada-noise": 0,
+        "cicada-unrelated": 0,
+        "cicada-a": 2,
+        "cicada-b": 3,
+        "cicada-survey": 1
+      }
+    },
+    {
+      "id": "larimar-0",
+      "assetKind": "paper",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Larimar episodic memory control language models",
+          "text": "Larimar episodic memory control language models"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "larimar-noise",
+          "title": "Larimar mineral jewelry stone",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Larimar episodic memory control language models"
+        },
+        {
+          "id": "larimar-b",
+          "title": "memory retrieval long context language models",
+          "abstract": "memory retrieval long context language models. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Larimar episodic memory control language models"
+        },
+        {
+          "id": "larimar-a",
+          "title": "episodic memory editing factual knowledge updates",
+          "abstract": "episodic memory editing factual knowledge updates. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Larimar episodic memory control language models"
+        },
+        {
+          "id": "larimar-survey",
+          "title": "Larimar episodic memory control language models survey",
+          "abstract": "Larimar episodic memory control language models. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Larimar episodic memory control language models"
+        },
+        {
+          "id": "larimar-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Larimar episodic memory control language models"
+        }
+      ],
+      "relevance": {
+        "larimar-noise": 0,
+        "larimar-unrelated": 0,
+        "larimar-a": 2,
+        "larimar-b": 2,
+        "larimar-survey": 3
+      }
+    },
+    {
+      "id": "larimar-1",
+      "assetKind": "markdown",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Larimar episodic memory control language models",
+          "text": "Larimar episodic memory control language models"
+        },
+        {
+          "id": "question",
+          "kind": "annotation",
+          "title": "Reading question",
+          "text": "episodic memory editing factual knowledge updates",
+          "path": "liteasy://fixtures/larimar/question"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "larimar-noise",
+          "title": "Larimar mineral jewelry stone",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Larimar episodic memory control language models"
+        },
+        {
+          "id": "larimar-b",
+          "title": "memory retrieval long context language models",
+          "abstract": "memory retrieval long context language models. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Larimar episodic memory control language models"
+        },
+        {
+          "id": "larimar-a",
+          "title": "episodic memory editing factual knowledge updates",
+          "abstract": "episodic memory editing factual knowledge updates. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Larimar episodic memory control language models"
+        },
+        {
+          "id": "larimar-survey",
+          "title": "Larimar episodic memory control language models survey",
+          "abstract": "Larimar episodic memory control language models. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Larimar episodic memory control language models"
+        },
+        {
+          "id": "larimar-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Larimar episodic memory control language models"
+        }
+      ],
+      "relevance": {
+        "larimar-noise": 0,
+        "larimar-unrelated": 0,
+        "larimar-a": 3,
+        "larimar-b": 2,
+        "larimar-survey": 1
+      }
+    },
+    {
+      "id": "larimar-2",
+      "assetKind": "ebook",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Larimar episodic memory control language models",
+          "text": "Larimar episodic memory control language models"
+        },
+        {
+          "id": "question",
+          "kind": "annotation",
+          "title": "Reading question",
+          "text": "memory retrieval long context language models",
+          "path": "liteasy://fixtures/larimar/question"
+        },
+        {
+          "id": "profile:method",
+          "kind": "profile",
+          "title": "Confirmed method interest",
+          "text": "memory"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "larimar-noise",
+          "title": "Larimar mineral jewelry stone",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Larimar episodic memory control language models"
+        },
+        {
+          "id": "larimar-b",
+          "title": "memory retrieval long context language models",
+          "abstract": "memory retrieval long context language models. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Larimar episodic memory control language models"
+        },
+        {
+          "id": "larimar-a",
+          "title": "episodic memory editing factual knowledge updates",
+          "abstract": "episodic memory editing factual knowledge updates. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Larimar episodic memory control language models"
+        },
+        {
+          "id": "larimar-survey",
+          "title": "Larimar episodic memory control language models survey",
+          "abstract": "Larimar episodic memory control language models. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Larimar episodic memory control language models"
+        },
+        {
+          "id": "larimar-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Larimar episodic memory control language models"
+        }
+      ],
+      "relevance": {
+        "larimar-noise": 0,
+        "larimar-unrelated": 0,
+        "larimar-a": 2,
+        "larimar-b": 3,
+        "larimar-survey": 1
+      }
+    },
+    {
+      "id": "causality-0",
+      "assetKind": "paper",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Causal inference book treatment effect estimation",
+          "text": "Causal inference book treatment effect estimation"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "causality-noise",
+          "title": "Treatment skincare beauty effects",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Causal inference book treatment effect estimation"
+        },
+        {
+          "id": "causality-b",
+          "title": "causal intervention counterfactual identification",
+          "abstract": "causal intervention counterfactual identification. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Causal inference book treatment effect estimation"
+        },
+        {
+          "id": "causality-a",
+          "title": "causal confounding propensity score adjustment",
+          "abstract": "causal confounding propensity score adjustment. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Causal inference book treatment effect estimation"
+        },
+        {
+          "id": "causality-survey",
+          "title": "Causal inference book treatment effect estimation survey",
+          "abstract": "Causal inference book treatment effect estimation. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Causal inference book treatment effect estimation"
+        },
+        {
+          "id": "causality-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Causal inference book treatment effect estimation"
+        }
+      ],
+      "relevance": {
+        "causality-noise": 0,
+        "causality-unrelated": 0,
+        "causality-a": 2,
+        "causality-b": 2,
+        "causality-survey": 3
+      }
+    },
+    {
+      "id": "causality-1",
+      "assetKind": "markdown",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Causal inference book treatment effect estimation",
+          "text": "Causal inference book treatment effect estimation"
+        },
+        {
+          "id": "question",
+          "kind": "annotation",
+          "title": "Reading question",
+          "text": "causal confounding propensity score adjustment",
+          "path": "liteasy://fixtures/causality/question"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "causality-noise",
+          "title": "Treatment skincare beauty effects",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Causal inference book treatment effect estimation"
+        },
+        {
+          "id": "causality-b",
+          "title": "causal intervention counterfactual identification",
+          "abstract": "causal intervention counterfactual identification. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Causal inference book treatment effect estimation"
+        },
+        {
+          "id": "causality-a",
+          "title": "causal confounding propensity score adjustment",
+          "abstract": "causal confounding propensity score adjustment. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Causal inference book treatment effect estimation"
+        },
+        {
+          "id": "causality-survey",
+          "title": "Causal inference book treatment effect estimation survey",
+          "abstract": "Causal inference book treatment effect estimation. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Causal inference book treatment effect estimation"
+        },
+        {
+          "id": "causality-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Causal inference book treatment effect estimation"
+        }
+      ],
+      "relevance": {
+        "causality-noise": 0,
+        "causality-unrelated": 0,
+        "causality-a": 3,
+        "causality-b": 2,
+        "causality-survey": 1
+      }
+    },
+    {
+      "id": "causality-2",
+      "assetKind": "ebook",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Causal inference book treatment effect estimation",
+          "text": "Causal inference book treatment effect estimation"
+        },
+        {
+          "id": "question",
+          "kind": "annotation",
+          "title": "Reading question",
+          "text": "causal intervention counterfactual identification",
+          "path": "liteasy://fixtures/causality/question"
+        },
+        {
+          "id": "profile:method",
+          "kind": "profile",
+          "title": "Confirmed method interest",
+          "text": "causal"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "causality-noise",
+          "title": "Treatment skincare beauty effects",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Causal inference book treatment effect estimation"
+        },
+        {
+          "id": "causality-b",
+          "title": "causal intervention counterfactual identification",
+          "abstract": "causal intervention counterfactual identification. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Causal inference book treatment effect estimation"
+        },
+        {
+          "id": "causality-a",
+          "title": "causal confounding propensity score adjustment",
+          "abstract": "causal confounding propensity score adjustment. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Causal inference book treatment effect estimation"
+        },
+        {
+          "id": "causality-survey",
+          "title": "Causal inference book treatment effect estimation survey",
+          "abstract": "Causal inference book treatment effect estimation. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Causal inference book treatment effect estimation"
+        },
+        {
+          "id": "causality-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Causal inference book treatment effect estimation"
+        }
+      ],
+      "relevance": {
+        "causality-noise": 0,
+        "causality-unrelated": 0,
+        "causality-a": 2,
+        "causality-b": 3,
+        "causality-survey": 1
+      }
+    },
+    {
+      "id": "retrieval-0",
+      "assetKind": "paper",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Retrieval augmented generation research notes",
+          "text": "Retrieval augmented generation research notes"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "retrieval-noise",
+          "title": "Generation electric power fuel",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Retrieval augmented generation research notes"
+        },
+        {
+          "id": "retrieval-b",
+          "title": "retrieval hallucination grounding factual attribution",
+          "abstract": "retrieval hallucination grounding factual attribution. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Retrieval augmented generation research notes"
+        },
+        {
+          "id": "retrieval-a",
+          "title": "dense retrieval multilingual semantic embeddings",
+          "abstract": "dense retrieval multilingual semantic embeddings. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Retrieval augmented generation research notes"
+        },
+        {
+          "id": "retrieval-survey",
+          "title": "Retrieval augmented generation research notes survey",
+          "abstract": "Retrieval augmented generation research notes. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Retrieval augmented generation research notes"
+        },
+        {
+          "id": "retrieval-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Retrieval augmented generation research notes"
+        }
+      ],
+      "relevance": {
+        "retrieval-noise": 0,
+        "retrieval-unrelated": 0,
+        "retrieval-a": 2,
+        "retrieval-b": 2,
+        "retrieval-survey": 3
+      }
+    },
+    {
+      "id": "retrieval-1",
+      "assetKind": "markdown",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Retrieval augmented generation research notes",
+          "text": "Retrieval augmented generation research notes"
+        },
+        {
+          "id": "question",
+          "kind": "annotation",
+          "title": "Reading question",
+          "text": "dense retrieval multilingual semantic embeddings",
+          "path": "liteasy://fixtures/retrieval/question"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "retrieval-noise",
+          "title": "Generation electric power fuel",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Retrieval augmented generation research notes"
+        },
+        {
+          "id": "retrieval-b",
+          "title": "retrieval hallucination grounding factual attribution",
+          "abstract": "retrieval hallucination grounding factual attribution. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Retrieval augmented generation research notes"
+        },
+        {
+          "id": "retrieval-a",
+          "title": "dense retrieval multilingual semantic embeddings",
+          "abstract": "dense retrieval multilingual semantic embeddings. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Retrieval augmented generation research notes"
+        },
+        {
+          "id": "retrieval-survey",
+          "title": "Retrieval augmented generation research notes survey",
+          "abstract": "Retrieval augmented generation research notes. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Retrieval augmented generation research notes"
+        },
+        {
+          "id": "retrieval-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Retrieval augmented generation research notes"
+        }
+      ],
+      "relevance": {
+        "retrieval-noise": 0,
+        "retrieval-unrelated": 0,
+        "retrieval-a": 3,
+        "retrieval-b": 2,
+        "retrieval-survey": 1
+      }
+    },
+    {
+      "id": "retrieval-2",
+      "assetKind": "ebook",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Retrieval augmented generation research notes",
+          "text": "Retrieval augmented generation research notes"
+        },
+        {
+          "id": "question",
+          "kind": "annotation",
+          "title": "Reading question",
+          "text": "retrieval hallucination grounding factual attribution",
+          "path": "liteasy://fixtures/retrieval/question"
+        },
+        {
+          "id": "profile:method",
+          "kind": "profile",
+          "title": "Confirmed method interest",
+          "text": "retrieval"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "retrieval-noise",
+          "title": "Generation electric power fuel",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Retrieval augmented generation research notes"
+        },
+        {
+          "id": "retrieval-b",
+          "title": "retrieval hallucination grounding factual attribution",
+          "abstract": "retrieval hallucination grounding factual attribution. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Retrieval augmented generation research notes"
+        },
+        {
+          "id": "retrieval-a",
+          "title": "dense retrieval multilingual semantic embeddings",
+          "abstract": "dense retrieval multilingual semantic embeddings. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Retrieval augmented generation research notes"
+        },
+        {
+          "id": "retrieval-survey",
+          "title": "Retrieval augmented generation research notes survey",
+          "abstract": "Retrieval augmented generation research notes. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Retrieval augmented generation research notes"
+        },
+        {
+          "id": "retrieval-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Retrieval augmented generation research notes"
+        }
+      ],
+      "relevance": {
+        "retrieval-noise": 0,
+        "retrieval-unrelated": 0,
+        "retrieval-a": 2,
+        "retrieval-b": 3,
+        "retrieval-survey": 1
+      }
+    },
+    {
+      "id": "pde-0",
+      "assetKind": "paper",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Neural operators partial differential equations",
+          "text": "Neural operators partial differential equations"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "pde-noise",
+          "title": "Telephone operator call management",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Neural operators partial differential equations"
+        },
+        {
+          "id": "pde-b",
+          "title": "partial differential equations operator generalization",
+          "abstract": "partial differential equations operator generalization. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Neural operators partial differential equations"
+        },
+        {
+          "id": "pde-a",
+          "title": "neural operator boundary conditions discretization",
+          "abstract": "neural operator boundary conditions discretization. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Neural operators partial differential equations"
+        },
+        {
+          "id": "pde-survey",
+          "title": "Neural operators partial differential equations survey",
+          "abstract": "Neural operators partial differential equations. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Neural operators partial differential equations"
+        },
+        {
+          "id": "pde-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Neural operators partial differential equations"
+        }
+      ],
+      "relevance": {
+        "pde-noise": 0,
+        "pde-unrelated": 0,
+        "pde-a": 2,
+        "pde-b": 2,
+        "pde-survey": 3
+      }
+    },
+    {
+      "id": "pde-1",
+      "assetKind": "markdown",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Neural operators partial differential equations",
+          "text": "Neural operators partial differential equations"
+        },
+        {
+          "id": "question",
+          "kind": "annotation",
+          "title": "Reading question",
+          "text": "neural operator boundary conditions discretization",
+          "path": "liteasy://fixtures/pde/question"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "pde-noise",
+          "title": "Telephone operator call management",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Neural operators partial differential equations"
+        },
+        {
+          "id": "pde-b",
+          "title": "partial differential equations operator generalization",
+          "abstract": "partial differential equations operator generalization. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Neural operators partial differential equations"
+        },
+        {
+          "id": "pde-a",
+          "title": "neural operator boundary conditions discretization",
+          "abstract": "neural operator boundary conditions discretization. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Neural operators partial differential equations"
+        },
+        {
+          "id": "pde-survey",
+          "title": "Neural operators partial differential equations survey",
+          "abstract": "Neural operators partial differential equations. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Neural operators partial differential equations"
+        },
+        {
+          "id": "pde-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Neural operators partial differential equations"
+        }
+      ],
+      "relevance": {
+        "pde-noise": 0,
+        "pde-unrelated": 0,
+        "pde-a": 3,
+        "pde-b": 2,
+        "pde-survey": 1
+      }
+    },
+    {
+      "id": "pde-2",
+      "assetKind": "ebook",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Neural operators partial differential equations",
+          "text": "Neural operators partial differential equations"
+        },
+        {
+          "id": "question",
+          "kind": "annotation",
+          "title": "Reading question",
+          "text": "partial differential equations operator generalization",
+          "path": "liteasy://fixtures/pde/question"
+        },
+        {
+          "id": "profile:method",
+          "kind": "profile",
+          "title": "Confirmed method interest",
+          "text": "neural"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "pde-noise",
+          "title": "Telephone operator call management",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Neural operators partial differential equations"
+        },
+        {
+          "id": "pde-b",
+          "title": "partial differential equations operator generalization",
+          "abstract": "partial differential equations operator generalization. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Neural operators partial differential equations"
+        },
+        {
+          "id": "pde-a",
+          "title": "neural operator boundary conditions discretization",
+          "abstract": "neural operator boundary conditions discretization. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Neural operators partial differential equations"
+        },
+        {
+          "id": "pde-survey",
+          "title": "Neural operators partial differential equations survey",
+          "abstract": "Neural operators partial differential equations. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Neural operators partial differential equations"
+        },
+        {
+          "id": "pde-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Neural operators partial differential equations"
+        }
+      ],
+      "relevance": {
+        "pde-noise": 0,
+        "pde-unrelated": 0,
+        "pde-a": 2,
+        "pde-b": 3,
+        "pde-survey": 1
+      }
+    },
+    {
+      "id": "protein-0",
+      "assetKind": "paper",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Protein structure sequence folding prediction",
+          "text": "Protein structure sequence folding prediction"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "protein-noise",
+          "title": "Folding paper origami lessons",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Protein structure sequence folding prediction"
+        },
+        {
+          "id": "protein-b",
+          "title": "protein sequence evolutionary structure alignment",
+          "abstract": "protein sequence evolutionary structure alignment. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Protein structure sequence folding prediction"
+        },
+        {
+          "id": "protein-a",
+          "title": "protein folding conformational uncertainty ensembles",
+          "abstract": "protein folding conformational uncertainty ensembles. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Protein structure sequence folding prediction"
+        },
+        {
+          "id": "protein-survey",
+          "title": "Protein structure sequence folding prediction survey",
+          "abstract": "Protein structure sequence folding prediction. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Protein structure sequence folding prediction"
+        },
+        {
+          "id": "protein-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Protein structure sequence folding prediction"
+        }
+      ],
+      "relevance": {
+        "protein-noise": 0,
+        "protein-unrelated": 0,
+        "protein-a": 2,
+        "protein-b": 2,
+        "protein-survey": 3
+      }
+    },
+    {
+      "id": "protein-1",
+      "assetKind": "markdown",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Protein structure sequence folding prediction",
+          "text": "Protein structure sequence folding prediction"
+        },
+        {
+          "id": "question",
+          "kind": "annotation",
+          "title": "Reading question",
+          "text": "protein folding conformational uncertainty ensembles",
+          "path": "liteasy://fixtures/protein/question"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "protein-noise",
+          "title": "Folding paper origami lessons",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Protein structure sequence folding prediction"
+        },
+        {
+          "id": "protein-b",
+          "title": "protein sequence evolutionary structure alignment",
+          "abstract": "protein sequence evolutionary structure alignment. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Protein structure sequence folding prediction"
+        },
+        {
+          "id": "protein-a",
+          "title": "protein folding conformational uncertainty ensembles",
+          "abstract": "protein folding conformational uncertainty ensembles. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Protein structure sequence folding prediction"
+        },
+        {
+          "id": "protein-survey",
+          "title": "Protein structure sequence folding prediction survey",
+          "abstract": "Protein structure sequence folding prediction. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Protein structure sequence folding prediction"
+        },
+        {
+          "id": "protein-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Protein structure sequence folding prediction"
+        }
+      ],
+      "relevance": {
+        "protein-noise": 0,
+        "protein-unrelated": 0,
+        "protein-a": 3,
+        "protein-b": 2,
+        "protein-survey": 1
+      }
+    },
+    {
+      "id": "protein-2",
+      "assetKind": "ebook",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Protein structure sequence folding prediction",
+          "text": "Protein structure sequence folding prediction"
+        },
+        {
+          "id": "question",
+          "kind": "annotation",
+          "title": "Reading question",
+          "text": "protein sequence evolutionary structure alignment",
+          "path": "liteasy://fixtures/protein/question"
+        },
+        {
+          "id": "profile:method",
+          "kind": "profile",
+          "title": "Confirmed method interest",
+          "text": "protein"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "protein-noise",
+          "title": "Folding paper origami lessons",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Protein structure sequence folding prediction"
+        },
+        {
+          "id": "protein-b",
+          "title": "protein sequence evolutionary structure alignment",
+          "abstract": "protein sequence evolutionary structure alignment. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Protein structure sequence folding prediction"
+        },
+        {
+          "id": "protein-a",
+          "title": "protein folding conformational uncertainty ensembles",
+          "abstract": "protein folding conformational uncertainty ensembles. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Protein structure sequence folding prediction"
+        },
+        {
+          "id": "protein-survey",
+          "title": "Protein structure sequence folding prediction survey",
+          "abstract": "Protein structure sequence folding prediction. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Protein structure sequence folding prediction"
+        },
+        {
+          "id": "protein-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Protein structure sequence folding prediction"
+        }
+      ],
+      "relevance": {
+        "protein-noise": 0,
+        "protein-unrelated": 0,
+        "protein-a": 2,
+        "protein-b": 3,
+        "protein-survey": 1
+      }
+    },
+    {
+      "id": "control-0",
+      "assetKind": "paper",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Robust control feedback stability textbook",
+          "text": "Robust control feedback stability textbook"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "control-noise",
+          "title": "Remote control television review",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Robust control feedback stability textbook"
+        },
+        {
+          "id": "control-b",
+          "title": "robust control model predictive constraints",
+          "abstract": "robust control model predictive constraints. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Robust control feedback stability textbook"
+        },
+        {
+          "id": "control-a",
+          "title": "feedback control Lyapunov stability guarantees",
+          "abstract": "feedback control Lyapunov stability guarantees. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Robust control feedback stability textbook"
+        },
+        {
+          "id": "control-survey",
+          "title": "Robust control feedback stability textbook survey",
+          "abstract": "Robust control feedback stability textbook. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Robust control feedback stability textbook"
+        },
+        {
+          "id": "control-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Robust control feedback stability textbook"
+        }
+      ],
+      "relevance": {
+        "control-noise": 0,
+        "control-unrelated": 0,
+        "control-a": 2,
+        "control-b": 2,
+        "control-survey": 3
+      }
+    },
+    {
+      "id": "control-1",
+      "assetKind": "markdown",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Robust control feedback stability textbook",
+          "text": "Robust control feedback stability textbook"
+        },
+        {
+          "id": "question",
+          "kind": "annotation",
+          "title": "Reading question",
+          "text": "feedback control Lyapunov stability guarantees",
+          "path": "liteasy://fixtures/control/question"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "control-noise",
+          "title": "Remote control television review",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Robust control feedback stability textbook"
+        },
+        {
+          "id": "control-b",
+          "title": "robust control model predictive constraints",
+          "abstract": "robust control model predictive constraints. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Robust control feedback stability textbook"
+        },
+        {
+          "id": "control-a",
+          "title": "feedback control Lyapunov stability guarantees",
+          "abstract": "feedback control Lyapunov stability guarantees. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Robust control feedback stability textbook"
+        },
+        {
+          "id": "control-survey",
+          "title": "Robust control feedback stability textbook survey",
+          "abstract": "Robust control feedback stability textbook. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Robust control feedback stability textbook"
+        },
+        {
+          "id": "control-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Robust control feedback stability textbook"
+        }
+      ],
+      "relevance": {
+        "control-noise": 0,
+        "control-unrelated": 0,
+        "control-a": 3,
+        "control-b": 2,
+        "control-survey": 1
+      }
+    },
+    {
+      "id": "control-2",
+      "assetKind": "ebook",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Robust control feedback stability textbook",
+          "text": "Robust control feedback stability textbook"
+        },
+        {
+          "id": "question",
+          "kind": "annotation",
+          "title": "Reading question",
+          "text": "robust control model predictive constraints",
+          "path": "liteasy://fixtures/control/question"
+        },
+        {
+          "id": "profile:method",
+          "kind": "profile",
+          "title": "Confirmed method interest",
+          "text": "control"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "control-noise",
+          "title": "Remote control television review",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Robust control feedback stability textbook"
+        },
+        {
+          "id": "control-b",
+          "title": "robust control model predictive constraints",
+          "abstract": "robust control model predictive constraints. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Robust control feedback stability textbook"
+        },
+        {
+          "id": "control-a",
+          "title": "feedback control Lyapunov stability guarantees",
+          "abstract": "feedback control Lyapunov stability guarantees. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Robust control feedback stability textbook"
+        },
+        {
+          "id": "control-survey",
+          "title": "Robust control feedback stability textbook survey",
+          "abstract": "Robust control feedback stability textbook. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Robust control feedback stability textbook"
+        },
+        {
+          "id": "control-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Robust control feedback stability textbook"
+        }
+      ],
+      "relevance": {
+        "control-noise": 0,
+        "control-unrelated": 0,
+        "control-a": 2,
+        "control-b": 3,
+        "control-survey": 1
+      }
+    },
+    {
+      "id": "privacy-0",
+      "assetKind": "paper",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Federated learning privacy research notes",
+          "text": "Federated learning privacy research notes"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "privacy-noise",
+          "title": "Federation political regional history",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Federated learning privacy research notes"
+        },
+        {
+          "id": "privacy-b",
+          "title": "federated learning aggregation heterogeneous clients",
+          "abstract": "federated learning aggregation heterogeneous clients. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Federated learning privacy research notes"
+        },
+        {
+          "id": "privacy-a",
+          "title": "federated differential privacy gradient leakage",
+          "abstract": "federated differential privacy gradient leakage. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Federated learning privacy research notes"
+        },
+        {
+          "id": "privacy-survey",
+          "title": "Federated learning privacy research notes survey",
+          "abstract": "Federated learning privacy research notes. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Federated learning privacy research notes"
+        },
+        {
+          "id": "privacy-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Federated learning privacy research notes"
+        }
+      ],
+      "relevance": {
+        "privacy-noise": 0,
+        "privacy-unrelated": 0,
+        "privacy-a": 2,
+        "privacy-b": 2,
+        "privacy-survey": 3
+      }
+    },
+    {
+      "id": "privacy-1",
+      "assetKind": "markdown",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Federated learning privacy research notes",
+          "text": "Federated learning privacy research notes"
+        },
+        {
+          "id": "question",
+          "kind": "annotation",
+          "title": "Reading question",
+          "text": "federated differential privacy gradient leakage",
+          "path": "liteasy://fixtures/privacy/question"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "privacy-noise",
+          "title": "Federation political regional history",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Federated learning privacy research notes"
+        },
+        {
+          "id": "privacy-b",
+          "title": "federated learning aggregation heterogeneous clients",
+          "abstract": "federated learning aggregation heterogeneous clients. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Federated learning privacy research notes"
+        },
+        {
+          "id": "privacy-a",
+          "title": "federated differential privacy gradient leakage",
+          "abstract": "federated differential privacy gradient leakage. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Federated learning privacy research notes"
+        },
+        {
+          "id": "privacy-survey",
+          "title": "Federated learning privacy research notes survey",
+          "abstract": "Federated learning privacy research notes. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Federated learning privacy research notes"
+        },
+        {
+          "id": "privacy-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Federated learning privacy research notes"
+        }
+      ],
+      "relevance": {
+        "privacy-noise": 0,
+        "privacy-unrelated": 0,
+        "privacy-a": 3,
+        "privacy-b": 2,
+        "privacy-survey": 1
+      }
+    },
+    {
+      "id": "privacy-2",
+      "assetKind": "ebook",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Federated learning privacy research notes",
+          "text": "Federated learning privacy research notes"
+        },
+        {
+          "id": "question",
+          "kind": "annotation",
+          "title": "Reading question",
+          "text": "federated learning aggregation heterogeneous clients",
+          "path": "liteasy://fixtures/privacy/question"
+        },
+        {
+          "id": "profile:method",
+          "kind": "profile",
+          "title": "Confirmed method interest",
+          "text": "privacy"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "privacy-noise",
+          "title": "Federation political regional history",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Federated learning privacy research notes"
+        },
+        {
+          "id": "privacy-b",
+          "title": "federated learning aggregation heterogeneous clients",
+          "abstract": "federated learning aggregation heterogeneous clients. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Federated learning privacy research notes"
+        },
+        {
+          "id": "privacy-a",
+          "title": "federated differential privacy gradient leakage",
+          "abstract": "federated differential privacy gradient leakage. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Federated learning privacy research notes"
+        },
+        {
+          "id": "privacy-survey",
+          "title": "Federated learning privacy research notes survey",
+          "abstract": "Federated learning privacy research notes. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Federated learning privacy research notes"
+        },
+        {
+          "id": "privacy-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Federated learning privacy research notes"
+        }
+      ],
+      "relevance": {
+        "privacy-noise": 0,
+        "privacy-unrelated": 0,
+        "privacy-a": 2,
+        "privacy-b": 3,
+        "privacy-survey": 1
+      }
+    },
+    {
+      "id": "graph-0",
+      "assetKind": "paper",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Graph neural networks representation learning",
+          "text": "Graph neural networks representation learning"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "graph-noise",
+          "title": "Hand drawn graphs art gallery",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Graph neural networks representation learning"
+        },
+        {
+          "id": "graph-b",
+          "title": "graph learning heterophily message passing",
+          "abstract": "graph learning heterophily message passing. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Graph neural networks representation learning"
+        },
+        {
+          "id": "graph-a",
+          "title": "graph neural network oversmoothing deep representations",
+          "abstract": "graph neural network oversmoothing deep representations. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Graph neural networks representation learning"
+        },
+        {
+          "id": "graph-survey",
+          "title": "Graph neural networks representation learning survey",
+          "abstract": "Graph neural networks representation learning. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Graph neural networks representation learning"
+        },
+        {
+          "id": "graph-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Graph neural networks representation learning"
+        }
+      ],
+      "relevance": {
+        "graph-noise": 0,
+        "graph-unrelated": 0,
+        "graph-a": 2,
+        "graph-b": 2,
+        "graph-survey": 3
+      }
+    },
+    {
+      "id": "graph-1",
+      "assetKind": "markdown",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Graph neural networks representation learning",
+          "text": "Graph neural networks representation learning"
+        },
+        {
+          "id": "question",
+          "kind": "annotation",
+          "title": "Reading question",
+          "text": "graph neural network oversmoothing deep representations",
+          "path": "liteasy://fixtures/graph/question"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "graph-noise",
+          "title": "Hand drawn graphs art gallery",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Graph neural networks representation learning"
+        },
+        {
+          "id": "graph-b",
+          "title": "graph learning heterophily message passing",
+          "abstract": "graph learning heterophily message passing. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Graph neural networks representation learning"
+        },
+        {
+          "id": "graph-a",
+          "title": "graph neural network oversmoothing deep representations",
+          "abstract": "graph neural network oversmoothing deep representations. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Graph neural networks representation learning"
+        },
+        {
+          "id": "graph-survey",
+          "title": "Graph neural networks representation learning survey",
+          "abstract": "Graph neural networks representation learning. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Graph neural networks representation learning"
+        },
+        {
+          "id": "graph-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Graph neural networks representation learning"
+        }
+      ],
+      "relevance": {
+        "graph-noise": 0,
+        "graph-unrelated": 0,
+        "graph-a": 3,
+        "graph-b": 2,
+        "graph-survey": 1
+      }
+    },
+    {
+      "id": "graph-2",
+      "assetKind": "ebook",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Graph neural networks representation learning",
+          "text": "Graph neural networks representation learning"
+        },
+        {
+          "id": "question",
+          "kind": "annotation",
+          "title": "Reading question",
+          "text": "graph learning heterophily message passing",
+          "path": "liteasy://fixtures/graph/question"
+        },
+        {
+          "id": "profile:method",
+          "kind": "profile",
+          "title": "Confirmed method interest",
+          "text": "graph"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "graph-noise",
+          "title": "Hand drawn graphs art gallery",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Graph neural networks representation learning"
+        },
+        {
+          "id": "graph-b",
+          "title": "graph learning heterophily message passing",
+          "abstract": "graph learning heterophily message passing. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Graph neural networks representation learning"
+        },
+        {
+          "id": "graph-a",
+          "title": "graph neural network oversmoothing deep representations",
+          "abstract": "graph neural network oversmoothing deep representations. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Graph neural networks representation learning"
+        },
+        {
+          "id": "graph-survey",
+          "title": "Graph neural networks representation learning survey",
+          "abstract": "Graph neural networks representation learning. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Graph neural networks representation learning"
+        },
+        {
+          "id": "graph-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Graph neural networks representation learning"
+        }
+      ],
+      "relevance": {
+        "graph-noise": 0,
+        "graph-unrelated": 0,
+        "graph-a": 2,
+        "graph-b": 3,
+        "graph-survey": 1
+      }
+    },
+    {
+      "id": "climate-0",
+      "assetKind": "paper",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Climate time series forecasting observations",
+          "text": "Climate time series forecasting observations"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "climate-noise",
+          "title": "Corporate climate management surveys",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Climate time series forecasting observations"
+        },
+        {
+          "id": "climate-b",
+          "title": "climate forecasting physical model data assimilation",
+          "abstract": "climate forecasting physical model data assimilation. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Climate time series forecasting observations"
+        },
+        {
+          "id": "climate-a",
+          "title": "climate time series uncertainty probabilistic calibration",
+          "abstract": "climate time series uncertainty probabilistic calibration. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Climate time series forecasting observations"
+        },
+        {
+          "id": "climate-survey",
+          "title": "Climate time series forecasting observations survey",
+          "abstract": "Climate time series forecasting observations. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Climate time series forecasting observations"
+        },
+        {
+          "id": "climate-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Climate time series forecasting observations"
+        }
+      ],
+      "relevance": {
+        "climate-noise": 0,
+        "climate-unrelated": 0,
+        "climate-a": 2,
+        "climate-b": 2,
+        "climate-survey": 3
+      }
+    },
+    {
+      "id": "climate-1",
+      "assetKind": "markdown",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Climate time series forecasting observations",
+          "text": "Climate time series forecasting observations"
+        },
+        {
+          "id": "question",
+          "kind": "annotation",
+          "title": "Reading question",
+          "text": "climate time series uncertainty probabilistic calibration",
+          "path": "liteasy://fixtures/climate/question"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "climate-noise",
+          "title": "Corporate climate management surveys",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Climate time series forecasting observations"
+        },
+        {
+          "id": "climate-b",
+          "title": "climate forecasting physical model data assimilation",
+          "abstract": "climate forecasting physical model data assimilation. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Climate time series forecasting observations"
+        },
+        {
+          "id": "climate-a",
+          "title": "climate time series uncertainty probabilistic calibration",
+          "abstract": "climate time series uncertainty probabilistic calibration. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Climate time series forecasting observations"
+        },
+        {
+          "id": "climate-survey",
+          "title": "Climate time series forecasting observations survey",
+          "abstract": "Climate time series forecasting observations. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Climate time series forecasting observations"
+        },
+        {
+          "id": "climate-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Climate time series forecasting observations"
+        }
+      ],
+      "relevance": {
+        "climate-noise": 0,
+        "climate-unrelated": 0,
+        "climate-a": 3,
+        "climate-b": 2,
+        "climate-survey": 1
+      }
+    },
+    {
+      "id": "climate-2",
+      "assetKind": "ebook",
+      "views": [
+        {
+          "id": "doc",
+          "kind": "document",
+          "title": "Climate time series forecasting observations",
+          "text": "Climate time series forecasting observations"
+        },
+        {
+          "id": "question",
+          "kind": "annotation",
+          "title": "Reading question",
+          "text": "climate forecasting physical model data assimilation",
+          "path": "liteasy://fixtures/climate/question"
+        },
+        {
+          "id": "profile:method",
+          "kind": "profile",
+          "title": "Confirmed method interest",
+          "text": "climate"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "climate-noise",
+          "title": "Corporate climate management surveys",
+          "abstract": "An unrelated record sharing an ambiguous name.",
+          "relevanceScore": 0.98,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Climate time series forecasting observations"
+        },
+        {
+          "id": "climate-b",
+          "title": "climate forecasting physical model data assimilation",
+          "abstract": "climate forecasting physical model data assimilation. Research techniques and limitations.",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Climate time series forecasting observations"
+        },
+        {
+          "id": "climate-a",
+          "title": "climate time series uncertainty probabilistic calibration",
+          "abstract": "climate time series uncertainty probabilistic calibration. Technical methods and empirical evaluation.",
+          "relevanceScore": 0.7,
+          "relevanceBand": "high",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Climate time series forecasting observations"
+        },
+        {
+          "id": "climate-survey",
+          "title": "Climate time series forecasting observations survey",
+          "abstract": "Climate time series forecasting observations. A broad introduction and terminology.",
+          "relevanceScore": 0.6,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Climate time series forecasting observations"
+        },
+        {
+          "id": "climate-unrelated",
+          "title": "Medieval pottery catalogue",
+          "abstract": "Historical ceramic crafts and decoration.",
+          "relevanceScore": 0.5,
+          "relevanceBand": "medium",
+          "source": "fixture",
+          "sourceKind": "cache",
+          "discoveredAt": "",
+          "reason": "",
+          "relatedDocumentTitle": "Climate time series forecasting observations"
+        }
+      ],
+      "relevance": {
+        "climate-noise": 0,
+        "climate-unrelated": 0,
+        "climate-a": 2,
+        "climate-b": 3,
+        "climate-survey": 1
+      }
+    }
+  ]
+}
