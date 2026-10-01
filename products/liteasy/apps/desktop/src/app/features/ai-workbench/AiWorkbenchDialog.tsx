@@ -1,3 +1,5 @@
+import { GenerationPromptEditor } from "../ai-prompts/GenerationPromptEditor";
+import { artifactPromptTask } from "../ai-prompts/generationPrompts";
 import { useEffect, useMemo, useState } from "react";
 import { Button, Checkbox, Dialog, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Tab, TabList } from "@fluentui/react-components";
 import { ChevronRightRegular, DismissRegular, DocumentBulletListRegular, DocumentSearchRegular, FolderRegular, OrganizationRegular, SlideTextRegular, SearchRegular, TableRegular } from "@fluentui/react-icons";
@@ -13,7 +15,7 @@ export type AiWorkbenchDialogProps = {
   snapshot: LocalLibrarySnapshot | null; selectedIds: string[]; confirmed: Paper[] | null;
   message: string; selectionValid: boolean;
   onClose(): void; onToggle(id: string): void; onIncludeOpened(): void; onClear(): void;
-  onConfirm(): void; onStart(type: ArtifactType): void;
+  onConfirm(): void; onStart(type: ArtifactType, systemPrompt?: string): void;
 };
 const capabilities = [
   { type: "thin_reading", label: "薄读", detail: "逐篇梳理研究问题、方法和结论", icon: <DocumentSearchRegular /> },
@@ -24,10 +26,12 @@ const capabilities = [
 ] satisfies { type: ArtifactType; label: string; detail: string; icon: React.ReactNode }[];
 
 export function AiWorkbenchDialog(props: AiWorkbenchDialogProps) {
+  const [task, setTask] = useState<ArtifactType>();
+  const [prompt, setPrompt] = useState<string>();
   const [query, setQuery] = useState("");
   const [view, setView] = useState("recent");
   const [limits, setLimits] = useState<Record<string, number>>({});
-  useEffect(() => { if (props.open) { setQuery(""); setView("recent"); setLimits({}); } }, [props.open]);
+  useEffect(() => { if (props.open) { setQuery(""); setView("recent"); setLimits({}); setTask(undefined); setPrompt(undefined); } }, [props.open]);
   const selected = new Set(props.selectedIds);
   const folders = useMemo(() => buildAiPaperFolders(props.papers, props.snapshot, query), [props.papers, props.snapshot, query]);
   const openedIds = new Set(props.openedPapers.map((paper) => paper.id));
@@ -82,9 +86,13 @@ export function AiWorkbenchDialog(props: AiWorkbenchDialogProps) {
             <p className="ai-workbench-muted">{props.confirmed ? `本次任务使用已确认的 ${props.confirmed.length} 篇论文。更改勾选后需重新确认。` : "确认左侧论文后，即可开始。"}</p>
             {props.confirmed ? <ul className="ai-confirmed-papers" aria-label="已确认的任务论文">{props.confirmed.map((paper) => <li key={paper.id}>{paper.title}</li>)}</ul> : null}
             <div className="ai-capability-list">{capabilities.map((capability) => <Button key={capability.type} className="ai-capability" appearance="outline"
-              aria-label={capability.label} disabled={!props.confirmed} icon={capability.icon} onClick={() => props.onStart(capability.type)}>
+              aria-label={capability.label} disabled={!props.confirmed} icon={capability.icon} aria-pressed={task === capability.type} onClick={() => { setTask(capability.type); setPrompt(undefined); }}>
               <span><strong>{capability.label}</strong><small>{capability.detail}</small></span>
             </Button>)}</div>
+            {task ? <div className="ai-generation-options">
+              <GenerationPromptEditor key={task} task={artifactPromptTask(task)} value={prompt} onChange={setPrompt} disabled={!props.confirmed} />
+              <Button appearance="primary" disabled={!props.confirmed} onClick={() => props.onStart(task, prompt)}>开始生成</Button>
+            </div> : null}
             {props.message ? <p role="status" className="ai-workbench-result">{props.message}</p> : null}
           </section>
         </DialogContent>

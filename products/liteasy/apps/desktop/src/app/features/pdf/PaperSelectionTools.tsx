@@ -1,5 +1,5 @@
 import { Button, Tooltip } from "@fluentui/react-components";
-import { CheckmarkRegular, CopyRegular, HighlightRegular, TextUnderlineRegular, WhiteboardRegular, ChatRegular, SparkleRegular, TextQuoteRegular } from "@fluentui/react-icons";
+import { CheckmarkRegular, CopyRegular, HighlightRegular, TextUnderlineRegular, WhiteboardRegular, ChatRegular, SparkleRegular, TextQuoteRegular, TranslateRegular } from "@fluentui/react-icons";
 import type { DragEventHandler, ReactNode } from "react";
 import { getHighlightColor } from "./pdfAnnotationAppearance";
 import type { PdfHighlightColor } from "./pdfAnnotationStorage";
@@ -23,6 +23,8 @@ export function PaperSelectionTools(props: {
   tray?: () => void;
   conversation?: () => void;
   quickAsk?: () => void;
+  lookup?: () => void;
+  lookupDisabled?: boolean;
   dragBoard?: DragEventHandler<HTMLButtonElement>;
 }) {
   return <div className="paper-selection-tools" role="toolbar" aria-label="选段工具">
@@ -42,7 +44,8 @@ export function PaperSelectionTools(props: {
       <Tooltip content="给选中文段添加下划线" relationship="description"><Button appearance="subtle" size="small" disabled={props.disabled} icon={<TextUnderlineRegular />} onClick={props.underline}>划线</Button></Tooltip>
       <Tooltip content="复制选中的内容" relationship="description"><Button appearance="subtle" size="small" disabled={props.disabled} icon={<CopyRegular />} onClick={props.copy}>复制</Button></Tooltip>
     </div>
-    {props.board || props.tray || props.quickAsk || props.conversation ? <div className="paper-selection-destinations" role="group" aria-label="使用选段">
+    {props.board || props.tray || props.quickAsk || props.conversation || props.lookup ? <div className="paper-selection-destinations" role="group" aria-label="使用选段">
+      {props.lookup ? <Tooltip content="查询单词释义或翻译短语" relationship="description"><Button appearance="subtle" size="small" disabled={props.lookupDisabled ?? props.disabled} icon={<TranslateRegular />} onClick={props.lookup}>查词/翻译</Button></Tooltip> : null}
       {props.board ? <Tooltip content="加入白板，也可拖动摘录" relationship="description"><Button appearance="subtle" size="small" disabled={props.disabled} icon={<WhiteboardRegular />} draggable={Boolean(props.dragBoard)} onDragStart={props.dragBoard} onClick={props.board}>加入白板</Button></Tooltip> : null}
       {props.tray ? <Tooltip content="收集选段后一起提问" relationship="description"><Button appearance="subtle" size="small" disabled={props.disabled} icon={<TextQuoteRegular />} onClick={props.tray}>加入摘录对话</Button></Tooltip> : null}
       {props.quickAsk ? <Tooltip content="结合当前页和摘要提问" relationship="description"><Button appearance="subtle" size="small" disabled={props.disabled} icon={<SparkleRegular />} onClick={props.quickAsk}>速问</Button></Tooltip> : null}

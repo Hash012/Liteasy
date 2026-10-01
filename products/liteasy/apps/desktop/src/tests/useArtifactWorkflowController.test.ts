@@ -219,6 +219,27 @@ describe("useArtifactWorkflowController", () => {
     vi.useRealTimers();
   });
 
+  test("freezes a prompt while paper import is pending and sends it with the generation task", async () => {
+    const artifactStore = createArtifactStore();
+    let begin!: () => void;
+    const runAgentAnalysis = vi.fn(async () => ({ ...completedRun(), status: "cancelled" as const }));
+    const { result } = renderHook(() => useArtifactWorkflowController({
+      artifactStore, artifactResultClient: artifactResultClient(),
+      getImportedChunksByPaperId: () => ({ [paper.id]: buildImportedChunksForPaper(paper) }),
+      getSelectedDocumentSet: () => ({ documentIds: [paper.id], locked: true }),
+      getSelectedPapers: () => [paper], onAnalysisHint: vi.fn(),
+      queueImportForPapers: (_papers, callback) => { begin = callback!; return "started"; },
+      runAgentAnalysis
+    }));
+    const options = { systemPrompt: "以三个启发式问题组织本次思维导图" };
+    act(() => { result.current.actions.startAnalysisForPapers("mindmap", [paper], options); });
+    expect(runAgentAnalysis).not.toHaveBeenCalled();
+    expect(artifactStore.getTasks()[0].recovery?.options?.systemPrompt).toBe(options.systemPrompt);
+    options.systemPrompt = "后来修改的值";
+    await act(async () => { begin(); });
+    expect(runAgentAnalysis).toHaveBeenCalledWith("mindmap", expect.any(Function), expect.objectContaining({ systemPrompt: "以三个启发式问题组织本次思维导图" }));
+  });
+
   test("does not rewrite the artifact catalog or replace tabs for every streamed PPT delta", async () => {
     const artifactStore = createArtifactStore();
     const localRepository = {

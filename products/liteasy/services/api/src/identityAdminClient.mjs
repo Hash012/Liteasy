@@ -1,6 +1,6 @@
 import { AccountLifecycleError } from "./accountLifecycleError.mjs";
 
-const productAudiences = Object.freeze(["intuecho-web", "liteasy-admin", "liteasy-desktop"]);
+const productAudiences = Object.freeze(["intuecho-web", "liteasy-admin", "liteasy-desktop", "liteasy-mobile"]);
 
 async function responseJson(response, code) {
   if (!response.ok) throw new AccountLifecycleError(code, 503);

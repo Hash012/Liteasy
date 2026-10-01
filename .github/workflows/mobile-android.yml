@@ -1,0 +1,68 @@
+name: Mobile Android
+
+on:
+  push:
+    paths:
+      - "products/liteasy/apps/mobile/**"
+      - "products/liteasy/packages/**"
+      - ".github/workflows/mobile-android.yml"
+  pull_request:
+    paths:
+      - "products/liteasy/apps/mobile/**"
+      - "products/liteasy/packages/**"
+      - ".github/workflows/mobile-android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: products/liteasy/apps/mobile
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: products/liteasy/apps/desktop/.nvmrc
+          cache: npm
+          cache-dependency-path: products/liteasy/apps/mobile/package-lock.json
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de
+        with:
+          toolchain: "1.98.1"
+          targets: aarch64-linux-android
+      - name: Configure Android toolchain
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'build-tools;35.0.0' 'ndk;27.2.12479018'
+      - run: npm ci
+      - run: npm test
+      - name: Check reading and annotation workflows
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:browser
+      - name: Check shared annotation merge
+        run: cargo test --locked --manifest-path ../../packages/annotation-sync/Cargo.toml
+      # Tauri runs the production frontend build before native compilation.
+      - run: npm run android:build
+      - name: Verify ARM64 and 16 KiB packaging
+        run: >-
+          python3 scripts/verify-android-apk.py
+          src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign"
+      - name: Check Android protocol tests and compile device tests
+        working-directory: products/liteasy/apps/mobile/src-tauri/gen/android
+        run: >-
+          ./gradlew :app:testUniversalDebugUnitTest :app:assembleUniversalDebugAndroidTest
+          -x rustBuildArm64Debug -x rustBuildArmDebug -x rustBuildX86Debug -x rustBuildX86_64Debug
+      - name: Verify dependency locks
+        run: node ../../../../.github/scripts/check-clean.mjs package-lock.json src-tauri/Cargo.lock
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Liteasy-android-debug-arm64
+          path: products/liteasy/apps/mobile/src-tauri/gen/android/app/build/outputs/apk/universal/debug/*.apk
+          if-no-files-found: error

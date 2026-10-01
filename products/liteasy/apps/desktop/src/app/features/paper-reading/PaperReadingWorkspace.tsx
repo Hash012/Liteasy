@@ -1,3 +1,6 @@
+import { GenerationPromptEditor } from "../ai-prompts/GenerationPromptEditor";
+import { SelectionLookupCard } from "../selection-lookup/SelectionLookupCard";
+import { selectionLookupContext } from "../selection-lookup/selectionLookupText";
 import { PaperSelectionTools } from "../pdf/PaperSelectionTools";
 import { SystemFontPicker } from "../settings/SystemFontPicker";
 import { defaultReadingFontCss, readingFontOptions } from "../settings/readingFonts";
@@ -75,9 +78,12 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
   }, []);
   const { modalAttributes } = useModalAttributes({ trapFocus: focus, legacyTrapFocus: true });
   const { findFirstFocusable } = useFocusFinders();
-  const [draft, setDraft] = useState<{ excerpt: string; page: string; id?: string; revision?: number }>();
+  const [draft, setDraft] = useState<{ excerpt: string; page: string; context?: string; id?: string; revision?: number }>();
+  const [lookupOpen, setLookupOpen] = useState(false);
+  const [lookupDismissed, setLookupDismissed] = useState(false);
   const [note, setNote] = useState("");
   const [markStyle, setMarkStyle] = useState<ReadingMarkStyle>();
+  const [systemPrompt, setSystemPrompt] = useState<string>();
   const [asking, setAsking] = useState(false);
   const [question, setQuestion] = useState("");
   const askAbort = useRef<AbortController>();
@@ -137,7 +143,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
   });
 
   function captureSelection() {
-    if (draft || busy) return;
+    if (draft?.id || busy) return;
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed || !contentRef.current?.contains(selection.anchorNode) || !contentRef.current.contains(selection.focusNode)) return;
     const start = selection.anchorNode?.parentElement?.closest(".mineru-markdown");
@@ -150,7 +156,10 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
     if (excerpt.length > 4000) { setMessage("选段过长，请缩小范围后添加批注。"); return; }
     const candidates = readingQuotePages(excerpt, session.pageTexts, chunks);
     const page = candidates.length === 1 ? String(candidates[0]) : start.closest<HTMLElement>("[data-reading-page]")?.dataset.readingPage ?? "";
-    setDraft({ excerpt, page }); setMarkStyle({ kind: "highlight", color: "yellow" }); setNote(""); openComments(); setError("");
+    const paragraph = selection.anchorNode?.parentElement?.closest("p, li, blockquote, td")?.textContent ?? "";
+    setDraft({ excerpt, page, context: selectionLookupContext(paragraph || session.pageTexts[Number(page)] || "", excerpt) });
+    setLookupOpen(false); setLookupDismissed(false); setAsking(false); askAbort.current?.abort();
+    setMarkStyle({ kind: "highlight", color: "yellow" }); setNote(""); openComments(); setError("");
     setMessage(page ? `已选择第 ${page} 页原文。` : "请选择选段所在的 PDF 页码；保存后可在两种模式中查看。");
   }
 
@@ -252,18 +261,26 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
           {draft.excerpt ? <blockquote>{draft.excerpt}</blockquote> : null}
           {draft.excerpt && !draft.id ? <>
             <PaperSelectionTools extensionActions={session.extensionActions?.({ page: Number(draft.page), excerpt: draft.excerpt })} disabled={busy || !session.ready || !draft.page}
+              lookup={session.lookup ? () => { setLookupOpen(true); setLookupDismissed(false); } : undefined} lookupDisabled={false}
               highlight={() => void selectionAction(() => session.create({ page: Number(draft.page), excerpt: draft.excerpt, note, kind: "highlight", color: markStyle?.color ?? "yellow" }), "高亮已保存。")}
               underline={() => void selectionAction(() => session.create({ page: Number(draft.page), excerpt: draft.excerpt, note, kind: "underline", color: markStyle?.color ?? "blue" }), "划线已保存。")}
               copy={() => void selectionAction(() => navigator.clipboard.writeText(draft.excerpt), "已复制选段。")}
               board={session.capture ? () => void selectionAction(() => session.capture!({ page: Number(draft.page), excerpt: draft.excerpt }, "board"), "摘录已加入白板。") : undefined}
               tray={session.capture ? () => void selectionAction(() => session.capture!({ page: Number(draft.page), excerpt: draft.excerpt }, "tray"), "摘录已加入所选内容对话。") : undefined}
               conversation={session.capture ? () => void selectionAction(() => session.capture!({ page: Number(draft.page), excerpt: draft.excerpt }, "conversation"), "选段已加入对话。") : undefined}
-              quickAsk={session.quickAsk ? () => setAsking(true) : undefined} />
+              quickAsk={session.quickAsk ? () => { setSystemPrompt(undefined); setAsking(true); } : undefined} />
+            {session.lookup && !lookupDismissed && (lookupOpen || session.lookup.autoQuery) ? <SelectionLookupCard
+              key={draft.excerpt} lookup={session.lookup} text={draft.excerpt} context={draft.context}
+              paperId={session.paperId} paperTitle={session.paperTitle}
+              onClose={() => { setLookupOpen(false); setLookupDismissed(true); }}
+              onSave={session.ready && draft.page ? (translation) => session.create({ page: Number(draft.page), excerpt: draft.excerpt, note: translation }) : undefined}
+              onExplain={session.quickAsk && draft.page ? () => { setSystemPrompt(undefined); setQuestion("请结合所在句子解释这个单词或短语在论文中的具体含义，说明它与常见释义的关系。"); setAsking(true); setLookupOpen(false); setLookupDismissed(true); } : undefined} /> : null}
             {asking && session.quickAsk ? <form aria-label="阅读速问" onSubmit={(event) => {
               event.preventDefault(); if (!question.trim() || busy) return;
               const abort = new AbortController(); askAbort.current = abort;
-              void selectionAction(() => session.quickAsk!({ page: Number(draft.page), excerpt: draft.excerpt, question }, abort.signal), "速问已保存到批注。PDF 与阅读模式均可查看。");
+              void selectionAction(() => session.quickAsk!({ page: Number(draft.page), excerpt: draft.excerpt, question, ...(systemPrompt !== undefined ? { systemPrompt } : {}) }, abort.signal), "速问已保存到批注。PDF 与阅读模式均可查看。");
             }}><Field label="速问问题"><Textarea aria-label="速问问题" value={question} disabled={busy} onChange={(_, data) => setQuestion(data.value)} maxLength={4000} /></Field>
+              <GenerationPromptEditor task="selection_explanation" value={systemPrompt} onChange={setSystemPrompt} disabled={busy} />
               <small>上下文：当前页全文与论文摘要</small>
               <Button type="submit" disabled={busy || !question.trim() || !draft.page}>提问</Button>
               <Button onClick={() => { askAbort.current?.abort(); setAsking(false); }}>取消速问</Button></form> : null}

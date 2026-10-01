@@ -7,7 +7,8 @@ import {
   loadCloudConfig,
   publicAdminIdentityConfig,
   publicCloudConfig,
-  publicDesktopIdentityConfig
+  publicDesktopIdentityConfig,
+  publicMobileIdentityConfig
 } from "./config.mjs";
 import { AccountLifecycleError } from "./accountLifecycleError.mjs";
 import { ExternalRetrievalError } from "./externalRetrievalConnectors.mjs";
@@ -21,6 +22,8 @@ import { PlatformAdminError } from "./platformAdminRepository.mjs";
 import { startCloudRuntime } from "./runtime.mjs";
 import { VisualizationServiceError } from "./visualizationService.mjs";
 import { handleVisualizationRequest } from "./visualizationRoutes.mjs";
+import { handleDeviceControl } from "../../../packages/device-control/src/routes.mjs";
+import { DeviceControlError } from "../../../packages/device-control/src/service.mjs";
 
 function sendJson(response, status, body) {
   response.writeHead(status, {
@@ -57,7 +60,9 @@ function sendCorsPreflight(response) {
       "x-liteasy-folder-id",
       "x-liteasy-scope-id",
       "x-liteasy-scope-type",
-      "x-liteasy-session-id"
+      "x-liteasy-session-id",
+      "x-liteasy-device-id",
+      "x-liteasy-device-secret"
     ].join(", "),
     "access-control-allow-methods": "DELETE, GET, PATCH, POST, OPTIONS",
     "access-control-allow-origin": response.liteasyCorsOrigin,
@@ -220,6 +225,7 @@ function errorMessage(code) {
 
 function sendError(response, error, traceId) {
   const known = error instanceof AccountLifecycleError ||
+    error instanceof DeviceControlError ||
     error instanceof ExternalRetrievalError ||
     error instanceof IdentityError ||
     error instanceof IntuechoLiteratureClientError ||
@@ -307,6 +313,25 @@ export function createCloudRequestHandler(runtime, config) {
         sendJson(response, 200, publicAdminIdentityConfig(config));
         return;
       }
+      if (request.method === "GET" && url.pathname === "/v1/identity/mobile-config") {
+        const mobile = publicMobileIdentityConfig(config);
+        if (!mobile) throw new IdentityError("mobile_identity_unavailable", 503);
+        sendJson(response, 200, mobile);
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/v1/mobile/session") {
+        if (!config.identity.mobileClientId) throw new IdentityError("mobile_identity_unavailable", 503);
+        const identity = await runtime.identityVerifier.verifyAuthorizationHeader(request.headers.authorization, "liteasy-mobile", config.identity.mobileClientId);
+        sendJson(response, 200, { subject: identity.subject, issuer: config.identity.issuer, audience: "liteasy-mobile" });
+        return;
+      }
+      if (await handleDeviceControl({ request, url, service: runtime.deviceControlService,
+        authenticate: async (kind) => {
+          const clientId = config.identity[kind === "mobile" ? "mobileClientId" : "desktopClientId"];
+          if (!clientId) throw new IdentityError("device_identity_unavailable", 503);
+          return runtime.identityVerifier.verifyAuthorizationHeader(request.headers.authorization, `liteasy-${kind}`, clientId);
+        }, readBody: readJsonBody, send: (value) => sendJson(response, 200, value)
+      })) return;
 
       if (await handleVisualizationRequest({
         config,

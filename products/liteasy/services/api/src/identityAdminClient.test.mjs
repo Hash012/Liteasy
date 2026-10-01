@@ -20,7 +20,7 @@ test("requires explicit revocation confirmation for every product audience", asy
     if (url === config.tokenUrl) return response({ access_token: "service-token", token_type: "Bearer" });
     return response({
       allSessionsRevoked: true,
-      revokedAudiences: ["liteasy-admin", "liteasy-desktop", "intuecho-web"],
+      revokedAudiences: ["liteasy-admin", "liteasy-desktop", "intuecho-web", "liteasy-mobile"],
       status: "disabled",
       subjectId: "user_1",
       updatedAt: "2026-08-07T00:00:00.000Z"
@@ -33,7 +33,7 @@ test("requires explicit revocation confirmation for every product audience", asy
     subjectId: "user_1",
     traceId: "trace_1"
   });
-  assert.deepEqual(result.revokedAudiences, ["intuecho-web", "liteasy-admin", "liteasy-desktop"]);
+  assert.deepEqual(result.revokedAudiences, ["intuecho-web", "liteasy-admin", "liteasy-desktop", "liteasy-mobile"]);
   assert.match(calls[0].request.headers.authorization, /^Basic /);
   assert.equal(calls[1].request.headers["x-idempotency-key"], "disable-user-0001");
   assert.equal(JSON.parse(calls[1].request.body).status, "disabled");

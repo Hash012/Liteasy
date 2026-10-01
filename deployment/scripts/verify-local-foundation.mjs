@@ -22,12 +22,14 @@ const expectedClients = new Set([
   "liteasy-admin-public",
   "liteasy-cloud",
   "liteasy-desktop-public",
+  "liteasy-mobile-public",
   "liteasy-identity-introspection",
   "liteasy-keycloak-admin",
   "liteasy-visualization-service"
 ]);
 const publicAudiences = new Map([
   ["liteasy-desktop-public", "liteasy-desktop"],
+  ["liteasy-mobile-public", "liteasy-mobile"],
   ["intuecho-web", "intuecho-web"],
   ["liteasy-admin-public", "liteasy-admin"]
 ]);
@@ -57,7 +59,7 @@ function command(executable, args, options = {}) {
     ...options
   });
   if (result.status !== 0) {
-    throw new Error(`${executable} ${args.join(" ")} failed: ${(result.stderr || result.stdout).trim()}`);
+    throw new Error(`${executable} ${args.join(" ")} failed: ${(result.error?.message || result.stderr || result.stdout || "command failed").trim()}`);
   }
 }
 

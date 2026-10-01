@@ -713,6 +713,9 @@ export function createAgentApplicationService(
           "idempotencyKey and input.message must be non-empty"
         );
       }
+      if (request.input.systemPrompt !== undefined && (typeof request.input.systemPrompt !== "string" || request.input.systemPrompt.length > 4000)) {
+        return apiError("invalid_request", "系统提示词最多 4,000 字符。");
+      }
       if (request.input.thinkingDepth !== undefined && !["quick", "balanced", "deliberate"].includes(request.input.thinkingDepth)) {
         return apiError("invalid_request", "Unsupported thinking depth");
       }
@@ -740,6 +743,7 @@ export function createAgentApplicationService(
           existingRun.input.message !== request.input.message ||
           existingRun.input.mode !== request.input.mode ||
           existingRun.input.thinkingDepth !== request.input.thinkingDepth ||
+          existingRun.input.systemPrompt !== request.input.systemPrompt ||
           existingRun.input.artifactType !== request.input.artifactType ||
           JSON.stringify(existingRun.contextRefs) !== JSON.stringify(request.contextRefs) ||
           existingRun.contextPurpose !== request.contextPurpose ||

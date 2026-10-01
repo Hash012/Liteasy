@@ -1,5 +1,31 @@
 import { expect, test } from "@playwright/test";
 
+test("centrally saves a generation prompt and restores it after reload with the editor collapsed", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
+  await page.goto("/");
+  async function openPromptSettings() {
+    await page.getByRole("navigation", { name: "左边栏导航" }).getByRole("button", { name: "设置", exact: true }).click();
+    const settings = page.getByRole("region", { name: "应用设置" });
+    await settings.getByRole("button", { name: "AI 与助手" }).click();
+    return settings.getByRole("region", { name: "AI 生成提示词", exact: true });
+  }
+  let panel = await openPromptSettings();
+  await panel.getByRole("combobox", { name: "提示词用途" }).selectOption("thin_reading");
+  await expect(panel.getByRole("textbox")).toHaveCount(0);
+  await panel.getByRole("combobox", { name: "生成风格" }).selectOption("question");
+  await panel.getByRole("button", { name: "自定义系统提示词" }).click();
+  await expect(panel.getByRole("textbox")).toHaveValue(/以启发式问题引导理解/);
+  await panel.getByRole("textbox").fill("优先解释隐含假设，给出三个检查理解的问题。");
+  await page.reload();
+  panel = await openPromptSettings();
+  await panel.getByRole("combobox", { name: "提示词用途" }).selectOption("thin_reading");
+  await expect(panel.getByRole("textbox")).toHaveCount(0);
+  await panel.getByRole("button", { name: "自定义系统提示词" }).click();
+  await expect(panel.getByRole("textbox")).toHaveValue("优先解释隐含假设，给出三个检查理解的问题。");
+  await panel.getByRole("combobox", { name: "生成风格" }).selectOption("default");
+  await expect(panel.getByRole("textbox")).toHaveValue(/你是论文薄读讲解者/);
+});
+
 test("settings opens centrally, searches globally and retains drafts across categories in both themes", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));

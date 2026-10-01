@@ -13,6 +13,7 @@ import type { AgentArtifactResult, ArtifactTab, ArtifactTask, ArtifactType } fro
 import type { AuthoredArtifact } from "../app/features/artifact-workflow/authoredArtifact";
 import type { Paper } from "../app/features/workspace/workspace.types";
 import { useArtifactActions } from "../app/features/artifacts/useArtifactActions";
+import { getGenerationPrompt } from "../app/features/ai-prompts/generationPrompts";
 import type { AgentRun } from "../app/features/agent-api/agentApi.types";
 import type { MineruFigure } from "../app/features/import/import.types";
 import { v1Fixture } from "./fixtures/thinReadingVersionFixtures";
@@ -509,7 +510,7 @@ describe("useArtifactActions", () => {
     expect(onArtifactTabsChanged).toHaveBeenLastCalledWith([
       expect.objectContaining({ title: "Literature PPT Outline", type: "ppt" })
     ]);
-    expect(runAgentAnalysis).toHaveBeenCalledWith("ppt", expect.any(Function), { sourcePaperIds: ["demo-1"] });
+    expect(runAgentAnalysis).toHaveBeenCalledWith("ppt", expect.any(Function), { sourcePaperIds: ["demo-1"], systemPrompt: getGenerationPrompt("ppt") });
     expect(saveArtifactResult).toHaveBeenCalledWith(
       expect.objectContaining({
         agent: expect.objectContaining({ runId: "run-artifact-1" }),
@@ -2034,7 +2035,8 @@ describe("useArtifactActions", () => {
       {
         regeneratedFromArtifactId: "artifact-original",
         sourcePaperIds: [paper.id],
-        supplementalContext: "请结合 Table 2 的 MRR@10 结果。"
+        supplementalContext: "请结合 Table 2 的 MRR@10 结果。",
+        systemPrompt: getGenerationPrompt("tree")
       }
     );
     expect(save).toHaveBeenCalledWith(

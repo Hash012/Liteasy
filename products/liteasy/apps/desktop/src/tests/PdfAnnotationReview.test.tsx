@@ -54,10 +54,15 @@ test("review is saved in the entry, reloads, remains editable, and travels with 
   const view = render(reader(port));
   await openEntry();
   fireEvent.click(screen.getByRole("button", { name: "AI review：Original source passage" }));
+  expect(screen.queryByRole("textbox", { name: "本次系统提示词" })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole("combobox", { name: "生成风格" }), { target: { value: "deep" } });
+  fireEvent.click(screen.getByRole("button", { name: "自定义系统提示词", exact: true }));
+  fireEvent.change(screen.getByRole("textbox", { name: "本次系统提示词" }), { target: { value: "核对原文，并只指出一项改进建议。" } });
+  fireEvent.click(await screen.findByRole("button", { name: "开始生成", exact: true }));
   await screen.findByText("AI review 已随批注保存。");
   expect(port.reviewAnnotation).toHaveBeenCalledWith(expect.objectContaining({
     paper, annotation: expect.objectContaining({ note: "用户自己的理解", excerpt: "Original source passage" }),
-  }), expect.any(AbortSignal));
+  }), expect.any(AbortSignal), "核对原文，并只指出一项改进建议。");
   expect(stored()).toMatchObject({ note: "用户自己的理解", excerpt: "Original source passage", revision: 2,
     review: { text: "请补充对照实验，区分观察与推断。", sourceRevision: 1 } });
 
@@ -83,6 +88,7 @@ test("an edited entry cannot be overwritten by an in-flight review; its result c
   render(reader(port));
   await openEntry();
   fireEvent.click(screen.getByRole("button", { name: "AI review：Original source passage" }));
+  fireEvent.click(await screen.findByRole("button", { name: "开始生成", exact: true }));
   fireEvent.change(screen.getByRole("textbox", { name: "补充批注笔记" }), { target: { value: "用户在 review 期间修改了批注" } });
   fireEvent.click(screen.getByRole("button", { name: "保存笔记" }));
   await act(async () => finish("基于旧版本的 review"));
@@ -105,6 +111,7 @@ test("switching papers cancels review and a late answer cannot change either ent
   const view = render(reader(port));
   await openEntry();
   fireEvent.click(screen.getByRole("button", { name: "AI review：Original source passage" }));
+  fireEvent.click(await screen.findByRole("button", { name: "开始生成", exact: true }));
   view.rerender(reader(port, { ...paper, id: "other-paper" }));
   expect(request.mock.calls[0][1].aborted).toBe(true);
   await act(async () => finish("late answer"));
@@ -119,6 +126,7 @@ test("failed regeneration preserves a previously edited review and shows the req
   render(reader(workbench({ reviewAnnotation: vi.fn(async () => { throw new Error("AI 服务离线"); }) })));
   await openEntry();
   fireEvent.click(screen.getByRole("button", { name: "AI review：Original source passage" }));
+  fireEvent.click(await screen.findByRole("button", { name: "开始生成", exact: true }));
   expect(await screen.findByRole("alert")).toHaveTextContent("AI 服务离线");
   expect(screen.getByText("用户保留的 review")).toBeVisible();
   expect(stored().review?.text).toBe("用户保留的 review");
@@ -130,6 +138,7 @@ test("storage failure retains generated text for retry without claiming it was s
   await openEntry();
   vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("磁盘空间不足"); });
   fireEvent.click(screen.getByRole("button", { name: "AI review：Original source passage" }));
+  fireEvent.click(await screen.findByRole("button", { name: "开始生成", exact: true }));
   expect(await screen.findByRole("alert")).toHaveTextContent("磁盘空间不足");
   expect(screen.getByText("请补充对照实验，区分观察与推断。")).toBeVisible();
   expect(screen.queryByText("AI review 已随批注保存。")).not.toBeInTheDocument();

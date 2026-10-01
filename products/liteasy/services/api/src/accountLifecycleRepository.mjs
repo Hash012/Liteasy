@@ -263,6 +263,7 @@ export class PostgresAccountLifecycleRepository {
         "DELETE FROM agent_artifacts WHERE subject_id = $1",
         [input.subjectId]
       );
+      await client.query("DELETE FROM device_control_accounts WHERE subject_id = $1", [input.subjectId]);
       const visualizationGenerationRequests = await client.query(
         "DELETE FROM visualization_generation_requests WHERE subject_id = $1",
         [input.subjectId]

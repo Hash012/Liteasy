@@ -1,2 +1,7 @@
 *.pdf binary
 products/liteasy/packages/shared/*.schema.json text eol=lf
+products/liteasy/apps/mobile/**/*.json text eol=lf
+products/liteasy/apps/mobile/**/*.kt text eol=lf
+products/liteasy/apps/mobile/**/*.kts text eol=lf
+products/liteasy/apps/mobile/**/*.gradle text eol=lf
+products/liteasy/apps/mobile/src-tauri/gen/android/gradlew text eol=lf

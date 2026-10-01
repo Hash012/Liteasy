@@ -595,3 +595,20 @@ test("canvas supports blank-space creation, selection, panning and cursor zoom w
   fireEvent.keyDown(host, { key: "Delete" });
   expect(f.model.removePlacement).toHaveBeenCalledWith(f.placement.placementId);
 });
+
+
+test("whiteboard questions use the selected prompt once and keep the editor collapsed by default", async () => {
+  const f = await fixture();
+  const model = { ...f.model, tray: [{ ref: { kind: "object" as const, ref: refOf(f.note) }, pinned: false }] };
+  render(<ObjectWorkbench model={model} />);
+  fireEvent.click(screen.getByRole("button", { name: "白板对话", exact: true }));
+  expect(screen.queryByRole("textbox", { name: "本次系统提示词" })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole("textbox", { name: "针对所选内容提问" }), { target: { value: "解释这段笔记" } });
+  fireEvent.change(screen.getByRole("combobox", { name: "生成风格" }), { target: { value: "hint" } });
+  fireEvent.click(screen.getByRole("button", { name: "自定义系统提示词", exact: true }));
+  fireEvent.change(screen.getByRole("textbox", { name: "本次系统提示词" }), { target: { value: "只给一个提示。" } });
+  fireEvent.click(screen.getByRole("button", { name: "提问", exact: true }));
+  expect(model.submit).toHaveBeenLastCalledWith("解释这段笔记", "只给一个提示。");
+  fireEvent.click(screen.getByRole("button", { name: "提问", exact: true }));
+  expect(model.submit).toHaveBeenLastCalledWith("解释这段笔记");
+});

@@ -1,3 +1,5 @@
+import { GenerationPromptEditor } from "../ai-prompts/GenerationPromptEditor";
+import { artifactPromptTask } from "../ai-prompts/generationPrompts";
 import { Button } from "@fluentui/react-components";
 import { AssistantMarkdown } from "../assistant/AssistantMarkdown";
 import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
@@ -228,6 +230,7 @@ export function ArtifactTabs({
   thinReadingVisualizationStatuses = {}
 }: ArtifactTabsProps) {
   const [regenerationOpen, setRegenerationOpen] = useState(false);
+  const [systemPrompt, setSystemPrompt] = useState<string>();
   const [supplementalContext, setSupplementalContext] = useState("");
   const [submittingRegeneration, setSubmittingRegeneration] = useState(false);
   const [deletingArtifact, setDeletingArtifact] = useState(false);
@@ -286,7 +289,8 @@ export function ArtifactTabs({
         artifactId: activeTab.artifactId,
         artifactType: activeTab.type,
         papers: activeTab.papers ?? [],
-        supplementalContext: trimmedContext
+        supplementalContext: trimmedContext,
+        ...(systemPrompt !== undefined ? { systemPrompt } : {})
       });
       setRegenerationOpen(false);
       setSupplementalContext("");
@@ -548,7 +552,7 @@ export function ArtifactTabs({
               {onRegenerateArtifact && activeTab.papers && activeTab.papers.length > 0 ? (
                 <button
                   className="artifact-regenerate-button"
-                  onClick={() => setRegenerationOpen(true)}
+                  onClick={() => { setSystemPrompt(undefined); setRegenerationOpen(true); }}
                   type="button"
                 >
                   补充资料并重新生成
@@ -701,6 +705,7 @@ export function ArtifactTabs({
               rows={10}
               value={supplementalContext}
             />
+            <GenerationPromptEditor task={artifactPromptTask(activeTab.type)} value={systemPrompt} onChange={setSystemPrompt} disabled={submittingRegeneration} />
             <div className="artifact-regenerate-actions">
               <button onClick={() => setRegenerationOpen(false)} type="button">取消</button>
               <button

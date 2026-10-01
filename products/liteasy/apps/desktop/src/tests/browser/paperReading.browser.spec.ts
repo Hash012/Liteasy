@@ -47,7 +47,8 @@ test("reading typography and comments stay consistent with the PDF and survive r
   await reading.getByRole("button", { name: "阅读排版", exact: true }).click();
   const size = page.getByRole("slider", { name: "阅读字号" });
   await size.focus(); await page.keyboard.press("End");
-  await page.getByRole("combobox", { name: "阅读字体" }).selectOption("sans");
+  await page.getByRole("combobox", { name: "阅读字体" }).click();
+  await page.getByRole("option", { name: "无衬线 · 黑体", exact: true }).click();
   await page.getByRole("combobox", { name: "阅读页面宽度" }).selectOption("1080");
   await page.getByRole("combobox", { name: "阅读行距" }).selectOption("2.2");
   await page.keyboard.press("Escape");

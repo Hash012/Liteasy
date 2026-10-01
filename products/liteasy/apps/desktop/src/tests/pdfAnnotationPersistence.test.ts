@@ -47,3 +47,11 @@ test("a failed write is surfaced and a queued review save can still recover", as
   await expect(second).resolves.toBeUndefined();
   expect(native.save).toHaveBeenCalledTimes(2);
 });
+
+test("durable snapshots retain the document identity and exact PDF fingerprint", async () => {
+  native.save.mockResolvedValue(undefined);
+  await persistPdfAnnotationState({ annotationStorageKey: "fingerprint", autoPublicStorageKey: null,
+    paperId: "document", contentHash: "a".repeat(64), snapshot: snapshot(false) });
+  expect(native.save).toHaveBeenCalledWith({ artifactKind: "annotations", paperId: "document",
+    snapshot: { ...snapshot(false), documentId: "document", contentHash: "a".repeat(64) } });
+});

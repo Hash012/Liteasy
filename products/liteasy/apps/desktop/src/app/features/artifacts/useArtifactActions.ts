@@ -1,3 +1,4 @@
+import { artifactPromptTask, getGenerationPrompt } from "../ai-prompts/generationPrompts";
 import { createArtifactResourceService, artifactResourceScope } from "../resource-filesystem/artifactResourceProvider";
 import type { ResourceScope } from "../resource-filesystem/resourceFile.types";
 import { parseAuthoredArtifact, type AuthoredArtifact } from "../artifact-workflow/authoredArtifact";
@@ -96,6 +97,7 @@ type VerifiedMindmapMetadata = {
 };
 
 export type AgentArtifactGenerationOptions = {
+  systemPrompt?: string;
   contextRefs?: ContextRef[];
   knowledgeSnapshot?: {
     papers: Paper[];
@@ -112,6 +114,7 @@ export type GenerateThinReadingBranchInput = {
   artifactId: string;
   document: ThinReadingDocument;
   source: ThinReadingBranchSource;
+  systemPrompt?: string;
   resumeTaskId?: string;
 };
 
@@ -655,6 +658,7 @@ export function useArtifactActions({
       onAnalysisHint(accessFailure);
       return;
     }
+    generationOptions = { ...generationOptions, systemPrompt: getGenerationPrompt(artifactPromptTask(artifactType), getGenerationSettings?.(), generationOptions?.systemPrompt) };
     const scopedPapers = papersForArtifactScope(artifactType, selectedPapers, getActiveReaderPaper?.());
     // Recovery must not retain unrelated papers from the workspace text index.
     const importedChunksByPaperId = Object.fromEntries(scopedPapers
@@ -1008,6 +1012,7 @@ export function useArtifactActions({
   }
 
   function startAnalysisForPapers(artifactType: ArtifactType, selectedPapers: Paper[], generationOptions?: AgentArtifactGenerationOptions) {
+    generationOptions = { ...generationOptions, systemPrompt: getGenerationPrompt(artifactPromptTask(artifactType), getGenerationSettings?.(), generationOptions?.systemPrompt) };
     const scopedPapers = papersForArtifactScope(artifactType, selectedPapers, getActiveReaderPaper?.());
     if (scopedPapers.length === 0 && !generationOptions?.contextRefs?.length) {
       const message = "请通过 @ 指定论文，或在顶栏 AI 工作台选择论文后再生成产物。";
@@ -1125,6 +1130,7 @@ export function useArtifactActions({
       return message;
     }
     const generationOptions: AgentArtifactGenerationOptions = {
+      systemPrompt: getGenerationPrompt(artifactPromptTask(request.artifactType), getGenerationSettings?.(), request.systemPrompt),
       regeneratedFromArtifactId: request.artifactId,
       sourcePaperIds: request.papers.map((paper) => paper.id),
       supplementalContext: request.supplementalContext
@@ -1273,6 +1279,7 @@ export function useArtifactActions({
     artifactId,
     document,
     source,
+    systemPrompt,
     resumeTaskId
   }: GenerateThinReadingBranchInput) {
     if (document.version === "liteasy.thin-reading/v1") {
@@ -1305,7 +1312,7 @@ export function useArtifactActions({
       }));
       artifactStore.upsertTab({ ...cloneEntry, resultPath });
       syncArtifacts();
-      return generateThinReadingBranch({ artifactId: cloneArtifactId, document: clone, source });
+      return generateThinReadingBranch({ artifactId: cloneArtifactId, document: clone, source, systemPrompt });
     }
     const runningTask = artifactStore.getTasks().find((task) => (
       task.type === "thin_reading" && task.artifactId === artifactId &&
@@ -1380,6 +1387,7 @@ export function useArtifactActions({
       ))
       : undefined;
     const taskId = resumeTaskId ?? artifactStore.createTask("thin_reading");
+    const capturedSystemPrompt = getGenerationPrompt("thin_reading", getGenerationSettings?.(), restoredRecovery?.options?.systemPrompt ?? systemPrompt);
     const finishExecution = trackExecution(artifactStore, taskId);
     try {
       let recoverySnapshot;
@@ -1396,6 +1404,7 @@ export function useArtifactActions({
       }
       artifactStore.updateTask(taskId, {
         artifactId, status: "queued", failure: undefined, agentRunId: undefined,
+        recovery: restoredRecovery ?? { papers: [structuredClone(primaryPaper)], chunks: {}, options: { systemPrompt: capturedSystemPrompt } },
         ...(recoverySnapshot ? { thinReadingBranchRecovery: recoverySnapshot } : {})
       });
       syncArtifacts(taskId);
@@ -1449,9 +1458,11 @@ export function useArtifactActions({
         source,
         targetLanguage: document.targetLanguage
       };
-      const generationOptions: AgentArtifactGenerationOptions = restoredRecovery?.options ?? {
-        supplementalContext: existing.supplementalContext, sourcePaperIds: [primaryPaperId], thinReadingContext: context,
-        knowledgeSnapshot: { papers: [structuredClone(primaryPaper)], chunks: structuredClone(importedChunksForPapers([primaryPaper])), settings: getGenerationSettings?.() ? structuredClone(getGenerationSettings!()) : undefined }
+      const generationOptions: AgentArtifactGenerationOptions = {
+        ...restoredRecovery?.options,
+        systemPrompt: capturedSystemPrompt,
+        supplementalContext: restoredRecovery?.options?.supplementalContext ?? existing.supplementalContext, sourcePaperIds: [primaryPaperId], thinReadingContext: context,
+        knowledgeSnapshot: restoredRecovery?.options?.knowledgeSnapshot ?? { papers: [structuredClone(primaryPaper)], chunks: structuredClone(importedChunksForPapers([primaryPaper])), settings: getGenerationSettings?.() ? structuredClone(getGenerationSettings!()) : undefined }
       };
       artifactStore.updateTask(taskId, { recovery: { papers: [primaryPaper], chunks: generationOptions.knowledgeSnapshot?.chunks ?? {}, options: generationOptions } });
       syncArtifacts(taskId);

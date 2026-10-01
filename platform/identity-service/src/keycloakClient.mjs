@@ -1,4 +1,4 @@
-const revokedAudiences = Object.freeze(["intuecho-web", "liteasy-admin", "liteasy-desktop"]);
+const revokedAudiences = Object.freeze(["intuecho-web", "liteasy-admin", "liteasy-desktop", "liteasy-mobile"]);
 
 export class IdentityManagementError extends Error {
   constructor(code, status = 503) {

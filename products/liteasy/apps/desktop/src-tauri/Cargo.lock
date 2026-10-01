@@ -2466,12 +2466,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 
 [[package]]
+name = "liteasy-annotation-sync"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "liteasy-desktop"
 version = "0.1.25"
 dependencies = [
  "base64 0.22.1",
  "chrono",
  "keyring",
+ "liteasy-annotation-sync",
  "notify",
  "openidconnect",
  "rfd",

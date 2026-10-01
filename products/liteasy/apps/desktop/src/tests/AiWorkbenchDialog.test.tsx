@@ -44,12 +44,14 @@ test("defaults to the current paper, confirms task-local sources, and requires r
   expect(await screen.findByRole("button", { name: "生成 PPT" })).toBeDisabled();
   await user.click(await screen.findByRole("button", { name: "确认选择" }));
   await user.click(await screen.findByRole("button", { name: "生成 PPT" }));
+  await user.click(await screen.findByRole("button", { name: "开始生成" }));
   expect(start).toHaveBeenCalledExactlyOnceWith("ppt", [papers[0]]);
   expect(await screen.findByRole("status")).toHaveTextContent("正在生成产物。");
   await user.click(await screen.findByRole("checkbox", { name: /Recent Paper/ }));
   expect(await screen.findByRole("button", { name: "生成 PPT" })).toBeDisabled();
   await user.click(await screen.findByRole("button", { name: "确认选择" }));
   await user.click(await screen.findByRole("button", { name: "生成提纲" }));
+  await user.click(await screen.findByRole("button", { name: "开始生成" }));
   expect(start).toHaveBeenLastCalledWith("tree", papers.slice(0, 2));
 });
 
@@ -65,6 +67,7 @@ test("selects papers from directories, retains hidden selections during search, 
   await user.click(await screen.findByRole("button", { name: "确认选择" }));
   expect(within(await screen.findByLabelText("已确认的任务论文")).getByText("Current Paper")).toBeInTheDocument();
   await user.click(await screen.findByRole("button", { name: "薄读", exact: true }));
+  await user.click(await screen.findByRole("button", { name: "开始生成" }));
   expect(start.mock.calls).toEqual([["thin_reading", [papers[0]]], ["thin_reading", [papers[2]]]]);
   await user.clear(await screen.findByRole("textbox", { name: "搜索任务论文" }));
   expect(await screen.findByRole("checkbox", { name: /Metadata Only/ })).toBeDisabled();
@@ -98,6 +101,7 @@ test("invalidates a confirmed paper when it is removed and exposes launch errors
   await user.click(await screen.findByRole("checkbox", { name: /Archived Methods/ }));
   await user.click(await screen.findByRole("button", { name: "确认选择" }));
   await user.click(await screen.findByRole("button", { name: "生成 PPT" }));
+  await user.click(await screen.findByRole("button", { name: "开始生成" }));
   expect(await screen.findByRole("status")).toHaveTextContent("服务暂不可用");
   rerender(<Harness start={start} available={papers.filter((paper) => paper.id !== "archived")} />);
   expect(await screen.findByRole("button", { name: "生成 PPT" })).toBeDisabled();

@@ -23,6 +23,22 @@ function content(session: PdfReadingAnnotations) {
 }
 afterEach(() => { localStorage.clear(); vi.restoreAllMocks(); window.getSelection()?.removeAllRanges(); });
 
+test("reading lookup works without annotation geometry and passes the surrounding sentence", async () => {
+  const query = vi.fn(async () => ({ text: "experiment", kind: "dictionary" as const, service: "youdao", sourceLabel: "有道词典", senses: [{ definition: "实验" }], pronunciations: [] }));
+  const session: PdfReadingAnnotations = { scopeKey: "lookup-no-geometry", ready: false, annotations: [], pageTexts: {}, pageCount: 0, focusedPage: 1,
+    lookup: { query, autoQuery: true, translationUsesAi: true }, create: vi.fn(), update: vi.fn(), remove: vi.fn(), openPdf: vi.fn() };
+  render(content(session));
+  const paragraph = screen.getByText(chunks[0].snippet), range = document.createRange();
+  range.setStart(paragraph.firstChild!, 4); range.setEnd(paragraph.firstChild!, 14);
+  window.getSelection()?.removeAllRanges(); window.getSelection()?.addRange(range); fireEvent.mouseUp(paragraph);
+  const tools = screen.getByRole("toolbar", { name: "选段工具" });
+  expect(within(tools).getByRole("button", { name: "高亮", exact: true })).toBeDisabled();
+  expect(within(tools).getByRole("button", { name: "查词/翻译" })).toBeEnabled();
+  await screen.findByText("实验");
+  expect(query.mock.calls[0][0]).toMatchObject({ text: "experiment", context: "The experiment used 128 samples." });
+  expect(screen.queryByRole("button", { name: "保存为批注" })).not.toBeInTheDocument();
+});
+
 test("PDF and reading mode edit and delete the same persisted comment without changing its source", async () => {
   savePdfAnnotations(pdfAnnotationStorageKey(paper), [original]);
   render(<ReaderPane {...props} readingContent={content} />);

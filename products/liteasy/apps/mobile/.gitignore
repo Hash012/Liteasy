@@ -1,0 +1,13 @@
+node_modules/
+dist/
+test-results/
+playwright-report/
+src-tauri/target/
+src-tauri/gen/schemas/
+src-tauri/gen/android/.gradle/
+src-tauri/gen/android/.idea/
+src-tauri/gen/android/local.properties
+src-tauri/gen/android/**/build/
+src-tauri/gen/android/app/src/main/jniLibs/
+*.jks
+*.keystore

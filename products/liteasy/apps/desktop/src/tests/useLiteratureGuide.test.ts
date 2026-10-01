@@ -6,7 +6,7 @@ import type { GuideBatch, GuideGenerator } from "../app/features/paper-reading/l
 const batch: GuideBatch = { level: "balanced", rejected: 0, items: [{ page: 1, quote: "source", title: "术语", explanation: "简明讲解", category: "term" }] };
 function setup(generate: GuideGenerator = async () => batch) {
   return { scope: "paper-a", title: "A", pageCount: 7, ready: true, count: 0, generate,
-    readPage: vi.fn(async (page: number) => `source page ${page}`), save: vi.fn(async () => 1), clear: vi.fn(async () => {}) };
+    readPage: vi.fn(async (page: number) => `source page ${page}`), save: vi.fn(async (_batch: GuideBatch, _pages: number[], _mode: string, _runId: string, _signal: AbortSignal, _options: { systemPrompt: string }) => 1), clear: vi.fn(async () => {}) };
 }
 
 test("processes bounded sequential text batches and resumes after a failure without regenerating completed pages", async () => {
@@ -101,4 +101,17 @@ test("captures options for every batch and save, resets resume on changes, and r
   expect(result.current.resume).toBe(false);
   act(() => result.current.start());
   expect(generate).toHaveBeenCalledTimes(2);
+});
+
+
+test("keeps the confirmed system prompt for every batch of an annotation run", async () => {
+  const generate = vi.fn<GuideGenerator>(async () => batch);
+  const props = setup(generate);
+  const { result } = renderHook(() => useLiteratureGuide(props));
+  act(() => result.current.start("本次只讲实验假设"));
+  await waitFor(() => expect(result.current.message).toContain("7/7 页"));
+  expect(generate).toHaveBeenCalledTimes(3);
+  for (const [request] of generate.mock.calls) expect(request.systemPrompt).toBe("本次只讲实验假设");
+  for (const call of props.save.mock.calls) expect(call[5].systemPrompt).toBe("本次只讲实验假设");
+  expect(result.current.options.systemPrompt).toBe("");
 });

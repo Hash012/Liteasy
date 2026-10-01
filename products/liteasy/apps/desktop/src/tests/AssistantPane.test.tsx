@@ -1,3 +1,4 @@
+import { generationPromptTasks } from "../app/features/ai-prompts/generationPrompts";
 import { createAgentApplicationService } from "../app/controllers/agent/agentApplicationService";
 import { createFrontendAgentClient } from "../app/features/agent-api/frontendAgentClient";
 import { ObjectWorkbenchContext, type ObjectWorkbenchPort } from "../app/features/objects/objectWorkbenchPort";
@@ -9,6 +10,7 @@ import {
   AssistantPane as RuntimeAssistantPane,
   hasPaperGroundedAuditScope
 } from "../app/features/assistant/AssistantPane";
+import { presetGenerationPrompt } from "../app/features/ai-prompts/generationPrompts";
 import { createSettingsStore } from "../app/features/settings/settings.store";
 import type { FrontendAgentClient } from "../app/features/agent-api/frontendAgentClient";
 import type { AgentEvent } from "../app/features/agent-api/agentApi.types";
@@ -575,18 +577,22 @@ test("queues a follow-up and interrupts at the next SDK tool boundary", async ()
   await user.click(screen.getByRole("button", { name: "发送" }));
   expect(composer).toHaveValue("");
   await user.type(composer, "第二条消息");
+  await user.selectOptions(screen.getByRole("combobox", { name: "生成风格" }), "deep");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(composer).toHaveValue("");
   expect(screen.getByText("已暂存 · 当前工具调用结束后生效")).toBeInTheDocument();
   expect(send).toHaveBeenCalledTimes(1);
 
+  await user.selectOptions(screen.getByRole("combobox", { name: "生成风格" }), "hint");
   await user.type(composer, "准备撤回的第三条消息");
   await user.click(screen.getByRole("button", { name: "发送" }));
   const thirdMessage = screen.getByText("准备撤回的第三条消息").closest("article");
   if (!thirdMessage) throw new Error("queued user message article not found");
   await user.click(within(thirdMessage).getByRole("button", { name: "撤回" }));
   expect(composer).toHaveValue("准备撤回的第三条消息");
+  await user.click(screen.getByRole("button", { name: "自定义系统提示词", exact: true }));
+  expect(screen.getByRole("textbox", { name: "本次系统提示词" })).toHaveValue(presetGenerationPrompt("assistant", "hint"));
   expect(thirdMessage).not.toBeInTheDocument();
   await user.clear(composer);
 
@@ -597,6 +603,7 @@ test("queues a follow-up and interrupts at the next SDK tool boundary", async ()
     "用户终止了 AI 对话"
   ));
   await waitFor(() => expect(send).toHaveBeenCalledTimes(2));
+  expect(send.mock.calls[1][0].systemPrompt).toBe(presetGenerationPrompt("assistant", "deep"));
   expect(await screen.findByText("第二条消息已经执行")).toBeInTheDocument();
   expect(screen.queryByText("已暂存 · 当前工具调用结束后生效")).not.toBeInTheDocument();
 });
@@ -1707,7 +1714,7 @@ test.each([["生成PPT", "ppt"], ["/制作提纲", "tree"]] as const)("lazy pape
   expect(fixture.captureFulltext).not.toHaveBeenCalled();
   expect(generate).not.toHaveBeenCalled();
   await act(async () => { finishPrepare(); });
-  await waitFor(() => expect(generate).toHaveBeenCalledWith(type, ["cicada"], expect.any(String), [fixture.noteRef, fixture.fulltextRef]));
+  await waitFor(() => expect(generate).toHaveBeenCalledWith(type, ["cicada"], expect.any(String), [fixture.noteRef, fixture.fulltextRef], generationPromptTasks[type].prompt));
   expect(fixture.captureFulltext).toHaveBeenCalledWith(["cicada"]);
   expect(fixture.captureMetadata).not.toHaveBeenCalled();
   expect(fixture.submit).not.toHaveBeenCalled();

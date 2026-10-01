@@ -5,7 +5,8 @@ import {
   loadMigrationDatabaseConfig,
   publicAdminIdentityConfig,
   publicCloudConfig,
-  publicDesktopIdentityConfig
+  publicDesktopIdentityConfig,
+  publicMobileIdentityConfig
 } from "./config.mjs";
 
 function validEnv(overrides = {}) {
@@ -73,6 +74,16 @@ test("loads a strict production PostgreSQL and S3 configuration", () => {
     issuer: "https://identity.internal"
   });
   assert.equal(JSON.stringify(publicAdminIdentityConfig(config)).includes("secret"), false);
+});
+
+test("mobile identity is opt-in and uses a separate public client without secrets", () => {
+  assert.equal(publicMobileIdentityConfig(loadCloudConfig(validEnv())), null);
+  const value = publicMobileIdentityConfig(loadCloudConfig(validEnv({ LITEASY_IDP_MOBILE_CLIENT_ID: "liteasy-mobile-public" })));
+  assert.deepEqual(value, { audience: "liteasy-mobile", authorizationFlow: "authorization_code_pkce", clientId: "liteasy-mobile-public",
+    issuer: "https://identity.internal", redirectUri: "com.liteasy.mobile://oauth/callback", revocationUrl: "https://identity.internal/oauth2/revoke" });
+  for (const id of ["liteasy-cloud", "liteasy-desktop-public", "liteasy-admin-public", "liteasy-account-lifecycle", "intuecho-organization-service"]) {
+    assert.throws(() => loadCloudConfig(validEnv({ LITEASY_IDP_MOBILE_CLIENT_ID: id })), /cloud_config_invalid/);
+  }
 });
 
 test("loads deployment-scoped model providers without exposing credentials", () => {

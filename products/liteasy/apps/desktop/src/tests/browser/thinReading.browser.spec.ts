@@ -546,6 +546,7 @@ test.describe("thin-reading multimodal integration", () => {
       const wholeFigure = firstSourceFigure.getByRole("button", { name: "深入整图" });
       await expect(wholeFigure).toBeVisible();
       await wholeFigure.click();
+      await page.getByRole("button", { name: "开始生成", exact: true }).click();
       const regionTrigger = firstSourceFigure.getByRole("button", { name: "选择区域" });
       await regionTrigger.click();
       const regionForm = page.getByLabel("区域坐标");
@@ -557,11 +558,13 @@ test.describe("thin-reading multimodal integration", () => {
       const regionAction = page.getByRole("button", { name: "深入此区域" });
       await regionAction.focus();
       await page.keyboard.press("Enter");
+      await page.getByRole("button", { name: "开始生成", exact: true }).click();
       await expect(regionForm).not.toBeVisible();
 
       const objectAction = page.getByRole("button", { name: "深入 Start" });
       await expect(objectAction).toBeVisible();
       await objectAction.click();
+      await page.getByRole("button", { name: "开始生成", exact: true }).click();
       await expect.poll(async () => page.evaluate(() => (
         (window as unknown as { __liteasyThinReadingTargets?: unknown[] }).__liteasyThinReadingTargets?.length ?? 0
       ))).toBe(3);

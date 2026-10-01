@@ -1,3 +1,4 @@
+import { getGenerationPrompt } from "../ai-prompts/generationPrompts";
 import { z } from "zod";
 import { compactPdfTextForSearch } from "../pdf/pdfTextSearch";
 import { createModelGatewayFromSettings } from "../models/modelRuntime";
@@ -72,7 +73,7 @@ export function createGuideGenerator(getSettings: () => SettingsState, getProfil
     const gateway = withModelContextBudget(createModelGatewayFromSettings(settings, { cloudTransport }), agentContextLimit(settings["assistant.context_window"]));
     const response = await gateway.generateAnswer({
       model: getModelForSettings(settings), provider: getActiveModelProvider(settings), requireLive: true,
-      signal: input.signal, outputFormat, prompt: guidePrompt(input, profile)
+      signal: input.signal, outputFormat, prompt: guidePrompt({ ...input, systemPrompt: getGenerationPrompt("literature_annotation", settings, input.systemPrompt) }, profile)
     });
     input.signal.throwIfAborted();
     return parseGuideBatch(response.answer, input, profile.level);

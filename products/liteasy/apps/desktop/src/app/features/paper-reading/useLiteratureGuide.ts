@@ -23,7 +23,8 @@ export function useLiteratureGuide(input: {
     return () => { running.current?.abort(); running.current = undefined; };
   }, [input.scope]);
 
-  async function start() {
+  async function start(systemPrompt?: string) {
+    const runOptions = { ...options, ...(systemPrompt === undefined ? {} : { systemPrompt }) };
     const request = latest.current;
     if (!request.ready || !request.generate || !options.categories.length || running.current) return;
     const controller = new AbortController(); running.current = controller;
@@ -43,10 +44,10 @@ export function useLiteratureGuide(input: {
       setMessage(`正在标注 ${pages[0].page}–${pages.at(-1)!.page} / ${request.pageCount} 页…`);
       const timeout = setTimeout(() => controller.abort(new Error("模型响应超时，请重试。")), 90_000);
       try {
-        const batch = await request.generate!({ title: request.title, abstract, mode, pages, signal, ...options });
+        const batch = await request.generate!({ title: request.title, abstract, mode, pages, signal, ...runOptions });
         check();
         if (batch.rejected && !batch.items.length) throw new Error("本批讲解未能对应原文，原有标注已保留，请重试。");
-        const saved = await request.save(batch, pages.map((page) => page.page), mode, runId, signal, options);
+        const saved = await request.save(batch, pages.map((page) => page.page), mode, runId, signal, runOptions);
         added += saved;
         check(); rejected += batch.rejected + Math.max(0, batch.items.length - saved);
         cursor.current = pages.at(-1)!.page + 1;
@@ -84,7 +85,7 @@ export function useLiteratureGuide(input: {
       cursor.current = 1; setMessage(""); setError("");
     },
     setMode: (value) => { if (!Object.prototype.hasOwnProperty.call(guideModes, value) || running.current) return; setMode(value); cursor.current = 1; setMessage(""); },
-    start: () => { void start(); }, cancel: () => running.current?.abort(), toggle: () => setVisible((value) => !value),
+    start: (systemPrompt?: string) => { void start(systemPrompt); }, cancel: () => running.current?.abort(), toggle: () => setVisible((value) => !value),
     clear: () => {
       if (running.current) return;
       const request = latest.current;

@@ -1,3 +1,5 @@
+import { GenerationPromptEditor } from "../ai-prompts/GenerationPromptEditor";
+import { artifactPromptTask, getGenerationPrompt, settingsWithGenerationPrompt, type GenerationPromptTask } from "../ai-prompts/generationPrompts";
 import { mergeAssistantAssetWrites, parseAssistantAssetWrites } from "./assistantAssetWrites";
 import { AssistantModelPicker } from "../models/AssistantModelPicker";
 import { contextPreviewText } from "./contextAssetPreview";
@@ -104,6 +106,7 @@ type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 const emptyImportedChunks: Record<string, RetrievalChunk[]> = {};
 
 type QueuedAssistantTurn = {
+  systemPrompt?: string;
   thinkingDepth: ThinkingDepth;
   attachedContextPrompt: string;
   contextTokens: AssistantContextToken[];
@@ -149,7 +152,7 @@ type AssistantPaneProps = {
   onApplyThemePreset?: ActionContext["applyThemePreset"];
   onResumeArtifactTask?: (taskId: string) => Promise<void>;
   onCancelArtifactTask?: (taskId: string) => string | Promise<string>;
-  onGenerateArtifact: (artifactType: ArtifactType, paperIds?: string[], context?: string, contextRefs?: import("../context/objectContext").ContextRef[]) => string;
+  onGenerateArtifact: (artifactType: ArtifactType, paperIds?: string[], context?: string, contextRefs?: import("../context/objectContext").ContextRef[], systemPrompt?: string) => string;
   onImportSelectedSet?: ActionContext["importSelectedSet"];
   lazyPaperContext?: boolean;
   onPreparePapersForContext?: (paperIds: string[]) => Promise<void>;
@@ -370,6 +373,7 @@ export function AssistantPane({
   );
   const [activeSessionId, setActiveSessionId] = useState(initialSessionRef.current.id);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [generationPrompts, setGenerationPrompts] = useState<Partial<Record<GenerationPromptTask, string>>>({});
   const [input, setInput] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [voiceInputMessage, setVoiceInputMessage] = useState<string | undefined>();
@@ -377,6 +381,7 @@ export function AssistantPane({
     initialSessionRef.current
   ]);
   const [composerContextTokens, setComposerContextTokens] = useState<AssistantContextToken[]>([]);
+  const promptTask = artifactPromptTask(requestedArtifactType(contextInstructionText(input, composerContextTokens)));
   const [readerContexts, setReaderContexts] = useState<ReaderConversationContext[]>([]);
   const [cancellingSession, setCancellingSession] = useState(false);
   const [historyReady, setHistoryReady] = useState(!historyPersistence);
@@ -1313,7 +1318,8 @@ export function AssistantPane({
     mode: AssistantMode,
     attachments?: AgentAttachment[],
     contextRefs?: ContextRef[],
-    depth?: ThinkingDepth
+    depth?: ThinkingDepth,
+    systemPrompt?: string
   ) {
     const sessionAgentClient = getActivePublicAgentClient();
     if (!sessionAgentClient) {
@@ -1329,7 +1335,7 @@ export function AssistantPane({
           return [];
         }
       });
-      await runEmbeddedAgentMessage(depth && mode !== "command" ? `${thinkingDepthInstruction(depth)}\n\n${message}` : message, mode, attachedPaperIds);
+      await runEmbeddedAgentMessage(depth && mode !== "command" ? `${thinkingDepthInstruction(depth)}\n\n${message}` : message, mode, attachedPaperIds, systemPrompt);
       return;
     }
 
@@ -1408,7 +1414,7 @@ export function AssistantPane({
     syncAssistant();
     try {
       const result = await sessionAgentClient.send(
-        { message, mode, ...(depth ? { thinkingDepth: depth } : {}) },
+        { message, mode, ...(depth ? { thinkingDepth: depth } : {}), ...(systemPrompt ? { systemPrompt } : {}) },
         { attachments, idempotencyKey, ...(contextRefs?.length ? { contextRefs, contextPurpose: message } : {}) }
       );
       if (!result.ok) {
@@ -1470,7 +1476,8 @@ export function AssistantPane({
   async function runEmbeddedAgentMessage(
     message: string,
     mode: AssistantMode,
-    referencedPaperIds: string[] = []
+    referencedPaperIds: string[] = [],
+    systemPrompt?: string
   ) {
     assistantStoreRef.current.setPending(true);
     syncAssistant();
@@ -1506,7 +1513,7 @@ export function AssistantPane({
           modelTransport,
           question: message,
           selectedPapers: scopedPapers,
-          settings: settingsStoreRef.current.getState(),
+          settings: settingsWithGenerationPrompt(settingsStoreRef.current.getState(), systemPrompt),
           thinReadingExternalKnowledgeTransport: modelTransport,
           thinReadingExternalPdfTransport: modelTransport
         });
@@ -1778,7 +1785,7 @@ export function AssistantPane({
   async function runKnowledgeMessage(
     question: string,
     mode: Exclude<AssistantMode, "command">,
-    options: { thinkingDepth?: ThinkingDepth; attachedContextPrompt?: string; referencedPaperIds?: string[]; contextRefs?: ContextRef[] } = {}
+    options: { systemPrompt?: string; thinkingDepth?: ThinkingDepth; attachedContextPrompt?: string; referencedPaperIds?: string[]; contextRefs?: ContextRef[] } = {}
   ) {
     const referencedPaperIds = [...new Set([
       ...(options.referencedPaperIds ?? []),
@@ -1822,7 +1829,7 @@ export function AssistantPane({
         uri: `liteasy://paper/${encodeURIComponent(paperId)}`
       }))
     ];
-    await runPublicAgentMessage(publicQuestion, mode, contextRefs?.length ? undefined : attachments, contextRefs, options.thinkingDepth);
+    await runPublicAgentMessage(publicQuestion, mode, contextRefs?.length ? undefined : attachments, contextRefs, options.thinkingDepth, options.systemPrompt);
   }
 
   async function executePreparedTurn(turn: QueuedAssistantTurn) {
@@ -1849,8 +1856,8 @@ export function AssistantPane({
           await onPreparePapersForContext?.(paperIds);
           contextRefs = [...contextRefs, ...await (objectWorkbench.capturePaperFulltextContext ?? objectWorkbench.capturePaperContext)(paperIds)];
         }
-        const result = contextRefs.length ? onGenerateArtifact(artifactType, paperIds, context, contextRefs)
-          : onGenerateArtifact(artifactType, paperIds, context);
+        const result = contextRefs.length ? onGenerateArtifact(artifactType, paperIds, context, contextRefs, turn.systemPrompt)
+          : onGenerateArtifact(artifactType, paperIds, context, undefined, turn.systemPrompt);
         assistantStoreRef.current.addMessage(createMessage("assistant", result));
       } catch (error) {
         assistantStoreRef.current.addMessage(createMessage("assistant", getAssistantErrorMessage(error, { developerDiagnostics })));
@@ -1879,6 +1886,7 @@ export function AssistantPane({
 
     try {
       await runKnowledgeMessage(turn.message, turn.mode, {
+        systemPrompt: turn.systemPrompt,
         thinkingDepth: turn.thinkingDepth,
         attachedContextPrompt: turn.attachedContextPrompt,
         referencedPaperIds: turn.referencedPaperIds,
@@ -1936,6 +1944,8 @@ export function AssistantPane({
     setInput(turn.userContent);
     setComposerContextTokens(turn.contextTokens);
     setReaderContexts(turn.readerContexts);
+    const task = artifactPromptTask(requestedArtifactType(contextInstructionText(turn.message, turn.contextTokens)));
+    setGenerationPrompts((drafts) => ({ ...drafts, [task]: turn.systemPrompt }));
     syncAssistant();
     inputRef.current?.focus();
   }
@@ -2013,7 +2023,9 @@ export function AssistantPane({
     setEditingMessageId(null);
     setVoiceInputMessage(undefined);
 
+    const turnPromptTask = artifactPromptTask(requestedArtifactType(contextInstructionText(adapted.runtimeInput.message, contextTokensForTurn)));
     const preparedTurn: QueuedAssistantTurn = {
+      systemPrompt: getGenerationPrompt(turnPromptTask, settingsStoreRef.current.getState(), generationPrompts[turnPromptTask]),
       thinkingDepth,
       attachedContextPrompt,
       contextTokens: contextTokensForTurn,
@@ -2025,6 +2037,7 @@ export function AssistantPane({
       userContent: adapted.userMessageContent,
       userMessageId: userMessage.id
     };
+    setGenerationPrompts((drafts) => ({ ...drafts, [turnPromptTask]: undefined }));
     if (currentState.pending) {
       queuedAssistantTurnsRef.current.push(preparedTurn);
       syncAssistant();
@@ -2276,6 +2289,8 @@ export function AssistantPane({
         <span>{contextCatalogStatus}</span>
         {onRefreshContextCatalog ? <Button appearance="subtle" size="small" onClick={onRefreshContextCatalog}>重试</Button> : null}
       </div> : null}
+      <GenerationPromptEditor key={promptTask} task={promptTask} value={generationPrompts[promptTask]}
+        onChange={(value) => setGenerationPrompts((drafts) => ({ ...drafts, [promptTask]: value }))} />
       <AssistantComposer
         contextUsage={contextUsage ?? [...assistantState.messages].reverse()
           .find((message) => message.agentActivity?.contextUsage)?.agentActivity?.contextUsage ?? {

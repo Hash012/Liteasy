@@ -5,10 +5,12 @@ import { Button, Input, Tooltip } from "@fluentui/react-components";
 import { AppsListRegular, BotRegular, CloudSyncRegular, DismissRegular, DocumentSearchRegular, FolderRegular, PaintBrushRegular, SearchRegular } from "@fluentui/react-icons";
 import { PaperServicesSettingsPanel } from "../features/paper-services/PaperServicesSettingsPanel";
 import { WebDavSettingsPanel } from "../features/webdav/WebDavSettingsPanel";
+import { DeviceControlPanel } from "../features/device-control/DeviceControlPanel";
 import { DataLocationSettings } from "../features/settings/DataLocationSettings";
 import { RecommendationSettingsPanel } from "../features/settings/RecommendationSettingsPanel";
 import { AnnotationSyncSettingsPanel } from "../features/settings/AnnotationSyncSettingsPanel";
 import { AgentSettingsPanel } from "../features/agent-core/AgentSettingsPanel";
+import { GenerationPromptSettingsPanel } from "../features/settings/GenerationPromptSettingsPanel";
 import { ViewSettingsPanel } from "../features/settings/ViewSettingsPanel";
 import { ModelConnectionPanel } from "../features/models/ModelConnectionPanel";
 import type { AgentCoreCatalogEntry } from "../features/agent-core/agentCoreConfig";
@@ -19,6 +21,7 @@ import type { SettingsState, UpdateSettingCommand } from "../features/settings/s
 import { matchesSettingsSearch, settingsCategories, settingsSections, type SettingsCategory, type SettingsSectionId } from "../features/settings/settingsNavigation";
 import "../features/settings/settingsPage.css";
 import { LocalMcpSettingsPanel } from "../features/local-mcp/LocalMcpSettingsPanel";
+import { SelectionLookupSettingsPanel } from "../features/selection-lookup/SelectionLookupSettingsPanel";
 
 type SettingsPaneProps = {
   documentMetadataSyncMessage?: string;
@@ -66,8 +69,10 @@ export function SettingsPane(props: SettingsPaneProps) {
   const shared = { settings: props.settings, onUpdateSetting: props.onUpdateSetting };
   const panels: Record<SettingsSectionId, ReactNode> = {
     appearance: <ViewSettingsPanel {...shared} />,
+    "selection-lookup": <SelectionLookupSettingsPanel {...shared} />,
     models: <ModelConnectionPanel {...shared} expandAdvanced={searching} />,
     assistant: <AgentSettingsPanel {...shared} expandCapabilities={searching} onOpenSkillDocument={props.onOpenSkillDocument} />,
+    "generation-prompts": <GenerationPromptSettingsPanel {...shared} />,
     "local-mcp": <LocalMcpSettingsPanel />,
     papers: <PaperServicesSettingsPanel {...shared} />,
     recommendations: <RecommendationSettingsPanel {...shared} />,
@@ -77,6 +82,7 @@ export function SettingsPane(props: SettingsPaneProps) {
       onChangeRoot={props.onChangeLibraryRoot} onOpenInFileManager={props.onOpenLibraryInFileManager}
       onSelectLegacyRoot={props.onSelectLegacyLibraryRoot} rootPath={props.libraryRootPath} />,
     webdav: <WebDavSettingsPanel key={props.libraryRootPath ?? "default"} embedded />,
+    devices: <DeviceControlPanel />,
     metadata: <DocumentMetadataSyncPanel lastResult={props.documentMetadataSyncResult}
       message={props.documentMetadataSyncMessage ?? ""} onRetrySync={props.onRetryDocumentMetadataSync}
       status={props.documentMetadataSyncStatus} />,

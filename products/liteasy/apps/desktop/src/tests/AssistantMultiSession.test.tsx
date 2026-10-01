@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { AssistantPane } from "../app/features/assistant/AssistantPane";
+import { getGenerationPrompt } from "../app/features/ai-prompts/generationPrompts";
 import type { ArtifactTask } from "../app/features/artifacts/artifact.types";
 
 function artifactTask(patch: Partial<ArtifactTask> = {}): ArtifactTask {
@@ -272,7 +273,7 @@ describe("AssistantPane multi-session registry", () => {
       expect(cancel).toHaveBeenCalledWith("run-target", "用户终止了 AI 对话");
     });
     expect(agentClient.send).toHaveBeenCalledWith(
-      { message: "解释 MaxSim", mode: "qa", thinkingDepth: "balanced" },
+      { message: "解释 MaxSim", mode: "qa", thinkingDepth: "balanced", systemPrompt: getGenerationPrompt("assistant") },
       expect.objectContaining({
         idempotencyKey: expect.stringMatching(/^conversation:qa:/)
       })

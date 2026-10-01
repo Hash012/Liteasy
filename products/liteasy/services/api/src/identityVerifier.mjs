@@ -1,6 +1,6 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
-const productAudiences = new Set(["liteasy-admin", "liteasy-desktop", "intuecho-web"]);
+const productAudiences = new Set(["liteasy-admin", "liteasy-desktop", "liteasy-mobile", "intuecho-web"]);
 const internalAudience = "liteasy-internal";
 
 export class IdentityError extends Error {
@@ -139,9 +139,10 @@ export function createIdentityVerifier(config, dependencies = {}) {
   }
 
   return {
-    async verifyAuthorizationHeader(header, expectedAudience) {
+    async verifyAuthorizationHeader(header, expectedAudience, expectedClientId) {
       if (!productAudiences.has(expectedAudience)) throw new IdentityError("identity_audience_configuration_invalid", 500);
       const { clientId: _clientId, ...identity } = await verify(header, expectedAudience);
+      if (expectedClientId && _clientId !== expectedClientId) throw new IdentityError("public_client_mismatch", 403);
       return Object.freeze(identity);
     },
     async verifyServiceAuthorizationHeader(header, { clientId, requiredScope }) {

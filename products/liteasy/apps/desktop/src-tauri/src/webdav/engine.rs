@@ -10,6 +10,65 @@ use std::{
 };
 
 type DocumentVersion = (String, model::FileVersion);
+
+async fn merge_annotations(
+    root: &Path,
+    path: &str,
+    current: &Manifest,
+    remote_manifest: &Manifest,
+    base: Option<&model::FileVersion>,
+    left: Option<&model::FileVersion>,
+    right: Option<&model::FileVersion>,
+    remote: &Remote,
+) -> Result<Option<Vec<u8>>, String> {
+    if !path.starts_with(".liteasy/paper-artifacts/") || !path.ends_with("/annotations.v1.json") {
+        return Ok(None);
+    }
+    let (Some(left), Some(right)) = (left, right) else {
+        return Ok(None);
+    };
+    let source = current.files.values().flatten().find(|version| {
+        version.document_id.as_ref().is_some_and(|id| {
+            crate::user_paper_store::paper_artifact_directory_name(id).is_ok_and(|directory| {
+                path == format!(".liteasy/paper-artifacts/{directory}/annotations.v1.json")
+            })
+        })
+    });
+    let Some(source) = source else {
+        return Ok(None);
+    };
+    let other = remote_manifest
+        .files
+        .values()
+        .flatten()
+        .find(|v| v.document_id == source.document_id);
+    if other.is_none_or(|v| v.hash != source.hash)
+        || [Some(left), Some(right), base]
+            .into_iter()
+            .flatten()
+            .any(|v| v.size > 32 * 1024 * 1024)
+    {
+        return Ok(None);
+    }
+    let local_bytes = local::read_file(&local::safe_path(root, path)?)?
+        .ok_or("批注文件已被移除，请重新同步。")?;
+    if model::digest(&local_bytes) != left.hash {
+        return Err("同步期间批注发生变化，请重试。".into());
+    }
+    let remote_bytes = remote.download(&right.hash, right.size).await?;
+    let base_bytes = match base {
+        Some(v) => Some(remote.download(&v.hash, v.size).await?),
+        None => None,
+    };
+    Ok(liteasy_annotation_sync::merge(
+        base_bytes.as_deref(),
+        &local_bytes,
+        &remote_bytes,
+        source.document_id.as_deref().expect("PDF identity"),
+        &source.hash,
+    )
+    .ok())
+}
 struct IdentityConflict {
     conflict: Conflict,
     paths: BTreeSet<String>,
@@ -256,12 +315,38 @@ pub(super) async fn sync_selected(
             total: keys.len(),
         });
         match decision {
-            Action::Conflict => result.conflicts.push(Conflict {
-                path: path.clone(),
-                remote_path: None,
-                local: local_version.cloned(),
-                remote: remote_version.cloned(),
-            }),
+            Action::Conflict => {
+                if let Some(bytes) = merge_annotations(
+                    root,
+                    path,
+                    &current,
+                    &manifest,
+                    base,
+                    local_version,
+                    remote_version,
+                    remote,
+                )
+                .await?
+                {
+                    let version = model::FileVersion {
+                        hash: model::digest(&bytes),
+                        size: bytes.len() as u64,
+                        document_id: None,
+                    };
+                    remote.upload(&version.hash, bytes).await?;
+                    downloads.push((path.clone(), local_version.cloned(), Some(version.clone())));
+                    manifest.files.insert(path.clone(), Some(version));
+                    result.uploaded += 1;
+                    changed = true;
+                } else {
+                    result.conflicts.push(Conflict {
+                        path: path.clone(),
+                        remote_path: None,
+                        local: local_version.cloned(),
+                        remote: remote_version.cloned(),
+                    });
+                }
+            }
             Action::Equal => {
                 acknowledgements.insert(path.clone(), local_version.cloned());
             }
@@ -391,6 +476,35 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+    #[test]
+    fn annotations_merge_on_two_devices_and_keep_concurrent_variants() {
+        let server = Server::start();
+        let a = Library::new();
+        let b = Library::new();
+        fs::write(a.0.join("paper.pdf"), b"%PDF-test-document").unwrap();
+        runtime().block_on(async {
+            a.sync(&server, vec![]).await.unwrap(); b.sync(&server, vec![]).await.unwrap();
+            let id = a.current().files["paper.pdf"].as_ref().unwrap().document_id.clone().unwrap();
+            let directory = crate::user_paper_store::paper_artifact_directory_name(&id).unwrap();
+            let path = format!(".liteasy/paper-artifacts/{directory}/annotations.v1.json");
+            let snapshot = |text: &str, revision: u64| serde_json::to_vec(&serde_json::json!({"version":2,"autoPublic":false,"annotations":[{
+                "id":"note","kind":"note","page":1,"rects":[],"text":text,"revision":revision,"paperIdentity":{"paperId":id},
+                "publication":{"desiredVisibility":"private","state":"not_published"}
+            }]})).unwrap();
+            crate::local_library::write_bytes_atomically(&a.0.join(&path), &snapshot("original",1)).unwrap();
+            a.sync(&server, vec![]).await.unwrap(); b.sync(&server, vec![]).await.unwrap();
+            fs::write(a.0.join(&path),snapshot("desktop edit",2)).unwrap();
+            fs::write(b.0.join(&path),snapshot("phone edit",2)).unwrap();
+            a.sync(&server, vec![]).await.unwrap();
+            let result = b.sync(&server, vec![]).await.unwrap(); assert!(result.conflicts.is_empty());
+            a.sync(&server, vec![]).await.unwrap();
+            let bytes = fs::read(a.0.join(&path)).unwrap(); assert_eq!(bytes,fs::read(b.0.join(&path)).unwrap());
+            let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(value["annotations"].as_array().unwrap().len(),2);
+            assert!(value["annotations"].as_array().unwrap().iter().any(|v| v["conflictOf"] == "note"));
+            let result = b.sync(&server, vec![]).await.unwrap(); assert_eq!(result.uploaded + result.downloaded,0);
+        });
     }
     #[test]
     fn disabled_categories_are_never_deleted_and_resume_three_way_conflicts() {

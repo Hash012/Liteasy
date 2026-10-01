@@ -1,3 +1,4 @@
+import { presetGenerationPrompt } from "../app/features/ai-prompts/generationPrompts";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
@@ -28,6 +29,23 @@ function selectText() {
 
 afterEach(() => { vi.restoreAllMocks(); localStorage.clear(); });
 
+test("PDF lookup uses the selected text and sentence, persists results and opens contextual explanation", async () => {
+  const query = vi.fn(async () => ({ text: "compact representations", kind: "dictionary" as const, service: "bing", sourceLabel: "必应词典", senses: [{ definition: "紧凑表示" }], pronunciations: [] }));
+  const onQuickAsk = vi.fn(async () => "解释");
+  render(<PdfReader selectedPapers={[paper]} zoom={100} onQuickAsk={onQuickAsk} selectionLookup={{ query, autoQuery: false, translationUsesAi: true }} />);
+  await act(async () => {}); selectText();
+  expect(query).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole("button", { name: "查词/翻译" }));
+  await screen.findByText("紧凑表示");
+  expect(query.mock.calls[0][0]).toMatchObject({ text: "compact representations", context: expect.stringContaining("Our method learns compact representations."), paperId: paper.id });
+  expect(query.mock.calls[0][0].context).not.toContain("Full page evidence");
+  await userEvent.click(screen.getByRole("button", { name: "保存为批注" }));
+  await waitFor(() => expect(loadPdfAnnotations(pdfAnnotationStorageKey(paper)).some((item) => item.note?.includes("紧凑表示"))).toBe(true));
+  await userEvent.click(screen.getByRole("button", { name: "结合本句解释" }));
+  expect(screen.getByRole("textbox", { name: "速问问题" })).toHaveValue("请结合所在句子解释这个单词或短语在论文中的具体含义，说明它与常见释义的关系。");
+  expect(screen.queryByRole("region", { name: "查词与翻译结果" })).not.toBeInTheDocument();
+});
+
 test("uses the full page and abstract, stores the answer privately, and restores a clickable dashed mark", async () => {
   const user = userEvent.setup();
   const onQuickAsk = vi.fn(async (_request: PdfQuickAskRequest) => "**回答**：这是紧凑表示。");
@@ -36,11 +54,17 @@ test("uses the full page and abstract, stores the answer privately, and restores
   selectText();
   await user.click(screen.getByRole("button", { name: "速问", exact: true }));
   await user.type(screen.getByLabelText("速问问题"), "这是什么意思？");
+  expect(screen.queryByRole("textbox", { name: "本次系统提示词" })).not.toBeInTheDocument();
+  await user.selectOptions(screen.getByRole("combobox", { name: "生成风格" }), "intuitive");
+  await user.click(screen.getByRole("button", { name: "自定义系统提示词" }));
+  expect(screen.getByRole("textbox", { name: "本次系统提示词" })).toHaveValue(presetGenerationPrompt("selection_explanation", "intuitive"));
+  await user.clear(screen.getByRole("textbox", { name: "本次系统提示词" }));
+  await user.type(screen.getByRole("textbox", { name: "本次系统提示词" }), "用二维向量举例");
   await user.click(screen.getByRole("button", { name: "提问", exact: true }));
   await waitFor(() => expect(onQuickAsk).toHaveBeenCalledTimes(1));
   expect(onQuickAsk.mock.calls[0][0]).toMatchObject({
     page: 1, excerpt: "compact representations", question: "这是什么意思？",
-    pageText: pageTexts[1], abstractText: "Our method learns compact representations."
+    systemPrompt: "用二维向量举例", pageText: pageTexts[1], abstractText: "Our method learns compact representations."
   });
   await screen.findAllByText("回答");
   await waitFor(() => expect(loadPdfAnnotations(pdfAnnotationStorageKey(paper))).toHaveLength(1));

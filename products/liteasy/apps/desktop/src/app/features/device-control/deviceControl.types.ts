@@ -1,0 +1,12 @@
+export type DeviceTaskKind = "open-document" | "extract-text" | "summarize-document" | "sync-library";
+export type DeviceTask = { taskId: string; operationId: string; kind: DeviceTaskKind; status: string; leaseToken?: string;
+  document?: { documentId: string; contentHash: string; title: string }; cancelRequested?: boolean; progress?: number;
+  result?: TaskResult; error?: string };
+export type TaskResult = { text?: string; hasText?: boolean; message: string; pages?: number };
+export type TaskReceipt = { status: "succeeded" | "failed" | "cancelled" | "uncertain"; result?: TaskResult; error?: string };
+export type DeviceSnapshot = { devices: { deviceId: string; name: string; online: boolean }[]; pairs: { pairId: string; mobileId: string }[]; tasks: DeviceTask[] };
+export type DeviceJournal = { version: 1; enabled: boolean; allowSummary: boolean; name?: string;
+  pending: { task: DeviceTask; phase: "executing" | "receipt"; receipt?: TaskReceipt } | null };
+export const emptyDeviceJournal = (): DeviceJournal => ({ version: 1, enabled: false, allowSummary: false, pending: null });
+export const taskKindLabels: Record<DeviceTaskKind, string> = { "open-document": "打开文献", "extract-text": "提取正文", "summarize-document": "生成摘要", "sync-library": "同步资料库" };
+export const taskStatusLabels: Record<string, string> = { queued: "等待领取", leased: "准备中", "waiting-input": "等待附件", running: "执行中", uncertain: "结果待确认", succeeded: "已完成", failed: "失败", cancelled: "已取消" };

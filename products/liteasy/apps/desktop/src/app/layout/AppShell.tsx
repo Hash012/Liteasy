@@ -21,6 +21,7 @@ import { useExternalNoteController } from "../controllers/useExternalNoteControl
 import { ExternalNoteEditor } from "../features/note-files/ExternalNoteEditor";
 import { useWindowControls } from "../controllers/useWindowControls";
 import { useImmersiveReadingController } from "../controllers/useImmersiveReadingController";
+import { GenerationPromptContext } from "../features/ai-prompts/GenerationPromptContext";
 import { useLiteratureGuideController } from "../controllers/useLiteratureGuideController";
 import { ImmersiveReadingControls } from "./ImmersiveReadingControls";
 import { WorkspaceCommandBar } from "./WorkspaceCommandBar";
@@ -29,6 +30,8 @@ import { useRecommendationLibraryController } from "../controllers/useRecommenda
 import { noteFileStatus, paperFileStatus, readingFileStatus, usePdfFileStatus, useWorkspaceShellController } from "../controllers/useWorkspaceShellController";
 import type { WorkspaceSurface } from "../features/workspace/workspaceShell.types";
 import { useWebDavSyncController } from "../controllers/useWebDavSyncController";
+import { useDeviceControlController } from "../controllers/useDeviceControlController";
+import { DeviceControlContext } from "../features/device-control/DeviceControlPanel";
 import { useReadingLibraryController } from "../controllers/useReadingLibraryController";
 import { ReadingLibrarySurface } from "../features/reading-library/ReadingLibrarySurface";
 import { ResourceLocationButton } from "../features/resource-filesystem/ResourceLocationButton";
@@ -66,6 +69,7 @@ import { LocalMcpContext } from "../features/local-mcp/localMcpContext";
 import { useLocalAssetMcp } from "../controllers/agent/useLocalAssetMcp";
 import { ObjectWorkbench } from "../features/boards/ObjectWorkbench";
 import { usePdfQuickAskController } from "../controllers/usePdfQuickAskController";
+import { useSelectionLookupController } from "../controllers/useSelectionLookupController";
 import { usePaperServicesController } from "../controllers/usePaperServicesController";
 import type { CSSProperties } from "react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -835,6 +839,10 @@ export function AppShell({
     );
   }
   cloudAccessTokenRef.current = accountSession?.sessionId;
+  const deviceControl = useDeviceControlController({ session: accountSession, endpoint: cloudAccount.model.controlPlaneEndpoint,
+    libraryRoot: localLibrarySnapshot?.rootPath ?? null,
+    getPapers: () => workspaceStoreRef.current.getState().papers, getSettings: () => settingsStoreRef.current.getState(),
+    getTransport: () => effectiveModelTransport, openPaper: openPaperInReader, refreshLibrary: refreshLocalLibrary });
   usePolicySync({
     applyModelPolicySnapshot: modelSettings.applyModelPolicySnapshot,
     controlPlaneTransport,
@@ -845,6 +853,7 @@ export function AppShell({
     modelTransport: effectiveModelTransport,
     settingsStore: settingsStoreRef.current
   });
+  const selectionLookup = useSelectionLookupController({ getSettings: () => settingsStoreRef.current.getState(), modelTransport: effectiveModelTransport });
   const localLiteratureMode = settingsState["papers.local_mode"];
   const localProfileMode = localLiteratureMode || cloudAccount.model.cloudAvailabilityStatus !== "available";
   const profileSamplingEnabled = settingsState[localProfileMode ? "profile.local_enabled" : "profile.enabled"];
@@ -1291,6 +1300,7 @@ export function AppShell({
   });
   objectAgentApiRef.current = assistantAgent.publicApi;
   const askPdfQuestion = usePdfQuickAskController({
+    getSettings: () => settingsStoreRef.current.getState(),
     capture: objectWorkbench.captureQuickAsk,
     ask: objectWorkbench.ask
   });
@@ -2016,9 +2026,9 @@ export function AppShell({
     }
   }
 
-  function startReaderScopedAnalysis(artifactType: ArtifactType, papers?: typeof selectedPapers) {
+  function startReaderScopedAnalysis(artifactType: ArtifactType, papers?: typeof selectedPapers, options?: import("../features/artifacts/useArtifactActions").AgentArtifactGenerationOptions) {
     if (papers && papers.length > 0) {
-      return artifactWorkflow.actions.startAnalysisForPapers(artifactType, papers);
+      return artifactWorkflow.actions.startAnalysisForPapers(artifactType, papers, options);
     }
     void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
   }
@@ -2140,13 +2150,13 @@ export function AppShell({
           onApplyThemePreset={runtimeActionContext.applyThemePreset}
           onResumeArtifactTask={artifactWorkflow.actions.resumeArtifactTask}
           onCancelArtifactTask={artifactWorkflow.actions.cancelArtifactTask}
-          onGenerateArtifact={(artifactType, paperIds, context, contextRefs) => {
+          onGenerateArtifact={(artifactType, paperIds, context, contextRefs, systemPrompt) => {
             const ids = paperIds?.length ? paperIds : workspaceStoreRef.current.getSelectedDocumentSet().locked
               ? workspaceStoreRef.current.getSelectedDocumentSet().documentIds : [];
             const papers = ids.map((id) => workspaceStoreRef.current.getState().papers.find((paper) => paper.id === id));
             if ((!papers.length && !contextRefs?.length) || papers.some((paper) => !paper)) return "请指定论文或将笔记、白板等资源拖入对话后再生成。";
             const sources = papers.filter((paper): paper is Paper => Boolean(paper));
-            const options = { supplementalContext: context, contextRefs };
+            const options = { supplementalContext: context, contextRefs, systemPrompt };
             return artifactType === "thin_reading"
               ? sources.map((paper) => artifactWorkflow.actions.startAnalysisForPapers(artifactType, [paper], options)).join("\n")
               : artifactWorkflow.actions.startAnalysisForPapers(artifactType, sources, options);
@@ -2214,6 +2224,7 @@ export function AppShell({
     ];
     return (
       <ReaderPane
+        selectionLookup={selectionLookup}
         onDocumentInfo={pdfFileStatus.onDocumentInfo}
         onQuickAsk={askPdfQuestion}
         onGenerateGuide={generateLiteratureGuide}
@@ -2550,7 +2561,9 @@ export function AppShell({
     runtimeTheme.kind === "generated" ? runtimeTheme.theme.scope.join(" ") : undefined;
 
   return (
+    <GenerationPromptContext.Provider value={settingsState}>
     <LocalMcpContext.Provider value={localMcp}>
+    <DeviceControlContext.Provider value={deviceControl}>
     <WorkbenchCommandsContext.Provider value={workbenchCommands.execute}>
     <NotesContext.Provider value={notes.port}>
     <HelpContext.Provider value={help.port}>
@@ -2742,6 +2755,8 @@ export function AppShell({
     </HelpContext.Provider>
     </NotesContext.Provider>
     </WorkbenchCommandsContext.Provider>
+    </DeviceControlContext.Provider>
     </LocalMcpContext.Provider>
+    </GenerationPromptContext.Provider>
   );
 }

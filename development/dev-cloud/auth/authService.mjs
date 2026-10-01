@@ -34,7 +34,7 @@ function normalizeAudience(value) {
   if (value === undefined || value === null || value === "") {
     return "liteasy-desktop";
   }
-  return ["liteasy-desktop", "intuecho-web", "liteasy-admin"].includes(value)
+  return ["liteasy-desktop", "liteasy-mobile", "intuecho-web", "liteasy-admin"].includes(value)
     ? value
     : null;
 }

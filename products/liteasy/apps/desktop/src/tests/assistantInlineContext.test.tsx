@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vitest";
 import { AssistantPane } from "../app/features/assistant/AssistantPane";
+import { getGenerationPrompt } from "../app/features/ai-prompts/generationPrompts";
 import type { AssistantContextToken } from "../app/features/assistant/assistant.types";
 import { ObjectWorkbenchContext, type ObjectWorkbenchPort } from "../app/features/objects/objectWorkbenchPort";
 import { ASSET_CONTEXT_MIME } from "../app/features/object-transfer/assetContextTransfer";
@@ -116,5 +117,5 @@ test("a context name containing 薄读 never becomes a generation command, but e
   await user.click(screen.getByRole("button", { name: "编辑：注意力薄读 请解释核心方法" }));
   fireEvent.change(input, { target: { value: "根据 注意力薄读 生成 PPT" } });
   await user.click(screen.getByRole("button", { name: "更新并发送" }));
-  await waitFor(() => expect(generate).toHaveBeenCalledWith("ppt", undefined, expect.stringContaining("根据 注意力薄读 生成 PPT"), note.contextRefs));
+  await waitFor(() => expect(generate).toHaveBeenCalledWith("ppt", undefined, expect.stringContaining("根据 注意力薄读 生成 PPT"), note.contextRefs, getGenerationPrompt("ppt")));
 });

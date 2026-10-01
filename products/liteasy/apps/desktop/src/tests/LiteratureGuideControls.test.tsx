@@ -15,6 +15,8 @@ test("keeps the reader toolbar compact and configures all annotation options in 
   expect(within(toolbar).getAllByRole("button")).toHaveLength(1);
   fireEvent.click(within(toolbar).getByRole("button"));
   const dialog = within(screen.getByRole("dialog", { name: "AI 标注", exact: true }));
+  expect(dialog.queryByRole("textbox", { name: "本次系统提示词" })).not.toBeInTheDocument();
+  fireEvent.click(dialog.getByRole("button", { name: "自定义系统提示词" }));
   fireEvent.change(dialog.getByLabelText("自定义系统提示词"), { target: { value: "我关心推理假设" } });
   expect(dialog.getByLabelText("自定义系统提示词")).toHaveValue("我关心推理假设");
   fireEvent.change(dialog.getByLabelText("已有标注处理方式"), { target: { value: "append" } });

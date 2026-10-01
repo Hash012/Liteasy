@@ -16,6 +16,8 @@ use std::time::{Duration, Instant};
 use url::Url;
 
 static ACTIVE_OBJECT_PRINCIPAL: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+static ACTIVE_DEVICE_SESSION: std::sync::Mutex<Option<(String, String)>> =
+    std::sync::Mutex::new(None);
 
 const CREDENTIAL_SERVICE: &str = "com.liteasy.desktop.identity";
 const CREDENTIAL_USERNAME: &str = "primary-refresh-token";
@@ -295,6 +297,9 @@ fn session_from_token(
     *ACTIVE_OBJECT_PRINCIPAL
         .lock()
         .map_err(|_| "object_forbidden")? = Some(subject.clone());
+    *ACTIVE_DEVICE_SESSION
+        .lock()
+        .map_err(|_| "oauth_session_unavailable")? = Some((subject.clone(), access_token.clone()));
     Ok(DesktopOAuthSession {
         email,
         expires_at,
@@ -490,6 +495,9 @@ pub async fn revoke_desktop_oauth_session(
     configuration: DesktopIdentityConfiguration,
 ) -> Result<(), String> {
     let issuer = validate_identity_configuration(&configuration)?;
+    *ACTIVE_DEVICE_SESSION
+        .lock()
+        .map_err(|_| "oauth_session_unavailable")? = None;
     let stored = match load_refresh_credential() {
         Ok(value) => value,
         Err(code) if code == "oauth_session_not_found" => return Ok(()),
@@ -615,6 +623,34 @@ mod tests {
             .unwrap()
             .ends_with('Z'));
     }
+
+    #[test]
+    fn device_requests_bind_the_verified_token_to_the_native_subject() {
+        session_from_token(
+            "token-a".into(),
+            Some(Duration::from_secs(900)),
+            "a@example.com".into(),
+            "A".into(),
+            "a".into(),
+        )
+        .unwrap();
+        assert!(authorize_device_session("a", "token-a").is_ok());
+        assert!(authorize_device_session("a", "token-b").is_err());
+        assert!(authorize_device_session("b", "token-a").is_err());
+        session_from_token(
+            "token-a-rotated".into(),
+            Some(Duration::from_secs(900)),
+            "a@example.com".into(),
+            "A".into(),
+            "a".into(),
+        )
+        .unwrap();
+        assert!(authorize_device_session("a", "token-a").is_err());
+        assert!(authorize_device_session("a", "token-a-rotated").is_ok());
+        *ACTIVE_DEVICE_SESSION.lock().unwrap() = None;
+        *ACTIVE_OBJECT_PRINCIPAL.lock().unwrap() = None;
+        assert!(authorize_device_session("a", "token-a-rotated").is_err());
+    }
 }
 
 /// Ownership follows only sessions successfully verified by the native OAuth flow.
@@ -626,4 +662,20 @@ pub(crate) fn local_object_scope() -> Result<String, String> {
         .as_ref()
         .map(|subject| format!("user:{subject}"))
         .unwrap_or_else(|| "local".to_string()))
+}
+
+/// A device credential may only accompany the token verified by this native OAuth session.
+pub(crate) fn authorize_device_session(subject: &str, token: &str) -> Result<(), String> {
+    let session = ACTIVE_DEVICE_SESSION
+        .lock()
+        .map_err(|_| "oauth_session_unavailable")?;
+    if session
+        .as_ref()
+        .is_some_and(|(owner, verified)| owner == subject && verified == token)
+        && local_object_scope()? == format!("user:{subject}")
+    {
+        Ok(())
+    } else {
+        Err("设备任务需要当前浏览器登录会话，请重新登录。".into())
+    }
 }

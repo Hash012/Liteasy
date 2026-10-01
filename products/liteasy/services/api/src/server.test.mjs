@@ -8,6 +8,8 @@ import { ModelProxyError } from "./modelProxyService.mjs";
 import { PdfUploadError } from "./pdfUploadService.mjs";
 import { createCloudRequestHandler } from "./server.mjs";
 import { VisualizationServiceError } from "./visualizationService.mjs";
+import { DeviceControlService, emptyDeviceState } from "../../../packages/device-control/src/service.mjs";
+import { randomBytes, randomUUID } from "node:crypto";
 
 function request(method, url, body, authorization = "Bearer valid") {
   const stream = Readable.from(body === undefined ? [] : [JSON.stringify(body)]);
@@ -38,6 +40,40 @@ function response() {
 function jsonBody(result) {
   return JSON.parse(result.body.toString("utf8"));
 }
+
+test("device routes bind audience, client, account and per-device proof before pairing or claiming tasks", async () => {
+  const states = new Map(); const instance = runtime();
+  instance.deviceControlService = new DeviceControlService({ async transaction(subject, operation) {
+    const state = structuredClone(states.get(subject) ?? emptyDeviceState()); const result = operation(state); states.set(subject, state); return result;
+  } });
+  instance.identityVerifier.verifyAuthorizationHeader = async (header, audience, clientId) => {
+    assert.equal(clientId, `${audience}-public`);
+    if (header !== `Bearer ${audience}`) throw new IdentityError("access_token_audience_mismatch", 403);
+    return { subject: "owner" };
+  };
+  const config = internalConfig(); config.identity.desktopClientId = "liteasy-desktop-public"; config.identity.mobileClientId = "liteasy-mobile-public";
+  const handler = createCloudRequestHandler(instance, config);
+  const desktop = { deviceId: randomUUID(), secret: randomBytes(32).toString("base64url"), name: "Desktop", capabilities: ["sync-library"] };
+  const mobile = { deviceId: randomUUID(), secret: randomBytes(32).toString("base64url"), name: "Phone", capabilities: [] };
+  async function invoke(kind, path, body, device, token = `liteasy-${kind}`) {
+    const input = request(body === undefined ? "GET" : "POST", `/v1/${kind}/${path}`, body, `Bearer ${token}`);
+    if (device) { input.headers["x-liteasy-device-id"] = device.deviceId; input.headers["x-liteasy-device-secret"] = device.secret; }
+    const output = response(); await handler(input, output); return output;
+  }
+  assert.equal((await invoke("desktop", "devices/register", desktop)).status, 200);
+  assert.equal((await invoke("mobile", "devices/register", mobile)).status, 200);
+  const code = jsonBody(await invoke("desktop", "devices/pair-code", {}, desktop)).code;
+  assert.equal((await invoke("mobile", "pairs", { code }, mobile)).status, 200);
+  const created = await invoke("mobile", "tasks", { operationId: randomUUID(), desktopId: desktop.deviceId, kind: "sync-library" }, mobile);
+  assert.equal(created.status, 200);
+  assert.equal((await invoke("desktop", "tasks/claim", {}, desktop, "liteasy-mobile")).status, 403);
+  assert.equal((await invoke("desktop", "tasks/claim", {}, { ...desktop, secret: mobile.secret })).status, 403);
+  const claimed = jsonBody(await invoke("desktop", "tasks/claim", {}, desktop)); assert.equal(claimed.task.taskId, jsonBody(created).task.taskId);
+  assert.equal(jsonBody(await invoke("mobile", `tasks/${claimed.task.taskId}`, undefined, mobile)).task.taskId, claimed.task.taskId);
+  assert.equal((await invoke("mobile", `tasks/${claimed.task.taskId}`, undefined, { ...mobile, secret: "invalid" })).status, 403);
+  const listed = jsonBody(await invoke("mobile", "tasks", undefined, mobile));
+  assert.equal("leaseToken" in listed.tasks[0], false); assert.equal(JSON.stringify(listed).includes(desktop.secret), false);
+});
 
 function internalConfig() {
   return {
@@ -787,6 +823,26 @@ test("publishes only audience-specific desktop and admin public-client OIDC conf
   });
   assert.equal(adminResult.body.includes("must-not-leak"), false);
   assert.equal(instance.calls.length, 0);
+});
+
+test("mobile identity is optional and its session response is audience/client bound without returning tokens", async () => {
+  const instance = runtime(); const config = internalConfig();
+  const disabled = response(); await createCloudRequestHandler(instance, config)(request("GET", "/v1/identity/mobile-config"), disabled);
+  assert.equal(disabled.status, 503);
+  config.identity = { ...config.identity, mobileClientId: "mobile-public", issuer: "https://identity.example", revocationUrl: "https://identity.example/revoke" };
+  instance.identityVerifier.verifyAuthorizationHeader = async (header, audience, clientId) => {
+    assert.equal(audience, "liteasy-mobile"); assert.equal(clientId, "mobile-public");
+    if (header !== "Bearer mobile") throw new IdentityError("access_token_audience_mismatch", 403);
+    return { subject: "mobile-user", token: "must-not-leak" };
+  };
+  const handler = createCloudRequestHandler(instance, config);
+  const settings = response(); await handler(request("GET", "/v1/identity/mobile-config"), settings);
+  assert.equal(jsonBody(settings).redirectUri, "com.liteasy.mobile://oauth/callback");
+  const denied = response(); await handler(request("GET", "/v1/mobile/session", undefined, "Bearer desktop"), denied);
+  assert.equal(denied.status, 403);
+  const session = response(); await handler(request("GET", "/v1/mobile/session", undefined, "Bearer mobile"), session);
+  assert.deepEqual(jsonBody(session), { subject: "mobile-user", issuer: "https://identity.example", audience: "liteasy-mobile" });
+  assert.equal(session.body.includes("must-not-leak"), false);
 });
 
 test("enables desktop diagnostics only outside production after a database role check", async () => {
