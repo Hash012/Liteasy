@@ -60,6 +60,8 @@ node --test products/liteasy/packages/recommendation-core/*.test.mjs development
 
 契约检查使用包含本次功能的隔离快照，不混入当前工作区既有修改。Linux 使用的 Rust 工具链与 Windows workflow 小版本不同，这些结果不代表 Windows 编译已验收。
 
+0.1.28 首轮 Windows CI（run `36892065288`）通过完整前端回归，以及新增向量索引、外链和 PDF 流式传输的 Windows 测试；随后两项 WebDAV 回归失败。测试文献库原先仅按进程号和系统时间命名，重复时钟读数会让并行设备共用目录，导致额外文件和写入冲突。现改为递增序号加排他创建，并补充 16 个固定时间戳并行设备的隔离与清理回归；保留原同步断言和 CI 门禁。首轮未产生安装包，最终结果以修复后的 Installer CI 为准。
+
 另通过实际 TypeScript 解析入口下载 arXiv `2402.12482`，得到 HTTP 200 和 284,060 字节 PDF。PMLR `das24a.html` 能打开，且指向 `raw.githubusercontent.com/mlresearch/v235/main/assets/das24a/das24a.pdf`；本环境请求该文件超时，独立 Python／Node 下载也复现超时。因此 PMLR 的真实下载未通过，不能计入开放样例验收。该联网检查运行于 Linux，无 WebView CORS 限制，也不代替原生 Windows 下载验证。
 
 ## 尚未满足的发布门槛

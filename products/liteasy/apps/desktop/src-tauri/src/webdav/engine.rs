@@ -419,7 +419,9 @@ pub(super) async fn sync_selected(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use transport::test_server::{runtime, Server};
+    static LIBRARY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
     struct Library(std::path::PathBuf);
     impl Library {
         fn new() -> Self {
@@ -427,13 +429,23 @@ mod tests {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_nanos();
-            let path = std::env::temp_dir().join(format!(
-                "liteasy-webdav-engine-{}-{nonce}",
-                std::process::id()
-            ));
-            fs::create_dir_all(&path).unwrap();
-            // Match library_root(), including the Windows verbatim path prefix.
-            Self(path.canonicalize().unwrap())
+            Self::with_nonce(nonce)
+        }
+        fn with_nonce(nonce: u128) -> Self {
+            // Windows clock readings can repeat across parallel tests. Reserve
+            // each directory exclusively so devices never share fixture files.
+            loop {
+                let sequence = LIBRARY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+                let path = std::env::temp_dir().join(format!(
+                    "liteasy-webdav-engine-{}-{nonce}-{sequence}",
+                    std::process::id()
+                ));
+                match fs::create_dir(&path) {
+                    Ok(()) => return Self(path.canonicalize().unwrap()),
+                    Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                    Err(error) => panic!("cannot create isolated WebDAV library: {error}"),
+                }
+            }
         }
         fn current(&self) -> Manifest {
             let snapshot = crate::local_library::webdav_snapshot_at(&self.0).unwrap();
@@ -475,6 +487,28 @@ mod tests {
     impl Drop for Library {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+    #[test]
+    fn device_fixtures_stay_isolated_when_parallel_clock_readings_repeat() {
+        let workers: Vec<_> = (0..16)
+            .map(|_| std::thread::spawn(|| Library::with_nonce(0)))
+            .collect();
+        let mut libraries: Vec<_> = workers
+            .into_iter()
+            .map(|worker| worker.join().unwrap())
+            .collect();
+        let paths: BTreeSet<_> = libraries.iter().map(|library| library.0.clone()).collect();
+        assert_eq!(paths.len(), libraries.len());
+        for (index, library) in libraries.iter().enumerate() {
+            fs::write(library.0.join("marker.txt"), index.to_string()).unwrap();
+        }
+        drop(libraries.pop());
+        for (index, library) in libraries.iter().enumerate() {
+            assert_eq!(
+                fs::read_to_string(library.0.join("marker.txt")).unwrap(),
+                index.to_string()
+            );
         }
     }
     #[test]
