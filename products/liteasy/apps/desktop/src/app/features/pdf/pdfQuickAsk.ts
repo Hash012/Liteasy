@@ -5,6 +5,7 @@ export type PdfQuickAskRequest = {
   page: number;
   excerpt: string;
   question: string;
+  systemPrompt?: string;
   pageText: string;
   abstractText: string;
   signal: AbortSignal;

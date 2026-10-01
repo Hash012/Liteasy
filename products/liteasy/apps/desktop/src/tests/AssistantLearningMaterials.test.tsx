@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import { AssistantPane } from "../app/features/assistant/AssistantPane";
+import { artifactPromptTask, getGenerationPrompt, presetGenerationPrompt } from "../app/features/ai-prompts/generationPrompts";
 import { runAgentArtifactAnalysis } from "../app/controllers/agent/runAgentArtifactAnalysis";
 import type { FrontendAgentClient } from "../app/features/agent-api/frontendAgentClient";
 import type { ArtifactType } from "../app/features/artifacts/artifact.types";
@@ -26,9 +27,9 @@ test.each([
   const user = userEvent.setup();
   const agentClient = client();
   let generation: Promise<unknown> | undefined;
-  const onGenerateArtifact = vi.fn((artifactType: ArtifactType, paperIds?: string[], context?: string) => {
+  const onGenerateArtifact = vi.fn((artifactType: ArtifactType, paperIds?: string[], context?: string, _contextRefs?: unknown, systemPrompt?: string) => {
     generation = runAgentArtifactAnalysis(agentClient, artifactType, undefined, {
-      sourcePaperIds: paperIds, supplementalContext: context
+      sourcePaperIds: paperIds, supplementalContext: context, systemPrompt
     });
     return "正在生成学习资料";
   });
@@ -45,12 +46,14 @@ test.each([
   expect(document.querySelector(".assistant-command-chip")?.textContent).toBe(label);
   expect(onGenerateArtifact).not.toHaveBeenCalled();
   await user.type(input, "面向初学者，包含对比表");
+  await user.selectOptions(screen.getByRole("combobox", { name: "生成风格" }), "concise");
+  const systemPrompt = presetGenerationPrompt(artifactPromptTask(type), "concise");
   await user.click(screen.getByRole("button", { name: "发送", exact: true }));
-  await waitFor(() => expect(onGenerateArtifact).toHaveBeenCalledWith(type, [paper.id], expect.stringContaining("面向初学者，包含对比表")));
+  await waitFor(() => expect(onGenerateArtifact).toHaveBeenCalledWith(type, [paper.id], expect.stringContaining("面向初学者，包含对比表"), undefined, systemPrompt));
   await generation;
   expect(agentClient.send).toHaveBeenCalledTimes(1);
   expect(agentClient.send).toHaveBeenCalledWith(expect.objectContaining({
-    artifactType: type, mode: "qa", message: expect.stringContaining("面向初学者，包含对比表")
+    artifactType: type, mode: "qa", message: expect.stringContaining("面向初学者，包含对比表"), systemPrompt
   }), expect.objectContaining({
     attachments: [expect.objectContaining({ source: "selection", metadata: { paperIds: [paper.id] } })],
     idempotencyKey: expect.stringContaining(`artifact:${type}:`)
@@ -69,6 +72,6 @@ test("keeps @ paper scope and requirements when starting an outline without a lo
   await user.click(paperSuggestion);
   await user.type(input, "/制作提纲 讲清方法与局限");
   await user.click(screen.getByRole("button", { name: "发送", exact: true }));
-  await waitFor(() => expect(onGenerateArtifact).toHaveBeenCalledWith("tree", [paper.id], expect.stringContaining("讲清方法与局限")));
+  await waitFor(() => expect(onGenerateArtifact).toHaveBeenCalledWith("tree", [paper.id], expect.stringContaining("讲清方法与局限"), undefined, getGenerationPrompt("tree")));
   expect(onGenerateArtifact.mock.calls[0][2]).toContain(paper.title);
 });

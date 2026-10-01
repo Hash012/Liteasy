@@ -29,3 +29,6 @@
   .ai-paper-picker-scroll { height: 25vh; }
   .ai-workbench-capabilities { border-left: 0; border-top: 1px solid var(--colorNeutralStroke2); padding: 12px 0 0; max-height: none; }
 }
+
+.ai-generation-options { display: grid; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--colorNeutralStroke2); }
+.ai-capability[aria-pressed="true"] { border-color: var(--colorBrandStroke1); background: var(--colorBrandBackground2); }

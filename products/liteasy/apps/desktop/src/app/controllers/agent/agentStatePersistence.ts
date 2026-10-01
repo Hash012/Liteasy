@@ -59,6 +59,7 @@ function isAgentRun(value: unknown): value is AgentRun {
     isRecord(value.input) &&
     typeof value.input.message === "string" &&
     typeof value.input.mode === "string" &&
+    (value.input.systemPrompt === undefined || typeof value.input.systemPrompt === "string" && value.input.systemPrompt.length <= 4000) &&
     (value.input.artifactType === undefined ||
       ["comparison_table", "layered_graph", "mindmap", "ppt", "thin_reading", "tree"].includes(
         value.input.artifactType as string

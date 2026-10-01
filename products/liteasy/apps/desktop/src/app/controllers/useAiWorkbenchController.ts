@@ -7,7 +7,7 @@ type Input = {
   papers: Paper[];
   openedPapers: Paper[];
   activePaperId?: string;
-  startAnalysis(type: ArtifactType, papers: Paper[]): string;
+  startAnalysis(type: ArtifactType, papers: Paper[], options?: import("../features/artifacts/useArtifactActions").AgentArtifactGenerationOptions): string;
 };
 
 /** A confirmed selection belongs to this launch only; library selection never changes it. */
@@ -42,14 +42,15 @@ export function useAiWorkbenchController(input: Input) {
       setConfirmed(selectedIds.map((id) => ({ ...papers.find((paper) => paper.id === id)! })));
       setMessage("");
     },
-    start(type: ArtifactType) {
+    start(type: ArtifactType, systemPrompt?: string) {
       if (!confirmedValid || !confirmed || openedScope !== input.scopeId || launching.current) return;
       launching.current = true;
       try {
         // Thin reading is one document per task; other capabilities use the entire confirmed set.
+        const launch = (papers: Paper[]) => systemPrompt === undefined ? input.startAnalysis(type, papers) : input.startAnalysis(type, papers, { systemPrompt });
         const messages = type === "thin_reading"
-          ? confirmed.map((paper) => `《${paper.title}》：${input.startAnalysis(type, [paper])}`)
-          : [input.startAnalysis(type, confirmed)];
+          ? confirmed.map((paper) => `《${paper.title}》：${launch([paper])}`)
+          : [launch(confirmed)];
         setMessage(messages.join("\n"));
       } catch (error) { setMessage(error instanceof Error ? error.message : "任务启动失败，请重试。"); }
       finally { launching.current = false; }

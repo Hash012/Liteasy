@@ -91,6 +91,7 @@ export type SubmitAgentTurnRequest = {
   idempotencyKey: string;
   input: {
     artifactType?: AgentArtifactType;
+    systemPrompt?: string;
     thinkingDepth?: import("../assistant/thinkingDepth").ThinkingDepth;
     message: string;
     mode: AgentMode;

@@ -1,3 +1,4 @@
+import { getGenerationPrompt } from "../features/ai-prompts/generationPrompts";
 import { createCanvasArchive } from "../features/boards/canvasArchive";
 import { createExtensionPackageStore } from "../features/extensions/extensionPackageStore";
 import { useExtensionPackages } from "../features/extensions/useExtensionPackages";
@@ -560,10 +561,10 @@ export function useObjectWorkbenchController(input: {
     openBoardFile: boardFiles.openBoardFile,
     resolveBoardFile: boardFiles.resolveBoardFile,
     serializeBoardFile: boardFiles.serializeBoardFile,
-    async reviewAnnotation(selection, signal) {
+    async reviewAnnotation(selection, signal, systemPrompt) {
       if (signal.aborted || !active()) throw new Error("Review 已取消。");
       const refs = await captureAnnotation(selection, "saved");
-      return ask(PDF_ANNOTATION_REVIEW_PROMPT, refs, signal, false);
+      return ask(PDF_ANNOTATION_REVIEW_PROMPT, refs, signal, false, { task: "annotation_review", prompt: getGenerationPrompt("annotation_review", latest.current.getSettings(), systemPrompt) });
     },
     isOpen: visible,
     close,
@@ -867,6 +868,7 @@ export function useObjectWorkbenchController(input: {
     refs = tray.map((item) => item.ref),
     signal?: AbortSignal,
     updateWorkbench = true,
+    generation?: { task: import("../features/ai-prompts/generationPrompts").GenerationPromptTask; prompt: string },
   ) {
     if (!question.trim() || refs.length === 0)
       throw new Error("请加入内容并输入问题。");
@@ -919,7 +921,7 @@ export function useObjectWorkbenchController(input: {
       const run = await api.submitTurn({
         sessionId: session.data.sessionId,
         idempotencyKey: crypto.randomUUID(),
-        input: { message: question, mode: "qa" },
+        input: { message: question, mode: "qa", ...(generation ? { systemPrompt: generation.prompt } : {}) },
         contextRefs: refs,
         contextPurpose: question,
       });
@@ -954,14 +956,14 @@ export function useObjectWorkbenchController(input: {
     }
   }
   const abortRef = useRef<AbortController>();
-  async function submit(question: string) {
+  async function submit(question: string, systemPrompt?: string) {
     const abort = new AbortController();
     abortRef.current = abort;
     setBusy(true);
     setAnswer(undefined);
     setStatus("正在回答…");
     try {
-      await ask(question, undefined, abort.signal);
+      await ask(question, undefined, abort.signal, true, { task: "assistant", prompt: getGenerationPrompt("assistant", latest.current.getSettings(), systemPrompt) });
       if (active()) setStatus("回答已完成，可保存为产物。");
     } catch (e) {
       if (active()) setStatus(String((e as Error).message));

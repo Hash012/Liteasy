@@ -1,7 +1,12 @@
 import type { RecommendationStyle } from "../recommendations/recommendation.types";
 import type { AppearancePreference } from "../theme/appearancePreference";
 
+import type { GenerationPromptSettingKey } from "../ai-prompts/generationPrompts";
+import type { SelectionLookupSettingKey, SelectionLookupSettings } from "../selection-lookup/selectionLookup.types";
+
 export type SettingKey =
+  | GenerationPromptSettingKey
+  | SelectionLookupSettingKey
   | "thin_reading.mode"
   | "papers.metadata_provider"
   | "papers.metadata_endpoint"
@@ -36,7 +41,7 @@ export type SettingKey =
   | "view.pdf_background"
   | "view.pdf_custom_background";
 
-export type SettingsState = {
+export type SettingsState = Partial<Record<GenerationPromptSettingKey, string>> & Partial<SelectionLookupSettings> & {
   "thin_reading.mode": "fast" | "rigorous";
   "papers.metadata_provider": "crossref" | "openalex" | "semantic-scholar" | "cloud";
   "papers.metadata_endpoint": string;

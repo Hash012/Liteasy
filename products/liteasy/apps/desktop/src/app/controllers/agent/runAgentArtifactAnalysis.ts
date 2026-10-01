@@ -229,7 +229,7 @@ export async function runAgentArtifactAnalysis(
   let result: Awaited<ReturnType<FrontendAgentClient["send"]>>;
   try {
     result = await client.send(
-      { artifactType, message, mode: "qa" },
+      { artifactType, message, mode: "qa", ...(options?.systemPrompt ? { systemPrompt: options.systemPrompt } : {}) },
       {
         ...(options?.contextRefs?.length
           ? { contextRefs: options.contextRefs, contextPurpose: message }

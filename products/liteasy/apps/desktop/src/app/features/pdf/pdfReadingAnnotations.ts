@@ -2,12 +2,16 @@ import type { ReactNode } from "react";
 import type { PdfAnnotationV2, PdfHighlightColor } from "./pdfAnnotationStorage";
 import { buildPdfSelectionRange, type PageCharModel } from "./pdfSelectionEngine";
 import { compactPdfTextForSearch } from "./pdfTextSearch";
+import type { SelectionLookupPort } from "../selection-lookup/selectionLookup.types";
 
 export type ReadingMarkStyle = { kind?: "highlight" | "underline" | "note"; color?: PdfHighlightColor };
 
 /** Both reader views operate on the PDF reader's live annotations, never a second store. */
 export type PdfReadingAnnotations = {
   scopeKey: string;
+  lookup?: SelectionLookupPort;
+  paperId?: string;
+  paperTitle?: string;
   ready: boolean;
   error?: string;
   annotations: readonly PdfAnnotationV2[];
@@ -22,7 +26,7 @@ export type PdfReadingAnnotations = {
   remove(id: string): Promise<void>;
   openPdf(id: string): void;
   capture?: (input: { page: number; excerpt: string }, target: "board" | "tray" | "conversation") => Promise<void>;
-  quickAsk?: (input: { page: number; excerpt: string; question: string }, signal: AbortSignal) => Promise<void>;
+  quickAsk?: (input: { page: number; excerpt: string; question: string; systemPrompt?: string }, signal: AbortSignal) => Promise<void>;
   annotationTools?: (annotation: PdfAnnotationV2) => ReactNode;
 
 };

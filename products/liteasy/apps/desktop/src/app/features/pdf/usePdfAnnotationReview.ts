@@ -10,7 +10,7 @@ export type PdfEntryReviewState = {
 export function usePdfAnnotationReview(input: {
   scopeKey: string | null;
   getAnnotation(id: string): PdfAnnotationV2 | undefined;
-  request(annotation: PdfAnnotationV2, signal: AbortSignal): Promise<string>;
+  request(annotation: PdfAnnotationV2, signal: AbortSignal, systemPrompt?: string): Promise<string>;
   commit(id: string, expectedRevision: number, review: PdfAnnotationReview): Promise<void>;
 }) {
   const latest = useRef(input);
@@ -31,7 +31,7 @@ export function usePdfAnnotationReview(input: {
     setStates((current) => ({ ...current, [id]: { ...current[id], pending: false } }));
   }
 
-  async function generate(id: string) {
+  async function generate(id: string, systemPrompt?: string) {
     const annotation = latest.current.getAnnotation(id);
     if (!annotation || runs.current.has(id)) return;
     const scopeKey = latest.current.scopeKey;
@@ -41,7 +41,7 @@ export function usePdfAnnotationReview(input: {
     let generated: PdfAnnotationReview | undefined;
     const active = () => !run.signal.aborted && runs.current.get(id) === run && latest.current.scopeKey === scopeKey;
     try {
-      const text = (await latest.current.request(annotation, run.signal)).trim();
+      const text = (await latest.current.request(annotation, run.signal, systemPrompt)).trim();
       if (!active()) return;
       if (!text) throw new Error("AI 未返回 review 内容，请重试。");
       const now = new Date().toISOString();

@@ -1,4 +1,6 @@
+import { GenerationPromptDialog } from "../features/ai-prompts/GenerationPromptDialog";
 import type { PdfQuickAskRequest } from "../features/pdf/pdfQuickAsk";
+import type { SelectionLookupPort } from "../features/selection-lookup/selectionLookup.types";
 import { Button } from "@fluentui/react-components";
 import {
   CheckmarkCircleRegular,
@@ -43,6 +45,7 @@ import type { PaneCollapseState } from "./paneLayout.types";
 import type { ThinReadingVisualizationStatus } from "../features/artifacts/artifact.types";
 
 type ReaderPaneProps = {
+  selectionLookup?: SelectionLookupPort;
   onGenerateGuide?: import("../features/paper-reading/literatureGuide").GuideGenerator;
   onDocumentInfo?: (info: import("../features/pdf/pdfDocumentInfo").PdfDocumentInfo) => void;
   onQuickAsk?: (request: PdfQuickAskRequest) => Promise<string>;
@@ -99,7 +102,7 @@ type ReaderPaneProps = {
   intuechoSessionId?: string;
   mineruFiguresByPaperId?: Record<string, MineruFigure[]>;
   pdfBackground?: string;
-  onStartAnalysis: (artifactType: ArtifactType, selectedPapers?: Paper[]) => void | string;
+  onStartAnalysis: (artifactType: ArtifactType, selectedPapers?: Paper[], options?: import("../features/artifacts/useArtifactActions").AgentArtifactGenerationOptions) => void | string;
   onToggleBottomPane?: () => void;
   onToggleLeftPane?: () => void;
   onToggleRightPane?: () => void;
@@ -123,6 +126,7 @@ const defaultLayoutCollapsed: PaneCollapseState = {
 };
 
 export function ReaderPane({
+  selectionLookup,
   onDocumentInfo,
   onQuickAsk,
   onGenerateGuide,
@@ -179,18 +183,21 @@ export function ReaderPane({
   showArtifactRegion = true,
   targetEvidence
 }: ReaderPaneProps) {
+  const [thinReadingPromptOpen, setThinReadingPromptOpen] = useState(false);
   const [zoom, setZoom] = useState(100);
   const [readingMode, setReadingMode] = useState(false);
   const [extractionError, setExtractionError] = useState("");
   const [analysisFeedback, setAnalysisFeedback] = useState("");
-  useEffect(() => { setReadingMode(false); }, [selectedPapers[0]?.id, targetEvidence?.requestId]);
+  useEffect(() => { setReadingMode(false); setThinReadingPromptOpen(false); }, [selectedPapers[0]?.id, targetEvidence?.requestId]);
   const readingVisible = readingMode && Boolean(readingContent);
   const activePaper = selectedPapers[0] ?? null;
   const thinReadingButton = activePaper ? <>
-    <Button appearance="primary" size="small" onClick={() => {
-      try { setAnalysisFeedback(onStartAnalysis("thin_reading", [activePaper]) ?? ""); }
+    <Button appearance="primary" size="small" onClick={() => setThinReadingPromptOpen(true)} title={`为《${activePaper.title}》生成薄读`}>AI 薄读</Button>
+    {thinReadingPromptOpen ? <GenerationPromptDialog task="thin_reading" title={`为《${activePaper.title}》生成薄读`} onClose={() => setThinReadingPromptOpen(false)} onConfirm={(systemPrompt) => {
+      setThinReadingPromptOpen(false);
+      try { setAnalysisFeedback(onStartAnalysis("thin_reading", [activePaper], { systemPrompt }) ?? ""); }
       catch (error) { setAnalysisFeedback(error instanceof Error ? error.message : "薄读启动失败，请重试。"); }
-    }} title={`为《${activePaper.title}》生成薄读`}>AI 薄读</Button>
+    }} /> : null}
     {analysisFeedback ? <span role="status" className="reader-ai-feedback" title={analysisFeedback}>{analysisFeedback}</span> : null}
   </> : null;
   const analysisPapers = useMemo(() => {
@@ -213,6 +220,7 @@ export function ReaderPane({
         >
           <div className="reader-pdf-surface">
           <PdfReader
+            selectionLookup={selectionLookup}
             onGenerateGuide={onGenerateGuide}
             onEnterReadingMode={readingContent ? () => setReadingMode(true) : undefined}
             onExitReadingMode={() => setReadingMode(false)}

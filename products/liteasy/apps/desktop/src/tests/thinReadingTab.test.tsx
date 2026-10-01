@@ -1,3 +1,6 @@
+import { useReducer } from "react";
+import userEvent from "@testing-library/user-event";
+import { generationPromptTasks } from "../app/features/ai-prompts/generationPrompts";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
@@ -273,7 +276,10 @@ describe("ThinReadingTab", () => {
     fireEvent.mouseUp(summary);
     fireEvent.click(screen.getByRole("button", { name: "深入" }));
 
+    expect(onGenerateBranch).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole("button", { name: "开始生成" }));
     await waitFor(() => expect(onGenerateBranch).toHaveBeenCalledWith({
+      systemPrompt: generationPromptTasks.thin_reading.prompt,
       artifactId: document.artifactId,
       document,
       source: {
@@ -387,9 +393,16 @@ describe("ThinReadingTab", () => {
       artifactId: root.artifactId, document: root, onGenerateBranch, onUpdateDocument,
       papers: fixture.papers
     };
-    const { rerender } = render(<ThinReadingTab {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: "深入阅读“自注意力”" }));
+    function ReaderWithFocusUpdates({ document }: { document: ThinReadingDocument }) {
+      const [, refresh] = useReducer((count) => count + 1, 0);
+      return <div onFocusCapture={refresh}><ThinReadingTab {...props} document={document} /></div>;
+    }
+    const { rerender } = render(<ReaderWithFocusUpdates document={root} />);
+    await userEvent.click(screen.getByRole("button", { name: "深入阅读“自注意力”" }));
+    expect(onGenerateBranch).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole("button", { name: "开始生成" }));
     await waitFor(() => expect(onGenerateBranch).toHaveBeenCalledWith({
+      systemPrompt: generationPromptTasks.thin_reading.prompt,
       artifactId: root.artifactId, document: root, source
     }));
     const withChild = advanceThinReadingDocument(root, {
@@ -398,8 +411,8 @@ describe("ThinReadingTab", () => {
       source,
       title: "自注意力"
     });
-    rerender(<ThinReadingTab {...props} document={{ ...withChild, activeNodeId: root.rootNodeId }} />);
-    fireEvent.click(screen.getByRole("button", { name: "深入阅读“自注意力”" }));
+    rerender(<ReaderWithFocusUpdates document={{ ...withChild, activeNodeId: root.rootNodeId }} />);
+    await userEvent.click(screen.getByRole("button", { name: "深入阅读“自注意力”" }));
     await waitFor(() => expect(onUpdateDocument).toHaveBeenCalledWith(root.artifactId, expect.objectContaining({
       activeNodeId: withChild.activeNodeId
     })));
@@ -461,7 +474,10 @@ describe("ThinReadingTab", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "深入了解实验" }));
 
+    expect(onGenerateBranch).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole("button", { name: "开始生成" }));
     await waitFor(() => expect(onGenerateBranch).toHaveBeenCalledWith({
+      systemPrompt: generationPromptTasks.thin_reading.prompt,
       artifactId: document.artifactId,
       document,
       source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" }
@@ -981,6 +997,8 @@ describe("ThinReadingTab", () => {
     expect(onUpdateDocument).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Explore Methods" }));
+    expect(onGenerateBranch).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole("button", { name: "开始生成" }));
     await waitFor(() => expect(onGenerateBranch).toHaveBeenCalledWith(expect.objectContaining({
       artifactId: document.artifactId,
       document: expect.objectContaining({ activeNodeId: document.rootNodeId }),
@@ -1022,7 +1040,10 @@ describe("ThinReadingTab", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "深入" }));
 
+    expect(onGenerateBranch).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole("button", { name: "开始生成" }));
     await waitFor(() => expect(onGenerateBranch).toHaveBeenCalledWith({
+      systemPrompt: generationPromptTasks.thin_reading.prompt,
       artifactId: document.artifactId,
       document,
       source: {
@@ -1069,7 +1090,10 @@ describe("ThinReadingTab", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "生成流程可视化" }));
 
+    expect(onGenerateBranch).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole("button", { name: "开始生成" }));
     await waitFor(() => expect(onGenerateBranch).toHaveBeenCalledWith({
+      systemPrompt: generationPromptTasks.thin_reading.prompt,
       artifactId: document.artifactId,
       document,
       source: {
@@ -1112,6 +1136,8 @@ describe("ThinReadingTab", () => {
     const command = screen.getByRole("button", { name: "生成流程可视化" });
     fireEvent.click(command);
     fireEvent.click(command);
+    expect(onGenerateBranch).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole("button", { name: "开始生成" }));
 
     expect(screen.queryByLabelText("快捷命令列表")).not.toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("生成中");

@@ -1,3 +1,4 @@
+import { generationPromptTasks } from "../app/features/ai-prompts/generationPrompts";
 import { expect, test, vi } from "vitest";
 import { createAgentApplicationService } from "../app/controllers/agent/agentApplicationService";
 import type { ContextSnapshot } from "../app/features/context/objectContext";
@@ -131,6 +132,8 @@ test("quick ask uses captured references and the public run cancellation signal"
     "why",
     [{ objectId: "fragment", revision: "v1" }],
     abort.signal,
+    true,
+    { task: "selection_explanation", prompt: generationPromptTasks.selection_explanation.prompt },
   );
   abort.abort();
   await expect(

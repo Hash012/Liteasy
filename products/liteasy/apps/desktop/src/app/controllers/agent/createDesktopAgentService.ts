@@ -1,3 +1,4 @@
+import { artifactPromptTask, getGenerationPrompt, settingsWithGenerationPrompt, withGenerationPrompt } from "../../features/ai-prompts/generationPrompts";
 import { agentContextLimit, withModelContextBudget } from "../../features/context/modelContextBudget";
 import { runWorkspaceAgent } from "./runWorkspaceAgent";
 import type { AgentAssetService } from "../../features/resource-filesystem/agentAssetService";
@@ -163,6 +164,7 @@ async function executeKnowledgeTurn(
     throw new Error("Command turns cannot use the knowledge executor");
   }
   const artifactType = override?.artifactType ?? request.input.artifactType;
+  environment = { ...environment, knowledge: { ...environment.knowledge, settings: settingsWithGenerationPrompt(environment.knowledge.settings, request.input.systemPrompt, artifactPromptTask(artifactType)) } };
   if (!artifactType && environment.assets) return runWorkspaceAgent(input, environment);
   const question = [request.input.thinkingDepth ? thinkingDepthInstruction(request.input.thinkingDepth) : "", override?.question ?? request.input.message].filter(Boolean).join("\n\n");
   const author = async (source: string, evidenceIds: string[], images?: Awaited<ReturnType<typeof contextSnapshotImages>>) => {
@@ -173,7 +175,7 @@ async function executeKnowledgeTurn(
     input.reportManagerActivity({ activityId, kind: "handoff", label: "创作结构化内容", status: "running", detail: "正在依据来源编写并校验可保存的内容。" });
     try {
       const result = await runArtifactAuthoring({ artifactType, instruction: question, source, evidenceIds, signal,
-        generate: (authorRequest) => gateway.generateAnswer({ ...authorRequest, ...(images?.length ? { images } : {}), model: getModelForSettings(settings), provider: getActiveModelProvider(settings) })
+        generate: (authorRequest) => gateway.generateAnswer({ ...authorRequest, prompt: withGenerationPrompt(authorRequest.prompt, getGenerationPrompt(artifactPromptTask(artifactType), settings)), ...(images?.length ? { images } : {}), model: getModelForSettings(settings), provider: getActiveModelProvider(settings) })
       });
       input.reportManagerActivity({ activityId, kind: "handoff", label: "内容校验通过", status: "completed", detail: "内容已交回生成任务，等待资源保存。" });
       return result;
@@ -208,7 +210,7 @@ async function executeKnowledgeTurn(
     const result = await gateway.generateAnswer({
       model: getModelForSettings(settings),
       provider: getActiveModelProvider(settings),
-      prompt: contextSnapshotPrompt(input.context.objectSnapshot, question),
+      prompt: withGenerationPrompt(contextSnapshotPrompt(input.context.objectSnapshot, question), getGenerationPrompt("assistant", settings)),
       ...(images.length ? { images } : {}),
       requireLive: true,
       signal

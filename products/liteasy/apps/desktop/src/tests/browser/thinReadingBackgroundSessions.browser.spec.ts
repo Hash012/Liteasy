@@ -5,6 +5,7 @@ test("generates reading layers in the background and opens their session only fr
   const releases: Array<() => void> = [];
   const gates = [0, 1].map(() => new Promise<void>((resolve) => { releases.push(resolve); }));
   let requests = 0;
+  const generationPrompts: string[] = [];
   await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
   await page.route("https://api.openai.com/v1/chat/completions", async (route) => {
     const body = route.request().postDataJSON();
@@ -12,6 +13,7 @@ test("generates reading layers in the background and opens their session only fr
     let content = "连接测试响应。";
     if (!prompt.includes("确认你已准备好")) {
       const index = requests++;
+      generationPrompts.push(prompt);
       await gates[index];
       content = JSON.stringify({ summary: index === 0
         ? "## 当前层概览\n\n[[[外部记忆]]] 保存论文中的历史信息。"
@@ -35,9 +37,16 @@ test("generates reading layers in the background and opens their session only fr
     await page.getByRole("button", { name: "关闭 Liteasy Chat", exact: true }).click();
     await expect(page.locator(".assistant-pane")).not.toBeVisible();
     await page.getByRole("button", { name: "AI 薄读", exact: true }).click();
+    const rootOptions = page.getByRole("dialog");
+    await expect(rootOptions.getByRole("textbox", { name: "本次系统提示词" })).toHaveCount(0);
+    await rootOptions.getByRole("combobox", { name: "生成风格" }).selectOption("concise");
+    await rootOptions.getByRole("button", { name: "自定义系统提示词", exact: true }).click();
+    await rootOptions.getByRole("textbox", { name: "本次系统提示词" }).fill("先解释外部记忆的核心直觉。");
+    await rootOptions.getByRole("button", { name: "开始生成", exact: true }).click();
     const status = page.locator(".thin-reading__generation-status");
     await expect(status).toContainText("生成中");
     await expect.poll(() => requests).toBe(1);
+    expect(generationPrompts[0]).toContain("先解释外部记忆的核心直觉。");
     await expect(page.locator(".assistant-pane")).not.toBeVisible();
     await status.getByRole("button", { name: "详情", exact: true }).click();
     await expect(page.locator(".assistant-pane")).toBeVisible();
@@ -52,8 +61,14 @@ test("generates reading layers in the background and opens their session only fr
     await expect(status).toHaveCount(0);
     await page.getByRole("button", { name: "关闭 Liteasy Chat", exact: true }).click();
     await page.getByRole("button", { name: "深入阅读“外部记忆”", exact: true }).click();
+    const branchOptions = page.getByRole("dialog", { name: "深入薄读" });
+    await branchOptions.getByRole("combobox", { name: "生成风格" }).selectOption("intuitive");
+    await expect(branchOptions.getByRole("textbox", { name: "本次系统提示词" })).toHaveCount(0);
+    await branchOptions.getByRole("button", { name: "开始生成", exact: true }).click();
     await expect(status).toContainText("生成中");
     await expect.poll(() => requests).toBe(2);
+    expect(generationPrompts[1]).toContain("先建立直观理解");
+    expect(generationPrompts[1]).not.toContain("先解释外部记忆的核心直觉。");
     await expect(page.locator(".assistant-pane")).not.toBeVisible();
     await status.getByRole("button", { name: "详情", exact: true }).click();
     await expect(page.getByLabel("当前会话")).toContainText("生成：薄读");

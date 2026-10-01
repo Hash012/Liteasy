@@ -16,6 +16,7 @@ mod note_files;
 mod object_store;
 mod paper_cache;
 mod paper_services;
+mod selection_lookup;
 mod system_fonts;
 mod user_paper_store;
 mod webdav;
@@ -43,6 +44,7 @@ fn main() {
         .manage(agent_host::AgentHostState::default())
         .manage(local_mcp::LocalMcpState::default())
         .manage(direct_model::DirectModelState::default())
+        .manage(selection_lookup::SelectionLookupState::default())
         .manage(local_library::LocalLibraryWatchState::default())
         .setup(|app| {
             data_location::initialize(app.handle()).map_err(std::io::Error::other)?;
@@ -89,6 +91,11 @@ fn main() {
             paper_services::save_paper_service_key,
             paper_services::has_paper_service_key,
             paper_services::delete_paper_service_key,
+            selection_lookup::request_selection_lookup,
+            selection_lookup::cancel_selection_lookup_request,
+            selection_lookup::save_selection_lookup_key,
+            selection_lookup::has_selection_lookup_key,
+            selection_lookup::delete_selection_lookup_key,
             workflow_checkpoints::load_workflow_checkpoints,
             workflow_checkpoints::save_workflow_checkpoints,
             agent_artifacts::list_local_agent_artifacts,

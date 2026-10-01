@@ -142,6 +142,7 @@ export type ArtifactPaperRef = {
 };
 
 export type ArtifactRegenerationRequest = {
+  systemPrompt?: string;
   artifactId: string;
   artifactType: Exclude<ArtifactType, "skill_doc">;
   papers: ArtifactPaperRef[];

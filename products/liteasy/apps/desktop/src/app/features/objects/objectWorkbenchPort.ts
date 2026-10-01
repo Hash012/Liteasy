@@ -46,6 +46,7 @@ export type ObjectWorkbenchPort = {
   reviewAnnotation?(
     input: PdfAnnotationCaptureInput,
     signal: AbortSignal,
+    systemPrompt?: string,
   ): Promise<string>;
   receiveContextDrop?(
     data: Pick<DataTransfer, "getData">,

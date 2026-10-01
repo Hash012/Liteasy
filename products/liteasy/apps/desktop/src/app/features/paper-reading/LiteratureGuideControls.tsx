@@ -1,11 +1,14 @@
+import { getGenerationPrompt } from "../ai-prompts/generationPrompts";
+import { useGenerationPromptSettings } from "../ai-prompts/GenerationPromptContext";
+import { GenerationPromptEditor } from "../ai-prompts/GenerationPromptEditor";
 import { useState } from "react";
-import { Button, Checkbox, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Select, Spinner, Textarea, Tooltip } from "@fluentui/react-components";
+import { Button, Checkbox, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Select, Spinner, Tooltip } from "@fluentui/react-components";
 import { SparkleRegular, DismissRegular, EyeRegular, EyeOffRegular, DeleteRegular, ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
 import { guideCategories, guideModes, type GuideCategory, type GuideMode, type GuideOptions } from "./literatureGuide.types";
 import "./literatureGuide.css";
 
 export type LiteratureGuideState = { mode: GuideMode; options: GuideOptions; busy: boolean; visible: boolean; count: number; resume: boolean; message: string; error: string;
-  ready: boolean; setMode(value: GuideMode): void; setOptions(value: GuideOptions): void; start(): void; cancel(): void; toggle(): void; clear(): void };
+  ready: boolean; setMode(value: GuideMode): void; setOptions(value: GuideOptions): void; start(systemPrompt?: string): void; cancel(): void; toggle(): void; clear(): void };
 const modeDescriptions: Record<GuideMode, string> = {
   detailed: "补足必要背景，解释术语、关键论断和推理步骤。",
   balanced: "略过常见概念，重点讲清影响理解的概念与因果。",
@@ -13,8 +16,10 @@ const modeDescriptions: Record<GuideMode, string> = {
   auto: "参考你的研究熟悉度选择深度；缺少相关画像时采用均衡。"
 };
 export function LiteratureGuideControls({ guide }: { guide: LiteratureGuideState }) {
+  const settings = useGenerationPromptSettings();
   const [open, setOpen] = useState(false);
   const [focusOpen, setFocusOpen] = useState(false);
+  const [prompt, setPrompt] = useState<string>();
   return <div className="literature-guide-controls" role="group" aria-label="文献 AI 标注">
     <Tooltip content={guide.error || guide.message || "设置讲解深度、重点与提示词，为原文添加可点击的虚线讲解"} relationship="description">
       <Button size="small" appearance="subtle" icon={guide.busy ? <Spinner size="extra-tiny" /> : <SparkleRegular />} onClick={() => setOpen(true)}>AI 标注{guide.count ? <span className="literature-guide-count">{guide.count}</span> : null}{guide.error ? " · 未完成" : ""}</Button>
@@ -37,9 +42,9 @@ export function LiteratureGuideControls({ guide }: { guide: LiteratureGuideState
               </div> : null}
               {!guide.options.categories.length ? <p role="alert">请至少选择一类讲解重点。</p> : null}
             </section>
-            <Field label="自定义系统提示词" hint="可选：说明你的背景、关心的问题或期望的讲解风格。最多 4,000 字符。">
-              <Textarea aria-label="自定义系统提示词" value={guide.options.systemPrompt} disabled={guide.busy} maxLength={4000} rows={4} resize="vertical" placeholder="例如：我熟悉数据库基础，请重点讲解并发控制中的假设，以及公式每一项的含义。" onChange={(_, data) => guide.setOptions({ ...guide.options, systemPrompt: data.value })} />
-            </Field>
+            <GenerationPromptEditor task="literature_annotation" value={prompt} disabled={guide.busy} onChange={(value) => {
+              setPrompt(value); guide.setOptions({ ...guide.options, systemPrompt: value ?? "" });
+            }} />
             <Field label="已有标注" hint="只处理所选类别；手动批注、已修改或已发布的讲解始终保留。">
               <Select aria-label="已有标注处理方式" disabled={guide.busy} value={guide.options.existing} onChange={(_, data) => guide.setOptions({ ...guide.options, existing: data.value as GuideOptions["existing"] })}>
                 <option value="replace">更新已有 AI 标注</option><option value="append">保留已有，仅补充新标注</option>
@@ -56,7 +61,7 @@ export function LiteratureGuideControls({ guide }: { guide: LiteratureGuideState
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setOpen(false)}>返回阅读</Button>
-            {guide.busy ? <Button appearance="primary" onClick={guide.cancel}>停止 AI 标注</Button> : <Button appearance="primary" disabled={!guide.ready || !guide.options.categories.length} onClick={guide.start}>{guide.resume ? "继续标注" : "开始标注"}</Button>}
+            {guide.busy ? <Button appearance="primary" onClick={guide.cancel}>停止 AI 标注</Button> : <Button appearance="primary" disabled={!guide.ready || !guide.options.categories.length} onClick={() => guide.start(getGenerationPrompt("literature_annotation", settings, prompt))}>{guide.resume ? "继续标注" : "开始标注"}</Button>}
           </DialogActions>
         </DialogBody>
       </DialogSurface>

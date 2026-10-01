@@ -2,6 +2,7 @@ import { agentContextLimit, withModelContextBudget, type ModelContextUsage } fro
 import { generateAdaptiveThinReading } from "../thin-reading/adaptiveThinReading";
 import { formatAnswer } from "./answerFormatter";
 import type { AssistantMode } from "./assistant.types";
+import { artifactPromptTask, getGenerationPrompt, withGenerationPrompt } from "../ai-prompts/generationPrompts";
 import { getActiveModelEndpoint, getActiveModelProvider, getModelForSettings } from "../models/modelPolicy";
 import { createModelGatewayFromSettings } from "../models/modelRuntime";
 import { createHttpModelAuditClient, type ModelAuditTransport } from "../models/modelAuditClient";
@@ -4468,7 +4469,7 @@ export async function generateAssistantAnswer({
   const gateway = { generateAnswer: (request: import("../models/modelGateway").GenerateAnswerInput) => {
     const index = publicReasoning.length;
     publicReasoning.push("");
-    return baseGateway.generateAnswer({ ...request, onReasoningDelta: (delta, accumulated) => {
+    return baseGateway.generateAnswer({ ...request, prompt: withGenerationPrompt(request.prompt, getGenerationPrompt(artifactPromptTask(artifactType), settings)), onReasoningDelta: (delta, accumulated) => {
       request.onReasoningDelta?.(delta, accumulated);
       publicReasoning[index] = accumulated;
       onReasoningDelta?.(delta, publicReasoning.filter(Boolean).join("\n\n"));

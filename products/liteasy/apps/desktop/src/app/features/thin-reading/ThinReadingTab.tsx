@@ -1,3 +1,4 @@
+import { GenerationPromptDialog } from "../ai-prompts/GenerationPromptDialog";
 import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
 import { paperAnchorFromEvidence, paperAnchorLabel, paperAnchorOpenRequest } from "../paper-anchors/paperAnchorEntity";
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
@@ -102,6 +103,7 @@ export type ThinReadingTabProps = {
     artifactId: string;
     document: ThinReadingDocument;
     source: ThinReadingBranchSource;
+    systemPrompt?: string;
   }) => Promise<void>;
   onOpenExternalFullText?: (source: ThinReadingExternalSource) => Promise<void>;
   onOpenGenerationDetails?: () => void;
@@ -327,6 +329,7 @@ export function ThinReadingTab({
   const generationLockRef = useRef(false);
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [selection, setSelection] = useState<ThinReadingSelection | null>(null);
+  const [pendingBranch, setPendingBranch] = useState<ThinReadingBranchSource>();
   const [prompt, setPrompt] = useState("");
   const [annotationBody, setAnnotationBody] = useState("");
   const [annotationPublic, setAnnotationPublic] = useState(false);
@@ -654,7 +657,15 @@ export function ThinReadingTab({
     return { kind: "node_summary", nodeId: activeNode.id };
   }
 
+  useEffect(() => setPendingBranch(undefined), [artifactId, activeNode.id]);
+
   async function generateBranch(source: ThinReadingBranchSource) {
+    const existingChild = findThinReadingChildBySource(document, activeNode.id, source);
+    if (existingChild) { goToNode(existingChild.id); return; }
+    if (!generationInProgress) setPendingBranch(source);
+  }
+
+  async function runBranch(source: ThinReadingBranchSource, systemPrompt: string) {
     if (generationLockRef.current || generationInProgress) {
       return;
     }
@@ -674,7 +685,7 @@ export function ThinReadingTab({
       const branchDocument = document.version === "liteasy.thin-reading/v1"
         ? { ...document, activeNodeId: activeNode.id }
         : document;
-      await onGenerateBranch({ artifactId, document: branchDocument, source });
+      await onGenerateBranch({ artifactId, document: branchDocument, source, systemPrompt });
     } catch (error) {
       setGenerationError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -1520,6 +1531,9 @@ export function ThinReadingTab({
         />
       ) : null}
 
+      {pendingBranch ? <GenerationPromptDialog task="thin_reading" title="深入薄读" onClose={() => setPendingBranch(undefined)} onConfirm={(systemPrompt) => {
+        const source = pendingBranch; setPendingBranch(undefined); void runBranch(source, systemPrompt);
+      }} /> : null}
       {selection ? (
         <div
           className="thin-reading__selection-popover"

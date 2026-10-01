@@ -1,3 +1,4 @@
+import { generationPromptTasks } from "../app/features/ai-prompts/generationPrompts";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
@@ -98,7 +99,7 @@ test("uses @ papers as the task scope for a thin-reading slash command", async (
   await user.click(screen.getByRole("button", { name: /Paper Beta/ }));
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(onGenerateArtifact).toHaveBeenCalledWith("thin_reading", ["paper-a", "paper-b"], expect.stringContaining("薄读"));
+  expect(onGenerateArtifact).toHaveBeenCalledWith("thin_reading", ["paper-a", "paper-b"], expect.stringContaining("薄读"), undefined, generationPromptTasks.thin_reading.prompt);
   expect(screen.getByText("已开始生成薄读。")).toBeInTheDocument();
 });
 
@@ -158,6 +159,6 @@ test("natural thin-reading requests prefer an explicit paper and retain the user
   await user.type(input, "请用薄读风格解释方法和动机 @");
   await user.click(screen.getAllByRole("button", { name: /Paper Alpha/ })[0]);
   await user.click(screen.getByRole("button", { name: "发送" }));
-  expect(generate).toHaveBeenCalledWith("thin_reading", ["paper-a"], expect.stringContaining("解释方法和动机"));
+  expect(generate).toHaveBeenCalledWith("thin_reading", ["paper-a"], expect.stringContaining("解释方法和动机"), undefined, generationPromptTasks.thin_reading.prompt);
   expect(client.send).not.toHaveBeenCalled();
 });

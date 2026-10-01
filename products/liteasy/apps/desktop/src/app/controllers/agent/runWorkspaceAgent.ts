@@ -1,3 +1,4 @@
+import { getGenerationPrompt, withGenerationPrompt } from "../../features/ai-prompts/generationPrompts";
 import { agentContextLimit, modelInputTokens } from "../../features/context/modelContextBudget";
 import { z } from "zod";
 import type { AgentCommandExecutionInput, AgentKnowledgeExecutionResult } from "./agentApplicationService";
@@ -100,7 +101,7 @@ export async function runWorkspaceAgent(input: AgentCommandExecutionInput, envir
   // a planner. Other requests use one decision call, which can answer directly.
   const greeting = /^(?:hello|hi|hey|你好|您好|嗨|早上好|晚上好|谢谢|thanks)[!！。，,.\s]*$/i.test(input.request.input.message.trim());
   if (greeting && !input.request.contextRefs?.length) {
-    const prompt = `你是 Liteasy 学术助手。自然、简短地回应用户。\n回答偏好（只影响表达，当前请求优先）：${JSON.stringify(environment.personalization?.response ?? "")}\n用户：${input.request.input.message}`;
+    const prompt = withGenerationPrompt(`你是 Liteasy 学术助手。自然、简短地回应用户。\n回答偏好（只影响表达，当前请求优先）：${JSON.stringify(environment.personalization?.response ?? "")}\n用户：${input.request.input.message}`, getGenerationPrompt("assistant", settings));
     reportUsage(prompt);
     const result = await gateway.generateAnswer({ prompt, model: getModelForSettings(settings), provider: getActiveModelProvider(settings),
       requireLive: true, signal: input.signal, onDelta: input.reportDelta });
@@ -143,7 +144,7 @@ export async function runWorkspaceAgent(input: AgentCommandExecutionInput, envir
     "每次只返回一个 JSON 对象，action=answer/search/read/write/extension。message 为简短的用户可见结论（answer）或本次操作的目的与内容说明（工具调用）；这段说明将在对应步骤展示，绝不输出内部思维链。",
     "所有字段必填：action,message,query,path,text,expectedRevision,mode,offset。无关字符串填空，mode 默认 append，offset 默认0。"
   ].join("\n");
-  const base = `${instructions}\n当前用户请求：${input.request.input.message}\n附加资产（仅元信息）：${JSON.stringify(attached)}\n选中论文（仅元信息，先展示 ${selected.length}/${environment.knowledge.selectedPapers.length} 项；其余可通过 search 查找）：${JSON.stringify(selected)}\n设置/诊断：${JSON.stringify(explicitDescriptions ?? [])}`;
+  const base = `${withGenerationPrompt(instructions, getGenerationPrompt("assistant", settings))}\n当前用户请求：${input.request.input.message}\n附加资产（仅元信息）：${JSON.stringify(attached)}\n选中论文（仅元信息，先展示 ${selected.length}/${environment.knowledge.selectedPapers.length} 项；其余可通过 search 查找）：${JSON.stringify(selected)}\n设置/诊断：${JSON.stringify(explicitDescriptions ?? [])}`;
   let finalTrace: unknown;
   for (let step = 0; step < 16; step += 1) {
     input.signal.throwIfAborted();

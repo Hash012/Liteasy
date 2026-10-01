@@ -53,20 +53,24 @@ test(`generates thin reading from ${entry} with a real PDF without library selec
     await expect(ai.getByRole("checkbox", { name: /das24a.pdf/ })).toBeChecked();
     await ai.getByRole("button", { name: "确认选择", exact: true }).click();
     await ai.getByRole("button", { name: "薄读", exact: true }).click();
+    await page.getByRole("button", { name: "开始生成", exact: true }).click();
     await expect(ai.getByRole("status")).not.toBeEmpty();
     await ai.getByRole("button", { name: "关闭 AI 工作台" }).click();
   } else {
     await page.getByRole("button", { name: "AI 薄读", exact: true }).click();
+    await page.getByRole("button", { name: "开始生成", exact: true }).click();
   }
   await expect(page.locator(".thin-reading").getByText(summary, { exact: true }).first()).toBeVisible({ timeout: 60_000 });
   expect(formats).toContain("liteasy_thin_reading");
   expect(formats).not.toContain("liteasy_thin_reading_evidence_review");
   await expect(page.locator(".thin-reading__generation-status")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "打开论文文件：薄读", exact: true, includeHidden: true })).toHaveCount(1);
+  await page.getByRole("button", { name: /展开 das24a.pdf 的 .* 个附件/ }).click();
+  await expect(page.getByRole("button", { name: "打开论文文件：薄读", exact: true })).toBeVisible();
   const requestCount = formats.length;
   await page.reload();
   const paperRow = page.locator(".library-paper-node").filter({ hasText: "das24a.pdf" });
-  if (!await paperRow.locator("details").evaluate((element) => (element as HTMLDetailsElement).open)) await paperRow.locator("summary").click();
+  const expand = paperRow.getByRole("button", { name: /展开 das24a.pdf 的 .* 个附件/ });
+  await expand.click();
   await paperRow.getByRole("button", { name: "打开论文文件：薄读", exact: true }).click();
   await expect(page.locator(".thin-reading").getByText(summary, { exact: true }).first()).toBeVisible();
   await page.screenshot({ path: `test-results/thin-reading-lifecycle-${entry}.png`, fullPage: true });

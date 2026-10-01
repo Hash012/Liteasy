@@ -10,6 +10,8 @@ import { DrawShapeRegular, EraserRegular, ArrowUndoRegular } from "@fluentui/rea
 import { PdfInkLayer } from "./PdfInkLayer";
 import { canGroupPdfInkStroke, pdfInkGroupBounds, pdfInkStrokes, type PdfInkMode, type PdfInkStroke } from "./pdfInk";
 import { PdfPaneResizeHandle } from "./PdfPaneResizeHandle";
+import { GenerationPromptDialog } from "../ai-prompts/GenerationPromptDialog";
+import { GenerationPromptEditor } from "../ai-prompts/GenerationPromptEditor";
 import { extractQuickAskAbstract, type PdfQuickAskRequest } from "./pdfQuickAsk";
 import { readerContextDragMime } from "../assistant/readerContextDrag";
 import { LiteratureGuideControls } from "../paper-reading/LiteratureGuideControls";
@@ -110,6 +112,9 @@ import { usePdfAnnotationReview } from "./usePdfAnnotationReview";
 import { PaperReviewSharePanel } from "./PaperReviewSharePanel";
 import { persistPdfAnnotationState } from "./pdfAnnotationPersistence";
 import { readingQuoteRects, type PdfReadingAnnotations } from "./pdfReadingAnnotations";
+import { SelectionLookupCard } from "../selection-lookup/SelectionLookupCard";
+import { selectionLookupContext } from "../selection-lookup/selectionLookupText";
+import type { SelectionLookupPort } from "../selection-lookup/selectionLookup.types";
 import "./pdfAnnotationList.css";
 import { PdfOutline } from "./PdfOutline";
 import { PdfThumbnail } from "./PdfThumbnail";
@@ -240,6 +245,7 @@ export type PdfAnnotationPublicationChange = {
 };
 
 type PdfReaderProps = {
+  selectionLookup?: SelectionLookupPort;
   onDocumentInfo?: (info: import("./pdfDocumentInfo").PdfDocumentInfo) => void;
   onQuickAsk?: (request: PdfQuickAskRequest) => Promise<string>;
   onGenerateGuide?: GuideGenerator;
@@ -1497,6 +1503,7 @@ function PdfPageView({
 }
 
 export function PdfReader({
+  selectionLookup,
   onDocumentInfo,
   readingControls,
   readingView, onEnterReadingMode, onExitReadingMode,
@@ -1576,7 +1583,12 @@ export function PdfReader({
   const [stageWidth, setStageWidth] = useState(960);
   const [status, setStatus] = useState("选择文段后可添加高亮、划线，或把选中文段交给 AI。");
   const [selection, setSelection] = useState<PdfSelection | null>(null);
+  const [lookupOpen, setLookupOpen] = useState(false);
+  const [lookupDismissed, setLookupDismissed] = useState(false);
+  useEffect(() => { setLookupOpen(false); setLookupDismissed(false); }, [selection?.excerpt, selection?.page, activePaper?.id]);
   const [quickAskSelection, setQuickAskSelection] = useState<PdfSelection | null>(null);
+  const [reviewPromptId, setReviewPromptId] = useState<string>();
+  const [quickAskPrompt, setQuickAskPrompt] = useState<string>();
   const [quickAskQuestion, setQuickAskQuestion] = useState("");
   const [quickAskPending, setQuickAskPending] = useState(false);
   const [quickAskError, setQuickAskError] = useState("");
@@ -1639,9 +1651,9 @@ export function PdfReader({
   const annotationReview = usePdfAnnotationReview({
     scopeKey: annotationStorageKey,
     getAnnotation: (id) => annotationsRef.current.find((annotation) => annotation.id === id),
-    request: async (annotation, signal) => {
+    request: async (annotation, signal, systemPrompt) => {
       if (!objectWorkbench?.reviewAnnotation) throw new Error("AI review 暂不可用。");
-      return objectWorkbench.reviewAnnotation(annotationCaptureInput(annotation), signal);
+      return objectWorkbench.reviewAnnotation(annotationCaptureInput(annotation), signal, systemPrompt);
     },
     commit: saveAnnotationReview,
   });
@@ -2772,7 +2784,7 @@ export function PdfReader({
     clearBrowserSelection();
   }
 
-  async function answerSelectionQuestion(anchor: Pick<PdfSelection, "page" | "excerpt" | "rects" | "normalizedStart">, question: string, signal: AbortSignal) {
+  async function answerSelectionQuestion(anchor: Pick<PdfSelection, "page" | "excerpt" | "rects" | "normalizedStart">, question: string, signal: AbortSignal, systemPrompt?: string) {
     assertReadingAnnotationsReady();
     if (!activePaper || !onQuickAsk) throw new Error("速问暂不可用。");
     const paper = activePaper;
@@ -2790,7 +2802,7 @@ export function PdfReader({
     const abstractText = extractQuickAskAbstract(openingPages.join("\n\n"));
     if (!pageText.trim() || !abstractText.trim()) throw new Error("页面或摘要文本尚未就绪，请先完成论文解析后重试。");
     const answer = await onQuickAsk({ paper, page: anchor.page, excerpt: anchor.excerpt,
-      question, pageText, abstractText, signal });
+      question, pageText, abstractText, signal, ...(systemPrompt !== undefined ? { systemPrompt } : {}) });
     signal.throwIfAborted();
     if (!answer.trim()) throw new Error("未收到回答，请重试。");
     const now = new Date().toISOString();
@@ -2806,6 +2818,8 @@ export function PdfReader({
     return annotation;
   }
 
+  useEffect(() => setReviewPromptId(undefined), [annotationStorageKey]);
+
   async function submitQuickAsk() {
     if (!quickAskSelection || !activePaper || !onQuickAsk || quickAskAbortRef.current ||
       !quickAskQuestion.trim() || hydratedAnnotationStorageKey !== annotationStorageKey) return;
@@ -2817,7 +2831,7 @@ export function PdfReader({
     const paper = activePaper;
     const question = quickAskQuestion.trim();
     try {
-      const annotation = await answerSelectionQuestion(anchor, question, abort.signal);
+      const annotation = await answerSelectionQuestion(anchor, question, abort.signal, quickAskPrompt);
       setCurrentAnnotations((current) => [...current, annotation]);
       setQuickAskSelection(null);
       setActiveAnnotationId(annotation.id);
@@ -2961,7 +2975,7 @@ export function PdfReader({
     return <Tooltip content={tooltip} relationship="description">
       <Button aria-label={`AI review：${annotation.excerpt}`} appearance="subtle" size="small" icon={<SparkleRegular />}
         disabled={dirtyNote || hydratedAnnotationStorageKey !== annotationStorageKey || annotationReview.states[annotation.id]?.pending}
-        onClick={() => void annotationReview.generate(annotation.id)} />
+        onClick={() => setReviewPromptId(annotation.id)} />
     </Tooltip>;
   }
 
@@ -3426,6 +3440,7 @@ export function PdfReader({
       style={{ "--pdf-reading-background": pdfBackground } as CSSProperties}
     >
       {readingView?.({ scopeKey: annotationStorageKey ?? "", ready: Boolean(annotationStorageKey && hydratedAnnotationStorageKey === annotationStorageKey && !annotationLoadError),
+        lookup: selectionLookup, paperId: activePaper?.id, paperTitle: activePaper?.title,
         error: annotationLoadError || annotationSaveError, annotations: hydratedAnnotationStorageKey === annotationStorageKey ? annotationsInReadingOrder.filter((annotation) => guide.visible || !annotation.aiGuide) : [], guideControls,
         pageTexts, pageCount, focusedPage, selectedId: readingAnnotationId,
         create: createReadingAnnotation, update: updateReadingAnnotation,
@@ -3441,7 +3456,7 @@ export function PdfReader({
         },
         quickAsk: onQuickAsk ? async (input, signal) => {
           const anchor = await readingSelectionGeometry(input);
-          const annotation = await answerSelectionQuestion(anchor, input.question.trim(), signal);
+          const annotation = await answerSelectionQuestion(anchor, input.question.trim(), signal, input.systemPrompt);
           signal.throwIfAborted(); assertReadingAnnotationsReady();
           setCurrentAnnotations((current) => [...current, annotation]);
           setReadingAnnotationId(annotation.id);
@@ -4001,16 +4016,31 @@ export function PdfReader({
             {selection ? (
               <PdfSelectionMenu stageRef={stageRef} anchor={{ left: selection.menuLeft, top: selection.menuTop, placement: selection.menuPlacement }}>
                 <PaperSelectionTools extensionActions={activePaper ? <ReaderExtensionActions input={{ paper: activePaper, ...selection }} /> : undefined} color={selectedColor} onColorChange={setSelectedColor}
+                  lookup={selectionLookup ? () => { setLookupOpen(true); setLookupDismissed(false); } : undefined}
                   highlight={() => addAnnotation("highlight")} underline={() => addAnnotation("underline")}
                   copy={() => void copySelectedText()} board={addSelectionToWhiteboard} dragBoard={handleSelectionWhiteboardDragStart}
                   tray={objectWorkbench ? () => { if (activePaper) void objectWorkbench.capturePdf({ paper: activePaper, ...selection }, "tray").catch((e) => setStatus(e.message)); } : undefined}
                   conversation={addSelectionToConversation} quickAsk={onQuickAsk ? () => {
                     quickAskAbortRef.current?.abort(); quickAskAbortRef.current = null;
-                    setQuickAskPending(false); setQuickAskSelection(selection); setQuickAskQuestion("");
+                    setQuickAskPending(false); setQuickAskSelection(selection); setQuickAskQuestion(""); setQuickAskPrompt(undefined);
                     setQuickAskError(""); setSelection(null); setSelectionPreview(null); clearBrowserSelection(); setAnnotationPopup(null);
                   } : undefined} />
+                {selectionLookup && !lookupDismissed && (lookupOpen || selectionLookup.autoQuery) ? <SelectionLookupCard
+                  key={`${activePaper?.id}:${selection.page}:${selection.excerpt}`}
+                  lookup={selectionLookup} text={selection.excerpt} paperId={activePaper?.id} paperTitle={activePaper?.title}
+                  context={selectionLookupContext(pageTexts[selection.page] ?? "", selection.excerpt, selection.normalizedStart)}
+                  onClose={() => { setLookupOpen(false); setLookupDismissed(true); }}
+                  onSave={hydratedAnnotationStorageKey === annotationStorageKey && !annotationLoadError ? (note) => createReadingAnnotation({ page: selection.page, excerpt: selection.excerpt, note }) : undefined}
+                  onExplain={onQuickAsk ? () => {
+                    quickAskAbortRef.current?.abort(); quickAskAbortRef.current = null;
+                    setQuickAskPending(false); setQuickAskSelection(selection); setQuickAskQuestion("请结合所在句子解释这个单词或短语在论文中的具体含义，说明它与常见释义的关系。");
+                    setQuickAskPrompt(undefined); setQuickAskError(""); setSelection(null); setSelectionPreview(null); clearBrowserSelection(); setAnnotationPopup(null);
+                  } : undefined} /> : null}
               </PdfSelectionMenu>
             ) : null}
+            {reviewPromptId ? <GenerationPromptDialog task="annotation_review" title="AI 评阅批注" onClose={() => setReviewPromptId(undefined)} onConfirm={(systemPrompt) => {
+              const id = reviewPromptId; setReviewPromptId(undefined); void annotationReview.generate(id, systemPrompt);
+            }} /> : null}
             {quickAskSelection ? (
               <aside aria-label="速问" className="pdf-quick-ask-panel">
                 <form onSubmit={(event) => { event.preventDefault(); void submitQuickAsk(); }}>
@@ -4019,6 +4049,7 @@ export function PdfReader({
                   <textarea aria-label="速问问题" placeholder="想了解这段内容的什么？" autoFocus
                     value={quickAskQuestion} onChange={(event) => setQuickAskQuestion(event.target.value)}
                     disabled={quickAskPending} maxLength={4000} rows={3} />
+                  <GenerationPromptEditor task="selection_explanation" value={quickAskPrompt} onChange={setQuickAskPrompt} disabled={quickAskPending} />
                   <small>上下文：当前页全文与论文摘要</small>
                   {quickAskError ? <p role="alert">{quickAskError}</p> : null}
                   <div className="editor-actions">

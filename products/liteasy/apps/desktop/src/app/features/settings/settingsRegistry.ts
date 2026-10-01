@@ -1,7 +1,15 @@
+import { generationPromptKey, generationPromptTasks } from "../ai-prompts/generationPrompts";
 import type { SettingKey } from "./settings.types";
 
 export const settingsRegistry: Record<SettingKey, { label: string; help?: string; dependencies?: string[]; restartRequirement?: "none" | "next-run" }> = {
+  ...Object.fromEntries(Object.entries(generationPromptTasks).map(([task, item]) => [generationPromptKey(task as keyof typeof generationPromptTasks), { label: `${item.label}系统提示词`, help: "设置默认生成风格，可在生成前临时修改。" }])) as Record<import("../ai-prompts/generationPrompts").GenerationPromptSettingKey, { label: string; help: string }>,
   "thin_reading.mode": { label: "薄读模式" },
+  "lookup.dictionary_service": { label: "词典服务", help: "选择单词与短语查询的释义来源。" },
+  "lookup.translation_service": { label: "选段翻译服务", help: "词典未收录时，可使用当前 AI 或自部署服务翻译选段。" },
+  "lookup.source_language": { label: "查询原语言" },
+  "lookup.target_language": { label: "查询目标语言" },
+  "lookup.auto_query": { label: "自动查询选区", help: "选中文字后自动展开查询。AI 翻译仍需点击确认。" },
+  "lookup.libretranslate_endpoint": { label: "LibreTranslate 地址" },
   "papers.metadata_provider": { label: "文献元信息服务" },
   "papers.metadata_endpoint": { label: "元信息 API 地址" },
   "papers.mineru_mode": { label: "论文解析服务" },

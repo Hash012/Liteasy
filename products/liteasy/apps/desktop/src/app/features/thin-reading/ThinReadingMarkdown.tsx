@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { Button, Tooltip } from "@fluentui/react-components";
 import type { Root } from "mdast";
 import { type Components } from "react-markdown";
@@ -182,6 +182,77 @@ function readingMarkupPlugin(ranges: SentenceRange[], anchors: AnchorRange[]) {
   };
 }
 
+type MarkdownInteraction = Pick<ThinReadingMarkdownProps,
+  "activeAnchorId" | "generating" | "locale" | "marksVisible" | "onDeepen" | "onSelectAnchor" | "renderReferences"
+> & {
+  sentenceById: ReadonlyMap<string, ThinReadingSummarySentence>;
+  anchorById: ReadonlyMap<string, ThinReadingAnchor>;
+};
+const MarkdownInteractionContext = createContext<MarkdownInteraction | null>(null);
+
+// Stable element components preserve a click when focus updates the reader shell.
+const components: Components = {
+  a: ({ children, href, node: _node, ...props }) => {
+    if (href?.startsWith("#")) return <a {...props} href={href}>{children}</a>;
+    return /^https?:\/\//u.test(href ?? "")
+      ? <a {...props} href={href} rel="noreferrer" target="_blank">{children}</a>
+      : <span>{children}</span>;
+  },
+  span: ({ children, node, ...props }) => {
+    const interaction = useContext(MarkdownInteractionContext);
+    if (!interaction) return <span {...props}>{children}</span>;
+    const { sentenceById, anchorById, locale, generating, activeAnchorId, marksVisible, onDeepen, onSelectAnchor, renderReferences } = interaction;
+    const properties = node?.properties ?? {};
+    const sentence = sentenceById.get(String(properties["data-thin-reading-sentence-id"] ?? ""));
+    const term = properties["data-thin-reading-term"];
+    if (typeof term === "string" && sentence) {
+      const label = locale === "zh" ? `深入阅读“${term}”` : `Read more about “${term}”`;
+      return (
+        <Tooltip content={locale === "zh" ? "点击生成下一层薄读" : "Generate the next reading layer"} relationship="description">
+          <Button
+            appearance="transparent"
+            aria-label={label}
+            className="thin-reading__deepen-term"
+            data-thin-reading-summary-evidence-ids={sentence.evidenceIds.join(",")}
+            data-thin-reading-summary-external-source-ids={sentence.externalKnowledge.join(",")}
+            disabled={generating}
+            onClick={() => onDeepen(term, sentence)}
+            size="small"
+            title={label}
+          >{children}</Button>
+        </Tooltip>
+      );
+    }
+    const referenceSentence = sentenceById.get(String(properties["data-thin-reading-references"] ?? ""));
+    if (referenceSentence) return <span {...props}>{renderReferences(referenceSentence)}</span>;
+    const anchor = anchorById.get(String(properties["data-thin-reading-mark"] ?? ""));
+    if (anchor) {
+      return (
+        <mark
+          aria-label={marksVisible ? `查看“${anchor.text}”关联论文` : undefined}
+          aria-pressed={marksVisible ? activeAnchorId === anchor.id : undefined}
+          className={`thin-reading__anchor${marksVisible ? "" : " is-hidden"}${activeAnchorId === anchor.id ? " is-active" : ""}`}
+          data-anchor-id={anchor.id}
+          data-thin-reading-anchor-id={anchor.id}
+          data-thin-reading-summary-evidence-ids={anchor.evidenceIds.join(",")}
+          data-thin-reading-summary-external-source-ids={anchor.externalSourceIds.join(",")}
+          onClick={marksVisible ? () => onSelectAnchor(anchor.id) : undefined}
+          onKeyDown={marksVisible ? (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              onSelectAnchor(anchor.id);
+            }
+          } : undefined}
+          role={marksVisible ? "button" : undefined}
+          tabIndex={marksVisible ? 0 : -1}
+          title={marksVisible ? `${anchor.text} · ${Math.round(anchor.importance * 100)}%` : undefined}
+        >{children}</mark>
+      );
+    }
+    return <span {...props}>{children}</span>;
+  }
+};
+
 /** Rich prose keeps sentence evidence and association marks while exposing explicit next layers. */
 export function ThinReadingMarkdown({
   activeAnchorId, anchors, generating, locale, marksVisible, onDeepen, onSelectAnchor,
@@ -196,73 +267,18 @@ export function ThinReadingMarkdown({
     const start = range.start + normalizeMarkdownMathDelimiters(range.sentence.text.slice(0, anchor.start)).length;
     return [{ anchor, end: start + anchor.text.length, start }];
   })), [anchors, ranges]);
-  const components: Components = {
-    a: ({ children, href, node: _node, ...props }) => {
-      if (href?.startsWith("#")) return <a {...props} href={href}>{children}</a>;
-      return /^https?:\/\//u.test(href ?? "")
-        ? <a {...props} href={href} rel="noreferrer" target="_blank">{children}</a>
-        : <span>{children}</span>;
-    },
-    span: ({ children, node, ...props }) => {
-      const properties = node?.properties ?? {};
-      const sentence = sentenceById.get(String(properties["data-thin-reading-sentence-id"] ?? ""));
-      const term = properties["data-thin-reading-term"];
-      if (typeof term === "string" && sentence) {
-        const label = locale === "zh" ? `深入阅读“${term}”` : `Read more about “${term}”`;
-        return (
-          <Tooltip content={locale === "zh" ? "点击生成下一层薄读" : "Generate the next reading layer"} relationship="description">
-            <Button
-              appearance="transparent"
-              aria-label={label}
-              className="thin-reading__deepen-term"
-              data-thin-reading-summary-evidence-ids={sentence.evidenceIds.join(",")}
-              data-thin-reading-summary-external-source-ids={sentence.externalKnowledge.join(",")}
-              disabled={generating}
-              onClick={() => onDeepen(term, sentence)}
-              size="small"
-              title={label}
-            >{children}</Button>
-          </Tooltip>
-        );
-      }
-      const referenceSentence = sentenceById.get(String(properties["data-thin-reading-references"] ?? ""));
-      if (referenceSentence) return <span {...props}>{renderReferences(referenceSentence)}</span>;
-      const anchor = anchorById.get(String(properties["data-thin-reading-mark"] ?? ""));
-      if (anchor) {
-        return (
-          <mark
-            aria-label={marksVisible ? `查看“${anchor.text}”关联论文` : undefined}
-            aria-pressed={marksVisible ? activeAnchorId === anchor.id : undefined}
-            className={`thin-reading__anchor${marksVisible ? "" : " is-hidden"}${activeAnchorId === anchor.id ? " is-active" : ""}`}
-            data-anchor-id={anchor.id}
-            data-thin-reading-anchor-id={anchor.id}
-            data-thin-reading-summary-evidence-ids={anchor.evidenceIds.join(",")}
-            data-thin-reading-summary-external-source-ids={anchor.externalSourceIds.join(",")}
-            onClick={marksVisible ? () => onSelectAnchor(anchor.id) : undefined}
-            onKeyDown={marksVisible ? (event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onSelectAnchor(anchor.id);
-              }
-            } : undefined}
-            role={marksVisible ? "button" : undefined}
-            tabIndex={marksVisible ? 0 : -1}
-            title={marksVisible ? `${anchor.text} · ${Math.round(anchor.importance * 100)}%` : undefined}
-          >{children}</mark>
-        );
-      }
-      return <span {...props}>{children}</span>;
-    }
-  };
+
   return (
-    <MarkdownContent
-      className="assistant-markdown thin-reading__markdown"
-      components={components}
-      normalizeMath={false}
-      paperAnchors={paperAnchors}
-      remarkPlugins={[plugin]}
-      streaming={generating}
-      value={markdown}
-    />
+    <MarkdownInteractionContext.Provider value={{ sentenceById, anchorById, activeAnchorId, generating, locale, marksVisible, onDeepen, onSelectAnchor, renderReferences }}>
+      <MarkdownContent
+        className="assistant-markdown thin-reading__markdown"
+        components={components}
+        normalizeMath={false}
+        paperAnchors={paperAnchors}
+        remarkPlugins={[plugin]}
+        streaming={generating}
+        value={markdown}
+      />
+    </MarkdownInteractionContext.Provider>
   );
 }

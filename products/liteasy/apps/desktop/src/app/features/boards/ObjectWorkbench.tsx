@@ -1,3 +1,4 @@
+import { GenerationPromptEditor } from "../ai-prompts/GenerationPromptEditor";
 import { ExtensionActions } from "../extensions/ExtensionActions";
 import { liteasyPath } from "../resource-filesystem/liteasyPath";
 import { BoardLayoutTools } from "./BoardLayoutTools";
@@ -105,7 +106,7 @@ export type WorkbenchViewModel = {
   drop(data: DataTransfer): Promise<void>;
   addToTray(refs: ContextRef[]): void;
   previewContext(): Promise<void>;
-  submit(question: string): Promise<void>;
+  submit(question: string, systemPrompt?: string): Promise<void>;
   cancel(): void;
   saveAnswer(): Promise<unknown>;
   openSource(object: ObjectEnvelope): Promise<ObjectEnvelope | undefined>;
@@ -252,6 +253,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
     };
   }, [model.repository, model.board?.revision, model.placements, model.status]);
   const [link, setLink] = useState("");
+  const [systemPrompt, setSystemPrompt] = useState<string>();
   const [question, setQuestion] = useState("");
   const [note, setNote] = useState("");
   const [libraryEditing, setLibraryEditing] = useState<ObjectEnvelope>();
@@ -1052,9 +1054,13 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
               onChange={(_, data) => setQuestion(data.value)}
               placeholder="针对这些内容提问"
             />
+            <GenerationPromptEditor task="assistant" value={systemPrompt} onChange={setSystemPrompt} disabled={model.busy} />
             <Button
               disabled={model.busy || !model.tray.length || !question.trim()}
-              onClick={() => void model.submit(question)}
+              onClick={() => {
+                void (systemPrompt === undefined ? model.submit(question) : model.submit(question, systemPrompt));
+                setSystemPrompt(undefined);
+              }}
             >
               提问
             </Button>

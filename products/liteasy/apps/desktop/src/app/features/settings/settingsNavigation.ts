@@ -1,3 +1,4 @@
+import { generationPromptKey, generationPromptTasks, type GenerationPromptTask } from "../ai-prompts/generationPrompts";
 import { settingsRegistry } from "./settingsRegistry";
 import type { SettingKey } from "./settings.types";
 
@@ -24,10 +25,14 @@ type SettingsSection = {
 export const settingsSections = [
   { id: "appearance", category: "appearance", title: "外观与阅读", description: "调整主题、界面大小、阅读字体和 PDF 阅读底色。", keywords: "light dark theme 字体 字号 护眼 缩放 浅色 深色 暖黄 电子书 EPUB MOBI Markdown TXT",
     keys: ["view.theme", "view.font_family", "view.reader_font_family", "view.font_size", "view.display_scale", "view.pdf_background", "view.pdf_custom_background"] },
+  { id: "selection-lookup", category: "appearance", title: "查词与选段翻译", description: "配置词典、短语翻译、查询语言和自动查询。", keywords: "dictionary translate 查词 单词 短语 翻译 释义 音标 发音 必应 有道 英英 LibreTranslate 自部署",
+    keys: ["lookup.dictionary_service", "lookup.translation_service", "lookup.source_language", "lookup.target_language", "lookup.auto_query", "lookup.libretranslate_endpoint"] },
   { id: "models", category: "ai", title: "模型与连接", description: "连接自己的 API，验证模型后可在对话中切换。", keywords: "服务商 供应商 provider API key 密钥 OpenAI Claude Anthropic DeepSeek Ollama Gemini 云代理 AI 接入 协议 结构化输出 已验证模型",
     keys: ["models.connection_mode", "models.direct_provider", "models.direct_endpoint", "models.direct_model", "models.direct_protocol", "models.direct_output_format"] },
   { id: "assistant", category: "ai", title: "助手偏好", description: "设置生成语言、过程展示，查看助手扩展能力。", keywords: "Agent 技能 Skill Plugin MCP 插件 工具 扩展 安全 中文 English",
     keys: ["assistant.context_window", "assistant.language", "assistant.public_audit.enabled"] },
+  { id: "generation-prompts", category: "ai", title: "AI 生成提示词", description: "集中修改各类生成的默认系统提示词与风格；单次修改只影响当次生成。", keywords: "系统提示词 prompt 讲解 速问 标注 薄读 提纲 PPT 思维导图 对比表 深入 精简 点拨 提问 详细 直觉",
+    keys: Object.keys(generationPromptTasks).map((task) => generationPromptKey(task as GenerationPromptTask)) },
   { id: "local-mcp", category: "ai", title: "本机 MCP · Codex", description: "将 Liteasy 研究资产接入自己的 AI 工作流。", keywords: "Windows MCP Codex 本机 连接 读写 笔记 白板 资产 STDIO", keys: [] },
   { id: "papers", category: "papers", title: "论文解析与薄读", description: "选择薄读方式、元信息来源和扫描件识别语言。", keywords: "OCR 识别 扫描 PDF 元数据 DOI Crossref OpenAlex Semantic Scholar MinerU 提取 快速 严谨",
     keys: ["thin_reading.mode", "papers.metadata_provider", "papers.metadata_endpoint", "papers.mineru_mode", "papers.mineru_endpoint", "import.ocr_language"] },
