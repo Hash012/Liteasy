@@ -15,6 +15,8 @@ import {
   type BoardFileSnapshot,
 } from "../features/boards/boardFileFormat";
 
+class BoardSnapshotChanged extends Error {}
+
 export function useBoardFileController(input: {
   repository: ObjectRepository;
   board?: ObjectEnvelope;
@@ -71,7 +73,7 @@ export function useBoardFileController(input: {
       throw new Error("请选择一个白板文件。");
     const head = await input.repository.resolveLatest(board.objectId);
     if (head.revision !== ref.revision)
-      throw new Error("白板已变化，请重新选择后导出。");
+      throw new BoardSnapshotChanged("白板已变化，请重新选择后导出。");
     const current =
       await input.repository.getBoardFileBinding<BoardFileBinding>(
         board.objectId,
@@ -92,7 +94,7 @@ export function useBoardFileController(input: {
       (await input.repository.resolveLatest(board.objectId)).revision !==
       ref.revision
     )
-      throw new Error("白板在导出时发生变化，请重试。");
+      throw new BoardSnapshotChanged("白板在导出时发生变化，请重试。");
     return text;
   }
   async function resolveBoardFile(file: BoardFileSnapshot): Promise<ObjectRef> {
@@ -239,18 +241,22 @@ export function useBoardFileController(input: {
   const saveRef = useRef(saveBoardFile);
   saveRef.current = saveBoardFile;
   useEffect(() => {
-    if (!binding || binding.savedRevision === input.board?.revision) return;
-    const timer = window.setTimeout(
-      () => void saveRef.current().catch(report),
-      500,
-    );
-    return () => window.clearTimeout(timer);
-  }, [input.repository, input.board?.objectId, input.board?.revision, binding]);
-  useEffect(() => {
-    if (!service.managedCanvas || !input.board || loadedBoardId !== input.board.objectId || binding) return;
-    const timer = window.setTimeout(() => void saveRef.current().catch(report), 500);
-    return () => window.clearTimeout(timer);
-  }, [service, loadedBoardId, binding, input.board?.objectId]);
+    if (!input.board || binding?.savedRevision === input.board.revision) return;
+    if (!binding && (!service.managedCanvas || loadedBoardId !== input.board.objectId)) return;
+    let alive = true;
+    let timer: number;
+    const schedule = () => {
+      timer = window.setTimeout(() => void saveRef.current().catch((error) => {
+        if (!alive) return;
+        // Editing while a snapshot is being serialized is normal. Retry after
+        // the next quiet interval; file CAS conflicts still require user action.
+        if (error instanceof BoardSnapshotChanged) schedule();
+        else report(error);
+      }), 500);
+    };
+    schedule();
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, [input.repository, input.board?.objectId, input.board?.revision, binding, service, loadedBoardId]);
   const syncRef = useRef(async () => {});
   syncRef.current = async () => {
     if (!binding || !input.board || !input.active()) return;

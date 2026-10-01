@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { paperPdfIdentity, resolvePaperPdf } from "../app/features/paper-services/paperPdfResolver";
+import { discoverPaperPdfUrl, knownPaperPdfUrl, paperPdfIdentity, resolvePaperPdf } from "../app/features/paper-services/paperPdfResolver";
 import { deletePaperServiceKey, savePaperServiceKey } from "../app/features/paper-services/paperServiceTransport";
 
 const doi = "10.1234/memory";
@@ -94,4 +94,21 @@ test("bounded page discovery stops loops, rejects HTML-as-PDF, and cancellation 
 test("distinguishes service failures from a successful lookup with no public PDF", async () => {
   network(() => new Response(null, { status: 503 }));
   await expect(resolvePaperPdf({ id: `doi:${doi}` })).rejects.toThrow("全文服务暂时未能连接或拒绝访问");
+});
+
+
+test("availability discovery resolves repository and registry links without downloading PDF bytes", async () => {
+  const fetch = network((url) => url.hostname === "api.openalex.org" ? Response.json({ doi: `https://doi.org/${doi}`,
+    locations: [{ is_oa: true, landing_page_url: "https://arxiv.org/abs/2402.12482" }] }) : absent());
+  expect(await discoverPaperPdfUrl({ id: `doi:${doi}` })).toBe("https://arxiv.org/pdf/2402.12482");
+  expect(fetch.mock.calls.every(([url]) => url.hostname.startsWith("api."))).toBe(true);
+  fetch.mockClear();
+  expect(await discoverPaperPdfUrl({ id: "arxiv:2402.12482" })).toBe("https://arxiv.org/pdf/2402.12482");
+  expect(knownPaperPdfUrl({ id: "x", url: "https://aclanthology.org/2025.acl-long.1.pdf" })).toBe("https://aclanthology.org/2025.acl-long.1.pdf");
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+test("a partial metadata outage is unknown availability, not a definitive missing PDF", async () => {
+  network((url) => url.hostname === "api.crossref.org" ? Response.json({ message: { DOI: doi } }) : new Response(null, { status: 503 }));
+  await expect(discoverPaperPdfUrl({ id: `doi:${doi}` })).rejects.toThrow("暂不可用");
 });

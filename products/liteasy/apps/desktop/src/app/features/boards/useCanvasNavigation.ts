@@ -25,14 +25,18 @@ export function useCanvasNavigation(input: { viewport: RefObject<HTMLDivElement>
     const host = input.viewport.current;
     if (!host || !input.visible) return;
     const wheel = (event: WheelEvent) => {
-      if (!(event.ctrlKey || event.metaKey || space.current) || editable(event.target)) return;
+      if (editable(event.target)) return;
+      if (!(event.ctrlKey || event.metaKey || space.current)) {
+        if (event.shiftKey) { event.preventDefault(); host.scrollLeft += event.deltaY || event.deltaX; }
+        return;
+      }
       event.preventDefault();
       const current = latest.current;
       const zoom = Math.max(0.25, Math.min(2, current.zoom * Math.exp(-event.deltaY * 0.002)));
       const bounds = host.getBoundingClientRect();
       const x = event.clientX - bounds.left, y = event.clientY - bounds.top;
       const left = (host.scrollLeft + x - 56) * zoom / current.zoom + 56 - x;
-      const top = (host.scrollTop + y - 24) * zoom / current.zoom + 24 - y;
+      const top = (host.scrollTop + y - 56) * zoom / current.zoom + 56 - y;
       current.setZoom(zoom);
       requestAnimationFrame(() => { host.scrollLeft = left; host.scrollTop = top; });
     };
@@ -46,7 +50,18 @@ export function useCanvasNavigation(input: { viewport: RefObject<HTMLDivElement>
     gesture.current = undefined; setMarquee(undefined);
     event.currentTarget.releasePointerCapture?.(event.pointerId);
   }
-  return { marquee,
+  function fitSelection() {
+    const host = input.viewport.current;
+    const items = input.placements.filter((p) => input.selected.includes(p.placementId));
+    if (!host || !items.length) return;
+    const left = Math.min(...items.map((p) => p.position.x)), top = Math.min(...items.map((p) => p.position.y));
+    const width = Math.max(...items.map((p) => p.position.x + p.size.width)) - left;
+    const height = Math.max(...items.map((p) => p.position.y + p.size.height)) - top;
+    const zoom = Math.max(0.25, Math.min(2, (host.clientWidth - 100) / width, (host.clientHeight - 100) / height));
+    input.setZoom(zoom);
+    requestAnimationFrame(() => host.scrollTo({ left: Math.max(0, 56 + (left + width / 2) * zoom - host.clientWidth / 2), top: Math.max(0, 56 + (top + height / 2) * zoom - host.clientHeight / 2) }));
+  }
+  return { marquee, fitSelection,
     onKeyDownCapture(event: KeyboardEvent<HTMLDivElement>) {
       if (event.currentTarget.contains(event.target as Node) && !(event.target as Element).closest("button") && event.code === "Space" && !editable(event.target)) { space.current = true; event.preventDefault(); event.stopPropagation(); }
     },
@@ -67,7 +82,8 @@ export function useCanvasNavigation(input: { viewport: RefObject<HTMLDivElement>
       const end = point(event.clientX, event.clientY);
       const box = { left: Math.min(drag.x, end.x), top: Math.min(drag.y, end.y), width: Math.abs(end.x - drag.x), height: Math.abs(end.y - drag.y) };
       setMarquee(box);
-      input.setSelected([...new Set([...drag.selected, ...input.placements.filter((p) => p.position.x < box.left + box.width && p.position.x + p.size.width > box.left && p.position.y < box.top + box.height && p.position.y + p.size.height > box.top).map((p) => p.placementId)])]);
+      const ids = [...new Set([...drag.selected, ...input.placements.filter((p) => p.position.x < box.left + box.width && p.position.x + p.size.width > box.left && p.position.y < box.top + box.height && p.position.y + p.size.height > box.top).map((p) => p.placementId)])];
+      if (ids.length !== input.selected.length || ids.some((id, index) => id !== input.selected[index])) input.setSelected(ids);
     }, onPointerUpCapture: finish,
     onDoubleClick(event: MouseEvent<HTMLDivElement>) { if (event.currentTarget.contains(event.target as Node) && blank(event.target) && input.canvas.current) { event.preventDefault(); void input.create(point(event.clientX, event.clientY)).catch(input.error); } },
     onKeyDown(event: KeyboardEvent<HTMLDivElement>) {

@@ -35,6 +35,7 @@ export type SettingKey =
   | "models.control_plane_endpoint"
   | "view.font_family"
   | "view.reader_font_family"
+  | "view.close_empty_panels"
   | "view.theme"
   | "view.font_size"
   | "view.display_scale"
@@ -70,6 +71,7 @@ export type SettingsState = Partial<Record<GenerationPromptSettingKey, string>> 
   "models.control_plane_endpoint": string;
   "view.font_family": string;
   "view.reader_font_family": string;
+  "view.close_empty_panels"?: boolean;
   "view.theme": AppearancePreference;
   "view.font_size": string;
   "view.display_scale": string;

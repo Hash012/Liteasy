@@ -347,3 +347,51 @@ test("dragging an unopened Vault file resolves its current context only when dro
   expect(resolve).toHaveBeenCalledTimes(1);
   expect(result.current.placements).toEqual([expect.objectContaining({ ref })]);
 });
+
+test("rapid layout edits use fresh board revisions without rescanning the library, while external card conflicts remain protected", async () => {
+  const scopeId = crypto.randomUUID();
+  const { result, unmount } = renderHook(() => useObjectWorkbenchController({
+    scopeId, getApi: () => { throw new Error("No AI call"); }, getPapers: () => [],
+    getSettings: () => createSettingsStore().getState(), openEvidence: vi.fn(),
+  }));
+  await act(async () => { await result.current.createNote("Card"); });
+  const card = result.current.placements[0];
+  // Another view updates presentation; this changes the board head, not the card geometry.
+  await result.current.repository.setBlockPresentation({ boardRef: refOf(result.current.board!), placementId: card.placementId,
+    expectedVersion: null, value: { schema: "liteasy.block-presentation/v1", fontSize: 20 }, operationId: crypto.randomUUID() });
+  const search = vi.spyOn(result.current.repository, "search");
+  await act(async () => {
+    await Promise.all([
+      result.current.move(card, { x: card.position.x + 20, y: card.position.y }),
+      result.current.move(card, { x: card.position.x + 20, y: card.position.y }),
+    ]);
+  });
+  expect(result.current.placements[0].position.x).toBe(card.position.x + 40);
+  expect(result.current.status).toBe("已保存到本机");
+  expect(search).not.toHaveBeenCalled();
+  const revision = result.current.board!.revision;
+  await act(async () => { await result.current.move(result.current.placements[0], result.current.placements[0].position); });
+  expect(result.current.board!.revision).toBe(revision);
+  const current = result.current.placements[0];
+  await result.current.repository.applyBoardPatch({ boardRef: refOf(result.current.board!), operationId: crypto.randomUUID(),
+    move: [{ placementId: current.placementId, revision: current.revision, position: { x: 800, y: 800 } }] });
+  await act(async () => {
+    await expect(result.current.move(current, { x: 120, y: 120 })).rejects.toThrow("其他位置修改");
+  });
+  expect((await result.current.repository.listPlacements(current.boardId))[0].position).toEqual({ x: 800, y: 800 });
+  unmount();
+});
+
+test("selected cards move together in one undoable layout operation", async () => {
+  const scopeId = crypto.randomUUID();
+  const { result, unmount } = renderHook(() => useObjectWorkbenchController({ scopeId, getApi: () => { throw new Error("No AI"); },
+    getPapers: () => [], getSettings: () => createSettingsStore().getState(), openEvidence: vi.fn() }));
+  await act(async () => { await result.current.createNote("One", { x: 100, y: 100 }); await result.current.createNote("Two", { x: 500, y: 200 }); });
+  const before = result.current.placements;
+  await act(async () => { await result.current.move(before[0], { x: before[0].position.x + 60, y: before[0].position.y + 40 }, before.map((p) => p.placementId)); });
+  for (const item of before) expect(result.current.placements.find((p) => p.placementId === item.placementId)?.position).toEqual({ x: item.position.x + 60, y: item.position.y + 40 });
+  await act(async () => { await result.current.restoreLayout("undo"); });
+  const restored = await result.current.repository.listPlacements(result.current.board!.objectId);
+  for (const item of before) expect(restored.find((p) => p.placementId === item.placementId)?.position).toEqual(item.position);
+  unmount();
+});

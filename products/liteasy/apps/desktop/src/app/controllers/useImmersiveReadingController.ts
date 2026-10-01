@@ -35,7 +35,13 @@ export function useImmersiveReadingController() {
   }, [reveal]);
 
   const setFullscreen = useCallback(async (value: boolean) => {
-    if (isTauri()) await getCurrentWindow().setFullscreen(value);
+    if (isTauri()) {
+      // Native borderless fullscreen uses the complete monitor bounds, including
+      // the Windows taskbar area. Keep the window foreground after the transition.
+      const host = getCurrentWindow();
+      await host.setFullscreen(value);
+      if (value) await host.setFocus().catch(() => { /* Fullscreen remains valid if the OS denies focus. */ });
+    }
     else if (value) await document.documentElement.requestFullscreen();
     else if (document.fullscreenElement) await document.exitFullscreen();
   }, []);
@@ -80,7 +86,7 @@ export function useImmersiveReadingController() {
       }
     };
     const fullscreenChanged = () => {
-      if (!document.fullscreenElement && !pending.current && current.current === "fullscreen") update("off");
+      if (!isTauri() && !document.fullscreenElement && !pending.current && current.current === "fullscreen") update("off");
     };
     window.addEventListener("keydown", keydown, true);
     document.addEventListener("fullscreenchange", fullscreenChanged);
@@ -104,7 +110,7 @@ export function useImmersiveReadingController() {
   }, [exit, toggleFullscreen, update]);
 
   useEffect(() => {
-    if (mode === "off") return;
+    if (mode !== "fullscreen") return;
     const hideLater = () => {
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => {

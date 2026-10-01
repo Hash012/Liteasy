@@ -25,7 +25,9 @@ export function useBlockPresentation(repository: ObjectRepository, boardId?: str
       } catch (e) { if (alive && generation === current) setError(e instanceof Error ? e.message : String(e)); }
     };
     void load();
-    const unsubscribe = subscribeObjectStorage(repository.scopeId, () => void load());
+    const unsubscribe = subscribeObjectStorage(repository.scopeId, (keys) => {
+      if (!keys || keys.includes(`block-presentation/${boardId}/$board`) || keys.includes(`block-presentation/${boardId}/${placementId}`)) void load();
+    });
     return () => { alive = false; unsubscribe(); };
   }, [repository, boardId, placementId]);
   return {

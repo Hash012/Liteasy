@@ -11,6 +11,7 @@ import { useCanvasNavigation } from "./useCanvasNavigation";
 import type { ResolvedObject } from "../objects/objectResolver";
 import {
   useRef,
+  useMemo,
   useEffect,
   useState,
   type Dispatch,
@@ -66,6 +67,7 @@ import {
   writeObjectTransfer,
 } from "../object-transfer/objectTransfer";
 import type { ObjectRepository } from "../objects/objectRepository";
+import { subscribeObjectStorage } from "../objects/objectStorage";
 import type { ContextRef, ContextSnapshot } from "../context/objectContext";
 import { AssistantMarkdown } from "../assistant/AssistantMarkdown";
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
@@ -97,7 +99,8 @@ export type WorkbenchViewModel = {
   createNote(text: string, position?: Placement["position"]): Promise<unknown>;
   place(refs: ObjectRef[]): Promise<unknown>;
   removePlacement(id: string): Promise<unknown>;
-  move(placement: Placement, position: Placement["position"]): Promise<unknown>;
+  restoreLayout?(direction: "undo" | "redo"): Promise<unknown>;
+  move(placement: Placement, position: Placement["position"], selection?: string[]): Promise<unknown>;
   resize(
     placement: Placement,
     geometry: Pick<Placement, "position" | "size">,
@@ -158,13 +161,29 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
     previousTraySize.current = model.tray.length;
   }, [model.tray.length]);
   const [selected, setSelected] = useState<string[]>([]);
+  const [newCard, setNewCard] = useState<string>();
+  const selection = useRef(selected); selection.current = selected;
   const visiblePlacements = useVisiblePlacements(model.placements, viewport, zoom, selected, model.visible);
   const navigation = useCanvasNavigation({ viewport, canvas, zoom, setZoom, visible: model.visible, boardId: model.board?.objectId,
-    placements: model.placements, selected, setSelected, create: (position) => model.createNote("新笔记", position),
+    placements: model.placements, selected, setSelected, create: async (position) => {
+      const before = new Set(model.placements.map((p) => p.placementId));
+      await model.createNote("新笔记", position);
+      requestAnimationFrame(() => {
+        if (actions.current.board?.objectId !== model.board?.objectId && model.board) return;
+        const created = actions.current.placements.find((p) => !before.has(p.placementId));
+        if (created) { setSelected([created.placementId]); setNewCard(created.placementId); }
+      });
+    },
     remove: model.removePlacement, error: (failure) => model.setStatus(String(failure)) });
   const [edges, setEdges] = useState<
     Array<BoardConnection & { semantic?: boolean }>
   >([]);
+  const [relationsVersion, setRelationsVersion] = useState(0);
+  useEffect(() => subscribeObjectStorage(model.repository.scopeId, (keys) => {
+    if (!keys || keys.some((key) => key.startsWith("relation/") || key.startsWith(`edge/${model.board?.objectId}/`))) {
+      setRelationsVersion((value) => value + 1);
+    }
+  }), [model.repository, model.board?.objectId]);
   const [connection, setConnection] = useState<{
     from: Placement;
     side: BoardSide;
@@ -172,13 +191,13 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
   }>();
   const connectionRef = useRef(connection);
   connectionRef.current = connection;
-  const connectionActions = {
+  const connectionActions = useMemo(() => ({
     active: !!connection,
     start(from: Placement, side: BoardSide) {
       const next = { from, side };
       connectionRef.current = next;
       setConnection(next);
-      model.setStatus("拖到另一张卡片的连接点；也可点击目标连接点。Esc 取消。");
+      actions.current.setStatus("拖到另一张卡片的连接点；也可点击目标连接点。Esc 取消。");
     },
     finish(to: Placement, toSide: BoardSide) {
       const start = connectionRef.current;
@@ -192,15 +211,15 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
       }
       connectionRef.current = undefined;
       setConnection(undefined);
-      void model
+      void actions.current
         .connect?.(start.from, start.side, to, toSide)
-        .catch((e) => model.setStatus(e.message));
+        .catch((e) => actions.current.setStatus(e.message));
     },
     cancel() {
       connectionRef.current = undefined;
       setConnection(undefined);
     },
-  };
+  }), [Boolean(connection)]);
   useEffect(() => {
     let active = true;
     const board = model.board;
@@ -251,7 +270,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
     return () => {
       active = false;
     };
-  }, [model.repository, model.board?.revision, model.placements, model.status]);
+  }, [model.repository, model.board?.revision, model.placements, relationsVersion]);
   const [link, setLink] = useState("");
   const [systemPrompt, setSystemPrompt] = useState<string>();
   const [question, setQuestion] = useState("");
@@ -264,7 +283,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
   const cachedCards = useRef(cards);
   cachedCards.current = cards;
   useEffect(() => {
-    setSelected([]);
+    setSelected([]); setNewCard(undefined);
     connectionRef.current = undefined;
     setConnection(undefined);
     setDetails(undefined);
@@ -435,7 +454,13 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
         onDoubleClick={navigation.onDoubleClick}
         onKeyDown={(event) => {
           navigation.onKeyDown(event);
+          if ((event.target as Element).closest("input,textarea,select,[contenteditable=true]")) return;
+          if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+            event.preventDefault();
+            void model.restoreLayout?.(event.shiftKey ? "redo" : "undo").catch(error);
+          }
           if (event.shiftKey && event.code === "Digit1") { event.preventDefault(); fitView(); }
+          if (event.shiftKey && event.code === "Digit2") { event.preventDefault(); navigation.fitSelection(); }
           if (event.key === "Escape") connectionActions.cancel();
           if (
             (event.ctrlKey || event.metaKey) &&
@@ -666,6 +691,8 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
                 object={cards[p.placementId]}
                 canvasNode={model.boardFile?.document.nodes.find((node) => node.id === p.placementId)}
                 selected={selected.includes(p.placementId)}
+                selection={selection}
+                editOnMount={newCard === p.placementId}
                 setSelected={setSelected}
                 actions={actions}
                 setDetails={setDetails}
@@ -675,7 +702,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
             ))}
             {!model.placements.length ? (
               <p className="object-empty">
-                从论文或回答加入摘录，也可以在这里粘贴文字。
+                双击空白处添加卡片，或拖入文献、笔记和图片。
               </p>
             ) : null}
           </div>
@@ -1084,6 +1111,9 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
             checked={showGrid}
             onChange={(_, data) => setShowGrid(!!data.checked)}
           />
+          <p>单击选中，双击编辑；Shift 单击可多选。拖动卡片移动，Shift 拖动限制方向。</p>
+          <p>空格 + 拖动或鼠标中键平移；Ctrl + 滚轮缩放。Shift+1 查看全部，Shift+2 查看所选。</p>
+          <p>Delete 移除卡片，Ctrl+Z 撤销布局。卡片工具栏的拖动图标可将内容拖入对话。</p>
           <p>当前缩放 {Math.round(zoom * 100)}%</p>
           <Button onClick={fitView}>适配全部卡片</Button>
           <Button onClick={() => setZoom(1)}>恢复 100%</Button>
@@ -1096,11 +1126,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
           <div className="object-layer-list">{model.placements.slice(layerPage * 50, (layerPage + 1) * 50).map((p) => <Button key={p.placementId} appearance={selected.includes(p.placementId) ? "primary" : "subtle"} onClick={() => {
             setSelected([p.placementId]);
             viewport.current?.scrollTo?.({ left: Math.max(0, p.position.x * zoom - 40), top: Math.max(0, p.position.y * zoom - 40), behavior: "smooth" });
-            void model.repository.getBlockPresentation(p.boardId, p.placementId).then(async (record) => {
-              const board = await model.repository.resolveLatest(p.boardId);
-              await model.repository.setBlockPresentation({ boardRef: refOf(board), placementId: p.placementId, expectedVersion: record.version, value: { ...record.value, layer: 10000 }, operationId: crypto.randomUUID() });
-              await model.refresh();
-            }).catch(error);
+
           }}>{cards[p.placementId]?.title || `卡片 ${model.placements.indexOf(p) + 1}`}</Button>)}</div>
         </div>
       ) : null}{" "}

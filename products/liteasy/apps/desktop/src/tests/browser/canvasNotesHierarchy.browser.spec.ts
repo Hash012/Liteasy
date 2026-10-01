@@ -23,7 +23,10 @@ test("Obsidian Canvas retains groups and media references while moving contained
   await board.getByRole("button", { name: "打开白板文件", exact: true }).click();
   const group = board.locator('.object-placement[data-placement-id="group"]');
   await expect(group).toHaveClass(/is-group/);
-  await expect(board.locator(".object-file-reference")).toContainText("figure.png");
+  const image = board.locator('[data-placement-id="image"]');
+  await expect(image).toHaveAttribute("aria-label", /figure\.png/);
+  // Opening a standalone Canvas grants that file, not its sibling Vault media.
+  await expect(image.getByRole("status")).toContainText("Vault 文件夹");
   await board.getByRole("button", { name: "适配全部卡片", exact: true }).click();
   await group.getByRole("button", { name: "编辑笔记正文" }).click({ button: "right" });
   await page.getByRole("menuitem", { name: "移动卡片", exact: true }).click();
@@ -31,6 +34,8 @@ test("Obsidian Canvas retains groups and media references while moving contained
   await group.press("ArrowRight");
   await expect(board.locator('[data-placement-id="a"]')).toHaveCSS("left", "60px");
   await group.press("Escape");
+  // Selecting the group must not raise its background over the contained cards.
+  await group.click();
   const card = board.locator('[data-placement-id="a"]');
   await card.click();
   await expect(card.getByRole("toolbar", { name: "选中卡片操作" })).toBeVisible();

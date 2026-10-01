@@ -12,10 +12,10 @@ export interface ObjectStorage {
   list(prefix: string, after?: string, limit?: number): Promise<StorageRow[]>;
   commit(changes: StorageChange[]): Promise<void>;
 }
-const storageListeners = new Map<string, Set<() => void>>();
+const storageListeners = new Map<string, Set<(keys?: readonly string[]) => void>>();
 /** Observe successful writes from other views using this account's shared store. */
-export function subscribeObjectStorage(scope: string, listener: () => void) {
-  const listeners = storageListeners.get(scope) ?? new Set<() => void>();
+export function subscribeObjectStorage(scope: string, listener: (keys?: readonly string[]) => void) {
+  const listeners = storageListeners.get(scope) ?? new Set<(keys?: readonly string[]) => void>();
   listeners.add(listener);
   storageListeners.set(scope, listeners);
   return () => {
@@ -34,13 +34,15 @@ export function createObjectStorage(
         "账号已切换，请重新打开。",
       );
   };
-  const wrap = async <T>(fn: () => Promise<T>, changed = false): Promise<T> => {
+  const wrap = async <T>(fn: () => Promise<T>, changes?: readonly StorageChange[]): Promise<T> => {
     check();
     try {
       const result = await fn();
       check();
-      if (changed)
-        for (const listener of storageListeners.get(scope) ?? []) listener();
+      if (changes?.length) {
+        const keys = changes.map((change) => change.key);
+        for (const listener of storageListeners.get(scope) ?? []) listener(keys);
+      }
       return result;
     } catch (e) {
       if (e instanceof ObjectStoreError) throw e;
@@ -65,7 +67,7 @@ export function createObjectStorage(
           invoke("object_store_list", { scope, prefix, after, limit }),
         ),
       commit: (changes) =>
-        wrap(() => invoke("object_store_commit", { scope, changes }), true),
+        wrap(() => invoke("object_store_commit", { scope, changes }), changes),
     };
   let dbPromise: Promise<IDBDatabase> | undefined;
   const db = () =>
@@ -170,6 +172,6 @@ export function createObjectStorage(
             reject(failure ?? tx.error ?? new Error("Transaction aborted"));
           tx.onerror = () => reject(failure ?? tx.error);
         });
-      }, true),
+      }, changes),
   };
 }

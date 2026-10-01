@@ -261,46 +261,23 @@ test("saved notes have an explicit drag handle carrying their existing reference
   expect(f.model.drop).toHaveBeenCalledWith(data);
 });
 
-test("a whole card drag moves its existing placement using canvas scale and retains its outward object reference", async () => {
+test("the selected card transfer handle carries its reference without moving the original", async () => {
   const f = await fixture();
-  const { container } = render(
-    <ObjectWorkbench model={{ ...f.model, placements: [f.placement] }} />,
-  );
+  const { container } = render(<ObjectWorkbench model={{ ...f.model, placements: [f.placement] }} />);
   await screen.findByRole("button", { name: "编辑笔记正文" });
-  const card = container.querySelector<HTMLElement>(".object-placement")!;
-  const canvas = container.querySelector<HTMLElement>(".object-board-canvas")!;
-  vi.spyOn(card, "getBoundingClientRect").mockReturnValue({
-    left: 220,
-    top: 240,
-    width: 540,
-  } as DOMRect);
-  vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
-    left: 20,
-    top: 40,
-    width: Number.parseFloat(canvas.style.width) * 2,
-  } as DOMRect);
+  fireEvent.click(container.querySelector(".object-placement")!);
   const payload = new Map<string, string>();
   const data = {
     effectAllowed: "",
     setData: (type: string, value: string) => payload.set(type, value),
     getData: (type: string) => payload.get(type) ?? "",
   };
-  // jsdom has no DragEvent constructor, so use MouseEvent for screen coordinates.
-  vi.stubGlobal("DragEvent", MouseEvent);
-  fireEvent.dragStart(card, { dataTransfer: data, clientX: 260, clientY: 280 });
+  fireEvent.dragStart(screen.getByRole("button", { name: "拖入对话或其他白板" }), { dataTransfer: data });
   expect(readObjectTransfer(data)?.refs).toEqual([refOf(f.note)]);
-  fireEvent.drop(screen.getByLabelText("白板卡片区域"), {
-    dataTransfer: data,
-    clientX: 420,
-    clientY: 540,
-  });
-  expect(f.model.move).toHaveBeenCalledWith(f.placement, { x: 180, y: 230 });
-  expect(f.model.drop).not.toHaveBeenCalled();
-  fireEvent.drop(screen.getByLabelText("白板卡片区域"), {
-    dataTransfer: data,
-    ctrlKey: true,
-  });
+  expect(data.effectAllowed).toBe("copy");
+  fireEvent.drop(screen.getByLabelText("白板卡片区域"), { dataTransfer: data });
   expect(f.model.drop).toHaveBeenCalledWith(data);
+  expect(f.model.move).not.toHaveBeenCalled();
 });
 
 test("annotation cards show their original quote once, start expanded and keep source separate from editing", async () => {
@@ -611,4 +588,48 @@ test("whiteboard questions use the selected prompt once and keep the editor coll
   expect(model.submit).toHaveBeenLastCalledWith("解释这段笔记", "只给一个提示。");
   fireEvent.click(screen.getByRole("button", { name: "提问", exact: true }));
   expect(model.submit).toHaveBeenLastCalledWith("解释这段笔记");
+});
+
+test("selecting cards including the layer list never writes presentation; tiny pointer jitter is not a move", async () => {
+  const f = await fixture();
+  const write = vi.spyOn(f.repository, "setBlockPresentation");
+  const { container } = render(<ObjectWorkbench model={{ ...f.model, placements: [f.placement] }} />);
+  const card = container.querySelector<HTMLElement>(".object-placement")!;
+  const body = await screen.findByRole("button", { name: "编辑笔记正文" });
+  fireEvent.pointerDown(card, { button: 0, pointerId: 1, clientX: 100, clientY: 100 });
+  fireEvent.pointerMove(card, { pointerId: 1, clientX: 101, clientY: 102 });
+  fireEvent.pointerUp(card, { pointerId: 1, clientX: 101, clientY: 102 });
+  fireEvent.click(body);
+  expect(card).toHaveClass("is-selected");
+  expect(f.model.move).not.toHaveBeenCalled(); expect(f.model.resize).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "画布设置" }));
+  fireEvent.click(container.querySelector<HTMLButtonElement>(".object-layer-list button")!);
+  await act(async () => {});
+  expect(write).not.toHaveBeenCalled(); expect(f.model.refresh).not.toHaveBeenCalled();
+});
+
+test("direct pointer movement stays on one axis with Shift and writes once on release", async () => {
+  const f = await fixture();
+  const { container } = render(<ObjectPlacementCard p={f.placement} object={f.note} selected setSelected={vi.fn()} setDetails={vi.fn()} actions={{ current: f.model }} />);
+  const card = container.querySelector<HTMLElement>(".object-placement")!;
+  vi.spyOn(card, "getBoundingClientRect").mockReturnValue({ width: f.placement.size.width } as DOMRect);
+  fireEvent.pointerDown(card, { button: 0, pointerId: 1, clientX: 100, clientY: 100 });
+  fireEvent.pointerMove(card, { pointerId: 1, clientX: 160, clientY: 120, shiftKey: true });
+  expect(card).toHaveStyle({ left: "160px", top: "100px" });
+  expect(f.model.move).not.toHaveBeenCalled();
+  fireEvent.pointerUp(card, { pointerId: 1, clientX: 160, clientY: 120, shiftKey: true });
+  expect(f.model.move).toHaveBeenCalledExactlyOnceWith(f.placement, { x: 160, y: 100 }, [f.placement.placementId]);
+});
+
+test("unchanged editing is read-only; Escape and clicking outside save changed notes", async () => {
+  const f = await fixture();
+  render(<ObjectPlacementCard p={f.placement} object={f.note} selected setSelected={vi.fn()} setDetails={vi.fn()} actions={{ current: f.model }} />);
+  fireEvent.doubleClick(screen.getByRole("button", { name: "编辑笔记正文" }));
+  fireEvent.keyDown(screen.getByRole("textbox", { name: "编辑卡片正文" }), { key: "Escape" });
+  expect(f.model.editPlacement).not.toHaveBeenCalled();
+  fireEvent.doubleClick(screen.getByRole("button", { name: "编辑笔记正文" }));
+  const input = screen.getByRole("textbox", { name: "编辑卡片正文" });
+  fireEvent.change(input, { target: { value: "Changed" } });
+  fireEvent.blur(input, { relatedTarget: document.body });
+  await waitFor(() => expect(f.model.editPlacement).toHaveBeenCalledExactlyOnceWith(f.placement, "Changed"));
 });

@@ -1,3 +1,4 @@
+import type { PaperServiceConfig } from "../features/paper-services/paperServiceTransport";
 import type { ProfileMemoryController } from "../features/profile/useProfileMemory";
 import { type LibraryFileAccess } from "../features/library/LibraryFileList";
 import {
@@ -149,6 +150,7 @@ export type LeftPaneProps = {
   profileReadPaperCount: number;
   profileSamplingEnabled: boolean;
   profileTags: UserTag[];
+  recommendationService?: PaperServiceConfig;
   recommendationItems: RecommendationItem[];
   recommendationMessage: string;
   recommendationPending: boolean;
@@ -281,6 +283,7 @@ export function LeftPane({
   profileReadPaperCount,
   profileSamplingEnabled,
   profileTags,
+  recommendationService,
   recommendationItems,
   contextScopeId,
   selectedRecommendationId,
@@ -445,6 +448,7 @@ export function LeftPane({
               role: organizationSummary.myRole
             } : undefined}
             papers={papers}
+            recommendationService={recommendationService}
             recommendationItems={recommendationItems}
             contextScopeId={contextScopeId}
             selectedRecommendationId={selectedRecommendationId}

@@ -504,10 +504,15 @@
 .object-card-toolbar .fui-Button { min-width: 28px; width: 28px; height: 28px; }
 .object-placement.is-group { z-index: 0; background: color-mix(in srgb, var(--canvas-card-color, var(--colorNeutralBackground3)) 9%, transparent); box-shadow: none; }
 .object-placement.is-group.is-selected { border-color: var(--colorBrandStroke1); }
-.object-placement.is-group > .object-surface:not(.has-editor) { position: absolute; bottom: calc(100% + 8px); left: 2px; max-height: 52px; max-width: 100%; font-weight: 600; color: var(--canvas-card-color, var(--colorNeutralForeground2)); }
+.object-placement.is-group:not(.is-editing) > .visual-block-base { position: absolute; bottom: calc(100% + 8px); left: 2px; max-height: 52px; max-width: 100%; font-weight: 600; color: var(--canvas-card-color, var(--colorNeutralForeground2)); }
 .object-placement.is-group.is-editing { z-index: 4; background: var(--colorNeutralBackground1); }
 .object-placement.is-group .object-card-toolbar { top: auto; bottom: -42px; }
 .object-file-reference { display: flex; flex: 1; min-height: 0; overflow: auto; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; overflow-wrap: anywhere; }
 .object-file-reference > svg { font-size: 30px; color: var(--colorNeutralForeground3); }
 .object-file-reference > span, .object-file-reference > small { font-size: 11px; color: var(--colorNeutralForeground3); }
-@container board (max-width: 440px) { .object-tool-rail { bottom: 48px; } .object-canvas-navigation { left: 12px; right: auto; } .object-workbench footer { bottom: 88px; } }
+@container board (max-width: 440px) { .object-tool-rail { bottom: 48px; } .object-tool-panel { bottom: 90px; } .object-canvas-navigation { left: 12px; right: auto; } .object-workbench footer { bottom: 88px; } }
+
+/* Scroll card text only after selection; canvas gestures remain predictable. */
+.object-placement:not(.is-selected):not(.is-editing) .object-body { overflow: hidden; }
+.object-placement:active:not(.is-editing) { cursor: grabbing; }
+.object-card-editor textarea { font: inherit; }

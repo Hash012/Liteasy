@@ -41,6 +41,7 @@ import {
   type ObjectDraft,
 } from "../features/objects/objectRepository";
 import {
+  ObjectStoreError,
   objectText,
   isPaperMetadataReference,
   refOf,
@@ -143,7 +144,32 @@ export function useObjectWorkbenchController(input: {
     const abstract = summary?.replace(/^题录已固定；正文按需读取。\n/, "");
     return abstract && abstract !== "摘要尚未提取。" ? abstract : undefined;
   }
+  const refreshGeneration = useRef(0);
+  const editQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const localLayoutRevisions = useRef(new Map<string, Set<string>>());
+  const objectCache = useRef(objects); objectCache.current = objects;
+  function updatePlacements(next: Placement[]) {
+    setPlacements((previous) => {
+      const cache = new Map(previous.map((p) => [p.placementId, p]));
+      const items = next.map((p) => cache.get(p.placementId)?.revision === p.revision ? cache.get(p.placementId)! : p);
+      return items.length === previous.length && items.every((item, index) => item === previous[index]) ? previous : items;
+    });
+  }
+  async function refreshBoard() {
+    const boardId = boardRef.current?.objectId;
+    if (!boardId) return;
+    const generation = ++refreshGeneration.current;
+    const [next, items] = await Promise.all([repository.resolveLatest(boardId), repository.listPlacements(boardId)]);
+    const cached = new Set(objectCache.current.map((item) => `${item.objectId}:${item.revision}`));
+    const refs = [...new Map(items.filter((item) => !cached.has(`${item.ref.objectId}:${item.ref.revision}`)).map((item) => [JSON.stringify(item.ref), item.ref])).values()];
+    const loaded = await Promise.all(refs.map((ref) => repository.get(ref).catch(() => undefined)));
+    if (!active() || generation !== refreshGeneration.current || boardRef.current?.objectId !== boardId) return;
+    boardRef.current = next; setBoard(next); updatePlacements(items);
+    const replacements = new Map([next, ...loaded.filter((item): item is ObjectEnvelope => !!item)].map((item) => [item.objectId, item]));
+    setObjects((current) => [...current.filter((item) => !replacements.has(item.objectId)), ...replacements.values()]);
+  }
   async function refresh() {
+    const generation = ++refreshGeneration.current;
     const all: ObjectEnvelope[] = [];
     const fileProjections = await repository.fileProjectionIds();
     let cursor: string | undefined;
@@ -167,21 +193,15 @@ export function useObjectWorkbenchController(input: {
         try { all.push(await repository.get(placement.ref)); } catch { /* Missing references retain their existing unavailable state. */ }
       }
     }
-    if (!active()) return;
+    if (!active() || generation !== refreshGeneration.current) return;
     setObjects(all);
     boardRef.current = next;
     setBoard(next);
-    setPlacements((previous) => {
-      const cache = new Map(previous.map((p) => [p.placementId, p]));
-      return nextPlacements.map((p) =>
-        cache.get(p.placementId)?.revision === p.revision
-          ? cache.get(p.placementId)!
-          : p,
-      );
-    });
+    updatePlacements(nextPlacements);
   }
   useEffect(() => {
     mounted.current = true;
+    ++refreshGeneration.current; editQueue.current = Promise.resolve(); localLayoutRevisions.current.clear();
     setOpened(undefined);
     setObjects([]);
     setBoard(undefined);
@@ -270,21 +290,46 @@ export function useObjectWorkbenchController(input: {
       document.removeEventListener("click", click);
     };
   }, []);
-  async function perform<T>(
-    action: () => Promise<T>,
-    rethrow = false,
-  ): Promise<T | undefined> {
-    setStatus("保存中…");
-    try {
-      const result = await action();
-      await refresh();
-      if (active()) setStatus("已保存到本机");
-      return result;
-    } catch (e) {
-      if (active())
-        setStatus(e instanceof Error ? e.message : "保存失败，请重试。");
-      if (rethrow) throw e;
-      return undefined;
+  async function perform<T>(action: () => Promise<T>, rethrow = false, boardOnly = false): Promise<T | undefined> {
+    const operation = editQueue.current.catch(() => undefined).then(async () => {
+      if (!active()) throw new Error("账号已切换，请重新打开。");
+      setStatus("保存中…");
+      try {
+        const result = await action();
+        await (boardOnly ? refreshBoard() : refresh());
+        if (active()) setStatus("已保存到本机");
+        return result;
+      } catch (e) {
+        if (active()) setStatus(e instanceof Error ? e.message : "保存失败，请重试。");
+        throw e;
+      }
+    });
+    editQueue.current = operation;
+    try { return await operation; } catch (error) { if (rethrow) throw error; return undefined; }
+  }
+  async function currentBoardFor(placement?: Placement) {
+    const current = boardRef.current;
+    if (!current || (placement && current.objectId !== placement.boardId)) throw new Error("白板已关闭或切换，请重新打开。");
+    return repository.resolveLatest(current.objectId);
+  }
+  async function currentPlacement(p: Placement) {
+    const current = (await repository.listPlacements(p.boardId)).find((item) => item.placementId === p.placementId);
+    const local = localLayoutRevisions.current.get(p.placementId);
+    if (!current || (current.revision !== p.revision && !(local?.has(current.revision) && local.has(p.revision))))
+      throw new ObjectStoreError("revision_conflict", "卡片已在其他位置修改，请重新选择后重试。");
+    return current;
+  }
+  async function rememberLayoutChange(before: Placement[], boardRevision: string) {
+    const next = await repository.listPlacements(before[0].boardId);
+    if ((await repository.resolveLatest(before[0].boardId)).revision !== boardRevision) return;
+    for (const item of before) {
+      const updated = next.find((p) => p.placementId === item.placementId);
+      if (!updated) continue;
+      const revisions = localLayoutRevisions.current.get(item.placementId) ?? new Set<string>();
+      revisions.add(item.revision); revisions.add(updated.revision);
+      // Retain only a small recent chain for rapid keyboard / pointer operations.
+      if (revisions.size > 64) revisions.delete(revisions.values().next().value!);
+      localLayoutRevisions.current.set(item.placementId, revisions);
     }
   }
   async function ensureBoard() {
@@ -1273,18 +1318,16 @@ export function useObjectWorkbenchController(input: {
     selectBoard,
     connect: (from: Placement, fromSide: BoardSide, to: Placement, toSide: BoardSide) =>
       perform(async () => {
-        const current = boardRef.current;
-        if (!current) throw new Error("白板已关闭。");
+        const current = await currentBoardFor(from);
         return repository.connectPlacements({ boardRef: refOf(current),
           from: { placementId: from.placementId, revision: from.revision, side: fromSide },
           to: { placementId: to.placementId, revision: to.revision, side: toSide },
           operationId: crypto.randomUUID() });
-      }, true),
+      }, true, true),
     removeConnection: (edgeId: string) => perform(async () => {
-      const current = boardRef.current;
-      if (!current) throw new Error("白板已关闭。");
+      const current = await currentBoardFor();
       return repository.removeConnection(refOf(current), edgeId);
-    }, true),
+    }, true, true),
     createBoard: (title: string) =>
       perform(async () => {
         const object = await repository.create({
@@ -1329,51 +1372,54 @@ export function useObjectWorkbenchController(input: {
           remove: [placementId],
         });
       }),
-    move: (p: Placement, position: Placement["position"]) =>
-      perform(async () => {
-        const board = boardRef.current;
-        if (!board) return;
-        const binding = await repository.getBoardFileBinding<BoardFileBinding>(board.objectId);
-        const moves = [{ placementId: p.placementId, revision: p.revision, position }];
-        const presentation = await repository.getBlockPresentation(board.objectId, p.placementId);
-        if (presentation.value.group || binding?.document.nodes.find((node) => node.id === p.placementId)?.type === "group") {
-          for (const child of await repository.listPlacements(board.objectId)) {
-            if (child.placementId === p.placementId || child.position.x < p.position.x || child.position.y < p.position.y ||
-              child.position.x + child.size.width > p.position.x + p.size.width || child.position.y + child.size.height > p.position.y + p.size.height) continue;
-            moves.push({ placementId: child.placementId, revision: child.revision,
-              position: { x: child.position.x + position.x - p.position.x, y: child.position.y + position.y - p.position.y } });
-          }
-        }
-        await repository.applyBoardPatch({
-          boardRef: refOf(board),
-          operationId: crypto.randomUUID(),
-          move: moves,
-        });
-      }),
-    resize: (p: Placement, geometry: Pick<Placement, "position" | "size">) =>
-      perform(async () => {
-        const board = boardRef.current;
-        if (!board) throw new Error("白板已关闭或不可用。");
-        return repository.applyBoardPatch({
-          boardRef: refOf(board),
-          operationId: crypto.randomUUID(),
-          resize: [
-            { placementId: p.placementId, revision: p.revision, ...geometry },
-          ],
-        });
-      }, true),
+    restoreLayout: (direction: "undo" | "redo") => perform(async () => {
+      const board = await currentBoardFor();
+      await repository.restoreBoardLayout(refOf(board), direction, crypto.randomUUID());
+    }, true, true),
+    move: (p: Placement, position: Placement["position"], selection?: string[]) => {
+      if (p.position.x === position.x && p.position.y === position.y) return Promise.resolve();
+      return perform(async () => {
+        const board = await currentBoardFor(p);
+        const current = await currentPlacement(p);
+        const [binding, presentation, items] = await Promise.all([
+          repository.getBoardFileBinding<BoardFileBinding>(board.objectId),
+          repository.getBlockPresentation(board.objectId, p.placementId), repository.listPlacements(board.objectId),
+        ]);
+        const selected = new Set(selection?.includes(p.placementId) ? selection : [p.placementId]);
+        const groups = items.filter((item) => selected.has(item.placementId) &&
+          (binding?.document.nodes.find((node) => node.id === item.placementId)?.type === "group" || (item.placementId === p.placementId && presentation.value.group)));
+        const moved = items.filter((item) => selected.has(item.placementId) || groups.some((group) =>
+          item.position.x >= group.position.x && item.position.y >= group.position.y &&
+          item.position.x + item.size.width <= group.position.x + group.size.width && item.position.y + item.size.height <= group.position.y + group.size.height));
+        const dx = Math.max(position.x - p.position.x, -Math.min(...moved.map((item) => item.position.x)));
+        const dy = Math.max(position.y - p.position.y, -Math.min(...moved.map((item) => item.position.y)));
+        const written = await repository.applyBoardPatch({ boardRef: refOf(board), operationId: crypto.randomUUID(),
+          move: moved.map((item) => ({ placementId: item.placementId, revision: item.placementId === p.placementId ? current.revision : item.revision,
+            position: { x: item.position.x + dx, y: item.position.y + dy } })) });
+        await rememberLayoutChange(moved, written[0].revision);
+      }, true, true);
+    },
+    resize: (p: Placement, geometry: Pick<Placement, "position" | "size">) => {
+      if (JSON.stringify({ position: p.position, size: p.size }) === JSON.stringify(geometry)) return Promise.resolve();
+      return perform(async () => {
+        const board = await currentBoardFor(p), current = await currentPlacement(p);
+        const adjusted = { position: { x: current.position.x + geometry.position.x - p.position.x, y: current.position.y + geometry.position.y - p.position.y },
+          size: { width: current.size.width + geometry.size.width - p.size.width, height: current.size.height + geometry.size.height - p.size.height } };
+        const written = await repository.applyBoardPatch({ boardRef: refOf(board), operationId: crypto.randomUUID(), resize: [{ placementId: p.placementId, revision: current.revision, ...adjusted }] });
+        await rememberLayoutChange([current], written[0].revision);
+      }, true, true);
+    },
     editPlacement: (p: Placement, text: string, structured?: import("../features/objects/visualBlock.types").StructuredBlock) =>
       perform(async () => {
-        const board = boardRef.current;
-        if (!board) throw new Error("白板已关闭或不可用。");
+        const board = await currentBoardFor(p);
         return repository.editPlacement({
           boardRef: refOf(board),
-          placement: p,
+          placement: await currentPlacement(p),
           structured,
           text,
           operationId: crypto.randomUUID(),
         });
-      }, true),
+      }, true, true),
     drop: async (data: DataTransfer) => {
       const ticket = data.getData(PENDING_CAPTURE_MIME);
       const transfer = readObjectTransfer(data);

@@ -1,3 +1,4 @@
+import type { PaperServiceConfig } from "../paper-services/paperServiceTransport";
 import { ExtensionActions } from "../extensions/ExtensionActions";
 import { RecommendationList } from "../recommendations/RecommendationList";
 import { LibraryIconProvider, LibraryIconMenuItem, LibraryItemIcon, useLibraryIcons } from "./LibraryItemIcon";
@@ -153,6 +154,7 @@ type LibraryPaneProps = {
   organizationWorkspaceLabel?: string;
   paperChildren?: Record<string, LibraryPaperChildItem[]>;
   papers: Paper[];
+  recommendationService?: PaperServiceConfig;
   recommendationItems: RecommendationItem[];
   selectedRecommendationId?: string;
   onInspectRecommendation?: (item: RecommendationItem) => void;
@@ -501,6 +503,7 @@ function LibraryPaneContent({
   organizationId,
   organizationStorageAccess,
   organizationWorkspaceLabel = "组织文献库",
+  recommendationService,
   recommendationItems,
   selectedRecommendationId,
   onInspectRecommendation,
@@ -1677,7 +1680,7 @@ function LibraryPaneContent({
             ) : recommendationItems.length === 0 ? (
               !recommendationPending ? <div className="library-empty-collection">{recommendationMessage || "暂无关联推荐"}</div> : null
             ) : (
-              <RecommendationList items={recommendationItems} selectedId={selectedRecommendationId}
+              <RecommendationList service={recommendationService} items={recommendationItems} selectedId={selectedRecommendationId}
                 pendingIds={pendingNodeIds} canSave={localRecommendations || Boolean(collection.tree)}
                 onInspect={onInspectRecommendation}
                 onOpen={onOpenRecommendation}

@@ -3,7 +3,7 @@ import { defaultReadingFontFamily, normalizeReadingFontFamily } from "./readingF
 import type { SettingsState, UpdateSettingCommand } from "./settings.types";
 import { normalizeDisplayScale, normalizeViewFontSize } from "./viewSettings";
 import { isRecommendationStyle, normalizeRecommendationStyle } from "../recommendations/recommendationStyle";
-import { isAppearancePreference, normalizeAppearancePreference, notifyAppearancePreference, viewSettingsStorageKey } from "../theme/appearancePreference";
+import { typographyChangeEvent, isAppearancePreference, normalizeAppearancePreference, notifyAppearancePreference, viewSettingsStorageKey } from "../theme/appearancePreference";
 
 import { generationPromptKey, generationPromptLimit, generationPromptTasks, type GenerationPromptSettingKey } from "../ai-prompts/generationPrompts";
 import { defaultSelectionLookupSettings, type SelectionLookupSettingKey, type SelectionLookupSettings } from "../selection-lookup/selectionLookup.types";
@@ -89,6 +89,7 @@ function loadPersistedViewSettings(): Partial<SettingsState> {
     if (!value) return {};
     const parsed = JSON.parse(value) as Partial<SettingsState>;
     return Object.fromEntries(Object.entries({
+      "view.close_empty_panels": parsed["view.close_empty_panels"] !== false,
       "view.theme": normalizeAppearancePreference(parsed["view.theme"]),
       "view.font_family": typeof parsed["view.font_family"] === "string" ? parsed["view.font_family"] : undefined,
       "view.reader_font_family": normalizeReadingFontFamily(parsed["view.reader_font_family"]),
@@ -111,6 +112,7 @@ function persistViewSettings(state: SettingsState) {
     globalThis.localStorage?.setItem(
       viewSettingsStorageKey,
       JSON.stringify({
+        "view.close_empty_panels": state["view.close_empty_panels"] !== false,
         "view.theme": state["view.theme"],
         "view.font_family": state["view.font_family"],
         "view.reader_font_family": state["view.reader_font_family"],
@@ -128,7 +130,7 @@ function persistViewSettings(state: SettingsState) {
 export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.env) {
   const cloudEndpoint = releaseEndpoint(runtimeEnv.VITE_LITEASY_CLOUD_URL, "http://127.0.0.1:8787");
   const forumEndpoint = releaseEndpoint(runtimeEnv.VITE_FORUM_API_URL, "");
-  const state: SettingsState & SelectionLookupSettings & Record<GenerationPromptSettingKey, string> & { "assistant.context_window": string } = {
+  const state: SettingsState & SelectionLookupSettings & Record<GenerationPromptSettingKey, string> & { "assistant.context_window": string; "view.close_empty_panels": boolean } = {
     ...loadGenerationPrompts() as Record<GenerationPromptSettingKey, string>,
     ...loadLookupSettings(),
     "thin_reading.mode": "fast",
@@ -160,6 +162,7 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
     "models.direct_protocol": "openai",
     "models.direct_output_format": "json_schema",
     ...loadPersistedModelSettings(),
+    "view.close_empty_panels": true,
     "view.theme": "system",
     "view.font_family": '"Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", sans-serif',
     "view.reader_font_family": defaultReadingFontFamily,
@@ -174,6 +177,7 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
 
   return {
     apply(command: UpdateSettingCommand) {
+      if (command.target === "view.close_empty_panels" && typeof command.value !== "boolean") throw new Error("invalid_empty_panel_preference");
       if (command.target.startsWith("lookup.") && !validateLookupSetting(command.target as SelectionLookupSettingKey, command.value)) {
         throw new Error("查词与翻译设置无效，请检查查询服务、语言和地址。");
       }
@@ -209,6 +213,9 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
       }
       if (command.target.startsWith("view.")) {
         persistViewSettings(state);
+      }
+      if (command.target === "view.font_family") {
+        globalThis.dispatchEvent?.(new CustomEvent(typographyChangeEvent, { detail: state["view.font_family"] }));
       }
       if (command.target === "view.theme") {
         notifyAppearancePreference(state["view.theme"]);

@@ -4596,7 +4596,7 @@ body {
   min-height: 0;
   border-radius: 4px;
   color: rgba(74, 55, 16, 0.86);
-  font-family: "SF Pro Display", "Noto Sans SC", sans-serif;
+  font-family: var(--fontFamilyBase, sans-serif);
   font-size: clamp(10px, 1.2vw, 12px);
   font-weight: 800;
   padding: 0;

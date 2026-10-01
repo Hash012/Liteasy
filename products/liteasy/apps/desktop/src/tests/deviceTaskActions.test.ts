@@ -16,7 +16,9 @@ test("desktop validates actual PDF bytes, bounds model input and returns actual 
     const task: DeviceTask = { taskId: "task", operationId: "op", status: "leased", kind: "summarize-document", document: { documentId: "paper", contentHash: hash, title: "Paper" } };
     const snapshot: LocalLibrarySnapshot = { rootPath: "/library", libraryId: "lib", revision: 1, folders: [], trashEntries: [], entries: [{ id: "paper", contentHash: hash, path: "/library/paper.pdf", relativePath: "paper.pdf", title: "Paper" }] };
     const actions: DeviceTaskActions = { current: () => true, getPapers: () => [], getSettings: () => ({} as SettingsState), getTransport: () => undefined, openPaper: vi.fn(), refreshLibrary: vi.fn() };
-    expect(await prepareDeviceTask(task, actions, { load: async () => snapshot, read: async () => new Uint8Array([1,2,3]) })).toBeNull();
+    // TextEncoder creates bytes in the same realm as Node's WebCrypto; jsdom's
+    // ArrayBuffer otherwise fails before the actual hash-mismatch assertion.
+    expect(await prepareDeviceTask(task, actions, { load: async () => snapshot, read: async () => new TextEncoder().encode("invalid PDF bytes") })).toBeNull();
     expect(mocks.generate).not.toHaveBeenCalled();
     const run = await prepareDeviceTask(task, actions, { load: async () => snapshot, read: async () => bytes });
     mocks.extract.mockResolvedValue([{ page: 1, text: "原文".repeat(20_000) }]); mocks.generate.mockResolvedValue({ answer: "来自模型的摘要 [第 1 页]" });

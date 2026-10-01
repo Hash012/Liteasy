@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { expect, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { RecommendationList, recommendationDateLabel } from "../app/features/recommendations/RecommendationList";
 import { FileStatusBar } from "../app/layout/FileStatusBar";
 import type { RecommendationItem } from "../app/features/recommendations/recommendation.types";
 import { RecommendationDetails } from "../app/features/recommendations/RecommendationDetails";
+
+afterEach(() => vi.restoreAllMocks());
 
 const item: RecommendationItem = {
   id: "paper", title: "Research on memory systems", authors: ["Researcher A"], publishedAt: "2024-07-12",
@@ -52,6 +54,7 @@ test("never invents a publication month when only the year is known", () => {
 
 test("narrows recommendations by author, year and available full text without replacing the source list", async () => {
   const open = vi.fn();
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 404 }));
   const items = [item, { ...item, id: "new", title: "New memory systems", authors: ["Author B"], publishedAt: "2026-03", citationCount: 40, openAccessAvailable: true }];
   const user = userEvent.setup();
   render(<RecommendationList items={items} pendingIds={[]} canSave onOpen={open} onSave={vi.fn()} onDismiss={vi.fn()} />);
@@ -63,7 +66,7 @@ test("narrows recommendations by author, year and available full text without re
   await user.click(screen.getByRole("checkbox", { name: "可获取全文" }));
   expect(screen.getAllByRole("button", { name: /^查看推荐/ })).toHaveLength(1);
   await user.selectOptions(screen.getByRole("combobox", { name: "推荐发表年份" }), "2024");
-  expect(screen.getByText("没有符合条件的论文。")).toBeInTheDocument();
+  expect(await screen.findByText(/暂未发现符合筛选条件的全文链接/)).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "清除筛选" }));
   expect(screen.getAllByRole("button", { name: /^查看推荐/ })).toHaveLength(2);
   screen.getAllByRole("button", { name: /^查看推荐/ })[0].focus();

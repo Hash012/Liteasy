@@ -42,6 +42,7 @@ export const settingsRegistry: Record<SettingKey, { label: string; help?: string
   "models.control_plane_endpoint": { label: "云端控制平面端点" },
   "view.font_family": { ...{ help: "选择应用界面的字体。不会安装系统字体或改写论文。", dependencies: [], restartRequirement: "none" }, label: "界面字体" },
   "view.reader_font_family": { label: "非 PDF 阅读字体", help: "设置论文阅读模式、电子书和 Markdown/TXT 的默认字体。可选择系统字体或输入已安装的字体名称；文档内可单独覆盖。", dependencies: [], restartRequirement: "none" },
+  "view.close_empty_panels": { label: "自动收起空面板", help: "关闭或移走最后一个页面后自动收起面板。关闭此选项可保留空面板。", restartRequirement: "none" },
   "view.theme": { label: "外观", help: "选择浅色、深色，或随系统自动切换。即时生效并在本机记住选择，PDF 保留原有阅读底色。", dependencies: [], restartRequirement: "none" },
   "view.font_size": { ...{ help: "调整应用界面字号。不会修改论文 PDF 文件。", dependencies: [], restartRequirement: "none" }, label: "界面字号" },
   "view.display_scale": { help: "整体调整应用界面、面板和控件的显示比例。Ctrl + 加号或减号调整，Ctrl + 0 恢复 100%。不会修改 PDF 文件。", dependencies: [], restartRequirement: "none", label: "显示比例" },

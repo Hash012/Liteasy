@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { webcrypto } from "node:crypto";
 import { beforeEach, expect, test, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { createObjectStorage } from "../app/features/objects/objectStorage";
 import { createObjectRepository } from "../app/features/objects/objectRepository";
 import { refOf, objectText } from "../app/features/objects/object.types";
@@ -9,6 +9,7 @@ import { blockPresentationSchema, defaultBlockPresentation } from "../app/featur
 import { parseCanvasFile, prepareCanvasImport, serializeCanvasFile } from "../app/features/boards/boardFileFormat";
 import { RichTextBlock, VisualBlockBase } from "../app/features/visual-blocks/VisualBlockBase";
 import { relativeImagePath } from "../app/features/visual-blocks/GrantedImage";
+import { useBlockPresentation } from "../app/features/visual-blocks/useBlockPresentation";
 
 beforeEach(() => vi.stubGlobal("crypto", webcrypto));
 async function fixture() {
@@ -62,4 +63,22 @@ test("relative images stay in the selected directory", () => {
   expect(relativeImagePath("papers/chapter/note.md", "../images/figure%201.png")).toBe("papers/images/figure 1.png");
   expect(() => relativeImagePath("note.md", "../secret.png")).toThrow();
   expect(() => relativeImagePath("note.md", "file:///etc/private.png")).toThrow();
+});
+
+test("layout writes do not reload every card's typography, while inherited appearance changes do", async () => {
+  const f = await fixture();
+  const read = vi.spyOn(f.repository, "getBlockPresentation");
+  const hook = renderHook(() => useBlockPresentation(f.repository, f.board.objectId, f.placement.placementId));
+  await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+  await act(async () => {
+    await f.repository.applyBoardPatch({ boardRef: refOf(f.board), operationId: "move", move: [{ placementId: f.placement.placementId, revision: f.placement.revision, position: { x: 300, y: 200 } }] });
+  });
+  expect(read).toHaveBeenCalledTimes(2);
+  await act(async () => {
+    const board = await f.repository.resolveLatest(f.board.objectId);
+    await f.repository.setBlockPresentation({ boardRef: refOf(board), expectedVersion: null, value: { ...defaultBlockPresentation, fontSize: 26 }, operationId: "font" });
+  });
+  await waitFor(() => expect(hook.result.current.value.fontSize).toBe(26));
+  expect(read).toHaveBeenCalledTimes(4);
+  hook.unmount();
 });

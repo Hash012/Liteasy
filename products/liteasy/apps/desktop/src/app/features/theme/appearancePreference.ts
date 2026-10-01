@@ -2,6 +2,7 @@ export type AppearancePreference = "system" | "light" | "dark";
 export type ColorScheme = "light" | "dark";
 
 export const viewSettingsStorageKey = "liteasy.view-settings.v1";
+export const typographyChangeEvent = "liteasy:typography-change";
 export const appearanceChangeEvent = "liteasy:appearance-change";
 
 export function isAppearancePreference(value: unknown): value is AppearancePreference {

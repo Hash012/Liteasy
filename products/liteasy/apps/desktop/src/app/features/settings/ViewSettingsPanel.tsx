@@ -1,7 +1,7 @@
 import { SystemFontPicker } from "./SystemFontPicker";
 import { normalizeReadingFontFamily, readingFontOptions } from "./readingFonts";
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
-import { Button, Tooltip, Field, Input, Option, Radio, RadioGroup, Dropdown } from "@fluentui/react-components";
+import { Button, Tooltip, Field, Input, Option, Radio, RadioGroup, Dropdown, Switch } from "@fluentui/react-components";
 import type { SettingsState, UpdateSettingCommand } from "./settings.types";
 import { isHexColor, normalizeDisplayScale, pdfBackgroundPresets, viewDisplayScaleOptions, viewFontOptions, viewFontSizeOptions } from "./viewSettings";
 import { normalizeAppearancePreference } from "../theme/appearancePreference";
@@ -27,7 +27,7 @@ export function ViewSettingsPanel({ onUpdateSetting, settings }: ViewSettingsPan
   const colorPickerValue = isHexColor(customPdfBackground)
     ? customPdfBackground
     : defaultCustomPdfBackground;
-  const update = (target: UpdateSettingCommand["target"], value: string) =>
+  const update = (target: UpdateSettingCommand["target"], value: string | boolean) =>
     onUpdateSetting?.({ intent: "update_setting", target, value });
 
   return (
@@ -43,6 +43,11 @@ export function ViewSettingsPanel({ onUpdateSetting, settings }: ViewSettingsPan
           <Radio value="light" label={<span><WeatherSunnyRegular aria-hidden="true" />浅色</span>} />
           <Radio value="dark" label={<span><DarkThemeRegular aria-hidden="true" />深色</span>} />
         </RadioGroup>
+      </Field>
+
+      <Field hint="关闭或移走最后一个页面后收起面板；全部页面关闭时保留起始页。">
+        <Switch label="自动收起空面板" checked={settings?.["view.close_empty_panels"] !== false}
+          onChange={(_, data) => update("view.close_empty_panels", data.checked)} />
       </Field>
 
       <Field label={<span>界面字体 {workbench ? <Tooltip content="解释此设置" relationship="description"><Button size="small" appearance="subtle" onClick={() => workbench.explain({ type: "setting", key: "view.font_family" })}>解释</Button></Tooltip> : null}</span>}>

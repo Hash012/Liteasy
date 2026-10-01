@@ -2,7 +2,7 @@ import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-li
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { useImmersiveReadingController } from "../app/controllers/useImmersiveReadingController";
 
-const host = vi.hoisted(() => ({ native: false, fullscreen: false, setFullscreen: vi.fn(), isFullscreen: vi.fn(), onResized: vi.fn(), resized: () => {}, unlisten: vi.fn() }));
+const host = vi.hoisted(() => ({ native: false, fullscreen: false, setFullscreen: vi.fn(), setFocus: vi.fn(), isFullscreen: vi.fn(), onResized: vi.fn(), resized: () => {}, unlisten: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => host.native }));
 vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: () => host }));
 let full: Element | null;
@@ -16,6 +16,7 @@ beforeEach(() => {
   request.mockImplementation(async () => { full = document.documentElement; document.dispatchEvent(new Event("fullscreenchange")); });
   leave.mockImplementation(async () => { full = null; document.dispatchEvent(new Event("fullscreenchange")); });
   host.setFullscreen.mockImplementation(async (value: boolean) => { host.fullscreen = value; });
+  host.setFocus.mockResolvedValue(undefined);
   host.isFullscreen.mockImplementation(async () => host.fullscreen);
   host.onResized.mockImplementation(async (callback: () => void) => { host.resized = callback; return host.unlisten; });
 });
@@ -93,10 +94,12 @@ test("native fullscreen uses Tauri commands and follows external window changes"
   host.native = true;
   const { result, unmount } = renderHook(useImmersiveReadingController);
   await act(async () => result.current.toggleFullscreen());
-  expect(host.setFullscreen).toHaveBeenCalledWith(true); expect(request).not.toHaveBeenCalled();
+  expect(host.setFullscreen).toHaveBeenCalledWith(true); expect(host.setFocus).toHaveBeenCalledOnce(); expect(request).not.toHaveBeenCalled();
   await act(async () => { fireEvent.keyDown(window, { key: "Escape" }); });
   expect(host.setFullscreen).toHaveBeenLastCalledWith(false); expect(result.current.mode).toBe("off");
   await act(async () => result.current.toggleFullscreen());
+  act(() => document.dispatchEvent(new Event("fullscreenchange")));
+  expect(result.current.mode).toBe("fullscreen");
   host.fullscreen = false;
   await act(async () => { await host.resized(); });
   await waitFor(() => expect(result.current.mode).toBe("off"));
@@ -114,11 +117,12 @@ test("a rejected native exit keeps the exit controls available for retry", async
   expect(result.current.mode).toBe("off"); expect(host.fullscreen).toBe(false);
 });
 
-test("edge panels remain usable while hovered and hide after returning to reading", () => {
+test("edge panels remain usable while hovered and hide after returning to reading", async () => {
   vi.useFakeTimers(); render(<Workspace />);
   const frame = screen.getByTestId("frame");
   vi.spyOn(frame, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 1200, 800));
   fireEvent.click(screen.getByRole("button", { name: "Paper" }), { detail: 3 });
+  await act(async () => { fireEvent.keyDown(window, { key: "F11" }); });
   const move = (target: Element, x: number, y: number) => fireEvent(target, new MouseEvent("pointermove", { bubbles: true, clientX: x, clientY: y }));
   move(frame, 1, 400); expect(frame).toHaveAttribute("data-edge", "left");
   move(screen.getByRole("button", { name: "Library" }), 100, 400);
@@ -136,4 +140,14 @@ test("Escape lets a menu close before exiting immersion", () => {
   const menu = document.createElement("div"); menu.setAttribute("role", "menu"); document.body.append(menu);
   fireEvent.keyDown(window, { key: "Escape" }); expect(result.current.mode).toBe("reading");
   menu.remove(); fireEvent.keyDown(window, { key: "Escape" }); expect(result.current.mode).toBe("off");
+});
+
+
+test("windowed reading never reveals collapsed panels when crossing the screen edge", () => {
+  render(<Workspace />);
+  const frame = screen.getByTestId("frame");
+  vi.spyOn(frame, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 1200, 800));
+  fireEvent.click(screen.getByRole("button", { name: "Paper" }), { detail: 3 });
+  fireEvent(frame, new MouseEvent("pointermove", { bubbles: true, clientX: 1, clientY: 400 }));
+  expect(frame).not.toHaveAttribute("data-edge"); expect(request).not.toHaveBeenCalled();
 });

@@ -8,7 +8,7 @@ export function ImmersiveReadingControls({ mode, error, reveal, exit, toggleFull
 }) {
   return <>
     {mode !== "off" ? <>
-      {(["top", "left", "right", "bottom"] as const).map((edge) => <button key={edge} type="button"
+      {(mode === "fullscreen" ? ["top", "left", "right", "bottom"] as const : []).map((edge) => <button key={edge} type="button"
         className={`immersive-edge immersive-edge-${edge}`} aria-label={`显示${{ top: "顶部工具", left: "左侧栏", right: "右侧栏", bottom: "底部面板" }[edge]}`}
         onFocus={() => reveal(edge)} onClick={() => reveal(edge)} />)}
       <div className="immersive-controls" role="toolbar" aria-label="沉浸阅读控制" onFocus={() => reveal("top")}>

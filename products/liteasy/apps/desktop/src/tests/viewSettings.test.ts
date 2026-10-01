@@ -49,3 +49,14 @@ test("uses white as a safe fallback for an incomplete custom color", () => {
     "view.pdf_custom_background": "not-a-color"
   })).toBe("#ffffff");
 });
+
+
+test("auto-closes empty panels by default, persists opting out, and rejects invalid old data", () => {
+  expect(createSettingsStore().getState()["view.close_empty_panels"]).toBe(true);
+  const store = createSettingsStore();
+  store.apply({ intent: "update_setting", target: "view.close_empty_panels", value: false });
+  expect(createSettingsStore().getState()["view.close_empty_panels"]).toBe(false);
+  expect(() => store.apply({ intent: "update_setting", target: "view.close_empty_panels", value: "false" })).toThrow();
+  localStorage.setItem("liteasy.view-settings.v1", JSON.stringify({ "view.close_empty_panels": "false" }));
+  expect(createSettingsStore().getState()["view.close_empty_panels"]).toBe(true);
+});

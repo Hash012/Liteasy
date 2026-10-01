@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 test("independent bars retain Notes and board tabs, while Agent can move into the bottom panel", async ({
   page,
 }, testInfo) => {
+  await page.addInitScript(() => localStorage.setItem("liteasy.view-settings.v1", JSON.stringify({ "view.close_empty_panels": false })));
   await page.setViewportSize({ width: 1800, height: 1080 });
   await page.goto("/");
   const nav = page.getByRole("navigation", { name: "左边栏导航" });
@@ -139,10 +140,8 @@ test("PDF tabs move into a new bar and preserve their resource drag payload", as
     });
   expect(payload.paper).toBeTruthy();
   expect(payload.tab).toBe(`pdf-${payload.paper}`);
-  await page
-    .locator('[data-region="main"]')
-    .getByRole("button", { name: "主内容区面板选项" })
-    .click();
+  await page.getByRole("navigation", { name: "左边栏导航" }).getByRole("button", { name: "设置", exact: true }).click();
+  await page.locator('[data-region="main"]').getByRole("button", { name: "主内容区面板选项" }).click();
   await page.getByRole("menuitem", { name: "关闭面板", exact: true }).click();
   await expect(
     newBar.getByRole("tab", { name: "das24a.pdf", exact: true }),

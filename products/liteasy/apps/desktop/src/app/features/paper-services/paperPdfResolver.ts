@@ -35,7 +35,86 @@ function repositoryPdf(value: string) {
     return `https://arxiv.org/pdf/${url.pathname.replace(/^\/(abs|pdf)\//, "").replace(/\.pdf$/, "")}`;
   if (url.hostname === "openreview.net" && url.pathname === "/forum" && url.searchParams.get("id"))
     return `https://openreview.net/pdf?id=${encodeURIComponent(url.searchParams.get("id")!)}`;
-  if (url.hostname === "aclanthology.org" && /^\/[\w.-]+\/?$/.test(url.pathname)) return value.replace(/\/$/, "") + ".pdf";
+  if (url.hostname === "aclanthology.org" && /^\/[\w.-]+\/?$/.test(url.pathname)) return /\.pdf$/.test(url.pathname) ? value : value.replace(/\/$/, "") + ".pdf";
+  return undefined;
+}
+
+
+async function discoverPdfMetadata(source: PaperPdfSource, options: { service?: PaperServiceConfig; signal: AbortSignal }) {
+  const { doi, arxivId } = paperPdfIdentity(source);
+  const signal = options.signal;
+  const urls: string[] = [], pages: string[] = [], failures: string[] = [];
+  let metadata: ResolvedPaperPdf["metadata"];
+  let reachedSource = false;
+  const add = (value: unknown) => { const url = publicUrl(text(value).replace(/^http:/i, "https:")); if (url && !urls.includes(url)) urls.push(url); };
+  if (doi || arxivId) {
+    const defaults: PaperServiceConfig[] = [
+      { provider: "crossref", endpoint: "https://api.crossref.org" },
+      { provider: "openalex", endpoint: "https://api.openalex.org" },
+      { provider: "semantic-scholar", endpoint: "https://api.semanticscholar.org/graph/v1" },
+    ];
+    const records = await Promise.allSettled(defaults.filter((config) => doi || config.provider === "semantic-scholar").map(async (fallback) => {
+      const config = options.service?.provider === fallback.provider ? options.service : fallback;
+      const suffix = config.provider === "crossref" ? `/works/${encodeURIComponent(doi)}`
+        : config.provider === "openalex" ? `/works/${encodeURIComponent(`https://doi.org/${doi}`)}`
+        : `/paper/${encodeURIComponent(doi ? `DOI:${doi}` : `ARXIV:${arxivId}`)}?fields=title,authors,year,externalIds,openAccessPdf,url`;
+      const response = await paperServiceRequest(config, config.endpoint.replace(/\/+$/, "") + suffix, { maxResponseBytes: 2 * 1024 * 1024, timeoutMs: 12_000, signal });
+      if (!response.ok) { if (response.status === 404) reachedSource = true; else failures.push(`${config.provider}: HTTP ${response.status}`); return; }
+      const payload = object(await response.json());
+      const row = config.provider === "crossref" ? object(payload.message) : payload;
+      const external = object(row.externalIds);
+      const recordDoi = normalizeLiteratureIdentifier("doi", text(row.DOI || row.doi || external.DOI));
+      const recordArxiv = normalizeLiteratureIdentifier("arxiv_id", text(external.ArXiv));
+      if (doi ? recordDoi !== doi : recordArxiv !== arxivId) return;
+      reachedSource = true;
+      return { provider: config.provider, row };
+    }));
+    signal.throwIfAborted();
+    const landingPages: unknown[] = [];
+    for (const result of records) {
+      if (result.status === "rejected") { failures.push(String(result.reason)); continue; }
+      if (!result.value) continue;
+      const { row, provider } = result.value;
+      const title = readableBibliographicTitle(text(Array.isArray(row.title) ? row.title[0] : row.title || row.display_name)).slice(0, 1000);
+      const authors = list(row.author || row.authors || row.authorships).slice(0, 100).map((raw) => {
+        const author = object(raw); return text(author.name || object(author.author).display_name) || [text(author.given), text(author.family)].filter(Boolean).join(" ");
+      }).filter(Boolean).map((author) => author.slice(0, 240));
+      const date = list(list(object(row.published)["date-parts"])[0]);
+      const year = Number(row.year || row.publication_year || date[0]);
+      if (!metadata && title) metadata = { title, ...(authors.length ? { authors } : {}), ...(year >= 1000 && year <= 9999 ? { publishedYear: year } : {}) };
+      if (provider === "crossref") {
+        for (const raw of list(row.link)) { const link = object(raw); if (text(link["content-type"]).includes("pdf") || /\.pdf(?:$|\?)/i.test(text(link.URL))) add(link.URL); }
+        landingPages.push(object(object(row.resource).primary).URL);
+      } else if (provider === "openalex") {
+        const locations = [row.best_oa_location, ...list(row.locations)].map(object);
+        for (const location of locations) add(location.pdf_url);
+        for (const location of locations) if (location.is_oa === true) landingPages.push(location.landing_page_url);
+      } else { add(object(row.openAccessPdf).url); }
+    }
+    for (const page of landingPages) { if (publicUrl(page)) add(repositoryPdf(publicUrl(page)!)); }
+    for (const page of landingPages) { const url = publicUrl(page); if (url) pages.push(url); }
+  }
+  return { urls, pages, metadata, reachedSource, failures };
+}
+
+/** Links from known repositories can be recognized without fetching a PDF. */
+export function knownPaperPdfUrl(source: PaperPdfSource) {
+  const { arxivId } = paperPdfIdentity(source);
+  const url = publicUrl(source.url);
+  return publicUrl(source.pdfUrl) || (arxivId ? `https://arxiv.org/pdf/${arxivId}` : undefined)
+    || (url ? repositoryPdf(url) || (/\.pdf(?:$|\?)/i.test(url) ? url : undefined) : undefined);
+}
+
+/** Metadata only: filtering must never download every paper's full PDF into memory. */
+export async function discoverPaperPdfUrl(source: PaperPdfSource, options: { service?: PaperServiceConfig; signal?: AbortSignal } = {}) {
+  options.signal?.throwIfAborted();
+  const known = knownPaperPdfUrl(source);
+  if (known) return known;
+  const signal = options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000);
+  const result = await discoverPdfMetadata(source, { ...options, signal });
+  signal.throwIfAborted();
+  if (result.urls.length) return result.urls[0];
+  if (result.failures.length) throw new Error("部分全文来源暂不可用，可稍后重试。");
   return undefined;
 }
 
@@ -100,53 +179,12 @@ export async function resolvePaperPdf(source: PaperPdfSource, options: { service
   }
   const immediate = await drain();
   if (immediate) return immediate;
-  if (doi || arxivId) {
-    const defaults: PaperServiceConfig[] = [
-      { provider: "crossref", endpoint: "https://api.crossref.org" },
-      { provider: "openalex", endpoint: "https://api.openalex.org" },
-      { provider: "semantic-scholar", endpoint: "https://api.semanticscholar.org/graph/v1" },
-    ];
-    const records = await Promise.allSettled(defaults.filter((config) => doi || config.provider === "semantic-scholar").map(async (fallback) => {
-      const config = options.service?.provider === fallback.provider ? options.service : fallback;
-      const suffix = config.provider === "crossref" ? `/works/${encodeURIComponent(doi)}`
-        : config.provider === "openalex" ? `/works/${encodeURIComponent(`https://doi.org/${doi}`)}`
-        : `/paper/${encodeURIComponent(doi ? `DOI:${doi}` : `ARXIV:${arxivId}`)}?fields=title,authors,year,externalIds,openAccessPdf,url`;
-      const response = await paperServiceRequest(config, config.endpoint.replace(/\/+$/, "") + suffix, { maxResponseBytes: 2 * 1024 * 1024, timeoutMs: 12_000, signal });
-      if (!response.ok) { if (response.status === 404) reachedSource = true; else failures.push(`${config.provider}: HTTP ${response.status}`); return; }
-      const payload = object(await response.json());
-      const row = config.provider === "crossref" ? object(payload.message) : payload;
-      const external = object(row.externalIds);
-      const recordDoi = normalizeLiteratureIdentifier("doi", text(row.DOI || row.doi || external.DOI));
-      const recordArxiv = normalizeLiteratureIdentifier("arxiv_id", text(external.ArXiv));
-      if (doi ? recordDoi !== doi : recordArxiv !== arxivId) return;
-      reachedSource = true;
-      return { provider: config.provider, row };
-    }));
-    signal.throwIfAborted();
-    const landingPages: unknown[] = [];
-    for (const result of records) {
-      if (result.status === "rejected") { failures.push(String(result.reason)); continue; }
-      if (!result.value) continue;
-      const { row, provider } = result.value;
-      const title = readableBibliographicTitle(text(Array.isArray(row.title) ? row.title[0] : row.title || row.display_name)).slice(0, 1000);
-      const authors = list(row.author || row.authors || row.authorships).slice(0, 100).map((raw) => {
-        const author = object(raw); return text(author.name || object(author.author).display_name) || [text(author.given), text(author.family)].filter(Boolean).join(" ");
-      }).filter(Boolean).map((author) => author.slice(0, 240));
-      const date = list(list(object(row.published)["date-parts"])[0]);
-      const year = Number(row.year || row.publication_year || date[0]);
-      if (!metadata && title) metadata = { title, ...(authors.length ? { authors } : {}), ...(year >= 1000 && year <= 9999 ? { publishedYear: year } : {}) };
-      if (provider === "crossref") {
-        for (const raw of list(row.link)) { const link = object(raw); if (text(link["content-type"]).includes("pdf") || /\.pdf(?:$|\?)/i.test(text(link.URL))) add(link.URL); }
-        landingPages.push(object(object(row.resource).primary).URL);
-      } else if (provider === "openalex") {
-        const locations = [row.best_oa_location, ...list(row.locations)].map(object);
-        for (const location of locations) add(location.pdf_url);
-        for (const location of locations) if (location.is_oa === true) landingPages.push(location.landing_page_url);
-      } else { add(object(row.openAccessPdf).url); }
-    }
-    for (const page of landingPages) { if (publicUrl(page)) add(repositoryPdf(publicUrl(page)!)); }
-    for (const page of landingPages) add(page);
-  }
+  const discovered = await discoverPdfMetadata(source, { ...options, signal });
+  metadata ??= discovered.metadata;
+  reachedSource ||= discovered.reachedSource;
+  failures.push(...discovered.failures);
+  discovered.urls.forEach((url) => add(url));
+  discovered.pages.forEach((url) => add(url));
   add(source.url);
   if (doi) add(`https://doi.org/${doi}`);
   const resolved = await drain();

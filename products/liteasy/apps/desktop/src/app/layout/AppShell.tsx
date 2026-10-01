@@ -1,3 +1,4 @@
+import { useEmptyDockRegionsController } from "../controllers/useEmptyDockRegionsController";
 import { VisualAssetContext } from "../features/visual-blocks/AssetImage";
 import { useExtensionStudioController } from "../controllers/useExtensionStudioController";
 import { WorkflowStudio } from "../features/workflow-studio/WorkflowStudio";
@@ -434,6 +435,7 @@ export function AppShell({
     paper: Paper;
   }) => Promise<void>) | null>(null);
   function revealDockRegion(regionId: DockRegionId) {
+    emptyDockRegions.reveal(regionId);
     if (dock.layout.bottomOrder.includes(regionId)) paneLayout.setCollapsed("bottom", false);
     else if (isBaseDockRegionId(regionId) && regionId !== "main") paneLayout.setCollapsed(regionId, false);
   }
@@ -1477,8 +1479,19 @@ export function AppShell({
   const leftPaneUtilitySize = paneLayout.collapsed.left ? "0px" : "4px";
   const rightPaneSize = paneLayout.collapsed.right ? "0px" : `minmax(0, ${paneLayout.layout.right}fr)`;
   const rightPaneUtilitySize = paneLayout.collapsed.right ? "0px" : "4px";
+  const emptyDockRegions = useEmptyDockRegionsController({
+    counts: Object.fromEntries(Object.entries(dock.layout.regions).map(([id, region]) =>
+      [id, region.itemIds.length + getDockRegionTabs(id as DockRegionId).length])),
+    bottomOrder: dock.layout.bottomOrder,
+    enabled: settingsState["view.close_empty_panels"] !== false,
+    close: closeDockRegion,
+  });
   const bottomPaneVisible = immersive.active || !paneLayout.collapsed.bottom;
-  const visibleHorizontalRegions = dock.layout.horizontalOrder.filter((region) => immersive.active || !isBaseDockRegionId(region) || region === "main" || !paneLayout.collapsed[region]);
+  const visibleHorizontalRegions = dock.layout.horizontalOrder.filter((region) => immersive.active ||
+    (!emptyDockRegions.hidden.includes(region) && (!isBaseDockRegionId(region) || region === "main" || !paneLayout.collapsed[region])));
+  // The last workspace surface becomes the welcome page instead of leaving an unusable window.
+  if (!visibleHorizontalRegions.length) visibleHorizontalRegions.push("main");
+  const visibleBottomRegions = dock.layout.bottomOrder.filter((region) => immersive.active || !emptyDockRegions.hidden.includes(region));
   const defaultRegionWeights = { main: paneLayout.layout.center, left: paneLayout.layout.left, right: paneLayout.layout.right };
   function regionWeight(region: DockRegionId) {
     return dock.layout.regionWidths[region] ?? defaultRegionWeights[region as keyof typeof defaultRegionWeights] ?? 32;
@@ -1951,6 +1964,9 @@ export function AppShell({
     profileReadPaperCount: workspaceState.papers.length,
     profileSamplingEnabled,
     profileTags: profileActions.profileTags,
+    recommendationService: settingsState["papers.metadata_provider"] === "cloud" ? undefined : {
+      provider: settingsState["papers.metadata_provider"], endpoint: settingsState["papers.metadata_endpoint"],
+    },
     recommendationItems,
     recommendationMessage,
     recommendationPending,
@@ -2722,11 +2738,11 @@ export function AppShell({
             />
           ) : null}
         </div>
-        {bottomPaneVisible ? <div className="dock-bottom-columns" style={{ gridTemplateColumns: dock.layout.bottomOrder.map((region) => `minmax(0, ${regionWeight(region)}fr)`).join(" 4px ") }}>
-          {dock.layout.bottomOrder.map((region, index) => <Fragment key={region}>
+        {bottomPaneVisible ? <div className="dock-bottom-columns" style={{ gridTemplateColumns: visibleBottomRegions.map((region) => `minmax(0, ${regionWeight(region)}fr)`).join(" 4px ") }}>
+          {visibleBottomRegions.map((region, index) => <Fragment key={region}>
             {index > 0 ? <PaneResizer ariaLabel="调整下栏分栏宽度" onResize={(deltaPixels, containerPixels) => dock.resizeBoundary({
-              before: dock.layout.bottomOrder[index - 1], after: region,
-              deltaPixels, containerPixels, visibleRegions: dock.layout.bottomOrder, defaultWeights: defaultRegionWeights,
+              before: visibleBottomRegions[index - 1], after: region,
+              deltaPixels, containerPixels, visibleRegions: visibleBottomRegions, defaultWeights: defaultRegionWeights,
             })} /> : null}
             {renderDockRegion(region)}
           </Fragment>)}

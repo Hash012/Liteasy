@@ -1,7 +1,56 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
+
+const geometry = (card: Locator) => card.evaluate((element) => {
+  const style = (element as HTMLElement).style;
+  return { left: style.left, top: style.top, width: style.width, height: style.height };
+});
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
+});
+
+test("blank double click edits a new note, Escape saves, and selected cards move together", async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1100 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "研究白板", exact: true }).click();
+  const board = page.locator("section.object-workbench");
+  const viewport = board.getByLabel("白板卡片区域", { exact: true });
+  await viewport.dblclick({ position: { x: 120, y: 100 } });
+  const editor = board.getByRole("textbox", { name: "编辑卡片正文", exact: true });
+  await expect(editor).toBeFocused();
+  await editor.fill("第一张研究卡片");
+  await editor.press("Escape");
+  await expect(editor).toHaveCount(0);
+  await viewport.dblclick({ position: { x: 140, y: 420 } });
+  await expect(editor).toBeFocused();
+  await editor.fill("第二张研究卡片");
+  await viewport.click({ position: { x: 20, y: 20 } });
+  await expect(editor).toHaveCount(0);
+  const first = board.locator(".object-placement").filter({ hasText: "第一张研究卡片" });
+  const second = board.locator(".object-placement").filter({ hasText: "第二张研究卡片" });
+  await first.click();
+  await second.click({ modifiers: ["Shift"] });
+  await expect(board.locator(".object-placement.is-selected")).toHaveCount(2);
+  const before = await Promise.all([geometry(first), geometry(second)]);
+  const bounds = (await first.boundingBox())!;
+  await page.mouse.move(bounds.x + 40, bounds.y + 30);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 100, bounds.y + 70, { steps: 8 });
+  await page.mouse.up();
+  for (const [index, card] of [first, second].entries()) {
+    await expect.poll(async () => parseFloat((await geometry(card)).left) - parseFloat(before[index].left)).toBeCloseTo(60, 2);
+    await expect.poll(async () => parseFloat((await geometry(card)).top) - parseFloat(before[index].top)).toBeCloseTo(40, 2);
+    expect(await geometry(card)).toMatchObject({ width: before[index].width, height: before[index].height });
+  }
+  await first.press("Control+z");
+  await expect.poll(() => geometry(first)).toEqual(before[0]);
+  await expect.poll(() => geometry(second)).toEqual(before[1]);
+  await first.press("Shift+2");
+  await expect(first).toBeInViewport();
+  await expect(second).toBeInViewport();
+  await page.reload();
+  await expect(first).toContainText("第一张研究卡片");
+  await expect(second).toContainText("第二张研究卡片");
 });
 
 test("resting cards drag by their content, resize from visible edges and keep their position after reopening", async ({
@@ -54,10 +103,10 @@ test("resting cards drag by their content, resize from visible edges and keep th
   await expect
     .poll(async () => (await card.boundingBox())!.height)
     .toBeLessThan(resized.height - 85);
-  const saved = await card.getAttribute("style");
+  const saved = await geometry(card);
   await page.reload();
   await expect(board).toBeVisible();
-  await expect(card).toHaveAttribute("style", saved!);
+  await expect.poll(() => geometry(card)).toEqual(saved);
   await card.click();
   await expect(card).toHaveClass(/is-selected/);
   await expect(card.getByRole("textbox")).toHaveCount(0);
@@ -134,7 +183,7 @@ test("board closes from details, notes edit in place, every resize handle works,
       .press(key);
     await expect.poll(() => card.getAttribute("style")).not.toBe(before);
   }
-  const resizedStyle = await card.getAttribute("style");
+  const resizedStyle = await geometry(card);
   await card.getByRole("button", { name: "取消编辑", exact: true }).click();
   await card.press("Shift+F10");
   await page.getByRole("menuitem", { name: "关联与历史", exact: true }).click();
@@ -148,7 +197,7 @@ test("board closes from details, notes edit in place, every resize handle works,
   await expect(card.locator(".object-body")).toContainText(
     "通过单击直接编辑后的笔记",
   );
-  await expect(card).toHaveAttribute("style", resizedStyle!);
+  await expect.poll(() => geometry(card)).toEqual(resizedStyle);
   await card.click({ button: "right" });
   await page.getByRole("menuitem", { name: "移除卡片", exact: true }).click();
   await expect(board.locator(".object-placement")).toHaveCount(0);

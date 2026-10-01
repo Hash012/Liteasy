@@ -22,6 +22,30 @@ beforeEach(() => {
   vi.clearAllMocks();
   files.managedCanvas = undefined;
 });
+
+test("autosave retries a board changed during serialization without reporting a file conflict", async () => {
+  const f = await fixture();
+  const target = { mountId: "managed", path: "board.canvas", name: "board.canvas", version: null, text: "" };
+  files.managedCanvas = vi.fn().mockResolvedValue(target);
+  files.writeFile.mockImplementation(async (input) => ({ ...target, text: input.text, version: "saved" }));
+  const list = f.repository.listPlacements.bind(f.repository);
+  let moved = false;
+  vi.spyOn(f.repository, "listPlacements").mockImplementation(async (id) => {
+    const items = await list(id);
+    if (!moved) {
+      moved = true;
+      await f.repository.applyBoardPatch({ boardRef: refOf(f.board), operationId: "during-export", move: [{ placementId: items[0].placementId, revision: items[0].revision, position: { x: 640, y: 480 } }] });
+    }
+    return items;
+  });
+  const status = vi.fn();
+  const hook = renderHook(() => useBoardFileController({ repository: f.repository, board: f.board, active: () => true, select: vi.fn(), setStatus: status }));
+  await waitFor(() => expect(files.writeFile).toHaveBeenCalledTimes(1), { timeout: 3500 });
+  const nodes = JSON.parse(files.writeFile.mock.calls[0][0].text).nodes;
+  expect(nodes[0]).toMatchObject({ x: 640, y: 480 });
+  expect(status.mock.calls.some(([message]) => /变化|重试/.test(message))).toBe(false);
+  hook.unmount();
+});
 async function fixture() {
   const scope = crypto.randomUUID();
   const repository = createObjectRepository(

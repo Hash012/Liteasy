@@ -34,6 +34,7 @@ test("limits main window permissions to host events, deep links, zoom, fullscree
     "core:window:allow-is-maximized",
     "core:window:allow-is-fullscreen",
     "core:window:allow-set-fullscreen",
+    "core:window:allow-set-focus",
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-internal-toggle-maximize",

@@ -92,3 +92,21 @@ test("updates an open window when a persisted theme changes in another window", 
   act(() => window.dispatchEvent(new StorageEvent("storage", { key: viewSettingsStorageKey })));
   expect(document.documentElement).toHaveAttribute("data-color-scheme", "dark");
 });
+
+
+test("updates interface and portal fonts immediately, including when storage is blocked", () => {
+  mockSystemAppearance(false);
+  const store = createSettingsStore();
+  const { container } = render(<ApplicationThemeProvider>
+    <p>Reader</p><Dialog open modalType="non-modal"><DialogSurface><DialogBody><DialogTitle>Fonts</DialogTitle></DialogBody></DialogSurface></Dialog>
+  </ApplicationThemeProvider>);
+  const provider = container.querySelector(".fluent-app-root")!;
+  const portal = screen.getByRole("dialog").closest(".fluent-app-root")!;
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("blocked"); });
+  act(() => store.apply({ intent: "update_setting", target: "view.font_family", value: '"My Reading Font", serif' }));
+  for (const element of [provider, portal]) {
+    expect(getComputedStyle(element).getPropertyValue("--fontFamilyBase").trim()).toBe('"My Reading Font", serif');
+    expect(getComputedStyle(element).getPropertyValue("--fontFamilyNumeric").trim()).toBe('"My Reading Font", serif');
+  }
+  expect(getComputedStyle(provider).getPropertyValue("--fontFamilyMonospace").trim()).toBe(webLightTheme.fontFamilyMonospace);
+});

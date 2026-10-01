@@ -12,6 +12,7 @@ import {
   useRef,
   useState,
   type Dispatch,
+  type RefObject,
   type PointerEvent,
   type SetStateAction,
 } from "react";
@@ -56,7 +57,6 @@ import {
   type BoardSide,
 } from "../objects/object.types";
 import type { WorkbenchViewModel } from "./ObjectWorkbench";
-import { writePlacementDrag } from "./boardPlacementDrag";
 import { canvasColor, canvasNodeText, type CanvasNode } from "./boardFileFormat";
 
 type Geometry = Pick<Placement, "position" | "size">;
@@ -105,6 +105,8 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
   p,
   object,
   selected,
+  editOnMount,
+  selection,
   setSelected,
   actions,
   setDetails,
@@ -117,6 +119,8 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
   object?: ObjectEnvelope | null;
   canvasNode?: CanvasNode;
   selected: boolean;
+  editOnMount?: boolean;
+  selection?: RefObject<string[]>;
   setSelected: Dispatch<SetStateAction<string[]>>;
   actions: { current: WorkbenchViewModel };
   setDetails: Dispatch<SetStateAction<ObjectEnvelope | undefined>>;
@@ -133,6 +137,7 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const gesture = useRef<{
+    sequence: number;
     pointerId: number;
     direction: ResizeDirection | "move";
     startX: number;
@@ -140,9 +145,14 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
     scale: number;
     placement: Placement;
     current: Geometry;
+    moved: boolean;
+    companions: HTMLElement[];
+    selected: string[];
   }>();
+  const gestureSequence = useRef(0);
+  const suppressClick = useRef(false);
+  const saveInFlight = useRef(false);
   const [preview, setPreview] = useState<Geometry>();
-  const [draggingOut, setDraggingOut] = useState(false);
   const [sourceText, setSourceText] = useState("");
   const [editing, setEditing] = useState(false);
   const [moving, setMoving] = useState(false);
@@ -205,12 +215,15 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
     direction: ResizeDirection | "move",
   ) {
     if (event.button !== 0 || appearance.value.locked) return;
-    event.preventDefault();
+    if (direction !== "move") event.preventDefault();
     event.stopPropagation();
+    const ids = selection?.current?.includes(p.placementId) ? selection.current : [p.placementId];
+    if (direction === "move" && !selected && !event.shiftKey && !event.ctrlKey && !event.metaKey) setSelected([p.placementId]);
     const scale =
       (cardRef.current?.getBoundingClientRect().width ?? p.size.width) /
         p.size.width || 1;
     gesture.current = {
+      sequence: ++gestureSequence.current,
       pointerId: event.pointerId,
       direction,
       startX: event.clientX,
@@ -218,14 +231,26 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
       scale,
       placement: p,
       current: { position: p.position, size: p.size },
+      moved: false, selected: ids,
+      companions: Array.from(cardRef.current?.parentElement?.querySelectorAll<HTMLElement>(".object-placement") ?? []).filter((node) => node !== cardRef.current && ids.includes(node.dataset.placementId!)),
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
   }
   function drag(event: PointerEvent<HTMLElement>) {
     const active = gesture.current;
     if (!active || active.pointerId !== event.pointerId) return;
-    const dx = (event.clientX - active.startX) / active.scale;
-    const dy = (event.clientY - active.startY) / active.scale;
+    const distance = Math.hypot(event.clientX - active.startX, event.clientY - active.startY);
+    if (!active.moved && distance < 4) return;
+    active.moved = true;
+    let dx = (event.clientX - active.startX) / active.scale;
+    let dy = (event.clientY - active.startY) / active.scale;
+    if (event.shiftKey && active.direction === "move") { if (Math.abs(dx) >= Math.abs(dy)) dy = 0; else dx = 0; }
+    if (event.shiftKey && active.direction !== "move" && active.direction.length === 2) {
+      const ratio = active.placement.size.width / active.placement.size.height;
+      const sx = active.direction.includes("w") ? -1 : 1, sy = active.direction.includes("n") ? -1 : 1;
+      if (Math.abs(dx) > Math.abs(dy) * ratio) dy = dx * sx * sy / ratio;
+      else dx = dy * sx * sy * ratio;
+    }
     active.current =
       active.direction === "move"
         ? {
@@ -236,6 +261,9 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
             size: active.placement.size,
           }
         : resizeCardGeometry(active.placement, active.direction, dx, dy);
+    if (active.direction === "move") for (const node of active.companions) {
+      node.style.translate = `${active.current.position.x - active.placement.position.x}px ${active.current.position.y - active.placement.position.y}px`;
+    }
     setPreview(active.current);
   }
   function finish(event: PointerEvent<HTMLElement>) {
@@ -245,22 +273,30 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
     gesture.current = undefined;
     event.currentTarget.releasePointerCapture?.(event.pointerId);
     if (
-      JSON.stringify(active.current) ===
+      !active.moved || JSON.stringify(active.current) ===
       JSON.stringify({
         position: active.placement.position,
         size: active.placement.size,
       })
     ) {
+      for (const node of active.companions) node.style.translate = "";
       setPreview(undefined);
       return;
     }
+    suppressClick.current = true;
     const result =
       active.direction === "move"
-        ? actions.current.move(active.placement, active.current.position)
+        ? actions.current.move(active.placement, active.current.position, active.selected)
         : actions.current.resize(active.placement, active.current);
-    void result.catch(error).finally(() => setPreview(undefined));
+    void result.catch(error).finally(() => {
+      for (const node of active.companions) {
+        if (!gesture.current?.companions.includes(node)) node.style.translate = "";
+      }
+      if (gestureSequence.current === active.sequence) setPreview(undefined);
+    });
   }
   function cancelGesture() {
+    for (const node of gesture.current?.companions ?? []) node.style.translate = "";
     gesture.current = undefined;
     setPreview(undefined);
   }
@@ -273,7 +309,11 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
     setEditing(true);
   }
   async function save() {
-    if (saving || !draft.trim()) return;
+    if (saveInFlight.current) return;
+    const initial = structured ? JSON.stringify(structured.data, null, 2) : object ? objectText(object) : "";
+    if (draft === initial) { setEditing(false); return; }
+    if (!draft.trim()) { setEditorError("正文不能为空；可使用移除卡片删除内容。"); return; }
+    saveInFlight.current = true;
     setSaving(true);
     setEditorError("");
     try {
@@ -288,10 +328,13 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
       setEditorError(message);
       actions.current.setStatus(message);
     } finally {
+      saveInFlight.current = false;
       setSaving(false);
     }
   }
+  useEffect(() => { if (editOnMount && object) startEditing(); }, [editOnMount, object?.objectId]);
   const fileReference = canvasNode?.type === "file" && object && objectText(object) === canvasNodeText(canvasNode);
+  const isGroup = canvasNode?.type === "group" || appearance.value.group;
   const canEdit = !fileReference &&
     (object?.kind === "content.note" || object?.kind === "content.fragment");
   function toggleSelection() {
@@ -333,43 +376,18 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
       <MenuTrigger disableButtonEnhancement>
         <div
           ref={cardRef}
-          className={`object-placement${(canvasNode?.type === "group" || appearance.value.group) ? " is-group" : ""}${editing ? " is-editing" : ""}${moving ? " is-moving" : ""}${draggingOut ? " is-dragging" : ""}${selected ? " is-selected" : ""}${adjusting ? " is-adjusting" : ""}`}
+          className={`object-placement${isGroup ? " is-group" : ""}${editing ? " is-editing" : ""}${moving ? " is-moving" : ""}${selected ? " is-selected" : ""}${adjusting ? " is-adjusting" : ""}`}
           data-placement-id={p.placementId}
           aria-label={`白板卡片：${object?.title ?? "正在读取"}`}
           aria-description={
             selected
               ? "已选择；右键或 Shift+F10 打开菜单"
-              : "拖动移动或加入对话；单击选中，双击编辑；右键或 Shift+F10 打开菜单"
+              : "拖动移动；单击选中，双击编辑；通过选中工具栏加入对话；右键或 Shift+F10 打开菜单"
           }
           tabIndex={0}
-          draggable={!editing && !moving && !!object}
-          onDragStart={(event) => {
-            if (
-              !object ||
-              (event.target as Element).closest(
-                "button,input,textarea,summary,a",
-              )
-            ) {
-              event.preventDefault();
-              return;
-            }
-            event.stopPropagation();
-            event.dataTransfer.effectAllowed = "copyMove";
-            writeObjectTransfer(
-              event.dataTransfer,
-              makeObjectTransfer([refOf(object)], objectText(object)),
-            );
-            writePlacementDrag(
-              event.dataTransfer,
-              p,
-              event.currentTarget.getBoundingClientRect(),
-              event.clientX,
-              event.clientY,
-            );
-            setDraggingOut(true);
-          }}
-          onDragEnd={() => setDraggingOut(false)}
+          draggable={false}
           onClick={(event) => {
+            if (suppressClick.current) { suppressClick.current = false; return; }
             if (
               (event.target as Element).closest(
                 "a,button,input,textarea,summary,.object-card-editor",
@@ -380,7 +398,7 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
               toggleSelection();
               return;
             }
-            setSelected([p.placementId]);
+            setSelected((current) => current.length === 1 && current[0] === p.placementId ? current : [p.placementId]);
           }}
           onDoubleClick={(event) => {
             if ((event.target as Element).closest("button,a,input,textarea,.object-card-editor")) return;
@@ -388,11 +406,14 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
             if (canEdit && !moving) startEditing();
           }}
           onPointerDown={(event) => {
-            if (moving) begin(event, "move");
+            suppressClick.current = false;
+            if (!editing && !(event.target as Element).closest("button,a,input,textarea,summary,.object-card-appearance") && !event.shiftKey && !event.ctrlKey && !event.metaKey) begin(event, "move");
+            else if (!editing && selected && event.shiftKey && !(event.target as Element).closest("button,a,input,textarea,summary")) begin(event, "move");
           }}
           onPointerMove={drag}
           onPointerUp={finish}
           onPointerCancel={cancelGesture}
+          onLostPointerCapture={() => { if (gesture.current) cancelGesture(); }}
           onKeyDown={(event) => {
             if (
               event.key === "ContextMenu" ||
@@ -409,7 +430,7 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
               setEditing(false);
               setAdjusting(false);
             }
-            if (moving && moveByKey(event.key)) event.preventDefault();
+            if ((selected || moving) && moveByKey(event.key)) { event.preventDefault(); event.stopPropagation(); }
             if (!moving && canEdit && event.key === "Enter") {
               event.preventDefault();
               startEditing();
@@ -420,13 +441,19 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
             top: geometry.position.y,
             width: geometry.size.width,
             height: geometry.size.height,
-            zIndex: appearance.value.layer,
+            zIndex: isGroup && !editing ? 0 : selected || editing ? 10001 : appearance.value.layer,
             ...(canvasNode?.color ? { "--canvas-card-color": canvasColor(canvasNode.color) } : {}),
           }}
         >
           {selected && object && !editing && !moving && !adjusting ? <div className="object-card-toolbar" role="toolbar" aria-label="选中卡片操作"
             onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
             <Tooltip content="拖动卡片位置" relationship="label"><Button size="small" appearance="subtle" aria-label="拖动卡片位置" icon={<ArrowMoveRegular />} disabled={!!appearance.value.locked} onPointerDown={(event) => begin(event, "move")} onKeyDown={(event) => { if (moveByKey(event.key)) event.preventDefault(); }} /></Tooltip>
+            <Tooltip content="拖入对话或其他白板" relationship="label"><Button size="small" appearance="subtle" aria-label="拖入对话或其他白板" icon={<LinkRegular />} draggable onDragStart={(event) => {
+              event.stopPropagation(); event.dataTransfer.effectAllowed = "copy";
+              const ids = selection?.current?.includes(p.placementId) ? selection.current : [p.placementId];
+              const refs = actions.current.placements.filter((item) => ids.includes(item.placementId)).map((item) => item.ref);
+              writeObjectTransfer(event.dataTransfer, makeObjectTransfer(refs.length ? refs : [refOf(object)], objectText(object)));
+            }} /></Tooltip>
             <Tooltip content="字体与布局" relationship="label"><Button size="small" appearance="subtle" aria-label="字体与布局" icon={<SettingsRegular />} onClick={() => setAppearanceOpen(!appearanceOpen)} /></Tooltip>
             {canEdit ? <Tooltip content={canvasNode?.type === "group" ? "编辑分组名称" : "编辑内容"} relationship="label"><Button size="small" appearance="subtle" icon={<EditRegular />} aria-label="编辑内容" onClick={startEditing} /></Tooltip> : null}
             <Tooltip content="加入对话" relationship="label"><Button size="small" appearance="subtle" icon={<ChatAddRegular />} aria-label="加入对话" onClick={() => actions.current.addToTray([refOf(object)])} /></Tooltip>
@@ -482,6 +509,11 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
                       </span>
                     ) : null}
                     <Textarea
+                      onBlur={(event) => {
+                        const next = event.relatedTarget;
+                        if (next instanceof Node && cardRef.current?.contains(next)) return;
+                        if (object.kind === "content.note") void save();
+                      }}
                       autoFocus
                       aria-label="编辑卡片正文"
                       value={draft}
@@ -489,8 +521,7 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
                       onChange={(_, data) => setDraft(data.value)}
                       onKeyDown={(event) => {
                         event.stopPropagation();
-                        if (event.key === "Escape" && !saving)
-                          setEditing(false);
+                        if (event.key === "Escape" && !saving) { event.preventDefault(); if (object.kind === "content.note") void save(); else setEditing(false); }
                         if (
                           (event.ctrlKey || event.metaKey) &&
                           event.key === "Enter"

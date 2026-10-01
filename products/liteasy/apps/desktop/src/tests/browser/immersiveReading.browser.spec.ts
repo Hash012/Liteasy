@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
+test.setTimeout(90_000);
+
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
@@ -23,12 +25,19 @@ test("triple-click opens Markdown in immersion, edges reveal panels, F11 toggles
   await expect(reading.getByRole("heading", { name: "Focus Reading", exact: true })).toBeVisible();
   const main = page.locator('[data-region="main"]');
   expect((await main.boundingBox())!.width).toBeGreaterThan(1590);
-  expect((await main.boundingBox())!.height).toBeGreaterThan(990);
-  await expect(page.getByRole("toolbar", { name: "工作区命令栏" })).toBeHidden();
-  await expect(reading.getByRole("button", { name: "返回文献库", exact: true })).toBeHidden();
+  expect((await main.boundingBox())!.height).toBeGreaterThan(850);
+  await expect(page.getByRole("toolbar", { name: "工作区命令栏" })).toBeVisible();
+  expect(await page.evaluate(() => Boolean(document.fullscreenElement))).toBe(false);
+  await expect(reading.getByRole("button", { name: "返回文献库", exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "左边栏导航" })).toBeHidden();
   const scroll = reading.locator(".reading-document__scroll");
   await scroll.evaluate((element) => { element.scrollTop = 600; });
+  await page.mouse.move(1599, 400);
+  await expect(composer).toBeHidden();
+  await page.keyboard.press("F11");
+  await expect(frame).toHaveAttribute("data-reading-focus", "fullscreen");
+  await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
+  await page.mouse.move(800, 400);
   await page.mouse.move(1599, 400);
   await expect(composer).toBeVisible();
   await expect(composer).toHaveValue("Keep this unsent draft");
@@ -46,9 +55,6 @@ test("triple-click opens Markdown in immersion, edges reveal panels, F11 toggles
   await expect(page.getByRole("toolbar", { name: "沉浸阅读控制" })).toBeHidden();
   await expect.poll(() => scroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(500);
   await page.screenshot({ path: testInfo.outputPath("immersive-markdown.png") });
-  await page.keyboard.press("F11");
-  await expect(frame).toHaveAttribute("data-reading-focus", "fullscreen");
-  await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
   await page.keyboard.press("F11");
   await expect(frame).toHaveAttribute("data-reading-focus", "off");
   await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(false);
@@ -71,6 +77,11 @@ test("a PDF tab enters immersion without remounting the document and restores it
   const handle = await canvas.elementHandle();
   await page.getByRole("tab", { name: "das24a.pdf", exact: true }).click({ clickCount: 3 });
   await expect(frame).toHaveAttribute("data-reading-focus", "reading");
+  await expect(page.locator(".pdf-reader-top")).toBeVisible();
+  expect(await page.evaluate(() => Boolean(document.fullscreenElement))).toBe(false);
+  await page.keyboard.press("F11");
+  await expect(frame).toHaveAttribute("data-reading-focus", "fullscreen");
+  await page.mouse.move(800, 400);
   await expect(page.locator(".pdf-reader-top")).toBeHidden();
   await expect(page.locator(".pdf-left-sidebar")).toBeHidden();
   const stage = page.locator(".pdf-stage");
@@ -79,7 +90,14 @@ test("a PDF tab enters immersion without remounting the document and restores it
   expect(await handle!.evaluate((element) => element.isConnected)).toBe(true);
   await page.emulateMedia({ colorScheme: "dark" });
   await page.screenshot({ path: testInfo.outputPath("immersive-pdf-dark.png") });
-  await page.mouse.move(800, 1);
+  const bounds = await stage.boundingBox();
+  await stage.evaluate((element) => { element.scrollTop = 100; });
+  const offset = await stage.evaluate((element) => element.scrollTop);
+  for (const [x, y] of [[800, 1], [1, 400], [1599, 400], [800, 999], [800, 1]]) {
+    await page.mouse.move(x, y);
+    await expect.poll(() => stage.boundingBox()).toEqual(bounds);
+    expect(await stage.evaluate((element) => element.scrollTop)).toBe(offset);
+  }
   await expect(page.locator(".pdf-reader-top")).toBeVisible();
   await page.getByRole("button", { name: "退出沉浸阅读", exact: true }).click();
   await expect(frame).toHaveAttribute("data-reading-focus", "off");

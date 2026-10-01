@@ -38,7 +38,7 @@
   padding: 16px 20px 28px;
   overflow: auto;
   scrollbar-gutter: stable;
-  font-family: var(--fontFamilyMonospace, monospace);
+  font-family: var(--reader-font-family, var(--fontFamilyMonospace, monospace));
   font-size: var(--markdown-font-size, 16px);
   line-height: 1.7;
   tab-size: 2;
