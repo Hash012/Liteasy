@@ -2,6 +2,8 @@
 
 Implementation: `918603e1`, based on `0fba97be`. This is a bounded C01 adapter slice, not full C01 acceptance. No native or Windows acceptance is claimed.
 
+The later [import source identity follow-up](C01-import-source-identity.md) changes content-only import deduplication while preserving old references. The findings below describe this first adapter slice at its stated commit.
+
 ## Existing contracts and integration
 
 | Existing contract | Reuse in this slice |
