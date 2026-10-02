@@ -1,0 +1,171 @@
+{
+  "schema": "liteasy.client-verification/v1",
+  "task_id": "C11-platform-candidate-ci-first-slice",
+  "head_commit": "45cf165253c4ca59ff302e59cb68acc74bcbe14a",
+  "enabled_release_tasks": [],
+  "environment": {
+    "os": "Ubuntu on WSL2 (not Windows or macOS native)",
+    "os_version": "24.04.3 LTS / Linux 6.18.33.2-microsoft-standard-WSL2",
+    "arch": "x86_64",
+    "webview": null,
+    "node": "22.13.1 (repository requests 22.23.2)",
+    "rust": "1.98.0 available, not executed (workflow requests 1.98.1)",
+    "fixture_revision": "Synthetic package bytes and temporary .app tree created by CI helper tests",
+    "test_profile_path_redacted": true
+  },
+  "commands": [
+    {
+      "command": "bash .github/scripts/lint-workflows.sh",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c11-actionlint.log"
+    },
+    {
+      "command": "/home/tjm/.cache/ms-playwright-go/1.50.1/node --test .github/scripts/*.test.mjs",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c11-script-tests.log",
+      "result": "87 tests passed; 0 failed/skipped"
+    },
+    {
+      "command": "git diff --cached --check",
+      "exit_code": 0,
+      "log": null
+    }
+  ],
+  "checks": {
+    "focused_tests": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c11-script-tests.log",
+        "/tmp/liteasy-c11-actionlint.log"
+      ],
+      "used_mock": true,
+      "reason": "CI helper/contract tests only: synthetic Actions outcomes and package bytes, real temp-file writes and tar mode/symlink round trip. No application IPC or real Tauri execution."
+    },
+    "typescript_build": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this isolated CI/script/documentation slice; no package or native acceptance result is inferred."
+    },
+    "rust_locked": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this isolated CI/script/documentation slice; no package or native acceptance result is inferred."
+    },
+    "schema_clean": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this isolated CI/script/documentation slice; no package or native acceptance result is inferred."
+    },
+    "browser_regression": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this isolated CI/script/documentation slice; no package or native acceptance result is inferred."
+    },
+    "native_ipc": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this isolated CI/script/documentation slice; no package or native acceptance result is inferred."
+    },
+    "native_window_file_events": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this isolated CI/script/documentation slice; no package or native acceptance result is inferred."
+    },
+    "accessibility": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this isolated CI/script/documentation slice; no package or native acceptance result is inferred."
+    },
+    "performance": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this isolated CI/script/documentation slice; no package or native acceptance result is inferred."
+    },
+    "installer_smoke": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this isolated CI/script/documentation slice; no package or native acceptance result is inferred."
+    },
+    "upgrade_recovery": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this isolated CI/script/documentation slice; no package or native acceptance result is inferred."
+    },
+    "signing": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this isolated CI/script/documentation slice; no package or native acceptance result is inferred."
+    },
+    "notarization": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this isolated CI/script/documentation slice; no package or native acceptance result is inferred."
+    },
+    "build": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Manual platform workflow implemented but not dispatched; no Linux deb or macOS app/DMG has been built by this slice."
+    }
+  },
+  "data_safety": {
+    "originals_preserved": true,
+    "secrets_excluded": true,
+    "network_services_unchanged": true,
+    "rollback_or_read_only_strategy": "CI/scripts/docs only. No data schema or runtime mutation. Revert the candidate CI commit to remove the manual workflow; keep existing Windows CI unchanged."
+  },
+  "changed_files": [
+    ".github/workflows/desktop-platform-candidates.yml",
+    ".github/scripts/platform-candidate.mjs",
+    ".github/scripts/platform-candidate.test.mjs",
+    ".github/scripts/platform-candidate-workflow.test.mjs",
+    "docs/qa/client-local/C11-platform-candidates.md",
+    "docs/qa/client-local/C11-verification.json"
+  ],
+  "known_limitations": [
+    "Requires integrator platform configuration commit e81a0b69 (tauri.linux.conf.json deb; tauri.macos.conf.json app,dmg). No shared configuration changes in this branch.",
+    "No GitHub workflow was dispatched and no remote push/publication occurred.",
+    "Local Node differs from .nvmrc; actionlint and dependency-free CI tests passed only on the recorded local Node/WSL environment.",
+    "Native IPC/window/file events, real credential/file operations, install/upgrade/uninstall, Windows native, macOS native, signing and notarization remain not_run.",
+    "WebdriverIO service evaluated from official sources, but no dependency version was installed/pinned or compatibility-tested. A test-only bridge and release binary listener/permission exclusion need a separate slice.",
+    "Production-driver runtime absence remains not_run. No production test plugin, test IPC or listener was introduced.",
+    "Ubuntu 24.04/macOS 15 are candidate build baselines, not minimum supported OS claims. AppImage, Intel macOS and Universal are excluded.",
+    "Actions runtime reports record actual step outcomes with exit_code=null because Actions does not expose exact process exit codes; logs remain the underlying evidence."
+  ],
+  "release_ready": false,
+  "notes": "First executable C11 packaging/evidence slice only, not full C11 acceptance. Regression tests first failed for the missing helper, then passed. An initial actionlint error in job-level runner.temp context was corrected before final lint. Browser, mocked transport, real Tauri and native file acceptance remain distinct. No production access or model invocation.",
+  "sources": [
+    {
+      "url": "https://v2.tauri.app/develop/tests/webdriver/",
+      "checked_at": "2026-10-02",
+      "finding": "Official recommended service supports all three desktop OSes through embedded provider; direct tauri-driver remains Windows/Linux."
+    },
+    {
+      "url": "https://webdriver.io/docs/desktop-testing/tauri/plugin-setup/",
+      "checked_at": "2026-10-02",
+      "finding": "Embedded test server and richer backend plugin require test-only configuration; no bridge added in this slice."
+    },
+    {
+      "url": "https://docs.github.com/en/actions/reference/runners/github-hosted-runners",
+      "checked_at": "2026-10-02",
+      "finding": "macos-15 is Apple Silicon arm64; runtime host checks additionally enforce native OS/arch."
+    },
+    {
+      "url": "https://v2.tauri.app/reference/cli/#bundle",
+      "checked_at": "2026-10-02",
+      "finding": "Platform files automatically merge; explicit build and bundle target accepted."
+    }
+  ]
+}
