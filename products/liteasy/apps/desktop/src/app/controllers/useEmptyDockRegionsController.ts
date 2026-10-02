@@ -7,8 +7,16 @@ export function useEmptyDockRegionsController({ counts, bottomOrder, enabled, cl
   enabled: boolean; close(region: DockRegionId): void;
 }) {
   const previous = useRef(counts);
+  const previousInputs = useRef<{ counts: typeof counts; order: DockRegionId[]; enabled: boolean }>();
   const [hidden, setHidden] = useState<DockRegionId[]>([]);
   useLayoutEffect(() => {
+    const last = previousInputs.current;
+    // AppShell rebuilds these objects each render. Avoid scheduling even a no-op
+    // layout update when panel contents did not change (including focus restoration).
+    if (last && last.enabled === enabled && last.order.join("\n") === bottomOrder.join("\n")
+      && Object.keys(last.counts).length === Object.keys(counts).length
+      && Object.entries(counts).every(([id, count]) => last.counts[id as DockRegionId] === count)) return;
+    previousInputs.current = { counts, order: bottomOrder, enabled };
     const before = previous.current;
     previous.current = counts;
     const emptied = enabled ? (Object.keys(counts) as DockRegionId[]).filter((id) => counts[id] === 0 && before[id]) : [];

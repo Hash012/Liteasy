@@ -63,6 +63,15 @@ function renderLibraryPane(childProps: Partial<React.ComponentProps<typeof Libra
   );
 }
 
+test("offers a dedicated bibliography editor from the local paper context menu", async () => {
+  const onEditBibliography = vi.fn();
+  renderLibraryPane({ fileLibrary: { entries: [{ id: paper.id, title: paper.title, format: "pdf" }], pending: false, message: "",
+    onImport: vi.fn(), onInspect: vi.fn(), onOpen: vi.fn(), onEditBibliography } });
+  await userEvent.pointer({ keys: "[MouseRight]", target: screen.getByRole("button", { name: paper.title, exact: true }) });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑元信息", exact: true }));
+  expect(onEditBibliography).toHaveBeenCalledWith(expect.objectContaining({ id: paper.id, title: paper.title, format: "pdf" }));
+});
+
 test("edits, displays and filters local papers by category and tags", async () => {
   const user = userEvent.setup();
   await savePaperFileMetadata(paper.id, {

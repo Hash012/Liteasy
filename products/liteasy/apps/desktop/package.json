@@ -1,6 +1,6 @@
 {
   "name": "liteasy-desktop",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,6 +11,7 @@
     "dev:desktop": "vite --host 127.0.0.1 --port 1420",
     "build": "npm run verify:tauri-resources && npm run schema:visualization && npm run schema:objects && npm run schema:resources && tsc && vite build && node scripts/verify-production-assets.mjs",
     "preview": "vite preview",
+    "icons:windows": "node scripts/generate-windows-icons.mjs",
     "schema:visualization": "vite-node scripts/write-visualization-artifact-schema.ts",
     "test": "vitest run",
     "verify:production-assets": "node scripts/verify-production-assets.mjs",

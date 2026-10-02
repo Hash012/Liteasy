@@ -3,7 +3,7 @@ export type ReadingCatalogFormat = "pdf" | "epub" | "mobi" | "fb2" | "html" | "m
 export type ReadingCatalogStatus = "unread" | "reading" | "finished";
 
 /** A presentation record: original papers and imported books keep their own storage identities. */
-export type ReadingCatalogEntry = import("./libraryAssetMetadata").LibraryAssetMetadata & {
+export type ReadingCatalogEntry = import("./libraryAssetMetadata").LibraryAssetMetadata & Partial<Record<import("./bibliographicFields").BibliographicField, string>> & {
   id: string;
   title: string;
   format: ReadingCatalogFormat;
@@ -29,6 +29,7 @@ export type ReadingCatalogEntry = import("./libraryAssetMetadata").LibraryAssetM
   available?: boolean;
   canExport?: boolean;
   canRemove?: boolean;
+  bibliographicRevision?: number;
 };
 
 export type ReadingCatalogMetadataPatch = import("./libraryAssetMetadata").LibraryAssetMetadata & {

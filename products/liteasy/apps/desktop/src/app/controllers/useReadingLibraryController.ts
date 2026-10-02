@@ -10,6 +10,7 @@ import { inferAssetType } from "../features/library/libraryAssetMetadata";
 import { liteasyPath, type ResourceTarget } from "../features/resource-filesystem/liteasyPath";
 import { displayPath } from "../features/resource-filesystem/displayPath";
 import type { Paper } from "../features/workspace/workspace.types";
+import { applyBibliographicMetadata, type BibliographicDraft } from "../features/library/bibliographicFields";
 
 export function useReadingLibraryController(input: {
   scopeId: string; papers: Paper[]; enabled: boolean; localLibraryRootPath?: string;
@@ -81,7 +82,7 @@ export function useReadingLibraryController(input: {
     const papers = input.papers.map((paper): ReadingCatalogEntry => {
       const authors = paper.literature?.authors ?? (typeof paper.authors === "string" ? [paper.authors] : [...(paper.authors ?? [])]);
       const year = Number(paper.literature?.year ?? paper.year);
-      return {
+      return applyBibliographicMetadata({
         id: paper.id, title: paper.literature?.title ?? paper.title, format: "pdf", authors,
         assetType: inferAssetType("pdf", paper.literature?.documentType),
         abstract: paper.literature?.abstract,
@@ -90,18 +91,18 @@ export function useReadingLibraryController(input: {
         publication: paper.literature?.venue,
         year: Number.isInteger(year) && year >= 1000 ? year : undefined,
         doi: paper.doi ?? paper.literature?.identifiers.find((identifier) => identifier.kind === "doi")?.value,
-        fileName: paper.sourcePath?.split(/[\\/]/).at(-1),
+        fileName: paper.sourcePath?.startsWith("blob:") ? (/\.pdf$/i.test(paper.title) ? paper.title : undefined) : paper.sourcePath?.split(/[\\/]/).at(-1),
         physicalPath: paper.sourcePath && /^(?:[A-Za-z]:[\\/]|\/|\\\\)/.test(paper.sourcePath) ? displayPath(paper.sourcePath) : undefined,
         available: Boolean(paper.sourcePath), canExport: false, canRemove: false,
         readingStatus: "unread", ...legacyMetadata[paper.id], ...metadata[paper.id],
         liteasyPath: liteasyPath(input.scopeId, { kind: "paper", paperId: paper.id })
-      };
+      }, metadata[paper.id]?.bibliographic);
     });
-    return [...papers, ...files.map((file): ReadingCatalogEntry => ({
+    return [...papers, ...files.map((file): ReadingCatalogEntry => applyBibliographicMetadata({
       ...file, format: file.format === "other" ? readingFormatForName(file.fileName) : file.format, year: /^\d{4}/.test(file.publishedAt ?? "") ? Number(file.publishedAt!.slice(0, 4)) : undefined,
       readingStatus: "unread", available: true, ...metadata[file.id],
       liteasyPath: liteasyPath(input.scopeId, { kind: "object", ref: file.ref, followLatest: true })
-    }))];
+    }, metadata[file.id]?.bibliographic))];
   }, [input.papers, input.scopeId, stateScope, files, metadata, legacyMetadata]);
   async function updateMetadata(id: string, patch: ReadingMetadata) {
     const value = await repository.updateMetadata(id, patch);
@@ -198,6 +199,12 @@ export function useReadingLibraryController(input: {
     active: stateScope === input.scopeId ? active : undefined,
     pending: stateScope === input.scopeId && (pending || catalogLoading),
     message: stateScope === input.scopeId ? message : "", importFiles, updateMetadata,
+    async saveBibliography(id: string, draft: BibliographicDraft, expectedRevision: number) {
+      if (!current()) throw new Error("账号已切换，请重新打开元信息。");
+      const value = await repository.saveBibliography(id, draft, expectedRevision);
+      if (!current()) throw new Error("账号已切换，请重新打开元信息。");
+      setMetadata((previous) => ({ ...previous, [id]: value }));
+    },
     async moveFile(id: string, targetFolderPath?: string) {
       if (!(await repository.list()).some((file) => file.id === id)) throw new Error("文件已移除，请刷新文献库。");
       if (!current()) throw new Error("文献库已切换，请重新拖放。");

@@ -7,6 +7,7 @@ export type CoreDockItemId =
   | "workflow-runs" | "extension-library"
   | "workflow-studio"
   | "library"
+  | "metadata-editor"
   | "document-reader"
   | "recommendation-reader"
   | "note-file-reader"

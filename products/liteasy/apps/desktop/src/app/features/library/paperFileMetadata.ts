@@ -6,6 +6,7 @@ import {
 } from "./userPaperArtifactClient";
 
 export type PaperFileMetadata = import("./libraryAssetMetadata").LibraryAssetMetadata & {
+  title?: string;
   category: string;
   tags: string[];
   version: 1;
@@ -34,8 +35,9 @@ export function normalizePaperFileMetadata(value: unknown): PaperFileMetadata {
   const strings = (value: unknown, limit: number, length: number) => Array.isArray(value)
     ? [...new Set(value.filter((item): item is string => typeof item === "string").map((item) => item.trim().slice(0, length)).filter(Boolean))].slice(0, limit) : undefined;
   const extensions = { ...candidate };
-  for (const key of ["assetType", "subjects", "authors", "year"]) delete extensions[key];
+  for (const key of ["assetType", "subjects", "authors", "year", "title"]) delete extensions[key];
   return { ...extensions, category, tags, version: 1,
+    ...(typeof candidate.title === "string" && candidate.title.trim() ? { title: candidate.title.trim().slice(0, 2000) } : {}),
     ...(typeof candidate.assetType === "string" ? { assetType: candidate.assetType.trim().slice(0, 80) } : {}),
     ...(Array.isArray(candidate.subjects) ? { subjects: strings(candidate.subjects, 20, 60) } : {}),
     ...(Array.isArray(candidate.authors) ? { authors: strings(candidate.authors, 200, 300) } : {}),

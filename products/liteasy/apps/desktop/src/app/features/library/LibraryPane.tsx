@@ -289,7 +289,7 @@ function localExplorerTree(
     const explorerEntry: ExplorerEntry = {
       bodyAvailable: entry.path !== null,
       id: entry.id,
-      label: paperById.get(entry.id)?.title || entry.title,
+      label: metadataByPaperId[entry.id]?.title || paperById.get(entry.id)?.title || entry.title,
       metadata: metadataByPaperId[entry.id],
       source: { area: "local", entry }
     };
@@ -614,6 +614,10 @@ function LibraryPaneContent({
       const paper = paperById.get(source.id);
       const metadata = visiblePaperMetadata[source.id];
       const previous = entries.get(source.id);
+      if (previous?.bibliographicRevision) {
+        entries.set(source.id, { ...previous, fileName: source.relativePath ?? undefined, physicalPath: source.path ?? undefined, available: source.path !== null });
+        continue;
+      }
       entries.set(source.id, { ...previous, id: source.id, format: "pdf", title: paper?.literature?.title || paper?.title || source.title,
         authors: metadata?.authors ?? paper?.literature?.authors ?? (typeof paper?.authors === "string" ? [paper.authors] : paper?.authors ? [...paper.authors] : previous?.authors),
         year: metadata?.year ?? paper?.literature?.year ?? (paper?.year ? Number(paper.year) : previous?.year),
@@ -1135,6 +1139,8 @@ function LibraryPaneContent({
                   icon={<OpenRegular />}
                   onClick={openEntry}
                 >打开</MenuItem>
+                {area === "local" && fileLibrary?.onEditBibliography ? <MenuItem icon={<EditRegular />} disabled={pending}
+                  onClick={() => fileLibrary.onEditBibliography!(catalogById.get(entry.id) ?? { id: entry.id, title: entry.label, format: "pdf" })}>编辑元信息</MenuItem> : null}
                 {sourcePaper && area === "local" ? <MenuItem
                   disabled={pending || !entry.bodyAvailable || !onRetrievePaperMetadata}
                   icon={<DocumentTextRegular />}

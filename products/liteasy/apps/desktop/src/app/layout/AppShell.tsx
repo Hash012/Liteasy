@@ -1,3 +1,5 @@
+import { BibliographicMetadataEditor } from "../features/library/BibliographicMetadataEditor";
+import { useBibliographicMetadataController } from "../controllers/useBibliographicMetadataController";
 import { useEmptyDockRegionsController } from "../controllers/useEmptyDockRegionsController";
 import { VisualAssetContext } from "../features/visual-blocks/AssetImage";
 import { useExtensionStudioController } from "../controllers/useExtensionStudioController";
@@ -1409,6 +1411,15 @@ export function AppShell({
       doi: item.identityResolution?.doi ?? (item.canonicalId?.startsWith("doi:") ? item.canonicalId.slice(4) : undefined),
     }),
   });
+  const metadataEditor = useBibliographicMetadataController({
+    scope: objectWorkbench.repository.scopeId, entries: readingLibrary.entries, save: readingLibrary.saveBibliography,
+  });
+  function openBibliographicEditor(entry: import("../features/library/readingCatalog.types").ReadingCatalogEntry) {
+    if (!metadataEditor.open(entry)) return;
+    setLibraryExpanded(false);
+    recommendationLibrary.clear(); readingLibrary.inspect(entry);
+    workbenchNavigation.open("metadata-editor");
+  }
   const localMcp = useLocalAssetMcp(objectWorkbench.repository.scopeId, objectWorkbench.agentAssets,
     { scopeKey: recommendationScopeKey, importPaper: recommendationLibrary.importPaper }, extensionStudio.service);
   const {
@@ -1744,7 +1755,8 @@ export function AppShell({
       onImport: readingLibrary.importFiles,
       onInspect: (entry) => { recommendationLibrary.clear(); readingLibrary.inspect(entry); },
       onOpen: (entry) => { recommendationLibrary.clear(); return readingLibrary.open(entry); },
-      onMetadataChange: readingLibrary.updateMetadata
+      onMetadataChange: readingLibrary.updateMetadata,
+      onEditBibliography: openBibliographicEditor
     },
     accountScopeId: accountSession?.userId,
     activePaperId: activeReaderPaper?.id ?? null,
@@ -2113,6 +2125,7 @@ export function AppShell({
   }
 
   function renderDockItem(itemId: DockItemId, regionId: DockRegionId) {
+    if (itemId === "metadata-editor") return <BibliographicMetadataEditor model={metadataEditor} />;
     if (itemId === "workflow-runs") return <WorkflowRuns />;
     if (itemId === "workflow-studio") return <WorkflowStudio />;
     if (itemId === "extension-library") return <ExtensionLibrary />;
@@ -2518,7 +2531,7 @@ export function AppShell({
         return {
           pageTarget, pageType: paper ? "PDF" : resource ? "论文附件" : artifact ? "产物" : "可视化",
           id: tab.id, region, dynamic: true, active: visible && tab === selected, title: tab.title,
-          fileStatus: paper ? { ...paperFileStatus(paper, importJobsByDocumentId[paper.id], pdfFileStatus.forPaper(paper)), entry: readingLibrary.entries.find((entry) => entry.id === paper.id) } : undefined,
+          fileStatus: paper ? { ...paperFileStatus(paper, importJobsByDocumentId[paper.id], pdfFileStatus.forPaper(paper)), name: readingLibrary.entries.find((entry) => entry.id === paper.id)?.title ?? paper.title, entry: readingLibrary.entries.find((entry) => entry.id === paper.id) } : undefined,
           search: paper?.sourcePath ? "pdf" : undefined,
           onActivate: () => { revealDockRegion(region); tab.onActivate(); }
         };
@@ -2535,6 +2548,7 @@ export function AppShell({
         fileStatus: item === "recommendation-reader" && recommendationLibrary.preview ? { name: recommendationLibrary.preview.item.title, type: "推荐文献", recommendation: recommendationLibrary.preview.item } : item === "library" ? recommendationLibrary.selected
           ? { name: recommendationLibrary.selected.title, type: "推荐文献", recommendation: recommendationLibrary.selected }
           : readingFileStatus(readingLibrary.selected)
+          : item === "metadata-editor" ? readingFileStatus(metadataEditor.entry)
           : item === "document-reader" ? readingFileStatus(readingEntry)
           : item === "notes" ? noteFileStatus(notes.model.selected) : undefined,
         search: item === "document-reader" ? readingLibrary.active ? "reading-document" : undefined
@@ -2766,6 +2780,7 @@ export function AppShell({
       </div>
       <FileStatusBar onOpenAsset={openAgentAsset} key={objectWorkbench.repository.scopeId} status={workspaceShell.fileStatus} recommendationLocations={localLibrarySnapshot} onDownloadRecommendation={recommendationLibrary.download}
         actions={{ onOpen: readingLibrary.openInspected,
+          onEditBibliography: workspaceShell.fileStatus?.entry && readingLibrary.entries.some((entry) => entry.id === workspaceShell.fileStatus?.entry?.id) ? openBibliographicEditor : undefined,
           onMetadataChange: readingLibrary.entries.some((entry) => entry.id === workspaceShell.fileStatus?.entry?.id) ? readingLibrary.updateMetadata : undefined,
           onExport: readingLibrary.exportFile, onDelete: readingLibrary.remove,
           renderLocation: (entry) => readingLibrary.entries.some((item) => item.id === entry.id) ? <ResourceLocationButton target={readingLibrary.target(entry)} /> : null }} />

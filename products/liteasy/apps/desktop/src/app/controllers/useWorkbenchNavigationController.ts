@@ -45,6 +45,9 @@ export function useWorkbenchNavigationController(input: {
       }
     },
     open(item: DockItemId) {
+      if (item === "metadata-editor") {
+        input.dock.moveItem(item, "right"); reveal("right"); input.activate("right", item); return;
+      }
       // Settings is a workspace page, including for users with an old sidebar layout.
       if (item === "settings" || item === "recommendation-reader") {
         input.dock.moveItem(item, "main");

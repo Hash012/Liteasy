@@ -2,7 +2,8 @@ import type { ReadingCatalogEntry } from "./readingCatalog.types";
 
 export const assetTypeLabels: Record<string, string> = {
   "journal-article": "期刊论文", "conference-paper": "会议论文", book: "图书",
-  webpage: "网页", report: "报告", preprint: "预印本", note: "笔记", other: "其他"
+  webpage: "网页", report: "报告", preprint: "预印本", note: "笔记", other: "其他",
+  thesis: "学位论文", "book-section": "图书章节"
 };
 export type LibraryAssetMetadata = { assetType?: string; subjects?: string[]; authors?: string[]; year?: number };
 export function inferAssetType(format: string, documentType?: string) {

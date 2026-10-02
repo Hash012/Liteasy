@@ -30,3 +30,16 @@ test("closing an empty bottom split never hides occupied siblings", () => {
   rerender({ ...initialProps, counts: { bottom: 0, "bar-bottom": 0 } });
   expect(close.mock.calls).toEqual([["bar-bottom"], ["bottom"]]);
 });
+
+test("fresh layout objects and callback identities cannot repeatedly schedule panel closures", () => {
+  const close = vi.fn();
+  const { result, rerender } = renderHook(({ count }) => useEmptyDockRegionsController({
+    counts: { main: 1, right: count, bottom: 0 }, bottomOrder: ["bottom"], enabled: true, close: (region) => close(region),
+  }), { initialProps: { count: 1 } });
+  rerender({ count: 0 });
+  for (let i = 0; i < 60; i++) rerender({ count: 0 });
+  expect(close).toHaveBeenCalledExactlyOnceWith("right");
+  act(() => result.current.reveal("right"));
+  rerender({ count: 0 });
+  expect(result.current.hidden).toEqual([]);
+});

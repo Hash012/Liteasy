@@ -2,6 +2,7 @@ import { ReadingCatalogDetails, type ReadingCatalogActions } from "../features/l
 import "../features/library/readingCatalog.css";
 import { displayPath } from "../features/resource-filesystem/displayPath";
 import { Button, Popover, PopoverSurface, PopoverTrigger, Tooltip } from "@fluentui/react-components";
+import { EditRegular } from "@fluentui/react-icons";
 import type { FileStatus } from "../features/workspace/workspaceShell.types";
 import "../styles/workspaceShell.css";
 import { RecommendationDetails } from "../features/recommendations/RecommendationDetails";
@@ -26,6 +27,7 @@ export function FileStatusBar({ status, actions, onDownloadRecommendation, recom
     status?.entry?.authors?.join(" · "),
     status?.entry?.year,
     status?.entry?.publication,
+    status?.entry?.publisher,
     status?.entry?.doi ? `DOI ${status.entry.doi}` : status?.entry?.identifier,
     status?.pageCount && Number.isFinite(status.pageCount) && status.pageCount > 0 ? `${status.pageCount} 页` : undefined,
     status?.itemCount !== undefined && Number.isFinite(status.itemCount) && status.itemCount >= 0 ? `${status.itemCount} 项` : undefined,
@@ -50,6 +52,9 @@ export function FileStatusBar({ status, actions, onDownloadRecommendation, recom
         <PopoverTrigger disableButtonEnhancement><Button appearance="subtle" size="small" aria-label="展开推荐元信息">元信息</Button></PopoverTrigger>
         <PopoverSurface><RecommendationDetails onOpenAsset={onOpenAsset} item={status.recommendation} onDownload={onDownloadRecommendation} locations={recommendationLocations} /></PopoverSurface>
       </Popover> : null}
+      {status?.entry && actions?.onEditBibliography ? <Tooltip content="在右侧编辑文献元信息" relationship="description">
+        <Button appearance="subtle" size="small" icon={<EditRegular />} onClick={() => actions.onEditBibliography!(status.entry!)}>编辑元信息</Button>
+      </Tooltip> : null}
       {status?.entry && actions ? <Popover key={status.entry.id} positioning="above-end">
         <PopoverTrigger disableButtonEnhancement><Button appearance="subtle" size="small" aria-label="展开文件元信息">元信息</Button></PopoverTrigger>
         <PopoverSurface className="shell-file-inspector"><ReadingCatalogDetails key={status.entry.id} entry={status.entry} {...actions} /></PopoverSurface>

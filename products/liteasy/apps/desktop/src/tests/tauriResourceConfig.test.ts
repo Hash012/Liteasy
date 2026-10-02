@@ -15,7 +15,7 @@ afterEach(() => {
 
 test("keeps the tracked Windows icon at the canonical Tauri resource path", () => {
   expect(verifyTauriResources({ requireGitTracked: true })).toEqual({
-    checkedResources: 2,
+    checkedResources: 4,
     verified: true,
     windowsIcon: "icons/icon.ico"
   });

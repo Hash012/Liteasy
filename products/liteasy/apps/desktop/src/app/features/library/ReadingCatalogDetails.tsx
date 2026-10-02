@@ -1,7 +1,9 @@
 import { ExtensionMetadataSections } from "../extensions/ExtensionMetadata";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button, Field, Input, Select, Tooltip } from "@fluentui/react-components";
-import { ArrowDownloadRegular, CopyRegular, DeleteRegular, FolderOpenRegular, OpenRegular } from "@fluentui/react-icons";
+import { ArrowDownloadRegular, CopyRegular, DeleteRegular, EditRegular, FolderOpenRegular, OpenRegular } from "@fluentui/react-icons";
+import { bibliographicFields } from "./bibliographicFields";
+import { assetTypeLabels } from "./libraryAssetMetadata";
 import { MarkdownContent } from "../markdown/MarkdownContent";
 import { displayPath } from "../resource-filesystem/displayPath";
 import { formatCatalogFileSize, readingCatalogCitation } from "./readingCatalogSearch";
@@ -17,6 +19,7 @@ export type ReadingCatalogActions = {
   onExport?: (entry: ReadingCatalogEntry) => void | Promise<void>;
   onDelete?: (entry: ReadingCatalogEntry) => void | Promise<void>;
   onMetadataChange?: (id: string, patch: ReadingCatalogMetadataPatch) => void | Promise<void>;
+  onEditBibliography?: (entry: ReadingCatalogEntry) => void;
   renderLocation?: (entry: ReadingCatalogEntry) => ReactNode;
 };
 
@@ -84,6 +87,7 @@ export function ReadingCatalogDetails({ entry, ...actions }: { entry: ReadingCat
       {entry.authors?.length ? <p>{entry.authors.join(" · ")}</p> : null}
     </div>
     <div className="reading-catalog-detail-actions">
+      {actions.onEditBibliography ? <Button icon={<EditRegular />} onClick={() => actions.onEditBibliography!(entry)}>编辑元信息</Button> : null}
       <Button appearance="primary" icon={<OpenRegular />} disabled={busy || entry.available === false} onClick={() => void invoke(() => actions.onOpen(entry))}>{entry.format === "other" ? "导出原文件" : "开始阅读"}</Button>
       <Button icon={<CopyRegular />} disabled={busy} onClick={() => void copy(readingCatalogCitation(entry))}>复制引用</Button>
       {actions.onAddToContext ? <Button disabled={busy} onClick={() => void invoke(() => actions.onAddToContext!(entry))}>添加到 Agent 上下文</Button> : null}
@@ -91,15 +95,18 @@ export function ReadingCatalogDetails({ entry, ...actions }: { entry: ReadingCat
     </div>
     {entry.available === false ? <p className="reading-catalog-muted">正文文件暂不可用，仍可查看和整理元信息。</p> : null}
     <dl className="reading-catalog-facts">
+      {entry.assetType ? <div><dt>条目类型</dt><dd>{assetTypeLabels[entry.assetType] ?? entry.assetType}</dd></div> : null}
       <div><dt>发表年份</dt><dd>{entry.year ?? "未提供"}</dd></div>
       {entry.publishedAt ? <div><dt>发表日期</dt><dd>{entry.publishedAt}</dd></div> : null}
       <div><dt>出版物</dt><dd>{entry.publication || "未提供"}</dd></div>
       {entry.language ? <div><dt>语言</dt><dd>{entry.language}</dd></div> : null}
       <div><dt>文件大小</dt><dd>{formatCatalogFileSize(entry.fileSize)}</dd></div>
       {entry.fileName ? <div><dt>文件名</dt><dd>{entry.fileName}</dd></div> : null}
+      {bibliographicFields.filter(({ key }) => !["title", "publishedAt", "publication", "doi", "isbn", "language", "abstract"].includes(key) && entry[key])
+        .map(({ key, label }) => <div key={key}><dt>{label}</dt><dd>{entry[key]}</dd></div>)}
     </dl>
     {entry.doi ? <CopyValue label="DOI" value={entry.doi} onCopy={(value) => void copy(value)} /> : null}
-    {entry.identifier ? <CopyValue label="出版标识" value={entry.identifier} onCopy={(value) => void copy(value)} /> : null}
+    {entry.isbn || entry.identifier ? <CopyValue label={entry.isbn ? "ISBN" : "出版标识"} value={entry.isbn || entry.identifier!} onCopy={(value) => void copy(value)} /> : null}
     <section className="reading-catalog-detail-section" aria-label="文件整理">
       <h4>整理</h4>
       <Field label="分类">

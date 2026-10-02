@@ -5,6 +5,7 @@ import { objectRefSchema, refOf } from "../objects/object.types";
 import type { ObjectStorage, StorageRow } from "../objects/objectStorage";
 import type { StagedObjectAsset } from "../objects/objectAssets";
 import type { ParsedReadingDocument } from "./readingDocument.types";
+import { bibliographicDraftSchema, bibliographicSnapshotSchema, type BibliographicDraft } from "../library/bibliographicFields";
 
 export const MAX_LIBRARY_FILE_BYTES = 20 * 1024 * 1024;
 const metadataSchema = z.object({
@@ -64,7 +65,35 @@ export function createReadingLibraryRepository(storage: ObjectStorage, scopeId: 
       const key = `reading-library/metadata/${id}`;
       const previous = await storage.get(key);
       const value = metadataSchema.parse({ ...metadataSchema.parse(previous?.value ?? {}), ...patch });
+      // The older classification editor exposes author/year/type too. Keep those
+      // edits in the same bibliography instead of creating competing overrides.
+      const has = (key: string) => Object.prototype.hasOwnProperty.call(patch, key);
+      if (value.bibliographic !== undefined && ["authors", "year", "assetType"].some(has)) {
+        const saved = bibliographicSnapshotSchema.safeParse(value.bibliographic);
+        if (!saved.success) throw new Error("元信息格式无法安全编辑，请使用兼容的应用版本。");
+        const next = { ...saved.data,
+          ...(has("authors") ? { authors: patch.authors ?? [] } : {}),
+          ...(has("assetType") ? { assetType: patch.assetType ?? "" } : {}),
+          ...(has("year") ? { publishedAt: patch.year === undefined ? "" : saved.data.publishedAt.startsWith(String(patch.year)) ? saved.data.publishedAt : String(patch.year) } : {}),
+        };
+        if (JSON.stringify(next) !== JSON.stringify(saved.data)) value.bibliographic = {
+          ...next, revision: saved.data.revision + 1, updatedAt: new Date().toISOString(),
+        };
+      }
       if (value.tags) value.tags = [...new Set(value.tags)];
+      await storage.commit([change(key, value, previous)]);
+      return value;
+    },
+    async saveBibliography(id: string, draft: BibliographicDraft, expectedRevision: number) {
+      const key = `reading-library/metadata/${id}`;
+      const previous = await storage.get(key);
+      const metadata = metadataSchema.parse(previous?.value ?? {});
+      const existing = metadata.bibliographic === undefined ? undefined : bibliographicSnapshotSchema.safeParse(metadata.bibliographic);
+      if (existing && !existing.success) throw new Error("已保存的元信息格式无法安全编辑，请先导出或使用兼容的应用版本。");
+      const revision = existing?.success ? existing.data.revision : 0;
+      if (revision !== expectedRevision) throw new Error("元信息已在其他位置修改，请重新载入后再保存。");
+      const value = { ...metadata, bibliographic: { ...(existing?.success ? existing.data : {}), ...bibliographicDraftSchema.parse(draft),
+        version: 1 as const, revision: revision + 1, updatedAt: new Date().toISOString() } };
       await storage.commit([change(key, value, previous)]);
       return value;
     },

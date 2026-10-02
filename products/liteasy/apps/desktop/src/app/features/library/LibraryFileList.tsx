@@ -2,7 +2,7 @@ import { libraryFileDragType, libraryFolderKey } from "./libraryFolderMembership
 import { useMemo, useState, useEffect } from "react";
 import { LibraryItemIcon, LibraryIconMenuItem } from "./LibraryItemIcon";
 import { Button, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem } from "@fluentui/react-components";
-import { TagRegular } from "@fluentui/react-icons";
+import { EditRegular, TagRegular } from "@fluentui/react-icons";
 import { LibraryTagChips } from "./LibraryTagChips";
 import type { ReadingCatalogEntry, ReadingCatalogMetadataPatch } from "./readingCatalog.types";
 import { readingCatalogFormatLabels } from "./readingCatalog.types";
@@ -20,6 +20,7 @@ export type LibraryFileAccess = {
   onInspect(entry: ReadingCatalogEntry, open?: () => void): void;
   onOpen(entry: ReadingCatalogEntry): void;
   onMetadataChange?(id: string, patch: ReadingCatalogMetadataPatch): Promise<void>;
+  onEditBibliography?(entry: ReadingCatalogEntry): void;
 };
 
 /** Non-PDF assets share the existing library search and selection inspector. */
@@ -62,6 +63,7 @@ export function LibraryFileList({ access, query, category, filters, folderPath, 
           <small>{entry.format === "other" ? entry.fileName?.split(".").pop()?.toUpperCase() : readingCatalogFormatLabels[entry.format]}</small>
         </button></MenuTrigger><MenuPopover><MenuList>
           <LibraryIconMenuItem itemKey={`file:local:${entry.id}`} title={entry.title} />
+          {access.onEditBibliography ? <MenuItem icon={<EditRegular />} onClick={() => access.onEditBibliography!(entry)}>编辑元信息</MenuItem> : null}
           {onEditMetadata && access.onMetadataChange ? <MenuItem icon={<TagRegular />} onClick={() => onEditMetadata(entry)}>编辑分类与标签</MenuItem> : null}
         </MenuList></MenuPopover></Menu>
       </li>)}
