@@ -1,0 +1,260 @@
+{
+  "schema": "liteasy.client-verification/v1",
+  "task_id": "C00-C02-C03-C08-C10-C11-first-wave-integration",
+  "head_commit": "781d980dde8326a90565dd7d462bc39cd2c7d6f2",
+  "enabled_release_tasks": [],
+  "environment": {
+    "os": "Ubuntu on WSL2 / WSLg; not native Windows or physical Linux acceptance",
+    "os_version": "24.04",
+    "arch": "x86_64",
+    "webview": "WebKitGTK 2.52.6 / GTK 3.24.41; Chromium for browser checks",
+    "node": "22.13.1 (repository requests 22.23.2)",
+    "rust": "1.98.0 (workflow requests 1.98.1)",
+    "fixture_revision": "Synthetic localClientProfile fixtures and synthetic 667-byte PDF SHA256 b67b3ff968a3b7719e8c0d1055aaf4af94ae3ed503052f533b5e486503cf043a",
+    "test_profile_path_redacted": true
+  },
+  "commands": [
+    {
+      "command": "npm test -- --run (full suite BEFORE final native-discovered startup fix; 3254 passed, 4 existing skipped)",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-client-integrated-all-tests-final.log"
+    },
+    {
+      "command": "npx vitest run src/tests/originalFilesAppShell.test.tsx src/tests/AppShell.test.tsx src/tests/ReaderPane.test.tsx (55 passed AFTER final fix)",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-client-integration-cold-focused.log"
+    },
+    {
+      "command": "npm run ci:smoke (9 passed)",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-client-integrated-smoke.log"
+    },
+    {
+      "command": "npm run build",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-client-integrated-build-release.log"
+    },
+    {
+      "command": "cargo check --locked --all-targets --no-default-features --manifest-path src-tauri/Cargo.toml",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-client-integrated-rust-check-final.log"
+    },
+    {
+      "command": "cargo test --locked --no-default-features --manifest-path src-tauri/Cargo.toml --test native_open (11 passed)",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-client-integrated-native-rust-final.log"
+    },
+    {
+      "command": "bash .github/scripts/lint-workflows.sh",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-client-integrated-workflow.log"
+    },
+    {
+      "command": "node --test .github/scripts/*.test.mjs (87 passed)",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-client-integrated-ci-tests.log"
+    },
+    {
+      "command": "PLAYWRIGHT_BASE_URL=http://127.0.0.1:1420 PLAYWRIGHT_EXECUTABLE_PATH=<cached Chromium> node node_modules/@playwright/test/cli.js test src/tests/browser/workbenchWelcome.browser.spec.ts --reporter=line (3 passed)",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-client-integrated-browser-final.log"
+    }
+  ],
+  "checks": {
+    "focused_tests": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-client-integration-cold-focused.log",
+        "/tmp/liteasy-client-integrated-all-tests-final.log",
+        "/tmp/liteasy-client-integrated-smoke.log"
+      ],
+      "used_mock": true,
+      "reason": "Final-code affected integration tests: 55 passed. Full suite before final cold-start fix: 3254 passed / 4 existing skipped. AppShell tests substitute native service and PDF canvas; not native acceptance."
+    },
+    "typescript_build": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-client-integrated-build-release.log"
+      ],
+      "used_mock": false,
+      "reason": "Final production frontend, schema generation and resource checks passed; existing large-chunk warning retained."
+    },
+    "rust_locked": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-client-integrated-rust-check-final.log",
+        "/tmp/liteasy-client-integrated-native-rust-final.log"
+      ],
+      "used_mock": false,
+      "reason": "Locked all-target check and 11 real temporary-file native-open tests on WSL Ubuntu x64. Does not validate Windows cfg branch or macOS."
+    },
+    "schema_clean": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": false,
+      "reason": "To be run after committing integration report; per-slice gates passed earlier. No schema or lock changes expected."
+    },
+    "browser_regression": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-client-integrated-browser-final.log"
+      ],
+      "used_mock": false,
+      "reason": "Three Chromium workbench UI scenarios; native chooser unavailable in browser and not simulated as successful."
+    },
+    "native_ipc": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-client-native-cold-fixed.png",
+        "/tmp/liteasy-client-native-hot-epub.png",
+        "/tmp/liteasy-client-native-reopened-highlight.png"
+      ],
+      "used_mock": false,
+      "reason": "Actual Tauri process cold argv/hot handoff, binary PDF reads and existing annotation IPC; EPUB parsed in existing reader. Synthetic data only; WSLg only."
+    },
+    "native_window_file_events": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-client-native-cold-fixed.png",
+        "/tmp/liteasy-client-native-main-closed.png",
+        "/tmp/liteasy-client-native-handle-evidence.json"
+      ],
+      "used_mock": false,
+      "reason": "Real X11/WSLg window PDF selection/highlight, close/reopen and process restart with explicit argv; persisted highlight visible. Main close-menu drops synthetic source FD count 1 to 0. Original PDF hash/mtime unchanged. C08 real add/rename/delete evidence in its separate report."
+    },
+    "accessibility": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Keyboard/browser entry checks ran but not a full native screen-reader/high-contrast/DPI acceptance."
+    },
+    "performance": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": false,
+      "reason": "Watcher loop removed; no full native performance budget accepted. WSLg software-rendering resource use remains high; hardware acceleration unavailable."
+    },
+    "installer_smoke": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "No native Windows/macOS host, signing material or remote candidate workflow run. No release published."
+    },
+    "upgrade_recovery": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "No native Windows/macOS host, signing material or remote candidate workflow run. No release published."
+    },
+    "signing": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "No native Windows/macOS host, signing material or remote candidate workflow run. No release published."
+    },
+    "notarization": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "No native Windows/macOS host, signing material or remote candidate workflow run. No release published."
+    }
+  },
+  "data_safety": {
+    "originals_preserved": true,
+    "secrets_excluded": true,
+    "network_services_unchanged": true,
+    "rollback_or_read_only_strategy": "Original-file grants are exact, scoped, read-only; close releases handles. No copied PDF source and no source modifications. Existing Liteasy annotations retained across explicit reopen. C02 retains corrupt/future-version snapshot bytes in read-only state. No schema migration; reverting code does not delete original documents or annotations."
+  },
+  "changed_files": [
+    ".github/scripts/platform-candidate-workflow.test.mjs",
+    ".github/scripts/platform-candidate.mjs",
+    ".github/scripts/platform-candidate.test.mjs",
+    ".github/workflows/desktop-platform-candidates.yml",
+    "docs/agent-dev/2026-10-02-client-c10-native-open.md",
+    "docs/agent-dev/2026-10-02-client-c10-native-open.verification.json",
+    "docs/qa/client-local/C00-local-development.md",
+    "docs/qa/client-local/C00-verification.json",
+    "docs/qa/client-local/C02-recovery.md",
+    "docs/qa/client-local/C02-verification.json",
+    "docs/qa/client-local/C03-original-files-verification.json",
+    "docs/qa/client-local/C03-original-files.md",
+    "docs/qa/client-local/C03-start.md",
+    "docs/qa/client-local/C03-verification.json",
+    "docs/qa/client-local/C08-verification.json",
+    "docs/qa/client-local/C08-watcher.md",
+    "docs/qa/client-local/C10-platform-config-verification.json",
+    "docs/qa/client-local/C10-platform-config.md",
+    "docs/qa/client-local/C11-platform-candidates.md",
+    "docs/qa/client-local/C11-verification.json",
+    "products/liteasy/apps/desktop/package.json",
+    "products/liteasy/apps/desktop/scripts/client-doctor.mjs",
+    "products/liteasy/apps/desktop/scripts/dev-local.mjs",
+    "products/liteasy/apps/desktop/scripts/localClientProfile.mjs",
+    "products/liteasy/apps/desktop/scripts/verify-tauri-resources.mjs",
+    "products/liteasy/apps/desktop/src-tauri/icons/icon.icns",
+    "products/liteasy/apps/desktop/src-tauri/src/agent_state.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/data_location.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/local_dev.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/local_library.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/main.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/native-open/files.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/native_open.rs",
+    "products/liteasy/apps/desktop/src-tauri/tauri.linux.conf.json",
+    "products/liteasy/apps/desktop/src-tauri/tauri.macos.conf.json",
+    "products/liteasy/apps/desktop/src-tauri/tests/native_open.rs",
+    "products/liteasy/apps/desktop/src/app/controllers/agent/agentApplicationService.ts",
+    "products/liteasy/apps/desktop/src/app/controllers/agent/agentStatePersistence.ts",
+    "products/liteasy/apps/desktop/src/app/controllers/agent/tauriAgentStateStore.ts",
+    "products/liteasy/apps/desktop/src/app/controllers/useExternalPaperController.ts",
+    "products/liteasy/apps/desktop/src/app/controllers/useOriginalFileOpenController.ts",
+    "products/liteasy/apps/desktop/src/app/controllers/useReadingLibraryController.ts",
+    "products/liteasy/apps/desktop/src/app/controllers/useWorkbenchCommandsController.ts",
+    "products/liteasy/apps/desktop/src/app/controllers/useWorkbenchNavigationController.ts",
+    "products/liteasy/apps/desktop/src/app/controllers/useWorkbenchStartController.ts",
+    "products/liteasy/apps/desktop/src/app/features/agent-api/frontendAgentClient.ts",
+    "products/liteasy/apps/desktop/src/app/features/help/manual/content/getting-started.workspace.md",
+    "products/liteasy/apps/desktop/src/app/features/library/cachedReaderPapers.ts",
+    "products/liteasy/apps/desktop/src/app/features/models/localDevCloudEndpoint.ts",
+    "products/liteasy/apps/desktop/src/app/features/original-files/originalFileService.ts",
+    "products/liteasy/apps/desktop/src/app/features/reading-library/ReadingLibrarySurface.tsx",
+    "products/liteasy/apps/desktop/src/app/features/workbench/WorkbenchCommandsDialog.tsx",
+    "products/liteasy/apps/desktop/src/app/features/workbench/WorkbenchWelcome.tsx",
+    "products/liteasy/apps/desktop/src/app/features/workbench/localDevelopment.ts",
+    "products/liteasy/apps/desktop/src/app/features/workbench/workbenchCommands.ts",
+    "products/liteasy/apps/desktop/src/app/features/workbench/workbenchCommandsContext.ts",
+    "products/liteasy/apps/desktop/src/app/features/workbench/workbenchWelcome.css",
+    "products/liteasy/apps/desktop/src/app/layout/AppShell.tsx",
+    "products/liteasy/apps/desktop/src/main.tsx",
+    "products/liteasy/apps/desktop/src/tests/ReaderPane.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/agentStatePersistence.test.ts",
+    "products/liteasy/apps/desktop/src/tests/agentStateStoreConflict.test.ts",
+    "products/liteasy/apps/desktop/src/tests/browser/workbenchWelcome.browser.spec.ts",
+    "products/liteasy/apps/desktop/src/tests/cachedReaderPapers.test.ts",
+    "products/liteasy/apps/desktop/src/tests/clientDoctor.test.ts",
+    "products/liteasy/apps/desktop/src/tests/localClientProfile.test.ts",
+    "products/liteasy/apps/desktop/src/tests/localDevelopment.test.ts",
+    "products/liteasy/apps/desktop/src/tests/originalFileOpenController.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/originalFileService.test.ts",
+    "products/liteasy/apps/desktop/src/tests/originalFilesAppShell.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/originalReadingController.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/tauriPlatformConfig.test.ts",
+    "products/liteasy/apps/desktop/src/tests/tauriResourceConfig.test.ts",
+    "products/liteasy/apps/desktop/src/tests/useExternalPaperController.test.ts",
+    "products/liteasy/apps/desktop/src/tests/workbenchCommands.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/workbenchStart.test.tsx",
+    "products/liteasy/apps/desktop/src/vite-env.d.ts",
+    "products/liteasy/apps/desktop/vite.config.ts"
+  ],
+  "known_limitations": [
+    "First wave slices only; C00-C14 task pack not complete.",
+    "PDF last-page restoration and automatic original grants after restart not implemented; explicit reopen required.",
+    "Complete WebView reload can lose temporary original tabs; drained requests are not replayed.",
+    "Native system-picker automation not completed; native proof uses cold/hot OS argv.",
+    "No physical Windows/macOS acceptance or installer artifacts; candidate CI present but not executed.",
+    "C02 whole-library backup/restore and remaining second-wave capabilities deferred.",
+    "Temporary screenshots/logs are not committed; JSON contains outcome receipts, not durable binary evidence.",
+    "Original main user changes preserved; no automatic push or main merge."
+  ],
+  "release_ready": false,
+  "notes": "Status follows task-pack template. Full suite timing is explicitly before the native-discovered final startup fix; final affected regressions/build/native operations recorded separately. Toolchain deviations retained without upgrading locks. Runtime fixture/window capture excludes real user documents."
+}

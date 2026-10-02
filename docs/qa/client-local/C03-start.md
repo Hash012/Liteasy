@@ -2,6 +2,8 @@
 
 基于 `8d31bf57`，分支 `feat/client-c03-workbench-start`。保留现有 CommandPalette、自由 Dock、笔记文件授权/读取/保存链路，没有创建第二套命令或文件管理系统。
 
+> 本文记录第一片提交的历史验收。后续集成已新增 PDF/EPUB 原位置打开：Ctrl/⌘+O 现在打开 PDF/EPUB，Markdown 改为 Ctrl/⌘+Alt/Option+O。最终能力与原生证据见 [第一轮总览](README.md) 和 [集成验收](first-wave-integration.md)，以下“待后续”仅表示当时状态。
+
 ## 可见行为
 
 - 起始页优先提供“打开 Markdown 原文件”（Ctrl/⌘+O）、“连接笔记文件夹”（Ctrl/⌘+Shift+O）、页面历史。已有“打开文献库”说明复制导入 PDF/电子书，不把复制包装成原位置打开。PDF/电子书原位置直开仍待后续切片。
