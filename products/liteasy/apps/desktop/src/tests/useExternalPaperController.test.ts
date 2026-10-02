@@ -6,7 +6,8 @@ const contentHash = "a".repeat(64);
 
 function createHarness(
   exportDocument: ReturnType<typeof vi.fn>,
-  literature?: unknown
+  literature?: unknown,
+  overrides: Partial<Parameters<typeof useExternalPaperController>[0]> = {}
 ) {
   const addMetadataOnlyEntry = vi.fn(async () => ({ created: true, documentId: "metadata-version" }));
   const addExternalPdfToLibrary = vi.fn(async () => undefined);
@@ -40,7 +41,8 @@ function createHarness(
     setActiveCenterArtifactId: vi.fn(),
     setActiveReaderPaperId: vi.fn(),
     setOpenReaderPaperIds: vi.fn(),
-    transport: vi.fn()
+    transport: vi.fn(),
+    ...overrides
   }));
   return {
     addExternalPdfToLibrary,
@@ -52,6 +54,49 @@ function createHarness(
     saveLiteratureMetadata
   };
 }
+
+test("opens an original PDF with stable identity and routes later reader bytes through its grant", async () => {
+  const bytes = new TextEncoder().encode("%PDF-1.7\nsynthetic manual");
+  const file = { id: "original-grant", path: "/synthetic/manual.pdf", fileName: "manual.pdf", format: "pdf" as const, sizeBytes: bytes.length, modifiedUnixMs: 1000 };
+  const readOriginalFile = vi.fn(async () => bytes);
+  const releaseOriginalFile = vi.fn(async () => undefined);
+  const h = createHarness(vi.fn(), undefined, { readOriginalFile, releaseOriginalFile });
+  await act(async () => { await h.result.result.current.openOriginalPdfFile(file, bytes); });
+  const first = h.result.result.current.originalReaderPapers[0];
+  expect(first.sourcePath).toBe(file.path);
+  expect(first.id).toMatch(/^paper-[a-f0-9]{64}$/);
+  await expect(h.result.result.current.loadPdfSource(file.path)).resolves.toEqual(bytes);
+  expect(readOriginalFile).toHaveBeenCalledWith(file);
+  await act(async () => { await h.result.result.current.openOriginalPdfFile({ ...file, id: "new-grant" }, bytes); });
+  expect(h.result.result.current.originalReaderPapers).toHaveLength(1);
+  expect(h.result.result.current.originalReaderPapers[0].id).toBe(first.id);
+  expect(releaseOriginalFile).toHaveBeenCalledWith(file);
+  expect(h.result.result.current.cachedReaderPapers).toEqual([]);
+  expect(h.addExternalPdfToLibrary).not.toHaveBeenCalled();
+  expect(h.addMetadataOnlyEntry).not.toHaveBeenCalled();
+  expect(h.promoteCachedPdf).not.toHaveBeenCalled();
+  expect(h.refreshLocalLibrary).not.toHaveBeenCalled();
+  act(() => h.result.result.current.closeOriginalPdfFile(first.id));
+  expect(h.result.result.current.originalReaderPapers).toEqual([]);
+  expect(releaseOriginalFile).toHaveBeenLastCalledWith({ ...file, id: "new-grant" });
+});
+
+test("reselecting externally changed bytes at the same path reloads only the newest grant", async () => {
+  const bytes = new TextEncoder().encode("%PDF-1.7\nfirst");
+  const file = { id: "old-grant", path: "/synthetic/manual.pdf", fileName: "manual.pdf", format: "pdf" as const, sizeBytes: bytes.length, modifiedUnixMs: 1000 };
+  const readOriginalFile = vi.fn(async () => bytes);
+  const releaseOriginalFile = vi.fn(async () => undefined);
+  const h = createHarness(vi.fn(), undefined, { readOriginalFile, releaseOriginalFile });
+  await act(async () => { await h.result.result.current.openOriginalPdfFile(file, bytes); });
+  const firstLoader = h.result.result.current.loadPdfSource;
+  const edited = { ...file, id: "changed-grant", modifiedUnixMs: 2000 };
+  await act(async () => { await h.result.result.current.openOriginalPdfFile(edited, new TextEncoder().encode("%PDF-1.7\nsecond")); });
+  expect(h.result.result.current.originalReaderPapers).toHaveLength(1);
+  expect(h.result.result.current.loadPdfSource).not.toBe(firstLoader);
+  await h.result.result.current.loadPdfSource(file.path);
+  expect(readOriginalFile).toHaveBeenLastCalledWith(edited);
+  expect(releaseOriginalFile).toHaveBeenCalledWith(file);
+});
 
 test("acquires a confirmed related version as a local metadata entry with its identity snapshot", async () => {
   const harness = createHarness(vi.fn());

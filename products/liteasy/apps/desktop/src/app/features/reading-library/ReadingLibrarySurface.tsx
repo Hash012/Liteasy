@@ -27,7 +27,7 @@ export function ReadingLibrarySurface(props: {
         <ReadingDocumentReader key={`${props.scopeId}:${props.active.id}`} document={props.active.document} documentId={props.active.id} storageScope={props.scopeId}
           onProgressChange={(progress) => {
             const id = props.active!.id, key = `${props.scopeId}:${id}`;
-            if (progress < 1 || activeEntry?.readingStatus === "finished" || finished.current.has(key)) return;
+            if (!activeEntry || progress < 1 || activeEntry.readingStatus === "finished" || finished.current.has(key)) return;
             finished.current.add(key);
             void props.onMetadataChange(id, { readingStatus: "finished" }).catch((error) => { finished.current.delete(key); setSaveError(String(error)); });
           }} />

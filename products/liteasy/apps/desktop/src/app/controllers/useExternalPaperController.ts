@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { buildOriginalReaderPaper, createOriginalFileService, type OriginalFileDescriptor, type OriginalFileService, type OriginalReaderPaper } from "../features/original-files/originalFileService";
 
 import {
   addMetadataOnlyLibraryEntry,
@@ -32,6 +33,9 @@ import type { LiteratureRecord } from "../features/paper-identity/literature.typ
 import { literatureRecordUrl } from "../features/forum/literatureVersioning";
 
 type UseExternalPaperControllerInput = {
+  scopeId?: string;
+  readOriginalFile?: OriginalFileService["read"];
+  releaseOriginalFile?: OriginalFileService["release"];
   addExternalPdfToLibrary: (input: {
     bytes: Uint8Array;
     fileName: string;
@@ -81,6 +85,9 @@ export function useExternalPaperController({
   endpoint,
   promoteCachedPdf = promoteCachedPdfToLibrary,
   refreshLocalLibrary,
+  scopeId = "local",
+  readOriginalFile,
+  releaseOriginalFile,
   saveLiteratureMetadata = (documentId, literature) =>
     literatureMetadataRepository.save(documentId, literature),
   setActiveCenterArtifactId,
@@ -92,6 +99,51 @@ export function useExternalPaperController({
     typeof buildCachedReaderPaper
   >[]>([]);
   const promotingPaperIdsRef = useRef<Set<string>>(new Set());
+  const currentScope = useRef(scopeId);
+  currentScope.current = scopeId;
+  const originalFiles = useMemo(() => createOriginalFileService(scopeId, () => currentScope.current), [scopeId]);
+  const originalPapersRef = useRef<OriginalReaderPaper[]>([]);
+  const originalGeneration = useRef(0);
+  const [originalState, setOriginalState] = useState<{ scope: string; papers: OriginalReaderPaper[] }>({ scope: scopeId, papers: [] });
+  const originalReaderPapers = originalState.scope === scopeId ? originalState.papers : [];
+  const releaseOriginal = useCallback((file: OriginalFileDescriptor) =>
+    (releaseOriginalFile ?? originalFiles.release)(file), [releaseOriginalFile, originalFiles]);
+  useEffect(() => {
+    originalGeneration.current++;
+    originalPapersRef.current = [];
+    setOriginalState({ scope: scopeId, papers: [] });
+    return () => {
+      originalGeneration.current++;
+      for (const paper of originalPapersRef.current) void releaseOriginal(paper.originalFile).catch(() => undefined);
+      originalPapersRef.current = [];
+    };
+  }, [scopeId, releaseOriginal]);
+
+  const openOriginalPdfFile = useCallback(async (file: OriginalFileDescriptor, bytes: Uint8Array) => {
+    const generation = originalGeneration.current;
+    const paper = await buildOriginalReaderPaper(file, bytes);
+    if (currentScope.current !== scopeId || originalGeneration.current !== generation) throw new Error("阅读会话已切换，请重新打开文件。");
+    const replaced = originalPapersRef.current.filter((entry) => entry.id === paper.id || entry.sourcePath === paper.sourcePath);
+    const next = [...originalPapersRef.current.filter((entry) => !replaced.includes(entry)), paper];
+    originalPapersRef.current = next;
+    setOriginalState({ scope: scopeId, papers: next });
+    for (const previous of replaced) {
+      if (previous.originalFile.id !== file.id) void releaseOriginal(previous.originalFile).catch(() => undefined);
+    }
+    setOpenReaderPaperIds((current) => current.includes(paper.id) ? current : [...current, paper.id]);
+    setActiveReaderPaperId(paper.id);
+    setActiveCenterArtifactId(null);
+    return paper;
+  }, [scopeId, releaseOriginal, setOpenReaderPaperIds, setActiveReaderPaperId, setActiveCenterArtifactId]);
+
+  const closeOriginalPdfFile = useCallback((paperId: string) => {
+    const paper = originalPapersRef.current.find((entry) => entry.id === paperId);
+    if (!paper) return;
+    const next = originalPapersRef.current.filter((entry) => entry.id !== paperId);
+    originalPapersRef.current = next;
+    setOriginalState({ scope: scopeId, papers: next });
+    void releaseOriginal(paper.originalFile).catch(() => undefined);
+  }, [scopeId, releaseOriginal]);
 
   const resolveExternalCachedPaper = useCallback(async (
     source: ThinReadingExternalSource
@@ -260,13 +312,19 @@ export function useExternalPaperController({
     return result;
   }, [addMetadataOnlyEntry, refreshLocalLibrary, saveLiteratureMetadata]);
 
-  const loadPdfSource = useCallback((sourcePath: string) =>
-    isCachedSourcePath(cachedReaderPapers, sourcePath)
+  const loadPdfSource = useCallback((sourcePath: string) => {
+    const original = originalReaderPapers.find((paper) => paper.sourcePath === sourcePath);
+    if (original) return (readOriginalFile ?? originalFiles.read)(original.originalFile);
+    return isCachedSourcePath(cachedReaderPapers, sourcePath)
       ? readCachedPdf({ cachePath: sourcePath })
-      : readLocalLibraryPdf(sourcePath), [cachedReaderPapers]);
+      : readLocalLibraryPdf(sourcePath);
+  }, [cachedReaderPapers, originalFiles, originalReaderPapers, readOriginalFile]);
 
   return {
     cachedReaderPapers,
+    originalReaderPapers,
+    openOriginalPdfFile,
+    closeOriginalPdfFile,
     acquireLiteratureVersion,
     loadPdfSource,
     openCloudDocumentInReader,

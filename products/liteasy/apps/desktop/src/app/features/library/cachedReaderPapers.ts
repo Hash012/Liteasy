@@ -89,9 +89,12 @@ export function findCachedReaderPaper(
 export function resolveReaderPaper(input: {
   cachedPapers: readonly CachedReaderPaper[];
   libraryPapers: readonly Paper[];
+  /** An explicit original-location open takes precedence until its tab closes. */
+  originalPapers?: readonly Paper[];
   paperId: string;
 }): Paper | null {
-  return input.libraryPapers.find((candidate) => candidate.id === input.paperId) ??
+  return input.originalPapers?.find((candidate) => candidate.id === input.paperId) ??
+    input.libraryPapers.find((candidate) => candidate.id === input.paperId) ??
     findCachedReaderPaper(input.cachedPapers, input.paperId);
 }
 

@@ -11,6 +11,7 @@ import { liteasyPath, type ResourceTarget } from "../features/resource-filesyste
 import { displayPath } from "../features/resource-filesystem/displayPath";
 import type { Paper } from "../features/workspace/workspace.types";
 import { applyBibliographicMetadata, type BibliographicDraft } from "../features/library/bibliographicFields";
+import { originalFileContentHash, type OriginalFileDescriptor } from "../features/original-files/originalFileService";
 
 export function useReadingLibraryController(input: {
   scopeId: string; papers: Paper[]; enabled: boolean; localLibraryRootPath?: string;
@@ -188,7 +189,27 @@ export function useReadingLibraryController(input: {
     } catch (error) { if (id === request.current && current()) setMessage(error instanceof Error ? error.message : String(error)); }
     finally { if (id === request.current && current()) setPending(false); }
   }
+  async function openOriginalFile(file: OriginalFileDescriptor, bytes: Uint8Array) {
+    const id = ++request.current;
+    setPending(true); setMessage("");
+    try {
+      if (file.format !== "epub") throw new Error("此入口仅支持 EPUB 电子书。");
+      const { parseReadingFile } = await import("../features/reading-library/parseReadingFile");
+      const document = await parseReadingFile({ name: file.fileName, bytes });
+      const contentHash = await originalFileContentHash(bytes);
+      if (id !== request.current || !current()) return;
+      const documentId = `original-reading-${contentHash}`;
+      setActive({ id: documentId, document });
+      setSelection({ scope: input.scopeId, entry: {
+        id: documentId, title: document.title, format: "epub", authors: document.authors,
+        fileName: file.fileName, physicalPath: displayPath(file.path), fileSize: file.sizeBytes,
+        available: true, canExport: false, canRemove: false, readingStatus: "reading"
+      } });
+      input.onOpenReader();
+    } finally { if (id === request.current && current()) setPending(false); }
+  }
   return {
+    openOriginalFile,
     entries,
     selected: selection?.scope === input.scopeId ? entries.find((entry) => entry.id === selection.entry.id) ?? selection.entry : undefined,
     inspect: (entry: ReadingCatalogEntry, open?: () => void) => setSelection({ scope: input.scopeId, entry, open }),

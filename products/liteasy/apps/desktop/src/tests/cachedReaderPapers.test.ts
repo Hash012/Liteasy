@@ -92,6 +92,13 @@ test("routes only cache-backed paths to the cache loader", () => {
   expect(isCachedSourcePath([], cached.cachePath)).toBe(false);
 });
 
+test("an explicit original file keeps its location even when the same bytes are also in the library", () => {
+  const cached = cachedPaper();
+  const library: Paper = { id: cached.id, sourcePath: "/library/manual.pdf", title: "Library manual" };
+  const original: Paper = { id: cached.id, sourcePath: "/original/manual.pdf", title: "Original manual" };
+  expect(resolveReaderPaper({ cachedPapers: [cached], libraryPapers: [library], originalPapers: [original], paperId: original.id })).toBe(original);
+});
+
 test("finds an already-cached body by its retrieval source, so a drag skips re-downloading", () => {
   const cached = buildCachedReaderPaper({
     cachePath: "C:/cache/paper-cache/abc.pdf",
