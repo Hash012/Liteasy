@@ -64,7 +64,8 @@ import { PAPER_CONTEXT_MIME } from "../features/object-transfer/contextTransfer"
 import { dockItemRegistry, isBaseDockRegionId, isExtensionDockItemId } from "../features/dock/dockRegistry";
 import { useHelpController } from "../controllers/useHelpController";
 import { useWorkbenchCommandsController } from "../controllers/useWorkbenchCommandsController";
-import { WorkbenchCommandsContext } from "../features/workbench/workbenchCommandsContext";
+import { useWorkbenchStartController } from "../controllers/useWorkbenchStartController";
+import { WorkbenchCommandAvailabilityContext, WorkbenchCommandsContext } from "../features/workbench/workbenchCommandsContext";
 import { WorkbenchCommandsDialog } from "../features/workbench/WorkbenchCommandsDialog";
 import { HelpPanel } from "../features/help/HelpPanel";
 import { HelpContext } from "../features/help/helpContext";
@@ -1161,19 +1162,34 @@ export function AppShell({
     keyboardShortcutEnabled: false,
     onOpen: () => workbenchNavigation.open("help")
   });
+
+  const externalNote = useExternalNoteController({ autosave: settingsState["view.markdown_mode"] !== "manual" && settingsState["view.markdown_autosave"] !== false,
+    scopeId: objectWorkbench.repository.scopeId,
+    visible: workbenchNavigation.isVisible("note-file-reader"),
+    onOpen: () => { workbenchNavigation.open("note-file-reader"); workspaceShell.focusRegion(dock.findItemRegion("note-file-reader") ?? "main"); },
+  });
+  const workbenchStart = useWorkbenchStartController({
+    scopeId: objectWorkbench.repository.scopeId,
+    visibility: { collapsed: paneLayout.collapsed, hiddenRegions: workbenchNavigation.hiddenRegions },
+    regionIds: Object.keys(dock.layout.regions) as DockRegionId[],
+    restoreVisibility: workbenchNavigation.restoreVisibility,
+    open: workbenchNavigation.open,
+    openNote: externalNote.open
+  });
   const workbenchCommands = useWorkbenchCommandsController({
+    "open-note": workbenchStart.openNote,
+    "open-folder": workbenchStart.openFolder,
+    "preset-reading": () => workbenchStart.applyPreset("reading"),
+    "preset-research": () => workbenchStart.applyPreset("research"),
+    "preset-processing": () => workbenchStart.applyPreset("processing"),
+    "preset-custom": () => workbenchStart.applyPreset("custom"),
     library: () => openDockedLeftRailView("library"),
     assistant: () => workbenchNavigation.open("assistant"),
     settings: () => workbenchNavigation.open("settings"),
     help: () => help.port.open(),
     "page-history": () => workspaceShell.pageSwitcher.show("history"),
     "active-pages": () => workspaceShell.pageSwitcher.show("active")
-  });
-  const externalNote = useExternalNoteController({ autosave: settingsState["view.markdown_mode"] !== "manual" && settingsState["view.markdown_autosave"] !== false,
-    scopeId: objectWorkbench.repository.scopeId,
-    visible: workbenchNavigation.isVisible("note-file-reader"),
-    onOpen: () => { workbenchNavigation.open("note-file-reader"); workspaceShell.focusRegion(dock.findItemRegion("note-file-reader") ?? "main"); },
-  });
+  }, workbenchStart.availability);
   const notes = useNotesController({
     scopeId: objectWorkbench.repository.scopeId,
     repository: objectWorkbench.repository,
@@ -2613,6 +2629,7 @@ export function AppShell({
     <GenerationPromptContext.Provider value={settingsState}>
     <LocalMcpContext.Provider value={localMcp}>
     <DeviceControlContext.Provider value={deviceControl}>
+    <WorkbenchCommandAvailabilityContext.Provider value={workbenchStart.availability}>
     <WorkbenchCommandsContext.Provider value={workbenchCommands.execute}>
     <NotesContext.Provider value={notes.port}>
     <HelpContext.Provider value={help.port}>
@@ -2630,6 +2647,7 @@ export function AppShell({
         onModeChange={workspaceShell.pageSwitcher.show} onSelect={workspaceShell.pageSwitcher.select}
         onClose={workspaceShell.pageSwitcher.close} pending={workspaceShell.pageSwitcher.pending} error={workspaceShell.pageSwitcher.error} /> : null}
       <WorkspaceCommandBar state={workspaceShell.toolbar} windowControls={windowControls} onOpenAi={aiWorkbench.show} />
+      {workbenchStart.notice ? <div role="status" className="workbench-command-notice"><span>{workbenchStart.notice}</span><button type="button" onClick={workbenchStart.dismissNotice}>关闭提示</button></div> : null}
       {workbenchCommands.open ? <WorkbenchCommandsDialog onClose={workbenchCommands.close} onExecute={workbenchCommands.execute} /> : null}
       <AiWorkbenchDialog open={aiWorkbench.open} papers={aiWorkbench.papers} openedPapers={openReaderPapers}
         activePaperId={openReaderPapers.find((paper) => `pdf-${paper.id}` === workspaceShell.activeSurfaceId)?.id ?? activeReaderPaper?.id}
@@ -2809,6 +2827,7 @@ export function AppShell({
     </HelpContext.Provider>
     </NotesContext.Provider>
     </WorkbenchCommandsContext.Provider>
+    </WorkbenchCommandAvailabilityContext.Provider>
     </DeviceControlContext.Provider>
     </LocalMcpContext.Provider>
     </GenerationPromptContext.Provider>

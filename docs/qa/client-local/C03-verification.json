@@ -1,0 +1,172 @@
+{
+  "schema": "liteasy.client-verification/v1",
+  "task_id": "C03-workbench-start",
+  "head_commit": null,
+  "enabled_release_tasks": [],
+  "environment": {
+    "os": "Ubuntu on WSL2 / WSLg (not native Windows)",
+    "os_version": "24.04",
+    "arch": "x86_64",
+    "webview": "WebKitGTK 2.52.6; Chromium browser regression",
+    "node": "22.13.1 (requested 22.23.2)",
+    "rust": "1.98.0 (requested 1.98.1)",
+    "fixture_revision": "Synthetic note + six-pane layout and mocked chooser fixtures",
+    "test_profile_path_redacted": true
+  },
+  "commands": [
+    {
+      "command": "npm test -- --run (9 related controller/dock/AppShell files)",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c03-integration.log"
+    },
+    {
+      "command": "npm test -- --run src/tests/manualProvider.test.ts src/tests/helpModule.test.tsx",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c03-help.log"
+    },
+    {
+      "command": "npm run ci:smoke",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c03-smoke.log"
+    },
+    {
+      "command": "npm run build",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c03-build-final.log"
+    },
+    {
+      "command": "cargo test --locked --no-default-features --manifest-path src-tauri/Cargo.toml note_files::store::tests",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c03-native-storage.log"
+    },
+    {
+      "command": "PLAYWRIGHT_BASE_URL=http://127.0.0.1:1425 playwright test src/tests/browser/workbenchWelcome.browser.spec.ts",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c03-browser.log"
+    }
+  ],
+  "checks": {
+    "focused_tests": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c03-integration.log",
+        "/tmp/liteasy-c03-help.log",
+        "/tmp/liteasy-c03-smoke.log"
+      ],
+      "used_mock": true,
+      "reason": "51 related frontend tests + 9 help/manual tests + 8 smoke. File chooser injected in unit tests."
+    },
+    "typescript_build": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c03-build-final.log"
+      ],
+      "used_mock": false,
+      "reason": "Final production build including updated manual passed; existing bundle-size warning remains."
+    },
+    "rust_locked": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c03-native-storage.log"
+      ],
+      "used_mock": false,
+      "reason": "12 existing note_files store tests use real temporary files and SQLite, --locked --no-default-features. No Rust changed in this slice."
+    },
+    "schema_clean": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "browser_regression": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c03-browser.log"
+      ],
+      "used_mock": false,
+      "reason": "3 real Chromium cases passed; local-only browser, no native picker or IPC claim."
+    },
+    "native_ipc": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "native_window_file_events": {
+      "status": "blocked",
+      "evidence_paths": [
+        "/tmp/liteasy-c03-welcome.png"
+      ],
+      "used_mock": false,
+      "reason": "WSLg real window shows new welcome; X11 automation could not complete system chooser (Wayland/portal boundary). Original-note opening and native user journey not verified."
+    },
+    "accessibility": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "performance": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "installer_smoke": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "upgrade_recovery": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "signing": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "notarization": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    }
+  },
+  "data_safety": {
+    "originals_preserved": true,
+    "secrets_excluded": true,
+    "network_services_unchanged": true,
+    "rollback_or_read_only_strategy": "No data migration. Original note uses existing single-file grant and revision-checked save; opening does not write. Presets change display visibility only."
+  },
+  "changed_files": [
+    "products/liteasy/apps/desktop/src/app/controllers/useWorkbenchCommandsController.ts",
+    "products/liteasy/apps/desktop/src/app/controllers/useWorkbenchNavigationController.ts",
+    "products/liteasy/apps/desktop/src/app/features/help/manual/content/getting-started.workspace.md",
+    "products/liteasy/apps/desktop/src/app/features/workbench/WorkbenchCommandsDialog.tsx",
+    "products/liteasy/apps/desktop/src/app/features/workbench/WorkbenchWelcome.tsx",
+    "products/liteasy/apps/desktop/src/app/features/workbench/workbenchCommands.ts",
+    "products/liteasy/apps/desktop/src/app/features/workbench/workbenchCommandsContext.ts",
+    "products/liteasy/apps/desktop/src/app/features/workbench/workbenchWelcome.css",
+    "products/liteasy/apps/desktop/src/app/layout/AppShell.tsx",
+    "products/liteasy/apps/desktop/src/tests/browser/workbenchWelcome.browser.spec.ts",
+    "products/liteasy/apps/desktop/src/tests/workbenchCommands.test.tsx",
+    "products/liteasy/apps/desktop/src/app/controllers/useWorkbenchStartController.ts",
+    "products/liteasy/apps/desktop/src/tests/workbenchStart.test.tsx",
+    "docs/qa/client-local/C03-start.md",
+    "docs/qa/client-local/C03-verification.json"
+  ],
+  "known_limitations": [
+    "Partial C03; PDF/eBook direct-open and cold/hot file handoff not in this slice.",
+    "Layout restore is current-window visibility snapshot, not persisted layout versioning.",
+    "Native Windows/macOS and original-file reopen-after-restart not_run.",
+    "Cold Vite startup exceeded existing browser assertion once; no timeouts widened; performance not accepted.",
+    "Evidence under /tmp is local and ephemeral."
+  ],
+  "release_ready": false,
+  "notes": "Release not enabled. Native chooser unavailable in browser; disabled reasons and keyboard guard tested. Source fixture SHA256 af03be751b335e9a0dcd6460cd2f16ad08b1e4568ae2db008ca444a9057a8b9a remained unchanged."
+}

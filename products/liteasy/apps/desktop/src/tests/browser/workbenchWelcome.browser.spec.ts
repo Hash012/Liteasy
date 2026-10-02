@@ -6,6 +6,9 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("empty center offers theme-aware vector branding, working entry points and an offline guide", async ({ page }, testInfo) => {
+  // This scenario intentionally keeps an empty center after closing Settings;
+  // automatic empty-panel closure is covered by emptyDockRegions/dockWorkspace.
+  await page.addInitScript(() => localStorage.setItem("liteasy.view-settings.v1", JSON.stringify({ "view.close_empty_panels": false })));
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
@@ -35,8 +38,8 @@ test("empty center offers theme-aware vector branding, working entry points and 
   await welcome.screenshot({ path: testInfo.outputPath("welcome-narrow-dark.png") });
   await welcome.getByRole("button", { name: /查看使用指南/ }).click();
   const help = page.getByRole("region", { name: "帮助", exact: true });
-  await help.getByRole("button", { name: "开始使用 Liteasy：文献库、AI 与快捷键", exact: true }).click();
-  await expect(help.getByRole("heading", { name: "发起第一次 AI 对话" })).toBeVisible();
+  await help.getByRole("button", { name: "第一次使用：读完并留下第一条研究笔记", exact: true }).click();
+  await expect(help.getByRole("heading", { name: "再连接 AI" })).toBeVisible();
   await expect(help.getByRole("table")).toContainText("Ctrl + Shift + L");
   expect(errors).toEqual([]);
 });
@@ -72,4 +75,21 @@ test("shortcuts reopen moved tools, preserve drafts and support keyboard quick a
   await expect(commands).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(commands).toHaveCount(0);
+});
+
+test("task presets retain pages and a chat draft and restore custom panel visibility", async ({ page }) => {
+  await page.goto("/");
+  const welcome = page.getByRole("region", { name: "开始使用 Liteasy", exact: true });
+  await expect(welcome).toBeVisible();
+  const chat = page.locator("textarea.assistant-input");
+  await chat.fill("保留这份草稿");
+  await welcome.getByRole("button", { name: "阅读布局", exact: true }).click();
+  await expect(chat).not.toBeVisible();
+  await expect(page.getByRole("textbox", { name: "搜索文献资源" })).not.toBeVisible();
+  await welcome.getByRole("button", { name: "恢复自定义布局", exact: true }).click();
+  await expect(chat).toBeVisible();
+  await expect(chat).toHaveValue("保留这份草稿");
+  await welcome.getByRole("button", { name: "处理布局", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "运行记录", exact: true })).toBeVisible();
+  await expect(chat).toHaveValue("保留这份草稿");
 });

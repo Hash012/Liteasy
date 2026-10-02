@@ -11,7 +11,7 @@
   container-type: inline-size;
 }
 .workbench-welcome-content { width: min(100%, 560px); margin: auto; }
-.workbench-welcome-mark { display: block; width: clamp(120px, 52%, 256px); max-width: 100%; margin: 0 auto 24px; color: var(--colorNeutralForeground1); opacity: .085; }
+.workbench-welcome-mark { display: block; width: clamp(100px, 30%, 176px); max-width: 100%; margin: 0 auto 24px; color: var(--colorNeutralForeground1); opacity: .085; }
 .workbench-welcome h1 { font-size: 14px; font-weight: 500; text-align: center; color: var(--colorNeutralForeground3); margin: 0 0 20px; }
 .workbench-welcome-actions { display: grid; gap: 6px; }
 .workbench-welcome-action, .workbench-command-option, .workbench-welcome-more {
@@ -40,3 +40,15 @@
   .workbench-welcome-mark { margin-bottom: 16px; }
 }
 @media (forced-colors: active) { .workbench-welcome-mark { opacity: 1; color: GrayText; } }
+
+.workbench-task-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; justify-content: center; }
+.workbench-task-presets button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; background: var(--colorNeutralBackground1); color: inherit; font: inherit; font-size: 12px; padding: 7px 9px; cursor: pointer; }
+.workbench-task-presets button:hover { background: var(--colorSubtleBackgroundHover); }
+.workbench-task-presets button:focus-visible { outline: 2px solid var(--colorStrokeFocus2); }
+.workbench-task-presets svg { width: 18px; height: 18px; }
+.workbench-welcome-action:disabled, .workbench-command-option:disabled { cursor: default; color: var(--colorNeutralForegroundDisabled); }
+.workbench-command-reason { display: block; margin-top: 4px; font-size: 12px; }
+.workbench-command-notice { position: fixed; z-index: 500; bottom: 32px; left: 50%; transform: translateX(-50%); max-width: min(560px, calc(100vw - 32px)); padding: 10px 14px; border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; box-shadow: var(--shadow8); background: var(--colorNeutralBackground1); color: var(--colorNeutralForeground1); }
+
+.workbench-command-notice { display: flex; align-items: center; gap: 12px; }
+.workbench-command-notice button { flex: 0 0 auto; color: inherit; background: transparent; border: 1px solid var(--colorNeutralStroke2); border-radius: 4px; font: inherit; cursor: pointer; }

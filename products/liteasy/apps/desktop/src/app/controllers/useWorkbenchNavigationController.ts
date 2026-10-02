@@ -34,6 +34,10 @@ export function useWorkbenchNavigationController(input: {
   }
   return {
     hiddenRegions,
+    restoreVisibility(visibility: { collapsed: typeof input.collapsed; hiddenRegions: DockRegionId[] }) {
+      setHiddenRegions(visibility.hiddenRegions.filter(region => Boolean(input.dock.layout.regions[region])));
+      for (const region of ["left", "right", "bottom"] as const) input.setCollapsed(region, visibility.collapsed[region]);
+    },
     reveal,
     collapse(region: DockRegionId) {
       if (region === "left" || region === "right") input.setCollapsed(region, true);

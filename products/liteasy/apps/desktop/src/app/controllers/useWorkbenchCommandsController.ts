@@ -1,22 +1,25 @@
 import { useEffect, useRef, useState } from "react";
-import { matchWorkbenchShortcut, type WorkbenchCommandId } from "../features/workbench/workbenchCommands";
+import { matchWorkbenchShortcut, type WorkbenchCommandAvailability, type WorkbenchCommandId } from "../features/workbench/workbenchCommands";
 
-type CommandActions = Record<Exclude<WorkbenchCommandId, "commands">, () => void>;
+type CommandActions = Partial<Record<Exclude<WorkbenchCommandId, "commands">, () => void>>;
 const focusSelectors: Partial<Record<WorkbenchCommandId, string>> = {
   assistant: "textarea.assistant-input",
   library: 'input[aria-label="搜索文献资源"]',
   settings: 'input[aria-label="搜索设置"]'
 };
 
-export function useWorkbenchCommandsController(actions: CommandActions) {
+export function useWorkbenchCommandsController(actions: CommandActions, availability: WorkbenchCommandAvailability = {}) {
   const latest = useRef(actions);
   latest.current = actions;
+  const allowed = useRef(availability);
+  allowed.current = availability;
   const [open, setOpen] = useState(false);
   const [focus, setFocus] = useState<{ command: WorkbenchCommandId }>();
   function execute(command: WorkbenchCommandId) {
+    if (allowed.current[command] || command !== "commands" && !latest.current[command]) return;
     setOpen(command === "commands");
     if (command === "commands") return;
-    latest.current[command]();
+    latest.current[command]?.();
     setFocus({ command });
   }
   const executeRef = useRef(execute);

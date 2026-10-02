@@ -4,7 +4,7 @@ import { expect, test, vi } from "vitest";
 import { useWorkbenchCommandsController } from "../app/controllers/useWorkbenchCommandsController";
 import { WorkbenchWelcome } from "../app/features/workbench/WorkbenchWelcome";
 import { WorkbenchCommandsDialog } from "../app/features/workbench/WorkbenchCommandsDialog";
-import { WorkbenchCommandsContext } from "../app/features/workbench/workbenchCommandsContext";
+import { WorkbenchCommandAvailabilityContext, WorkbenchCommandsContext } from "../app/features/workbench/workbenchCommandsContext";
 import { commandKeys, matchWorkbenchShortcut } from "../app/features/workbench/workbenchCommands";
 import { builtinHelpProviders } from "../app/features/help/builtinHelpProvider";
 
@@ -86,4 +86,21 @@ test("the offline getting-started guide includes actual keyboard bindings and cu
   expect(article?.body).toContain("双击");
   expect(article?.body).toContain("Ctrl + Shift + L");
   expect(article?.body).toContain("Ctrl + Alt + I");
+});
+
+test("disabled command availability is respected by both clicks and shortcuts", () => {
+  const library = vi.fn();
+  const { result } = renderHook(() => useWorkbenchCommandsController({ library }, { library: "文献库正在恢复" }));
+  act(() => result.current.execute("library"));
+  fireEvent.keyDown(window, { key: "L", ctrlKey: true, shiftKey: true });
+  expect(library).not.toHaveBeenCalled();
+});
+
+test("the command dialog explains unavailable file picking and Enter cannot bypass it", async () => {
+  const onExecute = vi.fn(); const user = userEvent.setup();
+  render(<WorkbenchCommandAvailabilityContext.Provider value={{ "open-note": "请使用桌面文件选择器" }}><WorkbenchCommandsDialog onClose={vi.fn()} onExecute={onExecute} /></WorkbenchCommandAvailabilityContext.Provider>);
+  await user.type(screen.getByRole("textbox", { name: "搜索快捷操作" }), "原文件");
+  expect(screen.getByRole("button", { name: /打开 Markdown 原文件/ })).toBeDisabled();
+  expect(screen.getByText("请使用桌面文件选择器")).toBeVisible();
+  await user.keyboard("{Enter}"); expect(onExecute).not.toHaveBeenCalled();
 });
