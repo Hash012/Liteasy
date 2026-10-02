@@ -1,0 +1,175 @@
+{
+  "schema": "liteasy.client-verification/v1",
+  "task_id": "C03-pdf-position",
+  "head_commit": "ec7e7d23",
+  "enabled_release_tasks": [
+    "C03 PDF page position slice",
+    "C02 reader-state profile retention"
+  ],
+  "environment": {
+    "os": "Ubuntu / WSL2",
+    "os_version": "24.04.3",
+    "arch": "x86_64",
+    "webview": "Chrome for Testing 151.0.7922.34 (not native WebView)",
+    "node": "22.13.1; expected 22.23.2",
+    "rust": "1.98.0; workflow 1.98.1",
+    "fixture_revision": "inline synthetic six-page PDF in scripts/verify-pdf-reader-position.mjs",
+    "test_profile_path_redacted": true
+  },
+  "commands": [
+    {
+      "command": "npm ci --no-audit --no-fund",
+      "exit_code": 0
+    },
+    {
+      "command": "npm test -- --reporter=dot src/tests/PdfReaderPosition.test.tsx src/tests/pdfReaderPositionStore.test.tsx",
+      "exit_code": 0
+    },
+    {
+      "command": "npm test -- --reporter=dot src/tests/PdfReaderPosition.test.tsx src/tests/pdfReaderPositionStore.test.tsx src/tests/originalFileService.test.ts src/tests/PdfReaderInteraction.test.tsx src/tests/PdfReaderToolbarKeyboard.test.tsx",
+      "exit_code": 0
+    },
+    {
+      "command": "npm run ci:smoke",
+      "exit_code": 0
+    },
+    {
+      "command": "npm run build",
+      "exit_code": 0
+    },
+    {
+      "command": "npm run ci:contracts",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo test --locked --no-default-features --manifest-path src-tauri/Cargo.toml --test local_recovery",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo check --locked --all-targets --no-default-features --manifest-path src-tauri/Cargo.toml",
+      "exit_code": 0
+    },
+    {
+      "command": "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/home/tjm/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome node scripts/verify-pdf-reader-position.mjs",
+      "exit_code": 0
+    }
+  ],
+  "checks": {
+    "focused_tests": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c03-position-final-focused.log",
+        "/tmp/liteasy-c03-position-focused.log"
+      ],
+      "used_mock": true,
+      "reason": "15 new and 19 existing affected tests passed; component PDF.js proxy and storage mocks."
+    },
+    "typescript_build": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c03-position-build.log"
+      ],
+      "used_mock": false,
+      "reason": "Production build and smoke 9 passed."
+    },
+    "rust_locked": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c03-position-recovery-green.log",
+        "/tmp/liteasy-c03-position-cargo-check.log"
+      ],
+      "used_mock": false,
+      "reason": "7 real SQLite/filesystem recovery tests; explicit GUI driver remains ignored. Locked all-targets check passed."
+    },
+    "schema_clean": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c03-position-contracts.log"
+      ],
+      "used_mock": false,
+      "reason": "Clean implementation commit ec7e7d23; generated contracts and locks match Git."
+    },
+    "browser_regression": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c03-position-browser-repro.log"
+      ],
+      "used_mock": true,
+      "reason": "Real PDF.js/IndexedDB/browser layout; synthetic grant, no native IPC. Page 4 and scrollTop 5036 restored after reload; no page errors."
+    },
+    "native_ipc": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this position slice; no inference from browser or Linux core tests."
+    },
+    "native_window_file_events": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this position slice; no inference from browser or Linux core tests."
+    },
+    "accessibility": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this position slice; no inference from browser or Linux core tests."
+    },
+    "performance": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this position slice; no inference from browser or Linux core tests."
+    },
+    "installer_smoke": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this position slice; no inference from browser or Linux core tests."
+    },
+    "upgrade_recovery": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this position slice; no inference from browser or Linux core tests."
+    },
+    "signing": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this position slice; no inference from browser or Linux core tests."
+    },
+    "notarization": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this position slice; no inference from browser or Linux core tests."
+    }
+  },
+  "data_safety": {
+    "originals_preserved": true,
+    "secrets_excluded": true,
+    "network_services_unchanged": true,
+    "rollback_or_read_only_strategy": "Unknown/malformed/read-failed state remains read-only; CAS conflict is surfaced. Existing version ignores reader-state keys. New-profile recovery preserves original scoped value/version."
+  },
+  "changed_files": [
+    "products/liteasy/apps/desktop/src/app/features/pdf/PdfReader.tsx",
+    "products/liteasy/apps/desktop/src/app/features/pdf/pdfReaderPosition.ts",
+    "products/liteasy/apps/desktop/src/app/features/pdf/usePdfReaderPosition.ts",
+    "products/liteasy/apps/desktop/src/tests/PdfReaderPosition.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/pdfReaderPositionStore.test.tsx",
+    "products/liteasy/apps/desktop/scripts/verify-pdf-reader-position.mjs",
+    "products/liteasy/apps/desktop/src-tauri/src/local-recovery/profile.rs",
+    "products/liteasy/apps/desktop/src-tauri/tests/local_recovery.rs"
+  ],
+  "known_limitations": [
+    "C03 whole card remains partial",
+    "Native Tauri restart, Windows/macOS and installer not verified",
+    "Fallback PDF IDs do not prove full byte identity when contentHash is absent",
+    "Page-level restoration only; no automatic file grant restoration",
+    "Exit before an asynchronous commit may lose the most recent position",
+    "No cross-window conflict merge or process-kill/disk-full drill for this slice"
+  ],
+  "release_ready": false,
+  "notes": "Observed checks only. Original native grants remain explicit and transient. Reader-state uses existing scoped object_store; no new native protocol."
+}
