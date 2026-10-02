@@ -1,0 +1,16 @@
+{
+  "scope": "C02 current-partition logical recovery into a new isolated profile",
+  "os": "Ubuntu 24.04 x64 / WSL2",
+  "toolchain": { "node": "22.13.1", "rust": "1.98.0" },
+  "checks": [
+    { "command": "cargo test --locked --no-default-features --manifest-path products/liteasy/apps/desktop/src-tauri/Cargo.toml --test local_recovery", "status": "passed", "tests": 7, "ignoredExplicitGuiDriver": 1, "realFilesystem": true, "realSqliteWal": true, "realTauri": false },
+    { "command": "npm test -- --run src/tests/ProfileRecoveryPanel.test.tsx", "status": "passed", "tests": 2, "mockTransport": true },
+    { "command": "npm run ci:smoke", "status": "passed", "tests": 9 },
+    { "command": "npm run build", "status": "passed" },
+    { "command": "npm run ci:contracts", "status": "passed", "cleanCommit": "f09ae66a" },
+    { "command": "cargo check --locked --all-targets --no-default-features --manifest-path products/liteasy/apps/desktop/src-tauri/Cargo.toml", "status": "passed_for_canvas_fix_631d3781", "recoveryWrapper": "requires_root_registration_check" }
+  ],
+  "notVerified": ["native recovery GUI restart", "Windows/macOS", "disk full", "read-only filesystem", "process termination", "all C02 task-card requirements"],
+  "limitations": ["external attachment directories explicitly rejected", "standalone non-object artifact catalog/checkpoint stores excluded", "browser preferences excluded", "temporary original-file readers not silently authorized"],
+  "wholeCardComplete": false
+}

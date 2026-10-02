@@ -16,6 +16,7 @@ struct Pending {
     scope: String,
     created: Instant,
     plan: Plan,
+    library_root: Option<PathBuf>,
 }
 struct Saved {
     scope: String,
@@ -64,7 +65,11 @@ pub struct Receipt {
     restored: bool,
     scope_id: String,
 }
-fn store(scope: String, plan: Plan) -> Result<Option<Preview>, String> {
+fn store(
+    scope: String,
+    plan: Plan,
+    library_root: Option<PathBuf>,
+) -> Result<Option<Preview>, String> {
     check(&scope)?;
     let id = id()?;
     let preview = Preview {
@@ -91,6 +96,7 @@ fn store(scope: String, plan: Plan) -> Result<Option<Preview>, String> {
             scope,
             created: Instant::now(),
             plan,
+            library_root,
         },
     );
     Ok(Some(preview))
@@ -116,7 +122,7 @@ pub async fn local_recovery_prepare_backup(
         let library = crate::local_library::library_root(&app)?;
         let target = parent.join(format!("Liteasy-Recovery-Backup-{}", &id()?[..12]));
         let plan = profile::prepare_backup(&data, &library, &scope, &target)?;
-        store(scope, plan)
+        store(scope, plan, Some(library))
     })
     .await
     .map_err(|_| "恢复备份预览任务中断。".to_string())?
@@ -146,13 +152,17 @@ pub async fn local_recovery_prepare_restore(scope: String) -> Result<Option<Prev
         check(&scope)?;
         let target = parent.join(format!("Liteasy-Recovered-{}", &id()?[..12]));
         let plan = profile::prepare_restore(&root, &target)?;
-        store(scope, plan)
+        store(scope, plan, None)
     })
     .await
     .map_err(|_| "恢复校验任务中断。".to_string())?
 }
 #[tauri::command]
-pub async fn local_recovery_commit(scope: String, plan_id: String) -> Result<Receipt, String> {
+pub async fn local_recovery_commit(
+    app: AppHandle,
+    scope: String,
+    plan_id: String,
+) -> Result<Receipt, String> {
     check(&scope)?;
     tauri::async_runtime::spawn_blocking(move || {
         check(&scope)?;
@@ -165,6 +175,13 @@ pub async fn local_recovery_commit(scope: String, plan_id: String) -> Result<Rec
         };
         if pending.created.elapsed() > Duration::from_secs(600) {
             return Err("恢复预览已过期，请重新预览。".into());
+        }
+        if pending
+            .library_root
+            .as_ref()
+            .is_some_and(|root| crate::local_library::library_root(&app).as_ref() != Ok(root))
+        {
+            return Err("预览后文献库位置已改变，请重新备份。".into());
         }
         let restored = pending.plan.restore;
         let archived_scope = pending.plan.manifest.scope.clone();

@@ -49,9 +49,11 @@ marker 精确为 `{schema:"liteasy.recovery-profile/v1",id:<32 hex>,scope:<archi
 
 Ubuntu 24.04 x64 / WSL2，Node 22.13.1 / Rust 1.98.0，分别低于项目当前指定的 22.23.2 / 1.98.1。
 
-- `cargo test --locked --no-default-features --manifest-path products/liteasy/apps/desktop/src-tauri/Cargo.toml --test local_recovery`：5 例通过，使用真实临时文件系统与 SQLite，源 WAL 连接保持打开；重新连接恢复的对象和 grants DB 并读取完整笔记、revision、关联、任务回执、批注侧文件、Canvas 和外部笔记副本。其他账户和凭据未进入快照。另覆盖变更、未知版本、损坏原始行、注入中断、路径/链接/大小上限、profile scope 篡改和拒绝覆盖。
+- `cargo test --locked --no-default-features --manifest-path products/liteasy/apps/desktop/src-tauri/Cargo.toml --test local_recovery`：7 例通过，使用真实临时文件系统与 SQLite，源 WAL 连接保持打开；重新连接恢复的对象和 grants DB 并读取完整笔记、revision、关联、任务回执、批注侧文件、Canvas 和外部笔记副本。其他账户和凭据未进入快照。另覆盖变更、未知版本、损坏原始行、注入中断、路径/链接/大小上限、profile scope 篡改、拒绝覆盖、复制后的源修改/新增文件和未来文献库 schema。正常编辑恢复数据库/原文后，bootstrap 仍可重新打开；不以初次恢复 hash 锁死用户编辑。
 - `npm test -- --run src/tests/ProfileRecoveryPanel.test.tsx`：2 例通过，原生 IPC/选择器使用替身，覆盖预览→确认→回执→独立打开和账户变化清理。
-- `npm run ci:smoke`：9 例通过；`npm run build`：通过，现有 chunk 提示保留。干净提交 contracts 结果另记。
+- `npm run ci:smoke`：9 例通过；`npm run build`：通过，现有 chunk 提示保留。干净提交 `f09ae66a` 的 `npm run ci:contracts` 通过。
+
+独立 GUI 演练 driver 默认忽略（未把未执行算通过）：`creates_gui_profile_from_explicit_synthetic_fixture`。准备临时 source 根目录，内含 `data/`、`library/` 和内容为 `synthetic` 的 `.liteasy-recovery-fixture`；对象 rows 用真实前端 schema/repository 生成。设置 `LITEASY_RECOVERY_FIXTURE_SOURCE`、`LITEASY_RECOVERY_FIXTURE_OUTPUT`（另一个空的已存在临时目录）、`LITEASY_RECOVERY_FIXTURE_SCOPE`（默认 local），运行同一 Rust 测试命令追加 `creates_gui_profile_from_explicit_synthetic_fixture -- --ignored --nocapture`。它经过真实 prepare/commit 往返，保留 output/backup 和 output/profile，供根代理的真实 Tauri 冷启动验证；不手写 profile marker 伪装成功。
 
 原生包装层/启动 UI 尚需根代理集成后检查。本片尚未执行真实窗口从新配置重启、原生选择器自动化、Windows/macOS、磁盘满/只读或杀进程。
 

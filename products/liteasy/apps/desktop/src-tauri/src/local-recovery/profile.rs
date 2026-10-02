@@ -78,6 +78,7 @@ pub struct Plan {
     pub restore: bool,
     files: BTreeMap<String, Payload>,
     source_state: Option<(PathBuf, String)>,
+    inventories: Vec<(PathBuf, String, BTreeSet<String>)>,
 }
 
 fn digest(bytes: &[u8]) -> String {
@@ -345,6 +346,52 @@ fn tree(plan: &mut Plan, root: &Path, source: &str, prefix: &str) -> Result<(), 
     }
     Ok(())
 }
+fn inventory(root: &Path, relative: &str) -> Result<BTreeSet<String>, String> {
+    fn visit(root: &Path, relative: &str, entries: &mut BTreeSet<String>) -> Result<(), String> {
+        let path = if relative.is_empty() {
+            root.to_path_buf()
+        } else {
+            checked(root, relative)?
+        };
+        let metadata = match fs::symlink_metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(error.to_string()),
+        };
+        if link(&metadata) {
+            return Err("备份期间目录变为链接。".into());
+        }
+        if metadata.is_file() {
+            entries.insert(relative.into());
+        } else if metadata.is_dir() {
+            for entry in fs::read_dir(&path).map_err(|e| e.to_string())? {
+                let name = entry
+                    .map_err(|e| e.to_string())?
+                    .file_name()
+                    .into_string()
+                    .map_err(|_| "备份文件名无效。")?;
+                visit(
+                    root,
+                    &if relative.is_empty() {
+                        name
+                    } else {
+                        format!("{relative}/{name}")
+                    },
+                    entries,
+                )?;
+            }
+        } else {
+            return Err("备份含特殊文件。".into());
+        }
+        if entries.len() > 100_000 {
+            return Err("备份文件超过数量限制。".into());
+        }
+        Ok(())
+    }
+    let mut entries = BTreeSet::new();
+    visit(root, relative, &mut entries)?;
+    Ok(entries)
+}
 fn new_target(path: &Path) -> Result<(), String> {
     if !path.is_absolute() || fs::symlink_metadata(path).is_ok() {
         return Err("恢复只写入尚不存在的新目录。".into());
@@ -383,11 +430,18 @@ pub fn prepare_backup(
         restore: false,
         files: BTreeMap::new(),
         source_state: Some((data.to_path_buf(), source_revision)),
+        inventories: vec![(
+            library.to_path_buf(),
+            String::new(),
+            inventory(library, "")?,
+        )],
     };
     tree(&mut plan, library, "", "data/local-library/library")?;
     let scope_hash = digest(scope.as_bytes());
     for folder in ["objects/assets", "boards", "synced-boards"] {
         let path = format!("{folder}/{scope_hash}");
+        plan.inventories
+            .push((data.to_path_buf(), path.clone(), inventory(data, &path)?));
         if checked(data, &path)?.exists() {
             tree(&mut plan, data, &path, &format!("data/{path}"))?;
         }
@@ -506,13 +560,24 @@ pub fn prepare_backup(
             },
         });
     }
+    let serialized = serde_json::to_vec(&snapshot).map_err(|e| e.to_string())?;
+    if serialized.len() as u64 > MAX_JSON {
+        return Err("序列化后的恢复快照超过 128 MiB，请分批整理后备份。".into());
+    }
     append(
         &mut plan,
         "snapshot.json".into(),
-        Payload::Bytes(serde_json::to_vec(&snapshot).map_err(|e| e.to_string())?),
+        Payload::Bytes(serialized),
     )?;
     plan.manifest.files.sort_by(|a, b| a.path.cmp(&b.path));
     validate_manifest(&plan.manifest)?;
+    if serde_json::to_vec_pretty(&plan.manifest)
+        .map_err(|e| e.to_string())?
+        .len() as u64
+        > MAX_JSON
+    {
+        return Err("恢复文件清单超过 128 MiB。".into());
+    }
     Ok(plan)
 }
 fn validate_manifest(manifest: &Manifest) -> Result<(), String> {
@@ -545,6 +610,7 @@ fn validate_manifest(manifest: &Manifest) -> Result<(), String> {
             || !relative(&entry.path)
             || !paths.insert(entry.path.to_lowercase())
             || entry.size > MAX_FILE
+            || (entry.path == "snapshot.json" && entry.size > MAX_JSON)
             || entry.sha256.len() != 64
             || !entry.sha256.bytes().all(|b| b.is_ascii_hexdigit())
         {
@@ -552,7 +618,10 @@ fn validate_manifest(manifest: &Manifest) -> Result<(), String> {
         }
         total = total.checked_add(entry.size).ok_or("恢复容量无效。")?;
     }
-    if total > MAX_TOTAL || !paths.contains("snapshot.json") {
+    if total > MAX_TOTAL
+        || !paths.contains("snapshot.json")
+        || !paths.contains("data/local-library/library/.liteasy-library.json")
+    {
         return Err("恢复容量超限或缺少对象快照。".into());
     }
     Ok(())
@@ -585,6 +654,23 @@ fn validate_snapshot(snapshot: &Snapshot, manifest: &Manifest) -> Result<(), Str
                     && value["revision"].as_str() != row.key.split('/').nth(2)
                 {
                     return Err("不可变对象版本标识不匹配。".into());
+                }
+                if let Some(assets) = value["assets"].as_array() {
+                    for asset in assets {
+                        let hash = asset["sha256"].as_str().ok_or("对象附件缺少指纹。")?;
+                        let path = format!(
+                            "data/objects/assets/{}/{}",
+                            digest(snapshot.scope.as_bytes()),
+                            hash
+                        );
+                        if !manifest.files.iter().any(|file| {
+                            file.path == path
+                                && file.sha256 == hash
+                                && Some(file.size) == asset["byteLength"].as_u64()
+                        }) {
+                            return Err("对象引用附件缺失或已损坏，未恢复不完整内容。".into());
+                        }
+                    }
                 }
             }
             if row.key.starts_with("asset/") {
@@ -674,6 +760,19 @@ pub fn prepare_restore(root: &Path, target: &Path) -> Result<Plan, String> {
     let snapshot: Snapshot = serde_json::from_slice(&read(root, "snapshot.json", MAX_JSON)?)
         .map_err(|_| "恢复快照损坏。")?;
     validate_snapshot(&snapshot, &manifest)?;
+    let library_marker: Value = serde_json::from_slice(&read(
+        root,
+        "data/local-library/library/.liteasy-library.json",
+        16 * 1024,
+    )?)
+    .map_err(|_| "恢复文献库标记损坏。")?;
+    if library_marker["schemaVersion"] != 1
+        || !library_marker["libraryId"]
+            .as_str()
+            .is_some_and(|id| !id.trim().is_empty())
+    {
+        return Err("文献库版本不兼容；未创建恢复配置。".into());
+    }
     // Retain raw manifest bytes as a condition without exporting an extra file.
     files.insert("manifest.json".into(), Payload::Bytes(bytes));
     Ok(Plan {
@@ -682,6 +781,7 @@ pub fn prepare_restore(root: &Path, target: &Path) -> Result<Plan, String> {
         restore: true,
         files,
         source_state: None,
+        inventories: vec![],
     })
 }
 fn write_new(path: &Path, bytes: &[u8]) -> Result<(), String> {
@@ -751,6 +851,11 @@ pub fn commit(plan: Plan, guard: impl Fn() -> Result<(), String>) -> Result<Path
     guard()?;
     new_target(&plan.target)?;
     let check_source = || -> Result<(), String> {
+        for (root, path, expected) in &plan.inventories {
+            if inventory(root, path)? != *expected {
+                return Err("预览后资料文件清单已改变，请重新备份。".into());
+            }
+        }
         if let Some((data, expected)) = &plan.source_state {
             let current = logical_snapshot(data, &plan.manifest.scope)?;
             if digest(&serde_json::to_vec(&current.rows).map_err(|e| e.to_string())?) != *expected {
@@ -840,6 +945,14 @@ pub fn commit(plan: Plan, guard: impl Fn() -> Result<(), String>) -> Result<Path
         }
         guard()?;
         check_source()?;
+        for entry in &plan.manifest.files {
+            if let Payload::Source(root, path) = &plan.files[&entry.path] {
+                guard()?;
+                if fingerprint(root, path)? != (entry.size, entry.sha256.clone()) {
+                    return Err(format!("备份完成前源文件已改变：{}", entry.path));
+                }
+            }
+        }
         let manifest = serde_json::to_vec_pretty(&plan.manifest).map_err(|e| e.to_string())?;
         let mut profile_hash = None;
         if plan.restore {
