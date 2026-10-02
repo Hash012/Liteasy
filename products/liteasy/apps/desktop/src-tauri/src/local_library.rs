@@ -886,7 +886,45 @@ fn prepare_legacy_root_selection(
     }
 }
 
+/// Explicit local profiles own one library. Never discover, select, or migrate a user's legacy root.
+fn resolve_profile_library_root(
+    profile: Option<&Path>,
+    normal_workspace: impl FnOnce() -> Result<PathBuf, String>,
+) -> Result<PathBuf, String> {
+    let Some(profile) = profile else {
+        return normal_workspace();
+    };
+    let metadata = fs::symlink_metadata(profile).map_err(|error| error.to_string())?;
+    if !metadata.is_dir()
+        || metadata_is_link_like(&metadata)
+        || profile.canonicalize().map_err(|error| error.to_string())? != profile
+    {
+        return Err("隔离配置目录无效，未打开其他文献库。".into());
+    }
+    let root = ensure_managed_directory(
+        profile,
+        Path::new("data/local-library/library"),
+        "隔离配置文献库",
+    )?;
+    match fs::symlink_metadata(root.join(LIBRARY_MARKER_FILE_NAME)) {
+        Ok(metadata) if metadata_is_link_like(&metadata) || !metadata.is_file() => {
+            return Err("隔离配置文献库标记不能是链接或其他非普通文件。".into());
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.to_string()),
+    }
+    ensure_library_marker(&root)?;
+    Ok(root)
+}
+
 pub(crate) fn library_root(app: &AppHandle) -> Result<PathBuf, String> {
+    resolve_profile_library_root(crate::local_dev::profile_root(), || {
+        normal_workspace_library_root(app)
+    })
+}
+
+fn normal_workspace_library_root(app: &AppHandle) -> Result<PathBuf, String> {
     let root = match read_root_override(app)? {
         Some(configured) => configured,
         None => {
@@ -4076,6 +4114,148 @@ mod tests {
         migrate_legacy_layout(&root).unwrap();
         ensure_library_marker(&root).unwrap();
         root
+    }
+
+    #[test]
+    fn explicit_profile_library_never_discovers_or_changes_an_external_legacy_root() {
+        let profile = temporary_directory("owned-profile-library");
+        let owned = profile.join("data/local-library/library");
+        fs::create_dir_all(&owned).unwrap();
+        ensure_library_marker(&owned).unwrap();
+        fs::write(owned.join("restored.pdf"), b"%PDF-1.7\nowned copy").unwrap();
+        let legacy = temporary_directory("synthetic-legacy-home-library");
+        let source = legacy.join("original.pdf");
+        fs::write(&source, b"%PDF-1.7\noriginal bytes").unwrap();
+        fs::write(
+            legacy.join(LEGACY_PROFILE_MARKER_FILE_NAME),
+            b"original account marker",
+        )
+        .unwrap();
+        let fallback_called = Cell::new(false);
+        let root = super::resolve_profile_library_root(Some(&profile), || {
+            fallback_called.set(true);
+            prepare_legacy_root_selection(&legacy)?;
+            Ok(legacy.clone())
+        })
+        .unwrap();
+        assert_eq!(root, owned.canonicalize().unwrap());
+        assert!(!fallback_called.get());
+        assert_eq!(fs::read(&source).unwrap(), b"%PDF-1.7\noriginal bytes");
+        assert_eq!(
+            fs::read(legacy.join(LEGACY_PROFILE_MARKER_FILE_NAME)).unwrap(),
+            b"original account marker"
+        );
+        assert!(!legacy.join(LIBRARY_MARKER_FILE_NAME).exists());
+        assert_eq!(scan_local_library_root(&root).unwrap().entries.len(), 1);
+        fs::remove_dir_all(profile).unwrap();
+        fs::remove_dir_all(legacy).unwrap();
+    }
+
+    #[test]
+    fn explicit_profile_library_ignores_overrides_and_creates_only_its_owned_directory() {
+        let profile = temporary_directory("profile-ignores-library-override");
+        let external = initialized_library("synthetic-configured-library");
+        fs::create_dir_all(profile.join("data/local-library")).unwrap();
+        let override_path = profile.join("data/local-library/library-root.json");
+        let override_bytes = serde_json::json!({"rootPath":external}).to_string();
+        fs::write(&override_path, &override_bytes).unwrap();
+        let root = super::resolve_profile_library_root(Some(&profile), || {
+            panic!("must not read override or candidates")
+        })
+        .unwrap();
+        assert_eq!(
+            root,
+            profile
+                .join("data/local-library/library")
+                .canonicalize()
+                .unwrap()
+        );
+        assert!(root.join(LIBRARY_MARKER_FILE_NAME).is_file());
+        assert_eq!(fs::read_to_string(override_path).unwrap(), override_bytes);
+        fs::remove_dir_all(profile).unwrap();
+        fs::remove_dir_all(external).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn explicit_profile_library_rejects_linked_owned_directories_without_fallback() {
+        use std::os::unix::fs::symlink;
+        for relative in ["data", "data/local-library", "data/local-library/library"] {
+            let profile = temporary_directory("profile-library-link");
+            let external = initialized_library("profile-library-link-target");
+            let marker = fs::read(external.join(LIBRARY_MARKER_FILE_NAME)).unwrap();
+            let link = profile.join(relative);
+            fs::create_dir_all(link.parent().unwrap()).unwrap();
+            symlink(&external, &link).unwrap();
+            assert!(
+                super::resolve_profile_library_root(Some(&profile), || Ok(external.clone()))
+                    .is_err()
+            );
+            assert_eq!(
+                fs::read(external.join(LIBRARY_MARKER_FILE_NAME)).unwrap(),
+                marker
+            );
+            fs::remove_dir_all(profile).unwrap();
+            fs::remove_dir_all(external).unwrap();
+        }
+    }
+
+    #[test]
+    fn explicit_profile_library_preserves_future_marker_and_never_falls_back() {
+        let profile = temporary_directory("profile-future-library-marker");
+        let owned = profile.join("data/local-library/library");
+        fs::create_dir_all(&owned).unwrap();
+        let marker = b"{\"libraryId\":\"future-fixture\",\"schemaVersion\":99}";
+        fs::write(owned.join(LIBRARY_MARKER_FILE_NAME), marker).unwrap();
+        assert!(
+            super::resolve_profile_library_root(Some(&profile), || panic!("must not fall back"))
+                .is_err()
+        );
+        assert_eq!(
+            fs::read(owned.join(LIBRARY_MARKER_FILE_NAME)).unwrap(),
+            marker
+        );
+        fs::remove_dir_all(profile).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn explicit_profile_library_rejects_a_linked_marker() {
+        use std::os::unix::fs::symlink;
+        let profile = temporary_directory("profile-linked-library-marker");
+        let external = initialized_library("profile-linked-library-marker-target");
+        let original_marker = fs::read(external.join(LIBRARY_MARKER_FILE_NAME)).unwrap();
+        let owned = profile.join("data/local-library/library");
+        fs::create_dir_all(&owned).unwrap();
+        symlink(
+            external.join(LIBRARY_MARKER_FILE_NAME),
+            owned.join(LIBRARY_MARKER_FILE_NAME),
+        )
+        .unwrap();
+        assert!(
+            super::resolve_profile_library_root(Some(&profile), || panic!("must not fall back"))
+                .is_err()
+        );
+        assert_eq!(
+            fs::read(external.join(LIBRARY_MARKER_FILE_NAME)).unwrap(),
+            original_marker
+        );
+        fs::remove_dir_all(profile).unwrap();
+        fs::remove_dir_all(external).unwrap();
+    }
+
+    #[test]
+    fn normal_workspace_library_still_uses_its_existing_route() {
+        let legacy = initialized_library("ordinary-legacy-library");
+        let called = Cell::new(false);
+        let root = super::resolve_profile_library_root(None, || {
+            called.set(true);
+            Ok(legacy.clone())
+        })
+        .unwrap();
+        assert!(called.get());
+        assert_eq!(root, legacy);
+        fs::remove_dir_all(legacy).unwrap();
     }
 
     #[test]
