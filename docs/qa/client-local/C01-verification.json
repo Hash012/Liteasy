@@ -1,0 +1,173 @@
+{
+  "schema": "liteasy.client-verification/v1",
+  "task_id": "C01-resource-capabilities",
+  "head_commit": "918603e13e3bf4f9ab069326cf0b1dc8c364eebb",
+  "enabled_release_tasks": [],
+  "environment": {
+    "os": "Ubuntu on WSL2 / WSLg (not native Windows)",
+    "os_version": "24.04.3; kernel 6.18.33.2-microsoft-standard-WSL2",
+    "arch": "x86_64",
+    "webview": "not exercised; Vitest jsdom",
+    "node": "22.13.1 (requested 22.23.2)",
+    "rust": "not exercised; no Rust changes",
+    "fixture_revision": "synthetic HTML, CSV and object/reference fixtures in 918603e1",
+    "test_profile_path_redacted": true
+  },
+  "commands": [
+    {
+      "command": "npm ci --no-audit --no-fund",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c01-npm-ci.log"
+    },
+    {
+      "command": "npm test -- src/tests/ReadingLibraryCatalog.test.tsx -t 'unsupported originals'",
+      "exit_code": 1,
+      "log": "/tmp/liteasy-c01-catalog-red.log",
+      "phase": "expected regression failure before fix"
+    },
+    {
+      "command": "npm test -- src/tests/useReadingLibraryFolders.test.ts src/tests/agentAssetService.test.ts -t 'unsupported original'",
+      "exit_code": 1,
+      "log": "/tmp/liteasy-c01-body-red.log",
+      "phase": "expected regression failure before fix"
+    },
+    {
+      "command": "npm test -- src/tests/readingResourceCapabilities.test.ts src/tests/resourceIdentity.test.ts src/tests/ReadingLibraryCatalog.test.tsx src/tests/useReadingLibraryFolders.test.ts src/tests/agentAssetService.test.ts src/tests/readingLibraryRepository.test.ts src/tests/parseReadingFile.test.ts src/tests/ReadingDocumentReader.test.tsx src/tests/liteasyPath.test.ts",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c01-focused-green.log"
+    },
+    {
+      "command": "npm run ci:smoke",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c01-smoke.log"
+    },
+    {
+      "command": "npm run build",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c01-build.log"
+    },
+    {
+      "command": "npm run ci:contracts",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c01-contracts.log"
+    }
+  ],
+  "checks": {
+    "focused_tests": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c01-focused-green.log",
+        "/tmp/liteasy-c01-smoke.log"
+      ],
+      "used_mock": true,
+      "reason": "95 affected tests across 9 files, plus 9 smoke checks. jsdom, fake IndexedDB, synthetic byte arrays and UI callback spies; no real native transport."
+    },
+    "typescript_build": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c01-build.log"
+      ],
+      "used_mock": false,
+      "reason": "Production frontend build; 157 verified production assets; existing chunk-size warning."
+    },
+    "rust_locked": {
+      "status": "not_applicable",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "No Rust host changes in this slice."
+    },
+    "schema_clean": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c01-contracts.log"
+      ],
+      "used_mock": false,
+      "reason": "ci:contracts on clean 918603e1; tracked resources, regenerated schemas, TypeScript and lock/shared cleanliness passed."
+    },
+    "browser_regression": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "This slice was verified with frontend unit/integration tests and builds; no real WebView or native filesystem operation was exercised."
+    },
+    "native_ipc": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "This slice was verified with frontend unit/integration tests and builds; no real WebView or native filesystem operation was exercised."
+    },
+    "native_window_file_events": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "This slice was verified with frontend unit/integration tests and builds; no real WebView or native filesystem operation was exercised."
+    },
+    "accessibility": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Role/button state and keyboard action assertions passed in jsdom; no real assistive-technology or complete accessibility audit."
+    },
+    "performance": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Outside this bounded adapter verification; no release tasks enabled."
+    },
+    "installer_smoke": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Outside this bounded adapter verification; no release tasks enabled."
+    },
+    "upgrade_recovery": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Outside this bounded adapter verification; no release tasks enabled."
+    },
+    "signing": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Outside this bounded adapter verification; no release tasks enabled."
+    },
+    "notarization": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Outside this bounded adapter verification; no release tasks enabled."
+    }
+  },
+  "data_safety": {
+    "originals_preserved": null,
+    "secrets_excluded": true,
+    "network_services_unchanged": true,
+    "rollback_or_read_only_strategy": "No data/schema migration or new native file writes. Synthetic imported bytes verified unchanged; native original files not tested. Revert 918603e1 without deleting assets, references, source files or annotations."
+  },
+  "changed_files": [
+    "products/liteasy/apps/desktop/src/app/controllers/useReadingLibraryController.ts",
+    "products/liteasy/apps/desktop/src/app/features/library/ReadingCatalogDetails.tsx",
+    "products/liteasy/apps/desktop/src/app/features/library/ReadingLibraryCatalog.tsx",
+    "products/liteasy/apps/desktop/src/app/features/library/readingCatalog.types.ts",
+    "products/liteasy/apps/desktop/src/app/features/reading-library/readingResourceCapabilities.ts",
+    "products/liteasy/apps/desktop/src/app/features/resource-filesystem/resourceIdentity.ts",
+    "products/liteasy/apps/desktop/src/app/features/resource-filesystem/workspaceAgentAssetService.ts",
+    "products/liteasy/apps/desktop/src/tests/ReadingLibraryCatalog.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/agentAssetService.test.ts",
+    "products/liteasy/apps/desktop/src/tests/readingResourceCapabilities.test.ts",
+    "products/liteasy/apps/desktop/src/tests/resourceIdentity.test.ts",
+    "products/liteasy/apps/desktop/src/tests/useReadingLibraryFolders.test.ts"
+  ],
+  "known_limitations": [
+    "Partial C01: legacy reading import deduplicates same-byte copies by hash; separate bibliographic provenance and migration remain unresolved.",
+    "External paths remain path identities; no OS rename/move/replacement tracking or missing-source reconnect workflow added.",
+    "No cross-platform identity/provenance transfer or export/reimport acceptance; ordinary original export does not package logical identity metadata.",
+    "Matrix describes existing reading-library adapter; separate external Markdown/image/provider capabilities remain in their own adapters.",
+    "PDF AI text extraction requires caller-confirmed text; scans may require OCR. No model requests issued.",
+    "Windows/macOS, real WebView, installer and native filesystem preservation not tested here.",
+    "Node 22.13.1 differs from repository .nvmrc 22.23.2; /tmp evidence logs are ephemeral."
+  ],
+  "release_ready": false,
+  "notes": "Implementation and focused adapter verification, not full C01 or release acceptance. Baseline failures precede fixes. See C01-resource-capabilities.md for inventory, matrix and compatibility limits."
+}
