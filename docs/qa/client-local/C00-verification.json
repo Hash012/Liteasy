@@ -1,7 +1,7 @@
 {
   "schema": "liteasy.client-verification/v1",
   "task_id": "C00",
-  "head_commit": "ff9ea211ef45d3995e93e0c0cf340782de2797fc",
+  "head_commit": "aaa7593d",
   "enabled_release_tasks": [],
   "environment": {
     "os": "Ubuntu on WSL2 / WSLg (not Windows native)",
@@ -48,6 +48,11 @@
       "command": "npm run client:doctor",
       "exit_code": 0,
       "log": "/tmp/liteasy-c00-doctor.json"
+    },
+    {
+      "command": "npm run ci:contracts",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c00-contracts.log"
     }
   ],
   "checks": {
@@ -78,10 +83,12 @@
       "reason": "Locked check and 2 local_dev tests. Existing same-OS x64 debug target cache reused."
     },
     "schema_clean": {
-      "status": "not_run",
-      "evidence_paths": [],
-      "used_mock": null,
-      "reason": null
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c00-contracts.log"
+      ],
+      "used_mock": false,
+      "reason": "ci:contracts on clean implementation commit; regenerated schemas and locks unchanged."
     },
     "browser_regression": {
       "status": "not_run",
@@ -173,9 +180,8 @@
     "Actual toolchain patch versions differ from pinned versions.",
     "Repeated native library scan detected; separate follow-up needed.",
     "Windows process-tree cleanup not run natively.",
-    "Schema contracts will run on clean implementation commit.",
     "No installation, upgrade, signing, external model or packet-capture validation."
   ],
   "release_ready": false,
-  "notes": "Evidence is limited to described synthetic cases. This report records the base commit; git history identifies implementation. Local /tmp logs are ephemeral, not release artifacts."
+  "notes": "Evidence is limited to described synthetic cases. head_commit identifies tested implementation; this follow-up only records evidence. Local /tmp logs are ephemeral, not release artifacts."
 }
