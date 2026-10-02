@@ -1,0 +1,555 @@
+{
+  "schema": "liteasy.client-verification/v1",
+  "task_ids": [
+    "C01",
+    "C02",
+    "C03",
+    "C04",
+    "C05",
+    "C06",
+    "C07",
+    "C08",
+    "C09",
+    "C12",
+    "C13",
+    "C14"
+  ],
+  "date": "2026-10-03",
+  "baseline": "0fba97bed3996f5d3c94fcd33c000a51cbb9ca89",
+  "branch": "feat/client-c04-global-search",
+  "release_ready": false,
+  "code_commit": "0fb015ec321a70e98f8696341be72252cfe7d9fd",
+  "environment": {
+    "os": "Ubuntu 24.04 x86_64 on WSL2/WSLg",
+    "node": "22.13.1",
+    "expected_node": "22.23.2",
+    "rust": "1.98.0",
+    "expected_rust": "1.98.1",
+    "renderer": "WebKitGTK 2.52.6, software rendering",
+    "private_data": false,
+    "paid_model_calls": 0,
+    "os_version": "24.04",
+    "arch": "x86_64",
+    "webview": "WebKitGTK 2.52.6",
+    "fixture_revision": "synthetic recovery fixture with 24 schema-valid rows; real prepare/commit roundtrip",
+    "test_profile_path_redacted": false
+  },
+  "native_fixture": {
+    "source": "synthetic real object repository rows, real Rust prepare/commit backup and restore",
+    "scope": "user:recovery-fixture",
+    "profile": "/tmp/liteasy-recovery-native-drill-1790957392475297014/output/profile",
+    "transport": "real Tauri IPC and native filesystem, WSLg WebKitGTK",
+    "early_drill": [
+      "restored PDF with saved highlight",
+      "restored note and two Canvas cards",
+      "linked Markdown owned copy edited and saved",
+      "source external Markdown unchanged",
+      "second process refused profile lock with exit 1"
+    ],
+    "known_issue_during_early_drill": "Opening PDF caused repeated identical annotation autosaves and canceled search. Final fixed-binary verification recorded separately.",
+    "final_binary_source_commit": "0fb015ec321a70e98f8696341be72252cfe7d9fd",
+    "final_verification": [
+      "Cold start opens recovered workspace without OAuth or automatic recommendations.",
+      "Search displays human-readable note, annotation and Canvas names.",
+      "Opening recovered PDF then searching owned returns linked file, note object and board; refresh remains functional.",
+      "Opened linked Markdown owned copy, appended final-native-saved, saved via Ctrl+S, terminated and restarted the final binary.",
+      "After cold restart Ctrl+Shift+F search finds final-native-saved in linked-note.md at line 7.",
+      "Original external Markdown remains 137 bytes and matches its pre-recovery manifest hash; saved edits affect the owned recovery copy only.",
+      "Concurrent second launch of the recovery profile exits 1 before opening a window."
+    ],
+    "original_external_sha256": "5627ec577fb1d9fd715487c8d77816731f9a3f7b19d7225a141db630050f8fdf",
+    "screenshots": [
+      "/tmp/liteasy-final-native-search.png",
+      "/tmp/liteasy-final-search-after-pdf.png",
+      "/tmp/liteasy-final-restored-markdown.png",
+      "/tmp/liteasy-final-native-save.png",
+      "/tmp/liteasy-final-cold-search-saved.png"
+    ],
+    "native_picker": "not_run: attempted six-page PDF file picker was not reachable in X11 automation; no native six-page position acceptance claimed.",
+    "headless_final_binary": {
+      "binary": "/tmp/liteasy-second-wave-final-native",
+      "environment": "WSL2 x64; DISPLAY/WAYLAND_DISPLAY/XDG_RUNTIME_DIR unset; native GUI terminated before execution",
+      "grantSource": "Synthetic existing grants.v1.sqlite3 with same schema as FileStore; no native picker claim",
+      "cases": [
+        {
+          "args": [
+            "mounts",
+            "--json"
+          ],
+          "exit": 0
+        },
+        {
+          "args": [
+            "list",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "--json"
+          ],
+          "exit": 0
+        },
+        {
+          "args": [
+            "extract",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "说明.md",
+            "--expected-revision",
+            "0f04260aa68318f141e85983420b3fdb1138f0317b6b05f546027cb491e9cc59",
+            "--json"
+          ],
+          "exit": 0
+        },
+        {
+          "args": [
+            "extract",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "说明.md",
+            "--expected-revision",
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            "--json"
+          ],
+          "exit": 5,
+          "error": "revision_conflict"
+        },
+        {
+          "args": [
+            "extract",
+            "unknown",
+            "说明.md",
+            "--json"
+          ],
+          "exit": 4,
+          "error": "grant_unavailable"
+        },
+        {
+          "args": [
+            "extract",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "../说明.md",
+            "--json"
+          ],
+          "exit": 2,
+          "error": "invalid_arguments"
+        },
+        {
+          "args": [
+            "extract",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "说明.md",
+            "--scope",
+            "user:other"
+          ],
+          "exit": 2,
+          "error": "invalid_arguments"
+        }
+      ],
+      "result": {
+        "format": "markdown",
+        "bytes": 74,
+        "revision": "0f04260aa68318f141e85983420b3fdb1138f0317b6b05f546027cb491e9cc59",
+        "truncated": false
+      },
+      "sourceUnchanged": true,
+      "source_commit": "0fb015ec321a70e98f8696341be72252cfe7d9fd"
+    }
+  },
+  "commands": [
+    {
+      "name": "full_desktop_suite",
+      "command": "npm test",
+      "status": "passed",
+      "test_files_passed": 502,
+      "test_files_skipped": 2,
+      "tests_passed": 3359,
+      "tests_skipped": 4,
+      "exit_code": 0,
+      "log": "/tmp/liteasy-second-wave-all-tests.log",
+      "note": "Executed before final PDF feedback and bounded search-cache corrections; changed reader, bootstrap and search coverage rerun separately."
+    },
+    {
+      "name": "final_reader_and_bootstrap_frontend",
+      "command": "npm test -- src/tests/PdfReaderAutosave.test.tsx src/tests/PdfReaderPosition.test.tsx src/tests/recoveryRuntime.test.tsx src/tests/AppShell.test.tsx",
+      "status": "passed",
+      "test_files_passed": 4,
+      "tests_passed": 21,
+      "exit_code": 0,
+      "log": "/tmp/liteasy-second-wave-final-reader-tests.log"
+    },
+    {
+      "name": "final_search",
+      "command": "npm test -- src/tests/globalSearch.test.ts src/tests/globalSearchController.test.tsx",
+      "status": "passed",
+      "test_files_passed": 2,
+      "tests_passed": 18,
+      "exit_code": 0,
+      "log": "/tmp/liteasy-second-wave-final-search-tests.log"
+    },
+    {
+      "name": "final_browser_search",
+      "command": "PLAYWRIGHT_BASE_URL=http://127.0.0.1:1430 npx playwright test src/tests/browser/globalSearch.browser.spec.ts",
+      "status": "passed",
+      "tests_passed": 1,
+      "exit_code": 0,
+      "log": "/tmp/liteasy-second-wave-final-search-browser.log",
+      "note": "Real Chromium browser storage and search; synthetic fixtures; not Tauri."
+    },
+    {
+      "name": "smoke",
+      "command": "npm run ci:smoke",
+      "status": "passed",
+      "tests_passed": 9,
+      "exit_code": 0,
+      "log": "/tmp/liteasy-second-wave-final-smoke.log"
+    },
+    {
+      "name": "recovery_bootstrap",
+      "command": "cargo test --locked --no-default-features --manifest-path src-tauri/Cargo.toml --bin liteasy-desktop local_dev::",
+      "status": "passed",
+      "tests_passed": 7,
+      "exit_code": 0,
+      "log": "/tmp/liteasy-second-wave-bootstrap-tests.log"
+    },
+    {
+      "name": "logical_backup_restore",
+      "command": "cargo test --locked --no-default-features --manifest-path src-tauri/Cargo.toml --test local_recovery",
+      "status": "passed",
+      "tests_passed": 7,
+      "tests_ignored": 1,
+      "exit_code": 0,
+      "log": "/tmp/liteasy-second-wave-recovery-tests.log",
+      "note": "Ignored fixture driver was explicitly run separately to produce the native GUI fixture; not counted as a regular test pass."
+    },
+    {
+      "name": "owned_library",
+      "command": "cargo test --locked --no-default-features --manifest-path src-tauri/Cargo.toml local_library::tests",
+      "status": "passed",
+      "tests_passed": 57,
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c02-profile-library-green.log",
+      "note": "Independent agent worktree commit 0e888d48, cherry-picked as 377b65b2."
+    },
+    {
+      "name": "rust_all_targets",
+      "command": "cargo check --locked --all-targets --no-default-features --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-second-wave-final-check.log"
+    },
+    {
+      "name": "production_build",
+      "command": "npm run build",
+      "status": "passed",
+      "exit_code": 0,
+      "verified_assets": 158,
+      "log": "/tmp/liteasy-second-wave-final-build.log",
+      "note": "Existing large-chunk warning remains; no bundle-size acceptance claim."
+    },
+    {
+      "name": "clean_contracts",
+      "command": "npm run ci:contracts",
+      "status": "not_run"
+    },
+    {
+      "name": "native_final_binary",
+      "status": "passed",
+      "command": "cargo build --locked --manifest-path src-tauri/Cargo.toml",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-second-wave-final-native-build.log",
+      "binary": "/tmp/liteasy-second-wave-final-native",
+      "sha256": "bd8602ffa5ad9a4b5da1c4624861752cc9145af76e836a626b35b57f8afb5887",
+      "source_commit": "0fb015ec321a70e98f8696341be72252cfe7d9fd",
+      "note": "Default features with actual production dist; WSL2 x64 debug binary, not a release installer."
+    },
+    {
+      "name": "windows_second_wave_installer",
+      "status": "not_run"
+    },
+    {
+      "name": "macos_native",
+      "status": "not_run"
+    },
+    {
+      "name": "install_upgrade_uninstall_signing",
+      "status": "not_run"
+    }
+  ],
+  "checks": {
+    "focused_tests": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-second-wave-all-tests.log",
+        "/tmp/liteasy-second-wave-final-reader-tests.log",
+        "/tmp/liteasy-second-wave-final-search-tests.log"
+      ],
+      "used_mock": true,
+      "reason": "Unit and component coverage; native IPC is recorded separately."
+    },
+    "typescript_build": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-second-wave-final-build.log"
+      ],
+      "used_mock": false,
+      "reason": "Production TypeScript and Vite build; 158 assets verified."
+    },
+    "rust_locked": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-second-wave-bootstrap-tests.log",
+        "/tmp/liteasy-second-wave-recovery-tests.log",
+        "/tmp/liteasy-second-wave-final-check.log"
+      ],
+      "used_mock": false,
+      "reason": "Real temporary files and SQLite; WSL2 host, not Windows."
+    },
+    "schema_clean": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "browser_regression": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-second-wave-final-search-browser.log"
+      ],
+      "used_mock": false,
+      "reason": "Chromium: centered topbar entry at 320–1440 px, bounded results, saved queries, source navigation and focus. Synthetic objects in actual browser repository; no mocked search transport."
+    },
+    "native_ipc": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-final-native-search.png",
+        "/tmp/liteasy-final-search-after-pdf.png",
+        "/tmp/liteasy-final-native-save.png",
+        "/tmp/liteasy-final-cold-search-saved.png"
+      ],
+      "used_mock": false,
+      "reason": "Actual Tauri IPC and filesystem on WSLg final binary: isolated recovered data, PDF/annotation navigation, search after PDF, Markdown edit/save/cold restart/search. Windows/macOS not tested."
+    },
+    "native_window_file_events": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-final-cold-search-saved.png",
+        "/tmp/liteasy-recovery-final-duplicate.log"
+      ],
+      "used_mock": false,
+      "reason": "Bounded manual WSLg window validation, Ctrl+Shift+F and source navigation; actual Markdown save and restart, duplicate profile launch rejected with exit 1. Native picker automation and system file-event coverage incomplete."
+    },
+    "accessibility": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "performance": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "installer_smoke": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "upgrade_recovery": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "signing": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "notarization": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    }
+  },
+  "task_id": "C14",
+  "head_commit": "0fb015ec321a70e98f8696341be72252cfe7d9fd",
+  "enabled_release_tasks": [
+    "C01",
+    "C02",
+    "C03",
+    "C04",
+    "C05",
+    "C06",
+    "C07",
+    "C08",
+    "C09",
+    "C12",
+    "C13",
+    "C14"
+  ],
+  "data_safety": {
+    "originals_preserved": true,
+    "secrets_excluded": true,
+    "network_services_unchanged": true,
+    "rollback_or_read_only_strategy": "New isolated profile only; unknown versions retained and rejected; no replay of writes; original workspace unchanged."
+  },
+  "known_limitations": [
+    "C02 standalone artifact catalogs/checkpoints, legacy Agent/history JSON and file_operation_tasks are excluded and disclosed in preview.",
+    "C06 adversarial filesystem TOCTOU gap; no live kill/power-loss or Windows junction acceptance.",
+    "C07 Windows GUI-control named pipes, Unix IPC hardening, cross-process write leases, AI sidecar and packaged headless delivery incomplete.",
+    "C08 full performance budgets and C13 complete six-role acceptance are not established.",
+    "Native Windows/macOS runtime and second-wave installer/upgrade/signing evidence missing.",
+    "C03 six-page position restore passed browser regression; native OS picker drill not completed.",
+    "C04 bounded source/cache coverage does not imply OCR, EPUB CFI or Canvas node-position indexing.",
+    "Local Node and Rust differ from CI pinned versions; WSLg results are not native Windows/macOS acceptance."
+  ],
+  "changed_files": [
+    "development/test-data/client-diagnostics/README.md",
+    "development/test-data/client-diagnostics/original-open.json",
+    "docs/qa/client-local/C01-import-source-identity.md",
+    "docs/qa/client-local/C01-import-source-verification.json",
+    "docs/qa/client-local/C01-resource-capabilities.md",
+    "docs/qa/client-local/C01-verification.json",
+    "docs/qa/client-local/C02-isolated-profile-recovery-verification.json",
+    "docs/qa/client-local/C02-isolated-profile-recovery.md",
+    "docs/qa/client-local/C03-pdf-position-verification.json",
+    "docs/qa/client-local/C03-pdf-position.md",
+    "docs/qa/client-local/C04-global-search.md",
+    "docs/qa/client-local/C04-verification.json",
+    "docs/qa/client-local/C05-research-templates.md",
+    "docs/qa/client-local/C05-verification.json",
+    "docs/qa/client-local/C06-file-operations.md",
+    "docs/qa/client-local/C06-verification.json",
+    "docs/qa/client-local/C07-headless-feasibility.md",
+    "docs/qa/client-local/C07-headless-read-adr.md",
+    "docs/qa/client-local/C07-native-headless-evidence.json",
+    "docs/qa/client-local/C07-verification.json",
+    "docs/qa/client-local/C08-C09-pdf-lifecycle.md",
+    "docs/qa/client-local/C08-C09-verification.json",
+    "docs/qa/client-local/C12-local-archive-verification.json",
+    "docs/qa/client-local/C12-local-archive.md",
+    "docs/qa/client-local/C13-local-diagnostics.md",
+    "docs/qa/client-local/C13-verification.json",
+    "products/liteasy/apps/desktop/scripts/verify-pdf-reader-position.mjs",
+    "products/liteasy/apps/desktop/src-tauri/src/data_location.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/desktop_identity.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/headless-cli/tests.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/headless_cli.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/local-archive/archive.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/local-recovery/profile.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/local_archive.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/local_dev.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/local_library.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/local_recovery.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/main.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/note-files/operations-tests.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/note-files/operations.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/note-files/store.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/note_files.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/semantic_index/benchmark.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/semantic_index/mod.rs",
+    "products/liteasy/apps/desktop/src-tauri/tests/local_archive.rs",
+    "products/liteasy/apps/desktop/src-tauri/tests/local_recovery.rs",
+    "products/liteasy/apps/desktop/src/app/controllers/LocalFileOperationsTool.tsx",
+    "products/liteasy/apps/desktop/src/app/controllers/useGlobalSearchController.ts",
+    "products/liteasy/apps/desktop/src/app/controllers/useOriginalFileOpenController.ts",
+    "products/liteasy/apps/desktop/src/app/controllers/useReadingLibraryController.ts",
+    "products/liteasy/apps/desktop/src/app/features/account/useAccountSession.ts",
+    "products/liteasy/apps/desktop/src/app/features/extensions/paperLensPackage.ts",
+    "products/liteasy/apps/desktop/src/app/features/global-search/GlobalSearchDialog.tsx",
+    "products/liteasy/apps/desktop/src/app/features/global-search/globalSearch.css",
+    "products/liteasy/apps/desktop/src/app/features/global-search/globalSearch.types.ts",
+    "products/liteasy/apps/desktop/src/app/features/global-search/globalSearchService.ts",
+    "products/liteasy/apps/desktop/src/app/features/global-search/workspaceSearchSource.ts",
+    "products/liteasy/apps/desktop/src/app/features/help/HelpPanel.tsx",
+    "products/liteasy/apps/desktop/src/app/features/help/manual/content/troubleshooting.report.md",
+    "products/liteasy/apps/desktop/src/app/features/library/ReadingCatalogDetails.tsx",
+    "products/liteasy/apps/desktop/src/app/features/library/ReadingLibraryCatalog.tsx",
+    "products/liteasy/apps/desktop/src/app/features/library/localAccountKey.ts",
+    "products/liteasy/apps/desktop/src/app/features/library/readingCatalog.types.ts",
+    "products/liteasy/apps/desktop/src/app/features/local-archive/LocalArchivePanel.tsx",
+    "products/liteasy/apps/desktop/src/app/features/local-archive/localArchiveService.ts",
+    "products/liteasy/apps/desktop/src/app/features/local-diagnostics/LocalDiagnosticsPanel.tsx",
+    "products/liteasy/apps/desktop/src/app/features/local-diagnostics/diagnosticPackage.ts",
+    "products/liteasy/apps/desktop/src/app/features/local-diagnostics/local-diagnostics.css",
+    "products/liteasy/apps/desktop/src/app/features/local-diagnostics/localDiagnostics.ts",
+    "products/liteasy/apps/desktop/src/app/features/local-file-operations/LocalFileOperationsPanel.tsx",
+    "products/liteasy/apps/desktop/src/app/features/local-file-operations/localFileOperations.ts",
+    "products/liteasy/apps/desktop/src/app/features/local-recovery/ProfileRecoveryPanel.tsx",
+    "products/liteasy/apps/desktop/src/app/features/local-recovery/localRecoveryService.ts",
+    "products/liteasy/apps/desktop/src/app/features/local-recovery/runtimeProfile.ts",
+    "products/liteasy/apps/desktop/src/app/features/markdown/MarkdownContent.tsx",
+    "products/liteasy/apps/desktop/src/app/features/markdown/MarkdownLiveEditor.tsx",
+    "products/liteasy/apps/desktop/src/app/features/markdown/MarkdownSourceEditor.tsx",
+    "products/liteasy/apps/desktop/src/app/features/markdown/markdownContent.css",
+    "products/liteasy/apps/desktop/src/app/features/object-surface/ObjectSurface.tsx",
+    "products/liteasy/apps/desktop/src/app/features/pdf/PdfReader.tsx",
+    "products/liteasy/apps/desktop/src/app/features/pdf/PdfReaderToolbar.tsx",
+    "products/liteasy/apps/desktop/src/app/features/pdf/PdfThumbnail.tsx",
+    "products/liteasy/apps/desktop/src/app/features/pdf/pdfReaderPosition.ts",
+    "products/liteasy/apps/desktop/src/app/features/pdf/usePdfReaderPosition.ts",
+    "products/liteasy/apps/desktop/src/app/features/reading-library/ReadingDocumentReader.tsx",
+    "products/liteasy/apps/desktop/src/app/features/reading-library/ReadingLibrarySurface.tsx",
+    "products/liteasy/apps/desktop/src/app/features/reading-library/readingImportIdentity.ts",
+    "products/liteasy/apps/desktop/src/app/features/reading-library/readingLibraryRepository.ts",
+    "products/liteasy/apps/desktop/src/app/features/reading-library/readingResourceCapabilities.ts",
+    "products/liteasy/apps/desktop/src/app/features/resource-filesystem/agentAsset.types.ts",
+    "products/liteasy/apps/desktop/src/app/features/resource-filesystem/agentAssetService.ts",
+    "products/liteasy/apps/desktop/src/app/features/resource-filesystem/resourceIdentity.ts",
+    "products/liteasy/apps/desktop/src/app/features/resource-filesystem/workspaceAgentAssetService.ts",
+    "products/liteasy/apps/desktop/src/app/features/resource-links/resourceReveal.ts",
+    "products/liteasy/apps/desktop/src/app/features/resources/resourceActionPolicy.ts",
+    "products/liteasy/apps/desktop/src/app/features/semantic-index/semanticIndexClient.ts",
+    "products/liteasy/apps/desktop/src/app/features/settings/settings.store.ts",
+    "products/liteasy/apps/desktop/src/app/features/settings/settingsNavigation.ts",
+    "products/liteasy/apps/desktop/src/app/features/workbench/WorkbenchWelcome.tsx",
+    "products/liteasy/apps/desktop/src/app/features/workbench/localDevelopment.ts",
+    "products/liteasy/apps/desktop/src/app/features/workbench/workbenchCommands.ts",
+    "products/liteasy/apps/desktop/src/app/features/workflows/WorkflowViews.tsx",
+    "products/liteasy/apps/desktop/src/app/features/workflows/comparisonContent.ts",
+    "products/liteasy/apps/desktop/src/app/features/workflows/researchTemplateContent.ts",
+    "products/liteasy/apps/desktop/src/app/features/workflows/researchTemplates.ts",
+    "products/liteasy/apps/desktop/src/app/layout/AppShell.tsx",
+    "products/liteasy/apps/desktop/src/app/layout/LeftPane.tsx",
+    "products/liteasy/apps/desktop/src/app/layout/SettingsPane.tsx",
+    "products/liteasy/apps/desktop/src/app/layout/WorkspaceCommandBar.tsx",
+    "products/liteasy/apps/desktop/src/app/styles/workspaceShell.css",
+    "products/liteasy/apps/desktop/src/main.tsx",
+    "products/liteasy/apps/desktop/src/tests/LocalArchivePanel.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/PdfReaderAutosave.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/PdfReaderInteraction.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/PdfReaderPosition.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/PdfReaderToolbarKeyboard.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/ProfileRecoveryPanel.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/ReadingLibraryCatalog.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/agentAssetService.test.ts",
+    "products/liteasy/apps/desktop/src/tests/browser/globalSearch.browser.spec.ts",
+    "products/liteasy/apps/desktop/src/tests/browser/localDiagnostics.browser.spec.ts",
+    "products/liteasy/apps/desktop/src/tests/browser/pdf-lifecycle-fixture.html",
+    "products/liteasy/apps/desktop/src/tests/browser/pdfKeyboardFocus.browser.spec.ts",
+    "products/liteasy/apps/desktop/src/tests/browser/pdfLifecycleBudget.browser.spec.ts",
+    "products/liteasy/apps/desktop/src/tests/browser/pdfLifecycleFixture.tsx",
+    "products/liteasy/apps/desktop/src/tests/browser/readingImportIdentity.browser.spec.ts",
+    "products/liteasy/apps/desktop/src/tests/extensionIntegration.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/extensionStudio.test.ts",
+    "products/liteasy/apps/desktop/src/tests/globalSearch.test.ts",
+    "products/liteasy/apps/desktop/src/tests/globalSearchController.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/helpModule.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/localArchiveService.test.ts",
+    "products/liteasy/apps/desktop/src/tests/localDiagnostics.test.ts",
+    "products/liteasy/apps/desktop/src/tests/localDiagnosticsPanel.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/localFileOperations.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/originalFileDiagnostics.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/pdfReaderPositionStore.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/pdfThumbnailLifecycle.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/readingLibraryRepository.test.ts",
+    "products/liteasy/apps/desktop/src/tests/readingResourceCapabilities.test.ts",
+    "products/liteasy/apps/desktop/src/tests/recoveryRuntime.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/researchTemplateViews.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/researchTemplates.test.ts",
+    "products/liteasy/apps/desktop/src/tests/resourceIdentity.test.ts",
+    "products/liteasy/apps/desktop/src/tests/resourceReveal.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/useReadingLibraryFolders.test.ts"
+  ],
+  "notes": "Bounded second-wave integration; remaining requirements and native platforms are not reported as complete."
+}
