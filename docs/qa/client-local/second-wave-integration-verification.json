@@ -245,7 +245,13 @@
     {
       "name": "clean_contracts",
       "command": "npm run ci:contracts",
-      "status": "not_run"
+      "status": "passed",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-second-wave-final-contracts.log",
+      "validated_commit": "9b404b862e8bc855a3afde65055acf937aca1e63",
+      "worktree_clean_before": true,
+      "worktree_clean_after": true,
+      "note": "Tracked Tauri resources, schema regeneration, TypeScript and lock/schema cleanliness all passed. Following commit updates only this QA record."
     },
     {
       "name": "native_final_binary",
@@ -301,10 +307,12 @@
       "reason": "Real temporary files and SQLite; WSL2 host, not Windows."
     },
     "schema_clean": {
-      "status": "not_run",
-      "evidence_paths": [],
-      "used_mock": null,
-      "reason": null
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-second-wave-final-contracts.log"
+      ],
+      "used_mock": false,
+      "reason": "Clean commit 9b404b86; original ci:contracts and check-clean completed with no generated-file or lockfile drift."
     },
     "browser_regression": {
       "status": "passed",

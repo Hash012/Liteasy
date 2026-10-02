@@ -44,7 +44,7 @@
 
 相同最终二进制在 GUI 关闭且移除 DISPLAY/WAYLAND_DISPLAY/XDG_RUNTIME_DIR 后，通过授权目录列举与 Markdown 提取；修订冲突、未知授权、越界路径和伪造分区参数分别失败，原文件不变。授权来自合成的现有 FileStore 数据库，不能称作系统选择器授权验收。六页 PDF 的原生选择器自动化未完成，页码恢复的对应证据仍为浏览器与组件回归。
 
-详细命令、日志、二进制 SHA-256、截图位置和未执行项目见 [机器验证报告](second-wave-integration-verification.json)。日志与截图位于本机 `/tmp`，不是永久托管的发布附件。最终干净提交上的契约检查另行记录。
+详细命令、日志、二进制 SHA-256、截图位置和未执行项目见 [机器验证报告](second-wave-integration-verification.json)。日志与截图位于本机 `/tmp`，不是永久托管的发布附件。干净提交 `9b404b86` 上的 `ci:contracts` 通过，检查前后工作区均干净，schema 与锁文件没有漂移；后续提交只更新验证记录。
 
 ## 验证语义与后续边界
 
