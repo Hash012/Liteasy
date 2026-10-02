@@ -1,7 +1,7 @@
 {
   "schema": "liteasy.client-verification/v1",
   "task_id": "C02-snapshot-recovery",
-  "head_commit": "4978126c",
+  "head_commit": "9404aaf3",
   "enabled_release_tasks": [],
   "environment": {
     "os": "Ubuntu on WSL2 / WSLg (not Windows native)",
@@ -53,6 +53,11 @@
       "command": "cargo test --locked --manifest-path src-tauri/Cargo.toml atomic_publish",
       "exit_code": 0,
       "log": "/tmp/liteasy-c02-atomic.log"
+    },
+    {
+      "command": "npm run ci:contracts",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c02-contracts.log"
     }
   ],
   "checks": {
@@ -86,10 +91,12 @@
       "reason": "Real filesystem in temporary directories. Atomic failure injected in existing publisher test; no actual power-loss validation."
     },
     "schema_clean": {
-      "status": "not_run",
-      "evidence_paths": [],
-      "used_mock": null,
-      "reason": null
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c02-contracts.log"
+      ],
+      "used_mock": false,
+      "reason": "Regenerated on clean code commit; locks and shared contracts unchanged."
     },
     "browser_regression": {
       "status": "not_run",
@@ -172,5 +179,5 @@
     "Logs under /tmp are local and ephemeral."
   ],
   "release_ready": false,
-  "notes": "First C02 vertical slice only. Code commit is identified by git history; a clean-commit contract receipt follows."
+  "notes": "First C02 vertical slice only; head_commit identifies tested code. Follow-up records evidence without changing code."
 }
