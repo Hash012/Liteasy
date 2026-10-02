@@ -1,0 +1,21 @@
+.paper-reading-content { position: relative; }
+.paper-reading-content[data-reading-margins="document"] .paper-resource-tab { padding-right: 268px; }
+.paper-reading-content[data-reading-margins="pane"] .paper-resource-tab__reading-pane[aria-label="原文"] { padding-right: 252px; }
+.reading-margin-layer { position: absolute; inset: 0; overflow: hidden; pointer-events: none; color: var(--paper-reading-ink); }
+.reading-margin-connectors { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; }
+.reading-margin-connectors path { fill: none; stroke: var(--paper-reading-link); stroke-width: 1; stroke-dasharray: 4 4; opacity: .5; }
+.reading-margin-connectors path[data-active="true"] { stroke-width: 1.5; opacity: 1; }
+.reading-margin-card { position: absolute; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--paper-reading-border); border-radius: 8px; background: var(--paper-reading-surface); color: var(--paper-reading-ink); pointer-events: auto; box-shadow: 0 1px 3px #00000008; font-size: 13px; }
+.reading-margin-card[data-active="true"], .reading-margin-card:focus-within { border-color: var(--paper-reading-link); }
+.reading-margin-card header { display: flex; align-items: center; gap: 2px; margin-bottom: 6px; }
+.reading-margin-card header > button, .reading-margin-summary > button { color: var(--paper-reading-ink); }
+.reading-margin-card header > button:hover, .reading-margin-summary > button:hover { color: var(--paper-reading-ink); background: var(--paper-reading-background); }
+.reading-margin-card header > button:disabled { opacity: .45; }
+.reading-margin-source { flex: 1; min-width: 0; padding: 0; border: 0; background: none; color: var(--paper-reading-link); font: inherit; font-size: 12px; text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; }
+.reading-margin-source:focus-visible { outline: 2px solid var(--paper-reading-link); outline-offset: 2px; }
+.reading-margin-note { max-height: 112px; overflow: auto; overscroll-behavior: contain; overflow-wrap: anywhere; }
+.reading-margin-note .pdf-annotation-markdown { font-size: 13px; color: inherit; }
+.reading-margin-note .pdf-annotation-markdown > :first-child { margin-top: 0; }
+.reading-margin-note .pdf-annotation-markdown > :last-child { margin-bottom: 0; }
+.reading-margin-summary { position: absolute; pointer-events: auto; border-radius: 6px; background: var(--paper-reading-surface); text-align: center; font-size: 12px; }
+.reading-margin-summary.is-unavailable { right: 12px; bottom: 8px; }

@@ -114,6 +114,25 @@ test("reading typography persists locally and malformed preferences are bounded"
   expect((document.querySelector(".paper-reading-workspace") as HTMLElement).style.getPropertyValue("--paper-reading-font")).toContain("var(--reader-font-family,");
 });
 
+test("page-margin preference replaces the sidebar, survives reopening, and keeps unmatched notes accessible", async () => {
+  const session: PdfReadingAnnotations = { scopeKey: "margin-preference", ready: true, annotations: [original], pageTexts: {}, pageCount: 2, focusedPage: 2,
+    create: vi.fn(), update: vi.fn(), remove: vi.fn(), openPdf: vi.fn() };
+  const view = render(content(session));
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "页边批注", exact: true }));
+  expect(screen.queryByRole("complementary", { name: "阅读模式批注", exact: true })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "页边批注", exact: true })).toHaveAttribute("aria-pressed", "true");
+  // jsdom has no viewport geometry: the narrow-layout fallback must still expose all notes.
+  await user.click(await screen.findByRole("button", { name: "加宽阅读区可查看页边连线" }));
+  expect(screen.getByRole("complementary", { name: "阅读模式批注", exact: true })).toHaveTextContent(original.note!);
+  await user.click(screen.getByRole("button", { name: "页边批注", exact: true }));
+  view.unmount();
+  render(content(session));
+  expect(screen.getByRole("complementary", { name: "阅读页边批注", exact: true })).toBeInTheDocument();
+  expect(screen.queryByRole("complementary", { name: "阅读模式批注", exact: true })).not.toBeInTheDocument();
+  expect(session.update).not.toHaveBeenCalled();
+});
+
 test("an old reading session cannot write after switching papers", async () => {
   let session!: PdfReadingAnnotations;
   const view = render(<ReaderPane {...props} readingContent={(value) => { session = value; return content(value); }} />);

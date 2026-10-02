@@ -44,6 +44,20 @@ test("reading typography and comments stay consistent with the PDF and survive r
   await expect.poll(() => page.evaluate(() => [...CSS.highlights.values()].reduce((sum, marks) => sum + marks.size, 0))).toBeGreaterThan(0);
   await expect.poll(() => page.locator(".pdf-page-canvas").evaluateAll((nodes) => nodes.reduce((sum, node) => sum + (node as HTMLCanvasElement).width * (node as HTMLCanvasElement).height, 0))).toBeLessThan(10);
 
+  await reading.getByRole("button", { name: "页边批注", exact: true }).click();
+  const margin = reading.getByRole("complementary", { name: "阅读页边批注", exact: true });
+  await expect(comments).toHaveCount(0);
+  await expect(margin.locator(".reading-margin-card")).toContainText("来自 PDF 的评论");
+  const connectorError = () => reading.locator(".paper-reading-content").evaluate((root) => {
+    const range = [...CSS.highlights.values()].flatMap((highlight) => [...highlight])[0] as Range;
+    const rect = Array.from(range.getClientRects()).find((rect) => rect.width > 0 && rect.height > 0)!;
+    const path = root.querySelector("[data-annotation-connector]")!;
+    const start = path.getAttribute("d")!.match(/^M ([\d.-]+) ([\d.-]+)/)!;
+    const bounds = root.getBoundingClientRect();
+    return Math.abs(Number(start[2]) - (rect.top + rect.height / 2 - bounds.top));
+  });
+  await expect.poll(connectorError).toBeLessThan(2);
+
   await reading.getByRole("button", { name: "阅读排版", exact: true }).click();
   const size = page.getByRole("slider", { name: "阅读字号" });
   await size.focus(); await page.keyboard.press("End");
@@ -56,10 +70,16 @@ test("reading typography and comments stay consistent with the PDF and survive r
   await expect(body).toHaveCSS("font-size", "30px");
   await expect(body).toHaveCSS("line-height", "66px");
   await expect(body).toHaveCSS("max-width", "1080px");
-  await comments.getByRole("button", { name: "编辑", exact: true }).click();
+  await expect.poll(connectorError).toBeLessThan(2);
+  await page.screenshot({ path: testInfo.outputPath("reading-margin-comments.png"), fullPage: true, animations: "disabled" });
+  await margin.getByRole("button", { name: "编辑页边批注", exact: true }).click();
   await comments.getByRole("textbox", { name: "阅读批注内容" }).fill("阅读模式补充的评论");
   await comments.getByRole("combobox", { name: "标记颜色" }).selectOption("pink");
   await comments.getByRole("button", { name: "保存批注", exact: true }).click();
+  await expect(comments).toHaveCount(0);
+  await expect(margin.locator(".reading-margin-card")).toContainText("阅读模式补充的评论");
+  await reading.getByRole("button", { name: "页边批注", exact: true }).click();
+  await reading.getByRole("button", { name: /^批注（/ }).click();
   await expect(comments.getByRole("status")).toContainText("批注已保存");
   await comments.getByRole("button", { name: "查看 PDF", exact: true }).click();
   await expect(row.getByLabel("补充批注笔记")).toHaveValue("阅读模式补充的评论");
@@ -171,5 +191,45 @@ test("long-form navigation, bookmarks, themes and focus retain the reading parag
   await reading.getByRole("button", { name: "阅读书签", exact: true }).click();
   await expect(reading.locator(".paper-reading-bookmark")).toContainText("Results landmark");
   await page.screenshot({ path: testInfo.outputPath("reading-bookmarks-and-progress.png"), fullPage: true, animations: "disabled" });
+
+  // A reflowed note follows a distant paragraph, including scrolling and narrow panes.
+  await reading.getByRole("button", { name: "阅读书签", exact: true }).click();
+  await heading.evaluate((element) => {
+    element.scrollIntoView({ block: "center" });
+    const range = document.createRange(); range.selectNodeContents(element);
+    const selection = window.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
+    element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+  });
+  await reading.getByRole("combobox", { name: "标记类型", exact: true }).selectOption("note");
+  await reading.getByRole("textbox", { name: "阅读批注内容", exact: true }).fill("重点核对实验结果。");
+  await reading.getByRole("button", { name: "保存批注", exact: true }).click();
+  await expect(reading.getByRole("textbox", { name: "阅读批注内容", exact: true })).toHaveCount(0);
+  await page.evaluate(() => window.getSelection()?.removeAllRanges());
+  await reading.getByRole("button", { name: "页边批注", exact: true }).click();
+  await heading.evaluate((element) => element.scrollIntoView({ block: "center" }));
+  const marginCard = reading.locator(".reading-margin-card");
+  await expect(marginCard).toContainText("重点核对实验结果。");
+  const anchorError = () => heading.evaluate((element) => {
+    const root = element.closest(".paper-reading-content")!;
+    const range = document.createRange(); range.selectNodeContents(element);
+    const rect = range.getBoundingClientRect();
+    const d = root.querySelector("[data-annotation-connector]")?.getAttribute("d");
+    if (!d) return Infinity;
+    const start = d.match(/^M ([\d.-]+) ([\d.-]+)/)!;
+    return Math.abs(Number(start[2]) - (rect.top + rect.height / 2 - root.getBoundingClientRect().top));
+  });
+  await expect.poll(anchorError).toBeLessThan(2);
+  await reading.locator(".paper-resource-tab").evaluate((element) => { element.scrollTop += 60; });
+  await expect.poll(anchorError).toBeLessThan(2);
+  await page.setViewportSize({ width: 1050, height: 1050 });
+  await expect(reading.getByRole("button", { name: "加宽阅读区可查看页边连线" })).toBeVisible();
+  await expect(marginCard).toHaveCount(0);
+  await page.setViewportSize({ width: 1600, height: 1050 });
+  await heading.evaluate((element) => element.scrollIntoView({ block: "center" }));
+  await expect(marginCard).toContainText("重点核对实验结果。");
+  await expect.poll(anchorError).toBeLessThan(2);
+  await expect(marginCard).toHaveCSS("color", "rgb(220, 225, 229)");
+  await expect(marginCard.getByRole("button", { name: "编辑页边批注" })).toHaveCSS("color", "rgb(220, 225, 229)");
+  await page.screenshot({ path: testInfo.outputPath("reading-margin-night-and-scroll.png"), fullPage: true, animations: "disabled" });
   expect(errors).toEqual([]);
 });

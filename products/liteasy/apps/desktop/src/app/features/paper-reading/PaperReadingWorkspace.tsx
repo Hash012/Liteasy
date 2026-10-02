@@ -5,9 +5,11 @@ import { PaperSelectionTools } from "../pdf/PaperSelectionTools";
 import { SystemFontPicker } from "../settings/SystemFontPicker";
 import { defaultReadingFontCss, readingFontOptions } from "../settings/readingFonts";
 import { useReadingHighlights } from "./useReadingHighlights";
+import { ReadingMarginComments } from "./ReadingMarginComments";
+import type { PdfAnnotationV2 } from "../pdf/pdfAnnotationStorage";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Button, Field, Popover, PopoverSurface, PopoverTrigger, Select, Slider, Textarea, Tooltip, useFocusFinders, useModalAttributes } from "@fluentui/react-components";
-import { AddRegular, ArrowUndoRegular, BookOpenRegular, BookmarkRegular, CommentRegular, DismissRegular, FullScreenMaximizeRegular, FullScreenMinimizeRegular, SearchRegular, TextFontSizeRegular } from "@fluentui/react-icons";
+import { AddRegular, ArrowUndoRegular, BookOpenRegular, BookmarkRegular, CommentRegular, CommentNoteRegular, DismissRegular, FullScreenMaximizeRegular, FullScreenMinimizeRegular, SearchRegular, TextFontSizeRegular } from "@fluentui/react-icons";
 import { guideCategories } from "./literatureGuide.types";
 import type { PdfReadingAnnotations, ReadingMarkStyle } from "../pdf/pdfReadingAnnotations";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
@@ -66,7 +68,8 @@ export function PaperReadingWorkspace(props: { session: PdfReadingAnnotations; c
 function ReadingSession({ session, chunks, children }: { session: PdfReadingAnnotations; chunks: readonly RetrievalChunk[]; children: ReactNode }) {
   const preferenceKey = `liteasy.paper-reading.preferences.v1:${encodeURIComponent(resolveLocalAccountKey())}`;
   const [preferences, setPreferences] = useState(() => loadPaperReadingPreferences(preferenceKey));
-  const [commentsVisible, setCommentsVisible] = useState(true);
+  const [commentsVisible, setCommentsVisible] = useState(!preferences.marginComments);
+  const [marginSelectedId, setMarginSelectedId] = useState<string>();
   const [panel, setPanel] = useState<ReadingPanel | null>(null);
   const [focus, setFocus] = useState(false);
   const [guideId, setGuideId] = useState<string>();
@@ -97,6 +100,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
   const navigation = usePaperReadingNavigation(contentRef, session.scopeKey);
   const mounted = useRef(true);
   const showComments = commentsVisible && !panel && !focus;
+  const showMargins = preferences.marginComments && !showComments && !panel;
   const totalMinutes = useMemo(() => readingMinutes(navigation.blocks), [navigation.blocks]);
   const minutes = Math.max(1, Math.ceil(totalMinutes * (1 - navigation.progress)));
   const pages = [...new Set([...Array.from({ length: session.pageCount }, (_, index) => index + 1), ...chunks.map((chunk) => chunk.page)])].sort((a, b) => a - b);
@@ -127,6 +131,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
     if (!annotation || !root) return;
     root.querySelectorAll("[data-reading-comment-match]").forEach((node) => node.removeAttribute("data-reading-comment-match"));
     openComments();
+    setMarginSelectedId(id);
     if (locateQuote(root, annotation.excerpt)) setMessage(`已定位第 ${annotation.page} 页批注的原文。`);
     else {
       const page = root.querySelector<HTMLElement>(`[data-reading-page="${annotation.page}"]`);
@@ -139,7 +144,8 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
   useEffect(() => { if (session.selectedId) locate(session.selectedId); }, [session.selectedId]);
 
   useReadingHighlights(contentRef, session.annotations, (id) => {
-    if (session.annotations.some((annotation) => annotation.id === id && annotation.aiGuide)) setGuideId(id);
+    if (showMargins) setMarginSelectedId(id);
+    else if (session.annotations.some((annotation) => annotation.id === id && annotation.aiGuide)) setGuideId(id);
     else locate(id);
   });
 
@@ -170,9 +176,15 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
     try {
       if (draft.id) await session.update(draft.id, draft.revision!, note, markStyle);
       else await session.create({ page: Number(draft.page), excerpt: draft.excerpt, note, ...markStyle });
-      if (mounted.current) { setDraft(undefined); setNote(""); setMessage("批注已保存，PDF 与阅读模式共用同一份内容。"); }
+      if (mounted.current) { setDraft(undefined); setNote(""); if (preferences.marginComments) setCommentsVisible(false); setMessage("批注已保存，PDF 与阅读模式共用同一份内容。"); }
     } catch (failure) { if (mounted.current) setError(failure instanceof Error ? failure.message : "保存失败，请重试。"); }
     finally { if (mounted.current) setBusy(false); }
+  }
+
+  function editAnnotation(annotation: PdfAnnotationV2) {
+    setMarkStyle(annotation.kind === "highlight" || annotation.kind === "underline" ? { kind: annotation.kind, color: annotation.color } : undefined);
+    setDraft({ id: annotation.id, revision: annotation.revision, page: String(annotation.page), excerpt: annotation.excerpt });
+    setNote(annotation.note ?? ""); setError(""); openComments();
   }
 
   async function selectionAction(action: () => Promise<unknown>, success: string) {
@@ -238,11 +250,20 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
         setDraft({ page: String(session.focusedPage), excerpt: "" }); setMarkStyle(undefined); setNote(""); openComments(); setError("");
       }}>添加页批注</Button>
       <Button icon={<CommentRegular />} aria-pressed={showComments} onClick={() => { navigation.rememberPosition(); if (showComments) setCommentsVisible(false); else openComments(); }}>批注（{session.annotations.length}）</Button>
+      <Tooltip content="在正文右侧显示批注，虚线连接原文" relationship="description"><Button icon={<CommentNoteRegular />} aria-pressed={showMargins}
+        onClick={() => {
+          navigation.rememberPosition(); setPanel(null); setCommentsVisible(false); setGuideId(undefined);
+          setPreferences({ ...preferences, marginComments: !showMargins });
+        }}>页边批注</Button></Tooltip>
       <Tooltip content="专注阅读（Ctrl / ⌘ + Shift + F）；Esc 退出" relationship="description"><Button icon={focus ? <FullScreenMinimizeRegular /> : <FullScreenMaximizeRegular />} aria-pressed={focus} onClick={toggleFocus}>{focus ? "退出专注" : "专注阅读"}</Button></Tooltip>
       {session.guideControls}
     </div>
     <div className={`paper-reading-body${showComments || panel ? " with-comments" : ""}`}>
-      <div className="paper-reading-content" ref={contentRef} onMouseUp={captureSelection} onKeyUp={(event) => { if (event.key === "Shift") captureSelection(); }}>{children}</div>
+      <div className="paper-reading-content" ref={contentRef} onMouseUp={captureSelection} onKeyUp={(event) => { if (event.key === "Shift") captureSelection(); }}>{children}
+        {showMargins ? <ReadingMarginComments contentRef={contentRef} annotations={session.annotations} selectedId={marginSelectedId}
+          disabled={busy || !session.ready || Boolean(draft)} onSelect={setMarginSelectedId} onEdit={editAnnotation}
+          onOpenPdf={session.openPdf} onShowList={openComments} /> : null}
+      </div>
       {explanation?.aiGuide ? <aside className="literature-guide-explanation" aria-label="AI 讲解">
         <header><strong>{explanation.text || guideCategories[explanation.aiGuide.category]}</strong>
           <Tooltip content="关闭讲解（Esc）" relationship="description"><Button appearance="subtle" icon={<DismissRegular />} aria-label="关闭 AI 讲解" onClick={() => setGuideId(undefined)} /></Tooltip>
@@ -301,7 +322,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
           </> : null}
           <Field label="批注内容"><Textarea aria-label="阅读批注内容" rows={5} resize="vertical" value={note} disabled={busy} onChange={(_, data) => setNote(data.value)} /></Field>
           <div className="paper-reading-comment-actions"><Button appearance="primary" disabled={busy || !session.ready || !draft.page || (!draft.id && !note.trim() && !draft.excerpt)} onClick={() => void save()}>保存批注</Button>
-            <Button disabled={busy} onClick={() => { setDraft(undefined); setNote(""); setError(""); }}>取消</Button></div>
+            <Button disabled={busy} onClick={() => { setDraft(undefined); setNote(""); setError(""); if (preferences.marginComments) setCommentsVisible(false); }}>取消</Button></div>
         </div> : null}
         {!session.annotations.length && !draft && session.ready ? <p>选中原文后添加批注，或记录整页想法。</p> : null}
         {session.annotations.map((annotation) => <article className="paper-reading-comment" key={annotation.id} data-reading-annotation-id={annotation.id}>
@@ -312,10 +333,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
           {session.annotationTools ? session.annotationTools(annotation) : annotation.review ? <PdfAnnotationMarkdown value={annotation.review.text} /> : null}
           <div className="paper-reading-comment-actions">
             <Button size="small" onClick={() => session.openPdf(annotation.id)}>查看 PDF</Button>
-            <Button size="small" disabled={busy || !session.ready || Boolean(draft)} onClick={() => {
-              setMarkStyle(annotation.kind === "highlight" || annotation.kind === "underline" ? { kind: annotation.kind, color: annotation.color } : undefined);
-              setDraft({ id: annotation.id, revision: annotation.revision, page: String(annotation.page), excerpt: annotation.excerpt }); setNote(annotation.note ?? ""); setError("");
-            }}>编辑</Button>
+            <Button size="small" disabled={busy || !session.ready || Boolean(draft)} onClick={() => editAnnotation(annotation)}>编辑</Button>
             <Button size="small" disabled={busy || !session.ready || Boolean(draft)} onClick={() => {
               setBusy(true); setError("");
               void session.remove(annotation.id).catch((failure) => { if (mounted.current) setError(failure instanceof Error ? failure.message : "删除失败"); })

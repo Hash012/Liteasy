@@ -9,9 +9,10 @@ export type PaperReadingPreferences = {
   alignment: "left" | "justify";
   theme: "auto" | "paper" | "warm" | "night";
   paragraphSpacing: number;
+  marginComments: boolean;
 };
 export const defaultPaperReadingPreferences: PaperReadingPreferences = {
-  fontSize: 18, font: "serif", lineHeight: 1.85, width: 800, alignment: "left", theme: "auto", paragraphSpacing: 1,
+  fontSize: 18, font: "serif", lineHeight: 1.85, width: 800, alignment: "left", theme: "auto", paragraphSpacing: 1, marginComments: false,
 };
 export function loadPaperReadingPreferences(key: string): PaperReadingPreferences {
   let value: Partial<PaperReadingPreferences> | null = null;
@@ -25,5 +26,6 @@ export function loadPaperReadingPreferences(key: string): PaperReadingPreference
     alignment: value?.alignment === "justify" ? "justify" : "left",
     theme: ["auto", "paper", "warm", "night"].includes(value?.theme ?? "") ? value!.theme! : "auto",
     paragraphSpacing: [0.6, 1, 1.5].includes(value?.paragraphSpacing ?? 0) ? value!.paragraphSpacing! : 1,
+    marginComments: value?.marginComments === true,
   };
 }
