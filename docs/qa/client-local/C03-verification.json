@@ -1,7 +1,7 @@
 {
   "schema": "liteasy.client-verification/v1",
   "task_id": "C03-workbench-start",
-  "head_commit": null,
+  "head_commit": "2b32c252",
   "enabled_release_tasks": [],
   "environment": {
     "os": "Ubuntu on WSL2 / WSLg (not native Windows)",
@@ -43,6 +43,11 @@
       "command": "PLAYWRIGHT_BASE_URL=http://127.0.0.1:1425 playwright test src/tests/browser/workbenchWelcome.browser.spec.ts",
       "exit_code": 0,
       "log": "/tmp/liteasy-c03-browser.log"
+    },
+    {
+      "command": "npm run ci:contracts",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c03-contracts.log"
     }
   ],
   "checks": {
@@ -73,10 +78,12 @@
       "reason": "12 existing note_files store tests use real temporary files and SQLite, --locked --no-default-features. No Rust changed in this slice."
     },
     "schema_clean": {
-      "status": "not_run",
-      "evidence_paths": [],
-      "used_mock": null,
-      "reason": null
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c03-contracts.log"
+      ],
+      "used_mock": false,
+      "reason": "Clean committed implementation, regenerated schemas/type checks/locks unchanged."
     },
     "browser_regression": {
       "status": "passed",
