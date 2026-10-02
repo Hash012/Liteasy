@@ -24,7 +24,8 @@ import {
   ZoomInRegular,
   ZoomOutRegular
 } from "@fluentui/react-icons";
-import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { isMacKeyboard } from "../workbench/workbenchCommands";
 
 export type PdfPageLayoutMode = "continuous" | "single" | "spread";
 
@@ -104,6 +105,24 @@ export function PdfReaderToolbar({
   zoom
 }: PdfReaderToolbarProps) {
   const [pageDraft, setPageDraft] = useState(String(currentPage));
+  const searchInput = useRef<HTMLInputElement>(null);
+  const searchButton = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const wasSearchOpen = useRef(false);
+
+  useEffect(() => {
+    if (searchOpen && !wasSearchOpen.current) {
+      const focused = document.activeElement;
+      returnFocus.current = focused instanceof HTMLElement && focused !== document.body
+        ? focused : searchButton.current;
+      searchInput.current?.focus();
+    } else if (!searchOpen && wasSearchOpen.current) {
+      const target = returnFocus.current?.isConnected ? returnFocus.current : searchButton.current;
+      target?.focus();
+      returnFocus.current = null;
+    }
+    wasSearchOpen.current = searchOpen;
+  }, [searchOpen]);
 
   useEffect(() => {
     setPageDraft(String(currentPage));
@@ -119,6 +138,7 @@ export function PdfReaderToolbar({
   }
 
   function handlePageKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
     if (event.key === "Enter") {
       commitPage();
       event.currentTarget.select();
@@ -126,6 +146,7 @@ export function PdfReaderToolbar({
   }
 
   function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
     if (event.key === "Enter") {
       if (event.shiftKey) onFindPrevious();
       else onFindNext();
@@ -241,9 +262,10 @@ export function PdfReaderToolbar({
           aria-label="在文档中搜索"
           appearance={searchOpen ? "primary" : "subtle"}
           icon={<SearchRegular />}
-          onClick={onOpenSearch}
+          ref={searchButton}
+          onClick={() => { onOpenSearch(); if (searchOpen) searchInput.current?.focus(); }}
           size="small"
-          title="在文档中搜索（Ctrl+F）"
+          title={`在文档中搜索（${isMacKeyboard() ? "⌘" : "Ctrl"}+F）`}
         />
         <Popover positioning="below-end" withArrow>
           <PopoverTrigger disableButtonEnhancement>
@@ -292,7 +314,7 @@ export function PdfReaderToolbar({
         <div aria-label="文档搜索栏" className="pdf-find-bar" role="search">
           <Input
             aria-label="搜索文档内容"
-            autoFocus
+            ref={searchInput}
             className="pdf-find-input"
             contentBefore={<SearchRegular />}
             onChange={(_, data) => onChangeSearchQuery(data.value)}

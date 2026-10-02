@@ -1953,7 +1953,7 @@ export function PdfReader({
 
   useEffect(() => {
     function handleFindShortcut(event: KeyboardEvent) {
-      if (readingView || event.defaultPrevented) return;
+      if (readingView || event.defaultPrevented || event.isComposing || event.keyCode === 229) return;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
         event.preventDefault();
         openSearch();

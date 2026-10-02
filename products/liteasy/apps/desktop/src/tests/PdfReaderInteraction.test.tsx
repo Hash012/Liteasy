@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -44,6 +44,15 @@ function renderAnnotation(value: PdfAnnotationV2) {
 afterEach(() => {
   vi.restoreAllMocks();
   window.localStorage.clear();
+});
+
+test("document find shortcuts leave active IME composition untouched", async () => {
+  await act(async () => { render(<PdfReader selectedPapers={[paper]} zoom={100} />); });
+  fireEvent.keyDown(window, { key: "f", ctrlKey: true, isComposing: true });
+  fireEvent.keyDown(window, { key: "f", ctrlKey: true, keyCode: 229 });
+  expect(screen.queryByRole("textbox", { name: "搜索文档内容" })).not.toBeInTheDocument();
+  fireEvent.keyDown(window, { key: "f", ctrlKey: true });
+  expect(screen.getByRole("textbox", { name: "搜索文档内容" })).toHaveFocus();
 });
 
 test("shows the same colored highlights in thumbnails and the page", async () => {

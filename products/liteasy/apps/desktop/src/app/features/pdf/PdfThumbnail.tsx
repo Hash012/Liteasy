@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { PDFDocumentProxy } from "pdfjs-dist";
+import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import type { PdfAnnotationV2 } from "./pdfAnnotationStorage";
 import { schedulePdfThumbnail } from "./pdfThumbnailQueue";
 
@@ -23,9 +23,10 @@ export function PdfThumbnail({ active, annotations, onNavigate, pageNumber, pdfD
     const canvas = canvasRef.current;
     if (!canvas || !pdfDocument || !visible) return;
     setFailed(false);
+    let page: PDFPageProxy | undefined;
     const cancel = schedulePdfThumbnail(pdfDocument, async (signal) => {
       try {
-        const page = await pdfDocument.getPage(pageNumber);
+        page = await pdfDocument.getPage(pageNumber);
         if (signal.aborted) return;
         const base = page.getViewport({ scale: 1 });
         setAspectRatio(base.width / base.height);
@@ -40,8 +41,18 @@ export function PdfThumbnail({ active, annotations, onNavigate, pageNumber, pdfD
         signal.addEventListener("abort", abort, { once: true });
         try { await task.promise; } finally { signal.removeEventListener("abort", abort); }
       } catch { if (!signal.aborted) setFailed(true); }
+      finally {
+        // getPage can resolve after the effect has already been disposed. The
+        // document retains the proxy, so releasing only the canvas is insufficient.
+        if (signal.aborted) page?.cleanup();
+      }
     });
-    return () => { cancel(); canvas.width = 1; canvas.height = 1; };
+    return () => {
+      cancel();
+      // PDF.js defers cleanup while another render still uses this shared page.
+      page?.cleanup();
+      canvas.width = 1; canvas.height = 1;
+    };
   }, [pdfDocument, pageNumber, visible, width, attempt]);
   return <li ref={element} className={active ? "active" : ""}>
     <button aria-current={active ? "page" : undefined} aria-label={`转到第 ${pageNumber} 页`} title={`转到第 ${pageNumber} 页`}
