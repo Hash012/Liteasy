@@ -101,6 +101,7 @@ pub fn note_files_dispatch(app: AppHandle, scope: String, request: Value) -> Res
     let _guard = FILE_LOCK
         .lock()
         .map_err(|_| "笔记文件存储正在恢复，请重试。")?;
+    check()?;
     let app_data = crate::data_location::root(&app).map_err(|e| e.to_string())?;
     let files = store::FileStore::open(&app_data, &scope)?;
     let value = |key: &str| {
@@ -109,6 +110,7 @@ pub fn note_files_dispatch(app: AppHandle, scope: String, request: Value) -> Res
             .ok_or_else(|| format!("缺少文件参数：{key}"))
     };
     match action {
+        "operations" => files.file_operations(&request, &check),
         "managedCanvas" => Ok(json!(files.managed_canvas(value("objectId")?)?)),
         "chooseFolder" => selected
             .map(|path| {

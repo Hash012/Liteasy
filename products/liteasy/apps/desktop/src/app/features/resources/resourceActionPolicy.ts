@@ -10,6 +10,12 @@ export type ActionPolicy = {
 };
 
 const policies: Record<string, ActionPolicy> = {
+  "local_files.copy": {
+    actionId: "local_files.copy",
+    requiresConfirmation: true,
+    resourceClass: "local_private",
+    riskLevel: "medium"
+  },
   "local_library.delete_file": {
     actionId: "local_library.delete_file",
     requiresConfirmation: true,

@@ -1,4 +1,6 @@
 //! User-selected grants and UTF-8 files. No renderer-provided absolute path is accepted.
+#[path = "operations.rs"]
+pub(crate) mod operations;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -81,9 +83,25 @@ fn supported(path: &Path) -> bool {
         Some("md" | "markdown" | "canvas")
     )
 }
+fn link_like(metadata: &fs::Metadata) -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        // Includes junctions and other reparse points, not only symbolic links.
+        if metadata.file_attributes() & 0x400 != 0 {
+            return true;
+        }
+    }
+    metadata.file_type().is_symlink()
+}
 fn read_text(path: &Path) -> Result<String, String> {
+    let selected = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
+    if link_like(&selected) || !selected.is_file() {
+        return Err("仅支持普通笔记文件，不读取链接、设备或管道。".into());
+    }
     let file = fs::File::open(path).map_err(|e| format!("无法读取笔记文件：{e}"))?;
-    if file.metadata().map_err(|e| e.to_string())?.len() > MAX_BYTES {
+    let opened = file.metadata().map_err(|e| e.to_string())?;
+    if !opened.is_file() || opened.len() > MAX_BYTES {
         return Err("单个笔记文件不能超过 8 MB。".into());
     }
     let mut bytes = Vec::new();
@@ -298,24 +316,19 @@ impl FileStore {
             if path != grant.name || !file {
                 return Err("请选择此文件所在的 Vault 文件夹，以读取其中的引用。".into());
             }
-            if fs::symlink_metadata(&root).is_ok_and(|m| m.file_type().is_symlink()) {
+            if fs::symlink_metadata(&root).is_ok_and(|m| link_like(&m)) {
                 return Err("授权文件已变为符号链接，请重新选择。".into());
             }
             return Ok(root);
         }
-        if !root.is_dir()
-            || fs::symlink_metadata(&root)
-                .map_err(|e| e.to_string())?
-                .file_type()
-                .is_symlink()
-        {
+        if !root.is_dir() || link_like(&fs::symlink_metadata(&root).map_err(|e| e.to_string())?) {
             return Err("连接的文件夹已移动，请重新连接。".into());
         }
         let mut target = root;
         for part in path.split('/') {
             target.push(part);
             match fs::symlink_metadata(&target) {
-                Ok(metadata) if metadata.file_type().is_symlink() => {
+                Ok(metadata) if link_like(&metadata) => {
                     return Err("不读取或写入文件夹内的符号链接。".into())
                 }
                 Ok(_) => (),
