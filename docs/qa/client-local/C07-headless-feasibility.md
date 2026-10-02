@@ -1,6 +1,6 @@
 # C07：CLI / headless 复用边界审计
 
-2026-10-02，基线 `0fba97be`，仅代码审计。本次没有新增 CLI 命令、传输、sidecar 或 headless 成功声明；C07 仍待实施。
+2026-10-02 的审计基线为 `0fba97be`。2026-10-03 已新增仅本地授权范围的文件清单/UTF-8 提取核心切片，见 [C07 只读 ADR](C07-headless-read-adr.md) 和 [验证报告](C07-verification.json)。该切片需要 main 的早期入口接线；核心测试不能代替真实无 DISPLAY 二进制验收。C07 整卡仍未完成，旧的桌面控制传输与下述写操作问题没有被此只读切片解决。
 
 现有 `src-tauri/src/main.rs` 在创建 Tauri app 前调用 `agent_host::run_external_mode()`，已有 `--agent-cli` / `--agent-mcp` 参数保留。`agent_host.rs` 的 CLI 将参数数组原样放入请求，通过 Unix socket 发送，等待运行中桌面的事件桥；`useTauriAgentHostBridge.ts` / `agentHost.ts` 最终使用 `agentApplicationService.ts` 与 `agentCliAdapter.ts`。业务执行仍依赖前端运行时。非 Unix 的 `send_external_request` 返回 unavailable，没有 Windows 命名管道。不存在可据此宣称的跨平台、无 GUI 业务执行。
 
@@ -13,6 +13,6 @@ C06 新增的 `FileStore::file_operations(request, checkScope)` 不依赖 AppHan
 - 当前 `get` / `list` 会恢复中断意图并持久化状态；它们不是严格只读接口。若先提供只读 status/dry-run，需清楚分离只读加载和恢复，不用“查看状态”暗中开始写文件。
 - 非交互复制必须绑定已审查计划摘要、授权 grant 与幂等键。取消/退出应保留逐项 intent/receipt；不增加笼统全权限 `--yes`。
 
-建议下一切片先抽出共用身份/数据根启动服务和跨进程任务租约，再让 GUI 与 CLI 共用一个确定性端口。在 GUI 关闭、DISPLAY/WAYLAND_DISPLAY 缺失、无源码/全局 Node 的真实安装环境中验证同一计划、冲突与回执。仅能本地打印 help 或静态 transport 信息不满足 C07 的“至少一个真实 headless 文件操作”验收。
+只读切片复用了身份/数据根启动服务与 FileStore 的读取端口。写操作的下一切片仍需跨进程任务租约，并在 GUI 关闭、DISPLAY/WAYLAND_DISPLAY 缺失、无源码/全局 Node 的真实安装环境中验证同一计划、冲突与回执。仅能本地打印 help 或静态 transport 信息不满足 C07 的“至少一个真实 headless 文件操作”验收。
 
 AI orchestration 仍是 TypeScript。是否打包 Node sidecar 需要独立 ADR、三平台可行性与体积测量；此审计既不选定新 sidecar，也不把现有编排全面移入 Rust。未修改生产服务、网络 MCP、现有 CLI 参数或安装包。

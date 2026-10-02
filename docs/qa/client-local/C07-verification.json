@@ -1,0 +1,191 @@
+{
+  "schema": "liteasy.client-verification/v1",
+  "task_id": "C07",
+  "head_commit": "2973ffb6aa6478fcf97405826391f358d9716e95",
+  "enabled_release_tasks": [],
+  "environment": {
+    "os": "Linux / WSL2",
+    "os_version": "Ubuntu 24.04.3 LTS; kernel 6.18.33.2-microsoft-standard-WSL2",
+    "arch": "x86_64",
+    "webview": "not launched by this component validation",
+    "node": "22.13.1; repository .nvmrc 22.23.2",
+    "rust": "1.98.0; Windows workflow pin 1.98.1",
+    "fixture_revision": "inline temporary filesystem and real SQLite fixtures at head_commit",
+    "test_profile_path_redacted": true
+  },
+  "commands": [
+    {
+      "command": "cargo test --locked --no-default-features --manifest-path products/liteasy/apps/desktop/src-tauri/Cargo.toml headless",
+      "cwd": ".",
+      "exit_code": 0,
+      "result": "10 passed: 8 CLI core tests, 2 data-root resolution tests; real file/SQLite operations, injected root/scope callbacks, no Tauri IPC."
+    },
+    {
+      "command": "cargo test --locked --no-default-features --manifest-path products/liteasy/apps/desktop/src-tauri/Cargo.toml read_only_connection",
+      "cwd": ".",
+      "exit_code": 101,
+      "result": "Regression before managed_canvas early write guard: API returned error but created boards directory. Fixed, then included in passing note_files suite."
+    },
+    {
+      "command": "cargo test --locked --no-default-features --manifest-path products/liteasy/apps/desktop/src-tauri/Cargo.toml note_files",
+      "cwd": ".",
+      "exit_code": 0,
+      "result": "31 passed including all 8 headless core, 13 shared FileStore, 10 C06 operations tests."
+    },
+    {
+      "command": "cargo check --locked --all-targets --no-default-features --manifest-path products/liteasy/apps/desktop/src-tauri/Cargo.toml",
+      "cwd": ".",
+      "exit_code": 0,
+      "result": "Passed; entry remains unregistered in this component worktree, plus existing dead-code warnings."
+    },
+    {
+      "command": "npm run ci:smoke",
+      "cwd": "products/liteasy/apps/desktop",
+      "exit_code": 0,
+      "result": "9 passed."
+    },
+    {
+      "command": "npm run build",
+      "cwd": "products/liteasy/apps/desktop",
+      "exit_code": 0,
+      "result": "TypeScript, production Vite and 157 production assets passed; existing chunk-size/dynamic-import warnings."
+    },
+    {
+      "command": "git diff --check",
+      "cwd": ".",
+      "exit_code": 0,
+      "result": "Passed."
+    },
+    {
+      "command": "npm run ci:contracts",
+      "cwd": "products/liteasy/apps/desktop",
+      "exit_code": 0,
+      "result": "Passed on clean documentation commit ee18ae9d (implementation 2973ffb6). Generated schemas and locks unchanged; final report amendment changes documentation only."
+    }
+  ],
+  "checks": {
+    "focused_tests": {
+      "status": "passed",
+      "evidence_paths": [
+        "products/liteasy/apps/desktop/src-tauri/src/headless-cli/tests.rs",
+        "products/liteasy/apps/desktop/src-tauri/src/data_location.rs"
+      ],
+      "used_mock": true,
+      "reason": "33 distinct native core tests across headless and note_files runs; root/scope callbacks supplied by test, files and SQLite real. No test driver substituted for a shipping CLI run."
+    },
+    "typescript_build": {
+      "status": "passed",
+      "evidence_paths": [
+        "docs/qa/client-local/C07-headless-read-adr.md"
+      ],
+      "used_mock": false,
+      "reason": "Production build and ci:smoke passed; no frontend code changed."
+    },
+    "rust_locked": {
+      "status": "passed",
+      "evidence_paths": [
+        "products/liteasy/apps/desktop/src-tauri/src/headless-cli/tests.rs",
+        "products/liteasy/apps/desktop/src-tauri/src/data_location.rs"
+      ],
+      "used_mock": false,
+      "reason": "Locked native tests and all-targets check passed."
+    },
+    "schema_clean": {
+      "status": "passed",
+      "evidence_paths": [
+        "docs/qa/client-local/C07-verification.json"
+      ],
+      "used_mock": false,
+      "reason": "ci:contracts passed from clean committed worktree; no dependency/lock/schema drift."
+    },
+    "browser_regression": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this read-only CLI core slice; no platform or release success inferred."
+    },
+    "native_ipc": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this read-only CLI core slice; no platform or release success inferred."
+    },
+    "native_window_file_events": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this read-only CLI core slice; no platform or release success inferred."
+    },
+    "accessibility": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this read-only CLI core slice; no platform or release success inferred."
+    },
+    "performance": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this read-only CLI core slice; no platform or release success inferred."
+    },
+    "installer_smoke": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this read-only CLI core slice; no platform or release success inferred."
+    },
+    "upgrade_recovery": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this read-only CLI core slice; no platform or release success inferred."
+    },
+    "signing": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this read-only CLI core slice; no platform or release success inferred."
+    },
+    "notarization": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this read-only CLI core slice; no platform or release success inferred."
+    },
+    "headless_cli": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": false,
+      "reason": "Root integration owns main early entry and real no-DISPLAY binary execution. This component report does not count core tests as that acceptance."
+    }
+  },
+  "data_safety": {
+    "originals_preserved": true,
+    "secrets_excluded": true,
+    "network_services_unchanged": true,
+    "rollback_or_read_only_strategy": "Read-only existing grants SQLite + shared FileStore; no schema migration/record/content/task mutation, no credentials or network calls. SQLite WAL may create/use coordination sidecars. Remove CLI early entry to roll back, without data conversion."
+  },
+  "changed_files": [
+    "products/liteasy/apps/desktop/src-tauri/src/data_location.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/headless-cli/tests.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/headless_cli.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/note-files/operations.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/note-files/store.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/note_files.rs",
+    "docs/qa/client-local/C07-headless-feasibility.md",
+    "docs/qa/client-local/C07-headless-read-adr.md",
+    "docs/qa/client-local/C07-verification.json"
+  ],
+  "known_limitations": [
+    "C07 card incomplete: Windows named pipe/Unix IPC hardening, concurrent GUI+CLI writes, Node sidecar feasibility and package size work remain.",
+    "No Windows or macOS native execution/build/signing/installer evidence. Windows release GUI subsystem console handles/exit-waiting/redirected stdout unverified.",
+    "Core test callbacks inject data root and effective scope; main and validated development/recovery profile bootstrap require integration verification.",
+    "Source formats only UTF-8 Markdown/Canvas <=8 MiB; list <=10000 entries/64 levels, no PDF/EPUB text extraction.",
+    "Same shared path-check/open TOCTOU remains; no resistance claimed against a malicious same-user directory replacement. Concurrent source edits are not a strict atomic snapshot.",
+    "SQLite WAL coordination files may be created/used despite no business state writes; no immutable flag that would hide committed GUI changes.",
+    "Managed grants after data-root migration require desktop migration/remap first; CLI refuses pending migrations and does not remap persistent grants.",
+    "Actual cancellation/signal, broken-pipe, source-free installation and no-global-Node execution still require binary/platform validation."
+  ],
+  "release_ready": false,
+  "notes": "This is bounded component evidence, not whole C07 completion. No release task enabled; production services and dependency/lock versions untouched."
+}
