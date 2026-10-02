@@ -3,6 +3,7 @@ import { Button, Menu, MenuItem, MenuItemCheckbox, MenuList, MenuPopover, MenuTr
 import { ArrowLeftRegular, ArrowRightRegular, HistoryRegular, MoreHorizontalRegular, PanelLeftRegular, SearchRegular, SettingsRegular, SubtractRegular, SquareRegular, SquareMultipleRegular, DismissRegular } from "@fluentui/react-icons";
 import type { ToolbarAction, WorkspaceToolbarState, WindowControlsState } from "../features/workspace/workspaceShell.types";
 import "../styles/workspaceShell.css";
+import { commandShortcut } from "../features/workbench/workbenchCommands";
 
 function actionIcon(icon: ToolbarAction["icon"]) {
   if (icon === "search") return <SearchRegular />;
@@ -37,9 +38,10 @@ function ActionButton({ action }: { action: ToolbarAction }) {
   ) : <Tooltip content={action.label} relationship="description">{button}</Tooltip>;
 }
 
-export function WorkspaceCommandBar({ state, windowControls, onOpenAi }: { state: WorkspaceToolbarState; windowControls?: WindowControlsState; onOpenAi?: () => void }) {
+export function WorkspaceCommandBar({ state, windowControls, onOpenAi, onOpenSearch }: { state: WorkspaceToolbarState; windowControls?: WindowControlsState; onOpenAi?: () => void; onOpenSearch?: () => void }) {
   const root = useRef<HTMLDivElement>(null);
   const restoreAiFocus = useRestoreFocusTarget();
+  const restoreSearchFocus = useRestoreFocusTarget();
   const [width, setWidth] = useState(0);
   useLayoutEffect(() => {
     const element = root.current;
@@ -51,18 +53,22 @@ export function WorkspaceCommandBar({ state, windowControls, onOpenAi }: { state
   }, []);
   const actions = state.actions ?? [];
   // Reserve navigation, overflow, and a readable title before allocating commands.
-  const capacity = Math.max(0, Math.floor((width - 350 - (state.onOpenPageHistory ? 32 : 0) - (onOpenAi ? 64 : 0) - (windowControls?.available ? 138 : 0)) / 38));
+  const capacity = Math.max(0, Math.floor((width - (onOpenSearch ? 650 : 350) - (state.onOpenPageHistory ? 32 : 0) - (onOpenAi ? 64 : 0) - (windowControls?.available ? 138 : 0)) / 38));
   const visibleIds = new Set([...actions].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0)).slice(0, capacity).map((action) => action.id));
   const overflow = [...actions.filter((action) => !visibleIds.has(action.id)), ...(state.overflowActions ?? [])];
   const title = [...(state.breadcrumb?.map((item) => item.label) ?? []), state.title].filter(Boolean).join(" / ");
   return (
-    <Toolbar ref={root} aria-label="工作区命令栏" className="workspace-command-bar">
+    <Toolbar ref={root} aria-label="工作区命令栏" className={`workspace-command-bar${onOpenSearch ? " has-global-search" : ""}`}>
+      <div className="shell-command-wing shell-command-wing-start">
       <div className="shell-navigation">
         <Tooltip content="后退" relationship="description"><Button className="shell-icon-button" appearance="subtle" aria-label="后退" disabled={!state.canGoBack} icon={<ArrowLeftRegular />} onClick={state.onGoBack} /></Tooltip>
         <Tooltip content="前进" relationship="description"><Button className="shell-icon-button" appearance="subtle" aria-label="前进" disabled={!state.canGoForward} icon={<ArrowRightRegular />} onClick={state.onGoForward} /></Tooltip>
         {state.onOpenPageHistory ? <Tooltip content="页面历史 · Ctrl+H" relationship="description"><Button className="shell-icon-button" appearance="subtle" aria-label="页面历史" icon={<HistoryRegular />} onClick={state.onOpenPageHistory} /></Tooltip> : null}
       </div>
       <div className="shell-workspace-title" data-tauri-drag-region={windowControls?.available ? true : undefined} title={title}>{windowControls?.available && title ? `Liteasy · ${title}` : title || "Liteasy"}</div>
+      </div>
+      {onOpenSearch ? <Button {...restoreSearchFocus} appearance="outline" className="shell-global-search" icon={<SearchRegular />} aria-label="搜索工作区" title={`搜索工作区 · ${commandShortcut("global-search")}`} onClick={onOpenSearch}><span className="shell-global-search-label">搜索工作区</span><kbd>{commandShortcut("global-search")}</kbd></Button> : null}
+      <div className="shell-command-wing shell-command-wing-end">
       <div className="shell-commands">
         {onOpenAi ? <Tooltip content="选择论文并使用 AI 能力" relationship="description"><Button {...restoreAiFocus} appearance="primary" className="shell-ai-button" aria-label="AI 工作台" onClick={onOpenAi}>AI</Button></Tooltip> : null}
         {actions.filter((action) => visibleIds.has(action.id)).map((action) => <ActionButton key={action.id} action={action} />)}
@@ -79,6 +85,7 @@ export function WorkspaceCommandBar({ state, windowControls, onOpenAi }: { state
         <Tooltip content={windowControls.maximized ? "还原窗口" : "最大化窗口"} relationship="description"><Button appearance="subtle" aria-label={windowControls.maximized ? "还原窗口" : "最大化窗口"} icon={windowControls.maximized ? <SquareMultipleRegular /> : <SquareRegular />} onClick={windowControls.toggleMaximize} /></Tooltip>
         <Tooltip content="关闭窗口" relationship="description"><Button className="shell-window-close" appearance="subtle" aria-label="关闭窗口" icon={<DismissRegular />} onClick={windowControls.close} /></Tooltip>
       </div> : null}
+      </div>
     </Toolbar>
   );
 }

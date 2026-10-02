@@ -41,6 +41,10 @@ pub struct IndexRequest {
     text: String,
     vector: Option<Vec<f32>>,
     limit: Option<usize>,
+    #[serde(default)]
+    clauses: Vec<String>,
+    group: Option<String>,
+    offset: Option<usize>,
 }
 fn initialize(db: &Connection) -> rusqlite::Result<()> {
     REGISTER.call_once(|| unsafe {
@@ -61,6 +65,10 @@ fn initialize(db: &Connection) -> rusqlite::Result<()> {
         CREATE TABLE IF NOT EXISTS entries (id TEXT PRIMARY KEY, path TEXT NOT NULL, revision TEXT NOT NULL, text TEXT NOT NULL, vector BLOB, dimension INTEGER, payload TEXT, updated INTEGER NOT NULL);
         CREATE INDEX IF NOT EXISTS entries_path ON entries(path);
         CREATE VIRTUAL TABLE IF NOT EXISTS words USING fts5(tokens);
+        CREATE VIRTUAL TABLE IF NOT EXISTS literal_words USING fts5(text, tokenize='trigram');
+        CREATE TRIGGER IF NOT EXISTS entries_literal_delete AFTER DELETE ON entries BEGIN
+          DELETE FROM literal_words WHERE rowid=old.rowid;
+        END;
         PRAGMA user_version=1;")
 }
 fn open_db(path: &std::path::Path) -> Result<Connection, String> {
@@ -148,9 +156,15 @@ fn execute(db: &mut Connection, input: IndexRequest) -> Result<Value, String> {
                 )
                 .map_err(fail)?;
                 tx.execute("INSERT INTO entries(id,path,revision,text,vector,dimension,payload,updated) VALUES(?1,?2,?3,?4,?5,?6,?7,unixepoch())", params![record.id,record.path,record.revision,record.text,vector,dimension,record.payload.map(|v|v.to_string())]).map_err(fail)?;
+                let rowid = tx.last_insert_rowid();
+                tx.execute(
+                    "INSERT INTO literal_words(rowid,text) VALUES(?1,?2)",
+                    params![rowid, record.text.to_lowercase()],
+                )
+                .map_err(fail)?;
                 tx.execute(
                     "INSERT INTO words(rowid,tokens) VALUES(?1,?2)",
-                    params![tx.last_insert_rowid(), record.tokens],
+                    params![rowid, record.tokens],
                 )
                 .map_err(fail)?;
             }
@@ -159,6 +173,61 @@ fn execute(db: &mut Connection, input: IndexRequest) -> Result<Value, String> {
             tx.execute("DELETE FROM entries WHERE rowid IN (SELECT rowid FROM entries ORDER BY updated DESC,rowid DESC LIMIT -1 OFFSET 50000)", []).map_err(fail)?;
             tx.commit().map_err(fail)?;
             Ok(json!({"ok":true}))
+        }
+        "literal_query" => {
+            if input.clauses.is_empty()
+                || input.clauses.len() > 16
+                || input.clauses.iter().any(|v| v.is_empty() || v.len() > 1024)
+            {
+                return Err("请输入最多 16 个检索词或引号短语。".into());
+            }
+            let clauses: Vec<String> = input.clauses.iter().map(|v| v.to_lowercase()).collect();
+            let coarse = clauses
+                .iter()
+                .filter(|v| v.chars().count() >= 3)
+                .map(|v| format!("\"{}\"", v.replace('"', "\"\"")))
+                .collect::<Vec<_>>()
+                .join(" AND ");
+            let mut conditions = Vec::new();
+            let mut values = Vec::<rusqlite::types::Value>::new();
+            if !coarse.is_empty() {
+                conditions.push("literal_words MATCH ?".to_string());
+                values.push(coarse.into());
+            }
+            // Exact substring checks retain two-character terms and literal punctuation;
+            // FTS only narrows candidates. All strings are bound parameters, never SQL.
+            for clause in clauses {
+                conditions.push("instr(l.text, ?) > 0".into());
+                values.push(clause.into());
+            }
+            if let Some(group) = input.group {
+                conditions.push("json_extract(e.payload, '$.group') = ?".into());
+                values.push(group.into());
+            }
+            let from = format!(
+                "FROM literal_words l JOIN entries e ON e.rowid=l.rowid WHERE {}",
+                conditions.join(" AND ")
+            );
+            let total: usize = db
+                .query_row(
+                    &format!("SELECT count(*) {from}"),
+                    rusqlite::params_from_iter(values.iter()),
+                    |row| row.get(0),
+                )
+                .map_err(fail)?;
+            let limit = input.limit.unwrap_or(20).clamp(1, 100);
+            let offset = input.offset.unwrap_or(0).min(50000);
+            values.push((limit as i64).into());
+            values.push((offset as i64).into());
+            let mut statement = db.prepare(&format!("SELECT e.id,e.path,e.revision,e.text,e.payload {from} ORDER BY e.path,e.id LIMIT ? OFFSET ?")).map_err(fail)?;
+            let rows = statement.query_map(rusqlite::params_from_iter(values.iter()), |row| Ok(json!({
+                "id":row.get::<_,String>(0)?, "path":row.get::<_,String>(1)?, "revision":row.get::<_,String>(2)?,
+                "text":row.get::<_,String>(3)?, "payload":row.get::<_,Option<String>>(4)?.and_then(|v|serde_json::from_str::<Value>(&v).ok())
+            }))).map_err(fail)?;
+            let hits = rows.collect::<Result<Vec<_>, _>>().map_err(fail)?;
+            Ok(
+                json!({"hits":hits,"total":total,"nextOffset":if offset+limit<total {Some(offset+limit)} else {None}}),
+            )
         }
         "search" => {
             let limit = input.limit.unwrap_or(100).clamp(1, 200);
@@ -283,7 +352,54 @@ mod tests {
             text: String::new(),
             vector: None,
             limit: None,
+            clauses: vec![],
+            group: None,
+            offset: None,
         }
+    }
+    #[test]
+    fn literal_query_filters_phrases_group_and_short_unicode_before_pagination() {
+        let mut db = open_db(std::path::Path::new(":memory:")).unwrap();
+        for i in 0..45 {
+            let mut write = request("upsert");
+            write.records.push(IndexRecord {
+                id: format!("{i:03}"),
+                path: format!("note:{i:03}"),
+                revision: "1".into(),
+                text: "研究 Concurrent Transactions Éclair".into(),
+                tokens: "".into(),
+                vector: None,
+                payload: Some(json!({"group":"note"})),
+            });
+            execute(&mut db, write).unwrap();
+        }
+        let mut query = request("literal_query");
+        query.clauses = vec![
+            "研究".into(),
+            "concurrent transactions".into(),
+            "éclair".into(),
+        ];
+        query.group = Some("note".into());
+        query.limit = Some(20);
+        query.offset = Some(20);
+        let result = execute(&mut db, query).unwrap();
+        assert_eq!(result["total"], 45);
+        assert_eq!(result["hits"].as_array().unwrap().len(), 20);
+        assert_eq!(result["hits"][0]["id"], "020");
+        assert_eq!(result["nextOffset"], 40);
+        let mut query = request("literal_query");
+        query.clauses = vec!["transactions concurrent".into()];
+        assert_eq!(execute(&mut db, query).unwrap()["total"], 0);
+        let mut delete = request("delete");
+        delete.ids = vec!["note:020".into()];
+        execute(&mut db, delete).unwrap();
+        let mut query = request("literal_query");
+        query.clauses = vec!["研究".into()];
+        assert_eq!(execute(&mut db, query).unwrap()["total"], 44);
+        let mut query = request("literal_query");
+        query.clauses = vec!["研究".into()];
+        query.group = Some("annotation".into());
+        assert_eq!(execute(&mut db, query).unwrap()["total"], 0);
     }
     #[test]
     fn fts_vectors_revisions_and_deletion_share_one_transaction() {

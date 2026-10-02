@@ -1,3 +1,4 @@
+import { ReferenceSourceContext } from "../resource-links/ResourceReferencesContext";
 import { AssetImage } from "../visual-blocks/AssetImage";
 import { liteasyPath } from "../resource-filesystem/liteasyPath";
 import { formatPaperAnchorText } from "../paper-anchors/paperAnchorEntity";
@@ -259,7 +260,7 @@ export function ObjectDetails({
     <section className="object-details" aria-label="内容详情">
       <Button onClick={onClose}>关闭详情</Button>
       <h3>{object.title}</h3>
-      <MarkdownContent allowRelativeImages renderResourceImage={(source, alt) => <AssetImage source={source} alt={alt} basePath={liteasyPath(object.scopeId, { kind: "object", ref: refOf(object) })} />} value={objectDisplayText(object)} paperAnchors={object.paperAnchors} />
+      <ReferenceSourceContext.Provider value={liteasyPath(object.scopeId, { kind: "object", ref: refOf(object) })}><MarkdownContent allowRelativeImages renderResourceImage={(source, alt) => <AssetImage source={source} alt={alt} basePath={liteasyPath(object.scopeId, { kind: "object", ref: refOf(object) })} />} value={objectDisplayText(object)} paperAnchors={object.paperAnchors} /></ReferenceSourceContext.Provider>
       <PaperAnchorReferences anchors={object.paperAnchors ?? []} />
       {object.assets.map((asset) => (
         <ObjectAssetImage

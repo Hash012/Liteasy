@@ -1,3 +1,5 @@
+import { LocalArchivePanel } from "../features/local-archive/LocalArchivePanel";
+import { LocalFileOperationsTool } from "../controllers/LocalFileOperationsTool";
 import { ExtensionSettings, extensionSettingsMatch } from "../features/extensions/ExtensionSettings";
 import { useExtensionWorkbench } from "../features/extensions/extensionWorkbenchContext";
 import { useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from "react";
@@ -24,6 +26,7 @@ import { LocalMcpSettingsPanel } from "../features/local-mcp/LocalMcpSettingsPan
 import { SelectionLookupSettingsPanel } from "../features/selection-lookup/SelectionLookupSettingsPanel";
 
 type SettingsPaneProps = {
+  localScope?: string;
   documentMetadataSyncMessage?: string;
   libraryRootPath?: string | null;
   loadLegacyLibraryRoots?: () => Promise<string[]>;
@@ -48,6 +51,8 @@ const categoryIcons: Record<SettingsCategory, ReactElement> = {
 
 export function SettingsPane(props: SettingsPaneProps) {
   const extensions = useExtensionWorkbench();
+  const scope = props.localScope ?? "local";
+  const currentScope = useRef(scope); currentScope.current = scope;
   const [category, setCategory] = useState<SettingsCategory>("all");
   const [query, setQuery] = useState("");
   useEffect(() => {
@@ -77,6 +82,8 @@ export function SettingsPane(props: SettingsPaneProps) {
     papers: <PaperServicesSettingsPanel {...shared} />,
     recommendations: <RecommendationSettingsPanel {...shared} />,
     data: <DataLocationSettings embedded />,
+    "local-files": <LocalFileOperationsTool key={scope} scope={scope} currentScope={() => currentScope.current} />,
+    "local-archive": <LocalArchivePanel key={scope} scopeId={scope} />,
     library: <LibraryLocationPanel
       loadLegacyRoots={props.loadLegacyLibraryRoots} onBackup={props.onBackupLibrary}
       onChangeRoot={props.onChangeLibraryRoot} onOpenInFileManager={props.onOpenLibraryInFileManager}

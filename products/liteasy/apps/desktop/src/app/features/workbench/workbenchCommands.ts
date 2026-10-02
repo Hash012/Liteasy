@@ -1,4 +1,5 @@
 export const workbenchCommands = [
+  { id: "global-search", title: "搜索工作区", description: "检索当前工作区的文献、正文、笔记、批注和产物。", key: "f", shift: true, alt: false, keys: ["Mod", "Shift", "F"], search: "search find 搜索 查找 全文 全局" },
   { id: "open-file", title: "打开 PDF / EPUB 原文件", description: "直接阅读所选文件，不复制到文献库；关闭页面会释放读取授权。", key: "o", shift: false, alt: false, keys: ["Mod", "O"], search: "open pdf epub book 打开 本地 原文件 电子书" },
   { id: "open-note", title: "打开 Markdown 原文件", description: "选择本地笔记，直接阅读原位置文件；编辑后保存回原文件。", key: "o", shift: false, alt: true, keys: ["Mod", "Alt", "O"], search: "open markdown note 打开 本地 原文件 笔记" },
   { id: "open-folder", title: "连接笔记文件夹", description: "在原位置引用文件夹，保留目录层级；不复制或上传内容。", key: "o", shift: true, alt: false, keys: ["Mod", "Shift", "O"], search: "open folder vault 文件夹 目录 连接 引用" },

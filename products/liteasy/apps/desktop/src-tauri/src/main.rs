@@ -11,6 +11,7 @@ mod desktop_identity;
 mod device_control;
 mod direct_model;
 mod external_navigation;
+mod local_archive;
 mod local_library;
 mod local_mcp;
 mod native_open;
@@ -108,6 +109,14 @@ fn main() {
                 webdav::workspace::restore_webdav_preferences,
                 webdav::workspace::acknowledge_webdav_preferences,
                 note_files::note_files_dispatch,
+                local_archive::local_archive_catalog,
+                local_archive::local_archive_prepare_export,
+                local_archive::local_archive_prepare_restore,
+                local_archive::local_archive_commit,
+                local_archive::local_archive_cancel,
+                local_archive::local_archive_open_restored,
+                local_archive::local_archive_reveal,
+                local_archive::local_archive_read_note,
                 native_open::choose_native_open_file,
                 native_open::read_native_open_file,
                 native_open::release_native_open_file,

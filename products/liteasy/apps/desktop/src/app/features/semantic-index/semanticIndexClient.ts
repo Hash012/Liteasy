@@ -1,6 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { bm25, cosine, terms } from "../../../../../../packages/recommendation-core/index.mjs";
 export type IndexRecord = { id: string; path: string; revision: string; text: string; tokens: string; vector?: number[]; payload?: unknown };
+export type LiteralIndexPage = { hits: IndexRecord[]; total: number; nextOffset: number | null };
 export type IndexHit = { id: string; path: string; payload?: unknown; lexical?: number; semantic?: number };
 export async function contentFingerprint(text: string) {
   const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -30,7 +31,13 @@ export function createSemanticIndex(input: { scope: string; workspace: string; m
       result = { ok: true };
     } else if (action === "clear") { rows.clear(); result = { ok: true }; }
     else if (action === "delete") { for (const [key, row] of rows) if ((args.ids as string[]).includes(row.path)) rows.delete(key); result = { ok: true }; }
-    else {
+    else if (action === "literal_query") {
+      const clauses = (args.clauses as string[]).map((value) => value.toLowerCase());
+      const values = [...rows.values()].filter((row) => clauses.every((clause) => row.text.toLowerCase().includes(clause)) &&
+        (!args.group || (row.payload as { group?: string } | undefined)?.group === args.group)).sort((a, b) => a.path.localeCompare(b.path) || a.id.localeCompare(b.id));
+      const offset = Number(args.offset ?? 0), limit = Number(args.limit ?? 20);
+      result = { hits: values.slice(offset, offset + limit), total: values.length, nextOffset: offset + limit < values.length ? offset + limit : null };
+    } else {
       const values = [...rows.values()], scores = bm25(String(args.text || ""), values.map((row) => row.text));
       result = values.map((row, i) => ({ id: row.id, path: row.path, payload: row.payload, lexical: scores[i], semantic: cosine(args.vector as number[] | undefined, row.vector) }))
         .filter((row) => row.lexical > 0 || row.semantic > 0).sort((a, b) => b.semantic + b.lexical - a.semantic - a.lexical).slice(0, Number(args.limit ?? 100));
@@ -41,6 +48,10 @@ export function createSemanticIndex(input: { scope: string; workspace: string; m
     lookup: (ids: string[], signal?: AbortSignal) => dispatch<IndexRecord[]>("lookup", { ids }, signal),
     upsert: (records: IndexRecord[], signal?: AbortSignal) => dispatch("upsert", { records }, signal),
     search: (text: string, vector?: number[], signal?: AbortSignal) => dispatch<IndexHit[]>("search", { text: terms(text).join(" "), vector, limit: 100 }, signal),
+    literalQuery: (clauses: string[], options: { group?: string; offset?: number; limit?: number } = {}, signal?: AbortSignal) => {
+      if (!clauses.length || clauses.length > 16 || clauses.some((value) => !value || new TextEncoder().encode(value).length > 1024)) throw new Error("请输入最多 16 个检索词或引号短语。");
+      return dispatch<LiteralIndexPage>("literal_query", { clauses, ...options, offset: Math.max(0, Math.min(50000, options.offset ?? 0)), limit: Math.max(1, Math.min(100, options.limit ?? 20)) }, signal);
+    },
     remove: (paths: string[], signal?: AbortSignal) => dispatch("delete", { ids: paths }, signal),
     clear: () => dispatch("clear"),
   };

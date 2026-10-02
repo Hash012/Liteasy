@@ -128,3 +128,18 @@
 .file-status-bar > button { flex: 0 0 auto; min-height: 22px; height: 22px; padding-block: 0; }
 
 .workspace-command-bar:has(.shell-window-controls) { padding-right: 0; }
+
+/* Equal wings keep the search field centered in the whole application title bar. */
+.shell-command-wing { display: contents; }
+.workspace-command-bar.has-global-search { display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, 30%) minmax(0, 1fr); }
+.has-global-search .shell-command-wing { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.has-global-search .shell-command-wing-end { justify-content: flex-end; }
+.has-global-search .shell-global-search { width: 100%; min-width: 0; min-height: 28px; height: 28px; border-radius: 6px; justify-content: flex-start; color: var(--colorNeutralForeground3); background: var(--colorNeutralBackground1); }
+.shell-global-search-label { white-space: nowrap; }
+.shell-global-search kbd { margin-left: auto; font: inherit; font-size: 10px; opacity: .8; white-space: nowrap; }
+@media (max-width: 900px) { .shell-global-search kbd { display: none; } }
+@media (max-width: 600px) {
+  .workspace-command-bar.has-global-search { grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr); }
+  .has-global-search .shell-global-search { padding: 4px; }
+  .shell-global-search .shell-global-search-label { display: none; }
+}

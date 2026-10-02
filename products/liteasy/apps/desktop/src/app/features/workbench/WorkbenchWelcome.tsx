@@ -5,7 +5,7 @@ import { useWorkbenchCommands, useWorkbenchCommandAvailability } from "./workben
 import "./workbenchWelcome.css";
 
 export function WorkbenchCommandIcon({ id }: { id: WorkbenchCommandId }) {
-  const Icon = { "open-file": BookOpenRegular, "open-note": DocumentRegular, "open-folder": FolderOpenRegular, "preset-reading": BookOpenRegular, "preset-research": BeakerRegular, "preset-processing": PlayCircleRegular, "preset-custom": ArrowUndoRegular, library: BookRegular, assistant: BotRegular, settings: SettingsRegular, help: QuestionCircleRegular, commands: SearchRegular, "page-history": HistoryRegular, "active-pages": AppsRegular }[id];
+  const Icon = { "global-search": SearchRegular, "open-file": BookOpenRegular, "open-note": DocumentRegular, "open-folder": FolderOpenRegular, "preset-reading": BookOpenRegular, "preset-research": BeakerRegular, "preset-processing": PlayCircleRegular, "preset-custom": ArrowUndoRegular, library: BookRegular, assistant: BotRegular, settings: SettingsRegular, help: QuestionCircleRegular, commands: SearchRegular, "page-history": HistoryRegular, "active-pages": AppsRegular }[id];
   return <Icon aria-hidden="true" />;
 }
 export function ShortcutKeys({ id }: { id: WorkbenchCommandId }) {

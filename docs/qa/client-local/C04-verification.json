@@ -1,0 +1,77 @@
+{
+  "task": "C04",
+  "date": "2026-10-02",
+  "baseline": "0fba97be",
+  "status": "implemented_bounded_slice",
+  "environment": {
+    "os": "Ubuntu 24.04 x64 WSL2/WSLg",
+    "node": "22.13.1",
+    "rust": "1.98.0",
+    "browser": "Chromium 151",
+    "nativeWindows": false
+  },
+  "checks": [
+    {
+      "name": "affected unit tests",
+      "passed": 69,
+      "log": "/tmp/liteasy-c04-affected.log"
+    },
+    {
+      "name": "integration unit tests",
+      "passed": 25,
+      "log": "/tmp/liteasy-c04-integration-tests.log"
+    },
+    {
+      "name": "source/reveal tests",
+      "passed": 25,
+      "log": "/tmp/liteasy-c04-final-tests.log"
+    },
+    {
+      "name": "final source adapter tests",
+      "log": "/tmp/liteasy-c04-source-tests.log"
+    },
+    {
+      "name": "browser search",
+      "passed": 1,
+      "log": "/tmp/liteasy-c04-browser4.log"
+    },
+    {
+      "name": "workspace browser",
+      "passed": 6,
+      "log": "/tmp/liteasy-c04-browser3.log"
+    },
+    {
+      "name": "native literal query",
+      "passed": 3,
+      "log": "/tmp/liteasy-c04-rust.log"
+    },
+    {
+      "name": "SQLite synthetic benchmark",
+      "passed": 1,
+      "log": "/tmp/liteasy-c04-benchmark.log"
+    },
+    {
+      "name": "smoke",
+      "passed": 9,
+      "log": "/tmp/liteasy-c04-smoke.log"
+    },
+    {
+      "name": "locked cargo all-target check",
+      "status": "passed",
+      "log": "/tmp/liteasy-c04-check.log"
+    },
+    {
+      "name": "final production build",
+      "log": "/tmp/liteasy-c04-source-build.log"
+    }
+  ],
+  "contracts": "pending clean source commit",
+  "limitations": [
+    "Source count/text/chunk limits reported in UI",
+    "PDF coverage partial until provenance confirms complete extraction",
+    "External changes refresh on focus/open/manual action",
+    "No native Windows/macOS UI acceptance",
+    "No RSS budget claim or paid model calls",
+    "C06/C12 native commands compiled, real pickers not exercised in this integration"
+  ]
+}

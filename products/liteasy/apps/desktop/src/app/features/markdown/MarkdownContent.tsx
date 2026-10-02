@@ -1,6 +1,7 @@
+import { useResourceReveal, observeRenderedResource, rehypeResourcePositions } from "../resource-links/resourceReveal";
 import {
   Children, Component, createContext, createElement, isValidElement, lazy, memo, Suspense, useContext, useMemo,
-  useState, type ReactNode
+  useState, useRef, type ReactNode
 } from "react";
 import ReactMarkdown, { type Components, type Options, type UrlTransform } from "react-markdown";
 import rehypeKatex from "rehype-katex";
@@ -172,6 +173,8 @@ export const MarkdownContent = memo(function MarkdownContent({
   const references = useContext(ResourceReferencesContext);
   const explicitSource = useContext(ReferenceSourceContext), visualSource = useContext(VisualResourceContext);
   const referenceSource = explicitSource ?? visualSource;
+  const revealRoot = useRef<HTMLElement | null>(null);
+  useResourceReveal((target) => observeRenderedResource(revealRoot.current, target));
   const [navigationError, setNavigationError] = useState<string>();
   const markdown = useMemo(() => normalizeMath ? normalizeMarkdownMathDelimiters(value) : value, [normalizeMath, value]);
   const mergedComponents = useMemo<Components>(() => {
@@ -191,7 +194,7 @@ export const MarkdownContent = memo(function MarkdownContent({
       };
       merged.p = (props) => {
         const embedded = props.node?.children.some((child) => child.type === "element" && child.tagName === "img" && locator(String(child.properties.src ?? "")) !== undefined);
-        return embedded ? <div>{props.children}</div> : previousParagraph ? createElement(previousParagraph, props) : <p>{props.children}</p>;
+        return embedded ? <div>{props.children}</div> : previousParagraph ? createElement(previousParagraph, props) : <p data-source-line={props.node?.position?.start.line}>{props.children}</p>;
       };
       return merged;
     }
@@ -209,7 +212,7 @@ export const MarkdownContent = memo(function MarkdownContent({
     } };
   }, [components, inline, onOpenLiteasyPath, renderResourceImage, references, referenceSource]);
   const remark = useMemo(() => [...baseRemarkPlugins, ...remarkPlugins, ...(references ? [remarkResourceReferences] : []), remarkLiteasyLinks(liteasyLinkTitles), remarkPaperAnchorReferences(paperAnchors)], [liteasyLinkTitles, paperAnchors, remarkPlugins, Boolean(references)]);
-  const rehype = useMemo(() => [...rehypePluginsBeforeMath, ...mathPlugin], [rehypePluginsBeforeMath]);
+  const rehype = useMemo(() => [...rehypePluginsBeforeMath, ...mathPlugin, rehypeResourcePositions], [rehypePluginsBeforeMath]);
   const resolveUrl = useMemo<UrlTransform>(() => (url, key, node) =>
     references && (url.startsWith("liteasy-reference:") || url.startsWith("liteasy://") || referenceSource && !/^[a-z][a-z0-9+.-]*:|^[\/\\]/i.test(url)) ? url :
     key === "src" && renderResourceImage && (safeLiteasyMarkdownUrl(url) || allowRelativeImages && !/^[a-z][a-z0-9+.-]*:|^[\/\\]/i.test(url)) ? url : key === "href" && onOpenLiteasyPath && safeLiteasyMarkdownUrl(url) ? url
@@ -217,7 +220,7 @@ export const MarkdownContent = memo(function MarkdownContent({
   const Root = inline ? "span" : "div";
   if (!value.trim()) return emptyLabel ? <Root className={`markdown-content ${className} is-empty`}>{emptyLabel}</Root> : null;
   return (
-    <Root className={`markdown-content${inline ? " markdown-content--inline" : ""} ${className}`.trim()}>
+    <Root ref={(element) => { revealRoot.current = element; }} className={`markdown-content${inline ? " markdown-content--inline" : ""} ${className}`.trim()}>
       <StreamingContext.Provider value={streaming}>
         <InlineContext.Provider value={inline}>
           <ReactMarkdown components={mergedComponents} rehypePlugins={rehype} remarkPlugins={remark} skipHtml={html === "skip"} urlTransform={resolveUrl}>

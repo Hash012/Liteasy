@@ -1,3 +1,4 @@
+import { useResourceReveal, revealOffset } from "../resource-links/resourceReveal";
 import { useContext, useLayoutEffect, useRef, useState } from "react";
 import { Textarea } from "@fluentui/react-components";
 import { MarkdownEditingToolbar } from "./MarkdownEditingToolbar";
@@ -15,6 +16,13 @@ export function MarkdownSourceEditor({ value, onChange, documentKey, className =
   const references = useContext(ResourceReferencesContext);
   const [editingLink, setEditingLink] = useState(false);
   const textarea = useRef<HTMLTextAreaElement>(null);
+  useResourceReveal((target) => {
+    const element = textarea.current; if (!element) return;
+    const offset = revealOffset(element.value, target);
+    element.focus({ preventScroll: true }); element.setSelectionRange(offset, Math.min(element.value.length, offset + (target.quote?.length ?? 0)));
+    const line = element.value.slice(0, offset).split("\n").length;
+    element.scrollTop = Math.max(0, (line - 1) * (parseFloat(getComputedStyle(element).lineHeight) || 24) - element.clientHeight / 2);
+  });
   const history = useRef(new MarkdownEditHistory());
   const known = useRef({ value, documentKey });
   const selection = useRef<MarkdownSelection>({ start: 0, end: 0 });

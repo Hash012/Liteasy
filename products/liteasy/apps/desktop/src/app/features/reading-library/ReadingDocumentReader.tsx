@@ -1,3 +1,4 @@
+import { useResourceReveal } from "../resource-links/resourceReveal";
 import { SystemFontPicker } from "../settings/SystemFontPicker";
 import { defaultReadingFontCss, readingFontOptions } from "../settings/readingFonts";
 import { memo, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
@@ -76,6 +77,7 @@ const EpubContent = memo(function EpubContent({ chapter, document }: { chapter: 
 export type ReadingDocumentReaderProps = {
   document: ParsedReadingDocument;
   documentId: string;
+  resourcePath?: string;
   storageScope: string;
   onProgressChange?: (progress: number) => void;
 };
@@ -85,7 +87,7 @@ export function ReadingDocumentReader(props: ReadingDocumentReaderProps) {
   return <ReaderSession key={`${props.storageScope}\u0000${props.documentId}`} {...props} />;
 }
 
-function ReaderSession({ document, documentId, storageScope, onProgressChange }: ReadingDocumentReaderProps) {
+function ReaderSession({ document, documentId, storageScope, onProgressChange, resourcePath }: ReadingDocumentReaderProps) {
   const settingsKey = `liteasy.reading.preferences.v1:${encodeURIComponent(storageScope)}`;
   const positionKey = `liteasy.reading.position.v1:${encodeURIComponent(storageScope)}:${encodeURIComponent(documentId)}`;
   const [preferences, setPreferences] = useState(() => readPreferences(settingsKey));
@@ -128,6 +130,24 @@ function ReaderSession({ document, documentId, storageScope, onProgressChange }:
     updatePosition({ chapterId: id, ratio: 0 });
     setJump({ anchor, occurrence, query: deferredQuery, nonce: Date.now() + Math.random() });
   };
+  useResourceReveal((target) => {
+    if (!target.quote) return;
+    // Source import concatenates chapter title + plain text. Recover its chapter and occurrence without re-parsing or inventing page numbers.
+    let line = 1;
+    for (const item of document.chapters) {
+      const section = `${item.title}\n\n${item.plainText}\n\n`;
+      const nextLine = line + (section.match(/\n/g)?.length ?? 0);
+      if ((target.line ?? 1) < nextLine) {
+        const prior = section.split("\n").slice(0, Math.max(0, (target.line ?? 1) - line)).join("\n");
+        const term = target.quote.toLowerCase(), prefix = prior.slice(item.title.length + 2).toLowerCase();
+        let occurrence = 0, from = 0;
+        while ((from = prefix.indexOf(term, from)) >= 0) { occurrence++; from += term.length; }
+        updatePosition({ chapterId: item.id, ratio: 0 }); setQuery(target.quote);
+        setJump({ occurrence, query: target.quote, nonce: Date.now() }); return;
+      }
+      line = nextLine;
+    }
+  }, resourcePath);
   useLayoutEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller) return;

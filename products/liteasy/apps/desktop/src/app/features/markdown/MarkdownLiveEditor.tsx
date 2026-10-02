@@ -1,3 +1,4 @@
+import { useResourceReveal, revealOffset } from "../resource-links/resourceReveal";
 import { useContext, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { EditorState, StateEffect, StateField, type Range } from "@codemirror/state";
@@ -81,6 +82,11 @@ export function MarkdownLiveEditor({ value, onChange, documentKey, className = "
   const latest = useRef({ onChange, value }); latest.current = { onChange, value };
   const [previews, setPreviews] = useState<Preview[]>([]), [tick, setTick] = useState(0), [linkOpen, setLinkOpen] = useState(false);
   const editable = useRef(readOnly); editable.current = readOnly;
+  useResourceReveal((target) => {
+    const view = editor.current; if (!view) return;
+    const offset = revealOffset(view.state.doc.toString(), target);
+    view.dispatch({ selection: { anchor: offset, head: Math.min(view.state.doc.length, offset + (target.quote?.length ?? 0)) }, effects: [focused.of(true), EditorView.scrollIntoView(offset, { y: "center" })] });
+  });
   const makeState = useRef<(text: string) => EditorState>();
   useLayoutEffect(() => {
     let disposed = false, queued = false;

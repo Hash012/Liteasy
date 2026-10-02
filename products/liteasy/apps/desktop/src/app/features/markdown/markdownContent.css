@@ -28,3 +28,4 @@
 .markdown-content--inline .markdown-content__image { display: inline-grid; }
 .assistant-markdown .markdown-content__code-block { background: #18232c; color: #edf5fa; }
 .assistant-markdown .markdown-content__code-language { border-color: rgba(255, 255, 255, .12); color: #b8cbd8; }
+.resource-search-location { outline: 2px solid var(--colorBrandStroke1); outline-offset: 3px; border-radius: 4px; }

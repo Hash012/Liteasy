@@ -1,3 +1,6 @@
+import { revealResource } from "../features/resource-links/resourceReveal";
+import { useGlobalSearchController } from "../controllers/useGlobalSearchController";
+import { GlobalSearchDialog } from "../features/global-search/GlobalSearchDialog";
 import { MarkdownEditingContext } from "../features/markdown/MarkdownEditingContext";
 import { BibliographicMetadataEditor } from "../features/library/BibliographicMetadataEditor";
 import { useResourceLinksController } from "../controllers/useResourceLinksController";
@@ -1272,7 +1275,21 @@ export function AppShell({
       "open-folder": "正在打开文件，请稍候。"
     } : {})
   };
+  const searchablePapers = useMemo(() => [...new Map([...workspaceState.papers, ...originalReaderPapers].map((paper) => [paper.id, paper])).values()], [workspaceState.papers, originalReaderPapers]);
+  const globalSearch = useGlobalSearchController({ repository: objectWorkbench.repository, papers: searchablePapers,
+    open: async (hit) => {
+      if (hit.paperId && hit.page) { openEvidenceInReader({ paperId: hit.paperId, page: hit.page, evidenceId: hit.annotationId || hit.id, quote: hit.quote || hit.text.slice(0, 250) }); return; }
+      if (hit.paperId) { openPaperInReader(hit.paperId); return; }
+      if (hit.readingId) {
+        const entry = readingLibrary.entries.find((entry) => entry.id === hit.readingId);
+        if (!entry) throw new Error("文件已移出当前文献库。");
+        readingLibrary.open(entry);
+      } else await openAgentAsset(hit.path);
+      revealResource({ path: hit.path, line: hit.line, quote: hit.quote });
+    },
+  });
   const workbenchCommands = useWorkbenchCommandsController({
+    "global-search": globalSearch.show,
     "open-file": originalFiles.openFile,
     "open-note": workbenchStart.openNote,
     "open-folder": workbenchStart.openFolder,
@@ -2687,8 +2704,9 @@ export function AppShell({
         options={workspaceShell.pageSwitcher.options} currentKey={workspaceShell.pageSwitcher.currentKey}
         onModeChange={workspaceShell.pageSwitcher.show} onSelect={workspaceShell.pageSwitcher.select}
         onClose={workspaceShell.pageSwitcher.close} pending={workspaceShell.pageSwitcher.pending} error={workspaceShell.pageSwitcher.error} /> : null}
-      <WorkspaceCommandBar state={workspaceShell.toolbar} windowControls={windowControls} onOpenAi={aiWorkbench.show} />
+      <WorkspaceCommandBar state={workspaceShell.toolbar} windowControls={windowControls} onOpenAi={aiWorkbench.show} onOpenSearch={globalSearch.show} />
       {workbenchStart.notice ? <div role="status" className="workbench-command-notice"><span>{workbenchStart.notice}</span><button type="button" onClick={workbenchStart.dismissNotice}>关闭提示</button></div> : null}
+      <GlobalSearchDialog model={globalSearch} />
       {workbenchCommands.open ? <WorkbenchCommandsDialog onClose={workbenchCommands.close} onExecute={workbenchCommands.execute} /> : null}
       <AiWorkbenchDialog open={aiWorkbench.open} papers={aiWorkbench.papers} openedPapers={openReaderPapers}
         activePaperId={openReaderPapers.find((paper) => `pdf-${paper.id}` === workspaceShell.activeSurfaceId)?.id ?? activeReaderPaper?.id}
