@@ -40,6 +40,8 @@ pub async fn choose_native_open_file(scope: String) -> Result<Option<OpenFile>, 
     tauri::async_runtime::spawn_blocking(move || {
         check_scope(&scope)?;
         let mut files = files().lock().map_err(|_| "原文件读取授权暂时不可用。")?;
+        check_scope(&scope)?;
+        files.retain_scope(&scope);
         let descriptor = files.select(&scope, &selected)?;
         if let Err(error) = check_scope(&scope) {
             files.release(&scope, &descriptor.id);
@@ -109,10 +111,15 @@ fn enqueue_paths(app: &AppHandle, paths: Vec<std::path::PathBuf>) {
     let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let result = scope.and_then(|scope| {
-            state
+            check_scope(&scope)?;
+            let mut files = state
                 .lock()
-                .map_err(|_| "native_open_state_unavailable".to_string())?
-                .enqueue(&scope, paths);
+                .map_err(|_| "native_open_state_unavailable".to_string())?;
+            // A delayed old-scope task must neither publish nor purge the new scope.
+            let current_scope = crate::desktop_identity::local_object_scope()?;
+            files.enqueue_current(&scope, &current_scope, paths);
+            let current_scope = crate::desktop_identity::local_object_scope()?;
+            files.retain_scope(&current_scope);
             Ok(())
         });
         if result.is_err() {

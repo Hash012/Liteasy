@@ -12,6 +12,8 @@
 
 授权只在本次进程有效。关闭/失败/替换/账户切换时前端应调用 release。release 验证授权原 scope 与不可预测 id，允许清理已退出账户的授权，不返回数据。冷启动在原生身份恢复前收到的文件归属 `local`；随后进入登录账户不会自动转移该授权，用户须在该账户重新选择文件。重新启动后必须重新选择原文件；原文件没有迁移或写入，既有笔记授权不变。
 
+审查补充修复：当前账户 drain 或选择文件会清理其他账户全部授权与未消费队列；原生异步 enqueue 在获得锁前后核对捕获账户，并在完成后再次清理非当前账户。旧账户的延迟任务不会修改新账户队列；切回旧账户也不会再次打开此前未消费的文件。Windows 使用现有 `windows-sys` 的 `GetFileInformationByHandle` 比较卷序列号和文件索引，读取前后打开路径新句柄检查，避免同长度/同 mtime 的原子替换继续命中旧句柄；API 失败拒绝读取。API 签名与 feature 链已对照本机缓存 `windows-sys-0.61.2.crate` 源码，未增加依赖或改锁文件。
+
 ## 集成要求（由集成人执行）
 
 1. `src-tauri/src/main.rs` 增加 `mod native_open;`。single-instance 原来的空回调替换为：
@@ -45,6 +47,8 @@
 | `cargo test --locked --no-default-features --manifest-path products/liteasy/apps/desktop/src-tauri/Cargo.toml --test native_open` | 首次 exit 101：新增回归引用的 native 模块不存在 | 基线缺少端口 |
 | 同上，添加溢出回归后 | exit 101：8 passed / 1 failed，重复路径队列溢出错误计数为 0 | 先暴露缺口，再修复 |
 | 同上，修复后 | exit 0：9 passed / 0 failed | 真实隔离临时文件和 Unix 符号链接，无用户资料，无 Tauri 窗口/IPC |
+| 同上，审查增加账户生命周期回归后 | exit 101：10 passed / 1 failed，切换账户后旧授权仍可读取 | 先复现未消费队列/授权遗留 |
+| 同上，账户生命周期修复后 | exit 0：11 passed / 0 failed | 包含旧账户队列清理、延迟旧账户任务拒绝、同长度/mtime 替换；最后一项此处仅执行 Unix 实现 |
 | `cargo test --locked --no-default-features --manifest-path products/liteasy/apps/desktop/src-tauri/Cargo.toml --bin liteasy-desktop local_dev::tests` | exit 0：2 passed / 0 failed | 开发隔离命令边界 |
 | `rustfmt --edition 2021`（本切片三个新增 Rust 文件）及 `git diff --check` | exit 0 | 格式与空白检查 |
 
@@ -53,5 +57,7 @@
 ## 未完成与下一步
 
 原生 picker 自动化目前受阻；实际 Tauri IPC、冷/热实例转交、macOS Opened、Windows 路径/重解析点/长路径、外置盘/只读权限均未验证。Unix 符号链接检查不替代 Windows 测试。没有执行安装器、签名、公证、升级、三平台一致性验证。没有新增完整能力报告、Reveal 统一端口、退出/活动任务语义或持久文件恢复授权。
+
+Windows 文件身份分支与跨平台替换回归已实现，但当前 Rust 未安装 Windows target，因此该分支未编译、未运行；须由现有 Windows CI/真机执行。源码 API 核对不是 Windows 验收。
 
 下一最小步骤：完成上述接线与 C03 读者消费，使用隔离 fixture 在真实 Tauri 中验证两次实例启动与无丢失转交，再用原生 Windows/macOS 重复验收。撤回本切片只需撤回代码和接线；无 schema、存储迁移、文件副本或写入需要回滚。

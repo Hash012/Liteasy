@@ -17,7 +17,7 @@
     {
       "command": "cargo test --locked --no-default-features --manifest-path products/liteasy/apps/desktop/src-tauri/Cargo.toml --test native_open",
       "exit_code": 0,
-      "result": "9 passed; prior red queue overflow regression exit 101",
+      "result": "11 passed after scope cleanup follow-up; prior lifecycle regression exit 101 with 10 passed/1 failed; prior initial overflow regression also failed before fix",
       "transport": "direct Rust core with actual temporary files, no Tauri IPC"
     },
     {
@@ -37,7 +37,7 @@
         "docs/agent-dev/2026-10-02-client-c10-native-open.md"
       ],
       "used_mock": false,
-      "reason": "9 core grant/parser/queue tests against isolated real temporary files, 2 existing profile boundary tests; wrapper/main integration not yet compiled on this branch"
+      "reason": "11 core grant/parser/queue tests against isolated real temporary files, plus prior 2 profile boundary tests; Windows identity branch not compiled/run, final wrapper integration delegated to root"
     },
     "typescript_build": {
       "status": "not_run",
@@ -133,9 +133,10 @@
     "Cold local-scope OS grants never automatically transfer to subsequently restored signed-in user; reselect required.",
     "Grants expire at process exit; original file reopening after restart requires reselection.",
     "Windows/macOS, installers/signing/notarization, broad capability report and Reveal/quit semantics not validated or implemented here.",
-    "100 MiB per file, 32 pending items per batch, 256 active grants; frontend must release closed/failed/stale selections."
+    "100 MiB per file, 32 pending items per batch, 256 active grants; frontend must release closed/failed/stale selections.",
+    "Windows GetFileInformationByHandle code is matched to cached windows-sys 0.61.2 primary source, but Windows target unavailable: compile/runtime not_run."
   ],
   "release_ready": false,
-  "notes": "Head hash is null because this report accompanies the source commit; base commit and actual uncommitted source verification stated above. See final integration report for final HEAD and native commands. No private files or paid models used.",
+  "notes": "Head hash is null because this report accompanies the source commit; base commit and actual uncommitted source verification stated above. See final integration report for final HEAD and native commands. No private files or paid models used. Follow-up source based on 6ddf4ae5 drops undrained old-scope grants and refuses delayed old-scope enqueue; 11 Linux core tests passed.",
   "base_commit": "8d31bf57"
 }

@@ -42,6 +42,8 @@ struct Grant {
     path: PathBuf,
     file: File,
     selected_metadata: Metadata,
+    #[cfg(windows)]
+    selected_identity: (u32, u64),
     descriptor: OpenFile,
 }
 
@@ -73,6 +75,35 @@ fn unchanged(left: &Metadata, right: &Metadata) -> bool {
     left.len() == right.len() && left.modified().ok() == right.modified().ok()
 }
 
+#[cfg(windows)]
+fn file_identity(file: &File) -> Result<(u32, u64), String> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{
+        GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+    };
+    let mut information = BY_HANDLE_FILE_INFORMATION::default();
+    // SAFETY: File owns a live handle and information points to writable storage
+    // of the exact Win32 structure type for the duration of this synchronous call.
+    if unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut information) } == 0 {
+        return Err("无法确认原文件身份，请重新选择。".into());
+    }
+    Ok((
+        information.dwVolumeSerialNumber,
+        (u64::from(information.nFileIndexHigh) << 32) | u64::from(information.nFileIndexLow),
+    ))
+}
+
+#[cfg(windows)]
+fn verify_path_identity(path: &Path, selected_identity: (u32, u64)) -> Result<(), String> {
+    // A fresh handle detects atomic replacement even when size and mtime match.
+    // Never fall back to metadata equality if the identity API is unavailable.
+    let current = File::open(path).map_err(|_| "原文件不可用，请重新选择。")?;
+    if file_identity(&current)? != selected_identity {
+        return Err("原文件已更改或移动，请重新选择。".into());
+    }
+    Ok(())
+}
+
 fn file_metadata(path: &Path) -> Result<Metadata, String> {
     let metadata = fs::symlink_metadata(path).map_err(|_| "原文件不可用，请重新选择。")?;
     if link_like(&metadata) || !metadata.is_file() {
@@ -85,6 +116,25 @@ fn file_metadata(path: &Path) -> Result<Metadata, String> {
 }
 
 impl OpenFiles {
+    pub fn retain_scope(&mut self, scope: &str) {
+        self.grants.retain(|_, grant| grant.scope == scope);
+        self.pending.retain(|owner, _| owner == scope);
+    }
+
+    pub fn enqueue_current(
+        &mut self,
+        scope: &str,
+        current_scope: &str,
+        paths: Vec<PathBuf>,
+    ) -> bool {
+        if scope != current_scope {
+            return false;
+        }
+        self.retain_scope(scope);
+        self.enqueue(scope, paths);
+        true
+    }
+
     pub fn select(&mut self, scope: &str, selected: &Path) -> Result<OpenFile, String> {
         file_metadata(selected)?;
         let path = selected
@@ -101,6 +151,10 @@ impl OpenFiles {
         }
         let mut file = File::open(&path).map_err(|_| "无法读取原文件，请检查权限后重新选择。")?;
         let opened_metadata = file.metadata().map_err(|_| "无法读取原文件信息。")?;
+        #[cfg(windows)]
+        let selected_identity = file_identity(&file)?;
+        #[cfg(windows)]
+        verify_path_identity(&path, selected_identity)?;
         if !unchanged(&metadata, &opened_metadata) {
             return Err("原文件在打开时发生变化，请重新选择。".into());
         }
@@ -112,6 +166,10 @@ impl OpenFiles {
             return Err("文件内容与扩展名不符，无法打开。".into());
         }
         if let Some(existing) = self.grants.values().find(|grant| {
+            #[cfg(windows)]
+            if grant.selected_identity != selected_identity {
+                return false;
+            }
             grant.scope == scope
                 && grant.path == path
                 && unchanged(&grant.selected_metadata, &opened_metadata)
@@ -156,6 +214,8 @@ impl OpenFiles {
                 path,
                 file,
                 selected_metadata: opened_metadata,
+                #[cfg(windows)]
+                selected_identity,
                 descriptor: descriptor.clone(),
             },
         );
@@ -174,6 +234,8 @@ impl OpenFiles {
         {
             return Err("原文件已更改或移动，请重新选择。".into());
         }
+        #[cfg(windows)]
+        verify_path_identity(&grant.path, grant.selected_identity)?;
         grant.file.rewind().map_err(|_| "无法读取原文件。")?;
         let mut bytes = Vec::with_capacity(grant.descriptor.size_bytes as usize);
         Read::by_ref(&mut grant.file)
@@ -186,6 +248,8 @@ impl OpenFiles {
         {
             return Err("原文件在读取时发生变化，请重新选择。".into());
         }
+        #[cfg(windows)]
+        verify_path_identity(&grant.path, grant.selected_identity)?;
         Ok(bytes)
     }
 
@@ -237,6 +301,9 @@ impl OpenFiles {
     }
 
     pub fn drain(&mut self, scope: &str) -> OpenBatch {
+        // Only the verified current native principal may call this boundary.
+        // Retire undisplayed grants too, so returning to an old scope cannot reopen them.
+        self.retain_scope(scope);
         self.pending.remove(scope).unwrap_or_default()
     }
 }

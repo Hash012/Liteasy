@@ -55,7 +55,6 @@ fn exact_file_grants_are_read_only_scope_bound_and_survive_queue_drain() {
     fs::write(&path, b"%PDF-1.7\nfixture").unwrap();
     let mut files = OpenFiles::default();
     files.enqueue("local", vec![path.clone(), path.clone()]);
-    assert!(files.drain("user:other").files.is_empty());
     let queued = files.drain("local");
     assert_eq!(queued.files.len(), 1);
     let grant = &queued.files[0];
@@ -159,6 +158,56 @@ fn file_url_handoff_rejects_remote_hosts_queries_and_fragments() {
     ] {
         assert!(files::path_from_url(&url::Url::parse(input).unwrap()).is_none());
     }
+}
+
+#[test]
+fn scope_switch_discards_undrained_files_and_rejects_late_old_scope_enqueue() {
+    let root = fixture();
+    let path = root.join("old.pdf");
+    fs::write(&path, b"%PDF-1.7\nfixture").unwrap();
+    let mut files = OpenFiles::default();
+    let old = files.select("local", &path).unwrap();
+    files.enqueue("local", vec![path.clone()]);
+    assert!(files.drain("user:b").files.is_empty());
+    assert!(files.read("local", &old.id).is_err());
+    let current = files.select("user:b", &path).unwrap();
+    assert!(!files.enqueue_current("local", "user:b", vec![path.clone()]));
+    assert!(files.read("user:b", &current.id).is_ok());
+    assert!(files.drain("local").files.is_empty());
+    assert!(files.read("user:b", &current.id).is_err());
+    drop(files);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn replacing_a_file_with_same_length_and_mtime_requires_new_selection() {
+    let root = fixture();
+    let path = root.join("selected.pdf");
+    let replacement = root.join("replacement.pdf");
+    fs::write(&path, b"%PDF-1.7\noriginal").unwrap();
+    fs::write(&replacement, b"%PDF-1.7\nreplaced").unwrap();
+    let modified = fs::metadata(&path).unwrap().modified().unwrap();
+    fs::OpenOptions::new()
+        .write(true)
+        .open(&replacement)
+        .unwrap()
+        .set_times(fs::FileTimes::new().set_modified(modified))
+        .unwrap();
+    let mut files = OpenFiles::default();
+    let old = files.select("local", &path).unwrap();
+    // Move the selected inode aside so Windows sharing permits replacement too.
+    fs::rename(&path, root.join("previous.pdf")).unwrap();
+    fs::rename(&replacement, &path).unwrap();
+    assert_eq!(fs::metadata(&path).unwrap().modified().unwrap(), modified);
+    assert!(files.read("local", &old.id).is_err());
+    let selected = files.select("local", &path).unwrap();
+    assert_ne!(selected.id, old.id);
+    assert_eq!(
+        files.read("local", &selected.id).unwrap(),
+        b"%PDF-1.7\nreplaced"
+    );
+    drop(files);
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[cfg(unix)]
