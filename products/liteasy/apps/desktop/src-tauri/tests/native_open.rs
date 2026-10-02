@@ -21,6 +21,10 @@ fn argv_retains_multiple_unicode_files_and_resolves_sender_cwd() {
     let root = fixture();
     let first = root.join("中文 空格 #1.pdf");
     let second = root.join("book.epub");
+    let pdf_bytes = b"%PDF-1.7\nUnicode argv fixture";
+    let epub_bytes = b"PK\x03\x04File URL handoff fixture";
+    fs::write(&first, pdf_bytes).unwrap();
+    fs::write(&second, epub_bytes).unwrap();
     let url = url::Url::from_file_path(&second).unwrap();
     let argv = [
         "Liteasy",
@@ -33,7 +37,22 @@ fn argv_retains_multiple_unicode_files_and_resolves_sender_cwd() {
     .into_iter()
     .map(OsString::from)
     .collect::<Vec<_>>();
-    assert_eq!(paths_from_argv(argv, &root), vec![first, second]);
+    let paths = paths_from_argv(argv, &root);
+    // Windows file URLs round-trip to ordinary paths, while canonicalize()
+    // returns verbatim paths. Verify the actual targets, not prefix spelling.
+    let targets = paths
+        .iter()
+        .map(|path| path.canonicalize().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(targets, vec![first, second]);
+    let mut files = OpenFiles::default();
+    files.enqueue("local", paths);
+    let batch = files.drain("local");
+    assert!(batch.errors.is_empty());
+    assert_eq!(batch.files.len(), 2);
+    assert_eq!(files.read("local", &batch.files[0].id).unwrap(), pdf_bytes);
+    assert_eq!(files.read("local", &batch.files[1].id).unwrap(), epub_bytes);
+    drop(files);
     fs::remove_dir_all(root).unwrap();
 }
 
