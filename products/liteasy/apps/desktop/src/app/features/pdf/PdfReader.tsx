@@ -1554,6 +1554,8 @@ export function PdfReader({
   const [annotations, setAnnotations] = useState<PdfAnnotationV2[]>([]);
   const annotationsRef = useRef<PdfAnnotationV2[]>([]);
   annotationsRef.current = annotations;
+  const onPaperAnnotatedRef = useRef(onPaperAnnotated);
+  onPaperAnnotatedRef.current = onPaperAnnotated;
   const [selectedColor, setSelectedColor] = useState<HighlightColor>("yellow");
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
   const [defaultPageSize, setDefaultPageSize] = useState({ width: 760, height: 980 });
@@ -1665,7 +1667,13 @@ export function PdfReader({
   }));
   const [hydratedWhiteboardStorageKey, setHydratedWhiteboardStorageKey] = useState<string | null>(null);
   const [autoPublicAnnotations, setAutoPublicAnnotations] = useState(false);
-  const [hydratedAnnotationStorageKey, setHydratedAnnotationStorageKey] = useState<string | null>(null);
+  const [hydratedAnnotationSource, setHydratedAnnotationSource] = useState<{
+    storageKey: string | null;
+    contentHash?: string;
+  } | null>(null);
+  // A replacement at the same path must finish reading before its hash can be saved.
+  const hydratedAnnotationStorageKey = hydratedAnnotationSource?.storageKey === annotationStorageKey &&
+    hydratedAnnotationSource.contentHash === activePaper?.contentHash ? annotationStorageKey : null;
   const [annotationLoadError, setAnnotationLoadError] = useState("");
   const [annotationSaveError, setAnnotationSaveError] = useState("");
   const [annotationLoadAttempt, setAnnotationLoadAttempt] = useState(0);
@@ -2054,7 +2062,7 @@ export function PdfReader({
       autoPublic: browserMigration?.autoPublic ?? loadPdfAnnotationAutoPublic(autoPublicStorageKey),
       version: 2
     }, fallbackPaperIdentity);
-    setHydratedAnnotationStorageKey(null);
+    setHydratedAnnotationSource(null);
     setAnnotationLoadError("");
     setAnnotationSaveError("");
     setReadingAnnotationId(undefined);
@@ -2065,7 +2073,7 @@ export function PdfReader({
     let readSucceeded = !isUserPaperArtifactStoreAvailable();
 
     if (!activePaper?.id) {
-      setHydratedAnnotationStorageKey(annotationStorageKey);
+      setHydratedAnnotationSource({ storageKey: annotationStorageKey, contentHash: activePaper?.contentHash });
       return undefined;
     }
 
@@ -2100,14 +2108,14 @@ export function PdfReader({
       })
       .finally(() => {
         if (!cancelled && readSucceeded) {
-          setHydratedAnnotationStorageKey(annotationStorageKey);
+          setHydratedAnnotationSource({ storageKey: annotationStorageKey, contentHash: activePaper.contentHash });
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [activePaper, annotationStorageKey, autoPublicStorageKey, annotationLoadAttempt]);
+  }, [activePaper, activePaper?.contentHash, annotationStorageKey, autoPublicStorageKey, annotationLoadAttempt]);
 
   useEffect(() => {
     setSelection(null);
@@ -2222,11 +2230,13 @@ export function PdfReader({
             setAnnotationSaveError(`批注尚未写入本地文献库：${detail}。`);
             setStatus(`批注尚未写入本地文献库：${detail}。请检查库目录后重试。`);
           });
-        if (annotations.length > 0 && onPaperAnnotated) {
+        if (annotations.length > 0 && onPaperAnnotatedRef.current) {
           // Annotating a paper whose body is still in the disposable cache promotes it
           // into the library, so clearing the cache cannot strip the body out from under
           // the user's own marks.
-          void onPaperAnnotated(activePaper.id).catch((error) => {
+          // Parent callbacks can change when a save invalidates search; that alone
+          // must not cause another save and another invalidation.
+          void onPaperAnnotatedRef.current(activePaper.id).catch((error) => {
             const detail = error instanceof Error ? error.message : "未知错误";
             setStatus(`批注已保存，但 PDF 自动转入文献库失败：${detail}。清理缓存前请重试。`);
           });
@@ -2235,12 +2245,12 @@ export function PdfReader({
     }
   }, [
     activePaper?.id,
+    activePaper?.contentHash,
     annotationStorageKey,
     annotations,
     autoPublicStorageKey,
     autoPublicAnnotations,
-    hydratedAnnotationStorageKey,
-    onPaperAnnotated
+    hydratedAnnotationStorageKey
   ]);
 
   useEffect(() => {
