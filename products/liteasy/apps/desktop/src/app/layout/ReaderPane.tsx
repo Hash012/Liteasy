@@ -1,3 +1,4 @@
+import type { PdfAppearance } from "../features/pdf/PdfAppearanceControl";
 import { GenerationPromptDialog } from "../features/ai-prompts/GenerationPromptDialog";
 import type { PdfQuickAskRequest } from "../features/pdf/pdfQuickAsk";
 import type { SelectionLookupPort } from "../features/selection-lookup/selectionLookup.types";
@@ -102,6 +103,8 @@ type ReaderPaneProps = {
   intuechoSessionId?: string;
   mineruFiguresByPaperId?: Record<string, MineruFigure[]>;
   pdfBackground?: string;
+  pdfAppearance?: PdfAppearance;
+  onPdfAppearanceChange?: (value: PdfAppearance) => void;
   onStartAnalysis: (artifactType: ArtifactType, selectedPapers?: Paper[], options?: import("../features/artifacts/useArtifactActions").AgentArtifactGenerationOptions) => void | string;
   onToggleBottomPane?: () => void;
   onToggleLeftPane?: () => void;
@@ -166,7 +169,7 @@ export function ReaderPane({
   intuechoEndpoint,
   intuechoSessionId,
   mineruFiguresByPaperId,
-  pdfBackground,
+  pdfBackground, pdfAppearance, onPdfAppearanceChange,
   onStartAnalysis,
   onToggleBottomPane,
   onToggleLeftPane,
@@ -200,6 +203,9 @@ export function ReaderPane({
     }} /> : null}
     {analysisFeedback ? <span role="status" className="reader-ai-feedback" title={analysisFeedback}>{analysisFeedback}</span> : null}
   </> : null;
+  const readingModeControls = <>{thinReadingButton}
+    <Button size="small" onClick={() => setReadingMode(false)}>PDF 模式</Button>
+  </>;
   const analysisPapers = useMemo(() => {
     const selectedPaperIdSet = new Set(selectedPaperIds);
     return selectedPapers.filter((paper) => selectedPaperIdSet.has(paper.id));
@@ -225,9 +231,9 @@ export function ReaderPane({
             onEnterReadingMode={readingContent ? () => setReadingMode(true) : undefined}
             onExitReadingMode={() => setReadingMode(false)}
             readingView={readingVisible ? (annotations) => <section aria-label="论文阅读模式" className="reader-reading-surface">
-              {thinReadingButton}
-              <Button size="small" onClick={() => setReadingMode(false)}>PDF 模式</Button>
-              {typeof readingContent === "function" ? readingContent(annotations) : readingContent}
+              {typeof readingContent === "function"
+                ? readingContent({ ...annotations, readerControls: readingModeControls })
+                : <><div className="reader-reading-actions">{readingModeControls}</div>{readingContent}</>}
             </section> : undefined}
             onDocumentInfo={onDocumentInfo}
             onQuickAsk={onQuickAsk}
@@ -247,6 +253,7 @@ export function ReaderPane({
             organizationAnnotationActorId={organizationAnnotationActorId}
             canModerateOrganizationAnnotations={canModerateOrganizationAnnotations}
             pdfBackground={pdfBackground}
+            pdfAppearance={pdfAppearance} onPdfAppearanceChange={onPdfAppearanceChange}
             onPaperAnnotated={onPaperAnnotated}
             onAddSelectionToConversation={onAddReaderContextToConversation}
             onSelectionChanged={onReaderSelectionChanged}

@@ -72,3 +72,13 @@ test("Markdown live preview is the default and manual mode/autosave preferences 
   localStorage.setItem("liteasy.view-settings.v1", '{"view.markdown_mode":"future-mode"}');
   expect(createSettingsStore().getState()["view.markdown_mode"]).toBe("live");
 });
+
+test("persists night reading and original image colors independently from the application theme", () => {
+  const store = createSettingsStore();
+  store.apply({ intent: "update_setting", target: "view.pdf_background", value: "night" });
+  store.apply({ intent: "update_setting", target: "view.pdf_preserve_images", value: false });
+  const restored = createSettingsStore().getState();
+  expect(restored["view.pdf_background"]).toBe("night");
+  expect(restored["view.pdf_preserve_images"]).toBe(false);
+  expect(resolvePdfReadingBackground(restored)).toBe("#20252a");
+});

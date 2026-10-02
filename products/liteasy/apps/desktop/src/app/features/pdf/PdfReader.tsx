@@ -1,3 +1,5 @@
+import { applyPdfReadingColors, pdfReadingPalette } from "./pdfReadingColors";
+import { PdfAppearanceControl, type PdfAppearance } from "./PdfAppearanceControl";
 import { MarkdownEditor } from "../markdown/MarkdownEditor";
 import { ReaderExtensionActions } from "../extensions/ReaderExtensionActions";
 import { PaperSelectionTools } from "./PaperSelectionTools";
@@ -266,6 +268,8 @@ type PdfReaderProps = {
   ) => Promise<{ created: boolean; documentId: string } | void>;
   onOpenLiteratureVersion?: (literature: LiteratureRecord, relation: LiteratureRelation) => void | Promise<void>;
   pdfBackground?: string;
+  pdfAppearance?: PdfAppearance;
+  onPdfAppearanceChange?: (value: PdfAppearance) => void;
   onPaperAnnotated?: (paperId: string) => Promise<void>;
   selectedPapers: Paper[];
   targetEvidence?: PdfEvidenceTarget | null;
@@ -1077,6 +1081,8 @@ type PdfPageViewProps = {
   renderActive: boolean;
   defaultPageSize: { width: number; height: number };
   pixelRatio: number;
+  readingBackground: string;
+  preserveImages: boolean;
   pdfDocument: PDFDocumentProxy | null;
   searchMatches?: PdfReaderSearchMatch[];
   searchQuery?: string;
@@ -1109,7 +1115,7 @@ function PdfPageView({
   pageNumber,
   renderActive,
   defaultPageSize,
-  pixelRatio,
+  pixelRatio, readingBackground, preserveImages,
   pdfDocument,
   searchMatches = [],
   searchQuery = "",
@@ -1243,8 +1249,10 @@ function PdfPageView({
 
         if (context) {
           renderTask = page.render({ canvas, canvasContext: context, viewport,
+            recordImages: preserveImages && readingBackground !== "#ffffff",
             transform: [output.ratio, 0, 0, output.ratio, 0, 0] });
           await renderTask.promise;
+          if (!cancelled) await applyPdfReadingColors(context, readingBackground, preserveImages ? page.imageCoordinates : null, () => cancelled);
         }
 
         if (cancelled) {
@@ -1315,7 +1323,7 @@ function PdfPageView({
     };
   // Focus changes while scrolling must not tear down the text layer in the middle of a drag.
   // Evidence/search overlays have their own effects below and do not require repainting the PDF.
-  }, [activePaper?.id, onPageCharModelRendered, onPageTextRendered, pageNumber, pixelRatio, pdfDocument, renderActive, stageWidth, zoom]);
+  }, [activePaper?.id, onPageCharModelRendered, onPageTextRendered, pageNumber, pixelRatio, pdfDocument, renderActive, stageWidth, zoom, readingBackground, preserveImages]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(updateTargetHighlightRects);
@@ -1515,7 +1523,7 @@ export function PdfReader({
   loadPdfSource,
   onAcquireLiteratureVersion,
   onOpenLiteratureVersion,
-  pdfBackground = "#ffffff",
+  pdfBackground = "#ffffff", pdfAppearance, onPdfAppearanceChange,
   onPaperAnnotated,
   selectedPapers,
   targetEvidence,
@@ -3439,6 +3447,7 @@ export function PdfReader({
       aria-label="PDF 阅读器"
       className="pdf-reader fluid"
       data-pdf-source={pdfDisplaySource ?? ""}
+      data-pdf-night={pdfReadingPalette(pdfBackground).dark}
       style={{ "--pdf-reading-background": pdfBackground } as CSSProperties}
     >
       {readingView?.({ scopeKey: annotationStorageKey ?? "", ready: Boolean(annotationStorageKey && hydratedAnnotationStorageKey === annotationStorageKey && !annotationLoadError),
@@ -3856,7 +3865,7 @@ export function PdfReader({
         >
           <div className="pdf-reader-top">
             <PdfReaderToolbar
-              readingControls={<>{readingControls}{guideControls}</>}
+              readingControls={<>{readingControls}{guideControls}{pdfAppearance && onPdfAppearanceChange ? <PdfAppearanceControl value={pdfAppearance} onChange={onPdfAppearanceChange} /> : null}</>}
               activeSearchIndex={activeSearchIndex}
               currentPage={focusedPage}
               layoutMode={layoutMode}
@@ -3964,6 +3973,7 @@ export function PdfReader({
               >
                 {pageNumbers.map((pageNumber) => (
                   <PdfPageView
+                    readingBackground={pdfBackground} preserveImages={pdfAppearance?.preserveImages !== false}
                     activeSearchMatch={activeSearchMatch}
                     inkMode={inkMode} inkColor={inkColor} inkWidth={inkWidth} onInkCreate={createInkAnnotation}
                     onInkDeleteStroke={deleteInkStroke}

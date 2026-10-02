@@ -57,6 +57,27 @@ test("reading typography and comments stay consistent with the PDF and survive r
     return Math.abs(Number(start[2]) - (rect.top + rect.height / 2 - bounds.top));
   });
   await expect.poll(connectorError).toBeLessThan(2);
+  await expect(margin.locator("[data-annotation-connector]")).toHaveAttribute("d", /^M [\d.-]+ [\d.-]+ H [\d.-]+ V [\d.-]+ H [\d.-]+$/);
+  const handle = margin.getByRole("separator", { name: "调整页边批注宽度" });
+  const before = Number(await handle.getAttribute("aria-valuenow"));
+  const grip = (await handle.boundingBox())!;
+  await page.mouse.move(grip.x + 4, grip.y + 150); await page.mouse.down();
+  await page.mouse.move(grip.x - 46, grip.y + 150, { steps: 8 }); await page.mouse.up();
+  await expect(handle).toHaveAttribute("aria-valuenow", String(before + 50));
+  await handle.focus(); await page.keyboard.press("ArrowRight");
+  await expect(handle).toHaveAttribute("aria-valuenow", String(before + 30));
+  await expect.poll(connectorError).toBeLessThan(2);
+  const toolbar = reading.getByRole("toolbar", { name: "阅读排版与批注" });
+  await expect(toolbar.getByRole("button", { name: "AI 薄读", exact: true })).toBeVisible();
+  await expect(toolbar.getByRole("button", { name: "PDF 模式", exact: true })).toBeVisible();
+  await expect(reading.locator(".reader-reading-actions")).toHaveCount(0);
+  const topSpacing = await reading.evaluate((root) => {
+    const toolbar = root.querySelector(".paper-reading-toolbar")!.getBoundingClientRect();
+    const document = root.querySelector(".paper-resource-tab__multimodal-document")!.getBoundingClientRect();
+    return { toolbarGap: toolbar.top - root.getBoundingClientRect().top, bodyGap: document.top - toolbar.bottom };
+  });
+  expect(topSpacing.toolbarGap).toBeLessThan(2);
+  expect(topSpacing.bodyGap).toBeLessThan(100);
 
   await reading.getByRole("button", { name: "阅读排版", exact: true }).click();
   const size = page.getByRole("slider", { name: "阅读字号" });
@@ -73,7 +94,8 @@ test("reading typography and comments stay consistent with the PDF and survive r
   await expect.poll(connectorError).toBeLessThan(2);
   await page.screenshot({ path: testInfo.outputPath("reading-margin-comments.png"), fullPage: true, animations: "disabled" });
   await margin.getByRole("button", { name: "编辑页边批注", exact: true }).click();
-  await comments.getByRole("textbox", { name: "阅读批注内容" }).fill("阅读模式补充的评论");
+  const editor = comments.getByRole("textbox", { name: "阅读批注内容" });
+  await editor.focus(); await editor.press("Control+a"); await page.keyboard.insertText("阅读模式补充的评论");
   await comments.getByRole("combobox", { name: "标记颜色" }).selectOption("pink");
   await comments.getByRole("button", { name: "保存批注", exact: true }).click();
   await expect(comments).toHaveCount(0);
@@ -82,7 +104,7 @@ test("reading typography and comments stay consistent with the PDF and survive r
   await reading.getByRole("button", { name: /^批注（/ }).click();
   await expect(comments.getByRole("status")).toContainText("批注已保存");
   await comments.getByRole("button", { name: "查看 PDF", exact: true }).click();
-  await expect(row.getByLabel("补充批注笔记")).toHaveValue("阅读模式补充的评论");
+  await expect(row.getByLabel("补充批注笔记")).toHaveText("阅读模式补充的评论");
   await expect(page.locator(".pdf-overlay-mark.highlight").first()).toHaveCSS("background-color", "rgb(253, 121, 168)");
   await row.getByRole("button", { name: /阅读模式查看批注：/ }).click();
   await expect(reading.locator("[data-reading-comment-match]")).toBeVisible();
@@ -165,6 +187,10 @@ test("long-form navigation, bookmarks, themes and focus retain the reading parag
   await expect.poll(async () => Math.abs(await relativeTop() - 16)).toBeLessThan(3);
   await reading.getByRole("button", { name: "返回跳转前", exact: true }).focus();
   await page.keyboard.press("Tab");
+  await expect(reading.getByRole("button", { name: "AI 薄读", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(reading.getByRole("button", { name: "PDF 模式", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(reading.getByRole("button", { name: "阅读目录", exact: true })).toBeFocused();
   await reading.getByRole("button", { name: "阅读排版", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "阅读主题" })).toBeVisible();
@@ -212,7 +238,7 @@ test("long-form navigation, bookmarks, themes and focus retain the reading parag
   const anchorError = () => heading.evaluate((element) => {
     const root = element.closest(".paper-reading-content")!;
     const range = document.createRange(); range.selectNodeContents(element);
-    const rect = range.getBoundingClientRect();
+    const rect = Array.from(range.getClientRects()).find((rect) => rect.width > 0 && rect.height > 0)!;
     const d = root.querySelector("[data-annotation-connector]")?.getAttribute("d");
     if (!d) return Infinity;
     const start = d.match(/^M ([\d.-]+) ([\d.-]+)/)!;

@@ -1,5 +1,5 @@
 .pdf-workspace[hidden] { display: none; }
-.pdf-reader > .reader-reading-surface { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; gap: 6px; }
+.pdf-reader > .reader-reading-surface { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; background: var(--colorNeutralBackground1); color: var(--colorNeutralForeground1); }
 .reader-reading-surface > button { align-self: flex-start; flex-shrink: 0; }
 .paper-reading-workspace { --paper-reading-surface: var(--colorNeutralBackground1); --paper-reading-background: var(--colorNeutralBackground2); --paper-reading-ink: var(--colorNeutralForeground1); --paper-reading-link: var(--colorBrandForegroundLink); --paper-reading-border: var(--colorNeutralStroke2); display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: hidden; color: var(--colorNeutralForeground1); background: var(--colorNeutralBackground2); }
 .paper-reading-workspace[data-reading-theme="paper"] { --paper-reading-surface: #fff; --paper-reading-background: #f3f4f5; --paper-reading-ink: #242424; --paper-reading-link: #0f548c; --paper-reading-border: #d9dde0; }
@@ -65,3 +65,11 @@
   .paper-reading-body.with-comments { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(200px, 1fr) minmax(160px, 35%); }
   .paper-reading-comments, .paper-reading-navigation { border-left: 0; border-top: 1px solid var(--colorNeutralStroke2); }
 }
+
+/* Keep mode actions in one compact row instead of reserving a row per button. */
+.reader-reading-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 4px 10px; flex: 0 0 auto; }
+.paper-reading-content .paper-resource-tab { padding-top: 8px; gap: 8px; align-content: start; }
+.paper-reading-content .paper-resource-tab__header { align-items: center; padding-bottom: 6px; }
+.paper-reading-content .paper-resource-tab__header .markdown-font-control { display: none; }
+.paper-reading-content .mineru-markdown > :first-child { margin-top: 0; }
+.paper-reading-content .paper-resource-tab__multimodal-document { padding-top: 8px; }

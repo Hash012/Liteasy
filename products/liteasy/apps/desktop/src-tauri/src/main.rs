@@ -25,6 +25,8 @@ mod user_paper_store;
 mod webdav;
 mod workflow_checkpoints;
 
+use tauri::Manager;
+
 fn main() {
     if std::env::args().nth(1).as_deref() == Some("--local-mcp") {
         let result = std::env::args()
@@ -52,6 +54,13 @@ fn main() {
         .manage(semantic_index::SemanticIndexState::default())
         .manage(local_library::LocalLibraryWatchState::default())
         .setup(|app| {
+            // Explicitly set the running window/taskbar icon as well as the EXE
+            // resource. Use the full-resolution mark instead of the ICO first frame.
+            if let Some(window) = app.get_webview_window("main") {
+                if let Err(error) = window.set_icon(tauri::include_image!("icons/128x128.png")) {
+                    eprintln!("Could not set the Liteasy window icon: {error}");
+                }
+            }
             data_location::initialize(app.handle()).map_err(std::io::Error::other)?;
             if let Err(error) = object_store::recover(app.handle()) {
                 eprintln!("Local object recovery: {error}");

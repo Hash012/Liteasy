@@ -97,9 +97,10 @@ function loadPersistedViewSettings(): Partial<SettingsState> {
       "view.reader_font_family": normalizeReadingFontFamily(parsed["view.reader_font_family"]),
       "view.font_size": normalizeViewFontSize(parsed["view.font_size"]),
       "view.display_scale": normalizeDisplayScale(parsed["view.display_scale"]),
-      "view.pdf_background": ["paper", "warm", "mint", "custom"].includes(String(parsed["view.pdf_background"]))
+      "view.pdf_background": ["paper", "warm", "mint", "night", "custom"].includes(String(parsed["view.pdf_background"]))
         ? parsed["view.pdf_background"]
         : undefined,
+      "view.pdf_preserve_images": parsed["view.pdf_preserve_images"] !== false,
       "view.pdf_custom_background": typeof parsed["view.pdf_custom_background"] === "string"
         ? parsed["view.pdf_custom_background"]
         : undefined
@@ -122,6 +123,7 @@ function persistViewSettings(state: SettingsState) {
         "view.reader_font_family": state["view.reader_font_family"],
         "view.font_size": state["view.font_size"],
         "view.display_scale": state["view.display_scale"],
+        "view.pdf_preserve_images": state["view.pdf_preserve_images"],
         "view.pdf_background": state["view.pdf_background"],
         "view.pdf_custom_background": state["view.pdf_custom_background"]
       })
@@ -175,6 +177,7 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
     "view.font_size": "14",
     "view.display_scale": "100",
     "view.pdf_background": "paper",
+    "view.pdf_preserve_images": true,
     "view.pdf_custom_background": "#ffffff",
     ...loadPersistedViewSettings()
   };

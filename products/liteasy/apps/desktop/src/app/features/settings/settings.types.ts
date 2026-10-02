@@ -41,6 +41,7 @@ export type SettingKey =
   | "view.theme"
   | "view.font_size"
   | "view.display_scale"
+  | "view.pdf_preserve_images"
   | "view.pdf_background"
   | "view.pdf_custom_background";
 
@@ -79,8 +80,9 @@ export type SettingsState = Partial<Record<GenerationPromptSettingKey, string>> 
   "view.theme": AppearancePreference;
   "view.font_size": string;
   "view.display_scale": string;
-  "view.pdf_background": "paper" | "warm" | "mint" | "custom";
+  "view.pdf_background": "paper" | "warm" | "mint" | "night" | "custom";
   "view.pdf_custom_background": string;
+  "view.pdf_preserve_images": boolean;
 };
 
 export type UpdateSettingCommand = {

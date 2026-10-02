@@ -129,11 +129,12 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
   function locate(id: string) {
     const annotation = session.annotations.find((item) => item.id === id);
     const root = contentRef.current;
-    if (!annotation || !root) return;
+    if (!annotation || !root) return false;
     root.querySelectorAll("[data-reading-comment-match]").forEach((node) => node.removeAttribute("data-reading-comment-match"));
     openComments();
     setMarginSelectedId(id);
-    if (locateQuote(root, annotation.excerpt)) setMessage(`已定位第 ${annotation.page} 页批注的原文。`);
+    const matched = locateQuote(root, annotation.excerpt);
+    if (matched) setMessage(`已定位第 ${annotation.page} 页批注的原文。`);
     else {
       const page = root.querySelector<HTMLElement>(`[data-reading-page="${annotation.page}"]`);
       page?.scrollIntoView?.({ block: "start", behavior: "smooth" });
@@ -141,8 +142,26 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
     }
     Array.from(rootRef.current?.querySelectorAll<HTMLElement>("[data-reading-annotation-id]") ?? [])
       .find((element) => element.dataset.readingAnnotationId === id)?.scrollIntoView?.({ block: "nearest" });
+    return matched;
   }
-  useEffect(() => { if (session.selectedId) locate(session.selectedId); }, [session.selectedId]);
+  useEffect(() => {
+    const id = session.selectedId, root = contentRef.current;
+    if (!id || !root || !session.ready) return;
+    let frame = 0, disposed = false, attempted = false;
+    // The extracted document can mount after the PDF requests a jump. Resolve
+    // when its text arrives or is replaced. An existing mark leaves normal
+    // scrolling alone; asynchronous Markdown hydration can replace that node.
+    const attempt = () => {
+      frame = 0;
+      if (!disposed && (!attempted || !root.querySelector("[data-reading-comment-match]"))) {
+        attempted = true; locate(id);
+      }
+    };
+    const observer = new MutationObserver(() => { if (!disposed && !frame) frame = requestAnimationFrame(attempt); });
+    observer.observe(root, { childList: true, characterData: true, subtree: true });
+    attempt();
+    return () => { disposed = true; cancelAnimationFrame(frame); observer.disconnect(); };
+  }, [session.selectedId, session.ready]);
 
   useReadingHighlights(contentRef, session.annotations, (id) => {
     if (showMargins) setMarginSelectedId(id);
@@ -216,6 +235,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
       }
     }}>
     <div className="paper-reading-toolbar" role="toolbar" aria-label="阅读排版与批注">
+      {session.readerControls}
       <Tooltip content="章节目录" relationship="description"><Button aria-label="阅读目录" aria-pressed={panel === "contents"} icon={<BookOpenRegular />} onClick={() => panel === "contents" ? closePanel() : openPanel("contents")} /></Tooltip>
       <Tooltip content="查找正文（Ctrl / ⌘ + F）" relationship="description"><Button aria-label="查找阅读正文" aria-pressed={panel === "search"} icon={<SearchRegular />} onClick={() => panel === "search" ? closePanel() : openPanel("search")} /></Tooltip>
       <Tooltip content="查看书签；Ctrl / ⌘ + Shift + B 收藏当前位置" relationship="description"><Button aria-label="阅读书签" aria-pressed={panel === "bookmarks"} icon={<BookmarkRegular />} onClick={() => panel === "bookmarks" ? closePanel() : openPanel("bookmarks")} /></Tooltip>
@@ -262,6 +282,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
     <div className={`paper-reading-body${showComments || panel ? " with-comments" : ""}`}>
       <div className="paper-reading-content" ref={contentRef} onMouseUp={captureSelection} onKeyUp={(event) => { if (event.key === "Shift") captureSelection(); }}>{children}
         {showMargins ? <ReadingMarginComments contentRef={contentRef} annotations={session.annotations} selectedId={marginSelectedId}
+          width={preferences.marginWidth} onWidthChange={(marginWidth) => changePreferences({ ...preferences, marginWidth })}
           disabled={busy || !session.ready || Boolean(draft)} onSelect={setMarginSelectedId} onEdit={editAnnotation}
           onOpenPdf={session.openPdf} onShowList={openComments} /> : null}
       </div>

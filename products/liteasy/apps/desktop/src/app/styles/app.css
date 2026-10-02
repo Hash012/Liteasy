@@ -4035,7 +4035,7 @@ body {
   display: block;
   max-width: none;
   background: var(--pdf-reading-background, #ffffff);
-  mix-blend-mode: multiply;
+  isolation: isolate;
 }
 
 .pdf-page-shadow {
@@ -6411,3 +6411,8 @@ button.pdf-overlay-mark:focus-visible {
 .assistant-asset-write-description small { color: var(--colorNeutralForeground3); }
 .assistant-context-coverage, .assistant-execution-trace { color: var(--colorNeutralForeground3); font-size: calc(11px * var(--app-font-ratio, 1)); width: 100%; }
 .assistant-context-coverage summary, .assistant-execution-trace summary { cursor: pointer; }
+
+.pdf-appearance-options { display: grid; gap: 12px; width: 280px; max-width: calc(100vw - 32px); }
+.pdf-appearance-options small { color: var(--colorNeutralForeground2); line-height: 1.5; }
+
+.pdf-reader[data-pdf-night="true"] .pdf-overlay-mark.search-result { mix-blend-mode: normal; border-color: #f0d57a; }

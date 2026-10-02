@@ -48,7 +48,8 @@ export const settingsRegistry: Record<SettingKey, { label: string; help?: string
   "view.theme": { label: "外观", help: "选择浅色、深色，或随系统自动切换。即时生效并在本机记住选择，PDF 保留原有阅读底色。", dependencies: [], restartRequirement: "none" },
   "view.font_size": { ...{ help: "调整应用界面字号。不会修改论文 PDF 文件。", dependencies: [], restartRequirement: "none" }, label: "界面字号" },
   "view.display_scale": { help: "整体调整应用界面、面板和控件的显示比例。Ctrl + 加号或减号调整，Ctrl + 0 恢复 100%。不会修改 PDF 文件。", dependencies: [], restartRequirement: "none", label: "显示比例" },
-  "view.pdf_background": { ...{ help: "调整 PDF 阅读区域的显示底色，不修改 PDF 原文件。", dependencies: [], restartRequirement: "none" }, label: "PDF 阅读底色" },
+  "view.pdf_preserve_images": { label: "PDF 保留图片原色" },
+  "view.pdf_background": { ...{ help: "调整 PDF 页面的阅读配色，提供深色、护眼色和自定义颜色，不修改 PDF 原文件。", dependencies: [], restartRequirement: "none" }, label: "PDF 阅读底色" },
   "view.pdf_custom_background": { label: "自定义 PDF 底色" }
 };
 

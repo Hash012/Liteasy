@@ -47,6 +47,9 @@ test("PDF and reading mode edit and delete the same persisted comment without ch
   render(<ReaderPane {...props} readingContent={content} />);
   const user = userEvent.setup();
   await user.click(screen.getByRole("button", { name: "阅读模式", exact: true }));
+  const toolbar = screen.getByRole("toolbar", { name: "阅读排版与批注" });
+  expect(within(toolbar).getByRole("button", { name: "AI 薄读", exact: true })).toBeInTheDocument();
+  expect(within(toolbar).getByRole("button", { name: "PDF 模式", exact: true })).toBeInTheDocument();
   const comments = await screen.findByRole("complementary", { name: "阅读模式批注" });
   expect(await within(comments).findByText("PDF 里的原始评论")).toBeInTheDocument();
   await user.click(within(comments).getByRole("button", { name: "编辑", exact: true }));
@@ -194,4 +197,19 @@ test("reading selections expose the same position-independent tools and cancel o
   const signal = quickAsk.mock.calls[0][1] as AbortSignal;
   view.unmount();
   expect(signal.aborted).toBe(true);
+});
+
+test("resolves a PDF annotation jump when the extracted reading text mounts later", async () => {
+  const session: PdfReadingAnnotations = { scopeKey: "delayed-source", ready: true, annotations: [original], selectedId: original.id,
+    pageTexts: { 2: chunks[0].snippet }, pageCount: 2, focusedPage: 2, create: vi.fn(), update: vi.fn(), remove: vi.fn(), openPdf: vi.fn() };
+  const view = render(<PaperReadingWorkspace session={session} chunks={chunks}><div className="paper-resource-tab" /></PaperReadingWorkspace>);
+  view.rerender(content(session));
+  await waitFor(() => expect(document.querySelector("[data-reading-comment-match]")).toHaveTextContent(chunks[0].snippet));
+  view.rerender(<PaperReadingWorkspace session={session} chunks={chunks}><div key="hydrated" className="paper-resource-tab"><div className="mineru-markdown"><p>{chunks[0].snippet}</p></div></div></PaperReadingWorkspace>);
+  await waitFor(() => expect(document.querySelector("[data-reading-comment-match]")).toHaveTextContent(chunks[0].snippet));
+  const next = { ...original, id: "second-comment", excerpt: "A different paragraph." };
+  const paragraphs = <div key="hydrated" className="paper-resource-tab"><div className="mineru-markdown"><p>{chunks[0].snippet}</p><p>{next.excerpt}</p></div></div>;
+  view.rerender(<PaperReadingWorkspace session={session} chunks={chunks}>{paragraphs}</PaperReadingWorkspace>);
+  view.rerender(<PaperReadingWorkspace session={{ ...session, annotations: [original, next], selectedId: next.id }} chunks={chunks}>{paragraphs}</PaperReadingWorkspace>);
+  await waitFor(() => expect(document.querySelector("[data-reading-comment-match]")).toHaveTextContent(next.excerpt));
 });

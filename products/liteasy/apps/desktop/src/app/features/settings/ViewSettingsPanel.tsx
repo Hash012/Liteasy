@@ -123,6 +123,8 @@ export function ViewSettingsPanel({ onUpdateSetting, settings }: ViewSettingsPan
         </RadioGroup>
       </Field>
 
+      <Switch label="PDF 保留图片原色" checked={settings?.["view.pdf_preserve_images"] !== false}
+        onChange={(_, data) => update("view.pdf_preserve_images", data.checked)} />
       {pdfBackground === "custom" ? (
         <Field label="自定义颜色" hint="输入十六进制颜色或使用系统拾色器">
           <div className="view-settings-custom-color">

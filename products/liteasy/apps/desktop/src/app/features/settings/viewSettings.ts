@@ -47,6 +47,7 @@ export const pdfBackgroundPresets = [
   { label: "纸白", value: "paper", color: "#ffffff" },
   { label: "暖黄护眼", value: "warm", color: "#fff7dd" },
   { label: "浅绿护眼", value: "mint", color: "#edf8ec" },
+  { label: "深色夜读", value: "night", color: "#20252a" },
   { label: "自定义", value: "custom", color: "#ffffff" }
 ] as const;
 

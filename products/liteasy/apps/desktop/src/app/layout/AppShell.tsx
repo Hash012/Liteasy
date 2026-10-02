@@ -2260,6 +2260,14 @@ export function AppShell({
     ];
     return (
       <ReaderPane
+        pdfBackground={resolvePdfReadingBackground(settingsState)}
+        pdfAppearance={{ background: settingsState["view.pdf_background"], customBackground: settingsState["view.pdf_custom_background"], preserveImages: settingsState["view.pdf_preserve_images"] }}
+        onPdfAppearanceChange={(value) => {
+          settingsStoreRef.current.apply({ intent: "update_setting", target: "view.pdf_background", value: value.background });
+          settingsStoreRef.current.apply({ intent: "update_setting", target: "view.pdf_custom_background", value: value.customBackground });
+          settingsStoreRef.current.apply({ intent: "update_setting", target: "view.pdf_preserve_images", value: value.preserveImages });
+          setSettingsState(cloneSettingsState(settingsStoreRef.current.getState()));
+        }}
         selectionLookup={selectionLookup}
         onDocumentInfo={pdfFileStatus.onDocumentInfo}
         onQuickAsk={askPdfQuestion}

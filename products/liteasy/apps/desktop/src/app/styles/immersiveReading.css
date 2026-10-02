@@ -50,7 +50,7 @@
   visibility: hidden; pointer-events: none; background: var(--colorNeutralBackground1); box-shadow: var(--shadow8);
 }
 [data-reading-focus="fullscreen"][data-focus-edge="top"] [data-region="main"] :is(.pdf-reader-top, .paper-reading-toolbar, .paper-resource-tab__header, .reading-document__toolbar, .external-note-editor > header, .reading-library-toolbar) { visibility: visible; pointer-events: auto; }
-[data-reading-focus="fullscreen"] [data-region="main"] :is(.reader-reading-surface > button, .reader-reading-surface > .reader-ai-feedback) { display: none !important; }
+[data-reading-focus="fullscreen"] [data-region="main"] :is(.reader-reading-actions, .reader-reading-surface > button, .reader-reading-surface > .reader-ai-feedback) { display: none !important; }
 [data-reading-focus="fullscreen"] [data-region="main"] :is(.paper-reading-progress, .reading-document__footer) {
   position: absolute; inset: auto 0 24px; z-index: 60; visibility: hidden; pointer-events: none; background: var(--colorNeutralBackground1);
 }
