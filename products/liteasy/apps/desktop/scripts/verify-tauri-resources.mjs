@@ -46,7 +46,7 @@ export function verifyTauriResources({
     throw new Error("tauri_resource_contract:\nbundle.icon must contain at least one resource path");
   }
 
-  const normalizedIcons = icons.map((icon) => {
+  function verifyIcon(icon) {
     if (typeof icon !== "string" || icon.trim() === "") {
       violations.push("bundle.icon entries must be non-empty strings");
       return "";
@@ -69,9 +69,33 @@ export function verifyTauriResources({
         violations.push(`configured Windows icon is not a valid ICO file: ${normalizedIcon}`);
       }
     }
+    if (normalizedIcon.toLocaleLowerCase().endsWith(".icns")) {
+      const contents = fs.readFileSync(iconPath);
+      if (contents.length < 8 || contents.toString("ascii", 0, 4) !== "icns" || contents.readUInt32BE(4) !== contents.length) {
+        violations.push(`configured macOS icon is not a valid ICNS file: ${normalizedIcon}`);
+      }
+    }
     if (requireGitTracked) assertTracked(iconPath, repositoryDirectory, violations);
     return normalizedIcon;
-  });
+  }
+  const normalizedIcons = icons.map(verifyIcon);
+
+  // Tauri merges these automatically on the target OS. Inspect their resources
+  // even on a Windows checkout so missing native icons fail before packaging.
+  let platformResourceCount = 0;
+  for (const platform of ["linux", "macos", "windows"]) {
+    const platformPath = path.join(tauriDirectory, `tauri.${platform}.conf.json`);
+    if (!fs.existsSync(platformPath)) continue;
+    if (requireGitTracked) assertTracked(platformPath, repositoryDirectory, violations);
+    const platformIcons = JSON.parse(fs.readFileSync(platformPath, "utf8")).bundle?.icon;
+    if (platformIcons === undefined) continue;
+    if (!Array.isArray(platformIcons) || platformIcons.length === 0) {
+      violations.push(`tauri.${platform}.conf.json bundle.icon must contain resource paths`);
+      continue;
+    }
+    platformIcons.forEach(verifyIcon);
+    platformResourceCount += platformIcons.length;
+  }
 
   const windowsIcons = normalizedIcons.filter((icon) => icon.toLocaleLowerCase().endsWith(".ico"));
   if (windowsIcons.length !== 1 || windowsIcons[0] !== canonicalWindowsIcon) {
@@ -105,7 +129,7 @@ export function verifyTauriResources({
   }
 
   return {
-    checkedResources: normalizedIcons.length + installerResources.length,
+    checkedResources: normalizedIcons.length + installerResources.length + platformResourceCount,
     verified: true,
     windowsIcon: canonicalWindowsIcon
   };

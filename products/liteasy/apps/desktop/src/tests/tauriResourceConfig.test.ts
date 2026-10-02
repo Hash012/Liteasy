@@ -15,7 +15,7 @@ afterEach(() => {
 
 test("keeps the tracked Windows icon at the canonical Tauri resource path", () => {
   expect(verifyTauriResources({ requireGitTracked: true })).toEqual({
-    checkedResources: 5,
+    checkedResources: 7,
     verified: true,
     windowsIcon: "icons/icon.ico"
   });
@@ -37,6 +37,13 @@ test("rejects a stale Windows resource icon path before Rust compilation", () =>
     configPath: path.join(tauriDirectory, "tauri.conf.json"),
     tauriDirectory
   })).toThrowError(/configured resource does not exist: assets\/liteasy\.ico/);
+});
+
+test("rejects a malformed macOS icon before native candidate packaging", () => {
+  const fixture = installerFixture({});
+  writeFileSync(path.join(fixture.tauriDirectory, "tauri.macos.conf.json"), JSON.stringify({ bundle: { icon: ["icons/icon.icns"] } }));
+  writeFileSync(path.join(fixture.tauriDirectory, "icons/icon.icns"), "stale icon");
+  expect(() => verifyTauriResources(fixture)).toThrow("not a valid ICNS file");
 });
 
 function installerFixture(nsis: Record<string, unknown>) {

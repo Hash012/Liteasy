@@ -1,0 +1,133 @@
+{
+  "schema": "liteasy.client-verification/v1",
+  "task_id": "C10-platform-bundle-config",
+  "head_commit": null,
+  "enabled_release_tasks": [],
+  "environment": {
+    "os": "Ubuntu on WSL2 / WSLg (not native Windows)",
+    "os_version": "24.04",
+    "arch": "x86_64",
+    "webview": "WebKitGTK 2.52.6; Chromium browser regression",
+    "node": "22.13.1 (requested 22.23.2)",
+    "rust": "1.98.0 (requested 1.98.1)",
+    "fixture_revision": "Temporary invalid ICNS + tracked platform merge configurations",
+    "test_profile_path_redacted": true
+  },
+  "commands": [
+    {
+      "command": "npm test -- --run src/tests/tauriPlatformConfig.test.ts src/tests/tauriResourceConfig.test.ts src/tests/sourceModuleCasing.test.ts",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c10-config.log"
+    },
+    {
+      "command": "npm run build",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c10-config-build.log"
+    }
+  ],
+  "checks": {
+    "focused_tests": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c10-config.log"
+      ],
+      "used_mock": false,
+      "reason": "11 passed incl smoke; malformed native icon fails resource gate."
+    },
+    "typescript_build": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c10-config-build.log"
+      ],
+      "used_mock": false,
+      "reason": "Production frontend and resource checks passed. Existing chunk warning."
+    },
+    "rust_locked": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "schema_clean": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "browser_regression": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "native_ipc": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "native_window_file_events": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "accessibility": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "performance": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "installer_smoke": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "upgrade_recovery": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "signing": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "notarization": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    }
+  },
+  "data_safety": {
+    "originals_preserved": true,
+    "secrets_excluded": true,
+    "network_services_unchanged": true,
+    "rollback_or_read_only_strategy": "No data migration; remove optional platform merge configs to return to NSIS-only configured targets."
+  },
+  "changed_files": [
+    "products/liteasy/apps/desktop/src-tauri/tauri.linux.conf.json",
+    "products/liteasy/apps/desktop/src-tauri/tauri.macos.conf.json",
+    "products/liteasy/apps/desktop/src-tauri/icons/icon.icns",
+    "products/liteasy/apps/desktop/scripts/verify-tauri-resources.mjs",
+    "products/liteasy/apps/desktop/src/tests/tauriPlatformConfig.test.ts",
+    "products/liteasy/apps/desktop/src/tests/tauriResourceConfig.test.ts"
+  ],
+  "known_limitations": [
+    "Only candidate configurations; physical Linux and native macOS/Windows installer runs not_run.",
+    "Minimum OS compatibility not established; signing/notarization not_run.",
+    "Logs /tmp local and ephemeral."
+  ],
+  "release_ready": false,
+  "notes": "status只能填passed/failed/not_run/blocked/not_applicable；not_applicable须理由，未执行不能写passed。模板不是任何测试结果。"
+}
