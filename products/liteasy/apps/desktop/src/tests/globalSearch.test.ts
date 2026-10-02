@@ -107,3 +107,17 @@ test("external-note hits are re-read and revoked mounts cannot expose cached bod
   await service.refresh(signal(), () => {}); expect((await service.search("New", "note", 0, signal())).hits).toHaveLength(1);
   mounted = false; expect((await service.search("New", "note", 0, signal())).hits).toEqual([]);
 });
+
+test("a managed Canvas uses its board title and artifact group instead of exposing a hash filename", async () => {
+  const scope = crypto.randomUUID(), repository = createObjectRepository(createObjectStorage(scope, () => scope), scope);
+  const board = await repository.create({ kind: "workspace.board", title: "Research synthesis", content: { schema: "liteasy.board/v1", payload: { description: "" } } });
+  await repository.setBoardFileBinding(board.objectId, { mountId: "boards", path: "a".repeat(64) + ".canvas" });
+  const files = createNoteFileService(scope, () => scope), path = "a".repeat(64) + ".canvas";
+  vi.spyOn(files, "listMounts").mockResolvedValue([{ id: "boards", name: "Managed boards", kind: "directory", location: "/synthetic" }]);
+  vi.spyOn(files, "listEntries").mockResolvedValue([{ mountId: "boards", kind: "file", name: path, path }]);
+  vi.spyOn(files, "readFile").mockResolvedValue({ mountId: "boards", kind: "file", name: path, path, text: JSON.stringify({ nodes: [{ type: "text", text: "Key comparison finding" }], edges: [] }), version: "r1" });
+  const source = createWorkspaceSearchSource({ repository, files, getPapers: () => [], active: () => true });
+  const service = createGlobalSearchService({ index: createSemanticIndex({ scope, workspace: "test", model: "literal", active: () => true }), source, active: () => true });
+  await service.refresh(signal(), () => {});
+  expect((await service.search("comparison", "artifact", 0, signal())).hits[0]).toMatchObject({ title: "Research synthesis", group: "artifact" });
+});

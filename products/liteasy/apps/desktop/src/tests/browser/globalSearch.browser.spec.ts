@@ -15,6 +15,7 @@ test("top-center search works with keyboard, local bodies, saved queries and sou
     const scope = "local";
     const repository = createObjectRepository(createObjectStorage(scope, () => scope), scope);
     await repository.create({ kind: "content.note", title: "Synthetic retrieval note", content: { schema: "liteasy.note/v1", payload: { origin: "user", text: "# Synthetic\n\nEpisodic memory test phrase.\n\nA second line." } } });
+    for (let index = 0; index < 12; index++) await repository.create({ kind: "content.note", title: `Other synthetic note ${index}`, content: { schema: "liteasy.note/v1", payload: { origin: "user", text: "Episodic memory test phrase.\n".repeat(20) } } });
   });
   await page.keyboard.press("Control+Shift+f");
   const dialog = page.getByRole("dialog", { name: "搜索工作区" });
@@ -23,6 +24,8 @@ test("top-center search works with keyboard, local bodies, saved queries and sou
   await expect(dialog.getByRole("button", { name: /Synthetic retrieval note/ })).toBeVisible();
   await dialog.getByRole("button", { name: "保存查询", exact: true }).click();
   await expect(dialog.getByLabel("保存的查询")).toContainText('"Episodic memory"');
+  expect((await dialog.boundingBox())!.height).toBeLessThanOrEqual(900 * 0.86 + 1);
+  expect(await page.getByLabel("搜索结果", { exact: true }).evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("global-search-light.png") });
   await dialog.getByRole("button", { name: /Synthetic retrieval note/ }).click();
   await expect(dialog).not.toBeVisible();

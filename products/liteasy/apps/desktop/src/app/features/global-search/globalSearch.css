@@ -1,5 +1,5 @@
-.global-search-dialog { width: min(880px, calc(100vw - 40px)); max-width: 880px; max-height: 86vh; border-radius: 8px; }
-.global-search-content { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: hidden; }
+.global-search-dialog.global-search-dialog { width: min(880px, calc(100vw - 40px)); max-width: 880px; max-height: 86dvh; border-radius: 8px; }
+.global-search-content.global-search-content { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: hidden; }
 .global-search-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .global-search-tools > :first-child { flex: 1; min-width: 180px; }
 .global-search-saved { display: flex; gap: 6px; flex-wrap: wrap; max-height: 90px; overflow: auto; }
@@ -13,3 +13,7 @@
 .global-search-hit strong { overflow-wrap: anywhere; font-size: 14px; }
 .global-search-hit small { color: var(--colorNeutralForeground3); }
 .global-search-hit > span { grid-column: 1 / -1; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; color: var(--colorNeutralForeground2); }
+
+.global-search-dialog .fui-DialogBody { min-height: 0; max-height: calc(86dvh - 48px); }
+.global-search-results { flex: 1 1 auto; min-height: 0; }
+.global-search-hit > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }

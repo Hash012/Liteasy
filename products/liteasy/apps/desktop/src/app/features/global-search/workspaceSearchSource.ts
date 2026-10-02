@@ -35,7 +35,7 @@ export function createWorkspaceSearchSource(input: { repository: ObjectRepositor
     return { id: `paper:${paper.id}`, title: paper.literature?.title || paper.title, sections, coverage, detail,
       revision: await contentFingerprint(JSON.stringify([paper.contentHash, paper.sourcePath, sections])) };
   }
-  async function externalDocument(mountId: string, path: string, signal: AbortSignal): Promise<SearchDocument> {
+  async function externalDocument(mountId: string, path: string, signal: AbortSignal, title?: string): Promise<SearchDocument> {
     const file = await input.files.readFile(mountId, path); check(signal);
     const target = liteasyPath(scope, { kind: "external-file", mountId, path });
     let text = file.text, coverage: SearchDocument["coverage"] = "indexed", detail: string | undefined;
@@ -45,12 +45,12 @@ export function createWorkspaceSearchSource(input: { repository: ObjectRepositor
       text = (canvas.nodes ?? []).filter((node) => node.type === "text" && typeof node.text === "string").map((node) => node.text).join("\n\n");
       coverage = "partial"; detail = "仅检索白板文字卡片；命中可打开白板，布局节点定位暂不支持。";
     }
-    return { id: `file:${await contentFingerprint(target)}`, title: file.name, revision: file.version ?? await contentFingerprint(file.text), coverage, detail,
-      sections: [{ key: "file", group: "note", text: `${text}`, locator: { path: target, line: 1 } }] };
+    return { id: `file:${await contentFingerprint(target)}`, title: title || file.name, revision: file.version ?? await contentFingerprint(file.text), coverage, detail,
+      sections: [{ key: "file", group: /\.canvas$/i.test(path) ? "artifact" : "note", text: `${text}`, locator: { path: target, line: 1 } }] };
   }
   return {
     async collect(signal, progress) {
-      const documents: SearchDocument[] = []; let limited = false, characters = 0;
+      const documents: SearchDocument[] = []; const boardTitles = new Map<string, string>(); let limited = false, characters = 0;
       const append = (document: SearchDocument) => {
         if (documents.length >= 3000 || characters >= 16_000_000) { limited = true; return false; }
         let truncated = false;
@@ -73,6 +73,12 @@ export function createWorkspaceSearchSource(input: { repository: ObjectRepositor
           catch { check(signal); append({ id: `object:${title.objectId}`, title: title.title, revision: "unavailable", sections: [], coverage: "failed", detail: "资产当前不可读取；可能已移除或格式不受支持。" }); continue; }
           if (object.lifecycle !== "active") continue;
           if (object.kind === "conversation.message") continue;
+          if (object.kind === "workspace.board") {
+            try {
+              const binding = await input.repository.getBoardFileBinding<{ mountId: string; path: string }>(object.objectId); check(signal);
+              if (binding && typeof binding.mountId === "string" && typeof binding.path === "string") boardTitles.set(`${binding.mountId}:${binding.path}`, object.title);
+            } catch { check(signal); /* A missing binding does not hide the board's description. */ }
+          }
           const file = library.get(object.objectId);
           // Extracted PDF pages are indexed above with real page locators, not as duplicated source snapshots.
           if (object.kind === "source.document" && !file) continue;
@@ -89,7 +95,7 @@ export function createWorkspaceSearchSource(input: { repository: ObjectRepositor
         try {
           for (const entry of await input.files.listEntries(mount.id)) {
             check(signal); if (entry.kind !== "file") continue;
-            try { if (!append(await externalDocument(mount.id, entry.path, signal))) break; }
+            try { if (!append(await externalDocument(mount.id, entry.path, signal, boardTitles.get(`${mount.id}:${entry.path}`)))) break; }
             catch (error) { check(signal); append({ id: `unavailable:${mount.id}:${entry.path}`, title: entry.name, revision: "unavailable", sections: [], coverage: "failed", detail: String(error) }); }
           }
         } catch (error) { check(signal); append({ id: `unavailable:${mount.id}`, title: mount.name, revision: "unavailable", sections: [], coverage: "failed", detail: "连接目录暂不可读取。" }); }
