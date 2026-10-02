@@ -1,0 +1,186 @@
+{
+  "schema": "liteasy.client-verification/v1",
+  "task_id": "C06",
+  "head_commit": "44d6e8f676c7b685c6fea2b034ec68b63b9698a1",
+  "enabled_release_tasks": [],
+  "environment": {
+    "os": "Linux / WSL2",
+    "os_version": "Ubuntu 24.04.3 LTS; kernel 6.18.33.2-microsoft-standard-WSL2",
+    "arch": "x86_64",
+    "webview": "not launched; frontend tests use jsdom",
+    "node": "22.13.1 (repository .nvmrc: 22.23.2)",
+    "rust": "1.98.0 (Windows workflow pin: 1.98.1)",
+    "fixture_revision": "inline temporary-file fixtures in operations-tests.rs and localFileOperations.test.tsx at head_commit",
+    "test_profile_path_redacted": true
+  },
+  "commands": [
+    {
+      "command": "npm test -- --run src/tests/localFileOperations.test.tsx src/tests/noteFileService.test.ts src/tests/resourceActionPolicy.test.ts",
+      "cwd": "products/liteasy/apps/desktop",
+      "exit_code": 0,
+      "result": "3 files, 16 tests passed; 7 new local-file tests; mocked invoke"
+    },
+    {
+      "command": "npm run ci:smoke",
+      "cwd": "products/liteasy/apps/desktop",
+      "exit_code": 0,
+      "result": "2 files, 9 tests passed"
+    },
+    {
+      "command": "npm run build",
+      "cwd": "products/liteasy/apps/desktop",
+      "exit_code": 0,
+      "result": "TypeScript, Vite production build, resource and production asset validation passed; existing dynamic-import/chunk-size warnings"
+    },
+    {
+      "command": "cargo test --locked --no-default-features --manifest-path products/liteasy/apps/desktop/src-tauri/Cargo.toml note_files::store -- --nocapture",
+      "cwd": ".",
+      "exit_code": 0,
+      "result": "22 native core tests passed: 10 new operations +12 existing FileStore; real files and SQLite; no Tauri IPC"
+    },
+    {
+      "command": "cargo check --locked --all-targets --no-default-features --manifest-path products/liteasy/apps/desktop/src-tauri/Cargo.toml",
+      "cwd": ".",
+      "exit_code": 0,
+      "result": "Passed; three existing dead-code warnings"
+    },
+    {
+      "command": "npm run ci:contracts",
+      "cwd": "products/liteasy/apps/desktop",
+      "exit_code": 0,
+      "result": "Passed on clean implementation commit; schemas and locks unchanged"
+    },
+    {
+      "command": "git diff --check",
+      "cwd": ".",
+      "exit_code": 0,
+      "result": "Passed"
+    }
+  ],
+  "checks": {
+    "focused_tests": {
+      "status": "passed",
+      "evidence_paths": [
+        "products/liteasy/apps/desktop/src/tests/localFileOperations.test.tsx",
+        "products/liteasy/apps/desktop/src-tauri/src/note-files/operations-tests.rs"
+      ],
+      "used_mock": true,
+      "reason": "Frontend tests mock Tauri invoke; native core tests use actual filesystem and SQLite. See separate native_files check."
+    },
+    "typescript_build": {
+      "status": "passed",
+      "evidence_paths": [
+        "docs/qa/client-local/C06-file-operations.md"
+      ],
+      "used_mock": false,
+      "reason": "Production build completed; tool still requires root AppShell integration to become reachable."
+    },
+    "rust_locked": {
+      "status": "passed",
+      "evidence_paths": [
+        "products/liteasy/apps/desktop/src-tauri/src/note-files/operations.rs"
+      ],
+      "used_mock": false,
+      "reason": "Linux x86_64 test and all-targets/no-default-features check, Rust1.98.0. Not a Windows build."
+    },
+    "schema_clean": {
+      "status": "passed",
+      "evidence_paths": [],
+      "used_mock": false,
+      "reason": "ci:contracts on clean 44d6e8f6; no shared schema/lock changes."
+    },
+    "browser_regression": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "React/jsdom component tests passed under focused_tests; no real browser or WebView end-to-end run in this branch."
+    },
+    "native_ipc": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this bounded feature branch; no installer, native WebView, platform assistive technology or release acceptance claimed."
+    },
+    "native_window_file_events": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this bounded feature branch; no installer, native WebView, platform assistive technology or release acceptance claimed."
+    },
+    "accessibility": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this bounded feature branch; no installer, native WebView, platform assistive technology or release acceptance claimed."
+    },
+    "performance": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this bounded feature branch; no installer, native WebView, platform assistive technology or release acceptance claimed."
+    },
+    "installer_smoke": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this bounded feature branch; no installer, native WebView, platform assistive technology or release acceptance claimed."
+    },
+    "upgrade_recovery": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "SQLite reopen and ambiguous commit recovery tested in core tests; actual process kill, power loss and installed-version upgrade untested."
+    },
+    "signing": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this bounded feature branch; no installer, native WebView, platform assistive technology or release acceptance claimed."
+    },
+    "notarization": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed for this bounded feature branch; no installer, native WebView, platform assistive technology or release acceptance claimed."
+    },
+    "native_files": {
+      "status": "passed",
+      "evidence_paths": [
+        "products/liteasy/apps/desktop/src-tauri/src/note-files/operations-tests.rs"
+      ],
+      "used_mock": false,
+      "reason": "22 real filesystem/SQLite core tests passed; interrupted intent is simulated then reloaded, not a real killed process. Static Unix symlinks and root replacement tested; Windows reparse branch unexecuted."
+    }
+  },
+  "data_safety": {
+    "originals_preserved": true,
+    "secrets_excluded": true,
+    "network_services_unchanged": true,
+    "rollback_or_read_only_strategy": "Additive scoped task table; old versions ignore it. Originals are never modified. Outputs and archival undo backups remain on rollback. Ambiguous interrupted outputs are preserved for manual review and never auto-overwritten or auto-undone."
+  },
+  "changed_files": [
+    "products/liteasy/apps/desktop/src-tauri/src/note_files.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/note-files/store.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/note-files/operations.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/note-files/operations-tests.rs",
+    "products/liteasy/apps/desktop/src/app/controllers/LocalFileOperationsTool.tsx",
+    "products/liteasy/apps/desktop/src/app/features/local-file-operations/localFileOperations.ts",
+    "products/liteasy/apps/desktop/src/app/features/local-file-operations/LocalFileOperationsPanel.tsx",
+    "products/liteasy/apps/desktop/src/app/features/resources/resourceActionPolicy.ts",
+    "products/liteasy/apps/desktop/src/tests/localFileOperations.test.tsx",
+    "docs/qa/client-local/C06-file-operations.md",
+    "docs/qa/client-local/C07-headless-feasibility.md"
+  ],
+  "known_limitations": [
+    "Root must wire the exported scope-keyed tool into a reachable settings surface; integration validation is separate.",
+    "Only selected UTF-8 Markdown/Canvas copies are available; no natural-language Agent/CLI action exposure or PDF/EPUB task.",
+    "Windows/macOS native execution, Windows junction tests and packaged desktop IPC remain unverified.",
+    "Path and revision rechecks reject observed substitutions but do not remove adversarial TOCTOU between checks and portable OS operations. Full C06 race acceptance remains open.",
+    "Undo archives rather than deletes. A racing manual edit is retained in a receipt-named backup and may need manual restoration.",
+    "Interrupted commits with existing outputs require manual review; output-directory create-before-receipt interruption requires a fresh plan.",
+    "Execution serialization is process-local. Do not enable concurrent headless CLI mutation before adding shared identity/data-root handling and cross-process serialization.",
+    "C07 document is feasibility only; no headless business operation or new transport implemented."
+  ],
+  "release_ready": false,
+  "notes": "Bounded C06 slice, not full card completion. A new regression first reproduced retry stalling at file17 (16 receipts vs19), then passed after known conflicts were preserved and remaining files could proceed. Final commands above passed; no repeated full suite or Installer CI was requested."
+}
