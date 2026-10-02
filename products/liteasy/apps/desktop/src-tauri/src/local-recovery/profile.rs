@@ -203,6 +203,7 @@ fn admitted(key: &str) -> bool {
         "object-attachment/",
         "workflow-run/",
         "workflow-snapshot/",
+        "reader-state/",
         "extension-operation/",
     ]
     .iter()

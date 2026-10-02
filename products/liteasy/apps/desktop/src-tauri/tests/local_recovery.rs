@@ -53,6 +53,16 @@ fn fixture() -> (PathBuf, Connection) {
         ),
         (
             "user:fixture",
+            "reader-state/pdf/paper",
+            json!({"schemaVersion":1,"paperId":"paper","contentRevision":"sha256:synthetic","page":7,"updatedAt":"2026-10-03T00:00:00.000Z"}),
+        ),
+        (
+            "user:fixture",
+            "reader-state/pdf/future",
+            json!({"schemaVersion":99,"page":19,"futureField":"preserve without interpreting"}),
+        ),
+        (
+            "user:fixture",
             "extension-grant/private",
             json!({"apiKey":"excluded-secret"}),
         ),
@@ -134,7 +144,13 @@ fn logical_wal_snapshot_restores_notes_annotations_relations_receipts_and_canvas
     let(value,version):(String,String)=db.query_row("SELECT value,version FROM object_records WHERE scope='user:fixture' AND key='head/note'",[],|r|Ok((r.get(0)?,r.get(1)?))).unwrap();
     assert!(value.contains("Full note body"));
     assert_eq!(version, "version-kept");
-    for key in ["revision/note/r1", "relation/note/paper", "run/receipt"] {
+    for key in [
+        "revision/note/r1",
+        "relation/note/paper",
+        "run/receipt",
+        "reader-state/pdf/paper",
+        "reader-state/pdf/future",
+    ] {
         assert_eq!(
             db.query_row(
                 "SELECT count(*) FROM object_records WHERE key=?1",
@@ -144,6 +160,23 @@ fn logical_wal_snapshot_restores_notes_annotations_relations_receipts_and_canvas
             .unwrap(),
             1
         );
+    }
+    for key in ["reader-state/pdf/paper", "reader-state/pdf/future"] {
+        let original: (String, String) = live_db
+            .query_row(
+                "SELECT value,version FROM object_records WHERE scope='user:fixture' AND key=?1",
+                [key],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        let recovered: (String, String) = db
+            .query_row(
+                "SELECT value,version FROM object_records WHERE scope='user:fixture' AND key=?1",
+                [key],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(recovered, original);
     }
     assert!(fs::read_to_string(
         bootstrap

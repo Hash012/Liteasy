@@ -8,6 +8,8 @@ import { resolveReadingQuoteRects } from "./readingAnnotationGeometry";
 import type { ReadingMarkStyle } from "./pdfReadingAnnotations";
 import { pdfCanvasSize } from "./pdfRenderBudget";
 import { usePdfPageWindow } from "./usePdfPageWindow";
+import { pdfReaderContentRevision } from "./pdfReaderPosition";
+import { usePdfReaderPosition } from "./usePdfReaderPosition";
 import { getHighlightColor, getOverlayStyle } from "./pdfAnnotationAppearance";
 import { DrawShapeRegular, EraserRegular, ArrowUndoRegular } from "@fluentui/react-icons";
 import { PdfInkLayer } from "./PdfInkLayer";
@@ -1555,9 +1557,19 @@ export function PdfReader({
   const [selectedColor, setSelectedColor] = useState<HighlightColor>("yellow");
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
   const [defaultPageSize, setDefaultPageSize] = useState({ width: 760, height: 980 });
-  const documentInfoSource = useRef<{ paperId?: string; sourcePath?: string }>({});
+  const documentInfoSource = useRef<{ paperId?: string; sourcePath?: string; contentHash?: string; document?: PDFDocumentProxy }>({});
   const [pageCount, setPageCount] = useState(1);
   const [focusedPage, setFocusedPage] = useState(1);
+  const loadedPositionDocument = pdfDocument && documentInfoSource.current.document === pdfDocument &&
+    documentInfoSource.current.paperId === activePaper?.id && documentInfoSource.current.sourcePath === activePaper?.sourcePath &&
+    documentInfoSource.current.contentHash === activePaper?.contentHash ? pdfDocument : null;
+  const readerPosition = usePdfReaderPosition({
+    scopeId: objectWorkbench?.scopeId, paperId: activePaper?.id, sourcePath: activePaper?.sourcePath,
+    document: loadedPositionDocument,
+    contentRevision: loadedPositionDocument ? pdfReaderContentRevision(activePaper?.contentHash, loadedPositionDocument.fingerprints) : null,
+    pageCount, page: focusedPage, hasNavigationTarget: targetEvidence?.paperId === activePaper?.id,
+    restorePage: (page, stillCurrent) => navigateToPage(page, "auto", undefined, stillCurrent)
+  });
   const [layoutMode, setLayoutMode] = useState<PdfPageLayoutMode>(loadPdfPageLayoutMode);
   const [marginCommentsVisible, setMarginCommentsVisible] = useState(loadPdfMarginCommentsVisible);
   const [marginCommentConnectorsVisible, setMarginCommentConnectorsVisible] = useState(
@@ -1772,12 +1784,14 @@ export function PdfReader({
     });
   }
 
-  function navigateToPage(page: number, behavior: ScrollBehavior = "smooth", topRatio?: number) {
+  function navigateToPage(page: number, behavior: ScrollBehavior = "smooth", topRatio?: number, restoringPosition?: () => boolean) {
+    if (!restoringPosition) readerPosition.markNavigation();
     setReaderView("document");
     const nextPage = Math.min(Math.max(1, Math.trunc(page || 1)), Math.max(1, pageCount));
     setFocusedPage(nextPage);
     setStatus(`已转到第 ${nextPage} 页。`);
     window.requestAnimationFrame(() => {
+      if (restoringPosition && !restoringPosition()) return;
       const stageElement = stageRef.current;
       const pageElement = stageElement?.querySelector<HTMLElement>(`[data-page="${nextPage}"]`);
       if (!stageElement || !pageElement) return;
@@ -1824,7 +1838,7 @@ export function PdfReader({
   }
 
   function handleStageScroll() {
-    if (layoutMode !== "continuous") return;
+    if (layoutMode !== "continuous" || readerPosition.isRestoring()) return;
     const stageElement = stageRef.current;
     if (!stageElement) return;
     const stageTop = stageElement.getBoundingClientRect().top;
@@ -1838,7 +1852,7 @@ export function PdfReader({
         nearestPage = page;
       }
     }
-    if (nearestPage !== focusedPage) setFocusedPage(nearestPage);
+    if (nearestPage !== focusedPage) { readerPosition.markNavigation(); setFocusedPage(nearestPage); }
   }
 
   function handleStageKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
@@ -2104,6 +2118,8 @@ export function PdfReader({
     setActiveTextAnnotationId(null);
     setTextBoxToolActive(false);
     setAnnotationPopup(null);
+    documentInfoSource.current = {};
+    setPdfDocument(null);
     setPageCount(1);
     setFocusedPage(1);
     setSearchOpen(false);
@@ -2156,7 +2172,7 @@ export function PdfReader({
         const viewport = (await document.getPage(1)).getViewport({ scale: 1 });
         if (cancelled) return;
         setDefaultPageSize({ width: viewport.width, height: viewport.height });
-        documentInfoSource.current = { paperId: activePaper?.id, sourcePath: activePaper?.sourcePath };
+        documentInfoSource.current = { paperId: activePaper?.id, sourcePath: activePaper?.sourcePath, contentHash: activePaper?.contentHash, document };
         setPdfDocument(document);
         setPageCount(document.numPages);
         setStatus(`已加载 ${document.numPages} 页 PDF，可直接选中文本批注。`);
@@ -2173,7 +2189,7 @@ export function PdfReader({
       cancelled = true;
       void loadingTask?.destroy();
     };
-  }, [activePaper?.sourcePath, loadPdfSource, pdfDisplaySource]);
+  }, [activePaper?.id, activePaper?.sourcePath, activePaper?.contentHash, loadPdfSource, pdfDisplaySource]);
 
   useEffect(() => {
     if (!pdfDocument || !activePaper || !onDocumentInfo ||
@@ -2232,6 +2248,7 @@ export function PdfReader({
       return undefined;
     }
 
+    readerPosition.markNavigation();
     const targetPage = Math.min(
       Math.max(1, Math.trunc(targetEvidence.page || 1)),
       Math.max(1, pageCount)
@@ -2931,6 +2948,7 @@ export function PdfReader({
   }
 
   function locateAnnotation(annotation: PdfAnnotation) {
+    readerPosition.markNavigation();
     setReaderView("document");
     setFocusedPage(annotation.page);
     setStatus(`已定位到第 ${annotation.page} 页的${getAnnotationLabel(annotation.kind)}。`);
@@ -3134,6 +3152,7 @@ export function PdfReader({
 
   function createInkAnnotation(page: number, ink: PdfInkStroke) {
     if (!activePaper || hydratedAnnotationStorageKey !== annotationStorageKey) return;
+    readerPosition.markNavigation();
     setFocusedPage(page);
     const now = new Date().toISOString();
     setCurrentAnnotations((current) => {
@@ -3901,6 +3920,7 @@ export function PdfReader({
               pageCount={pageCount}
               parserStatus={(
                 <>
+                  {readerPosition.error ? <span role="status">{readerPosition.error}</span> : null}
                   {citationParsing.loading ? (
                     <span role="status">正在提取结构化引用…</span>
                   ) : citationParsing.parser === "grobid" ? (
