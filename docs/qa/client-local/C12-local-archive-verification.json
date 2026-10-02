@@ -1,0 +1,16 @@
+{
+  "scope": "C12 selected-resource archive and C02 new-directory recovery slice",
+  "base": "0fba97be",
+  "os": "Ubuntu 24.04 x64 / WSL2",
+  "toolchain": { "node": "22.13.1", "expectedNode": "22.23.2", "rust": "1.98.0", "expectedRust": "1.98.1" },
+  "checks": [
+    { "command": "cargo test --locked --no-default-features --manifest-path products/liteasy/apps/desktop/src-tauri/Cargo.toml --test local_archive", "status": "passed", "tests": 7, "realFilesystem": true, "realTauri": false },
+    { "command": "npm test -- --run src/tests/LocalArchivePanel.test.tsx src/tests/localArchiveService.test.ts", "status": "passed", "tests": 5, "mockTransport": true, "realTauri": false },
+    { "command": "npm run ci:smoke", "status": "passed", "tests": 9 },
+    { "command": "npm run build", "status": "passed" },
+    { "command": "npm run ci:contracts", "status": "pending_clean_commit" },
+    { "command": "cargo check --locked --all-targets --no-default-features --manifest-path products/liteasy/apps/desktop/src-tauri/Cargo.toml", "status": "pending_root_main_registration" }
+  ],
+  "notVerified": ["native picker automation", "Windows/macOS", "disk full", "process kill", "full profile restore", "geometric annotation reintegration", "external-edit merge", "Connector/Mobile compatibility"],
+  "wholeCardsComplete": false
+}
