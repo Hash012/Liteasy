@@ -1,0 +1,142 @@
+name: Desktop platform candidates
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Build an unsigned internal candidate on the selected native runner.
+        required: true
+        type: choice
+        default: linux-x64
+        options:
+          - linux-x64
+          - macos-arm64
+          - both
+      use-rust-cache:
+        description: Restore native compiled dependencies; leave false for a clean build.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-platform-candidates-${{ github.ref }}-${{ inputs.platform }}
+  cancel-in-progress: true
+
+jobs:
+  select:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+      rust: ${{ steps.select.outputs.rust }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - id: select
+        env:
+          CANDIDATE_SELECTION: ${{ inputs.platform }}
+        run: node .github/scripts/platform-candidate.mjs select
+
+  frontend:
+    uses: ./.github/workflows/desktop-frontend.yml
+    with:
+      full-tests: true
+
+  candidate:
+    name: Candidate ${{ matrix.id }}
+    needs: [select, frontend]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.select.outputs.matrix) }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      CANDIDATE_ID: ${{ matrix.id }}
+      CANDIDATE_TARGET: ${{ matrix.target }}
+      CANDIDATE_BUNDLES: ${{ matrix.bundles }}
+      CARGO_INCREMENTAL: 0
+      CARGO_PROFILE_TEST_DEBUG: 0
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Create evidence directory
+        run: |
+          candidate_logs="$RUNNER_TEMP/liteasy-candidate/$CANDIDATE_ID/logs"
+          mkdir -p "$candidate_logs"
+          printf 'CANDIDATE_LOGS=%s\n' "$candidate_logs" >> "$GITHUB_ENV"
+      - name: Install Ubuntu native build dependencies
+        if: ${{ matrix.id == 'linux-x64' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev librsvg2-dev libayatana-appindicator3-dev libdbus-1-dev
+      - uses: ./.github/actions/setup-desktop
+      - name: Set up the existing Windows workflow Rust pin
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master, pinned
+        with:
+          toolchain: ${{ needs.select.outputs.rust }}
+          targets: ${{ matrix.target }}
+      - name: Optional native dependency cache
+        if: ${{ inputs.use-rust-cache }}
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: products/liteasy/apps/desktop/src-tauri -> target
+          shared-key: candidate-v1-${{ runner.os }}-${{ runner.arch }}-${{ matrix.target }}-rust-${{ needs.select.outputs.rust }}-test-release-default-${{ hashFiles('products/liteasy/apps/desktop/src-tauri/Cargo.lock', 'products/liteasy/apps/desktop/package-lock.json') }}
+          env-vars: CARGO CC CFLAGS CXX CMAKE RUST ImageOS ImageVersion
+          cache-workspace-crates: false
+      - name: Verify native runner, architecture and platform merge configuration
+        id: host
+        run: node .github/scripts/platform-candidate.mjs host 2>&1 | tee "$CANDIDATE_LOGS/host.log"
+      - name: Build the real production frontend before default-feature Rust tests
+        id: frontend
+        working-directory: products/liteasy/apps/desktop
+        run: npm run build 2>&1 | tee "$CANDIDATE_LOGS/frontend.log"
+      - name: Test the native Rust host with the lockfile
+        id: rust
+        working-directory: products/liteasy/apps/desktop
+        run: cargo test --locked --target "$CANDIDATE_TARGET" --manifest-path src-tauri/Cargo.toml 2>&1 | tee "$CANDIDATE_LOGS/rust.log"
+      - name: Compile and link the native Release executable
+        id: compile
+        working-directory: products/liteasy/apps/desktop
+        run: npm run tauri -- build --target "$CANDIDATE_TARGET" --no-bundle -- --locked 2>&1 | tee "$CANDIDATE_LOGS/compile.log"
+      - name: Package the selected native candidate
+        id: package
+        working-directory: products/liteasy/apps/desktop
+        run: npm run tauri -- bundle --target "$CANDIDATE_TARGET" --bundles "$CANDIDATE_BUNDLES" 2>&1 | tee "$CANDIDATE_LOGS/package.log"
+      - name: Inspect package structure without installing or launching
+        id: inspect
+        run: node .github/scripts/platform-candidate.mjs inspect 2>&1 | tee "$CANDIDATE_LOGS/inspect.log"
+      - name: Verify locks and regenerated schemas stayed unchanged
+        id: clean
+        working-directory: products/liteasy/apps/desktop
+        run: node ../../../../.github/scripts/check-clean.mjs package-lock.json src-tauri/Cargo.lock ../../packages/shared 2>&1 | tee "$CANDIDATE_LOGS/clean.log"
+      - name: Record actual outcomes and checksums
+        if: ${{ always() }}
+        env:
+          CANDIDATE_STEPS: ${{ toJSON(steps) }}
+          CANDIDATE_RUST: ${{ needs.select.outputs.rust }}
+          CANDIDATE_RUST_CACHE: ${{ inputs.use-rust-cache }}
+        run: node .github/scripts/platform-candidate.mjs report
+      - name: Upload candidate artifacts and evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Liteasy-${{ matrix.id }}-candidate-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/liteasy-candidate/${{ matrix.id }}/
+          if-no-files-found: error
+          retention-days: 7
+
+  ready:
+    name: Selected candidate build checks
+    if: ${{ always() }}
+    needs: [select, frontend, candidate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Require every selected layer and state acceptance boundaries
+        env:
+          CI_RESULTS: ${{ toJSON(needs) }}
+        run: node .github/scripts/platform-candidate.mjs require-success
