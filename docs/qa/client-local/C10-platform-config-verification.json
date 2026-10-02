@@ -1,7 +1,7 @@
 {
   "schema": "liteasy.client-verification/v1",
   "task_id": "C10-platform-bundle-config",
-  "head_commit": null,
+  "head_commit": "e81a0b69",
   "enabled_release_tasks": [],
   "environment": {
     "os": "Ubuntu on WSL2 / WSLg (not native Windows)",
@@ -23,6 +23,11 @@
       "command": "npm run build",
       "exit_code": 0,
       "log": "/tmp/liteasy-c10-config-build.log"
+    },
+    {
+      "command": "npm run ci:contracts",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c10-config-contracts.log"
     }
   ],
   "checks": {
@@ -49,10 +54,12 @@
       "reason": null
     },
     "schema_clean": {
-      "status": "not_run",
-      "evidence_paths": [],
-      "used_mock": null,
-      "reason": null
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c10-config-contracts.log"
+      ],
+      "used_mock": false,
+      "reason": "Clean committed config/resources; schemas and dependency locks unchanged."
     },
     "browser_regression": {
       "status": "not_run",
