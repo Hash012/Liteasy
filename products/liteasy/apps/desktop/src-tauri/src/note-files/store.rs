@@ -2,7 +2,7 @@
 #[path = "operations.rs"]
 pub(crate) mod operations;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs::{self, OpenOptions};
@@ -39,6 +39,7 @@ pub struct Snapshot {
 }
 pub struct FileStore {
     connection: Connection,
+    read_only: bool,
     scope: String,
     managed_root: PathBuf,
     mirrored_root: PathBuf,
@@ -138,9 +139,49 @@ fn replace(temp: &Path, target: &Path) -> Result<(), String> {
     Ok(())
 }
 impl FileStore {
+    /// Reuse saved GUI grants without initializing, migrating, or authorizing anything.
+    pub fn open_read_only(app_data: &Path, scope: &str) -> Result<Self, String> {
+        let database = app_data.join("note-files").join("grants.v1.sqlite3");
+        if !app_data.is_absolute() {
+            return Err("数据目录必须是绝对路径。".into());
+        }
+        for path in [
+            app_data.to_path_buf(),
+            app_data.join("note-files"),
+            database.clone(),
+        ] {
+            let metadata = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
+            if link_like(&metadata) || (!metadata.is_file() && !metadata.is_dir()) {
+                return Err("只读数据目录不能经过链接或特殊文件。".into());
+            }
+        }
+        let connection = Connection::open_with_flags(&database, OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .map_err(|e| e.to_string())?;
+        connection
+            .busy_timeout(std::time::Duration::from_secs(5))
+            .map_err(|e| e.to_string())?;
+        connection
+            .execute_batch("PRAGMA query_only=ON;")
+            .map_err(|e| e.to_string())?;
+        Ok(Self {
+            connection,
+            read_only: true,
+            scope: scope.into(),
+            managed_root: app_data.join("boards").join(hash(scope.as_bytes())),
+            mirrored_root: app_data.join("synced-boards").join(hash(scope.as_bytes())),
+        })
+    }
+    fn require_writable(&self) -> Result<(), String> {
+        if self.read_only {
+            Err("只读文件命令不能修改文件或授权。".into())
+        } else {
+            Ok(())
+        }
+    }
     /// Only application-owned Canvas grants follow an approved data-root migration.
     /// External selections keep their original exact path and authorization.
     pub fn remap_managed_grants(&self, remap: impl Fn(&Path) -> PathBuf) -> Result<(), String> {
+        self.require_writable()?;
         for mount in self.mounts()? {
             let old = Path::new(&mount.location);
             let next = remap(old);
@@ -176,6 +217,7 @@ impl FileStore {
         connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS grants(scope TEXT NOT NULL, id TEXT NOT NULL, path TEXT NOT NULL, kind TEXT NOT NULL, PRIMARY KEY(scope,id), UNIQUE(scope,path,kind));").map_err(|e| e.to_string())?;
         Ok(Self {
             connection,
+            read_only: false,
             scope: scope.into(),
             managed_root: app_data.join("boards").join(hash(scope.as_bytes())),
             mirrored_root: app_data.join("synced-boards").join(hash(scope.as_bytes())),
@@ -247,6 +289,7 @@ impl FileStore {
             .ok_or_else(|| "找不到已连接的文件夹，请重新连接。".into())
     }
     pub fn register(&self, selected: &Path, kind: &str) -> Result<Mount, String> {
+        self.require_writable()?;
         if kind != "file" && kind != "directory" {
             return Err("文件授权类型无效。".into());
         }
@@ -297,6 +340,7 @@ impl FileStore {
     /// Application-owned Canvas files live under the configured data root and
     /// account. The renderer cannot nominate an absolute path or another account.
     pub fn managed_canvas(&self, object_id: &str) -> Result<Snapshot, String> {
+        self.require_writable()?;
         if object_id.is_empty() || object_id.len() > 512 {
             return Err("白板标识无效。".into());
         }
@@ -382,10 +426,7 @@ impl FileStore {
         if fs::canonicalize(root).map_err(|e| e.to_string())? != root {
             return Err("授权路径已移动或变为符号链接，请重新连接。".into());
         }
-        if fs::symlink_metadata(root)
-            .map_err(|e| format!("无法读取文件夹：{e}"))?
-            .file_type()
-            .is_symlink()
+        if link_like(&fs::symlink_metadata(root).map_err(|e| format!("无法读取文件夹：{e}"))?)
         {
             return Err("连接的文件夹已移动，请重新连接。".into());
         }
@@ -408,8 +449,9 @@ impl FileStore {
                 if name.starts_with('.') {
                     continue;
                 }
-                let file_type = item.file_type().map_err(|e| e.to_string())?;
-                if file_type.is_symlink()
+                let metadata = fs::symlink_metadata(item.path()).map_err(|e| e.to_string())?;
+                let file_type = metadata.file_type();
+                if link_like(&metadata)
                     || !(file_type.is_dir()
                         || file_type.is_file()
                             && (supported(&item.path())
@@ -565,6 +607,7 @@ impl FileStore {
         text: &str,
         expected: Option<&str>,
     ) -> Result<Snapshot, String> {
+        self.require_writable()?;
         if text.len() as u64 > MAX_BYTES {
             return Err("单个笔记文件不能超过 8 MB。".into());
         }
@@ -645,6 +688,7 @@ impl FileStore {
         result
     }
     pub fn create_directory(&self, id: &str, path: &str) -> Result<(), String> {
+        self.require_writable()?;
         let target = self.resolve(id, path, false)?;
         fs::create_dir_all(&target).map_err(|e| format!("无法创建文件夹：{e}"))
     }
@@ -1092,6 +1136,7 @@ impl FileStore {
         value: &serde_json::Value,
         previous: Option<&serde_json::Value>,
     ) -> Result<(), String> {
+        self.require_writable()?;
         use base64::{engine::general_purpose::STANDARD, Engine};
         let id = value["id"].as_str().ok_or("缺少笔记目录标识")?;
         let name = value["name"].as_str().ok_or("缺少笔记目录名称")?;

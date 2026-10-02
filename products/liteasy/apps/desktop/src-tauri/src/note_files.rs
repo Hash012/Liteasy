@@ -1,3 +1,6 @@
+#[cfg(test)]
+#[path = "headless-cli/tests.rs"]
+mod headless_cli_tests;
 #[path = "note-files/store.rs"]
 pub(crate) mod store;
 use rfd::FileDialog;

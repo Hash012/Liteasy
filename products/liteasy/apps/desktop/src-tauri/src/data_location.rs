@@ -84,6 +84,64 @@ fn read_config(base: &Path) -> Result<Config, String> {
     serde_json::from_slice(&fs::read(path).map_err(|e| e.to_string())?)
         .map_err(|e| format!("数据目录设置损坏，未切换目录：{e}"))
 }
+/// Resolve the existing data root without Tauri, directory creation or migration.
+/// A pending move must be settled by the desktop before a headless read.
+pub fn headless_root() -> Result<PathBuf, String> {
+    if let Some(profile) = crate::local_dev::profile_root() {
+        return existing_headless_root(profile.join("data"));
+    }
+    let absolute_env = |name: &str| {
+        std::env::var_os(name)
+            .map(PathBuf::from)
+            .filter(|path| path.is_absolute())
+    };
+    #[cfg(target_os = "linux")]
+    let base = absolute_env("XDG_DATA_HOME")
+        .or_else(|| absolute_env("HOME").map(|home| home.join(".local/share")));
+    #[cfg(target_os = "macos")]
+    let base = absolute_env("HOME").map(|home| home.join("Library/Application Support"));
+    #[cfg(windows)]
+    let base = absolute_env("APPDATA");
+    #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+    let base: Option<PathBuf> = None;
+    // Keep the identifier tied to the checked-in desktop configuration.
+    let config: serde_json::Value =
+        serde_json::from_str(include_str!("../tauri.conf.json")).map_err(|e| e.to_string())?;
+    let identifier = config["identifier"].as_str().ok_or("应用标识不可用")?;
+    let base = base
+        .ok_or("无法确定用户数据目录；未创建或打开其他资料库。")?
+        .join(identifier);
+    let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+    headless_root_at(&base, executable.parent().ok_or("无法确定安装目录")?)
+}
+fn existing_headless_root(root: PathBuf) -> Result<PathBuf, String> {
+    let metadata = fs::symlink_metadata(&root).map_err(|e| format!("数据目录不可用：{e}"))?;
+    if !root.is_absolute() || !metadata.is_dir() || link_like(&metadata) {
+        return Err("只读数据目录不可用或已变为链接；请在桌面中检查。".into());
+    }
+    root.canonicalize().map_err(|e| e.to_string())
+}
+fn headless_root_at(base: &Path, installation: &Path) -> Result<PathBuf, String> {
+    match fs::symlink_metadata(base.join(CONFIG)) {
+        Ok(metadata)
+            if !metadata.is_file() || link_like(&metadata) || metadata.len() > 1024 * 1024 =>
+        {
+            return Err("数据目录设置无效；只读命令未打开资料库。".into());
+        }
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.to_string()),
+        _ => {}
+    }
+    let config = read_config(base)?;
+    if config.pending.is_some() {
+        return Err("存在待处理的数据目录迁移；请先启动桌面完成或取消迁移。".into());
+    }
+    let root = if cfg!(windows) {
+        initial_root(base, &config, installation)
+    } else {
+        config.root.unwrap_or_else(|| base.to_path_buf())
+    };
+    existing_headless_root(root)
+}
 fn save_config(base: &Path, config: &Config) -> Result<(), String> {
     crate::local_library::write_bytes_atomically(
         &base.join(CONFIG),
@@ -528,6 +586,49 @@ pub fn resource_location(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn headless_resolution_preserves_existing_custom_roots_and_refuses_pending_or_missing() {
+        let temp = fixture();
+        let base = temp.join("profile");
+        let install = temp.join("install");
+        fs::create_dir_all(&base).unwrap();
+        let custom = temp.join("chosen");
+        fs::create_dir(&custom).unwrap();
+        let mut config = Config {
+            root: Some(custom.clone()),
+            ..Config::default()
+        };
+        fs::write(base.join(CONFIG), serde_json::to_vec(&config).unwrap()).unwrap();
+        assert_eq!(
+            headless_root_at(&base, &install).unwrap(),
+            custom.canonicalize().unwrap()
+        );
+        config.pending = Some(temp.join("pending"));
+        fs::write(base.join(CONFIG), serde_json::to_vec(&config).unwrap()).unwrap();
+        assert!(headless_root_at(&base, &install).is_err());
+        assert!(!temp.join("pending").exists());
+        config.pending = None;
+        fs::remove_dir(&custom).unwrap();
+        fs::write(base.join(CONFIG), serde_json::to_vec(&config).unwrap()).unwrap();
+        assert!(headless_root_at(&base, &install).is_err());
+        assert!(!custom.exists());
+        fs::remove_dir_all(temp).unwrap();
+    }
+    #[test]
+    fn headless_default_matches_desktop_platform_and_does_not_initialize() {
+        let temp = fixture();
+        let base = temp.join("profile");
+        let install = temp.join("install");
+        assert!(headless_root_at(&base, &install).is_err());
+        assert!(!base.exists());
+        fs::create_dir_all(base.join("note-files")).unwrap();
+        assert_eq!(
+            headless_root_at(&base, &install).unwrap(),
+            base.canonicalize().unwrap()
+        );
+        assert!(!base.join(CONFIG).exists());
+        fs::remove_dir_all(temp).unwrap();
+    }
     #[test]
     fn explorer_uses_ordinary_drive_and_unc_paths() {
         assert_eq!(

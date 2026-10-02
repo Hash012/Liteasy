@@ -503,6 +503,7 @@ impl FileStore {
         request: &Value,
         check: &dyn Fn() -> Result<(), String>,
     ) -> Result<Value, String> {
+        self.require_writable()?;
         check()?;
         self.operation_schema()?;
         let operation = text(request, "operation")?;
