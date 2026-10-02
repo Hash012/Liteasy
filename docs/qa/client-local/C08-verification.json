@@ -1,7 +1,7 @@
 {
   "schema": "liteasy.client-verification/v1",
   "task_id": "C08-read-event-loop",
-  "head_commit": "5a3411e9",
+  "head_commit": "37f7017c",
   "enabled_release_tasks": [],
   "environment": {
     "os": "Ubuntu on WSL2 / WSLg (not Windows native)",
@@ -40,6 +40,11 @@
       "command": "npm run build",
       "exit_code": 0,
       "log": "/tmp/liteasy-c08-build.log"
+    },
+    {
+      "command": "npm run ci:contracts",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c08-contracts.log"
     }
   ],
   "checks": {
@@ -70,10 +75,12 @@
       "reason": "51 Rust library tests with real temporary files; notify events synthetically constructed."
     },
     "schema_clean": {
-      "status": "not_run",
-      "evidence_paths": [],
-      "used_mock": null,
-      "reason": null
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c08-contracts.log"
+      ],
+      "used_mock": false,
+      "reason": "Contracts regenerated on clean implementation commit without drift."
     },
     "browser_regression": {
       "status": "not_run",
