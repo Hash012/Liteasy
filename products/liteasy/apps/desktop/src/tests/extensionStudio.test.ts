@@ -22,7 +22,8 @@ test("draft CAS and AI fixture protection preserve user edits; actual isolated t
   await expect(f.drafts.patch(draft.id, draft.revision, [{ path: "README.md", text: "过时覆盖" }])).rejects.toThrow("合并");
   await expect(f.drafts.patch(draft.id, updated.revision, [{ path: "fixtures/case-0.json", text: null }])).rejects.toThrow("验收");
   const report = await trialExtension(updated, () => true);
-  expect(report.cases).toHaveLength(3); expect(report.cases.every((item) => item.passed)).toBe(true);
+  expect(report.cases).toHaveLength(8); expect(report.cases.every((item) => item.passed)).toBe(true);
+  expect(report.cases.filter((item) => item.workflow !== "analyze")).toHaveLength(5);
   await f.drafts.saveReport(draft.id, report);
   const published = await f.drafts.publish(draft.id, f.packages);
   expect(published.bundle.files["extension.lock.json"]).toContain(published.manifest.version);

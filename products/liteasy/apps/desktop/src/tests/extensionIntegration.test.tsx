@@ -26,7 +26,7 @@ test("personal namespace trials use the account storage without exposing or chan
   const files = Object.fromEntries(Object.entries((await paperLensPackage()).files).map(([path, value]) => [path, value.replaceAll("plugin.paper-lens", "plugin.personal-trial")]));
   const draft = await createExtensionDraftStore(storage).create("Personal", files);
   const report = await trialExtension(draft, () => true, scope);
-  expect(report.cases.map((item) => item.error)).toEqual([undefined, undefined, undefined]);
+  expect(report.cases.map((item) => item.error)).toEqual(Array(8).fill(undefined));
   expect(report.passed).toBe(true);
   expect(await storage.list("extension-trial-data/")).toEqual([]);
   expect((await storage.get(key))?.version).toBe("original");

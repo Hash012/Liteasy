@@ -22,6 +22,8 @@ export type AgentAssetRead = {
   totalCharacters: number;
   truncated: boolean;
   nextOffset?: number;
+  /** Trusted adapter provenance; absence does not prove source text or full coverage. */
+  evidence?: { kind: "source" | "user" | "derived" | "metadata"; coverage: "partial" | "unknown"; reason?: string };
 };
 export type AgentAssetWriteOptions = {
   text: string;

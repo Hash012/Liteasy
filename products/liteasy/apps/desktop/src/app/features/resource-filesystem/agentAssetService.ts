@@ -105,11 +105,11 @@ export function createAgentAssetService(input: { scopeId: string; active(): bool
 }
 export type AgentAssetService = ReturnType<typeof createAgentAssetService>;
 
-export function readAgentAssetText(asset: AgentAsset, text: string, options: AgentAssetReadOptions) {
+export function readAgentAssetText(asset: AgentAsset, text: string, options: AgentAssetReadOptions, evidence?: import("./agentAsset.types").AgentAssetRead["evidence"]) {
   const offset = options.offset ?? 0;
   const end = Math.min(text.length, offset + (options.maxCharacters ?? 12000));
   return { asset, text: text.slice(offset, end), offset, totalCharacters: text.length,
-    truncated: offset > 0 || end < text.length, ...(end < text.length ? { nextOffset: end } : {}) };
+    truncated: offset > 0 || end < text.length, ...(end < text.length ? { nextOffset: end } : {}), ...(evidence ? { evidence } : {}) };
 }
 
 export function assetChangedLines(before: string, after: string) {

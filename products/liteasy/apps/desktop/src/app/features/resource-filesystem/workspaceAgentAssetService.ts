@@ -206,7 +206,15 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
         text = await readAgentBoard(input.repository, object);
       }
       check(options.signal);
-      return readAgentAssetText(await objectStat(object, path), text, options);
+      const bodyCapability = object.kind === "source.document" ? sourceDocumentBodyCapability(object) : undefined;
+      const selectedSource = parsed.kind === "object" && Boolean(parsed.ref.selectorId) && object.kind === "source.document";
+      const paperBody = object.kind === "source.document" && isPaperMetadataReference(object) && Boolean(input.readPaper);
+      return readAgentAssetText(await objectStat(object, path), text, options, {
+        kind: object.kind === "source.document" ? bodyCapability?.available || selectedSource || paperBody ? "source" : "metadata"
+          : object.kind === "content.note" && object.content.payload.origin !== "derived" ? "user" : "derived",
+        coverage: selectedSource || paperBody ? "partial" : "unknown",
+        ...(bodyCapability && !bodyCapability.available && !selectedSource && !paperBody ? { reason: bodyCapability.reason } : {})
+      });
     },
     resolveRelativeImages: relativeImages,
     resolveImages: resolveObjectImages,
@@ -291,7 +299,10 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
         return rows;
       },
       async stat(path) { return fileStat(await describeFile(path)); },
-      async read(path, options) { const file = await describeFile(path); return readAgentAssetText(fileStat(file), file.text, options); },
+      async read(path, options) { const file = await describeFile(path); return readAgentAssetText(fileStat(file), file.text, options, {
+        kind: imageExtension.test(file.path) ? "metadata" : "user", coverage: "unknown",
+        ...(imageExtension.test(file.path) ? { reason: "图片文字尚未提取。" } : {})
+      }); },
       async write(path, options) {
         if (imageExtension.test(target(path).kind === "external-file" ? new URL(path).pathname : "")) throw new AgentAssetError("read_only", "图片支持读取与加入上下文，请创建派生笔记保存解释。" );
         const file = await fileSnapshot(path);
@@ -333,8 +344,11 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
       async stat(path) { return paperWithAbstract(findPaper(path)); },
       async read(path, options) {
         const paper = findPaper(path);
+        const revision = paper.contentHash;
         const text = input.readPaper ? await input.readPaper(paper, options) : `# ${paperStat(paper).title}\n\n${paperStat(paper).summary}\n\n当前仅有题录；请先在阅读器中解析论文正文。`;
-        return readAgentAssetText(paperStat(paper), text, options);
+        if (findPaper(path).contentHash !== revision) throw new AgentAssetError("revision_conflict", "读取期间论文文件版本已变化，请重新选择来源。");
+        return readAgentAssetText(paperStat(paper), text, options, { kind: input.readPaper ? "source" : "metadata", coverage: "partial",
+          ...(!input.readPaper ? { reason: "当前仅有题录，正文尚未读取。" } : {}) });
       },
     });
   }
@@ -359,7 +373,7 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
           .filter((artifact) => `${artifact.title} ${artifact.path}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())).slice(0, limit);
       },
       async stat(path) { const artifact = await findArtifact(path); return artifactStat(artifact, await resourceContentRevision(canonicalResourceJson(artifact))); },
-      async read(path, options) { const artifact = await findArtifact(path); return readAgentAssetText(artifactStat(artifact, await resourceContentRevision(canonicalResourceJson(artifact))), artifactContextText(artifact), options); },
+      async read(path, options) { const artifact = await findArtifact(path); return readAgentAssetText(artifactStat(artifact, await resourceContentRevision(canonicalResourceJson(artifact))), artifactContextText(artifact), options, { kind: "derived", coverage: "unknown" }); },
     });
   }
   return createAgentAssetService({ scopeId: scope, active: input.active, adapters,

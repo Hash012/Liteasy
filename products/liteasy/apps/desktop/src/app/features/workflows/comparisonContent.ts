@@ -1,8 +1,15 @@
 import { z } from "zod";
+import { researchTemplateContent } from "./researchTemplateContent";
 const section = z.strictObject({ title: z.string().min(1).max(120), text: z.string().min(1).max(12000), sources: z.array(z.string().max(8192)).max(8) });
 export const comparisonSchema = z.strictObject({ sections: z.array(section).length(4) });
 /** Citations are checked against actual read results, never against model-invented IDs. */
 export function comparisonContent(value: unknown, evidence: unknown[], cardType: { id: string; version: string }) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const fields = value as Record<string, unknown>;
+    const request = fields.template && typeof fields.template === "object" && !Array.isArray(fields.template)
+      ? { ...fields.template as Record<string, unknown>, question: fields.question, userComment: fields.userComment } : fields;
+    if (request.schema === "liteasy.research-template/v1") return researchTemplateContent(request, evidence, cardType);
+  }
   const analysis = comparisonSchema.parse(value);
   const sources = evidence.map((entry) => z.object({ asset: z.object({ path: z.string(), title: z.string() }), text: z.string(), truncated: z.boolean().optional() }).parse(entry));
   const allowed = new Map(sources.map((source) => [source.asset.path, source]));

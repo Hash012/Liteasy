@@ -1,22 +1,30 @@
 import { paperComparisonWorkflow } from "../workflows/paperComparisonWorkflow";
+import { researchTemplates, researchTemplateWorkflow } from "../workflows/researchTemplates";
 import { buildExtensionPackage } from "./extensionPackage";
 
 /** An ordinary installable package, using exactly the public loader and renderer. */
 export function paperLensPackage() {
   const id = "plugin.paper-lens";
   const titles = ["研究问题", "方法与假设", "证据与推理", "局限与下一步"];
-  const manifest = { apiVersion: "liteasy.extension/v2", id, name: "论文比较板", version: "1.4.0", engines: { extensionApi: "2.0.0" }, activationEvents: [], permissions: [{ capability: "resources.metadata.read", scopeRef: "invocation.selection" }, { capability: "resources.content.read", scopeRef: "invocation.selection" }, { capability: "resources.create", scopeRef: "invocation.output", kinds: ["content.note", "workspace.board"] }, { capability: "model.invoke", scopeRef: "invocation.modelConnection" }], contributes: {
+  const manifest = { apiVersion: "liteasy.extension/v2", id, name: "论文比较板", version: "1.5.0", engines: { extensionApi: "2.0.0" }, activationEvents: [], permissions: [{ capability: "resources.metadata.read", scopeRef: "invocation.selection" }, { capability: "resources.content.read", scopeRef: "invocation.selection" }, { capability: "resources.create", scopeRef: "invocation.output", kinds: ["content.note", "workspace.board"] }, { capability: "model.invoke", scopeRef: "invocation.modelConnection" }], contributes: {
     blockTypes: [{ id: "reasoning-card", path: "blocks/reasoning-card.json" }], boardTemplates: [{ id: "comparison", path: "templates/comparison.json" }],
     views: [{ id: "overview", title: "论文比较台", icon: "BoardRegular", placement: "main", entry: { kind: "declarative", path: "ui/overview.json" }, instancePolicy: "singleton" }],
     settings: [{ id: "reading", title: "比较板阅读", category: "extensions", schema: "settings/schema.json" }],
     skills: [{ id: "compare", path: "skills/compare.json" }],
-    workflows: [{ id: "analyze", path: "workflows/compare.json" }],
-    menus: [{ location: "library.item.context", command: "analyze" }],
-    commands: [{ id: "analyze", title: "比较论文并保存笔记", workflow: "analyze" }, { id: "compare", title: "新建论文比较板", boardTemplate: "comparison" }],
+    workflows: [{ id: "analyze", path: "workflows/compare.json" }, ...researchTemplates.map((template) => ({ id: template.id, path: `workflows/${template.id}.json` }))],
+    menus: [{ location: "library.item.context", command: "analyze" }, ...researchTemplates.map((template) => ({ location: "library.item.context", command: template.id }))],
+    commands: [{ id: "analyze", title: "比较论文并保存笔记", workflow: "analyze" }, { id: "compare", title: "新建论文比较板", boardTemplate: "comparison" }, ...researchTemplates.map((template) => ({ id: template.id, title: `整理：${template.title}`, workflow: template.id }))],
   } };
   const definition = { id: `${id}/reasoning-card`, version: "1.0.0", title: "推理卡", base: { id: "liteasy/RichTextBlock", version: "1.0.0" }, dataSchema: { type: "object", properties: { evidence: { type: "string", maxLength: 20000, default: "" } }, additionalProperties: false }, defaults: {}, template: { component: "Card", props: { title: "依据与来源" }, children: [{ component: "MarkdownView", props: { text: { $field: "evidence" } } }] } };
   const template = { schema: "liteasy.board-template/v1", id: "comparison", title: "论文比较板", cards: titles.map((title, index) => ({ id: `column-${index}`, title, type: { id: `${id}/reasoning-card`, version: "1.0.0" }, data: { text: `## ${title}\n\n拖入论文后整理此项内容。`, evidence: "" }, position: { x: index * 350, y: 20 }, size: { width: 320, height: 400 } })) };
   const settings = { type: "object", properties: { explanationLevel: { type: "string", title: "解释详略", enum: ["brief", "balanced", "deep"], default: "balanced" }, fontSize: { type: "integer", title: "默认字号", minimum: 10, maximum: 48, default: 16 } }, additionalProperties: false };
   const fixtures = Object.fromEntries(["两篇不同论文", "同名论文", "无正文覆盖"].map((name, index) => [`fixtures/case-${index}.json`, JSON.stringify({ schema: "liteasy.workflow-fixture/v1", name, workflow: "analyze", input: { selection: ["fixture://first", "fixture://second"], question: "比较并说明覆盖范围" }, resources: [{ id: "first", title: "论文一", text: index === 2 ? "" : "研究对象与方法一" }, { id: "second", title: index === 1 ? "论文一" : "论文二", text: "研究对象与方法二" }], modelResponses: [{ sections: titles.map((title) => ({ title, text: index === 2 ? "首篇正文缺失，无法完整比较。" : "仅根据已读取片段比较。", sources: index === 2 ? ["fixture://second"] : ["fixture://first", "fixture://second"] })) }], assertions: [{ node: "evidence", path: "0.text", equals: index === 2 ? "" : "研究对象与方法一" }, { node: "verify", path: "text", contains: "比较" }, { node: "save", path: "kind", equals: "content.note" }, { node: "board", path: "kind", equals: "workspace.board" }] })]));
+  for (const template of researchTemplates) {
+    fixtures[`workflows/${template.id}.json`] = JSON.stringify(researchTemplateWorkflow(template.id));
+    fixtures[`fixtures/${template.id}.json`] = JSON.stringify({ schema: "liteasy.workflow-fixture/v1", name: `${template.title}：有分歧和缺失的资料`, workflow: template.id,
+      input: { selection: ["fixture://first", "fixture://second", "fixture://missing"], question: "核查相互分歧的假设", userComment: "需要检查测量条件。" },
+      resources: [{ id: "first", title: "资料一", text: "假设样本彼此独立。" }, { id: "second", title: "资料二", text: "样本之间存在依赖关系。" }, { id: "missing", title: "资料三", text: "" }],
+      modelResponses: [], assertions: [{ node: "worksheet", path: "text", contains: "证据不足" }, { node: "worksheet", path: "text", contains: "模型推断：未生成" }, { node: "save", path: "kind", equals: "content.note" }] });
+  }
   return buildExtensionPackage({ ...fixtures, "skills/compare.json": JSON.stringify({ schema: "liteasy.skill/v2", id: "compare", title: "比较论文", description: "用户希望比较几篇论文的问题、方法、证据与局限，并保存结果时使用。", instructions: "先选择明确论文，查看标题摘要，再按需读取文段。只使用实际返回的来源，说明覆盖不足；保存回执成功后才能报告完成。", workflow: { id: "analyze", version: "1.1.0" }, examples: ["比较两篇论文并保存笔记"] }), "workflows/compare.json": JSON.stringify(paperComparisonWorkflow()), "liteasy.extension.json": JSON.stringify(manifest), "ui/overview.json": JSON.stringify({ component: "Stack", children: [{ component: "MarkdownView", props: { text: "# 我的论文比较台\n\n从下方创建可编辑的比较板。每张卡都支持公式、图片、字体设置和加入上下文。" } }, { component: "Card", props: { title: "当前解释详略" }, children: [{ component: "MarkdownView", props: { text: { $field: "settings.reading.explanationLevel" } } }] } ] }), "blocks/reasoning-card.json": JSON.stringify(definition), "templates/comparison.json": JSON.stringify(template), "settings/schema.json": JSON.stringify(settings) });
 }
