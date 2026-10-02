@@ -104,6 +104,7 @@ pub fn note_files_dispatch(app: AppHandle, scope: String, request: Value) -> Res
     check()?;
     let app_data = crate::data_location::root(&app).map_err(|e| e.to_string())?;
     let files = store::FileStore::open(&app_data, &scope)?;
+    files.remap_managed_grants(crate::data_location::remap_path)?;
     let value = |key: &str| {
         request[key]
             .as_str()
@@ -171,7 +172,9 @@ pub(crate) fn sync_managed_mounts(
     scope: &str,
 ) -> Result<std::collections::HashSet<String>, String> {
     let root = crate::data_location::root(app).map_err(|e| e.to_string())?;
-    Ok(store::FileStore::open(&root, scope)?
+    let files = store::FileStore::open(&root, scope)?;
+    files.remap_managed_grants(crate::data_location::remap_path)?;
+    Ok(files
         .mounts()?
         .into_iter()
         .filter(|m| m.managed)

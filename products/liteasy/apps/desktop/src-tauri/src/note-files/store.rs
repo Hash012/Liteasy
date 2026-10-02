@@ -138,6 +138,33 @@ fn replace(temp: &Path, target: &Path) -> Result<(), String> {
     Ok(())
 }
 impl FileStore {
+    /// Only application-owned Canvas grants follow an approved data-root migration.
+    /// External selections keep their original exact path and authorization.
+    pub fn remap_managed_grants(&self, remap: impl Fn(&Path) -> PathBuf) -> Result<(), String> {
+        for mount in self.mounts()? {
+            let old = Path::new(&mount.location);
+            let next = remap(old);
+            if next == old
+                || !(next.starts_with(&self.managed_root) || next.starts_with(&self.mirrored_root))
+            {
+                continue;
+            }
+            if next
+                .canonicalize()
+                .map_err(|_| "迁移后的白板文件不可用。")?
+                != next
+            {
+                return Err("迁移后的白板授权路径不能经过符号链接。".into());
+            }
+            self.connection
+                .execute(
+                    "UPDATE grants SET path=?1 WHERE scope=?2 AND id=?3 AND path=?4",
+                    params![next.to_string_lossy(), self.scope, mount.id, mount.location],
+                )
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
     pub fn open(app_data: &Path, scope: &str) -> Result<Self, String> {
         let root = app_data.join("note-files");
         fs::create_dir_all(&root).map_err(|e| e.to_string())?;
@@ -640,6 +667,62 @@ mod tests {
         let root = std::env::temp_dir().join(format!("liteasy-notefiles-{}", nonce()));
         fs::create_dir_all(root.join("vault")).unwrap();
         root
+    }
+    #[test]
+    fn managed_canvas_grant_follows_approved_root_migration_but_external_selection_does_not() {
+        let root = workspace().canonicalize().unwrap();
+        let old = root.join("old");
+        let new = root.join("new");
+        let store = FileStore::open(&old, "local").unwrap();
+        let canvas = store.managed_canvas("board-id").unwrap();
+        store
+            .write(
+                &canvas.entry.mount_id,
+                &canvas.entry.path,
+                "{\"nodes\":[],\"edges\":[]}",
+                None,
+            )
+            .unwrap();
+        let external = store.register(&root.join("vault"), "directory").unwrap();
+        drop(store);
+        fs::create_dir_all(new.join("note-files")).unwrap();
+        fs::copy(
+            old.join("note-files/grants.v1.sqlite3"),
+            new.join("note-files/grants.v1.sqlite3"),
+        )
+        .unwrap();
+        let managed = PathBuf::from("boards").join(hash(b"local"));
+        fs::create_dir_all(new.join(&managed)).unwrap();
+        fs::copy(
+            old.join(&managed).join(&canvas.entry.path),
+            new.join(&managed).join(&canvas.entry.path),
+        )
+        .unwrap();
+        let moved = FileStore::open(&new, "local").unwrap();
+        moved
+            .remap_managed_grants(|path| {
+                path.strip_prefix(&old)
+                    .map(|p| new.join(p))
+                    .unwrap_or_else(|_| path.to_path_buf())
+            })
+            .unwrap();
+        assert_eq!(
+            moved
+                .read(&canvas.entry.mount_id, &canvas.entry.path)
+                .unwrap()
+                .text,
+            "{\"nodes\":[],\"edges\":[]}"
+        );
+        assert!(moved
+            .location(&canvas.entry.mount_id, &canvas.entry.path)
+            .unwrap()
+            .starts_with(&new));
+        assert_eq!(
+            moved.mount(&external.id).unwrap().location,
+            external.location
+        );
+        assert!(old.join(&managed).join(&canvas.entry.path).is_file());
+        fs::remove_dir_all(root).unwrap();
     }
     #[test]
     fn images_require_directory_grants_valid_content_and_bounded_paths() {

@@ -14,6 +14,8 @@ const CONFIG: &str = "data-location.v1.json";
 const MANAGED: &[&str] = &[
     "objects",
     "note-files",
+    "boards",
+    "synced-boards",
     "local-library",
     "library-profiles",
     "user-library",
@@ -610,6 +612,38 @@ mod tests {
             "原数据".as_bytes()
         );
         assert!(migrate(&root.join("source"), &root.join("source/nested")).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn migration_keeps_owned_and_mirrored_canvas_bytes_with_their_scope_namespace() {
+        let root = fixture();
+        for folder in ["boards", "synced-boards"] {
+            fs::create_dir_all(root.join("source").join(folder).join("scope-hash")).unwrap();
+            fs::write(
+                root.join("source")
+                    .join(folder)
+                    .join("scope-hash/白板.canvas"),
+                b"{\"nodes\":[],\"edges\":[]}",
+            )
+            .unwrap();
+        }
+        migrate(&root.join("source"), &root.join("target")).unwrap();
+        for folder in ["boards", "synced-boards"] {
+            assert_eq!(
+                fs::read(
+                    root.join("target")
+                        .join(folder)
+                        .join("scope-hash/白板.canvas")
+                )
+                .unwrap(),
+                b"{\"nodes\":[],\"edges\":[]}"
+            );
+            assert!(root
+                .join("source")
+                .join(folder)
+                .join("scope-hash/白板.canvas")
+                .is_file());
+        }
         fs::remove_dir_all(root).unwrap();
     }
     #[cfg(unix)]
