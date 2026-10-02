@@ -1,0 +1,176 @@
+{
+  "schema": "liteasy.client-verification/v1",
+  "task_id": "C02-snapshot-recovery",
+  "head_commit": "4978126c",
+  "enabled_release_tasks": [],
+  "environment": {
+    "os": "Ubuntu on WSL2 / WSLg (not Windows native)",
+    "os_version": "24.04",
+    "arch": "x86_64",
+    "webview": "WebKitGTK 2.52.6 / GTK 3.24.41",
+    "node": "22.13.1 (requested 22.23.2)",
+    "rust": "1.98.0 (requested 1.98.1)",
+    "fixture_revision": "Synthetic v1, v99, broken JSON and in-memory transport fixtures",
+    "test_profile_path_redacted": true
+  },
+  "commands": [
+    {
+      "command": "npm test -- --run src/tests/agentStatePersistence.test.ts src/tests/agentStateStoreConflict.test.ts src/tests/agentApplicationService.test.ts",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c02-focused.log"
+    },
+    {
+      "command": "npm test -- --run src/tests/agentApiAdapters.test.ts src/tests/assistantContextCatalog.test.tsx src/tests/AssistantPane.test.tsx src/tests/assistantInlineContext.test.tsx src/tests/dockAssistantLifecycle.test.tsx src/tests/assistantResourceContext.test.tsx src/tests/assistantArtifactRouting.test.tsx",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c02-integration.log"
+    },
+    {
+      "command": "npm test -- --run src/tests/assistantAgentPublicApi.integration.test.tsx src/tests/artifactTaskRecovery.test.ts",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c02-public-api.log"
+    },
+    {
+      "command": "npm run ci:smoke",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c02-smoke.log"
+    },
+    {
+      "command": "npm run build",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c02-build.log"
+    },
+    {
+      "command": "cargo check --locked --all-targets --no-default-features --manifest-path src-tauri/Cargo.toml",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c02-rust-check.log"
+    },
+    {
+      "command": "cargo test --locked --manifest-path src-tauri/Cargo.toml agent_state::tests",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c02-rust-test.log"
+    },
+    {
+      "command": "cargo test --locked --manifest-path src-tauri/Cargo.toml atomic_publish",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c02-atomic.log"
+    }
+  ],
+  "checks": {
+    "focused_tests": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c02-focused.log",
+        "/tmp/liteasy-c02-integration.log",
+        "/tmp/liteasy-c02-public-api.log",
+        "/tmp/liteasy-c02-smoke.log"
+      ],
+      "used_mock": true,
+      "reason": "25 focused, 85 related frontend/integration, 8 smoke. Model/storage transports are test doubles."
+    },
+    "typescript_build": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c02-build.log"
+      ],
+      "used_mock": false,
+      "reason": "Production assets; existing chunk warning."
+    },
+    "rust_locked": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c02-rust-check.log",
+        "/tmp/liteasy-c02-rust-test.log",
+        "/tmp/liteasy-c02-atomic.log"
+      ],
+      "used_mock": false,
+      "reason": "Real filesystem in temporary directories. Atomic failure injected in existing publisher test; no actual power-loss validation."
+    },
+    "schema_clean": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "browser_regression": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "native_ipc": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "native_window_file_events": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "accessibility": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "performance": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "installer_smoke": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "upgrade_recovery": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Full backup/restore to fresh user directory and native upgrade not executed; snapshot-specific recovery tests are focused tests, not full upgrade evidence."
+    },
+    "signing": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "notarization": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    }
+  },
+  "data_safety": {
+    "originals_preserved": true,
+    "secrets_excluded": true,
+    "network_services_unchanged": true,
+    "rollback_or_read_only_strategy": "Unknown/corrupt snapshot stays untouched and read-only; healthy records remain readable. No migration. Back up before returning to older unsafe client."
+  },
+  "changed_files": [
+    "products/liteasy/apps/desktop/src-tauri/src/agent_state.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/local_library.rs",
+    "products/liteasy/apps/desktop/src/app/controllers/agent/agentApplicationService.ts",
+    "products/liteasy/apps/desktop/src/app/controllers/agent/agentStatePersistence.ts",
+    "products/liteasy/apps/desktop/src/app/controllers/agent/tauriAgentStateStore.ts",
+    "products/liteasy/apps/desktop/src/app/features/agent-api/frontendAgentClient.ts",
+    "products/liteasy/apps/desktop/src/tests/agentStatePersistence.test.ts",
+    "docs/qa/client-local/C02-recovery.md",
+    "products/liteasy/apps/desktop/src/tests/agentStateStoreConflict.test.ts"
+  ],
+  "known_limitations": [
+    "Partial C02: full backup restore, view-level boundaries, draft receipts remain.",
+    "Read-only recovery deliberately does not enable writes to healthy records until repair.",
+    "Native legacy JSON writer has atomic replacement but no cross-process optimistic transaction; scoped object storage does.",
+    "Browser localStorage conflict check is not a multi-process transaction.",
+    "Windows/macOS native, real disk-full/read-only mount, kill-process and installer checks not_run.",
+    "Logs under /tmp are local and ephemeral."
+  ],
+  "release_ready": false,
+  "notes": "First C02 vertical slice only. Code commit is identified by git history; a clean-commit contract receipt follows."
+}

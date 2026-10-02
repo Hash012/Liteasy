@@ -20,19 +20,27 @@ function isTauriRuntime() {
 }
 
 function createBrowserStateStore(): AgentStateStore {
+  let loaded: string | null | undefined;
   return {
     load() {
       if (typeof window === "undefined" || !window.localStorage) {
         return null;
       }
       const serialized = window.localStorage.getItem(browserStorageKey);
-      return serialized ? JSON.parse(serialized) : null;
+      const parsed = serialized ? JSON.parse(serialized) : null;
+      loaded = serialized;
+      return parsed;
     },
     save(snapshot) {
       if (typeof window === "undefined" || !window.localStorage) {
         return;
       }
-      window.localStorage.setItem(browserStorageKey, JSON.stringify(snapshot));
+      if (loaded === undefined || window.localStorage.getItem(browserStorageKey) !== loaded) {
+        throw new Error("会话已被修改或尚未读取，原数据已保留，请重新打开。");
+      }
+      const next = JSON.stringify(snapshot);
+      window.localStorage.setItem(browserStorageKey, next);
+      loaded = next;
     },
   };
 }
@@ -63,18 +71,25 @@ export function createScopedAgentStateStore(
   currentScope: () => string,
 ): AgentStateStore {
   const storage = createObjectStorage(scopeId, currentScope);
+  let loadedVersion: string | null | undefined;
   return {
-    load: async () => (await storage.get("agent-state/public"))?.value ?? null,
+    load: async () => {
+      const row = await storage.get("agent-state/public");
+      loadedVersion = row?.version ?? null;
+      return row?.value ?? null;
+    },
     save: async (snapshot) => {
       const key = "agent-state/public";
-      const previous = await storage.get(key);
+      if (loadedVersion === undefined) throw new Error("保存前须先读取会话。");
+      const version = crypto.randomUUID();
       await storage.commit([
         {
           key,
-          expected: previous?.version ?? null,
-          row: { key, version: crypto.randomUUID(), value: snapshot },
+          expected: loadedVersion,
+          row: { key, version, value: snapshot },
         },
       ]);
+      loadedVersion = version;
     },
   };
 }

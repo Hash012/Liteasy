@@ -1,8 +1,6 @@
 use serde_json::Value;
-use std::fs::{self, OpenOptions};
-use std::io::Write;
-use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::fs;
+use std::path::{Path, PathBuf};
 use tauri::AppHandle;
 
 const MAX_AGENT_STATE_BYTES: u64 = 10 * 1024 * 1024;
@@ -15,7 +13,10 @@ fn state_path(app: &AppHandle) -> Result<PathBuf, String> {
 
 #[tauri::command]
 pub fn load_agent_state(app: AppHandle) -> Result<Option<Value>, String> {
-    let path = state_path(&app)?;
+    load(&state_path(&app)?)
+}
+
+fn load(path: &Path) -> Result<Option<Value>, String> {
     if !path.exists() {
         return Ok(None);
     }
@@ -36,7 +37,25 @@ pub fn load_agent_state(app: AppHandle) -> Result<Option<Value>, String> {
 
 #[tauri::command]
 pub fn save_agent_state(app: AppHandle, snapshot: Value) -> Result<(), String> {
-    let serialized = serde_json::to_vec(&snapshot)
+    save(&state_path(&app)?, &snapshot)
+}
+
+fn save(path: &Path, snapshot: &Value) -> Result<(), String> {
+    let supported = |value: &Value| {
+        value["version"] == "liteasy.agent-state/v1"
+            && value["savedAt"].is_string()
+            && value["sessions"].is_array()
+            && value["pendingConfirmations"].is_array()
+    };
+    if !supported(snapshot) {
+        return Err("会话格式无效，未覆盖原数据。".into());
+    }
+    // Older clients may not overwrite a future or unreadable snapshot, even if
+    // called directly through IPC. Per-record recovery belongs to the TS reader.
+    if load(path)?.is_some_and(|previous| !supported(&previous)) {
+        return Err("会话格式不兼容，原数据已保留，请使用兼容版本恢复。".into());
+    }
+    let serialized = serde_json::to_vec(snapshot)
         .map_err(|error| format!("Could not encode Agent state: {error}"))?;
     if serialized.len() as u64 > MAX_AGENT_STATE_BYTES {
         return Err(format!(
@@ -44,52 +63,50 @@ pub fn save_agent_state(app: AppHandle, snapshot: Value) -> Result<(), String> {
             MAX_AGENT_STATE_BYTES
         ));
     }
+    // Reuse the existing synced temp + atomic publication implementation. On
+    // Windows it replaces the destination without first deleting the old file.
+    crate::local_library::write_private_bytes_atomically(path, &serialized)
+}
 
-    let path = state_path(&app)?;
-    let parent = path
-        .parent()
-        .ok_or_else(|| "Agent state path has no parent".to_string())?;
-    fs::create_dir_all(parent)
-        .map_err(|error| format!("Could not create Agent state directory: {error}"))?;
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    let temporary_path = parent.join(format!(
-        ".agent-state.v1.{}.{nonce}.tmp",
-        std::process::id()
-    ));
-
-    let save_result = (|| -> Result<(), String> {
-        let mut temporary = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&temporary_path)
-            .map_err(|error| format!("Could not create temporary Agent state: {error}"))?;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn preserves_unsupported_or_corrupt_bytes_and_atomically_replaces_valid_state() {
+        let root = std::env::temp_dir().join(format!(
+            "liteasy-state-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("中文 state.json");
+        let valid = serde_json::json!({"version":"liteasy.agent-state/v1","savedAt":"2026-10-02","sessions":[],"pendingConfirmations":[]});
+        for original in [
+            b"{ \"version\": \"liteasy.agent-state/v99\", \"future\":true }".as_slice(),
+            b"{broken JSON",
+        ] {
+            fs::write(&path, original).unwrap();
+            assert!(save(&path, &valid).is_err());
+            assert_eq!(fs::read(&path).unwrap(), original);
+        }
+        fs::remove_file(&path).unwrap();
+        save(&path, &valid).unwrap();
+        save(&path, &valid).unwrap();
+        assert_eq!(load(&path).unwrap(), Some(valid.clone()));
+        assert!(save(&path, &serde_json::json!({})).is_err());
+        assert_eq!(load(&path).unwrap(), Some(valid));
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            temporary
-                .set_permissions(fs::Permissions::from_mode(0o600))
-                .map_err(|error| format!("Could not secure temporary Agent state: {error}"))?;
+            assert_eq!(
+                fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
         }
-        temporary
-            .write_all(&serialized)
-            .and_then(|_| temporary.sync_all())
-            .map_err(|error| format!("Could not write Agent state: {error}"))?;
-
-        #[cfg(windows)]
-        if path.exists() {
-            fs::remove_file(&path)
-                .map_err(|error| format!("Could not replace old Agent state: {error}"))?;
-        }
-        fs::rename(&temporary_path, &path)
-            .map_err(|error| format!("Could not publish Agent state: {error}"))?;
-        Ok(())
-    })();
-
-    if save_result.is_err() && temporary_path.exists() {
-        let _ = fs::remove_file(&temporary_path);
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+        fs::remove_dir_all(root).unwrap();
     }
-    save_result
 }

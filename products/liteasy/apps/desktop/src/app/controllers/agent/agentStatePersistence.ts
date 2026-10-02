@@ -129,82 +129,76 @@ function isConfirmation(value: unknown): value is HumanConfirmationRequest {
   );
 }
 
-export function parseAgentStateSnapshot(value: unknown): AgentStateSnapshot | null {
-  if (
-    !isRecord(value) ||
-    value.version !== AGENT_STATE_SNAPSHOT_VERSION ||
-    typeof value.savedAt !== "string" ||
-    !Array.isArray(value.sessions) ||
-    !Array.isArray(value.pendingConfirmations)
-  ) {
-    return null;
-  }
+export type AgentStateInspection = {
+  snapshot: AgentStateSnapshot | null;
+  issues: string[];
+};
 
+/** Recover independently valid records for reading. Any issue forbids automatic writes.
+ * The store retains its original bytes/value; diagnostics never include user content.
+ */
+export function inspectAgentStateSnapshot(value: unknown): AgentStateInspection {
+  if (!isRecord(value) || value.version !== AGENT_STATE_SNAPSHOT_VERSION) {
+    return { snapshot: null, issues: ["version"] };
+  }
+  if (typeof value.savedAt !== "string" || !Array.isArray(value.sessions) || !Array.isArray(value.pendingConfirmations)) {
+    return { snapshot: null, issues: ["snapshot"] };
+  }
+  const issues: string[] = [];
   const sessions: PersistedAgentSession[] = [];
-  for (const candidate of value.sessions) {
-    const session = isRecord(candidate) ? candidate.session : undefined;
-    const runs = isRecord(candidate) ? candidate.runs : undefined;
-    if (
-      !isRecord(candidate) ||
-      !isAgentSession(session) ||
-      !Array.isArray(runs) ||
-      !runs.every(isAgentRun)
-    ) {
-      return null;
+  const sessionIds = new Set<string>();
+  value.sessions.forEach((candidate, index) => {
+    const path = `sessions[${index}]`;
+    if (!isRecord(candidate) || !isAgentSession(candidate.session) || sessionIds.has(candidate.session.sessionId)) {
+      issues.push(path);
+      return;
     }
-    if (runs.some((run) => run.sessionId !== session.sessionId)) {
-      return null;
-    }
-    sessions.push({
-      runs,
-      session
+    const session = candidate.session;
+    sessionIds.add(session.sessionId);
+    const runs: AgentRun[] = [];
+    const runIds = new Set<string>();
+    const requestIds = new Set<string>();
+    if (!Array.isArray(candidate.runs)) issues.push(`${path}.runs`);
+    else candidate.runs.forEach((run, runIndex) => {
+      if (!isAgentRun(run) || run.sessionId !== session.sessionId || runIds.has(run.runId) || requestIds.has(run.idempotencyKey) ||
+        !["running", "waiting_confirmation", "waiting_clarification", "completed", "failed", "cancelled"].includes(run.status) ||
+        run.events.some(event => event.runId !== run.runId || event.sessionId !== session.sessionId)) {
+        issues.push(`${path}.runs[${runIndex}]`);
+        return;
+      }
+      runIds.add(run.runId);
+      requestIds.add(run.idempotencyKey);
+      runs.push(run);
     });
-  }
-
-  const sessionIds = new Set(sessions.map(({ session }) => session.sessionId));
-  const runIdsBySession = new Map(
-    sessions.map(({ runs, session }) => [
-      session.sessionId,
-      new Set(runs.map((run) => run.runId))
-    ])
-  );
+    sessions.push({ session, runs });
+  });
+  const runIdsBySession = new Map(sessions.map(({ session, runs }) => [session.sessionId, new Set(runs.map(run => run.runId))]));
   const pendingConfirmations: PersistedAgentConfirmation[] = [];
-  for (const candidate of value.pendingConfirmations) {
-    if (
-      !isRecord(candidate) ||
-      typeof candidate.runId !== "string" ||
-      typeof candidate.sessionId !== "string" ||
-      !sessionIds.has(candidate.sessionId) ||
-      !isConfirmation(candidate.confirmation)
-    ) {
-      return null;
+  const confirmationIds = new Set<string>();
+  value.pendingConfirmations.forEach((candidate, index) => {
+    if (!isRecord(candidate) || typeof candidate.runId !== "string" || typeof candidate.sessionId !== "string" ||
+      !runIdsBySession.get(candidate.sessionId)?.has(candidate.runId) || !isConfirmation(candidate.confirmation) ||
+      confirmationIds.has(candidate.confirmation.confirmationId)) {
+      issues.push(`pendingConfirmations[${index}]`);
+      return;
     }
-    pendingConfirmations.push({
-      confirmation: candidate.confirmation,
-      runId: candidate.runId,
-      sessionId: candidate.sessionId
+    confirmationIds.add(candidate.confirmation.confirmationId);
+    pendingConfirmations.push({ confirmation: candidate.confirmation, runId: candidate.runId, sessionId: candidate.sessionId });
+  });
+  let workflowTraces: AgentWorkflowTraceRecord[] | undefined;
+  if (value.workflowTraces !== undefined) {
+    workflowTraces = [];
+    if (!Array.isArray(value.workflowTraces)) issues.push("workflowTraces");
+    else value.workflowTraces.forEach((trace, index) => {
+      if (!isWorkflowTraceRecord(trace) || !runIdsBySession.get(trace.sessionId)?.has(trace.runId)) issues.push(`workflowTraces[${index}]`);
+      else workflowTraces!.push(trace);
     });
   }
+  return { snapshot: { pendingConfirmations, savedAt: value.savedAt, sessions, version: AGENT_STATE_SNAPSHOT_VERSION, workflowTraces }, issues };
+}
 
-  const workflowTraces = value.workflowTraces === undefined
-    ? undefined
-    : Array.isArray(value.workflowTraces) &&
-        value.workflowTraces.every((trace) =>
-          isWorkflowTraceRecord(trace) &&
-          sessionIds.has(trace.sessionId) &&
-          runIdsBySession.get(trace.sessionId)?.has(trace.runId)
-        )
-      ? value.workflowTraces
-      : null;
-  if (workflowTraces === null) {
-    return null;
-  }
-
-  return {
-    pendingConfirmations,
-    savedAt: value.savedAt,
-    sessions,
-    version: AGENT_STATE_SNAPSHOT_VERSION,
-    workflowTraces
-  };
+/** Strict consumers still reject anything that needs recovery. */
+export function parseAgentStateSnapshot(value: unknown): AgentStateSnapshot | null {
+  const inspection = inspectAgentStateSnapshot(value);
+  return inspection.issues.length ? null : inspection.snapshot;
 }

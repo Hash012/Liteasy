@@ -500,22 +500,81 @@ test("repairs a run that was interrupted by application restart", async () => {
   await submittedPromise;
 });
 
-test("reports a corrupt snapshot and starts from a clean state", async () => {
-  const memory = createMemoryStore({ version: "not-supported" });
+test("preserves unknown versions and refuses new persistent work", async () => {
+  const original = { version: "liteasy.agent-state/v99", privateFutureData: { keep: true } };
+  const memory = createMemoryStore(original);
   const onPersistenceError = vi.fn();
-  const api = createPersistentService({
-    onPersistenceError,
-    stateStore: memory.store
-  });
+  const api = createPersistentService({ onPersistenceError, stateStore: memory.store });
+  expect(await api.createSession({ consumer: "frontend" })).toMatchObject({ ok: false, error: { code: "execution_failed" } });
+  expect(memory.snapshot).toEqual(original);
+  expect(onPersistenceError).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("只读") }));
+});
 
+test("loads healthy runs from a partly corrupt snapshot without replacing original records", async () => {
+  const memory = createMemoryStore();
+  const first = createPersistentService({ stateStore: memory.store });
+  const session = await createSession(first);
+  const result = await first.submitTurn({ sessionId: session.sessionId, idempotencyKey: "good", input: { message: "hello", mode: "qa" } });
+  if (!result.ok) throw new Error(result.error.message);
+  const broken = clone(memory.snapshot) as AgentStateSnapshot;
+  broken.sessions[0].runs.push({ bad: "preserve me" } as never);
+  broken.sessions.push({ session: { broken: true }, runs: [] } as never);
+  const restart = createMemoryStore(broken);
+  const onPersistenceError = vi.fn();
+  const second = createPersistentService({ stateStore: restart.store, onPersistenceError });
+  expect(await second.getRun({ sessionId: session.sessionId, runId: result.data.runId })).toMatchObject({ ok: true, data: { status: "completed" } });
+  expect(await second.submitTurn({ sessionId: session.sessionId, idempotencyKey: "new", input: { message: "write a file", mode: "qa" } })).toMatchObject({ ok: false });
+  expect(restart.snapshot).toEqual(broken);
+  expect(onPersistenceError).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("sessions[0].runs[1]") }));
+});
+
+test("does not save after a failed load", async () => {
+  const save = vi.fn();
+  const api = createPersistentService({ stateStore: { load: () => { throw new Error("unreadable snapshot"); }, save } });
+  expect(await api.createSession({ consumer: "frontend" })).toMatchObject({ ok: false });
+  expect(save).not.toHaveBeenCalled();
+});
+
+test("does not run a command when its initial receipt cannot be persisted", async () => {
+  const memory = createMemoryStore();
+  const executeCommand = vi.fn(() => ({ events: [], settingsChanged: false }));
+  const api = createPersistentService({ stateStore: memory.store, executeCommand });
   const session = await createSession(api);
+  const before = clone(memory.snapshot);
+  memory.store.save = () => { throw new Error("disk full"); };
+  const request = { sessionId: session.sessionId, idempotencyKey: "write", input: { message: "write", mode: "command" as const } };
+  expect(await api.submitTurn(request)).toMatchObject({ ok: false, error: { message: expect.stringContaining("保存") } });
+  expect(await api.submitTurn(request)).toMatchObject({ ok: false });
+  expect(executeCommand).not.toHaveBeenCalled();
+  expect(memory.snapshot).toEqual(before);
+});
 
-  expect(session.status).toBe("active");
-  expect(onPersistenceError).toHaveBeenCalledWith(
-    expect.objectContaining({ message: "Stored Agent state snapshot is invalid" })
-  );
-  expect(memory.snapshot).toMatchObject({
-    sessions: [{ session: { sessionId: session.sessionId } }],
-    version: "liteasy.agent-state/v1"
-  });
+test("does not report success when the completed output cannot be persisted", async () => {
+  const memory = createMemoryStore();
+  const api = createPersistentService({ stateStore: memory.store, executeKnowledge: () => {
+    memory.store.save = () => { throw new Error("read only disk"); };
+    return { message: "completed in memory" };
+  } });
+  const session = await createSession(api);
+  const result = await api.submitTurn({ sessionId: session.sessionId, idempotencyKey: "answer", input: { message: "hello", mode: "qa" } });
+  expect(result).toMatchObject({ ok: false, error: { code: "execution_failed" } });
+  expect((memory.snapshot as AgentStateSnapshot).sessions[0].runs[0].status).toBe("running");
+});
+
+test("keeps the recovery explanation when a frontend send cannot connect", async () => {
+  const { createFrontendAgentClient } = await import("../app/features/agent-api/frontendAgentClient");
+  const api = createPersistentService({ stateStore: createMemoryStore({ version: "future" }).store });
+  const result = await createFrontendAgentClient(api).send({ message: "write", mode: "command" });
+  expect(result).toMatchObject({ ok: false, error: { message: expect.stringContaining("只读") } });
+});
+
+test("accepts a paused clarification when recovering supported run statuses", async () => {
+  const memory = createMemoryStore();
+  const first = createPersistentService({ stateStore: memory.store });
+  const session = await createSession(first);
+  await first.submitTurn({ sessionId: session.sessionId, idempotencyKey: "clarify", input: { message: "hello", mode: "qa" } });
+  const saved = memory.snapshot as AgentStateSnapshot;
+  saved.sessions[0].runs[0].status = "waiting_clarification";
+  const { inspectAgentStateSnapshot } = await import("../app/controllers/agent/agentStatePersistence");
+  expect(inspectAgentStateSnapshot(saved).issues).toEqual([]);
 });

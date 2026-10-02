@@ -72,24 +72,12 @@ export function createFrontendAgentClient(
     return result;
   };
 
-  const requireSession = async () => {
-    const result = await connect();
-    return result.ok ? result.data : null;
-  };
 
   return {
     async cancel(runId, reason) {
-      const activeSession = await requireSession();
-      if (!activeSession) {
-        return {
-          error: {
-            code: "session_not_found",
-            message: "Unable to create an Agent session",
-            retryable: true
-          },
-          ok: false
-        };
-      }
+      const connected = await connect();
+      if (!connected.ok) return connected;
+      const activeSession = connected.data;
       return api.cancelRun({ reason, runId, sessionId: activeSession.sessionId });
     },
 
@@ -123,17 +111,9 @@ export function createFrontendAgentClient(
     },
 
     async confirm(confirmationId, decision) {
-      const activeSession = await requireSession();
-      if (!activeSession) {
-        return {
-          error: {
-            code: "session_not_found",
-            message: "Unable to create an Agent session",
-            retryable: true
-          },
-          ok: false
-        };
-      }
+      const connected = await connect();
+      if (!connected.ok) return connected;
+      const activeSession = connected.data;
       return api.resolveConfirmation({
         confirmationId,
         decision,
@@ -150,17 +130,9 @@ export function createFrontendAgentClient(
     },
 
     async send(input, sendOptions = {}) {
-      const activeSession = await requireSession();
-      if (!activeSession) {
-        return {
-          error: {
-            code: "session_not_found",
-            message: "Unable to create an Agent session",
-            retryable: true
-          },
-          ok: false
-        };
-      }
+      const connected = await connect();
+      if (!connected.ok) return connected;
+      const activeSession = connected.data;
       return api.submitTurn({
         attachments: sendOptions.attachments,
         contextRefs: sendOptions.contextRefs,

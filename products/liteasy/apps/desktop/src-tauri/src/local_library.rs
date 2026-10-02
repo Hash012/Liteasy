@@ -1349,6 +1349,22 @@ fn write_bytes_atomically_with_publisher<F>(
 where
     F: FnOnce(&Path, &Path) -> std::io::Result<()>,
 {
+    write_bytes_atomically_with_options(path, bytes, publisher, false)
+}
+
+pub(crate) fn write_private_bytes_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    write_bytes_atomically_with_options(path, bytes, publish_atomic_file, true)
+}
+
+fn write_bytes_atomically_with_options<F>(
+    path: &Path,
+    bytes: &[u8],
+    publisher: F,
+    private: bool,
+) -> Result<(), String>
+where
+    F: FnOnce(&Path, &Path) -> std::io::Result<()>,
+{
     let parent = path
         .parent()
         .ok_or_else(|| "目标文件缺少父目录。".to_string())?;
@@ -1358,9 +1374,16 @@ where
         .unwrap_or_default()
         .as_nanos();
     let temporary_path = parent.join(format!(".liteasy.{}.{nonce}.tmp", std::process::id()));
-    let mut temporary = fs::OpenOptions::new()
-        .create_new(true)
-        .write(true)
+    let mut options = fs::OpenOptions::new();
+    options.create_new(true).write(true);
+    #[cfg(unix)]
+    if private {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    #[cfg(not(unix))]
+    let _ = private; // Windows inherits the application's data-directory ACL.
+    let mut temporary = options
         .open(&temporary_path)
         .map_err(|error| format!("无法创建临时文件：{error}"))?;
     temporary

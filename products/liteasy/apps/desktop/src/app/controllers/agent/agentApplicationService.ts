@@ -39,7 +39,7 @@ import {
 } from "./agentWorkflowTraceProjection";
 import {
   AGENT_STATE_SNAPSHOT_VERSION,
-  parseAgentStateSnapshot,
+  inspectAgentStateSnapshot,
   type AgentStateSnapshot,
   type AgentStateStore
 } from "./agentStatePersistence";
@@ -361,6 +361,8 @@ export function createAgentApplicationService(
   let fallbackId = 0;
   let hydrationPromise: Promise<void> | null = null;
   let persistenceQueue = Promise.resolve();
+  let persistenceBlocked: string | null = null;
+  const persistenceError = () => apiError("execution_failed", persistenceBlocked ?? "保存失败，原数据已保留。请检查存储后重新打开。");
 
   const createId = (prefix: "event" | "run" | "session") => {
     if (ports.createId) {
@@ -438,15 +440,21 @@ export function createAgentApplicationService(
     ports.onPersistenceError?.(normalized);
   };
 
-  const persistState = async () => {
-    if (!ports.stateStore) {
-      return;
-    }
+  const persistState = async (): Promise<boolean> => {
+    if (persistenceBlocked) return false;
+    if (!ports.stateStore) return true;
     const snapshot = createSnapshot();
-    persistenceQueue = persistenceQueue
-      .then(() => ports.stateStore!.save(snapshot))
-      .catch(reportPersistenceError);
+    // Recheck inside the queue: a prior write may have failed while this was queued.
+    persistenceQueue = persistenceQueue.then(async () => {
+      if (persistenceBlocked) return;
+      try { await ports.stateStore!.save(snapshot); }
+      catch (error) {
+        persistenceBlocked = "会话保存失败，已暂停后续任务。已执行操作可能已生效，请检查回执与存储后重新打开，不要直接重试写入。";
+        reportPersistenceError(error);
+      }
+    });
     await persistenceQueue;
+    return persistenceBlocked === null;
   };
 
   const hydrateState = async () => {
@@ -457,17 +465,19 @@ export function createAgentApplicationService(
     try {
       loaded = await ports.stateStore.load();
     } catch (error) {
+      persistenceBlocked = "会话读取失败，已进入只读保护，原数据未修改。请检查存储后重新打开。";
       reportPersistenceError(error);
       return;
     }
-    if (!loaded) {
+    if (loaded === null || loaded === undefined) {
       return;
     }
-    const snapshot = parseAgentStateSnapshot(loaded);
-    if (!snapshot) {
-      reportPersistenceError(new Error("Stored Agent state snapshot is invalid"));
-      return;
+    const { snapshot, issues } = inspectAgentStateSnapshot(loaded);
+    if (issues.length) {
+      persistenceBlocked = "会话格式不兼容或部分记录损坏，已进入只读保护，原数据完整保留。请先备份，再使用兼容版本恢复。";
+      reportPersistenceError(new Error(`${persistenceBlocked} 位置：${issues.slice(0, 20).join(", ")}`));
     }
+    if (!snapshot) return;
 
     let repairedInterruptedRun = false;
     snapshot.sessions.forEach(({ runs, session }) => {
@@ -520,7 +530,7 @@ export function createAgentApplicationService(
       }
     });
 
-    if (repairedInterruptedRun) {
+    if (repairedInterruptedRun && !persistenceBlocked) {
       await persistState();
     }
   };
@@ -653,6 +663,7 @@ export function createAgentApplicationService(
           return { data: existing.session, ok: true };
         }
       }
+      if (persistenceBlocked) return persistenceError();
       const sessionId = createId("session");
       const session: AgentSession = {
         apiVersion: AGENT_API_VERSION,
@@ -670,12 +681,13 @@ export function createAgentApplicationService(
         runs: new Map(),
         session
       });
-      await persistState();
+      if (!(await persistState())) return persistenceError();
       return { data: session, ok: true };
     },
 
     async closeSession(sessionId: string) {
       await ensureHydrated();
+      if (persistenceBlocked) return persistenceError();
       const result = getStoredSession(sessionId);
       if (!result.ok) {
         return result;
@@ -697,12 +709,13 @@ export function createAgentApplicationService(
       });
       stored.session.status = "closed";
       stored.listeners.clear();
-      await persistState();
+      if (!(await persistState())) return persistenceError();
       return { data: stored.session, ok: true };
     },
 
     async submitTurn(request: SubmitAgentTurnRequest) {
       await ensureHydrated();
+      if (persistenceBlocked) return persistenceError();
       const sessionResult = getStoredSession(request.sessionId);
       if (!sessionResult.ok) {
         return sessionResult;
@@ -781,7 +794,7 @@ export function createAgentApplicationService(
         message: request.input.message,
         type: "run.started"
       });
-      await persistState();
+      if (!(await persistState())) return persistenceError();
 
       try {
         const context = (await ports.resolveContext?.({
@@ -789,7 +802,7 @@ export function createAgentApplicationService(
           session: stored.session
         })) ?? {};
         if (run.status === "cancelled") {
-          await persistState();
+          if (!(await persistState())) return persistenceError();
           return { data: run, ok: true };
         }
         const prepared = stored.core.prepareTurn({
@@ -802,7 +815,7 @@ export function createAgentApplicationService(
             events: prepared.events,
             settingsChanged: false
           });
-          await persistState();
+          if (!(await persistState())) return persistenceError();
           return { data: run, ok: true };
         }
         if (context.objectSnapshot) {
@@ -881,7 +894,7 @@ export function createAgentApplicationService(
             ? managerResult.result
             : await ports.executeCommand(executionInput);
           if (isCancelled(run)) {
-            await persistState();
+            if (!(await persistState())) return persistenceError();
             return { data: run, ok: true };
           }
           stored.core.observeRuntimeTurn({
@@ -894,7 +907,7 @@ export function createAgentApplicationService(
             ? managerResult.result
             : await ports.executeKnowledge(executionInput);
           if (isCancelled(run)) {
-            await persistState();
+            if (!(await persistState())) return persistenceError();
             return { data: run, ok: true };
           }
           stored.core.observeKnowledgeTurn({
@@ -924,7 +937,7 @@ export function createAgentApplicationService(
           finishRun(stored, run, "failed");
         }
       }
-      await persistState();
+      if (!(await persistState())) return persistenceError();
       if (run.status === "completed") {
         // Side work receives only the submitted user text, never tool output or attachments.
         try { ports.onConversationCompleted?.({ message: request.input.message, sessionId: request.sessionId, requestId: run.runId }); }
@@ -935,6 +948,7 @@ export function createAgentApplicationService(
 
     async resolveConfirmation(request: ResolveAgentConfirmationRequest) {
       await ensureHydrated();
+      if (persistenceBlocked) return persistenceError();
       const sessionResult = getStoredSession(request.sessionId);
       if (!sessionResult.ok) {
         return sessionResult;
@@ -966,7 +980,7 @@ export function createAgentApplicationService(
           type: "assistant.message"
         });
         finishRun(stored, run, "completed");
-        await persistState();
+        if (!(await persistState())) return persistenceError();
         return { data: run, ok: true };
       }
       if (!ports.executeConfirmation) {
@@ -974,14 +988,14 @@ export function createAgentApplicationService(
           "This Agent host does not provide confirmation execution."
         ));
         finishRun(stored, run, "failed");
-        await persistState();
+        if (!(await persistState())) return persistenceError();
         return { data: run, ok: true };
       }
 
       run.status = "running";
       const abortController = new AbortController();
       abortControllers.set(run.runId, abortController);
-      await persistState();
+      if (!(await persistState())) return persistenceError();
       try {
         const runtimeResult = await ports.executeConfirmation({
           confirmation: pending.confirmation,
@@ -1001,7 +1015,7 @@ export function createAgentApplicationService(
           finishRun(stored, run, "failed");
         }
       }
-      await persistState();
+      if (!(await persistState())) return persistenceError();
       return { data: run, ok: true };
     },
 
@@ -1029,7 +1043,7 @@ export function createAgentApplicationService(
       run.completedAt = now().toISOString();
       emit(stored, run, { reason, type: "run.cancelled" });
       abortControllers.delete(runId);
-      await persistState();
+      if (!(await persistState())) return persistenceError();
       return { data: run, ok: true };
     },
 
