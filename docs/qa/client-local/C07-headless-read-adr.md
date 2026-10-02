@@ -27,4 +27,6 @@ FileStore 使用 SQLite read-only connection/query_only 和原授权表，同时
 
 当前源码的 Windows release 使用 `windows_subsystem="windows"`；该子系统没有自动附加控制台，终端 stdout/退出等待、重定向以及独立 console launcher 的打包仍待 Windows 实测。未将 Linux 单元测试写成 Windows CLI 通过；macOS 启动与打包也未执行。[Rust Windows subsystem 官方说明](https://doc.rust-lang.org/reference/runtime.html#the-windows_subsystem-attribute)
 
+实际无界面证据：root 在 WSL2 Ubuntu 24.04 x64 终止原生 GUI 后，清除 DISPLAY、WAYLAND_DISPLAY、XDG_RUNTIME_DIR，用含默认 feature 的 debug host 执行 mounts、list、extract，均退出 0；74 字节 Markdown 的 SHA-256 与返回 revision 一致，原文件保持不变。revision 冲突/未知授权/穿越路径/作用域参数分别退出 5/4/2/2，失败 stdout 为空。授权由现有调试 profile 工具和合成 SQLite fixture 准备，未使用原生选择器；harness 的 Node/Python 仅准备 fixture 和启动子进程，未据此声称无源码安装验收。二进制来自含未提交 main 接线的集成工作树，SHA-256 为 `2fcd80f53d53fc43857a85d92fc426bf376ccbf280954f1ff9d832b447b3d861`。详见 [七项原生命令记录](C07-native-headless-evidence.json)。
+
 尚未完成的 C07 项目：Windows 同用户受限命名管道，Unix peer/帧/并发/断连完整检查，GUI/CLI 并发写租约与回执，三平台无源码/无全局 Node 安装验证，AI sidecar 三平台可行性和体积测量。只读文件命令不经 IPC，不能算旧桌面控制协议的修复。

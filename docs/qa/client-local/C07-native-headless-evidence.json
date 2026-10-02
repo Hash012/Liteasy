@@ -1,0 +1,89 @@
+{
+  "binary": "/tmp/liteasy-second-wave-native",
+  "environment": "WSL2 x64; DISPLAY/WAYLAND_DISPLAY/XDG_RUNTIME_DIR unset; native GUI terminated before execution",
+  "grantSource": "Synthetic existing grants.v1.sqlite3 with same schema as FileStore; no native picker claim",
+  "cases": [
+    {
+      "args": [
+        "mounts",
+        "--json"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "list",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "--json"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "extract",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "说明.md",
+        "--expected-revision",
+        "0f04260aa68318f141e85983420b3fdb1138f0317b6b05f546027cb491e9cc59",
+        "--json"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "extract",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "说明.md",
+        "--expected-revision",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "--json"
+      ],
+      "exit": 5,
+      "error": "revision_conflict"
+    },
+    {
+      "args": [
+        "extract",
+        "unknown",
+        "说明.md",
+        "--json"
+      ],
+      "exit": 4,
+      "error": "grant_unavailable"
+    },
+    {
+      "args": [
+        "extract",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "../说明.md",
+        "--json"
+      ],
+      "exit": 2,
+      "error": "invalid_arguments"
+    },
+    {
+      "args": [
+        "extract",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "说明.md",
+        "--scope",
+        "user:other"
+      ],
+      "exit": 2,
+      "error": "invalid_arguments"
+    }
+  ],
+  "result": {
+    "format": "markdown",
+    "bytes": 74,
+    "revision": "0f04260aa68318f141e85983420b3fdb1138f0317b6b05f546027cb491e9cc59",
+    "truncated": false
+  },
+  "sourceUnchanged": true,
+  "schema": "liteasy.headless-native-evidence/v1",
+  "binarySha256": "2fcd80f53d53fc43857a85d92fc426bf376ccbf280954f1ff9d832b447b3d861",
+  "binaryBytes": 411711920,
+  "sourceState": "Root integration worktree at native build, including C07 2973ffb6 and uncommitted main early entry; not a clean release build. Later root edits are not claimed present in this binary.",
+  "executedBy": "Root integrator; this reviewer read the generated report and harness and independently hashed the tested binary.",
+  "harness": "Temporary /tmp/liteasy-headless-real.mjs uses existing localClientProfile.mjs to create a marked debug profile and Python sqlite3 to seed an authorized synthetic local grant. Node orchestrates subprocesses; the native command does not invoke Node."
+}

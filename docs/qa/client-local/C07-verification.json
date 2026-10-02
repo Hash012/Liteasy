@@ -61,6 +61,12 @@
       "cwd": "products/liteasy/apps/desktop",
       "exit_code": 0,
       "result": "Passed on clean documentation commit ee18ae9d (implementation 2973ffb6). Generated schemas and locks unchanged; final report amendment changes documentation only."
+    },
+    {
+      "command": "node /tmp/liteasy-headless-real.mjs",
+      "cwd": "root integration environment; temporary native binary invoked via absolute path",
+      "exit_code": 0,
+      "result": "Root executed 7 real native CLI cases with GUI terminated and DISPLAY, WAYLAND_DISPLAY, XDG_RUNTIME_DIR unset; successful mounts/list/extract and expected failure exits 5/4/2/2. Synthetic existing grant, no native picker claim."
     }
   ],
   "checks": {
@@ -108,7 +114,7 @@
       "status": "not_run",
       "evidence_paths": [],
       "used_mock": null,
-      "reason": "Not executed for this read-only CLI core slice; no platform or release success inferred."
+      "reason": "The headless branch uses no IPC. Existing desktop-control CLI transport remains untested by these cases."
     },
     "native_window_file_events": {
       "status": "not_run",
@@ -153,10 +159,12 @@
       "reason": "Not executed for this read-only CLI core slice; no platform or release success inferred."
     },
     "headless_cli": {
-      "status": "not_run",
-      "evidence_paths": [],
+      "status": "passed",
+      "evidence_paths": [
+        "docs/qa/client-local/C07-native-headless-evidence.json"
+      ],
       "used_mock": false,
-      "reason": "Root integration owns main early entry and real no-DISPLAY binary execution. This component report does not count core tests as that acceptance."
+      "reason": "Real default-feature debug Tauri host binary returns from early CLI path with GUI closed and display variables unset. 74 UTF-8 bytes and revision exactly match source; no source change or failed-command stdout. Grants were seeded synthetically, not selected through a native picker. Core tests separately prove same FileStore Snapshot as GUI service."
     }
   },
   "data_safety": {
@@ -174,18 +182,19 @@
     "products/liteasy/apps/desktop/src-tauri/src/note_files.rs",
     "docs/qa/client-local/C07-headless-feasibility.md",
     "docs/qa/client-local/C07-headless-read-adr.md",
-    "docs/qa/client-local/C07-verification.json"
+    "docs/qa/client-local/C07-verification.json",
+    "docs/qa/client-local/C07-native-headless-evidence.json"
   ],
   "known_limitations": [
     "C07 card incomplete: Windows named pipe/Unix IPC hardening, concurrent GUI+CLI writes, Node sidecar feasibility and package size work remain.",
     "No Windows or macOS native execution/build/signing/installer evidence. Windows release GUI subsystem console handles/exit-waiting/redirected stdout unverified.",
-    "Core test callbacks inject data root and effective scope; main and validated development/recovery profile bootstrap require integration verification.",
     "Source formats only UTF-8 Markdown/Canvas <=8 MiB; list <=10000 entries/64 levels, no PDF/EPUB text extraction.",
     "Same shared path-check/open TOCTOU remains; no resistance claimed against a malicious same-user directory replacement. Concurrent source edits are not a strict atomic snapshot.",
     "SQLite WAL coordination files may be created/used despite no business state writes; no immutable flag that would hide committed GUI changes.",
     "Managed grants after data-root migration require desktop migration/remap first; CLI refuses pending migrations and does not remap persistent grants.",
-    "Actual cancellation/signal, broken-pipe, source-free installation and no-global-Node execution still require binary/platform validation."
+    "Actual cancellation/signal, broken-pipe, source-free installation and no-global-Node execution still require binary/platform validation.",
+    "Actual CLI evidence uses a debug host from an uncommitted integration tree and a marked debug profile. No source-free packaged installation, native picker, or Windows/macOS CLI evidence is inferred."
   ],
   "release_ready": false,
-  "notes": "This is bounded component evidence, not whole C07 completion. No release task enabled; production services and dependency/lock versions untouched."
+  "notes": "Bounded component and real Linux headless evidence, not whole C07 completion. No release task enabled; production services and dependency/lock versions untouched. Native source provenance is recorded separately because root integrated the early main entry outside the component commit."
 }

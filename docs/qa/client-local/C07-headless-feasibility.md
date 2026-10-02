@@ -1,6 +1,6 @@
 # C07：CLI / headless 复用边界审计
 
-2026-10-02 的审计基线为 `0fba97be`。2026-10-03 已新增仅本地授权范围的文件清单/UTF-8 提取核心切片，见 [C07 只读 ADR](C07-headless-read-adr.md) 和 [验证报告](C07-verification.json)。该切片需要 main 的早期入口接线；核心测试不能代替真实无 DISPLAY 二进制验收。C07 整卡仍未完成，旧的桌面控制传输与下述写操作问题没有被此只读切片解决。
+2026-10-02 的审计基线为 `0fba97be`。2026-10-03 已新增仅本地授权范围的文件清单/UTF-8 提取切片，见 [C07 只读 ADR](C07-headless-read-adr.md) 和 [验证报告](C07-verification.json)。集成分支接入 main 早期入口后，真实 Linux debug host 在 GUI 关闭、DISPLAY/Wayland 环境变量缺失时完成提取；合成授权和二进制来源见 [原生证据](C07-native-headless-evidence.json)。C07 整卡仍未完成，旧的桌面控制传输与下述写操作问题没有被此只读切片解决。
 
 现有 `src-tauri/src/main.rs` 在创建 Tauri app 前调用 `agent_host::run_external_mode()`，已有 `--agent-cli` / `--agent-mcp` 参数保留。`agent_host.rs` 的 CLI 将参数数组原样放入请求，通过 Unix socket 发送，等待运行中桌面的事件桥；`useTauriAgentHostBridge.ts` / `agentHost.ts` 最终使用 `agentApplicationService.ts` 与 `agentCliAdapter.ts`。业务执行仍依赖前端运行时。非 Unix 的 `send_external_request` 返回 unavailable，没有 Windows 命名管道。不存在可据此宣称的跨平台、无 GUI 业务执行。
 
