@@ -3988,6 +3988,11 @@ fn request_full_local_library_validation(app: &AppHandle) -> Result<(), String> 
 }
 
 pub fn resume_local_library_watcher(app: &AppHandle) {
+    // Wry may emit Resumed before the setup callback initializes the data root.
+    // setup starts the watcher after initialization; only later resumes restart it.
+    if crate::data_location::root(app).is_err() {
+        return;
+    }
     let result =
         restart_local_library_watcher(app).and_then(|_| request_full_local_library_validation(app));
     if let Err(error) = result {

@@ -1,0 +1,141 @@
+{
+  "schema": "liteasy.client-verification/v1",
+  "task_id": "C10-native-open-slice",
+  "head_commit": null,
+  "enabled_release_tasks": [],
+  "environment": {
+    "os": "Linux (WSLg, not native Windows)",
+    "os_version": "Ubuntu 24.04.3 LTS",
+    "arch": "x86_64",
+    "webview": null,
+    "node": "18.19.1 system; no Node commands run",
+    "rust": "1.98.0 (workflow expects 1.98.1)",
+    "fixture_revision": "tests/native_open.rs synthetic temporary fixtures",
+    "test_profile_path_redacted": true
+  },
+  "commands": [
+    {
+      "command": "cargo test --locked --no-default-features --manifest-path products/liteasy/apps/desktop/src-tauri/Cargo.toml --test native_open",
+      "exit_code": 0,
+      "result": "9 passed; prior red queue overflow regression exit 101",
+      "transport": "direct Rust core with actual temporary files, no Tauri IPC"
+    },
+    {
+      "command": "cargo test --locked --no-default-features --manifest-path products/liteasy/apps/desktop/src-tauri/Cargo.toml --bin liteasy-desktop local_dev::tests",
+      "exit_code": 0,
+      "result": "2 passed"
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "checks": {
+    "focused_tests": {
+      "status": "passed",
+      "evidence_paths": [
+        "docs/agent-dev/2026-10-02-client-c10-native-open.md"
+      ],
+      "used_mock": false,
+      "reason": "9 core grant/parser/queue tests against isolated real temporary files, 2 existing profile boundary tests; wrapper/main integration not yet compiled on this branch"
+    },
+    "typescript_build": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Pending final integrator wiring and validation; this bounded branch does not register native commands or change platform configuration."
+    },
+    "rust_locked": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Pending final integrator wiring and validation; this bounded branch does not register native commands or change platform configuration."
+    },
+    "schema_clean": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Pending final integrator wiring and validation; this bounded branch does not register native commands or change platform configuration."
+    },
+    "browser_regression": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Pending final integrator wiring and validation; this bounded branch does not register native commands or change platform configuration."
+    },
+    "native_ipc": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Pending final integrator wiring and validation; this bounded branch does not register native commands or change platform configuration."
+    },
+    "native_window_file_events": {
+      "status": "blocked",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Native picker automation currently blocked in WSLg; native Windows/macOS unavailable. Synthetic argv/file URL tests are not native OS event acceptance."
+    },
+    "accessibility": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Pending final integrator wiring and validation; this bounded branch does not register native commands or change platform configuration."
+    },
+    "performance": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Pending final integrator wiring and validation; this bounded branch does not register native commands or change platform configuration."
+    },
+    "installer_smoke": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Pending final integrator wiring and validation; this bounded branch does not register native commands or change platform configuration."
+    },
+    "upgrade_recovery": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Pending final integrator wiring and validation; this bounded branch does not register native commands or change platform configuration."
+    },
+    "signing": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Pending final integrator wiring and validation; this bounded branch does not register native commands or change platform configuration."
+    },
+    "notarization": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Pending final integrator wiring and validation; this bounded branch does not register native commands or change platform configuration."
+    }
+  },
+  "data_safety": {
+    "originals_preserved": true,
+    "secrets_excluded": true,
+    "network_services_unchanged": true,
+    "rollback_or_read_only_strategy": "In-memory exact-file read-only grants only; no migration or copying/uploading, no persistent grant; revert module and root integration to roll back."
+  },
+  "changed_files": [
+    "docs/agent-dev/2026-10-02-client-c10-native-open.md",
+    "docs/agent-dev/2026-10-02-client-c10-native-open.verification.json",
+    "products/liteasy/apps/desktop/src-tauri/src/native_open.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/native-open/files.rs",
+    "products/liteasy/apps/desktop/src-tauri/tests/native_open.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/local_library.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/local_dev.rs"
+  ],
+  "known_limitations": [
+    "C10 whole card remains incomplete.",
+    "native_open.rs Tauri wrappers await main registration and integrated compile.",
+    "Cold local-scope OS grants never automatically transfer to subsequently restored signed-in user; reselect required.",
+    "Grants expire at process exit; original file reopening after restart requires reselection.",
+    "Windows/macOS, installers/signing/notarization, broad capability report and Reveal/quit semantics not validated or implemented here.",
+    "100 MiB per file, 32 pending items per batch, 256 active grants; frontend must release closed/failed/stale selections."
+  ],
+  "release_ready": false,
+  "notes": "Head hash is null because this report accompanies the source commit; base commit and actual uncommitted source verification stated above. See final integration report for final HEAD and native commands. No private files or paid models used.",
+  "base_commit": "8d31bf57"
+}

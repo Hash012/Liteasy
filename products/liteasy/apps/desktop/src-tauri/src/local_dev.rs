@@ -78,6 +78,10 @@ mod tests {
             "note_files_dispatch",
             "load_agent_state",
             "save_agent_state",
+            "choose_native_open_file",
+            "read_native_open_file",
+            "release_native_open_file",
+            "drain_native_open_requests",
         ] {
             assert!(!network_or_credential_command(command));
         }
