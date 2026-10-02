@@ -1,0 +1,167 @@
+{
+  "schema": "liteasy.client-verification/v1",
+  "task_id": "C03-original-files-frontend",
+  "head_commit": "fb9abd2f25a33d76d52dad26222a5368dca3e866",
+  "enabled_release_tasks": [],
+  "environment": {
+    "os": "Ubuntu on WSL2 / WSLg (not native Windows)",
+    "os_version": "24.04",
+    "arch": "x86_64",
+    "webview": "not exercised; Vitest jsdom",
+    "node": "22.13.1 (requested 22.23.2)",
+    "rust": "not exercised; available 1.98.0 (requested 1.98.1)",
+    "fixture_revision": "synthetic PDF byte arrays and ZIP EPUB fixtures in implementation commits",
+    "test_profile_path_redacted": true
+  },
+  "commands": [
+    {
+      "command": "npm ci --no-audit --no-fund",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c03-files-npm-ci.log"
+    },
+    {
+      "command": "npm test -- --run src/tests/originalFileService.test.ts src/tests/originalFileOpenController.test.tsx src/tests/useExternalPaperController.test.ts src/tests/originalReadingController.test.tsx src/tests/cachedReaderPapers.test.ts src/tests/parseReadingFile.test.ts src/tests/pdfAnnotationStorage.test.ts src/tests/pdfAnnotationPersistence.test.ts src/tests/readingLibraryRepository.test.ts",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c03-files-focused.log"
+    },
+    {
+      "command": "npm test -- --run src/tests/useExternalPaperController.test.ts src/tests/originalFileOpenController.test.tsx",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c03-files-close-focused.log"
+    },
+    {
+      "command": "npm run ci:smoke",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c03-files-smoke.log"
+    },
+    {
+      "command": "npm run build",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c03-files-build-final.log"
+    },
+    {
+      "command": "npm run ci:contracts",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c03-files-contracts.log"
+    }
+  ],
+  "checks": {
+    "focused_tests": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c03-files-focused.log",
+        "/tmp/liteasy-c03-files-close-focused.log",
+        "/tmp/liteasy-c03-files-smoke.log"
+      ],
+      "used_mock": true,
+      "reason": "82 focused before the final race fix; 15 affected after it including one new case, 83 distinct. Eight smoke checks. Native chooser, binary read, event subscription and storage use explicit test doubles; synthetic PDF/EPUB bytes only."
+    },
+    "typescript_build": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c03-files-build-final.log"
+      ],
+      "used_mock": false,
+      "reason": "Final frontend code production build; existing chunk-size warning."
+    },
+    "rust_locked": {
+      "status": "not_applicable",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "This slice changes no Rust; companion C10 native grants require integrated Rust verification."
+    },
+    "schema_clean": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c03-files-contracts.log"
+      ],
+      "used_mock": false,
+      "reason": "ci:contracts on clean fb9abd2f. Tracked resource verification, schema regeneration, TypeScript and lock/shared cleanliness all passed."
+    },
+    "browser_regression": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "native_ipc": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not exercised here. Actual chooser/OS/binary IPC and filesystem preservation belong to combined C03/C10 integration, not these mocked frontend tests."
+    },
+    "native_window_file_events": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not exercised here. Actual chooser/OS/binary IPC and filesystem preservation belong to combined C03/C10 integration, not these mocked frontend tests."
+    },
+    "accessibility": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "performance": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "installer_smoke": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "upgrade_recovery": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "signing": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "notarization": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    }
+  },
+  "data_safety": {
+    "originals_preserved": null,
+    "secrets_excluded": true,
+    "network_services_unchanged": true,
+    "rollback_or_read_only_strategy": "Only exact native grant IDs are read; no import, rename, copy or upload calls. Synthetic input arrays verified unchanged; original native filesystem bytes not tested in this frontend worktree. Rollback frontend wiring without deleting existing annotations or original files."
+  },
+  "changed_files": [
+    "products/liteasy/apps/desktop/src/app/controllers/useExternalPaperController.ts",
+    "products/liteasy/apps/desktop/src/app/controllers/useOriginalFileOpenController.ts",
+    "products/liteasy/apps/desktop/src/app/controllers/useReadingLibraryController.ts",
+    "products/liteasy/apps/desktop/src/app/features/library/cachedReaderPapers.ts",
+    "products/liteasy/apps/desktop/src/app/features/original-files/originalFileService.ts",
+    "products/liteasy/apps/desktop/src/app/features/reading-library/ReadingLibrarySurface.tsx",
+    "products/liteasy/apps/desktop/src/tests/cachedReaderPapers.test.ts",
+    "products/liteasy/apps/desktop/src/tests/originalFileOpenController.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/originalFileService.test.ts",
+    "products/liteasy/apps/desktop/src/tests/originalReadingController.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/useExternalPaperController.test.ts",
+    "docs/qa/client-local/C03-original-files.md",
+    "docs/qa/client-local/C03-original-files-verification.json"
+  ],
+  "known_limitations": [
+    "Integration ports are supplied; AppShell/action and Rust registration wiring are in the integrator branch.",
+    "Full C03 acceptance incomplete: PDF page position resets to page 1; original grants/tabs are not automatically restored after restart.",
+    "User must reselect the original after restart; unchanged original PDF annotation keys persist. EPUB position behavior is reused but not tested end to end after restart.",
+    "Reference-only library membership and additional copy-import UX not implemented.",
+    "Native picker/IPC/OS events, browser rendering, Windows/macOS, installers, upgrade, signing and notarization not run here.",
+    "Node and available Rust patch versions differ from repository pins; WSLg is not native Windows."
+  ],
+  "release_ready": false,
+  "notes": "Frontend-only evidence for a bounded C03 slice, not full card completion or release acceptance. Red-first logs: /tmp/liteasy-c03-files-red.log, -controller-red.log, -epub-red.log, -reselect-red.log and -close-red.log; all fail before the corresponding implementation/fix. Local /tmp evidence is ephemeral. No production/private data/model calls."
+}
