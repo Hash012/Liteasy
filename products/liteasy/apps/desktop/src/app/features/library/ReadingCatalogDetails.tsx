@@ -6,6 +6,7 @@ import { bibliographicFields } from "./bibliographicFields";
 import { assetTypeLabels } from "./libraryAssetMetadata";
 import { MarkdownContent } from "../markdown/MarkdownContent";
 import { displayPath } from "../resource-filesystem/displayPath";
+import { readingResourceCapabilities } from "../reading-library/readingResourceCapabilities";
 import { formatCatalogFileSize, readingCatalogCitation } from "./readingCatalogSearch";
 import {
   readingCatalogFormatLabels, readingCatalogStatusLabels,
@@ -42,6 +43,7 @@ export function ReadingCatalogDetails({ entry, ...actions }: { entry: ReadingCat
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const savedTags = entry.tags?.join(", ") ?? "";
+  const { operations } = readingResourceCapabilities(entry, { canExport: Boolean(actions.onExport) });
   useEffect(() => {
     if (dirty) return;
     setCollection(entry.collection ?? "");
@@ -88,12 +90,12 @@ export function ReadingCatalogDetails({ entry, ...actions }: { entry: ReadingCat
     </div>
     <div className="reading-catalog-detail-actions">
       {actions.onEditBibliography ? <Button icon={<EditRegular />} onClick={() => actions.onEditBibliography!(entry)}>编辑元信息</Button> : null}
-      <Button appearance="primary" icon={<OpenRegular />} disabled={busy || entry.available === false} onClick={() => void invoke(() => actions.onOpen(entry))}>{entry.format === "other" ? "导出原文件" : "开始阅读"}</Button>
+      <Button appearance="primary" icon={<OpenRegular />} disabled={busy || !operations.open.available} onClick={() => void invoke(() => actions.onOpen(entry))}>开始阅读</Button>
       <Button icon={<CopyRegular />} disabled={busy} onClick={() => void copy(readingCatalogCitation(entry))}>复制引用</Button>
       {actions.onAddToContext ? <Button disabled={busy} onClick={() => void invoke(() => actions.onAddToContext!(entry))}>添加到 Agent 上下文</Button> : null}
       {actions.renderLocation?.(entry)}
     </div>
-    {entry.available === false ? <p className="reading-catalog-muted">正文文件暂不可用，仍可查看和整理元信息。</p> : null}
+    {!operations.open.available ? <p className="reading-catalog-muted">{operations.open.reason}</p> : null}
     <dl className="reading-catalog-facts">
       {entry.assetType ? <div><dt>条目类型</dt><dd>{assetTypeLabels[entry.assetType] ?? entry.assetType}</dd></div> : null}
       <div><dt>发表年份</dt><dd>{entry.year ?? "未提供"}</dd></div>
@@ -129,7 +131,7 @@ export function ReadingCatalogDetails({ entry, ...actions }: { entry: ReadingCat
       {entry.liteasyPath ? <CopyValue label="Liteasy Path" value={entry.liteasyPath} onCopy={(value) => void copy(value)} /> : null}
       <div className="reading-catalog-detail-actions">
         {actions.onReveal ? <Button icon={<FolderOpenRegular />} disabled={busy} onClick={() => void invoke(() => actions.onReveal!(entry))}>显示实际位置</Button> : null}
-        {actions.onExport && entry.canExport !== false ? <Button icon={<ArrowDownloadRegular />} disabled={busy || entry.available === false} onClick={() => void invoke(() => actions.onExport!(entry))}>导出原文件</Button> : null}
+        {actions.onExport && entry.canExport !== false ? <Button icon={<ArrowDownloadRegular />} disabled={busy || !operations.export.available} onClick={() => void invoke(() => actions.onExport!(entry))}>导出原文件</Button> : null}
       </div>
     </section> : null}
     {actions.onDelete && entry.canRemove !== false ? <Button icon={<DeleteRegular />} disabled={busy} onClick={() => void invoke(() => actions.onDelete!(entry))}>移出文献库</Button> : null}

@@ -1,4 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { readingResourceCapabilities } from "../reading-library/readingResourceCapabilities";
 import { Button, Input, Select, Tooltip } from "@fluentui/react-components";
 import { AddRegular, ArrowLeftRegular, ArrowRightRegular, BookOpenRegular, DismissRegular, DocumentPdfRegular, DocumentTextRegular, SearchRegular } from "@fluentui/react-icons";
 import { ReadingCatalogDetails, type ReadingCatalogActions } from "./ReadingCatalogDetails";
@@ -48,7 +49,9 @@ export function ReadingLibraryCatalog({ entries, loading = false, message, onImp
   }
 
   async function open(entry: ReadingCatalogEntry) {
-    if (entry.available === false) return;
+    const capability = readingResourceCapabilities(entry).operations.open;
+    if (!capability.available) { setActionMessage(capability.reason); return; }
+    setActionMessage("");
     try { await actions.onOpen(entry); }
     catch (error) { setActionMessage(error instanceof Error ? error.message : "无法打开文件，请重试。"); }
   }

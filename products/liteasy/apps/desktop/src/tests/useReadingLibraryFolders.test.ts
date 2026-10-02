@@ -21,9 +21,10 @@ test("imports into a folder and persists moves and folder renames without changi
   await act(async () => { await hook.result.current.importFiles([sourceFile()], "D:\\Library\\eBooks\\Topics"); });
   const entry = hook.result.current.entries[0];
   expect(entry).toMatchObject({ format: "markdown", folderPath: "eBooks/Topics" });
+  expect(entry.identity).toMatchObject({ key: entry.liteasyPath, locator: entry.liteasyPath, stability: "logical", contentHash: expect.any(String), revision: expect.any(String) });
   await act(async () => { await hook.result.current.updateMetadata(entry.id, { tags: ["经典"], readingStatus: "finished" }); });
   await act(async () => { await hook.result.current.relocateFolder("D:\\Library\\eBooks", "D:\\Library\\Books"); });
-  expect(hook.result.current.entries[0]).toMatchObject({ id: entry.id, folderPath: "Books/Topics", tags: ["经典"], liteasyPath: entry.liteasyPath });
+  expect(hook.result.current.entries[0]).toMatchObject({ id: entry.id, folderPath: "Books/Topics", tags: ["经典"], liteasyPath: entry.liteasyPath, identity: entry.identity });
   hook.unmount();
   const reopened = renderHook(() => useReadingLibraryController({ ...hook.input, localLibraryRootPath: "E:\\MovedLibrary" }));
   await waitFor(() => expect(reopened.result.current.entries).toHaveLength(1));
@@ -39,6 +40,20 @@ test("reimporting a duplicate into a folder moves it without creating a second o
   expect(hook.result.current.entries).toHaveLength(1);
   expect(hook.result.current.entries[0].folderPath).toBe("eBooks");
   expect(hook.result.current.message).toContain("1 个已有文件已归入目标目录");
+});
+
+test("opening an unsupported original reports why without downloading or opening a reader", async () => {
+  const hook = setup();
+  await act(async () => { await hook.result.current.importFiles([sourceFile("measurements.csv", "name,value\nsample,2")]); });
+  const download = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  try {
+    await act(async () => { hook.result.current.open(hook.result.current.entries[0]); });
+    await waitFor(() => expect(hook.result.current.message).toContain("暂不支持内置阅读"));
+    expect(hook.input.openPaper).not.toHaveBeenCalled();
+    expect(hook.input.onOpenReader).not.toHaveBeenCalled();
+    expect(download).not.toHaveBeenCalled();
+    expect(hook.result.current.selected?.title).toBe("measurements.csv");
+  } finally { download.mockRestore(); hook.unmount(); }
 });
 
 test("normalizes Windows display paths and rejects traversal or destinations outside the library", () => {

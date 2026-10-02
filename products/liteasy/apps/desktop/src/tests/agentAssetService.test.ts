@@ -11,6 +11,7 @@ import { liteasyPath } from "../app/features/resource-filesystem/liteasyPath";
 import type { NoteFileService, NoteFileSnapshot } from "../app/features/note-files/noteFileService";
 import type { AgentAssetAdapter } from "../app/features/resource-filesystem/agentAsset.types";
 import { stageImage } from "../app/features/objects/objectAssets";
+import { createReadingLibraryRepository } from "../app/features/reading-library/readingLibraryRepository";
 
 beforeEach(() => vi.stubGlobal("crypto", webcrypto));
 
@@ -26,6 +27,18 @@ function fixture() {
 }
 
 describe("workspace agent assets", () => {
+  test("does not return an unsupported original's saved-file placeholder as extracted body", async () => {
+    const f = fixture();
+    const library = createReadingLibraryRepository(f.storage, f.scopeId);
+    const { entry } = await library.importFile("observations.csv", new TextEncoder().encode("sample,value\nA,1"), {
+      format: "other", title: "Field observations", authors: [], chapters: [], toc: [], resources: [], warnings: []
+    });
+    const path = liteasyPath(f.scopeId, { kind: "object", ref: entry.ref });
+    expect((await f.service.search({ query: "Field observations" }))[0].title).toBe("Field observations");
+    await expect(f.service.read(path)).rejects.toMatchObject({ code: "unavailable", message: expect.stringContaining("尚未提取正文") });
+    expect(Array.from((await library.readFile(entry.id)).bytes)).toEqual(Array.from(new TextEncoder().encode("sample,value\nA,1")));
+  });
+
   test("discovers a new CicN note, writes the real project asset, retains history, and re-adds the saved revision as context", async () => {
     const f = fixture();
     expect(await f.service.search({ query: "CicN" })).toEqual([]);

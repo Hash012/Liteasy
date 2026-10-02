@@ -7,11 +7,13 @@ import type { ParsedReadingDocument } from "../features/reading-library/readingD
 import type { ReadingCatalogEntry } from "../features/library/readingCatalog.types";
 import { loadPaperFileMetadata, savePaperFileMetadata } from "../features/library/paperFileMetadata";
 import { inferAssetType } from "../features/library/libraryAssetMetadata";
-import { liteasyPath, type ResourceTarget } from "../features/resource-filesystem/liteasyPath";
+import type { ResourceTarget } from "../features/resource-filesystem/liteasyPath";
 import { displayPath } from "../features/resource-filesystem/displayPath";
 import type { Paper } from "../features/workspace/workspace.types";
 import { applyBibliographicMetadata, type BibliographicDraft } from "../features/library/bibliographicFields";
 import { originalFileContentHash, type OriginalFileDescriptor } from "../features/original-files/originalFileService";
+import { describeResourceIdentity } from "../features/resource-filesystem/resourceIdentity";
+import { readingResourceCapabilities } from "../features/reading-library/readingResourceCapabilities";
 
 export function useReadingLibraryController(input: {
   scopeId: string; papers: Paper[]; enabled: boolean; localLibraryRootPath?: string;
@@ -83,6 +85,9 @@ export function useReadingLibraryController(input: {
     const papers = input.papers.map((paper): ReadingCatalogEntry => {
       const authors = paper.literature?.authors ?? (typeof paper.authors === "string" ? [paper.authors] : [...(paper.authors ?? [])]);
       const year = Number(paper.literature?.year ?? paper.year);
+      const identity = describeResourceIdentity(input.scopeId, { kind: "paper", paperId: paper.id }, {
+        contentHash: paper.contentHash, sourcePath: paper.sourcePath
+      });
       return applyBibliographicMetadata({
         id: paper.id, title: paper.literature?.title ?? paper.title, format: "pdf", authors,
         assetType: inferAssetType("pdf", paper.literature?.documentType),
@@ -96,14 +101,17 @@ export function useReadingLibraryController(input: {
         physicalPath: paper.sourcePath && /^(?:[A-Za-z]:[\\/]|\/|\\\\)/.test(paper.sourcePath) ? displayPath(paper.sourcePath) : undefined,
         available: Boolean(paper.sourcePath), canExport: false, canRemove: false,
         readingStatus: "unread", ...legacyMetadata[paper.id], ...metadata[paper.id],
-        liteasyPath: liteasyPath(input.scopeId, { kind: "paper", paperId: paper.id })
+        identity, liteasyPath: identity.locator
       }, metadata[paper.id]?.bibliographic);
     });
-    return [...papers, ...files.map((file): ReadingCatalogEntry => applyBibliographicMetadata({
-      ...file, format: file.format === "other" ? readingFormatForName(file.fileName) : file.format, year: /^\d{4}/.test(file.publishedAt ?? "") ? Number(file.publishedAt!.slice(0, 4)) : undefined,
-      readingStatus: "unread", available: true, ...metadata[file.id],
-      liteasyPath: liteasyPath(input.scopeId, { kind: "object", ref: file.ref, followLatest: true })
-    }, metadata[file.id]?.bibliographic))];
+    return [...papers, ...files.map((file): ReadingCatalogEntry => {
+      const identity = describeResourceIdentity(input.scopeId, { kind: "object", ref: file.ref, followLatest: true }, { contentHash: file.assetId });
+      return applyBibliographicMetadata({
+        ...file, format: file.format === "other" ? readingFormatForName(file.fileName) : file.format, year: /^\d{4}/.test(file.publishedAt ?? "") ? Number(file.publishedAt!.slice(0, 4)) : undefined,
+        readingStatus: "unread", available: true, canExport: true, ...metadata[file.id],
+        identity, liteasyPath: identity.locator
+      }, metadata[file.id]?.bibliographic);
+    })];
   }, [input.papers, input.scopeId, stateScope, files, metadata, legacyMetadata]);
   async function updateMetadata(id: string, patch: ReadingMetadata) {
     const value = await repository.updateMetadata(id, patch);
@@ -165,7 +173,8 @@ export function useReadingLibraryController(input: {
   }
   async function open(entry: ReadingCatalogEntry) {
     setSelection({ scope: input.scopeId, entry });
-    if (entry.format === "other" && !isReadableFileName(entry.fileName ?? "")) { await exportFile(entry); return; }
+    const capability = readingResourceCapabilities(entry).operations.open;
+    if (!capability.available) { setMessage(capability.reason); return; }
     if (entry.format === "pdf") {
       request.current += 1; setPending(false);
       input.openPaper(entry.id);

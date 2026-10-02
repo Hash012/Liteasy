@@ -26,6 +26,7 @@ export type ReadingCatalogEntry = import("./libraryAssetMetadata").LibraryAssetM
   fileName?: string;
   physicalPath?: string;
   liteasyPath?: string;
+  identity?: import("../resource-filesystem/resourceIdentity").ResourceIdentity;
   available?: boolean;
   canExport?: boolean;
   canRemove?: boolean;

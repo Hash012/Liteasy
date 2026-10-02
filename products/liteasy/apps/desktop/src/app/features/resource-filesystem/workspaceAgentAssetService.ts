@@ -18,6 +18,7 @@ import { liteasyPath, parseLiteasyPath } from "./liteasyPath";
 import { resourceContentRevision, canonicalResourceJson } from "./resourceFileContent";
 import { readAgentBoard, writeAgentBoard } from "./agentBoardAsset";
 import { parseCanvasFile } from "../boards/boardFileFormat";
+import { sourceDocumentBodyCapability } from "../reading-library/readingResourceCapabilities";
 
 export type WorkspaceAgentAssetInput = {
   repository: ObjectRepository;
@@ -164,6 +165,10 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
     },
     async read(path, options) {
       const object = await findObject(path);
+      if (object.kind === "source.document" && object.content.payload.legacyKey.startsWith("reading-file:")) {
+        const bodyCapability = sourceDocumentBodyCapability(object);
+        if (!bodyCapability.available) throw new AgentAssetError("unavailable", bodyCapability.reason);
+      }
       let text = objectText(object);
       const parsed = target(path);
       if (parsed.kind === "object" && parsed.ref.selectorId) {

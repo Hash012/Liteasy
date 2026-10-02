@@ -126,6 +126,22 @@ describe("ReadingLibraryCatalog", () => {
     await waitFor(() => expect(onDelete).toHaveBeenCalledExactlyOnceWith(entries[1]));
   });
 
+  test("keeps unsupported originals inspectable and exports only through the explicit export action", async () => {
+    const onOpen = vi.fn(), onExport = vi.fn();
+    const entry: ReadingCatalogEntry = { id: "spreadsheet", title: "Field observations", fileName: "observations.xlsx", format: "other", available: true };
+    render(<ReadingLibraryCatalog entries={[entry]} onOpen={onOpen} onExport={onExport} />);
+    fireEvent.click(fileRows()[0]);
+    const details = screen.getByRole("complementary", { name: "文件元信息" });
+    expect(within(details).getByRole("button", { name: "开始阅读" })).toBeDisabled();
+    expect(within(details).getByText(/暂不支持内置阅读/)).toBeInTheDocument();
+    fireEvent.doubleClick(fileRows()[0]);
+    fireEvent.keyDown(fileRows()[0], { key: "Enter" });
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(onExport).not.toHaveBeenCalled();
+    fireEvent.click(within(details).getByRole("button", { name: "导出原文件" }));
+    await waitFor(() => expect(onExport).toHaveBeenCalledExactlyOnceWith(entry));
+  });
+
   test("copies a citation and a Liteasy Path and exposes import/export/context callbacks", async () => {
     const writeText = vi.fn(async () => undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
