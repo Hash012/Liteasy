@@ -3816,6 +3816,38 @@ fn watched_path_is_relevant(path: &Path) -> bool {
         .any(|component| component.as_os_str() == INTERNAL_DIRECTORY_NAME)
         && path.file_name().and_then(|name| name.to_str()) != Some(LIBRARY_MARKER_FILE_NAME)
         && path.file_name().and_then(|name| name.to_str()) != Some(LEGACY_PROFILE_MARKER_FILE_NAME)
+        && !path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with(".liteasy.") && name.ends_with(".tmp"))
+}
+
+fn watch_event_signal(event: notify::Event) -> Option<LocalLibraryWatchSignal> {
+    use notify::event::{AccessKind, AccessMode};
+    // Lost events require a full scan even when the backend supplies no paths.
+    if event.need_rescan() {
+        return Some(LocalLibraryWatchSignal::FullValidation);
+    }
+    // inotify reports read/open/close-read for our own scans and PDF readers.
+    // Feeding those back into the scanner creates an endless idle scan loop.
+    if matches!(event.kind, EventKind::Access(_))
+        && !matches!(
+            event.kind,
+            EventKind::Access(AccessKind::Close(AccessMode::Write))
+        )
+    {
+        return None;
+    }
+    let external_deletion = matches!(event.kind, EventKind::Remove(_));
+    let paths = event
+        .paths
+        .into_iter()
+        .filter(|path| watched_path_is_relevant(path))
+        .collect::<Vec<_>>();
+    (!paths.is_empty()).then_some(LocalLibraryWatchSignal::Change {
+        external_deletion,
+        paths,
+    })
 }
 
 pub fn restart_local_library_watcher(app: &AppHandle) -> Result<(), String> {
@@ -3826,17 +3858,8 @@ pub fn restart_local_library_watcher(app: &AppHandle) -> Result<(), String> {
     let mut watcher =
         notify::recommended_watcher(move |result: notify::Result<notify::Event>| match result {
             Ok(event) => {
-                let external_deletion = matches!(event.kind, EventKind::Remove(_));
-                let relevant = event
-                    .paths
-                    .into_iter()
-                    .filter(|path| watched_path_is_relevant(path))
-                    .collect::<Vec<_>>();
-                if !relevant.is_empty() {
-                    let _ = watch_sender.send(LocalLibraryWatchSignal::Change {
-                        external_deletion,
-                        paths: relevant,
-                    });
+                if let Some(signal) = watch_event_signal(event) {
+                    let _ = watch_sender.send(signal);
                 }
             }
             Err(error) => {
@@ -4048,6 +4071,47 @@ mod tests {
         migrate_legacy_layout(&root).unwrap();
         ensure_library_marker(&root).unwrap();
         root
+    }
+
+    #[test]
+    fn watch_read_events_do_not_schedule_another_scan() {
+        use super::{watch_event_signal, LocalLibraryWatchSignal};
+        use notify::event::{
+            AccessKind, AccessMode, CreateKind, DataChange, Flag, ModifyKind, RemoveKind,
+            RenameMode,
+        };
+        use notify::EventKind;
+        use std::path::PathBuf;
+        let path = PathBuf::from("library/中文 paper.pdf");
+        for access in [
+            AccessKind::Open(AccessMode::Any),
+            AccessKind::Read,
+            AccessKind::Close(AccessMode::Read),
+        ] {
+            assert!(watch_event_signal(
+                notify::Event::new(EventKind::Access(access)).add_path(path.clone())
+            )
+            .is_none());
+        }
+        for kind in [
+            EventKind::Create(CreateKind::File),
+            EventKind::Modify(ModifyKind::Data(DataChange::Content)),
+            EventKind::Modify(ModifyKind::Name(RenameMode::Both)),
+            EventKind::Remove(RemoveKind::File),
+            EventKind::Access(AccessKind::Close(AccessMode::Write)),
+        ] {
+            assert!(watch_event_signal(notify::Event::new(kind).add_path(path.clone())).is_some());
+        }
+        assert!(watch_event_signal(
+            notify::Event::new(EventKind::Create(CreateKind::File))
+                .add_path(PathBuf::from("library/.liteasy.123.456.tmp"))
+        )
+        .is_none());
+        let overflow = notify::Event::new(EventKind::Other).set_flag(Flag::Rescan);
+        assert!(matches!(
+            watch_event_signal(overflow),
+            Some(LocalLibraryWatchSignal::FullValidation)
+        ));
     }
 
     #[test]
