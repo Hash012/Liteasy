@@ -1,7 +1,7 @@
 import type { ReactElement, ReactNode } from "react";
 import { Button, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip } from "@fluentui/react-components";
 import {
-  ArrowRedoRegular, ArrowUndoRegular, CodeRegular, ImageRegular, LinkRegular, MoreHorizontalRegular,
+  ArrowRedoRegular, ArrowUndoRegular, CodeRegular, ImageRegular, LinkRegular, LinkAddRegular, MoreHorizontalRegular,
   TableRegular, TextBoldRegular, TextBulletListLtrRegular, TextItalicRegular, TextNumberListLtrRegular,
   TextQuoteRegular, TextStrikethroughRegular,
 } from "@fluentui/react-icons";
@@ -35,8 +35,9 @@ const more: Action[] = [
   { command: "outdent", label: "减少缩进" },
 ];
 
-export function MarkdownEditingToolbar({ execute, undo, redo, canUndo, canRedo }: {
+export function MarkdownEditingToolbar({ execute, undo, redo, canUndo, canRedo, insertReference }: {
   execute(command: MarkdownCommand): void; undo(): void; redo(): void; canUndo: boolean; canRedo: boolean;
+  insertReference?(): void;
 }) {
   const button = (label: string, icon: ReactElement | undefined, action: () => void, disabled = false, hint = label) =>
     <Tooltip key={label} content={hint} relationship="description"><Button size="small" appearance="subtle" icon={icon}
@@ -64,6 +65,7 @@ export function MarkdownEditingToolbar({ execute, undo, redo, canUndo, canRedo }
     </div>
     <div className="markdown-editing-group" role="group" aria-label="插入内容">
       {insert.map((item) => button(item.label, item.icon, () => execute(item.command), false, item.shortcut ? `${item.label} · ${item.shortcut}` : item.label))}
+      {insertReference ? button("插入文件引用", <LinkAddRegular />, insertReference, false, "插入文件引用 · [[") : null}
       {menu("更多 Markdown 工具", <MoreHorizontalRegular />, more)}
     </div>
   </div>;

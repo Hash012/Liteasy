@@ -1,22 +1,37 @@
-# 帮助模块接口
+# 帮助模块接口与内容维护
 
-本模块提供用户手册 UI、内容接口和随桌面离线打包的 Markdown 正文。内置条目由 `builtinHelpProvider.ts` 注册，支持目录筛选及标题、摘要、正文搜索。
+用户通过帮助按钮或 F1 进入离线用户手册。保留 `liteasy` provider、`getting-started.basics` 和 `reading.chatgpt-review` 路由；现有业务入口不需要改变。
 
-当前条目：
+## 正文与检索
 
-- 文献与阅读 → [连接 ChatGPT Review 论文评论](articles/chatgpt-comment-review.md)，条目 ID 为 `reading.chatgpt-review`。包括安装、私有隧道与 HTTPS 连接、共享操作、权限范围及排错；开发侧协议说明见 [Review MCP README](../../../../../../services/review-mcp/README.md)。
+- `manual/content/`：49 篇 Markdown 正文，是应用手册的唯一内容来源，覆盖 12 个主题。
+- `manual/manifest.json`：标题、摘要、关键词、主题、适用条件、关联文章、材料来源和内容版本。
+- `manual/manualCatalog.ts`：静态导入正文的生成文件，不能手工编辑。
+- `manual/manualProvider.ts`：支持标题、关键词、摘要和正文加权搜索、全角字符归一化、多词同时匹配、取消请求及中文语言回退。
+- 快捷键从 `workbenchCommands` 动态生成，不在手册中维护另一份键位表。
+- `articles/` 保留原有两份文章的历史来源，不再参与注册。新增或更新正文应修改 `manual/content/`。
 
-- `HelpContentProvider`：以独立 `id` 注册，提供目录、搜索和 Markdown 条目读取。请求携带语言及 `AbortSignal`；适配器应支持取消。
-- `createHelpCatalog(providers)`：聚合目录与搜索，以 `{ providerId, articleId }` 路由读取；不同提供方可使用相同的条目 ID。不存在的条目返回 `null`，读取失败抛出错误，由 UI 显示重试入口。
-- `HelpPanel`：只接受 `HelpViewModel`，不依赖账号、网络客户端、Agent、文件系统、Dock 或 `AppShell`。
-- `useHelpController`（位于 `controllers/`）：管理加载、查询、空状态、失败重试、过期结果丢弃和 F1 快捷键。
-- `HelpPort.open(ref?)`：通过 `HelpContext` / `useHelp()` 提供上下文帮助入口；调用方不需要知道面板位置或存储来源。
+修改 manifest 后，在桌面目录执行：
 
-组合入口是 `AppShell` 的 `helpProviders` 属性。以后新增本地 Markdown、远端手册或扩展提供方，只需实现 `HelpContentProvider` 并注入；不要在帮助 UI 中引入业务存储或执行应用命令。提供方只负责内容，不包含 React 组件或可执行脚本。
+```bash
+node scripts/generate-manual-catalog.mjs
+node scripts/generate-manual-catalog.mjs --check
+npm test -- src/tests/manualProvider.test.ts src/tests/helpModule.test.tsx src/tests/workbenchCommands.test.tsx
+```
+
+生成目录校验也由 `manualProvider.test.ts` 执行；新增文章必须注册主题并使用唯一 ID，关联文章必须存在。生成文件统一使用 LF。
+
+材料包来源与历史设计记录见仓库 `docs/user-manual/README.md`。历史验收记录不代表当前 Windows 安装包或用户外部服务已经验收。
+
+## 接口边界
+
+`HelpContentProvider` 以独立 ID 提供目录、搜索、Markdown 读取；请求包含语言和 AbortSignal。`createHelpCatalog` 通过 `{ providerId, articleId }` 聚合提供方，不存在的文章返回 null，错误由 UI 显示重试。
+
+`HelpPanel` 仅消费 `HelpViewModel`，不访问账号、网络、文件系统或应用命令。`useHelpController` 管理加载、筛选、过期请求、错误重试和 F1。组合入口仍是 AppShell 的 helpProviders。
 
 ```ts
 const help = useHelp();
-help?.open({ providerId: "liteasy", articleId: "reading.selection" });
+help?.open({ providerId: "liteasy", articleId: "reading.references" });
 ```
 
-上述 `reading.selection` 条目 ID 仅示范接口，当前未提供该正文。已有的评论 Review 正文可使用 `reading.chatgpt-review` 打开。帮助标签页可独立关闭和移动，左侧“帮助”按钮或 F1 会重新打开。
+帮助标签页可以关闭和移动；帮助按钮或 F1 可以重新打开。

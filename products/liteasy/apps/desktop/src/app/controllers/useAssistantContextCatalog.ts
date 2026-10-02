@@ -140,6 +140,7 @@ export function useAssistantContextCatalog(input: {
     const suggestions: AssistantComposerSuggestion[] = [
       ...artifacts.map((artifact) => ({
         id: `artifact-${artifact.artifactId}`, trigger: "@" as const, label: artifact.title,
+        resourcePath: liteasyPath(scopeId, { kind: "artifact", artifactId: artifact.artifactId }),
         category: "产物", description: "使用生成内容作为参考，保留来源关系。", preview: contextPreviewText(artifactContextText(artifact)),
         readOnly: true,
         detail: artifact.sourcePath ?? artifact.resultPath ?? `产物/${artifact.type === "thin_reading" ? "薄读" : "生成文档"}/${artifact.title}`,
@@ -147,6 +148,7 @@ export function useAssistantContextCatalog(input: {
       })),
       ...catalog.map((file) => ({
         id: `file-${file.mountId}-${file.path}`, trigger: "@" as const, label: file.name, detail: file.location,
+        resourcePath: liteasyPath(scopeId, { kind: "external-file", mountId: file.mountId, path: file.path }),
         category: /\.canvas$/i.test(file.name) ? "白板" : "笔记", description: "从连接的文件夹读取，加入时固定当前版本。",
         readOnly: /\.canvas$/i.test(file.name),
         loadPreview: async () => {
@@ -184,6 +186,7 @@ export function useAssistantContextCatalog(input: {
       })),
       ...objects.filter((object) => object.scopeId === scopeId && !projects.some(({ assets }) => assets.some((asset) => asset.ref?.objectId === object.objectId))).map((object) => ({
         id: `saved-${object.objectId}`, trigger: "@" as const, label: object.title,
+        resourcePath: liteasyPath(scopeId, { kind: "object", ref: refOf(object), followLatest: true }),
         category: object.kind === "source.document" ? "阅读文件" : object.kind === "workspace.board" ? "白板" : object.kind === "content.fragment" ? "摘录" : object.kind === "artifact.document" ? "产物" : object.kind === "conversation.message" ? "对话" : "笔记",
         readOnly: object.kind !== "content.note" && object.kind !== "workspace.board",
         loadPreview: async () => {
@@ -197,6 +200,7 @@ export function useAssistantContextCatalog(input: {
       ...titles.filter((entry) => !objects.some((object) => object.scopeId === scopeId && object.objectId === entry.objectId) &&
         !projects.some(({ assets }) => assets.some((asset) => asset.ref?.objectId === entry.objectId))).map((entry) => ({
         id: `saved-${entry.objectId}`, trigger: "@" as const, label: entry.title,
+        resourcePath: liteasyPath(scopeId, { kind: "object", ref: { objectId: entry.objectId, revision: "latest" }, followLatest: true }),
         category: entry.kind === "source.document" ? "阅读文件" : entry.kind === "workspace.board" ? "白板" : entry.kind === "content.fragment" ? "摘录" : entry.kind === "artifact.document" ? "产物" : entry.kind === "conversation.message" ? "对话" : entry.kind === "content.note" ? "笔记" : "已保存内容",
         readOnly: entry.kind !== "content.note" && entry.kind !== "workspace.board", description: "加入时固定版本，正文按任务需要读取，可跨项目组合。",
         resolveToken: async () => { assertCurrentScope(); return resolveObject(refOf(await input.repository.resolveLatest(entry.objectId))); },
@@ -232,6 +236,7 @@ export function useAssistantContextCatalog(input: {
               detail: `${fixed.length} 项资产 · 已固定本次成员与版本`, prompt: "", contextRefs: refs };
           },
         }, ...assets.map((asset) => ({ ...common, id: `project-asset-${project.projectId}-${asset.assetId}`,
+          resourcePath: asset.ref ? liteasyPath(scopeId, { kind: "object", ref: asset.ref, followLatest: asset.role === "derived" }) : asset.artifactId ? liteasyPath(scopeId, { kind: "artifact", artifactId: asset.artifactId }) : undefined,
           label: asset.title, category: ({ text: "原文", image: "图片", note: "笔记", board: "白板", artifact: "产物", excerpt: "摘录" })[asset.kind],
           readOnly: asset.role === "source" || (asset.kind !== "note" && asset.kind !== "board"), detail: `${project.title}${asset.page ? ` · 第 ${asset.page} 页` : ""}`,
           description: asset.role === "source" || asset.kind === "text" || asset.kind === "image" ? "论文来源只读。修改请创建副本，原文与原图始终保留。" : "可跨论文、跨项目组合引用。",

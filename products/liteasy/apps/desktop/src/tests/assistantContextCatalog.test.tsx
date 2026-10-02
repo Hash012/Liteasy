@@ -20,7 +20,8 @@ const files = vi.hoisted(() => ({
   }),
   readFile: vi.fn(async () => ({ mountId: "vault", path: "project/methods/review.md", name: "review.md", kind: "file", version: "v1", text: "磁盘文件正文：归一化后权重和为一。" })),
 }));
-vi.mock("../app/features/note-files/noteFileService", () => ({
+vi.mock("../app/features/note-files/noteFileService", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../app/features/note-files/noteFileService")>(),
   createNoteFileService: () => files,
   subscribeNoteFiles: () => () => undefined,
 }));

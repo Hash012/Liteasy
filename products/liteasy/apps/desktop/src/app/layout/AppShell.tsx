@@ -1,4 +1,6 @@
 import { BibliographicMetadataEditor } from "../features/library/BibliographicMetadataEditor";
+import { useResourceLinksController } from "../controllers/useResourceLinksController";
+import { ResourceReferencesContext } from "../features/resource-links/ResourceReferencesContext";
 import { useBibliographicMetadataController } from "../controllers/useBibliographicMetadataController";
 import { useEmptyDockRegionsController } from "../controllers/useEmptyDockRegionsController";
 import { VisualAssetContext } from "../features/visual-blocks/AssetImage";
@@ -1231,6 +1233,8 @@ export function AppShell({
     onOpenReader: () => { workbenchNavigation.open("document-reader"); workspaceShell.focusRegion(dock.findItemRegion("document-reader") ?? "main"); },
     openPaper: openPaperInReader
   });
+  const resourceLinks = useResourceLinksController({ repository: objectWorkbench.repository, assets: objectWorkbench.agentAssets,
+    suggestions: assistantContextSuggestions, papers: workspaceState.papers, open: openAgentAsset });
   const artifactSessionNavigation = useArtifactSessionNavigationController({
     tasks: artifactTasks, scopeId: assistantScopeId,
     openAssistant: () => workbenchNavigation.open("assistant")
@@ -2606,6 +2610,7 @@ export function AppShell({
     <ObjectWorkbenchContext.Provider value={objectWorkbench.port}>
     <ExtensionWorkbenchContext.Provider value={extensionWorkbench}>
     <VisualAssetContext.Provider value={objectWorkbench.agentAssets}>
+    <ResourceReferencesContext.Provider value={resourceLinks}>
     <WorkflowInvocation model={extensionWorkflows} />
     <div ref={immersive.root} className={appFrameClassName} data-theme-scope={appFrameScope} style={appFrameStyle}
       data-reading-focus={immersive.mode} data-focus-edge={immersive.edge} onClickCapture={immersive.onClickCapture}>
@@ -2786,6 +2791,7 @@ export function AppShell({
           renderLocation: (entry) => readingLibrary.entries.some((item) => item.id === entry.id) ? <ResourceLocationButton target={readingLibrary.target(entry)} /> : null }} />
     </div>
     {createPortal(renderAssistantSurface(dock.findItemRegion("assistant") ?? "right"), assistantSurfaceHost)}
+    </ResourceReferencesContext.Provider>
     </VisualAssetContext.Provider>
     </ExtensionWorkbenchContext.Provider>
     </ObjectWorkbenchContext.Provider>

@@ -10,7 +10,6 @@ import {
   MenuPopover,
   MenuTrigger,
   Select,
-  Textarea,
   Tooltip,
 } from "@fluentui/react-components";
 import {
@@ -40,6 +39,9 @@ import {
   type NotesItem,
   type NotesViewModel,
 } from "./notes.types";
+import { MarkdownSourceEditor } from "../markdown/MarkdownSourceEditor";
+import { ReferenceSourceContext } from "../resource-links/ResourceReferencesContext";
+import { liteasyPath } from "../resource-filesystem/liteasyPath";
 import { MarkdownContent } from "../markdown/MarkdownContent";
 import { PdfAnnotationMarkdown } from "../pdf/PdfAnnotationMarkdown";
 import { LibraryIconProvider, LibraryIconMenuItem, LibraryItemIcon } from "../library/LibraryItemIcon";
@@ -280,13 +282,9 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
                   .catch(() => undefined);
               }}
             >
-              <Textarea
-                autoFocus
-                resize="vertical"
-                aria-label="笔记正文"
-                value={draft}
-                onChange={(_, data) => setDraft(data.value)}
-              />
+              <ReferenceSourceContext.Provider value={editingItem ? liteasyPath(model.scopeId ?? "local", editingItem.target) : undefined}>
+                <MarkdownSourceEditor documentKey={editingItem?.key ?? `new:${model.folderId}`} label="笔记正文" value={draft} onChange={setDraft} />
+              </ReferenceSourceContext.Provider>
               <div>
                 <Button size="small" type="submit" icon={<SaveRegular />}>
                   保存
@@ -410,7 +408,7 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
                     <span>{item.source}</span>
                   </header>
                   {item.target.kind === "external-file" ? <Button appearance="subtle" icon={<ArrowUpRightRegular />} onClick={() => model.openSource(item)}>在阅读区打开</Button> : item.annotation ? <PdfAnnotationMarkdown value={item.text} images={item.annotation.images} />
-                    : <MarkdownContent value={item.text} paperAnchors={item.paperAnchors ?? item.object?.paperAnchors} />}
+                    : <ReferenceSourceContext.Provider value={liteasyPath(model.scopeId ?? "local", item.target)}><MarkdownContent value={item.text} paperAnchors={item.paperAnchors ?? item.object?.paperAnchors} /></ReferenceSourceContext.Provider>}
                   <PaperAnchorReferences anchors={item.paperAnchors ?? item.object?.paperAnchors ?? []} />
                   {quote && !item.text.includes(quote) && (
                     <details>

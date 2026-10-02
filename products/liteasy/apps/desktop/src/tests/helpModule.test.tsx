@@ -68,7 +68,7 @@ test("built-in user manual exposes the ChatGPT connection guide by topic and bod
   const article = await catalog.read(matches[0].ref, request);
   expect(article?.body).toContain("CONTROL_PLANE_API_KEY");
   expect(article?.body).toContain("停止共享");
-  expect(await catalog.search({ ...request, query: "", topic: { providerId: "liteasy", topicId: "boards" } })).toEqual([]);
+  expect((await catalog.search({ ...request, query: "", topic: { providerId: "liteasy", topicId: "boards" } })).map((article) => article.id)).toEqual(["boards.basics", "boards.research"]);
   expect(await catalog.read({ providerId: "liteasy", articleId: "missing" }, request)).toBeNull();
   const abort = new AbortController();
   abort.abort();

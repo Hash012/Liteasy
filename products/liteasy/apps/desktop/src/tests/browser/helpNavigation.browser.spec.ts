@@ -44,9 +44,9 @@ test("Agent and help remain reachable after closing, moving and reopening the wo
   await expect(
     help.getByRole("navigation", { name: "帮助目录" }),
   ).toBeVisible();
-  await help.getByRole("button", { name: "研究白板", exact: true }).click();
-  await expect(help).toContainText("此目录暂无帮助条目。");
-  await help.getByRole("textbox", { name: "搜索帮助" }).fill("选区");
+  await help.getByRole("button", { name: "笔记与研究白板", exact: true }).click();
+  await expect(help.locator(".help-results li")).toHaveCount(2);
+  await help.getByRole("textbox", { name: "搜索帮助" }).fill("no-such-manual-topic-123");
   await expect(help).toContainText("没有匹配的帮助条目。");
   await page.getByRole("button", { name: "关闭 帮助", exact: true }).click();
   await expect(help).toHaveCount(0);
@@ -56,6 +56,11 @@ test("Agent and help remain reachable after closing, moving and reopening the wo
   await expect(help.getByRole("textbox", { name: "搜索帮助" })).toHaveValue("");
   await expect(help.getByRole("button", { name: "全部", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(help).toHaveAttribute("aria-busy", "false");
+  await help.getByRole("textbox", { name: "搜索帮助" }).fill("双括号");
+  await help.getByRole("button", { name: "文件链接与片段引用", exact: true }).click();
+  await expect(help.getByRole("article", { name: "文件链接与片段引用", exact: true })).toContainText("[[CicN#L1:3]]");
+  await help.getByRole("button", { name: "帮助首页", exact: true }).click();
+
   await expect(page.getByRole("button", { name: "薄读", exact: true })).toHaveCount(0);
   await page.screenshot({
     path: testInfo.outputPath("help-navigation.png"),

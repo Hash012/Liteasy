@@ -1,0 +1,289 @@
+{
+  "repository": "Hash012/Liteasy",
+  "baseline": "c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a",
+  "appVersion": "0.1.28",
+  "retrievedAt": "2026-10-02",
+  "method": "GitHub connector live reads/search; pinned commit. No local clone or Windows run.",
+  "sources": [
+    {
+      "id": "S01",
+      "title": "帮助模块接口",
+      "path": "products/liteasy/apps/desktop/src/app/features/help/README.md",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/products/liteasy/apps/desktop/src/app/features/help/README.md",
+      "supports": "接口边界；F1；HelpPort；示例 reading.selection 尚无正文",
+      "kind": "repository"
+    },
+    {
+      "id": "S02",
+      "title": "帮助类型契约",
+      "path": "products/liteasy/apps/desktop/src/app/features/help/help.types.ts",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/products/liteasy/apps/desktop/src/app/features/help/help.types.ts",
+      "supports": "provider 命名空间；locale；AbortSignal；Markdown",
+      "kind": "repository"
+    },
+    {
+      "id": "S03",
+      "title": "内置手册注册",
+      "path": "products/liteasy/apps/desktop/src/app/features/help/builtinHelpProvider.ts",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/products/liteasy/apps/desktop/src/app/features/help/builtinHelpProvider.ts",
+      "supports": "原有两篇正文、五个目录；动态快捷键",
+      "kind": "repository"
+    },
+    {
+      "id": "S04",
+      "title": "帮助面板",
+      "path": "products/liteasy/apps/desktop/src/app/features/help/HelpPanel.tsx",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/products/liteasy/apps/desktop/src/app/features/help/HelpPanel.tsx",
+      "supports": "标题由 UI 输出；正文 html=skip；目录/搜索/失败重试",
+      "kind": "repository"
+    },
+    {
+      "id": "S05",
+      "title": "帮助模块回归测试",
+      "path": "products/liteasy/apps/desktop/src/tests/helpModule.test.tsx",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/products/liteasy/apps/desktop/src/tests/helpModule.test.tsx",
+      "supports": "旧白板空目录断言需要按新增内容更新；取消与过期结果保护",
+      "kind": "repository"
+    },
+    {
+      "id": "S06",
+      "title": "快捷键注册",
+      "path": "products/liteasy/apps/desktop/src/app/features/workbench/workbenchCommands.ts",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/products/liteasy/apps/desktop/src/app/features/workbench/workbenchCommands.ts",
+      "supports": "七个命令及平台修饰键",
+      "kind": "repository"
+    },
+    {
+      "id": "S07",
+      "title": "现有入门正文",
+      "path": "products/liteasy/apps/desktop/src/app/features/help/articles/getting-started.md",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/products/liteasy/apps/desktop/src/app/features/help/articles/getting-started.md",
+      "supports": "单击选择、双击打开、三击沉浸；布局；AI 入口",
+      "kind": "repository"
+    },
+    {
+      "id": "S08",
+      "title": "桌面产品 README",
+      "path": "products/liteasy/apps/desktop/README.md",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/products/liteasy/apps/desktop/README.md",
+      "supports": "BYOK、凭据库、浏览器边界；开发和安装验证",
+      "kind": "repository"
+    },
+    {
+      "id": "S09",
+      "title": "设置导航",
+      "path": "products/liteasy/apps/desktop/src/app/features/settings/settingsNavigation.ts",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/products/liteasy/apps/desktop/src/app/features/settings/settingsNavigation.ts",
+      "supports": "当前设置分类、标题和搜索词",
+      "kind": "repository"
+    },
+    {
+      "id": "S10",
+      "title": "本地文献与论文工作区",
+      "path": "docs/agent-dev/2026-09-28-local-literature-workspace.md",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/docs/agent-dev/2026-09-28-local-literature-workspace.md",
+      "supports": "笔记、白板、选段、画像；单击打开的旧描述由 S07 取代",
+      "kind": "repository"
+    },
+    {
+      "id": "S11",
+      "title": "阅读器与 Vault",
+      "path": "docs/agent-dev/2026-09-28-reader-vault-memory.md",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/docs/agent-dev/2026-09-28-reader-vault-memory.md",
+      "supports": "格式支持；共用批注；懒加载；外部写入冲突",
+      "kind": "repository"
+    },
+    {
+      "id": "S12",
+      "title": "文献分类与图标",
+      "path": "docs/agent-dev/2026-09-28-library-organization.md",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/docs/agent-dev/2026-09-28-library-organization.md",
+      "supports": "目录移动与图标边界",
+      "kind": "repository"
+    },
+    {
+      "id": "S13",
+      "title": "文献服务与兼容修复",
+      "path": "docs/agent-dev/2026-09-28-literature-sync-reliability.md",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/docs/agent-dev/2026-09-28-literature-sync-reliability.md",
+      "supports": "题录确认；服务隔离；弱 ETag 并发边界；旧同步范围由 S16 取代",
+      "kind": "repository"
+    },
+    {
+      "id": "S14",
+      "title": "全文获取与批量导入",
+      "path": "docs/agent-dev/2026-09-29-paper-pdf-import.md",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/docs/agent-dev/2026-09-29-paper-pdf-import.md",
+      "supports": "身份核对、开放全文、重复检测；原生大小限制以 S15 为准",
+      "kind": "repository"
+    },
+    {
+      "id": "S15",
+      "title": "推荐与全文最新实现",
+      "path": "docs/agent-dev/2026-10-02-personalized-recommendations-implementation.md",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/docs/agent-dev/2026-10-02-personalized-recommendations-implementation.md",
+      "supports": "0.1.28；增强推荐默认关闭；隐私授权；256 MiB；待完成验收",
+      "kind": "repository"
+    },
+    {
+      "id": "S16",
+      "title": "WebDAV 分类同步",
+      "path": "docs/agent-dev/2026-09-29-webdav-sync-scope.md",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/docs/agent-dev/2026-09-29-webdav-sync-scope.md",
+      "supports": "七类同步、默认值、密钥加密、重启恢复、冲突、排除项",
+      "kind": "repository"
+    },
+    {
+      "id": "S17",
+      "title": "本机资产 MCP",
+      "path": "docs/agent-dev/2026-09-29-local-asset-mcp.md",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/docs/agent-dev/2026-09-29-local-asset-mcp.md",
+      "supports": "本机 STDIO、版本检查、分页、批量导入与撤销边界",
+      "kind": "repository"
+    },
+    {
+      "id": "S18",
+      "title": "原有评论 Review 手册",
+      "path": "products/liteasy/apps/desktop/src/app/features/help/articles/chatgpt-comment-review.md",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/products/liteasy/apps/desktop/src/app/features/help/articles/chatgpt-comment-review.md",
+      "supports": "Linux/macOS；私有隧道；单论文共享快照；只读",
+      "kind": "repository"
+    },
+    {
+      "id": "S19",
+      "title": "AI 论文工作台",
+      "path": "products/liteasy/apps/desktop/src/app/features/ai-workbench/AiWorkbenchDialog.tsx",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/products/liteasy/apps/desktop/src/app/features/ai-workbench/AiWorkbenchDialog.tsx",
+      "supports": "确认论文→选择五类能力→开始生成；全文可用性",
+      "kind": "repository"
+    },
+    {
+      "id": "S20",
+      "title": "本地数据位置设置",
+      "path": "products/liteasy/apps/desktop/src/app/features/settings/DataLocationSettings.tsx",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/products/liteasy/apps/desktop/src/app/features/settings/DataLocationSettings.tsx",
+      "supports": "选择位置、重启迁移、校验、旧目录保留；外接库不搬迁",
+      "kind": "repository"
+    },
+    {
+      "id": "S21",
+      "title": "手机到桌面任务",
+      "path": "products/liteasy/apps/mobile/docs/device-control.md",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/products/liteasy/apps/mobile/docs/device-control.md",
+      "supports": "同账户同服务、8 位码 5 分钟、四类命令、未完成实链路验收",
+      "kind": "repository"
+    },
+    {
+      "id": "S22",
+      "title": "仓库总入口",
+      "path": "README.md",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/README.md",
+      "supports": "产品范围；开发服务非生产；边界和构建分发",
+      "kind": "repository"
+    },
+    {
+      "id": "S23",
+      "title": "文档索引",
+      "path": "docs/README.md",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/docs/README.md",
+      "supports": "archive 不作现状；规划不等于实现",
+      "kind": "repository"
+    },
+    {
+      "id": "S24",
+      "title": "快捷操作回归",
+      "path": "products/liteasy/apps/desktop/src/tests/workbenchCommands.test.tsx",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/products/liteasy/apps/desktop/src/tests/workbenchCommands.test.tsx",
+      "supports": "入门正文需含实际动态绑定及双击交互",
+      "kind": "repository"
+    },
+    {
+      "id": "S25",
+      "title": "助手上下文目录",
+      "path": "products/liteasy/apps/desktop/src/app/controllers/useAssistantContextCatalog.ts",
+      "url": "https://github.com/Hash012/Liteasy/blob/c37bb2f0fde9fca8dd8dbbc409cb8cfeea030c7a/products/liteasy/apps/desktop/src/app/controllers/useAssistantContextCatalog.ts",
+      "supports": "从 builtinHelpProviders 建立帮助上下文；只改 AppShell 注入不充分",
+      "kind": "repository"
+    },
+    {
+      "id": "R01",
+      "title": "Apple Preview 用户指南",
+      "url": "https://support.apple.com/guide/preview/welcome/mac",
+      "supports": "版本选择、目录与搜索并存、独立任务与故障条目",
+      "kind": "official-external",
+      "retrievedAt": "2026-10-02"
+    },
+    {
+      "id": "R02",
+      "title": "Microsoft 操作步骤写作规范",
+      "url": "https://learn.microsoft.com/en-us/style-guide/procedures-instructions/writing-step-by-step-instructions",
+      "supports": "任务式标题、编号步骤、准确入口和完成动作",
+      "kind": "official-external",
+      "retrievedAt": "2026-10-02"
+    },
+    {
+      "id": "R03",
+      "title": "VS Code Documentation",
+      "url": "https://code.visualstudio.com/docs",
+      "supports": "按用户要完成的任务导流，入门、概念、参考与排错分层",
+      "kind": "official-external",
+      "retrievedAt": "2026-10-02"
+    },
+    {
+      "id": "R04",
+      "title": "Notion Help Center",
+      "url": "https://www.notion.com/help",
+      "supports": "显著搜索、主题聚类、入门及权限支持独立入口",
+      "kind": "official-external",
+      "retrievedAt": "2026-10-02"
+    },
+    {
+      "id": "R05",
+      "title": "Diátaxis",
+      "url": "https://diataxis.fr/",
+      "supports": "教程、操作指南、参考、解释四种内容目的",
+      "kind": "official-external",
+      "retrievedAt": "2026-10-02"
+    },
+    {
+      "id": "R06",
+      "title": "W3C WCAG 2.2 最小目标尺寸",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html",
+      "supports": "24 CSS px 最小目标及例外；本包另设 44 px 常用按钮设计目标",
+      "kind": "official-external",
+      "retrievedAt": "2026-10-02"
+    },
+    {
+      "id": "R07",
+      "title": "W3C 焦点不被完全遮挡",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html",
+      "supports": "粘性导航与键盘焦点可见性",
+      "kind": "official-external",
+      "retrievedAt": "2026-10-02"
+    },
+    {
+      "id": "R08",
+      "title": "OpenAI 本地 MCP 配置",
+      "url": "https://developers.openai.com/codex/mcp",
+      "supports": "STDIO、用户 config.toml、程序和参数配置；页面可能重定向到新文档站",
+      "kind": "official-external",
+      "retrievedAt": "2026-10-02"
+    },
+    {
+      "id": "R09",
+      "title": "OpenAI Secure MCP Tunnels",
+      "url": "https://developers.openai.com/api/docs/guides/secure-mcp-tunnels",
+      "supports": "本地服务、私有隧道、控制面凭据与工作区",
+      "kind": "official-external",
+      "retrievedAt": "2026-10-02"
+    },
+    {
+      "id": "R10",
+      "title": "OpenAI 连接与测试",
+      "url": "https://developers.openai.com/plugins/deploy/connect-chatgpt",
+      "supports": "开发者模式、HTTPS 或 Tunnel；以账户实际权限为准",
+      "kind": "official-external",
+      "retrievedAt": "2026-10-02"
+    }
+  ]
+}

@@ -8,6 +8,11 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { remarkPaperAnchorReferences, type PaperAnchorEntity } from "../paper-anchors/paperAnchorEntity";
 import { remarkLiteasyLinks, safeLiteasyMarkdownUrl } from "./liteasyMarkdownLinks";
+import { ResourceReferencesContext, ReferenceSourceContext } from "../resource-links/ResourceReferencesContext";
+import { AssetImage, VisualResourceContext } from "../visual-blocks/AssetImage";
+import { ResourceLink, ResourceEmbed } from "../resource-links/ResourceReferenceView";
+import { fromReferenceHref } from "../resource-links/referenceText";
+import { remarkResourceReferences } from "../resource-links/remarkResourceReferences";
 import "katex/dist/katex.min.css";
 import "./markdownContent.css";
 
@@ -164,10 +169,32 @@ export const MarkdownContent = memo(function MarkdownContent({
   paperAnchors = emptyAnchors, rehypePluginsBeforeMath = emptyPlugins, remarkPlugins = emptyPlugins, streaming = false,
   urlTransform = markdownUrlTransform, onOpenLiteasyPath, liteasyLinkTitles, value
 }: MarkdownContentProps) {
+  const references = useContext(ResourceReferencesContext);
+  const explicitSource = useContext(ReferenceSourceContext), visualSource = useContext(VisualResourceContext);
+  const referenceSource = explicitSource ?? visualSource;
   const [navigationError, setNavigationError] = useState<string>();
   const markdown = useMemo(() => normalizeMath ? normalizeMarkdownMathDelimiters(value) : value, [normalizeMath, value]);
   const mergedComponents = useMemo<Components>(() => {
-    const merged = { ...markdownComponents, ...(inline ? inlineComponents : {}), ...components, ...(renderResourceImage ? { img: (props: { src?: string; alt?: string }) => props.src ? renderResourceImage(props.src, props.alt ?? "图片") : <img src={props.src} alt={props.alt ?? ""} loading="lazy" decoding="async" /> } : {}) };
+    const merged: Components = { ...markdownComponents, ...(inline ? inlineComponents : {}), ...components, ...(renderResourceImage ? { img: (props: { src?: string; alt?: string }) => props.src ? renderResourceImage(props.src, props.alt ?? "图片") : <img src={props.src} alt={props.alt ?? ""} loading="lazy" decoding="async" /> } : {}) };
+    if (references && !inline) {
+      const previousLink = merged.a!, previousImage = merged.img!, previousParagraph = merged.p;
+      const locator = (href: string) => fromReferenceHref(href) ?? (href.startsWith("liteasy://") || referenceSource && !/^[a-z][a-z0-9+.-]*:|^[\/\\]/i.test(href) ? href : undefined);
+      merged.a = (props) => {
+        const target = props.href ? locator(props.href) : undefined;
+        return target !== undefined ? <ResourceLink locator={target} source={referenceSource}>{props.children}</ResourceLink> : createElement(previousLink, props);
+      };
+      merged.img = (props) => {
+        const target = props.src ? locator(props.src) : undefined;
+        if (target === undefined) return createElement(previousImage, props);
+        if (props.src?.startsWith("liteasy-reference:") || !/\.(png|jpe?g|gif|webp|svg)(?:[?#]|$)/i.test(props.src ?? "")) return <ResourceEmbed locator={target} source={referenceSource} />;
+        return !renderResourceImage ? <AssetImage source={target} basePath={referenceSource} alt={props.alt ?? "图片"} /> : createElement(previousImage, props);
+      };
+      merged.p = (props) => {
+        const embedded = props.node?.children.some((child) => child.type === "element" && child.tagName === "img" && locator(String(child.properties.src ?? "")) !== undefined);
+        return embedded ? <div>{props.children}</div> : previousParagraph ? createElement(previousParagraph, props) : <p>{props.children}</p>;
+      };
+      return merged;
+    }
     if (!onOpenLiteasyPath) return merged;
     const DefaultLink = merged.a!;
     return { ...merged, a: (props) => {
@@ -180,12 +207,13 @@ export const MarkdownContent = memo(function MarkdownContent({
         });
       }}>{props.children}</a>;
     } };
-  }, [components, inline, onOpenLiteasyPath, renderResourceImage]);
-  const remark = useMemo(() => [...baseRemarkPlugins, ...remarkPlugins, remarkLiteasyLinks(liteasyLinkTitles), remarkPaperAnchorReferences(paperAnchors)], [liteasyLinkTitles, paperAnchors, remarkPlugins]);
+  }, [components, inline, onOpenLiteasyPath, renderResourceImage, references, referenceSource]);
+  const remark = useMemo(() => [...baseRemarkPlugins, ...remarkPlugins, ...(references ? [remarkResourceReferences] : []), remarkLiteasyLinks(liteasyLinkTitles), remarkPaperAnchorReferences(paperAnchors)], [liteasyLinkTitles, paperAnchors, remarkPlugins, Boolean(references)]);
   const rehype = useMemo(() => [...rehypePluginsBeforeMath, ...mathPlugin], [rehypePluginsBeforeMath]);
   const resolveUrl = useMemo<UrlTransform>(() => (url, key, node) =>
+    references && (url.startsWith("liteasy-reference:") || url.startsWith("liteasy://") || referenceSource && !/^[a-z][a-z0-9+.-]*:|^[\/\\]/i.test(url)) ? url :
     key === "src" && renderResourceImage && (safeLiteasyMarkdownUrl(url) || allowRelativeImages && !/^[a-z][a-z0-9+.-]*:|^[\/\\]/i.test(url)) ? url : key === "href" && onOpenLiteasyPath && safeLiteasyMarkdownUrl(url) ? url
-      : safeResolvedUrl(urlTransform(url, key, node), key), [onOpenLiteasyPath, urlTransform, renderResourceImage, allowRelativeImages]);
+      : safeResolvedUrl(urlTransform(url, key, node), key), [onOpenLiteasyPath, urlTransform, renderResourceImage, allowRelativeImages, references, referenceSource]);
   const Root = inline ? "span" : "div";
   if (!value.trim()) return emptyLabel ? <Root className={`markdown-content ${className} is-empty`}>{emptyLabel}</Root> : null;
   return (

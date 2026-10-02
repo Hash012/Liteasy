@@ -84,6 +84,8 @@ export type AssistantContextToken = {
 };
 
 export type AssistantComposerSuggestion = {
+  /** Canonical locator for shared references and selecting content fragments. */
+  resourcePath?: string;
   /** Resolve a library locator only when the user selects it. */
   resolveToken?: () => Promise<AssistantContextToken>;
   category?: string;

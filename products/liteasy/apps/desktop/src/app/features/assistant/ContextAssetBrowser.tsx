@@ -1,4 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { ResourceReferencesContext } from "../resource-links/ResourceReferencesContext";
+import { ReferenceContentPicker } from "../resource-links/ReferenceContentPicker";
+import type { ReferenceCandidate } from "../resource-links/resourceReferenceService";
 import {
   Button, Checkbox, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface,
   DialogTitle, Input, Textarea, Tooltip
@@ -17,6 +20,7 @@ type ContextAssetBrowserProps = {
   onClose: () => void;
   onAddContextToken?: (token: AssistantContextToken) => void;
   onResolveContextToken?: (resolve: () => Promise<AssistantContextToken>) => void | Promise<boolean | void>;
+  onChooseReference?: (candidate: ReferenceCandidate, fragment?: string) => void;
 };
 
 const PAGE_SIZE = 60;
@@ -25,7 +29,10 @@ const available = (asset: AssistantComposerSuggestion) => !asset.unavailableReas
 
 /** Uses the same catalog as @ mentions; no secondary asset inventory or eager reads. */
 export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQuery = "", initialPreviewId, onClose,
-  onAddContextToken, onResolveContextToken }: ContextAssetBrowserProps) {
+  onAddContextToken, onResolveContextToken, onChooseReference }: ContextAssetBrowserProps) {
+  const references = useContext(ResourceReferencesContext);
+  const [openContent, setOpenContent] = useState(Boolean(onChooseReference));
+  const closeLabel = onChooseReference ? "返回编辑" : "返回对话";
   const [query, setQuery] = useState(initialQuery);
   const [category, setCategory] = useState("");
   const [project, setProject] = useState("");
@@ -42,7 +49,8 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
   const mounted = useRef(true);
   const operation = useRef(false);
   const catalog = useMemo(() => [...new Map(suggestions.filter((asset) => asset.trigger === "@" &&
-    (asset.token || asset.resolveToken || asset.unavailableReason)).map((asset) => [asset.id, asset])).values()], [suggestions]);
+    (asset.token || asset.resolveToken || asset.unavailableReason || onChooseReference && asset.resourcePath)).map((asset) => [asset.id,
+      { ...asset, resourcePath: asset.resourcePath ?? references?.suggestions.find((candidate) => candidate.id === asset.id)?.resourcePath }])).values()], [suggestions, references?.suggestions, onChooseReference]);
   const catalogRef = useRef(catalog);
   catalogRef.current = catalog;
   const index = useMemo(() => createAssistantSuggestionIndex(catalog), [catalog]);
@@ -67,7 +75,7 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
   const preview = catalog.find((asset) => asset.id === previewId);
   const loadedPreview = previewResult?.asset === preview ? previewResult?.value : undefined;
   const previewError = previewResult?.asset === preview ? previewResult?.error : undefined;
-  const previewLoading = Boolean(preview?.loadPreview && !loadedPreview && !previewError);
+  const previewLoading = Boolean(!openContent && preview?.loadPreview && !loadedPreview && !previewError);
   const previewText = loadedPreview?.text ?? preview?.preview;
   const addedIds = new Set(contextTokens.map((token) => token.id));
 
@@ -77,7 +85,7 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
   useEffect(() => {
     let active = true;
     setPreviewResult(undefined);
-    if (preview?.loadPreview) {
+    if (preview?.loadPreview && !(openContent && preview.resourcePath && references)) {
       void preview.loadPreview().then((value) => {
         if (active) setPreviewResult({ asset: preview, value });
       }).catch((error) => {
@@ -85,7 +93,7 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
       });
     }
     return () => { active = false; };
-  }, [preview, previewAttempt]);
+  }, [preview, previewAttempt, openContent, references?.service]);
   useEffect(() => {
     const liveIds = new Set(catalog.filter(available).map((asset) => asset.id));
     setSelected((current) => [...current].every((id) => liveIds.has(id)) ? current :
@@ -124,6 +132,9 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
   }
 
   async function addPreview(asset: AssistantComposerSuggestion) {
+    if (onChooseReference && asset.resourcePath) {
+      onChooseReference({ path: asset.resourcePath, title: asset.label, detail: asset.detail }); onClose(); return;
+    }
     if (operation.current || !available(asset)) return;
     operation.current = true;
     setBusy(true); setErrors([]);
@@ -186,10 +197,10 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
   return <Dialog open onOpenChange={(_, data) => { if (!data.open) onClose(); }}>
     <DialogSurface aria-label="上下文资产浏览器" className="context-asset-browser">
       <DialogBody className="context-asset-browser-body">
-        <DialogTitle action={<Tooltip content="返回对话" relationship="label"><Button appearance="subtle"
-          aria-label="返回对话" icon={<DismissRegular />} onClick={onClose} /></Tooltip>}>添加上下文</DialogTitle>
+        <DialogTitle action={<Tooltip content={closeLabel} relationship="label"><Button appearance="subtle"
+          aria-label={closeLabel} icon={<DismissRegular />} onClick={onClose} /></Tooltip>}>{onChooseReference ? "插入文件引用" : "添加上下文"}</DialogTitle>
         <DialogContent className="context-asset-browser-content">
-          <p className="context-asset-intro">搜索名称的一部分，或按类别、项目浏览。论文、笔记和其他文件都从这里加入对话，也可直接拖到输入框。</p>
+          <p className="context-asset-intro">{onChooseReference ? "搜索文件或论文，引用整个文件，或打开内容选择章节和文字。" : "搜索名称的一部分，或按类别、项目浏览。也可打开内容，只将需要的片段加入对话。"}</p>
           <Input aria-label="搜索全部上下文资产" className="context-asset-search" contentBefore={<SearchRegular />}
             placeholder="搜索标题、项目、类别、内容说明或路径；多个关键词可组合" value={query}
             onChange={(_, data) => setQuery(data.value)} />
@@ -211,15 +222,15 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
             </nav>
             <section className="context-asset-results" aria-label="可添加资产">
               <div className="context-asset-results-toolbar"><span>{matches.length} 项资产</span>
-                <Checkbox label="只看已选" checked={onlySelected} onChange={(_, data) => setOnlySelected(Boolean(data.checked))} />
+                {!onChooseReference ? <Checkbox label="只看已选" checked={onlySelected} onChange={(_, data) => setOnlySelected(Boolean(data.checked))} /> : null}
               </div>
               <div className="context-asset-grid">
                 {visible.map((asset) => <article key={asset.id} className={`context-asset-card${previewId === asset.id ? " previewing" : ""}`}>
-                  <Checkbox aria-label={`选择 ${asset.label}`} checked={selected.has(asset.id)}
+                  {!onChooseReference ? <Checkbox aria-label={`选择 ${asset.label}`} checked={selected.has(asset.id)}
                     disabled={busy || !available(asset)} onChange={(_, data) => {
                       toggleSelection(asset.id, Boolean(data.checked));
                       if (data.checked) setPreviewId(asset.id);
-                    }} />
+                    }} /> : null}
                   <button className="context-asset-card-preview" type="button" aria-label={`预览 ${asset.label}`}
                     aria-pressed={previewId === asset.id} onClick={() => setPreviewId(asset.id)}>
                     <span className="context-asset-card-heading">{categoryOf(asset) === "项目" ? <FolderRegular /> : <DocumentRegular />}<strong>{asset.label}</strong></span>
@@ -245,6 +256,18 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
                 {preview.unavailableReason ? <p role="note">{preview.unavailableReason}</p> : null}
                 {previewLoading ? <p role="status">正在读取预览…</p> : null}
                 {previewError ? <><p role="alert">{previewError}</p><Button size="small" onClick={() => setPreviewAttempt((value) => value + 1)}>重试预览</Button></> : null}
+                {preview.resourcePath && references ? <Button size="small" onClick={() => setOpenContent((value) => !value)}>{openContent ? "返回摘要预览" : "打开内容，选择章节或文字"}</Button> : null}
+                {openContent && preview.resourcePath && references ? <ReferenceContentPicker path={preview.resourcePath}
+                  actionLabel={onChooseReference ? "插入选中片段引用" : "将选中片段加入对话"} disabled={busy}
+                  onChoose={async (document, range) => {
+                    if (operation.current) return;
+                    operation.current = true; setBusy(true);
+                    try {
+                      if (onChooseReference) onChooseReference({ path: preview.resourcePath!, title: preview.label, detail: preview.detail }, range.fragment);
+                      else await addResolved(preview, () => references.capture(document, range));
+                      if (mounted.current) onClose();
+                    } finally { operation.current = false; if (mounted.current) setBusy(false); }
+                  }} /> : <>
                 <strong className="context-asset-preview-heading">供 AI 参考的内容</strong>
                 {loadedPreview?.images?.map((image, index) => <img key={index} className="context-asset-preview-image" src={image.url} alt={image.label} />)}
                 {!previewLoading && !previewError ? <>
@@ -253,13 +276,14 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
                   <p className="context-asset-muted">{categoryOf(preview) === "设置" ? "包含当前设置值、用途和生效时间；发送时读取最新设置。" :
                     categoryOf(preview) === "项目" ? "添加整个项目会包含以上资产，也可逐项选择。" : "此处为内容预览，长篇资料会根据问题选取相关片段。"}</p>
                 </> : null}
+                </>}
                 {preview.readOnly ? <p className="context-asset-muted">{getAssistantReadOnlyLabel(preview) === "原始内容 · 只读"
                   ? "原始资料保留原义；需要修改时，请创建独立副本。" : "此项用于解释与参考。"}</p> : null}
-                {preview.readOnly && preview.createEditableCopy ? <Button icon={<CopyRegular />} disabled={busy || Boolean(preview.unavailableReason)}
+                {!onChooseReference && preview.readOnly && preview.createEditableCopy ? <Button icon={<CopyRegular />} disabled={busy || Boolean(preview.unavailableReason)}
                   onClick={() => { void createAsset(preview, "copy"); }}>创建可编辑副本</Button> : null}
                 {categoryOf(preview) === "项目" && preview.projectId ? <Button icon={<FolderRegular />}
                   onClick={() => { setProject(preview.projectId!); setCategory(""); setQuery(""); setOnlySelected(false); }}>浏览此项目资产</Button> : null}
-                {categoryOf(preview) === "项目" && preview.createNote ? <div className="context-asset-note">
+                {!onChooseReference && categoryOf(preview) === "项目" && preview.createNote ? <div className="context-asset-note">
                   <label htmlFor="context-project-note">新建项目笔记</label>
                   <Textarea id="context-project-note" value={noteText} resize="vertical" rows={5} disabled={busy}
                     placeholder="记录想法、问题或整理后的内容" onChange={(_, data) => setNoteText(data.value)} />
@@ -267,11 +291,11 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
                     onClick={() => { void createAsset(preview, "note"); }}>保存并加入上下文</Button>
                 </div> : null}
                 {preview.readOnly === false ? <p className="context-asset-muted">可让 AI 读取内容，并按你的要求修改此资产；实际操作会显示在对话中。</p> : null}
-                <Button appearance="primary" icon={<AddRegular />} disabled={busy || !available(preview)}
-                  onClick={() => { void addPreview(preview); }}>加入对话</Button>
-                <Button disabled={busy || !available(preview)} onClick={() => toggleSelection(preview.id, !selected.has(preview.id))}>
+                <Button appearance="primary" icon={<AddRegular />} disabled={busy || (onChooseReference ? !preview.resourcePath : !available(preview))}
+                  onClick={() => { void addPreview(preview); }}>{onChooseReference ? "引用整个文件" : "加入对话"}</Button>
+                {!onChooseReference ? <Button disabled={busy || !available(preview)} onClick={() => toggleSelection(preview.id, !selected.has(preview.id))}>
                   {selected.has(preview.id) ? "取消选择此资产" : "选择此资产"}
-                </Button>
+                </Button> : null}
               </> : <div className="context-asset-empty"><DocumentRegular /><strong>先看看内容</strong><p>点击资产查看说明和预览，勾选需要的资料后批量添加。</p></div>}
             </aside>
           </div>
@@ -280,11 +304,11 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
             <ul>{errors.map((error, index) => <li key={index}>{error}</li>)}</ul></div> : null}
         </DialogContent>
         <DialogActions className="context-asset-actions">
-          <span className="context-asset-selection-count" aria-live="polite">已选 {selected.size} 项</span>
-          <Button disabled={busy || !selected.size} onClick={() => setSelected(new Set())}>清空选择</Button>
-          <Button onClick={onClose}>返回对话</Button>
-          <Button appearance="primary" icon={<AddRegular />} disabled={busy || !selected.size}
-            onClick={() => { void addSelection(); }}>{busy ? "正在处理…" : `添加所选（${selected.size}）`}</Button>
+          {!onChooseReference ? <span className="context-asset-selection-count" aria-live="polite">已选 {selected.size} 项</span> : null}
+          {!onChooseReference ? <Button disabled={busy || !selected.size} onClick={() => setSelected(new Set())}>清空选择</Button> : null}
+          <Button onClick={onClose}>{closeLabel}</Button>
+          {!onChooseReference ? <Button appearance="primary" icon={<AddRegular />} disabled={busy || !selected.size}
+            onClick={() => { void addSelection(); }}>{busy ? "正在处理…" : `添加所选（${selected.size}）`}</Button> : null}
         </DialogActions>
       </DialogBody>
     </DialogSurface>

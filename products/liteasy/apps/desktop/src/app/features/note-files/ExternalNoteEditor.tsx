@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import { Button, Select } from "@fluentui/react-components";
 import { BookOpenRegular, EditRegular, SaveRegular } from "@fluentui/react-icons";
 import { MarkdownContent } from "../markdown/MarkdownContent";
@@ -7,6 +7,8 @@ import { MarkdownSourceEditor } from "../markdown/MarkdownSourceEditor";
 import { textChapters } from "../reading-library/readingTextChapters";
 import type { NoteFileSnapshot } from "./noteFileService";
 import type { ExternalEditingStatus } from "./obsidianWorkspace";
+import { ReferenceSourceContext, ResourceReferencesContext } from "../resource-links/ResourceReferencesContext";
+import { liteasyPath } from "../resource-filesystem/liteasyPath";
 import "./externalNoteEditor.css";
 
 export type ExternalNoteModel = {
@@ -17,6 +19,7 @@ export type ExternalNoteModel = {
   save(copy?: boolean): Promise<void>; reload(): Promise<void>;
 };
 export function ExternalNoteEditor({ model }: { model: ExternalNoteModel }) {
+  const references = useContext(ResourceReferencesContext);
   const font = useMarkdownFontSize();
   const session = model.session;
   const [part, setPart] = useState(0);
@@ -31,7 +34,8 @@ export function ExternalNoteEditor({ model }: { model: ExternalNoteModel }) {
   if (!session) return <section className="external-note-editor"><p>在笔记目录中选择 Markdown 文件，即可在此阅读和编辑。</p></section>;
   const dirty = session.draft !== session.snapshot.text;
   const selectedPart = Math.min(part, Math.max(0, preview.chapters.length - 1));
-  return <section className="external-note-editor" style={font.style} aria-label="Markdown 文件阅读与编辑" onKeyDown={(event) => {
+  const source = references ? liteasyPath(references.service.scope, { kind: "external-file", mountId: session.snapshot.mountId, path: session.snapshot.path }) : undefined;
+  return <ReferenceSourceContext.Provider value={source}><section className="external-note-editor" style={font.style} aria-label="Markdown 文件阅读与编辑" onKeyDown={(event) => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") { event.preventDefault(); void model.save(); }
   }}>
     <header>
@@ -60,5 +64,5 @@ export function ExternalNoteEditor({ model }: { model: ExternalNoteModel }) {
         {preview.error ? <p role="alert">{preview.error}</p> : <MarkdownContent value={preview.chapters[selectedPart]?.content ?? ""} />}
       </article>
     </>}
-  </section>;
+  </section></ReferenceSourceContext.Provider>;
 }
