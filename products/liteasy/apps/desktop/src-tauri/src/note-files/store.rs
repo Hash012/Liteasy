@@ -766,6 +766,8 @@ mod tests {
             external.location
         );
         assert!(old.join(&managed).join(&canvas.entry.path).is_file());
+        // Windows keeps the SQLite files locked until the store is closed.
+        drop(moved);
         fs::remove_dir_all(root).unwrap();
     }
     #[test]
