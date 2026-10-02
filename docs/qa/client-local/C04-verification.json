@@ -28,7 +28,9 @@
     },
     {
       "name": "final source adapter tests",
-      "log": "/tmp/liteasy-c04-source-tests.log"
+      "log": "/tmp/liteasy-c04-source-tests.log",
+      "status": "passed",
+      "passed": 7
     },
     {
       "name": "browser search",
@@ -62,10 +64,15 @@
     },
     {
       "name": "final production build",
-      "log": "/tmp/liteasy-c04-source-build.log"
+      "log": "/tmp/liteasy-c04-source-build.log",
+      "status": "passed"
     }
   ],
-  "contracts": "pending clean source commit",
+  "contracts": {
+    "status": "passed",
+    "log": "/tmp/liteasy-c04-contracts.log",
+    "commit": "c8724614"
+  },
   "limitations": [
     "Source count/text/chunk limits reported in UI",
     "PDF coverage partial until provenance confirms complete extraction",
@@ -73,5 +80,6 @@
     "No native Windows/macOS UI acceptance",
     "No RSS budget claim or paid model calls",
     "C06/C12 native commands compiled, real pickers not exercised in this integration"
-  ]
+  ],
+  "sourceCommit": "c8724614"
 }
