@@ -58,5 +58,5 @@ export function useWorkbenchStartController(input: {
   }
   const unavailable = busy ? "正在选择文件，请先完成当前选择。" : !input.files && !isTauri() ? "请在 Liteasy 桌面端使用系统文件选择器。" : undefined;
   const availability: WorkbenchCommandAvailability = unavailable ? { "open-note": unavailable, "open-folder": unavailable } : {};
-  return { availability, notice, dismissNotice: () => setNotice(""), applyPreset, openNote: () => select("file"), openFolder: () => select("folder") };
+  return { availability, notice, busy, reportError: setNotice, dismissNotice: () => setNotice(""), applyPreset, openNote: () => select("file"), openFolder: () => select("folder") };
 }

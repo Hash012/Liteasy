@@ -98,7 +98,7 @@ test("disabled command availability is respected by both clicks and shortcuts", 
 
 test("the command dialog explains unavailable file picking and Enter cannot bypass it", async () => {
   const onExecute = vi.fn(); const user = userEvent.setup();
-  render(<WorkbenchCommandAvailabilityContext.Provider value={{ "open-note": "请使用桌面文件选择器" }}><WorkbenchCommandsDialog onClose={vi.fn()} onExecute={onExecute} /></WorkbenchCommandAvailabilityContext.Provider>);
+  render(<WorkbenchCommandAvailabilityContext.Provider value={{ "open-note": "请使用桌面文件选择器", "open-file": "请在桌面端选择 PDF / EPUB" }}><WorkbenchCommandsDialog onClose={vi.fn()} onExecute={onExecute} /></WorkbenchCommandAvailabilityContext.Provider>);
   await user.type(screen.getByRole("textbox", { name: "搜索快捷操作" }), "原文件");
   expect(screen.getByRole("button", { name: /打开 Markdown 原文件/ })).toBeDisabled();
   expect(screen.getByText("请使用桌面文件选择器")).toBeVisible();

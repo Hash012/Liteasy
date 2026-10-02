@@ -175,6 +175,7 @@ import { useArtifactWorkflowController } from "../controllers/useArtifactWorkflo
 import { useArtifactExportController } from "../controllers/useArtifactExportController";
 import { useKnowledgeSyncController } from "../controllers/useKnowledgeSyncController";
 import { useOrganizationShellController } from "../controllers/useOrganizationShellController";
+import { useOriginalFileOpenController } from "../controllers/useOriginalFileOpenController";
 import { useExternalPaperController } from "../controllers/useExternalPaperController";
 import { useLibraryResourceTransferController } from "../controllers/useLibraryResourceTransferController";
 import { useTeamAnnotationController } from "../controllers/useTeamAnnotationController";
@@ -498,16 +499,6 @@ export function AppShell({
   const mineruFiguresByPaperId = Object.fromEntries(
     Object.entries(importJobsByDocumentId).map(([paperId, job]) => [paperId, job.mineruFigures ?? []])
   ) as Record<string, MineruFigure[]>;
-  const externalPapers = useExternalPaperController({
-    addExternalPdfToLibrary: workspaceActions.addExternalPdfToLibrary,
-    endpoint: externalKnowledgeEndpoint,
-    refreshLocalLibrary,
-    setActiveCenterArtifactId,
-    setActiveReaderPaperId,
-    setOpenReaderPaperIds,
-    transport: effectiveModelTransport
-  });
-  const { cachedReaderPapers } = externalPapers;
   const artifactAccountId = loadStoredAccountSession()?.userId;
   const multimodalVisualizationCapabilityRef = useRef<MultimodalVisualizationCapability>(
     unavailableMultimodalVisualizationCapability
@@ -839,6 +830,17 @@ export function AppShell({
   pendingVisualizationRequestsRef.current = cloudAccount.actions.pendingVisualizationRequests;
   resumeVisualizationGenerationRef.current = cloudAccount.actions.resumeVisualizationGeneration;
   const assistantScopeId = accountSession?.userId ? `user:${accountSession.userId}` : "local";
+  const externalPapers = useExternalPaperController({
+    addExternalPdfToLibrary: workspaceActions.addExternalPdfToLibrary,
+    endpoint: externalKnowledgeEndpoint,
+    scopeId: assistantScopeId,
+    refreshLocalLibrary,
+    setActiveCenterArtifactId,
+    setActiveReaderPaperId,
+    setOpenReaderPaperIds,
+    transport: effectiveModelTransport
+  });
+  const { cachedReaderPapers, originalReaderPapers } = externalPapers;
   if (assistantHistoryScopeRef.current !== assistantScopeId) {
     assistantHistoryScopeRef.current = assistantScopeId;
     assistantHistoryRef.current = createScopedAssistantHistoryPersistence(
@@ -906,7 +908,7 @@ export function AppShell({
   const selectedPapers = workspaceActions.getSelectedPapers();
   const openReaderPapers = openReaderPaperIds.flatMap((paperId) => {
     const paper = resolveReaderPaper({
-      cachedPapers: cachedReaderPapers,
+      cachedPapers: cachedReaderPapers, originalPapers: originalReaderPapers,
       libraryPapers: workspaceState.papers,
       paperId
     });
@@ -917,16 +919,20 @@ export function AppShell({
   useEffect(() => {
     const availablePaperIds = new Set([
       ...workspaceState.papers.map((paper) => paper.id),
-      ...cachedReaderPapers.map((paper) => paper.id)
+      ...cachedReaderPapers.map((paper) => paper.id),
+      ...originalReaderPapers.map((paper) => paper.id)
     ]);
-    setOpenReaderPaperIds((current) => {
-      const next = current.filter((paperId) => availablePaperIds.has(paperId));
+    // A passive cleanup can run after a native open has queued newer state.
+    // Only prune IDs observed as missing in this render, never newly opened IDs.
+    const missingPaperIds = new Set(openReaderPaperIds.filter((id) => !availablePaperIds.has(id)));
+    if (missingPaperIds.size) setOpenReaderPaperIds((current) => {
+      const next = current.filter((paperId) => !missingPaperIds.has(paperId));
       return next.length === current.length ? current : next;
     });
-    setActiveReaderPaperId((current) =>
-      current && availablePaperIds.has(current) ? current : null
-    );
-  }, [cachedReaderPapers, workspaceState.papers]);
+    if (activeReaderPaperId && !availablePaperIds.has(activeReaderPaperId)) {
+      setActiveReaderPaperId((current) => current === activeReaderPaperId ? null : current);
+    }
+  }, [activeReaderPaperId, cachedReaderPapers, openReaderPaperIds, originalReaderPapers, workspaceState.papers]);
   const importedChunksByPaperId = Object.fromEntries(
     workspaceState.papers.map((paper) => [
       paper.id,
@@ -1176,20 +1182,6 @@ export function AppShell({
     open: workbenchNavigation.open,
     openNote: externalNote.open
   });
-  const workbenchCommands = useWorkbenchCommandsController({
-    "open-note": workbenchStart.openNote,
-    "open-folder": workbenchStart.openFolder,
-    "preset-reading": () => workbenchStart.applyPreset("reading"),
-    "preset-research": () => workbenchStart.applyPreset("research"),
-    "preset-processing": () => workbenchStart.applyPreset("processing"),
-    "preset-custom": () => workbenchStart.applyPreset("custom"),
-    library: () => openDockedLeftRailView("library"),
-    assistant: () => workbenchNavigation.open("assistant"),
-    settings: () => workbenchNavigation.open("settings"),
-    help: () => help.port.open(),
-    "page-history": () => workspaceShell.pageSwitcher.show("history"),
-    "active-pages": () => workspaceShell.pageSwitcher.show("active")
-  }, workbenchStart.availability);
   const notes = useNotesController({
     scopeId: objectWorkbench.repository.scopeId,
     repository: objectWorkbench.repository,
@@ -1250,6 +1242,51 @@ export function AppShell({
     onOpenReader: () => { workbenchNavigation.open("document-reader"); workspaceShell.focusRegion(dock.findItemRegion("document-reader") ?? "main"); },
     openPaper: openPaperInReader
   });
+  const originalFiles = useOriginalFileOpenController({
+    scopeId: objectWorkbench.repository.scopeId,
+    onOpenPdf: async (file, bytes) => {
+      const paper = await externalPapers.openOriginalPdfFile(file, bytes);
+      const region = dock.findDynamicItemRegion(`pdf-${paper.id}`) ?? "main";
+      setLibraryExpanded(false);
+      setActivePaperResourceId(null);
+      setActiveVisualizationId(null);
+      if (region === "main") {
+        setActiveCenterArtifactId(null);
+        setActiveReaderPaperId(paper.id);
+      } else {
+        setActiveReaderPaperId(null);
+        setActiveSideArtifactIds((current) => ({ ...current, [region]: `pdf-${paper.id}` }));
+      }
+      revealDockRegion(region);
+      workspaceShell.focusRegion(region);
+    },
+    onOpenEpub: readingLibrary.openOriginalFile,
+    onError: workbenchStart.reportError
+  });
+  const commandAvailability = {
+    ...workbenchStart.availability,
+    ...(originalFiles.disabledReason ? { "open-file": originalFiles.disabledReason } : {}),
+    ...(workbenchStart.busy || originalFiles.busy ? {
+      "open-file": "正在打开文件，请稍候。",
+      "open-note": "正在打开文件，请稍候。",
+      "open-folder": "正在打开文件，请稍候。"
+    } : {})
+  };
+  const workbenchCommands = useWorkbenchCommandsController({
+    "open-file": originalFiles.openFile,
+    "open-note": workbenchStart.openNote,
+    "open-folder": workbenchStart.openFolder,
+    "preset-reading": () => workbenchStart.applyPreset("reading"),
+    "preset-research": () => workbenchStart.applyPreset("research"),
+    "preset-processing": () => workbenchStart.applyPreset("processing"),
+    "preset-custom": () => workbenchStart.applyPreset("custom"),
+    library: () => openDockedLeftRailView("library"),
+    assistant: () => workbenchNavigation.open("assistant"),
+    settings: () => workbenchNavigation.open("settings"),
+    help: () => help.port.open(),
+    "page-history": () => workspaceShell.pageSwitcher.show("history"),
+    "active-pages": () => workspaceShell.pageSwitcher.show("active")
+  }, commandAvailability);
   const resourceLinks = useResourceLinksController({ repository: objectWorkbench.repository, assets: objectWorkbench.agentAssets,
     suggestions: assistantContextSuggestions, papers: workspaceState.papers, open: openAgentAsset });
   const artifactSessionNavigation = useArtifactSessionNavigationController({
@@ -1585,7 +1622,7 @@ export function AppShell({
   function openPaperInReader(paperId: string) {
     setLibraryExpanded(false);
     const paper = resolveReaderPaper({
-      cachedPapers: cachedReaderPapers,
+      cachedPapers: cachedReaderPapers, originalPapers: originalReaderPapers,
       libraryPapers: workspaceState.papers,
       paperId
     });
@@ -1734,6 +1771,7 @@ export function AppShell({
   }
 
   function closeReaderPaper(paperId: string) {
+    externalPapers.closeOriginalPdfFile(paperId);
     setOpenReaderPaperIds((current) => {
       const closingIndex = current.indexOf(paperId);
       const next = current.filter((currentPaperId) => currentPaperId !== paperId);
@@ -1749,7 +1787,7 @@ export function AppShell({
   }
 
   function openEvidenceInReader(request: Omit<PdfEvidenceTarget, "requestId">) {
-    const paper = workspaceState.papers.find((candidate) => candidate.id === request.paperId);
+    const paper = resolveReaderPaper({ cachedPapers: cachedReaderPapers, originalPapers: originalReaderPapers, libraryPapers: workspaceState.papers, paperId: request.paperId });
     if (!paper) {
       setAnalysisHint("这条证据对应的论文当前不在文献库中，无法打开 PDF 原文。");
       return;
@@ -2266,7 +2304,7 @@ export function AppShell({
   }
 
   function renderReaderPaper(paperId: string) {
-    const paper = workspaceState.papers.find((candidate) => candidate.id === paperId);
+    const paper = resolveReaderPaper({ cachedPapers: cachedReaderPapers, originalPapers: originalReaderPapers, libraryPapers: workspaceState.papers, paperId });
     if (!paper) {
       return null;
     }
@@ -2370,6 +2408,9 @@ export function AppShell({
       paneLayout.setCollapsed(regionId, true);
     } else {
       for (const item of dock.layout.regions.main.itemIds) { dock.closeItem(item); if (item === "board") objectWorkbench.setVisible(false); }
+      for (const id of openReaderPaperIds) {
+        if ((dock.findDynamicItemRegion(`pdf-${id}`) ?? "main") === "main") externalPapers.closeOriginalPdfFile(id);
+      }
       setOpenReaderPaperIds((current) => current.filter((id) => (dock.findDynamicItemRegion(`pdf-${id}`) ?? "main") !== "main")); setActiveReaderPaperId(null);
       setOpenPaperResources((current) => current.filter((resource) => (dock.findDynamicItemRegion(paperResourceTabId(resource)) ?? "main") !== "main")); setActivePaperResourceId(null);
       setOpenVisualizations((current) => current.filter((item) => (dock.findDynamicItemRegion(item.id) ?? "main") !== "main")); setActiveVisualizationId(null);
@@ -2528,7 +2569,7 @@ export function AppShell({
     recommendations: recommendationItems, openRecommendation: recommendationLibrary.open,
     notes: notes.model.items, selectNote: notes.model.selectItem,
     readingEntries: readingLibrary.entries, openReading: readingLibrary.open,
-    hasPaper: (paperId) => Boolean(resolveReaderPaper({ cachedPapers: cachedReaderPapers, libraryPapers: workspaceState.papers, paperId })),
+    hasPaper: (paperId) => Boolean(resolveReaderPaper({ cachedPapers: cachedReaderPapers, originalPapers: originalReaderPapers, libraryPapers: workspaceState.papers, paperId })),
     hasPaperResource: (paperId, kind) => {
       const resources = getPaperMineruResources(paperId);
       return Boolean(resources && (kind === "figures" ? resources.figures.length : kind === "extracted_text" ? resources.textChunks.length : resources.figures.length + resources.textChunks.length));
@@ -2629,7 +2670,7 @@ export function AppShell({
     <GenerationPromptContext.Provider value={settingsState}>
     <LocalMcpContext.Provider value={localMcp}>
     <DeviceControlContext.Provider value={deviceControl}>
-    <WorkbenchCommandAvailabilityContext.Provider value={workbenchStart.availability}>
+    <WorkbenchCommandAvailabilityContext.Provider value={commandAvailability}>
     <WorkbenchCommandsContext.Provider value={workbenchCommands.execute}>
     <NotesContext.Provider value={notes.port}>
     <HelpContext.Provider value={help.port}>

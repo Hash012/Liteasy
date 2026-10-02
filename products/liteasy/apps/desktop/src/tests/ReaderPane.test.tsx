@@ -370,7 +370,8 @@ describe("ReaderPane", () => {
 
     const emptyState = screen.getByLabelText("PDF 空状态");
     expect(within(emptyState).getByRole("img", { name: "LiteasyClaw" })).toBeInTheDocument();
-    expect(within(emptyState).getByText("从这里开始研究")).toBeInTheDocument();
+    expect(within(emptyState).getByRole("heading", { name: "打开资料，继续你的工作" })).toBeInTheDocument();
+    expect(within(emptyState).getByRole("button", { name: /打开 PDF \/ EPUB 原文件/ })).toBeInTheDocument();
     expect(screen.queryByText("选择文献后开始阅读")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("PDF 阅读器")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("多模态产物区域")).not.toBeInTheDocument();

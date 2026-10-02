@@ -13,6 +13,7 @@ mod direct_model;
 mod external_navigation;
 mod local_library;
 mod local_mcp;
+mod native_open;
 mod note_files;
 mod object_store;
 mod paper_cache;
@@ -49,7 +50,14 @@ fn main() {
     }
 
     let app = tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|_app, _argv, _cwd| {}))
+        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+            native_open::enqueue_argv(
+                app,
+                argv.into_iter().map(std::ffi::OsString::from),
+                std::path::Path::new(&cwd),
+            );
+            native_open::focus_main_window(app);
+        }))
         .plugin(tauri_plugin_deep_link::init())
         .manage(agent_host::AgentHostState::default())
         .manage(local_mcp::LocalMcpState::default())
@@ -67,6 +75,9 @@ fn main() {
                 }
             }
             data_location::initialize(app.handle()).map_err(std::io::Error::other)?;
+            if let Ok(cwd) = std::env::current_dir() {
+                native_open::enqueue_argv(app.handle(), std::env::args_os(), &cwd);
+            }
             if let Err(error) = object_store::recover(app.handle()) {
                 eprintln!("Local object recovery: {error}");
             }
@@ -97,6 +108,10 @@ fn main() {
                 webdav::workspace::restore_webdav_preferences,
                 webdav::workspace::acknowledge_webdav_preferences,
                 note_files::note_files_dispatch,
+                native_open::choose_native_open_file,
+                native_open::read_native_open_file,
+                native_open::release_native_open_file,
+                native_open::drain_native_open_requests,
                 data_location::get_data_location,
                 data_location::choose_data_location,
                 data_location::cancel_data_location_change,
@@ -192,6 +207,10 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("error while building Liteasy desktop");
     app.run(|app_handle, event| {
+        #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+        if let tauri::RunEvent::Opened { urls } = &event {
+            native_open::enqueue_urls(app_handle, urls.clone());
+        }
         if matches!(event, tauri::RunEvent::Resumed) {
             local_library::resume_local_library_watcher(app_handle);
         }

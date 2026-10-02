@@ -1,5 +1,6 @@
 export const workbenchCommands = [
-  { id: "open-note", title: "打开 Markdown 原文件", description: "选择本地笔记，直接阅读原位置文件；编辑后保存回原文件。", key: "o", shift: false, alt: false, keys: ["Mod", "O"], search: "open markdown note 打开 本地 原文件 笔记" },
+  { id: "open-file", title: "打开 PDF / EPUB 原文件", description: "直接阅读所选文件，不复制到文献库；关闭页面会释放读取授权。", key: "o", shift: false, alt: false, keys: ["Mod", "O"], search: "open pdf epub book 打开 本地 原文件 电子书" },
+  { id: "open-note", title: "打开 Markdown 原文件", description: "选择本地笔记，直接阅读原位置文件；编辑后保存回原文件。", key: "o", shift: false, alt: true, keys: ["Mod", "Alt", "O"], search: "open markdown note 打开 本地 原文件 笔记" },
   { id: "open-folder", title: "连接笔记文件夹", description: "在原位置引用文件夹，保留目录层级；不复制或上传内容。", key: "o", shift: true, alt: false, keys: ["Mod", "Shift", "O"], search: "open folder vault 文件夹 目录 连接 引用" },
   { id: "page-history", title: "回溯历史页面", description: "按访问时间查看页面，用方向键选择并按 Enter 打开。", key: "h", shift: false, alt: false, keys: ["Mod", "H"], search: "history recent 历史 页面 回溯" },
   { id: "preset-reading", title: "阅读布局", description: "收起周边面板，保留中央内容与所有已打开页面。", key: "", shift: false, alt: false, keys: [], search: "read preset 专注 阅读 布局" },
