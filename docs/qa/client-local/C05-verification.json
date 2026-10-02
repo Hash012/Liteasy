@@ -1,0 +1,182 @@
+{
+  "schema": "liteasy.client-verification/v1",
+  "task_id": "C05-offline-research-templates",
+  "head_commit": "7bf3daaa486ca8162128600c0fce4446c35881b5",
+  "enabled_release_tasks": [],
+  "environment": {
+    "os": "Ubuntu on WSL2 / WSLg (not native Windows)",
+    "os_version": "24.04.3; kernel 6.18.33.2-microsoft-standard-WSL2",
+    "arch": "x86_64",
+    "webview": "not exercised; Vitest jsdom",
+    "node": "22.13.1 (requested 22.23.2)",
+    "rust": "not exercised; no Rust changes",
+    "fixture_revision": "synthetic source documents, conflicting text and package fixtures in 7bf3daaa",
+    "test_profile_path_redacted": true
+  },
+  "commands": [
+    {
+      "command": "npm test -- src/tests/researchTemplates.test.ts",
+      "exit_code": 1,
+      "log": "/tmp/liteasy-c05-red.log",
+      "phase": "expected regression failure before fix"
+    },
+    {
+      "command": "npm test -- src/tests/researchTemplates.test.ts -t 'version changes while'",
+      "exit_code": 1,
+      "log": "/tmp/liteasy-c05-revision-red.log",
+      "phase": "expected regression failure before fix"
+    },
+    {
+      "command": "npm test -- src/tests/researchTemplates.test.ts src/tests/researchTemplateViews.test.tsx src/tests/durableWorkflows.test.ts src/tests/extensionPackages.test.tsx src/tests/extensionStudio.test.ts src/tests/extensionIntegration.test.tsx src/tests/agentAssetService.test.ts",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c05-final-green.log"
+    },
+    {
+      "command": "npm test -- src/tests/researchTemplateViews.test.tsx",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c05-view-isolated.log"
+    },
+    {
+      "command": "npm test -- src/tests/extensionIntegration.test.tsx",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c05-extension-isolated.log"
+    },
+    {
+      "command": "npm run ci:smoke",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c05-smoke.log"
+    },
+    {
+      "command": "npm run build",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c05-build-final.log"
+    },
+    {
+      "command": "npm run ci:contracts",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c05-contracts.log"
+    }
+  ],
+  "checks": {
+    "focused_tests": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c05-final-green.log",
+        "/tmp/liteasy-c05-smoke.log",
+        "/tmp/liteasy-c05-view-isolated.log",
+        "/tmp/liteasy-c05-extension-isolated.log"
+      ],
+      "used_mock": true,
+      "reason": "47 affected tests in 7 files plus 9 smoke tests. Fake IndexedDB and synthetic sources; actual repository/runner code. Existing comparison fixtures use model-response doubles; all five new templates execute zero model calls. Export click and UI runtime ports are injected. Extension integration emits jsdom/Tabster NodeFilter teardown stderr while tests exit 0."
+    },
+    "typescript_build": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c05-build-final.log"
+      ],
+      "used_mock": false,
+      "reason": "Final production build, 157 verified assets; existing chunk-size warning."
+    },
+    "rust_locked": {
+      "status": "not_applicable",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "No Rust host change in this slice."
+    },
+    "schema_clean": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c05-contracts.log"
+      ],
+      "used_mock": false,
+      "reason": "Clean-commit ci:contracts on 7bf3daaa; no generated schema or lock drift."
+    },
+    "browser_regression": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "No real WebView, native source navigation/file operation or Tauri transport exercised by this slice."
+    },
+    "native_ipc": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "No real WebView, native source navigation/file operation or Tauri transport exercised by this slice."
+    },
+    "native_window_file_events": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "No real WebView, native source navigation/file operation or Tauri transport exercised by this slice."
+    },
+    "accessibility": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "jsdom role/button navigation assertions are not a full accessibility or assistive-technology audit."
+    },
+    "performance": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Outside this bounded workflow verification; no release tasks enabled."
+    },
+    "installer_smoke": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Outside this bounded workflow verification; no release tasks enabled."
+    },
+    "upgrade_recovery": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Outside this bounded workflow verification; no release tasks enabled."
+    },
+    "signing": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Outside this bounded workflow verification; no release tasks enabled."
+    },
+    "notarization": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Outside this bounded workflow verification; no release tasks enabled."
+    }
+  },
+  "data_safety": {
+    "originals_preserved": null,
+    "secrets_excluded": true,
+    "network_services_unchanged": true,
+    "rollback_or_read_only_strategy": "Selected resources are read only; each run creates a separate note. Tests verify prior user edits and immutable source revision remain unchanged. No real native originals exercised. Roll back package to 1.4.0 before reverting runtime code; retain notes, sources and run snapshots."
+  },
+  "changed_files": [
+    "products/liteasy/apps/desktop/src/app/features/extensions/paperLensPackage.ts",
+    "products/liteasy/apps/desktop/src/app/features/resource-filesystem/agentAsset.types.ts",
+    "products/liteasy/apps/desktop/src/app/features/resource-filesystem/agentAssetService.ts",
+    "products/liteasy/apps/desktop/src/app/features/resource-filesystem/workspaceAgentAssetService.ts",
+    "products/liteasy/apps/desktop/src/app/features/workflows/WorkflowViews.tsx",
+    "products/liteasy/apps/desktop/src/app/features/workflows/comparisonContent.ts",
+    "products/liteasy/apps/desktop/src/app/features/workflows/researchTemplateContent.ts",
+    "products/liteasy/apps/desktop/src/app/features/workflows/researchTemplates.ts",
+    "products/liteasy/apps/desktop/src/tests/extensionIntegration.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/extensionStudio.test.ts",
+    "products/liteasy/apps/desktop/src/tests/researchTemplateViews.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/researchTemplates.test.ts"
+  ],
+  "known_limitations": [
+    "Bounded C05 worksheet feature, not automatic scientific comparison/derivation verification; live model and human academic-quality acceptance not performed.",
+    "Author checking, model inference and user comments are separated in editable Markdown; no dedicated claim/status schema or visual diff editor.",
+    "Unrecorded original page labels and electronic-book chapters/CFIs remain unknown; native source jump/reconnect not validated.",
+    "Paper/artifact/external-file locators that cannot pin a revision are labeled current-resource fallbacks; saved revision and excerpt remain offline-readable.",
+    "Unavailable read errors stop the workflow before saving; successful metadata-only reads create explicit evidence gaps.",
+    "Legacy same-byte reading import deduplication/source-provenance limits inherited from C01 remain.",
+    "extensionIntegration.test.tsx emits jsdom/Tabster NodeFilter teardown stderr while 8 tests exit 0; isolated new template UI test passes without this warning.",
+    "Node 22.13.1 differs from requested 22.23.2. No native Windows/macOS, real browser, installer or model-quality acceptance. /tmp logs are ephemeral.",
+    "Older runtimes cannot execute/recompute the new versioned offline template request; roll back package version before code rollback. Saved notes remain readable."
+  ],
+  "release_ready": false,
+  "notes": "See C05-research-templates.md. New offline templates use existing core.comparison request data and the current workflow runtime, not a new operation/schema registry. Source/regeneration and Blob export checks are synthetic, not native filesystem or scholarly quality acceptance."
+}
