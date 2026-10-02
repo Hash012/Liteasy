@@ -23,6 +23,40 @@ async function selectPdfText(page: Page, paper: Locator) {
   return page.getByLabel("选中文本批注菜单");
 }
 
+for (const entry of ["selection", "dictionary"] as const) test(`AI word lookup from ${entry} sends only a term without paper context`, async ({ page }, testInfo) => {
+  const modelRequests: { messages: { role: string; content: string }[] }[] = [];
+  let dictionaryRequests = 0;
+  await page.route("https://cn.bing.com/dict/search?**", (route) => {
+    dictionaryRequests++;
+    return route.fulfill({ contentType: "text/html", headers: { "Access-Control-Allow-Origin": "*" },
+      body: '<div class="qdef"><ul><li><span class="def">原词典释义</span></li></ul></div>' });
+  });
+  await page.route("http://localhost:11434/v1/chat/completions", (route) => {
+    if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type" } });
+    modelRequests.push(route.request().postDataJSON());
+    return route.fulfill({ json: { choices: [{ message: { content: "**核心释义**：一个简短例子。" } }] }, headers: { "Access-Control-Allow-Origin": "*" } });
+  });
+  const paper = await openReader(page), menu = await selectPdfText(page, paper);
+  const card = menu.getByRole("region", { name: "查词与翻译结果" });
+  if (entry === "dictionary") {
+    await menu.getByRole("button", { name: "查词/翻译", exact: true }).click();
+    await expect(card.getByText("原词典释义", { exact: true })).toBeVisible();
+    expect(modelRequests).toHaveLength(0);
+    await card.getByRole("button", { name: "AI 查词", exact: true }).click();
+  } else await menu.getByRole("button", { name: "AI 查词", exact: true }).click();
+  await expect(card.getByText("核心释义", { exact: true })).toBeVisible();
+  expect(modelRequests).toHaveLength(1);
+  expect(dictionaryRequests).toBe(entry === "dictionary" ? 1 : 0);
+  const messages = modelRequests[0].messages;
+  expect(messages).toHaveLength(1);
+  const term = await card.locator("header > strong").innerText();
+  expect(messages[0].content).toContain(`待解释的词：${JSON.stringify(term)}`);
+  expect(messages[0].content).not.toContain("das24a");
+  expect(messages[0].content.length).toBeLessThan(500);
+  expect(await menu.evaluate((element) => { const r = element.getBoundingClientRect(); return r.right <= window.innerWidth && r.bottom <= window.innerHeight; })).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath(`ai-word-${entry}.png`) });
+});
+
 test("looks up a PDF selection, expands senses and persists the result as a shared annotation", async ({ page }, testInfo) => {
   const requests: string[] = [];
   await page.route("https://cn.bing.com/dict/search?**", (route) => {

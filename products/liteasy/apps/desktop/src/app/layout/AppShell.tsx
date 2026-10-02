@@ -436,8 +436,7 @@ export function AppShell({
   }) => Promise<void>) | null>(null);
   function revealDockRegion(regionId: DockRegionId) {
     emptyDockRegions.reveal(regionId);
-    if (dock.layout.bottomOrder.includes(regionId)) paneLayout.setCollapsed("bottom", false);
-    else if (isBaseDockRegionId(regionId) && regionId !== "main") paneLayout.setCollapsed(regionId, false);
+    workbenchNavigation.reveal(regionId);
   }
 
   function openDockedLeftRailView(view: LeftRailView) {
@@ -1490,10 +1489,10 @@ export function AppShell({
   });
   const bottomPaneVisible = immersive.active || !paneLayout.collapsed.bottom;
   const visibleHorizontalRegions = dock.layout.horizontalOrder.filter((region) => immersive.active ||
-    (!emptyDockRegions.hidden.includes(region) && (!isBaseDockRegionId(region) || region === "main" || !paneLayout.collapsed[region])));
+    (!workbenchNavigation.hiddenRegions.includes(region) && !emptyDockRegions.hidden.includes(region) && (!isBaseDockRegionId(region) || region === "main" || !paneLayout.collapsed[region])));
   // The last workspace surface becomes the welcome page instead of leaving an unusable window.
   if (!visibleHorizontalRegions.length) visibleHorizontalRegions.push("main");
-  const visibleBottomRegions = dock.layout.bottomOrder.filter((region) => immersive.active || !emptyDockRegions.hidden.includes(region));
+  const visibleBottomRegions = dock.layout.bottomOrder.filter((region) => immersive.active || (!workbenchNavigation.hiddenRegions.includes(region) && !emptyDockRegions.hidden.includes(region)));
   const defaultRegionWeights = { main: paneLayout.layout.center, left: paneLayout.layout.left, right: paneLayout.layout.right };
   function regionWeight(region: DockRegionId) {
     return dock.layout.regionWidths[region] ?? defaultRegionWeights[region as keyof typeof defaultRegionWeights] ?? 32;
@@ -1998,6 +1997,7 @@ export function AppShell({
   }
 
   function activateDockItem(regionId: DockRegionId, itemId: DockItemId) {
+    if (workbenchNavigation.hiddenRegions.includes(regionId)) revealDockRegion(regionId);
     workspaceShell.focusRegion(regionId);
     if (regionId === "main") {
       setActiveCenterArtifactId(null);
@@ -2449,6 +2449,10 @@ export function AppShell({
         onActivateItem={(itemId) => activateDockItem(regionId, itemId)}
         onCloseItem={(item) => { dock.closeItem(item); if (item === "board") objectWorkbench.setVisible(false); }}
         onCloseRegion={() => closeDockRegion(regionId)}
+        onCollapseRegion={regionId === "main" && visibleHorizontalRegions.length === 1 ? undefined : () => {
+          workbenchNavigation.collapse(regionId);
+          if (regionId !== "main" && visibleHorizontalRegions.length === 1 && visibleHorizontalRegions.includes(regionId)) revealDockRegion("main");
+        }}
         onSplitRegion={(side) => dock.splitRegion(regionId, side)}
         onItemDragStart={(item, event) => {
           if (item === "board" && objectWorkbench.board) {
@@ -2630,7 +2634,7 @@ export function AppShell({
           onOpenHelp={() => help.port.open()}
           layoutControls={<><Tooltip content="扩展" relationship="description"><Button appearance="subtle" aria-label="扩展" icon={<AppsListRegular />} onClick={() => workbenchNavigation.open("extension-library")} /></Tooltip><Tooltip content={objectWorkbench.visible ? "关闭研究白板" : "研究白板"} relationship="description"><Button appearance="subtle" aria-label="研究白板" aria-pressed={objectWorkbench.visible} icon={<WhiteboardRegular />} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData(dockItemMimeType, "board"); }} onClick={() => { if (workbenchNavigation.isVisible("board")) objectWorkbench.setVisible(false); else { objectWorkbench.setVisible(true); if (dock.findItemRegion("board")) workbenchNavigation.open("board"); } }} /></Tooltip><DockLayoutControls
             collapsed={paneLayout.collapsed}
-            onToggleBottom={() => paneLayout.setCollapsed("bottom", !paneLayout.collapsed.bottom)}
+            onToggleBottom={() => { if (paneLayout.collapsed.bottom) revealDockRegion("bottom"); else paneLayout.setCollapsed("bottom", true); }}
             onToggleLeft={() => paneLayout.setCollapsed("left", !paneLayout.collapsed.left)}
             onToggleRight={() => paneLayout.setCollapsed("right", !paneLayout.collapsed.right)}
           /></>}

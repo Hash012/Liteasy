@@ -27,7 +27,7 @@ export type SelectionLookupRequest = {
   context?: string;
   paperId?: string;
   paperTitle?: string;
-  mode?: "auto" | "translate";
+  mode?: "auto" | "translate" | "explain";
   /** Automatic dictionary lookup must not start AI generation before confirmation. */
   allowTranslation?: boolean;
   systemPrompt?: string;
@@ -37,13 +37,14 @@ export type LookupSense = { partOfSpeech?: string; definition: string; example?:
 export type LookupPronunciation = { label: string; phonetic?: string; audioUrl?: string };
 export type SelectionLookupResult = {
   text: string;
-  kind: "dictionary" | "translation" | "missing";
+  kind: "dictionary" | "translation" | "explanation" | "missing";
   service: string;
   sourceLabel: string;
   sourceUrl?: string;
   senses: LookupSense[];
   pronunciations: LookupPronunciation[];
   translation?: string;
+  explanation?: string;
   fallback?: boolean;
 };
 export type SelectionLookupPort = {

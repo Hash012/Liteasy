@@ -23,5 +23,5 @@ export function selectionLookupContext(pageText: string, excerpt: string, offset
 }
 
 export function lookupResultNote(result: import("./selectionLookup.types").SelectionLookupResult) {
-  return [result.translation, ...result.senses.map((sense) => `${sense.partOfSpeech ? `${sense.partOfSpeech} ` : ""}${sense.definition}${sense.example ? `\n例句：${sense.example}` : ""}`), `来源：${result.sourceLabel}`].filter(Boolean).join("\n");
+  return [result.explanation, result.translation, ...result.senses.map((sense) => `${sense.partOfSpeech ? `${sense.partOfSpeech} ` : ""}${sense.definition}${sense.example ? `\n例句：${sense.example}` : ""}`), `来源：${result.sourceLabel}`].filter(Boolean).join("\n");
 }

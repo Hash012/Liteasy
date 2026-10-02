@@ -24,6 +24,7 @@ export function PaperSelectionTools(props: {
   conversation?: () => void;
   quickAsk?: () => void;
   lookup?: () => void;
+  aiLookup?: () => void;
   lookupDisabled?: boolean;
   dragBoard?: DragEventHandler<HTMLButtonElement>;
 }) {
@@ -44,8 +45,9 @@ export function PaperSelectionTools(props: {
       <Tooltip content="给选中文段添加下划线" relationship="description"><Button appearance="subtle" size="small" disabled={props.disabled} icon={<TextUnderlineRegular />} onClick={props.underline}>划线</Button></Tooltip>
       <Tooltip content="复制选中的内容" relationship="description"><Button appearance="subtle" size="small" disabled={props.disabled} icon={<CopyRegular />} onClick={props.copy}>复制</Button></Tooltip>
     </div>
-    {props.board || props.tray || props.quickAsk || props.conversation || props.lookup ? <div className="paper-selection-destinations" role="group" aria-label="使用选段">
+    {props.board || props.tray || props.quickAsk || props.conversation || props.lookup || props.aiLookup ? <div className="paper-selection-destinations" role="group" aria-label="使用选段">
       {props.lookup ? <Tooltip content="查询单词释义或翻译短语" relationship="description"><Button appearance="subtle" size="small" disabled={props.lookupDisabled ?? props.disabled} icon={<TranslateRegular />} onClick={props.lookup}>查词/翻译</Button></Tooltip> : null}
+      {props.aiLookup ? <Tooltip content="只解释选中的词，不附带论文或对话上下文" relationship="description"><Button appearance="subtle" size="small" disabled={props.lookupDisabled ?? props.disabled} icon={<SparkleRegular />} onClick={props.aiLookup}>AI 查词</Button></Tooltip> : null}
       {props.board ? <Tooltip content="加入白板，也可拖动摘录" relationship="description"><Button appearance="subtle" size="small" disabled={props.disabled} icon={<WhiteboardRegular />} draggable={Boolean(props.dragBoard)} onDragStart={props.dragBoard} onClick={props.board}>加入白板</Button></Tooltip> : null}
       {props.tray ? <Tooltip content="收集选段后一起提问" relationship="description"><Button appearance="subtle" size="small" disabled={props.disabled} icon={<TextQuoteRegular />} onClick={props.tray}>加入摘录对话</Button></Tooltip> : null}
       {props.quickAsk ? <Tooltip content="结合当前页和摘要提问" relationship="description"><Button appearance="subtle" size="small" disabled={props.disabled} icon={<SparkleRegular />} onClick={props.quickAsk}>速问</Button></Tooltip> : null}

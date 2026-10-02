@@ -96,6 +96,7 @@ type DockRegionProps = {
   onActivateItem: (itemId: DockItemId) => void;
   onCloseItem: (itemId: DockItemId) => void;
   onCloseRegion?: () => void;
+  onCollapseRegion?: () => void;
   onSplitRegion?: (side: "left" | "right") => void;
   onItemDragStart?: (
     itemId: DockItemId,
@@ -148,6 +149,7 @@ export function DockRegion({
   onActivateItem,
   onCloseItem,
   onCloseRegion,
+  onCollapseRegion,
   onSplitRegion,
   onItemDragStart,
   onMoveDynamicTab,
@@ -354,7 +356,7 @@ export function DockRegion({
       }}
       onDrop={handleDrop}
     >
-      {hasTabs || regionActions || onSplitRegion || onCloseRegion ? (
+      {hasTabs || regionActions || onSplitRegion || onCloseRegion || onCollapseRegion ? (
         <div className="dock-region-tab-row">
           {hasTabs ? (
             <div
@@ -535,6 +537,10 @@ export function DockRegion({
                 </MenuPopover>
               </Menu>
             ) : null}
+            {onCollapseRegion ? <Tooltip content={`收起${regionLabel}面板，保留已打开页面`} relationship="description">
+              <Button appearance="subtle" size="small" aria-label={`收起${regionLabel}面板`}
+                icon={<DismissRegular />} onClick={onCollapseRegion} />
+            </Tooltip> : null}
           </div>
         </div>
       ) : null}

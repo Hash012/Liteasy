@@ -24,6 +24,16 @@ function createDataTransfer(itemId: string) {
 }
 
 describe("DockRegion", () => {
+  test("collapses the panel with its own visible button without closing any page", async () => {
+    const onCollapseRegion = vi.fn(), onCloseRegion = vi.fn(), onCloseItem = vi.fn();
+    render(<DockRegion regionId="right" layout={{ activeItemId: "assistant", itemIds: ["assistant"] }}
+      onActivateItem={vi.fn()} onCloseItem={onCloseItem} onCloseRegion={onCloseRegion} onCollapseRegion={onCollapseRegion}
+      onMoveItem={vi.fn()} renderItem={() => <div>assistant</div>} />);
+    await userEvent.click(screen.getByRole("button", { name: "收起右栏面板" }));
+    expect(onCollapseRegion).toHaveBeenCalledOnce();
+    expect(onCloseItem).not.toHaveBeenCalled(); expect(onCloseRegion).not.toHaveBeenCalled();
+  });
+
   test("renders accessible tabs and activates them by click and keyboard", async () => {
     const user = userEvent.setup();
     const onActivateItem = vi.fn();

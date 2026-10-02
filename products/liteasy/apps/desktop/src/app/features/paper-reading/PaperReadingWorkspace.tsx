@@ -80,6 +80,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
   const { findFirstFocusable } = useFocusFinders();
   const [draft, setDraft] = useState<{ excerpt: string; page: string; context?: string; id?: string; revision?: number }>();
   const [lookupOpen, setLookupOpen] = useState(false);
+  const [lookupMode, setLookupMode] = useState<"auto" | "explain">("auto");
   const [lookupDismissed, setLookupDismissed] = useState(false);
   const [note, setNote] = useState("");
   const [markStyle, setMarkStyle] = useState<ReadingMarkStyle>();
@@ -158,7 +159,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
     const page = candidates.length === 1 ? String(candidates[0]) : start.closest<HTMLElement>("[data-reading-page]")?.dataset.readingPage ?? "";
     const paragraph = selection.anchorNode?.parentElement?.closest("p, li, blockquote, td")?.textContent ?? "";
     setDraft({ excerpt, page, context: selectionLookupContext(paragraph || session.pageTexts[Number(page)] || "", excerpt) });
-    setLookupOpen(false); setLookupDismissed(false); setAsking(false); askAbort.current?.abort();
+    setLookupOpen(false); setLookupDismissed(false); setLookupMode("auto"); setAsking(false); askAbort.current?.abort();
     setMarkStyle({ kind: "highlight", color: "yellow" }); setNote(""); openComments(); setError("");
     setMessage(page ? `已选择第 ${page} 页原文。` : "请选择选段所在的 PDF 页码；保存后可在两种模式中查看。");
   }
@@ -261,7 +262,8 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
           {draft.excerpt ? <blockquote>{draft.excerpt}</blockquote> : null}
           {draft.excerpt && !draft.id ? <>
             <PaperSelectionTools extensionActions={session.extensionActions?.({ page: Number(draft.page), excerpt: draft.excerpt })} disabled={busy || !session.ready || !draft.page}
-              lookup={session.lookup ? () => { setLookupOpen(true); setLookupDismissed(false); } : undefined} lookupDisabled={false}
+              lookup={session.lookup ? () => { setLookupMode("auto"); setLookupOpen(true); setLookupDismissed(false); } : undefined} lookupDisabled={false}
+              aiLookup={session.lookup ? () => { setLookupMode("explain"); setLookupOpen(true); setLookupDismissed(false); } : undefined}
               highlight={() => void selectionAction(() => session.create({ page: Number(draft.page), excerpt: draft.excerpt, note, kind: "highlight", color: markStyle?.color ?? "yellow" }), "高亮已保存。")}
               underline={() => void selectionAction(() => session.create({ page: Number(draft.page), excerpt: draft.excerpt, note, kind: "underline", color: markStyle?.color ?? "blue" }), "划线已保存。")}
               copy={() => void selectionAction(() => navigator.clipboard.writeText(draft.excerpt), "已复制选段。")}
@@ -271,6 +273,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
               quickAsk={session.quickAsk ? () => { setSystemPrompt(undefined); setAsking(true); } : undefined} />
             {session.lookup && !lookupDismissed && (lookupOpen || session.lookup.autoQuery) ? <SelectionLookupCard
               key={draft.excerpt} lookup={session.lookup} text={draft.excerpt} context={draft.context}
+              initialMode={lookupMode}
               paperId={session.paperId} paperTitle={session.paperTitle}
               onClose={() => { setLookupOpen(false); setLookupDismissed(true); }}
               onSave={session.ready && draft.page ? (translation) => session.create({ page: Number(draft.page), excerpt: draft.excerpt, note: translation }) : undefined}

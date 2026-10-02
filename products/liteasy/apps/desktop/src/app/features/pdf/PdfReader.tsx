@@ -1584,8 +1584,9 @@ export function PdfReader({
   const [status, setStatus] = useState("选择文段后可添加高亮、划线，或把选中文段交给 AI。");
   const [selection, setSelection] = useState<PdfSelection | null>(null);
   const [lookupOpen, setLookupOpen] = useState(false);
+  const [lookupMode, setLookupMode] = useState<"auto" | "explain">("auto");
   const [lookupDismissed, setLookupDismissed] = useState(false);
-  useEffect(() => { setLookupOpen(false); setLookupDismissed(false); }, [selection?.excerpt, selection?.page, activePaper?.id]);
+  useEffect(() => { setLookupOpen(false); setLookupDismissed(false); setLookupMode("auto"); }, [selection?.excerpt, selection?.page, activePaper?.id]);
   const [quickAskSelection, setQuickAskSelection] = useState<PdfSelection | null>(null);
   const [reviewPromptId, setReviewPromptId] = useState<string>();
   const [quickAskPrompt, setQuickAskPrompt] = useState<string>();
@@ -4016,7 +4017,8 @@ export function PdfReader({
             {selection ? (
               <PdfSelectionMenu stageRef={stageRef} anchor={{ left: selection.menuLeft, top: selection.menuTop, placement: selection.menuPlacement }}>
                 <PaperSelectionTools extensionActions={activePaper ? <ReaderExtensionActions input={{ paper: activePaper, ...selection }} /> : undefined} color={selectedColor} onColorChange={setSelectedColor}
-                  lookup={selectionLookup ? () => { setLookupOpen(true); setLookupDismissed(false); } : undefined}
+                  lookup={selectionLookup ? () => { setLookupMode("auto"); setLookupOpen(true); setLookupDismissed(false); } : undefined}
+                  aiLookup={selectionLookup ? () => { setLookupMode("explain"); setLookupOpen(true); setLookupDismissed(false); } : undefined}
                   highlight={() => addAnnotation("highlight")} underline={() => addAnnotation("underline")}
                   copy={() => void copySelectedText()} board={addSelectionToWhiteboard} dragBoard={handleSelectionWhiteboardDragStart}
                   tray={objectWorkbench ? () => { if (activePaper) void objectWorkbench.capturePdf({ paper: activePaper, ...selection }, "tray").catch((e) => setStatus(e.message)); } : undefined}
@@ -4027,6 +4029,7 @@ export function PdfReader({
                   } : undefined} />
                 {selectionLookup && !lookupDismissed && (lookupOpen || selectionLookup.autoQuery) ? <SelectionLookupCard
                   key={`${activePaper?.id}:${selection.page}:${selection.excerpt}`}
+                  initialMode={lookupMode}
                   lookup={selectionLookup} text={selection.excerpt} paperId={activePaper?.id} paperTitle={activePaper?.title}
                   context={selectionLookupContext(pageTexts[selection.page] ?? "", selection.excerpt, selection.normalizedStart)}
                   onClose={() => { setLookupOpen(false); setLookupDismissed(true); }}

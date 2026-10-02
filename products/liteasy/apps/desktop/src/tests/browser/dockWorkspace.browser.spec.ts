@@ -1,5 +1,29 @@
 import { expect, test } from "@playwright/test";
 
+test("panel close controls hide whole groups and restore their existing pages", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto("/");
+  const nav = page.getByRole("navigation", { name: "左边栏导航" });
+  const right = page.locator('[data-region="right"]');
+  const composer = right.getByPlaceholder("输入你的问题或命令");
+  await composer.fill("收起后保留这份草稿");
+  await right.getByRole("button", { name: "收起右栏面板", exact: true }).click();
+  await expect(right).toHaveCount(0);
+  await nav.getByRole("button", { name: "Agent", exact: true }).click();
+  await expect(composer).toHaveValue("收起后保留这份草稿");
+  const main = page.locator('[data-region="main"]');
+  await main.getByRole("button", { name: "主内容区面板选项" }).click();
+  await page.getByRole("menuitem", { name: "在右边新建栏" }).click();
+  const split = page.locator('[data-region^="bar-"]');
+  const regionId = await split.getAttribute("data-region");
+  await nav.getByRole("button", { name: "笔记", exact: true }).dragTo(split);
+  await split.getByRole("button", { name: "收起分栏面板" }).click();
+  await expect(split).toHaveCount(0);
+  await nav.getByRole("button", { name: "笔记", exact: true }).click();
+  await expect(page.locator(`[data-region="${regionId}"]`).getByRole("tab", { name: "笔记", exact: true })).toBeVisible();
+});
+
 test("independent bars retain Notes and board tabs, while Agent can move into the bottom panel", async ({
   page,
 }, testInfo) => {

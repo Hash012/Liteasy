@@ -6,6 +6,7 @@ import { defaultSelectionLookupSettings, type LookupTransport, type SelectionLoo
 export function createSelectionLookupService(deps: {
   getSettings(): Partial<SelectionLookupSettings>;
   translateAi(request: SelectionLookupRequest & { sourceLanguage: string; targetLanguage: string }): Promise<string>;
+  explainAi?(request: { text: string; targetLanguage: string; signal?: AbortSignal }): Promise<string>;
   transport?: LookupTransport;
 }) {
   const transport = deps.transport ?? selectionLookupTransport;
@@ -18,6 +19,14 @@ export function createSelectionLookupService(deps: {
       const dictionary = settings["lookup.dictionary_service"];
       const sourceLanguage = settings["lookup.source_language"];
       const targetLanguage = settings["lookup.target_language"];
+      if (request.mode === "explain") {
+        if (!deps.explainAi) throw new Error("AI 查词暂不可用，请检查模型连接。");
+        // A word lookup is intentionally independent of paper, profile and chat context.
+        const explanation = await deps.explainAi({ text, targetLanguage, signal: request.signal });
+        request.signal?.throwIfAborted();
+        if (!explanation.trim()) throw new Error("AI 没有返回释义，请重试。");
+        return { text, kind: "explanation", service: "ai", sourceLabel: "AI 查词", explanation: explanation.trim(), senses: [], pronunciations: [] };
+      }
       let dictionaryError: unknown;
       let missing: SelectionLookupResult = { text, kind: "missing", service: dictionary,
         sourceLabel: dictionary === "bing" ? "必应词典" : dictionary === "youdao" ? "有道词典" : "英英词典", senses: [], pronunciations: [] };

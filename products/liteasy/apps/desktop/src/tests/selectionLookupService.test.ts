@@ -36,6 +36,18 @@ test("does not start AI translation when automatic querying has not been confirm
   expect(translateAi).not.toHaveBeenCalled();
 });
 
+test("AI lookup sends only the normalized term and language, without dictionary or translation requests", async () => {
+  const explainAi = vi.fn(async () => "正则化：限制模型过于复杂，减少过拟合。"), transport = vi.fn(), translateAi = vi.fn();
+  const service = createSelectionLookupService({ getSettings: () => ({}), explainAi, transport, translateAi });
+  const controller = new AbortController();
+  expect(await service.query({ text: " regularization ", mode: "explain", context: "PRIVATE_SENTENCE", paperId: "PRIVATE_ID",
+    paperTitle: "PRIVATE_PAPER", systemPrompt: "TRANSLATION_ONLY_PROMPT", signal: controller.signal })).toMatchObject({
+      kind: "explanation", sourceLabel: "AI 查词", explanation: "正则化：限制模型过于复杂，减少过拟合。"
+    });
+  expect(explainAi).toHaveBeenCalledExactlyOnceWith({ text: "regularization", targetLanguage: "zh", signal: controller.signal });
+  expect(transport).not.toHaveBeenCalled(); expect(translateAi).not.toHaveBeenCalled();
+});
+
 test("cancels without starting a fallback and validates selection size", async () => {
   const abort = new AbortController(), translateAi = vi.fn();
   const transport = vi.fn(async () => { abort.abort(); return { status: 200, body: "" }; });

@@ -1,5 +1,6 @@
 import { act, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { StrictMode } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 import { SelectionLookupCard } from "../app/features/selection-lookup/SelectionLookupCard";
 import { SelectionLookupSettingsPanel } from "../app/features/selection-lookup/SelectionLookupSettingsPanel";
@@ -11,6 +12,40 @@ import type { SelectionLookupRequest, SelectionLookupResult } from "../app/featu
 const result: SelectionLookupResult = { text: "field", kind: "dictionary", service: "bing", sourceLabel: "必应词典", pronunciations: [],
   senses: [{ partOfSpeech: "n.", definition: "领域", example: "A research field." }, { definition: "场" }, { definition: "田野" }, { definition: "字段" }] };
 afterEach(() => { vi.restoreAllMocks(); localStorage.clear(); });
+
+test("direct AI lookup sends a single minimal request and can save its Markdown explanation", async () => {
+  const query = vi.fn(async (_request: SelectionLookupRequest) => ({ ...result, kind: "explanation" as const, sourceLabel: "AI 查词", senses: [], explanation: "**field**：领域。" }));
+  const onSave = vi.fn(async () => {});
+  render(<StrictMode><SelectionLookupCard lookup={{ query, autoQuery: true, translationUsesAi: true }} initialMode="explain"
+    text="field" context="PRIVATE_SENTENCE" paperId="PRIVATE_ID" paperTitle="PRIVATE_PAPER" onClose={vi.fn()} onSave={onSave} /></StrictMode>);
+  await screen.findByText("：领域。");
+  expect(query).toHaveBeenCalledExactlyOnceWith({ text: "field", mode: "explain", signal: expect.any(AbortSignal) });
+  await userEvent.click(screen.getByRole("button", { name: "保存为批注" }));
+  expect(onSave).toHaveBeenCalledWith("**field**：领域。\n来源：AI 查词");
+});
+
+test("upgrades a dictionary result to AI lookup without forwarding the sentence or previous result", async () => {
+  const query = vi.fn(async (request: SelectionLookupRequest) => request.mode === "explain"
+    ? { ...result, kind: "explanation" as const, senses: [], explanation: "精简解释", sourceLabel: "AI 查词" } : result);
+  render(<SelectionLookupCard lookup={{ query, autoQuery: false, translationUsesAi: true }} text="field" context="PRIVATE_SENTENCE" onClose={vi.fn()} />);
+  await screen.findByText("领域");
+  await userEvent.click(screen.getByRole("button", { name: "AI 查词", exact: true }));
+  await screen.findByText("精简解释");
+  expect(query.mock.calls[1][0]).toEqual({ text: "field", mode: "explain", signal: expect.any(AbortSignal) });
+});
+
+test("the real model gateway receives only a brief explanation prompt and the selected term", async () => {
+  const store = createSettingsStore();
+  store.apply({ intent: "update_setting", target: "ai.prompts.selection_translation", value: "PRIVATE_TRANSLATION_PROMPT" });
+  const modelTransport = vi.fn(async (_input: ModelTransportRequest) => ({ ok: true, status: 200, json: async () => ({ answer: "正则化", execution: { mode: "live", provider: "openai" } }) }));
+  const { result: hook } = renderHook(() => useSelectionLookupController({ getSettings: () => store.getState(), modelTransport }));
+  await hook.current.query({ text: "regularization", mode: "explain", context: "PRIVATE_SENTENCE", paperTitle: "PRIVATE_PAPER", systemPrompt: "PRIVATE_OVERRIDE" });
+  const body = JSON.parse(modelTransport.mock.calls[0][0].body);
+  expect(body.prompt).toContain('待解释的词："regularization"');
+  expect(body.prompt).not.toContain("PRIVATE_");
+  expect(body.prompt.length).toBeLessThan(500);
+  expect(Object.keys(body).sort()).toEqual(["model", "prompt", "provider", "requireLive", "source"]);
+});
 
 test("shows compact senses and saves the full result through the supplied annotation action", async () => {
   const query = vi.fn(async () => result), onSave = vi.fn(async () => {}), onExplain = vi.fn();

@@ -37,6 +37,9 @@ test("reading lookup works without annotation geometry and passes the surroundin
   await screen.findByText("实验");
   expect(query.mock.calls[0][0]).toMatchObject({ text: "experiment", context: "The experiment used 128 samples." });
   expect(screen.queryByRole("button", { name: "保存为批注" })).not.toBeInTheDocument();
+  expect(within(tools).getByRole("button", { name: "AI 查词" })).toBeEnabled();
+  await userEvent.click(within(tools).getByRole("button", { name: "AI 查词" }));
+  await waitFor(() => expect(query).toHaveBeenLastCalledWith({ text: "experiment", mode: "explain", signal: expect.any(AbortSignal) }));
 });
 
 test("PDF and reading mode edit and delete the same persisted comment without changing its source", async () => {

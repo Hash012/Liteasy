@@ -62,6 +62,38 @@ test("reopens a tool in a persisted split without touching other regions", () =>
   expect(result.current.dock.findItemRegion("notes")).toBe("bar-notes");
 });
 
+test("collapsing a split preserves its pages and activity navigation restores the same panel", () => {
+  const { result } = renderHook(useFixture);
+  act(() => {
+    result.current.dock.splitRegion("main", "right", "bar-notes");
+    result.current.dock.moveItem("notes", "bar-notes");
+  });
+  act(() => result.current.navigation.open("notes"));
+  const layout = result.current.dock.layout;
+  act(() => result.current.navigation.collapse("bar-notes"));
+  expect(result.current.navigation.isVisible("notes")).toBe(false);
+  expect(result.current.navigation.hiddenRegions).toEqual(["bar-notes"]);
+  expect(result.current.dock.layout).toEqual(layout);
+  act(() => result.current.navigation.open("notes"));
+  expect(result.current.navigation.isVisible("notes")).toBe(true);
+  expect(result.current.navigation.hiddenRegions).toEqual([]);
+  expect(result.current.dock.findItemRegion("notes")).toBe("bar-notes");
+});
+
+test("closing a bottom split leaves its sibling visible and the last one collapses the row", () => {
+  const { result } = renderHook(useFixture);
+  act(() => result.current.dock.splitRegion("bottom", "right", "bar-bottom"));
+  act(() => result.current.navigation.reveal("bottom"));
+  act(() => result.current.navigation.collapse("bottom"));
+  expect(result.current.collapsed.bottom).toBe(false);
+  expect(result.current.navigation.hiddenRegions).toEqual(["bottom"]);
+  act(() => result.current.navigation.collapse("bar-bottom"));
+  expect(result.current.collapsed.bottom).toBe(true);
+  act(() => result.current.navigation.reveal("bottom"));
+  expect(result.current.collapsed.bottom).toBe(false);
+  expect(result.current.navigation.hiddenRegions).toEqual(["bar-bottom"]);
+});
+
 
 test("settings opens in the center and relocates old sidebar placements without closing other tools", () => {
   const { result } = renderHook(useFixture);
