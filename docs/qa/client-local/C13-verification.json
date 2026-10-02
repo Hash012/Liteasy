@@ -1,0 +1,75 @@
+{
+  "schema": "liteasy.client-verification/v1",
+  "task_id": "C13",
+  "head_commit": "3bb1e903481e89e2aee11986cfb8eef69c0629cc",
+  "enabled_release_tasks": [],
+  "environment": {
+    "os": "Ubuntu (WSL2)",
+    "os_version": "24.04.3 LTS; kernel 6.18.33.2-microsoft-standard-WSL2",
+    "arch": "x86_64",
+    "webview": "Not exercised; browser Chromium 151.0.7922.34",
+    "node": "22.13.1; repository .nvmrc requests 22.23.2",
+    "rust": "1.98.0; Windows workflow requests 1.98.1; no Rust checks run",
+    "fixture_revision": "3bb1e903481e89e2aee11986cfb8eef69c0629cc",
+    "test_profile_path_redacted": true
+  },
+  "commands": [
+    "npm ci --no-audit --no-fund",
+    "npm test -- src/tests/localDiagnostics.test.ts src/tests/localDiagnosticsPanel.test.tsx src/tests/originalFileDiagnostics.test.tsx src/tests/helpModule.test.tsx src/tests/originalFileOpenController.test.tsx",
+    "npm test -- src/tests/localDiagnosticsPanel.test.tsx",
+    "npm run ci:smoke",
+    "npm run build",
+    "NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost PLAYWRIGHT_BASE_URL=http://127.0.0.1:1433 npx playwright test src/tests/browser/localDiagnostics.browser.spec.ts --workers=1",
+    "npm run ci:contracts",
+    "git diff --check"
+  ],
+  "checks": {
+    "focused_tests": { "status": "passed", "evidence_paths": ["/tmp/liteasy-c13-focused.log", "/tmp/liteasy-c13-panel-final.log"], "used_mock": true, "reason": "25 focused checks; two UI checks rerun after act cleanup. Original-file transports and reader callbacks are synthetic. No native I/O." },
+    "smoke": { "status": "passed", "evidence_paths": ["/tmp/liteasy-c13-smoke.log"], "used_mock": false, "reason": "9 repository casing/resource checks." },
+    "typescript_build": { "status": "passed", "evidence_paths": ["/tmp/liteasy-c13-build.log"], "used_mock": false, "reason": "Production build and 157 asset checks passed; existing chunk-size warning remains." },
+    "rust_locked": { "status": "not_applicable", "evidence_paths": [], "used_mock": null, "reason": "No Rust source, dependency or configuration changes." },
+    "schema_clean": { "status": "passed", "evidence_paths": ["/tmp/liteasy-c13-contracts.log"], "used_mock": false, "reason": "ci:contracts passed on clean source commit; no lock/schema drift." },
+    "browser_regression": { "status": "passed", "evidence_paths": ["/tmp/liteasy-c13-browser.log", "products/liteasy/apps/desktop/test-results/localDiagnostics.browser-h-5612c-y-reload-returns-to-opt-out/diagnostics-reviewed.png"], "used_mock": false, "reason": "One real Chromium AppShell help/download/reload test, environment-only package. No native transport and no document reading." },
+    "native_ipc": { "status": "not_run", "evidence_paths": [], "used_mock": null, "reason": "Native transports mocked only in controller tests; not a native acceptance result." },
+    "native_window_file_events": { "status": "not_run", "evidence_paths": [], "used_mock": null, "reason": "No real picker, native WebView download or OS handoff executed for C13." },
+    "accessibility": { "status": "not_run", "evidence_paths": [], "used_mock": null, "reason": "Role/name assertions are covered; complete keyboard and screen-reader audit not run." },
+    "performance": { "status": "not_run", "evidence_paths": [], "used_mock": null, "reason": "Five user-task metric definitions documented; baselines remain not_measured. Controller duration is not first paint." },
+    "installer_smoke": { "status": "not_run", "evidence_paths": [], "used_mock": null, "reason": "No installer requested or built." },
+    "upgrade_recovery": { "status": "not_applicable", "evidence_paths": [], "used_mock": null, "reason": "Collector is memory-only and no stored schema changes; C12 recovery untouched." },
+    "signing": { "status": "not_run", "evidence_paths": [], "used_mock": null, "reason": "No release artifact." },
+    "notarization": { "status": "not_run", "evidence_paths": [], "used_mock": null, "reason": "No macOS release artifact." }
+  },
+  "data_safety": {
+    "originals_preserved": null,
+    "secrets_excluded": true,
+    "network_services_unchanged": true,
+    "rollback_or_read_only_strategy": "Memory-only opt-in collector; disable/reset/account switch invalidate pending stages. No native originals used or rewritten. Reverting the feature needs no data migration. Export uses reviewed whitelist projection only."
+  },
+  "changed_files": [
+    "development/test-data/client-diagnostics/README.md",
+    "development/test-data/client-diagnostics/original-open.json",
+    "products/liteasy/apps/desktop/src/app/features/local-diagnostics/localDiagnostics.ts",
+    "products/liteasy/apps/desktop/src/app/features/local-diagnostics/diagnosticPackage.ts",
+    "products/liteasy/apps/desktop/src/app/features/local-diagnostics/LocalDiagnosticsPanel.tsx",
+    "products/liteasy/apps/desktop/src/app/features/local-diagnostics/local-diagnostics.css",
+    "products/liteasy/apps/desktop/src/app/controllers/useOriginalFileOpenController.ts",
+    "products/liteasy/apps/desktop/src/app/features/help/HelpPanel.tsx",
+    "products/liteasy/apps/desktop/src/app/features/help/manual/content/troubleshooting.report.md",
+    "products/liteasy/apps/desktop/src/tests/localDiagnostics.test.ts",
+    "products/liteasy/apps/desktop/src/tests/localDiagnosticsPanel.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/originalFileDiagnostics.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/helpModule.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/browser/localDiagnostics.browser.spec.ts"
+  ],
+  "known_limitations": [
+    "Partial C13: no complete six-role user acceptance; scenario S01/S07 references are related controller slices only.",
+    "No real-model, productivity, retention, interview or market conclusions.",
+    "Only chooser/read/reader-callback stages; no first-paint, pre-queue errors, release errors or other feature instrumentation.",
+    "User-agent-derived engine/architecture metadata can be unknown; not native WebView installation probing.",
+    "Chromium download passed, but native WebView download is unverified; preview text is manually copyable.",
+    "Initial automatic Playwright webServer wait was terminated; isolated Vite with localhost NO_PROXY completed.",
+    "Local Node and Rust versions differ from repository pins; no Windows/macOS native or installer acceptance."
+  ],
+  "release_ready": false,
+  "notes": "Regression first: new help-entry test failed while four existing help tests passed (/tmp/liteasy-c13-red.log). All content fixtures are synthetic. Temporary Vite 1433 was stopped. Source commit contracts passed before evidence-only docs were added."
+}
