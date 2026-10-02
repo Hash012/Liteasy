@@ -30,7 +30,7 @@ local_archive::local_archive_reveal,
 local_archive::local_archive_read_note,
 ```
 
-本地开发 IPC 白名单需明确允许这 8 个纯本地命令。生产配置不变。界面在现有资料/备份设置区组合：
+本地开发 IPC 现用黑名单，这 8 个纯本地命令均不匹配禁止项，无需改动生产配置。界面在现有资料/备份设置区组合：
 
 ```tsx
 import { LocalArchivePanel } from "../features/local-archive/LocalArchivePanel";
@@ -48,7 +48,7 @@ Ubuntu 24.04 x64 / WSL2；Node 22.13.1（仓库要求 22.23.2）、Rust 1.98.0�
 - `cargo test --locked --no-default-features --manifest-path products/liteasy/apps/desktop/src-tauri/Cargo.toml --test local_archive`：7 例通过；真实临时目录，含 Unicode 原文、完整文本/几何往返、凭据字段排除、未知版本/坏 hash、预览后变化、已有目录、恶意路径/碰撞、符号链接、写入中断后诊断标记。中断由 guard 注入，不是真实杀进程/磁盘满。
 - `npm test -- --run src/tests/LocalArchivePanel.test.tsx src/tests/localArchiveService.test.ts`：5 例通过；IPC/选择器为替身，验证显式确认、正确计划/回执参数、字面 HTML、错误无成功回执、账户切换取消旧预览。
 - `npm run ci:smoke`：9 例通过。`npm run build`：通过，现有 chunk/dynamic import 提示仍在。
-- 干净提交上的 `npm run ci:contracts` 结果单独记录在验证 JSON；根代理集成后需要复查宿主与最终组合。
+- 干净提交 `69e10005` 上的 `npm run ci:contracts` 通过，无 schema/lock 漂移；根代理集成后需要复查宿主与最终组合。
 
 ## 兼容、回退与剩余工作
 
