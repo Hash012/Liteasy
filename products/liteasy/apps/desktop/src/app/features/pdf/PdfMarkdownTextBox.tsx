@@ -1,3 +1,5 @@
+import { MarkdownEditor } from "../markdown/MarkdownEditor";
+import { useMarkdownEditing } from "../markdown/MarkdownEditingContext";
 import {
   Button,
   Popover,
@@ -23,7 +25,7 @@ import {
 } from "react";
 import { readPdfTextBoxImage, type PdfTextBoxImages } from "./pdfTextBoxImages";
 import type { PdfAnnotationRect, PdfAnnotationV2 } from "./pdfAnnotationStorage";
-import { PdfAnnotationMarkdown } from "./PdfAnnotationMarkdown";
+import { PdfAnnotationMarkdown, pdfAnnotationUrlTransform } from "./PdfAnnotationMarkdown";
 import "./pdfTextBoxResize.css";
 
 type PdfMarkdownTextBoxProps = {
@@ -100,6 +102,7 @@ export function PdfMarkdownTextBox({
   onOpacityChange,
   rect
 }: PdfMarkdownTextBoxProps) {
+  const preference = useMarkdownEditing();
   const [draft, setDraft] = useState(annotation.note ?? "");
   const [draggedRect, setDraggedRect] = useState<PdfAnnotationRect | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -172,7 +175,7 @@ export function PdfMarkdownTextBox({
     const dismiss = (event: PointerEvent) => {
       const target = event.target;
       if (target instanceof Node && !rootRef.current?.contains(target) &&
-        !(target instanceof Element && target.closest(".pdf-markdown-text-box-opacity-popover"))) finishEditing();
+        !(target instanceof Element && target.closest(".pdf-markdown-text-box-opacity-popover, .fui-PopoverSurface, .fui-MenuPopover, [role=dialog], [role=menu]"))) finishEditing();
     };
     document.addEventListener("pointerdown", dismiss, true);
     return () => document.removeEventListener("pointerdown", dismiss, true);
@@ -248,7 +251,7 @@ export function PdfMarkdownTextBox({
     <section
       ref={rootRef}
       onBlur={(event) => {
-        if (event.relatedTarget instanceof Node && !event.currentTarget.contains(event.relatedTarget) && !(event.relatedTarget instanceof Element && event.relatedTarget.closest(".pdf-markdown-text-box-opacity-popover"))) finishEditing();
+        if (event.relatedTarget instanceof Node && !event.currentTarget.contains(event.relatedTarget) && !(event.relatedTarget instanceof Element && event.relatedTarget.closest(".pdf-markdown-text-box-opacity-popover, .fui-PopoverSurface, .fui-MenuPopover, [role=dialog], [role=menu]"))) finishEditing();
       }}
       aria-label={`Markdown 文本框：第 ${annotation.page} 页`}
       className={`pdf-markdown-text-box ${active ? "is-editing" : ""} ${dragging ? "is-dragging" : ""} ${opacity === 0 ? "is-transparent" : ""}`}
@@ -277,8 +280,12 @@ export function PdfMarkdownTextBox({
           <div className="pdf-text-box-source-measure">{`${draft || "输入文字"}\u200b`}</div>
         ) : <PdfAnnotationMarkdown emptyLabel="输入文字" value={draft} images={images} />}
       </div>
-      {active ? (
-        <textarea
+      {active ? (preference.mode === "live" ? <div className="pdf-text-box-live-editor" onPaste={(event) => {
+        const file = Array.from(event.clipboardData.files).find((item) => item.type.startsWith("image/"));
+        if (file) { event.preventDefault(); void insertImage(file); }
+      }} onKeyDown={(event) => { if (event.key === "Escape" || event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); finishEditing(); } }}>
+        <MarkdownEditor documentKey={annotation.id} label={`编辑第 ${annotation.page} 页 Markdown 文本框`} value={draft} onChange={(text) => setDraft(text.slice(0, 10000))} compact autoFocus previewProps={{ urlTransform: pdfAnnotationUrlTransform(images) }} />
+      </div> : <textarea
           ref={inputRef}
           aria-label={`编辑第 ${annotation.page} 页 Markdown 文本框`}
           autoFocus

@@ -36,6 +36,8 @@ export type SettingKey =
   | "view.font_family"
   | "view.reader_font_family"
   | "view.close_empty_panels"
+  | "view.markdown_mode"
+  | "view.markdown_autosave"
   | "view.theme"
   | "view.font_size"
   | "view.display_scale"
@@ -72,6 +74,8 @@ export type SettingsState = Partial<Record<GenerationPromptSettingKey, string>> 
   "view.font_family": string;
   "view.reader_font_family": string;
   "view.close_empty_panels"?: boolean;
+  "view.markdown_mode"?: "live" | "manual";
+  "view.markdown_autosave"?: boolean;
   "view.theme": AppearancePreference;
   "view.font_size": string;
   "view.display_scale": string;

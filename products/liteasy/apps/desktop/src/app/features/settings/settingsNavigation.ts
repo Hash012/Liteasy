@@ -24,7 +24,7 @@ type SettingsSection = {
 
 export const settingsSections = [
   { id: "appearance", category: "appearance", title: "外观与阅读", description: "调整主题、界面大小、阅读字体和 PDF 阅读底色。", keywords: "light dark theme 字体 字号 护眼 缩放 浅色 深色 暖黄 电子书 EPUB MOBI Markdown TXT",
-    keys: ["view.close_empty_panels", "view.theme", "view.font_family", "view.reader_font_family", "view.font_size", "view.display_scale", "view.pdf_background", "view.pdf_custom_background"] },
+    keys: ["view.markdown_mode", "view.markdown_autosave", "view.close_empty_panels", "view.theme", "view.font_family", "view.reader_font_family", "view.font_size", "view.display_scale", "view.pdf_background", "view.pdf_custom_background"] },
   { id: "selection-lookup", category: "appearance", title: "查词与选段翻译", description: "配置词典、短语翻译、查询语言和自动查询。", keywords: "dictionary translate 查词 单词 短语 翻译 释义 音标 发音 必应 有道 英英 LibreTranslate 自部署",
     keys: ["lookup.dictionary_service", "lookup.translation_service", "lookup.source_language", "lookup.target_language", "lookup.auto_query", "lookup.libretranslate_endpoint"] },
   { id: "models", category: "ai", title: "模型与连接", description: "连接自己的 API，验证模型后可在对话中切换。", keywords: "服务商 供应商 provider API key 密钥 OpenAI Claude Anthropic DeepSeek Ollama Gemini 云代理 AI 接入 协议 结构化输出 已验证模型",

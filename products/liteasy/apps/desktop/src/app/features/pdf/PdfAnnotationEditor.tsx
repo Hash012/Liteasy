@@ -1,3 +1,5 @@
+import { MarkdownEditor } from "../markdown/MarkdownEditor";
+import { useMarkdownEditing } from "../markdown/MarkdownEditingContext";
 import { Button, Textarea, Tooltip } from "@fluentui/react-components";
 import { CheckmarkRegular, DismissRegular } from "@fluentui/react-icons";
 import { PdfAnnotationMarkdown } from "./PdfAnnotationMarkdown";
@@ -16,19 +18,11 @@ export function PdfAnnotationEditor({
   onCancel(): void;
   inline?: boolean;
 }) {
+  const preference = useMarkdownEditing();
   return (
     <div className="pdf-annotation-note-editor">
-      <Textarea
-        aria-label={inline ? "页内批注内容" : "补充批注笔记"}
-        autoFocus={inline}
-        maxLength={10_000}
-        onChange={(_, data) => onChange(data.value)}
-        placeholder="添加注释，支持 Markdown…"
-        resize="vertical"
-        rows={4}
-        value={value}
-      />
-      {value.trim() ? (
+      <MarkdownEditor documentKey="annotation-note" label={inline ? "页内批注内容" : "补充批注笔记"} value={value} onChange={(text) => onChange(text.slice(0, 10000))} autoFocus={inline} />
+      {preference.mode === "manual" && value.trim() ? (
         <div
           aria-label={
             inline ? "页内批注 Markdown 实时预览" : "批注 Markdown 实时预览"

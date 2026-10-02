@@ -1,0 +1,24 @@
+.markdown-live-editor { display: flex; flex-direction: column; min-width: 0; min-height: 160px; overflow: hidden; border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; background: var(--colorNeutralBackground1); color: var(--colorNeutralForeground1); }
+.markdown-live-host { flex: 1 1 0; min-height: 0; overflow: hidden; }
+.markdown-live-editor .cm-editor { height: 100%; outline: none; }
+.markdown-live-editor .cm-scroller { font: inherit; font-family: var(--reader-font-family, inherit); font-size: var(--markdown-font-size, 16px); line-height: 1.7; overflow: auto; scrollbar-gutter: stable; }
+.markdown-live-editor .cm-content { padding: 16px 20px 40px; caret-color: var(--colorNeutralForeground1); }
+.markdown-live-editor .cm-line { padding: 0; }
+.markdown-live-editor .cm-cursor { border-left-color: var(--colorNeutralForeground1); }
+.markdown-live-editor .cm-selectionBackground, .markdown-live-editor .cm-content ::selection { background: var(--colorBrandBackground2) !important; }
+.markdown-live-preview { padding: 2px 0; overflow-wrap: anywhere; cursor: text; }
+.markdown-live-preview .markdown-content > :first-child { margin-top: 0; }
+.markdown-live-preview .markdown-content > :last-child { margin-bottom: 0; }
+.markdown-live-preview img { max-width: 100%; }
+.markdown-save-status { color: var(--colorNeutralForeground3); font-size: 12px; }
+.notes-editor .markdown-live-editor, .object-card-editor .markdown-live-editor { flex: 1; height: 100%; min-height: 200px; }
+.external-note-source.markdown-live-editor { min-height: 0; }
+.extension-markdown-editor .markdown-live-editor { height: 320px; }
+.pdf-annotation-note-editor .markdown-live-editor, .paper-reading-comment-editor .markdown-live-editor { height: 220px; }
+.object-tool-panel .markdown-live-editor { min-width: 200px; height: 260px; flex: 1; }
+.pdf-entry-review .markdown-live-editor { height: 220px; }
+
+.pdf-text-box-live-editor, .pdf-text-box-live-editor .markdown-live-editor { height: 100%; min-height: 0; border: 0; background: transparent; }
+.pdf-text-box-live-editor .cm-content { padding: 4px; }
+.pdf-text-box-live-editor .cm-scroller { font-size: var(--pdf-text-size, 12px); }
+.context-asset-note .markdown-live-editor { height: 260px; }

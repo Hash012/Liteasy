@@ -130,11 +130,11 @@ test("a contributed Markdown editor uses real revision writes and keeps a draft 
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "my draft" } });
   await repository.editNote(refOf(note), "external change");
   fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
-  await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("草稿仍保留"));
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("草稿仍保留"));
   view.unmount(); render(ui());
   await waitFor(() => expect(screen.getByRole("textbox")).toHaveValue("my draft"));
   fireEvent.click(screen.getByRole("button", { name: "读取笔记" }));
-  await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("源文已变化"));
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("源文已变化"));
   expect(screen.getByRole("button", { name: "保存修改" })).toBeDisabled();
   expect((await repository.resolveLatest(note.objectId)).content.payload).toHaveProperty("text", "external change");
 });

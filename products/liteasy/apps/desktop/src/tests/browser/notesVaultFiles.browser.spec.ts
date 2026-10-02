@@ -5,6 +5,7 @@ test("dropping a note into a connected Vault writes Markdown and protects subseq
   // Only the OS directory chooser is replaced. Handles, IndexedDB, Markdown
   // writes, reload, and competing file edits use Chromium's real filesystem.
   await page.addInitScript(() => {
+    localStorage.setItem("liteasy.view-settings.v1", JSON.stringify({ ...JSON.parse(localStorage.getItem("liteasy.view-settings.v1") ?? "{}"), "view.markdown_mode": "manual" }));
     Object.defineProperty(window, "showDirectoryPicker", { configurable: true,
       value: async () => (await navigator.storage.getDirectory()).getDirectoryHandle("Research Vault", { create: true }) });
   });

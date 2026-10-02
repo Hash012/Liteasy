@@ -1,3 +1,4 @@
+import { MarkdownEditor } from "../../markdown/MarkdownEditor";
 import {
   Background,
   BackgroundVariant,
@@ -107,16 +108,10 @@ function PdfWhiteboardNodeView({ data, selected }: NodeProps<WhiteboardFlowNode>
       </header>
       {item.kind === "markdown" ? (
         editing ? (
-          <textarea
-            aria-label="白板文字内容"
-            autoFocus
-            className="nodrag nowheel"
-            onBlur={() => setEditing(false)}
-            onChange={(event) => data.onChangeMarkdown(item.id, event.currentTarget.value)}
-            onKeyDown={(event) => event.stopPropagation()}
-            placeholder="输入想法、摘录或 Markdown…"
-            value={item.content.markdown}
-          />
+          <div className="nodrag nopan nowheel" onKeyDown={(event) => event.stopPropagation()} onBlur={(event) => { if (!event.relatedTarget || !event.currentTarget.contains(event.relatedTarget) && !(event.relatedTarget instanceof Element && event.relatedTarget.closest(".fui-PopoverSurface, .fui-MenuPopover, [role=dialog]"))) setEditing(false); }}>
+            <MarkdownEditor documentKey={item.id} label="白板文字内容" autoFocus value={item.content.markdown} onChange={(text) => data.onChangeMarkdown(item.id, text)} />
+            <button type="button" onClick={() => setEditing(false)}>完成编辑</button>
+          </div>
         ) : (
           <button
             aria-label="编辑白板文字"

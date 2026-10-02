@@ -1,3 +1,4 @@
+import { MarkdownEditor } from "../markdown/MarkdownEditor";
 import { useState } from "react";
 import { Button, Textarea, Tooltip } from "@fluentui/react-components";
 import { CheckmarkRegular, DismissRegular, EditRegular } from "@fluentui/react-icons";
@@ -42,8 +43,8 @@ export function PdfAnnotationReview({ annotation, state, onCancel, onSave }: {
     </header>
     {state?.error ? <p role="alert">{state.error}</p> : null}
     {editing ? <>
-      <Textarea aria-label="AI review 内容" value={editing.text} resize="vertical" rows={5} disabled={saving}
-        onChange={(_, data) => setEditing({ ...editing, text: data.value })} />
+      <MarkdownEditor documentKey={annotation.id} label="AI review 内容" value={editing.text} readOnly={saving}
+        onChange={(text) => setEditing({ ...editing, text })} />
       <div className="pdf-annotation-editor-actions">
         <Tooltip content="保存 AI review" relationship="description">
           <Button aria-label="保存 AI review" appearance="primary" size="small" icon={<CheckmarkRegular />}

@@ -1,3 +1,4 @@
+import { MarkdownEditor } from "../markdown/MarkdownEditor";
 import { GenerationPromptEditor } from "../ai-prompts/GenerationPromptEditor";
 import { SelectionLookupCard } from "../selection-lookup/SelectionLookupCard";
 import { selectionLookupContext } from "../selection-lookup/selectionLookupText";
@@ -320,7 +321,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
               <option value="yellow">黄色</option><option value="red">红色</option><option value="blue">蓝色</option><option value="green">绿色</option><option value="pink">粉色</option>
             </Select></Field> : null}
           </> : null}
-          <Field label="批注内容"><Textarea aria-label="阅读批注内容" rows={5} resize="vertical" value={note} disabled={busy} onChange={(_, data) => setNote(data.value)} /></Field>
+          <Field label="批注内容"><MarkdownEditor documentKey={draft.id ?? "new-reading-comment"} label="阅读批注内容" value={note} readOnly={busy} onChange={setNote} /></Field>
           <div className="paper-reading-comment-actions"><Button appearance="primary" disabled={busy || !session.ready || !draft.page || (!draft.id && !note.trim() && !draft.excerpt)} onClick={() => void save()}>保存批注</Button>
             <Button disabled={busy} onClick={() => { setDraft(undefined); setNote(""); setError(""); if (preferences.marginComments) setCommentsVisible(false); }}>取消</Button></div>
         </div> : null}

@@ -1,6 +1,7 @@
+import { useMarkdownEditing } from "../markdown/MarkdownEditingContext";
 import { useContext, useEffect, useMemo, useState } from "react";
 import { Button, Select } from "@fluentui/react-components";
-import { MarkdownSourceEditor } from "../markdown/MarkdownSourceEditor";
+import { MarkdownEditor } from "../markdown/MarkdownEditor";
 import { ReferenceSourceContext, ResourceReferencesContext } from "../resource-links/ResourceReferencesContext";
 import { liteasyPath } from "../resource-filesystem/liteasyPath";
 import { MarkdownContent } from "../markdown/MarkdownContent";
@@ -13,13 +14,15 @@ type Model = { session?: Session; drafts: Session[]; busy: boolean; error: strin
 export function PaperNoteEditor({ model }: { model: Model }) {
   const references = useContext(ResourceReferencesContext);
   const font = useMarkdownFontSize();
+  const preference = useMarkdownEditing();
+  const live = preference.mode === "live";
   const [editing, setEditing] = useState(true);
   const [part, setPart] = useState(0);
   const [confirm, setConfirm] = useState(false);
   const note = model.session;
   useEffect(() => { setPart(0); setConfirm(false); }, [note?.object.objectId]);
-  const preview = useMemo(() => { try { return { chapters: !editing && note ? textChapters(note.draft, note.object.title, true) : [], error: "" }; }
-    catch (failure) { return { chapters: [], error: String(failure) }; } }, [editing, note?.draft]);
+  const preview = useMemo(() => { try { return { chapters: !live && !editing && note ? textChapters(note.draft, note.object.title, true) : [], error: "" }; }
+    catch (failure) { return { chapters: [], error: String(failure) }; } }, [editing, note?.draft, live]);
   if (!note) return <p>从文献库打开或新建论文笔记。</p>;
   const dirty = note.draft !== note.saved;
   const source = references ? liteasyPath(references.service.scope, { kind: "object", ref: { objectId: note.object.objectId, revision: "latest" }, followLatest: true }) : undefined;
@@ -27,13 +30,14 @@ export function PaperNoteEditor({ model }: { model: Model }) {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") { event.preventDefault(); void model.save(); }
   }}><header><strong>{note.object.title}{dirty ? " · 未保存" : ""}</strong>
     <MarkdownFontControl {...font} />
-    <Button onClick={() => setEditing(!editing)}>{editing ? "阅读" : "编辑"}</Button>
+    {!live && <Button onClick={() => setEditing(!editing)}>{editing ? "阅读" : "编辑"}</Button>}
     <Button appearance="primary" disabled={!dirty || model.busy} onClick={() => void model.save()}>保存</Button>
     <Button disabled={model.busy} onClick={() => dirty ? setConfirm(true) : void model.reload()}>重新载入</Button></header>
+    {live ? <span role="status" className="markdown-save-status">{model.busy ? "正在保存…" : model.error ? "自动保存已暂停 · 草稿保留" : dirty ? preference.autosave ? "等待自动保存…" : "未保存 · Ctrl+S 保存" : "已保存"}</span> : null}
     {model.drafts.length ? <nav aria-label="未保存的论文笔记">{model.drafts.map((draft) => <Button key={draft.object.objectId} onClick={() => model.select(draft.object.objectId)}>{draft.object.title}</Button>)}</nav> : null}
     {confirm ? <div role="group" aria-label="放弃草稿确认"><p>重新载入会放弃此笔记未保存的修改。</p><Button onClick={() => { setConfirm(false); void model.reload(); }}>放弃修改并载入</Button><Button onClick={() => setConfirm(false)}>保留草稿</Button></div> : null}
     {model.error ? <p role="alert">{model.error}</p> : null}
-    {editing ? <MarkdownSourceEditor documentKey={note.object.objectId} className="external-note-source" label="论文笔记 Markdown 源码" value={note.draft} onChange={model.setDraft} /> : <>
+    {live || editing ? <MarkdownEditor documentKey={note.object.objectId} className="external-note-source" label="论文笔记 Markdown 源码" value={note.draft} onChange={model.setDraft} /> : <>
       {preview.chapters.length > 1 ? <Select aria-label="笔记章节" value={part} onChange={(_, data) => setPart(Number(data.value))}>{preview.chapters.map((chapter, index) => <option key={chapter.id} value={index}>{chapter.title}</option>)}</Select> : null}
       <article className="external-note-preview">{preview.error ? <p role="alert">{preview.error}</p> : <MarkdownContent value={preview.chapters[Math.min(part, preview.chapters.length - 1)]?.content ?? ""} />}</article>
     </>}

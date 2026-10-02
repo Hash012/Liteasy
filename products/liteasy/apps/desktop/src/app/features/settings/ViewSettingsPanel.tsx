@@ -54,6 +54,17 @@ export function ViewSettingsPanel({ onUpdateSetting, settings }: ViewSettingsPan
         <SystemFontPicker label="界面字体" value={fontFamily} options={viewFontOptions} onChange={(value) => update("view.font_family", value)} />
       </Field>
 
+      <Field label="Markdown 编辑方式" hint="即时预览中，点击正文直接编辑，其他段落保持阅读排版。">
+        <RadioGroup aria-label="Markdown 编辑方式" value={settings?.["view.markdown_mode"] ?? "live"} onChange={(_, data) => update("view.markdown_mode", data.value)}>
+          <Radio value="live" label="即时预览 · 边读边写" />
+          <Radio value="manual" label="手动切换 · 编辑、保存、阅读" />
+        </RadioGroup>
+      </Field>
+      <Field hint="停止输入约 1.5 秒后保存已有文件。发现版本冲突时暂停；新建笔记仍需首次保存。">
+        <Switch label="Markdown 自动保存" checked={settings?.["view.markdown_autosave"] !== false} disabled={settings?.["view.markdown_mode"] === "manual"}
+          onChange={(_, data) => update("view.markdown_autosave", data.checked)} />
+      </Field>
+
       <Field label="非 PDF 阅读字体" hint="用于论文阅读模式、电子书和 Markdown/TXT。文档内可单独设置字体，选择“跟随阅读设置”可恢复统一字体。">
         <SystemFontPicker label="非 PDF 阅读字体" value={normalizeReadingFontFamily(settings?.["view.reader_font_family"])}
           options={readingFontOptions} onChange={(value) => update("view.reader_font_family", value)} />

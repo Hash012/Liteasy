@@ -60,3 +60,15 @@ test("auto-closes empty panels by default, persists opting out, and rejects inva
   localStorage.setItem("liteasy.view-settings.v1", JSON.stringify({ "view.close_empty_panels": "false" }));
   expect(createSettingsStore().getState()["view.close_empty_panels"]).toBe(true);
 });
+
+test("Markdown live preview is the default and manual mode/autosave preferences persist with validation", () => {
+  const store = createSettingsStore();
+  expect(store.getState()["view.markdown_mode"]).toBe("live");
+  expect(store.getState()["view.markdown_autosave"]).toBe(true);
+  store.apply({ intent: "update_setting", target: "view.markdown_mode", value: "manual" });
+  store.apply({ intent: "update_setting", target: "view.markdown_autosave", value: false });
+  expect(createSettingsStore().getState()).toMatchObject({ "view.markdown_mode": "manual", "view.markdown_autosave": false });
+  expect(() => store.apply({ intent: "update_setting", target: "view.markdown_mode", value: "unknown" })).toThrow();
+  localStorage.setItem("liteasy.view-settings.v1", '{"view.markdown_mode":"future-mode"}');
+  expect(createSettingsStore().getState()["view.markdown_mode"]).toBe("live");
+});

@@ -250,3 +250,6 @@
 .notes-child-folders { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
 .notes-child-folders > button { justify-content: flex-start; text-align: left; }
 .notes-item-detail { border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; background: var(--colorNeutralBackground2); max-height: 35vh; overflow: auto; }
+
+.notes-inline-editor .markdown-live-editor { height: 340px; }
+.notes-editor > .markdown-live-editor { height: 300px; justify-content: initial; gap: 0; }

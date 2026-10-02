@@ -1,3 +1,4 @@
+import { MarkdownEditor } from "../markdown/MarkdownEditor";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ResourceReferencesContext } from "../resource-links/ResourceReferencesContext";
 import { ReferenceContentPicker } from "../resource-links/ReferenceContentPicker";
@@ -284,9 +285,8 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
                 {categoryOf(preview) === "项目" && preview.projectId ? <Button icon={<FolderRegular />}
                   onClick={() => { setProject(preview.projectId!); setCategory(""); setQuery(""); setOnlySelected(false); }}>浏览此项目资产</Button> : null}
                 {!onChooseReference && categoryOf(preview) === "项目" && preview.createNote ? <div className="context-asset-note">
-                  <label htmlFor="context-project-note">新建项目笔记</label>
-                  <Textarea id="context-project-note" value={noteText} resize="vertical" rows={5} disabled={busy}
-                    placeholder="记录想法、问题或整理后的内容" onChange={(_, data) => setNoteText(data.value)} />
+                  <span>新建项目笔记</span>
+                  <MarkdownEditor documentKey={`project-note:${preview.projectId}`} label="新建项目笔记" value={noteText} readOnly={busy} onChange={setNoteText} />
                   <Button icon={<AddRegular />} disabled={busy || !noteText.trim()}
                     onClick={() => { void createAsset(preview, "note"); }}>保存并加入上下文</Button>
                 </div> : null}

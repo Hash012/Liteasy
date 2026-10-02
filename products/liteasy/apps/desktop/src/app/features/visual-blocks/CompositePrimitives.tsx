@@ -1,3 +1,7 @@
+import { MarkdownEditor } from "../markdown/MarkdownEditor";
+import { useMarkdownEditing } from "../markdown/MarkdownEditingContext";
+import { useMarkdownAutosave } from "../markdown/useMarkdownAutosave";
+import { ReferenceSourceContext } from "../resource-links/ResourceReferencesContext";
 import { useContext, useEffect, useState, useRef, type ReactNode } from "react";
 import { Button, Dialog, DialogSurface, DialogBody, DialogTitle, DialogContent, Input, Tab, TabList, Textarea } from "@fluentui/react-components";
 import { VisualAssetContext } from "./AssetImage";
@@ -37,9 +41,44 @@ function rememberDraft(path: string, text: string, revision?: string) {
   if (revision) editorDrafts.save(path, { text, revision });
 }
 function ResourceEditor({ path }: { path: string }) {
-  const assets = useContext(VisualAssetContext), [text, setText] = useState(""), [revision, setRevision] = useState<string>(), [message, setMessage] = useState("");
-  const [writable, setWritable] = useState(false), [busy, setBusy] = useState(false);
-  const generation = useRef(0);
-  useEffect(() => { generation.current++; const draft = editorDrafts.get(path); setText(draft?.text ?? ""); setRevision(draft?.revision); setWritable(false); setMessage(draft ? "未保存草稿已恢复；读取源文后检查版本再保存。" : ""); setBusy(false); return () => { generation.current++; }; }, [assets, path]);
-  return <section><div className="extension-toolbar"><Button disabled={!assets || busy} onClick={() => { setBusy(true); const current = generation.current; void assets!.read(path, { maxCharacters: 80000 }).then((result) => { if (current !== generation.current) return; const draft = editorDrafts.get(path); setText(draft?.text ?? result.text); setRevision(draft?.revision ?? result.asset.revision); const conflict = draft && draft.revision !== result.asset.revision; setWritable(!conflict && !result.truncated && result.asset.capabilities.includes("write")); setMessage(conflict ? "源文已变化，草稿已保留，请在原编辑器合并后重新载入。" : result.truncated ? "这里只读取了部分内容，请在原编辑器编辑。" : "已读取"); }).catch((e) => { if (current === generation.current) setMessage(String(e)); }).finally(() => { if (current === generation.current) setBusy(false); }); }}>读取笔记</Button><Button disabled={!assets || !revision || !writable || busy} onClick={() => { setBusy(true); const current = generation.current; void assets!.write(path, { text, expectedRevision: revision!, mode: "replace" }).then((result) => { editorDrafts.remove(path); if (current !== generation.current) return; setRevision(result.asset.revision); setMessage(`已保存：+${result.addedLines} −${result.removedLines} 行`); }).catch((e) => { if (current === generation.current) setMessage(`${String(e)}；编辑草稿仍保留在此处。`); }).finally(() => { if (current === generation.current) setBusy(false); }); }}>保存修改</Button></div><Textarea aria-label="扩展中的 Markdown 笔记" value={text} readOnly={!writable || busy} resize="vertical" onChange={(_, data) => { setText(data.value); try { rememberDraft(path, data.value, revision); } catch (error) { setMessage(String(error)); } }} /><details><summary>预览</summary><RichTextBlock text={text} /></details><p role="status">{message}</p></section>;
+  const assets = useContext(VisualAssetContext), preference = useMarkdownEditing();
+  const [text, setText] = useState(""), [saved, setSaved] = useState(""), [revision, setRevision] = useState<string>(), [message, setMessage] = useState("");
+  const [writable, setWritable] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const generation = useRef(0), inFlight = useRef(false), latestText = useRef(text); latestText.current = text;
+  useEffect(() => { generation.current++; const draft = editorDrafts.get(path); setText(draft?.text ?? ""); setSaved(""); setRevision(draft?.revision); setWritable(false); setError(""); setMessage(draft ? "未保存草稿已恢复；读取源文后检查版本再保存。" : ""); setBusy(false); return () => { generation.current++; }; }, [assets, path]);
+  async function read() {
+    if (!assets || inFlight.current) return;
+    const current = generation.current; inFlight.current = true; setBusy(true);
+    try {
+      const result = await assets.read(path, { maxCharacters: 80000 });
+      if (current !== generation.current) return;
+      const draft = editorDrafts.get(path), conflict = draft && draft.revision !== result.asset.revision;
+      setText(draft?.text ?? result.text); setSaved(result.text); setRevision(draft?.revision ?? result.asset.revision);
+      setWritable(!conflict && !result.truncated && result.asset.capabilities.includes("write"));
+      setError(conflict ? "源文已变化，草稿已保留，请在原编辑器合并后重新载入。" : "");
+      setMessage(result.truncated ? "这里只读取了部分内容，请在原编辑器编辑。" : "已读取");
+    } catch (e) { if (current === generation.current) setError(String(e)); }
+    finally { inFlight.current = false; if (current === generation.current) setBusy(false); }
+  }
+  async function save() {
+    if (!assets || !revision || !writable || inFlight.current) return;
+    const current = generation.current, written = text;
+    inFlight.current = true; setBusy(true); setError("");
+    try {
+      const result = await assets.write(path, { text: written, expectedRevision: revision, mode: "replace" });
+      if (current !== generation.current) return;
+      setRevision(result.asset.revision); setSaved(written);
+      if (latestText.current === written) editorDrafts.remove(path);
+      else rememberDraft(path, latestText.current, result.asset.revision);
+      setMessage(`已保存：+${result.addedLines} −${result.removedLines} 行`);
+    } catch (e) { if (current === generation.current) setError(`${String(e)}；编辑草稿仍保留在此处。`); }
+    finally { inFlight.current = false; if (current === generation.current) setBusy(false); }
+  }
+  useMarkdownAutosave({ identity: path, value: text, saved, enabled: preference.mode === "live" && preference.autosave && writable, busy, blocked: Boolean(error), save });
+  return <ReferenceSourceContext.Provider value={path}><section className="extension-markdown-editor">
+    <div className="extension-toolbar"><Button disabled={!assets || busy} onClick={() => void read()}>读取笔记</Button><Button disabled={!assets || !revision || !writable || busy || text === saved} onClick={() => void save()}>保存修改</Button></div>
+    <MarkdownEditor documentKey={path} label="扩展中的 Markdown 笔记" value={text} readOnly={!writable} onChange={(value) => { setText(value); try { rememberDraft(path, value, revision); } catch (e) { setError(String(e)); } }} />
+    {preference.mode === "manual" ? <details><summary>预览</summary><RichTextBlock text={text} /></details> : null}
+    <p role="status">{busy ? "正在保存或读取…" : error ? preference.mode === "live" ? "自动保存已暂停 · 草稿保留" : "未保存 · 草稿保留" : text !== saved && writable && preference.autosave && preference.mode === "live" ? "等待自动保存…" : message}</p>{error ? <p role="alert">{error}</p> : null}
+  </section></ReferenceSourceContext.Provider>;
 }

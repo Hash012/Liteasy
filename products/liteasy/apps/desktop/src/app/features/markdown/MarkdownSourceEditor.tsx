@@ -9,8 +9,8 @@ import { activeWiki } from "../resource-links/referenceText";
 import { textareaCaret } from "./textareaCaret";
 import "./markdownSourceEditor.css";
 
-export function MarkdownSourceEditor({ value, onChange, documentKey, className = "", label = "Markdown 源码" }: {
-  value: string; onChange(value: string): void; documentKey: string; className?: string; label?: string;
+export function MarkdownSourceEditor({ value, onChange, documentKey, className = "", label = "Markdown 源码", readOnly = false, autoFocus = false }: {
+  value: string; onChange(value: string): void; documentKey: string; className?: string; label?: string; readOnly?: boolean; autoFocus?: boolean;
 }) {
   const references = useContext(ResourceReferencesContext);
   const [editingLink, setEditingLink] = useState(false);
@@ -52,19 +52,19 @@ export function MarkdownSourceEditor({ value, onChange, documentKey, className =
     refresh();
   };
   const execute = (command: MarkdownCommand) => {
-    if (composing.current) return;
+    if (composing.current || readOnly) return;
     const edit = formatMarkdown(value, selection.current, command);
     history.current.record(value, edit.value, selection.current, edit.selection);
     apply(edit);
   };
   const travel = (undo: boolean) => {
-    if (composing.current) return;
+    if (composing.current || readOnly) return;
     const edit = undo ? history.current.undo(value) : history.current.redo(value);
     if (edit) apply(edit); else refresh();
   };
   const wiki = editingLink ? activeWiki(value, selection.current.start) : undefined;
   const editWiki = (raw: string, finish = false, beforeLastBracket = false) => {
-    if (!wiki) return;
+    if (!wiki || readOnly) return;
     const replacement = `[[${raw}]]`;
     const next = value.slice(0, wiki.start) + replacement + value.slice(wiki.end);
     const caret = wiki.start + replacement.length - (finish ? beforeLastBracket ? 1 : 0 : 2);
@@ -75,6 +75,7 @@ export function MarkdownSourceEditor({ value, onChange, documentKey, className =
     apply({ value: next, selection: after }, finish);
   };
   const insertReference = () => {
+    if (readOnly) return;
     rememberSelection();
     const start = selection.current.start, end = selection.current.end;
     const next = value.slice(0, start) + "[[]]" + value.slice(end);
@@ -86,7 +87,7 @@ export function MarkdownSourceEditor({ value, onChange, documentKey, className =
     <MarkdownEditingToolbar execute={execute} undo={() => travel(true)} redo={() => travel(false)} canUndo={history.current.canUndo} canRedo={history.current.canRedo} insertReference={references ? insertReference : undefined} />
     {wiki && references ? <WikiLinkEditor key={`${documentKey}:${wiki.start}`} raw={value.slice(wiki.start + 2, wiki.end - 2)} target={{ getBoundingClientRect: () => textarea.current ? textareaCaret(textarea.current, wiki.start) : new DOMRect() }}
       onChange={(raw) => editWiki(raw)} onFinish={(raw, beforeLast) => editWiki(raw, true, beforeLast)} onHistory={(undo) => { setEditingLink(false); travel(undo); }} /> : null}
-    <Textarea ref={textarea} className="markdown-source-input" aria-label={label} value={value} resize="none" spellCheck={false}
+    <Textarea ref={textarea} autoFocus={autoFocus} className="markdown-source-input" aria-label={label} value={value} readOnly={readOnly} resize="none" spellCheck={false}
       onSelect={() => { rememberSelection(); }} onBeforeInput={rememberSelection}
       onDoubleClick={() => { rememberSelection(); if (activeWiki(value, selection.current.start)) setEditingLink(true); }}
       onCompositionStart={() => { composing.current = true; compositionStart.current = { value, selection: { ...selection.current } }; }}

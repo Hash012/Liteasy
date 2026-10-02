@@ -1,3 +1,5 @@
+import { MarkdownEditor } from "../markdown/MarkdownEditor";
+import { useMarkdownEditing } from "../markdown/MarkdownEditingContext";
 import { liteasyPath } from "../resource-filesystem/liteasyPath";
 import { DerivedBlockContent } from "../visual-blocks/DerivedBlockContent";
 import { projectBlockText, type createBlockRegistry } from "../visual-blocks/blockRegistry";
@@ -159,6 +161,8 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
   const [adjusting, setAdjusting] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [draft, setDraft] = useState("");
+  const editBase = useRef<{ placement: Placement; revision: string; text: string }>();
+  const markdownPreference = useMarkdownEditing();
   const [saving, setSaving] = useState(false);
   const [editorError, setEditorError] = useState("");
   const error = (e: unknown) =>
@@ -304,14 +308,17 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
     if (!object || editing) return;
     setMoving(false);
     setAdjusting(false);
-    setDraft(structured ? JSON.stringify(structured.data, null, 2) : objectText(object));
+    const text = structured ? JSON.stringify(structured.data, null, 2) : objectText(object);
+    editBase.current = { placement: p, revision: object.revision, text };
+    setDraft(text);
     setEditorError("");
     setEditing(true);
   }
   async function save() {
     if (saveInFlight.current) return;
-    const initial = structured ? JSON.stringify(structured.data, null, 2) : object ? objectText(object) : "";
+    const initial = editBase.current?.text ?? (structured ? JSON.stringify(structured.data, null, 2) : object ? objectText(object) : "");
     if (draft === initial) { setEditing(false); return; }
+    if (editBase.current && object?.revision !== editBase.current.revision) { setEditorError("卡片内容已被其他操作更新，草稿已保留。请复制草稿后重新打开最新版本合并。"); return; }
     if (!draft.trim()) { setEditorError("正文不能为空；可使用移除卡片删除内容。"); return; }
     saveInFlight.current = true;
     setSaving(true);
@@ -319,8 +326,8 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
     try {
       if (structured && blockRegistry) {
         const data = blockRegistry.instantiate(structured.type.id, structured.type.version, JSON.parse(draft));
-        await actions.current.editPlacement(p, projectBlockText(data), { ...structured, data });
-      } else await actions.current.editPlacement(p, draft);
+        await actions.current.editPlacement(editBase.current?.placement ?? p, projectBlockText(data), { ...structured, data });
+      } else await actions.current.editPlacement(editBase.current?.placement ?? p, draft);
       setEditing(false);
       setAdjusting(false);
     } catch (e) {
@@ -508,6 +515,7 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
                         保存为笔记，并保留摘录来源
                       </span>
                     ) : null}
+                    {structured ? (
                     <Textarea
                       onBlur={(event) => {
                         const next = event.relatedTarget;
@@ -531,6 +539,10 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
                         }
                       }}
                     />
+) : <div onKeyDown={(event) => { event.stopPropagation(); if (event.key === "Escape" && !saving) { event.preventDefault(); if (object.kind === "content.note") void save(); else setEditing(false); } if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void save(); } }}
+                      onBlur={(event) => { if ((markdownPreference.mode === "manual" || markdownPreference.autosave) && object.kind === "content.note" && event.relatedTarget instanceof Node && !cardRef.current?.contains(event.relatedTarget) && !(event.relatedTarget instanceof Element && event.relatedTarget.closest("[role=dialog], [role=menu], .fui-PopoverSurface"))) void save(); }}>
+                      <MarkdownEditor documentKey={object.objectId} label="编辑卡片正文" value={draft} onChange={setDraft} readOnly={saving} autoFocus />
+                    </div>}
                     {editorError ? (
                       <span role="alert">{editorError}</span>
                     ) : null}

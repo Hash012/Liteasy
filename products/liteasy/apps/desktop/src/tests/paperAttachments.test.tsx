@@ -72,3 +72,27 @@ test("opening an Agent write receipt refreshes a clean paper note and preserves 
   expect(result.current.session!.draft).toBe("我尚未保存的补充");
   await expect(navigate(path.replace(`scope=${scope}`, "scope=another-user"))).rejects.toThrow("账户");
 });
+
+test("autosave writes a new revision while preserving edits made during the write", async () => {
+  const scope = crypto.randomUUID(), storage = createObjectStorage(scope, () => scope);
+  const repository = createObjectRepository(storage, scope), projects = createPaperProjectRepository(storage, scope);
+  const { result, unmount } = renderHook(() => usePaperAttachmentController({ repository, projects, autosave: true, openEditor: vi.fn(), openBoard: vi.fn() }));
+  await act(() => result.current.create({ id: "p", title: "Paper" }, "note", "Auto"));
+  const originalWrite = repository.editNote;
+  let release!: () => void;
+  const blocked = new Promise<void>((resolve) => { release = resolve; });
+  const write = vi.spyOn(repository, "editNote").mockImplementationOnce(async (...args) => { await blocked; return originalWrite(...args); });
+  act(() => result.current.setDraft("first edit"));
+  await waitFor(() => expect(write).toHaveBeenCalledTimes(1), { timeout: 2500 });
+  act(() => result.current.setDraft("second edit"));
+  await act(async () => { release(); });
+  await waitFor(() => expect(result.current.session?.saved).toBe("first edit"));
+  expect(result.current.session?.draft).toBe("second edit");
+  await waitFor(() => expect(result.current.session?.saved).toBe("second edit"), { timeout: 2500 });
+  const source = result.current.session!.object;
+  act(() => result.current.setDraft("local conflict"));
+  await act(() => repository.editNote(refOf(source), "AI changed the note"));
+  await waitFor(() => expect(result.current.error).toContain("草稿仍保留"), { timeout: 2500 });
+  expect(objectText(await repository.resolveLatest(source.objectId))).toBe("AI changed the note");
+  unmount();
+}, 12000);

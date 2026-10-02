@@ -1,3 +1,4 @@
+import { useMarkdownAutosave } from "../features/markdown/useMarkdownAutosave";
 import { useEffect, useRef, useState } from "react";
 import { refOf, type ObjectEnvelope } from "../features/objects/object.types";
 import type { ObjectRepository } from "../features/objects/objectRepository";
@@ -8,12 +9,14 @@ import { subscribeObjectStorage } from "../features/objects/objectStorage";
 
 type NoteSession = { object: ObjectEnvelope; draft: string; saved: string; projectId: string; assetId: string };
 export function usePaperAttachmentController(input: { repository: ObjectRepository; projects: PaperProjectRepository;
-  openEditor(): void; openBoard(object: ObjectEnvelope): Promise<void> }) {
+  autosave?: boolean; openEditor(): void; openBoard(object: ObjectEnvelope): Promise<void> }) {
   const latest = useRef(input); latest.current = input;
   const [sessions, setSessions] = useState<Record<string, NoteSession>>({});
   const [selected, setSelected] = useState("");
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusyState] = useState(false);
+  const busyRef = useRef(false);
+  const setBusy = (value: boolean) => { busyRef.current = value; setBusyState(value); };
   const scope = input.repository.scopeId;
   const request = useRef(0);
   useEffect(() => { request.current += 1; setSessions({}); setSelected(""); setError(""); setBusy(false); }, [scope]);
@@ -65,25 +68,34 @@ export function usePaperAttachmentController(input: { repository: ObjectReposito
   }
   const session = sessions[selected];
   async function save() {
-    if (!session || busy) return;
+    if (!session || busyRef.current) return;
     setBusy(true); setError("");
     try {
       const note = await input.repository.editNote(refOf(session.object), session.draft);
+      if (active()) setSessions((current) => current[note.objectId] ? ({ ...current, [note.objectId]: { ...current[note.objectId], object: note, saved: session.draft } }) : current);
       await input.projects.addAsset(session.projectId, { assetId: session.assetId, kind: "note", role: "derived", title: note.title, ref: refOf(note) });
-      if (active()) setSessions((current) => ({ ...current, [note.objectId]: { ...current[note.objectId], object: note, saved: session.draft } }));
     } catch (failure) { if (active()) setError(`${String(failure)}。草稿仍保留，请复制后再重新载入。`); }
     finally { if (active()) setBusy(false); }
   }
   async function reload() {
-    if (!session || busy) return;
+    if (!session || busyRef.current) return;
     setBusy(true);
     try {
       const object = await input.repository.resolveLatest(session.object.objectId);
-      if (active() && object.kind === "content.note") setSessions((current) => ({ ...current, [object.objectId]: { ...session, object, draft: object.content.payload.text, saved: object.content.payload.text } }));
+      if (active() && object.kind === "content.note") {
+        if (sessionsRef.current[object.objectId]?.draft !== session.draft) throw new Error("载入期间草稿已改变，请再次载入。");
+        setSessions((current) => ({ ...current, [object.objectId]: { ...session, object, draft: object.content.payload.text, saved: object.content.payload.text } }));
+      }
       if (active()) setError("");
     } catch (failure) { if (active()) setError(String(failure)); }
     finally { if (active()) setBusy(false); }
   }
+  useMarkdownAutosave({ identity: session ? `${scope}:${session.object.objectId}` : undefined,
+    value: session?.draft, saved: session?.saved, enabled: Boolean(input.autosave), busy, blocked: Boolean(error), save });
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => { if (Object.values(sessionsRef.current).some((note) => note.draft !== note.saved)) { event.preventDefault(); event.returnValue = ""; } };
+    window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn);
+  }, []);
   return { open, create, session, busy, error, save, reload, select: setSelected,
     drafts: Object.values(sessions).filter((item) => item.draft !== item.saved),
     setDraft: (draft: string) => setSessions((current) => ({ ...current, [selected]: { ...current[selected], draft } })),

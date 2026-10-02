@@ -633,3 +633,17 @@ test("unchanged editing is read-only; Escape and clicking outside save changed n
   fireEvent.blur(input, { relatedTarget: document.body });
   await waitFor(() => expect(f.model.editPlacement).toHaveBeenCalledExactlyOnceWith(f.placement, "Changed"));
 });
+
+test("a card refresh cannot replace the base revision of an active Markdown draft", async () => {
+  const f = await fixture(), edit = vi.fn();
+  const props = { p: f.placement, object: f.note, selected: false, setSelected: vi.fn(), setDetails: vi.fn(), actions: { current: { ...f.model, editPlacement: edit } } };
+  const { rerender } = render(<ObjectPlacementCard {...props} />);
+  fireEvent.doubleClick(screen.getByRole("button", { name: "编辑笔记正文" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "编辑卡片正文" }), { target: { value: "my unsaved text" } });
+  const updated = await f.repository.editNote(refOf(f.note), "external update");
+  rerender(<ObjectPlacementCard {...props} object={updated} p={{ ...f.placement, ref: refOf(updated), revision: "changed-placement" }} />);
+  fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("草稿已保留");
+  expect(screen.getByRole("textbox", { name: "编辑卡片正文" })).toHaveValue("my unsaved text");
+  expect(edit).not.toHaveBeenCalled();
+});

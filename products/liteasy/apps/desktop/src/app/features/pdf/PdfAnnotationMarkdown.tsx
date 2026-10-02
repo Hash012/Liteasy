@@ -17,14 +17,17 @@ export function PdfAnnotationMarkdown({
       className={className}
       emptyLabel={emptyLabel}
       value={value}
-      urlTransform={(url, key, node) => {
-        if (key === "src" && url.startsWith("attachment:")) {
-          const id = url.slice("attachment:".length);
-          const image = images?.[id];
-          return image && isPdfTextBoxImages({ [id]: image }) ? image : "";
-        }
-        return markdownUrlTransform(url, key, node);
-      }}
+      urlTransform={pdfAnnotationUrlTransform(images)}
     />
   );
+}
+
+export function pdfAnnotationUrlTransform(images?: PdfTextBoxImages): typeof markdownUrlTransform {
+  return (url, key, node) => {
+    if (key === "src" && url.startsWith("attachment:")) {
+      const id = url.slice("attachment:".length), image = images?.[id];
+      return image && isPdfTextBoxImages({ [id]: image }) ? image : "";
+    }
+    return markdownUrlTransform(url, key, node);
+  };
 }

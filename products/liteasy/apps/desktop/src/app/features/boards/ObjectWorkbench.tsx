@@ -1,3 +1,4 @@
+import { MarkdownEditor } from "../markdown/MarkdownEditor";
 import { GenerationPromptEditor } from "../ai-prompts/GenerationPromptEditor";
 import { ExtensionActions } from "../extensions/ExtensionActions";
 import { liteasyPath } from "../resource-filesystem/liteasyPath";
@@ -831,12 +832,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
         <div className="object-tool-panel" role="region" aria-label="添加笔记">
           {panelHeader}
           <div className="object-toolbar">
-            <Textarea
-              aria-label="笔记内容"
-              value={note}
-              onChange={(_, data) => setNote(data.value)}
-              placeholder="写一条笔记"
-            />
+            <MarkdownEditor documentKey={libraryEditing?.objectId ?? "new-board-note"} label="笔记内容" value={note} onChange={setNote} />
             <Button
               disabled={!note.trim()}
               onClick={() =>

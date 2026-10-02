@@ -1,3 +1,4 @@
+import { MarkdownEditingContext } from "../features/markdown/MarkdownEditingContext";
 import { BibliographicMetadataEditor } from "../features/library/BibliographicMetadataEditor";
 import { useResourceLinksController } from "../controllers/useResourceLinksController";
 import { ResourceReferencesContext } from "../features/resource-links/ResourceReferencesContext";
@@ -1168,7 +1169,7 @@ export function AppShell({
     "page-history": () => workspaceShell.pageSwitcher.show("history"),
     "active-pages": () => workspaceShell.pageSwitcher.show("active")
   });
-  const externalNote = useExternalNoteController({
+  const externalNote = useExternalNoteController({ autosave: settingsState["view.markdown_mode"] !== "manual" && settingsState["view.markdown_autosave"] !== false,
     scopeId: objectWorkbench.repository.scopeId,
     visible: workbenchNavigation.isVisible("note-file-reader"),
     onOpen: () => { workbenchNavigation.open("note-file-reader"); workspaceShell.focusRegion(dock.findItemRegion("note-file-reader") ?? "main"); },
@@ -1194,7 +1195,7 @@ export function AppShell({
     scopeId: objectWorkbench.repository.scopeId, papers: workspaceState.papers, artifacts: artifactCatalog,
     extractionVersion: projectExtractionVersion, getResources: getPaperMineruResources,
   });
-  const paperAttachments = usePaperAttachmentController({ repository: objectWorkbench.repository, projects: paperProjects.repository,
+  const paperAttachments = usePaperAttachmentController({ autosave: settingsState["view.markdown_mode"] !== "manual" && settingsState["view.markdown_autosave"] !== false, repository: objectWorkbench.repository, projects: paperProjects.repository,
     openEditor: () => { setLibraryExpanded(false); workbenchNavigation.open("paper-note"); },
     openBoard: async (object) => { await objectWorkbench.selectBoard(object); setLibraryExpanded(false); objectWorkbench.setVisible(true); workbenchNavigation.open("board"); },
   });
@@ -2611,6 +2612,7 @@ export function AppShell({
     <ExtensionWorkbenchContext.Provider value={extensionWorkbench}>
     <VisualAssetContext.Provider value={objectWorkbench.agentAssets}>
     <ResourceReferencesContext.Provider value={resourceLinks}>
+    <MarkdownEditingContext.Provider value={{ mode: settingsState["view.markdown_mode"] ?? "live", autosave: settingsState["view.markdown_autosave"] !== false }}>
     <WorkflowInvocation model={extensionWorkflows} />
     <div ref={immersive.root} className={appFrameClassName} data-theme-scope={appFrameScope} style={appFrameStyle}
       data-reading-focus={immersive.mode} data-focus-edge={immersive.edge} onClickCapture={immersive.onClickCapture}>
@@ -2791,6 +2793,7 @@ export function AppShell({
           renderLocation: (entry) => readingLibrary.entries.some((item) => item.id === entry.id) ? <ResourceLocationButton target={readingLibrary.target(entry)} /> : null }} />
     </div>
     {createPortal(renderAssistantSurface(dock.findItemRegion("assistant") ?? "right"), assistantSurfaceHost)}
+    </MarkdownEditingContext.Provider>
     </ResourceReferencesContext.Provider>
     </VisualAssetContext.Provider>
     </ExtensionWorkbenchContext.Provider>

@@ -4,6 +4,7 @@ test("wiki authoring shares the AI picker, persists source syntax, previews frag
   test.setTimeout(90000);
   await page.setViewportSize({ width: 1500, height: 1000 });
   await page.addInitScript(() => {
+    localStorage.setItem("liteasy.view-settings.v1", JSON.stringify({ ...JSON.parse(localStorage.getItem("liteasy.view-settings.v1") ?? "{}"), "view.markdown_mode": "manual" }));
     localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true");
     Object.defineProperty(window, "showDirectoryPicker", { configurable: true, value: async () => {
       const directory = await (await navigator.storage.getDirectory()).getDirectoryHandle("Reference Vault", { create: true });

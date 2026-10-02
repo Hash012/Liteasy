@@ -1,3 +1,5 @@
+import { useMarkdownEditing } from "../markdown/MarkdownEditingContext";
+import { NotesInlineEditor } from "./NotesInlineEditor";
 import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
 import { ResourceLocationButton } from "../resource-filesystem/ResourceLocationButton";
 import { useEffect, useMemo, useState } from "react";
@@ -39,7 +41,7 @@ import {
   type NotesItem,
   type NotesViewModel,
 } from "./notes.types";
-import { MarkdownSourceEditor } from "../markdown/MarkdownSourceEditor";
+import { MarkdownEditor } from "../markdown/MarkdownEditor";
 import { ReferenceSourceContext } from "../resource-links/ResourceReferencesContext";
 import { liteasyPath } from "../resource-filesystem/liteasyPath";
 import { MarkdownContent } from "../markdown/MarkdownContent";
@@ -81,6 +83,7 @@ function noteIconKey(item: NotesItem) {
   return item.object ? `object:${item.object.objectId}` : item.key;
 }
 function NotesPanelContent({ model }: { model: NotesViewModel }) {
+  const preference = useMarkdownEditing();
   const [visibleCount, setVisibleCount] = useState(100);
   useEffect(() => setVisibleCount(100), [model.folderId, model.query]);
   const [folderName, setFolderName] = useState<string>();
@@ -283,7 +286,7 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
               }}
             >
               <ReferenceSourceContext.Provider value={editingItem ? liteasyPath(model.scopeId ?? "local", editingItem.target) : undefined}>
-                <MarkdownSourceEditor documentKey={editingItem?.key ?? `new:${model.folderId}`} label="笔记正文" value={draft} onChange={setDraft} />
+                <MarkdownEditor documentKey={editingItem?.key ?? `new:${model.folderId}`} label="笔记正文" value={draft} onChange={setDraft} />
               </ReferenceSourceContext.Provider>
               <div>
                 <Button size="small" type="submit" icon={<SaveRegular />}>
@@ -408,7 +411,7 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
                     <span>{item.source}</span>
                   </header>
                   {item.target.kind === "external-file" ? <Button appearance="subtle" icon={<ArrowUpRightRegular />} onClick={() => model.openSource(item)}>在阅读区打开</Button> : item.annotation ? <PdfAnnotationMarkdown value={item.text} images={item.annotation.images} />
-                    : <ReferenceSourceContext.Provider value={liteasyPath(model.scopeId ?? "local", item.target)}><MarkdownContent value={item.text} paperAnchors={item.paperAnchors ?? item.object?.paperAnchors} /></ReferenceSourceContext.Provider>}
+                    : <ReferenceSourceContext.Provider value={liteasyPath(model.scopeId ?? "local", item.target)}>{preference.mode === "live" && item.editable && item.object?.kind === "content.note" ? <NotesInlineEditor key={item.key} item={item} model={model} path={liteasyPath(model.scopeId ?? "local", item.target)} /> : <MarkdownContent value={item.text} paperAnchors={item.paperAnchors ?? item.object?.paperAnchors} />}</ReferenceSourceContext.Provider>}
                   <PaperAnchorReferences anchors={item.paperAnchors ?? item.object?.paperAnchors ?? []} />
                   {quote && !item.text.includes(quote) && (
                     <details>

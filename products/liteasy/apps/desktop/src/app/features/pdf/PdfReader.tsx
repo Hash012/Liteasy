@@ -1,3 +1,4 @@
+import { MarkdownEditor } from "../markdown/MarkdownEditor";
 import { ReaderExtensionActions } from "../extensions/ReaderExtensionActions";
 import { PaperSelectionTools } from "./PaperSelectionTools";
 import { PdfSelectionMenu } from "./PdfSelectionMenu";
@@ -3776,13 +3777,7 @@ export function PdfReader({
                               ) : null}
                               {editingTeamAnnotationId === annotation.annotationId ? (
                                 <div className="annotation-note-editor">
-                                  <textarea
-                                    aria-label="编辑组织批注备注"
-                                    maxLength={10_000}
-                                    onChange={(event) => setTeamAnnotationNoteDraft(event.currentTarget.value)}
-                                    rows={3}
-                                    value={teamAnnotationNoteDraft}
-                                  />
+                                  <MarkdownEditor documentKey={annotation.annotationId} label="编辑组织批注备注" value={teamAnnotationNoteDraft} onChange={(text) => setTeamAnnotationNoteDraft(text.slice(0, 10000))} />
                                   <div className="editor-actions">
                                     <Button
                                       disabled={mutatingTeamAnnotationId !== null}

@@ -52,3 +52,70 @@ test("a failed disk write preserves editable drafts and allows a create-only cop
   expect(writeFile.mock.calls[1][0]).toMatchObject({ text: "continued editing", expectedVersion: null });
   expect(writeFile.mock.calls[1][0].path).not.toBe("a.md");
 });
+
+test("autosave serializes writes and retains text typed while a disk write is pending", async () => {
+  vi.useFakeTimers();
+  try {
+    const first = note("a.md");
+    let finish!: (value: NoteFileSnapshot) => void;
+    const writeFile = vi.fn().mockImplementationOnce(() => new Promise<NoteFileSnapshot>((resolve) => { finish = resolve; }))
+      .mockImplementation(async (input) => ({ ...first, text: input.text, version: "v3" }));
+    gateway.create.mockReturnValue({ writeFile });
+    const { result, unmount } = renderHook(() => useExternalNoteController({ scopeId: "scope", visible: false, autosave: true, onOpen: () => {} }));
+    act(() => result.current.open(first)); act(() => result.current.setDraft("first edit"));
+    await act(() => vi.advanceTimersByTimeAsync(1500));
+    expect(writeFile).toHaveBeenCalledTimes(1);
+    act(() => result.current.setDraft("second edit"));
+    await act(() => vi.advanceTimersByTimeAsync(2000));
+    expect(writeFile).toHaveBeenCalledTimes(1);
+    await act(async () => { finish({ ...first, text: "first edit", version: "v2" }); });
+    expect(result.current.session?.draft).toBe("second edit");
+    await act(() => vi.advanceTimersByTimeAsync(1500));
+    expect(writeFile.mock.calls[1][0]).toMatchObject({ expectedVersion: "v2", text: "second edit" });
+    unmount();
+  } finally { vi.useRealTimers(); }
+});
+
+test("autosave pauses after a conflict, including further typing, and cancels pending work on file switch", async () => {
+  vi.useFakeTimers();
+  try {
+    const first = note("a.md"), second = note("b.md");
+    const writeFile = vi.fn().mockRejectedValue(new Error("文件已在其他应用中修改"));
+    gateway.create.mockReturnValue({ writeFile });
+    const { result, unmount } = renderHook(() => useExternalNoteController({ scopeId: "scope", visible: false, autosave: true, onOpen: () => {} }));
+    act(() => result.current.open(first)); act(() => result.current.setDraft("mine"));
+    await act(() => vi.advanceTimersByTimeAsync(1500));
+    expect(result.current.error).toContain("其他应用");
+    act(() => result.current.setDraft("continued"));
+    await act(() => vi.advanceTimersByTimeAsync(3000));
+    expect(writeFile).toHaveBeenCalledTimes(1);
+    act(() => result.current.open(second)); act(() => result.current.setDraft("second draft"));
+    act(() => result.current.open(first));
+    await act(() => vi.advanceTimersByTimeAsync(1500));
+    expect(writeFile.mock.calls.every(([input]) => input.path === "a.md")).toBe(true);
+    expect(result.current.drafts).toHaveLength(1);
+    unmount();
+  } finally { vi.useRealTimers(); }
+});
+
+test("autosave waits until IME composition ends and does not write when manual mode disables it", async () => {
+  vi.useFakeTimers();
+  try {
+    const first = note("a.md");
+    const writeFile = vi.fn(async (input) => ({ ...first, text: input.text, version: "v2" }));
+    gateway.create.mockReturnValue({ writeFile });
+    const { result, rerender, unmount } = renderHook(({ enabled }) => useExternalNoteController({ scopeId: "scope", visible: false, autosave: enabled, onOpen: () => {} }), { initialProps: { enabled: true } });
+    act(() => result.current.open(first));
+    act(() => { document.dispatchEvent(new CompositionEvent("compositionstart")); result.current.setDraft("拼"); });
+    await act(() => vi.advanceTimersByTimeAsync(2000));
+    expect(writeFile).not.toHaveBeenCalled();
+    act(() => { result.current.setDraft("拼音输入完成"); document.dispatchEvent(new CompositionEvent("compositionend")); });
+    await act(() => vi.advanceTimersByTimeAsync(1500));
+    expect(writeFile).toHaveBeenCalledWith(expect.objectContaining({ text: "拼音输入完成" }));
+    rerender({ enabled: false });
+    act(() => result.current.setDraft("manual draft"));
+    await act(() => vi.advanceTimersByTimeAsync(2000));
+    expect(writeFile).toHaveBeenCalledTimes(1);
+    unmount();
+  } finally { vi.useRealTimers(); }
+});

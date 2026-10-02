@@ -1,3 +1,4 @@
+import { useMarkdownAutosave } from "../features/markdown/useMarkdownAutosave";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createNoteFileService, type NoteFileSnapshot } from "../features/note-files/noteFileService";
 import type { ExternalEditingStatus } from "../features/note-files/obsidianWorkspace";
@@ -6,7 +7,7 @@ type NoteSession = { snapshot: NoteFileSnapshot; draft: string; editing: boolean
 const keyOf = (file: NoteFileSnapshot) => `${file.mountId}\0${file.path}`;
 
 /** Keep only the active file and unsaved drafts. Directory browsing never loads bodies. */
-export function useExternalNoteController(input: { scopeId: string; visible: boolean; onOpen(): void }) {
+export function useExternalNoteController(input: { scopeId: string; visible: boolean; autosave?: boolean; onOpen(): void }) {
   const latest = useRef(input); latest.current = input;
   const files = useMemo(() => createNoteFileService(input.scopeId, () => latest.current.scopeId), [input.scopeId]);
   const [session, setSession] = useState<NoteSession>();
@@ -14,7 +15,9 @@ export function useExternalNoteController(input: { scopeId: string; visible: boo
   const drafts = useRef(new Map<string, NoteSession>());
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusyState] = useState(false);
+  const busyRef = useRef(false);
+  const setBusy = (value: boolean) => { busyRef.current = value; setBusyState(value); };
   const [status, setStatus] = useState<ExternalEditingStatus>();
   const scope = input.scopeId;
   const generation = useRef(0);
@@ -71,7 +74,7 @@ export function useExternalNoteController(input: { scopeId: string; visible: boo
 
   async function save(copy = false) {
     const active = current.current;
-    if (!active || busy) return;
+    if (!active || busyRef.current) return;
     const operation = generation.current;
     const text = active.draft;
     setBusy(true); setError("");
@@ -81,19 +84,23 @@ export function useExternalNoteController(input: { scopeId: string; visible: boo
       const saved = await files.writeFile({ mountId: file.mountId, path, text, expectedVersion: copy ? null : file.version });
       if (!valid() || operation !== generation.current) return;
       drafts.current.delete(keyOf(file));
-      replace({ snapshot: saved, draft: current.current?.draft ?? text, changed: false, editing: active.editing });
+      replace({ snapshot: saved, draft: current.current?.draft ?? text, changed: false, editing: current.current?.editing ?? active.editing });
       setNotice(copy ? "草稿已另存为副本，原文件保持不变。" : "已保存到原文件。");
     } catch (failure) {
       if (valid() && operation === generation.current) setError(failure instanceof Error ? failure.message : String(failure));
     } finally { if (valid() && operation === generation.current) setBusy(false); }
   }
 
+  useMarkdownAutosave({ identity: session ? `${scope}:${keyOf(session.snapshot)}` : undefined,
+    value: session?.draft, saved: session?.snapshot.text, enabled: Boolean(input.autosave), busy,
+    blocked: Boolean(error || session?.changed || status?.editing), save });
+
   return {
     session, error, notice, busy, status,
     drafts: [...drafts.current.values()].filter((entry) => keyOf(entry.snapshot) !== (session && keyOf(session.snapshot))).map((entry) => entry.snapshot),
     open(file: NoteFileSnapshot) {
       if (!valid()) return;
-      if (busy) throw new Error("正在保存，请稍后打开其他文件。");
+      if (busyRef.current) throw new Error("正在保存，请稍后打开其他文件。");
       const active = current.current;
       if (active && active.draft !== active.snapshot.text) drafts.current.set(keyOf(active.snapshot), active);
       else if (active) drafts.current.delete(keyOf(active.snapshot));
@@ -110,7 +117,7 @@ export function useExternalNoteController(input: { scopeId: string; visible: boo
     save,
     async reload() {
       const active = current.current;
-      if (!active || busy) return;
+      if (!active || busyRef.current) return;
       const operation = generation.current;
       setBusy(true); setError("");
       try {
