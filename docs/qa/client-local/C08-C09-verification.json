@@ -1,0 +1,294 @@
+{
+  "schema": "liteasy.client-verification/v1",
+  "task_id": "C08",
+  "head_commit": "8d49f087058fadb8a486032a9b9bf7065280ce8d",
+  "enabled_release_tasks": [],
+  "environment": {
+    "os": "Linux / WSL2",
+    "os_version": "Ubuntu 24.04.3 LTS; kernel 6.18.33.2-microsoft-standard-WSL2",
+    "arch": "x86_64",
+    "webview": "Chromium151.0.7922.34 headless; not Tauri WebView",
+    "node": "22.13.1 (repository .nvmrc22.23.2)",
+    "rust": "not used",
+    "fixture_revision": "synthetic-50-page-text-pdf-v1,8156 bytes,50 pages; fixture source at head_commit; glyph-boundaries.pdf for keyboard flow",
+    "test_profile_path_redacted": true,
+    "hardware": "AMD Ryzen9 7940HX;32 logical CPUs exposed;WSL memory23GiB"
+  },
+  "commands": [
+    {
+      "command": "npm ci --offline",
+      "exit_code": 0,
+      "result": "652 packages installed from cache; lock unchanged"
+    },
+    {
+      "command": "npm test -- --run src/tests/pdfThumbnailLifecycle.test.tsx src/tests/PdfReaderToolbarKeyboard.test.tsx src/tests/PdfReaderInteraction.test.tsx src/tests/PdfReaderPublication.test.tsx",
+      "exit_code": 0,
+      "result": "42 passed before adding1 integrated shortcut regression"
+    },
+    {
+      "command": "npm test -- --run src/tests/PdfReaderInteraction.test.tsx",
+      "exit_code": 0,
+      "result": "10 passed, includes new shortcut regression; total43 distinct focused tests passed"
+    },
+    {
+      "command": "npm test -- --run src/tests/PdfReaderInteraction.test.tsx -t 'document find shortcuts'",
+      "exit_code": 0,
+      "result": "1 passed,9 filtered by test-name selection after improving async fixture setup; no disabled tests added"
+    },
+    {
+      "command": "npm run ci:smoke",
+      "exit_code": 0,
+      "result": "9 passed"
+    },
+    {
+      "command": "npm run build",
+      "exit_code": 0,
+      "result": "Production build and157-file production asset check passed; fixture entry absent from built JavaScript"
+    },
+    {
+      "command": "PLAYWRIGHT_BASE_URL=http://127.0.0.1:1429 node_modules/.bin/playwright test src/tests/browser/pdfLifecycleBudget.browser.spec.ts --workers=1",
+      "exit_code": 0,
+      "result": "1 passed;3 rounds x50 thumbnails;3 workers started/closed;0 remaining"
+    },
+    {
+      "command": "PLAYWRIGHT_BASE_URL=http://127.0.0.1:1429 node_modules/.bin/playwright test src/tests/browser/pdfKeyboardFocus.browser.spec.ts --workers=1",
+      "exit_code": 0,
+      "result": "3 passed at125/150/200% CSS zoom after explicit PDF response readiness"
+    },
+    {
+      "command": "PLAYWRIGHT_BASE_URL=http://127.0.0.1:1429 node_modules/.bin/playwright test src/tests/browser/pdfLifecycleBudget.browser.spec.ts src/tests/browser/pdfKeyboardFocus.browser.spec.ts src/tests/browser/pdfNavigation.browser.spec.ts --workers=1",
+      "exit_code": 1,
+      "result": "Initial grouped run:4 passed,1 cold125% startup wait failed; existing navigation passed. Keyboard suite then passed with same timeouts after response readiness; lifecycle then passed with worker lifetime assertions."
+    },
+    {
+      "command": "npm run ci:contracts",
+      "exit_code": 0,
+      "result": "Passed on clean8d49f087; generated schemas and locks unchanged"
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0,
+      "result": "Passed"
+    }
+  ],
+  "checks": {
+    "focused_tests": {
+      "status": "passed",
+      "evidence_paths": [
+        "products/liteasy/apps/desktop/src/tests/pdfThumbnailLifecycle.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/PdfReaderToolbarKeyboard.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/PdfReaderInteraction.test.tsx"
+      ],
+      "used_mock": true,
+      "reason": "jsdom and simulated PDFPageProxy for race/lifetime tests;43 distinct tests verified over focused runs."
+    },
+    "typescript_build": {
+      "status": "passed",
+      "evidence_paths": [],
+      "used_mock": false,
+      "reason": "Production build/resource checks passed; no AppShell/main/shared config changes."
+    },
+    "rust_locked": {
+      "status": "not_applicable",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "No Rust/native code changed."
+    },
+    "schema_clean": {
+      "status": "passed",
+      "evidence_paths": [],
+      "used_mock": false,
+      "reason": "Clean commit ci:contracts passed."
+    },
+    "browser_regression": {
+      "status": "passed",
+      "evidence_paths": [
+        "products/liteasy/apps/desktop/src/tests/browser/pdfLifecycleBudget.browser.spec.ts",
+        "products/liteasy/apps/desktop/src/tests/browser/pdfKeyboardFocus.browser.spec.ts",
+        "products/liteasy/apps/desktop/src/tests/browser/pdfNavigation.browser.spec.ts"
+      ],
+      "used_mock": true,
+      "reason": "Real Chromium/PDF.js/worker/canvas, synthetic PDF fixtures and mocked PDF HTTP response;5 distinct browser checks passed. Composition events are synthetic, not physical IME."
+    },
+    "native_ipc": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed in this browser/PDF leaf slice; no native, installer or assistive-technology acceptance claimed."
+    },
+    "native_window_file_events": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed in this browser/PDF leaf slice; no native, installer or assistive-technology acceptance claimed."
+    },
+    "accessibility": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed in this browser/PDF leaf slice; no native, installer or assistive-technology acceptance claimed."
+    },
+    "performance": {
+      "status": "passed",
+      "evidence_paths": [
+        "docs/qa/client-local/C08-C09-pdf-lifecycle.md"
+      ],
+      "used_mock": false,
+      "reason": "Bounded synthetic thumbnail lifecycle measurement only.3x50 cycles before/after; remaining50 operator lists/300 operators fell to0/0. No application startup, process-memory, low-end or speed claim."
+    },
+    "installer_smoke": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed in this browser/PDF leaf slice; no native, installer or assistive-technology acceptance claimed."
+    },
+    "upgrade_recovery": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed in this browser/PDF leaf slice; no native, installer or assistive-technology acceptance claimed."
+    },
+    "signing": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed in this browser/PDF leaf slice; no native, installer or assistive-technology acceptance claimed."
+    },
+    "notarization": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": "Not executed in this browser/PDF leaf slice; no native, installer or assistive-technology acceptance claimed."
+    }
+  },
+  "data_safety": {
+    "originals_preserved": true,
+    "secrets_excluded": true,
+    "network_services_unchanged": true,
+    "rollback_or_read_only_strategy": "Only in-memory PDF page resource cleanup and keyboard focus handling changed. No data migration; rollback reverts behavior without deleting annotations/files."
+  },
+  "changed_files": [
+    "products/liteasy/apps/desktop/src/app/features/pdf/PdfThumbnail.tsx",
+    "products/liteasy/apps/desktop/src/app/features/pdf/PdfReaderToolbar.tsx",
+    "products/liteasy/apps/desktop/src/app/features/pdf/PdfReader.tsx",
+    "products/liteasy/apps/desktop/src/tests/pdfThumbnailLifecycle.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/PdfReaderToolbarKeyboard.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/PdfReaderInteraction.test.tsx",
+    "products/liteasy/apps/desktop/src/tests/browser/pdf-lifecycle-fixture.html",
+    "products/liteasy/apps/desktop/src/tests/browser/pdfLifecycleFixture.tsx",
+    "products/liteasy/apps/desktop/src/tests/browser/pdfLifecycleBudget.browser.spec.ts",
+    "products/liteasy/apps/desktop/src/tests/browser/pdfKeyboardFocus.browser.spec.ts",
+    "docs/qa/client-local/C08-C09-pdf-lifecycle.md"
+  ],
+  "known_limitations": [
+    "C08/C09 full cards remain incomplete: native startup,10k query,six panes,long chat,idle CPU and native50-window process-memory budgets unmeasured.",
+    "Synthetic50-page text PDF is small and not a low-end/scanned-document workload. Timing is frame-paced and not a controlled speed comparison.",
+    "Internal PDF.js _intentStates probe must be rechecked on dependency upgrade.",
+    "Real Windows/macOS/Tauri WebView/NVDA/VoiceOver/Linux AT and physical IME not tested.",
+    "125/150/200% CSS zoom is browser emulation, not OS scaling or multi-monitor validation.",
+    "Mac shortcut text tested with navigator.platform mock, not a native Mac.",
+    "No broad i18n/pseudolocalization or language-switch data invariance validation."
+  ],
+  "release_ready": false,
+  "notes": "Seven new regressions first failed before fixes. Baseline real browser retained50 operator lists in each of3 runs; final real browser retained0 and closed all3 workers. An initial symlinked-node_modules Vite worker-path error was resolved by npm ci --offline; no test timeout widened, skipped assertion or disabled feature.",
+  "related_task_ids": [
+    "C09"
+  ],
+  "measurements": {
+    "before": {
+      "browser": "151.0.7922.34",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+      "hardwareConcurrency": 32,
+      "runs": [
+        {
+          "fixture": "synthetic-50-page-text-pdf-v1",
+          "pages": 50,
+          "byteLength": 8156,
+          "loadMs": 638.7,
+          "firstThumbnailMs": 42.7,
+          "warmThumbnailP50Ms": 16.5,
+          "warmThumbnailP95Ms": 16.9,
+          "remainingOperatorLists": 50,
+          "remainingOperators": 300,
+          "maximumCanvasPixels": 16950,
+          "closedCanvasPixels": 50
+        },
+        {
+          "fixture": "synthetic-50-page-text-pdf-v1",
+          "pages": 50,
+          "byteLength": 8156,
+          "loadMs": 326.6,
+          "firstThumbnailMs": 17.7,
+          "warmThumbnailP50Ms": 16.5,
+          "warmThumbnailP95Ms": 17,
+          "remainingOperatorLists": 50,
+          "remainingOperators": 300,
+          "maximumCanvasPixels": 16950,
+          "closedCanvasPixels": 50
+        },
+        {
+          "fixture": "synthetic-50-page-text-pdf-v1",
+          "pages": 50,
+          "byteLength": 8156,
+          "loadMs": 299.2,
+          "firstThumbnailMs": 12.7,
+          "warmThumbnailP50Ms": 16.5,
+          "warmThumbnailP95Ms": 17,
+          "remainingOperatorLists": 50,
+          "remainingOperators": 300,
+          "maximumCanvasPixels": 16950,
+          "closedCanvasPixels": 50
+        }
+      ]
+    },
+    "after": {
+      "browser": "151.0.7922.34",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+      "hardwareConcurrency": 32,
+      "workersStarted": 3,
+      "workersClosed": 3,
+      "remainingWorkers": 0,
+      "runs": [
+        {
+          "fixture": "synthetic-50-page-text-pdf-v1",
+          "pages": 50,
+          "byteLength": 8156,
+          "loadMs": 384.4,
+          "firstThumbnailMs": 31.9,
+          "warmThumbnailP50Ms": 16.5,
+          "warmThumbnailP95Ms": 16.9,
+          "remainingOperatorLists": 0,
+          "remainingOperators": 0,
+          "maximumCanvasPixels": 16950,
+          "closedCanvasPixels": 50
+        },
+        {
+          "fixture": "synthetic-50-page-text-pdf-v1",
+          "pages": 50,
+          "byteLength": 8156,
+          "loadMs": 293.7,
+          "firstThumbnailMs": 16.6,
+          "warmThumbnailP50Ms": 16.4,
+          "warmThumbnailP95Ms": 17.1,
+          "remainingOperatorLists": 0,
+          "remainingOperators": 0,
+          "maximumCanvasPixels": 16950,
+          "closedCanvasPixels": 50
+        },
+        {
+          "fixture": "synthetic-50-page-text-pdf-v1",
+          "pages": 50,
+          "byteLength": 8156,
+          "loadMs": 326.9,
+          "firstThumbnailMs": 18.7,
+          "warmThumbnailP50Ms": 16.5,
+          "warmThumbnailP95Ms": 17,
+          "remainingOperatorLists": 0,
+          "remainingOperators": 0,
+          "maximumCanvasPixels": 16950,
+          "closedCanvasPixels": 50
+        }
+      ]
+    }
+  }
+}

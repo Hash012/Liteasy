@@ -42,7 +42,7 @@ npm run ci:smoke
 npm run build
 npm run ci:contracts
 # 在本 worktree 启动 Vite 1429，避免复用其他分支服务器：
-PLAYWRIGHT_BASE_URL=http://127.0.0.1:1429 playwright test src/tests/browser/pdfLifecycleBudget.browser.spec.ts src/tests/browser/pdfKeyboardFocus.browser.spec.ts src/tests/browser/pdfNavigation.browser.spec.ts --workers=1
+PLAYWRIGHT_BASE_URL=http://127.0.0.1:1429 node_modules/.bin/playwright test src/tests/browser/pdfLifecycleBudget.browser.spec.ts src/tests/browser/pdfKeyboardFocus.browser.spec.ts src/tests/browser/pdfNavigation.browser.spec.ts --workers=1
 ```
 
 没有更改资源/文献持久化、共享 schema、锁文件、版本、AppShell、生产服务或 CI。回退代码只撤回清理和键盘行为修正，不需要数据迁移。
