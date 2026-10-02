@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev:local": "node scripts/dev-local.mjs",
+    "client:doctor": "node scripts/client-doctor.mjs",
     "dev": "node scripts/dev-with-cloud.mjs --dev:cloud --dev:desktop",
     "dev:test-api": "node scripts/dev-with-cloud.mjs",
     "dev:cloud": "node ../../../../development/dev-cloud/server.mjs",

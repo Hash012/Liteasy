@@ -7,6 +7,7 @@ type BrowserLocationLike = {
 };
 
 type DevCloudEnvLike = {
+  VITE_LITEASY_LOCAL_ONLY?: string;
   VITE_LITEASY_DEV_CLOUD_PORT?: string;
 };
 
@@ -71,6 +72,7 @@ export function shouldApplyLocalDevCloudDefaults(
     typeof window === "undefined" ? undefined : window.location,
   envLike: DevCloudEnvLike = import.meta.env
 ) {
+  if (envLike.VITE_LITEASY_LOCAL_ONLY === "1") return false;
   if (hasInjectedLocalDevCloudEndpoint(envLike)) {
     return true;
   }

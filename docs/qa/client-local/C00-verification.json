@@ -1,0 +1,181 @@
+{
+  "schema": "liteasy.client-verification/v1",
+  "task_id": "C00",
+  "head_commit": "ff9ea211ef45d3995e93e0c0cf340782de2797fc",
+  "enabled_release_tasks": [],
+  "environment": {
+    "os": "Ubuntu on WSL2 / WSLg (not Windows native)",
+    "os_version": "24.04",
+    "arch": "x86_64",
+    "webview": "WebKitGTK 2.52.6 / GTK 3.24.41",
+    "node": "22.13.1 (requested 22.23.2)",
+    "rust": "1.98.0 (requested 1.98.1)",
+    "fixture_revision": "ff9ea211:glyph-boundaries.pdf and generated synthetic fixtures",
+    "test_profile_path_redacted": true
+  },
+  "commands": [
+    {
+      "command": "npm ci --no-audit --no-fund",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-client-c00-npm-ci.log"
+    },
+    {
+      "command": "npm test -- --run src/tests/localClientProfile.test.ts src/tests/clientDoctor.test.ts src/tests/localDevelopment.test.ts src/tests/localDevCloudEndpoint.test.ts src/tests/devScript.test.ts",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c00-focused.log"
+    },
+    {
+      "command": "npm run ci:smoke",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c00-smoke.log"
+    },
+    {
+      "command": "npm run build",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c00-build.log"
+    },
+    {
+      "command": "cargo check --locked --all-targets --no-default-features --manifest-path src-tauri/Cargo.toml",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c00-rust-check.log"
+    },
+    {
+      "command": "cargo test --locked --manifest-path src-tauri/Cargo.toml local_dev::tests",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c00-rust-test.log"
+    },
+    {
+      "command": "npm run client:doctor",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-c00-doctor.json"
+    }
+  ],
+  "checks": {
+    "focused_tests": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c00-focused.log",
+        "/tmp/liteasy-c00-smoke.log"
+      ],
+      "used_mock": true,
+      "reason": "21 focused + 8 smoke tests. Doctor OS probes and fetch mocked; profile filesystem is real."
+    },
+    "typescript_build": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c00-build.log"
+      ],
+      "used_mock": false,
+      "reason": "Production build; existing chunk size warning."
+    },
+    "rust_locked": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c00-rust-check.log",
+        "/tmp/liteasy-c00-rust-test.log"
+      ],
+      "used_mock": false,
+      "reason": "Locked check and 2 local_dev tests. Existing same-OS x64 debug target cache reused."
+    },
+    "schema_clean": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "browser_regression": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "native_ipc": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c00-native-keys.png"
+      ],
+      "used_mock": false,
+      "reason": "One synthetic PDF opened through actual Tauri IPC; other formats not_run."
+    },
+    "native_window_file_events": {
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-c00-hmr.png",
+        "C00-local-development.md"
+      ],
+      "used_mock": false,
+      "reason": "WSLg native X11 window, double-click PDF, React HMR and process-tree shutdown only; OS file association not_run."
+    },
+    "accessibility": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "performance": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "installer_smoke": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "upgrade_recovery": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "signing": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    },
+    "notarization": {
+      "status": "not_run",
+      "evidence_paths": [],
+      "used_mock": null,
+      "reason": null
+    }
+  },
+  "data_safety": {
+    "originals_preserved": true,
+    "secrets_excluded": true,
+    "network_services_unchanged": true,
+    "rollback_or_read_only_strategy": "Separate temporary app identity/data. Debug-only opt-in; no production migration. Keep test profile on exit."
+  },
+  "changed_files": [
+    "products/liteasy/apps/desktop/package.json",
+    "products/liteasy/apps/desktop/src-tauri/src/data_location.rs",
+    "products/liteasy/apps/desktop/src-tauri/src/main.rs",
+    "products/liteasy/apps/desktop/src/app/features/models/localDevCloudEndpoint.ts",
+    "products/liteasy/apps/desktop/src/main.tsx",
+    "products/liteasy/apps/desktop/src/vite-env.d.ts",
+    "products/liteasy/apps/desktop/vite.config.ts",
+    "docs/qa/client-local/C00-local-development.md",
+    "products/liteasy/apps/desktop/scripts/client-doctor.mjs",
+    "products/liteasy/apps/desktop/scripts/dev-local.mjs",
+    "products/liteasy/apps/desktop/scripts/localClientProfile.mjs",
+    "products/liteasy/apps/desktop/src-tauri/src/local_dev.rs",
+    "products/liteasy/apps/desktop/src/app/features/workbench/localDevelopment.ts",
+    "products/liteasy/apps/desktop/src/tests/clientDoctor.test.ts",
+    "products/liteasy/apps/desktop/src/tests/localClientProfile.test.ts",
+    "products/liteasy/apps/desktop/src/tests/localDevelopment.test.ts"
+  ],
+  "known_limitations": [
+    "Windows/macOS native not_run; WSLg is not Windows verification.",
+    "Secret Service unavailable; no credential reads attempted.",
+    "Actual toolchain patch versions differ from pinned versions.",
+    "Repeated native library scan detected; separate follow-up needed.",
+    "Windows process-tree cleanup not run natively.",
+    "Schema contracts will run on clean implementation commit.",
+    "No installation, upgrade, signing, external model or packet-capture validation."
+  ],
+  "release_ready": false,
+  "notes": "Evidence is limited to described synthetic cases. This report records the base commit; git history identifies implementation. Local /tmp logs are ephemeral, not release artifacts."
+}

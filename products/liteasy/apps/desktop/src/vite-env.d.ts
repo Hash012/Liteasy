@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
+  readonly VITE_LITEASY_LOCAL_ONLY?: string;
   readonly VITE_FORUM_API_URL?: string;
   readonly VITE_LITEASY_CLOUD_URL?: string;
   readonly VITE_LITEASY_DEV_CLOUD_PORT?: string;

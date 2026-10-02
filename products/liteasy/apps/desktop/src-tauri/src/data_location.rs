@@ -50,6 +50,9 @@ struct Active {
 static ACTIVE: OnceLock<Active> = OnceLock::new();
 static CONFIG_LOCK: Mutex<()> = Mutex::new(());
 fn bootstrap(app: &AppHandle) -> Result<PathBuf, String> {
+    if let Some(root) = crate::local_dev::profile_root() {
+        return Ok(root.join("config"));
+    }
     app.path().app_data_dir().map_err(|e| e.to_string())
 }
 fn initial_root(base: &Path, config: &Config, installation: &Path) -> PathBuf {
@@ -273,6 +276,17 @@ fn migrate(source: &Path, target: &Path) -> Result<(), String> {
     result
 }
 pub fn initialize(app: &AppHandle) -> Result<(), String> {
+    if let Some(profile) = crate::local_dev::profile_root() {
+        let root = profile.join("data");
+        fs::create_dir_all(&root).map_err(|e| e.to_string())?;
+        return ACTIVE
+            .set(Active {
+                root,
+                previous: vec![],
+                error: None,
+            })
+            .map_err(|_| "数据目录已初始化".to_string());
+    }
     let base = bootstrap(app)?;
     fs::create_dir_all(&base).map_err(|e| e.to_string())?;
     let mut config = read_config(&base)?;

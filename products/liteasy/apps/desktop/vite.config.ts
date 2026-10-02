@@ -1,7 +1,9 @@
 import { configDefaults, defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  // Do not inherit .env.local endpoints or secrets in the isolated profile.
+  envDir: mode === "local-only" ? process.env.LITEASY_LOCAL_DEV_PROFILE : undefined,
   plugins: [react()],
   test: {
     environment: "jsdom",
@@ -21,4 +23,4 @@ export default defineConfig({
     maxWorkers: 2,
     setupFiles: "./src/tests/setup.ts"
   }
-});
+}));
