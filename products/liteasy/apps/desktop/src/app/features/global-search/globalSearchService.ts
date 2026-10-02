@@ -25,6 +25,19 @@ const blankCoverage = (): SearchCoverage => ({ indexed: 0, partial: 0, metadata:
 export function createGlobalSearchService(input: { index: SemanticIndex; source: SearchSource; active(): boolean; capacity?: number }) {
   let current = new Map<string, SearchDocument>(), coverage = blankCoverage();
   const check = (signal: AbortSignal) => { signal.throwIfAborted(); if (!input.active()) throw new Error("工作区已切换，请重新搜索。"); };
+  async function removeRejectedDocument(path: string, signal: AbortSignal) {
+    const saved = await input.index.lookup([manifestPath], signal);
+    const after = { ...((saved[0]?.payload ?? {}) as Record<string, string>) };
+    if (Object.prototype.hasOwnProperty.call(after, path)) {
+      delete after[path];
+      const payload = JSON.stringify(after);
+      // Invalidate the persisted shortcut before deleting rows. If interrupted,
+      // the next refresh rebuilds this source even when its revision is unchanged.
+      await input.index.upsert([{ id: manifestPath, path: manifestPath,
+        revision: await contentFingerprint(payload), text: "", tokens: "", payload: after }], signal);
+    }
+    await input.index.remove([path], signal);
+  }
   return {
     async refresh(signal: AbortSignal, progress: (count: number) => void) {
       check(signal);
@@ -55,7 +68,9 @@ export function createGlobalSearchService(input: { index: SemanticIndex; source:
         coverage[document.coverage]++;
         if (document.detail && coverage.details.length < 100) coverage.details.push({ title: document.title, detail: document.detail });
         if (!records.length) continue;
-        after[document.id] = `${document.revision}:${records.length}`;
+        // Display titles, groups and locators can change without changing the
+        // source bytes. Cache the complete normalized records, not just revision.
+        after[document.id] = await contentFingerprint(JSON.stringify(records));
         if (before[document.id] !== after[document.id]) {
           await input.index.remove([document.id], signal);
           for (let offset = 0; offset < records.length; offset += 32) await input.index.upsert(records.slice(offset, offset + 32), signal);
@@ -87,7 +102,7 @@ export function createGlobalSearchService(input: { index: SemanticIndex; source:
         if (!hit.quote) hit.quote = hit.text.slice(at, at + (clauses.find((clause) => hit.text.toLowerCase().indexOf(clause) === at)?.length ?? 80));
         if (!verified.has(row.path)) verified.set(row.path, await input.source.verify(hit, signal));
         if (verified.get(row.path)) hits.push(hit);
-        else { current.delete(row.path); await input.index.remove([row.path], signal); }
+        else { current.delete(row.path); await removeRejectedDocument(row.path, signal); }
       }
       check(signal); return { hits, nextOffset: result.nextOffset, coverage };
     },

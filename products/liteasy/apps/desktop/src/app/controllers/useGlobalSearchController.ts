@@ -27,6 +27,9 @@ export function useGlobalSearchController(input: { repository: ObjectRepository;
       source: createWorkspaceSearchSource({ repository: input.repository, files: createNoteFileService(scope, () => latest.current.repository.scopeId), active, getPapers: () => latest.current.papers }),
     });
   }, [input.repository, scope]);
+  // The admissible source set belongs to the service instance, even when the
+  // replacement repository still represents the same account scope.
+  useEffect(() => { dirty.current = true; }, [service]);
   const storage = useMemo(() => createObjectStorage(scope, () => latest.current.repository.scopeId), [scope]);
   useEffect(() => {
     let active = true; setStateScope(scope); dirty.current = true; abort.current?.abort(); setHits([]); setCoverage(undefined); setSaved([]); setQuery("");

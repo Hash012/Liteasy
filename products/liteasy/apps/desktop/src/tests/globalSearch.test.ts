@@ -61,6 +61,34 @@ test("cached unchanged sources avoid rewrites and overlapping chunks retain phra
   expect(upsert.mock.calls.flatMap(([records]) => records).every((record) => record.id === "global-search:manifest")).toBe(true);
   expect((await f.service.search('"meaningful phrase across boundary"', undefined, 0, signal())).hits.length).toBeGreaterThan(0);
 });
+test("refresh restores a transiently rejected hit with the same source revision, including after service recreation", async () => {
+  const f = fixture(); f.setDocuments([document("n", "owned recovered"), document("keep", "unchanged neighbor")]);
+  await f.service.refresh(signal(), () => {});
+  expect((await f.service.search("owned", undefined, 0, signal())).hits).toHaveLength(1);
+  const verify = vi.spyOn(f.source, "verify").mockResolvedValueOnce(false);
+  expect((await f.service.search("owned", undefined, 0, signal())).hits).toEqual([]);
+  verify.mockRestore();
+  const recreated = createGlobalSearchService({ index: f.index, source: f.source, active: () => true });
+  const upsert = vi.spyOn(f.index, "upsert");
+  await recreated.refresh(signal(), () => {});
+  expect((await recreated.search("owned", undefined, 0, signal())).hits).toHaveLength(1);
+  expect((await recreated.search("neighbor", undefined, 0, signal())).hits).toHaveLength(1);
+  expect(upsert.mock.calls.flatMap(([records]) => records).some((record) => record.path === "keep")).toBe(false);
+});
+test("same-revision title, group and locator changes replace cached records after restart", async () => {
+  const f = fixture();
+  const first = document("canvas", "owned comparison", "same-file-hash");
+  f.setDocuments([{ ...first, title: "hashed.canvas" }]);
+  await f.service.refresh(signal(), () => {});
+  f.setDocuments([{ ...first, title: "Research board", sections: [{ ...first.sections[0], group: "artifact",
+    locator: { path: "liteasy://objects/board?scope=test", line: 7 } }] }]);
+  const reopened = createGlobalSearchService({ index: f.index, source: f.source, active: () => true });
+  await reopened.refresh(signal(), () => {});
+  expect((await reopened.search("owned", "note", 0, signal())).hits).toEqual([]);
+  expect((await reopened.search("owned", "artifact", 0, signal())).hits[0]).toMatchObject({
+    title: "Research board", group: "artifact", path: "liteasy://objects/board?scope=test", line: 7,
+  });
+});
 test("real object storage indexes note body and invalidates an edited or tombstoned note", async () => {
   const scope = crypto.randomUUID(), storage = createObjectStorage(scope, () => scope), repository = createObjectRepository(storage, scope);
   const source = createWorkspaceSearchSource({ repository, files: createNoteFileService(scope, () => scope), getPapers: () => [], active: () => true });
