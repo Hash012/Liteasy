@@ -14,6 +14,7 @@ import { applyBibliographicMetadata, type BibliographicDraft } from "../features
 import { originalFileContentHash, type OriginalFileDescriptor } from "../features/original-files/originalFileService";
 import { describeResourceIdentity } from "../features/resource-filesystem/resourceIdentity";
 import { readingResourceCapabilities } from "../features/reading-library/readingResourceCapabilities";
+import { readingImportSourceForFile } from "../features/reading-library/readingImportIdentity";
 
 export function useReadingLibraryController(input: {
   scopeId: string; papers: Paper[]; enabled: boolean; localLibraryRootPath?: string;
@@ -105,7 +106,9 @@ export function useReadingLibraryController(input: {
       }, metadata[paper.id]?.bibliographic);
     });
     return [...papers, ...files.map((file): ReadingCatalogEntry => {
-      const identity = describeResourceIdentity(input.scopeId, { kind: "object", ref: file.ref, followLatest: true }, { contentHash: file.assetId });
+      const identity = describeResourceIdentity(input.scopeId, { kind: "object", ref: file.ref, followLatest: true }, {
+        contentHash: file.assetId, sourcePath: file.importSource?.kind !== "file-name" ? file.importSource?.location : undefined,
+      });
       return applyBibliographicMetadata({
         ...file, format: file.format === "other" ? readingFormatForName(file.fileName) : file.format, year: /^\d{4}/.test(file.publishedAt ?? "") ? Number(file.publishedAt!.slice(0, 4)) : undefined,
         readingStatus: "unread", available: true, canExport: true, ...metadata[file.id],
@@ -140,7 +143,7 @@ export function useReadingLibraryController(input: {
             ? await parseReadingFile({ name: file.name, bytes })
             : { format: "other", title: file.name, authors: [], description: "此格式已保存原文件，暂不支持内置阅读。可导出后使用对应应用打开。", chapters: [], toc: [], resources: [], warnings: [] };
           if (!current()) break;
-          const result = await repository.importFile(file.name, bytes, document);
+          const result = await repository.importFile(file.name, bytes, document, { source: readingImportSourceForFile(file) });
           if (folderPath !== undefined) await repository.updateMetadata(result.entry.id, { folderPath });
           if (result.duplicate) duplicates += 1; else imported += 1;
         } catch (error) { errors.push(`${file.name}：${error instanceof Error ? error.message : String(error)}`); }

@@ -8,6 +8,7 @@ import { resolveContextSnapshot } from "../app/features/context/objectContext";
 import { liteasyPath } from "../app/features/resource-filesystem/liteasyPath";
 import { resolveLiteasyContext } from "../app/features/resource-filesystem/resourceContext";
 import type { NoteFileService } from "../app/features/note-files/noteFileService";
+import { refOf } from "../app/features/objects/object.types";
 
 function fixture() {
   const scope = crypto.randomUUID();
@@ -74,7 +75,7 @@ test("keeps files and metadata isolated by account and invalidates old handles a
   expect(await other.metadata()).toEqual({});
   await expect(other.readFile(entry.id)).rejects.toThrow();
   const ownImport = await other.importFile(source.name, source.bytes, source.parsed);
-  expect(ownImport.entry.id).toBe(entry.id);
+  expect(ownImport.entry.id).not.toBe(entry.id);
   expect(ownImport.entry.ref.objectId).not.toBe(entry.ref.objectId);
   f.switchAccount();
   await expect(f.repository.list()).rejects.toMatchObject({ code: "object_forbidden" });
@@ -82,14 +83,19 @@ test("keeps files and metadata isolated by account and invalidates old handles a
   await expect(f.repository.updateMetadata(entry.id, { tags: ["wrong-account"] })).rejects.toMatchObject({ code: "object_forbidden" });
 });
 
-test("treats identical bytes as one file while distinguishing different files with the same name", async () => {
+test("reuses the same import while preserving different names and changed bytes independently", async () => {
   const f = fixture(), first = await file();
   const imported = await f.repository.importFile(first.name, first.bytes, first.parsed);
-  const duplicate = await f.repository.importFile("更名.md", first.bytes, first.parsed);
+  const duplicate = await f.repository.importFile(first.name, first.bytes, first.parsed);
   expect(duplicate).toEqual({ entry: imported.entry, duplicate: true });
+  const renamed = await f.repository.importFile("另一来源.md", first.bytes, first.parsed);
+  expect(renamed.duplicate).toBe(false);
+  expect(renamed.entry.id).not.toBe(imported.entry.id);
+  expect(renamed.entry.ref.objectId).not.toBe(imported.entry.ref.objectId);
+  expect(renamed.entry.assetId).toBe(imported.entry.assetId);
   const changed = await file(first.name, "# 新版本\n修改后的正文。");
   await f.repository.importFile(changed.name, changed.bytes, changed.parsed);
-  expect(await f.repository.list()).toHaveLength(2);
+  expect(await f.repository.list()).toHaveLength(3);
   expect(Array.from((await f.repository.readFile(imported.entry.id)).bytes)).toEqual(Array.from(first.bytes));
 });
 
@@ -129,7 +135,7 @@ test("removing from the library preserves referenced text, original assets, and 
   expect((await f.repository.metadata())[entry.id]).toMatchObject({ readingStatus: "finished", tags: ["珍藏"] });
 });
 
-test.each(["asset/", "operation/legacy-reading-file:", "reading-library/file/"])("a failure at %s can be retried without exposing a partial catalog entry", async (prefix) => {
+test.each(["reading-library/import/", "asset/", "operation/legacy-reading-file:", "reading-library/file/"])("a failure at %s can be retried without exposing a partial catalog entry", async (prefix) => {
   const f = fixture(), source = await file();
   const failing = failOneCommit(f.storage, prefix);
   await expect(f.repository.importFile(source.name, source.bytes, source.parsed)).rejects.toThrow("磁盘暂时不可写");
@@ -141,15 +147,15 @@ test.each(["asset/", "operation/legacy-reading-file:", "reading-library/file/"])
   expect(await f.storage.list("head/")).toHaveLength(1);
 });
 
-test("reimports a renamed plain text file after removal without breaking its existing source reference", async () => {
+test("does not infer a rename from matching bytes after removal and preserves the previous source reference", async () => {
   const f = fixture(), source = await file("原名.txt", "无标题的原始正文。");
   const { entry } = await f.repository.importFile(source.name, source.bytes, source.parsed);
   await f.repository.removeFromLibrary(entry.id);
   const renamed = await file("新名字.txt", "无标题的原始正文。");
   const restored = await f.repository.importFile(renamed.name, renamed.bytes, renamed.parsed);
-  expect(restored.entry.id).toBe(entry.id);
-  expect(restored.entry.ref).toEqual(entry.ref);
-  expect(Array.from((await f.repository.readFile(entry.id)).bytes)).toEqual(Array.from(source.bytes));
+  expect(restored.entry.id).not.toBe(entry.id);
+  expect(restored.entry.ref.objectId).not.toBe(entry.ref.objectId);
+  expect(Array.from((await f.repository.readFile(restored.entry.id)).bytes)).toEqual(Array.from(source.bytes));
   const snapshot = await resolveContextSnapshot({ repository: f.objects, refs: [entry.ref], purpose: "原引用", persist: false });
   expect(snapshot.entries[0].text).toContain("无标题的原始正文。");
 });
@@ -211,7 +217,79 @@ test("stores opaque file formats without parsing or changing their bytes", async
   expect((await f.reopen().readFile(imported.entry.id)).bytes).toEqual(bytes);
   expect((await f.repository.importFile("再次导入.bin", bytes, {
     format: "other", title: "再次导入.bin", authors: [], chapters: [], resources: [], toc: [], warnings: []
-  })).duplicate).toBe(true);
+  })).duplicate).toBe(false);
+});
+
+test("same bytes at distinct exact source paths or with different bibliography remain independent", async () => {
+  const f = fixture(), source = await file();
+  const first = await f.repository.importFile(source.name, source.bytes, source.parsed, {
+    source: { kind: "source-path", location: "/Synthetic/Collection/guide.md" }
+  });
+  const again = await f.repository.importFile(source.name, source.bytes, source.parsed, {
+    source: { kind: "source-path", location: "/Synthetic/Collection/guide.md" }
+  });
+  expect(again).toEqual({ entry: first.entry, duplicate: true });
+  const differentPath = await f.repository.importFile(source.name, source.bytes, source.parsed, {
+    source: { kind: "source-path", location: "/synthetic/collection/guide.md" }
+  });
+  const differentBook = await f.repository.importFile(source.name, source.bytes, { ...source.parsed, identifier: "synthetic-edition-two" }, {
+    source: { kind: "source-path", location: "/Synthetic/Collection/guide.md" }
+  });
+  expect(new Set([first, differentPath, differentBook].map((result) => result.entry.id)).size).toBe(3);
+  expect(new Set([first, differentPath, differentBook].map((result) => result.entry.ref.objectId)).size).toBe(3);
+  expect(new Set([first, differentPath, differentBook].map((result) => result.entry.assetId)).size).toBe(1);
+  await f.repository.updateMetadata(first.entry.id, { tags: ["first-source-only"] });
+  expect((await f.repository.metadata())[differentPath.entry.id]).toBeUndefined();
+  await f.repository.removeFromLibrary(first.entry.id);
+  expect(Array.from((await f.reopen().readFile(differentPath.entry.id)).bytes)).toEqual(Array.from(source.bytes));
+  expect((await f.objects.get(first.entry.ref)).title).toBe(source.parsed.title);
+});
+
+test("adopts a matching legacy hash entry without changing its ID, pinned reference, bytes or saved metadata", async () => {
+  const f = fixture(), source = await file();
+  const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", source.bytes)), (n) => n.toString(16).padStart(2, "0")).join("");
+  const id = `reading:${hash}`, legacyKey = `reading-file:${hash}`;
+  const descriptor = { assetId: hash, sha256: hash, byteLength: source.bytes.length, mediaType: "text/markdown" };
+  const oldSource = await f.objects.legacy(legacyKey, {
+    kind: "source.document", title: source.parsed.title, assets: [descriptor],
+    content: { schema: "liteasy.source-document/v1", payload: { paperId: id, text: "Pinned pre-upgrade text.", availability: "local", legacyKey, documentHash: hash } },
+  });
+  const oldEntry = { id, ref: refOf(oldSource), assetId: hash, fileName: source.name,
+    format: "markdown", title: source.parsed.title, authors: source.parsed.authors,
+    fileSize: source.bytes.length, addedAt: "2025-01-01T00:00:00.000Z", contextTruncated: false };
+  await f.storage.commit([
+    { key: `asset/${hash}`, expected: null, row: { key: `asset/${hash}`, version: "legacy-asset", value: { ...descriptor, base64: btoa(String.fromCharCode(...source.bytes)) } } },
+    { key: `reading-library/file/${id}`, expected: null, row: { key: `reading-library/file/${id}`, version: "legacy-entry", value: oldEntry } },
+  ]);
+  await f.repository.updateMetadata(id, { tags: ["pre-upgrade"], readingStatus: "finished" });
+  const imported = await f.repository.importFile(source.name, source.bytes, source.parsed);
+  expect(imported).toEqual({ entry: oldEntry, duplicate: true });
+  expect((await f.storage.get(`reading-library/file/${id}`))?.version).toBe("legacy-entry");
+  const other = await f.repository.importFile(source.name, source.bytes, source.parsed, {
+    source: { kind: "source-path", location: "/synthetic/previously-unknown/guide.md" },
+  });
+  expect(other.entry.id).not.toBe(id);
+  expect(other.entry.ref.objectId).not.toBe(oldSource.objectId);
+  expect(other.entry.assetId).toBe(hash);
+  expect(await f.objects.get(oldEntry.ref)).toEqual(oldSource);
+  expect((await f.repository.metadata())[id]).toMatchObject({ tags: ["pre-upgrade"], readingStatus: "finished" });
+  await f.repository.removeFromLibrary(id);
+  const restored = await f.reopen().importFile(source.name, source.bytes, source.parsed);
+  expect(restored.entry.id).toBe(id);
+  expect(restored.entry.ref).toEqual(oldEntry.ref);
+  expect(Array.from((await f.repository.readFile(id)).bytes)).toEqual(Array.from(source.bytes));
+});
+
+test("different sources racing on one asset retain separate objects and one immutable byte asset", async () => {
+  const f = fixture(), source = await file();
+  const results = await Promise.all(["/synthetic/a/guide.md", "/synthetic/b/guide.md"].map((location) => f.repository.importFile(
+    source.name, source.bytes, source.parsed, { source: { kind: "source-path", location } },
+  )));
+  expect(results.every((item) => !item.duplicate)).toBe(true);
+  expect(new Set(results.map((item) => item.entry.id)).size).toBe(2);
+  expect(await f.storage.list("asset/")).toHaveLength(1);
+  expect(await f.storage.list("head/")).toHaveLength(2);
+  expect(await f.repository.list()).toHaveLength(2);
 });
 
 

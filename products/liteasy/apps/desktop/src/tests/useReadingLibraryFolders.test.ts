@@ -42,6 +42,26 @@ test("reimporting a duplicate into a folder moves it without creating a second o
   expect(hook.result.current.message).toContain("1 个已有文件已归入目标目录");
 });
 
+test("known relative source paths distinguish same-name same-byte files while catalog moves preserve their references", async () => {
+  const hook = setup();
+  const first = sourceFile(), second = sourceFile();
+  Object.defineProperty(first, "webkitRelativePath", { value: "Sources/one/guide.md" });
+  Object.defineProperty(second, "webkitRelativePath", { value: "Sources/two/guide.md" });
+  await act(async () => { await hook.result.current.importFiles([first, second]); });
+  expect(hook.result.current.entries).toHaveLength(2);
+  const a = hook.result.current.entries.find((entry) => entry.identity?.sourcePath === "Sources/one/guide.md")!;
+  const b = hook.result.current.entries.find((entry) => entry.identity?.sourcePath === "Sources/two/guide.md")!;
+  expect(a.identity?.contentHash).toBe(b.identity?.contentHash);
+  expect(a.id).not.toBe(b.id);
+  expect(a.identity?.key).not.toBe(b.identity?.key);
+  await act(async () => { await hook.result.current.importFiles([first], "D:\\Library\\Books"); });
+  expect(hook.result.current.entries).toHaveLength(2);
+  expect(hook.result.current.entries.find((entry) => entry.id === a.id)).toMatchObject({ folderPath: "Books", identity: a.identity });
+  expect(hook.result.current.entries.find((entry) => entry.id === b.id)).toMatchObject({ identity: b.identity });
+  expect(hook.result.current.entries.find((entry) => entry.id === b.id)?.folderPath).toBeUndefined();
+  hook.unmount();
+});
+
 test("opening an unsupported original reports why without downloading or opening a reader", async () => {
   const hook = setup();
   await act(async () => { await hook.result.current.importFiles([sourceFile("measurements.csv", "name,value\nsample,2")]); });

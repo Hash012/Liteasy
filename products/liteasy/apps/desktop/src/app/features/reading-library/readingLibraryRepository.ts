@@ -6,6 +6,7 @@ import type { ObjectStorage, StorageRow } from "../objects/objectStorage";
 import type { StagedObjectAsset } from "../objects/objectAssets";
 import type { ParsedReadingDocument } from "./readingDocument.types";
 import { bibliographicDraftSchema, bibliographicSnapshotSchema, type BibliographicDraft } from "../library/bibliographicFields";
+import { readingImportBibliography, readingImportSourceSchema, type ReadingImportSource } from "./readingImportIdentity";
 
 export const MAX_LIBRARY_FILE_BYTES = 20 * 1024 * 1024;
 const metadataSchema = z.object({
@@ -24,9 +25,13 @@ const entrySchema = z.object({
   format: z.enum(["epub", "mobi", "fb2", "html", "markdown", "txt", "other"]), title: z.string(), authors: z.array(z.string()),
   language: z.string().optional(), publication: z.string().optional(), publishedAt: z.string().optional(),
   identifier: z.string().optional(), abstract: z.string().optional(), fileSize: z.number().int().nonnegative(),
-  addedAt: z.string(), contextTruncated: z.boolean()
+  addedAt: z.string(), contextTruncated: z.boolean(),
+  importSource: readingImportSourceSchema.optional()
 }).passthrough();
 export type ReadingLibraryFile = z.infer<typeof entrySchema>;
+const importMappingSchema = z.object({
+  schema: z.literal("liteasy.reading-import/v1"), id: z.string().min(1), objectKey: z.string().min(1),
+}).passthrough();
 const change = (key: string, value: unknown, previous?: StorageRow | null) => ({
   key, expected: previous?.version ?? null, row: { key, version: crypto.randomUUID(), value }
 });
@@ -97,10 +102,37 @@ export function createReadingLibraryRepository(storage: ObjectStorage, scopeId: 
       await storage.commit([change(key, value, previous)]);
       return value;
     },
-    async importFile(name: string, bytes: Uint8Array, document: ParsedReadingDocument) {
+    async importFile(name: string, bytes: Uint8Array, document: ParsedReadingDocument, options: { source?: ReadingImportSource } = {}) {
       if (!bytes.length || bytes.length > MAX_LIBRARY_FILE_BYTES) throw new Error("单个阅读文件需在 1 字节至 20 MB 之间。");
+      const importSource = readingImportSourceSchema.parse(options.source ?? { kind: "file-name", location: name });
+      const bibliography = readingImportBibliography(document);
       const hash = await digest(bytes);
-      const id = `reading:${hash}`;
+      const importHash = await digest(new TextEncoder().encode(JSON.stringify({ source: importSource, bibliography, contentHash: hash })));
+      const mappingKey = `reading-library/import/${importHash}`;
+      let mappingRow = await storage.get(mappingKey);
+      if (!mappingRow) {
+        // Adopt only an unambiguous legacy entry. Keep its ID and pinned object ref;
+        // an unknown old path is not evidence that a newly supplied path is the same source.
+        const legacyRow = await storage.get(`reading-library/file/reading:${hash}`);
+        const legacy = legacyRow ? entrySchema.parse(legacyRow.value) : undefined;
+        const legacyBibliography = legacy ? {
+          format: legacy.format, title: legacy.title, authors: legacy.authors, language: legacy.language,
+          publication: legacy.publication, publishedAt: legacy.publishedAt, identifier: legacy.identifier,
+        } : undefined;
+        const adoptLegacy = legacy && !legacy.importSource && importSource.kind === "file-name"
+          && legacy.fileName === name.slice(0, 300) && legacy.assetId === hash
+          && JSON.stringify(legacyBibliography) === JSON.stringify(bibliography);
+        const id = adoptLegacy ? legacy.id : `reading:${crypto.randomUUID()}`;
+        const value = { schema: "liteasy.reading-import/v1" as const, id, objectKey: `reading-file:${adoptLegacy ? hash : id}` };
+        try { await storage.commit([change(mappingKey, value)]); }
+        catch (error) {
+          // Another importer can reserve the same logical resource concurrently.
+          if (!(await storage.get(mappingKey))) throw error;
+        }
+        mappingRow = await storage.get(mappingKey);
+      }
+      const mapping = importMappingSchema.parse(mappingRow?.value);
+      const id = mapping.id;
       const key = `reading-library/file/${id}`;
       const previous = await storage.get(key);
       if (previous) return { entry: entrySchema.parse(previous.value), duplicate: true };
@@ -128,18 +160,15 @@ export function createReadingLibraryRepository(storage: ObjectStorage, scopeId: 
       }
       if (truncated) text += "\n\n[上下文为节选；完整原文保存在阅读文件中。]";
       const { base64: _base64, ...descriptor } = asset;
-      const source = await objects.legacy(`reading-file:${hash}`, {
+      const source = await objects.legacy(mapping.objectKey, {
           kind: "source.document", title: document.title.slice(0, 1000), assets: [descriptor],
           content: { schema: "liteasy.source-document/v1", payload: {
-            paperId: id, text, availability: "local", legacyKey: `reading-file:${hash}`, documentHash: hash
+            paperId: id, text, availability: "local", legacyKey: mapping.objectKey, documentHash: hash
           } }
       });
       const entry = entrySchema.parse({
-        id, ref: refOf(source), assetId: hash, fileName: name.slice(0, 300),
-        format: document.format === "text" ? "txt" : document.format,
-        title: document.title.slice(0, 1000), authors: document.authors,
-        language: document.language, publication: document.publisher, publishedAt: document.publishedAt,
-        identifier: document.identifier, abstract: document.description?.slice(0, 12000),
+        id, ref: refOf(source), assetId: hash, fileName: name.slice(0, 300), importSource,
+        ...bibliography, abstract: document.description?.slice(0, 12000),
         fileSize: bytes.length, addedAt: new Date().toISOString(), contextTruncated: truncated
       });
       try { await storage.commit([change(key, entry)]); }
