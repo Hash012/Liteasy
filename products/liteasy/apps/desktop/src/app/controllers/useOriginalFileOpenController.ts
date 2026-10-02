@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { localDiagnostics } from "../features/local-diagnostics/localDiagnostics";
 import {
   createOriginalFileService, isOriginalFileOpenAvailable,
   type OriginalFileDescriptor, type OriginalFileService
@@ -26,15 +27,16 @@ export function useOriginalFileOpenController(input: Input) {
   const report = (state: Session, error: unknown) => {
     if (valid(state)) latest.current.onError(error instanceof Error ? error.message : String(error));
   };
-  async function open(state: Session, file: OriginalFileDescriptor) {
+  async function open(state: Session, file: OriginalFileDescriptor, diagnosticGeneration = localDiagnostics.getSnapshot().generation) {
     let retained = false;
     try {
-      const bytes = await service.read(file);
+      const options = { format: file.format, isCurrent: () => valid(state) && localDiagnostics.getSnapshot().generation === diagnosticGeneration };
+      const bytes = await localDiagnostics.measure("read_file", () => service.read(file), options);
       if (!valid(state)) return;
       if (file.format === "pdf") {
-        await latest.current.onOpenPdf(file, bytes);
+        await localDiagnostics.measure("open_reader", () => latest.current.onOpenPdf(file, bytes), options);
         retained = valid(state);
-      } else await latest.current.onOpenEpub(file, bytes);
+      } else await localDiagnostics.measure("open_reader", () => latest.current.onOpenEpub(file, bytes), options);
     } finally {
       if (!retained) await service.release(file);
     }
@@ -74,7 +76,7 @@ export function useOriginalFileOpenController(input: Input) {
         void state.drain();
       }).catch((error) => report(state, error));
     }
-    return () => { state.live = false; unsubscribe?.(); };
+    return () => { state.live = false; unsubscribe?.(); localDiagnostics.reset(); };
   }, [scope, service, available]);
 
   return {
@@ -86,10 +88,13 @@ export function useOriginalFileOpenController(input: Input) {
       if (!available || !state || !valid(state) || state.busy) return;
       state.busy = true;
       setBusy(true);
+      const diagnosticGeneration = localDiagnostics.getSnapshot().generation;
       try {
-        const file = await service.choose();
+        const file = await localDiagnostics.measure("choose_file", () => service.choose(), {
+          isCurrent: () => valid(state) && localDiagnostics.getSnapshot().generation === diagnosticGeneration,
+        });
         if (file) {
-          if (valid(state)) await open(state, file);
+          if (valid(state)) await open(state, file, diagnosticGeneration);
           else await service.release(file);
         }
       } catch (error) { report(state, error); }

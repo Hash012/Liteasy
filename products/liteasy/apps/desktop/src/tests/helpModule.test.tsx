@@ -13,6 +13,17 @@ import { createHelpCatalog } from "../app/features/help/helpCatalog";
 import { builtinHelpProviders } from "../app/features/help/builtinHelpProvider";
 import type { HelpContentProvider } from "../app/features/help/help.types";
 
+test("help exposes voluntary local diagnostics with collection disabled by default", async () => {
+  render(<HelpPanel model={{
+    topics: [], articles: [], query: "", loading: false, error: "",
+    setQuery: vi.fn(), selectTopic: vi.fn(), openArticle: vi.fn(), home: vi.fn(), retry: vi.fn(),
+  }} />);
+  await userEvent.click(screen.getByText("本地诊断"));
+  expect(screen.getByRole("switch", { name: "记录本次窗口的诊断" })).not.toBeChecked();
+  expect(screen.getByRole("button", { name: "预览诊断包" })).toBeEnabled();
+  expect(screen.queryByRole("button", { name: "导出已预览的诊断包" })).not.toBeInTheDocument();
+});
+
 function provider(id = "test-guide"): HelpContentProvider {
   return {
     id,

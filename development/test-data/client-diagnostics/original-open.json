@@ -1,0 +1,22 @@
+{
+  "schema": "liteasy.synthetic-diagnostics-fixture/v1",
+  "syntheticOnly": true,
+  "scenarioSlices": ["S01: original reader preparation", "S07: queued original file dispatch"],
+  "file": {
+    "id": "synthetic-private-grant",
+    "path": "/synthetic-private-user/private-keyword.pdf",
+    "fileName": "private-keyword.pdf",
+    "format": "pdf",
+    "sizeBytes": 12,
+    "modifiedUnixMs": 1000
+  },
+  "errorText": "synthetic-private-user /synthetic-private-user/private-keyword.pdf Authorization: Bearer synthetic-secret-token private-body private-chat",
+  "forbiddenExportStrings": ["synthetic-private-user", "private-keyword", "synthetic-private-grant", "Authorization", "synthetic-secret-token", "private-body", "private-chat"],
+  "cases": [
+    { "id": "picker-success", "outcomes": ["choose_file:succeeded", "read_file:succeeded", "open_reader:succeeded"] },
+    { "id": "picker-cancel", "outcomes": ["choose_file:cancelled"] },
+    { "id": "read-failure", "outcomes": ["choose_file:succeeded", "read_file:failed"] },
+    { "id": "reader-failure", "outcomes": ["choose_file:succeeded", "read_file:succeeded", "open_reader:failed"] },
+    { "id": "queued-success", "outcomes": ["read_file:succeeded", "open_reader:succeeded"] }
+  ]
+}

@@ -6,6 +6,7 @@ import {
   SearchRegular,
 } from "@fluentui/react-icons";
 import { MarkdownContent } from "../markdown/MarkdownContent";
+import { LocalDiagnosticsPanel } from "../local-diagnostics/LocalDiagnosticsPanel";
 import type { HelpViewModel } from "./help.types";
 import "./help.css";
 
@@ -65,6 +66,7 @@ export function HelpPanel({ model }: { model: HelpViewModel }) {
           })}
         </nav>
         <div className="help-content" aria-live="polite">
+          <LocalDiagnosticsPanel />
           {model.loading ? (
             <Spinner size="small" label="正在加载帮助" />
           ) : model.error ? (

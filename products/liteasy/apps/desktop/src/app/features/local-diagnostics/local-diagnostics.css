@@ -1,0 +1,8 @@
+.local-diagnostics { border-bottom: 1px solid var(--colorNeutralStroke2); padding-bottom: 8px; margin-bottom: 12px; }
+.local-diagnostics summary { cursor: pointer; font-weight: 600; }
+.local-diagnostics p { font-size: 12px; line-height: 1.6; margin: 8px 0; }
+.local-diagnostics-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.local-diagnostics section { display: flex; flex-direction: column; gap: 8px; }
+.local-diagnostics ul { padding-left: 0; list-style: none; max-height: 160px; overflow: auto; }
+.local-diagnostics li { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.local-diagnostics textarea { min-height: 160px; font-family: monospace; font-size: 12px; }
