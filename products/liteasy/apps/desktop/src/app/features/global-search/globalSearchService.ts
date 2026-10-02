@@ -21,6 +21,22 @@ export function searchSnippet(text: string, clauses: string[]) {
 }
 const manifestPath = "global-search:manifest";
 const blankCoverage = (): SearchCoverage => ({ indexed: 0, partial: 0, metadata: 0, failed: 0, limited: false, details: [] });
+function documentRecords(document: SearchDocument, capacity: number) {
+  const records: IndexRecord[] = [];
+  for (const section of document.sections) {
+    // 4K chars/overlap bound IPC bytes and allow phrases across chunk boundaries.
+    for (let offset = 0; offset < section.text.length; offset += 2800) {
+      if (records.length >= capacity) return { records, limited: true };
+      const text = section.text.slice(offset, offset + 4000);
+      const line = (section.locator.line ?? 1) + (section.text.slice(0, offset).match(/\n/g)?.length ?? 0);
+      records.push({ id: `${document.id}:${section.key}:${offset}`, path: document.id, revision: document.revision,
+        text: `${document.title}\n${text}`, tokens: "", payload: { ...section.locator, line, documentId: document.id,
+          revision: document.revision, title: document.title, group: section.group, text } });
+      if (offset + 4000 >= section.text.length) break;
+    }
+  }
+  return { records, limited: false };
+}
 /** Rebuildable lexical cache. The current authorized corpus and live revisions remain authoritative. */
 export function createGlobalSearchService(input: { index: SemanticIndex; source: SearchSource; active(): boolean; capacity?: number }) {
   let current = new Map<string, SearchDocument>(), coverage = blankCoverage();
@@ -48,38 +64,41 @@ export function createGlobalSearchService(input: { index: SemanticIndex; source:
       const before = (saved[0]?.payload ?? {}) as Record<string, string>;
       const after: Record<string, string> = Object.create(null);
       const next = new Map<string, SearchDocument>();
+      const changed: Array<{ document: SearchDocument; count: number }> = [];
       let count = 0;
       for (const document of corpus.documents) {
         check(signal);
-        const records: IndexRecord[] = [];
-        for (const section of document.sections) {
-          // 4K chars/overlap bound IPC bytes and allow phrases across chunk boundaries.
-          for (let offset = 0; offset < section.text.length; offset += 2800) {
-            if (count >= (input.capacity ?? 48000)) { coverage.limited = true; break; }
-            const text = section.text.slice(offset, offset + 4000);
-            const line = (section.locator.line ?? 1) + (section.text.slice(0, offset).match(/\n/g)?.length ?? 0);
-            records.push({ id: `${document.id}:${section.key}:${offset}`, path: document.id, revision: document.revision,
-              text: `${document.title}\n${text}`, tokens: "", payload: { ...section.locator, line, documentId: document.id,
-                revision: document.revision, title: document.title, group: section.group, text } });
-            count++;
-            if (offset + 4000 >= section.text.length) break;
-          }
-        }
-        coverage[document.coverage]++;
+        const { records, limited } = documentRecords(document, (input.capacity ?? 48000) - count);
+        count += records.length; coverage.limited ||= limited;
+        if (limited && !records.length) break;
+        coverage[limited && document.coverage === "indexed" ? "partial" : document.coverage]++;
         if (document.detail && coverage.details.length < 100) coverage.details.push({ title: document.title, detail: document.detail });
         if (!records.length) continue;
         // Display titles, groups and locators can change without changing the
         // source bytes. Cache the complete normalized records, not just revision.
         after[document.id] = await contentFingerprint(JSON.stringify(records));
         if (before[document.id] !== after[document.id]) {
-          await input.index.remove([document.id], signal);
-          for (let offset = 0; offset < records.length; offset += 32) await input.index.upsert(records.slice(offset, offset + 32), signal);
+          changed.push({ document, count: records.length });
         }
         check(signal); next.set(document.id, document);
         if (coverage.limited) break;
       }
-      const removed = Object.keys(before).filter((id) => !after[id]);
+      // Prune against the actual bounded selection, including changed documents
+      // whose old chunks may be larger. Adding first can evict unchanged sources.
+      // Remove the manifest before mutations: an interrupted pass must rebuild,
+      // including any newly written rows the old manifest did not know about.
+      if (!saved.length) await input.index.clear();
+      const removed = [manifestPath, ...new Set([
+        ...Object.keys(before).filter((id) => before[id] !== after[id]),
+        ...changed.map(({ document }) => document.id)
+      ])];
       for (let i = 0; i < removed.length; i += 200) await input.index.remove(removed.slice(i, i + 200), signal);
+      for (const entry of changed) {
+        check(signal);
+        // Recreate one document at a time instead of retaining every chunk payload.
+        const { records } = documentRecords(entry.document, entry.count);
+        for (let offset = 0; offset < records.length; offset += 32) await input.index.upsert(records.slice(offset, offset + 32), signal);
+      }
       const payload = JSON.stringify(after);
       // Keep manifest bounded; very large corpora safely reindex instead of relying on truncated state.
       if (new TextEncoder().encode(payload).length < 60000) await input.index.upsert([{ id: manifestPath, path: manifestPath, revision: await contentFingerprint(payload), text: "", tokens: "", payload: after }], signal);

@@ -12,12 +12,12 @@ import { refOf } from "../app/features/objects/object.types";
 
 beforeEach(() => vi.stubGlobal("crypto", webcrypto));
 const signal = () => new AbortController().signal;
-function fixture() {
+function fixture(capacity?: number) {
   let active = true;
   let documents: SearchDocument[] = [];
   const source: SearchSource = { collect: async () => ({ documents, limited: false }), verify: async (hit) => documents.some((d) => d.id === hit.documentId && d.revision === hit.revision) };
   const index = createSemanticIndex({ scope: crypto.randomUUID(), workspace: "test", model: "literal", active: () => active });
-  const service = createGlobalSearchService({ index, source, active: () => active });
+  const service = createGlobalSearchService({ index, source, active: () => active, capacity });
   return { service, index, source, setDocuments(value: SearchDocument[]) { documents = value; }, switchScope() { active = false; } };
 }
 function document(id: string, text: string, revision = "1"): SearchDocument { return { id, title: `Note ${id}`, revision, coverage: "indexed", sections: [{ key: "body", group: "note", text, locator: { path: `liteasy://objects/${id}?scope=test`, line: 1 } }] }; }
@@ -60,6 +60,59 @@ test("cached unchanged sources avoid rewrites and overlapping chunks retain phra
   await f.service.refresh(signal(), () => {});
   expect(upsert.mock.calls.flatMap(([records]) => records).every((record) => record.id === "global-search:manifest")).toBe(true);
   expect((await f.service.search('"meaningful phrase across boundary"', undefined, 0, signal())).hits.length).toBeGreaterThan(0);
+});
+test.each([
+  { retainedLast: false, remainBeyondCapacity: false }, { retainedLast: true, remainBeyondCapacity: false },
+  { retainedLast: false, remainBeyondCapacity: true }, { retainedLast: true, remainBeyondCapacity: true }
+])("a bounded refresh retains unchanged hits (retained last: $retainedLast, old sources beyond capacity: $remainBeyondCapacity)", async ({ retainedLast, remainBeyondCapacity }) => {
+  const f = fixture(450);
+  const retained = document("retained", "retained unique evidence");
+  const old = Array.from({ length: 449 }, (_, i) => document(`old-${i}`, `obsolete body ${i}`));
+  const added = Array.from({ length: 449 }, (_, i) => document(`new-${i}`, `replacement body ${i}`));
+  f.setDocuments([retained, ...old]);
+  await f.service.refresh(signal(), () => {});
+  expect((await f.service.search("unique", undefined, 0, signal())).hits).toHaveLength(1);
+
+  f.setDocuments([...(retainedLast ? [...added, retained] : [retained, ...added]), ...(remainBeyondCapacity ? old : [])]);
+  expect(await f.service.refresh(signal(), () => {})).toMatchObject({ indexed: 450, limited: remainBeyondCapacity });
+  expect((await f.service.search("unique", undefined, 0, signal())).hits).toHaveLength(1);
+  expect((await f.index.literalQuery(["obsolete"])).hits).toEqual([]);
+  await f.service.refresh(signal(), () => {});
+  expect((await f.service.search("unique", undefined, 0, signal())).hits).toHaveLength(1);
+});
+test("a source cut at the chunk capacity is reported as partial and excludes its unseen tail", async () => {
+  const f = fixture(3);
+  f.setDocuments([document("bounded", "x".repeat(10000) + " unadmitted needle"), document("excluded", "unadmitted document")]);
+  expect(await f.service.refresh(signal(), () => {})).toMatchObject({ indexed: 0, partial: 1, limited: true });
+  expect((await f.service.search("unadmitted", undefined, 0, signal())).hits).toEqual([]);
+});
+test("shrinking an admitted old document frees its surplus chunks before adding new sources", async () => {
+  const f = fixture(450), retained = document("retained", "retained unique evidence");
+  f.setDocuments([retained, document("shrunk", "x".repeat(4000 + 448 * 2800))]);
+  await f.service.refresh(signal(), () => {});
+  f.setDocuments([...Array.from({ length: 448 }, (_, i) => document(`new-${i}`, `replacement body ${i}`)),
+    document("shrunk", "smaller body", "2"), retained]);
+  await f.service.refresh(signal(), () => {});
+  expect((await f.service.search("unique", undefined, 0, signal())).hits).toHaveLength(1);
+  expect((await f.service.search("smaller", undefined, 0, signal())).hits).toHaveLength(1);
+});
+test("an interrupted replacement rebuilds after a retry with a different bounded selection", async () => {
+  const f = fixture(450), retained = document("retained", "retained unique evidence");
+  f.setDocuments([retained, ...Array.from({ length: 449 }, (_, i) => document(`old-${i}`, `old body ${i}`))]);
+  await f.service.refresh(signal(), () => {});
+  const controller = new AbortController(), upsert = f.index.upsert;
+  const write = vi.spyOn(f.index, "upsert").mockImplementation(async (records, requestSignal) => {
+    const result = await upsert(records, requestSignal);
+    if (records.some((row) => row.path === "interrupted-300")) controller.abort();
+    return result;
+  });
+  f.setDocuments([retained, ...Array.from({ length: 449 }, (_, i) => document(`interrupted-${i}`, `orphan body ${i}`))]);
+  await expect(f.service.refresh(controller.signal, () => {})).rejects.toThrow();
+  write.mockRestore();
+  f.setDocuments([retained, ...Array.from({ length: 449 }, (_, i) => document(`final-${i}`, `final body ${i}`))]);
+  await f.service.refresh(signal(), () => {});
+  expect((await f.service.search("unique", undefined, 0, signal())).hits).toHaveLength(1);
+  expect((await f.index.literalQuery(["orphan"])).hits).toEqual([]);
 });
 test("refresh restores a transiently rejected hit with the same source revision, including after service recreation", async () => {
   const f = fixture(); f.setDocuments([document("n", "owned recovered"), document("keep", "unchanged neighbor")]);
