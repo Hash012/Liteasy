@@ -1,3 +1,4 @@
+import { ProfileRecoveryPanel } from "../features/local-recovery/ProfileRecoveryPanel";
 import { LocalArchivePanel } from "../features/local-archive/LocalArchivePanel";
 import { LocalFileOperationsTool } from "../controllers/LocalFileOperationsTool";
 import { ExtensionSettings, extensionSettingsMatch } from "../features/extensions/ExtensionSettings";
@@ -83,6 +84,7 @@ export function SettingsPane(props: SettingsPaneProps) {
     recommendations: <RecommendationSettingsPanel {...shared} />,
     data: <DataLocationSettings embedded />,
     "local-files": <LocalFileOperationsTool key={scope} scope={scope} currentScope={() => currentScope.current} />,
+    "local-recovery": <ProfileRecoveryPanel key={scope} scopeId={scope} />,
     "local-archive": <LocalArchivePanel key={scope} scopeId={scope} />,
     library: <LibraryLocationPanel
       loadLegacyRoots={props.loadLegacyLibraryRoots} onBackup={props.onBackupLibrary}

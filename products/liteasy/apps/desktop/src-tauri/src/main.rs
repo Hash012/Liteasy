@@ -11,9 +11,11 @@ mod desktop_identity;
 mod device_control;
 mod direct_model;
 mod external_navigation;
+mod headless_cli;
 mod local_archive;
 mod local_library;
 mod local_mcp;
+mod local_recovery;
 mod native_open;
 mod note_files;
 mod object_store;
@@ -35,6 +37,12 @@ fn main() {
         eprintln!("{error}");
         std::process::exit(1);
     }
+    if let Some(code) = headless_cli::run_external_mode(
+        data_location::headless_root,
+        desktop_identity::local_object_scope,
+    ) {
+        std::process::exit(code);
+    }
     if std::env::args().nth(1).as_deref() == Some("--local-mcp") {
         let result = std::env::args()
             .nth(2)
@@ -50,16 +58,30 @@ fn main() {
         std::process::exit(exit_code);
     }
 
-    let app = tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
-            native_open::enqueue_argv(
-                app,
-                argv.into_iter().map(std::ffi::OsString::from),
-                std::path::Path::new(&cwd),
-            );
-            native_open::focus_main_window(app);
-        }))
-        .plugin(tauri_plugin_deep_link::init())
+    let mut context = tauri::generate_context!();
+    if local_dev::recovery_scope().is_some() {
+        for window in &mut context.config_mut().app.windows {
+            window.create = false;
+        }
+        let csp = "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost; font-src 'self' data:; frame-src 'self' blob: data:; img-src 'self' asset: http://asset.localhost blob: data:; media-src 'self' blob: data:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:";
+        context.config_mut().app.security.csp = Some(tauri::utils::config::Csp::Policy(csp.into()));
+        context.config_mut().app.security.dev_csp =
+            Some(tauri::utils::config::Csp::Policy(csp.into()));
+    }
+    let mut builder = tauri::Builder::default();
+    if local_dev::recovery_scope().is_none() {
+        builder = builder
+            .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+                native_open::enqueue_argv(
+                    app,
+                    argv.into_iter().map(std::ffi::OsString::from),
+                    std::path::Path::new(&cwd),
+                );
+                native_open::focus_main_window(app);
+            }))
+            .plugin(tauri_plugin_deep_link::init());
+    }
+    let app = builder
         .manage(agent_host::AgentHostState::default())
         .manage(local_mcp::LocalMcpState::default())
         .manage(direct_model::DirectModelState::default())
@@ -68,6 +90,28 @@ fn main() {
         .manage(semantic_index::SemanticIndexState::default())
         .manage(local_library::LocalLibraryWatchState::default())
         .setup(|app| {
+            data_location::initialize(app.handle()).map_err(std::io::Error::other)?;
+            if local_dev::recovery_scope().is_some() {
+                let root = local_dev::profile_root()
+                    .ok_or_else(|| std::io::Error::other("Missing recovery root"))?;
+                let config = app
+                    .config()
+                    .app
+                    .windows
+                    .first()
+                    .ok_or_else(|| std::io::Error::other("Missing window configuration"))?;
+                let window = tauri::WebviewWindowBuilder::from_config(app, config)?
+                    .title("Liteasy · 隔离恢复资料")
+                    .data_directory(
+                        local_dev::recovery_webview_directory(root)
+                            .map_err(std::io::Error::other)?,
+                    );
+                // WKWebView does not support data_directory. Its ephemeral store prevents
+                // reading normal-profile cookies/settings; native restored files still persist.
+                #[cfg(target_os = "macos")]
+                let window = window.incognito(true);
+                window.build()?;
+            }
             // Explicitly set the running window/taskbar icon as well as the EXE
             // resource. Use the full-resolution mark instead of the ICO first frame.
             if let Some(window) = app.get_webview_window("main") {
@@ -75,9 +119,11 @@ fn main() {
                     eprintln!("Could not set the Liteasy window icon: {error}");
                 }
             }
-            data_location::initialize(app.handle()).map_err(std::io::Error::other)?;
-            if let Ok(cwd) = std::env::current_dir() {
-                native_open::enqueue_argv(app.handle(), std::env::args_os(), &cwd);
+
+            if local_dev::recovery_scope().is_none() {
+                if let Ok(cwd) = std::env::current_dir() {
+                    native_open::enqueue_argv(app.handle(), std::env::args_os(), &cwd);
+                }
             }
             if let Err(error) = object_store::recover(app.handle()) {
                 eprintln!("Local object recovery: {error}");
@@ -92,6 +138,12 @@ fn main() {
         })
         .invoke_handler({
             let handler: fn(tauri::ipc::Invoke) -> bool = tauri::generate_handler![
+                local_dev::local_runtime_profile,
+                local_recovery::local_recovery_prepare_backup,
+                local_recovery::local_recovery_prepare_restore,
+                local_recovery::local_recovery_commit,
+                local_recovery::local_recovery_cancel,
+                local_recovery::local_recovery_open_profile,
                 external_navigation::open_external_url,
                 device_control::device_control_request,
                 device_control::device_control_journal,
@@ -206,14 +258,18 @@ fn main() {
                 if local_dev::blocked_command(invoke.message.command()) {
                     invoke
                         .resolver
-                        .reject("local_development_network_and_credentials_disabled");
+                        .reject(if local_dev::recovery_scope().is_some() {
+                            "隔离恢复资料保持离线，请在原工作区使用联网功能。"
+                        } else {
+                            "local_development_network_and_credentials_disabled"
+                        });
                     true
                 } else {
                     handler(invoke)
                 }
             }
         })
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building Liteasy desktop");
     app.run(|app_handle, event| {
         #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]

@@ -1,4 +1,4 @@
-/** Opt-in dev profile only. Production builds tree-shake the call in main.tsx. */
+/** Offline browser boundary for explicit development and validated recovery profiles. */
 export function initializeLocalDevelopment() {
   localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true");
   localStorage.setItem("liteasy.local-literature.v1", JSON.stringify({ "papers.local_mode": true, "profile.local_enabled": false }));

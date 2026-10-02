@@ -1,3 +1,4 @@
+import { getRecoveryRuntime } from "../local-recovery/runtimeProfile";
 import { restoreWebDavPreferences, reportWebDavRestoreError } from "../webdav/webdavPreferences";
 import { formatCloudConnectionError } from "../network/cloudErrorMessage";
 import { useEffect, useRef, useState } from "react";
@@ -57,6 +58,7 @@ export function useAccountSession({
   );
 
   useEffect(() => {
+    if (getRecoveryRuntime()) { clearStoredAccountSession(); setShouldShowLoginReminder(false); return; }
     const storedSession = loadStoredAccountSession();
     if (storedSession) {
       onSessionRestoredRef.current?.();
@@ -105,6 +107,7 @@ export function useAccountSession({
   }, []);
 
   async function loginPersonalAccountWithSystemBrowser() {
+    if (getRecoveryRuntime()) { setAccountMessage("隔离恢复资料保持离线，请在原工作区登录。"); return null; }
     setAccountPending(true);
     setAccountMessage("正在打开系统浏览器进行安全登录...");
     try {
@@ -131,6 +134,7 @@ export function useAccountSession({
   }
 
   async function loginPersonalAccount(login: AccountLoginInput) {
+    if (getRecoveryRuntime()) { setAccountMessage("隔离恢复资料保持离线，请在原工作区登录。"); return null; }
     setAccountPending(true);
     setAccountMessage("正在登录账号...");
 
@@ -154,6 +158,7 @@ export function useAccountSession({
   }
 
   async function registerPersonalAccount(registration: AccountRegistrationInput) {
+    if (getRecoveryRuntime()) { setAccountMessage("隔离恢复资料保持离线，请在原工作区登录。"); return null; }
     setAccountPending(true);
     setAccountMessage("正在注册云账号...");
 

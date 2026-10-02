@@ -34,7 +34,7 @@ export function ProfileRecoveryPanel({ scopeId, service }: { scopeId: string; se
   if (!service && !isLocalRecoveryAvailable()) return null;
   return <section aria-label="隔离配置恢复" className="library-location-panel">
     <h3>本地配置备份与恢复演练</h3>
-    <p>备份当前分区的文献、对象笔记、批注、关联、白板和任务回执。恢复到新的隔离配置，可离线继续阅读与编辑。</p>
+    <p>备份当前分区的文献、对象笔记、批注、关联、白板和对象内的任务回执。恢复到新的隔离配置，可离线继续阅读与编辑。</p>
     <p>不携带登录凭据、插件授权和外部目录访问权。已关联的外部笔记复制为新配置拥有的文件；缺失或不支持的附件会阻止备份。</p>
     <Button icon={<SaveRegular />} disabled={busy || Boolean(preview)} onClick={() => prepare("backup")}>预览本地恢复备份</Button>
     <Button icon={<ArrowCounterclockwiseRegular />} disabled={busy || Boolean(preview)} onClick={() => prepare("restore")}>校验并恢复隔离配置</Button>

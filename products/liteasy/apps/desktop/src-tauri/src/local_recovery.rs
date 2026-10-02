@@ -108,7 +108,7 @@ pub async fn local_recovery_prepare_backup(
 ) -> Result<Option<Preview>, String> {
     check(&scope)?;
     let Some(parent) = rfd::AsyncFileDialog::new()
-        .set_title("选择完整本地恢复备份的保存位置")
+        .set_title("选择本地资料恢复备份的保存位置")
         .pick_folder()
         .await
     else {
@@ -131,7 +131,7 @@ pub async fn local_recovery_prepare_backup(
 pub async fn local_recovery_prepare_restore(scope: String) -> Result<Option<Preview>, String> {
     check(&scope)?;
     let Some(root) = rfd::AsyncFileDialog::new()
-        .set_title("选择完整本地恢复备份")
+        .set_title("选择本地资料恢复备份")
         .pick_folder()
         .await
     else {

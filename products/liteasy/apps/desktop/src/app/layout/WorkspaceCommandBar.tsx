@@ -1,3 +1,4 @@
+import { getRecoveryRuntime } from "../features/local-recovery/runtimeProfile";
 import { useLayoutEffect, useRef, useState } from "react";
 import { Button, Menu, MenuItem, MenuItemCheckbox, MenuList, MenuPopover, MenuTrigger, Toolbar, Tooltip, useRestoreFocusTarget } from "@fluentui/react-components";
 import { ArrowLeftRegular, ArrowRightRegular, HistoryRegular, MoreHorizontalRegular, PanelLeftRegular, SearchRegular, SettingsRegular, SubtractRegular, SquareRegular, SquareMultipleRegular, DismissRegular } from "@fluentui/react-icons";
@@ -56,6 +57,7 @@ export function WorkspaceCommandBar({ state, windowControls, onOpenAi, onOpenSea
   const capacity = Math.max(0, Math.floor((width - (onOpenSearch ? 650 : 350) - (state.onOpenPageHistory ? 32 : 0) - (onOpenAi ? 64 : 0) - (windowControls?.available ? 138 : 0)) / 38));
   const visibleIds = new Set([...actions].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0)).slice(0, capacity).map((action) => action.id));
   const overflow = [...actions.filter((action) => !visibleIds.has(action.id)), ...(state.overflowActions ?? [])];
+  const recovery = getRecoveryRuntime();
   const title = [...(state.breadcrumb?.map((item) => item.label) ?? []), state.title].filter(Boolean).join(" / ");
   return (
     <Toolbar ref={root} aria-label="工作区命令栏" className={`workspace-command-bar${onOpenSearch ? " has-global-search" : ""}`}>
@@ -65,7 +67,7 @@ export function WorkspaceCommandBar({ state, windowControls, onOpenAi, onOpenSea
         <Tooltip content="前进" relationship="description"><Button className="shell-icon-button" appearance="subtle" aria-label="前进" disabled={!state.canGoForward} icon={<ArrowRightRegular />} onClick={state.onGoForward} /></Tooltip>
         {state.onOpenPageHistory ? <Tooltip content="页面历史 · Ctrl+H" relationship="description"><Button className="shell-icon-button" appearance="subtle" aria-label="页面历史" icon={<HistoryRegular />} onClick={state.onOpenPageHistory} /></Tooltip> : null}
       </div>
-      <div className="shell-workspace-title" data-tauri-drag-region={windowControls?.available ? true : undefined} title={title}>{windowControls?.available && title ? `Liteasy · ${title}` : title || "Liteasy"}</div>
+      <div className="shell-workspace-title" data-tauri-drag-region={windowControls?.available ? true : undefined} title={recovery ? `隔离恢复资料 · 离线 / ${title}` : title}>{recovery ? "隔离恢复资料 · 离线" : windowControls?.available && title ? `Liteasy · ${title}` : title || "Liteasy"}</div>
       </div>
       {onOpenSearch ? <Button {...restoreSearchFocus} appearance="outline" className="shell-global-search" icon={<SearchRegular />} aria-label="搜索工作区" title={`搜索工作区 · ${commandShortcut("global-search")}`} onClick={onOpenSearch}><span className="shell-global-search-label">搜索工作区</span><kbd>{commandShortcut("global-search")}</kbd></Button> : null}
       <div className="shell-command-wing shell-command-wing-end">

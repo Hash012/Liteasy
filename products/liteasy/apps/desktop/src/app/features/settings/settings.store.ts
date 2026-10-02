@@ -1,3 +1,4 @@
+import { getRecoveryRuntime } from "../local-recovery/runtimeProfile";
 import { agentContextLimit } from "../context/modelContextBudget";
 import { defaultReadingFontFamily, normalizeReadingFontFamily } from "./readingFonts";
 import type { SettingsState, UpdateSettingCommand } from "./settings.types";
@@ -144,7 +145,7 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
     "papers.metadata_endpoint": "https://api.crossref.org",
     "papers.mineru_mode": "local",
     "papers.mineru_endpoint": "https://mineru.net",
-    "network.recommendation.enabled": true,
+    "network.recommendation.enabled": !getRecoveryRuntime(),
     "network.recommendation.sort_mode": "relevance",
     "network.recommendation.style": loadRecommendationStyle(),
     "assistant.public_audit.enabled": false,

@@ -656,6 +656,9 @@ mod tests {
 /// Ownership follows only sessions successfully verified by the native OAuth flow.
 /// Before login/restore, offline edits belong to the separate local partition.
 pub(crate) fn local_object_scope() -> Result<String, String> {
+    if let Some(scope) = crate::local_dev::recovery_scope() {
+        return Ok(scope.to_string());
+    }
     Ok(ACTIVE_OBJECT_PRINCIPAL
         .lock()
         .map_err(|_| "object_forbidden")?

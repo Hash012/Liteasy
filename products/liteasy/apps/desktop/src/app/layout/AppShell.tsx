@@ -1,3 +1,4 @@
+import { getRecoveryRuntime, localWorkspaceScope } from "../features/local-recovery/runtimeProfile";
 import { revealResource } from "../features/resource-links/resourceReveal";
 import { useGlobalSearchController } from "../controllers/useGlobalSearchController";
 import { GlobalSearchDialog } from "../features/global-search/GlobalSearchDialog";
@@ -347,7 +348,8 @@ export function AppShell({
   const paneLayout = usePaneLayout();
   const dock = useDockLayout();
   const assistantSurfaceHost = useMemo(createDockSurfaceHost, []);
-  const { isOnline } = useConnectivity();
+  const connectivity = useConnectivity();
+  const isOnline = !getRecoveryRuntime() && connectivity.isOnline;
   const [runtimeTheme, setRuntimeTheme] = useState<RuntimeTheme>({ kind: "default" });
   const [workbenchOverlay, setWorkbenchOverlay] = useState<UIDslDocument | null>(null);
   const [activeCenterArtifactId, setActiveCenterArtifactId] = useState<string | null>(null);
@@ -832,7 +834,7 @@ export function AppShell({
   generateVisualizationRef.current = cloudAccount.actions.generateVisualization;
   pendingVisualizationRequestsRef.current = cloudAccount.actions.pendingVisualizationRequests;
   resumeVisualizationGenerationRef.current = cloudAccount.actions.resumeVisualizationGeneration;
-  const assistantScopeId = accountSession?.userId ? `user:${accountSession.userId}` : "local";
+  const assistantScopeId = localWorkspaceScope(accountSession?.userId);
   const externalPapers = useExternalPaperController({
     addExternalPdfToLibrary: workspaceActions.addExternalPdfToLibrary,
     endpoint: externalKnowledgeEndpoint,
@@ -1141,7 +1143,7 @@ export function AppShell({
   const objectWorkbench = useObjectWorkbenchController({
     artifactScopeId: artifactResourceScope(artifactAccountId && settingsState["models.connection_mode"] !== "direct"
       ? `${settingsState["models.cloud_proxy_endpoint"]}:${artifactAccountId}` : undefined).id,
-    scopeId: accountSession?.userId ? `user:${accountSession.userId}` : "local",
+    scopeId: localWorkspaceScope(accountSession?.userId),
     getApi: () => objectAgentApiRef.current!,
     readPaperBytes: loadPaperPdfBytes,
     ensurePaperImported: async (paper) => { await workspaceActions.ensurePapersImported([paper]); },
@@ -1420,7 +1422,7 @@ export function AppShell({
     documentMetadataTransport,
     documents: workspaceState.papers,
     recommendationTransport,
-    recommendationsEnabled: settingsState["network.recommendation.enabled"],
+    recommendationsEnabled: !getRecoveryRuntime() && settingsState["network.recommendation.enabled"],
     recommendationSortMode: settingsState["network.recommendation.sort_mode"],
     recommendationStyle: settingsState["network.recommendation.style"],
     personalizationEnabled: profileSamplingEnabled,

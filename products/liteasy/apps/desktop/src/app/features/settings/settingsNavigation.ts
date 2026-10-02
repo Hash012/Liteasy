@@ -40,6 +40,7 @@ export const settingsSections = [
     keys: ["papers.local_mode", "profile.local_enabled", "network.recommendation.enabled", "network.recommendation.style"] },
   { id: "data", category: "storage", title: "数据保存位置", description: "查看和迁移 Liteasy 的本地数据目录。", keywords: "路径 文件夹 安装目录 LiteasyData 重启 聊天 笔记 生成内容", keys: [] },
   { id: "local-files", category: "storage", title: "本地文件操作", description: "预览并复制连接目录中的 Markdown 与 Canvas 文件，查看任务记录与撤销结果。", keywords: "文件 批量 复制 copy 预览 取消 重试 撤销 receipts", keys: [] },
+  { id: "local-recovery", category: "storage", title: "本地恢复副本", description: "保存本地资料快照，在隔离的离线窗口检查恢复后的文献、笔记和白板。", keywords: "完整 备份 快照 backup profile recovery 恢复 本地 隔离", keys: [] },
   { id: "local-archive", category: "storage", title: "本地资料归档", description: "将选定文献、关联笔记和批注归档，校验并还原到新的文件夹。", keywords: "归档 archive 导出 export 恢复 restore 笔记 批注 备份", keys: [] },
   { id: "library", category: "storage", title: "文献库与备份", description: "管理文献库目录、导入旧库或创建本地备份。", keywords: "路径 保存位置 文件夹 迁移 备份 backup library 本地", keys: [] },
   { id: "webdav", category: "sync", title: "WebDAV 同步", description: "选择同步文献、笔记、白板、画像、外部目录与密钥。", keywords: "WebDAV 服务器 账号 密码 自动同步 备份 冲突 笔记 白板 画像 API key 外部目录", keys: [] },

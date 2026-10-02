@@ -381,7 +381,7 @@ export function LeftPane({
             />
         ) : leftRailView === "settings" ? (
           <SettingsPane
-            localScope={accountScopeId ? `user:${accountScopeId}` : "local"}
+            localScope={contextScopeId ?? (accountScopeId ? `user:${accountScopeId}` : "local")}
             documentMetadataSyncMessage={documentMetadataSyncMessage}
             documentMetadataSyncResult={documentMetadataSyncResult}
             documentMetadataSyncStatus={documentMetadataSyncStatus}
