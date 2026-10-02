@@ -1,9 +1,14 @@
 import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Profiler, StrictMode } from "react";
+import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { AppShell } from "../app/layout/AppShell";
 import type { OriginalFileDescriptor } from "../app/features/original-files/originalFileService";
 import type { Paper } from "../app/features/workspace/workspace.types";
+import type { LocalLibrarySnapshot } from "../app/features/library/localLibrary.types";
+import { createDefaultDockLayout, openDockItem } from "../app/features/dock/dockLayout";
+import { saveDockLayout } from "../app/features/dock/dockLayout.storage";
 
 // Only native transport and the PDF canvas are substitutes. AppShell, the open
 // controller, content identities, reader resolution, and Dock lifecycle are real.
@@ -117,4 +122,87 @@ test("closing the main region releases every original grant without importing or
   expect(screen.queryByRole("tab", { name: "Second original", exact: true })).not.toBeInTheDocument();
   expect(within(library).getByText("本地文献库为空")).toBeInTheDocument();
   expect(emptyLibrary.entries).toEqual([]);
+});
+
+test("retains a cold queued PDF while a saved local workbench and its library finish restoring in StrictMode", async () => {
+  localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true");
+  localStorage.setItem("liteasy.local-literature.v1", JSON.stringify({ "papers.local_mode": true, "profile.local_enabled": false }));
+  saveDockLayout(openDockItem(createDefaultDockLayout(), "document-reader"));
+  const file = original("Cold original");
+  native.pending.push(file);
+  let finishLibrary!: (value: typeof emptyLibrary) => void;
+  const library = new Promise<typeof emptyLibrary>((resolve) => { finishLibrary = resolve; });
+  let finishRead!: (value: Uint8Array) => void;
+  native.read.mockImplementationOnce(() => new Promise<Uint8Array>((resolve) => { finishRead = resolve; }));
+
+  render(<StrictMode><AppShell initialPapers={[]} localLibraryLoader={() => library} /></StrictMode>);
+  expect(screen.queryByRole("dialog", { name: "轻量登录面板" })).not.toBeInTheDocument();
+  await waitFor(() => expect(native.read).toHaveBeenCalledWith(file));
+  // Library restoration and the queued original complete in the same task. A
+  // cleanup based on a previous empty render must not erase this new open ID.
+  await act(async () => {
+    finishLibrary(emptyLibrary);
+    await Promise.resolve();
+    finishRead(new TextEncoder().encode("%PDF-1.7\nCold original"));
+  });
+
+  const tab = await screen.findByRole("tab", { name: "Cold original", exact: true });
+  expect(tab).toHaveAttribute("aria-selected", "true");
+  expect(await screen.findByRole("region", { name: "原文件 PDF 阅读器替身" })).toHaveAttribute("data-source-path", file.path);
+  expect(screen.getByRole("region", { name: "本地文献库" })).toHaveTextContent("本地文献库为空");
+  expect(native.drain).toHaveBeenCalledTimes(1);
+  expect(native.read).toHaveBeenCalledTimes(1);
+  expect(native.release).not.toHaveBeenCalled();
+  expect(native.pending).toEqual([]);
+});
+
+
+test("does not let an earlier empty cleanup erase an original that finishes between commit and passive effects", async () => {
+  localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true");
+  localStorage.setItem("liteasy.local-literature.v1", JSON.stringify({ "papers.local_mode": true, "profile.local_enabled": false }));
+  saveDockLayout(openDockItem(createDefaultDockLayout(), "document-reader"));
+  const file = original("Concurrent cold original");
+  native.pending.push(file);
+  const bytes = new TextEncoder().encode("%PDF-1.7\nConcurrent cold original");
+  const digestOriginal = crypto.subtle.digest.bind(crypto.subtle);
+  const contentHash = await digestOriginal("SHA-256", bytes);
+  let finishDigest: ((value: ArrayBuffer) => void) | undefined;
+  const digest = vi.spyOn(crypto.subtle, "digest").mockImplementationOnce(() => new Promise((resolve) => { finishDigest = resolve; }));
+  native.read.mockResolvedValue(bytes);
+  let finishLibrary!: (value: LocalLibrarySnapshot) => void;
+  const library = new Promise<LocalLibrarySnapshot>((resolve) => { finishLibrary = resolve; });
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  // act() flushes passive effects eagerly and hides this production ordering.
+  // Use the public concurrent root and Profiler commit callback for this case.
+  const runtime = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+  const actEnvironment = runtime.IS_REACT_ACT_ENVIRONMENT;
+  runtime.IS_REACT_ACT_ENVIRONMENT = false;
+  let restoring = false;
+  let releasedAtLibraryCommit = false;
+  try {
+    root.render(<StrictMode><Profiler id="native-open-order" onRender={() => {
+      // Release the native open only after the library marker commits, before
+      // that render's passive pruning effect consumes its captured snapshot.
+      if (restoring && finishDigest && screen.queryByRole("button", { name: "Library marker", exact: true })) {
+        const finish = finishDigest;
+        finishDigest = undefined;
+        releasedAtLibraryCommit = true;
+        finish(contentHash);
+      }
+    }}><AppShell initialPapers={[]} localLibraryLoader={() => library} /></Profiler></StrictMode>);
+    await vi.waitFor(() => expect(finishDigest).toBeTypeOf("function"));
+    restoring = true;
+    finishLibrary({ ...emptyLibrary, entries: [{ id: "library-marker", title: "Library marker", path: "/synthetic/library/marker.pdf", relativePath: "marker.pdf", contentHash: "a".repeat(64) }] });
+    await vi.waitFor(() => expect(releasedAtLibraryCommit).toBe(true));
+    await vi.waitFor(() => expect(screen.getByRole("tab", { name: "Concurrent cold original", exact: true })).toHaveAttribute("aria-selected", "true"));
+    expect(screen.getByRole("region", { name: "原文件 PDF 阅读器替身" })).toHaveAttribute("data-source-path", file.path);
+    expect(native.release).not.toHaveBeenCalled();
+  } finally {
+    root.unmount();
+    host.remove();
+    digest.mockRestore();
+    runtime.IS_REACT_ACT_ENVIRONMENT = actEnvironment;
+  }
 });
