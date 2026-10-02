@@ -1,7 +1,7 @@
 {
   "schema": "liteasy.client-verification/v1",
   "task_id": "C00-C02-C03-C08-C10-C11-first-wave-integration",
-  "head_commit": "781d980dde8326a90565dd7d462bc39cd2c7d6f2",
+  "head_commit": "2ab0efc0c4d1864ab21879375a94c0eed9ab0465",
   "enabled_release_tasks": [],
   "environment": {
     "os": "Ubuntu on WSL2 / WSLg; not native Windows or physical Linux acceptance",
@@ -58,6 +58,16 @@
       "command": "PLAYWRIGHT_BASE_URL=http://127.0.0.1:1420 PLAYWRIGHT_EXECUTABLE_PATH=<cached Chromium> node node_modules/@playwright/test/cli.js test src/tests/browser/workbenchWelcome.browser.spec.ts --reporter=line (3 passed)",
       "exit_code": 0,
       "log": "/tmp/liteasy-client-integrated-browser-final.log"
+    },
+    {
+      "command": "npx vitest run src/tests/originalFilesAppShell.test.tsx (4 passed, includes deterministic cold-open ordering regression)",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-client-integrated-cold-regression.log"
+    },
+    {
+      "command": "npm run ci:contracts (clean committed integration)",
+      "exit_code": 0,
+      "log": "/tmp/liteasy-client-integrated-contracts.log"
     }
   ],
   "checks": {
@@ -66,10 +76,12 @@
       "evidence_paths": [
         "/tmp/liteasy-client-integration-cold-focused.log",
         "/tmp/liteasy-client-integrated-all-tests-final.log",
-        "/tmp/liteasy-client-integrated-smoke.log"
+        "/tmp/liteasy-client-integrated-smoke.log",
+        "/tmp/liteasy-client-integrated-cold-regression.log",
+        "/tmp/liteasy-c03-cold-race-old-red.log"
       ],
       "used_mock": true,
-      "reason": "Final-code affected integration tests: 55 passed. Full suite before final cold-start fix: 3254 passed / 4 existing skipped. AppShell tests substitute native service and PDF canvas; not native acceptance."
+      "reason": "Final-code affected integration tests: 55 passed. Full suite before final cold-start fix: 3254 passed / 4 existing skipped. AppShell tests substitute native service and PDF canvas; not native acceptance. Added two cold-start cases: all four original-file AppShell cases pass on final integration. The deterministic commit/passive-effect case fails with only the former pruning block restored in an isolated worktree; no React internals mocked."
     },
     "typescript_build": {
       "status": "passed",
@@ -89,10 +101,12 @@
       "reason": "Locked all-target check and 11 real temporary-file native-open tests on WSL Ubuntu x64. Does not validate Windows cfg branch or macOS."
     },
     "schema_clean": {
-      "status": "not_run",
-      "evidence_paths": [],
+      "status": "passed",
+      "evidence_paths": [
+        "/tmp/liteasy-client-integrated-contracts.log"
+      ],
       "used_mock": false,
-      "reason": "To be run after committing integration report; per-slice gates passed earlier. No schema or lock changes expected."
+      "reason": "Tracked Tauri resources, all schema generators, tsc and unchanged schema/lock gate pass on clean commit 2ab0efc0. No generated or dependency-lock drift."
     },
     "browser_regression": {
       "status": "passed",
@@ -256,5 +270,6 @@
     "Original main user changes preserved; no automatic push or main merge."
   ],
   "release_ready": false,
-  "notes": "Status follows task-pack template. Full suite timing is explicitly before the native-discovered final startup fix; final affected regressions/build/native operations recorded separately. Toolchain deviations retained without upgrading locks. Runtime fixture/window capture excludes real user documents."
+  "notes": "Status follows task-pack template. Full suite timing is explicitly before the native-discovered final startup fix; final affected regressions/build/native operations recorded separately. Toolchain deviations retained without upgrading locks. Runtime fixture/window capture excludes real user documents.",
+  "implementation_commit": "781d980d"
 }

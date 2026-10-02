@@ -17,7 +17,7 @@
 
 初次全量测试发现 ReaderPane 仍断言旧首页标题，改为当前欢迎页标题并验证原文件入口。没有删除用户行为断言或跳过用例。
 
-真窗口复用 profile 冷启动还暴露了测试替身未覆盖的时序：原生 drain/read 已成功，原文件对象仍在，但旧 render 的可用文献集合为空；延后的页面清理 updater 使用这个旧集合，把刚刚添加的 PDF 标签和激活项删掉。修复后清理只移除该 render 已观察为缺失的 ID，激活项清理也检查是否仍为原值，不再删除随后打开的新页面。修复后真实冷启动与已有高亮恢复通过。诊断用临时 DOM 日志已全部移除。
+真窗口复用 profile 冷启动还暴露了测试替身未覆盖的时序：原生 drain/read 已成功，原文件对象仍在，但旧 render 的可用文献集合为空；延后的页面清理 updater 使用这个旧集合，把刚刚添加的 PDF 标签和激活项删掉。修复后清理只移除该 render 已观察为缺失的 ID，激活项清理也检查是否仍为原值，不再删除随后打开的新页面。修复后真实冷启动与已有高亮恢复通过。补充了预排队文件/StrictMode 回归，以及通过公开 Profiler commit 回调控制资料恢复与哈希完成顺序的回归：只恢复旧清理逻辑时后者失败，最终 4 个原文件集成用例全部通过。没有替换 React 内部实现。诊断用临时 DOM 日志已全部移除。
 
 ## 分层验证
 
@@ -25,7 +25,7 @@
 
 - 完整桌面测试：3254 通过、4 个既有跳过。随后发现并修复上述原生时序问题；最终代码另跑受影响 AppShell/ReaderPane/原文件回归，而非把此前的全量结果冒充最终修复后的完整重跑。
 - 首页 Playwright：3 通过；这是 Chromium 的交互回归，不是原生文件选择器验证。
-- smoke、production build、Cargo locked check、原文件真实文件系统 Rust 测试、workflow lint 和 CI 脚本回归分别记录。生成 schema/锁文件门禁在提交后执行。
+- smoke、production build、Cargo locked check、原文件真实文件系统 Rust 测试、workflow lint 和 CI 脚本回归分别记录。生成 schema/锁文件门禁在干净提交 `2ab0efc0` 上通过，输出 `Selected paths match Git; no generated-file or lockfile drift detected.`。核心接线提交为 `781d980d`，冷启动回归提交为 `2ab0efc0`。
 
 ## 未验收和后续边界
 
