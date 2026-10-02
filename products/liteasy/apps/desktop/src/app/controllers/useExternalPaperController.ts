@@ -104,12 +104,14 @@ export function useExternalPaperController({
   const originalFiles = useMemo(() => createOriginalFileService(scopeId, () => currentScope.current), [scopeId]);
   const originalPapersRef = useRef<OriginalReaderPaper[]>([]);
   const originalGeneration = useRef(0);
+  const originalCloseGenerations = useRef(new Map<string, number>());
   const [originalState, setOriginalState] = useState<{ scope: string; papers: OriginalReaderPaper[] }>({ scope: scopeId, papers: [] });
   const originalReaderPapers = originalState.scope === scopeId ? originalState.papers : [];
   const releaseOriginal = useCallback((file: OriginalFileDescriptor) =>
     (releaseOriginalFile ?? originalFiles.release)(file), [releaseOriginalFile, originalFiles]);
   useEffect(() => {
     originalGeneration.current++;
+    originalCloseGenerations.current.clear();
     originalPapersRef.current = [];
     setOriginalState({ scope: scopeId, papers: [] });
     return () => {
@@ -121,8 +123,10 @@ export function useExternalPaperController({
 
   const openOriginalPdfFile = useCallback(async (file: OriginalFileDescriptor, bytes: Uint8Array) => {
     const generation = originalGeneration.current;
+    const closeGeneration = originalCloseGenerations.current.get(file.path) ?? 0;
     const paper = await buildOriginalReaderPaper(file, bytes);
     if (currentScope.current !== scopeId || originalGeneration.current !== generation) throw new Error("阅读会话已切换，请重新打开文件。");
+    if ((originalCloseGenerations.current.get(file.path) ?? 0) !== closeGeneration) throw new Error("阅读标签已关闭，请重新打开文件。");
     const replaced = originalPapersRef.current.filter((entry) => entry.id === paper.id || entry.sourcePath === paper.sourcePath);
     const next = [...originalPapersRef.current.filter((entry) => !replaced.includes(entry)), paper];
     originalPapersRef.current = next;
@@ -139,6 +143,7 @@ export function useExternalPaperController({
   const closeOriginalPdfFile = useCallback((paperId: string) => {
     const paper = originalPapersRef.current.find((entry) => entry.id === paperId);
     if (!paper) return;
+    originalCloseGenerations.current.set(paper.originalFile.path, (originalCloseGenerations.current.get(paper.originalFile.path) ?? 0) + 1);
     const next = originalPapersRef.current.filter((entry) => entry.id !== paperId);
     originalPapersRef.current = next;
     setOriginalState({ scope: scopeId, papers: next });

@@ -98,6 +98,25 @@ test("reselecting externally changed bytes at the same path reloads only the new
   expect(releaseOriginalFile).toHaveBeenCalledWith(file);
 });
 
+test("closing an original tab wins over an in-flight duplicate open", async () => {
+  const bytes = new TextEncoder().encode("%PDF-1.7\nmanual");
+  const file = { id: "same-native-grant", path: "/synthetic/manual.pdf", fileName: "manual.pdf", format: "pdf" as const, sizeBytes: bytes.length, modifiedUnixMs: 1000 };
+  const releaseOriginalFile = vi.fn(async () => undefined);
+  const h = createHarness(vi.fn(), undefined, { releaseOriginalFile });
+  await act(async () => { await h.result.result.current.openOriginalPdfFile(file, bytes); });
+  const paperId = h.result.result.current.originalReaderPapers[0].id;
+  let finish!: (hash: ArrayBuffer) => void;
+  const digest = vi.spyOn(crypto.subtle, "digest").mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  try {
+    const reopening = h.result.result.current.openOriginalPdfFile(file, bytes);
+    const failed = expect(reopening).rejects.toThrow("已关闭");
+    act(() => h.result.result.current.closeOriginalPdfFile(paperId));
+    await act(async () => { finish(new Uint8Array(32).buffer); await failed; });
+    expect(h.result.result.current.originalReaderPapers).toEqual([]);
+    expect(releaseOriginalFile).toHaveBeenCalledWith(file);
+  } finally { digest.mockRestore(); }
+});
+
 test("acquires a confirmed related version as a local metadata entry with its identity snapshot", async () => {
   const harness = createHarness(vi.fn());
   const literature = {
