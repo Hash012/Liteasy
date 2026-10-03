@@ -1,6 +1,7 @@
 import { Avatar, Badge, Button, ProgressBar } from "@fluentui/react-components";
 import { BookOpenRegular, PeopleRegular, AlertRegular, StorageRegular } from "@fluentui/react-icons";
 import type { OrganizationSummary } from "./organization.types";
+import { OrganizationAccessDetails } from "./OrganizationAccessDetails";
 import "./organization.css";
 
 export function organizationRoleLabel(role: string) {
@@ -28,6 +29,7 @@ export function OrganizationOverview({ summary, onOpenSharedLibrary, onMarkNotif
       <Button appearance="primary" size="small" icon={<BookOpenRegular />} disabled={!libraryReady || !onOpenSharedLibrary}
         onClick={() => onOpenSharedLibrary?.(summary)}>打开共享文献库</Button>
     </section>
+    <OrganizationAccessDetails snapshot={summary.accessSnapshot} />
     <details className="organization-surface organization-disclosure">
       <summary><PeopleRegular /><span>成员</span><span className="organization-count">{summary.memberCount}</span></summary>
       <ul className="organization-member-list">

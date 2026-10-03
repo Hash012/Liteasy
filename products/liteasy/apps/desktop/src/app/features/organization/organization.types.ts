@@ -17,6 +17,20 @@ export type OrganizationAuditEvent = {
 
 export type OrganizationRole = "owner" | "admin" | "member";
 
+export type OrganizationAction =
+  | "read_metadata" | "read_body" | "comment" | "edit_own" | "moderate"
+  | "upload" | "export_original" | "share_excerpt" | "publish_public"
+  | "invite" | "change_role" | "transfer_owner" | "run_external_model";
+
+export type OrganizationAccessSnapshot = {
+  actionConstraints: { inviteRoles: Array<"admin" | "member"> };
+  allowedActions: OrganizationAction[];
+  authorizationRevision: number;
+  denialReasons: Partial<Record<OrganizationAction, string>>;
+  policyExceptions: Array<"owner_export">;
+  policyRevision: number | null;
+};
+
 export type OrganizationMember = {
   id: string;
   name: string;
@@ -80,6 +94,7 @@ export type OrganizationTaskSummary = {
 };
 
 export type OrganizationSummary = {
+  accessSnapshot?: OrganizationAccessSnapshot;
   auditEvents: OrganizationAuditEvent[];
   canCreateOrganization?: boolean;
   memberCount: number;
@@ -98,6 +113,7 @@ export type OrganizationSummary = {
 };
 
 export type OrganizationListItem = {
+  accessSnapshot?: OrganizationAccessSnapshot;
   canCreateOrganization?: boolean;
   memberCount: number;
   myRole: OrganizationRole;

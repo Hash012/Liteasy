@@ -1,5 +1,6 @@
 import type { ModelTransportResponse } from "../models/modelHttpClient";
 import { readCloudServiceError } from "../network/cloudErrorMessage";
+import { normalizeOrganizationAccessSnapshot } from "./organizationAccessSnapshot";
 import type {
   OrganizationAuditEvent,
   OrganizationMember,
@@ -128,6 +129,7 @@ function normalizeSummary(value: unknown): OrganizationSummary {
     }
     : undefined;
   return {
+    accessSnapshot: normalizeOrganizationAccessSnapshot(value),
     auditEvents: auditEvents(value.auditEvents),
     ...(typeof value.canCreateOrganization === "boolean"
       ? { canCreateOrganization: value.canCreateOrganization }

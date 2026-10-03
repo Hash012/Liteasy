@@ -1,6 +1,7 @@
 import type { ModelTransportResponse } from "../models/modelHttpClient";
 import { readCloudServiceError } from "../network/cloudErrorMessage";
 import type { OrganizationList, OrganizationListInput, OrganizationRole } from "./organization.types";
+import { normalizeOrganizationAccessSnapshot } from "./organizationAccessSnapshot";
 
 export type OrganizationListTransportRequest = {
   body: string;
@@ -76,6 +77,7 @@ export function createOrganizationListClient({
       const name = string(value.name);
       if (!myRole || !organizationId || !name) throw new Error("组织列表返回格式无效");
       return {
+        accessSnapshot: normalizeOrganizationAccessSnapshot(value),
         ...(typeof value.canCreateOrganization === "boolean"
           ? { canCreateOrganization: value.canCreateOrganization }
           : {}),
