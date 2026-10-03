@@ -128,7 +128,9 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
     try {
       if (sourceReplyId) await communityApi.updateReply(sourceReplyId, { body });
       else if (original) await communityApi.updateAnnotation(original.id, input);
-      else if (parent) await communityApi.createReply(parent.id, { body, publishAsAnnotation, tags: publishAsAnnotation ? tags : [], targets: publishAsAnnotation ? targets : [] });
+      else if (parent) await communityApi.createReply(parent.id, { body, publishAsAnnotation,
+        expectedParent: { revision: parent.revision, visibility: parent.visibility, organizationId: parent.organizationId },
+        tags: publishAsAnnotation ? tags : [], targets: publishAsAnnotation ? targets : [] });
       else await communityApi.createAnnotation(input);
       onSaved();
     } catch (reason) {

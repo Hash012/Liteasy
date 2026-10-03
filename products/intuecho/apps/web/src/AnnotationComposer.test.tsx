@@ -200,6 +200,7 @@ test("submits a pure reply with the canonical empty publication payload", async 
 
   await waitFor(() => expect(createReply).toHaveBeenCalledWith("annotation-parent", {
     body: "Thread only",
+    expectedParent: { revision: 1, visibility: "public", organizationId: null },
     publishAsAnnotation: false,
     tags: [],
     targets: []
@@ -227,7 +228,9 @@ test("canonicalizes inherited legacy targets before publishing a reply", async (
     },
     purpose: "forum_compose"
   });
-  expect(payload).toEqual({ body: "Published reply", publishAsAnnotation: true, tags: [], targets: [{ kind: "whole_document", literature: { literatureId: "literature-parent" } }] });
+  expect(payload).toEqual({ body: "Published reply", publishAsAnnotation: true,
+    expectedParent: { revision: 1, visibility: "public", organizationId: null },
+    tags: [], targets: [{ kind: "whole_document", literature: { literatureId: "literature-parent" } }] });
   expect(payload.targets[0]).not.toBe(publicParent.targets[0]);
 });
 
@@ -328,6 +331,7 @@ test("clearing inherited targets disables only independent publication", async (
   await user.click(screen.getByRole("button", { name: "发布" }));
   await waitFor(() => expect(createReply).toHaveBeenCalledWith(publicParent.id, {
     body: "Still a reply",
+    expectedParent: { revision: 1, visibility: "public", organizationId: null },
     publishAsAnnotation: false,
     tags: [],
     targets: []
