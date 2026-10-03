@@ -37,6 +37,41 @@ function createSyncableFixture() {
 }
 
 describe("thinReadingIntuechoSyncQueue", () => {
+  test("rejects conflicting duplicate receipts and keeps confirmed batch items out of retries", async () => {
+    const root = createThinReadingDocument({ ...createSyncableFixture(), artifactId: "artifact-sync-receipts" });
+    let document = addThinReadingAnnotation(root, {
+      body: "第一条合成批注。", excerpt: "first", nodeId: root.rootNodeId, visibility: "pending_public"
+    });
+    document = addThinReadingAnnotation(document, {
+      body: "第二条合成批注。", excerpt: "second", nodeId: root.rootNodeId, visibility: "pending_public"
+    });
+    const queue = listThinReadingPendingPublicAnnotations(document);
+    const receipts = queue.map((item, index) => ({
+      annotationId: item.annotationId,
+      intuechoAnnotationId: `intuecho-remote-${index}`,
+      queueKey: item.queueKey,
+      status: "synced",
+      syncedAt: "2026-07-28T01:00:00.000Z"
+    }));
+    const results = await createHttpIntuechoSyncAdapter({
+      endpoint: "https://intuecho.example.com",
+      sessionId: "desktop-token",
+      transport: async () => ({
+        json: async () => ({ results: [receipts[0], { ...receipts[0], intuechoAnnotationId: "conflicting" }, receipts[1]] }),
+        ok: true,
+        status: 200
+      })
+    }).syncPendingAnnotations(queue);
+
+    expect(results).toEqual([
+      expect.objectContaining({ annotationId: queue[0].annotationId, status: "failed" }),
+      expect.objectContaining({ annotationId: queue[1].annotationId, status: "synced" })
+    ]);
+    const { applyThinReadingAnnotationSyncResults } = await import("../app/features/thin-reading/thinReadingProjection");
+    const persisted = applyThinReadingAnnotationSyncResults(document, results);
+    expect(listThinReadingPendingPublicAnnotations(persisted).map((item) => item.queueKey)).toEqual([queue[0].queueKey]);
+  });
+
   test("projects pending public annotations into an artifact-scoped local queue", () => {
     const fixture = createThinReadingFixture();
     const root = createThinReadingDocument({

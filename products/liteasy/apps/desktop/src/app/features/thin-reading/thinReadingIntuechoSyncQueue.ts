@@ -129,15 +129,25 @@ function normalizeRemoteResults(input: {
       : [];
   const itemsByKey = new Map(input.items.map((item) => [item.queueKey, item]));
   const resultByKey = new Map<string, ThinReadingIntuechoSyncResult>();
+  const seenQueueKeys = new Set<string>();
   for (const result of results) {
     if (!result || typeof result !== "object" || Array.isArray(result)) {
       continue;
     }
     const candidate = result as Partial<ThinReadingIntuechoSyncResult>;
     const item = typeof candidate.queueKey === "string" ? itemsByKey.get(candidate.queueKey) : undefined;
-    if (!item || candidate.annotationId !== item.annotationId || resultByKey.has(item.queueKey)) {
+    if (!item) continue;
+    if (seenQueueKeys.has(item.queueKey)) {
+      resultByKey.set(item.queueKey, Object.freeze({
+        annotationId: item.annotationId,
+        error: "Intuecho 同步响应包含重复回执，请核实后重试。",
+        queueKey: item.queueKey,
+        status: "failed"
+      }));
       continue;
     }
+    seenQueueKeys.add(item.queueKey);
+    if (candidate.annotationId !== item.annotationId) continue;
     if (candidate.status === "synced" && typeof candidate.intuechoAnnotationId === "string" &&
       candidate.intuechoAnnotationId.trim().length > 0 && typeof candidate.syncedAt === "string") {
       resultByKey.set(item.queueKey, Object.freeze({

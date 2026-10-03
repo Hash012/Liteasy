@@ -94,6 +94,38 @@ describe("PDF annotation publication operations", () => {
 });
 
 describe("PDF annotation publication client", () => {
+  test("rejects duplicate receipts for one operation without discarding other batch receipts", async () => {
+    const first = createUpsertOperation(annotation(), literature);
+    const second = createUpsertOperation(annotation({ id: "annotation-local-2" }), literature);
+    const firstReceipt = {
+      annotationId: first.annotationId,
+      queueKey: first.queueKey,
+      remoteAnnotationId: "remote-1",
+      remoteRevision: 1,
+      state: "published",
+      syncedAt: "2026-08-09T03:00:00.000Z"
+    };
+    const client = createForumClient({
+      fetchImpl: vi.fn(async () => ({
+        json: async () => ({ results: [
+          firstReceipt,
+          { ...firstReceipt, remoteAnnotationId: "remote-conflicting" },
+          { ...firstReceipt, annotationId: second.annotationId, queueKey: second.queueKey, remoteAnnotationId: "remote-2" }
+        ] }),
+        ok: true,
+        status: 200
+      })) as unknown as typeof fetch,
+      sessionId: "desktop-session"
+    });
+
+    await expect(client.applyAnnotationPublications([first, second])).resolves.toEqual({
+      results: [
+        expect.objectContaining({ pendingOperation: first, state: "failed" }),
+        expect.objectContaining({ annotationId: second.annotationId, remoteAnnotationId: "remote-2", state: "published" })
+      ]
+    });
+  });
+
   test("sends a retract operation without claiming success early", async () => {
     const operation = createRetractOperation(annotation({
       publication: { desiredVisibility: "private", remoteAnnotationId: "annotation-remote-1", state: "pending_retract" }

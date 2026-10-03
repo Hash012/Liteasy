@@ -80,6 +80,7 @@ export function createForumClient({
     const values = value && typeof value === "object" && !Array.isArray(value) &&
       "results" in value && Array.isArray(value.results) ? value.results : [];
     const byQueueKey = new Map<string, ForumAnnotationPublicationResult>();
+    const seenQueueKeys = new Set<string>();
     for (const value of values) {
       if (!value || typeof value !== "object" || Array.isArray(value)) continue;
       const candidate = value as Partial<ForumAnnotationPublicationReceipt> & {
@@ -90,7 +91,15 @@ export function createForumClient({
       const operation = typeof candidate.queueKey === "string"
         ? operations.find((item) => item.queueKey === candidate.queueKey)
         : undefined;
-      if (!operation || candidate.annotationId !== operation.annotationId || byQueueKey.has(operation.queueKey)) continue;
+      if (!operation) continue;
+      if (seenQueueKeys.has(operation.queueKey)) {
+        byQueueKey.set(operation.queueKey, failedPublication(operation,
+          "论坛发布响应包含重复回执，请核实后重试。",
+          { code: "DUPLICATE_PUBLICATION_RECEIPT" }));
+        continue;
+      }
+      seenQueueKeys.add(operation.queueKey);
+      if (candidate.annotationId !== operation.annotationId) continue;
       if (typeof candidate.error === "string" && candidate.error.trim()) {
         byQueueKey.set(operation.queueKey, failedPublication(operation, candidate.error, {
           ...(typeof candidate.code === "string" && candidate.code.trim() ? { code: candidate.code } : {}),
