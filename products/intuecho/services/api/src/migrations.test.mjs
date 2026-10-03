@@ -32,6 +32,7 @@ test("loads ordered immutable forum migrations", () => {
     "023_enforce_version_identity_boundaries.sql",
     "024_annotation_contribution_provenance.sql",
     "025_community_governance_and_notifications.sql",
+    "026_structured_community_notification_events.sql",
     "027_tag_appeal_submission_audience.sql"
   ]);
   assert.match(migrations[0].checksum, /^[a-f0-9]{64}$/);
@@ -101,7 +102,7 @@ test("readiness rejects missing, changed and unknown migrations", async () => {
   }));
   assert.deepEqual(await verifyIntuechoMigrations({
     async query() { return { rows }; }
-  }), { count: 26, current: true });
+  }), { count: 27, current: true });
   await assert.rejects(
     () => verifyIntuechoMigrations({
       async query() { return { rows: [

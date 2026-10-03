@@ -86,7 +86,7 @@ function SubscriptionControl({ api, preference, label, onChanged }: {
     setBusy(true); setStatus("");
     try {
       const result = await api.setPreference(next);
-      if (active.current) { setValue(result.preference); setStatus(next.muted ? "已静音，不再生成此范围的新提醒。" : next.subscribed ? "已订阅新回复。" : "已取消订阅，不再生成此范围的新提醒。"); onChanged?.(); }
+      if (active.current) { setValue(result.preference); setStatus(next.muted ? "已静音，不再生成此范围的新提醒。" : next.subscribed ? "已订阅此范围的工作提醒。" : "已取消订阅，不再生成此范围的新提醒。"); onChanged?.(); }
     } catch (error) { if (active.current) setStatus(errorText(error)); }
     finally { if (active.current) setBusy(false); }
   }
@@ -98,9 +98,9 @@ function SubscriptionControl({ api, preference, label, onChanged }: {
   </section>;
 }
 
-type InboxProps = { api: CommunityGovernanceApi; actorBinding: string; onOpenAnnotation: (id: string) => void };
+type InboxProps = { api: CommunityGovernanceApi; actorBinding: string; onOpenAnnotation: (id: string) => void; onOpenReports?: () => void };
 export function QuietInbox(props: InboxProps) { return <Inbox key={props.actorBinding} {...props} />; }
-function Inbox({ api, onOpenAnnotation }: InboxProps) {
+function Inbox({ api, onOpenAnnotation, onOpenReports }: InboxProps) {
   const active = useActive();
   const [notifications, setNotifications] = useState<CommunityNotification[] | null>(null);
   const [read, setRead] = useState(new Set<string>());
@@ -120,12 +120,12 @@ function Inbox({ api, onOpenAnnotation }: InboxProps) {
     finally { if (active.current) setBusy(null); }
   }
   return <section className="community-governance" aria-label="工作通知">
-    <h2>工作通知</h2><p>仅显示你订阅的讨论提醒。组织邀请和私聊继续在消息中查看。</p>
+    <h2>工作通知</h2><p>仅显示你订阅范围内的回复、提及、阅读任务与治理结果。组织邀请和私聊继续在消息中查看。</p>
     <Button disabled={busy !== null} onClick={() => void load()}>刷新通知</Button>
     {notifications?.length === 0 && <p>暂无通知。可在讨论中主动订阅。</p>}
     {notifications?.map((item) => <article key={item.id} className="community-notification">
-      <p>{item.available ? "订阅的讨论有新回复" : "相关内容当前不可访问。"}</p>
-      {item.available && <Button onClick={() => onOpenAnnotation(item.target.annotationId)}>查看讨论</Button>}
+      <p>{item.available ? ({ reply: "订阅的讨论有新回复", mention: "讨论中有人提及了你", reading_task: "订阅的组织有新的阅读任务", report_result: "你的举报有处理结果", tag_appeal_result: "你的标签申诉有处理结果", moderation: "你的内容有治理状态变化" }[item.kind]) : "相关内容当前不可访问。"}</p>
+      {item.available && (item.kind === "report_result" && onOpenReports ? <Button onClick={onOpenReports}>查看举报记录</Button> : <Button onClick={() => onOpenAnnotation(item.target.annotationId)}>查看讨论</Button>)}
       {read.has(item.id) || (item.available && item.readAt) ? <span>已读</span> : <Button disabled={busy !== null} onClick={() => void markRead(item.id)}>标为已读</Button>}
     </article>)}
     {status && <p role="status">{status}</p>}

@@ -258,6 +258,7 @@ export type AnnotationParentSnapshot = {
 };
 
 export type CreateReplyInput = {
+  mentionedUserIds?: string[];
   expectedParent?: AnnotationParentSnapshot;
   body: string;
   publishAsAnnotation?: boolean;
@@ -266,6 +267,7 @@ export type CreateReplyInput = {
 };
 
 export type CreateReply = {
+  mentionedUserIds?: string[];
   expectedParent?: AnnotationParentSnapshot;
   body: string;
   publishAsAnnotation: boolean;
@@ -318,6 +320,7 @@ export declare const desktopDraftHandoffSchema: z.ZodType<unknown>;
 export declare const annotationVisibilitySchema: z.ZodType<"private" | "organization" | "mutual_followers" | "public">;
 export declare const literatureMetadataSchema: z.ZodType<LegacyLiteratureReference["metadata"]>;
 export type CreateAnnotationInput = {
+  notificationIntent?: "reading_task";
   expectedAuthorProfileRevision?: number;
   body: string;
   contribution?: AnnotationContribution;

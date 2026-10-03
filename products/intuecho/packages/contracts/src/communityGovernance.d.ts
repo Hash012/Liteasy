@@ -17,8 +17,8 @@ export type CommunityReport = {
 export type CommunityNotification = {
   id: string; available: false;
 } | {
-  id: string; available: true; kind: "reply"; createdAt: string; readAt: string | null;
-  target: { annotationId: string; revision: number };
+  id: string; available: true; kind: "reply" | "mention" | "reading_task" | "report_result" | "tag_appeal_result" | "moderation"; createdAt: string; readAt: string | null;
+  target: { annotationId: string; revision: number; reportId?: string; appealId?: string };
 };
 export declare const communityPreferenceSchema: z.ZodType<CommunityPreference>;
 export declare const communityReportSchema: z.ZodType<CommunityReportInput>;

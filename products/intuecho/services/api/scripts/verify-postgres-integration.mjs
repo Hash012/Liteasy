@@ -9,6 +9,7 @@ import { migrateIntuecho, readIntuechoMigrations, verifyIntuechoMigrations } fro
 import { PostgresAnnotationCommunityRepository } from "../src/postgresAnnotationCommunityRepository.mjs";
 import { PostgresForumRepository } from "../src/postgresForumRepository.mjs";
 import { validateIntuechoPostgresIntegrationDatabases } from "./postgresIntegrationGuard.mjs";
+import { verifyStructuredCommunityEvents } from "./verify-structured-community-events.mjs";
 import { verifyCommunityGovernance } from "./verify-community-governance.mjs";
 import { verifyPlatformGovernanceVisibility } from "./verify-platform-governance-visibility.mjs";
 
@@ -130,6 +131,7 @@ try {
     "023_enforce_version_identity_boundaries.sql",
     "024_annotation_contribution_provenance.sql",
     "025_community_governance_and_notifications.sql",
+    "026_structured_community_notification_events.sql",
     "027_tag_appeal_submission_audience.sql"
   ];
   assert.equal(migrated.applied.every((name) => expectedMigrations.includes(name)), true);
@@ -297,10 +299,25 @@ try {
       literature_id, identity_kind, identity_value, identity_source
     ) VALUES ($1, 'openalex_id', 'W170000001', 'public_registry')
   `, [legacyAggregateId]);
+  const beforeEventsDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "intuecho-migration-026-legacy-"));
+  let beforeEventsMigration;
+  try {
+    for (const item of allMigrations.filter((item) => item.name > migration015.name && item.name < "026_")) fs.writeFileSync(path.join(beforeEventsDirectory, item.name), item.sql);
+    beforeEventsMigration = await migrateIntuecho(migrationPool, { applicationRole: application.user, directory: beforeEventsDirectory });
+  } finally { fs.rmSync(beforeEventsDirectory, { force: true, recursive: true }); }
+  assert.deepEqual(beforeEventsMigration.applied, expectedMigrations.slice(15, 25));
+  await pool.query("INSERT INTO community_notification_events(id,annotation_id,reply_id,actor_id) VALUES ('reply:migration-026', 'migration-015-parent', 'migration-015-existing-reply', 'migration-026-author')");
+  await pool.query("INSERT INTO community_notifications(id,event_id,recipient_id,read_at) VALUES ('migration-026-notification', 'reply:migration-026', 'migration-026-reader', '2026-10-01T00:00:00.000Z')");
   const sourceConfirmedMigration = await migrateIntuecho(migrationPool, {
     applicationRole: application.user
   });
-  assert.deepEqual(sourceConfirmedMigration.applied, expectedMigrations.slice(15));
+  assert.deepEqual(sourceConfirmedMigration.applied, expectedMigrations.slice(25));
+  assert.deepEqual([...beforeEventsMigration.applied, ...sourceConfirmedMigration.applied], expectedMigrations.slice(15));
+  const upgradedEvent = (await pool.query("SELECT kind,source_id,target_subject_id FROM community_notification_events WHERE id = 'reply:migration-026'")).rows[0];
+  assert.deepEqual(upgradedEvent, { kind: "reply", source_id: "migration-015-existing-reply", target_subject_id: null });
+  assert.equal((await pool.query("SELECT read_at FROM community_notifications WHERE id = 'migration-026-notification'")).rows[0].read_at.toISOString(), "2026-10-01T00:00:00.000Z");
+  await assert.rejects(pool.query("INSERT INTO community_notification_events(id,annotation_id,actor_id,kind,source_id) VALUES ('invalid-reply-source','migration-015-parent','migration-026-author','reply','missing-reply')"), (error) => error.code === "23514");
+  await assert.rejects(pool.query("INSERT INTO community_notification_events(id,annotation_id,actor_id,kind,source_id,reply_id) VALUES ('invalid-mention-target','migration-015-parent','migration-026-author','mention','migration-015-existing-reply','migration-015-existing-reply')"), (error) => error.code === "23514");
   const currentMigrations = await verifyIntuechoMigrations(pool);
   assert.deepEqual(currentMigrations, { count: expectedMigrations.length, current: true });
   const constrainedLegacyAggregate = await migrationPool.query(
@@ -2168,6 +2185,7 @@ try {
     subscriber: { id: "governance-verification-subscriber", name: "Synthetic Governance Subscriber", initials: "GS" },
     literatureId: confirmedLiterature.literatureId
   });
+  const structuredCommunityEvents = await verifyStructuredCommunityEvents({ pool, literatureId: confirmedLiterature.literatureId });
   const platformGovernance = await verifyPlatformGovernanceVisibility({ pool, literatureId: confirmedLiterature.literatureId });
   const previewAuthor = { id: "profile-preview-verification", name: "Synthetic Profile Author", initials: "PA" };
   const firstProfile = await annotations.updateProfile(previewAuthor.id, { educationStage: null, institutions: [{ name: "Synthetic institution one" }] });
@@ -2368,6 +2386,7 @@ try {
     ...counts.rows[0],
     accountDeletion: true,
     communityGovernance,
+    structuredCommunityEvents: { ...structuredCommunityEvents, preservesLegacyReplyReadState: true },
     platformGovernance,
     authorProfileRevision: true,
     database: application.database,

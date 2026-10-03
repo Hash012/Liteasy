@@ -42,8 +42,8 @@ function organizationPack(pack: CommunityAnnotation) {
   }
 }
 
-export function buildReadingPack({ organizationId, title, guide, materials, deadline }: {
-  organizationId: string; title: string; guide: string; materials: ReadingMaterial[]; deadline?: string;
+export function buildReadingPack({ organizationId, title, guide, materials, deadline, notifyReadingTask = false }: {
+  organizationId: string; title: string; guide: string; materials: ReadingMaterial[]; deadline?: string; notifyReadingTask?: boolean;
 }): CreateAnnotationInput {
   required(organizationId, 200, "请先选择有效组织。");
   const selected = [...new Set(materials.map((material) => required(material.literatureId, 200, "请重新确认文献身份。")))];
@@ -55,6 +55,7 @@ export function buildReadingPack({ organizationId, title, guide, materials, dead
   return {
     body: `# ${required(title, 160, "请填写不超过 160 字的读书主题。")}\n\n## 导读\n${required(guide, 6000, "请填写导读，最多 6000 字。")}${deadline ? `\n\n讨论截止日期：${deadline}` : ""}`,
     organizationId,
+    ...(notifyReadingTask ? { notificationIntent: "reading_task" as const } : {}),
     shareToPlaza: false,
     tags: ["读书包", "讨论中"],
     targets: selected.map((literatureId) => ({ kind: "whole_document", literature: { literatureId } })),
@@ -62,9 +63,9 @@ export function buildReadingPack({ organizationId, title, guide, materials, dead
   };
 }
 
-export function buildReadingReply({ pack, kind, body, evidence, unresolved, references = [], viewerId }: {
+export function buildReadingReply({ pack, kind, body, evidence, unresolved, references = [], viewerId, mentionedUserIds = [] }: {
   pack: CommunityAnnotation; kind: ReadingContributionKind; body: string; evidence?: string;
-  unresolved?: string; references?: CommunityReply[]; viewerId: string;
+  unresolved?: string; references?: CommunityReply[]; viewerId: string; mentionedUserIds?: string[];
 }): CreateReplyInput {
   organizationPack(pack);
   if (kind === "summary" && pack.author.id !== viewerId) throw new Error("仅读书包主持人可整理主持人摘要。");
@@ -80,6 +81,7 @@ export function buildReadingReply({ pack, kind, body, evidence, unresolved, refe
   required(content, 8000, "本次内容过长，请减少正文或引用后重试。");
   return {
     body: content,
+    ...(mentionedUserIds.length ? { mentionedUserIds: [...new Set(mentionedUserIds)] } : {}),
     expectedParent: { revision: pack.revision, visibility: "organization", organizationId: pack.organizationId },
     publishAsAnnotation: false, tags: [], targets: []
   };

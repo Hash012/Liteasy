@@ -475,6 +475,7 @@ export const annotationContributionSchema = z.object({
 });
 
 export const createAnnotationSchema = z.object({
+  notificationIntent: z.literal("reading_task").optional(),
   expectedAuthorProfileRevision: z.number().int().nonnegative().optional(),
   body: z.string().trim().min(1).max(8000),
   contribution: annotationContributionSchema.optional(),
@@ -484,6 +485,9 @@ export const createAnnotationSchema = z.object({
   targets: z.array(annotationTargetSchema).min(1).max(100),
   visibility: annotationVisibilitySchema
 }).superRefine((value, context) => {
+  if (value.notificationIntent === "reading_task" && (value.visibility !== "organization" || !value.tags.includes("读书包"))) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["notificationIntent"], message: "阅读任务提醒必须属于组织读书包。" });
+  }
   if (value.shareToPlaza && value.visibility !== "public") {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["shareToPlaza"], message: "只有公开批注可以进入广场。" });
   }
@@ -523,6 +527,7 @@ export const annotationParentSnapshotSchema = z.object({
 });
 
 export const createReplySchema = z.object({
+  mentionedUserIds: z.array(z.string().trim().min(1).max(200)).max(5).optional(),
   body: z.string().trim().min(1).max(8000),
   expectedParent: annotationParentSnapshotSchema.optional(),
   publishAsAnnotation: z.boolean().default(false),

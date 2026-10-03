@@ -191,3 +191,38 @@ test("a fresh authorization rejection removes active organization content despit
   expect(screen.queryByText(/Read and compare/)).not.toBeInTheDocument();
   expect(screen.queryByRole("textbox", { name: "问题或原文对照" })).not.toBeInTheDocument();
 });
+
+
+test("reading task notifications require an unchecked explicit choice and a confirmed audience preview", async () => {
+  const user = userEvent.setup();
+  render(<OrganizationReadingGroup {...props} />);
+  await user.click(screen.getByRole("button", { name: "创建读书包" }));
+  await user.type(screen.getByRole("textbox", { name: "读书主题" }), "Reading task");
+  await user.type(screen.getByRole("textbox", { name: "导读与讨论目标" }), "Review the evidence");
+  await user.click(screen.getByRole("checkbox", { name: /已确认文献/ }));
+  const notify = screen.getByRole("checkbox", { name: "作为阅读任务提醒已订阅成员" });
+  expect(notify).not.toBeChecked();
+  await user.click(notify);
+  await user.click(screen.getByRole("button", { name: "预览读书包" }));
+  expect(within(screen.getByRole("region", { name: "提交预览" })).getByText(/阅读任务提醒仅发给已订阅且未静音的成员/)).toBeInTheDocument();
+  expect(communityApi.createAnnotation).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "确认提交" }));
+  await waitFor(() => expect(communityApi.createAnnotation).toHaveBeenCalledWith(expect.objectContaining({ notificationIntent: "reading_task", visibility: "organization", shareToPlaza: false })));
+});
+
+test("mention choices use loaded participants, require preview, and reset for another actor", async () => {
+  const user = userEvent.setup();
+  vi.mocked(communityApi.replies).mockResolvedValue({ replies: [replyFixture()] });
+  const { rerender } = render(<OrganizationReadingGroup {...props} />);
+  const mention = await screen.findByRole("checkbox", { name: "提及 Synthetic contributor" });
+  expect(mention).not.toBeChecked();
+  await user.click(mention);
+  await user.type(screen.getByRole("textbox", { name: "问题或原文对照" }), "Please check this assumption");
+  await user.click(screen.getByRole("button", { name: "预览贡献" }));
+  expect(within(screen.getByRole("region", { name: "提交预览" })).getByText(/将提及：Synthetic contributor/)).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "确认提交" }));
+  await waitFor(() => expect(communityApi.createReply).toHaveBeenCalledWith("pack_1", expect.objectContaining({ mentionedUserIds: ["member_1"], publishAsAnnotation: false })));
+  rerender(<OrganizationReadingGroup {...props} viewerId="member_2" actorBinding="issuer:member_2:2" />);
+  expect(await screen.findByRole("checkbox", { name: "提及 Synthetic contributor" })).not.toBeChecked();
+  expect(screen.queryByRole("region", { name: "提交预览" })).not.toBeInTheDocument();
+});

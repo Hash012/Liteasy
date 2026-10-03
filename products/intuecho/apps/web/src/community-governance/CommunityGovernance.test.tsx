@@ -112,3 +112,22 @@ test("report history shows status and review records a reason without changing a
   await user.click(screen.getByRole("button", { name: "记录不予采纳" }));
   await waitFor(() => expect(api.resolveReport).toHaveBeenCalledWith("report_1", { status: "dismissed", reason: "insufficient_evidence" }));
 });
+
+
+test("available structured events identify their purpose and report results open the user's records", async () => {
+  const api = apiFixture();
+  const kinds = ["mention", "reading_task", "report_result", "tag_appeal_result", "moderation"] as const;
+  vi.mocked(api.notifications).mockResolvedValue({ notifications: kinds.map((kind) => ({ id: kind, available: true, kind, createdAt: "now", readAt: null, target: { annotationId: "pack_1", revision: 1 } })) });
+  const onOpenReports = vi.fn();
+  const onOpenAnnotation = vi.fn();
+  const user = userEvent.setup();
+  render(<QuietInbox api={api} actorBinding="member1" onOpenAnnotation={onOpenAnnotation} onOpenReports={onOpenReports} />);
+  await screen.findByText("讨论中有人提及了你");
+  expect(screen.getByText("订阅的组织有新的阅读任务")).toBeInTheDocument();
+  expect(screen.getByText("你的举报有处理结果")).toBeInTheDocument();
+  expect(screen.getByText("你的标签申诉有处理结果")).toBeInTheDocument();
+  expect(screen.getByText("你的内容有治理状态变化")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "查看举报记录" }));
+  expect(onOpenReports).toHaveBeenCalledTimes(1);
+  expect(onOpenAnnotation).not.toHaveBeenCalled();
+});

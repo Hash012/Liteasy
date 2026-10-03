@@ -1,7 +1,7 @@
 import { currentOrganizationChoices } from "./organizationChoices.mjs";
 import { annotationContribution } from "./annotationContribution.mjs";
 import { platformAppealSummary } from "./tagAppealVisibility.mjs";
-import { initializeSqliteCommunityGovernance, recordSqliteCommunityReplyEvent } from "./communityGovernanceRepository.mjs";
+import { initializeSqliteCommunityGovernance, recordSqliteCommunityReplyEvent, recordSqliteCommunitySourceEvent } from "./communityGovernanceRepository.mjs";
 import { thinReadingPublicationLookup } from "./thinReadingPublicationLookup.mjs";
 import { thinReadingSyncPayload } from "./thinReadingSyncPayload.mjs";
 import { createHash, randomUUID } from "node:crypto";
@@ -1392,6 +1392,7 @@ export class SqliteAnnotationCommunityRepository {
       this.db.prepare("UPDATE annotations_v2 SET contribution_json = ? WHERE id = ?").run(JSON.stringify(annotationContribution(input.contribution)), id);
       this.#replaceUserTags(id, input.tags, now);
       this.#assignPlatformTags(id, input.body, input.tags, now);
+      if (input.notificationIntent === "reading_task") recordSqliteCommunitySourceEvent(this.db, { kind: "reading_task", sourceId: id, annotationId: id, actorId: author.id });
     })();
     return this.annotation(id, author);
   }
@@ -1556,7 +1557,7 @@ export class SqliteAnnotationCommunityRepository {
         this.#assignPlatformTags(derivedAnnotationId, input.body, input.tags, now);
         this.db.prepare("UPDATE annotation_replies_v2 SET derived_annotation_id = ? WHERE id = ?").run(derivedAnnotationId, replyId);
       }
-      recordSqliteCommunityReplyEvent(this.db, { replyId, annotationId: parentAnnotationId, actorId: author.id });
+      recordSqliteCommunityReplyEvent(this.db, { replyId, annotationId: parentAnnotationId, actorId: author.id, mentionedUserIds: input.mentionedUserIds });
     })();
     const row = this.db.prepare("SELECT * FROM annotation_replies_v2 WHERE id = ?").get(replyId);
     return { annotation: derivedAnnotationId ? await this.annotation(derivedAnnotationId, author) : null, reply: { ...this.#serializeReply(row), viewerIsAuthor: true } };
@@ -1896,8 +1897,10 @@ export class SqliteAnnotationCommunityRepository {
         this.db.prepare("UPDATE annotation_replies_v2 SET moderated_at = ?, moderation_reason = ?, moderated_by = ?, updated_at = ? WHERE id = ?")
           .run(action === "withdraw" ? now : null, action === "withdraw" ? reason : null, action === "withdraw" ? `${authority}:${moderatorId}`.slice(0, 200) : null, now, linkedReplyId);
       }
+      const auditId = `annotationaudit_${randomUUID()}`;
       this.db.prepare("INSERT INTO annotation_moderation_audit_v2(id, annotation_id, linked_reply_id, action, reason, admin_user_id, trace_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-        .run(`annotationaudit_${randomUUID()}`, annotation.id, linkedReplyId, action, reason, moderatorId, traceId, now);
+        .run(auditId, annotation.id, linkedReplyId, action, reason, moderatorId, traceId, now);
+      recordSqliteCommunitySourceEvent(this.db, { kind: "moderation", sourceId: auditId, annotationId: annotation.id, actorId: moderatorId });
     })();
     return { action, annotationId: annotation.id, ok: true };
   }
@@ -2088,6 +2091,7 @@ export class SqliteAnnotationCommunityRepository {
         .run(tagState, now, appeal.annotation_id, appeal.tag_slug);
       this.db.prepare("INSERT INTO annotation_tag_appeal_audit_v2(id, appeal_id, annotation_id, tag_slug, decision, admin_user_id, reason, trace_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .run(`appealaudit_${randomUUID()}`, appealId, appeal.annotation_id, appeal.tag_slug, input.decision, adminUserId, input.reason, traceId, now);
+      recordSqliteCommunitySourceEvent(this.db, { kind: "tag_appeal_result", sourceId: appealId, annotationId: appeal.annotation_id, actorId: adminUserId });
     })();
     return { appealId, decision: input.decision, resolvedAt: now };
   }

@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
+import { SqliteAnnotationCommunityRepository } from "./annotationCommunitySqlite.mjs";
 import { createIntuechoApp } from "./server.mjs";
 
 test("the application mounts governance and generates inbox events inside real reply transactions", async () => {
@@ -37,4 +38,40 @@ test("the application mounts governance and generates inbox events inside real r
   } finally {
     await app.close(); db.close(); await rm(directory, { recursive: true, force: true });
   }
+});
+
+
+test("real routes preserve explicit task and mention intent and deliver an authorized governance result", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "intuecho-structured-event-routes-"));
+  const access = async () => ({ allowed: true, role: "admin" });
+  const { app, db } = await createIntuechoApp({
+    databasePath: join(directory, "synthetic.db"),
+    identityVerifier: async (token) => ({ id: token, name: "Synthetic researcher", initials: "SR" }),
+    authorizeOrganizationAccess: access, authorizeOrganizationVisibility: async () => true
+  });
+  const request = (user, method, url, payload) => app.inject({ headers: { authorization: `Bearer ${user}` }, method, url, payload });
+  try {
+    const annotations = new SqliteAnnotationCommunityRepository(db, { authorizeOrganizationAccess: access, authorizeOrganizationVisibility: async () => true });
+    const literature = await annotations.confirmRefetchedLiterature({ id: "host", name: "Synthetic host", initials: "SH" }, { candidateKey: "crossref:doi:10.1000/structured-route", provider: "crossref", record: { authors: ["Synthetic Author"], title: "Synthetic route material", identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/structured-route" }], documentType: "journal_article", year: 2026 } });
+    assert.equal((await request("reader", "PUT", "/v1/me/community-preferences", { targetKind: "organization", targetId: "synthetic-org", subscribed: true, muted: false, blocked: false })).statusCode, 200);
+    const input = { body: "Synthetic task through the actual HTTP contract", visibility: "organization", organizationId: "synthetic-org", notificationIntent: "reading_task", shareToPlaza: false, tags: ["读书包"], targets: [{ kind: "whole_document", literature: { literatureId: literature.literatureId } }] };
+    const created = await request("host", "POST", "/v1/annotations", input);
+    assert.equal(created.statusCode, 201, created.body);
+    const parent = created.json().annotation;
+    assert.equal((await request("reader", "GET", "/v1/me/notifications")).json().notifications[0].kind, "reading_task");
+    const invalidTask = await request("host", "POST", "/v1/annotations", { ...input, visibility: "public", organizationId: undefined });
+    assert.equal(invalidTask.statusCode, 400, invalidTask.body);
+    assert.equal((await request("host", "PUT", "/v1/me/community-preferences", { targetKind: "thread", targetId: parent.id, subscribed: true, muted: false, blocked: false })).statusCode, 200);
+    const replyInput = { body: "A deliberate participant mention", publishAsAnnotation: false, tags: [], targets: [], mentionedUserIds: ["host"], expectedParent: { revision: parent.revision, visibility: "organization", organizationId: "synthetic-org" } };
+    const reply = await request("reader", "POST", `/v1/annotations/${parent.id}/replies`, replyInput);
+    assert.equal(reply.statusCode, 201, reply.body);
+    assert.equal((await request("host", "GET", "/v1/me/notifications")).json().notifications[0].kind, "mention");
+    assert.equal((await request("reader", "POST", `/v1/annotations/${parent.id}/replies`, { ...replyInput, mentionedUserIds: ["a", "b", "c", "d", "e", "f"] })).statusCode, 400);
+    const report = await request("reader", "POST", `/v1/annotations/${parent.id}/reports`, { revision: parent.revision, reason: "other", detail: "Synthetic concern for the authorized organization reviewer." });
+    assert.equal(report.statusCode, 201, report.body);
+    const resolved = await request("reviewer", "POST", `/v1/community-reports/${report.json().report.id}/resolve`, { status: "resolved", reason: "reviewed" });
+    assert.equal(resolved.statusCode, 200, resolved.body);
+    const results = (await request("reader", "GET", "/v1/me/notifications")).json().notifications;
+    assert.equal(results.find((item) => item.kind === "report_result").target.reportId, report.json().report.id);
+  } finally { await app.close(); db.close(); await rm(directory, { recursive: true, force: true }); }
 });

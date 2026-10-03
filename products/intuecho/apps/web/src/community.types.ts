@@ -121,6 +121,7 @@ export type ConversationSummary = {
 };
 
 export type CreateReplyInput = {
+  mentionedUserIds?: string[];
   body: string;
   expectedParent?: AnnotationParentSnapshot;
   publishAsAnnotation: boolean;

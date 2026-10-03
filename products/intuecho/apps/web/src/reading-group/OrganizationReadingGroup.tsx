@@ -55,6 +55,8 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, access, o
   const [title, setTitle] = useState("");
   const [guide, setGuide] = useState("");
   const [deadline, setDeadline] = useState("");
+  const [notifyReadingTask, setNotifyReadingTask] = useState(false);
+  const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
   const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
   const [kind, setKind] = useState<ReadingContributionKind>("question");
   const [contribution, setContribution] = useState("");
@@ -81,6 +83,7 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, access, o
   const replies = thread?.context === context ? thread.replies : [];
   const activePreview = preview?.context === context ? preview : null;
   const isHost = pack?.author.id === viewerId;
+  const participants = [...new Map([...(pack ? [pack.author] : []), ...replies.map((reply) => reply.author)].filter((author) => author.id !== viewerId).map((author) => [author.id, author])).values()];
 
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => { setCreatedPacks([]); }, [organization.annotations]);
@@ -90,6 +93,7 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, access, o
     setThread(null);
     setThreadError("");
     setReferenceIds([]);
+    setMentionedUserIds([]);
     if (!canRead || !pack) return;
     let active = true;
     void communityApi.replies(pack.id).then((result) => {
@@ -118,17 +122,18 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, access, o
   }
   function previewPack() {
     prepare(() => ({ context, kind: "pack", payload: buildReadingPack({
-      organizationId: organization.organizationId, title, guide, deadline,
+      organizationId: organization.organizationId, title, guide, deadline, notifyReadingTask,
       materials: materials.filter((material) => selectedMaterials.includes(material.literatureId))
     }) }));
   }
   function previewContribution(contributionKind: ReadingContributionKind) {
     if (!pack) return;
     prepare(() => {
+      if (mentionedUserIds.some((id) => !participants.some((participant) => participant.id === id))) throw new Error("讨论参与者已变化，请重新选择提及对象。");
       const references = contributionKind === "summary" ? replies.filter((reply) => referenceIds.includes(reply.id)) : [];
       return { context, kind: "reply", references, payload: buildReadingReply({
         pack, kind: contributionKind, body: contributionKind === "summary" ? summary : contribution,
-        evidence: contributionKind === "summary" ? undefined : evidence, unresolved, references, viewerId
+        evidence: contributionKind === "summary" ? undefined : evidence, unresolved, references, viewerId, mentionedUserIds
       }) };
     });
   }
@@ -149,7 +154,7 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, access, o
         setCreatedPacks((current) => [...current, result.annotation]);
         setSelectedId(result.annotation.id);
         setCreateOpen(false);
-        setTitle(""); setGuide(""); setDeadline(""); setSelectedMaterials([]);
+        setTitle(""); setGuide(""); setDeadline(""); setSelectedMaterials([]); setNotifyReadingTask(false);
       } else if (approved.kind === "reply" && pack) {
         if (approved.references.length) {
           const current = await communityApi.replies(pack.id);
@@ -165,7 +170,7 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, access, o
           throw new Error("回复回执与批准的讨论不一致，请刷新核对。");
         }
         setThread({ context, replies: [...replies.filter((reply) => reply.id !== result.reply.id), result.reply] });
-        setContribution(""); setEvidence(""); setSummary(""); setUnresolved(""); setReferenceIds([]);
+        setContribution(""); setEvidence(""); setSummary(""); setUnresolved(""); setReferenceIds([]); setMentionedUserIds([]);
       } else if (approved.kind === "edit" && pack) {
         if (approved.reply.author.id !== viewerId || approved.reply.parentAnnotationId !== pack.id) return;
         const result = await communityApi.updateReply(approved.reply.id, approved.payload);
@@ -207,6 +212,7 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, access, o
         <fieldset><legend>精选资料</legend>{materials.map((material) => <Checkbox key={material.literatureId} label={material.title} checked={selectedMaterials.includes(material.literatureId)} onChange={(_, data) => editInput(() => setSelectedMaterials((current) => data.checked ? [...current, material.literatureId] : current.filter((id) => id !== material.literatureId)))} />)}
           {!materials.length && <p>先在组织内关联已确认的文献，再将其加入读书包。</p>}</fieldset>
         <label>讨论截止日期（可选）<Input type="date" value={deadline} onChange={(_, data) => editInput(() => setDeadline(data.value))} /></label>
+        <Checkbox label="作为阅读任务提醒已订阅成员" checked={notifyReadingTask} onChange={(_, data) => editInput(() => setNotifyReadingTask(data.checked === true))} />
         <Button disabled={!canComment || pending} onClick={previewPack}>预览读书包</Button>
       </section>}
       {!!packs.length && <label className="reading-group-select">选择读书包<select value={pack?.id ?? ""} onChange={(event) => {
@@ -227,6 +233,9 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, access, o
         {editing && <section className="reading-group-form" aria-label="更正自己的贡献"><label>更正内容<Textarea value={editBody} maxLength={8000} onChange={(_, data) => editInput(() => setEditBody(data.value))} /></label>
           <Button disabled={!canComment || pending || !editBody.trim()} onClick={() => prepare(() => ({ context, kind: "edit", reply: editing, payload: { body: editBody.trim() } }))}>预览更正</Button>
           <Button appearance="subtle" onClick={() => editInput(() => setEditing(null))}>取消更正</Button></section>}
+        {!!participants.length && <fieldset><legend>提及讨论参与者（可选，最多 5 人）</legend><p>仅提醒已订阅且未静音的参与者；输入姓名不会自动提及。</p>
+          {participants.map((participant) => <Checkbox key={participant.id} label={`提及 ${participant.name}`} checked={mentionedUserIds.includes(participant.id)} disabled={!canComment || pending || (mentionedUserIds.length >= 5 && !mentionedUserIds.includes(participant.id))} onChange={(_, data) => editInput(() => setMentionedUserIds((current) => data.checked ? [...current, participant.id] : current.filter((id) => id !== participant.id)))} />)}
+        </fieldset>}
         <section className="reading-group-form" aria-label="贡献问题或原文对照"><label>贡献用途<select value={kind} onChange={(event) => editInput(() => setKind(event.target.value as ReadingContributionKind))}><option value="question">问题</option><option value="evidence">原文对照与回应</option></select></label>
           <label>问题或原文对照<Textarea value={contribution} maxLength={6000} onChange={(_, data) => editInput(() => setContribution(data.value))} /></label>
           <label>原文位置（自行核对）<Input value={evidence} maxLength={500} onChange={(_, data) => editInput(() => setEvidence(data.value))} /></label>
@@ -247,6 +256,8 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, access, o
       {activePreview && <section className="reading-group-preview" aria-label="提交预览"><h3>提交预览</h3><p>仅组织内：{organization.name}</p>
         <p className="reading-group-body">{activePreview.payload.body}</p>
         {activePreview.kind === "pack" && <p>关联 {activePreview.payload.targets.length} 篇文献，仅发送文献引用，不发送原文件。</p>}
+        {activePreview.kind === "pack" && activePreview.payload.notificationIntent === "reading_task" && <p>阅读任务提醒仅发给已订阅且未静音的成员。</p>}
+        {activePreview.kind === "reply" && !!activePreview.payload.mentionedUserIds?.length && <p>将提及：{participants.filter((participant) => activePreview.payload.mentionedUserIds?.includes(participant.id)).map((participant) => participant.name).join("、")}。仅提醒已订阅且未静音的参与者。</p>}
         <Button appearance="primary" disabled={!canComment || pending} onClick={() => void submitPreview()}>{pending ? "正在提交" : "确认提交"}</Button>
         <Button disabled={pending} appearance="subtle" onClick={() => setPreview(null)}>返回修改</Button>
       </section>}

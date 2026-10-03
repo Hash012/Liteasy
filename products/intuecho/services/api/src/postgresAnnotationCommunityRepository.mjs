@@ -1,6 +1,6 @@
 import { assertIntuechoAccountActive } from "./accountWriteFence.mjs";
 import { platformAppealSummary } from "./tagAppealVisibility.mjs";
-import { recordPostgresCommunityReplyEvent } from "./communityGovernanceRepository.mjs";
+import { recordPostgresCommunityReplyEvent, recordPostgresCommunitySourceEvent } from "./communityGovernanceRepository.mjs";
 import { currentOrganizationChoices } from "./organizationChoices.mjs";
 import { annotationContribution } from "./annotationContribution.mjs";
 import { thinReadingPublicationLookup } from "./thinReadingPublicationLookup.mjs";
@@ -1029,6 +1029,7 @@ export class PostgresAnnotationCommunityRepository {
       await client.query("UPDATE annotations SET contribution = $2::jsonb WHERE id = $1", [id, JSON.stringify(annotationContribution(input.contribution))]);
       await this.#replaceUserTags(client, id, input.tags);
       await this.#assignPlatformTags(client, id, input.body, input.tags);
+      if (input.notificationIntent === "reading_task") await recordPostgresCommunitySourceEvent(client, { kind: "reading_task", sourceId: id, annotationId: id, actorId: author.id });
       return this.annotation(id, author, client);
     });
   }
@@ -1202,7 +1203,7 @@ export class PostgresAnnotationCommunityRepository {
         await this.#assignPlatformTags(client, derivedAnnotationId, input.body, input.tags);
         await client.query("UPDATE annotation_replies SET derived_annotation_id = $2 WHERE id = $1", [replyId, derivedAnnotationId]);
       }
-      await recordPostgresCommunityReplyEvent(client, { replyId, annotationId: parentAnnotationId, actorId: author.id });
+      await recordPostgresCommunityReplyEvent(client, { replyId, annotationId: parentAnnotationId, actorId: author.id, mentionedUserIds: input.mentionedUserIds });
       const reply = await this.#replyRow(replyId, client);
       return { annotation: derivedAnnotationId ? await this.annotation(derivedAnnotationId, author, client) : null, reply: this.#serializeReply(reply, author) };
     });
@@ -1765,6 +1766,7 @@ export class PostgresAnnotationCommunityRepository {
           id, appeal_id, annotation_id, tag_id, decision, admin_user_id, reason, trace_id
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       `, [`appealaudit_${randomUUID()}`, appealId, appeal.annotation_id, appeal.tag_id, input.decision, adminUserId, input.reason, traceId]);
+      await recordPostgresCommunitySourceEvent(client, { kind: "tag_appeal_result", sourceId: appealId, annotationId: appeal.annotation_id, actorId: adminUserId });
       return { appealId, decision: input.decision, resolvedAt: resolved.rows[0].resolved_at.toISOString() };
     });
   }
@@ -1839,10 +1841,12 @@ export class PostgresAnnotationCommunityRepository {
          WHERE id = $1
       `, [annotation.source_reply_id, action, reason, `${authority}:${moderatorId}`.slice(0, 200)]);
     }
+    const auditId = `annotationaudit_${randomUUID()}`;
     await client.query(`
       INSERT INTO annotation_moderation_audit(id, annotation_id, linked_reply_id, action, reason, admin_user_id, trace_id)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
-    `, [`annotationaudit_${randomUUID()}`, annotation.id, annotation.source_reply_id, action, reason, moderatorId, traceId]);
+    `, [auditId, annotation.id, annotation.source_reply_id, action, reason, moderatorId, traceId]);
+    await recordPostgresCommunitySourceEvent(client, { kind: "moderation", sourceId: auditId, annotationId: annotation.id, actorId: moderatorId });
     return { action, annotationId: annotation.id, ok: true };
   }
 }
