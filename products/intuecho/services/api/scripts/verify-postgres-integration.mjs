@@ -120,7 +120,12 @@ try {
     "015_reply_projection_lifecycle.sql",
     "016_source_confirmed_literature_identity.sql",
     "017_constrain_legacy_aggregate_confirmation.sql",
-    "018_align_literature_identity_model.sql"
+    "018_align_literature_identity_model.sql",
+    "019_classify_literature_identifiers.sql",
+    "020_expand_computer_science_literature_sources.sql",
+    "021_add_audited_pmlr_identity.sql",
+    "022_preserve_literature_source_artifacts.sql",
+    "023_enforce_version_identity_boundaries.sql"
   ];
   assert.equal(migrated.applied.every((name) => expectedMigrations.includes(name)), true);
   const stagedMigrationRows = await pool.query("SELECT name FROM schema_migrations ORDER BY name");
@@ -290,12 +295,9 @@ try {
   const sourceConfirmedMigration = await migrateIntuecho(migrationPool, {
     applicationRole: application.user
   });
-  assert.deepEqual(sourceConfirmedMigration.applied, [
-    "016_source_confirmed_literature_identity.sql",
-    "017_constrain_legacy_aggregate_confirmation.sql",
-    "018_align_literature_identity_model.sql"
-  ]);
-  assert.deepEqual(await verifyIntuechoMigrations(pool), { count: 18, current: true });
+  assert.deepEqual(sourceConfirmedMigration.applied, expectedMigrations.slice(15));
+  const currentMigrations = await verifyIntuechoMigrations(pool);
+  assert.deepEqual(currentMigrations, { count: expectedMigrations.length, current: true });
   const constrainedLegacyAggregate = await migrationPool.query(
     "SELECT confirmation_status FROM literature_records WHERE id = $1",
     [legacyAggregateId]
@@ -578,7 +580,8 @@ try {
   });
   assert.deepEqual(identityCorrectedLiterature.identifiers.map((identifier) => `${identifier.kind}:${identifier.value}`), [
     "doi:10.1000/integration-confirmed",
-    "openalex_id:W424242"
+    "openalex_id:W424242",
+    "title_authors_year_hash:sha256:2161eccb78611a26725b877b0355df872e02b2868ed7b1288104307b3cde378a"
   ]);
   const identityCorrectionState = await pool.query(`
     SELECT
@@ -591,7 +594,13 @@ try {
   `, [confirmedLiterature.literatureId]);
   assert.equal(Number(identityCorrectionState.rows[0].revision), 2);
   assert.deepEqual(identityCorrectionState.rows[0].prior_identifiers, [
-    { kind: "doi", source: "public_registry", value: "10.1000/integration-confirmed" }
+    { kind: "doi", role: "confirmable", source: "public_registry", value: "10.1000/integration-confirmed" },
+    {
+      kind: "title_authors_year_hash",
+      role: "candidate_alias",
+      source: "metadata",
+      value: "sha256:2161eccb78611a26725b877b0355df872e02b2868ed7b1288104307b3cde378a"
+    }
   ]);
   const corroboratedLiterature = await annotations.confirmRefetchedLiterature(literatureOwner, {
     candidateKey: "openalex:openalex_id:W434343",
@@ -651,12 +660,12 @@ try {
     }
   });
   const relatedPreprint = await annotations.confirmRefetchedLiterature(literatureOwner, {
-    candidateKey: "arxiv:arxiv_id:2401.01234",
+    candidateKey: "arxiv:arxiv_id:2401.01234v1",
     provider: "arxiv",
     record: {
       authors: ["Evidence Author"],
       documentType: "preprint",
-      identifiers: [{ kind: "arxiv_id", source: "public_registry", value: "2401.01234" }],
+      identifiers: [{ kind: "arxiv_id", source: "public_registry", value: "2401.01234v1" }],
       title: "Evidenced Version Relation",
       year: 2024
     },
@@ -684,7 +693,7 @@ try {
   })), [{
     createdAt: "timestamp",
     evidence: {
-      candidateKey: "arxiv:arxiv_id:2401.01234",
+      candidateKey: "arxiv:arxiv_id:2401.01234v1",
       sourceField: "arxiv:doi",
       targetIdentifier: { kind: "doi", value: "10.1000/evidenced-publication" }
     },
@@ -2263,7 +2272,7 @@ try {
     ...counts.rows[0],
     accountDeletion: true,
     database: application.database,
-    migrations: migrated.applied.length,
+    migrations: currentMigrations.count,
     verified: true
   })}\n`);
 } finally {
