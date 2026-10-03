@@ -695,7 +695,7 @@ test("closing a draft flushes pending keystrokes before unmount", async () => {
   const user = userEvent.setup(); const closed = vi.fn();
   render(<AnnotationComposer owner="actor-close" context={{}} onClose={closed} onSaved={vi.fn()} />);
   await user.type(screen.getByLabelText("批注内容"), "Private last keystrokes");
-  await user.click(screen.getByRole("button", { name: "关闭", exact: true }));
+  await user.click(screen.getByRole("button", { name: "关闭" }));
   await waitFor(() => expect(closed).toHaveBeenCalledOnce());
   expect(draftRecords<{ body: string }>("actor-close", "new-annotation").map((draft) => draft.value.body)).toContain("Private last keystrokes");
   expect(communityApi.createAnnotation).not.toHaveBeenCalled();
@@ -706,7 +706,7 @@ test("storage failure keeps the editor open instead of claiming a successful clo
   render(<AnnotationComposer owner="actor-quota" context={{}} onClose={closed} onSaved={vi.fn()} />);
   await user.type(screen.getByLabelText("批注内容"), "Do not lose this body");
   const storage = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new DOMException("Quota", "QuotaExceededError"); });
-  await user.click(screen.getByRole("button", { name: "关闭", exact: true }));
+  await user.click(screen.getByRole("button", { name: "关闭" }));
   expect(closed).not.toHaveBeenCalled(); expect(screen.getByLabelText("批注内容")).toHaveValue("Do not lose this body");
   expect(screen.getByRole("alert")).toHaveTextContent("草稿尚未保存");
   storage.mockRestore();
