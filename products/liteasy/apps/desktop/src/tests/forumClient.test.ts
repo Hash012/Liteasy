@@ -11,6 +11,7 @@ const identity: ForumPaperIdentity = {
 
 function context(): ForumContext {
   return {
+    visibility: "private",
     targets: [{
       anchorHash: "sha256:source",
       excerpt: "一段选文",
@@ -34,7 +35,7 @@ describe("forum client", () => {
     await client.createDraftHandoff(context());
 
     expect(fetchMock).toHaveBeenCalledWith("http://forum.test/v1/integrations/desktop/annotation-handoffs", expect.objectContaining({
-      body: JSON.stringify({ ...context(), body: "", tags: [], shareToPlaza: true, visibility: "public" }),
+      body: expect.any(String),
       headers: expect.objectContaining({ Authorization: "Bearer intuecho-token" }),
       method: "POST"
     }));
@@ -42,6 +43,7 @@ describe("forum client", () => {
     expect(body).not.toHaveProperty("topicId");
     expect(body).not.toHaveProperty("workId");
     expect(body).not.toHaveProperty("sourcePath");
+    expect(body).toEqual({ ...context(), body: "", tags: [], shareToPlaza: false });
   });
 
   test("loads a public contextual feed by stable literature identity", async () => {
@@ -68,13 +70,36 @@ describe("forum client", () => {
     await client.createDraftHandoff(context(), { body: "我的批注", tags: ["证据"] });
 
     expect(fetchMock).toHaveBeenCalledWith("http://forum.test/v1/integrations/desktop/annotation-handoffs", expect.objectContaining({
-      body: JSON.stringify({ ...context(), body: "我的批注", tags: ["证据"], shareToPlaza: true, visibility: "public" }),
+      body: expect.any(String),
       method: "POST"
     }));
+    expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body))).toEqual({ ...context(), body: "我的批注", tags: ["证据"], shareToPlaza: false });
   });
 
   test("rejects handoff creation without a Liteasy desktop session", async () => {
     const client = createForumClient({ apiBaseUrl: "http://forum.test", fetchImpl: vi.fn() as unknown as typeof fetch });
     await expect(client.createDraftHandoff(context())).rejects.toThrow("请先登录 Liteasy");
+  });
+
+  test("does not upload an older draft without an explicit audience", async () => {
+    const fetchMock = vi.fn();
+    const client = createForumClient({ fetchImpl: fetchMock, sessionId: "synthetic-session" });
+    await expect(client.createDraftHandoff({ ...context(), visibility: undefined })).rejects.toThrow("选择");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("projects only approved handoff fields, including nested evidence", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ handoffId: "synthetic-handoff" }) }));
+    const client = createForumClient({ fetchImpl: fetchMock as unknown as typeof fetch, sessionId: "synthetic-session" });
+    const draft = { ...context(), localPath: "D:\\private\\paper.pdf", apiKey: "synthetic-secret", targets: [{
+      ...context().targets[0], privateUrl: "https://private.test/signed", literature: { literatureId: "lit_01J00000000000000000000000", filePath: "private-file" },
+      rects: [{ left: 0.1, top: 0.2, width: 0.3, height: 0.4, localSecret: "synthetic-secret" }]
+    }] } as ForumContext;
+    await client.createDraftHandoff(draft);
+    const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(body).toEqual({ ...context(), body: "", tags: [], shareToPlaza: false,
+      targets: [{ ...context().targets[0], rects: [{ left: 0.1, top: 0.2, width: 0.3, height: 0.4 }] }]
+    });
+    expect(JSON.stringify(body)).not.toMatch(/synthetic-secret|private-file|private\.test/);
   });
 });

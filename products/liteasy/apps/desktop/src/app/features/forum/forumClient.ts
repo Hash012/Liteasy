@@ -7,6 +7,7 @@ import type {
   ForumFeedQuery,
   ForumPost
 } from "./forum.types";
+import { forumHandoffPayload } from "./forumHandoffPayload";
 
 type ForumClientOptions = {
   apiBaseUrl?: string;
@@ -153,15 +154,11 @@ export function createForumClient({
       }
     },
     async createDraftHandoff(context: ForumContext, update?: ForumDraftUpdate) {
+      const headers = { "Content-Type": "application/json", ...authenticationHeaders(true) };
+      const payload = forumHandoffPayload(context, update);
       const response = await fetchImpl(joinUrl(apiBaseUrl, "/v1/integrations/desktop/annotation-handoffs"), {
-        body: JSON.stringify({
-          ...context,
-          body: update?.body ?? context.body ?? "",
-          tags: update?.tags ?? context.tags ?? [],
-          shareToPlaza: context.shareToPlaza ?? true,
-          visibility: context.visibility ?? "public"
-        }),
-        headers: { "Content-Type": "application/json", ...authenticationHeaders(true) },
+        body: JSON.stringify(payload),
+        headers,
         method: "POST"
       });
       const body = await response.json().catch(() => ({}));
