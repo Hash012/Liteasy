@@ -5,6 +5,7 @@ import type { AssistantMode } from "./assistant.types";
 import { artifactPromptTask, getGenerationPrompt, withGenerationPrompt } from "../ai-prompts/generationPrompts";
 import { getActiveModelEndpoint, getActiveModelProvider, getModelForSettings } from "../models/modelPolicy";
 import { createModelGatewayFromSettings } from "../models/modelRuntime";
+import { assertExternalPaperSources } from "../models/externalSourcePolicy";
 import { createHttpModelAuditClient, type ModelAuditTransport } from "../models/modelAuditClient";
 import type { ModelTransport, ModelTransportResponse } from "../models/modelHttpClient";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
@@ -4438,6 +4439,7 @@ export async function generateAssistantAnswer({
     : null;
   const analysisInputChunks = thinReadingInput?.importedChunksByPaperId ?? importedChunksByPaperId;
   const analysisInputPapers = thinReadingInput?.selectedPapers ?? selectedPapers;
+  assertExternalPaperSources(analysisInputPapers);
   onProgress?.({
     phase: "retrieving_evidence",
     progress: 32,

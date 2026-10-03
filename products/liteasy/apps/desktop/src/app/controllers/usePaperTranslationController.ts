@@ -2,6 +2,7 @@ import { useRef } from "react";
 import type { ModelTransport } from "../features/models/modelHttpClient";
 import { getActiveModelProvider, getModelForSettings } from "../features/models/modelPolicy";
 import { createModelGatewayFromSettings } from "../features/models/modelRuntime";
+import { assertExternalPaperSources } from "../features/models/externalSourcePolicy";
 import type { createSettingsStore } from "../features/settings/settings.store";
 import type { Paper } from "../features/workspace/workspace.types";
 import {
@@ -22,7 +23,7 @@ type UsePaperTranslationControllerInput = {
   settingsStore: SettingsStore;
 };
 
-type TranslationPaper = Pick<Paper, "id" | "title">;
+type TranslationPaper = Pick<Paper, "id" | "title" | "libraryReference">;
 
 export function usePaperTranslationController({
   modelTransport,
@@ -49,6 +50,7 @@ export function usePaperTranslationController({
     markedSource: string,
     options: TranslationRequestOptions
   ) {
+    assertExternalPaperSources([paper]);
     const settings = settingsStore.getState();
     const provider = getActiveModelProvider(settings);
     const model = getModelForSettings(settings);

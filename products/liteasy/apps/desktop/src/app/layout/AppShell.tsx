@@ -867,7 +867,8 @@ export function AppShell({
     modelTransport: effectiveModelTransport,
     settingsStore: settingsStoreRef.current
   });
-  const selectionLookup = useSelectionLookupController({ getSettings: () => settingsStoreRef.current.getState(), modelTransport: effectiveModelTransport });
+  const selectionLookup = useSelectionLookupController({ getSettings: () => settingsStoreRef.current.getState(),
+    getPaper: (id) => workspaceStoreRef.current.getState().papers.find((paper) => paper.id === id), modelTransport: effectiveModelTransport });
   const localLiteratureMode = settingsState["papers.local_mode"];
   const localProfileMode = localLiteratureMode || cloudAccount.model.cloudAvailabilityStatus !== "available";
   const profileSamplingEnabled = settingsState[localProfileMode ? "profile.local_enabled" : "profile.enabled"];

@@ -8,6 +8,7 @@ import { createLocalLibraryClient } from "../features/library/localLibraryClient
 import { readLocalLibraryPdf } from "../features/library/libraryFileSystemClient";
 import { createModelGatewayFromSettings } from "../features/models/modelRuntime";
 import { getActiveModelProvider, getModelForSettings } from "../features/models/modelPolicy";
+import { assertExternalPaperSources } from "../features/models/externalSourcePolicy";
 import { syncWebDav, webdavStatus } from "../features/webdav/webdavClient";
 
 export type DeviceTaskActions = { getPapers: () => Paper[]; getSettings: () => SettingsState; getTransport: () => ModelTransport | undefined;
@@ -46,6 +47,7 @@ export async function prepareDeviceTask(task: DeviceTask, actions: DeviceTaskAct
     const coverage = `提取了 ${pages.length} 个含文字的页面；扫描页未进行识别。${clipped ? "内容较长，本次仅返回并使用前 24000 个字符。" : ""}`;
     if (task.kind === "extract-text") return { text, pages: pages.length, message: coverage };
     if (task.kind !== "summarize-document") throw new Error("此桌面尚不支持该任务。");
+    assertExternalPaperSources(actions.getPapers().filter((paper) => paper.id === document.documentId));
     const settings = actions.getSettings();
     const gateway = createModelGatewayFromSettings(settings, { cloudTransport: actions.getTransport() });
     const result = await gateway.generateAnswer({ signal, requireLive: true, model: getModelForSettings(settings), provider: getActiveModelProvider(settings),

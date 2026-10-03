@@ -24,6 +24,18 @@ async function fixture() {
   return { scope, storage, repository, assets, source, host, grant, model, runner: createWorkflowRunner(storage, host, scope) };
 }
 const literal = (value: unknown) => ({ source: "literal", value });
+test("rechecks organization source policy at the model node after a local read grant", async () => {
+  const f = await fixture();
+  const originalStat = f.assets.stat;
+  vi.spyOn(f.assets, "stat").mockImplementation(async (path, options) => ({ ...await originalStat(path, options), sourceReferences: [{
+    documentId: "group-document", scopeId: "group", scopeType: "organization", revision: 1
+  }] }));
+  const receipt = await f.host.call({ operationId: "group-model", operation: "model.generate", value: { prompt: "A private source excerpt", maxOutputTokens: 500 },
+    grantId: f.grant.id, owner: "plugin.test", digest: "abc", signal: new AbortController().signal });
+  expect(receipt.status).toBe("failed");
+  expect(receipt.error?.message).toContain("资料属于组织");
+  expect(f.model).not.toHaveBeenCalled();
+});
 function definition(nodes: unknown[], edges: unknown[] = [], output = { source: "node", nodeId: "save", path: "" }) {
   return compileWorkflow({ schema: "liteasy.workflow/v2", id: "test", version: "1.0.0", title: "工作流", inputSchema: { type: "object", properties: {}, additionalProperties: false }, outputSchema: { type: "string" }, nodes, edges, output }).definition;
 }

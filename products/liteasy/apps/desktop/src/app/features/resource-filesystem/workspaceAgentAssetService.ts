@@ -37,6 +37,8 @@ export type WorkspaceAgentAssetInput = {
 /** Built-in adapters share the real repositories used by the reader and editors. */
 export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput) {
   const scope = input.repository.scopeId;
+  const sourceReferences = (paperIds: string[]) => (input.getPapers?.() ?? []).filter((paper) => paperIds.includes(paper.id))
+    .flatMap((paper) => paper.libraryReference ? [paper.libraryReference] : []);
   const check = (signal?: AbortSignal) => {
     signal?.throwIfAborted();
     if (!input.active()) throw new AgentAssetError("scope_changed", "账号已切换，请重新选择资产。");
@@ -87,6 +89,7 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
       ...(object.kind === "workspace.board" && selector ? { summary: "固定的白板布局与连接快照，仅供读取。" } : {}),
       ...(binding ? { summary: `此资产映射到文件，请通过文件地址读取：${liteasyPath(scope, { kind: "external-file", mountId: binding.mountId, path: binding.path })}` } : {}),
       relatedPaperIds: [...new Set([...related.map((item) => item.paperId), ...(object.paperId ? [object.paperId] : [])])],
+      sourceReferences: sourceReferences([...related.map((item) => item.paperId), ...(object.paperId ? [object.paperId] : [])]),
     };
   };
   const objectStat = async (object: ObjectEnvelope, path?: string) => describedObjectStat({
@@ -151,6 +154,7 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
       return rows.map((row) => ({ path: objectPath(row.objectId), title: row.title, kind: row.kind ?? "object", revision: row.revision,
         capabilities: ["search", "read", "add_context", ...(row.kind && ["content.note", "workspace.board"].includes(row.kind) ? ["write" as const] : [])],
         relatedPaperIds: [...new Set(related.filter((item) => item.asset.ref?.objectId === row.objectId).map((item) => item.paperId))],
+        sourceReferences: sourceReferences(related.filter((item) => item.asset.ref?.objectId === row.objectId).map((item) => item.paperId)),
       }));
     },
     async stat(path, options) {
@@ -246,7 +250,8 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
       }
       if (!input.active()) warnings.push("笔记已保存到原账号；当前账号已切换。");
       return { asset: { path: objectPath(next.objectId), title: next.title, kind: next.kind, revision: next.revision,
-        capabilities: ["search", "read", "write", "add_context"], relatedPaperIds: [...new Set(related.map((item) => item.paperId))] },
+        capabilities: ["search", "read", "write", "add_context"], relatedPaperIds: [...new Set(related.map((item) => item.paperId))],
+        sourceReferences: sourceReferences(related.map((item) => item.paperId)) },
         previousRevision: object.revision, changed: next.revision !== object.revision,
         ...assetChangedLines(before, after), ...(warnings.length ? { warnings } : {}) };
     },
@@ -324,6 +329,7 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
     const paperStat = (paper: Paper): AgentAsset => ({ path: liteasyPath(scope, { kind: "paper", paperId: paper.id }),
       title: paper.literature?.title || paper.title, kind: "paper", revision: paper.contentHash,
       capabilities: readCapabilities(), relatedPaperIds: [paper.id],
+      sourceReferences: paper.libraryReference ? [paper.libraryReference] : [],
       summary: [Array.isArray(paper.authors) ? paper.authors.join("、") : paper.authors, paper.year].filter(Boolean).join(" · "),
     });
     const findPaper = (path: string) => {
@@ -356,6 +362,7 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
     const artifactStat = (artifact: AgentArtifactResult, revision?: string): AgentAsset => ({
       path: liteasyPath(scope, { kind: "artifact", artifactId: artifact.artifactId }), title: artifact.title,
       kind: `artifact.${artifact.artifactType}`, revision, capabilities: readCapabilities(), relatedPaperIds: artifact.papers.map((paper) => paper.id),
+      sourceReferences: sourceReferences(artifact.papers.map((paper) => paper.id)),
     });
     const findArtifact = async (path: string) => {
       const parsed = target(path);

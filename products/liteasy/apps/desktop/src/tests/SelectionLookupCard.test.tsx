@@ -19,7 +19,7 @@ test("direct AI lookup sends a single minimal request and can save its Markdown 
   render(<StrictMode><SelectionLookupCard lookup={{ query, autoQuery: true, translationUsesAi: true }} initialMode="explain"
     text="field" context="PRIVATE_SENTENCE" paperId="PRIVATE_ID" paperTitle="PRIVATE_PAPER" onClose={vi.fn()} onSave={onSave} /></StrictMode>);
   await screen.findByText("：领域。");
-  expect(query).toHaveBeenCalledExactlyOnceWith({ text: "field", mode: "explain", signal: expect.any(AbortSignal) });
+  expect(query).toHaveBeenCalledExactlyOnceWith({ text: "field", paperId: "PRIVATE_ID", mode: "explain", signal: expect.any(AbortSignal) });
   await userEvent.click(screen.getByRole("button", { name: "保存为批注" }));
   expect(onSave).toHaveBeenCalledWith("**field**：领域。\n来源：AI 查词");
 });
@@ -39,12 +39,28 @@ test("the real model gateway receives only a brief explanation prompt and the se
   store.apply({ intent: "update_setting", target: "ai.prompts.selection_translation", value: "PRIVATE_TRANSLATION_PROMPT" });
   const modelTransport = vi.fn(async (_input: ModelTransportRequest) => ({ ok: true, status: 200, json: async () => ({ answer: "正则化", execution: { mode: "live", provider: "openai" } }) }));
   const { result: hook } = renderHook(() => useSelectionLookupController({ getSettings: () => store.getState(), modelTransport }));
-  await hook.current.query({ text: "regularization", mode: "explain", context: "PRIVATE_SENTENCE", paperTitle: "PRIVATE_PAPER", systemPrompt: "PRIVATE_OVERRIDE" });
+  await hook.current.query({ text: "regularization", paperId: "PRIVATE_ID", mode: "explain", context: "PRIVATE_SENTENCE", paperTitle: "PRIVATE_PAPER", systemPrompt: "PRIVATE_OVERRIDE" });
   const body = JSON.parse(modelTransport.mock.calls[0][0].body);
   expect(body.prompt).toContain('待解释的词："regularization"');
   expect(body.prompt).not.toContain("PRIVATE_");
   expect(body.prompt.length).toBeLessThan(500);
   expect(Object.keys(body).sort()).toEqual(["model", "prompt", "provider", "requireLive", "source"]);
+});
+
+test("organization selection lookup does not call AI or a dictionary without an external-use policy", async () => {
+  const modelTransport = vi.fn();
+  const transport = vi.fn();
+  const { result: hook } = renderHook(() => useSelectionLookupController({
+    getSettings: () => createSettingsStore().getState(), modelTransport, transport,
+    getPaper: () => ({ id: "org-paper", title: "Private source", libraryReference: {
+      scopeType: "organization", scopeId: "group", documentId: "document", revision: 1
+    } })
+  }));
+  for (const mode of ["auto", "explain", "translate"] as const) {
+    await expect(hook.current.query({ text: "field", paperId: "org-paper", mode })).rejects.toThrow("自备 API 不会改变资料权限");
+  }
+  expect(transport).not.toHaveBeenCalled();
+  expect(modelTransport).not.toHaveBeenCalled();
 });
 
 test("shows compact senses and saves the full result through the supplied annotation action", async () => {

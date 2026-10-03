@@ -60,6 +60,13 @@ test("honors the configured context cap before sending source text to the provid
   expect(transport).not.toHaveBeenCalled();
 });
 
+test("organization material cannot enter AI annotation through an otherwise available model", async () => {
+  const transport = vi.fn();
+  const generate = createGuideGenerator(() => createSettingsStore().getState(), () => ({ level: "balanced", context: "" }), transport);
+  await expect(generate({ ...input, sourceReference: { scopeType: "organization", scopeId: "group", documentId: "document", revision: 1 } })).rejects.toThrow("资料属于组织");
+  expect(transport).not.toHaveBeenCalled();
+});
+
 test("sampling opt-out excludes conversation memories while manual reading preferences still apply", async () => {
   const memory = emptyProfileMemory();
   memory.entries.push({ id: "familiarity", field: "research_familiarity", value: "我熟悉事务处理", source: "conversation", updatedAt: new Date().toISOString() });

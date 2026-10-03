@@ -8,6 +8,7 @@ import { z } from "zod";
 import type { ObjectStorage } from "../objects/objectStorage";
 import type { AgentAssetService } from "../resource-filesystem/agentAssetService";
 import { hashText } from "../context/objectContext";
+import { assertExternalSourceReferences } from "../models/externalSourcePolicy";
 import { boundedJson, parseDataSchema, validateSchemaValue, type JsonObject, type JsonValue } from "../extensions/extensionSchema";
 import { operationCatalog, type OperationId } from "./operationCatalog";
 
@@ -99,6 +100,10 @@ export function createOperationHost(input: {
         }
         case "model.generate": {
           if (!input.model) throw new OperationError("dependency_unavailable", "模型连接不可用。");
+          for (const path of grant.selection) {
+            const asset = await input.assets.stat(path, { signal: request.signal });
+            assertExternalSourceReferences(asset.sourceReferences);
+          }
           const model = await input.model({ prompt: String(args.prompt), schema: args.schema, maxOutputTokens: Number(args.maxOutputTokens), signal: request.signal, connection: grant.modelConnection! });
           if (args.schema) validateSchemaValue(parseDataSchema(args.schema), model.value);
           result = model as unknown as JsonValue; break;

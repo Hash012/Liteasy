@@ -30,7 +30,7 @@ export function SelectionLookupCard({ lookup, text, context, paperId, paperTitle
     setMode(mode); setPending(true); setResult(undefined); setError(""); setMessage(""); setExpanded(false);
     try {
       const next = await lookup.query(mode === "explain"
-        ? { text, mode, signal: controller.signal }
+        ? { text, paperId, mode, signal: controller.signal }
         : { text, context, paperId, paperTitle, mode,
           allowTranslation: mode === "translate" || !lookup.translationUsesAi, systemPrompt, signal: controller.signal });
       if (!controller.signal.aborted && serial.current === id) setResult(next);

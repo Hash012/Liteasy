@@ -33,6 +33,8 @@ function setup(responses: string[], options: {
     save: (snapshot) => { persisted = JSON.parse(JSON.stringify(snapshot)) as AgentStateSnapshot; }
   };
   const stat = vi.fn(async (path: string): Promise<AgentAsset> => {
+    const discovered = options.searchRows?.find((row) => row.path === path);
+    if (discovered) return discovered;
     if (path === notePath) return { ...note, revision };
     if (path === paperPath) return paper;
     throw new Error("No such asset");
@@ -84,6 +86,29 @@ function setup(responses: string[], options: {
   };
   return { environment, api, createApi, requestFor, submit, requests, stat, read, write, search, getText: () => text, getPersisted: () => persisted };
 }
+
+test("does not send organization-owned papers to a model even when they can be read", async () => {
+  const fixture = setup([action({ message: "Should never call the model" })]);
+  fixture.environment.knowledge.selectedPapers[0].libraryReference = {
+    documentId: "organization-document", revision: 1, scopeType: "organization", scopeId: "synthetic-group"
+  };
+  const run = await fixture.submit("解释这篇组织论文");
+  expect(run.status).toBe("failed");
+  expect(fixture.requests).toHaveLength(0);
+  expect(fixture.read).not.toHaveBeenCalled();
+  fixture.api.dispose();
+});
+
+test("a selected local note cannot smuggle an organization source into model context", async () => {
+  const fixture = setup([action({ message: "Should never call the model" })]);
+  fixture.stat.mockImplementation(async (path) => path === notePath ? { ...note, sourceReferences: [{
+    documentId: "organization-document", revision: 1, scopeType: "organization", scopeId: "synthetic-group"
+  }] } : paper);
+  const run = await fixture.submit("解释这份派生笔记");
+  expect(run.status).toBe("failed");
+  expect(fixture.requests).toHaveLength(0);
+  fixture.api.dispose();
+});
 
 test("a committed write stays visible and survives restart when cancellation precedes its receipt", async () => {
   const committed = deferred();

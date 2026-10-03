@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import type { GuideBatch, GuideGenerator, GuideMode, GuidePage } from "./literatureGuide";
 import { defaultGuideOptions, guideCategories, guideModes, type GuideOptions } from "./literatureGuide.types";
 import type { LiteratureGuideState } from "./LiteratureGuideControls";
+import { assertExternalSourceReferences, type ModelSourceReference } from "../models/externalSourcePolicy";
 
 export function useLiteratureGuide(input: {
   scope: string | null; title: string; pageCount: number; ready: boolean; count: number;
+  sourceReference?: ModelSourceReference;
   generate?: GuideGenerator; readPage(page: number): Promise<string>;
   save(batch: GuideBatch, pages: number[], mode: GuideMode, runId: string, signal: AbortSignal, options: GuideOptions): Promise<number>;
   clear(): Promise<void>;
@@ -44,7 +46,7 @@ export function useLiteratureGuide(input: {
       setMessage(`正在标注 ${pages[0].page}–${pages.at(-1)!.page} / ${request.pageCount} 页…`);
       const timeout = setTimeout(() => controller.abort(new Error("模型响应超时，请重试。")), 90_000);
       try {
-        const batch = await request.generate!({ title: request.title, abstract, mode, pages, signal, ...runOptions });
+        const batch = await request.generate!({ title: request.title, abstract, mode, pages, signal, sourceReference: request.sourceReference, ...runOptions });
         check();
         if (batch.rejected && !batch.items.length) throw new Error("本批讲解未能对应原文，原有标注已保留，请重试。");
         const saved = await request.save(batch, pages.map((page) => page.page), mode, runId, signal, runOptions);
@@ -55,6 +57,7 @@ export function useLiteratureGuide(input: {
       } finally { clearTimeout(timeout); }
     }
     try {
+      assertExternalSourceReferences(request.sourceReference ? [request.sourceReference] : []);
       // Read bounded text only. Never render a PDF page canvas for AI analysis.
       abstract = (await request.readPage(1)).slice(0, 4000);
       check();

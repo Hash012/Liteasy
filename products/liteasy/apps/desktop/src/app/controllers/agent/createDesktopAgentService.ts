@@ -66,6 +66,8 @@ import { runArtifactAuthoring } from "../../features/artifact-workflow/runArtifa
 import { contextEntryText, contextSnapshotImages, contextSnapshotPrompt, type ContextSnapshot } from "../../features/context/objectContext";
 import { createModelGatewayFromSettings } from "../../features/models/modelRuntime";
 import { getActiveModelProvider, getModelForSettings } from "../../features/models/modelPolicy";
+import { assertExternalPaperSources, externalModelAssetService } from "../../features/models/externalSourcePolicy";
+import { liteasyPath } from "../../features/resource-filesystem/liteasyPath";
 
 type KnowledgeEnvironment = Omit<
   Parameters<typeof generateAssistantAnswer>[0],
@@ -166,6 +168,7 @@ async function executeKnowledgeTurn(
   const artifactType = override?.artifactType ?? request.input.artifactType;
   environment = { ...environment, knowledge: { ...environment.knowledge, settings: settingsWithGenerationPrompt(environment.knowledge.settings, request.input.systemPrompt, artifactPromptTask(artifactType)) } };
   if (!artifactType && environment.assets) return runWorkspaceAgent(input, environment);
+  assertExternalPaperSources(environment.knowledge.selectedPapers);
   const question = [request.input.thinkingDepth ? thinkingDepthInstruction(request.input.thinkingDepth) : "", override?.question ?? request.input.message].filter(Boolean).join("\n\n");
   const author = async (source: string, evidenceIds: string[], images?: Awaited<ReturnType<typeof contextSnapshotImages>>) => {
     if (artifactType !== "ppt" && artifactType !== "tree") throw new Error("当前资源尚不支持这种产物格式。");
@@ -442,7 +445,14 @@ export function createDesktopAgentService(
     now: options.now,
     onPersistenceError: options.onPersistenceError,
     async resolveContext({ request, session }) {
-      const environment = options.getEnvironment({ request, session });
+      let environment = options.getEnvironment({ request, session });
+      if (environment.assets) {
+        const assets = externalModelAssetService(environment.assets);
+        environment = { ...environment, assets };
+        for (const ref of request.contextRefs ?? []) {
+          if ("objectId" in ref) await assets.stat(liteasyPath(environment.assetScopeId ?? "local", { kind: "object", ref }));
+        }
+      }
       return {
         objectSnapshot: request.contextRefs?.length && (!environment.assets || request.input.artifactType || request.contextRefs.some((ref) => !("objectId" in ref)))
           ? await options.resolveObjectContext?.(request) : undefined,

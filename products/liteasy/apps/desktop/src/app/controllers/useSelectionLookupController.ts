@@ -1,4 +1,6 @@
-import { useRef } from "react";
+import { useCallback, useRef } from "react";
+import type { Paper } from "../features/workspace/workspace.types";
+import { assertExternalPaperSources } from "../features/models/externalSourcePolicy";
 import { getGenerationPrompt, withGenerationPrompt } from "../features/ai-prompts/generationPrompts";
 import { getActiveModelProvider, getModelForSettings } from "../features/models/modelPolicy";
 import { createModelGatewayFromSettings } from "../features/models/modelRuntime";
@@ -8,7 +10,7 @@ import { createSelectionLookupService } from "../features/selection-lookup/selec
 import { defaultSelectionLookupSettings, type LookupTransport, type SelectionLookupPort, type SelectionLookupSettingKey } from "../features/selection-lookup/selectionLookup.types";
 import { selectionLookupTransport } from "../features/selection-lookup/selectionLookupTransport";
 
-export function useSelectionLookupController(input: { getSettings(): SettingsState; modelTransport?: ModelTransport; transport?: LookupTransport }): SelectionLookupPort {
+export function useSelectionLookupController(input: { getSettings(): SettingsState; getPaper?(id: string): Paper | undefined; modelTransport?: ModelTransport; transport?: LookupTransport }): SelectionLookupPort {
   const deps = useRef(input);
   deps.current = input;
   const service = useRef<ReturnType<typeof createSelectionLookupService>>();
@@ -44,7 +46,12 @@ export function useSelectionLookupController(input: { getSettings(): SettingsSta
     }
   });
   const settings = input.getSettings();
-  return { query: service.current.query, autoQuery: settings["lookup.auto_query"] ?? false,
+  const query = useCallback<SelectionLookupPort["query"]>(async (request) => {
+    const paper = request.paperId ? deps.current.getPaper?.(request.paperId) : undefined;
+    if (paper) assertExternalPaperSources([paper]);
+    return service.current!.query(request);
+  }, []);
+  return { query, autoQuery: settings["lookup.auto_query"] ?? false,
     configurationKey: JSON.stringify(Object.keys(defaultSelectionLookupSettings).map((key) => settings[key as SelectionLookupSettingKey])),
     translationUsesAi: (settings["lookup.translation_service"] ?? "ai") === "ai" };
 }

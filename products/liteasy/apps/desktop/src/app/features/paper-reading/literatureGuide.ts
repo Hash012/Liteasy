@@ -2,6 +2,7 @@ import { getGenerationPrompt } from "../ai-prompts/generationPrompts";
 import { z } from "zod";
 import { compactPdfTextForSearch } from "../pdf/pdfTextSearch";
 import { createModelGatewayFromSettings } from "../models/modelRuntime";
+import { assertExternalSourceReferences, type ModelSourceReference } from "../models/externalSourcePolicy";
 import { getActiveModelProvider, getModelForSettings } from "../models/modelPolicy";
 import type { ModelTransport } from "../models/modelHttpClient";
 import type { SettingsState } from "../settings/settings.types";
@@ -10,7 +11,7 @@ import { agentContextLimit, withModelContextBudget } from "../context/modelConte
 import { guideCategories, type GuideMode, type GuideOptions } from "./literatureGuide.types";
 export * from "./literatureGuide.types";
 export type GuidePage = { page: number; text: string };
-export type GuideRequest = { title: string; abstract: string; mode: GuideMode; pages: GuidePage[]; signal: AbortSignal } & Partial<GuideOptions>;
+export type GuideRequest = { title: string; abstract: string; mode: GuideMode; pages: GuidePage[]; signal: AbortSignal; sourceReference?: ModelSourceReference } & Partial<GuideOptions>;
 const item = z.object({ page: z.number().int().positive(), quote: z.string().min(2).max(360),
   category: z.enum(["term", "claim", "reasoning", "insight", "formula", "figure"]), title: z.string().min(1).max(100), explanation: z.string().min(1).max(600) }).strict();
 const batch = z.object({ level: z.enum(["detailed", "balanced", "advanced"]), items: z.array(item).max(18) }).strict();
@@ -66,6 +67,7 @@ export function parseGuideBatch(answer: string, input: Pick<GuideRequest, "pages
 
 export function createGuideGenerator(getSettings: () => SettingsState, getProfile: () => GuideReaderProfile, cloudTransport?: ModelTransport): GuideGenerator {
   return async (input) => {
+    assertExternalSourceReferences(input.sourceReference ? [input.sourceReference] : []);
     const settings = getSettings();
     const supplied = getProfile();
     // With no explicit familiarity evidence, do not let the model invent a reader level.

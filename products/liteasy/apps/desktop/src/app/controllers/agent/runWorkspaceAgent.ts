@@ -14,6 +14,7 @@ import { thinkingDepthInstruction } from "../../features/assistant/thinkingDepth
 import type { AgentJsonValue } from "../../features/agent-api/agentApi.types";
 import { findKnownAgentAsset } from "../../features/resource-filesystem/agentAssetPath";
 import { assetMarkdownLink } from "../../features/markdown/liteasyMarkdownLinks";
+import { assertExternalPaperSources } from "../../features/models/externalSourcePolicy";
 
 // This is a transport-independent tool protocol: the model chooses each action;
 // the application validates and executes it, then returns the actual receipt.
@@ -110,6 +111,7 @@ export async function runWorkspaceAgent(input: AgentCommandExecutionInput, envir
   }
 
   structured = true;
+  assertExternalPaperSources(environment.knowledge.selectedPapers);
   if ((input.request.contextRefs?.length ?? 0) > 50) throw new Error("本轮最多附加 50 项资产，请按项目分批处理。尚未读取正文或写入文件。");
   const remember = (asset: AgentAsset) => { known.set(asset.path, asset); return assetManifest(asset); };
   const attached: unknown[] = [];
