@@ -204,6 +204,16 @@ export function registerAnnotationCommunityRoutes(app, repository, {
     annotation: await repository.annotation(request.params.annotationId, currentUser(request))
   })));
 
+  app.get("/v1/organizations/:organizationId/reading-sources", async (request, reply) => route(reply, async () => {
+    const viewer = requireUser(request, reply);
+    return viewer ? { sources: await repository.readingSources(request.params.organizationId, viewer, String(request.query?.query ?? "").slice(0, 300)) } : undefined;
+  }));
+
+  app.get("/v1/community-sources/:sourceNamespace/:sourceId/revisions/:revision", async (request, reply) => route(reply, async () => {
+    const viewer = requireUser(request, reply);
+    return viewer ? repository.communitySourceRevision(viewer, request.params.sourceNamespace, request.params.sourceId, request.params.revision) : undefined;
+  }));
+
   app.get("/v1/community-commands/:operationType/:operationId", async (request, reply) => route(reply, async () => {
     const viewer = requireUser(request, reply);
     if (!viewer) return;

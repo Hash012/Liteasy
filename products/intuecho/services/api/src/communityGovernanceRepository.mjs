@@ -105,7 +105,8 @@ function* recordSourceEvent({ sqlite, tables }, { kind, sourceId, annotationId, 
       if (!participant || target === actorId) throw failure("MENTION_TARGET_NOT_IN_THREAD");
     }
   } else if (kind === "reading_task") {
-    const tag = sqlite
+    const metadata = sqlite ? JSON.parse(parent.collaboration_json ?? "null") : parent.collaboration;
+    const tag = metadata?.kind === "reading_pack" ? [true] : sqlite
       ? yield statement("SELECT 1 FROM annotation_tags_v2 WHERE annotation_id = ? AND tag_name = '读书包' AND origin = 'user' AND state = 'active'", [annotationId])
       : yield statement("SELECT 1 FROM annotation_tags assigned JOIN tags ON tags.id = assigned.tag_id WHERE assigned.annotation_id = ? AND tags.name = '读书包' AND assigned.origin = 'user' AND assigned.state = 'active'", [annotationId]);
     if (sourceId !== annotationId || parent.author_id !== actorId || parent.visibility !== "organization" || parent.share_to_plaza || parent.withdrawn_at || !tag.length) throw failure("INVALID_READING_TASK_INTENT");

@@ -1,3 +1,4 @@
+import { verifyStructuredCollaboration } from "./verify-structured-collaboration.mjs";
 import { verifyScopeDerivedTags } from "./verify-scope-derived-tags.mjs";
 import { verifyCommunityCommands } from "./verify-community-commands.mjs";
 import assert from "node:assert/strict";
@@ -136,7 +137,8 @@ try {
     "026_structured_community_notification_events.sql",
     "027_tag_appeal_submission_audience.sql",
     "028_scope_derived_tags.sql",
-    "029_community_command_receipts.sql"
+    "029_community_command_receipts.sql",
+    "030_structured_collaboration.sql"
   ];
   assert.equal(migrated.applied.every((name) => expectedMigrations.includes(name)), true);
   const stagedMigrationRows = await pool.query("SELECT name FROM schema_migrations ORDER BY name");
@@ -2194,6 +2196,7 @@ try {
   });
   const structuredCommunityEvents = await verifyStructuredCommunityEvents({ pool, literatureId: confirmedLiterature.literatureId });
   await verifyScopeDerivedTags(new PostgresAnnotationCommunityRepository(pool, { authorizeOrganizationVisibility: async () => true }));
+  const structuredCollaboration = await verifyStructuredCollaboration(pool);
   const communityCommands = await verifyCommunityCommands(new PostgresAnnotationCommunityRepository(pool));
   const platformGovernance = await verifyPlatformGovernanceVisibility({ pool, literatureId: confirmedLiterature.literatureId });
   const previewAuthor = { id: "profile-preview-verification", name: "Synthetic Profile Author", initials: "PA" };
@@ -2398,6 +2401,7 @@ try {
     structuredCommunityEvents: { ...structuredCommunityEvents, preservesLegacyReplyReadState: true },
     platformGovernance,
     communityCommands,
+    structuredCollaboration,
     scopedDerivedTags: true,
     authorProfileRevision: true,
     database: application.database,

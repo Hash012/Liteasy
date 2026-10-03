@@ -35,7 +35,8 @@ test("loads ordered immutable forum migrations", () => {
     "026_structured_community_notification_events.sql",
     "027_tag_appeal_submission_audience.sql",
     "028_scope_derived_tags.sql",
-    "029_community_command_receipts.sql"
+    "029_community_command_receipts.sql",
+    "030_structured_collaboration.sql"
   ]);
   assert.match(migrations[0].checksum, /^[a-f0-9]{64}$/);
   assert.match(migrations[0].sql, /CREATE TABLE moderation_audit/);

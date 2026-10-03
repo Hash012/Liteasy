@@ -1,3 +1,4 @@
+import { collaborationMetadata, assertSourceSnapshot } from "./collaborationMetadata.mjs";
 import { validateCommunityCommand, assertCommandReplay, commandReceipt, assertExpectedRevision } from "./communityCommands.mjs";
 import { desktopPublicationLookup } from "./desktopPublicationLookup.mjs";
 import { assertIntuechoAccountActive } from "./accountWriteFence.mjs";
@@ -1064,6 +1065,49 @@ export class PostgresAnnotationCommunityRepository {
     }
   }
 
+  async readingSources(organizationId, viewer, query) {
+    if (!await this.#organizationVisible({ organizationId, userId: viewer.id })) throw new AnnotationCommunityError("ORGANIZATION_ACCESS_DENIED", 403);
+    return this.searchStoredLiterature(query, 10);
+  }
+
+  async #validateSources(metadata, viewer, organizationId, client) {
+    const references = [...(metadata?.sourceRefs ?? [])].sort((a, b) => `${a.sourceNamespace}:${a.sourceId}`.localeCompare(`${b.sourceNamespace}:${b.sourceId}`));
+    for (const reference of references) {
+      const table = { "intuecho.annotation": "annotations", "intuecho.reply": "annotation_replies", "intuecho.literature": "literature_records" }[reference.sourceNamespace];
+      const row = (await client.query(`SELECT * FROM ${table} WHERE id = $1 FOR SHARE`, [reference.sourceId])).rows[0];
+      if (!row || row.withdrawn_at || row.deleted_at || row.moderated_at || row.parent_deleted_at) throw new AnnotationCommunityError("SOURCE_NOT_FOUND", 404);
+      if (Number(row.revision) !== reference.revision) throw new AnnotationCommunityError("SOURCE_REVISION_CONFLICT", 409);
+      if (reference.sourceNamespace === "intuecho.reply") await client.query("SELECT id FROM annotations WHERE id = $1 FOR SHARE", [row.parent_annotation_id]);
+      const snapshot = await this.communitySourceRevision(viewer, reference.sourceNamespace, reference.sourceId, reference.revision, client);
+      assertSourceSnapshot(reference, snapshot, organizationId);
+    }
+  }
+
+  async communitySourceRevision(viewer, namespace, id, revision, client = this.pool) {
+    const version = Number(revision);
+    if (!Number.isInteger(version) || version < 1) throw new AnnotationCommunityError("INVALID_SOURCE_REVISION");
+    let current; let historical; let visibility; let organizationId;
+    if (namespace === "intuecho.literature") {
+      current = await this.#literatureRecord(id, client);
+      if (!current) throw new AnnotationCommunityError("SOURCE_NOT_FOUND", 404);
+      historical = version === current.revision ? current : (await client.query("SELECT snapshot FROM literature_record_versions WHERE literature_id = $1 AND revision = $2", [id, version])).rows[0]?.snapshot;
+    } else if (namespace === "intuecho.annotation") {
+      current = await this.annotation(id, viewer, client);
+      visibility = current.visibility; organizationId = current.organizationId;
+      historical = version === current.revision ? current : (await client.query("SELECT body, visibility, organization_id, collaboration FROM annotation_versions WHERE annotation_id = $1 AND revision = $2", [id, version])).rows[0];
+      if (historical && (historical.visibility !== visibility || (historical.organizationId ?? historical.organization_id ?? null) !== (organizationId ?? null))) throw new AnnotationCommunityError("SOURCE_NOT_FOUND", 404);
+    } else if (namespace === "intuecho.reply") {
+      const row = await this.#replyRow(id, client);
+      if (!row || row.deleted_at || row.moderated_at || row.parent_deleted_at) throw new AnnotationCommunityError("SOURCE_NOT_FOUND", 404);
+      const parent = await this.annotation(row.parent_annotation_id, viewer, client);
+      if (row.visibility !== parent.visibility || row.organization_id !== parent.organizationId) throw new AnnotationCommunityError("SOURCE_NOT_FOUND", 404);
+      current = this.#serializeReply(row, viewer); visibility = row.visibility; organizationId = row.organization_id;
+      historical = version === current.revision ? current : (await client.query("SELECT body, collaboration FROM annotation_reply_versions WHERE reply_id = $1 AND revision = $2", [id, version])).rows[0];
+    } else throw new AnnotationCommunityError("INVALID_SOURCE_NAMESPACE");
+    if (!historical) throw new AnnotationCommunityError("SOURCE_NOT_FOUND", 404);
+    return { sourceNamespace: namespace, sourceId: id, revision: version, currentRevision: current.revision, historical: version !== current.revision, ...(namespace === "intuecho.literature" ? { literature: historical } : { body: historical.body, collaboration: historical.collaboration ?? null, visibility, organizationId }) };
+  }
+
   async createAnnotation(author, input) {
     const command = validateCommunityCommand("create_annotation", null, input);
     if (input.visibility === "organization" && !await this.#organizationVisible({ organizationId: input.organizationId, userId: author.id })) {
@@ -1077,6 +1121,8 @@ export class PostgresAnnotationCommunityRepository {
         if (!lookup.available) throw new AnnotationCommunityError("COMMAND_RESULT_UNAVAILABLE", 409);
         return lookup.result.annotation;
       }
+      const metadata = collaborationMetadata(input.collaboration, { actor: author, visibility: input.visibility, organizationId: input.organizationId });
+      await this.#validateSources(metadata, author, input.organizationId, client);
       const profile = await this.profile(author.id, client);
       if (input.expectedAuthorProfileRevision !== undefined && profile.revision !== input.expectedAuthorProfileRevision) throw new AnnotationCommunityError("AUTHOR_PROFILE_CHANGED", 409);
       const id = `annotation_${randomUUID()}`;
@@ -1084,6 +1130,7 @@ export class PostgresAnnotationCommunityRepository {
         INSERT INTO annotations(id, parent_annotation_id, body, author_id, author_name, author_initials, author_profile_snapshot, visibility, organization_id, share_to_plaza)
         VALUES ($1, NULL, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
       `, [id, input.body, author.id, author.name, author.initials, JSON.stringify({ educationStage: profile.educationStage, institutions: profile.institutions }), input.visibility, input.organizationId ?? null, input.shareToPlaza]);
+      await client.query("UPDATE annotations SET collaboration = $2::jsonb WHERE id = $1", [id, JSON.stringify(metadata)]);
       await this.#replaceTargets(client, id, input.targets, author.id);
       await client.query("UPDATE annotations SET contribution = $2::jsonb WHERE id = $1", [id, JSON.stringify(annotationContribution(input.contribution))]);
       await this.#replaceUserTags(client, id, input.tags);
@@ -1122,10 +1169,13 @@ export class PostgresAnnotationCommunityRepository {
       if (scopeChanged && (await client.query("SELECT 1 FROM annotation_replies WHERE parent_annotation_id = $1 LIMIT 1", [id])).rows[0]) {
         throw new AnnotationCommunityError("ANNOTATION_SCOPE_LOCKED_BY_REPLIES", 409);
       }
+      const metadata = collaborationMetadata(update.collaboration === undefined ? row.collaboration : update.collaboration, { actor: author, visibility, organizationId });
+      await this.#validateSources(metadata, author, organizationId, client);
       const oldTargets = await this.#targets(id, client, false);
       const oldTags = await this.#tags(id, client);
       const contribution = annotationContribution(update.contribution, row.contribution, (update.body !== undefined && update.body !== row.body) || (update.targets !== undefined && JSON.stringify(update.targets) !== JSON.stringify(oldTargets)));
-      await client.query(`INSERT INTO annotation_versions(id, annotation_id, revision, body, author_profile_snapshot, visibility, organization_id, share_to_plaza, targets, tags, changed_by, contribution) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12::jsonb)`, [`annotation_version_${randomUUID()}`, id, row.revision, row.body, JSON.stringify(row.author_profile_snapshot), row.visibility, row.organization_id, row.share_to_plaza, JSON.stringify(oldTargets), JSON.stringify(oldTags), author.id, JSON.stringify(annotationContribution(undefined, row.contribution))]);
+      await client.query(`INSERT INTO annotation_versions(id, annotation_id, revision, body, author_profile_snapshot, visibility, organization_id, share_to_plaza, targets, tags, changed_by, contribution, collaboration) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12::jsonb, $13::jsonb)`, [`annotation_version_${randomUUID()}`, id, row.revision, row.body, JSON.stringify(row.author_profile_snapshot), row.visibility, row.organization_id, row.share_to_plaza, JSON.stringify(oldTargets), JSON.stringify(oldTags), author.id, JSON.stringify(annotationContribution(undefined, row.contribution)), JSON.stringify(row.collaboration ?? null)]);
+      await client.query("UPDATE annotations SET collaboration = $2::jsonb WHERE id = $1", [id, JSON.stringify(metadata)]);
       await client.query(`UPDATE annotations SET body = $2, author_name = $3, author_initials = $4, author_profile_snapshot = $5::jsonb, visibility = $6, organization_id = $7, share_to_plaza = $8, revision = revision + 1, updated_at = now() WHERE id = $1`, [id, update.body ?? row.body, author.name, author.initials, JSON.stringify(await this.#profileSnapshot(author.id, client)), visibility, organizationId, shareToPlaza]);
       if (update.targets) await this.#replaceTargets(client, id, update.targets, author.id);
       await client.query("UPDATE annotations SET contribution = $2::jsonb WHERE id = $1", [id, JSON.stringify(contribution)]);
@@ -1175,6 +1225,7 @@ export class PostgresAnnotationCommunityRepository {
     return {
       author: { id: row.author_id, initials: row.author_initials, name: row.author_name, profile: row.author_profile_snapshot },
       body: row.body,
+      collaboration: row.collaboration ?? null,
       createdAt: row.created_at,
       contribution: annotationContribution(undefined, row.contribution),
       id: row.id,
@@ -1221,6 +1272,7 @@ export class PostgresAnnotationCommunityRepository {
     return {
       author: { id: row.author_id, initials: row.author_initials, name: row.author_name, profile: row.author_profile_snapshot },
       body: row.body,
+      collaboration: row.collaboration ?? null,
       createdAt: row.created_at,
       derivedAnnotationId: row.derived_annotation_id,
       derivedAnnotationState: !row.derived_annotation_id ? "none" : row.derived_withdrawn_at ? "withdrawn" : "published",
@@ -1262,10 +1314,13 @@ export class PostgresAnnotationCommunityRepository {
       }
       const effectiveParent = currentParent;
       assertExpectedReplyParent(effectiveParent, input.expectedParent);
+      const metadata = collaborationMetadata(input.collaboration, { actor: author, visibility: effectiveParent.visibility, organizationId: effectiveParent.organization_id, parent: effectiveParent });
+      await this.#validateSources(metadata, author, effectiveParent.organization_id, client);
       const replyId = `reply_${randomUUID()}`;
       const derivedAnnotationId = input.publishAsAnnotation ? `annotation_${randomUUID()}` : null;
       const profile = JSON.stringify(await this.#profileSnapshot(author.id, client));
       await client.query(`INSERT INTO annotation_replies(id, parent_annotation_id, derived_annotation_id, body, author_id, author_name, author_initials, author_profile_snapshot, visibility, organization_id) VALUES ($1, $2, NULL, $3, $4, $5, $6, $7::jsonb, $8, $9)`, [replyId, parentAnnotationId, input.body, author.id, author.name, author.initials, profile, effectiveParent.visibility, effectiveParent.organization_id]);
+      await client.query("UPDATE annotation_replies SET collaboration = $2::jsonb WHERE id = $1", [replyId, JSON.stringify(metadata)]);
       if (derivedAnnotationId) {
         await client.query(`INSERT INTO annotations(id, source_reply_id, body, author_id, author_name, author_initials, author_profile_snapshot, visibility, organization_id, share_to_plaza) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10)`, [derivedAnnotationId, replyId, input.body, author.id, author.name, author.initials, profile, effectiveParent.visibility, effectiveParent.organization_id, effectiveParent.visibility === "public"]);
         await this.#replaceTargets(client, derivedAnnotationId, input.targets, author.id);
@@ -1291,8 +1346,11 @@ export class PostgresAnnotationCommunityRepository {
       if (row.author_id !== author.id) throw new AnnotationCommunityError("NOT_REPLY_AUTHOR", 403);
       assertExpectedRevision(row, input.expectedRevision, "REPLY");
       if (row.visibility === "organization" && !await this.#organizationVisible({ organizationId: row.organization_id, userId: author.id })) throw new AnnotationCommunityError("ORGANIZATION_ACCESS_DENIED", 403);
+      const metadata = collaborationMetadata(input.collaboration === undefined ? row.collaboration : input.collaboration, { actor: author, visibility: row.visibility, organizationId: row.organization_id, parent: await this.#row(row.parent_annotation_id, client) });
+      await this.#validateSources(metadata, author, row.organization_id, client);
       const profile = JSON.stringify(await this.#profileSnapshot(author.id, client));
-      await client.query(`INSERT INTO annotation_reply_versions(id, reply_id, revision, body, author_profile_snapshot, changed_by) VALUES ($1, $2, $3, $4, $5::jsonb, $6)`, [`reply_version_${randomUUID()}`, replyId, row.revision, row.body, JSON.stringify(row.author_profile_snapshot), author.id]);
+      await client.query(`INSERT INTO annotation_reply_versions(id, reply_id, revision, body, author_profile_snapshot, changed_by, collaboration) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7::jsonb)`, [`reply_version_${randomUUID()}`, replyId, row.revision, row.body, JSON.stringify(row.author_profile_snapshot), author.id, JSON.stringify(row.collaboration ?? null)]);
+      await client.query("UPDATE annotation_replies SET collaboration = $2::jsonb WHERE id = $1", [replyId, JSON.stringify(metadata)]);
       await client.query("UPDATE annotation_replies SET body = $2, author_name = $3, author_initials = $4, author_profile_snapshot = $5::jsonb, revision = revision + 1, updated_at = now() WHERE id = $1", [replyId, input.body, author.name, author.initials, profile]);
       if (row.derived_annotation_id) {
         const derived = await this.#row(row.derived_annotation_id, client, true);

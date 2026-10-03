@@ -91,3 +91,31 @@ Internal repository callers remain source-compatible when the field is omitted;
 all new browser edits supply it. Reply publication accepts its own expected
 revision, parent snapshot, and expected author-profile revision. Projection reads
 include the actual `originalReply.revision`, which can differ from the projection.
+
+
+### Structured collaboration and versioned references (030)
+
+Optional schema-version-1 `collaboration` metadata lives on existing annotations
+and replies. A `reading_pack` is an organization annotation; `question`,
+`host_summary`, `dissent`, and `reflection` are replies with the exact `parentPackId`.
+Only the pack author may label a reply as the host summary. Tags and Markdown do
+not determine type; legacy rows stay `collaboration:null` without changing body.
+Dates are ISO discussion deadlines; source references include namespace, ID,
+revision and an optional locator. This does not grant new organization privileges.
+
+`GET /v1/organizations/:id/reading-sources?query=...` requires current organization
+access and returns matching confirmed public-registry literature, independent of
+annotation count. Existing resolver confirmation can add a verified source;
+unconfirmed local chapters are not fabricated as confirmed records.
+
+Writes validate references against actual current versions and current read
+access, rejecting stale references with `SOURCE_REVISION_CONFLICT`. Organization
+references cannot import another organization's or a private source. PostgreSQL
+locks referenced rows while committing; SQLite rechecks versions and tombstones
+inside its write transaction after async permission checks.
+`GET /v1/community-sources/:namespace/:id/revisions/:revision` checks current access
+before returning history, distinguishes `revision` from `currentRevision`, and
+includes `historical`, current `visibility` and `organizationId`. Deleted/withdrawn
+sources are unavailable. Historical annotation snapshots whose audience differs
+from the current one are unavailable, so publishing a revision cannot expose an
+older private body. This endpoint is a controlled read, not an export exception.

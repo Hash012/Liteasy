@@ -1,3 +1,4 @@
+import { collaborationMetadata, assertSourceSnapshot } from "./collaborationMetadata.mjs";
 import { validateCommunityCommand, assertCommandReplay, commandReceipt, assertExpectedRevision } from "./communityCommands.mjs";
 import { desktopAnnotationPublicationPayload } from "@intuecho/contracts";
 import { desktopPublicationLookup } from "./desktopPublicationLookup.mjs";
@@ -191,6 +192,9 @@ export function initializeAnnotationCommunitySqlite(db) {
     CREATE TABLE IF NOT EXISTS annotation_moderation_audit_v2 (id TEXT PRIMARY KEY, annotation_id TEXT NOT NULL, linked_reply_id TEXT, action TEXT NOT NULL, reason TEXT NOT NULL, admin_user_id TEXT NOT NULL, trace_id TEXT NOT NULL, created_at TEXT NOT NULL);
   `);
   db.exec(`CREATE TABLE IF NOT EXISTS community_command_receipts (actor_id TEXT NOT NULL, operation_type TEXT NOT NULL, operation_id TEXT NOT NULL, body_digest TEXT NOT NULL, resource_id TEXT NOT NULL, target_id TEXT, committed_at TEXT NOT NULL, PRIMARY KEY(actor_id, operation_type, operation_id))`);
+  for (const table of ["annotations_v2", "annotation_replies_v2"]) {
+    if (!db.prepare(`PRAGMA table_info(${table})`).all().some((column) => column.name === "collaboration_json")) db.exec(`ALTER TABLE ${table} ADD COLUMN collaboration_json TEXT`);
+  }
   const tagColumns = new Set(db.prepare("PRAGMA table_info(annotation_tags_v2)").all().map((column) => column.name));
   if (!tagColumns.has("source_scope_json")) db.exec("ALTER TABLE annotation_tags_v2 ADD COLUMN source_scope_json TEXT");
   const literatureColumns = new Set(db.prepare("PRAGMA table_info(literature_records_v2)").all().map((column) => column.name));
@@ -1394,8 +1398,66 @@ export class SqliteAnnotationCommunityRepository {
     }
   }
 
+  async readingSources(organizationId, viewer, query) {
+    if (!await this.#organizationVisible({ organizationId, userId: viewer.id })) throw new AnnotationCommunityError("ORGANIZATION_ACCESS_DENIED", 403);
+    return this.searchStoredLiterature(query, 10);
+  }
+
+  async #validateSources(metadata, viewer, organizationId) {
+    for (const reference of metadata?.sourceRefs ?? []) {
+      const snapshot = await this.communitySourceRevision(viewer, reference.sourceNamespace, reference.sourceId, reference.revision);
+      assertSourceSnapshot(reference, snapshot, organizationId);
+    }
+  }
+
+  #assertSourceRevisions(metadata) {
+    for (const reference of metadata?.sourceRefs ?? []) {
+      const table = { "intuecho.annotation": "annotations_v2", "intuecho.reply": "annotation_replies_v2", "intuecho.literature": "literature_records_v2" }[reference.sourceNamespace];
+      const row = this.db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(reference.sourceId);
+      if (!row || row.withdrawn_at || row.deleted_at || row.moderated_at || row.parent_deleted_at) throw new AnnotationCommunityError("SOURCE_NOT_FOUND", 404);
+      if (Number(row.revision) !== reference.revision) throw new AnnotationCommunityError("SOURCE_REVISION_CONFLICT", 409);
+      if (reference.sourceNamespace === "intuecho.reply") {
+        const parent = this.#annotationRow(row.parent_annotation_id);
+        if (!parent || parent.withdrawn_at || !this.#rootAudience(parent)) throw new AnnotationCommunityError("SOURCE_NOT_FOUND", 404);
+      }
+    }
+  }
+
+  async communitySourceRevision(viewer, namespace, id, revision) {
+    const version = Number(revision);
+    if (!Number.isInteger(version) || version < 1) throw new AnnotationCommunityError("INVALID_SOURCE_REVISION");
+    let current; let historical; let visibility; let organizationId;
+    if (namespace === "intuecho.literature") {
+      current = this.#literatureRecord(id);
+      if (!current) throw new AnnotationCommunityError("SOURCE_NOT_FOUND", 404);
+      historical = version === current.revision ? current : parseJson(this.db.prepare("SELECT snapshot_json FROM literature_record_versions_v2 WHERE literature_id = ? AND revision = ?").get(id, version)?.snapshot_json, null);
+    } else if (namespace === "intuecho.annotation") {
+      current = await this.annotation(id, viewer);
+      visibility = current.visibility; organizationId = current.organizationId;
+      historical = version === current.revision ? current : parseJson(this.db.prepare("SELECT snapshot_json FROM annotation_versions_v2 WHERE annotation_id = ? AND revision = ?").get(id, version)?.snapshot_json, null);
+      if (historical && (historical.visibility !== visibility || (historical.organizationId ?? null) !== (organizationId ?? null))) throw new AnnotationCommunityError("SOURCE_NOT_FOUND", 404);
+    } else if (namespace === "intuecho.reply") {
+      const row = this.db.prepare("SELECT * FROM annotation_replies_v2 WHERE id = ?").get(id);
+      if (!row || row.deleted_at || row.moderated_at || row.parent_deleted_at) throw new AnnotationCommunityError("SOURCE_NOT_FOUND", 404);
+      const parent = await this.annotation(row.parent_annotation_id, viewer);
+      if (row.visibility !== parent.visibility || row.organization_id !== parent.organizationId) throw new AnnotationCommunityError("SOURCE_NOT_FOUND", 404);
+      current = this.#serializeReply(row); visibility = row.visibility; organizationId = row.organization_id;
+      historical = version === current.revision ? current : parseJson(this.db.prepare("SELECT snapshot_json FROM annotation_reply_versions_v2 WHERE reply_id = ? AND revision = ?").get(id, version)?.snapshot_json, null);
+    } else throw new AnnotationCommunityError("INVALID_SOURCE_NAMESPACE");
+    if (!historical) throw new AnnotationCommunityError("SOURCE_NOT_FOUND", 404);
+    return { sourceNamespace: namespace, sourceId: id, revision: version, currentRevision: current.revision, historical: version !== current.revision, ...(namespace === "intuecho.literature" ? { literature: historical } : { body: historical.body, collaboration: historical.collaboration ?? null, visibility, organizationId }) };
+  }
+
   async createAnnotation(author, input) {
     const command = validateCommunityCommand("create_annotation", null, input);
+    if (command && this.#commandRow(author, "create_annotation", command.operationId)) {
+      assertCommandReplay(this.#commandRow(author, "create_annotation", command.operationId), command);
+      const lookup = await this.lookupCommunityCommand(author, "create_annotation", command.operationId);
+      if (!lookup.available) throw new AnnotationCommunityError("COMMAND_RESULT_UNAVAILABLE", 409);
+      return lookup.result.annotation;
+    }
+    const metadata = collaborationMetadata(input.collaboration, { actor: author, visibility: input.visibility, organizationId: input.organizationId });
+    await this.#validateSources(metadata, author, input.organizationId);
     const now = new Date().toISOString();
     if (input.visibility === "organization") {
       if (!await this.#organizationVisible({ organizationId: input.organizationId, userId: author.id })) {
@@ -1407,12 +1469,14 @@ export class SqliteAnnotationCommunityRepository {
       const existing = this.#commandRow(author, "create_annotation", command?.operationId);
       if (command) assertCommandReplay(existing, command);
       if (existing) { id = existing.resource_id; return; }
+      this.#assertSourceRevisions(metadata);
       const profile = this.profile(author.id);
       if (input.expectedAuthorProfileRevision !== undefined && profile.revision !== input.expectedAuthorProfileRevision) throw new AnnotationCommunityError("AUTHOR_PROFILE_CHANGED", 409);
       this.db.prepare(`
         INSERT INTO annotations_v2(id, parent_annotation_id, body, author_id, author_name, author_initials, author_profile_snapshot_json, visibility, organization_id, share_to_plaza, revision, created_at, updated_at)
         VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
       `).run(id, input.body, author.id, author.name, author.initials ?? initialsFor(author.name), JSON.stringify(this.#profileSnapshot(author.id)), input.visibility, input.organizationId ?? null, input.shareToPlaza ? 1 : 0, now, now);
+      this.db.prepare("UPDATE annotations_v2 SET collaboration_json = ? WHERE id = ?").run(JSON.stringify(metadata), id);
       this.#replaceTargets(id, input.targets, now, author.id);
       this.db.prepare("UPDATE annotations_v2 SET contribution_json = ? WHERE id = ?").run(JSON.stringify(annotationContribution(input.contribution)), id);
       this.#replaceUserTags(id, input.tags, now);
@@ -1455,13 +1519,17 @@ export class SqliteAnnotationCommunityRepository {
     if (scopeChanged && this.db.prepare("SELECT 1 FROM annotation_replies_v2 WHERE parent_annotation_id = ? LIMIT 1").get(id)) {
       throw new AnnotationCommunityError("ANNOTATION_SCOPE_LOCKED_BY_REPLIES", 409);
     }
+    const metadata = collaborationMetadata(update.collaboration === undefined ? parseJson(row.collaboration_json, null) : update.collaboration, { actor: author, visibility, organizationId });
+    await this.#validateSources(metadata, author, organizationId);
     const now = new Date().toISOString();
     const contribution = annotationContribution(update.contribution, parseJson(row.contribution_json, {}),
       (update.body !== undefined && update.body !== row.body) || (update.targets !== undefined && JSON.stringify(update.targets) !== JSON.stringify(this.#targets(id, false))));
     this.db.transaction(() => {
+      this.#assertSourceRevisions(metadata);
       if (update.expectedAuthorProfileRevision !== undefined && this.profile(author.id).revision !== update.expectedAuthorProfileRevision) throw new AnnotationCommunityError("AUTHOR_PROFILE_CHANGED", 409);
       this.db.prepare("INSERT INTO annotation_versions_v2(id, annotation_id, revision, snapshot_json, changed_by, created_at) VALUES (?, ?, ?, ?, ?, ?)")
         .run(`annotation_version_${randomUUID()}`, id, row.revision, JSON.stringify(this.#serialize(row, author, false)), author.id, now);
+      this.db.prepare("UPDATE annotations_v2 SET collaboration_json = ? WHERE id = ?").run(JSON.stringify(metadata), id);
       this.db.prepare(`UPDATE annotations_v2 SET body = ?, author_name = ?, author_initials = ?, author_profile_snapshot_json = ?, visibility = ?, organization_id = ?, share_to_plaza = ?, revision = revision + 1, updated_at = ? WHERE id = ?`)
         .run(update.body ?? row.body, author.name, author.initials ?? initialsFor(author.name), JSON.stringify(this.#profileSnapshot(author.id)), visibility, organizationId, shareToPlaza ? 1 : 0, now, id);
       if (update.targets) this.#replaceTargets(id, update.targets, now, author.id);
@@ -1506,6 +1574,7 @@ export class SqliteAnnotationCommunityRepository {
     return {
       author: { id: row.author_id, initials: row.author_initials, name: row.author_name, profile: parseJson(row.author_profile_snapshot_json, {}) },
       body: row.body,
+      collaboration: parseJson(row.collaboration_json, null),
       createdAt: row.created_at,
       contribution: annotationContribution(undefined, parseJson(row.contribution_json, {})),
       id: row.id,
@@ -1542,6 +1611,7 @@ export class SqliteAnnotationCommunityRepository {
     return {
       author: { id: row.author_id, initials: row.author_initials, name: row.author_name, profile: parseJson(row.author_profile_snapshot_json, {}) },
       body: row.body,
+      collaboration: parseJson(row.collaboration_json, null),
       createdAt: row.created_at,
       derivedAnnotationId: row.derived_annotation_id,
       derivedAnnotationState: !row.derived_annotation_id ? "none" : derived?.withdrawn_at ? "withdrawn" : "published",
@@ -1578,6 +1648,8 @@ export class SqliteAnnotationCommunityRepository {
     ) {
       throw new AnnotationCommunityError("PARENT_ANNOTATION_NOT_FOUND", 404);
     }
+    const metadata = collaborationMetadata(input.collaboration, { actor: author, visibility: parent.visibility, organizationId: parent.organization_id, parent: parent });
+    await this.#validateSources(metadata, author, parent.organization_id);
     const now = new Date().toISOString();
     let replyId = `reply_${randomUUID()}`;
     let derivedAnnotationId = input.publishAsAnnotation ? `annotation_${randomUUID()}` : null;
@@ -1587,6 +1659,7 @@ export class SqliteAnnotationCommunityRepository {
       const existing = this.#commandRow(author, "create_reply", command?.operationId);
       if (command) assertCommandReplay(existing, command);
       if (existing) { replyId = existing.resource_id; derivedAnnotationId = this.db.prepare("SELECT derived_annotation_id FROM annotation_replies_v2 WHERE id = ?").get(replyId)?.derived_annotation_id; return; }
+      this.#assertSourceRevisions(metadata);
       const currentParent = this.#annotationRow(parentAnnotationId);
       if (!currentParent || currentParent.withdrawn_at) throw new AnnotationCommunityError("PARENT_ANNOTATION_NOT_FOUND", 404);
       assertExpectedReplyParent(currentParent, input.expectedParent);
@@ -1594,6 +1667,7 @@ export class SqliteAnnotationCommunityRepository {
         currentParent.revision !== parent.revision) throw new AnnotationCommunityError("PARENT_ANNOTATION_NOT_FOUND", 404);
       this.db.prepare(`INSERT INTO annotation_replies_v2(id, parent_annotation_id, derived_annotation_id, body, author_id, author_name, author_initials, author_profile_snapshot_json, visibility, organization_id, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`)
         .run(replyId, parentAnnotationId, null, input.body, author.id, author.name, author.initials ?? initialsFor(author.name), profile, parent.visibility, parent.organization_id, now, now);
+      this.db.prepare("UPDATE annotation_replies_v2 SET collaboration_json = ? WHERE id = ?").run(JSON.stringify(metadata), replyId);
       if (derivedAnnotationId) {
         this.db.prepare(`INSERT INTO annotations_v2(id, parent_annotation_id, source_reply_id, body, author_id, author_name, author_initials, author_profile_snapshot_json, visibility, organization_id, share_to_plaza, revision, created_at, updated_at) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`)
           .run(derivedAnnotationId, replyId, input.body, author.id, author.name, author.initials ?? initialsFor(author.name), profile, parent.visibility, parent.organization_id, parent.visibility === "public" ? 1 : 0, now, now);
@@ -1628,12 +1702,16 @@ export class SqliteAnnotationCommunityRepository {
     ) {
       throw new AnnotationCommunityError("REPLY_NOT_FOUND", 404);
     }
+    const metadata = collaborationMetadata(input.collaboration === undefined ? parseJson(row.collaboration_json, null) : input.collaboration, { actor: author, visibility: row.visibility, organizationId: row.organization_id, parent: this.#annotationRow(row.parent_annotation_id) });
+    await this.#validateSources(metadata, author, row.organization_id);
     const now = new Date().toISOString();
     const profile = JSON.stringify(this.#profileSnapshot(author.id));
     this.db.transaction(() => {
+      this.#assertSourceRevisions(metadata);
       if (input.expectedAuthorProfileRevision !== undefined && this.profile(author.id).revision !== input.expectedAuthorProfileRevision) throw new AnnotationCommunityError("AUTHOR_PROFILE_CHANGED", 409);
       this.db.prepare("INSERT INTO annotation_reply_versions_v2(id, reply_id, revision, snapshot_json, changed_by, created_at) VALUES (?, ?, ?, ?, ?, ?)")
         .run(`reply_version_${randomUUID()}`, replyId, row.revision, JSON.stringify(this.#serializeReply(row)), author.id, now);
+      this.db.prepare("UPDATE annotation_replies_v2 SET collaboration_json = ? WHERE id = ?").run(JSON.stringify(metadata), replyId);
       this.db.prepare("UPDATE annotation_replies_v2 SET body = ?, author_name = ?, author_initials = ?, author_profile_snapshot_json = ?, revision = revision + 1, updated_at = ? WHERE id = ?")
         .run(input.body, author.name, author.initials ?? initialsFor(author.name), profile, now, replyId);
       if (row.derived_annotation_id) {
