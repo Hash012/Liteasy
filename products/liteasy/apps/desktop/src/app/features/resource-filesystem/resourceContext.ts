@@ -1,3 +1,4 @@
+import { noteSourceReferences } from "./assetSourceReferences";
 import { stageImage } from "../objects/objectAssets";
 import type { ObjectRepository } from "../objects/objectRepository";
 import { isPaperMetadataReference, refOf, type ObjectRef } from "../objects/object.types";
@@ -82,7 +83,7 @@ export async function resolveLiteasyContext(input: {
     if (/\.canvas$/i.test(file.path)) refs = [await input.resolveBoard(file)];
     else {
       const object = await repository.projectLegacy(`note-file-${file.mountId}-${file.path}`, {
-        kind: "content.note", title: file.name,
+        kind: "content.note", title: file.name, ...noteSourceReferences(file.text),
         content: { schema: "liteasy.note/v1", payload: { text: file.text, origin: "external" } },
       });
       await repository.setObjectFileBinding(object.objectId, { mountId: file.mountId, path: file.path, version: file.version, objectRevision: object.revision });

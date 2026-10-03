@@ -23,7 +23,7 @@ function usage(message?: string): AgentCliResult {
       "liteasy-agent capabilities",
       "liteasy-agent session create [clientSessionId]",
       "liteasy-agent session close <sessionId>",
-      "liteasy-agent turn <sessionId> <command|explain|qa> <idempotencyKey> <message...>",
+      "liteasy-agent turn <sessionId> <command|explain|qa> <idempotencyKey> [--local-only] <message...>",
       "liteasy-agent run get <sessionId> <runId>",
       "liteasy-agent run cancel <sessionId> <runId> [reason]",
       "liteasy-agent confirm <sessionId> <confirmationId> <approve|reject>"
@@ -55,7 +55,8 @@ export function createAgentCliAdapter(api: AgentPublicApi) {
           return usage(`Unknown Agent mode: ${mode}`);
         }
         const idempotencyKey = args[1];
-        const message = args.slice(2).join(" ");
+        const localOnly = args[2] === "--local-only";
+        const message = args.slice(localOnly ? 3 : 2).join(" ");
         if (!message) {
           return usage("turn requires a message");
         }
@@ -63,7 +64,7 @@ export function createAgentCliAdapter(api: AgentPublicApi) {
         const unsubscribe = api.subscribe(operation, (event) => events.push(line(event)));
         const result = await api.submitTurn({
           idempotencyKey,
-          input: { message, mode },
+          input: { message, mode, ...(localOnly ? { networkMode: "local-only" as const } : {}) },
           sessionId: operation
         });
         unsubscribe();

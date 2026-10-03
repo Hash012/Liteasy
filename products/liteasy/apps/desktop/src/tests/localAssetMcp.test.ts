@@ -118,3 +118,28 @@ test("Windows config safely quotes paths, including spaces and non-ASCII names",
   expect(config).toContain('args = ["--local-mcp",');
   expect(config).not.toContain("token");
 });
+
+
+test("MCP refuses organization-derived bodies, images and attached creation while local reads remain available", async () => {
+  const f = setup();
+  const note = await f.repository.create({ kind: "content.note", title: "Organization reference", sourceReferences: [{ scopeType: "organization", scopeId: "group", paperId: "source", revision: 3 }], content: { schema: "liteasy.note/v1", payload: { text: "SYNTHETIC_PRIVATE_BODY", origin: "derived" } } });
+  const path = liteasyPath(f.scopeId, { kind: "object", ref: refOf(note) });
+  expect((await f.assets.read(path)).text).toBe("SYNTHETIC_PRIVATE_BODY");
+  for (const name of ["liteasy_read", "liteasy_stat", "liteasy_read_image"]) {
+    const result = await f.call(name, { path });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).not.toContain("SYNTHETIC_PRIVATE_BODY");
+    expect(result.structuredContent.error.message).toContain("属于组织");
+  }
+  expect((await f.call("liteasy_search", { query: "Organization reference" })).structuredContent.result).toEqual([]);
+});
+
+test("a mounted community note retains the organization boundary while ordinary local Markdown stays readable", async () => {
+  const file = { mountId: "vault", path: "reflection.md", name: "reflection.md", kind: "file" as const, version: "v1", text: '---\nsourceNamespace: intuecho.annotation\nsourceId: "annotation"\nrevision: 2\norganizationId: "group"\nsourcePolicy: organization-bound\n---\nMy reflection' };
+  const f = setup({ listMounts: async () => [{ id: "vault", name: "Vault", kind: "directory", location: "" }], listEntries: async () => [file], readFile: async () => file } as unknown as NoteFileService);
+  const path = (await f.assets.search({ query: "reflection" }))[0].path;
+  expect((await f.assets.read(path)).text).toContain("My reflection");
+  expect((await f.call("liteasy_read", { path })).structuredContent.error.message).toContain("属于组织");
+  file.text = "My own local note, without a community source";
+  expect((await f.call("liteasy_read", { path })).structuredContent.result.text).toBe(file.text);
+});

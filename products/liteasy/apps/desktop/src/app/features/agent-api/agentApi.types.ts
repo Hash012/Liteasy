@@ -48,6 +48,8 @@ export type AgentCitation = {
 };
 
 export type AgentCapability = {
+  available?: boolean;
+  unavailableReason?: string;
   actionId: string;
   estimatedCost: "cloud_tokens" | "local_compute" | "none" | "paid_resource";
   estimatedLatencyMs: number;
@@ -90,6 +92,7 @@ export type SubmitAgentTurnRequest = {
   attachments?: AgentAttachment[];
   idempotencyKey: string;
   input: {
+    networkMode?: "online" | "local-only";
     artifactType?: AgentArtifactType;
     systemPrompt?: string;
     thinkingDepth?: import("../assistant/thinkingDepth").ThinkingDepth;

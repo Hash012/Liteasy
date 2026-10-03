@@ -44,6 +44,7 @@ const toolDefinitions: McpToolDefinition[] = [
       properties: {
         idempotencyKey: { type: "string" },
         message: { type: "string" },
+        networkMode: { enum: ["online", "local-only"], type: "string" },
         systemPrompt: { type: "string", maxLength: 4000 },
         mode: { enum: ["command", "explain", "qa"], type: "string" },
         sessionId: { type: "string" }
@@ -144,6 +145,7 @@ export function createAgentMcpAdapter(api: AgentPublicApi) {
               idempotencyKey: requiredString(argumentsValue, "idempotencyKey"),
               input: {
                 message: requiredString(argumentsValue, "message"),
+                ...(argumentsValue.networkMode !== undefined ? { networkMode: requiredString(argumentsValue, "networkMode") as "online" | "local-only" } : {}),
                 ...(argumentsValue.systemPrompt !== undefined ? { systemPrompt: requiredString(argumentsValue, "systemPrompt") } : {}),
                 mode
               },

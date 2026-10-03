@@ -1,29 +1,30 @@
+import { getAccountSessionGeneration } from "../account/accountSessionStorage";
 import { acquireExecutionSlot } from "./executionQuota";
 import type { ObjectRepository } from "../objects/objectRepository";
-import { refOf } from "../objects/object.types";
-import { liteasyPath } from "../resource-filesystem/liteasyPath";
+import { refOf, type ObjectRef } from "../objects/object.types";
+import { liteasyPath, parseLiteasyPath } from "../resource-filesystem/liteasyPath";
 import { createBlockRegistry, projectBlockText } from "../visual-blocks/blockRegistry";
 import { evaluatePureOperation } from "./pureOperations";
 import { z } from "zod";
 import type { ObjectStorage } from "../objects/objectStorage";
 import type { AgentAssetService } from "../resource-filesystem/agentAssetService";
 import { hashText } from "../context/objectContext";
-import { assertExternalSourceReferences } from "../models/externalSourcePolicy";
+import { externalModelAssetService } from "../models/externalSourcePolicy";
 import { boundedJson, parseDataSchema, validateSchemaValue, type JsonObject, type JsonValue } from "../extensions/extensionSchema";
 import { operationCatalog, type OperationId } from "./operationCatalog";
 
 export class OperationError extends Error { constructor(readonly code: string, message: string) { super(message); this.name = "OperationError"; } }
-const grantSchema = z.strictObject({ schema: z.literal("liteasy.extension-grant/v1"), id: z.string(), owner: z.string(), digest: z.string(), scope: z.string(), capabilities: z.array(z.string()), selection: z.array(z.string()).max(200), output: z.boolean(), outputKinds: z.array(z.string()).optional(), modelConnection: z.string().nullable(), createdAt: z.string(), revoked: z.boolean() });
+const grantSchema = z.strictObject({ schema: z.literal("liteasy.extension-grant/v1"), id: z.string(), owner: z.string(), digest: z.string(), scope: z.string(), capabilities: z.array(z.string()), selection: z.array(z.string()).max(200), output: z.boolean(), outputKinds: z.array(z.string()).optional(), modelConnection: z.string().nullable(), createdAt: z.string(), expiresAt: z.string().optional(), sessionGeneration: z.string().optional(), revoked: z.boolean() });
 export type ExtensionGrant = z.infer<typeof grantSchema>;
 export function createGrantStore(storage: ObjectStorage, scope: string) {
   return {
-    async issue(input: Omit<ExtensionGrant, "schema" | "id" | "scope" | "createdAt" | "revoked">) {
-      const grant = grantSchema.parse({ ...input, schema: "liteasy.extension-grant/v1", id: crypto.randomUUID(), scope, createdAt: new Date().toISOString(), revoked: false });
+    async issue(input: Omit<ExtensionGrant, "schema" | "id" | "scope" | "createdAt" | "expiresAt" | "sessionGeneration" | "revoked">) {
+      const grant = grantSchema.parse({ ...input, schema: "liteasy.extension-grant/v1", id: crypto.randomUUID(), scope, createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(), sessionGeneration: getAccountSessionGeneration(), revoked: false });
       const key = `extension-grant/${grant.id}`;
       await storage.commit([{ key, expected: null, row: { key, version: crypto.randomUUID(), value: grant } }]);
       return grant;
     },
-    async get(id: string) { const row = await storage.get(`extension-grant/${id}`); if (!row) throw new OperationError("permission_denied", "本机授权不存在，请重新绑定资料与输出位置。"); const grant = grantSchema.parse(row.value); if (grant.revoked || grant.scope !== scope) throw new OperationError("permission_denied", "授权已撤销或账号已切换。"); return grant; },
+    async get(id: string) { const row = await storage.get(`extension-grant/${id}`); if (!row) throw new OperationError("permission_denied", "本机授权不存在，请重新绑定资料与输出位置。"); const grant = grantSchema.parse(row.value); if (!grant.expiresAt || Date.parse(grant.expiresAt) <= Date.now() || grant.sessionGeneration !== getAccountSessionGeneration()) throw new OperationError("permission_denied", "授权已过期或登录会话已变化，请重新核对资料、操作和输出范围。"); if (grant.revoked || grant.scope !== scope) throw new OperationError("permission_denied", "授权已撤销或账号已切换。"); return grant; },
     async revoke(id: string) { const key = `extension-grant/${id}`, row = await storage.get(key); if (!row) return; await storage.commit([{ key, expected: row.version, row: { key, version: crypto.randomUUID(), value: { ...grantSchema.parse(row.value), revoked: true } } }]); },
   };
 }
@@ -74,6 +75,15 @@ export function createOperationHost(input: {
     let final: OperationReceipt;
     try {
       let result: JsonValue = null, undo: OperationReceipt["undo"];
+      const sourceRefs: ObjectRef[] = [];
+      if (descriptor.effect === "write" && input.repository) {
+        for (const path of [...grant.selection, ...request.outputPaths ?? []]) {
+          const target = parseLiteasyPath(path, input.scope);
+          if (target.kind === "object") sourceRefs.push(refOf(target.followLatest ? await input.repository.resolveLatest(target.ref.objectId) : await input.repository.get(target.ref)));
+          else sourceRefs.push(...(await input.assets.context(path)).flatMap((attachment) => attachment.refs));
+        }
+      }
+
       switch (request.operation) {
         case "core.value": case "core.end": case "core.join": case "core.branch": case "core.template": case "core.validate": case "core.comparison": result = evaluatePureOperation(request.operation, args); break;
         case "core.wait": throw new OperationError("waiting_input", String(args.message));
@@ -86,24 +96,21 @@ export function createOperationHost(input: {
         case "boards.compose": {
           if (!input.repository) throw new OperationError("dependency_unavailable", "白板存储尚未就绪。");
           const value = operationCatalog["boards.compose"].input.parse(args), registry = input.registry?.(request.owner) ?? createBlockRegistry();
-          const board = await input.repository.importBoardFile({ title: value.title, operationId: `flow:${(await hashText(request.operationId)).slice(0, 64)}`, edges: [], nodes: value.cards.map((card, index) => { const data = registry.instantiate(card.type.id, card.type.version, card.data); return { id: `card-${index}`, position: { x: (index % 4) * 370 + 24, y: Math.floor(index / 4) * 500 + 24 }, size: { width: 340, height: 460 }, structured: { schema: "liteasy.visual-block/v1" as const, type: card.type, data }, draft: { kind: "content.note" as const, title: card.title, content: { schema: "liteasy.note/v1" as const, payload: { text: projectBlockText(data), origin: "derived" as const } } } }; }) });
+          const board = await input.repository.importBoardFile({ title: value.title, operationId: `flow:${(await hashText(request.operationId)).slice(0, 64)}`, edges: [], nodes: value.cards.map((card, index) => { const data = registry.instantiate(card.type.id, card.type.version, card.data); return { id: `card-${index}`, position: { x: (index % 4) * 370 + 24, y: Math.floor(index / 4) * 500 + 24 }, size: { width: 340, height: 460 }, structured: { schema: "liteasy.visual-block/v1" as const, type: card.type, data }, draft: { kind: "content.note" as const, sourceRefs, title: card.title, content: { schema: "liteasy.note/v1" as const, payload: { text: projectBlockText(data), origin: "derived" as const } } } }; }) });
           result = { path: liteasyPath(input.scope, { kind: "object", ref: refOf(board), followLatest: true }), title: board.title, kind: board.kind, revision: board.revision, capabilities: ["read", "write", "add_context"] }; break;
         }
-        case "resources.create": result = JSON.parse(JSON.stringify(await input.assets.create({ kind: args.kind as "note" | "board", title: String(args.title), text: args.text as string | undefined, paperPath: args.paperPath as string | undefined, operationId: `flow:${(await hashText(request.operationId)).slice(0, 64)}`, signal: request.signal }))); break;
+        case "resources.create": result = JSON.parse(JSON.stringify(await input.assets.create({ sourceRefs, kind: args.kind as "note" | "board", title: String(args.title), text: args.text as string | undefined, paperPath: args.paperPath as string | undefined, operationId: `flow:${(await hashText(request.operationId)).slice(0, 64)}`, signal: request.signal }))); break;
         case "resources.write": {
           const before = await input.assets.read(String(args.path), { maxCharacters: 80000, signal: request.signal });
           if (before.asset.revision !== args.expectedRevision) throw new OperationError("revision_conflict", "目标已发生变化，请保留草稿并重新读取。");
           if (args.mode === "replace" && before.truncated) throw new OperationError("invalid_input", "目标超出本次完整替换上限，请分页读取后使用原编辑器保存。");
-          const receipt = await input.assets.write(String(args.path), { text: String(args.text), expectedRevision: String(args.expectedRevision), mode: args.mode as "append" | "replace", signal: request.signal });
+          const receipt = await input.assets.write(String(args.path), { sourceRefs, text: String(args.text), expectedRevision: String(args.expectedRevision), mode: args.mode as "append" | "replace", signal: request.signal });
           if (!before.truncated && receipt.asset.revision) undo = { path: receipt.asset.path, text: before.text, expectedRevision: receipt.asset.revision };
           result = JSON.parse(JSON.stringify(receipt)); break;
         }
         case "model.generate": {
           if (!input.model) throw new OperationError("dependency_unavailable", "模型连接不可用。");
-          for (const path of grant.selection) {
-            const asset = await input.assets.stat(path, { signal: request.signal });
-            assertExternalSourceReferences(asset.sourceReferences);
-          }
+          for (const path of [...grant.selection, ...request.outputPaths ?? []]) await externalModelAssetService(input.assets).stat(path, { signal: request.signal });
           const model = await input.model({ prompt: String(args.prompt), schema: args.schema, maxOutputTokens: Number(args.maxOutputTokens), signal: request.signal, connection: grant.modelConnection! });
           if (args.schema) validateSchemaValue(parseDataSchema(args.schema), model.value);
           result = model as unknown as JsonValue; break;

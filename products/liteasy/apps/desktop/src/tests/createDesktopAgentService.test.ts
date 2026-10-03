@@ -757,3 +757,26 @@ test("routes PluginBuilder output through public Agent confirmation before insta
   expect(approved).toMatchObject({ data: { status: "completed" }, ok: true });
   expect(install).toHaveBeenCalledWith("plugin-build-public-confirmation");
 });
+
+test.each(["issuer", "forum", "cloud"])("changing %s invalidates a desktop approval without relying on session generation", async (change) => {
+  const settingsStore = createSettingsStore();
+  const settings = settingsStore.getState();
+  let actor = { issuer: "https://identity-a.example.test", endpoint: "https://forum-a.example.test", subject: "same-person" };
+  const api = createDesktopAgentService({
+    getPrincipalId: () => "same-person", getConfirmationBinding: () => JSON.stringify(actor),
+    getEnvironment: () => ({ knowledge: { importedChunksByPaperId: {}, selectedPapers: [], settings }, runtime: { profileUnlocked: true, settingsStore } }),
+    managerAgent: { run: async (input) => ({ kind: "runtime", result: await input.invokeCapability({ actionId: "settings.update", arguments: { target: "profile.enabled", value: true }, toolCallId: "enable-profile" }) }) }
+  });
+  const session = await api.createSession({ consumer: "frontend" });
+  if (!session.ok) throw new Error(session.error.message);
+  const run = await api.submitTurn({ sessionId: session.data.sessionId, idempotencyKey: "approve-profile", input: { mode: "command", message: "开启用户画像" } });
+  if (!run.ok) throw new Error(run.error.message);
+  const approval = run.data.events.find((event) => event.type === "confirmation.required");
+  if (!approval || approval.type !== "confirmation.required") throw new Error("Expected bounded approval");
+  if (change === "cloud") settings["models.cloud_proxy_endpoint"] = "https://cloud-b.example.test";
+  else actor = { ...actor, [change === "issuer" ? "issuer" : "endpoint"]: "https://changed.example.test" };
+  const result = await api.resolveConfirmation({ sessionId: session.data.sessionId, confirmationId: approval.confirmationId, decision: "approve" });
+  expect(result).toMatchObject({ ok: true, data: { status: "failed" } });
+  expect(settingsStore.getState()["profile.enabled"]).toBe(false);
+  api.dispose();
+});

@@ -15,6 +15,8 @@ export type PersistedAgentSession = {
 };
 
 export type PersistedAgentConfirmation = {
+  expiresAt?: string;
+  approvalBinding?: string;
   confirmation: HumanConfirmationRequest;
   runId: string;
   sessionId: string;
@@ -183,7 +185,9 @@ export function inspectAgentStateSnapshot(value: unknown): AgentStateInspection 
       return;
     }
     confirmationIds.add(candidate.confirmation.confirmationId);
-    pendingConfirmations.push({ confirmation: candidate.confirmation, runId: candidate.runId, sessionId: candidate.sessionId });
+    pendingConfirmations.push({ confirmation: candidate.confirmation, runId: candidate.runId, sessionId: candidate.sessionId,
+      ...(typeof candidate.expiresAt === "string" ? { expiresAt: candidate.expiresAt } : {}),
+      ...(typeof candidate.approvalBinding === "string" ? { approvalBinding: candidate.approvalBinding } : {}) });
   });
   let workflowTraces: AgentWorkflowTraceRecord[] | undefined;
   if (value.workflowTraces !== undefined) {

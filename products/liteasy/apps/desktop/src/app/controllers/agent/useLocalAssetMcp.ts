@@ -1,3 +1,4 @@
+import { getAccountSessionGeneration } from "../../features/account/accountSessionStorage";
 import type { ExtensionStudioService } from "../../features/workflow-studio/extensionStudioService";
 import { useEffect, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
@@ -17,18 +18,19 @@ function configureHost(args: { enabled: boolean; writable: boolean; scopeId: str
 type Request = { requestId: string; scopeId: string; generation: string; writable: boolean; line: string };
 
 export function useLocalAssetMcp(scopeId: string, assets: AgentAssetService, importer?: { scopeKey: string; importPaper: ImportPaper }, studio?: ExtensionStudioService): LocalMcpModel {
-  const [policy, setPolicy] = useState({ scopeId, enabled: false, writable: false });
+  const sessionGeneration = getAccountSessionGeneration();
+  const [policy, setPolicy] = useState({ scopeId, sessionGeneration, enabled: false, writable: false });
   const [info, setInfo] = useState<LocalMcpInfo>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [recent, setRecent] = useState<LocalMcpModel["recent"]>();
-  const current = useRef({ scopeId, policy, importer });
-  current.current = { scopeId, policy, importer };
+  const current = useRef({ scopeId, sessionGeneration, policy, importer });
+  current.current = { scopeId, sessionGeneration, policy, importer };
   // Explicit opt-in per app run; account switches revoke access until re-enabled.
   useEffect(() => {
     setRecent(undefined);
-    setPolicy((previous) => previous.scopeId === scopeId ? previous : { scopeId, enabled: false, writable: false });
-  }, [scopeId]);
+    setPolicy((previous) => previous.scopeId === scopeId && previous.sessionGeneration === sessionGeneration ? previous : { scopeId, sessionGeneration, enabled: false, writable: false });
+  }, [scopeId, sessionGeneration]);
   useEffect(() => {
     if (!isTauri()) return;
     let disposed = false;
@@ -38,13 +40,13 @@ export function useLocalAssetMcp(scopeId: string, assets: AgentAssetService, imp
     const requests = new Map<string, AbortController>();
     const imports = importer ? createPaperImportJobs(scopeId, (item, options, signal) => {
       signal.throwIfAborted();
-      if (disposed || current.current.scopeId !== scopeId || current.current.policy !== policy || current.current.importer?.scopeKey !== importer.scopeKey)
+      if (disposed || current.current.scopeId !== scopeId || current.current.sessionGeneration !== sessionGeneration || getAccountSessionGeneration() !== sessionGeneration || current.current.policy !== policy || current.current.importer?.scopeKey !== importer.scopeKey)
         throw new Error("账号、目录或 MCP 权限已变化，导入已停止。");
       return current.current.importer!.importPaper(item, options, signal);
     }) : undefined;
     const mcp = createLocalAssetMcp(assets, imports, studio);
     setBusy(true); setError("");
-    const active = () => !disposed && current.current.scopeId === scopeId && current.current.policy === policy;
+    const active = () => !disposed && current.current.scopeId === scopeId && current.current.sessionGeneration === sessionGeneration && getAccountSessionGeneration() === sessionGeneration && current.current.policy === policy;
     void (async () => {
       stop = await listen<Request>("liteasy-local-mcp-request", async ({ payload }) => {
         if (!active() || !host?.enabled || payload.scopeId !== scopeId || payload.generation !== host.generation) return;
@@ -66,7 +68,7 @@ export function useLocalAssetMcp(scopeId: string, assets: AgentAssetService, imp
       });
       stopCancel = await listen<{ requestId: string }>("liteasy-local-mcp-cancel", ({ payload }) => requests.get(payload.requestId)?.abort());
       if (!active()) { stop(); stopCancel(); return; }
-      host = await configureHost({ enabled: policy.scopeId === scopeId && policy.enabled,
+      host = await configureHost({ enabled: policy.scopeId === scopeId && policy.sessionGeneration === sessionGeneration && policy.enabled,
         writable: policy.scopeId === scopeId && policy.writable, scopeId });
       if (active()) setInfo(host);
     })().catch((e) => { if (active()) { setInfo(undefined); setError(String(e)); } }).finally(() => { if (active()) setBusy(false); });
@@ -77,7 +79,7 @@ export function useLocalAssetMcp(scopeId: string, assets: AgentAssetService, imp
       stop?.(); stopCancel?.();
       void configureHost({ enabled: false, writable: false, scopeId }).catch(() => undefined);
     };
-  }, [scopeId, assets, policy, importer?.scopeKey, studio]);
-  return { info: info?.scopeId && info.scopeId !== scopeId ? undefined : info, busy, error, recent,
-    configure: (enabled, writable) => setPolicy({ scopeId, enabled, writable: enabled && writable }) };
+  }, [scopeId, sessionGeneration, assets, policy, importer?.scopeKey, studio]);
+  return { info: policy.sessionGeneration !== sessionGeneration || info?.scopeId && info.scopeId !== scopeId ? undefined : info, busy, error, recent: policy.sessionGeneration === sessionGeneration ? recent : undefined,
+    configure: (enabled, writable) => setPolicy({ scopeId, sessionGeneration, enabled, writable: enabled && writable }) };
 }

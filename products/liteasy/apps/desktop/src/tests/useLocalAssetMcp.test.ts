@@ -49,7 +49,7 @@ test("only accepts current scope/generation, exposes read-only tools, and revoke
 test("revoking access aborts an in-flight asset operation", async () => {
   let signal: AbortSignal | undefined;
   let finish!: () => void;
-  const assets = { read: vi.fn(async (_path, options) => {
+  const assets = { stat: vi.fn(async () => ({ path: "liteasy://objects/a" })), read: vi.fn(async (_path, options) => {
     signal = options.signal;
     await new Promise<void>((resolve) => { finish = resolve; });
     signal!.throwIfAborted();
@@ -63,7 +63,7 @@ test("revoking access aborts an in-flight asset operation", async () => {
   let pending!: Promise<void> | void;
   act(() => { pending = callback({ payload: { requestId: "r", scopeId: "a", generation: result.current.info!.generation, writable: true,
     line: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "liteasy_read", arguments: { path: "liteasy://objects/a" } } }) } }); });
-  expect(signal?.aborted).toBe(false);
+  await waitFor(() => expect(signal?.aborted).toBe(false));
   act(() => result.current.configure(false, false));
   expect(signal?.aborted).toBe(true);
   await act(async () => { finish(); await pending; });
@@ -96,4 +96,19 @@ test("keeps import jobs across normal renders but aborts them when library scope
   act(() => result.current.configure(true, false));
   expect(signal?.aborted).toBe(true);
   await waitFor(() => expect(result.current.busy).toBe(false));
+});
+
+
+test("same-account session renewal revokes the previous native MCP opt-in", async () => {
+  const { clearStoredAccountSession } = await import("../app/features/account/accountSessionStorage");
+  const assets = { search: vi.fn(async () => []) } as unknown as AgentAssetService;
+  const { result, rerender } = renderHook(() => useLocalAssetMcp("a", assets));
+  await waitFor(() => expect(result.current.busy).toBe(false));
+  act(() => result.current.configure(true, true));
+  await waitFor(() => expect(result.current.info?.enabled).toBe(true));
+  const generation = result.current.info!.generation;
+  clearStoredAccountSession(); rerender();
+  await waitFor(() => expect(result.current.info?.enabled).toBe(false));
+  await deliver({ requestId: "old", scopeId: "a", generation, writable: true, line: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "liteasy_search", arguments: {} } }) });
+  expect(assets.search).not.toHaveBeenCalled();
 });

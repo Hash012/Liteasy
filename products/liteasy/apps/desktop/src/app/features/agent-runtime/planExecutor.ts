@@ -59,7 +59,7 @@ function createRuntimeErrorFallbackEvent(
 }
 
 type SemanticPlanExecutionOptions = {
-  confirmedActionIds?: string[];
+  confirmedActions?: RuntimeActionInvocation[];
   includePlanPreview?: boolean;
   recordPlan?: boolean;
 };
@@ -339,6 +339,9 @@ async function executeSemanticPlanWithOptions(
     });
   }
 
+  if (context.networkMode === "local-only" && plan.actions.some((action) => !/^(layout\.|pane\.|panel\.|dock\.|theme\.apply_preset$)/.test(action.actionId))) {
+    return { events: [{ type: "runtime_error", message: "本轮仅限本机操作；此动作可能联网或改变联网设置，请在对应界面核对后操作。" }], settingsChanged: false };
+  }
   const runtimeContexts = buildIntentRuntimeContexts(context);
   const validation = validateSemanticActionPlan(plan, {
     mode:
@@ -370,7 +373,7 @@ async function executeSemanticPlanWithOptions(
     plan,
     {
       ...runtimeContexts.policyContext,
-      confirmedActionIds: options.confirmedActionIds
+      confirmedActions: options.confirmedActions
     }
   );
   const smoothPolicy = evaluateSmoothExecutionPolicy(
@@ -701,7 +704,7 @@ export async function executeConfirmedSemanticPlan(
   });
 
   return executeSemanticPlanWithOptions(confirmation.plan, context, {
-    confirmedActionIds: [confirmation.action.actionId],
+    confirmedActions: [{ actionId: confirmation.action.actionId, input: confirmation.action.payload } as RuntimeActionInvocation],
     includePlanPreview: false,
     recordPlan: false
   });

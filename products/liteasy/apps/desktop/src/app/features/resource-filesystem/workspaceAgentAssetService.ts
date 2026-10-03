@@ -1,4 +1,5 @@
-import { paperSourceReferences } from "./assetSourceReferences";
+import { objectSourceLineage, type ObjectSourceLineage } from "../objects/objectSourceLineage";
+import { paperSourceReferences, noteSourceReferences } from "./assetSourceReferences";
 import { relativeImagePath } from "./attachmentPath";
 import type { AgentArtifactResult } from "../artifacts/artifact.types";
 import { artifactContextText } from "../artifacts/artifactContext";
@@ -40,7 +41,8 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
   const scope = input.repository.scopeId;
   const sourceReferenceFields = (paperIds: string[]) => {
     const sourceReferences = (input.getPapers?.() ?? []).filter((paper) => paperIds.includes(paper.id)).flatMap(paperSourceReferences);
-    return sourceReferences.length ? { sourceReferences } : {};
+    return { ...(sourceReferences.length ? { sourceReferences } : {}),
+      ...(paperIds.some((id) => !(input.getPapers?.() ?? []).some((paper) => paper.id === id)) ? { sourceResolution: "unavailable" as const } : {}) };
   };
   const check = (signal?: AbortSignal) => {
     signal?.throwIfAborted();
@@ -79,12 +81,35 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
     return found;
   };
   const describedObjectStat = async (object: Pick<ObjectEnvelope, "objectId" | "title" | "kind" | "revision"> & {
-    paperId?: string; summary?: string; structuredType?: { id: string; version: string }; fileBinding?: { mountId: string; path: string };
+    sourceReferences?: AgentAsset["sourceReferences"]; sourceResolution?: "unavailable"; paperId?: string; summary?: string; sourceLineage?: ObjectSourceLineage; structuredType?: { id: string; version: string }; fileBinding?: { mountId: string; path: string };
   }, requestedPath?: string): Promise<AgentAsset> => {
     const related = await memberships(new Set([object.objectId]));
     const binding = object.fileBinding;
     const requested = requestedPath ? target(requestedPath) : undefined;
     const selector = requested?.kind === "object" ? requested.ref.selectorId : undefined;
+    const lineage = object.sourceLineage ?? { paperIds: object.paperId ? [object.paperId] : [], refs: [] };
+    const preserved = [...(object.sourceReferences ?? [])];
+    const paperIds = [...lineage.paperIds, ...related.map((item) => item.paperId)];
+    const pending = [...lineage.refs];
+    if (object.kind === "workspace.board" && !selector) pending.push(...(await input.repository.listPlacements(object.objectId)).map((placement) => placement.ref));
+    const visited = new Set<string>([`${object.objectId}:${object.revision}`]);
+    let unresolved = object.sourceResolution === "unavailable";
+    while (pending.length && visited.size < 256) {
+      const ref = pending.pop()!, key = `${ref.objectId}:${ref.revision}`;
+      if (visited.has(key)) continue;
+      visited.add(key);
+      try {
+        const metadata = await input.repository.describeObject(ref.objectId);
+        preserved.push(...(metadata.sourceReferences ?? []));
+        if (metadata.sourceResolution === "unavailable") unresolved = true;
+        const source = metadata.revision === ref.revision ? metadata.sourceLineage : objectSourceLineage(await input.repository.get(ref));
+        if (!source) { unresolved = true; continue; }
+        paperIds.push(...source.paperIds);
+        pending.push(...source.refs);
+      } catch { unresolved = true; }
+    }
+    check();
+    const sources = sourceReferenceFields(paperIds);
     return { path: requestedPath ?? objectPath(object.objectId), title: object.title, kind: object.kind, revision: object.revision, ...(object.structuredType ? { structuredType: object.structuredType, summary: "结构化组件：通过 liteasy_block_read 读取字段，liteasy_block_update 按版本修改，保留布局。" } : {}),
       capabilities: ["search", "read", "add_context", ...(["content.note", "workspace.board"].includes(object.kind) && !binding && !selector ? ["write" as const] : [])],
       ...(object.kind === "source.document" ? { summary: object.summary || "摘要尚未提取；正文按需读取。" } : {}),
@@ -92,11 +117,13 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
       ...(object.kind === "workspace.board" && selector ? { summary: "固定的白板布局与连接快照，仅供读取。" } : {}),
       ...(binding ? { summary: `此资产映射到文件，请通过文件地址读取：${liteasyPath(scope, { kind: "external-file", mountId: binding.mountId, path: binding.path })}` } : {}),
       relatedPaperIds: [...new Set([...related.map((item) => item.paperId), ...(object.paperId ? [object.paperId] : [])])],
-      ...sourceReferenceFields([...related.map((item) => item.paperId), ...(object.paperId ? [object.paperId] : [])]),
+      ...sources,
+      ...((preserved.length || sources.sourceReferences?.length) ? { sourceReferences: [...new Map([...preserved, ...(sources.sourceReferences ?? [])].map((source) => [JSON.stringify(source), source])).values()] } : {}),
+      ...(unresolved || pending.length ? { sourceResolution: "unavailable" as const } : {}),
     };
   };
   const objectStat = async (object: ObjectEnvelope, path?: string) => describedObjectStat({
-    ...object, ...(object.kind === "source.document" ? { paperId: object.content.payload.paperId,
+    ...(await input.repository.describeObject(object.objectId)), ...object, sourceLineage: objectSourceLineage(object), ...(object.kind === "source.document" ? { paperId: object.content.payload.paperId,
       summary: [isPaperMetadataReference(object) ? "题录已固定；正文按需读取。" : "", object.content.payload.abstractText?.slice(0, 4000)].filter(Boolean).join("\n") } : {}),
     fileBinding: (await input.repository.describeObject(object.objectId)).fileBinding,
   }, path);
@@ -240,9 +267,9 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
       if (new TextEncoder().encode(after).byteLength > MAX_NOTE_FILE_BYTES) throw new AgentAssetError("invalid_request", "笔记写入后的正文不能超过 8 MiB。");
       const related = await memberships(new Set([object.objectId]));
       check(options.signal);
-      const next = before === after ? object : object.kind === "workspace.board"
-        ? await writeAgentBoard(input.repository, object, after, () => input.active() && !options.signal?.aborted)
-        : await input.repository.editNote(refOf(object), after);
+      const next = before === after && !options.sourceRefs?.length ? object : object.kind === "workspace.board"
+        ? await writeAgentBoard(input.repository, object, after, () => input.active() && !options.signal?.aborted, options.sourceRefs)
+        : await input.repository.editNote(refOf(object), after, undefined, options.sourceRefs);
       const warnings: string[] = [];
       // The body commit is authoritative; a delayed index refresh must not report it as failed.
       if (input.active() && next !== object) {
@@ -275,6 +302,7 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
     };
     const fileStat = (file: NoteFileSnapshot): AgentAsset => ({
       path: liteasyPath(scope, { kind: "external-file", mountId: file.mountId, path: file.path }),
+      ...noteSourceReferences(file.text),
       title: file.name, kind: imageExtension.test(file.path) ? "image" : /\.canvas$/i.test(file.path) ? "canvas" : "markdown", ...(file.version ? { revision: file.version } : {}),
       capabilities: [...readCapabilities(), ...(!imageExtension.test(file.path) ? ["write" as const] : [])],
       ...(/\.canvas$/i.test(file.path) ? { summary: "JSON Canvas 文件；使用 replace 提交完整且有效的 JSON Canvas。" } : {}),
@@ -314,6 +342,11 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
       async write(path, options) {
         if (imageExtension.test(target(path).kind === "external-file" ? new URL(path).pathname : "")) throw new AgentAssetError("read_only", "图片支持读取与加入上下文，请创建派生笔记保存解释。" );
         const file = await fileSnapshot(path);
+        // Mounted formats have no object lineage slot. Do not silently remove organization restrictions.
+        for (const ref of options.sourceRefs ?? []) {
+          const source = await objectStat(await input.repository.get(ref));
+          if (source.sourceResolution || source.sourceReferences?.some((item) => item.scopeType === "organization")) throw new AgentAssetError("read_only", "此输出含组织或尚未核实的来源，请保存为内部笔记以保留来源；本地文件尚未改写。");
+        }
         if (/\.canvas$/i.test(file.path)) {
           if (options.mode !== "replace") throw new AgentAssetError("invalid_request", "Canvas 请使用 replace 写入完整文档。");
           parseCanvasFile(options.text);
@@ -396,13 +429,13 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
         const project = await input.projects.ensurePaperProject({ paperId: paper.id, title: paper.title });
         check(options.signal);
         const asset = options.kind === "note"
-          ? await input.projects.createNote(project.projectId, options.text ?? "", options.title, [], `mcp:${options.operationId}`)
-          : await input.projects.createBoard(project.projectId, options.title, `mcp:${options.operationId}`);
+          ? await input.projects.createNote(project.projectId, options.text ?? "", options.title, options.sourceRefs, `mcp:${options.operationId}`)
+          : await input.projects.createBoard(project.projectId, options.title, `mcp:${options.operationId}`, options.sourceRefs);
         return objectStat(await input.repository.resolveLatest(asset.ref!.objectId));
       }
       const object = await input.repository.create(options.kind === "note"
-        ? { kind: "content.note", title: options.title, content: { schema: "liteasy.note/v1", payload: { text: options.text ?? "", origin: "user" } } }
-        : { kind: "workspace.board", title: options.title, content: { schema: "liteasy.board/v1", payload: { description: "" } } }, `mcp-create:${options.operationId}`);
+        ? { kind: "content.note", title: options.title, sourceRefs: options.sourceRefs, content: { schema: "liteasy.note/v1", payload: { text: options.text ?? "", origin: "user" } } }
+        : { kind: "workspace.board", title: options.title, sourceRefs: options.sourceRefs, content: { schema: "liteasy.board/v1", payload: { description: "" } } }, `mcp-create:${options.operationId}`);
       return objectStat(await input.repository.resolveLatest(object.objectId));
     },
   });

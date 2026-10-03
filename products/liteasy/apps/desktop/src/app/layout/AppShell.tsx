@@ -1262,7 +1262,7 @@ export function AppShell({
     openArtifact: (id) => { artifactWorkflow.actions.openArtifact(id); activateArtifactSurface(id); }
   });
   const extensionWorkflows = useExtensionWorkflowController({ scope: objectWorkbench.repository.scopeId, assets: objectWorkbench.agentAssets, packages: objectWorkbench.extensions, settings: settingsState, modelTransport: effectiveModelTransport, open: async (path) => { await openAgentAsset(path); }, showRuns: () => workbenchNavigation.open("workflow-runs") });
-  const extensionStudio = useExtensionStudioController({ model: objectWorkbench, runner: extensionWorkflows.runner, requestWorkflow: extensionWorkflows.request, settings: settingsState, modelTransport: effectiveModelTransport });
+  const extensionStudio = useExtensionStudioController({ assets: objectWorkbench.agentAssets, model: objectWorkbench, runner: extensionWorkflows.runner, requestWorkflow: extensionWorkflows.request, settings: settingsState, modelTransport: effectiveModelTransport });
   const extensionWorkbench = useExtensionWorkbenchController({ model: objectWorkbench, openDock: workbenchNavigation.open, openAsset: async (path) => openAgentAsset(path), workflows: extensionWorkflows, studio: extensionStudio, runWorkflow: extensionWorkflows.request });
   const assistantContextSuggestions = useAssistantContextCatalog({
     artifacts: artifactCatalog,
@@ -1370,6 +1370,7 @@ export function AppShell({
   }, [objectWorkbench.board?.objectId, objectWorkbench.placements.length]);
 
   const assistantAgent = useAssistantAgentController({
+    getConfirmationBinding: () => JSON.stringify(getPublicationActorBinding()),
     principalId: objectWorkbench.repository.scopeId,
     resolveObjectContext: objectWorkbench.resolveContext,
     agentAssets: objectWorkbench.agentAssets,

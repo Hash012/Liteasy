@@ -1,4 +1,5 @@
 import {
+  actionUnavailableReason,
   getRegisteredActionMetadata,
   getRuntimeActionPolicy,
   type ActionInvocation,
@@ -56,6 +57,8 @@ export function getManagerCapabilityToolName(actionId: ActionInvocation["actionI
 }
 
 function describeCapability(metadata: RegisteredActionMetadata) {
+  const unavailable = actionUnavailableReason(metadata.actionId);
+  if (unavailable) return `${metadata.label}。不可用：${unavailable}`;
   const context = metadata.requiredContext.length > 0
     ? `需要上下文：${metadata.requiredContext.join("、")}。`
     : "无需额外工作区上下文。";
@@ -68,7 +71,7 @@ function describeCapability(metadata: RegisteredActionMetadata) {
 export function createManagerCapabilityToolCatalog(
   registeredActions = getRegisteredActionMetadata()
 ): ManagerCapabilityToolDefinition[] {
-  return registeredActions.map((metadata) => ({
+  return registeredActions.filter((metadata) => !actionUnavailableReason(metadata.actionId)).map((metadata) => ({
     actionId: metadata.actionId,
     deferLoading: true,
     description: describeCapability(metadata),

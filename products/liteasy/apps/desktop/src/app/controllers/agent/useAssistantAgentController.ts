@@ -44,6 +44,7 @@ type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 
 export type AssistantAgentControllerInput = {
   principalId?: string;
+  getConfirmationBinding?: () => string;
   extensionStudio?: import("../../features/workflow-studio/extensionStudioService").ExtensionStudioService;
   agentAssets?: import("../../features/resource-filesystem/agentAssetService").AgentAssetService;
   resolveObjectContext?: import("./createDesktopAgentService").DesktopAgentServiceOptions["resolveObjectContext"];
@@ -134,6 +135,7 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
     const owner = input.principalId;
     apiRef.current = createDesktopAgentService({
       getPrincipalId: () => inputRef.current.principalId ?? "local",
+      getConfirmationBinding: () => inputRef.current.getConfirmationBinding?.() ?? inputRef.current.principalId ?? "local",
       onConversationCompleted: (turn) => {
         if (inputRef.current.principalId === owner) inputRef.current.onConversationCompleted?.(turn);
       },

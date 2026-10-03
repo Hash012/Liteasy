@@ -1,3 +1,4 @@
+import { externalModelAssetService } from "../models/externalSourcePolicy";
 import type { ExtensionStudioService } from "../workflow-studio/extensionStudioService";
 import { z } from "zod";
 import { paperImportSchema, type PaperImportJobs } from "./paperImportJobs";
@@ -55,8 +56,9 @@ const record = (value: unknown): value is Record<string, unknown> => !!value && 
 const toolResult = (result: unknown) => ({ content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: { result } });
 
 export function createLocalAssetMcp(assets: AgentAssetService, imports?: PaperImportJobs, studio?: ExtensionStudioService) {
+  assets = externalModelAssetService(assets);
   async function call(name: string, args: unknown, policy: LocalMcpPolicy) {
-    if (studio && Object.prototype.hasOwnProperty.call(studio.tools, name)) return toolResult(await studio.call(name, args, policy));
+    if (studio && Object.prototype.hasOwnProperty.call(studio.tools, name)) return toolResult(await studio.call(name, args, { ...policy, externalAssets: assets }));
     const definition = definitions[name as keyof typeof definitions];
     if (!Object.prototype.hasOwnProperty.call(definitions, name) || !definition) throw new AgentAssetError("invalid_request", `Unknown tool: ${name}`);
     policy.signal?.throwIfAborted();

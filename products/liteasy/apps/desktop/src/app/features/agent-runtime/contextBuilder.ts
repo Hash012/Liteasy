@@ -7,7 +7,6 @@ import type {
 } from "./agentRuntime.types";
 
 export type RuntimePolicyContext = {
-  confirmedActionIds?: string[];
   contextView?: AgentRuntimeContextView;
   registeredActions: RegisteredActionMetadata[];
 };

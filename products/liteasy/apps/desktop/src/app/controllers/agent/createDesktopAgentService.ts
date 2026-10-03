@@ -1,3 +1,4 @@
+import { getAccountSessionGeneration } from "../../features/account/accountSessionStorage";
 import { artifactPromptTask, getGenerationPrompt, settingsWithGenerationPrompt, withGenerationPrompt } from "../../features/ai-prompts/generationPrompts";
 import { agentContextLimit, withModelContextBudget } from "../../features/context/modelContextBudget";
 import { runWorkspaceAgent } from "./runWorkspaceAgent";
@@ -67,6 +68,7 @@ import { contextEntryText, contextSnapshotImages, contextSnapshotPrompt, type Co
 import { createModelGatewayFromSettings } from "../../features/models/modelRuntime";
 import { getActiveModelProvider, getModelForSettings } from "../../features/models/modelPolicy";
 import { assertExternalPaperSources, externalModelAssetService } from "../../features/models/externalSourcePolicy";
+import { planSemanticCommand } from "../../features/agent-runtime/semanticPlanner";
 import { liteasyPath } from "../../features/resource-filesystem/liteasyPath";
 
 type KnowledgeEnvironment = Omit<
@@ -124,6 +126,7 @@ export type DesktopManagerAgent = {
 export type DesktopAgentServiceOptions = Pick<
   AgentApplicationPorts,
   | "getPrincipalId"
+  | "getConfirmationBinding"
   | "createCoreSession"
   | "createId"
   | "listCapabilities"
@@ -153,6 +156,7 @@ async function executeKnowledgeTurn(
     question: string;
   }
 ): Promise<AgentKnowledgeExecutionResult> {
+  if (input.request.input.networkMode === "local-only") return { message: "本轮仅限本机操作，未连接模型或外部服务。可继续在阅读器、笔记和本机资产工具中阅读或编辑资料。" };
   const {
     conversationHistory,
     coreTurn,
@@ -297,6 +301,7 @@ export function createDesktopAgentService(
     supportsObjectContext: !!options.resolveObjectContext,
     onConversationCompleted: options.onConversationCompleted,
     getPrincipalId: options.getPrincipalId,
+    getConfirmationBinding: () => JSON.stringify([options.getPrincipalId?.() ?? "local", getAccountSessionGeneration(), options.getConfirmationBinding?.(), options.getEnvironment().knowledge.settings["models.cloud_proxy_endpoint"]]),
     createCoreSession: options.createCoreSession,
     createId: options.createId,
     async executeCommand({ context, coreTurn, request }) {
@@ -342,6 +347,9 @@ export function createDesktopAgentService(
               mode: input.request.input.mode
             }
           });
+          if (input.request.input.networkMode === "local-only") return input.request.input.mode === "command"
+            ? { kind: "runtime", result: await runAgentRuntime({ message: input.request.input.message, mode: "command" }, runtimeContext) }
+            : { kind: "knowledge", result: await executeKnowledgeTurn(input, environment) };
           return options.managerAgent!.run({
             ...input,
             activityTools: createAgentActivityToolCatalog(),
@@ -446,6 +454,10 @@ export function createDesktopAgentService(
     onPersistenceError: options.onPersistenceError,
     async resolveContext({ request, session }) {
       let environment = options.getEnvironment({ request, session });
+      if (request.input.networkMode === "local-only") return { value: { ...environment, runtime: {
+        ...environment.runtime, networkMode: "local-only", semanticPlanner: planSemanticCommand,
+        clarifySemanticPlan: undefined, generateUIDsl: undefined
+      } } };
       if (environment.assets) {
         const assets = externalModelAssetService(environment.assets);
         environment = { ...environment, assets };

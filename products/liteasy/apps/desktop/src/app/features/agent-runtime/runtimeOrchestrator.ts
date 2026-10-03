@@ -18,7 +18,7 @@ export async function runAgentRuntime(
   const semanticPlan = await semanticPlanner(input, runtimeContexts.plannerContext);
 
   context.journal?.record({
-    input: input.message,
+    // Source and user text belong to the scoped conversation, not the general audit log.
     mode: input.mode,
     traceId: `trace-${semanticPlan.planId}`,
     type: "input"

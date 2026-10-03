@@ -1,3 +1,5 @@
+import type { AssetSourceReference } from "../resource-filesystem/assetSourceReferences";
+import { objectSourceLineage, type ObjectSourceLineage } from "./objectSourceLineage";
 import { structuredBlockSchema, type StructuredBlock, blockPresentationSchema, defaultBlockPresentation, type BlockPresentation, type BlockPresentationRecord } from "./visualBlock.types";
 import { hashText } from "../context/objectContext";
 import type { StagedObjectAsset } from "./objectAssets";
@@ -20,6 +22,8 @@ import {
 import type { ObjectStorage, StorageChange, StorageRow } from "./objectStorage";
 
 export type ObjectDraft = ObjectContent & {
+  sourceReferences?: AssetSourceReference[];
+  sourceResolution?: "unavailable";
   paperAnchors?: ObjectEnvelope["paperAnchors"];
   assets?: ObjectEnvelope["assets"];
   title: string;
@@ -42,6 +46,12 @@ export function createObjectRepository(
     value: unknown,
     expected: string | null = null,
   ): StorageChange => ({ key, expected, row: { key, version: id(), value } });
+  async function sourceChanges(objectId: string, draft: Pick<ObjectDraft, "sourceReferences" | "sourceResolution">): Promise<StorageChange[]> {
+    if (!draft.sourceReferences?.length && !draft.sourceResolution) return [];
+    const key = `source-lineage/${objectId}`, previous = await storage.get(key);
+    const old = previous?.value as Pick<ObjectDraft, "sourceReferences" | "sourceResolution"> | undefined;
+    return [change(key, { sourceReferences: [...new Map([...(old?.sourceReferences ?? []), ...(draft.sourceReferences ?? [])].map((source) => [JSON.stringify(source), source])).values()], sourceResolution: old?.sourceResolution ?? draft.sourceResolution }, previous?.version ?? null)];
+  }
   const make = (
     draft: ObjectDraft,
     previous?: ObjectEnvelope,
@@ -99,6 +109,7 @@ export function createObjectRepository(
             lifecycle: object.lifecycle,
             kind: object.kind,
             revision: object.revision,
+            sourceLineage: objectSourceLineage(object),
             ...(object.kind === "source.document" ? {
               paperId: object.content.payload.paperId,
               ...(object.content.payload.abstractText || isPaperMetadataReference(object) ? { summary: [
@@ -182,6 +193,7 @@ export function createObjectRepository(
       for (const ref of draft.sourceRefs ?? []) await get(ref);
       const object = make(draft);
       const changes = objectChanges(object);
+      changes.push(...await sourceChanges(object.objectId, draft));
       for (const source of draft.derivedFrom ?? []) {
         await get(source);
         const relation: ObjectRelation = {
@@ -691,7 +703,7 @@ export function createObjectRepository(
     } while (after);
     return { objects, cursor: undefined as string | undefined };
   }
-  async function editNote(ref: ObjectRef, text: string, title?: string) {
+  async function editNote(ref: ObjectRef, text: string, title?: string, sourceRefs: ObjectRef[] = []) {
     if (await storage.get(`visual-block/${ref.objectId}/${ref.revision}`)) throw new ObjectStoreError("capability_denied", "此卡片包含结构化字段，请用组件编辑器或 liteasy_block_update 保存；普通笔记写入不会破坏其类型。");
     const head = await storage.get(headKey(ref.objectId));
     const current = readObject(head);
@@ -714,6 +726,7 @@ export function createObjectRepository(
           payload: { ...current.content.payload, text },
         },
         ...current.provenance,
+        sourceRefs: [...current.provenance.sourceRefs, ...sourceRefs],
       },
       current,
     );
@@ -1063,15 +1076,16 @@ export function createObjectRepository(
     /** Lightweight current-head metadata; old indexes safely fall back to their existing object. */
     async describeObject(objectId: string) {
       const row = await storage.get(`title/${objectId}`);
-      const indexed = row?.value as { scopeId?: string; objectId: string; title: string; lifecycle: string; kind?: ObjectEnvelope["kind"]; revision?: string; paperId?: string; summary?: string } | undefined;
-      const object = !indexed?.kind || !indexed.revision || indexed.scopeId !== scopeId ? await resolveLatest(objectId) : undefined;
-      const description = object ? { objectId: object.objectId, title: object.title, kind: object.kind, revision: object.revision, lifecycle: object.lifecycle,
+      const indexed = row?.value as { scopeId?: string; objectId: string; title: string; lifecycle: string; kind?: ObjectEnvelope["kind"]; revision?: string; paperId?: string; summary?: string; sourceLineage?: ObjectSourceLineage } | undefined;
+      const object = !indexed?.kind || !indexed.revision || !indexed.sourceLineage || indexed.scopeId !== scopeId ? await resolveLatest(objectId) : undefined;
+      const description = object ? { objectId: object.objectId, title: object.title, kind: object.kind, revision: object.revision, lifecycle: object.lifecycle, sourceLineage: objectSourceLineage(object),
         ...(object.kind === "source.document" ? { paperId: object.content.payload.paperId, summary: object.content.payload.abstractText?.slice(0, 4000) } : {}) }
         : { ...indexed!, kind: indexed!.kind!, revision: indexed!.revision! };
       if (description.lifecycle !== "active") throw new ObjectStoreError("object_not_found", "内容已归档或删除。");
       const binding = description.kind === "content.note" ? await storage.get(`object-file/${objectId}`)
         : description.kind === "workspace.board" ? await storage.get(`board-file/${objectId}`) : undefined;
-      return { ...description, structuredType: (await storage.get(`visual-block-type/${objectId}`))?.value as { id: string; version: string } | undefined, fileBinding: binding?.value as { mountId: string; path: string } | undefined };
+      const sourceRecord = (await storage.get(`source-lineage/${objectId}`))?.value as { sourceReferences: AssetSourceReference[]; sourceResolution?: "unavailable" } | undefined;
+      return { ...description, ...sourceRecord, structuredType: (await storage.get(`visual-block-type/${objectId}`))?.value as { id: string; version: string } | undefined, fileBinding: binding?.value as { mountId: string; path: string } | undefined };
     },
     migrateBoard,
     readRaw: async (ref: { objectId: string; revision?: string }) => {
@@ -1541,6 +1555,7 @@ export function createObjectRepository(
             return {
               changes: [
                 ...objectChanges(object),
+                ...await sourceChanges(object.objectId, draft),
                 change(`legacy/${key}`, refOf(object)),
               ],
               result: [refOf(object)],
@@ -1552,15 +1567,19 @@ export function createObjectRepository(
       const head = await storage.get(headKey(ref.objectId));
       const current = readObject(head);
       const next = make(draft, current);
+      const lineageChanges = await sourceChanges(current.objectId, draft);
       if (
         JSON.stringify(current.content) === JSON.stringify(next.content) &&
         JSON.stringify(current.assets) === JSON.stringify(next.assets) &&
         JSON.stringify(current.paperAnchors) === JSON.stringify(next.paperAnchors) &&
         current.title === next.title
-      )
+      ) {
+        if (lineageChanges.length) await storage.commit(lineageChanges);
         return current;
+      }
       await storage.commit([
         ...objectChanges(next, head),
+        ...lineageChanges,
         change(`legacy/${key}`, refOf(next), mapping!.version),
       ]);
       return next;

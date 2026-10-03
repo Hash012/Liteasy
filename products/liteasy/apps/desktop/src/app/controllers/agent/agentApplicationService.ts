@@ -31,7 +31,7 @@ import {
   type SubmitAgentTurnRequest
 } from "../../features/agent-api/agentApi.types";
 import { createAgentErrorEnvelope } from "../../features/agent-runtime/runtimeObservability";
-import { getRegisteredActionMetadata } from "../../features/skills/actionRegistry";
+import { actionUnavailableReason, getRegisteredActionMetadata } from "../../features/skills/actionRegistry";
 import {
   projectPublicWorkflowAuditSummary,
   projectWorkflowTraceEvents,
@@ -107,6 +107,7 @@ export type AgentManagerExecutionResult =
 
 export type AgentApplicationPorts = {
   supportsObjectContext?: boolean;
+  getConfirmationBinding?: () => string;
   getPrincipalId?: () => string;
   createCoreSession?: () => AgentCoreSession;
   createId?: (prefix: "event" | "run" | "session") => string;
@@ -148,6 +149,8 @@ type StoredSession = {
 
 type PendingConfirmation = {
   confirmation: HumanConfirmationRequest;
+  expiresAt?: string;
+  approvalBinding?: string;
   context: ResolvedAgentContext;
   runId: string;
   sessionId: string;
@@ -339,6 +342,7 @@ function mapRuntimeEvent(event: AgentRuntimeEvent): AgentEventPayload[] {
 function defaultCapabilities(): AgentCapability[] {
   return getRegisteredActionMetadata().map((capability) => ({
     actionId: capability.actionId,
+    ...(actionUnavailableReason(capability.actionId) ? { available: false, unavailableReason: actionUnavailableReason(capability.actionId) } : { available: true }),
     estimatedCost: capability.estimatedCost,
     estimatedLatencyMs: capability.estimatedLatencyMs,
     inputSchema: asJsonValue(capability.inputSchema),
@@ -410,6 +414,8 @@ export function createAgentApplicationService(
   const createSnapshot = (): AgentStateSnapshot => ({
     pendingConfirmations: [...pendingConfirmations.values()].map((pending) => ({
       confirmation: asJsonValue(pending.confirmation) as unknown as HumanConfirmationRequest,
+      expiresAt: pending.expiresAt,
+      approvalBinding: pending.approvalBinding,
       runId: pending.runId,
       sessionId: pending.sessionId
     })),
@@ -571,7 +577,9 @@ export function createAgentApplicationService(
     result.events.forEach((runtimeEvent) => {
       if (isHumanConfirmation(runtimeEvent)) {
         pendingConfirmations.set(runtimeEvent.confirmationId, {
-          confirmation: runtimeEvent,
+          confirmation: JSON.parse(JSON.stringify(runtimeEvent)),
+          expiresAt: new Date(now().getTime() + 5 * 60 * 1000).toISOString(),
+          approvalBinding: ports.getConfirmationBinding?.(),
           context,
           runId: run.runId,
           sessionId: stored.session.sessionId
@@ -726,6 +734,7 @@ export function createAgentApplicationService(
           "idempotencyKey and input.message must be non-empty"
         );
       }
+      if (request.input.networkMode !== undefined && !["online", "local-only"].includes(request.input.networkMode)) return apiError("invalid_request", "Unsupported network mode");
       if (request.input.systemPrompt !== undefined && (typeof request.input.systemPrompt !== "string" || request.input.systemPrompt.length > 4000)) {
         return apiError("invalid_request", "系统提示词最多 4,000 字符。");
       }
@@ -755,6 +764,7 @@ export function createAgentApplicationService(
         if (
           existingRun.input.message !== request.input.message ||
           existingRun.input.mode !== request.input.mode ||
+          existingRun.input.networkMode !== request.input.networkMode ||
           existingRun.input.thinkingDepth !== request.input.thinkingDepth ||
           existingRun.input.systemPrompt !== request.input.systemPrompt ||
           existingRun.input.artifactType !== request.input.artifactType ||
@@ -967,6 +977,13 @@ export function createAgentApplicationService(
       const run = stored.runs.get(pending.runId);
       if (!run) {
         return apiError("run_not_found", `Agent run not found: ${pending.runId}`);
+      }
+      if (request.decision === "approve" && ((ports.getConfirmationBinding && pending.approvalBinding !== ports.getConfirmationBinding()) || !pending.expiresAt || !Number.isFinite(Date.parse(pending.expiresAt)) || now().getTime() >= Date.parse(pending.expiresAt))) {
+        pendingConfirmations.delete(request.confirmationId);
+        emit(stored, run, createRunFailureEvent("确认已过期或账号会话已变化，请重新发起操作并核对目标。"));
+        finishRun(stored, run, "failed");
+        if (!(await persistState())) return persistenceError();
+        return { data: run, ok: true };
       }
       pendingConfirmations.delete(request.confirmationId);
       emit(stored, run, {

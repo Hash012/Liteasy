@@ -12,6 +12,7 @@ export type AgentAsset = {
   summary?: string;
   relatedPaperIds?: string[];
   /** Trusted adapter source provenance; not an authorization supplied by a model. */
+  sourceResolution?: "unavailable";
   sourceReferences?: import("./assetSourceReferences").AssetSourceReference[];
   structuredType?: { id: string; version: string };
 };
@@ -28,6 +29,8 @@ export type AgentAssetRead = {
   evidence?: { kind: "source" | "user" | "derived" | "metadata"; coverage: "partial" | "unknown"; reason?: string };
 };
 export type AgentAssetWriteOptions = {
+  /** Host-resolved lineage; never accepted from model tool arguments. */
+  sourceRefs?: import("../objects/object.types").ObjectRef[];
   text: string;
   expectedRevision: string;
   mode?: "replace" | "append";
@@ -42,6 +45,8 @@ export type AgentAssetWriteReceipt = {
   warnings?: string[];
 };
 export type AgentAssetCreate = {
+  /** Host-resolved lineage; never accepted from model tool arguments. */
+  sourceRefs?: import("../objects/object.types").ObjectRef[];
   kind: "note" | "board";
   title: string;
   text?: string;

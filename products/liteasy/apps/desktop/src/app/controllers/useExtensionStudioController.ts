@@ -1,3 +1,5 @@
+import type { AgentAssetService } from "../features/resource-filesystem/agentAssetService";
+import { externalModelAssetService } from "../features/models/externalSourcePolicy";
 import { withModelContextBudget, agentContextLimit } from "../features/context/modelContextBudget";
 import { useMemo, useRef } from "react";
 import { z } from "zod";
@@ -12,7 +14,7 @@ import { createModelGatewayFromSettings } from "../features/models/modelRuntime"
 import { getActiveModelProvider, getModelForSettings } from "../features/models/modelPolicy";
 import type { ModelTransport } from "../features/models/modelHttpClient";
 const proposalSchema = z.strictObject({ changes: z.array(z.strictObject({ path: z.string().max(240), text: z.string().max(120000).nullable() })).max(30) });
-export function useExtensionStudioController(input: { model: WorkbenchViewModel & { extensions: NonNullable<WorkbenchViewModel["extensions"]> }; runner: WorkflowRunner; requestWorkflow?(owner: string, workflow: string, selection: string[]): Promise<void>; settings: SettingsState; modelTransport?: ModelTransport }): StudioModel {
+export function useExtensionStudioController(input: { assets: AgentAssetService; model: WorkbenchViewModel & { extensions: NonNullable<WorkbenchViewModel["extensions"]> }; runner: WorkflowRunner; requestWorkflow?(owner: string, workflow: string, selection: string[]): Promise<void>; settings: SettingsState; modelTransport?: ModelTransport }): StudioModel {
   const latest = useRef(input); latest.current = input;
   const scope = input.model.repository.scopeId;
   return useMemo(() => {
@@ -21,6 +23,8 @@ export function useExtensionStudioController(input: { model: WorkbenchViewModel 
     const service = createExtensionStudioService({ drafts, packages: input.model.extensions.store, runner: input.runner, repository: input.model.repository, active, refresh: () => latest.current.model.refresh(), requestWorkflow: (owner, workflow, selection) => { if (!latest.current.requestWorkflow) return Promise.reject(new Error("工作台尚未就绪。")); return latest.current.requestWorkflow(owner, workflow, selection); } });
     return { drafts, service, async propose(draft, request, signal) {
       if (request.length > 12000) throw new Error("请将需求限制在 12,000 字符以内。");
+      if (!draft.sourcePaths) throw new Error("此旧草稿尚未记录来源，请在本机核对后重新创建。");
+      for (const path of draft.sourcePaths) await externalModelAssetService(latest.current.assets).stat(path, { signal });
       const files = Object.fromEntries(Object.entries(draft.files).filter(([path]) => !path.startsWith("fixtures/") && !path.startsWith("tests/")));
       if (JSON.stringify(files).length > 50000) throw new Error("项目较大，请通过 MCP 按文件读取与修改，避免一次加载全部源码。");
       const catalog = { summaries: await service.call("liteasy_extension_catalog", {}, { writable: false, signal }), manifest: await service.call("liteasy_extension_catalog", { kind: "manifest" }, { writable: false, signal }) };

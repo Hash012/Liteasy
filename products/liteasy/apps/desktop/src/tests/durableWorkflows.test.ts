@@ -165,3 +165,16 @@ test("embedded versioned subflows compile to the same bounded executor and rejec
   expect((await f.runner.execute(run.id)).status).toBe("succeeded");
   expect((await f.runner.replay(run.id)).nodes.save).toBe("你好 研究者");
 });
+
+
+test("workflow grants expire and cannot be replayed after a session change", async () => {
+  const f = await fixture();
+  const clock = vi.spyOn(Date, "now").mockReturnValue(Date.parse(f.grant.expiresAt!) + 1);
+  await expect(f.host.grants.get(f.grant.id)).rejects.toThrow("过期");
+  clock.mockRestore();
+  const { clearStoredAccountSession } = await import("../app/features/account/accountSessionStorage");
+  clearStoredAccountSession();
+  await expect(f.host.grants.get(f.grant.id)).rejects.toThrow("会话已变化");
+  const renewed = await f.host.grants.issue({ owner: "plugin.test", digest: "abc", capabilities: [], selection: [], output: false, modelConnection: null });
+  expect((await f.host.grants.get(renewed.id)).selection).toEqual([]);
+});

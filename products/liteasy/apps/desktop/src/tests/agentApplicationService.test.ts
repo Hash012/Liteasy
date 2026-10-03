@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { createAgentApplicationService } from "../app/controllers/agent/agentApplicationService";
 import type {
   HumanConfirmationRequest,
@@ -5,6 +6,8 @@ import type {
 } from "../app/features/agent-runtime/agentRuntime.types";
 
 function createTestService(overrides: {
+  now?: () => Date;
+  getConfirmationBinding?: () => string;
   executeCommand?: () => RuntimeExecutionResult | Promise<RuntimeExecutionResult>;
   executeConfirmation?: () => RuntimeExecutionResult | Promise<RuntimeExecutionResult>;
   executeKnowledge?: () =>
@@ -25,7 +28,8 @@ function createTestService(overrides: {
       ? () => overrides.executeConfirmation!()
       : undefined,
     executeKnowledge: overrides.executeKnowledge ?? (() => ({ message: "grounded answer" })),
-    now: () => new Date("2026-07-19T00:00:00.000Z")
+    getConfirmationBinding: overrides.getConfirmationBinding,
+    now: overrides.now ?? (() => new Date("2026-07-19T00:00:00.000Z"))
   });
 }
 
@@ -344,4 +348,23 @@ test("does not curate failed or cancelled turns", async () => {
   if (!session.ok) throw new Error("session");
   await api.submitTurn({ sessionId: session.data.sessionId, idempotencyKey: "failed", input: { mode: "qa", message: "我偏好简短回答" } });
   expect(onConversationCompleted).not.toHaveBeenCalled(); api.dispose();
+});
+
+test("confirmation expires and cannot survive a changed actor session", async () => {
+  for (const change of ["time", "actor"]) {
+    let now = Date.parse("2026-10-03T00:00:00Z"), binding = "actor-a:session-1";
+    const executeConfirmation = vi.fn(() => ({ events: [], settingsChanged: false }));
+    const confirmation: HumanConfirmationRequest = { action: { actionId: "settings.update", payload: { target: "profile.enabled", value: true } },
+      confirmationId: "bounded-confirmation", plan: { actions: [{ actionId: "settings.update", input: { target: "profile.enabled", value: true } }], confidence: "high", intentId: "settings.update", planId: "bounded-plan", requiredContext: [], requiresConfirmation: true, riskLevel: "medium", summary: "开启画像" }, summary: "开启画像", traceId: "bounded-trace", type: "confirmation_request" };
+    const api = createTestService({ now: () => new Date(now), getConfirmationBinding: () => binding,
+      executeCommand: () => ({ events: [confirmation], settingsChanged: false }), executeConfirmation });
+    const session = await createSession(api);
+    await api.submitTurn({ sessionId: session.sessionId, idempotencyKey: "bounded", input: { mode: "command", message: "开启画像" } });
+    if (change === "time") now += 5 * 60 * 1000;
+    else binding = "actor-a:session-2";
+    const result = await api.resolveConfirmation({ sessionId: session.sessionId, confirmationId: confirmation.confirmationId, decision: "approve" });
+    expect(result).toMatchObject({ ok: true, data: { status: "failed", events: expect.arrayContaining([expect.objectContaining({ type: "run.failed", message: expect.stringContaining("确认已过期") })]) } });
+    expect(executeConfirmation).not.toHaveBeenCalled();
+    api.dispose();
+  }
 });

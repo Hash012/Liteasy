@@ -4,7 +4,7 @@ import { boundedJson } from "../extensions/extensionSchema";
 import { buildExtensionPackage, validateExtensionPackage } from "../extensions/extensionPackage";
 import type { ExtensionPackageStore } from "../extensions/extensionPackageStore";
 import { hashText } from "../context/objectContext";
-const draftSchema = z.strictObject({ schema: z.literal("liteasy.extension-draft/v1"), id: z.string(), title: z.string().max(120), description: z.string().max(12000), files: z.record(z.string(), z.string()), updatedAt: z.string(), revision: z.string() });
+const draftSchema = z.strictObject({ schema: z.literal("liteasy.extension-draft/v1"), id: z.string(), title: z.string().max(120), description: z.string().max(12000), files: z.record(z.string(), z.string()), sourcePaths: z.array(z.string()).optional(), updatedAt: z.string(), revision: z.string() });
 export type ExtensionDraft = z.infer<typeof draftSchema>;
 export type DraftChange = { path: string; text: string | null };
 export type TrialReport = { schema: "liteasy.extension-trial/v1"; digest: string; at: string; cases: Array<{ name: string; workflow: string; passed: boolean; runId?: string; error?: string }>; passed: boolean };
@@ -16,10 +16,10 @@ export function createExtensionDraftStore(storage: ObjectStorage) {
     get,
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     async list() { return (await storage.list("extension-draft/", "", 100)).flatMap((row) => { const value = draftSchema.safeParse(row.value); return value.success ? [value.data] : []; }); },
-    async create(title: string, files: Record<string, string>, description = "") {
+    async create(title: string, files: Record<string, string>, description = "", sourcePaths: string[] = []) {
       files = { ...files }; delete files["extension.lock.json"]; delete files["tests/report.json"];
       boundedJson(files, 24 * 1024 * 1024); await buildExtensionPackage(files); // safe relative paths even in unfinished drafts
-      const draft = draftSchema.parse({ schema: "liteasy.extension-draft/v1", id: crypto.randomUUID(), title, description, files, updatedAt: new Date().toISOString(), revision: crypto.randomUUID() });
+      const draft = draftSchema.parse({ schema: "liteasy.extension-draft/v1", id: crypto.randomUUID(), title, description, files, sourcePaths, updatedAt: new Date().toISOString(), revision: crypto.randomUUID() });
       const key = `extension-draft/${draft.id}`;
       await storage.commit([{ key, expected: null, row: { key, version: draft.revision, value: draft } }]); notify(); return draft;
     },

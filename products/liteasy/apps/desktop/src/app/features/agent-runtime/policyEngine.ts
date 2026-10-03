@@ -8,7 +8,7 @@ import type {
 } from "./agentRuntime.types";
 
 export type PolicyEngineContext = {
-  confirmedActionIds?: string[];
+  confirmedActions?: RuntimeActionInvocation[];
   contextView?: AgentRuntimeContextView;
   registeredActions: RegisteredActionMetadata[];
 };
@@ -85,7 +85,7 @@ function isRegisteredAction(action: RuntimeActionInvocation, context: PolicyEngi
 }
 
 function hasHumanConfirmation(action: RuntimeActionInvocation, context: PolicyEngineContext) {
-  return context.confirmedActionIds?.includes(action.actionId) ?? false;
+  return context.confirmedActions?.some((confirmed) => confirmed.actionId === action.actionId && JSON.stringify(confirmed.input) === JSON.stringify(action.input)) ?? false;
 }
 
 function findConfirmationAction(plan: SemanticActionPlan, context: PolicyEngineContext) {

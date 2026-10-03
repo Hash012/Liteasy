@@ -60,6 +60,7 @@ export type AgentRuntimeInput = {
 };
 
 export type AgentRuntimeExecutionContext = ActionContext & {
+  networkMode?: "online" | "local-only";
   agentCore?: RuntimeAgentCoreContext;
   clarifySemanticPlan?: SemanticPlanClarifier;
   contextView?: AgentRuntimeContextView;

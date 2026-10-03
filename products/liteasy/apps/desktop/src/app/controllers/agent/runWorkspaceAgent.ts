@@ -14,7 +14,7 @@ import { thinkingDepthInstruction } from "../../features/assistant/thinkingDepth
 import type { AgentJsonValue } from "../../features/agent-api/agentApi.types";
 import { findKnownAgentAsset } from "../../features/resource-filesystem/agentAssetPath";
 import { assetMarkdownLink } from "../../features/markdown/liteasyMarkdownLinks";
-import { assertExternalPaperSources } from "../../features/models/externalSourcePolicy";
+import { assertExternalPaperSources, externalModelAssetService } from "../../features/models/externalSourcePolicy";
 
 // This is a transport-independent tool protocol: the model chooses each action;
 // the application validates and executes it, then returns the actual receipt.
@@ -67,7 +67,8 @@ function operationDetail(action: z.infer<typeof actionSchema>, target: AgentAsse
 }
 
 export async function runWorkspaceAgent(input: AgentCommandExecutionInput, environment: DesktopAgentEnvironment): Promise<AgentKnowledgeExecutionResult> {
-  const assets = environment.assets!;
+  if (input.request.input.networkMode === "local-only") return { message: "本轮仅限本机操作；尚未调用模型或外部服务。" };
+  const assets = externalModelAssetService(environment.assets!);
   const scope = environment.assetScopeId ?? "local";
   const settings = environment.knowledge.settings;
   const gateway = createModelGatewayFromSettings(settings, { cloudTransport: environment.knowledge.modelTransport });
@@ -195,7 +196,7 @@ export async function runWorkspaceAgent(input: AgentCommandExecutionInput, envir
         if (assetPath !== undefined && !asset) throw new Error("请先搜索或使用已附加的资产，不能猜测组件或白板地址。");
         if (action.query === "liteasy_block_update" && (!asset || blockReads.get(asset.path) !== args.expectedRevision)) throw new Error("更新组件前必须使用 liteasy_block_read 读取完整结构，并使用返回的版本。");
         const requestedWorkflowControl = ["liteasy_workflow_request", "liteasy_workflow_control"].includes(action.query) && /运行|执行|启动|暂停|继续|恢复|取消|停止|\b(?:run|start|pause|resume|cancel|stop)\b/i.test(input.request.input.message);
-        result = await environment.extensionStudio.call(action.query, args, { writable: mayWrite || requestedWorkflowControl || /创建|制作|生成|组装|设计|create|build|design/i.test(input.request.input.message), signal: input.signal });
+        result = await environment.extensionStudio.call(action.query, args, { writable: mayWrite || requestedWorkflowControl || /创建|制作|生成|组装|设计|create|build|design/i.test(input.request.input.message), signal: input.signal, externalAssets: assets });
         if (action.query === "liteasy_block_read" && asset && result && typeof result === "object" && "revision" in result) blockReads.set(asset.path, String(result.revision));
         if (action.query === "liteasy_block_update" && asset) blockReads.delete(asset.path);
         if (["liteasy_block_create", "liteasy_block_update"].includes(action.query) && result && typeof result === "object" && "path" in result) remember(await assets.stat(String(result.path), { signal: input.signal }));

@@ -1,3 +1,4 @@
+import type { AgentAssetService } from "../resource-filesystem/agentAssetService";
 import { inspectLegacyExtension, compileLegacyWorkflowPlan } from "../extensions/legacyExtensionAdapter";
 import { componentCatalog } from "../visual-blocks/blockRegistry";
 import { extensionSkillSchema } from "../extensions/extensionSkill";
@@ -45,12 +46,25 @@ export type StudioToolName = keyof typeof studioTools;
 export function createExtensionStudioService(input: { drafts: ExtensionDraftStore; packages: ExtensionPackageStore; runner: WorkflowRunner; repository: ObjectRepository; active(): boolean; refresh(): Promise<unknown>; requestWorkflow?(owner: string, workflow: string, selection: string[]): Promise<void> }) {
   return {
     tools: studioTools,
-    async call(name: string, raw: unknown, policy: { writable: boolean; signal?: AbortSignal }) {
+    async call(name: string, raw: unknown, policy: { writable: boolean; signal?: AbortSignal; externalAssets?: AgentAssetService }) {
       policy.signal?.throwIfAborted(); if (!input.active()) throw new Error("账号已切换。");
       if (!Object.prototype.hasOwnProperty.call(studioTools, name)) throw new Error("未登记的扩展操作。");
       const tool = studioTools[name as StudioToolName];
       if (tool.write && !policy.writable) throw new Error("当前会话未授权写入。");
       const args = tool.schema.parse(raw ?? {});
+      // External tools must revalidate source lineage even when a path was discovered earlier.
+      if (policy.externalAssets) {
+        const values = args as { path?: string; boardPath?: string; selection?: string[]; id?: string };
+        const paths = [...values.selection ?? [], ...[values.path, values.boardPath].filter((path): path is string => !!path)];
+        if (values.id && ["liteasy_workflow_inspect", "liteasy_workflow_control", "liteasy_workflow_replay", "liteasy_workflow_recompute", "liteasy_extension_from_run"].includes(name)) paths.push(...await input.runner.sourcePaths(values.id));
+        if (values.id && ["liteasy_extension_draft", "liteasy_extension_patch", "liteasy_extension_validate", "liteasy_extension_trial", "liteasy_extension_export"].includes(name)) {
+          const draft = await input.drafts.get(values.id);
+          if (!draft.sourcePaths) throw new Error("此旧草稿尚未记录来源，请在本机工作台核对后重新创建，尚未发送给外部服务。");
+          paths.push(...draft.sourcePaths);
+        }
+        for (const path of new Set(paths)) await policy.externalAssets.stat(path, { signal: policy.signal });
+      }
+
       switch (name) {
         case "liteasy_workflow_request": {
           const options = studioTools.liteasy_workflow_request.schema.parse(args);
@@ -84,7 +98,7 @@ export function createExtensionStudioService(input: { drafts: ExtensionDraftStor
             schema.required = [...new Set([...(schema.required as string[] ?? []), field])];
           }
           const permissions = [...new Set(definition.nodes.map((node) => operationCatalog[node.operation.id].capability).filter(Boolean))].map((capability) => ({ capability, scopeRef: capability === "resources.create" ? "invocation.output" : capability === "model.invoke" ? "invocation.modelConnection" : "invocation.selection" }));
-          return input.drafts.create(options.title, { "liteasy.extension.json": JSON.stringify({ apiVersion: "liteasy.extension/v2", id: owner, name: options.title, version: "1.0.0", engines: { extensionApi: "2.0.0" }, permissions, contributes: { workflows: [{ id: definition.id, path: "workflows/method.json" }], commands: [{ id: "run", title: options.title, workflow: definition.id }] } }), "workflows/method.json": JSON.stringify(definition, null, 2), "README.md": "从成功运行提炼的方法。正文快照未复制。请检查参数、设置绑定，并添加明确授权的验收样例后试跑与发布。" });
+          return input.drafts.create(options.title, { "liteasy.extension.json": JSON.stringify({ apiVersion: "liteasy.extension/v2", id: owner, name: options.title, version: "1.0.0", engines: { extensionApi: "2.0.0" }, permissions, contributes: { workflows: [{ id: definition.id, path: "workflows/method.json" }], commands: [{ id: "run", title: options.title, workflow: definition.id }] } }), "workflows/method.json": JSON.stringify(definition, null, 2), "README.md": "从成功运行提炼的方法。正文快照未复制。请检查参数、设置绑定，并添加明确授权的验收样例后试跑与发布。" }, "", await input.runner.sourcePaths(options.id));
         }
         case "liteasy_board_template": {
           const options = studioTools.liteasy_board_template.schema.parse(args), target = parseLiteasyPath(options.path, input.repository.scopeId);
@@ -106,7 +120,7 @@ export function createExtensionStudioService(input: { drafts: ExtensionDraftStor
           }
           files["templates/board.json"] = JSON.stringify({ schema: "liteasy.board-template/v1", id: "board", title: options.title, cards });
           files["liteasy.extension.json"] = JSON.stringify({ apiVersion: "liteasy.extension/v2", id: owner, name: options.title, version: "1.0.0", engines: { extensionApi: "2.0.0" }, contributes: { blockTypes: definitions, boardTemplates: [{ id: "board", path: "templates/board.json" }], commands: [{ id: "create", title: options.title, boardTemplate: "board" }] } });
-          return input.drafts.create(options.title, files);
+          return input.drafts.create(options.title, files, "", [options.path]);
         }
         case "liteasy_skills": { const id = (args as { id?: string }).id; const skills = (await input.packages.active()).packages.flatMap((pkg) => pkg.manifest.contributes.skills.map((entry) => ({ owner: pkg.manifest.id, digest: pkg.digest, ...extensionSkillSchema.parse(JSON.parse(pkg.bundle.files[entry.path])) }))); return id ? skills.find((skill) => `${skill.owner}/${skill.id}` === id) ?? null : skills.map(({ owner, id, title, description, workflow }) => ({ id: `${owner}/${id}`, title, description, workflow })); }
         case "liteasy_extension_catalog": {

@@ -1851,3 +1851,11 @@ export async function executeAction(
 
   throw new Error(`Unknown action: ${(invocation as { actionId: string }).actionId}`);
 }
+
+/** These registrations describe future commands; no approved executor exists. */
+export function actionUnavailableReason(actionId: string): string | undefined {
+  if (["cloud.upload_documents", "cloud.sync_workspace", "workspace.delete_documents", "workspace.overwrite_documents", "workspace.batch_update_documents"].includes(actionId)) {
+    return "该 Agent 动作尚未接入获准执行器，请使用对应界面的明确操作；联网或文件写入权限不授权上传、分享或邀请。";
+  }
+  return undefined;
+}

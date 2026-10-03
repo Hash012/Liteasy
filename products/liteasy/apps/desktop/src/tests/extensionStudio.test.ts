@@ -69,3 +69,31 @@ test("SDK and MCP workflow requests use host binding and control actual persiste
   expect(await service.call("liteasy_workflow_inspect", { id: run.id }, { writable: false })).toMatchObject({ status: "succeeded" });
   expect((await runner.replay(run.id)).nodes.end).toBe("result");
 });
+
+test("MCP rechecks structured assets, run snapshots and draft lineage before returning content", async () => {
+  const { createWorkspaceAgentAssetService } = await import("../app/features/resource-filesystem/workspaceAgentAssetService");
+  const { liteasyPath } = await import("../app/features/resource-filesystem/liteasyPath");
+  const { refOf } = await import("../app/features/objects/object.types");
+  const { compileWorkflow } = await import("../app/features/workflows/workflowDefinition");
+  const f = fixture(), repository = createObjectRepository(f.storage, f.scope);
+  const source = await repository.create({ kind: "content.note", title: "Private reference", sourceReferences: [{ scopeType: "organization", scopeId: "synthetic-org", paperId: "synthetic-source" }], content: { schema: "liteasy.note/v1", payload: { text: "SYNTHETIC_PRIVATE", origin: "derived" } } });
+  const path = liteasyPath(f.scope, { kind: "object", ref: refOf(source) });
+  const assets = createWorkspaceAgentAssetService({ repository, active: () => true });
+  const host = createOperationHost({ storage: f.storage, assets, scope: f.scope, enabled: () => true });
+  const runner = createWorkflowRunner(f.storage, host, f.scope);
+  const grant = await host.grants.issue({ owner: "plugin.test", digest: "version", capabilities: [], selection: [path], output: false, modelConnection: null });
+  const definition = compileWorkflow({ schema: "liteasy.workflow/v2", id: "method", title: "Method", version: "1.0.0", inputSchema: { type: "object", properties: {}, additionalProperties: false }, outputSchema: { type: "string" }, nodes: [{ id: "end", title: "完成", operation: { id: "core.end", version: "1.0.0" }, input: { value: { source: "literal", value: "SYNTHETIC_PRIVATE" } } }], output: { source: "node", nodeId: "end", path: "" } }).definition;
+  const run = await runner.create({ owner: "plugin.test", digest: "version", definition, grantId: grant.id, input: {} });
+  await runner.execute(run.id);
+  const draft = await f.drafts.create("Restricted template", (await paperLensPackage()).files, "", [path]);
+  const service = createExtensionStudioService({ ...f, repository, runner, active: () => true, refresh: async () => undefined });
+  const mcp = createLocalAssetMcp(assets, undefined, service);
+  for (const [name, args] of [["liteasy_block_read", { path }], ["liteasy_workflow_replay", { id: run.id }], ["liteasy_workflow_inspect", { id: run.id }], ["liteasy_extension_export", { id: draft.id }], ["liteasy_extension_draft", { id: draft.id }]] as const) {
+    const response = JSON.parse((await mcp.handleLine(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }), { writable: true }))!);
+    expect(response.result.isError).toBe(true);
+    expect(response.result.structuredContent.error.message).toContain("属于组织");
+    expect(JSON.stringify(response)).not.toContain("SYNTHETIC_PRIVATE");
+  }
+  expect((await runner.replay(run.id)).nodes.end).toBe("SYNTHETIC_PRIVATE");
+  expect(await f.drafts.get(draft.id)).toMatchObject({ sourcePaths: [path] });
+});

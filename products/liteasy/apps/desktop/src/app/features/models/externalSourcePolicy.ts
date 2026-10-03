@@ -17,13 +17,21 @@ export function assertExternalPaperSources(papers: readonly Pick<Paper, "library
 }
 
 export function externalModelAssetService(assets: AgentAssetService): AgentAssetService {
-  const check = (asset: AgentAsset) => { assertExternalSourceReferences(asset.sourceReferences); return asset; };
+  const check = (asset: AgentAsset) => {
+    assertExternalSourceReferences(asset.sourceReferences);
+    if (asset.sourceResolution === "unavailable") throw new Error("该资料的来源暂不可核实，尚未发送给外部服务。请恢复来源关联；本机阅读仍可继续。");
+    return asset;
+  };
   return {
     ...assets,
+    async create(options) {
+      if (options.paperPath) check(await assets.stat(options.paperPath, options));
+      return check(await assets.create(options));
+    },
     async search(options) {
       const matches = await assets.search(options);
       const resolved = await Promise.allSettled(matches.map((asset) => assets.stat(asset.path, options)));
-      return resolved.flatMap((entry) => entry.status === "fulfilled" && !entry.value.sourceReferences?.some((source) => source.scopeType === "organization") ? [entry.value] : []);
+      return resolved.flatMap((entry) => entry.status === "fulfilled" && entry.value.sourceResolution !== "unavailable" && !entry.value.sourceReferences?.some((source) => source.scopeType === "organization") ? [entry.value] : []);
     },
     async stat(path, options) { return check(await assets.stat(path, options)); },
     async read(path, options = {}) {

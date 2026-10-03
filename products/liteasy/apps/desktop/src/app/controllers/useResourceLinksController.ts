@@ -50,7 +50,7 @@ export function useResourceLinksController(input: { repository: ObjectRepository
       const snapshotKey = `reference:${await hashText(JSON.stringify([scope, document.asset.path, document.asset.revision, document.text]))}`;
       const source = parsed?.kind === "object" && document.asset.revision
         ? await repository.get({ objectId: parsed.ref.objectId, revision: document.asset.revision })
-        : await repository.projectLegacy(snapshotKey, { kind: "source.document", title: `${document.asset.title}（引用时快照）`,
+        : await repository.create({ kind: "source.document", sourceReferences: document.asset.sourceReferences, sourceResolution: document.asset.sourceResolution, title: `${document.asset.title}（引用时快照）`,
           content: { schema: "liteasy.source-document/v1", payload: { paperId: snapshotKey, availability: "local", text: document.text,
             legacyKey: snapshotKey,
             abstractText: [`来源：${document.asset.path}`, `读取版本：${document.asset.revision ?? "内容快照"}`,

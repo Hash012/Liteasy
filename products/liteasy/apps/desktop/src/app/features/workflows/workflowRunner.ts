@@ -159,6 +159,7 @@ export function createWorkflowRunner(storage: ObjectStorage, host: OperationHost
   }
   return {
     host, get, execute,
+    async sourcePaths(id: string) { const run = await get(id); return (await host.grants.get(run.grantId)).selection; },
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     async list() { return (await storage.list("workflow-run/", "", 200)).flatMap((row) => (row.value as WorkflowRun).schema === "liteasy.workflow-run/v2" ? [{ ...row.value as WorkflowRun, revision: row.version }] : []); },
     async create(options: { owner: string; digest: string; definition: WorkflowDefinition; grantId: string; input: JsonObject; settings?: JsonObject; parentRunId?: string; id?: string }) {
