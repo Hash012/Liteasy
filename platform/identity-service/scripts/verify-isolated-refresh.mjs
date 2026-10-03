@@ -40,7 +40,7 @@ try {
     sessions.push({ ...session, refreshToken: tokens.refresh_token });
   }
   const keycloak = new KeycloakClient({ apiUrl: config.apiUrl, tokenUrl: config.tokenUrl,
-    clientId: config.admin.clientId, clientSecret: config.admin.clientSecret });
+    clientId: config.admin.clientId, clientSecret: config.admin.clientSecret }, { fetchImpl: request });
   await keycloak.setStatus(config.subjectId, "disabled");
   const results = [];
   for (const session of sessions) {

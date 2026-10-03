@@ -10,7 +10,7 @@ import { validateCloudFaultConfig } from "./cloudFaultGuard.mjs";
 import { migratePostgres } from "../src/migrations.mjs";
 import { PostgresLibraryRepository } from "../src/libraryRepository.mjs";
 import { S3ObjectStore } from "../src/s3ObjectStore.mjs";
-import { HttpsPdfSecurityScanner } from "../src/pdfSecurityScanner.mjs";
+import { HttpsPdfSecurityScanner, PdfSecurityScannerError } from "../src/pdfSecurityScanner.mjs";
 import { PdfUploadService } from "../src/pdfUploadService.mjs";
 
 const phases = ["scanner-unavailable", "prepare-response-lost", "object-publication-failed", "database-completion-failed", "kill-after-prepare", "kill-after-publish"];
@@ -50,11 +50,15 @@ try {
       if (current === "scanner-unavailable") {
         assert.equal(workflows.rows.length, 0);
         assert.equal((await pool.query("SELECT count(*)::int AS count FROM library_entries WHERE scope_id=$1", [subject])).rows[0].count, 0);
-        await assert.rejects(() => store.openObject(store.stagingKey(subject)));
+        await assert.rejects(() => store.openObject(store.stagingKey(subject)), (error) => error?.$metadata?.httpStatusCode === 404);
       }
       else {
         assert.equal(workflows.rows.length, 1);
         const workflow = workflows.rows[0];
+        const expectedState = { "prepare-response-lost": "database_committed", "kill-after-prepare": "database_committed",
+          "object-publication-failed": "repair_required", "database-completion-failed": "repair_required", "kill-after-publish": "object_published" }[current];
+        assert.equal(workflow.state, expectedState, "fault must occur at the declared phase");
+        assert.equal((await pool.query("SELECT availability FROM library_entries WHERE document_id=$1", [workflow.document_id])).rows[0].availability, "pending");
         assert.equal(workflow.security_scanner, config.scanner.expectedScanner, "real configured scanner proof required");
         assert.equal(workflow.security_scan_hash, digest(fixture(subject)));
         if (["prepare-response-lost", "object-publication-failed", "kill-after-prepare"].includes(current)) {
@@ -79,25 +83,31 @@ try {
     const subject = `synthetic-${config.runId}-${phase}`;
     const scope = { scopeType: "user", scopeId: subject };
     const bytes = fixture(subject);
+    let faultReached = false;
     const prepare = repository.preparePdfUpload.bind(repository);
     if (["prepare-response-lost", "kill-after-prepare"].includes(phase)) repository.preparePdfUpload = async (...args) => {
       await prepare(...args);
+      faultReached = true;
       if (phase.startsWith("kill-")) process.kill(process.pid, "SIGKILL");
       throw new Error("synthetic-prepare-response-loss");
     };
-    if (phase === "object-publication-failed") store.publishStagedPdf = async () => { throw new Error("synthetic-object-publication-failure"); };
-    if (phase === "database-completion-failed") repository.completePdfUpload = async () => { throw new Error("synthetic-database-completion-failure"); };
+    if (phase === "object-publication-failed") store.publishStagedPdf = async () => { faultReached = true; throw new Error("synthetic-object-publication-failure"); };
+    if (phase === "database-completion-failed") repository.completePdfUpload = async () => { faultReached = true; throw new Error("synthetic-database-completion-failure"); };
     if (phase === "kill-after-publish") {
       const mark = repository.markPdfObjectPublished.bind(repository);
       repository.markPdfObjectPublished = async (...args) => { await mark(...args); process.kill(process.pid, "SIGKILL"); };
     }
-    // Unavailable scanner dependency; success phases use the actual process and
-    // its hash-bound response. No mocked clean verdict is used.
-    const actualScanner = phase === "scanner-unavailable" ? undefined : scanner;
+    // Fault at scan invocation after the real S3 read; success phases use the
+    // actual process. A transport failure before this hook cannot count as pass.
+    const actualScanner = phase === "scanner-unavailable" ? { async scan() {
+      faultReached = true;
+      throw new PdfSecurityScannerError("pdf_security_scanner_unavailable", 503);
+    } } : scanner;
     await assert.rejects(() => new PdfUploadService(repository, store, actualScanner).upload(scope, {
       actorId: subject, expectedRevision: 0, fileName: "Synthetic.pdf", idempotencyKey: subject,
       operationId: subject, traceId: "isolated-cloud-fault", readable: Readable.from([bytes])
-    }));
+    }), (error) => faultReached && (phase === "prepare-response-lost" ? error.message === "synthetic-prepare-response-loss"
+      : error.code === (phase === "scanner-unavailable" ? "pdf_security_scanner_unavailable" : "storage_publish_failed")));
     assert.equal(digest(bytes), digest(fixture(subject)), "source bytes are unchanged");
   }
 } catch {
