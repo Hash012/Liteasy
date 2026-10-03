@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { thinReadingSyncPayload } from "@intuecho/contracts";
 import pg from "pg";
 import { PostgresAnnotationCommunityRepository } from "../src/postgresAnnotationCommunityRepository.mjs";
 import { validateIntuechoPostgresIntegrationDatabases } from "./postgresIntegrationGuard.mjs";
@@ -38,6 +39,22 @@ try {
 
   const original = { annotationId: "local-1", queueKey, body: "Synthetic original", createdAt, updatedAt: createdAt,
     targets: [{ kind: "whole_document", literature: { literatureId, literatureRecord: { title: "Display-only hydration" } } }] };
+  const query = { annotationId: original.annotationId, queueKey, updatedAt: original.updatedAt,
+    payloadDigest: createHash("sha256").update(thinReadingSyncPayload(original)).digest("hex") };
+  // Execute the lookup in an enforced read-only transaction: a hidden write,
+  // even one rolled back afterwards, must fail this real PostgreSQL check.
+  const reader = await pool.connect();
+  try {
+    await reader.query("BEGIN READ ONLY");
+    const lookup = new PostgresAnnotationCommunityRepository(reader);
+    assert.deepEqual(await lookup.lookupDesktopAnnotations(owner, [query]), [{ ...query, status: "matched", remoteAnnotationId: remoteId, publicationRevision: 1 }]);
+    assert.equal((await lookup.lookupDesktopAnnotations({ ...owner, id: `other-${suffix}` }, [query]))[0].status, "not_found");
+    assert.equal((await lookup.lookupDesktopAnnotations(owner, [{ ...query, queueKey: `missing-${suffix}` }]))[0].status, "not_found");
+    for (const changed of [{ ...query, annotationId: "forged" }, { ...query, payloadDigest: "0".repeat(64) },
+      { ...query, updatedAt: "2026-10-02T01:00:00.000Z" }]) assert.equal((await lookup.lookupDesktopAnnotations(owner, [changed]))[0].status, "conflict");
+    await reader.query("COMMIT");
+  } catch (error) { await reader.query("ROLLBACK"); throw error; }
+  finally { reader.release(); }
   assert.equal((await repository.syncDesktopAnnotations(owner, [original]))[0].status, "synced");
   assert.equal((await repository.syncDesktopAnnotations(owner, [{ ...original, body: "Same-version divergence" }]))[0].error,
     "ANNOTATION_PUBLICATION_VERSION_CONFLICT");
@@ -84,7 +101,7 @@ try {
   assert.deepEqual((await pool.query("SELECT visibility,share_to_plaza,revision::int,withdrawn_at FROM annotations WHERE id = $1", [remoteId])).rows[0],
     { visibility: "private", share_to_plaza: false, revision: 2, withdrawn_at: null });
   assert.equal((await pool.query("SELECT body FROM annotation_replies WHERE id = $1", [`reply-${suffix}`])).rows[0].body, "Preserved reply");
-  console.log(JSON.stringify({ verified: true, storage: "postgresql", cases: ["exact-legacy-replay", "legacy-version-conflict", "owner-source-remote", "rollback", "concurrent-replay", "no-resurrection", "replies-preserved"] }));
+  console.log(JSON.stringify({ verified: true, storage: "postgresql", cases: ["read-only-original-lookup", "lookup-owner-source-version-digest", "exact-legacy-replay", "legacy-version-conflict", "owner-source-remote", "rollback", "concurrent-replay", "no-resurrection", "replies-preserved"] }));
 } finally {
   await pool.query("DELETE FROM annotation_replies WHERE id = $1", [`reply-${suffix}`]);
   await pool.query("DELETE FROM desktop_annotation_publications WHERE owner_id = $1 AND queue_key = $2", [owner.id, queueKey]);

@@ -628,6 +628,27 @@ export const desktopCommunityAnnotationBatchSchema = z.object({
   annotations: z.array(desktopCommunityAnnotationSchema).min(1).max(100)
 });
 
+export const desktopCommunityAnnotationLookupQuerySchema = z.object({
+  annotationId: z.string().trim().min(1).max(200),
+  queueKey: z.string().trim().min(1).max(500),
+  updatedAt: z.string().datetime(),
+  payloadDigest: z.string().regex(/^[a-f0-9]{64}$/u)
+}).strict();
+
+export const desktopCommunityAnnotationLookupBatchSchema = z.object({
+  queries: z.array(desktopCommunityAnnotationLookupQuerySchema).min(1).max(100)
+}).strict();
+
+export const desktopCommunityAnnotationLookupResultSchema = z.discriminatedUnion("status", [
+  desktopCommunityAnnotationLookupQuerySchema.extend({
+    status: z.literal("matched"),
+    remoteAnnotationId: z.string().trim().min(1).max(200),
+    publicationRevision: z.number().int().positive()
+  }).strict(),
+  z.object({ annotationId: z.string().min(1), queueKey: z.string().min(1), status: z.literal("not_found") }).strict(),
+  z.object({ annotationId: z.string().min(1), queueKey: z.string().min(1), status: z.literal("conflict") }).strict()
+]);
+
 const desktopPublicationOperationSchema = z.object({
   annotationId: z.string().trim().min(1).max(200),
   queueKey: z.string().trim().min(1).max(500),
@@ -680,3 +701,5 @@ export const organizationChoiceSchema = organizationAccessSnapshotSchema.extend(
   name: z.string().trim().min(1).max(300),
   role: z.enum(["owner", "admin", "member"])
 });
+
+export { thinReadingSyncPayload } from "./thinReadingSyncPayload.js";

@@ -2,6 +2,7 @@ import { currentOrganizationChoices } from "./organizationChoices.mjs";
 import { annotationContribution } from "./annotationContribution.mjs";
 import { platformAppealSummary } from "./tagAppealVisibility.mjs";
 import { initializeSqliteCommunityGovernance, recordSqliteCommunityReplyEvent } from "./communityGovernanceRepository.mjs";
+import { thinReadingPublicationLookup } from "./thinReadingPublicationLookup.mjs";
 import { thinReadingSyncPayload } from "./thinReadingSyncPayload.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import {
@@ -856,6 +857,19 @@ export class SqliteAnnotationCommunityRepository {
       if (!replayed) this.db.prepare("UPDATE desktop_annotation_handoffs_v2 SET consumed_at = ? WHERE id = ?").run(new Date().toISOString(), id);
       return { draft: parseJson(row.payload_json, {}), replayed };
     })();
+  }
+
+  lookupDesktopAnnotations(author, queries) {
+    return this.db.transaction(() => queries.map((query) => {
+      const row = this.db.prepare(`SELECT s.*, a.body, a.withdrawn_at, p.source_revision,
+        p.annotation_id AS publication_annotation_id, p.source_annotation_id AS publication_source_id
+        FROM desktop_annotation_syncs_v2 s JOIN annotations_v2 a ON a.id = s.annotation_id AND a.author_id = s.owner_id
+        LEFT JOIN desktop_annotation_publications_v2 p ON p.owner_id = s.owner_id AND p.queue_key = s.queue_key
+        WHERE s.owner_id = ? AND s.queue_key = ?`).get(author.id, query.queueKey);
+      if (row) row.targets = this.db.prepare("SELECT target_json,literature_id FROM annotation_targets_v2 WHERE annotation_id = ? ORDER BY position")
+        .all(row.annotation_id).map((target) => ({ target: parseJson(target.target_json, {}), literatureId: target.literature_id }));
+      return thinReadingPublicationLookup(query, row);
+    }))();
   }
 
   syncDesktopAnnotations(author, items) {

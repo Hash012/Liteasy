@@ -4,6 +4,7 @@ import { useArtifactActions } from "../app/features/artifacts/useArtifactActions
 import { addThinReadingAnnotation, createThinReadingDocument, setThinReadingAnnotationPublic } from "../app/features/thin-reading/thinReadingProjection";
 import { createThinReadingFixture } from "./fixtures/thinReadingFixtures";
 import type { PublicationActorBinding } from "../app/features/forum/publicationActorBinding";
+import { prepareThinReadingPublications } from "../app/features/thin-reading/thinReadingIntuechoSyncQueue";
 import type { ThinReadingDocument } from "../app/features/thin-reading/thinReading.types";
 
 const actor: PublicationActorBinding = { endpoint: "https://community.example.invalid", issuer: "https://identity.example.invalid",
@@ -141,4 +142,128 @@ test("persists and replays the exact owned withdrawal after a lost response with
   expect(confirmed.annotations).toHaveLength(1);
   expect(confirmed.annotations[0].publication?.retractReceipt).toMatchObject({ state: "retracted", remoteAnnotationId: "remote-1" });
   expect(setThinReadingAnnotationPublic(confirmed, confirmed.annotations[0].id, true).annotations[0].visibility).toBe("private");
+});
+
+
+function unknownCreateWithdrawal(context: ReturnType<typeof setup>) {
+  const prepared = prepareThinReadingPublications(context.document, actor);
+  const withdrawn = setThinReadingAnnotationPublic(prepared, prepared.annotations[0].id, false);
+  context.store.upsertTab({ artifactId: withdrawn.artifactId, title: "Synthetic thin reading", type: "thin_reading", thinReadingDocument: withdrawn });
+  return withdrawn;
+}
+
+test("reads the unknown original result then durably withdraws it without republishing its body", async () => {
+  const context = setup({ sourceCheck: () => { throw new Error("organization source cannot publish"); } });
+  const document = unknownCreateWithdrawal(context);
+  const transport = vi.fn(async (url: string, request: RequestInit) => {
+    const input = JSON.parse(String(request.body));
+    if (url.endsWith("/v1/thin-reading/annotations:lookup")) {
+      expect(input.queries[0]).toMatchObject({ annotationId: document.annotations[0].id, queueKey: `${document.artifactId}:${document.annotations[0].id}` });
+      expect(input.queries[0].payloadDigest).toMatch(/^[a-f0-9]{64}$/);
+      expect(String(request.body)).not.toContain("Synthetic reader note");
+      expect(String(request.body)).not.toContain("targets");
+      return { ok: true, status: 200, json: async () => ({ results: [{ ...input.queries[0], status: "matched", remoteAnnotationId: "remote-unknown", publicationRevision: 1 }] }) };
+    }
+    expect(url).toBe(`${actor.endpoint}/v1/pdf-annotations:sync`);
+    const operation = input.operations[0];
+    expect(context.save).toHaveBeenCalled();
+    expect(context.save.mock.calls.at(-1)?.[0].thinReadingDocument.annotations[0].publication.pendingRetract).toEqual(operation);
+    return { ok: true, status: 200, json: async () => ({ results: [{ annotationId: operation.annotationId, queueKey: operation.queueKey,
+      remoteAnnotationId: operation.remoteAnnotationId, state: "retracted", remoteRevision: 2, syncedAt: "2026-10-03T00:00:00.000Z" }] }) };
+  });
+  vi.stubGlobal("fetch", transport);
+  await context.actions.syncThinReadingAnnotations({ artifactId: document.artifactId, document });
+  expect(transport).toHaveBeenCalledTimes(2);
+  expect(context.store.getOpenTabs()[0].thinReadingDocument?.annotations[0].publication?.retractReceipt?.state).toBe("retracted");
+});
+
+test.each(["not_found", "conflict", "wrong_digest", "duplicate", "incomplete"])("holds unknown create when lookup returns %s", async (status) => {
+  const context = setup();
+  const document = unknownCreateWithdrawal(context);
+  const transport = vi.fn(async (_url: string, request: RequestInit) => {
+    const query = JSON.parse(String(request.body)).queries[0];
+    const matched = { ...query, status: "matched", remoteAnnotationId: "remote-1", publicationRevision: 1 };
+    const results = status === "duplicate" ? [matched, matched] : [status === "wrong_digest" ? { ...matched, payloadDigest: "0".repeat(64) }
+      : status === "incomplete" ? { ...matched, publicationRevision: undefined } : { annotationId: query.annotationId, queueKey: query.queueKey, status }];
+    return { ok: true, status: 200, json: async () => ({ results }) };
+  });
+  vi.stubGlobal("fetch", transport);
+  await expect(context.actions.syncThinReadingAnnotations({ artifactId: document.artifactId, document })).rejects.toThrow();
+  expect(transport).toHaveBeenCalledOnce();
+  const saved = context.store.getOpenTabs()[0].thinReadingDocument!.annotations[0];
+  expect(saved.publication?.pendingOperation).toEqual(document.annotations[0].publication?.pendingOperation);
+  expect(saved.publication?.retractReceipt).toBeUndefined();
+});
+
+test("holds the original actor and source identity before lookup and checks the session after lookup", async () => {
+  let current = actor;
+  const context = setup({ getActorBinding: () => current });
+  const document = unknownCreateWithdrawal(context);
+  const transport = vi.fn(async (_url: string, request: RequestInit) => {
+    const query = JSON.parse(String(request.body)).queries[0];
+    current = { ...actor, sessionGeneration: "runtime:2" };
+    return { ok: true, status: 200, json: async () => ({ results: [{ ...query, status: "matched", remoteAnnotationId: "remote-1", publicationRevision: 1 }] }) };
+  });
+  vi.stubGlobal("fetch", transport);
+  current = { ...actor, subject: "another", scopeId: "another" };
+  await expect(context.actions.syncThinReadingAnnotations({ artifactId: document.artifactId, document })).rejects.toThrow("账号");
+  expect(transport).not.toHaveBeenCalled();
+  current = actor;
+  await expect(context.actions.syncThinReadingAnnotations({ artifactId: document.artifactId, document })).rejects.toThrow("会话");
+  expect(transport).toHaveBeenCalledOnce();
+});
+
+
+test("withdraws matched batch items while preserving unresolved original requests for a later read-only retry", async () => {
+  const context = setup();
+  const withTwo = addThinReadingAnnotation(context.document, { body: "Second synthetic note", excerpt: "Second evidence", nodeId: context.document.rootNodeId, visibility: "pending_public" });
+  const bound = { ...withTwo, annotations: withTwo.annotations.map((annotation) => ({ ...annotation, publication: { actorBinding: actor } })) };
+  const prepared = prepareThinReadingPublications(bound, actor);
+  const document = { ...prepared, annotations: prepared.annotations.map((annotation) => ({ ...annotation, visibility: "private" as const })) };
+  context.store.upsertTab({ artifactId: document.artifactId, title: "Two unknown originals", type: "thin_reading", thinReadingDocument: document });
+  const transport = vi.fn(async (url: string, request: RequestInit) => {
+    const input = JSON.parse(String(request.body));
+    if (url.endsWith(":lookup")) return { ok: true, status: 200, json: async () => ({ results: [
+      { ...input.queries[0], status: "matched", remoteAnnotationId: "remote-first", publicationRevision: 4 },
+      { annotationId: input.queries[1].annotationId, queueKey: input.queries[1].queueKey, status: "not_found" }
+    ] }) };
+    expect(input.operations).toHaveLength(1);
+    expect(input.operations[0].revision).toBe(5);
+    return { ok: true, status: 200, json: async () => ({ results: [{ ...input.operations[0], state: "retracted", remoteRevision: 5, syncedAt: "2026-10-03T00:00:00.000Z" }] }) };
+  });
+  vi.stubGlobal("fetch", transport);
+  await context.actions.syncThinReadingAnnotations({ artifactId: document.artifactId, document });
+  expect(transport).toHaveBeenCalledTimes(2);
+  const saved = context.store.getOpenTabs()[0].thinReadingDocument!;
+  expect(saved.annotations[0].publication?.retractReceipt?.state).toBe("retracted");
+  expect(saved.annotations[1].publication?.pendingOperation).toEqual(document.annotations[1].publication?.pendingOperation);
+  expect(saved.annotations[1].publication?.pendingRetract).toBeUndefined();
+});
+
+test("does not trust an input original that differs from the durable original", async () => {
+  const context = setup();
+  const saved = unknownCreateWithdrawal(context);
+  const document = structuredClone(saved);
+  document.annotations[0].publication!.pendingOperation!.body = "Substituted original";
+  const transport = vi.fn();
+  vi.stubGlobal("fetch", transport);
+  await expect(context.actions.syncThinReadingAnnotations({ artifactId: document.artifactId, document })).rejects.toThrow("原发布请求");
+  expect(transport).not.toHaveBeenCalled();
+});
+
+test.each(["original", "local-note"])("holds a changed local %s while its lookup is in flight", async (changedField) => {
+  const context = setup();
+  const document = unknownCreateWithdrawal(context);
+  const transport = vi.fn(async (_url: string, request: RequestInit) => {
+    const query = JSON.parse(String(request.body)).queries[0];
+    const changed = structuredClone(document);
+    if (changedField === "original") changed.annotations[0].publication!.pendingOperation!.body = "Changed during lookup";
+    else changed.annotations[0].body = "A local edit that must survive lookup";
+    context.store.upsertTab({ artifactId: changed.artifactId, title: "Changed", type: "thin_reading", thinReadingDocument: changed });
+    return { ok: true, status: 200, json: async () => ({ results: [{ ...query, status: "matched", remoteAnnotationId: "remote-1", publicationRevision: 1 }] }) };
+  });
+  vi.stubGlobal("fetch", transport);
+  await expect(context.actions.syncThinReadingAnnotations({ artifactId: document.artifactId, document })).rejects.toThrow("原发布请求");
+  expect(transport).toHaveBeenCalledOnce();
+  expect(context.save).not.toHaveBeenCalled();
 });

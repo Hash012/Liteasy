@@ -8,6 +8,7 @@ import {
   desktopAnnotationHandoffSchema,
   desktopAnnotationPublicationBatchSchema,
   desktopCommunityAnnotationBatchSchema,
+  desktopCommunityAnnotationLookupBatchSchema,
   followUserSchema,
   markConversationReadSchema,
   sendMessageSchema,
@@ -149,7 +150,14 @@ export function registerAnnotationCommunityRoutes(app, repository, {
       throw new AnnotationCommunityError("INVALID_ANNOTATIONS");
     }));
 
-    app.post("/v1/thin-reading/annotations:sync", async (request, reply) => route(reply, async () => {
+    app.post("/v1/thin-reading/annotations::lookup", async (request, reply) => route(reply, async () => {
+      const viewer = requireDesktopUser(request, reply);
+      if (!viewer) return;
+      const input = validated(desktopCommunityAnnotationLookupBatchSchema, request.body, "INVALID_ANNOTATIONS");
+      return { results: await repository.lookupDesktopAnnotations(viewer, input.queries) };
+    }));
+
+    app.post("/v1/thin-reading/annotations::sync", async (request, reply) => route(reply, async () => {
       const viewer = requireDesktopUser(request, reply);
       if (!viewer) return;
       const legacy = validated(desktopCommunityAnnotationBatchSchema, request.body, "INVALID_ANNOTATIONS");

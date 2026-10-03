@@ -3,6 +3,7 @@ import { platformAppealSummary } from "./tagAppealVisibility.mjs";
 import { recordPostgresCommunityReplyEvent } from "./communityGovernanceRepository.mjs";
 import { currentOrganizationChoices } from "./organizationChoices.mjs";
 import { annotationContribution } from "./annotationContribution.mjs";
+import { thinReadingPublicationLookup } from "./thinReadingPublicationLookup.mjs";
 import { thinReadingSyncPayload } from "./thinReadingSyncPayload.mjs";
 import { randomUUID } from "node:crypto";
 import { withTransaction } from "./postgres.mjs";
@@ -435,6 +436,22 @@ export class PostgresAnnotationCommunityRepository {
       if (!replayed) await client.query("UPDATE desktop_annotation_handoffs SET consumed_at = now() WHERE id = $1", [id]);
       return { draft: row.payload, replayed };
     });
+  }
+
+  async lookupDesktopAnnotations(author, queries) {
+    return Promise.all(queries.map(async (query) => {
+      // One statement takes a consistent read snapshot of mapping, body and
+      // targets. No row/advisory locks, ledger inserts, or source replay.
+      const { rows } = await this.pool.query(`SELECT s.*, a.body, a.withdrawn_at, p.source_revision,
+        p.annotation_id AS publication_annotation_id, p.source_annotation_id AS publication_source_id,
+        COALESCE((SELECT jsonb_agg(jsonb_build_object('target', t.target, 'literatureId', t.literature_id) ORDER BY t.position)
+          FROM annotation_targets t WHERE t.annotation_id = s.annotation_id), '[]'::jsonb) AS targets
+        FROM desktop_annotation_syncs s JOIN annotations a ON a.id = s.annotation_id AND a.author_id = s.owner_id
+        LEFT JOIN desktop_annotation_publications p ON p.owner_id = s.owner_id AND p.queue_key = s.queue_key
+        WHERE s.owner_id = $1 AND s.queue_key = $2
+          AND NOT EXISTS (SELECT 1 FROM account_deletion_jobs WHERE subject_id = $1)`, [author.id, query.queueKey]);
+      return thinReadingPublicationLookup(query, rows[0]);
+    }));
   }
 
   async syncDesktopAnnotations(author, items) {

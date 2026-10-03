@@ -101,3 +101,12 @@ that path does not assign an actor to a recovered legacy task.
 - This slice does not claim real IdP, S3, scanner, native Tauri, Windows Installer,
   production readiness, or end-to-end revocation acceptance. Real isolated
   PostgreSQL verification is recorded separately by the service integration work.
+
+
+## Unknown thin-reading create withdrawal lookup
+
+A user-requested withdrawal can recover a lost create response without publishing its body again. The desktop sends only the original queue key, source annotation ID, timestamp, and SHA-256 of canonical wire body/targets to `POST /v1/thin-reading/annotations:lookup`. The authenticated owner is selected by the existing desktop audience boundary. The stored mapping, source timestamp, body and target digest must all match before a remote ID is returned. The client also requires the same verified actor, original durable request, unchanged session during the read, unique complete receipts, and an unchanged local document. It persists the resulting existing-ledger retract operation before sending it. Matched batch siblings can finish; unresolved originals remain available for an explicit later lookup. No result never means a successful withdrawal or permission to replay a create.
+
+The shared canonical helper ignores response-only literature hydration but includes all wire body, target, derived-source and evidence fields. No table or migration was added. The route registration escapes its literal colon (`annotations::lookup` and `annotations::sync` in Fastify); external URLs remain unchanged. Root integration must add the lookup URL to the desktop audience allowlists in `server.mjs` and `productionApp.mjs`.
+
+Validation: two SQLite lookup regressions first failed on the missing method, and seven desktop recovery tests first failed on the old unconditional hold. The final suite covers owner/source/version/digest conflicts, absent results, duplicate or incomplete receipts, actor/session changes, durable-original substitution, local changes while reading, partial batches and persist-before-retract. SQLite serialization is unchanged across lookups. Route tests use a stub authentication boundary and real Fastify routing. The scoped PostgreSQL script runs the lookup inside `BEGIN READ ONLY` against the separately restored `account_restore_3d8ddc732b_test` database on loopback port 46349, then verifies the existing transaction rollback, concurrent replay, no-resurrection and reply-preservation cases. This is local PostgreSQL evidence, not S3, IdP, deployment, or production acceptance.

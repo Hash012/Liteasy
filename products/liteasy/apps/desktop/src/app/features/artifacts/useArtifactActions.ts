@@ -52,6 +52,7 @@ import {
 } from "../thin-reading/thinReadingIntuechoSyncQueue";
 import { normalizePublicationActorBinding, samePublicationActor, type PublicationActorBinding } from "../forum/publicationActorBinding";
 import { createForumClient } from "../forum/forumClient";
+import { lookupThinReadingPublications, sameThinReadingPendingPublication, type ThinReadingMatchedPublication } from "../thin-reading/thinReadingPublicationLookup";
 import {
   createThinReadingBranchRecoverySnapshot,
   validateThinReadingBranchRecoverySnapshot
@@ -1706,22 +1707,38 @@ export function useArtifactActions({
     if (candidates.some((annotation) => !samePublicationActor(annotation.publication?.actorBinding, actor, { includeGeneration: false }))) {
       throw new Error("撤回任务缺少原账号归属，请使用原账号核实；本地批注已保留。");
     }
-    if (candidates.some((annotation) => !annotation.publication?.pendingRetract && !annotation.publication?.remoteAnnotationId && annotation.syncState?.status !== "synced")) {
-      throw new Error("原发布结果尚未核实，无法确认撤回对象；原请求和本地批注已保留。");
-    }
     if (!confirmPublication) throw new Error("撤回预览暂不可用，未发送请求。");
     if (!await confirmPublication({ actorBinding: actor, operation: "retract", items: candidates.map((annotation) => ({
       annotationId: annotation.id, queueKey: `${artifactId}:${annotation.id}`, body: annotation.body, excerpt: annotation.excerpt
     })) })) return;
     if (!samePublicationActor(actor, getActorBinding?.())) throw new Error("账号或会话已变化，请重新确认撤回。");
-    const ids = new Set(candidates.map((annotation) => annotation.id));
+    const unknown = candidates.filter((annotation) => !annotation.publication?.pendingRetract &&
+      !annotation.publication?.remoteAnnotationId && annotation.syncState?.status !== "synced");
+    const storedBeforeLookup = (artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId) ??
+      artifactStore.getCatalog().find((tab) => tab.artifactId === artifactId))?.thinReadingDocument;
+    function assertStoredOriginals() {
+      const stored = (artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId) ??
+        artifactStore.getCatalog().find((tab) => tab.artifactId === artifactId))?.thinReadingDocument;
+      if (unknown.length && stored !== storedBeforeLookup) throw new Error("本地原发布请求或批注已变化，请重新核实后撤回。");
+      if (unknown.some((annotation) => {
+        const original = stored?.annotations.find((item) => item.id === annotation.id);
+        return !samePublicationActor(original?.publication?.actorBinding, actor, { includeGeneration: false }) ||
+          !sameThinReadingPendingPublication(original?.publication?.pendingOperation, annotation.publication?.pendingOperation);
+      })) throw new Error("本地保存的原发布请求已变化，请重新核实后撤回。");
+    }
+    assertStoredOriginals();
+    const matches = unknown.length ? await lookupThinReadingPublications({ actor, annotations: unknown, artifactId, endpoint,
+      getActorBinding, sessionId: getIntuechoSessionId?.() }) : new Map<string, ThinReadingMatchedPublication>();
+    assertStoredOriginals();
+    const ids = new Set(candidates.filter((annotation) => !unknown.includes(annotation) || matches.has(annotation.id)).map((annotation) => annotation.id));
+    if (ids.size === 0) throw new Error("原发布结果尚未核实，无法确认撤回对象；原请求和本地批注已保留。");
     const prepared = { ...document, annotations: document.annotations.map((annotation) => {
       if (!ids.has(annotation.id)) return annotation;
       const remoteAnnotationId = annotation.publication?.pendingRetract?.remoteAnnotationId ?? annotation.publication?.remoteAnnotationId ??
-        (annotation.syncState?.status === "synced" ? annotation.syncState.intuechoAnnotationId : "");
+        (annotation.syncState?.status === "synced" ? annotation.syncState.intuechoAnnotationId : matches.get(annotation.id)?.remoteAnnotationId ?? "");
       const pendingRetract = annotation.publication?.pendingRetract ?? {
         annotationId: annotation.id, queueKey: `${artifactId}:${annotation.id}`, remoteAnnotationId,
-        operation: "retract" as const, revision: 2, updatedAt: annotation.updatedAt
+        operation: "retract" as const, revision: (matches.get(annotation.id)?.publicationRevision ?? 1) + 1, updatedAt: annotation.updatedAt
       };
       return { ...annotation, publication: { ...annotation.publication, actorBinding: actor, remoteAnnotationId,
         pendingRetract, outcome: "unknown" as const }, syncState: undefined };

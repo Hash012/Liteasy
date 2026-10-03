@@ -369,3 +369,14 @@ export type OrganizationChoice = OrganizationAccessSnapshot & {
 export declare const organizationActionSchema: z.ZodType<OrganizationAction>;
 export declare const organizationAccessSnapshotSchema: z.ZodType<OrganizationAccessSnapshot>;
 export declare const organizationChoiceSchema: z.ZodType<OrganizationChoice>;
+
+export { thinReadingSyncPayload } from "./thinReadingSyncPayload.js";
+export type DesktopCommunityAnnotationLookupQuery = {
+  annotationId: string; queueKey: string; updatedAt: string; payloadDigest: string;
+};
+export type DesktopCommunityAnnotationLookupResult =
+  | (DesktopCommunityAnnotationLookupQuery & { status: "matched"; remoteAnnotationId: string; publicationRevision: number })
+  | { annotationId: string; queueKey: string; status: "not_found" | "conflict" };
+export declare const desktopCommunityAnnotationLookupQuerySchema: z.ZodType<DesktopCommunityAnnotationLookupQuery>;
+export declare const desktopCommunityAnnotationLookupBatchSchema: z.ZodType<{ queries: DesktopCommunityAnnotationLookupQuery[] }>;
+export declare const desktopCommunityAnnotationLookupResultSchema: z.ZodType<DesktopCommunityAnnotationLookupResult>;

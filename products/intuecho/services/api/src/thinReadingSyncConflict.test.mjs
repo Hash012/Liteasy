@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createHash } from "node:crypto";
 import Database from "better-sqlite3";
 import { SqliteAnnotationCommunityRepository } from "./annotationCommunitySqlite.mjs";
 import { thinReadingSyncPayload } from "./thinReadingSyncPayload.mjs";
@@ -67,4 +68,33 @@ test("canonicalizes derived evidence wire fields without equating changed proven
     { ...derived, derivedContent: { ...derived.derivedContent, version: "version-2" } },
     { ...derived, evidence: [{ ...target, excerpt: "Different evidence" }] }
   ]) assert.notEqual(thinReadingSyncPayload(plain), thinReadingSyncPayload({ ...plain, targets: [changed] }));
+});
+
+
+test("looks up an unknown committed create by owner and original source without mutating it", (t) => {
+  const { db, repository, first } = setup(t);
+  const query = { annotationId: operation.annotationId, queueKey: operation.queueKey, updatedAt: operation.updatedAt,
+    payloadDigest: createHash("sha256").update(thinReadingSyncPayload(operation)).digest("hex") };
+  const before = db.serialize();
+  assert.deepEqual(repository.lookupDesktopAnnotations(owner, [query]), [{ ...query, status: "matched",
+    remoteAnnotationId: first.intuechoAnnotationId, publicationRevision: 1 }]);
+  assert.deepEqual(db.serialize(), before);
+  assert.deepEqual(repository.lookupDesktopAnnotations({ ...owner, id: "another-owner" }, [query]),
+    [{ annotationId: query.annotationId, queueKey: query.queueKey, status: "not_found" }]);
+});
+
+test("lookup holds absent, stale, substituted and divergent originals without exposing content", (t) => {
+  const { db, repository } = setup(t);
+  const query = { annotationId: operation.annotationId, queueKey: operation.queueKey, updatedAt: operation.updatedAt,
+    payloadDigest: createHash("sha256").update(thinReadingSyncPayload(operation)).digest("hex") };
+  const before = db.serialize();
+  for (const changed of [{ ...query, annotationId: "another-source" }, { ...query, payloadDigest: "0".repeat(64) },
+    { ...query, updatedAt: "2026-10-02T01:00:00.000Z" }]) {
+    const [result] = repository.lookupDesktopAnnotations(owner, [changed]);
+    assert.equal(result.status, "conflict");
+    assert.equal(result.remoteAnnotationId, undefined);
+    assert.equal(result.body, undefined);
+  }
+  assert.equal(repository.lookupDesktopAnnotations(owner, [{ ...query, queueKey: "missing" }])[0].status, "not_found");
+  assert.deepEqual(db.serialize(), before);
 });
