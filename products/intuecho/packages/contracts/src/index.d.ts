@@ -324,3 +324,21 @@ export declare const annotationModerationSchema: z.ZodType<unknown>;
 export declare const desktopAnnotationHandoffSchema: z.ZodType<unknown>;
 export declare const desktopCommunityAnnotationSchema: z.ZodType<unknown>;
 export declare const desktopCommunityAnnotationBatchSchema: z.ZodType<unknown>;
+
+export type OrganizationAction = "read_metadata" | "read_body" | "comment" | "edit_own" | "moderate" | "upload" | "export_original" | "share_excerpt" | "publish_public" | "invite" | "change_role" | "transfer_owner" | "run_external_model";
+export type OrganizationAccessSnapshot = {
+  allowedActions: OrganizationAction[];
+  authorizationRevision: number;
+  policyRevision: number | null;
+  denialReasons: Partial<Record<OrganizationAction, string>>;
+  policyExceptions: Array<"owner_export">;
+  actionConstraints: { inviteRoles: Array<"admin" | "member"> };
+};
+export type OrganizationChoice = OrganizationAccessSnapshot & {
+  organizationId: string;
+  name: string;
+  role: "owner" | "admin" | "member";
+};
+export declare const organizationActionSchema: z.ZodType<OrganizationAction>;
+export declare const organizationAccessSnapshotSchema: z.ZodType<OrganizationAccessSnapshot>;
+export declare const organizationChoiceSchema: z.ZodType<OrganizationChoice>;

@@ -1,3 +1,4 @@
+import { organizationAccessSnapshotSchema } from "@intuecho/contracts";
 export class OrganizationAuthorizationError extends Error {
   constructor(code = "organization_authorization_unavailable", status = 503) {
     super(code);
@@ -106,7 +107,14 @@ export class OrganizationAuthorizationClient {
       ) {
         throw new OrganizationAuthorizationError("organization_authorization_response_invalid");
       }
+      let snapshot = {};
+      if (organization.allowedActions !== undefined) {
+        const parsed = organizationAccessSnapshotSchema.safeParse(organization);
+        if (!parsed.success) throw new OrganizationAuthorizationError("organization_authorization_response_invalid");
+        snapshot = parsed.data;
+      }
       return {
+        ...snapshot,
         name: organization.name,
         organizationId: organization.organizationId,
         role: organization.myRole

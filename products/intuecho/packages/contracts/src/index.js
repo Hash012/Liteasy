@@ -470,10 +470,10 @@ const annotationTagsSchema = z.array(tagSchema).max(20).default([]);
 export const createAnnotationSchema = z.object({
   body: z.string().trim().min(1).max(8000),
   organizationId: z.string().trim().min(1).max(200).optional(),
-  shareToPlaza: z.boolean().default(true),
+  shareToPlaza: z.boolean().default(false),
   tags: annotationTagsSchema,
   targets: z.array(annotationTargetSchema).min(1).max(100),
-  visibility: annotationVisibilitySchema.default("public")
+  visibility: annotationVisibilitySchema
 }).superRefine((value, context) => {
   if (value.shareToPlaza && value.visibility !== "public") {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["shareToPlaza"], message: "只有公开批注可以进入广场。" });
@@ -573,10 +573,10 @@ export const annotationModerationSchema = z.object({
 export const desktopAnnotationHandoffSchema = z.object({
   body: z.string().trim().max(8000).default(""),
   organizationId: z.string().trim().min(1).max(200).optional(),
-  shareToPlaza: z.boolean().default(true),
+  shareToPlaza: z.boolean().default(false),
   tags: annotationTagsSchema,
   targets: z.array(annotationTargetSchema).min(1).max(100),
-  visibility: annotationVisibilitySchema.default("public")
+  visibility: annotationVisibilitySchema
 }).superRefine((value, context) => {
   if (value.shareToPlaza && value.visibility !== "public") {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["shareToPlaza"], message: "只有公开批注可以进入广场。" });
@@ -638,3 +638,23 @@ export const desktopAnnotationPublicationBatchSchema = z.object({
     desktopPublicationRetractSchema
   ])).min(1).max(100)
 }).strict();
+
+
+export const organizationActionSchema = z.enum([
+  "read_metadata", "read_body", "comment", "edit_own", "moderate", "upload",
+  "export_original", "share_excerpt", "publish_public", "invite", "change_role",
+  "transfer_owner", "run_external_model"
+]);
+export const organizationAccessSnapshotSchema = z.object({
+  allowedActions: z.array(organizationActionSchema).max(13),
+  authorizationRevision: z.number().int().nonnegative(),
+  policyRevision: z.number().int().nonnegative().nullable(),
+  denialReasons: z.record(organizationActionSchema, z.string().min(1).max(200)),
+  policyExceptions: z.array(z.literal("owner_export")).max(1),
+  actionConstraints: z.object({ inviteRoles: z.array(z.enum(["admin", "member"])).max(2) })
+});
+export const organizationChoiceSchema = organizationAccessSnapshotSchema.extend({
+  organizationId: z.string().trim().min(1).max(200),
+  name: z.string().trim().min(1).max(300),
+  role: z.enum(["owner", "admin", "member"])
+});

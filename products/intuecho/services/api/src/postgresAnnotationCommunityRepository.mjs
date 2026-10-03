@@ -1,3 +1,4 @@
+import { currentOrganizationChoices } from "./organizationChoices.mjs";
 import { randomUUID } from "node:crypto";
 import { withTransaction } from "./postgres.mjs";
 import { AnnotationCommunityError, desktopAnnotationPublicationDigest, localSemanticSimilarity } from "./annotationCommunitySqlite.mjs";
@@ -406,6 +407,9 @@ export class PostgresAnnotationCommunityRepository {
   }
 
   async createHandoff(ownerId, input) {
+    if (input.visibility === "organization" && !(await this.#organizationAccess({ organizationId: input.organizationId, userId: ownerId })).allowed) {
+      throw new AnnotationCommunityError("ORGANIZATION_ACCESS_DENIED", 403);
+    }
     const id = `handoff_${randomUUID()}`;
     const result = await this.pool.query(`INSERT INTO desktop_annotation_handoffs(id, owner_id, payload, expires_at) VALUES ($1, $2, $3::jsonb, now() + interval '5 minutes') RETURNING expires_at`, [id, ownerId, JSON.stringify(input)]);
     return { expiresAt: result.rows[0].expires_at, handoffId: id };
@@ -1329,6 +1333,10 @@ export class PostgresAnnotationCommunityRepository {
       annotations.push(await this.#serialize(row, viewer));
     }
     return annotations;
+  }
+
+  async organizationChoices(viewer) {
+    return currentOrganizationChoices(this.listOrganizations, viewer.id);
   }
 
   async organizationFeed(viewer) {

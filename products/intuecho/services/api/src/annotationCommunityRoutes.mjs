@@ -61,6 +61,7 @@ const messages = {
   ANNOTATION_MODERATION_CONFLICT: "这条批注已经处于目标治理状态。",
   ANNOTATION_SCOPE_LOCKED_BY_REPLIES: "已有回复后不能修改批注的可见范围或所属组织。",
   ANNOTATION_TARGET_REQUIRED: "批注必须关联至少一篇文献或一个文献字句。",
+  AUDIENCE_REQUIRED: "请明确选择接收范围后再发送。旧版客户端需要更新分享设置。",
   AUTH_REQUIRED: "登录后才能进行此操作。",
   CANNOT_FOLLOW_SELF: "不能关注自己。",
   CONVERSATION_NOT_FOUND: "找不到这段私聊。",
@@ -120,10 +121,20 @@ export function registerAnnotationCommunityRoutes(app, repository, {
     filters: plazaFilters(request.query)
   })));
 
+  app.get("/v1/me/organizations", async (request, reply) => route(reply, async () => {
+    const viewer = requireUser(request, reply);
+    return viewer ? { organizations: await repository.organizationChoices(viewer) } : undefined;
+  }));
+
   if (requireDesktopUser) {
+    app.post("/v1/integrations/desktop/organizations:list", async (request, reply) => route(reply, async () => {
+      const viewer = requireDesktopUser(request, reply);
+      return viewer ? { organizations: await repository.organizationChoices(viewer) } : undefined;
+    }));
     app.post("/v1/integrations/desktop/annotation-handoffs", async (request, reply) => route(reply, async () => {
       const viewer = requireDesktopUser(request, reply);
       if (!viewer) return;
+      if (!request.body?.visibility) throw new AnnotationCommunityError("AUDIENCE_REQUIRED");
       const input = validated(desktopAnnotationHandoffSchema, request.body, "INVALID_HANDOFF");
       return reply.code(201).send(await repository.createHandoff(viewer.id, input));
     }));
@@ -173,6 +184,7 @@ export function registerAnnotationCommunityRoutes(app, repository, {
   app.post("/v1/annotations", async (request, reply) => route(reply, async () => {
     const author = requireUser(request, reply);
     if (!author) return;
+    if (!request.body?.visibility) throw new AnnotationCommunityError("AUDIENCE_REQUIRED");
     const input = validated(createAnnotationSchema, request.body, "INVALID_ANNOTATION");
     const annotation = await repository.createAnnotation(author, input);
     return reply.code(201).send({ annotation });

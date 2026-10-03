@@ -153,6 +153,7 @@ export async function createIntuechoApp({
     return request.method === "POST" && new Set([
       "/v1/integrations/desktop/draft-handoffs",
       "/v1/integrations/desktop/annotation-handoffs",
+      "/v1/integrations/desktop/organizations:list",
       "/v1/pdf-annotations:sync",
       "/v1/thin-reading/annotations:sync",
       "/v1/thin-reading/recommendations:query",

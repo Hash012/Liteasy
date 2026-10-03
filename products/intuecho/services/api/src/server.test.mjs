@@ -2709,3 +2709,69 @@ test("old forum databases gain nullable author id columns without losing rows", 
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+
+test("new annotation and handoff requests require an explicit audience before persistence", async () => {
+  await withApp(async (app, db) => {
+    for (const [url, headers] of [["/v1/annotations", userHeader], ["/v1/integrations/desktop/annotation-handoffs", desktopHeader]]) {
+      const payload = annotationV2Payload();
+      delete payload.visibility;
+      const response = await app.inject({ method: "POST", url, headers, payload });
+      assert.equal(response.statusCode, 400, response.body);
+      assert.equal(response.json().code, "AUDIENCE_REQUIRED");
+    }
+    assert.equal(db.prepare("SELECT count(*) AS count FROM annotations_v2").get().count, 0);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM desktop_annotation_handoffs_v2").get().count, 0);
+    const payload = annotationV2Payload({ visibility: "public" });
+    delete payload.shareToPlaza;
+    const response = await app.inject({ method: "POST", url: "/v1/annotations", headers: userHeader, payload });
+    assert.equal(response.statusCode, 201, response.body);
+    assert.equal(response.json().annotation.shareToPlaza, false);
+  });
+});
+
+test("organization choices contain only currently authorized names and action snapshots", async () => {
+  const calls = [];
+  const membership = {
+    organizationId: "org-synthetic-x", name: "Synthetic Reading Group", role: "member",
+    allowedActions: ["read_metadata", "read_body", "comment"], authorizationRevision: 4,
+    policyRevision: 2, policyExceptions: [], actionConstraints: { inviteRoles: [] },
+    denialReasons: { publish_public: "organization_external_use_policy_unconfirmed" },
+    ownerSubject: "private-owner", members: ["private-member"], annotations: ["private-body"]
+  };
+  await withApp(async (app) => {
+    for (const [url, method, headers] of [["/v1/me/organizations", "GET", userHeader], ["/v1/integrations/desktop/organizations:list", "POST", desktopHeader]]) {
+      const response = await app.inject({ method, url, headers });
+      assert.equal(response.statusCode, 200, response.body);
+      const choice = response.json().organizations[0];
+      assert.equal(choice.name, membership.name);
+      assert.deepEqual(choice.allowedActions, membership.allowedActions);
+      assert.equal(choice.ownerSubject, undefined);
+      assert.equal(choice.members, undefined);
+      assert.equal(choice.annotations, undefined);
+    }
+    assert.deepEqual(calls, ["user-1", "user-1"]);
+    const anonymous = await app.inject({ method: "GET", url: "/v1/me/organizations" });
+    assert.equal(anonymous.statusCode, 401);
+    const crossed = await app.inject({ method: "GET", url: "/v1/me/organizations", headers: desktopHeader });
+    assert.notEqual(crossed.statusCode, 200);
+  }, { listOrganizations: async (subject) => { calls.push(subject); return [membership]; } });
+});
+
+test("organization choices fail closed and membership is rechecked when sending the draft", async () => {
+  let available = true;
+  await withApp(async (app, db) => {
+    const choice = await app.inject({ method: "GET", url: "/v1/me/organizations", headers: userHeader });
+    assert.equal(choice.statusCode, 200, choice.body);
+    available = false;
+    const unavailable = await app.inject({ method: "GET", url: "/v1/me/organizations", headers: userHeader });
+    assert.equal(unavailable.statusCode, 503, unavailable.body);
+    const payload = annotationV2Payload({ visibility: "organization", shareToPlaza: false, organizationId: "org-synthetic-x" });
+    const response = await app.inject({ method: "POST", url: "/v1/annotations", headers: userHeader, payload });
+    assert.equal(response.statusCode, 403, response.body);
+    const handoff = await app.inject({ method: "POST", url: "/v1/integrations/desktop/annotation-handoffs", headers: desktopHeader, payload });
+    assert.equal(handoff.statusCode, 403, handoff.body);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM annotations_v2").get().count, 0);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM desktop_annotation_handoffs_v2").get().count, 0);
+  }, { listOrganizations: async () => { if (!available) throw new Error("unavailable"); return []; }, authorizeOrganizationAccess: async () => ({ allowed: available, role: available ? "member" : null }) });
+});

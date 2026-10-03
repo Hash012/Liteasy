@@ -1,3 +1,4 @@
+import { currentOrganizationChoices } from "./organizationChoices.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import {
   hasCrossVersionIdentifierConflict,
@@ -816,7 +817,10 @@ export class SqliteAnnotationCommunityRepository {
     })();
   }
 
-  createHandoff(ownerId, input) {
+  async createHandoff(ownerId, input) {
+    if (input.visibility === "organization" && !(await this.#organizationAccess({ organizationId: input.organizationId, userId: ownerId })).allowed) {
+      throw new AnnotationCommunityError("ORGANIZATION_ACCESS_DENIED", 403);
+    }
     const id = `handoff_${randomUUID()}`;
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 5 * 60 * 1000);
@@ -1676,6 +1680,10 @@ export class SqliteAnnotationCommunityRepository {
       annotations.push(this.#serialize(row, viewer));
     }
     return annotations;
+  }
+
+  async organizationChoices(viewer) {
+    return currentOrganizationChoices(this.listOrganizations, viewer.id);
   }
 
   async organizationFeed(viewer) {
