@@ -809,7 +809,8 @@ try {
   });
   assert.equal(publicAnnotation.tags.some((tag) =>
     tag.name === "证据分类" && tag.origin === "platform" && tag.state === "active"
-  ), true);
+  ), false, "public posts are not an opted-in classifier corpus");
+  assert.ok(semanticSeed.tags.some((tag) => tag.name === "证据分类" && tag.origin === "user"), "explicit user labels remain available");
   const canonicalReference = { literatureId: confirmedLiterature.literatureId };
   const canonicalRead = await annotations.createAnnotation(literatureOwner, {
     body: "Canonical display data is hydrated only at the read boundary.",
@@ -2011,6 +2012,8 @@ try {
   assert.equal(invitationMessage.invitation.invitationId, "orginvite-integration");
   assert.equal(organizationInvitations.length, 1);
 
+  // Preserve governance coverage using a synthetic pre-upgrade platform assignment.
+  await pool.query("INSERT INTO annotation_tags(annotation_id, tag_id, origin, state, classifier_version) SELECT $1, id, 'platform', 'active', 'local-semantic-v1' FROM tags WHERE name = $2", [publicAnnotation.id, "证据分类"]);
   const appeal = await annotations.appealPlatformTag(
     publicAnnotation.id,
     "证据分类",
