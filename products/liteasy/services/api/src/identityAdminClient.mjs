@@ -2,6 +2,35 @@ import { AccountLifecycleError } from "./accountLifecycleError.mjs";
 
 const productAudiences = Object.freeze(["intuecho-web", "liteasy-admin", "liteasy-desktop", "liteasy-mobile"]);
 
+// Reuse the same exact audience and subject checks for network and persisted receipts.
+export function validateIdentityStatusReceipt(body, input) {
+  const updatedAt = new Date(body?.updatedAt);
+  if (
+    body?.subjectId !== input.subjectId || body.status !== input.status ||
+    typeof body.updatedAt !== "string" || !Number.isFinite(updatedAt.getTime())
+  ) {
+    throw new AccountLifecycleError("identity_management_invalid_response", 503);
+  }
+  if (input.status !== "active") {
+    const revoked = Array.isArray(body.revokedAudiences)
+      ? [...new Set(body.revokedAudiences)].sort()
+      : [];
+    if (
+      body.allSessionsRevoked !== true ||
+      JSON.stringify(revoked) !== JSON.stringify([...productAudiences].sort())
+    ) {
+      throw new AccountLifecycleError("identity_session_revocation_unconfirmed", 503);
+    }
+  }
+  return Object.freeze({
+    allSessionsRevoked: body.allSessionsRevoked === true,
+    revokedAudiences: input.status === "active" ? [] : [...productAudiences],
+    status: body.status,
+    subjectId: body.subjectId,
+    updatedAt: updatedAt.toISOString()
+  });
+}
+
 async function responseJson(response, code) {
   if (!response.ok) throw new AccountLifecycleError(code, 503);
   try {
@@ -71,30 +100,6 @@ export class IdentityAdminClient {
       throw new AccountLifecycleError("identity_management_unavailable", 503);
     }
     const body = await responseJson(response, "identity_management_unavailable");
-    const updatedAt = new Date(body.updatedAt);
-    if (
-      body.subjectId !== input.subjectId || body.status !== input.status ||
-      !Number.isFinite(updatedAt.getTime())
-    ) {
-      throw new AccountLifecycleError("identity_management_invalid_response", 503);
-    }
-    if (input.status !== "active") {
-      const revoked = Array.isArray(body.revokedAudiences)
-        ? [...new Set(body.revokedAudiences)].sort()
-        : [];
-      if (
-        body.allSessionsRevoked !== true ||
-        JSON.stringify(revoked) !== JSON.stringify([...productAudiences].sort())
-      ) {
-        throw new AccountLifecycleError("identity_session_revocation_unconfirmed", 503);
-      }
-    }
-    return Object.freeze({
-      allSessionsRevoked: body.allSessionsRevoked === true,
-      revokedAudiences: input.status === "active" ? [] : [...productAudiences],
-      status: body.status,
-      subjectId: body.subjectId,
-      updatedAt: updatedAt.toISOString()
-    });
+    return validateIdentityStatusReceipt(body, input);
   }
 }

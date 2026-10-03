@@ -138,7 +138,7 @@ Intuecho 的组织可见性和组织邀请使用独立内部边界。服务 toke
 
 上传和元数据 PDF 附件进入数据库 prepare 后，提交响应丢失不能视为事务已回滚。请求仍返回失败，但暂存字节保留给现有发布工作流恢复，不立即删除；启动恢复完成前不会把待完成文档开放下载。确实已回滚的 prepare 也可能留下暂存对象，由 `maintain:storage` 在默认 24 小时保留窗口后核对工作流和对象引用，再删除无引用暂存。维护未运行或删除失败时，保留时间可能更长。
 
-账号启用、禁用和删除只通过 `POST /v1/admin/accounts/status` 执行。路由要求 `liteasy-admin` token、数据库中的 `platform_admin`、五分钟内的新鲜 MFA、8–1000 字符的原因和稳定幂等键；当前管理员不能禁用或删除自己。删除流程具有 PostgreSQL 持久阶段账本：先要求 IdP 禁用账号并明确确认 `liteasy-desktop`、`intuecho-web`、`liteasy-admin` 三个 audience 的活动会话全部吊销，再清理 Liteasy 个人收藏/正文引用、画像、推荐、成员关系、邀请和本人团队批注，然后调用 Intuecho 清理私人状态并去身份化公开作者，最后才要求 IdP 删除主体。账号仍是未转移组织的负责人时，流程在禁用前以冲突拒绝。
+账号启用、禁用和删除只通过 `POST /v1/admin/accounts/status` 执行。路由要求 `liteasy-admin` token、数据库中的 `platform_admin`、五分钟内的新鲜 MFA、8–1000 字符的原因和稳定幂等键；当前管理员不能禁用或删除自己。删除流程具有 PostgreSQL 持久阶段账本：先要求 IdP 禁用账号并明确确认 `liteasy-desktop`、`liteasy-mobile`、`intuecho-web`、`liteasy-admin` 四个 audience 的活动会话全部吊销，再清理 Liteasy 个人收藏/正文引用、画像、推荐、成员关系、邀请和本人团队批注，然后调用 Intuecho 清理私人状态并去身份化公开作者，最后才要求 IdP 删除主体。账号仍是未转移组织的负责人时，流程在禁用前以冲突拒绝。
 
 配额读取通过 `POST /v1/admin/quotas/get` 执行，设置通过 `POST /v1/admin/quotas/set` 执行。设置要求新鲜 MFA、原因、幂等键和 `expectedRevision`，与更新者、已用字节和追加写审计事件在同一 PostgreSQL 事务中返回。组织目标必须是真实 active 组织，已删除的用户不能重新配置配额。
 
@@ -150,7 +150,7 @@ Intuecho 的组织可见性和组织邀请使用独立内部边界。服务 toke
 
 管理员模型策略及检索源写入要求 `liteasy-admin`、数据库 `platform_admin`、新鲜 MFA、原因、幂等键和乐观修订号，并与审计事件处于同一事务。模型代理端点不得直接指向已知上游模型 API；检索源只接受不含查询参数、片段或凭据的公开 HTTPS 元数据，并拒绝 loopback、私有、链路本地及保留地址。任意层级的 `apiKey`、token、password、secret、credential 等字段都会被拒绝；普通 PostgreSQL 配置表不承担密钥存储职责。模型 key 只能通过 `LITEASY_MODEL_*_API_KEY` 对应的部署 secret 注入，每个 provider 的 key、HTTPS base URL 和固定 model 必须成组存在。
 
-IdP 管理边界使用独立 confidential client，通过 `LITEASY_IDP_TOKEN_URL` 的 client credentials 获取仅含 `accounts:write sessions:revoke` 的管理 token，再调用 `LITEASY_IDP_MANAGEMENT_URL/v1/accounts/:subjectId/status`。该管理 client 必须不同于桌面 public client 和 token introspection client。IdP 响应必须返回匹配的 `subjectId`、`status`、`updatedAt`、`allSessionsRevoked: true` 及精确的三个 `revokedAudiences`；少报或多报 audience 都失败关闭。Intuecho 管理地址由 `LITEASY_INTUECHO_ADMIN_API_URL` 配置，Liteasy 只向该内部 HTTPS 边界转交当前已验证的管理员 Bearer token，不共享数据库会话或服务凭据。
+IdP 管理边界使用独立 confidential client，通过 `LITEASY_IDP_TOKEN_URL` 的 client credentials 获取仅含 `accounts:write sessions:revoke` 的管理 token，再调用 `LITEASY_IDP_MANAGEMENT_URL/v1/accounts/:subjectId/status`。该管理 client 必须不同于桌面 public client 和 token introspection client。IdP 响应必须返回匹配的 `subjectId`、`status`、`updatedAt`、`allSessionsRevoked: true` 及精确的四个 `revokedAudiences`；少报或多报 audience 都失败关闭。Intuecho 管理地址由 `LITEASY_INTUECHO_ADMIN_API_URL` 配置，Liteasy 只向该内部 HTTPS 边界转交当前已验证的管理员 Bearer token，不共享数据库会话或服务凭据。
 
 删除中途失败时账号保持禁用，操作和删除任务保留最后完成阶段；管理员看到稳定的 `account_lifecycle_pending_retry`，必须使用原幂等键重试。组织负责人冲突、当前管理员自删和身份吊销未确认等禁用前错误保留各自稳定错误码。个人 PDF 引用被删除后，字节仍由既有对象引用垃圾回收处理；存在其他用户或组织引用时不得删除共享对象。安全审计、已撤销平台角色/支持授权以及删除 tombstone 按经批准的保留策略保存，不作为可恢复业务账号使用。
 
@@ -180,3 +180,5 @@ npm run bootstrap:admin
 - 目标环境的 PITR、跨故障域复制、KMS、恢复演练和经批准 SLA。
 
 这些项目完成并取得发布证据前，本包不得描述为生产就绪。
+
+完成身份删除时，现有 `account_deletion_jobs.result` 保存已校验的 `identityDeletionReceipt`（主体、状态、四个受众、吊销确认和时间，不含 token 或凭据）。阶段恢复和完成重放均检查该回执；旧记录仅有时间戳或缺少移动端受众时，调用现有幂等身份适配器重新核实，失败以 `account_lifecycle_pending_retry` 返回，不能据时间戳声明全部会话已吊销。此兼容核实不重做业务数据清理，也不改变公开正文留存政策。

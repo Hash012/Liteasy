@@ -1,4 +1,5 @@
 import { AccountLifecycleError } from "./accountLifecycleError.mjs";
+import { validateIdentityStatusReceipt } from "./identityAdminClient.mjs";
 
 const statuses = new Set(["active", "disabled", "deleted"]);
 const identityDisabledStages = new Set([
@@ -65,7 +66,9 @@ export class AccountLifecycleService {
     }
     const operation = { actorId, idempotencyKey, reason, status: input.status, subjectId, traceId };
     const claim = await this.repository.beginOperation(operation);
-    if (claim.replayed) return claim.response;
+    // Older successful responses omitted mobile and did not persist revocation evidence.
+    // Reconcile deletions against their existing job instead of trusting those projections.
+    if (claim.replayed && input.status !== "deleted") return claim.response;
     try {
       const response = input.status === "deleted"
         ? await this.#delete(operation, identity)
@@ -107,18 +110,19 @@ export class AccountLifecycleService {
       throw new AccountLifecycleError("admin_access_token_required", 500);
     }
     const job = await this.repository.beginDeletion(operation);
-    if (job.state === "completed") {
-      return {
-        account: { status: "deleted", subjectId: operation.subjectId },
-        deletion: job,
-        sessionRevocation: {
-          allSessionsRevoked: true,
-          audiences: ["liteasy-desktop", "intuecho-web", "liteasy-admin"]
-        }
-      };
-    }
-    let identityIsDisabled = identityDisabledStages.has(job.lastCompletedStage);
+    let identityIsDisabled = job.state === "completed" || identityDisabledStages.has(job.lastCompletedStage);
     try {
+      if (job.state === "completed") {
+        const { receipt, deletion } = await this.#confirmIdentityDeletion(operation, job);
+        return {
+          account: { status: "deleted", subjectId: operation.subjectId },
+          deletion,
+          sessionRevocation: {
+            allSessionsRevoked: receipt.allSessionsRevoked,
+            audiences: receipt.revokedAudiences
+          }
+        };
+      }
       let disabled;
       if (!identityIsDisabled) {
         disabled = await this.identityAdminClient.setAccountStatus({
@@ -165,27 +169,7 @@ export class AccountLifecycleService {
           subjectId: operation.subjectId
         });
       }
-      let deleted;
-      if (job.lastCompletedStage === "identity_deleted") {
-        deleted = {
-          allSessionsRevoked: true,
-          revokedAudiences: ["liteasy-desktop", "intuecho-web", "liteasy-admin"],
-          status: "deleted",
-          subjectId: operation.subjectId,
-          updatedAt: job.result.identityDeletedAt
-        };
-      } else {
-        deleted = await this.identityAdminClient.setAccountStatus({
-          ...operation,
-          idempotencyKey: `${operation.idempotencyKey}:delete`,
-          status: "deleted"
-        });
-        await this.repository.markDeletionStage({
-          result: { identityDeletedAt: deleted.updatedAt },
-          stage: "identity_deleted",
-          subjectId: operation.subjectId
-        });
-      }
+      const { receipt: deleted } = await this.#confirmIdentityDeletion(operation, job);
       await this.repository.projectStatus({
         ...operation,
         allSessionsRevoked: deleted.allSessionsRevoked,
@@ -212,5 +196,30 @@ export class AccountLifecycleService {
       pending.internalCode = typeof error?.code === "string" ? error.code : "account_lifecycle_failed";
       throw pending;
     }
+  }
+
+  async #confirmIdentityDeletion(operation, job) {
+    if (job.state === "completed" || job.lastCompletedStage === "identity_deleted") {
+      try {
+        return {
+          receipt: validateIdentityStatusReceipt(job.result?.identityDeletionReceipt, operation),
+          deletion: job
+        };
+      } catch (error) {
+        if (!(error instanceof AccountLifecycleError)) throw error;
+        // A legacy timestamp or incomplete receipt cannot prove session revocation.
+      }
+    }
+    const receipt = validateIdentityStatusReceipt(await this.identityAdminClient.setAccountStatus({
+      ...operation,
+      idempotencyKey: `${operation.idempotencyKey}:delete`,
+      status: "deleted"
+    }), operation);
+    const deletion = await this.repository.markDeletionStage({
+      result: { identityDeletedAt: receipt.updatedAt, identityDeletionReceipt: receipt },
+      stage: job.state === "completed" ? "completed" : "identity_deleted",
+      subjectId: operation.subjectId
+    });
+    return { receipt, deletion };
   }
 }

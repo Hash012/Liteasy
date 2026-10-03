@@ -15,7 +15,7 @@ function harness(overrides = {}) {
     async failDeletion(_subjectId, code) { calls.push(["failDeletion", code]); },
     async failOperation(_input, code) { calls.push(["failOperation", code]); },
     async markDeletionStage(input) {
-      calls.push(["stage", input.stage]);
+      calls.push(["stage", input.stage, input.result]);
       return { ...input, jobId: "job_1", lastCompletedStage: input.stage, state: input.stage };
     },
     async projectStatus(input) { calls.push(["projectStatus", input.status]); },
@@ -64,6 +64,13 @@ const deletion = {
   subjectId: "user_1",
   traceId: "trace_1"
 };
+const deletionReceipt = {
+  allSessionsRevoked: true,
+  revokedAudiences: ["intuecho-web", "liteasy-admin", "liteasy-desktop", "liteasy-mobile"],
+  status: "deleted",
+  subjectId: "user_1",
+  updatedAt: "2026-08-07T00:00:00.000Z"
+};
 
 test("disables identity first and deletes it only after both business services finish", async () => {
   const instance = harness();
@@ -81,6 +88,7 @@ test("disables identity first and deletes it only after both business services f
     deletedVisualizationArtifactSources: 1,
     deletedVisualizationGenerationRequests: 1
   });
+  assert.deepEqual(instance.calls.find((item) => item[0] === "stage" && item[1] === "identity_deleted")[2].identityDeletionReceipt, deletionReceipt);
 });
 
 test("does not allow the current administrator to disable or delete itself", async () => {
@@ -155,6 +163,7 @@ test("resumes after confirmed identity deletion without calling external service
       return {
         lastCompletedStage: "identity_deleted",
         result: {
+          identityDeletionReceipt: deletionReceipt,
           identityDeletedAt: "2026-08-07T00:00:00.000Z",
           intuecho: { deletedDrafts: 1 },
           liteasy: { deletedEntries: 7 }
@@ -165,6 +174,7 @@ test("resumes after confirmed identity deletion without calling external service
   } });
   const result = await instance.service.setStatus(principal, identity, deletion);
   assert.equal(result.account.status, "deleted");
+  assert.deepEqual(result.sessionRevocation.audiences, deletionReceipt.revokedAudiences);
   assert.equal(instance.calls.some((item) => item[0] === "identity"), false);
   assert.equal(instance.calls.some((item) => item[0] === "intuecho"), false);
   assert.equal(instance.calls.some((item) => item[0] === "purgeLiteasyData"), false);
@@ -172,3 +182,72 @@ test("resumes after confirmed identity deletion without calling external service
     "deleted"
   ]);
 });
+
+for (const stage of ["identity_deleted", "completed"]) {
+  test(`reconfirms legacy ${stage} receipts instead of inferring revocation from a timestamp`, async () => {
+    const instance = harness({ repository: {
+      async beginDeletion() {
+        return { lastCompletedStage: stage, state: stage, result: { identityDeletedAt: deletionReceipt.updatedAt } };
+      }
+    } });
+    const result = await instance.service.setStatus(principal, identity, deletion);
+    assert.deepEqual(instance.calls.filter((call) => call[0] === "identity"), [["identity", "deleted"]]);
+    assert.deepEqual(result.sessionRevocation, { allSessionsRevoked: true, audiences: deletionReceipt.revokedAudiences });
+    assert.equal(instance.calls.some((call) => ["intuecho", "purgeLiteasyData"].includes(call[0])), false);
+    const receiptStage = instance.calls.find((call) => call[0] === "stage" && call[2]?.identityDeletionReceipt);
+    assert.deepEqual(receiptStage?.[2].identityDeletionReceipt, deletionReceipt);
+    assert.equal(receiptStage?.[1], stage);
+  });
+
+  test(`keeps ${stage} with missing revocation evidence unconfirmed if the adapter is unavailable`, async () => {
+    const instance = harness({
+      repository: { async beginDeletion() {
+        return { lastCompletedStage: stage, state: stage, result: { identityDeletedAt: deletionReceipt.updatedAt } };
+      } },
+      identityAdminClient: { async setAccountStatus() {
+        throw new AccountLifecycleError("identity_management_unavailable", 503);
+      } }
+    });
+    await assert.rejects(() => instance.service.setStatus(principal, identity, deletion), (error) => error.code === "account_lifecycle_pending_retry" && error.status === 503);
+    assert.equal(instance.calls.some((call) => call[0] === "completeOperation" || call[0] === "projectStatus"), false);
+    assert.deepEqual(instance.calls.find((call) => call[0] === "failOperation"), ["failOperation", "identity_management_unavailable"]);
+  });
+}
+
+test("replays a completed deletion using its persisted four-audience receipt", async () => {
+  const job = { lastCompletedStage: "completed", state: "completed", result: { identityDeletionReceipt: deletionReceipt } };
+  const instance = harness({ repository: { async beginDeletion() { return job; } } });
+  const result = await instance.service.setStatus(principal, identity, deletion);
+  assert.deepEqual(result.sessionRevocation, { allSessionsRevoked: true, audiences: deletionReceipt.revokedAudiences });
+  assert.equal(instance.calls.some((call) => call[0] === "identity"), false);
+});
+
+test("does not replay the old operation response that omitted the mobile audience", async () => {
+  const legacy = {
+    account: { status: "deleted", subjectId: deletion.subjectId },
+    sessionRevocation: { allSessionsRevoked: true, audiences: deletionReceipt.revokedAudiences.slice(0, 3) }
+  };
+  const instance = harness({ repository: {
+    async beginOperation() { return { replayed: true, response: legacy }; },
+    async beginDeletion() { return { lastCompletedStage: "completed", state: "completed", result: {} }; }
+  } });
+  const result = await instance.service.setStatus(principal, identity, deletion);
+  assert.deepEqual(result.sessionRevocation.audiences, deletionReceipt.revokedAudiences);
+  assert.deepEqual(instance.calls.filter((call) => call[0] === "identity"), [["identity", "deleted"]]);
+});
+
+for (const invalid of [
+  { ...deletionReceipt, revokedAudiences: deletionReceipt.revokedAudiences.slice(0, 3) },
+  { ...deletionReceipt, subjectId: "other_user" },
+  { ...deletionReceipt, status: "disabled" },
+  { ...deletionReceipt, allSessionsRevoked: false }
+]) {
+  test(`reconfirms invalid persisted receipt: ${JSON.stringify(invalid)}`, async () => {
+    const instance = harness({ repository: { async beginDeletion() {
+      return { lastCompletedStage: "completed", state: "completed", result: { identityDeletionReceipt: invalid } };
+    } } });
+    const result = await instance.service.setStatus(principal, identity, deletion);
+    assert.deepEqual(result.sessionRevocation.audiences, deletionReceipt.revokedAudiences);
+    assert.deepEqual(instance.calls.filter((call) => call[0] === "identity"), [["identity", "deleted"]]);
+  });
+}

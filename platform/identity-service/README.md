@@ -11,7 +11,8 @@ Keycloak's least-privilege user-management role. Caller, verifier, and administr
 credentials cannot be shared. Authorization also requires the configured issuer.
 
 For `disabled` and `deleted`, the adapter invokes Keycloak's all-session logout
-before returning the exact three Liteasy product audiences. A repeated delete is a
+before returning the exact four product audiences: `liteasy-desktop`,
+`liteasy-mobile`, `intuecho-web`, and `liteasy-admin`. A repeated delete is a
 desired-state operation: an already absent Keycloak subject is returned as deleted.
 Liteasy Cloud still owns the durable cross-service stage ledger and idempotency key.
 
