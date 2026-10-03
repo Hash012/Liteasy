@@ -2,7 +2,7 @@
 
 ## 本轮实际执行
 
-Linux x86_64 / PostgreSQL 16.15 / Node 22.13.1。在本轮新建的 SCRAM loopback 实例中创建全新 source/restore 数据库和不同的 owner/recovery/business 身份，业务角色没有管理权限。`verify-before-event-replay.mjs` 实际 pg_dump/pg_restore **事件发生前**的数据库，再回放事件后的删除与撤回：30 migrations，15 个演练检查通过。不是 SQL mock，也未接生产库。
+Linux x86_64 / PostgreSQL 16.15 / Node 22.13.1。在本轮新建的 SCRAM loopback 实例中创建全新 source/restore 数据库和不同的 owner/recovery/business 身份，业务角色没有管理权限。`verify-before-event-replay.mjs` 实际 pg_dump/pg_restore **事件发生前**的数据库，再回放事件后的删除与撤回：开发阶段执行 30 migrations，最终代码候选执行 31 migrations，两次各自的 15 个演练检查均通过，不相加计数。最终记录见 [恢复证据](evidence/recovery.json)。不是 SQL mock，也未接生产库。
 
 原实现使用演练内存中的 digest 对比；现增加 `recoveryJournal.mjs`：独立生产者的 Ed25519 签名检查点绑定源/目标、备份摘要、时间高水位、起止序号、前后链 hash 和完整 journal digest。恢复者另传所需最新高水位，不能从待验证日志推断。逐条回执必须覆盖全部序号及 hash；缺失、截断、改写、错误签名、错误目标、旧高水位和部分回放都拒绝。恢复库唯一的业务 CONNECT 授予仍位于所有回放与数据库语义检查之后。不能通过持有一份旧的合法签名日志绕过最新检查点。
 

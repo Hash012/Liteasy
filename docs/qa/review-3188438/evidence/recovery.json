@@ -1,0 +1,34 @@
+{
+  "verified": true,
+  "storage": "postgresql",
+  "boundary": "synthetic-before-event-backup-later-ledger-replay",
+  "cases": [
+    "backup-predates-deletion-and-withdrawal",
+    "later-events-derived-from-source-ledgers",
+    "older-restore-demonstrably-has-private-and-public-stale-state",
+    "business-connect-denied-before-replay",
+    "missing-journal-keeps-gate-closed",
+    "incomplete-journal-keeps-gate-closed",
+    "partial-replay-keeps-gate-closed",
+    "deletion-replay-removes-private-data",
+    "retained-public-data-anonymized-under-D03",
+    "withdrawal-replay-hides-publication-and-preserves-replies",
+    "exact-repeat-is-idempotent",
+    "old-publication-cannot-resurrect",
+    "deleted-owner-late-write-rejected",
+    "business-connect-opens-only-after-all-replay-and-verification",
+    "restored-app-is-not-privileged"
+  ],
+  "notRun": [
+    "real-IdP",
+    "S3",
+    "production-independent-journal-backup",
+    "production-routing-readiness"
+  ],
+  "sourceMigrations": 31,
+  "lastMigration": "031_community_read_indexes.sql",
+  "checkpointAuthentication": "ed25519-synthetic-producer-key",
+  "restoredMigrations": 31,
+  "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+  "testedTree": "869c84589f2d0e3591cbe70cd027cb2d382e559a"
+}

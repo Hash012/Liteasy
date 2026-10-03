@@ -1,0 +1,1100 @@
+{
+  "schema": "liteasy.review-verification/v1",
+  "reviewedCommit": "3188438c95dfc7f73b5ccf20a05ef69391e646cf",
+  "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+  "testedTree": "869c84589f2d0e3591cbe70cd027cb2d382e559a",
+  "workingTreeDiffSha256": null,
+  "status": "partial",
+  "meaning": "全部可在当前隔离环境执行的代码检查通过；真实云链、原生平台与真人验收未运行，因此不宣称发布就绪。",
+  "toolchain": {
+    "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+    "architecture": "x64",
+    "node": "v22.13.1",
+    "postgres": "16.15",
+    "requestedDesktopNode": "22.23.2",
+    "nodeNote": "当前可用工具为22.13.1，同主版本但不冒充.nvmrc精确版本。"
+  },
+  "fixtureVersion": "review-3188438/v1",
+  "taskPackManifestSha256": "c82d940091d326130e2d8dcb0b7e3a2db46dddaeda0db9e3f3bcad98d3c2b3d0",
+  "suites": [
+    {
+      "schema": "liteasy.boundary-evidence/v1",
+      "suite": "services-unit",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "tree": "869c84589f2d0e3591cbe70cd027cb2d382e559a",
+      "dirtyDiffHash": null,
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "results": [
+        {
+          "cwd": "platform/identity-service",
+          "command": [
+            "npm",
+            "test"
+          ],
+          "exitCode": 0,
+          "status": "pass"
+        },
+        {
+          "cwd": "products/liteasy/services/api",
+          "command": [
+            "npm",
+            "test"
+          ],
+          "exitCode": 0,
+          "status": "pass"
+        },
+        {
+          "cwd": "products/intuecho",
+          "command": [
+            "npm",
+            "test"
+          ],
+          "exitCode": 0,
+          "status": "pass"
+        },
+        {
+          "cwd": "products/intuecho",
+          "command": [
+            "npm",
+            "run",
+            "build"
+          ],
+          "exitCode": 0,
+          "status": "pass"
+        }
+      ],
+      "status": "pass",
+      "redactions": [
+        "no subprocess logs",
+        "no credentials or environment values",
+        "no database dumps",
+        "no user content"
+      ],
+      "fullLocalArtifact": "test-results/account-boundaries/services-unit.json",
+      "fullLocalArtifactSha256": "0a572f13db97c6e169ef88fb8edb81e1377b9e20f7731c5b55b5753e2c1bbe94",
+      "inputManifest": "evidence/inputs.sha256",
+      "inputManifestSha256": "3899fa208689c62a68b2305161173f3b8a7daf8e1c8a9938ea00326ef7b499b3"
+    },
+    {
+      "schema": "liteasy.boundary-evidence/v1",
+      "suite": "services-postgres",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "tree": "869c84589f2d0e3591cbe70cd027cb2d382e559a",
+      "dirtyDiffHash": null,
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "results": [
+        {
+          "cwd": ".",
+          "command": [
+            "node",
+            "products/liteasy/services/api/scripts/verify-postgres-integration.mjs"
+          ],
+          "exitCode": 0,
+          "status": "pass"
+        },
+        {
+          "cwd": ".",
+          "command": [
+            "node",
+            "products/intuecho/services/api/scripts/verify-postgres-integration.mjs"
+          ],
+          "exitCode": 0,
+          "status": "pass"
+        },
+        {
+          "cwd": ".",
+          "command": [
+            "node",
+            "products/intuecho/services/api/scripts/verify-thin-reading-withdrawal.mjs"
+          ],
+          "exitCode": 0,
+          "status": "pass"
+        },
+        {
+          "cwd": ".",
+          "command": [
+            "node",
+            "products/intuecho/services/api/scripts/verify-desktop-publication-profile.mjs"
+          ],
+          "exitCode": 0,
+          "status": "pass"
+        }
+      ],
+      "status": "pass",
+      "redactions": [
+        "no subprocess logs",
+        "no credentials or environment values",
+        "no database dumps",
+        "no user content"
+      ],
+      "fullLocalArtifact": "test-results/account-boundaries/services-postgres.json",
+      "fullLocalArtifactSha256": "2f7099aea076848d0fc6b281fbc738107d238b0604acf8b7edb5990652133b2b",
+      "inputManifest": "evidence/inputs.sha256",
+      "inputManifestSha256": "3899fa208689c62a68b2305161173f3b8a7daf8e1c8a9938ea00326ef7b499b3"
+    },
+    {
+      "schema": "liteasy.boundary-evidence/v1",
+      "suite": "desktop-full",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "tree": "869c84589f2d0e3591cbe70cd027cb2d382e559a",
+      "dirtyDiffHash": null,
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "results": [
+        {
+          "cwd": "products/liteasy/apps/desktop",
+          "command": [
+            "npm",
+            "run",
+            "ci:smoke"
+          ],
+          "exitCode": 0,
+          "status": "pass"
+        },
+        {
+          "cwd": "products/liteasy/apps/desktop",
+          "command": [
+            "npm",
+            "test"
+          ],
+          "exitCode": 0,
+          "status": "pass"
+        },
+        {
+          "cwd": "products/liteasy/apps/desktop",
+          "command": [
+            "npm",
+            "run",
+            "build"
+          ],
+          "exitCode": 0,
+          "status": "pass"
+        },
+        {
+          "cwd": "products/liteasy/apps/desktop",
+          "command": [
+            "npm",
+            "run",
+            "ci:contracts"
+          ],
+          "exitCode": 0,
+          "status": "pass"
+        }
+      ],
+      "status": "pass",
+      "redactions": [
+        "no subprocess logs",
+        "no credentials or environment values",
+        "no database dumps",
+        "no user content"
+      ],
+      "harness": {
+        "path": "/tmp/liteasy-review-final-extra.mjs",
+        "sha256": "09fffdc2d1c456bf31a6873e43e2693b01b0201bb7ac4afa77b4f5afbcdbea53"
+      },
+      "fullLocalArtifact": "test-results/account-boundaries/desktop-full.json",
+      "fullLocalArtifactSha256": "414e68ae51b7434d3ab8e1eca7a9550f41a3c74062b8ac8f2a35aab5317f8311",
+      "inputManifest": "evidence/inputs.sha256",
+      "inputManifestSha256": "3899fa208689c62a68b2305161173f3b8a7daf8e1c8a9938ea00326ef7b499b3"
+    },
+    {
+      "schema": "liteasy.boundary-evidence/v1",
+      "suite": "admin",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "tree": "869c84589f2d0e3591cbe70cd027cb2d382e559a",
+      "dirtyDiffHash": null,
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "results": [
+        {
+          "cwd": "products/liteasy/apps/admin",
+          "command": [
+            "npm",
+            "test"
+          ],
+          "exitCode": 0,
+          "status": "pass"
+        },
+        {
+          "cwd": "products/liteasy/apps/admin",
+          "command": [
+            "npm",
+            "run",
+            "build"
+          ],
+          "exitCode": 0,
+          "status": "pass"
+        }
+      ],
+      "status": "pass",
+      "redactions": [
+        "no subprocess logs",
+        "no credentials or environment values",
+        "no database dumps",
+        "no user content"
+      ],
+      "fullLocalArtifact": "test-results/account-boundaries/admin.json",
+      "fullLocalArtifactSha256": "9efdd1828b7407a4b20338743082f25524d23dfdb7f68eb2b0bc6f542a11c8e6",
+      "inputManifest": "evidence/inputs.sha256",
+      "inputManifestSha256": "3899fa208689c62a68b2305161173f3b8a7daf8e1c8a9938ea00326ef7b499b3"
+    },
+    {
+      "schema": "liteasy.boundary-evidence/v1",
+      "suite": "mobile",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "tree": "869c84589f2d0e3591cbe70cd027cb2d382e559a",
+      "dirtyDiffHash": null,
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "results": [
+        {
+          "cwd": "products/liteasy/apps/mobile",
+          "command": [
+            "npm",
+            "test"
+          ],
+          "exitCode": 0,
+          "status": "pass"
+        },
+        {
+          "cwd": "products/liteasy/apps/mobile",
+          "command": [
+            "npm",
+            "run",
+            "build"
+          ],
+          "exitCode": 0,
+          "status": "pass"
+        }
+      ],
+      "status": "pass",
+      "redactions": [
+        "no subprocess logs",
+        "no credentials or environment values",
+        "no database dumps",
+        "no user content"
+      ],
+      "fullLocalArtifact": "test-results/account-boundaries/mobile.json",
+      "fullLocalArtifactSha256": "0677d5d1d9fa217763a0c6278df547554829b40ec8379f26d26d305cf3be0e75",
+      "inputManifest": "evidence/inputs.sha256",
+      "inputManifestSha256": "3899fa208689c62a68b2305161173f3b8a7daf8e1c8a9938ea00326ef7b499b3"
+    },
+    {
+      "schema": "liteasy.boundary-evidence/v1",
+      "suite": "review-tooling",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "tree": "869c84589f2d0e3591cbe70cd027cb2d382e559a",
+      "dirtyDiffHash": null,
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "results": [
+        {
+          "cwd": ".",
+          "command": [
+            "bash",
+            ".github/scripts/lint-workflows.sh"
+          ],
+          "exitCode": 0,
+          "status": "pass"
+        },
+        {
+          "cwd": ".",
+          "command": [
+            "node",
+            "--test",
+            ".github/scripts/account-boundary-policy.test.mjs",
+            ".github/scripts/check-clean.test.mjs",
+            ".github/scripts/installer-policy.test.mjs",
+            ".github/scripts/platform-candidate-workflow.test.mjs",
+            ".github/scripts/platform-candidate.test.mjs",
+            ".github/scripts/require-ci-success.test.mjs",
+            ".github/scripts/workflow-contract.test.mjs"
+          ],
+          "exitCode": 0,
+          "status": "pass"
+        },
+        {
+          "cwd": ".",
+          "command": [
+            "node",
+            "--test",
+            "development/pilots/account-community.test.mjs"
+          ],
+          "exitCode": 0,
+          "status": "pass"
+        },
+        {
+          "cwd": ".",
+          "command": [
+            "git",
+            "diff",
+            "--check"
+          ],
+          "exitCode": 0,
+          "status": "pass"
+        }
+      ],
+      "status": "pass",
+      "redactions": [
+        "no subprocess logs",
+        "no credentials or environment values",
+        "no database dumps",
+        "no user content"
+      ],
+      "harness": {
+        "path": "/tmp/liteasy-review-final-extra.mjs",
+        "sha256": "09fffdc2d1c456bf31a6873e43e2693b01b0201bb7ac4afa77b4f5afbcdbea53"
+      },
+      "fullLocalArtifact": "test-results/account-boundaries/review-tooling.json",
+      "fullLocalArtifactSha256": "ab3a9df19fd80213724f3f1082a9599620481e1dc0edead5d41a688ea33166e6",
+      "inputManifest": "evidence/inputs.sha256",
+      "inputManifestSha256": "3899fa208689c62a68b2305161173f3b8a7daf8e1c8a9938ea00326ef7b499b3"
+    },
+    {
+      "schema": "liteasy.boundary-evidence/v1",
+      "suite": "recovery-postgres",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "tree": "869c84589f2d0e3591cbe70cd027cb2d382e559a",
+      "dirtyDiffHash": null,
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "results": [
+        {
+          "cwd": ".",
+          "command": [
+            "node",
+            "products/intuecho/services/api/scripts/verify-before-event-replay.mjs",
+            "--config",
+            "<isolated-private-config>"
+          ],
+          "exitCode": 0,
+          "status": "pass"
+        }
+      ],
+      "status": "pass",
+      "redactions": [
+        "no subprocess logs",
+        "no credentials or environment values",
+        "no database dumps",
+        "no user content"
+      ],
+      "harness": {
+        "path": "/tmp/liteasy-review-final-extra.mjs",
+        "sha256": "09fffdc2d1c456bf31a6873e43e2693b01b0201bb7ac4afa77b4f5afbcdbea53"
+      },
+      "fullLocalArtifact": "test-results/account-boundaries/recovery-postgres.json",
+      "fullLocalArtifactSha256": "9b90208c1569c85a06be674271ed2759d85ec4c3cc8ccb7f3c304a934818c4e8",
+      "inputManifest": "evidence/inputs.sha256",
+      "inputManifestSha256": "3899fa208689c62a68b2305161173f3b8a7daf8e1c8a9938ea00326ef7b499b3"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "RV01",
+      "task": "R01",
+      "title": "私密标签不影响公开标签",
+      "setup": "A建立private唯一标签合成样本，B建立相似public内容",
+      "expected": "B结果不含该标记；加入/移除不可见样本不改变公共推断",
+      "status": "pass",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit",
+        "services-postgres"
+      ],
+      "reviewNote": "真实 SQLite/PG 合成私密标签隔离；无许可的公共 corpus 推断关闭。"
+    },
+    {
+      "id": "RV02",
+      "task": "R01",
+      "title": "组织与互关样本隔离",
+      "setup": "X组织/互关内容作为候选，C无访问权",
+      "expected": "C公共输出不能使用这些样本/标签",
+      "status": "pass",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit",
+        "services-postgres"
+      ],
+      "reviewNote": "组织、互关与 public 样本按可见受众分域；公共输出不使用无权样本。"
+    },
+    {
+      "id": "RV03",
+      "task": "R01",
+      "title": "合法同scope与撤回",
+      "setup": "同组授权样本参与，再撤回源",
+      "expected": "正常结果保留；撤回源不参与新推断；历史平台标签按策略可追溯",
+      "status": "pass",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit",
+        "services-postgres"
+      ],
+      "reviewNote": "合法组织推断及撤回检查；旧 unscoped 标签留存审计但不再参与展示、搜索或新推断。"
+    },
+    {
+      "id": "RV04",
+      "task": "R02",
+      "title": "提交后丢响应",
+      "setup": "Web create提交成功后切断响应，恢复原operationId",
+      "expected": "一条annotation、一个创建回执、相应事件不重复",
+      "status": "partial",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit",
+        "services-postgres"
+      ],
+      "reviewNote": "SQLite 模拟提交后响应丢失、PG 并发同命令重试与 Web transport/JSDOM 分层通过；未做真实浏览器到服务端断网演练。"
+    },
+    {
+      "id": "RV05",
+      "task": "R02",
+      "title": "重复ID异内容",
+      "setup": "同主体同operationId提交不同payload",
+      "expected": "稳定409冲突且不覆盖首次内容",
+      "status": "pass",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit",
+        "services-postgres"
+      ],
+      "reviewNote": "SQLite/PG 同 operationId 不同 digest 拒绝，首次正文保留。"
+    },
+    {
+      "id": "RV06",
+      "task": "R02",
+      "title": "回复与读书包重试",
+      "setup": "对reply和pack重复丢响应流程",
+      "expected": "各只有一份业务内容和一次相应通知",
+      "status": "partial",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit",
+        "services-postgres"
+      ],
+      "reviewNote": "真实仓库 reply 并发重试与 typed reading pack 共用 command 契约；未独立执行真实浏览器读书包断网全链。"
+    },
+    {
+      "id": "RV07",
+      "task": "R02",
+      "title": "双窗口旧版本编辑",
+      "setup": "两个窗口读v4，先提交v5，再以v4更新",
+      "expected": "后者409且草稿保留；数据库锁不能被当通过理由",
+      "status": "partial",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit",
+        "services-postgres"
+      ],
+      "reviewNote": "服务端旧 revision 拒绝及 Web 草稿/显式新 base 恢复通过；未执行两个真实浏览器窗口。"
+    },
+    {
+      "id": "RV08",
+      "task": "R02",
+      "title": "跨账号回执读取",
+      "setup": "B请求A的已提交command结果",
+      "expected": "不返回正文或可推断私有目标的多余细节",
+      "status": "pass",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit",
+        "services-postgres"
+      ],
+      "reviewNote": "同 operationId 的不同主体读取为 not_found；撤回内容不可经回执复活；销号清理 receipt。"
+    },
+    {
+      "id": "RV09",
+      "task": "R03",
+      "title": "编辑扩大受众",
+      "setup": "无回复私有内容改公开或扩大受众",
+      "expected": "重新预览实际payload、来源、作者资料；确认前无写入",
+      "status": "partial",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit"
+      ],
+      "reviewNote": "JSDOM 冻结正文、受众、来源及资料预览；确认前不写，API 仍裁决 scope。真实浏览器未运行。"
+    },
+    {
+      "id": "RV10",
+      "task": "R03",
+      "title": "父scope锁",
+      "setup": "有回复内容试图换组织或变公开",
+      "expected": "保持既有scope lock；不搬运他人回复",
+      "status": "pass",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit"
+      ],
+      "reviewNote": "既有父 scope lock 在 SQLite/PG 回归中保持；有回复不搬移他人内容。"
+    },
+    {
+      "id": "RV11",
+      "task": "R03",
+      "title": "草稿刷新与存储失败",
+      "setup": "编辑未发草稿刷新，再模拟浏览器存储失败",
+      "expected": "已落盘草稿可恢复；失败时不称已保存；不自动发送",
+      "status": "partial",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit"
+      ],
+      "reviewNote": "JSDOM 存储实例恢复与 quota/写失败测试通过；未测真实浏览器崩溃或跨设备持久性。"
+    },
+    {
+      "id": "RV12",
+      "task": "R03",
+      "title": "预览后身份变化",
+      "setup": "预览后切号/切端点/更新资料/更换受众",
+      "expected": "旧批准无效；原草稿/未知请求不进入新主体",
+      "status": "partial",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit"
+      ],
+      "reviewNote": "Web actor/端点/资料与 Desktop issuer/endpoint/账号变更负例通过；真实 IdP 切换未运行。"
+    },
+    {
+      "id": "RV13",
+      "task": "R04",
+      "title": "零数据组织第一包",
+      "setup": "新组织无annotation但有可用资料或可确认文献",
+      "expected": "无需先造占位批注即可选择合法材料并创建包",
+      "status": "partial",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit",
+        "services-postgres"
+      ],
+      "reviewNote": "真实仓库零批注组织的题录来源与 Web source picker 回归通过；尚无真人首用验证。"
+    },
+    {
+      "id": "RV14",
+      "task": "R04",
+      "title": "标签和语言变更",
+      "setup": "已建包改标签/Markdown标题/界面语言",
+      "expected": "业务类型与主持人语义不消失；不扩大权限",
+      "status": "pass",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit",
+        "services-postgres"
+      ],
+      "reviewNote": "typed collaboration 独立于标签和 Markdown 标题；schema/SQLite/PG 通过，元数据不增加权限。"
+    },
+    {
+      "id": "RV15",
+      "task": "R04",
+      "title": "旧内容迁移歧义",
+      "setup": "普通批注碰巧有“读书包”标签或标题",
+      "expected": "不自动升级业务权限/类型；原body与链接保留",
+      "status": "pass",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit",
+        "services-postgres"
+      ],
+      "reviewNote": "旧无 typed metadata 内容保持普通批注；JSON null/SQL NULL 迁移兼容已真实 PG 修复验证。"
+    },
+    {
+      "id": "RV16",
+      "task": "R05",
+      "title": "引用提交竞态",
+      "setup": "客户端预检后引用回复被修改/撤回",
+      "expected": "服务器按实际版本/可见性拒绝或要求重审",
+      "status": "pass",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit",
+        "services-postgres",
+        "desktop-full"
+      ],
+      "reviewNote": "真实 PostgreSQL 用行锁屏障观察引用在提交期间修改/撤回，拒绝旧版本或无权来源。"
+    },
+    {
+      "id": "RV17",
+      "task": "R05",
+      "title": "定位与更正回流",
+      "setup": "从摘要旧revision引用进入原文/再带回笔记",
+      "expected": "清楚区分历史/当前/无法访问；不覆盖私人笔记",
+      "status": "partial",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit",
+        "services-postgres",
+        "desktop-full"
+      ],
+      "reviewNote": "版本接口/历史权限及 Desktop hook 的新建反思、陈旧请求、重复保存与失败重试通过；原生深链未运行。"
+    },
+    {
+      "id": "RV18",
+      "task": "R06",
+      "title": "空间状态理解",
+      "setup": "用户在本机、个人云、组织与public非广场间操作",
+      "expected": "能正确指出谁可见；待核实/已读/已发布不混淆",
+      "status": "partial",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit",
+        "desktop-full"
+      ],
+      "reviewNote": "UI/DOM 验证本机、云端、组织及 public 非广场说明；发布与已读分开，未知不称失败。真人理解测试未运行。"
+    },
+    {
+      "id": "RV19",
+      "task": "R06",
+      "title": "普通阅读零外发",
+      "setup": "访客打开、批注、搜索、关闭重启",
+      "expected": "本地工作可用，无隐式上传/社区参与",
+      "status": "partial",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit",
+        "desktop-full"
+      ],
+      "reviewNote": "local-only 与普通阅读本地来源回归通过；未测三平台真实关闭重启及文件原件行为。"
+    },
+    {
+      "id": "RV20",
+      "task": "R07",
+      "title": "邀请失效竞态",
+      "setup": "邀请后撤回/过期/邀请者降权再接受",
+      "expected": "当前权威服务裁决，旧卡片不能授权",
+      "status": "pass",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit",
+        "services-postgres"
+      ],
+      "reviewNote": "既有 invitation 当前角色、过期、撤销与 revision 场景通过，旧卡片不授予权限。"
+    },
+    {
+      "id": "RV21",
+      "task": "R07",
+      "title": "交接与销号并发",
+      "setup": "负责人转移与退出/销号同时发生",
+      "expected": "唯一owner与既有无主保护成立，无静默接管",
+      "status": "pass",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit",
+        "services-postgres"
+      ],
+      "reviewNote": "真实 PG 验证 deletion-first/transfer-first/leave-transfer 多事务屏障；唯一 owner 与无主保护保持。"
+    },
+    {
+      "id": "RV22",
+      "task": "R07",
+      "title": "离组例外矩阵",
+      "setup": "作者/普通成员/管理员/外人读取各类旧内容",
+      "expected": "只保留已有明确权利；未知D02不外推",
+      "status": "pass",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit",
+        "services-postgres"
+      ],
+      "reviewNote": "SQLite/PG 五身份×六类读取矩阵及写/删负例通过；只保留已批准作者例外。"
+    },
+    {
+      "id": "RV23",
+      "task": "R08",
+      "title": "扫描对象数据库分步失败",
+      "setup": "真实测试S3/scanner/PG逐阶段中断",
+      "expected": "未扫不发布；已提交结果可核实；失败可恢复不丢原件",
+      "status": "not_run",
+      "testedCommit": null,
+      "environment": null,
+      "evidence": [],
+      "reviewNote": "缺少隔离 S3 与真实 scanner；已提供受保护的分阶段故障脚本，配置负例通过。"
+    },
+    {
+      "id": "RV24",
+      "task": "R08",
+      "title": "旧备份恢复缺日志",
+      "setup": "恢复事件前备份但缺较新删除/撤回日志",
+      "expected": "业务入口仍关闭；完整验证后才开放",
+      "status": "pass",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit",
+        "recovery-postgres"
+      ],
+      "reviewNote": "真实 pg_dump/pg_restore 事件前备份，15 项检查；缺失/改写/旧高水位/坏签名/部分回放不开放业务 CONNECT。签名生产者为合成测试。"
+    },
+    {
+      "id": "RV25",
+      "task": "R08",
+      "title": "真实身份多audience吊销",
+      "setup": "使用测试IdP各启用client登录/refresh并禁用主体",
+      "expected": "逐客户端实际请求被拒；本机退出不伪装全局吊销",
+      "status": "not_run",
+      "testedCommit": null,
+      "environment": null,
+      "evidence": [],
+      "reviewNote": "缺少隔离 IdP realm 与四 audience 的实际登录/refresh 会话；脚本与边界负例已交付。"
+    },
+    {
+      "id": "RV26",
+      "task": "R09",
+      "title": "Desktop单独变更触发",
+      "setup": "只改账号/分享/组织Desktop文件",
+      "expected": "required suites覆盖对应Web/API契约，不仅桌面组件",
+      "status": "pass",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "review-tooling",
+        "desktop-full",
+        "admin",
+        "mobile"
+      ],
+      "reviewNote": "CI policy 和实际选取文件测试覆盖 Desktop-only cloud/source/Agent 入口，服务与客户端套件不可跳过。"
+    },
+    {
+      "id": "RV27",
+      "task": "R09",
+      "title": "三平台原生恢复",
+      "setup": "Win/Linux/macOS实际OAuth/keyring/handoff冷启动",
+      "expected": "分别证据，不把浏览器或构建替代原生运行",
+      "status": "not_run",
+      "testedCommit": null,
+      "environment": null,
+      "evidence": [],
+      "reviewNote": "未运行 Windows/Linux/macOS 原生 OAuth、keyring 与冷启动 handoff。"
+    },
+    {
+      "id": "RV28",
+      "task": "R09",
+      "title": "证据可携带",
+      "setup": "同SHA汇总脚本、fixture、平台和结果",
+      "expected": "无敏感artifact；历史日志不相加；未跑保持not_run",
+      "status": "pass",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "review-tooling",
+        "desktop-full",
+        "admin",
+        "mobile"
+      ],
+      "reviewNote": "同一干净代码 SHA 的七份白名单记录、脚本/fixture 哈希及未执行层；原始日志和私密配置不提交。"
+    },
+    {
+      "id": "RV29",
+      "task": "R10",
+      "title": "规模查询与公平分页",
+      "setup": "合成多规模资料/组织/权限数据",
+      "expected": "记录查询计划/次数/p95；scope过滤不使合法用户永久空页",
+      "status": "pass",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-postgres",
+        "desktop-full"
+      ],
+      "reviewNote": "真实 PG 100/1000/10000 合成根条目，30 条页面固定 9 次查询，对比逐条读取 240 次；当前 scope 与公平 cursor 通过。不是生产容量指标。"
+    },
+    {
+      "id": "RV30",
+      "task": "R10",
+      "title": "撤权派生视图",
+      "setup": "撤权后读search/snippet/count/notification/AI context",
+      "expected": "不因缓存/旧事件泄露或复活；已导出副本不承诺回收",
+      "status": "partial",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-postgres",
+        "desktop-full"
+      ],
+      "reviewNote": "当前权限再检查、撤回历史/通知裁剪、来源与 Agent 外发负例通过；未验证生产缓存和所有原生恢复链。"
+    },
+    {
+      "id": "RV31",
+      "task": "R11",
+      "title": "自主任务试点",
+      "setup": "自愿用户完成受众选择、失败恢复、复用总结",
+      "expected": "记录真实观察与失败；无真人则明确未执行",
+      "status": "not_run",
+      "testedCommit": null,
+      "environment": null,
+      "evidence": [],
+      "reviewNote": "没有真实自愿参与者，只有经同意后可用的离线记录工具与模板。"
+    },
+    {
+      "id": "RV32",
+      "task": "R11",
+      "title": "成本与商业证据",
+      "setup": "记录实际存储/传输/模型/支持用量",
+      "expected": "无实测不填金额，不把合成角色当留存或付费证据",
+      "status": "not_run",
+      "testedCommit": null,
+      "environment": null,
+      "evidence": [],
+      "reviewNote": "没有实际付费服务用量或支持成本，金额保持 null。"
+    },
+    {
+      "id": "RV33",
+      "task": "R12",
+      "title": "不可信正文诱导外发",
+      "setup": "合成PDF/网页/社区正文要求上传/邀请/取密钥",
+      "expected": "只当数据，不增加能力，不产生真实副作用",
+      "status": "partial",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "desktop-full"
+      ],
+      "reviewNote": "真实工具入口使用合成不可信正文，测试中不能新增上传/公开/邀请/取密钥能力；未调用付费真实模型做攻击评测。"
+    },
+    {
+      "id": "RV34",
+      "task": "R12",
+      "title": "来源与允许的本地资料",
+      "setup": "组织材料经复制/摘要/恢复，与普通本地书籍对照",
+      "expected": "前者保持组织外发限制，后者正常本地使用不误伤",
+      "status": "partial",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "desktop-full"
+      ],
+      "reviewNote": "内部对象复制/派生、旧索引回退、外部文件 marker 防降级及合法本地资产回归通过；未验证三平台实际备份还原。"
+    },
+    {
+      "id": "RV35",
+      "task": "R12",
+      "title": "确认范围与网络模式",
+      "setup": "local-only任务及过期/换号的发布确认",
+      "expected": "不联网，不复用旧actor/target批准，拒绝原因明确",
+      "status": "partial",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "desktop-full"
+      ],
+      "reviewNote": "local-only 在准备正文/模型/网络之前停止外发，批准绑定 actor/env/session/payload/TTL；真实外部 MCP 客户端未运行。"
+    },
+    {
+      "id": "RV36",
+      "task": "R02",
+      "title": "独立重复内容的合法性",
+      "setup": "用户有意新建第二个同文内容且新operationId",
+      "expected": "允许合法新意图；只有重试去重，不按body永久合并",
+      "status": "pass",
+      "testedCommit": "acdf679894ab8b60b0ab339cc937198a6f8b0586",
+      "environment": {
+        "os": "linux 6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64",
+        "node": "v22.13.1"
+      },
+      "evidence": [
+        "services-unit",
+        "services-postgres"
+      ],
+      "reviewNote": "新 operationId 的相同正文仍允许创建；只对重试去重，不按正文永久合并。"
+    }
+  ],
+  "excludedLayers": [
+    "production",
+    "real-S3-scanner",
+    "real-IdP-refresh",
+    "native-Windows",
+    "native-Linux",
+    "native-macOS",
+    "real-MCP-client",
+    "voluntary-human-pilot",
+    "measured-paid-costs",
+    "Windows-installer"
+  ],
+  "redactions": [
+    "No credentials, environment values, raw process logs, database dumps or user content are committed.",
+    "Performance and recovery evidence contain synthetic data only."
+  ],
+  "releasePolicy": "No push, main merge or release requested by this task pack.",
+  "previousAttempt": {
+    "testedCommit": "3108ff937b203786a65f5c350373c90aac931d6b",
+    "testedTree": "67cf1a83b0f29c03f44d681a653b5027b798cc71",
+    "status": "fail",
+    "component": "desktop-full",
+    "tests": {
+      "passed": 3575,
+      "failed": 3,
+      "skipped": 4
+    },
+    "artifactSha256": "a34afaab6f200d01337d43eefb5d28537b7bb990c08d51fdb0cc24374921688d",
+    "failures": [
+      "research template output schema omitted sourceResolution/documentId",
+      "general execution journal test still required private command text",
+      "tool catalog test still required unimplemented cloud capabilities"
+    ],
+    "resolution": "最终候选补齐严格schema并保留组织/未知来源；测试验证脱敏审计和明确的不可用能力，未删除断言或跳过测试。",
+    "notCountedInFinalResults": true
+  }
+}
