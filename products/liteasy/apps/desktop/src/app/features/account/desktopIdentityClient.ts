@@ -108,17 +108,21 @@ export async function loadDesktopIdentityConfiguration({
 export async function loginWithSystemBrowser(input: DesktopIdentityClientInput) {
   const configuration = await loadDesktopIdentityConfiguration(input);
   if (input.isCurrent && !input.isCurrent()) throw new Error("oauth_session_changed");
-  return requireInvoke(input.invoke)<AccountSession>("begin_desktop_oauth_login", {
+  const session = await requireInvoke(input.invoke)<AccountSession>("begin_desktop_oauth_login", {
     configuration
   });
+  if (!session.userId?.trim()) throw new Error("oauth_verified_subject_missing");
+  return { ...session, endpoint: input.endpoint.replace(/\/+$/, ""), issuer: configuration.issuer };
 }
 
 export async function restoreSystemBrowserSession(input: DesktopIdentityClientInput) {
   const configuration = await loadDesktopIdentityConfiguration(input);
   if (input.isCurrent && !input.isCurrent()) throw new Error("oauth_session_changed");
-  return requireInvoke(input.invoke)<AccountSession>("restore_desktop_oauth_session", {
+  const session = await requireInvoke(input.invoke)<AccountSession>("restore_desktop_oauth_session", {
     configuration
   });
+  if (!session.userId?.trim()) throw new Error("oauth_verified_subject_missing");
+  return { ...session, endpoint: input.endpoint.replace(/\/+$/, ""), issuer: configuration.issuer };
 }
 
 export type DesktopLogoutResult = {

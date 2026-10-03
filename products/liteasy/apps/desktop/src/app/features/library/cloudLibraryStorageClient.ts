@@ -1,7 +1,6 @@
-import { loadStoredAccountSession } from "../account/accountSessionStorage";
+import { captureAccountSessionRequest } from "../account/accountSessionBinding";
 import { CloudServiceError, readCloudServiceError } from "../network/cloudErrorMessage";
 import { cacheExternalPdf, readCachedPdf } from "./paperCacheClient";
-import { resolveLocalAccountKey } from "./localAccountKey";
 import type { OrganizationStorageAccess } from "../organization/organizationStoragePolicy";
 import type { LiteratureRecord } from "../paper-identity/literature.types";
 
@@ -93,12 +92,6 @@ function apiUrl(endpoint: string, path: string) {
   return `${endpoint.replace(/\/+$/, "")}${path}`;
 }
 
-function requireSessionId() {
-  const sessionId = loadStoredAccountSession()?.sessionId;
-  if (!sessionId) throw new Error("请先登录，再访问云端文献库。");
-  return sessionId;
-}
-
 function createIdempotencyKey() {
   if (typeof globalThis.crypto?.randomUUID === "function") {
     return globalThis.crypto.randomUUID();
@@ -106,19 +99,19 @@ function createIdempotencyKey() {
   return `op_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
 
-function cacheRecordKey(scope: CloudLibraryScope, documentId: string) {
+function cacheRecordKey(actorKey: string, scope: CloudLibraryScope, documentId: string) {
   return [
-    "liteasy.cloud-document-cache.v1",
-    resolveLocalAccountKey(),
+    "liteasy.cloud-document-cache.v2",
+    actorKey,
     scope.scopeType,
     scope.scopeId,
     documentId
   ].map(encodeURIComponent).join("::");
 }
 
-function loadCacheRecord(scope: CloudLibraryScope, documentId: string) {
-  if (typeof window === "undefined" || !window.localStorage) return undefined;
-  const value = window.localStorage.getItem(cacheRecordKey(scope, documentId));
+function loadCacheRecord(actorKey: string | undefined, scope: CloudLibraryScope, documentId: string) {
+  if (!actorKey || typeof window === "undefined" || !window.localStorage) return undefined;
+  const value = window.localStorage.getItem(cacheRecordKey(actorKey, scope, documentId));
   if (!value) return undefined;
   try {
     const record = JSON.parse(value) as CachedCloudDocument;
@@ -131,15 +124,16 @@ function loadCacheRecord(scope: CloudLibraryScope, documentId: string) {
 }
 
 function saveCacheRecord(
+  actorKey: string | undefined,
   scope: CloudLibraryScope,
   documentId: string,
   record: CachedCloudDocument
 ) {
-  if (typeof window === "undefined" || !window.localStorage) return;
-  window.localStorage.setItem(cacheRecordKey(scope, documentId), JSON.stringify(record));
+  if (!actorKey || typeof window === "undefined" || !window.localStorage) return;
+  window.localStorage.setItem(cacheRecordKey(actorKey, scope, documentId), JSON.stringify(record));
 }
 
-async function jsonResponse<T>(response: Response): Promise<T> {
+async function parseJsonResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     throw await readCloudServiceError(response, {
       code: "cloud_library_request_failed",
@@ -149,13 +143,26 @@ async function jsonResponse<T>(response: Response): Promise<T> {
   return await response.json() as T;
 }
 
-export function createCloudLibraryStorageClient({
+function createBoundCloudLibraryStorageClient({
   endpoint,
   fetchImpl = fetch
 }: CreateCloudLibraryStorageClientInput) {
+  const binding = captureAccountSessionRequest(endpoint);
+  const { assertCurrent, actorKey } = binding;
+  function requireSessionId() {
+    assertCurrent();
+    return binding.sessionId!;
+  }
+  async function jsonResponse<T>(response: Response) {
+    const result = await parseJsonResponse<T>(response);
+    assertCurrent();
+    return result;
+  }
   async function request(url: string, init: RequestInit) {
+    assertCurrent();
+    let response: Response;
     try {
-      return await fetchImpl(url, init);
+      response = await fetchImpl(url, init);
     } catch {
       throw new CloudServiceError({
         code: "cloud_library_unavailable",
@@ -163,6 +170,8 @@ export function createCloudLibraryStorageClient({
         status: 0
       });
     }
+    assertCurrent();
+    return response;
   }
 
   function authorizationError(error: unknown) {
@@ -229,7 +238,22 @@ export function createCloudLibraryStorageClient({
       });
     }
     if (!response.body) throw new Error("文献下载响应不包含可读取的数据流。");
-    return response.body;
+    const reader = response.body.getReader();
+    return new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        try {
+          assertCurrent();
+          const chunk = await reader.read();
+          assertCurrent();
+          if (chunk.done) controller.close();
+          else controller.enqueue(chunk.value);
+        } catch (error) {
+          controller.error(error);
+          await reader.cancel().catch(() => undefined);
+        }
+      },
+      cancel: (reason) => reader.cancel(reason)
+    }, { highWaterMark: 0 });
   }
 
   async function uploadOnce(
@@ -604,11 +628,12 @@ export function createCloudLibraryStorageClient({
         throw authorizationError(error);
       }
 
-      const cached = loadCacheRecord(scope, documentId);
+      const cached = loadCacheRecord(actorKey, scope, documentId);
       if (cached?.contentHash === authorization.document.contentHash) {
         try {
           const bytes = await readCachedPdf({ cachePath: cached.cachePath });
-          saveCacheRecord(scope, documentId, {
+          assertCurrent();
+          saveCacheRecord(actorKey, scope, documentId, {
             ...cached,
             expiresAt: authorization.expiresAt,
             lastAccessedAt: new Date().toISOString(),
@@ -616,6 +641,7 @@ export function createCloudLibraryStorageClient({
           });
           return { authorization, bytes, cachePath: cached.cachePath };
         } catch {
+          assertCurrent();
           // Missing or evicted local cache: fetch an authorized replacement below.
         }
       }
@@ -633,11 +659,13 @@ export function createCloudLibraryStorageClient({
         });
       }
       const bytes = new Uint8Array(await response.arrayBuffer());
+      assertCurrent();
       const cachePath = await cacheExternalPdf({
         bytes,
         contentHash: authorization.document.contentHash
       });
-      saveCacheRecord(scope, documentId, {
+      assertCurrent();
+      saveCacheRecord(actorKey, scope, documentId, {
         cachePath,
         contentHash: authorization.document.contentHash,
         expiresAt: authorization.expiresAt,
@@ -660,7 +688,9 @@ export function createCloudLibraryStorageClient({
           message: "文献出库失败，请稍后重试。"
         });
       }
-      return { bytes: new Uint8Array(await response.arrayBuffer()) };
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      assertCurrent();
+      return { bytes };
     },
 
     async uploadTeamAnnotation(
@@ -712,4 +742,15 @@ export function createCloudLibraryStorageClient({
       );
     }
   };
+}
+
+
+/** Each user operation owns one immutable session, including its follow-up requests. */
+export function createCloudLibraryStorageClient(input: CreateCloudLibraryStorageClientInput) {
+  type Client = ReturnType<typeof createBoundCloudLibraryStorageClient>;
+  const methods = Object.keys(createBoundCloudLibraryStorageClient(input)) as Array<keyof Client>;
+  return Object.fromEntries(methods.map((method) => [method, (...args: unknown[]) => {
+    const operation = createBoundCloudLibraryStorageClient(input);
+    return Reflect.apply(operation[method], operation, args);
+  }])) as Client;
 }

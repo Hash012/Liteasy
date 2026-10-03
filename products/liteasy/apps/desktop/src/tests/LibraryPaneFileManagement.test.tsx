@@ -67,6 +67,9 @@ test("offers a dedicated bibliography editor from the local paper context menu",
   const onEditBibliography = vi.fn();
   renderLibraryPane({ fileLibrary: { entries: [{ id: paper.id, title: paper.title, format: "pdf" }], pending: false, message: "",
     onImport: vi.fn(), onInspect: vi.fn(), onOpen: vi.fn(), onEditBibliography } });
+  expect(within(screen.getByRole("region", { name: "本地文献库" })).getByText("本机文件 · 保存在此设备")).toBeInTheDocument();
+  expect(within(screen.getByRole("region", { name: "收藏" })).getByText("个人云收藏 · 当前账号的云端副本，未因此发布到 Intuecho")).toBeInTheDocument();
+  expect(within(screen.getByRole("region", { name: "组织文献库" })).getByText("组织文献 · 访问和下载遵循当前组织权限")).toBeInTheDocument();
   await userEvent.pointer({ keys: "[MouseRight]", target: screen.getByRole("button", { name: paper.title, exact: true }) });
   fireEvent.click(await screen.findByRole("menuitem", { name: "编辑元信息", exact: true }));
   expect(onEditBibliography).toHaveBeenCalledWith(expect.objectContaining({ id: paper.id, title: paper.title, format: "pdf" }));

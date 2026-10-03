@@ -1513,6 +1513,7 @@ function LibraryPaneContent({
           onToggle={() => toggleSection("local")}
           title="本地文献库"
         />
+        <p className="library-scope-description">本机文件 · 保存在此设备</p>
         <LiteratureHydrationStatus hydration={literatureHydration} />
         {dropHover?.key === dropKey("local") ? <div className="library-drop-feedback" role="status">{dropHover.label}</div> : null}
         <input
@@ -1635,6 +1636,7 @@ function LibraryPaneContent({
           onToggle={() => toggleSection("collection")}
           title="收藏"
         />
+        <p className="library-scope-description">个人云收藏 · 当前账号的云端副本，未因此发布到 Intuecho</p>
         {!collapsedSections.includes("collection") ? (
           <div className="library-section-content">
             {!accountSessionAvailable ? (
@@ -1716,6 +1718,7 @@ function LibraryPaneContent({
           onToggle={() => toggleSection("organization")}
           title={organizationWorkspaceLabel}
         />
+        <p className="library-scope-description">组织文献 · 访问和下载遵循当前组织权限</p>
         {!collapsedSections.includes("organization") ? (
           <div className="library-section-content">
             {!accountSessionAvailable ? (

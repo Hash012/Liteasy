@@ -1272,3 +1272,9 @@ button.library-tag-chip:hover { border-color: currentColor; }
 .library-metadata-dialog { width: min(520px, calc(100vw - 32px)); }
 .library-metadata-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .library-file-name > .library-tag-chips { font-weight: normal; }
+
+.library-scope-description {
+  color: var(--colorNeutralForeground3);
+  font-size: 11px;
+  margin: 0 8px 6px;
+}

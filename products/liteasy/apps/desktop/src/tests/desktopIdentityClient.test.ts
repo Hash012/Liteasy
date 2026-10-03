@@ -55,8 +55,8 @@ test("uses only Tauri host commands for login, restore, and revocation", async (
     invoke
   };
 
-  await expect(loginWithSystemBrowser(input)).resolves.toEqual(session);
-  await expect(restoreSystemBrowserSession(input)).resolves.toEqual(session);
+  await expect(loginWithSystemBrowser(input)).resolves.toEqual({ ...session, endpoint: input.endpoint, issuer: configuration.issuer });
+  await expect(restoreSystemBrowserSession(input)).resolves.toEqual({ ...session, endpoint: input.endpoint, issuer: configuration.issuer });
   await expect(revokeSystemBrowserSession(input)).resolves.toEqual({ localCleared: true, remoteRevocation: "revoked" });
   expect(invoke.mock.calls).toEqual([
     ["begin_desktop_oauth_login", { configuration }],

@@ -1,6 +1,12 @@
 import { vi } from "vitest";
 import { storeAccountSession } from "../app/features/account/accountSessionStorage";
+import { cacheExternalPdf, readCachedPdf } from "../app/features/library/paperCacheClient";
 import { createCloudLibraryStorageClient } from "../app/features/library/cloudLibraryStorageClient";
+
+vi.mock("../app/features/library/paperCacheClient", () => ({
+  cacheExternalPdf: vi.fn(async () => "synthetic-cache.pdf"),
+  readCachedPdf: vi.fn(async () => new Uint8Array([37, 80, 68, 70]))
+}));
 
 const confirmedLiterature = {
   authors: ["Ada Lovelace"],
@@ -15,6 +21,8 @@ const confirmedLiterature = {
 
 beforeEach(() => {
   window.localStorage.clear();
+  vi.mocked(cacheExternalPdf).mockClear();
+  vi.mocked(readCachedPdf).mockClear();
   storeAccountSession({
     email: "alice@example.com",
     expiresAt: "2026-08-03T00:00:00.000Z",
@@ -98,7 +106,9 @@ test("returns the authorized response stream without buffering the document", as
     "document-1"
   );
 
-  expect(result).toBe(stream);
+  const reader = result.getReader();
+  expect((await reader.read()).value).toEqual(new Uint8Array([37, 80, 68, 70, 45]));
+  expect((await reader.read()).done).toBe(true);
   expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual([
     "http://127.0.0.1:8787/v1/library/documents/authorize",
     "http://127.0.0.1:8787/v1/library/documents/download"
@@ -274,4 +284,70 @@ test("updates cloud literature with revision and idempotency metadata", async ()
     sessionId: "ltsy_session"
   });
   expect(body.idempotencyKey).toMatch(/^[A-Za-z0-9._:-]{8,200}$/);
+});
+
+function switchCloudAccount() {
+  storeAccountSession({ email: "bob@example.test", expiresAt: "2099-01-01T00:00:00Z", name: "Bob", sessionId: "token-b", userId: "bob" });
+}
+
+test("does not use B's token for the download after A's authorization resolves late", async () => {
+  let finish!: (response: Response) => void;
+  const fetchImpl = vi.fn().mockImplementationOnce(() => new Promise<Response>((resolve) => { finish = resolve; }))
+    .mockImplementation(async () => new Response(new Uint8Array([37, 80, 68, 70]), { status: 200 }));
+  const client = createCloudLibraryStorageClient({ endpoint: "https://cloud.example.test", fetchImpl: fetchImpl as typeof fetch });
+  const download = client.downloadDocumentStream({ scopeId: "org-1", scopeType: "organization" }, "document-1");
+  switchCloudAccount();
+  finish(new Response(JSON.stringify({ allowed: true }), { status: 200 }));
+  await expect(download).rejects.toMatchObject({ code: "account_session_changed" });
+  expect(fetchImpl).toHaveBeenCalledTimes(1);
+});
+
+test("a duplicate confirmation cannot retry A's upload using B's token", async () => {
+  const fetchImpl = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ status: "duplicate", duplicates: [] }), { status: 200 }));
+  const client = createCloudLibraryStorageClient({ endpoint: "https://cloud.example.test", fetchImpl: fetchImpl as typeof fetch });
+  await expect(client.uploadDocument({
+    scope: { scopeId: "user:alice", scopeType: "user" }, expectedRevision: 1,
+    file: new File(["%PDF-synthetic"], "synthetic.pdf"),
+    onDuplicate: async () => { switchCloudAccount(); return true; }
+  })).rejects.toMatchObject({ code: "account_session_changed" });
+  expect(fetchImpl).toHaveBeenCalledTimes(1);
+});
+
+
+test("an authorized stream stops delivering bytes after the account changes", async () => {
+  const source = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array([37, 80, 68, 70])); } });
+  const fetchImpl = vi.fn().mockResolvedValueOnce(new Response(source, { status: 200 }));
+  const client = createCloudLibraryStorageClient({ endpoint: "https://cloud.example.test", fetchImpl: fetchImpl as typeof fetch });
+  const stream = await client.downloadDocumentStream({ scopeId: "org-1", scopeType: "organization" }, "document-1", "export");
+  switchCloudAccount();
+  await expect(stream.getReader().read()).rejects.toMatchObject({ code: "account_session_changed" });
+});
+
+test.each(["endpoint", "issuer", "subject", "scope"])("cloud cache does not reuse the same document ID across %s bindings", async (changed) => {
+  const first = { email: "alice@example.test", name: "Alice", expiresAt: "2099-01-01T00:00:00Z", endpoint: "https://cloud.example.test", issuer: "https://identity.example.test", userId: "alice", sessionId: "token-a" };
+  storeAccountSession(first);
+  const fetchImpl = vi.fn(async (url: RequestInfo | URL) => String(url).endsWith("/authorize")
+    ? new Response(JSON.stringify({ document: { contentHash: "same-bytes" }, expiresAt: "2099-01-01T00:00:00Z", serverNow: "2026-10-03T00:00:00Z" }), { status: 200 })
+    : new Response(new Uint8Array([37, 80, 68, 70]), { status: 200 }));
+  const scope = { scopeId: "same-scope", scopeType: "organization" as const };
+  await createCloudLibraryStorageClient({ endpoint: first.endpoint, fetchImpl }).openDocument(scope, "same-document");
+  const next = { ...first, ...(changed === "endpoint" ? { endpoint: "https://other.example.test" } : {}), ...(changed === "issuer" ? { issuer: "https://other-idp.example.test" } : {}), ...(changed === "subject" ? { userId: "bob" } : {}) };
+  storeAccountSession(next);
+  const nextScope = changed === "scope" ? { ...scope, scopeType: "user" as const } : scope;
+  await createCloudLibraryStorageClient({ endpoint: next.endpoint, fetchImpl }).openDocument(nextScope, "same-document");
+  expect(readCachedPdf).not.toHaveBeenCalled();
+  expect(cacheExternalPdf).toHaveBeenCalledTimes(2);
+  expect(Object.keys(localStorage).filter((key) => key.startsWith("liteasy.cloud-document-cache.v2"))).toHaveLength(2);
+  expect(JSON.stringify(localStorage)).not.toContain("token-a");
+});
+
+test("a legacy session without a verified issuer never acquires an old persistent cache", async () => {
+  localStorage.setItem("liteasy.cloud-document-cache.v1::user%3Aalice::organization::org-1::document-1", JSON.stringify({ cachePath: "old-private-cache.pdf", contentHash: "same-bytes" }));
+  const fetchImpl = vi.fn(async (url: RequestInfo | URL) => String(url).endsWith("/authorize")
+    ? new Response(JSON.stringify({ document: { contentHash: "same-bytes" } }), { status: 200 })
+    : new Response(new Uint8Array([37, 80, 68, 70]), { status: 200 }));
+  await createCloudLibraryStorageClient({ endpoint: "https://cloud.example.test", fetchImpl }).openDocument({ scopeId: "org-1", scopeType: "organization" }, "document-1");
+  expect(readCachedPdf).not.toHaveBeenCalled();
+  expect(Object.keys(localStorage).filter((key) => key.startsWith("liteasy.cloud-document-cache.v2"))).toHaveLength(0);
+  expect(localStorage.getItem("liteasy.cloud-document-cache.v1::user%3Aalice::organization::org-1::document-1")).toContain("old-private-cache.pdf");
 });
