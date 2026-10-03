@@ -1,0 +1,256 @@
+import { Badge, Button, Checkbox, Input, Textarea } from "@fluentui/react-components";
+import { Add20Regular, BookOpen20Regular, Save20Regular } from "@fluentui/react-icons";
+import { useEffect, useRef, useState } from "react";
+import type { OrganizationAccessSnapshot } from "@intuecho/contracts";
+import { communityApi } from "../communityApi";
+import type { CommunityAnnotation, CommunityReply, CreateAnnotationInput, CreateReplyInput, OrganizationAnnotationGroup } from "../community.types";
+import { buildPersonalReadingNote, buildReadingPack, buildReadingReply, isHostSummary, readingMaterials, readingPacks, readingPackTitle } from "./readingGroup";
+import type { PersonalReadingNote, ReadingContributionKind } from "./readingGroup";
+import "./reading-group.css";
+
+export type OrganizationReadingGroupProps = {
+  organization: OrganizationAnnotationGroup;
+  viewerId: string;
+  actorBinding: string;
+  access?: OrganizationAccessSnapshot;
+  onChanged?: () => void;
+  onExportNote?: (note: PersonalReadingNote) => void | Promise<void>;
+};
+
+type Preview = { context: string } & (
+  | { kind: "pack"; payload: CreateAnnotationInput }
+  | { kind: "reply"; payload: CreateReplyInput; references: CommunityReply[] }
+  | { kind: "edit"; reply: CommunityReply; payload: { body: string } }
+);
+
+function savePersonalNote(note: PersonalReadingNote) {
+  const url = URL.createObjectURL(new Blob([note.content], { type: "text/markdown;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = note.filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function errorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : "操作未完成，请刷新后核对。";
+  if (/PARENT_ANNOTATION_REVISION_CONFLICT/.test(message)) return "读书包的内容或可见范围已变化，请重新加载并确认。";
+  if (/ORGANIZATION_ACCESS_DENIED|ANNOTATION_NOT_FOUND|PARENT_ANNOTATION_NOT_FOUND/.test(message)) return "当前无法访问此读书包，请刷新组织权限。";
+  return message;
+}
+
+export function OrganizationReadingGroup(props: OrganizationReadingGroupProps) {
+  return <ReadingGroupWorkspace key={`${props.actorBinding}:${props.organization.organizationId}`} {...props} />;
+}
+
+function ReadingGroupWorkspace({ organization, viewerId, actorBinding, access, onChanged, onExportNote = savePersonalNote }: OrganizationReadingGroupProps) {
+  const [createdPacks, setCreatedPacks] = useState<CommunityAnnotation[]>([]);
+  const packs = readingPacks([...new Map([...createdPacks, ...organization.annotations].map((annotation) => [annotation.id, annotation])).values()], organization.organizationId);
+  const [selectedId, setSelectedId] = useState("");
+  const pack = packs.find((item) => item.id === selectedId) ?? packs[0];
+  const materials = readingMaterials(organization.annotations, organization.organizationId);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [guide, setGuide] = useState("");
+  const [deadline, setDeadline] = useState("");
+  const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
+  const [kind, setKind] = useState<ReadingContributionKind>("question");
+  const [contribution, setContribution] = useState("");
+  const [evidence, setEvidence] = useState("");
+  const [summary, setSummary] = useState("");
+  const [unresolved, setUnresolved] = useState("");
+  const [referenceIds, setReferenceIds] = useState<string[]>([]);
+  const [reflection, setReflection] = useState("");
+  const [exportConfirmed, setExportConfirmed] = useState(false);
+  const [editing, setEditing] = useState<CommunityReply | null>(null);
+  const [editBody, setEditBody] = useState("");
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [status, setStatus] = useState("");
+  const [pending, setPending] = useState(false);
+  const [thread, setThread] = useState<{ context: string; replies: CommunityReply[] } | null>(null);
+  const [threadError, setThreadError] = useState("");
+  const [unavailableContext, setUnavailableContext] = useState("");
+  const context = JSON.stringify([actorBinding, organization.organizationId, pack?.id, pack?.revision, access]);
+  const canRead = access?.allowedActions.includes("read_body") === true && unavailableContext !== context;
+  const canComment = canRead && access?.allowedActions.includes("comment") === true;
+  const currentContext = useRef(context);
+  currentContext.current = context;
+  const mounted = useRef(true);
+  const replies = thread?.context === context ? thread.replies : [];
+  const activePreview = preview?.context === context ? preview : null;
+  const isHost = pack?.author.id === viewerId;
+
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => { setCreatedPacks([]); }, [organization.annotations]);
+  useEffect(() => {
+    setPreview(null);
+    setPending(false);
+    setThread(null);
+    setThreadError("");
+    setReferenceIds([]);
+    if (!canRead || !pack) return;
+    let active = true;
+    void communityApi.replies(pack.id).then((result) => {
+      if (active && mounted.current && currentContext.current === context) {
+        setThread({ context, replies: result.replies.filter((reply) => reply.parentAnnotationId === pack.id) });
+      }
+    }).catch((error) => {
+      if (active && mounted.current && currentContext.current === context) {
+        rejectUnavailableAccess(error);
+        setThreadError(errorMessage(error));
+      }
+    });
+    return () => { active = false; };
+  }, [context, canRead, pack?.id]);
+
+  function rejectUnavailableAccess(error: unknown) {
+    if (error instanceof Error && /ORGANIZATION_ACCESS_DENIED|ANNOTATION_NOT_FOUND/.test(error.message)) {
+      setUnavailableContext(context);
+      setThread(null);
+    }
+  }
+  function editInput(update: () => void) { update(); setPreview(null); setStatus(""); }
+  function prepare(build: () => Preview) {
+    if (!canComment || pending) return;
+    try { setPreview(build()); setStatus(""); } catch (error) { setStatus(errorMessage(error)); }
+  }
+  function previewPack() {
+    prepare(() => ({ context, kind: "pack", payload: buildReadingPack({
+      organizationId: organization.organizationId, title, guide, deadline,
+      materials: materials.filter((material) => selectedMaterials.includes(material.literatureId))
+    }) }));
+  }
+  function previewContribution(contributionKind: ReadingContributionKind) {
+    if (!pack) return;
+    prepare(() => {
+      const references = contributionKind === "summary" ? replies.filter((reply) => referenceIds.includes(reply.id)) : [];
+      return { context, kind: "reply", references, payload: buildReadingReply({
+        pack, kind: contributionKind, body: contributionKind === "summary" ? summary : contribution,
+        evidence: contributionKind === "summary" ? undefined : evidence, unresolved, references, viewerId
+      }) };
+    });
+  }
+
+  async function submitPreview() {
+    if (!activePreview || !canComment || pending) return;
+    const approved = activePreview;
+    const stillCurrent = () => mounted.current && currentContext.current === approved.context;
+    setPending(true);
+    setStatus("");
+    try {
+      if (approved.kind === "pack") {
+        const result = await communityApi.createAnnotation(approved.payload);
+        if (!stillCurrent()) return;
+        if (result.annotation.organizationId !== organization.organizationId || result.annotation.visibility !== "organization" || result.annotation.shareToPlaza || result.annotation.author.id !== viewerId) {
+          throw new Error("读书包回执与批准的作者或组织范围不一致，请刷新核对。");
+        }
+        setCreatedPacks((current) => [...current, result.annotation]);
+        setSelectedId(result.annotation.id);
+        setCreateOpen(false);
+        setTitle(""); setGuide(""); setDeadline(""); setSelectedMaterials([]);
+      } else if (approved.kind === "reply" && pack) {
+        if (approved.references.length) {
+          const current = await communityApi.replies(pack.id);
+          if (!stillCurrent()) return;
+          if (approved.references.some((reference) => !current.replies.some((reply) => reply.id === reference.id && reply.revision === reference.revision && reply.parentAnnotationId === pack.id))) {
+            setThread({ context, replies: current.replies.filter((reply) => reply.parentAnnotationId === pack.id) });
+            throw new Error("引用的回复已更新，请重新查看后整理摘要。");
+          }
+        }
+        const result = await communityApi.createReply(pack.id, approved.payload);
+        if (!stillCurrent()) return;
+        if (result.reply.parentAnnotationId !== pack.id || result.reply.author.id !== viewerId || result.annotation !== null) {
+          throw new Error("回复回执与批准的讨论不一致，请刷新核对。");
+        }
+        setThread({ context, replies: [...replies.filter((reply) => reply.id !== result.reply.id), result.reply] });
+        setContribution(""); setEvidence(""); setSummary(""); setUnresolved(""); setReferenceIds([]);
+      } else if (approved.kind === "edit" && pack) {
+        if (approved.reply.author.id !== viewerId || approved.reply.parentAnnotationId !== pack.id) return;
+        const result = await communityApi.updateReply(approved.reply.id, approved.payload);
+        if (!stillCurrent()) return;
+        if (result.reply.id !== approved.reply.id || result.reply.author.id !== viewerId || result.reply.parentAnnotationId !== pack.id || result.reply.revision <= approved.reply.revision) {
+          throw new Error("修改回执无法核实，请刷新讨论。");
+        }
+        setThread({ context, replies: replies.map((reply) => reply.id === result.reply.id ? result.reply : reply) });
+        setEditing(null);
+      }
+      setPreview(null);
+      setStatus("已保存到组织讨论。");
+      onChanged?.();
+    } catch (error) {
+      if (stillCurrent()) { rejectUnavailableAccess(error); setStatus(errorMessage(error)); setPreview(null); }
+    } finally {
+      if (stillCurrent()) setPending(false);
+    }
+  }
+
+  async function exportNote() {
+    if (!pack || !exportConfirmed || !canRead) return;
+    const approvedContext = context;
+    try {
+      await onExportNote(buildPersonalReadingNote(pack, reflection));
+      if (mounted.current && currentContext.current === approvedContext) setStatus("已导出个人复盘与来源引用。");
+    } catch (error) {
+      if (mounted.current && currentContext.current === approvedContext) setStatus(errorMessage(error));
+    }
+  }
+
+  return <section className="reading-group" aria-label={`${organization.name} 读书组`}>
+    <header><div><h2><BookOpen20Regular />读书组</h2><p>精选资料、提出问题、对照原文，并由主持人手动整理。</p></div>
+      <Button icon={<Add20Regular />} disabled={!canComment || pending} onClick={() => editInput(() => setCreateOpen(!createOpen))}>创建读书包</Button></header>
+    {!canRead ? <p role="status">组织权限尚未确认或已变化，请刷新后重试。</p> : <>
+      {createOpen && <section className="reading-group-form" aria-label="创建组织读书包">
+        <label>读书主题<Input value={title} maxLength={160} onChange={(_, data) => editInput(() => setTitle(data.value))} /></label>
+        <label>导读与讨论目标<Textarea value={guide} maxLength={6000} onChange={(_, data) => editInput(() => setGuide(data.value))} /></label>
+        <fieldset><legend>精选资料</legend>{materials.map((material) => <Checkbox key={material.literatureId} label={material.title} checked={selectedMaterials.includes(material.literatureId)} onChange={(_, data) => editInput(() => setSelectedMaterials((current) => data.checked ? [...current, material.literatureId] : current.filter((id) => id !== material.literatureId)))} />)}
+          {!materials.length && <p>先在组织内关联已确认的文献，再将其加入读书包。</p>}</fieldset>
+        <label>讨论截止日期（可选）<Input type="date" value={deadline} onChange={(_, data) => editInput(() => setDeadline(data.value))} /></label>
+        <Button disabled={!canComment || pending} onClick={previewPack}>预览读书包</Button>
+      </section>}
+      {!!packs.length && <label className="reading-group-select">选择读书包<select value={pack?.id ?? ""} onChange={(event) => {
+        setSelectedId(event.target.value); setPreview(null); setEditing(null); setContribution(""); setEvidence("");
+        setSummary(""); setUnresolved(""); setReflection(""); setExportConfirmed(false); setStatus("");
+      }}>{packs.map((item) => <option key={item.id} value={item.id}>{readingPackTitle(item)}</option>)}</select></label>}
+      {!pack ? <p>该组织尚无读书包。可从已关联的资料创建一个。</p> : <>
+        <article className="reading-group-pack"><div className="reading-group-row"><strong>主持人：{pack.author.name}</strong>
+          <Badge appearance="tint">{replies.some((reply) => isHostSummary(pack, reply)) ? "已有主持人整理" : "讨论中"}</Badge></div>
+          <p className="reading-group-body">{pack.body}</p><a href={`/annotations/${encodeURIComponent(pack.id)}`}>查看原批注与文献 · 修订 {pack.revision}</a></article>
+        <section aria-label="读书组讨论" className="reading-group-thread"><h3>问题与原文对照</h3>
+          {threadError ? <p role="alert">{threadError}</p> : thread?.context !== context ? <p role="status">正在加载讨论…</p> : !replies.length ? <p>尚无贡献，可从一个问题开始。</p> : null}
+          {replies.map((reply) => <article key={reply.id} id={`reply-${reply.id}`}><div className="reading-group-row"><strong>{reply.author.name}</strong><small>修订 {reply.revision}</small>{isHostSummary(pack, reply) && <Badge appearance="tint">主持人手动摘要</Badge>}</div>
+            <p className="reading-group-body">{reply.body}</p>
+            {reply.author.id === viewerId && reply.viewerIsAuthor && <Button size="small" disabled={!canComment || pending} onClick={() => editInput(() => { setEditing(reply); setEditBody(reply.body); })}>更正我的贡献</Button>}
+          </article>)}
+        </section>
+        {editing && <section className="reading-group-form" aria-label="更正自己的贡献"><label>更正内容<Textarea value={editBody} maxLength={8000} onChange={(_, data) => editInput(() => setEditBody(data.value))} /></label>
+          <Button disabled={!canComment || pending || !editBody.trim()} onClick={() => prepare(() => ({ context, kind: "edit", reply: editing, payload: { body: editBody.trim() } }))}>预览更正</Button>
+          <Button appearance="subtle" onClick={() => editInput(() => setEditing(null))}>取消更正</Button></section>}
+        <section className="reading-group-form" aria-label="贡献问题或原文对照"><label>贡献用途<select value={kind} onChange={(event) => editInput(() => setKind(event.target.value as ReadingContributionKind))}><option value="question">问题</option><option value="evidence">原文对照与回应</option></select></label>
+          <label>问题或原文对照<Textarea value={contribution} maxLength={6000} onChange={(_, data) => editInput(() => setContribution(data.value))} /></label>
+          <label>原文位置（自行核对）<Input value={evidence} maxLength={500} onChange={(_, data) => editInput(() => setEvidence(data.value))} /></label>
+          <Button disabled={!canComment || pending} onClick={() => previewContribution(kind)}>预览贡献</Button>
+        </section>
+        {isHost && <section className="reading-group-form" aria-label="主持人整理"><h3>主持人整理</h3><p>手动保留讨论依据与异议；每次整理保留为新的回复，不代表全员共识。</p>
+          <label>主持人手动摘要<Textarea value={summary} maxLength={6000} onChange={(_, data) => editInput(() => setSummary(data.value))} /></label>
+          <label>未解决项与异议<Textarea value={unresolved} maxLength={1000} onChange={(_, data) => editInput(() => setUnresolved(data.value))} /></label>
+          {replies.map((reply) => <Checkbox key={reply.id} label={`引用 ${reply.author.name} 的回复（修订 ${reply.revision}）`} checked={referenceIds.includes(reply.id)} onChange={(_, data) => editInput(() => setReferenceIds((current) => data.checked ? [...current, reply.id] : current.filter((id) => id !== reply.id)))} />)}
+          <Button disabled={!canComment || pending} onClick={() => previewContribution("summary")}>预览主持人摘要</Button>
+        </section>}
+        <section className="reading-group-form" aria-label="返回个人笔记"><h3>个人复盘</h3><p>导出仅包含你在此填写的复盘与来源引用，不会复制组织讨论、资料摘录或原文件。</p>
+          <label>个人复盘<Textarea value={reflection} maxLength={8000} onChange={(_, data) => { setReflection(data.value); setExportConfirmed(false); }} /></label>
+          <Checkbox label="确认仅导出我在此填写的个人复盘与来源引用" checked={exportConfirmed} onChange={(_, data) => setExportConfirmed(Boolean(data.checked))} />
+          <Button icon={<Save20Regular />} disabled={!exportConfirmed || !reflection.trim()} onClick={() => void exportNote()}>导出个人笔记</Button>
+        </section>
+      </>}
+      {activePreview && <section className="reading-group-preview" aria-label="提交预览"><h3>提交预览</h3><p>仅组织内：{organization.name}</p>
+        <p className="reading-group-body">{activePreview.payload.body}</p>
+        {activePreview.kind === "pack" && <p>关联 {activePreview.payload.targets.length} 篇文献，仅发送文献引用，不发送原文件。</p>}
+        <Button appearance="primary" disabled={!canComment || pending} onClick={() => void submitPreview()}>{pending ? "正在提交" : "确认提交"}</Button>
+        <Button disabled={pending} appearance="subtle" onClick={() => setPreview(null)}>返回修改</Button>
+      </section>}
+    </>}
+    {status && <p role="status">{status}</p>}
+  </section>;
+}

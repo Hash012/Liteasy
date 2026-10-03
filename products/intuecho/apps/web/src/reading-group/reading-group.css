@@ -1,0 +1,17 @@
+.reading-group { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--intuecho-line); border-radius: 8px; background: var(--intuecho-surface); }
+.reading-group > header, .reading-group-row { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.reading-group h2, .reading-group h3 { margin: 0; font-size: 16px; }
+.reading-group h2 { display: flex; align-items: center; gap: 8px; }
+.reading-group p { margin: 8px 0; line-height: 1.6; font-size: 13px; }
+.reading-group-form { display: grid; gap: 8px; border-top: 1px solid var(--intuecho-line); padding-top: 12px; }
+.reading-group-form > label, .reading-group-select { display: grid; gap: 6px; font-size: 13px; }
+.reading-group-form select, .reading-group-select select { padding: 7px; border: 1px solid var(--intuecho-line); border-radius: 4px; background: var(--intuecho-surface); color: var(--intuecho-ink); }
+.reading-group-form fieldset { display: grid; gap: 4px; border: 1px solid var(--intuecho-line); border-radius: 4px; min-width: 0; }
+.reading-group-form > .fui-Button { justify-self: start; }
+.reading-group-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.reading-group-pack, .reading-group-thread > article, .reading-group-preview { padding: 12px; border: 1px solid var(--intuecho-line); border-radius: 6px; }
+.reading-group-thread { display: grid; gap: 8px; }
+.reading-group-thread small { color: var(--intuecho-muted); }
+.reading-group-preview { background: var(--intuecho-brand-soft); }
+.reading-group-preview > .fui-Button + .fui-Button { margin-left: 8px; }
+.reading-group a { text-decoration: underline; color: var(--intuecho-brand); font-size: 13px; }
