@@ -37,7 +37,7 @@ export function FileStatusBar({ status, actions, onDownloadRecommendation, recom
   ].filter(Boolean).join(" · ");
   const progress = [
     status?.indexState ? { indexed: "已索引", indexing: "正在索引…", "not-indexed": "未索引", error: "解析失败" }[status.indexState] : undefined,
-    status?.syncState ? { synced: "已同步", syncing: "正在同步…", error: "同步失败" }[status.syncState] : undefined
+    status?.syncState ? { synced: "当前文件已同步", syncing: "当前文件正在同步…", error: "当前文件同步失败" }[status.syncState] : undefined
   ].filter(Boolean).join(" · ");
   const error = status?.indexState === "error" || status?.syncState === "error";
   return (

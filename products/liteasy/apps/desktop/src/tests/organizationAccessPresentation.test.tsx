@@ -76,7 +76,7 @@ test("explains the existing owner export exception and constrained invitation ro
     policyExceptions: ["owner_export"]
   })} />);
   await userEvent.setup().click(screen.getByText("我的组织权限"));
-  expect(screen.getByText("组织已限制导出；所有者仍可导出原文件。")).toBeInTheDocument();
+  expect(screen.getByText("组织已限制导出；所有者仍可导出原文件。此例外仅适用于原文件导出，不授予公开发布或外部 AI 使用权限。")).toBeInTheDocument();
   expect(screen.getByText("可邀请管理员或成员。")).toBeInTheDocument();
 });
 

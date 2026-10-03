@@ -8,7 +8,7 @@ export function OrganizationAccessDetails({ snapshot }: { snapshot?: Organizatio
     <summary><ShieldRegular /><span>我的组织权限</span></summary>
     {snapshot ? <>
       <p className="organization-muted">策略版本 {snapshot.policyRevision ?? "未提供"} · 组织版本 {snapshot.authorizationRevision}</p>
-      {snapshot.policyExceptions.includes("owner_export") ? <p>组织已限制导出；所有者仍可导出原文件。</p> : null}
+      {snapshot.policyExceptions.includes("owner_export") && snapshot.allowedActions.includes("export_original") ? <p>组织已限制导出；所有者仍可导出原文件。此例外仅适用于原文件导出，不授予公开发布或外部 AI 使用权限。</p> : null}
       <ul className="organization-access-list" aria-label="组织权限明细">
         {(Object.keys(organizationActionLabels) as OrganizationAction[]).map((action) => {
           const allowed = snapshot.allowedActions.includes(action);

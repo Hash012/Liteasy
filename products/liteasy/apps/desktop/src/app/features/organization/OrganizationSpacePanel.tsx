@@ -20,7 +20,7 @@ export function OrganizationSpacePanel(props: OrganizationSpacePanelProps) {
     {list?.organizations.length ? <Field label="当前组织">
       <Select aria-label="切换组织" value={list.activeOrganizationId || summary?.organizationId || ""}
         disabled={status === "loading"} onChange={(_, data) => props.onSelectOrganization?.(data.value)}>
-        {list.organizations.map((item) => <option key={item.organizationId} value={item.organizationId}>{item.name}</option>)}
+        {list.organizations.map((item) => <option key={item.organizationId} value={item.organizationId}>{item.name}{list.organizations.filter((other) => other.name === item.name).length > 1 ? `（${item.organizationId}）` : ""}</option>)}
       </Select>
     </Field> : null}
     {listStatus === "loading" || status === "loading" ? <Spinner label="正在加载组织" size="tiny" /> : null}

@@ -1,3 +1,4 @@
+import type { SpaceOperationsView } from "../features/spaces/SpaceOperationsPanel";
 import type { PaperServiceConfig } from "../features/paper-services/paperServiceTransport";
 import type { ProfileMemoryController } from "../features/profile/useProfileMemory";
 import { type LibraryFileAccess } from "../features/library/LibraryFileList";
@@ -42,6 +43,7 @@ import type {
 import type { LeftRailView } from "./useLeftRailNavigation";
 
 export type LeftPaneProps = {
+  spaceOperations?: SpaceOperationsView;
   contextScopeId?: string;
   selectedRecommendationId?: string;
   onInspectRecommendation?: (item: RecommendationItem) => void;
@@ -187,6 +189,7 @@ function getPaneHeader(leftRailView: LeftRailView) {
 }
 
 export function LeftPane({
+  spaceOperations,
   fileLibrary,
   accountScopeId,
   activePaperId,
@@ -360,6 +363,11 @@ export function LeftPane({
           />
         ) : leftRailView === "profile" ? (
             <PersonalCenterPanel
+              spaceOperations={spaceOperations}
+              workspaceSourceType={workspaceSourceType}
+              readNotificationIds={readNotificationIds}
+              onOpenLocal={onReturnToLocalWorkspace}
+              onOpenOrganization={onOpenOrganizationDialog}
               academicProfile={academicProfile}
               profileMemory={profileMemory}
               onLoginRequired={onLoginRequired}

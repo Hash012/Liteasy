@@ -1,0 +1,88 @@
+import "fake-indexeddb/auto";
+import { webcrypto } from "node:crypto";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, expect, test, vi } from "vitest";
+import { useCommunitySourceController } from "../app/controllers/useCommunitySourceController";
+import { communitySourceLink, type CommunitySourceRevision } from "../app/features/forum/communitySourceReference";
+import type { ObjectRef } from "../app/features/objects/object.types";
+import { createObjectRepository } from "../app/features/objects/objectRepository";
+import { createObjectStorage } from "../app/features/objects/objectStorage";
+import { createWorkspaceAgentAssetService } from "../app/features/resource-filesystem/workspaceAgentAssetService";
+import { externalModelAssetService } from "../app/features/models/externalSourcePolicy";
+import { liteasyPath } from "../app/features/resource-filesystem/liteasyPath";
+
+beforeEach(() => vi.stubGlobal("crypto", webcrypto));
+const source: CommunitySourceRevision = { sourceNamespace: "intuecho.annotation", sourceId: "synthetic-annotation", revision: 2, currentRevision: 3, historical: true, visibility: "organization", organizationId: "synthetic-org", body: "SYNTHETIC ORGANIZATION BODY MUST NOT COPY" };
+const link = communitySourceLink(source);
+function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>((done) => { resolve = done; }); return { promise, resolve }; }
+function fixture() {
+  const scope = crypto.randomUUID(), repository = createObjectRepository(createObjectStorage(scope, () => scope), scope);
+  const create = vi.spyOn(repository, "create"), readCommunitySource = vi.fn(async (): Promise<CommunitySourceRevision> => source), collect = vi.fn(async (_ref: ObjectRef) => {}), openNote = vi.fn(async (_ref: ObjectRef) => {});
+  let controller!: ReturnType<typeof useCommunitySourceController>;
+  function View({ actor = "a" }: { actor?: string }) { controller = useCommunitySourceController({ actorKey: actor, repository, client: { readCommunitySource }, collect, openNote }); return controller.dialog; }
+  const view = render(<View />);
+  return { scope, repository, create, readCommunitySource, collect, openNote, view, View, begin: (url = link) => controller.open(url), open: (url = link) => act(async () => { await controller.open(url); }) };
+}
+async function startSave(f: ReturnType<typeof fixture>) {
+  await f.open();
+  fireEvent.change(screen.getByRole("textbox", { name: "带回个人笔记的想法" }), { target: { value: "My own reflection" } });
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "新建个人笔记" })); });
+}
+test("explicit note return saves only personal reflection and the fixed source, with organization lineage", async () => {
+  const f = fixture();
+  await startSave(f);
+  await waitFor(() => expect(f.openNote).toHaveBeenCalledOnce());
+  expect(f.create).toHaveBeenCalledOnce();
+  const ref = f.openNote.mock.calls[0][0];
+  const note = await f.repository.get(ref);
+  expect(JSON.stringify(note)).toContain("My own reflection");
+  expect(JSON.stringify(note)).toContain("revision=2");
+  expect(JSON.stringify(note)).not.toContain(source.body);
+  const assets = createWorkspaceAgentAssetService({ repository: f.repository, active: () => true });
+  await expect(externalModelAssetService(assets).read(liteasyPath(f.scope, { kind: "object", ref }))).rejects.toThrow("属于组织");
+});
+test("access loss on explicit save hides the cached body and creates no note", async () => {
+  const f = fixture();
+  f.readCommunitySource.mockResolvedValueOnce(source).mockRejectedValueOnce(new Error("来源当前不可访问"));
+  await startSave(f);
+  expect(await screen.findByRole("alert")).toHaveTextContent("不可访问");
+  expect(screen.queryByText(source.body!)).not.toBeInTheDocument();
+  expect(f.create).not.toHaveBeenCalled();
+});
+test.each(["close", "account", "source"])("a pending save invalidated by %s cannot write or close the next source", async (change) => {
+  const f = fixture(), pending = deferred<CommunitySourceRevision>();
+  f.readCommunitySource.mockResolvedValueOnce(source).mockImplementationOnce(() => pending.promise);
+  await startSave(f);
+  if (change === "close") fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+  if (change === "account") f.view.rerender(<f.View actor="b" />);
+  if (change === "source") await f.open(communitySourceLink({ ...source, sourceId: "next-source" }));
+  await act(async () => pending.resolve(source));
+  expect(f.create).not.toHaveBeenCalled();
+  expect(f.openNote).not.toHaveBeenCalled();
+  if (change === "source") expect(screen.getByRole("dialog")).toBeInTheDocument();
+});
+test("rapid repeated saves share one permission check and one committed note", async () => {
+  const f = fixture(), pending = deferred<CommunitySourceRevision>();
+  f.readCommunitySource.mockResolvedValueOnce(source).mockImplementationOnce(() => pending.promise);
+  await startSave(f);
+  fireEvent.click(screen.getByRole("button", { name: "新建个人笔记" }));
+  await act(async () => pending.resolve(source));
+  await waitFor(() => expect(f.openNote).toHaveBeenCalledOnce());
+  expect(f.readCommunitySource).toHaveBeenCalledTimes(2);
+  expect(f.create).toHaveBeenCalledOnce();
+});
+test("account switch hides a late preview and confirmed literature remains a normal personal reference", async () => {
+  const f = fixture(), pending = deferred<CommunitySourceRevision>();
+  f.readCommunitySource.mockImplementationOnce(() => pending.promise);
+  let loading!: Promise<void>;
+  act(() => { loading = f.begin(); });
+  f.view.rerender(<f.View actor="b" />);
+  await act(async () => pending.resolve(source));
+  await loading;
+  expect(screen.queryByText(source.body!)).not.toBeInTheDocument();
+  expect(f.create).not.toHaveBeenCalled();
+  f.readCommunitySource.mockResolvedValue({ sourceNamespace: "intuecho.literature", sourceId: "literature", revision: 1, currentRevision: 1, historical: false, literature: { title: "Confirmed public reference" } });
+  await startSave(f);
+  await waitFor(() => expect(f.create).toHaveBeenCalledOnce());
+  expect(f.create.mock.calls[0][0].sourceResolution).toBeUndefined();
+});

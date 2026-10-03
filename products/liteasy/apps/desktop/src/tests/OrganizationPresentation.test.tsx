@@ -40,3 +40,13 @@ test("searches organizations and closes the accessible dialog with Escape", asyn
   await user.keyboard("{Escape}");
   expect(onClose).toHaveBeenCalledTimes(1);
 });
+
+test("same-name organizations retain distinct choices and owner export is narrowly explained", async () => {
+  const onSelectOrganization = vi.fn();
+  render(<OrganizationSpacePanel list={{ ...list, organizations: list.organizations.map((item) => ({ ...item, name: "同名研究组" })) }}
+    listMessage="" listStatus="success" message="" status="success" summary={{ ...summary, accessSnapshot: { allowedActions: ["export_original"], authorizationRevision: 3, policyRevision: 2, policyExceptions: ["owner_export"], denialReasons: { publish_public: "organization_external_sharing_disabled", run_external_model: "organization_external_model_disabled" }, actionConstraints: { inviteRoles: [] } } }} readNotificationIds={[]} onSelectOrganization={onSelectOrganization} />);
+  await userEvent.selectOptions(screen.getByRole("combobox", { name: "切换组织" }), "systems");
+  expect(onSelectOrganization).toHaveBeenCalledWith("systems");
+  expect(screen.getByRole("option", { name: "同名研究组（systems）" })).toHaveValue("systems");
+  expect(screen.getByText(/此例外仅适用于原文件导出，不授予公开发布或外部 AI 使用权限/)).toBeInTheDocument();
+});

@@ -236,6 +236,7 @@ export function useObjectWorkbenchController(input: {
   }
   const boardFiles = useBoardFileController({ repository, board, active, select: selectBoard, setStatus });
   async function openLink(link: string) {
+    if (!link.startsWith("liteasy://objects/") && !link.startsWith("liteasy://agent-artifacts/")) return;
     const generation = closeGeneration.current;
     if (link.startsWith("liteasy://agent-artifacts/")) {
       const url = new URL(link);

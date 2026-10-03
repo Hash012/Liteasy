@@ -1,3 +1,4 @@
+import { SpaceOperationsPanel, type SpaceOperationsView } from "../spaces/SpaceOperationsPanel";
 import type { AccountSession } from "../account/account.types";
 import { AccountDataExportPanel } from "../account/AccountDataExportPanel";
 import { useState } from "react";
@@ -13,6 +14,11 @@ import { ProfileMemoryPanel } from "./ProfileMemoryPanel";
 import "./personalCenter.css";
 
 type PersonalCenterPanelProps = {
+  spaceOperations?: SpaceOperationsView;
+  workspaceSourceType?: "local_library" | "organization_shared";
+  onOpenLocal?: () => void;
+  onOpenOrganization?: () => void;
+  readNotificationIds?: string[];
   academicProfile: AcademicProfile;
   agentMemories?: AgentMemoryEntry[];
   agentRecentState?: string;
@@ -38,7 +44,7 @@ export function PersonalCenterPanel(props: PersonalCenterPanelProps) {
   return <section aria-label="左边栏个人中心" className="personal-center-panel profile-page">
     <header className="profile-identity">
       <div className="profile-avatar" aria-hidden="true"><PersonRegular /></div>
-      <div className="profile-identity-text"><strong>{accountSession?.name ?? "本机研究者"}</strong><span>{accountSession ? props.organizationSummary?.name ?? "个人工作区" : "未登录 · 本机档案可用"}</span></div>
+      <div className="profile-identity-text"><strong>{accountSession?.name ?? "本机研究者"}</strong><span>{accountSession ? props.workspaceSourceType === "organization_shared" ? props.organizationSummary?.name ?? "组织文库" : "本机文库" : "未登录 · 本机档案可用"}</span></div>
       {accountSession ? <Tooltip content="退出登录" relationship="label"><Button appearance="subtle" icon={<SignOutRegular />} aria-label="退出登录" onClick={props.onLogout} /></Tooltip>
         : <Button size="small" onClick={props.onLoginRequired}>登录</Button>}
     </header>
@@ -47,9 +53,10 @@ export function PersonalCenterPanel(props: PersonalCenterPanelProps) {
       <p className="profile-muted">用于论文推荐和 AI 回答。关闭后停止采集和使用，已有条目保留。</p>
     </div>
     <TabList selectedValue={section} onTabSelect={(_, data) => setSection(String(data.value))} size="small" aria-label="个人中心分类">
-      <Tab value="research" icon={<BookOpenRegular />}>研究档案</Tab><Tab value="memory" icon={<SparkleRegular />}>已记偏好{memory?.data.pending.length ? ` · ${memory.data.pending.length}` : ""}</Tab><Tab value="data" icon={<ArchiveRegular />}>数据管理</Tab>
+      <Tab value="spaces">空间与操作</Tab><Tab value="research" icon={<BookOpenRegular />}>研究档案</Tab><Tab value="memory" icon={<SparkleRegular />}>已记偏好{memory?.data.pending.length ? ` · ${memory.data.pending.length}` : ""}</Tab><Tab value="data" icon={<ArchiveRegular />}>数据管理</Tab>
     </TabList>
-    <div className="profile-section" role="region" aria-label={section === "research" ? "研究档案" : section === "memory" ? "已记偏好" : "数据管理"}>
+    <div className="profile-section" role="region" aria-label={section === "spaces" ? "空间与操作" : section === "research" ? "研究档案" : section === "memory" ? "已记偏好" : "数据管理"}>
+      {section === "spaces" ? <SpaceOperationsPanel session={accountSession} workspace={props.workspaceSourceType ?? "local_library"} organization={props.organizationSummary} operations={props.spaceOperations} readNotificationIds={props.readNotificationIds} onOpenLocal={props.onOpenLocal} onOpenOrganization={props.onOpenOrganization} /> : null}
       {section === "research" ? <><h3>你的研究方向</h3><p className="profile-muted">填写主题、方法和阅读语言，让推荐更贴近当前研究。</p><AcademicProfileForm academicProfile={props.academicProfile} onSave={props.onUpdateAcademicProfile} /></> : null}
       {section === "memory" && memory ? <ProfileMemoryPanel memory={memory} enabled={props.profileSamplingEnabled} /> : null}
       {section === "memory" && !memory ? <p className="profile-muted">暂无已保存的偏好。</p> : null}

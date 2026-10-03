@@ -1,3 +1,4 @@
+import type { CommunitySourceReference, CommunitySourceRevision } from "./communitySourceReference";
 import { desktopAnnotationPublicationPayload } from "../../../../../../../intuecho/packages/contracts/src/desktopAnnotationPublicationPayload.js";
 import { sha256Hex } from "../paper-identity/paperIdentity";
 import type {
@@ -135,6 +136,17 @@ export function createForumClient({
   }
 
   return {
+    async readCommunitySource(source: CommunitySourceReference): Promise<CommunitySourceRevision> {
+      const actor = normalizePublicationActorBinding(getActorBinding?.());
+      if (!actor) throw new Error("请先登录，再核对社区来源。普通本机阅读不受影响。");
+      if (actor.endpoint !== normalizePublicationActorBinding({ ...actor, endpoint: apiBaseUrl })?.endpoint) throw new Error("社区服务已变化，请重新登录后打开来源。");
+      const result = await request<CommunitySourceRevision>(`/v1/integrations/desktop/community-sources/${encodeURIComponent(source.sourceNamespace)}/${encodeURIComponent(source.sourceId)}/revisions/${source.revision}`, true);
+      if (!samePublicationActor(actor, getActorBinding?.())) throw new Error("账号或服务已变化，请重新打开来源。");
+      if (result.sourceNamespace !== source.sourceNamespace || result.sourceId !== source.sourceId || result.revision !== source.revision ||
+        !Number.isSafeInteger(result.currentRevision) || result.currentRevision < source.revision || result.historical !== (result.currentRevision !== source.revision) ||
+        (result.body !== undefined && typeof result.body !== "string")) throw new Error("来源修订无法核实；尚未保存任何来源正文。");
+      return { ...result, ...(source.locator ? { locator: source.locator } : {}) };
+    },
     lookupAnnotationPublications: async (operations: readonly ForumAnnotationPublicationOperation[], actorBinding: PublicationActorBinding) => {
       const failures = (message: string) => ({ results: operations.map((operation) => failedPublication(operation, message)) });
       const actorIsCurrent = () => samePublicationActor(actorBinding, getActorBinding?.()) &&

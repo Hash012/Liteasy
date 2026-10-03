@@ -1,0 +1,7 @@
+.space-operations { display: grid; gap: 8px; font-size: 12px; }
+.space-operations h3, .space-operations p { margin: 0; }
+.space-operations p { color: var(--colorNeutralForeground2); line-height: 1.6; }
+.space-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.space-operations ul { display: grid; gap: 8px; list-style: none; padding: 0; margin: 0; }
+.space-operations li { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; }
+.space-operations li p { flex-basis: 100%; }

@@ -1,3 +1,5 @@
+import { useCommunitySourceController } from "../controllers/useCommunitySourceController";
+import { useSpaceOperationsController } from "../controllers/useSpaceOperationsController";
 import { usePublicationPreview } from "../features/forum/usePublicationPreview";
 import { normalizePublicationActorBinding } from "../features/forum/publicationActorBinding";
 import { assertExternalPaperSources } from "../features/models/externalSourcePolicy";
@@ -1190,6 +1192,12 @@ export function AppShell({
     getSettings: () => settingsStoreRef.current.getState(),
     openEvidence: openEvidenceInReader
   });
+  const communitySource = useCommunitySourceController({
+    actorKey: JSON.stringify([accountSession?.issuer, accountSession?.userId, resolveIntuechoEndpoint()]), client: forum.client,
+    repository: objectWorkbench.repository,
+    collect: (ref) => notes.port.collect({ kind: "object", ref }),
+    openNote: (ref) => objectWorkbench.openLink(objectLink(ref)),
+  });
   const workbenchNavigation = useWorkbenchNavigationController({
     dock,
     collapsed: paneLayout.collapsed,
@@ -1488,7 +1496,16 @@ export function AppShell({
     recommendationPending,
     recommendationStatus
   } = knowledgeSync.model;
+  const spaceOperations = useSpaceOperationsController({
+    session: accountSession, endpoint: externalKnowledgeEndpoint, getActorBinding: getPublicationActorBinding,
+    getPapers: () => workspaceStoreRef.current.getState().papers,
+    listArtifacts: () => artifactResultClientRef.current!.list(),
+    openAnnotation: (paper, annotation) => openEvidenceInReader({ evidenceId: annotation.id, paperId: paper.id, page: annotation.page, quote: annotation.excerpt }),
+    openArtifact: (id) => { void artifactWorkflow.actions.openArtifact(id); },
+    openLibrary: (scope) => { workbenchNavigation.open(scope?.scopeType === "organization" ? "organization" : "library"); }
+  });
   const transferLibraryResource = useLibraryResourceTransferController({
+    onOperation: spaceOperations.reportTransfer,
     endpoint: externalKnowledgeEndpoint,
     onRecommendationSaved: async (recommendation) => {
       const results = await Promise.allSettled([
@@ -1880,6 +1897,7 @@ export function AppShell({
     academicProfile: profileActions.academicProfile,
     agentMemories: profileActions.agentMemories,
     profileMemory: profileActions.memory,
+    spaceOperations,
     agentRecentState,
     artifactCatalog,
     artifactCatalogLoadState,
@@ -2811,6 +2829,7 @@ export function AppShell({
           }}
         />
         {publicationPreview.dialog}
+        {communitySource.dialog}
         <AppDialogs
           academicProfile={profileActions.academicProfile}
           accountMessage={cloudAccount.model.accountMessage}

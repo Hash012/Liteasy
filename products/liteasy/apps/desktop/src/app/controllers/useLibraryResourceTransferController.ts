@@ -1,3 +1,4 @@
+import type { TransferOperationEvent } from "../features/spaces/spaceOperations";
 import { importDownloadedPdf, releaseDownloadedPdf } from "../features/paper-services/paperFullTextTransport";
 import { useCallback, useRef } from "react";
 import { captureAccountSessionRequest } from "../features/account/accountSessionBinding";
@@ -35,6 +36,7 @@ import {
 
 type Input = {
   endpoint: string;
+  onOperation?: (event: TransferOperationEvent) => void;
   confirmTransfer?: (plan: LibraryResourceTransferPlan) => Promise<boolean>;
   onRecommendationSaved: (recommendation: RecommendationItem) => void | Promise<void>;
   refreshCloudTrees: () => void | Promise<void>;
@@ -72,12 +74,20 @@ export function useLibraryResourceTransferController(input: Input) {
       binding.assertCurrent();
       if (endpointRef.current !== input.endpoint) throw new Error("账号或云服务已变化，请重新操作。");
     }
+    let cancelled = false;
     async function guarded<T>(operation: () => T | Promise<T>): Promise<T> {
       assertCurrent();
       const result = await operation();
+      if (result && typeof result === "object" && "status" in result && result.status === "cancelled") cancelled = true;
       assertCurrent();
       return result;
     }
+    const operation = { id: crypto.randomUUID(), actorKey: binding.actorKey, generation: binding.generation,
+      title: source.area === "recommendation" ? source.recommendation.title : "entry" in source ? source.entry.title || "资料转移" : source.folder.name,
+      target: target.scope };
+    input.onOperation?.({ ...operation, phase: "running" });
+    try {
+      await (async () => {
     assertCurrent();
     if (source.area === "collection" && source.scope.scopeId !== binding.subject) throw new Error("个人云收藏不属于当前账号，请刷新后重试。");
     if (target.area === "collection" && target.scope?.scopeId !== binding.subject) throw new Error("目标个人云收藏不属于当前账号，请刷新后重试。");
@@ -416,5 +426,12 @@ export function useLibraryResourceTransferController(input: Input) {
       }));
     }
     await guarded(() => input.refreshCloudTrees());
+      })();
+      input.onOperation?.({ ...operation, phase: cancelled ? "cancelled" : "completed" });
+    } catch (error) {
+      const status = (error as { status?: number })?.status;
+      input.onOperation?.({ ...operation, error, phase: error instanceof Error && error.message === "已取消资料转移。" ? "cancelled" : status && status >= 400 && status < 500 ? "failed" : "unknown" });
+      throw error;
+    }
   }, [input]);
 }
