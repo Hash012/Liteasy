@@ -198,7 +198,7 @@ export function useLibraryResourceTransferController(input: Input) {
         const stream = await client.downloadDocumentStream(
           entrySource.scope,
           entrySource.entry.documentId,
-          entrySource.area === "organization" ? "export" : "download"
+          "export"
         );
         await persistPdfByteStream({
           fileName: entrySource.entry.fileName,
@@ -354,7 +354,7 @@ export function useLibraryResourceTransferController(input: Input) {
         const stream = await client.downloadDocumentStream(
           source.scope,
           source.entry.documentId,
-          source.area === "organization" ? "export" : "download"
+          "export"
         );
         await persistPdfByteStream({
           fileName: source.entry.fileName,

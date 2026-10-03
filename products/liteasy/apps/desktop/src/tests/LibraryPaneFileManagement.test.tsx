@@ -3,8 +3,9 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { mockFocusLayout } from "./fixtures/mockFocusLayout";
-import { LibraryPane } from "../app/features/library/LibraryPane";
+import { LibraryPane, personalLibraryScopeId } from "../app/features/library/LibraryPane";
 import { savePaperFileMetadata } from "../app/features/library/paperFileMetadata";
+import * as cloudTree from "../app/features/library/useCloudLibraryTree";
 
 const paper = {
   id: "paper-file-management",
@@ -62,6 +63,52 @@ function renderLibraryPane(childProps: Partial<React.ComponentProps<typeof Libra
     </FluentProvider>
   );
 }
+
+function mockPersonalCollection() {
+  const entry = {
+    documentId: "cloud_pdf", entryKind: "pdf" as const, fileName: "Cloud paper.pdf", title: "Cloud paper",
+    byteLength: 10, contentHash: "a".repeat(64), status: "active" as const,
+    createdAt: "2026-10-03T00:00:00.000Z", updatedAt: "2026-10-03T00:00:00.000Z",
+    scopeId: "user_1", scopeType: "user" as const, uploadedBy: "user_1"
+  };
+  vi.spyOn(cloudTree, "useCloudLibraryTree").mockImplementation((input) => ({
+    message: "", quota: null, refresh: vi.fn().mockResolvedValue(undefined), status: "ready", trashTree: null,
+    tree: input.scopeType === "user" ? { scopeId: "user_1", scopeType: "user", entries: [entry], folders: [], revision: 1 } : null
+  }));
+  return entry;
+}
+
+test("copies a personal cloud PDF to the selected local library through the existing transfer action", async () => {
+  const entry = mockPersonalCollection();
+  const onResourceTransfer = vi.fn().mockResolvedValue(undefined);
+  renderLibraryPane({ accountSessionAvailable: true, accountScopeId: "user_1", onResourceTransfer });
+  fireEvent.contextMenu(await screen.findByRole("button", { name: "Cloud paper", exact: true }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "复制到本机文献库", exact: true }));
+  await waitFor(() => expect(onResourceTransfer).toHaveBeenCalledWith({ area: "collection", entry, scope: { scopeId: "user_1", scopeType: "user" } }, { area: "local", localFolderPath: "/library" }));
+  expect(await screen.findByText("已复制到本机文献库。")).toBeInTheDocument();
+});
+
+test("uses the verified account subject unchanged as the personal cloud scope", () => {
+  expect(personalLibraryScopeId("8d337604-f670-440a-8f72-aa057b84137d")).toBe("8d337604-f670-440a-8f72-aa057b84137d");
+  expect(personalLibraryScopeId("user:development-subject")).toBe("user:development-subject");
+  expect(personalLibraryScopeId(undefined)).toBe("");
+});
+
+test("keeps a failed personal cloud export visible without reporting success", async () => {
+  mockPersonalCollection();
+  renderLibraryPane({ accountSessionAvailable: true, accountScopeId: "user_1", onResourceTransfer: vi.fn().mockRejectedValue(new Error("账号已变化，请重新操作。")) });
+  fireEvent.contextMenu(await screen.findByRole("button", { name: "Cloud paper", exact: true }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "复制到本机文献库", exact: true }));
+  expect(await screen.findByText("账号已变化，请重新操作。")).toBeInTheDocument();
+  expect(screen.queryByText("已复制到本机文献库。")).not.toBeInTheDocument();
+});
+
+test("requires a chosen local library for personal cloud PDF copies", async () => {
+  mockPersonalCollection();
+  renderLibraryPane({ accountSessionAvailable: true, accountScopeId: "user_1", localLibrarySnapshot: null, onResourceTransfer: vi.fn() });
+  fireEvent.contextMenu(await screen.findByRole("button", { name: "Cloud paper", exact: true }));
+  expect(await screen.findByRole("menuitem", { name: "复制到本机文献库", exact: true })).toHaveAttribute("aria-disabled", "true");
+});
 
 test("offers a dedicated bibliography editor from the local paper context menu", async () => {
   const onEditBibliography = vi.fn();

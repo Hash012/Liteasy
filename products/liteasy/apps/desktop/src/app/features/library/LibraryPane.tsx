@@ -55,6 +55,7 @@ import {
   DeleteDismissRegular,
   DeleteRegular,
   DocumentPdfRegular,
+  DocumentArrowDownRegular,
   DocumentTextRegular,
   EditRegular,
   FolderAddRegular,
@@ -248,8 +249,7 @@ const resourceTransferMimeType = "application/x-liteasy-library-resource-v2";
 const sectionIds: LibraryResourceArea[] = ["local", "collection", "recommendation", "organization"];
 
 export function personalLibraryScopeId(accountScopeId?: string) {
-  if (!accountScopeId) return "";
-  return accountScopeId.startsWith("user:") ? accountScopeId : `user:${accountScopeId}`;
+  return accountScopeId ?? "";
 }
 
 function dirname(value: string) {
@@ -1139,6 +1139,17 @@ function LibraryPaneContent({
                   icon={<OpenRegular />}
                   onClick={openEntry}
                 >打开</MenuItem>
+                {entry.source.area === "collection" && entry.source.entry.entryKind === "pdf" ? (
+                  <MenuItem
+                    disabled={pending || !accountSessionAvailable || !localLibrarySnapshot || !onResourceTransfer}
+                    icon={<DocumentArrowDownRegular />}
+                    onClick={() => void runNodeAction(entry.id, "正在复制到本机文献库...", async () => {
+                      if (!onResourceTransfer || !localLibrarySnapshot) throw new Error("请先选择本机文献库。");
+                      await onResourceTransfer(entry.source, targetFor("local"));
+                      return "已复制到本机文献库。";
+                    })}
+                  >复制到本机文献库</MenuItem>
+                ) : null}
                 {area === "local" && fileLibrary?.onEditBibliography ? <MenuItem icon={<EditRegular />} disabled={pending}
                   onClick={() => fileLibrary.onEditBibliography!(catalogById.get(entry.id) ?? { id: entry.id, title: entry.label, format: "pdf" })}>编辑元信息</MenuItem> : null}
                 {sourcePaper && area === "local" ? <MenuItem

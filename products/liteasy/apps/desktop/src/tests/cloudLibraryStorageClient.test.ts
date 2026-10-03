@@ -2,6 +2,7 @@ import { vi } from "vitest";
 import { storeAccountSession } from "../app/features/account/accountSessionStorage";
 import { cacheExternalPdf, readCachedPdf } from "../app/features/library/paperCacheClient";
 import { createCloudLibraryStorageClient } from "../app/features/library/cloudLibraryStorageClient";
+import { personalLibraryScopeId } from "../app/features/library/LibraryPane";
 
 vi.mock("../app/features/library/paperCacheClient", () => ({
   cacheExternalPdf: vi.fn(async () => "synthetic-cache.pdf"),
@@ -31,6 +32,24 @@ beforeEach(() => {
     sessionId: "ltsy_session",
     userId: "alice"
   });
+});
+
+test("sends the verified personal subject unchanged for tree, import and export requests", async () => {
+  const subject = "8d337604-f670-440a-8f72-aa057b84137d";
+  storeAccountSession({ email: "alice@example.com", expiresAt: "2027-01-01T00:00:00.000Z", membershipTier: "basic", name: "Alice", sessionId: "subject-token", userId: subject });
+  const fetchImpl = vi.fn(async (url: string) => url.endsWith("/export")
+    ? new Response(new Uint8Array([37, 80, 68, 70]))
+    : new Response(JSON.stringify({ tree: { entries: [], folders: [], revision: 0 }, revision: 1 }), { headers: { "content-type": "application/json" } }));
+  const client = createCloudLibraryStorageClient({ endpoint: "https://cloud.example.test", fetchImpl: fetchImpl as unknown as typeof fetch });
+  const scope = { scopeId: personalLibraryScopeId(subject), scopeType: "user" as const };
+  await client.getTree(scope);
+  await client.createMetadataEntry({ scope, expectedRevision: 0, title: "My reference" });
+  const exported = await client.exportDocument(scope, "my-pdf");
+  expect(exported.bytes).toEqual(new Uint8Array([37, 80, 68, 70]));
+  for (const [, request] of vi.mocked(fetchImpl as unknown as typeof fetch).mock.calls) {
+    expect(JSON.parse(String(request!.body))).toMatchObject({ scopeId: subject, scopeType: "user" });
+    expect(request!.headers).toMatchObject({ Authorization: "Bearer subject-token" });
+  }
 });
 
 test("requires a live authorization request before opening a cloud document", async () => {

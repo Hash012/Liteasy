@@ -287,6 +287,14 @@ test("rechecks organization export policy and streams the export into the local 
   expect(refreshLocalLibrary).toHaveBeenCalledOnce();
 });
 
+test("uses the authorized export route when copying a personal PDF to the local library", async () => {
+  const { result } = renderController();
+  const scope = { scopeId: "8d337604-f670-440a-8f72-aa057b84137d", scopeType: "user" as const };
+  await act(() => result.current({ area: "collection", scope, entry: { ...documentEntry(), ...scope } }, matrixTargets.local));
+  expect(cloud.downloadDocumentStream).toHaveBeenCalledWith(scope, "document-1", "export");
+  expect(local.persistPdfByteStream).toHaveBeenCalledWith(expect.objectContaining({ fileName: "Paper.pdf", targetFolderPath: "/library" }));
+});
+
 test("stops when the organization policy changed before submission", async () => {
   cloud.getOrganizationStoragePolicy.mockResolvedValue({
     exportPolicy: "disabled",
