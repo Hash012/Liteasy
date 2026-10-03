@@ -42,3 +42,23 @@ This read boundary preserves the existing, separately audited platform withdrawa
 Structured work notifications use persisted reply, reading-pack, report, tag-appeal, or moderation-audit identifiers. Creating a reading task requires explicit `notificationIntent: "reading_task"` on an organization reading pack; ordinary creation generates no task reminder. Replies may explicitly name up to five existing thread participants in `mentionedUserIds`; names in the body are never parsed. A mention replaces the same recipient's ordinary reply notification. Governance results target the original reporter, appellant, or content author.
 
 All event kinds honor explicit scope subscriptions, overlapping opt-outs, mute, and author hiding. They contain no copied body, title, or private review evidence, and inbox reads recheck current content and organization access. Unavailable events expose only an opaque notification identifier and remain markable as read. These notifications do not send email, push, or invitations. Migration 026 preserves existing reply events and read state while adding source and recipient constraints.
+
+
+### Scoped platform-tag upgrade (028)
+
+`local-semantic-scope-v2` constrains candidate selection before its limit: public
+output uses public root annotations; organization output uses the exact same
+organization; private and mutual-followers output uses the same visibility and
+author. Reply projections are not samples because their inherited audience needs
+additional ancestry validation. No new training permission is implied. The tag
+response includes `classifierVersion` and `sourceScope`; user tags have no derived
+provenance. Withdrawn samples cannot contribute to new assignments.
+
+Migration 028 preserves historical tags, pending appeals and append-only audits.
+A legacy platform tag with no `sourceScope` is **not** evidence of safe derivation.
+Before reopening affected existing data, inventory these assignments by audience,
+review their candidate history offline, and explicitly recompute selected active
+assignments using the scoped classifier. Existing normal annotation edits already
+recompute active platform tags. Appealed/removed tags and their audit history must
+be preserved; do not bulk delete user labels or automatically run a production
+recompute. Back up, dry-run a scoped diff, and review before any approved data repair.

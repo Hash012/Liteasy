@@ -897,6 +897,8 @@ export class PostgresAnnotationCommunityRepository {
 
   async #assignPlatformTags(client, annotationId, body, userTags) {
     await client.query("DELETE FROM annotation_tags WHERE annotation_id = $1 AND origin = 'platform' AND state = 'active'", [annotationId]);
+    const output = await this.#row(annotationId, client);
+    const sourceScope = { visibility: output.visibility, organizationId: output.organization_id ?? null, authorId: ["public", "organization"].includes(output.visibility) ? null : output.author_id };
     const excluded = new Set(uniqueTags(userTags).map(tagSlug));
     const examples = await client.query(`
       SELECT tags.id AS tag_id, tags.slug, tags.name, annotations.body
@@ -905,8 +907,12 @@ export class PostgresAnnotationCommunityRepository {
         JOIN annotations ON annotations.id = assigned.annotation_id
        WHERE assigned.origin = 'user' AND assigned.state = 'active'
          AND assigned.annotation_id <> $1 AND annotations.withdrawn_at IS NULL
+         AND annotations.visibility = $2
+         AND annotations.organization_id IS NOT DISTINCT FROM $3
+         AND ($2 IN ('public', 'organization') OR annotations.author_id = $4)
+         AND annotations.source_reply_id IS NULL AND annotations.parent_annotation_id IS NULL
        ORDER BY annotations.updated_at DESC LIMIT 2000
-    `, [annotationId]);
+    `, [annotationId, output.visibility, output.organization_id, output.author_id]);
     const best = new Map();
     for (const example of examples.rows) {
       if (excluded.has(example.slug)) continue;
@@ -916,7 +922,7 @@ export class PostgresAnnotationCommunityRepository {
     }
     for (const candidate of best.values()) {
       if (candidate.score < 0.48) continue;
-      await client.query(`INSERT INTO annotation_tags(annotation_id, tag_id, origin, state, confidence, classifier_version) VALUES ($1, $2, 'platform', 'active', $3, 'local-semantic-v1') ON CONFLICT(annotation_id, tag_id, origin) DO NOTHING`, [annotationId, candidate.tag_id, candidate.score]);
+      await client.query(`INSERT INTO annotation_tags(annotation_id, tag_id, origin, state, confidence, classifier_version, source_scope) VALUES ($1, $2, 'platform', 'active', $3, 'local-semantic-scope-v2', $4::jsonb) ON CONFLICT(annotation_id, tag_id, origin) DO NOTHING`, [annotationId, candidate.tag_id, candidate.score, JSON.stringify(sourceScope)]);
     }
   }
 
@@ -1109,7 +1115,7 @@ export class PostgresAnnotationCommunityRepository {
   }
 
   async #tags(id, client = this.pool) {
-    const result = await client.query(`SELECT tags.name, annotation_tags.origin, annotation_tags.state, annotation_tags.confidence FROM annotation_tags JOIN tags ON tags.id = annotation_tags.tag_id WHERE annotation_tags.annotation_id = $1 AND annotation_tags.state <> 'removed' ORDER BY annotation_tags.origin, tags.name`, [id]);
+    const result = await client.query(`SELECT tags.name, annotation_tags.origin, annotation_tags.state, annotation_tags.confidence, annotation_tags.classifier_version AS "classifierVersion", annotation_tags.source_scope AS "sourceScope" FROM annotation_tags JOIN tags ON tags.id = annotation_tags.tag_id WHERE annotation_tags.annotation_id = $1 AND annotation_tags.state <> 'removed' ORDER BY annotation_tags.origin, tags.name`, [id]);
     return result.rows;
   }
 

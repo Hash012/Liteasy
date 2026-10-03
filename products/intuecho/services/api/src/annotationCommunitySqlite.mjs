@@ -189,6 +189,8 @@ export function initializeAnnotationCommunitySqlite(db) {
     CREATE TABLE IF NOT EXISTS direct_conversation_reads_v2 (conversation_id TEXT NOT NULL, user_id TEXT NOT NULL, last_read_message_id TEXT NOT NULL, last_read_at TEXT NOT NULL, PRIMARY KEY(conversation_id, user_id));
     CREATE TABLE IF NOT EXISTS annotation_moderation_audit_v2 (id TEXT PRIMARY KEY, annotation_id TEXT NOT NULL, linked_reply_id TEXT, action TEXT NOT NULL, reason TEXT NOT NULL, admin_user_id TEXT NOT NULL, trace_id TEXT NOT NULL, created_at TEXT NOT NULL);
   `);
+  const tagColumns = new Set(db.prepare("PRAGMA table_info(annotation_tags_v2)").all().map((column) => column.name));
+  if (!tagColumns.has("source_scope_json")) db.exec("ALTER TABLE annotation_tags_v2 ADD COLUMN source_scope_json TEXT");
   const literatureColumns = new Set(db.prepare("PRAGMA table_info(literature_records_v2)").all().map((column) => column.name));
   if (!literatureColumns.has("record_source")) db.exec("ALTER TABLE literature_records_v2 ADD COLUMN record_source TEXT NOT NULL DEFAULT 'legacy_metadata'");
   if (!literatureColumns.has("source_provider")) db.exec("ALTER TABLE literature_records_v2 ADD COLUMN source_provider TEXT");
@@ -1229,6 +1231,8 @@ export class SqliteAnnotationCommunityRepository {
 
   #assignPlatformTags(annotationId, body, userTags, now) {
     this.db.prepare("DELETE FROM annotation_tags_v2 WHERE annotation_id = ? AND origin = 'platform' AND state = 'active'").run(annotationId);
+    const output = this.#annotationRow(annotationId);
+    const sourceScope = JSON.stringify({ visibility: output.visibility, organizationId: output.organization_id ?? null, authorId: ["public", "organization"].includes(output.visibility) ? null : output.author_id });
     const excluded = new Set(uniqueTags(userTags).map(tagSlug));
     const examples = this.db.prepare(`
       SELECT assigned.tag_slug, assigned.tag_name, annotations.body
@@ -1236,8 +1240,12 @@ export class SqliteAnnotationCommunityRepository {
         JOIN annotations_v2 annotations ON annotations.id = assigned.annotation_id
        WHERE assigned.origin = 'user' AND assigned.state = 'active'
          AND assigned.annotation_id <> ? AND annotations.withdrawn_at IS NULL
+         AND annotations.visibility = ?
+         AND (annotations.organization_id IS ?)
+         AND (? IN ('public', 'organization') OR annotations.author_id = ?)
+         AND annotations.source_reply_id IS NULL AND annotations.parent_annotation_id IS NULL
        ORDER BY annotations.updated_at DESC LIMIT 2000
-    `).all(annotationId);
+    `).all(annotationId, output.visibility, output.organization_id, output.visibility, output.author_id);
     const best = new Map();
     for (const example of examples) {
       if (excluded.has(example.tag_slug)) continue;
@@ -1245,8 +1253,8 @@ export class SqliteAnnotationCommunityRepository {
       const current = best.get(example.tag_slug);
       if (!current || score > current.score) best.set(example.tag_slug, { name: example.tag_name, score });
     }
-    const insert = this.db.prepare(`INSERT OR IGNORE INTO annotation_tags_v2(annotation_id, tag_slug, tag_name, origin, state, confidence, classifier_version, assigned_at, updated_at) VALUES (?, ?, ?, 'platform', 'active', ?, 'local-semantic-v1', ?, ?)`);
-    for (const [slug, candidate] of best) if (candidate.score >= 0.48) insert.run(annotationId, slug, candidate.name, candidate.score, now, now);
+    const insert = this.db.prepare(`INSERT OR IGNORE INTO annotation_tags_v2(annotation_id, tag_slug, tag_name, origin, state, confidence, classifier_version, source_scope_json, assigned_at, updated_at) VALUES (?, ?, ?, 'platform', 'active', ?, 'local-semantic-scope-v2', ?, ?, ?)`);
+    for (const [slug, candidate] of best) if (candidate.score >= 0.48) insert.run(annotationId, slug, candidate.name, candidate.score, sourceScope, now, now);
   }
 
   #annotationRow(id) {
@@ -1443,7 +1451,7 @@ export class SqliteAnnotationCommunityRepository {
   }
 
   #tags(annotationId) {
-    return this.db.prepare("SELECT tag_name AS name, origin, state, confidence FROM annotation_tags_v2 WHERE annotation_id = ? AND state <> 'removed' ORDER BY origin, tag_name").all(annotationId);
+    return this.db.prepare("SELECT tag_name AS name, origin, state, confidence, classifier_version AS classifierVersion, source_scope_json FROM annotation_tags_v2 WHERE annotation_id = ? AND state <> 'removed' ORDER BY origin, tag_name").all(annotationId).map(({ source_scope_json, ...tag }) => ({ ...tag, sourceScope: parseJson(source_scope_json, null) }));
   }
 
   #serialize(row, viewer, hydrateTargets = true) {
