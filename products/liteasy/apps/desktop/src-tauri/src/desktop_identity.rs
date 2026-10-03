@@ -15,9 +15,51 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::time::{Duration, Instant};
 use url::Url;
 
-static ACTIVE_OBJECT_PRINCIPAL: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
-static ACTIVE_DEVICE_SESSION: std::sync::Mutex<Option<(String, String)>> =
-    std::sync::Mutex::new(None);
+#[derive(Default)]
+struct DesktopIdentityState {
+    generation: u64,
+    device_session: Option<(String, String)>,
+}
+
+impl DesktopIdentityState {
+    fn begin_request(&mut self) -> u64 {
+        self.generation += 1;
+        self.generation
+    }
+
+    fn commit_session(
+        &mut self,
+        generation: u64,
+        session: &DesktopOAuthSession,
+        save: impl FnOnce() -> Result<(), String>,
+    ) -> Result<(), String> {
+        if self.generation != generation {
+            return Err("oauth_session_changed".into());
+        }
+        save()?;
+        self.device_session = Some((session.user_id.clone(), session.session_id.clone()));
+        Ok(())
+    }
+
+    fn clear_session<T>(&mut self, clear: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+        self.begin_request();
+        self.device_session = None;
+        clear()
+    }
+}
+
+static IDENTITY_STATE: std::sync::Mutex<DesktopIdentityState> =
+    std::sync::Mutex::new(DesktopIdentityState {
+        generation: 0,
+        device_session: None,
+    });
+
+fn begin_session_request() -> Result<u64, String> {
+    Ok(IDENTITY_STATE
+        .lock()
+        .map_err(|_| "oauth_session_unavailable")?
+        .begin_request())
+}
 
 const CREDENTIAL_SERVICE: &str = "com.liteasy.desktop.identity";
 const CREDENTIAL_USERNAME: &str = "primary-refresh-token";
@@ -44,6 +86,8 @@ struct StoredRefreshCredential {
     issuer: String,
     name: String,
     refresh_token: String,
+    #[serde(default)]
+    revocation_url: Option<String>,
     subject: String,
 }
 
@@ -294,12 +338,6 @@ fn session_from_token(
         return Err("oauth_access_token_invalid".to_string());
     }
     let expires_at = expires_at(expires_in)?;
-    *ACTIVE_OBJECT_PRINCIPAL
-        .lock()
-        .map_err(|_| "object_forbidden")? = Some(subject.clone());
-    *ACTIVE_DEVICE_SESSION
-        .lock()
-        .map_err(|_| "oauth_session_unavailable")? = Some((subject.clone(), access_token.clone()));
     Ok(DesktopOAuthSession {
         email,
         expires_at,
@@ -313,6 +351,7 @@ fn session_from_token(
 pub async fn begin_desktop_oauth_login(
     configuration: DesktopIdentityConfiguration,
 ) -> Result<DesktopOAuthSession, String> {
+    let generation = begin_session_request()?;
     let issuer = validate_identity_configuration(&configuration)?;
     let http_client = http_client()?;
     let provider_metadata = CoreProviderMetadata::discover_async(issuer, &http_client)
@@ -418,30 +457,47 @@ pub async fn begin_desktop_oauth_login(
         .ok_or_else(|| "oauth_refresh_token_missing".to_string())?
         .secret()
         .to_string();
-    save_refresh_credential(&StoredRefreshCredential {
+    let credential = StoredRefreshCredential {
         audience: configuration.audience,
         client_id: configuration.client_id,
         email: email.clone(),
         issuer: configuration.issuer,
         name: name.clone(),
         refresh_token,
+        revocation_url: Some(configuration.revocation_url),
         subject: subject.clone(),
-    })?;
-    session_from_token(
+    };
+    let session = session_from_token(
         token_response.access_token().secret().to_string(),
         token_response.expires_in(),
         email,
         name,
         subject,
-    )
+    )?;
+    IDENTITY_STATE
+        .lock()
+        .map_err(|_| "oauth_session_unavailable")?
+        .commit_session(generation, &session, || {
+            save_refresh_credential(&credential)
+        })?;
+    Ok(session)
 }
 
 #[tauri::command]
 pub async fn restore_desktop_oauth_session(
     configuration: DesktopIdentityConfiguration,
 ) -> Result<DesktopOAuthSession, String> {
+    let generation = begin_session_request()?;
     let issuer = validate_identity_configuration(&configuration)?;
-    let mut stored = load_refresh_credential()?;
+    let mut stored = {
+        let state = IDENTITY_STATE
+            .lock()
+            .map_err(|_| "oauth_session_unavailable")?;
+        if state.generation != generation {
+            return Err("oauth_session_changed".into());
+        }
+        load_refresh_credential()?
+    };
     if stored.issuer != configuration.issuer
         || stored.client_id != configuration.client_id
         || stored.audience != configuration.audience
@@ -479,39 +535,86 @@ pub async fn restore_desktop_oauth_session(
         .map_err(|_| "oauth_userinfo_failed".to_string())?;
     if let Some(rotated) = token_response.refresh_token() {
         stored.refresh_token = rotated.secret().to_string();
-        save_refresh_credential(&stored)?;
     }
-    session_from_token(
+    stored.revocation_url = Some(configuration.revocation_url);
+    let session = session_from_token(
         token_response.access_token().secret().to_string(),
         token_response.expires_in(),
-        stored.email,
-        stored.name,
-        stored.subject,
-    )
+        stored.email.clone(),
+        stored.name.clone(),
+        stored.subject.clone(),
+    )?;
+    IDENTITY_STATE
+        .lock()
+        .map_err(|_| "oauth_session_unavailable")?
+        .commit_session(generation, &session, || save_refresh_credential(&stored))?;
+    Ok(session)
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopLogoutResult {
+    local_cleared: bool,
+    remote_revocation: &'static str,
 }
 
 #[tauri::command]
 pub async fn revoke_desktop_oauth_session(
+    configuration: Option<DesktopIdentityConfiguration>,
+) -> Result<DesktopLogoutResult, String> {
+    // Serialize local clearing with credential commits. Never hold this lock over network I/O.
+    let stored = IDENTITY_STATE
+        .lock()
+        .map_err(|_| "oauth_session_unavailable")?
+        .clear_session(|| {
+            let stored = load_refresh_credential();
+            clear_refresh_credential()?;
+            // A corrupt/unreadable credential can still be removed locally.
+            Ok(stored)
+        })?;
+    let remote_revocation = match stored {
+        Err(code) if code == "oauth_session_not_found" => "not_required",
+        Err(_) => "unconfirmed",
+        Ok(stored) => {
+            let configuration = configuration.or_else(|| {
+                stored
+                    .revocation_url
+                    .as_ref()
+                    .map(|url| DesktopIdentityConfiguration {
+                        audience: stored.audience.clone(),
+                        client_id: stored.client_id.clone(),
+                        issuer: stored.issuer.clone(),
+                        revocation_url: url.clone(),
+                    })
+            });
+            match configuration {
+                Some(configuration) => {
+                    if revoke_remote_session(stored, configuration).await.is_ok() {
+                        "revoked"
+                    } else {
+                        "unconfirmed"
+                    }
+                }
+                None => "unconfirmed",
+            }
+        }
+    };
+    Ok(DesktopLogoutResult {
+        local_cleared: true,
+        remote_revocation,
+    })
+}
+
+async fn revoke_remote_session(
+    stored: StoredRefreshCredential,
     configuration: DesktopIdentityConfiguration,
 ) -> Result<(), String> {
     let issuer = validate_identity_configuration(&configuration)?;
-    *ACTIVE_DEVICE_SESSION
-        .lock()
-        .map_err(|_| "oauth_session_unavailable")? = None;
-    let stored = match load_refresh_credential() {
-        Ok(value) => value,
-        Err(code) if code == "oauth_session_not_found" => return Ok(()),
-        Err(code) => return Err(code),
-    };
-    clear_refresh_credential()?;
-    *ACTIVE_OBJECT_PRINCIPAL
-        .lock()
-        .map_err(|_| "object_forbidden")? = None;
     if stored.issuer != configuration.issuer
         || stored.client_id != configuration.client_id
         || stored.audience != configuration.audience
     {
-        return Ok(());
+        return Err("oauth_session_configuration_mismatch".into());
     }
     let http_client = http_client()?;
     let provider_metadata = CoreProviderMetadata::discover_async(issuer, &http_client)
@@ -547,6 +650,95 @@ mod tests {
             issuer: issuer.to_string(),
             revocation_url: "https://identity.example.com/oauth2/revoke".to_string(),
         }
+    }
+
+    #[test]
+    fn logout_and_new_login_fence_late_credential_and_subject_writes() {
+        let mut state = DesktopIdentityState::default();
+        let old = state.begin_request();
+        let old_session = session_from_token(
+            "token-a".into(),
+            Some(Duration::from_secs(900)),
+            "a@example.test".into(),
+            "A".into(),
+            "a".into(),
+        )
+        .unwrap();
+        let mut credential = Some("old-refresh");
+        state
+            .clear_session(|| {
+                credential = None;
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(
+            state
+                .commit_session(old, &old_session, || {
+                    credential = Some("late-refresh");
+                    Ok(())
+                })
+                .unwrap_err(),
+            "oauth_session_changed"
+        );
+        assert_eq!(credential, None);
+        assert!(state.device_session.is_none());
+
+        let next = state.begin_request();
+        let next_session = session_from_token(
+            "token-b".into(),
+            Some(Duration::from_secs(900)),
+            "b@example.test".into(),
+            "B".into(),
+            "b".into(),
+        )
+        .unwrap();
+        state
+            .commit_session(next, &next_session, || {
+                credential = Some("b-refresh");
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(
+            state
+                .commit_session(old, &old_session, || {
+                    credential = Some("a-refresh");
+                    Ok(())
+                })
+                .unwrap_err(),
+            "oauth_session_changed"
+        );
+        assert_eq!(credential, Some("b-refresh"));
+        assert_eq!(state.device_session, Some(("b".into(), "token-b".into())));
+    }
+
+    #[test]
+    fn failed_local_credential_removal_still_invalidates_inflight_authentication() {
+        let mut state = DesktopIdentityState::default();
+        let generation = state.begin_request();
+        let session = session_from_token(
+            "token-a".into(),
+            Some(Duration::from_secs(900)),
+            "a@example.test".into(),
+            "A".into(),
+            "a".into(),
+        )
+        .unwrap();
+        state
+            .commit_session(generation, &session, || Ok(()))
+            .unwrap();
+        assert_eq!(
+            state
+                .clear_session::<()>(|| Err("oauth_secure_storage_delete_failed".into()))
+                .unwrap_err(),
+            "oauth_secure_storage_delete_failed"
+        );
+        assert!(state.device_session.is_none());
+        assert_eq!(
+            state
+                .commit_session(generation, &session, || panic!("stale save must not run"))
+                .unwrap_err(),
+            "oauth_session_changed"
+        );
     }
 
     #[test]
@@ -626,7 +818,7 @@ mod tests {
 
     #[test]
     fn device_requests_bind_the_verified_token_to_the_native_subject() {
-        session_from_token(
+        let first = session_from_token(
             "token-a".into(),
             Some(Duration::from_secs(900)),
             "a@example.com".into(),
@@ -634,10 +826,16 @@ mod tests {
             "a".into(),
         )
         .unwrap();
+        let generation = begin_session_request().unwrap();
+        IDENTITY_STATE
+            .lock()
+            .unwrap()
+            .commit_session(generation, &first, || Ok(()))
+            .unwrap();
         assert!(authorize_device_session("a", "token-a").is_ok());
         assert!(authorize_device_session("a", "token-b").is_err());
         assert!(authorize_device_session("b", "token-a").is_err());
-        session_from_token(
+        let rotated = session_from_token(
             "token-a-rotated".into(),
             Some(Duration::from_secs(900)),
             "a@example.com".into(),
@@ -645,10 +843,18 @@ mod tests {
             "a".into(),
         )
         .unwrap();
+        IDENTITY_STATE
+            .lock()
+            .unwrap()
+            .commit_session(generation, &rotated, || Ok(()))
+            .unwrap();
         assert!(authorize_device_session("a", "token-a").is_err());
         assert!(authorize_device_session("a", "token-a-rotated").is_ok());
-        *ACTIVE_DEVICE_SESSION.lock().unwrap() = None;
-        *ACTIVE_OBJECT_PRINCIPAL.lock().unwrap() = None;
+        IDENTITY_STATE
+            .lock()
+            .unwrap()
+            .clear_session(|| Ok(()))
+            .unwrap();
         assert!(authorize_device_session("a", "token-a-rotated").is_err());
     }
 }
@@ -659,23 +865,25 @@ pub(crate) fn local_object_scope() -> Result<String, String> {
     if let Some(scope) = crate::local_dev::recovery_scope() {
         return Ok(scope.to_string());
     }
-    Ok(ACTIVE_OBJECT_PRINCIPAL
+    Ok(IDENTITY_STATE
         .lock()
         .map_err(|_| "object_forbidden")?
+        .device_session
         .as_ref()
-        .map(|subject| format!("user:{subject}"))
+        .map(|(subject, _)| format!("user:{subject}"))
         .unwrap_or_else(|| "local".to_string()))
 }
 
 /// A device credential may only accompany the token verified by this native OAuth session.
 pub(crate) fn authorize_device_session(subject: &str, token: &str) -> Result<(), String> {
-    let session = ACTIVE_DEVICE_SESSION
+    let state = IDENTITY_STATE
         .lock()
         .map_err(|_| "oauth_session_unavailable")?;
-    if session
+    if state
+        .device_session
         .as_ref()
         .is_some_and(|(owner, verified)| owner == subject && verified == token)
-        && local_object_scope()? == format!("user:{subject}")
+        && crate::local_dev::recovery_scope().is_none()
     {
         Ok(())
     } else {

@@ -18,6 +18,7 @@ type DesktopIdentityClientInput = {
   endpoint: string;
   fetchImpl?: typeof fetch;
   invoke?: DesktopIdentityInvoke;
+  isCurrent?: () => boolean;
 };
 
 function isTauriRuntime() {
@@ -106,6 +107,7 @@ export async function loadDesktopIdentityConfiguration({
 
 export async function loginWithSystemBrowser(input: DesktopIdentityClientInput) {
   const configuration = await loadDesktopIdentityConfiguration(input);
+  if (input.isCurrent && !input.isCurrent()) throw new Error("oauth_session_changed");
   return requireInvoke(input.invoke)<AccountSession>("begin_desktop_oauth_login", {
     configuration
   });
@@ -113,14 +115,18 @@ export async function loginWithSystemBrowser(input: DesktopIdentityClientInput) 
 
 export async function restoreSystemBrowserSession(input: DesktopIdentityClientInput) {
   const configuration = await loadDesktopIdentityConfiguration(input);
+  if (input.isCurrent && !input.isCurrent()) throw new Error("oauth_session_changed");
   return requireInvoke(input.invoke)<AccountSession>("restore_desktop_oauth_session", {
     configuration
   });
 }
 
+export type DesktopLogoutResult = {
+  localCleared: true;
+  remoteRevocation: "revoked" | "not_required" | "unconfirmed";
+};
+
 export async function revokeSystemBrowserSession(input: DesktopIdentityClientInput) {
-  const configuration = await loadDesktopIdentityConfiguration(input);
-  await requireInvoke(input.invoke)<void>("revoke_desktop_oauth_session", {
-    configuration
-  });
+  // Credential removal and generation invalidation must precede any network call.
+  return requireInvoke(input.invoke)<DesktopLogoutResult>("revoke_desktop_oauth_session", {});
 }

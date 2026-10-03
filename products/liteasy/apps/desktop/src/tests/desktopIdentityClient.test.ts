@@ -47,7 +47,7 @@ test("uses only Tauri host commands for login, restore, and revocation", async (
     userId: "user-1"
   };
   const invoke = vi.fn(async (command: string) => command === "revoke_desktop_oauth_session"
-    ? undefined
+    ? { localCleared: true, remoteRevocation: "revoked" }
     : session);
   const input = {
     endpoint: "https://api.liteasy.example",
@@ -57,11 +57,11 @@ test("uses only Tauri host commands for login, restore, and revocation", async (
 
   await expect(loginWithSystemBrowser(input)).resolves.toEqual(session);
   await expect(restoreSystemBrowserSession(input)).resolves.toEqual(session);
-  await expect(revokeSystemBrowserSession(input)).resolves.toBeUndefined();
+  await expect(revokeSystemBrowserSession(input)).resolves.toEqual({ localCleared: true, remoteRevocation: "revoked" });
   expect(invoke.mock.calls).toEqual([
     ["begin_desktop_oauth_login", { configuration }],
     ["restore_desktop_oauth_session", { configuration }],
-    ["revoke_desktop_oauth_session", { configuration }]
+    ["revoke_desktop_oauth_session", {}]
   ]);
 });
 
@@ -83,4 +83,19 @@ test("exposes password login only for an explicit HTTP loopback development endp
   expect(isLoopbackAccountEndpoint("http://localhost:8787")).toBe(true);
   expect(isLoopbackAccountEndpoint("https://api.liteasy.example")).toBe(false);
   expect(isLoopbackAccountEndpoint("http://api.liteasy.example")).toBe(false);
+});
+
+
+test("local logout invokes the host without requiring a reachable configuration service", async () => {
+  const fetchImpl = vi.fn(async () => { throw new TypeError("Failed to fetch"); });
+  const invoke = vi.fn(async () => ({ localCleared: true, remoteRevocation: "unconfirmed" }));
+  await expect(revokeSystemBrowserSession({ endpoint: "https://api.example.test", fetchImpl, invoke })).resolves.toMatchObject({ localCleared: true, remoteRevocation: "unconfirmed" });
+  expect(fetchImpl).not.toHaveBeenCalled();
+  expect(invoke).toHaveBeenCalledWith("revoke_desktop_oauth_session", {});
+});
+
+test("a configuration response arriving after logout cannot start native authentication", async () => {
+  const invoke = vi.fn();
+  await expect(loginWithSystemBrowser({ endpoint: "https://api.example.test", fetchImpl: configurationFetch(), invoke, isCurrent: () => false })).rejects.toThrow("oauth_session_changed");
+  expect(invoke).not.toHaveBeenCalled();
 });

@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { useAccountSession } from "../app/features/account/useAccountSession";
-import { clearStoredAccountSession } from "../app/features/account/accountSessionStorage";
+import { clearStoredAccountSession, loadStoredAccountSession, storeAccountSession } from "../app/features/account/accountSessionStorage";
 import { createSeededSettingsStore } from "../app/features/settings/settingsStateHelpers";
 
 describe("useAccountSession", () => {
@@ -201,6 +201,117 @@ describe("useAccountSession", () => {
     expect(result.current.accountSession?.membershipTier).toBe("basic");
     expect(window.localStorage.getItem("liteasy.account.session.v1")).toBeNull();
     expect(onSessionRestored).toHaveBeenCalledTimes(1);
+  });
+
+});
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+const sessionFor = (id: string) => ({
+  email: `${id}@example.test`, expiresAt: "2027-01-01T00:00:00Z", name: id,
+  sessionId: `ltsy_${id}`, userId: id, membershipTier: "basic" as const
+});
+const responseFor = (id: string) => ({ ok: true, status: 200, json: async () => ({ session: sessionFor(id) }) });
+
+describe("account request isolation", () => {
+  beforeEach(() => { clearStoredAccountSession(); localStorage.clear(); });
+
+  test("ignores a late login after logout and a newer account login", async () => {
+    const old = deferred<ReturnType<typeof responseFor>>();
+    const settings = createSeededSettingsStore({ "models.control_plane_endpoint": "http://127.0.0.1:8787" });
+    const { result } = renderHook(() => useAccountSession({
+      accountTransport: async (request) => JSON.parse(request.body).email === "A@example.test" ? old.promise : responseFor("B"),
+      getSettings: () => settings.getState()
+    }));
+    let pending!: Promise<unknown>;
+    act(() => { pending = result.current.loginPersonalAccount({ email: "A@example.test", password: "synthetic" }); });
+    act(() => { result.current.logoutFromCloudAccount(); });
+    await act(async () => { await result.current.loginPersonalAccount({ email: "B@example.test", password: "synthetic" }); });
+    await act(async () => { old.resolve(responseFor("A")); expect(await pending).toBeNull(); });
+    expect(result.current.accountSession?.userId).toBe("B");
+    expect(loadStoredAccountSession()?.userId).toBe("B");
+  });
+
+  test("a stale validation rejection cannot clear the newer account", async () => {
+    storeAccountSession(sessionFor("A"));
+    const validation = deferred<{ ok: boolean; status: number; json: () => Promise<unknown> }>();
+    const settings = createSeededSettingsStore({ "models.control_plane_endpoint": "http://127.0.0.1:8787" });
+    const { result } = renderHook(() => useAccountSession({
+      accountTransport: async (request) => request.url.endsWith("/session") ? validation.promise : responseFor("B"),
+      getSettings: () => settings.getState()
+    }));
+    await act(async () => { await result.current.loginPersonalAccount({ email: "B@example.test", password: "synthetic" }); });
+    await act(async () => { validation.resolve({ ok: false, status: 401, json: async () => ({}) }); });
+    expect(result.current.accountSession?.userId).toBe("B");
+    expect(loadStoredAccountSession()?.userId).toBe("B");
+  });
+
+  test.each([503, 403])("does not turn a %s validation failure into logout or delete local reading data", async (status) => {
+    storeAccountSession(sessionFor("A"));
+    localStorage.setItem("liteasy.local-literature.v1", "synthetic local reading data");
+    const settings = createSeededSettingsStore({ "models.control_plane_endpoint": "http://127.0.0.1:8787" });
+    const { result } = renderHook(() => useAccountSession({
+      accountTransport: async () => ({ ok: false, status, json: async () => ({}) }),
+      getSettings: () => settings.getState()
+    }));
+    await waitFor(() => expect(result.current.accountMessage).not.toBe("已恢复本地云账号会话。"));
+    expect(result.current.accountSession?.userId).toBe("A");
+    expect(loadStoredAccountSession()?.userId).toBe("A");
+    expect(localStorage.getItem("liteasy.local-literature.v1")).toBe("synthetic local reading data");
+    expect(result.current.accountMessage).not.toContain("过期");
+  });
+
+  test("a newer login stays pending when an old login completes", async () => {
+    const first = deferred<ReturnType<typeof responseFor>>();
+    const second = deferred<ReturnType<typeof responseFor>>();
+    const settings = createSeededSettingsStore({ "models.control_plane_endpoint": "http://127.0.0.1:8787" });
+    const { result } = renderHook(() => useAccountSession({
+      accountTransport: async (request) => JSON.parse(request.body).email === "A@example.test" ? first.promise : second.promise,
+      getSettings: () => settings.getState()
+    }));
+    let a!: Promise<unknown>; let b!: Promise<unknown>;
+    act(() => { a = result.current.loginPersonalAccount({ email: "A@example.test", password: "synthetic" }); });
+    act(() => { b = result.current.loginPersonalAccount({ email: "B@example.test", password: "synthetic" }); });
+    await act(async () => { first.resolve(responseFor("A")); await a; });
+    expect(result.current.accountPending).toBe(true);
+    await act(async () => { second.resolve(responseFor("B")); await b; });
+    expect(result.current.accountSession?.userId).toBe("B");
+  });
+
+  test("does not store an authentication response after unmount", async () => {
+    const request = deferred<ReturnType<typeof responseFor>>();
+    const settings = createSeededSettingsStore({ "models.control_plane_endpoint": "http://127.0.0.1:8787" });
+    const { result, unmount } = renderHook(() => useAccountSession({ accountTransport: () => request.promise, getSettings: () => settings.getState() }));
+    let pending!: Promise<unknown>;
+    act(() => { pending = result.current.registerPersonalAccount({ displayName: "A", email: "A@example.test", password: "synthetic" }); });
+    unmount();
+    await act(async () => { request.resolve(responseFor("A")); await pending; });
+    expect(loadStoredAccountSession()).toBeNull();
+  });
+
+  test("logout fences a late native restore and reports unconfirmed remote revocation", async () => {
+    const restored = deferred<ReturnType<typeof sessionFor>>();
+    const settings = createSeededSettingsStore({ "models.control_plane_endpoint": "https://api.example.test" });
+    const invoke = vi.fn(async (command: string) => command === "restore_desktop_oauth_session"
+      ? restored.promise : { localCleared: true, remoteRevocation: "unconfirmed" });
+    const identityConfig = { audience: "liteasy-desktop", authorizationFlow: "authorization_code_pkce", clientId: "liteasy-desktop-public", issuer: "https://identity.example.test", revocationUrl: "https://identity.example.test/revoke" };
+    const { result } = renderHook(() => useAccountSession({
+      desktopIdentityHostAvailable: true,
+      desktopIdentityInvoke: invoke,
+      desktopIdentityFetch: async () => new Response(JSON.stringify(identityConfig), { status: 200 }),
+      getSettings: () => settings.getState()
+    }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("restore_desktop_oauth_session", { configuration: identityConfig }));
+    act(() => { result.current.logoutFromCloudAccount(); });
+    await waitFor(() => expect(result.current.accountMessage).toBe("当前设备的登录凭据已清除；远程会话撤销尚未确认。"));
+    await act(async () => { restored.resolve(sessionFor("A")); });
+    expect(result.current.accountSession).toBeNull();
+    expect(loadStoredAccountSession()).toBeNull();
+    expect(result.current.accountPending).toBe(false);
   });
 
 });

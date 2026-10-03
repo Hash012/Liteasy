@@ -24,3 +24,18 @@ test("keeps pending restoration when browser storage cannot save", async () => {
   expect(bridge.invoke).toHaveBeenCalledTimes(1);
   write.mockRestore();
 });
+
+
+test("does not apply or acknowledge a restore from a departed account", async () => {
+  localStorage.setItem("liteasy.view-settings.v1", "B settings");
+  let resolve!: (value: unknown) => void;
+  bridge.invoke.mockImplementation(() => new Promise((done) => { resolve = done; }));
+  let current = true;
+  const restore = restoreWebDavPreferences(() => current);
+  current = false;
+  resolve({ pending: true, preferences: { "liteasy.view-settings.v1": "private A settings" }, message: "A notice" });
+  await restore;
+  expect(localStorage.getItem("liteasy.view-settings.v1")).toBe("B settings");
+  expect(sessionStorage.getItem("liteasy.webdav-restore-notice")).toBeNull();
+  expect(bridge.invoke).toHaveBeenCalledTimes(1);
+});

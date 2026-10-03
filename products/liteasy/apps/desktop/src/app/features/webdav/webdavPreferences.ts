@@ -22,10 +22,11 @@ export function webDavCredentialDescriptors() {
   return [...new Map(descriptors.map((item) => [JSON.stringify(item), item])).values()].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
 }
 /** Called before importing the App module, so stores initialize from restored preferences. */
-export async function restoreWebDavPreferences() {
-  if (!isTauri()) return;
+export async function restoreWebDavPreferences(isCurrent: () => boolean = () => true) {
+  if (!isTauri() || !isCurrent()) return;
   const previous = exportWebDavPreferences();
   const result = await invoke<{ preferences?: Record<string, string>; pending?: boolean; message?: string }>("restore_webdav_preferences", { preferences: previous });
+  if (!isCurrent()) return;
   if (result.preferences) {
     const allowed = new Set([...publicKeys, ...scopedKeys.map((key) => key + resolveLocalAccountKey())]);
     for (const key of new Set([...Object.keys(previous), ...Object.keys(result.preferences)])) {
@@ -35,7 +36,7 @@ export async function restoreWebDavPreferences() {
     }
   }
   if (result.pending) await invoke("acknowledge_webdav_preferences");
-  if (result.message) reportWebDavRestoreError(result.message);
+  if (isCurrent() && result.message) reportWebDavRestoreError(result.message);
 }
 
 export function reportWebDavRestoreError(error: unknown) {
