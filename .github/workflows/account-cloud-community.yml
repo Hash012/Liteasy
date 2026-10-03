@@ -4,6 +4,13 @@ on:
   push:
     paths:
       - 'products/liteasy/services/api/**'
+      - 'products/liteasy/apps/desktop/**'
+      - 'products/liteasy/apps/admin/**'
+      - 'products/liteasy/apps/mobile/**'
+      - 'products/liteasy/packages/shared/**'
+      - 'deployment/local/**'
+      - '.github/scripts/account-*'
+      - '.github/scripts/run-account-*'
       - 'products/intuecho/**'
       - 'platform/identity-service/**'
       - '.github/workflows/account-cloud-community.yml'
@@ -11,6 +18,13 @@ on:
   pull_request:
     paths:
       - 'products/liteasy/services/api/**'
+      - 'products/liteasy/apps/desktop/**'
+      - 'products/liteasy/apps/admin/**'
+      - 'products/liteasy/apps/mobile/**'
+      - 'products/liteasy/packages/shared/**'
+      - 'deployment/local/**'
+      - '.github/scripts/account-*'
+      - '.github/scripts/run-account-*'
       - 'products/intuecho/**'
       - 'platform/identity-service/**'
       - '.github/workflows/account-cloud-community.yml'
@@ -25,7 +39,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  policy:
+    runs-on: ubuntu-24.04
+    outputs:
+      services: ${{ steps.policy.outputs.services }}
+      clients: ${{ steps.policy.outputs.clients }}
+      clients-enabled: ${{ steps.policy.outputs.clients-enabled }}
+      policy: ${{ steps.policy.outputs.policy }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: products/liteasy/apps/desktop/.nvmrc
+      - id: policy
+        run: node .github/scripts/account-boundary-policy.mjs
+
   isolated-services:
+    needs: policy
+    if: needs.policy.outputs.services == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     services:
@@ -59,10 +92,7 @@ jobs:
           npm ci --prefix products/intuecho --no-audit --no-fund
       - name: Unit, contract and SQLite boundary tests
         run: |
-          npm test --prefix platform/identity-service
-          npm test --prefix products/liteasy/services/api
-          npm test --prefix products/intuecho
-          npm run build --prefix products/intuecho
+          node .github/scripts/run-account-boundary-suite.mjs services-unit
       - name: Create isolated test databases and least-privilege roles
         env:
           PGPASSWORD: ephemeral-ci-admin
@@ -74,9 +104,61 @@ jobs:
           INTUECHO_TEST_DATABASE_URL: postgresql://intuecho_ci_app:ephemeral-intuecho-app@127.0.0.1:5432/intuecho_ci_test
           INTUECHO_TEST_MIGRATION_DATABASE_URL: postgresql://intuecho_ci_migrator:ephemeral-intuecho-migrator@127.0.0.1:5432/intuecho_ci_test
         run: |
-          node products/liteasy/services/api/scripts/verify-postgres-integration.mjs
-          node products/intuecho/services/api/scripts/verify-postgres-integration.mjs
-          node products/intuecho/services/api/scripts/verify-thin-reading-withdrawal.mjs
-          node products/intuecho/services/api/scripts/verify-desktop-publication-profile.mjs
+          node .github/scripts/run-account-boundary-suite.mjs services-postgres
       - name: Verify dependency locks stayed unchanged
         run: node .github/scripts/check-clean.mjs products/liteasy/services/api/package-lock.json products/intuecho/package-lock.json
+      - name: Upload sanitized service evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: account-services-${{ github.sha }}
+          path: test-results/account-boundaries/*.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  client-contracts:
+    needs: policy
+    if: needs.policy.outputs.clients-enabled == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        client: ${{ fromJSON(needs.policy.outputs.clients) }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: products/liteasy/apps/desktop/.nvmrc
+          cache: npm
+          cache-dependency-path: products/liteasy/apps/${{ matrix.client }}/package-lock.json
+      - name: Install independent client dependencies
+        working-directory: products/liteasy/apps/${{ matrix.client }}
+        run: npm ci --no-audit --no-fund
+      - name: Verify required client contracts
+        env:
+          ACCOUNT_CLIENT: ${{ matrix.client }}
+        run: node .github/scripts/run-account-boundary-suite.mjs "$ACCOUNT_CLIENT"
+      - name: Upload sanitized client evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: account-${{ matrix.client }}-${{ github.sha }}
+          path: test-results/account-boundaries/*.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  ready:
+    needs: [policy, isolated-services, client-contracts]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: products/liteasy/apps/desktop/.nvmrc
+      - name: Require every selected boundary suite
+        env:
+          ACCOUNT_POLICY: ${{ needs.policy.outputs.policy }}
+          CI_RESULTS: ${{ toJSON(needs) }}
+        run: node .github/scripts/account-boundary-policy.mjs --gate
