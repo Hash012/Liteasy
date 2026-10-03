@@ -1,3 +1,5 @@
+import { desktopAnnotationPublicationPayload } from "../../../../../../../intuecho/packages/contracts/src/desktopAnnotationPublicationPayload.js";
+import { sha256Hex } from "../paper-identity/paperIdentity";
 import type {
   ForumAnnotationPublicationOperation,
   ForumAnnotationPublicationReceipt,
@@ -133,6 +135,36 @@ export function createForumClient({
   }
 
   return {
+    lookupAnnotationPublications: async (operations: readonly ForumAnnotationPublicationOperation[], actorBinding: PublicationActorBinding) => {
+      const failures = (message: string) => ({ results: operations.map((operation) => failedPublication(operation, message)) });
+      const actorIsCurrent = () => samePublicationActor(actorBinding, getActorBinding?.()) &&
+        normalizePublicationActorBinding(actorBinding)?.endpoint === normalizePublicationActorBinding({ ...actorBinding, endpoint: apiBaseUrl })?.endpoint;
+      if (!actorIsCurrent()) return failures("账号或会话已变化，请由原账号核实发布结果。");
+      if (!operations.length) return { results: [] };
+      if (new Set(operations.map((operation) => operation.queueKey)).size !== operations.length) return failures("查询包含重复队列键，无法核实原请求。");
+      try {
+        const queries = operations.map((operation) => ({ annotationId: operation.annotationId, queueKey: operation.queueKey,
+          revision: operation.revision, updatedAt: operation.updatedAt, operationDigest: sha256Hex(desktopAnnotationPublicationPayload(operation)) }));
+        const value = await postJson<unknown>("/v1/pdf-annotations:lookup", { queries });
+        if (!actorIsCurrent()) return failures("账号或会话已变化，请由原账号核实发布结果。");
+        const results = value && typeof value === "object" && "results" in value && Array.isArray(value.results) ? value.results : [];
+        const counts = new Map<string, number>();
+        for (const result of results) if (result && typeof result.queueKey === "string") counts.set(result.queueKey, (counts.get(result.queueKey) ?? 0) + 1);
+        const receipts = results.map((candidate: unknown) => {
+          if (!candidate || typeof candidate !== "object") return candidate;
+          const result = candidate as Record<string, unknown>;
+          const query = queries.find((item) => item.queueKey === result.queueKey);
+          const receipt = result.receipt as Partial<ForumAnnotationPublicationReceipt> | undefined;
+          if (query && counts.get(query.queueKey) === 1 && result.status === "matched" && result.annotationId === query.annotationId && result.revision === query.revision &&
+              result.updatedAt === query.updatedAt && result.operationDigest === query.operationDigest &&
+              receipt?.annotationId === query.annotationId && receipt?.queueKey === query.queueKey) return receipt;
+          return { annotationId: result.annotationId, queueKey: result.queueKey, error: "原发布结果尚未核实；原请求和本地批注已保留。" };
+        });
+        return { results: normalizePublicationResults(operations, { results: receipts }) };
+      } catch (error) {
+        return failures(error instanceof Error ? error.message : "发布结果查询暂不可用，请稍后核实。");
+      }
+    },
     readPublicationAuthorProfile: async (actorBinding: PublicationActorBinding) => {
       const assertActor = () => {
         if (!samePublicationActor(actorBinding, getActorBinding?.()) || normalizePublicationActorBinding(actorBinding)?.endpoint !==

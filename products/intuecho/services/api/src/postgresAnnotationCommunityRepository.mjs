@@ -1,3 +1,4 @@
+import { desktopPublicationLookup } from "./desktopPublicationLookup.mjs";
 import { assertIntuechoAccountActive } from "./accountWriteFence.mjs";
 import { platformAppealSummary } from "./tagAppealVisibility.mjs";
 import { recordPostgresCommunityReplyEvent, recordPostgresCommunitySourceEvent } from "./communityGovernanceRepository.mjs";
@@ -512,6 +513,16 @@ export class PostgresAnnotationCommunityRepository {
         }
         return results;
       });
+  }
+
+  async lookupDesktopAnnotationPublications(author, queries) {
+    return Promise.all(queries.map(async (query) => {
+      const { rows } = await this.pool.query(`SELECT p.* FROM desktop_annotation_publications p
+        JOIN annotations a ON a.id=p.annotation_id AND a.author_id=p.owner_id
+        WHERE p.owner_id=$1 AND p.queue_key=$2 AND a.withdrawn_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM account_deletion_jobs WHERE subject_id=$1)`, [author.id, query.queueKey]);
+      return desktopPublicationLookup(query, rows[0]);
+    }));
   }
 
   async applyDesktopAnnotationPublications(author, operations) {

@@ -7,6 +7,7 @@ import {
   createReplySchema,
   desktopAnnotationHandoffSchema,
   desktopAnnotationPublicationBatchSchema,
+  desktopAnnotationPublicationLookupBatchSchema,
   desktopCommunityAnnotationBatchSchema,
   desktopCommunityAnnotationLookupBatchSchema,
   followUserSchema,
@@ -147,7 +148,14 @@ export function registerAnnotationCommunityRoutes(app, repository, {
       return reply.code(201).send(await repository.createHandoff(viewer.id, input));
     }));
 
-    app.post("/v1/pdf-annotations:sync", async (request, reply) => route(reply, async () => {
+    app.post("/v1/pdf-annotations::lookup", async (request, reply) => route(reply, async () => {
+      const viewer = requireDesktopUser(request, reply);
+      if (!viewer) return;
+      const input = validated(desktopAnnotationPublicationLookupBatchSchema, request.body, "INVALID_ANNOTATIONS");
+      return { results: await repository.lookupDesktopAnnotationPublications(viewer, input.queries) };
+    }));
+
+    app.post("/v1/pdf-annotations::sync", async (request, reply) => route(reply, async () => {
       const viewer = requireDesktopUser(request, reply);
       if (!viewer) return;
       const publication = desktopAnnotationPublicationBatchSchema.safeParse(request.body);

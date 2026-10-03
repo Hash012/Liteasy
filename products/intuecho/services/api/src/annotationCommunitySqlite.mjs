@@ -1,3 +1,5 @@
+import { desktopAnnotationPublicationPayload } from "@intuecho/contracts";
+import { desktopPublicationLookup } from "./desktopPublicationLookup.mjs";
 import { currentOrganizationChoices } from "./organizationChoices.mjs";
 import { annotationContribution } from "./annotationContribution.mjs";
 import { platformAppealSummary } from "./tagAppealVisibility.mjs";
@@ -107,38 +109,8 @@ function parseJson(value, fallback) {
 
 const legacyPublicationDigest = "0".repeat(64);
 
-function canonicalJsonValue(value) {
-  if (Array.isArray(value)) return value.map(canonicalJsonValue);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(Object.keys(value).sort()
-      .filter((key) => value[key] !== undefined)
-      .map((key) => [key, canonicalJsonValue(value[key])]));
-  }
-  return value;
-}
-
 export function desktopAnnotationPublicationDigest(operation) {
-  const normalized = {
-    annotationId: operation.annotationId,
-    operation: operation.operation,
-    queueKey: operation.queueKey,
-    revision: operation.revision,
-    updatedAt: new Date(operation.updatedAt).toISOString(),
-    ...(operation.operation === "upsert"
-      ? {
-          body: operation.body,
-          ...(operation.expectedAuthorProfileRevision === undefined ? {} : { expectedAuthorProfileRevision: operation.expectedAuthorProfileRevision }),
-          literatureId: operation.literatureId,
-          sourcePassage: {
-            anchorHash: operation.sourcePassage.anchorHash,
-            excerpt: operation.sourcePassage.excerpt,
-            ...(operation.sourcePassage.page ? { page: operation.sourcePassage.page } : {}),
-            rects: operation.sourcePassage.rects ?? []
-          }
-        }
-      : { remoteAnnotationId: operation.remoteAnnotationId })
-  };
-  return createHash("sha256").update(JSON.stringify(canonicalJsonValue(normalized))).digest("hex");
+  return createHash("sha256").update(desktopAnnotationPublicationPayload(operation)).digest("hex");
 }
 
 export function initializeAnnotationCommunitySqlite(db) {
@@ -915,6 +887,15 @@ export class SqliteAnnotationCommunityRepository {
       }
       return { annotationId: item.annotationId, intuechoAnnotationId: id, queueKey: item.queueKey, status: "synced", syncedAt };
     }))();
+  }
+
+  lookupDesktopAnnotationPublications(author, queries) {
+    return queries.map((query) => {
+      const row = this.db.prepare(`SELECT p.* FROM desktop_annotation_publications_v2 p
+        JOIN annotations_v2 a ON a.id=p.annotation_id AND a.author_id=p.owner_id
+        WHERE p.owner_id=? AND p.queue_key=? AND a.withdrawn_at IS NULL`).get(author.id, query.queueKey);
+      return desktopPublicationLookup(query, row);
+    });
   }
 
   applyDesktopAnnotationPublications(author, operations) {

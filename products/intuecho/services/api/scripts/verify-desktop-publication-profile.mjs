@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
+import { desktopAnnotationPublicationDigest } from "../src/annotationCommunitySqlite.mjs";
 import { PostgresAnnotationCommunityRepository } from "../src/postgresAnnotationCommunityRepository.mjs";
 import { validateIntuechoPostgresIntegrationDatabases } from "./postgresIntegrationGuard.mjs";
 
@@ -28,6 +29,21 @@ try {
   const [pdfReceipt] = await repository.applyDesktopAnnotationPublications(owner, [pdf]);
   assert.equal(thinReceipt.status, "synced");
   assert.equal(pdfReceipt.state, "published");
+  const lookupQuery = { annotationId: pdf.annotationId, queueKey: pdf.queueKey, revision: pdf.revision,
+    updatedAt: pdf.updatedAt, operationDigest: desktopAnnotationPublicationDigest(pdf) };
+  const reader = await pool.connect();
+  try {
+    await reader.query("BEGIN READ ONLY");
+    const lookup = new PostgresAnnotationCommunityRepository(reader);
+    assert.deepEqual(await lookup.lookupDesktopAnnotationPublications(owner, [lookupQuery]), [{ ...lookupQuery, status: "matched", receipt: pdfReceipt }]);
+    assert.equal((await lookup.lookupDesktopAnnotationPublications({ ...owner, id: `other-${suffix}` }, [lookupQuery]))[0].status, "not_found");
+    for (const changed of [{ ...lookupQuery, revision: 2 }, { ...lookupQuery, operationDigest: "0".repeat(64) }, { ...lookupQuery, annotationId: "another" }]) {
+      assert.equal((await lookup.lookupDesktopAnnotationPublications(owner, [changed]))[0].status, "conflict");
+    }
+    await reader.query("COMMIT");
+  } catch (error) { await reader.query("ROLLBACK"); throw error; }
+  finally { reader.release(); }
+
   await repository.updateProfile(owner.id, { educationStage: null, institutions: [] });
   assert.equal((await repository.syncDesktopAnnotations(owner, [thin]))[0].intuechoAnnotationId, thinReceipt.intuechoAnnotationId);
   assert.deepEqual(await repository.applyDesktopAnnotationPublications(owner, [pdf]), [pdfReceipt]);
@@ -41,7 +57,7 @@ try {
     assert.equal(Number(row.revision), 1);
     assert.deepEqual(row.author_profile_snapshot.institutions, [{ name: "Original University" }]);
   }
-  console.log(JSON.stringify({ verified: true, storage: "postgresql", cases: ["thin-pdf-profile-fence", "immutable-committed-replay", "same-version-profile-conflict", "stale-profile-no-write"] }));
+  console.log(JSON.stringify({ verified: true, storage: "postgresql", cases: ["pdf-read-only-exact-operation-lookup", "thin-pdf-profile-fence", "immutable-committed-replay", "same-version-profile-conflict", "stale-profile-no-write"] }));
 } finally {
   await pool.query("DELETE FROM desktop_annotation_publications WHERE owner_id=$1", [owner.id]);
   await pool.query("DELETE FROM desktop_annotation_syncs WHERE owner_id=$1", [owner.id]);

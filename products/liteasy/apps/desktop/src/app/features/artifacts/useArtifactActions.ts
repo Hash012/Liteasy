@@ -1831,12 +1831,23 @@ export function useArtifactActions({
       return;
     }
     const expectedUpdatedAtByAnnotationId = new Map(pending.map((item) => [item.annotationId, item.pendingOperation?.updatedAt ?? item.updatedAt]));
-    const nextDocument = applyThinReadingAnnotationSyncResults(
+    const applied = applyThinReadingAnnotationSyncResults(
       currentTab.thinReadingDocument,
       results,
       new Date().toISOString(),
       expectedUpdatedAtByAnnotationId
     );
+    const nextDocument = { ...applied, annotations: applied.annotations.map((annotation) => {
+      const result = results.find((item) => item.annotationId === annotation.id);
+      const sent = pending.find((item) => item.annotationId === annotation.id)?.pendingOperation;
+      if (result?.status !== "failed" || result.error !== "AUTHOR_PROFILE_CHANGED" ||
+          !samePublicationActor(annotation.publication?.actorBinding, actor) ||
+          !sameThinReadingPendingPublication(annotation.publication?.pendingOperation, sent)) return annotation;
+      // This exact server rejection precedes every write. A later explicit
+      // action may preview a fresh profile; ambiguous outcomes keep the original.
+      const { pendingOperation: _pending, authorProfile: _profile, outcome: _outcome, ...publication } = annotation.publication!;
+      return { ...annotation, publication };
+    }) };
     await persistThinReadingDocument(input.artifactId, nextDocument as Extract<ThinReadingDocument, { version: "liteasy.thin-reading/v2" }>);
     const synced = results.filter((result) => result.status === "synced").length;
     const failed = results.filter((result) => result.status === "failed").length;

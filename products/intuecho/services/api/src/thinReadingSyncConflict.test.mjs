@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createHash } from "node:crypto";
 import Database from "better-sqlite3";
-import { SqliteAnnotationCommunityRepository } from "./annotationCommunitySqlite.mjs";
+import { SqliteAnnotationCommunityRepository, desktopAnnotationPublicationDigest } from "./annotationCommunitySqlite.mjs";
 import { thinReadingSyncPayload } from "./thinReadingSyncPayload.mjs";
 
 const owner = { id: "sync-owner", name: "Synthetic Owner", initials: "SO" };
@@ -130,4 +130,21 @@ test("fences PDF profile revisions but preserves exact receipts across later pro
   assert.equal(repository.applyDesktopAnnotationPublications(owner, [{ ...guarded, expectedAuthorProfileRevision: profile.revision + 1 }])[0].error,
     "ANNOTATION_PUBLICATION_VERSION_CONFLICT");
   assert.equal(repository.applyDesktopAnnotationPublications(owner, [{ ...guarded, revision: 2 }])[0].error, "AUTHOR_PROFILE_CHANGED");
+});
+
+
+test("reads an exact PDF operation receipt without replaying body or mutating the ledger", (t) => {
+  const { db, repository } = setup(t);
+  const operation = { annotationId: "pdf-unknown", queueKey: "pdf-unknown", revision: 1, operation: "upsert", updatedAt: timestamp,
+    body: "Original PDF note", literatureId: "literature-1", sourcePassage: { anchorHash: "original-anchor", excerpt: "Original excerpt", rects: [] } };
+  const [receipt] = repository.applyDesktopAnnotationPublications(owner, [operation]);
+  const query = { annotationId: operation.annotationId, queueKey: operation.queueKey, revision: operation.revision,
+    updatedAt: operation.updatedAt, operationDigest: desktopAnnotationPublicationDigest(operation) };
+  const before = db.serialize();
+  assert.deepEqual(repository.lookupDesktopAnnotationPublications(owner, [query]), [{ ...query, status: "matched", receipt }]);
+  assert.equal(repository.lookupDesktopAnnotationPublications({ ...owner, id: "another" }, [query])[0].status, "not_found");
+  for (const changed of [{ ...query, annotationId: "wrong" }, { ...query, revision: 2 }, { ...query, operationDigest: "0".repeat(64) }]) {
+    assert.equal(repository.lookupDesktopAnnotationPublications(owner, [changed])[0].status, "conflict");
+  }
+  assert.deepEqual(db.serialize(), before);
 });

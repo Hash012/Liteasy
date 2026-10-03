@@ -655,6 +655,16 @@ export const desktopCommunityAnnotationLookupResultSchema = z.discriminatedUnion
   z.object({ annotationId: z.string().min(1), queueKey: z.string().min(1), status: z.literal("conflict") }).strict()
 ]);
 
+export const desktopAnnotationPublicationLookupBatchSchema = z.object({
+  queries: z.array(z.object({
+    annotationId: z.string().trim().min(1).max(200),
+    queueKey: z.string().trim().min(1).max(500),
+    revision: z.number().int().positive(),
+    updatedAt: z.string().datetime(),
+    operationDigest: z.string().regex(/^[a-f0-9]{64}$/u)
+  }).strict()).min(1).max(100)
+}).strict();
+
 const desktopPublicationOperationSchema = z.object({
   annotationId: z.string().trim().min(1).max(200),
   queueKey: z.string().trim().min(1).max(500),
@@ -710,3 +720,5 @@ export const organizationChoiceSchema = organizationAccessSnapshotSchema.extend(
 });
 
 export { thinReadingSyncPayload } from "./thinReadingSyncPayload.js";
+
+export { desktopAnnotationPublicationPayload } from "./desktopAnnotationPublicationPayload.js";

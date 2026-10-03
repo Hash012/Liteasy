@@ -330,3 +330,24 @@ test("does not retrofit a profile fence onto an old unknown original or send whe
   await expect(context.actions.syncThinReadingAnnotations({ artifactId: context.document.artifactId, document: context.document })).rejects.toThrow("profile unavailable");
   expect(context.save).not.toHaveBeenCalled();
 });
+
+test("reprepares only after a definitive profile rejection and the next explicit preview", async () => {
+  const preview = vi.fn(async () => true);
+  const context = setup({ confirmPublication: preview });
+  const transport = vi.fn(async (_url: string, request: RequestInit) => {
+    const operation = JSON.parse(String(request.body)).annotations[0];
+    return { ok: true, status: 200, json: async () => ({ results: [{ annotationId: operation.annotationId, queueKey: operation.queueKey,
+      status: "failed", error: "AUTHOR_PROFILE_CHANGED" }] }) };
+  });
+  vi.stubGlobal("fetch", transport);
+  await context.actions.syncThinReadingAnnotations({ artifactId: context.document.artifactId, document: context.document });
+  const rejected = context.store.getOpenTabs()[0].thinReadingDocument!;
+  expect(rejected.annotations[0].publication?.pendingOperation).toBeUndefined();
+  expect(rejected.annotations[0].publication?.actorBinding).toEqual(actor);
+  expect(rejected.annotations[0].body).toBe(context.document.annotations[0].body);
+  expect(preview).toHaveBeenCalledOnce();
+  readAuthorProfile.mockResolvedValue({ ...authorProfile, profile: { ...authorProfile.profile, revision: 4 } });
+  await context.actions.syncThinReadingAnnotations({ artifactId: rejected.artifactId, document: rejected });
+  expect(JSON.parse(String(transport.mock.calls[1][1].body)).annotations[0].expectedAuthorProfileRevision).toBe(4);
+  expect(preview).toHaveBeenCalledTimes(2);
+});

@@ -383,3 +383,6 @@ export type DesktopCommunityAnnotationLookupResult =
 export declare const desktopCommunityAnnotationLookupQuerySchema: z.ZodType<DesktopCommunityAnnotationLookupQuery>;
 export declare const desktopCommunityAnnotationLookupBatchSchema: z.ZodType<{ queries: DesktopCommunityAnnotationLookupQuery[] }>;
 export declare const desktopCommunityAnnotationLookupResultSchema: z.ZodType<DesktopCommunityAnnotationLookupResult>;
+
+export { desktopAnnotationPublicationPayload } from "./desktopAnnotationPublicationPayload.js";
+export declare const desktopAnnotationPublicationLookupBatchSchema: z.ZodType<unknown>;
