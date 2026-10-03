@@ -135,6 +135,8 @@ try {
     assert.ok(duplicate.some((result) => result.status === "fulfilled"));
     assert.equal(fixture.state.commits - before, 3);
     assert.equal(fixture.state.events, fixture.state.commits);
+    assert.equal(fixture.state.requests.filter((request) => request.method === "POST" && request.body?.command?.operationId === "33333333-3333-4333-8333-333333333333").length, 1,
+      "Real cross-tab Web Locks must prevent a second dispatch, independently of fixture idempotency");
     const recovered = await source(first, async ({ persistence, commands, communityApi, owner }) => {
       const original = persistence.commandRecords(owner).find((item) => item.operationId.startsWith("1111"));
       await commands.recoverCommand(owner, original, communityApi.lookupCommand);
@@ -298,11 +300,15 @@ try {
     const position = await page.evaluate(() => window.scrollY);
     await page.getByRole("link", { name: "打开批注详情", exact: true }).last().click();
     await page.locator(".annotation-detail .annotation-body").waitFor();
+    const beforeBack = fixture.state.requests.length;
     await page.goBack();
     await expectCards(page, 65);
+    assert.equal(fixture.state.requests.slice(beforeBack).filter((request) => request.path === "/v1/plaza/page" && request.authenticated).length, 3);
     await page.waitForFunction((position) => Math.abs(window.scrollY - position) < 100, position);
+    const beforeReload = fixture.state.requests.length;
     await page.reload();
     await expectCards(page, 65);
+    assert.equal(fixture.state.requests.slice(beforeReload).filter((request) => request.path === "/v1/plaza/page" && request.authenticated).length, 3);
     const pages = fixture.state.requests.slice(offset).filter((request) => request.path === "/v1/plaza/page");
     assert.ok(pages.some((request) => request.query.cursor === "fixture-cursor-30"));
     assert.ok(pages.some((request) => request.query.cursor === "fixture-cursor-60"));
