@@ -43,7 +43,7 @@ function readStoredSession(storage: Storage, key: string) {
 }
 
 function storeSession(storage: Storage, key: string, session: IdentitySession | null) {
-  if (readStoredSession(storage, key)?.userId !== session?.userId) invalidateIdentitySession();
+  if (readStoredSession(storage, key)?.userId !== session?.userId || readStoredSession(storage, key)?.issuer !== session?.issuer) invalidateIdentitySession();
   if (session) storage.setItem(key, JSON.stringify(session));
   else storage.removeItem(key);
 }
@@ -139,7 +139,7 @@ async function oauthManager() {
     });
     manager.events.addUserLoaded((value) => {
       if (!oauthSessionAllowed) return;
-      storeSession(sessionStorage, oauthSessionProjectionKey, sessionFromOauthUser(value));
+      storeSession(sessionStorage, oauthSessionProjectionKey, sessionFromOauthUser(value, configuration.issuer));
     });
     manager.events.addUserUnloaded(() => {
       storeSession(sessionStorage, oauthSessionProjectionKey, null);
@@ -149,7 +149,7 @@ async function oauthManager() {
   return oauthManagerPromise;
 }
 
-function sessionFromOauthUser(user: User): IdentitySession {
+function sessionFromOauthUser(user: User, issuer: string): IdentitySession {
   const name = typeof user.profile.name === "string" ? user.profile.name :
     typeof user.profile.preferred_username === "string" ? user.profile.preferred_username : "";
   if (!user.access_token || !user.profile.sub || !name || !user.expires_at) {
@@ -157,6 +157,7 @@ function sessionFromOauthUser(user: User): IdentitySession {
   }
   return {
     audience,
+    issuer,
     email: typeof user.profile.email === "string" ? user.profile.email : "",
     expiresAt: new Date(user.expires_at * 1000).toISOString(),
     name,
@@ -179,7 +180,7 @@ async function validOauthSession() {
     storeSession(sessionStorage, oauthSessionProjectionKey, null);
     return null;
   }
-  const session = sessionFromOauthUser(value);
+  const session = sessionFromOauthUser(value, manager.settings.authority);
   storeSession(sessionStorage, oauthSessionProjectionKey, session);
   return session;
 }

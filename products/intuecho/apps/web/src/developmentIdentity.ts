@@ -43,8 +43,9 @@ async function request(path: string, body: Record<string, unknown>) {
   if (generation !== getIdentitySessionGeneration()) throw new Error("账号会话已变化，请重新操作。");
   if (!response.ok) throw Object.assign(new Error(payload.message ?? payload.error ?? "身份服务请求失败"), { status: response.status });
   if (payload.session?.audience !== audience) throw new Error("身份服务返回了错误的会话类型");
-  store(payload.session);
-  return payload.session as IdentitySession;
+  const session: IdentitySession = { ...payload.session, issuer: endpoint };
+  store(session);
+  return session;
 }
 
 export const developmentIdentity = {
