@@ -118,6 +118,9 @@ export class PdfUploadService {
         };
       }
       const finalKey = this.objectStore.objectKey(staged.contentHash);
+      // A failed prepare response does not prove its transaction rolled back.
+      // Recovery owns referenced staging; maintenance later removes true orphans.
+      keepStagingForRepair = true;
       const prepared = await this.repository.preparePdfUpload(scope, {
         actorId: input.actorId,
         expectedRevision: input.expectedRevision,
@@ -136,7 +139,6 @@ export class PdfUploadService {
       if (workflow.staging_key !== staged.storageKey) {
         await this.objectStore.deleteKey(staged.storageKey);
       }
-      keepStagingForRepair = true;
       return await this.publishWorkflow(workflow, input.traceId);
     } catch (error) {
       if (!keepStagingForRepair) await this.objectStore.deleteKey(stagedObject.storageKey).catch(() => {});
@@ -149,12 +151,15 @@ export class PdfUploadService {
     let keepStagingForRepair = false;
     try {
       const staged = { ...stagedObject, securityScan: await this.scanStoredPdf(stagedObject) };
+      const finalKey = this.objectStore.objectKey(staged.contentHash);
+      // Preserve bytes even if prepare commits but its response is lost.
+      keepStagingForRepair = true;
       const prepared = await this.repository.prepareMetadataPdfAttachment(scope, {
         actorId: input.actorId,
         documentId: input.documentId,
         expectedRevision: input.expectedRevision,
         fileName: input.fileName,
-        finalKey: this.objectStore.objectKey(staged.contentHash),
+        finalKey,
         idempotencyKey: input.idempotencyKey,
         traceId: input.traceId
       }, staged);
@@ -164,7 +169,6 @@ export class PdfUploadService {
       }
       const workflow = prepared.workflow;
       if (workflow.staging_key !== staged.storageKey) await this.objectStore.deleteKey(staged.storageKey);
-      keepStagingForRepair = true;
       return await this.publishWorkflow(workflow, input.traceId);
     } catch (error) {
       if (!keepStagingForRepair) await this.objectStore.deleteKey(stagedObject.storageKey).catch(() => {});

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 import test from "node:test";
 import { PdfUploadService } from "./pdfUploadService.mjs";
+import { StorageMaintenanceService } from "./storageMaintenance.mjs";
 
 const staged = {
   byteLength: 12,
@@ -52,6 +53,105 @@ function input(overrides = {}) {
     traceId: "trace_1",
     ...overrides
   };
+}
+
+for (const [operation, prepare] of [
+  ["upload", "preparePdfUpload"],
+  ["attach", "prepareMetadataPdfAttachment"]
+]) {
+  test(`${operation} retains staged bytes when the prepare commit response is lost and repairs once`, async () => {
+    const objects = new Set([staged.storageKey]);
+    const finalKey = `documents/objects/aa/${staged.contentHash}`;
+    const commitResponseLost = new Error("prepare commit response lost");
+    let workflow;
+    let completed = 0;
+    const repository = {
+      async findPdfDuplicates() { return []; },
+      async [prepare]() {
+        workflow = securedWorkflow({
+          byte_length: staged.byteLength,
+          content_hash: staged.contentHash,
+          final_key: finalKey,
+          staging_key: staged.storageKey,
+          state: "database_committed",
+          workflow_id: `workflow_${operation}`
+        });
+        throw commitResponseLost;
+      },
+      async listRecoverablePdfUploads() {
+        return workflow.state === "completed" ? [] : [workflow];
+      },
+      async markPdfObjectPublished() { workflow.state = "object_published"; },
+      async completePdfUpload() {
+        assert.equal(workflow.state, "object_published");
+        assert.equal(objects.has(finalKey), true);
+        workflow.state = "completed";
+        completed += 1;
+      },
+      async markPdfUploadRepairRequired() { throw new Error("repair must succeed"); }
+    };
+    const service = new PdfUploadService(repository, scannedObjectStore({
+      objectKey() { return finalKey; },
+      async stagePdf() { return staged; },
+      async deleteKey(key) { objects.delete(key); },
+      async publishStagedPdf(value) {
+        assert.equal(objects.has(value.storageKey), true, "the committed workflow still has source bytes");
+        objects.add(finalKey);
+        objects.delete(value.storageKey);
+      }
+    }), cleanScanner);
+
+    await assert.rejects(
+      () => service[operation]({ scopeId: "user_1", scopeType: "user" }, input({ documentId: "document_1" })),
+      (error) => error === commitResponseLost
+    );
+    assert.equal(workflow.state, "database_committed");
+    assert.equal(objects.has(staged.storageKey), true);
+    assert.equal(objects.has(finalKey), false);
+    assert.equal(completed, 0);
+    assert.deepEqual(await service.repairPendingWorkflows(), { repaired: 1, scanned: 1 });
+    assert.deepEqual(await service.repairPendingWorkflows(), { repaired: 0, scanned: 0 });
+    assert.equal(completed, 1);
+    assert.deepEqual([...objects], [finalKey]);
+  });
+
+  test(`${operation} leaves an unconfirmed prepare for maintenance instead of treating absence as rollback`, async () => {
+    const objects = new Set([staged.storageKey]);
+    const prepareFailure = new Error("database connection lost before outcome was confirmed");
+    const repository = {
+      async findPdfDuplicates() { return []; },
+      async [prepare]() { throw prepareFailure; },
+      async purgeExpiredTrash() { return { purgedCount: 0 }; },
+      async listReferencedStagingKeys(keys) {
+        assert.deepEqual(keys, [staged.storageKey]);
+        return [];
+      },
+      async claimUnreferencedObjects() { return []; }
+    };
+    const objectStore = scannedObjectStore({
+      objectKey() { return `documents/objects/aa/${staged.contentHash}`; },
+      async stagePdf() { return staged; },
+      async deleteKey(key) { objects.delete(key); },
+      async listStagingObjects({ before }) {
+        assert.equal(before.toISOString(), "2026-08-07T01:00:00.000Z");
+        return [{ lastModified: "2026-08-07T00:00:00.000Z", storageKey: staged.storageKey }];
+      }
+    });
+    const service = new PdfUploadService(repository, objectStore, cleanScanner);
+
+    await assert.rejects(
+      () => service[operation]({ scopeId: "user_1", scopeType: "user" }, input({ documentId: "document_1" })),
+      (error) => error === prepareFailure
+    );
+    assert.equal(objects.has(staged.storageKey), true);
+
+    const result = await new StorageMaintenanceService(repository, objectStore).run({
+      now: new Date("2026-08-08T01:00:00.000Z")
+    });
+    assert.equal(result.removedStagingObjects, 1);
+    assert.deepEqual(result.failedStagingObjects, []);
+    assert.equal(objects.size, 0);
+  });
 }
 
 test("returns a duplicate decision without creating a logical entry", async () => {

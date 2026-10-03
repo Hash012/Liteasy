@@ -129,6 +129,8 @@ Intuecho 的组织可见性和组织邀请使用独立内部边界。服务 toke
 
 扫描时间、引擎、版本和哈希同时持久化到对象与发布工作流。S3 发布和数据库完成都会再次要求有效扫描证明；恢复任务会先补扫并持久化证明，再发布对象。迁移不会为历史对象伪造扫描结果：未验证旧对象不可列出、复制或下载，并阻止服务 readiness。部署升级时反复运行 `npm run maintain:storage`，它每次最多流式补扫 100 个旧对象；输出中的 `pdfSecurity.remaining` 必须为 `0`，之后服务才可启动。
 
+上传和元数据 PDF 附件进入数据库 prepare 后，提交响应丢失不能视为事务已回滚。请求仍返回失败，但暂存字节保留给现有发布工作流恢复，不立即删除；启动恢复完成前不会把待完成文档开放下载。确实已回滚的 prepare 也可能留下暂存对象，由 `maintain:storage` 在默认 24 小时保留窗口后核对工作流和对象引用，再删除无引用暂存。维护未运行或删除失败时，保留时间可能更长。
+
 账号启用、禁用和删除只通过 `POST /v1/admin/accounts/status` 执行。路由要求 `liteasy-admin` token、数据库中的 `platform_admin`、五分钟内的新鲜 MFA、8–1000 字符的原因和稳定幂等键；当前管理员不能禁用或删除自己。删除流程具有 PostgreSQL 持久阶段账本：先要求 IdP 禁用账号并明确确认 `liteasy-desktop`、`intuecho-web`、`liteasy-admin` 三个 audience 的活动会话全部吊销，再清理 Liteasy 个人收藏/正文引用、画像、推荐、成员关系、邀请和本人团队批注，然后调用 Intuecho 清理私人状态并去身份化公开作者，最后才要求 IdP 删除主体。账号仍是未转移组织的负责人时，流程在禁用前以冲突拒绝。
 
 配额读取通过 `POST /v1/admin/quotas/get` 执行，设置通过 `POST /v1/admin/quotas/set` 执行。设置要求新鲜 MFA、原因、幂等键和 `expectedRevision`，与更新者、已用字节和追加写审计事件在同一 PostgreSQL 事务中返回。组织目标必须是真实 active 组织，已删除的用户不能重新配置配额。
