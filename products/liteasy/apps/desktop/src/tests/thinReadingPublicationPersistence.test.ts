@@ -189,14 +189,21 @@ test("reads the unknown original result then durably withdraws it without republ
   expect(context.store.getOpenTabs()[0].thinReadingDocument?.annotations[0].publication?.retractReceipt?.state).toBe("retracted");
 });
 
-test.each(["not_found", "conflict", "wrong_digest", "duplicate", "incomplete"])("holds unknown create when lookup returns %s", async (status) => {
+test.each(["not_found", "conflict", "wrong_digest", "duplicate", "incomplete", "invalid_remote_id", "invalid_revision", "unexpected_fields"])("holds unknown create when lookup returns %s", async (status) => {
   const context = setup();
   const document = unknownCreateWithdrawal(context);
   const transport = vi.fn(async (_url: string, request: RequestInit) => {
     const query = JSON.parse(String(request.body)).queries[0];
     const matched = { ...query, status: "matched", remoteAnnotationId: "remote-1", publicationRevision: 1 };
-    const results = status === "duplicate" ? [matched, matched] : [status === "wrong_digest" ? { ...matched, payloadDigest: "0".repeat(64) }
-      : status === "incomplete" ? { ...matched, publicationRevision: undefined } : { annotationId: query.annotationId, queueKey: query.queueKey, status }];
+    const invalidMatches: Record<string, object> = {
+      wrong_digest: { ...matched, payloadDigest: "0".repeat(64) },
+      incomplete: { ...matched, publicationRevision: undefined },
+      invalid_remote_id: { ...matched, remoteAnnotationId: "   " },
+      invalid_revision: { ...matched, publicationRevision: 1.5 },
+      unexpected_fields: { ...matched, body: "Unexpected response content" }
+    };
+    const results = status === "duplicate" ? [matched, matched]
+      : [invalidMatches[status] ?? { annotationId: query.annotationId, queueKey: query.queueKey, status }];
     return { ok: true, status: 200, json: async () => ({ results }) };
   });
   vi.stubGlobal("fetch", transport);

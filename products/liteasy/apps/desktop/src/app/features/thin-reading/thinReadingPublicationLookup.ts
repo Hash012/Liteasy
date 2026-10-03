@@ -1,8 +1,8 @@
-import {
-  desktopCommunityAnnotationLookupResultSchema,
-  thinReadingSyncPayload,
-  type DesktopCommunityAnnotationLookupQuery,
-  type DesktopCommunityAnnotationLookupResult
+import { z } from "zod";
+import { thinReadingSyncPayload } from "../../../../../../../intuecho/packages/contracts/src/thinReadingSyncPayload.js";
+import type {
+  DesktopCommunityAnnotationLookupQuery,
+  DesktopCommunityAnnotationLookupResult
 } from "../../../../../../../intuecho/packages/contracts/src/index.js";
 import { sha256Hex } from "../paper-identity/paperIdentity";
 import { normalizePublicationActorBinding, samePublicationActor, type PublicationActorBinding } from "../forum/publicationActorBinding";
@@ -10,6 +10,18 @@ import type { ThinReadingAnnotation } from "./thinReading.types";
 
 type PendingOperation = NonNullable<ThinReadingAnnotation["publication"]>["pendingOperation"];
 export type ThinReadingMatchedPublication = Extract<DesktopCommunityAnnotationLookupResult, { status: "matched" }>;
+
+// Validate the wire response with the desktop's own schema dependency. Importing
+// the forum's runtime barrel would require its separate Zod installation.
+const matchedPublicationSchema: z.ZodType<ThinReadingMatchedPublication> = z.object({
+  annotationId: z.string().trim().min(1).max(200),
+  queueKey: z.string().trim().min(1).max(500),
+  updatedAt: z.string().datetime(),
+  payloadDigest: z.string().regex(/^[a-f0-9]{64}$/u),
+  status: z.literal("matched"),
+  remoteAnnotationId: z.string().trim().min(1).max(200),
+  publicationRevision: z.number().int().positive()
+}).strict();
 
 export function sameThinReadingPendingPublication(left: PendingOperation, right: PendingOperation) {
   return Boolean(left && right && left.annotationId === right.annotationId && left.queueKey === right.queueKey &&
@@ -62,8 +74,8 @@ export async function lookupThinReadingPublications(input: {
   const matched = new Map<string, ThinReadingMatchedPublication>();
   for (const query of queries) {
     if (counts.get(query.queueKey) !== 1) continue;
-    const parsed = desktopCommunityAnnotationLookupResultSchema.safeParse(results.find((result) => result?.queueKey === query.queueKey));
-    if (!parsed.success || parsed.data.status !== "matched") continue;
+    const parsed = matchedPublicationSchema.safeParse(results.find((result) => result?.queueKey === query.queueKey));
+    if (!parsed.success) continue;
     const result = parsed.data;
     if (result.annotationId === query.annotationId && result.updatedAt === query.updatedAt && result.payloadDigest === query.payloadDigest &&
         Number.isSafeInteger(result.publicationRevision) && result.publicationRevision < Number.MAX_SAFE_INTEGER) matched.set(query.annotationId, result);
