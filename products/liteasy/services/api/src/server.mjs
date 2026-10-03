@@ -454,6 +454,10 @@ export function createCloudRequestHandler(runtime, config) {
           sendJson(response, 200, await runtime.agentArtifactRepository.list(identity.subject));
           return;
         }
+        if (request.method === "GET" && artifactId !== undefined) {
+          sendJson(response, 200, await runtime.agentArtifactRepository.get(identity.subject, artifactId));
+          return;
+        }
         if (request.method === "POST" && artifactId === undefined) {
           const body = await readJsonBody(request, 12 * 1024 * 1024);
           sendJson(response, 201, await runtime.agentArtifactRepository.save(

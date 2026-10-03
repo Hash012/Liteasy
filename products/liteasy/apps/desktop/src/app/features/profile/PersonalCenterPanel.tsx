@@ -1,4 +1,5 @@
 import type { AccountSession } from "../account/account.types";
+import { AccountDataExportPanel } from "../account/AccountDataExportPanel";
 import { useState } from "react";
 import { Button, Switch, Tab, TabList, Tooltip } from "@fluentui/react-components";
 import { ArchiveRegular, DeleteRegular, PersonRegular, SignOutRegular, SparkleRegular, BookOpenRegular } from "@fluentui/react-icons";
@@ -58,6 +59,7 @@ export function PersonalCenterPanel(props: PersonalCenterPanelProps) {
         <p className="profile-muted">研究档案与明确偏好优先；阅读记录中的词语仅作为辅助兴趣，不会自动变成确定的个人事实。</p>
         <div className="profile-interest-tags" aria-label="阅读兴趣">{props.profileTags.length ? props.profileTags.map((tag) => <span key={tag.label} title={`阅读证据 ${tag.evidenceCount} 次`}>{tag.label}</span>) : <p className="profile-muted">暂无阅读兴趣记录。</p>}</div>
         <div className="profile-actions"><Button icon={<ArchiveRegular />} onClick={props.onOpenAcademicArchive}>查看与导出档案</Button><Button icon={<DeleteRegular />} onClick={props.onClearProfile}>清空画像数据</Button></div>
+        <AccountDataExportPanel session={accountSession} />
       </> : null}
     </div>
     {memory?.error ? <p role="alert" className="profile-notice">{memory.error}</p> : null}

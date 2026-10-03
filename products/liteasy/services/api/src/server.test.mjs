@@ -101,6 +101,11 @@ function runtime() {
       }
     },
     agentArtifactRepository: {
+      async get(subjectId, artifactId) {
+        calls.push({ agentArtifactGet: artifactId, subjectId });
+        if (artifactId === "other-owner") throw new LibraryRepositoryError("agent_artifact_not_found", 404);
+        return { artifact: { artifactId }, revision: 7 };
+      },
       async list(subjectId) {
         calls.push({ agentArtifactList: true, subjectId });
         return { artifacts: [] };
@@ -639,12 +644,26 @@ test("binds formal Agent artifact operations to the desktop token subject", asyn
   await handler(request("GET", "/v1/agent-artifacts"), listed);
   const removed = response();
   await handler(request("DELETE", "/v1/agent-artifacts/artifact_1"), removed);
+  const fetched = response();
+  await handler(request("GET", "/v1/agent-artifacts/artifact_1?subject=other"), fetched);
+  const foreign = response();
+  await handler(request("GET", "/v1/agent-artifacts/other-owner"), foreign);
 
   assert.equal(saved.status, 201);
   assert.equal(jsonBody(saved).path, "liteasy://agent-artifacts/artifact_1");
   assert.equal(listed.status, 200);
   assert.deepEqual(jsonBody(listed).artifacts, []);
   assert.equal(removed.status, 200);
+  assert.equal(fetched.status, 200);
+  assert.equal(jsonBody(fetched).revision, 7);
+  assert.equal(foreign.status, 404);
+  assert.equal(instance.calls.find((item) => item.agentArtifactGet).subjectId, "user_1");
+  const previousReads = instance.calls.filter((item) => item.agentArtifactGet).length;
+  instance.identityVerifier.verifyAuthorizationHeader = async () => { throw new IdentityError("session_revoked", 401); };
+  const revoked = response();
+  await handler(request("GET", "/v1/agent-artifacts/artifact_1"), revoked);
+  assert.equal(revoked.status, 401);
+  assert.equal(instance.calls.filter((item) => item.agentArtifactGet).length, previousReads);
   assert.equal(instance.calls.find((item) => item.agentArtifactSave).subjectId, "user_1");
   assert.equal(instance.calls.find((item) => item.agentArtifactList).subjectId, "user_1");
   assert.equal(instance.calls.find((item) => item.agentArtifactRemove).subjectId, "user_1");
