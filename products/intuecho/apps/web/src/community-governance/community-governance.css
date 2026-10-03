@@ -1,0 +1,6 @@
+.community-governance { border: 1px solid var(--colorNeutralStroke2, #ddd); border-radius: 6px; padding: 12px; margin-block: 8px; }
+.community-governance form { display: grid; gap: 8px; margin-top: 8px; }
+.community-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.community-notification { border-top: 1px solid var(--colorNeutralStroke2, #ddd); padding-block: 12px; }
+.community-notification button { margin-right: 8px; }
+.community-multiline { white-space: pre-wrap; overflow-wrap: anywhere; }
