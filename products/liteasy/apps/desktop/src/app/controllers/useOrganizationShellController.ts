@@ -58,7 +58,7 @@ export function useOrganizationShellController({
     },
     transport: organizationActionTransport
   });
-  const organizationNotifications = useOrganizationNotifications({ onAnalysisHint });
+  const organizationNotifications = useOrganizationNotifications({ accountSession, controlPlaneEndpoint, onAnalysisHint });
   const organizationData = useOrganizationData({
     accountSession,
     controlPlaneEndpoint,

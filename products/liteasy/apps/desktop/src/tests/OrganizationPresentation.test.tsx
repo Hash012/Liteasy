@@ -16,6 +16,10 @@ test("switches organizations, opens the shared library and marks scoped notifica
   await user.click(screen.getByRole("button", { name: "打开共享文献库" }));
   expect(onOpenSharedLibrary).toHaveBeenCalledWith(summary);
   expect(screen.getByText("2 条未读")).toBeInTheDocument();
+  expect(screen.getByText("已读状态仅保存在此设备；标记已读不会处理邀请或任务。")).toBeInTheDocument();
+  const notice = screen.getByText(summary.notifications[0].message).closest("li")!;
+  await user.click(within(notice).getByRole("button", { name: "标记此通知已读" }));
+  expect(onMarkNotificationsRead).toHaveBeenCalledWith({ ...summary, notifications: [summary.notifications[0]] });
   await user.click(screen.getByRole("button", { name: "全部标记已读" }));
   expect(onMarkNotificationsRead).toHaveBeenCalledWith(summary);
   rerender(<OrganizationSpacePanel {...props} readNotificationIds={["research:welcome", "research:papers"]} />);

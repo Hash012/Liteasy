@@ -44,11 +44,13 @@ export function OrganizationOverview({ summary, onOpenSharedLibrary, onMarkNotif
       <summary><AlertRegular /><span>通知</span><span className="organization-count">{readNotificationIds ? (unreadCount ? `${unreadCount} 条未读` : "全部已读") : `${summary.notifications.length} 条`}</span></summary>
       {onMarkNotificationsRead && summary.notifications.length ? <Button appearance="subtle" size="small" disabled={!unreadCount}
         onClick={() => onMarkNotificationsRead(summary)}>全部标记已读</Button> : null}
+      <p className="organization-muted">已读状态仅保存在此设备；标记已读不会处理邀请或任务。</p>
       <ul className="organization-notice-list">
         {summary.notifications.map((item) => <li key={item.id}>
           <div>{readNotificationIds ? <Badge appearance="tint" color={isRead(item.id) ? "informative" : "brand"}>{isRead(item.id) ? "已读" : "未读"}</Badge> : null}
             <small>{item.type === "announcement" ? "公告" : item.type === "document_upload" ? "文献上传" : "文献库变更"}</small></div>
           <p>{item.message}</p>
+          {onMarkNotificationsRead && !isRead(item.id) ? <Button appearance="subtle" size="small" onClick={() => onMarkNotificationsRead({ ...summary, notifications: [item] })}>标记此通知已读</Button> : null}
         </li>)}
       </ul>
       {!summary.notifications.length ? <p className="organization-muted">暂无通知</p> : null}
