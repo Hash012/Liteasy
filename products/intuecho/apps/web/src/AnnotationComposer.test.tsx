@@ -20,7 +20,8 @@ vi.mock("./communityApi", () => ({
     resolveLiterature: vi.fn(),
     updateAnnotation: vi.fn(),
     updateReply: vi.fn(),
-    updateReplyPublication: vi.fn()
+    updateReplyPublication: vi.fn(),
+    sourceRevision: vi.fn()
   }
 }));
 
@@ -202,8 +203,12 @@ test("submits a pure reply with the canonical empty publication payload", async 
   await user.type(screen.getByLabelText("批注内容"), "Thread only");
   await user.click(screen.getByRole("button", { name: "发布" }));
 
+  expect(createReply).not.toHaveBeenCalled();
+  expect(await screen.findByRole("region", { name: "发送预览" })).toHaveTextContent("接收方：所有人");
+  await user.click(screen.getByRole("button", { name: "确认发送" }));
   await waitFor(() => expect(createReply).toHaveBeenCalledWith("annotation-parent", {
     body: "Thread only",
+    expectedAuthorProfileRevision: 0,
     expectedParent: { revision: 1, visibility: "public", organizationId: null },
     publishAsAnnotation: false,
     tags: [],
@@ -335,8 +340,10 @@ test("clearing inherited targets disables only independent publication", async (
   expect(screen.getByRole("checkbox", { name: "同时发布为独立批注" })).not.toBeChecked();
   expect(screen.getByRole("button", { name: "发布" })).toBeEnabled();
   await user.click(screen.getByRole("button", { name: "发布" }));
+  await user.click(await screen.findByRole("button", { name: "确认发送" }));
   await waitFor(() => expect(createReply).toHaveBeenCalledWith(publicParent.id, {
     body: "Still a reply",
+    expectedAuthorProfileRevision: 0,
     expectedParent: { revision: 1, visibility: "public", organizationId: null },
     publishAsAnnotation: false,
     tags: [],
@@ -616,4 +623,85 @@ test("switching actors invalidates an outstanding preview and never restores the
   expect(screen.getByLabelText("批注内容")).toHaveValue("");
   expect(screen.queryByRole("button", { name: "恢复本机草稿" })).not.toBeInTheDocument();
   expect(communityApi.createAnnotation).not.toHaveBeenCalled();
+});
+
+
+test("derived reply conflicts retain the draft and adopt the current reply revision", async () => {
+  const user = userEvent.setup();
+  const original = { ...publicParent, revision: 9, body: "Old source reply", originalReply: { replyId: "reply-source", revision: 4, status: "available" as const } };
+  updateReply.mockRejectedValueOnce(new Error("REPLY_REVISION_CONFLICT"));
+  const sourceRevision = vi.mocked(communityApi.sourceRevision);
+  sourceRevision.mockResolvedValueOnce({ sourceNamespace: "intuecho.reply", sourceId: "reply-source", revision: 4, currentRevision: 5, historical: true, body: "Old source reply" });
+  sourceRevision.mockResolvedValueOnce({ sourceNamespace: "intuecho.reply", sourceId: "reply-source", revision: 5, currentRevision: 5, historical: false, body: "Current server reply" });
+  render(<AnnotationComposer owner="reply-author" context={{ edit: original }} onClose={vi.fn()} onSaved={vi.fn()} />);
+  expect(screen.getByText("编辑基于修订 4；冲突时保留你的草稿，请核对最新内容。")).toBeVisible();
+  await user.clear(screen.getByLabelText("批注内容"));
+  await user.type(screen.getByLabelText("批注内容"), "My preserved reply edit");
+  await user.click(screen.getByRole("button", { name: "保存修改" }));
+  expect(await screen.findByRole("region", { name: "修订冲突" })).toBeVisible();
+  expect(screen.getByLabelText("批注内容")).toHaveValue("My preserved reply edit");
+  expect(Object.values(localStorage).join("")).toContain("My preserved reply edit");
+  await user.click(screen.getByRole("button", { name: "核对最新版本（保留我的草稿）" }));
+  expect(await screen.findByText("Current server reply")).toBeVisible();
+  expect(sourceRevision).toHaveBeenNthCalledWith(1, { sourceNamespace: "intuecho.reply", sourceId: "reply-source", revision: 4 });
+  expect(sourceRevision).toHaveBeenNthCalledWith(2, { sourceNamespace: "intuecho.reply", sourceId: "reply-source", revision: 5 });
+  await user.click(screen.getByRole("button", { name: "以当前修订继续编辑我的草稿" }));
+  expect(screen.getByLabelText("批注内容")).toHaveValue("My preserved reply edit");
+  await user.click(screen.getByRole("button", { name: "保存修改" }));
+  expect(updateReply).toHaveBeenLastCalledWith("reply-source", { body: "My preserved reply edit", expectedRevision: 5 });
+});
+
+test("ordinary replies revoke changed profile approval and bind the newly reviewed profile", async () => {
+  const user = userEvent.setup();
+  const profiles = vi.mocked(communityApi.academicProfile);
+  profiles.mockResolvedValueOnce({ profile: { educationStage: "Old stage", institutions: [], revision: 1 } });
+  profiles.mockResolvedValue({ profile: { educationStage: "New stage", institutions: [{ name: "Updated Institute" }], revision: 2 } });
+  render(<AnnotationComposer authorName="Reply Author" context={{ replyTo: { ...publicParent, visibility: "organization", organizationId: "org-x" } }} onClose={vi.fn()} onSaved={vi.fn()} />);
+  await user.type(screen.getByLabelText("批注内容"), "My ordinary reply");
+  await user.click(screen.getByRole("button", { name: "发布" }));
+  const preview = await screen.findByRole("region", { name: "发送预览" });
+  expect(preview).toHaveTextContent("指定组织 · org-x");
+  expect(preview).toHaveTextContent("Reply Author · Old stage");
+  expect(preview).toHaveTextContent("My ordinary reply");
+  expect(createReply).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "确认发送" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("作者资料已变化");
+  expect(createReply).not.toHaveBeenCalled();
+  expect(screen.queryByRole("button", { name: "确认发送" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "发布" }));
+  expect(await screen.findByRole("region", { name: "发送预览" })).toHaveTextContent("New stage · Updated Institute");
+  await user.click(screen.getByRole("button", { name: "确认发送" }));
+  expect(createReply).toHaveBeenCalledWith(publicParent.id, expect.objectContaining({ body: "My ordinary reply", publishAsAnnotation: false, expectedAuthorProfileRevision: 2, expectedParent: { revision: 1, visibility: "organization", organizationId: "org-x" } }), expect.any(String));
+});
+
+test("ordinary reply preview is revoked when the parent audience changes", async () => {
+  const user = userEvent.setup();
+  const view = render(<AnnotationComposer actorBinding="actor-a" context={{ replyTo: { ...publicParent, visibility: "private", shareToPlaza: false } }} onClose={vi.fn()} onSaved={vi.fn()} />);
+  await user.type(screen.getByLabelText("批注内容"), "Same local draft");
+  await user.click(screen.getByRole("button", { name: "发布" }));
+  expect(await screen.findByRole("region", { name: "发送预览" })).toHaveTextContent("仅自己");
+  view.rerender(<AnnotationComposer actorBinding="actor-a" context={{ replyTo: { ...publicParent, revision: 2 } }} onClose={vi.fn()} onSaved={vi.fn()} />);
+  expect(screen.queryByRole("button", { name: "确认发送" })).not.toBeInTheDocument();
+  expect(createReply).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "发布" }));
+  expect(await screen.findByRole("region", { name: "发送预览" })).toHaveTextContent("接收方：所有人");
+});
+
+
+test("switching actors during ordinary reply confirmation cannot send the old actor draft", async () => {
+  const user = userEvent.setup();
+  const profileCheck = deferred<Awaited<ReturnType<typeof communityApi.academicProfile>>>();
+  const profiles = vi.mocked(communityApi.academicProfile);
+  profiles.mockResolvedValueOnce({ profile: { educationStage: null, institutions: [], revision: 1 } }).mockReturnValueOnce(profileCheck.promise);
+  const view = render(<AnnotationComposer owner="actor-a" actorBinding="actor-a:1" context={{ replyTo: publicParent }} onClose={vi.fn()} onSaved={vi.fn()} />);
+  await user.type(screen.getByLabelText("批注内容"), "ACTOR_A_PRIVATE_DRAFT");
+  await user.click(screen.getByRole("button", { name: "发布" }));
+  await user.click(await screen.findByRole("button", { name: "确认发送" }));
+  view.rerender(<AnnotationComposer owner="actor-b" actorBinding="actor-b:2" context={{ replyTo: publicParent }} onClose={vi.fn()} onSaved={vi.fn()} />);
+  profileCheck.resolve({ profile: { educationStage: null, institutions: [], revision: 1 } });
+  await waitFor(() => expect(screen.getByLabelText("批注内容")).toHaveValue(""));
+  expect(screen.queryByText("ACTOR_A_PRIVATE_DRAFT")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "确认发送" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "恢复本机草稿" })).not.toBeInTheDocument();
+  expect(createReply).not.toHaveBeenCalled();
 });
