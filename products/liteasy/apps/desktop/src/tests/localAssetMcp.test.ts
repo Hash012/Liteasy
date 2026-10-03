@@ -143,3 +143,28 @@ test("a mounted community note retains the organization boundary while ordinary 
   file.text = "My own local note, without a community source";
   expect((await f.call("liteasy_read", { path })).structuredContent.result.text).toBe(file.text);
 });
+
+test("mounted-file writes cannot remove or downgrade source metadata and malformed metadata fails closed", async () => {
+  let file = { mountId: "vault", path: "reflection.md", name: "reflection.md", kind: "file" as const, version: "v1", text: '---\nsourceNamespace: intuecho.annotation\nsourceId: "annotation"\nrevision: 2\norganizationId: "group"\nsourcePolicy: organization-bound\n---\nMy reflection' };
+  const writeFile = vi.fn(async (input) => { file = { ...file, version: `v${Number(file.version.slice(1)) + 1}`, text: input.text }; return file; });
+  const f = setup({ listMounts: async () => [{ id: "vault", name: "Vault", kind: "directory", location: "" }], listEntries: async () => [file], readFile: async () => file, writeFile } as unknown as NoteFileService);
+  const path = (await f.assets.search({ query: "reflection" }))[0].path;
+  for (const text of ["Body without provenance", file.text.replace('organizationId: "group"', 'organizationId: "other"'), file.text.replace("revision: 2", "revision: 3")]) {
+    await expect(f.assets.write(path, { expectedRevision: file.version, mode: "replace", text })).rejects.toThrow("来源");
+  }
+  expect(writeFile).not.toHaveBeenCalled();
+  await f.assets.write(path, { expectedRevision: file.version, mode: "append", text: "\nAdditional personal reflection" });
+  expect((await f.call("liteasy_read", { path })).isError).toBe(true);
+  file.text = file.text.replace("sourcePolicy: organization-bound", "sourcePolicy: malformed");
+  expect((await f.assets.stat(path)).sourceResolution).toBe("unavailable");
+  await expect(f.assets.write(path, { expectedRevision: file.version, mode: "replace", text: "Remove malformed source" })).rejects.toThrow("来源");
+  expect((await f.call("liteasy_read", { path })).isError).toBe(true);
+});
+
+test("ordinary mounted Markdown still supports explicit revision-checked MCP edits", async () => {
+  let file = { mountId: "vault", path: "local.md", name: "local.md", kind: "file" as const, version: "v1", text: "My independent local note" };
+  const f = setup({ listMounts: async () => [{ id: "vault", name: "Vault", kind: "directory", location: "" }], listEntries: async () => [file], readFile: async () => file, writeFile: async (input: { text: string }) => (file = { ...file, text: input.text, version: "v2" }) } as unknown as NoteFileService);
+  const path = (await f.assets.search({ query: "local" }))[0].path;
+  expect((await f.call("liteasy_write", { path, expectedRevision: "v1", mode: "append", text: "\nMy additional reflection" })).isError).toBeUndefined();
+  expect((await f.call("liteasy_read", { path })).structuredContent.result.text).toBe("My independent local note\nMy additional reflection");
+});

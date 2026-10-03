@@ -354,6 +354,10 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
         if (!file.version || file.version !== options.expectedRevision) throw new AgentAssetError("revision_conflict", "文件已被其他编辑器修改，请重新读取。");
         const editing = await files.editingStatus?.(file.mountId, file.path);
         const after = options.mode === "append" ? file.text + options.text : options.text;
+        const previousSource = noteSourceReferences(file.text), nextSource = noteSourceReferences(after);
+        if (previousSource.sourceResolution && nextSource.sourceResolution !== previousSource.sourceResolution || previousSource.sourceReferences?.some((source) => !nextSource.sourceReferences?.some((next) => JSON.stringify(next) === JSON.stringify(source)))) {
+          throw new AgentAssetError("read_only", "不能移除或替换文件的来源标记；请保留原来源与修订后再保存。原文件未改写。");
+        }
         check(options.signal);
         const next = after === file.text ? file : await files.writeFile({ mountId: file.mountId, path: file.path, text: after, expectedVersion: file.version });
         return { asset: fileStat(next), previousRevision: file.version, changed: next.version !== file.version,

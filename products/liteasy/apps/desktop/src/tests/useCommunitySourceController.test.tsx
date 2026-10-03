@@ -48,6 +48,21 @@ test("access loss on explicit save hides the cached body and creates no note", a
   expect(await screen.findByRole("alert")).toHaveTextContent("不可访问");
   expect(screen.queryByText(source.body!)).not.toBeInTheDocument();
   expect(f.create).not.toHaveBeenCalled();
+  expect(screen.getByRole("textbox", { name: "带回个人笔记的想法" })).toHaveValue("My own reflection");
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "新建个人笔记" })); });
+  await waitFor(() => expect(f.openNote).toHaveBeenCalledOnce());
+});
+test("a storage failure keeps the reflection and verified preview for an explicit retry", async () => {
+  const f = fixture();
+  f.create.mockRejectedValueOnce(new Error("本机存储暂不可用"));
+  await startSave(f);
+  expect(await screen.findByRole("alert")).toHaveTextContent("本机存储暂不可用");
+  expect(screen.getByRole("textbox", { name: "带回个人笔记的想法" })).toHaveValue("My own reflection");
+  expect(screen.getByText(source.body!)).toBeInTheDocument();
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "新建个人笔记" })); });
+  await waitFor(() => expect(f.openNote).toHaveBeenCalledOnce());
+  expect(f.create.mock.calls[0][1]).toBe(f.create.mock.calls[1][1]);
+  expect(f.readCommunitySource).toHaveBeenCalledTimes(3);
 });
 test.each(["close", "account", "source"])("a pending save invalidated by %s cannot write or close the next source", async (change) => {
   const f = fixture(), pending = deferred<CommunitySourceRevision>();

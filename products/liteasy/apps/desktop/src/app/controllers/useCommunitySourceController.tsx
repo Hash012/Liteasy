@@ -17,6 +17,7 @@ export function useCommunitySourceController(input: {
   const [reflection, setReflection] = useState("");
   const requestId = useRef(0);
   const saving = useRef<number>();
+  const saveAttempt = useRef<{ request: number; text: string; operationId: string }>();
   async function open(link: string) {
     if (!link.startsWith("liteasy://community-sources/")) return;
     let reference: CommunitySourceReference;
@@ -49,15 +50,19 @@ export function useCommunitySourceController(input: {
   const visible = state?.binding === binding ? state : undefined;
   const close = () => { ++requestId.current; setState(undefined); setReflection(""); };
   async function save() {
-    if (!visible?.source || !reflection.trim() || latest.current.binding !== visible.binding || saving.current !== undefined) return;
+    if (!visible || !reflection.trim() || latest.current.binding !== visible.binding || saving.current !== undefined) return;
     const captured = visible, request = requestId.current, text = reflection.trim();
     const current = () => latest.current.binding === captured.binding && requestId.current === request;
     saving.current = request;
+    if (saveAttempt.current?.request !== request || saveAttempt.current.text !== text) saveAttempt.current = { request, text, operationId: `community-reflection:${crypto.randomUUID()}` };
+    const operationId = saveAttempt.current.operationId;
+    let verifiedSource: CommunitySourceRevision | undefined;
     setState({ ...captured, busy: true, error: undefined });
     try {
       // Recheck current access at the explicit save, never use a withdrawn cached body.
       const source = await latest.current.client.readCommunitySource(captured.reference);
       if (!current()) return;
+      verifiedSource = source;
       const owner = latest.current;
       const sourceRef = { sourceNamespace: source.sourceNamespace, sourceId: source.sourceId, revision: source.revision, ...(source.locator ? { locator: source.locator } : {}) };
       const portableSource = source.visibility === "organization" && source.organizationId
@@ -67,7 +72,7 @@ export function useCommunitySourceController(input: {
         sourceResolution: source.visibility === "public" || source.sourceNamespace === "intuecho.literature" && source.literature || source.visibility === "organization" && source.organizationId ? undefined : "unavailable",
         content: { schema: "liteasy.note/v1", payload: {
         text: `${portableSource}${text}\n\n[来源 · 修订 ${source.revision}](${communitySourceLink(sourceRef)})\n\n<!-- liteasy-source: ${JSON.stringify(sourceRef)} -->`, origin: "user"
-      } } });
+      } } }, operationId);
 
       if (latest.current.binding !== captured.binding) return;
       await owner.collect(refOf(object));
@@ -75,7 +80,7 @@ export function useCommunitySourceController(input: {
       await owner.openNote(refOf(object));
       if (current()) close();
     } catch (error) {
-      if (current()) setState({ binding: captured.binding, reference: captured.reference, error: error instanceof Error ? error.message : "笔记尚未保存，请重试。" });
+      if (current()) setState({ binding: captured.binding, reference: captured.reference, source: verifiedSource, busy: false, error: error instanceof Error ? error.message : "笔记尚未保存，请重试。" });
     } finally { if (saving.current === request) saving.current = undefined; }
   }
   return { open, dialog: <Dialog open={Boolean(visible)} onOpenChange={(_, data) => { if (!data.open) close(); }}><DialogSurface><DialogBody>
@@ -86,9 +91,10 @@ export function useCommunitySourceController(input: {
         {visible.source.locator?.page ? <p>定位：第 {visible.source.locator.page} 页{visible.source.locator.anchorHash ? " · 已保留段落定位" : ""}</p> : null}
         <pre style={{ whiteSpace: "pre-wrap", maxHeight: "35vh", overflow: "auto" }}>{visible.source.body ?? visible.source.literature?.title ?? "此来源仅有题录信息。"}</pre>
         {visible.source.historical ? <Button disabled={visible.busy} onClick={() => void open(communitySourceLink({ ...visible.reference, revision: visible.source!.currentRevision }))}>查看当前修订</Button> : null}
-        <Field label="带回个人笔记的想法"><Textarea value={reflection} onChange={(_, data) => setReflection(data.value)} /></Field>
+      </> : null}
+      {visible && (visible.source || reflection) ? <><Field label="带回个人笔记的想法"><Textarea value={reflection} onChange={(_, data) => setReflection(data.value)} /></Field>
         <p>仅保存你填写的想法与版本来源链接，不复制社区正文，也不覆盖已有笔记。以后读取来源仍需当前访问权限。</p>
       </> : null}
-    </DialogContent><DialogActions><Button onClick={close}>关闭</Button>{visible?.source ? <Button appearance="primary" disabled={visible.busy || !reflection.trim()} onClick={() => void save()}>新建个人笔记</Button> : null}</DialogActions>
+    </DialogContent><DialogActions><Button onClick={close}>关闭</Button>{visible && (visible.source || reflection) ? <Button appearance="primary" disabled={visible.busy || !reflection.trim()} onClick={() => void save()}>新建个人笔记</Button> : null}</DialogActions>
   </DialogBody></DialogSurface></Dialog> };
 }

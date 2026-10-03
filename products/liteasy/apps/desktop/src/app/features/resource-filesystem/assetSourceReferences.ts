@@ -17,8 +17,11 @@ export function paperSourceReferences(paper: Pick<Paper, "id" | "libraryReferenc
 
 /** Portable note-return metadata only adds restrictions; it never grants access. */
 export function noteSourceReferences(text: string): { sourceReferences?: AssetSourceReference[]; sourceResolution?: "unavailable" } {
+  text = text.replace(/^\uFEFF/, "");
   const header = text.match(/^---\r?\n([\s\S]{0,8192}?)\r?\n---(?:\r?\n|$)/)?.[1];
-  if (!header || !/^sourcePolicy:\s*organization-bound\s*$/m.test(header)) return {};
+  const candidate = header ?? (text.startsWith("---\n") || text.startsWith("---\r\n") ? text.slice(0, 8192) : "");
+  if (!/^\s*(?:sourcePolicy:|sourceNamespace:\s*intuecho\.)/m.test(candidate)) return {};
+  if (!header || !/^sourcePolicy:\s*organization-bound\s*$/m.test(header)) return { sourceResolution: "unavailable" };
   try {
     const field = (name: string) => {
       const matches = [...header.matchAll(new RegExp(`^${name}:\\s*(.*)$`, "gm"))];
