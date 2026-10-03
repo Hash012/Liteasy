@@ -92,7 +92,9 @@ function* recordReplyEvent({ sqlite, tables }, { replyId, annotationId, actorId 
   const preferences = yield statement(`SELECT * FROM community_preferences WHERE ${matched} OR (target_kind = 'author' AND target_id = ?) ORDER BY user_id, target_kind, target_id${sqlite ? "" : " FOR UPDATE"}`, [...values, actorId]);
   const subscribers = new Set(preferences.filter((row) => row.subscribed).map((row) => row.user_id));
   for (const recipient of subscribers) {
-    if (recipient === actorId || preferences.some((row) => row.user_id === recipient && (row.muted || row.blocked))) continue;
+    // An explicit opt-out wins over overlapping broader subscriptions. No row is
+    // the default; a persisted unsubscribed scope expresses the user's choice.
+    if (recipient === actorId || preferences.some((row) => row.user_id === recipient && (row.muted || row.blocked || (row.target_kind !== "author" && !row.subscribed)))) continue;
     if (!sqlite && (yield statement("SELECT 1 FROM account_deletion_jobs WHERE subject_id = ?", [recipient])).length) continue;
     // No membership snapshot is stored. Read-time authorization is authoritative.
     yield statement("INSERT INTO community_notifications(id, event_id, recipient_id, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(event_id, recipient_id) DO NOTHING", [`notification_${randomUUID()}`, `reply:${replyId}`, recipient, now]);

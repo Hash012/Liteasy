@@ -112,6 +112,8 @@ test("subscriptions are explicit; unsubscribe, scope mute and author hiding stop
   reply("subscribed", "public_thread");
   await request("member", "PUT", "/v1/me/community-preferences", preference("literature", "literature_1", { subscribed: false }));
   reply("after_unsubscribe", "public_thread");
+  assert.equal(db.prepare("SELECT count(*) AS count FROM community_notifications").get().count, 1);
+  await request("member", "PUT", "/v1/me/community-preferences", preference("literature", "literature_1"));
   await request("member", "PUT", "/v1/me/community-preferences", preference("thread", "public_thread"));
   await request("member", "PUT", "/v1/me/community-preferences", preference("author", "writer", { subscribed: false, blocked: true }));
   reply("hidden_author", "public_thread");
@@ -129,4 +131,14 @@ test("reply and notification writes roll back together", async () => fixture(asy
   assert.equal(db.prepare("SELECT count(*) AS count FROM community_notification_events").get().count, 0);
   assert.equal(db.prepare("SELECT count(*) AS count FROM community_notifications").get().count, 0);
   assert.equal(db.prepare("SELECT count(*) AS count FROM annotation_replies_v2").get().count, 0);
+}));
+
+test("an explicit scope unsubscribe suppresses overlapping broader subscriptions", async () => fixture(async ({ db, request, annotation, reply }) => {
+  annotation("overlap", "organization");
+  await request("member", "PUT", "/v1/me/community-preferences", preference("organization", "org"));
+  await request("member", "PUT", "/v1/me/community-preferences", preference("thread", "overlap"));
+  reply("before_optout", "overlap");
+  await request("member", "PUT", "/v1/me/community-preferences", preference("thread", "overlap", { subscribed: false }));
+  reply("after_optout", "overlap");
+  assert.equal(db.prepare("SELECT count(*) AS count FROM community_notifications").get().count, 1);
 }));

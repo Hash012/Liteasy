@@ -93,6 +93,7 @@ function SubscriptionControl({ api, preference, label, onChanged }: {
   return <section className="community-governance" aria-label={`${label}提醒设置`}>
     <Checkbox label={`订阅${label}`} checked={value.subscribed} disabled={busy} onChange={(_, data) => void save({ ...value, subscribed: data.checked === true })} />
     <Checkbox label={`静音${label}`} checked={value.muted} disabled={busy} onChange={(_, data) => void save({ ...value, muted: data.checked === true })} />
+    <p>取消订阅或静音此范围，也会停止来自重叠订阅的新提醒。</p>
     {status && <p role="status">{status}</p>}
   </section>;
 }
