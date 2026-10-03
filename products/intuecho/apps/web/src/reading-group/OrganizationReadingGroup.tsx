@@ -3,7 +3,7 @@ import { Add20Regular, BookOpen20Regular, Save20Regular } from "@fluentui/react-
 import { useEffect, useRef, useState } from "react";
 import type { AcademicProfile } from "../community.types";
 import { LocalDraftControls } from "../LocalDraftControls";
-import { saveDraft, removeDraft } from "../communityPersistence";
+import { useLocalDraft } from "../useLocalDraft";
 import { LiteratureTargetEditor } from "../LiteratureTargetEditor";
 import { SourceRevision } from "../SourceRevision";
 import type { LiteratureRecord, OrganizationAccessSnapshot } from "@intuecho/contracts";
@@ -11,6 +11,7 @@ import { communityApi } from "../communityApi";
 import type { CommunityAnnotation, CommunityReply, CreateAnnotationInput, CreateReplyInput, OrganizationAnnotationGroup } from "../community.types";
 import { buildPersonalReadingNote, buildReadingPack, buildReadingReply, isHostSummary, readingMaterials, readingPacks, readingPackTitle } from "./readingGroup";
 import type { PersonalReadingNote, ReadingContributionKind } from "./readingGroup";
+import { ReadingRoundReview, matchesDiscussionFilter, type DiscussionFilter } from "./ReadingRoundReview";
 import "./reading-group.css";
 
 export type OrganizationReadingGroupProps = {
@@ -57,6 +58,8 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, owner = "
   const [createdPacks, setCreatedPacks] = useState<CommunityAnnotation[]>([]);
   const packs = readingPacks([...new Map([...createdPacks, ...organization.annotations].map((annotation) => [annotation.id, annotation])).values()], organization.organizationId);
   const [selectedId, setSelectedId] = useState("");
+  const [discussionFilter, setDiscussionFilter] = useState<DiscussionFilter>("all");
+  const [discussionQuery, setDiscussionQuery] = useState("");
   const pack = packs.find((item) => item.id === selectedId) ?? packs[0];
   const [sourceRecords, setSourceRecords] = useState<LiteratureRecord[]>([]);
   const [sourceError, setSourceError] = useState("");
@@ -77,6 +80,7 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, owner = "
   const [unresolved, setUnresolved] = useState("");
   const [referenceIds, setReferenceIds] = useState<string[]>([]);
   const [reflection, setReflection] = useState("");
+  const [reflectionRevision, setReflectionRevision] = useState<number | null>(null);
   const [exportConfirmed, setExportConfirmed] = useState(false);
   const [editing, setEditing] = useState<CommunityReply | null>(null);
   const [editBody, setEditBody] = useState("");
@@ -95,17 +99,24 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, owner = "
   const replies = thread?.context === context ? thread.replies : [];
   const isHost = pack?.author.id === viewerId;
   const draftScope = `reading-group:${organization.organizationId}:${pack?.id ?? "first-pack"}`;
-  const draftValue = { packIntentId, replyIntentId, title, guide, deadline, notifyReadingTask, selectedMaterials, kind, contribution, evidence, summary, unresolved, referenceIds, reflection, editing, editBody };
+  const draftValue = { packIntentId, replyIntentId, title, guide, deadline, notifyReadingTask, selectedMaterials, kind, contribution, evidence, summary, unresolved, referenceIds, reflection, reflectionRevision, editing, editBody };
   const draftKey = JSON.stringify(draftValue);
   const currentDraftKey = useRef(draftKey);
   currentDraftKey.current = draftKey;
   const activePreview = preview?.context === context && preview.draftKey === draftKey ? preview : null;
   function restoreDraft(value: typeof draftValue) {
+    if (!value || [value.packIntentId, value.replyIntentId, value.title, value.guide, value.deadline, value.contribution, value.evidence, value.summary, value.unresolved, value.reflection, value.editBody].some((item) => typeof item !== "string") ||
+      !Array.isArray(value.selectedMaterials) || value.selectedMaterials.some((item) => typeof item !== "string") ||
+      !Array.isArray(value.referenceIds) || value.referenceIds.some((item) => typeof item !== "string") ||
+      (value.editing !== null && (!value.editing || typeof value.editing.id !== "string" || typeof value.editing.body !== "string" || !Number.isSafeInteger(value.editing.revision) || value.editing.parentAnnotationId !== pack?.id)) ||
+      (value.reflectionRevision != null && (!Number.isSafeInteger(value.reflectionRevision) || value.reflectionRevision < 1)) ||
+      !["question", "evidence", "summary"].includes(value.kind)) throw new Error("草稿内容格式无法识别，原件已保留，请从操作中心导出。");
     setPackIntentId(value.packIntentId); setReplyIntentId(value.replyIntentId); setTitle(value.title); setGuide(value.guide); setDeadline(value.deadline); setNotifyReadingTask(value.notifyReadingTask);
     setSelectedMaterials(value.selectedMaterials); setKind(value.kind); setContribution(value.contribution); setEvidence(value.evidence);
-    setSummary(value.summary); setUnresolved(value.unresolved); setReferenceIds(value.referenceIds); setReflection(value.reflection);
+    setSummary(value.summary); setUnresolved(value.unresolved); setReferenceIds(value.referenceIds); setReflection(value.reflection); setReflectionRevision(value.reflectionRevision ?? null);
     setEditing(value.editing); setEditBody(value.editBody); setPreview(null); setExportConfirmed(false); setCreateOpen(true);
   }
+  const localDraft = useLocalDraft({ owner, scope: draftScope, value: draftValue, onRestore: restoreDraft, enabled: canRead });
   useEffect(() => {
     if (!canRead || !createOpen) return;
     let active = true;
@@ -197,7 +208,7 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, owner = "
     setPending(true);
     setStatus("");
     try {
-      if (owner) saveDraft(owner, draftScope, draftValue);
+      const savedSnapshot = owner ? await localDraft.save() : undefined;
       if (approved.kind === "pack") {
         const { profile } = await communityApi.academicProfile();
         if (!stillCurrent()) return;
@@ -239,7 +250,8 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, owner = "
       }
       if (approved.kind === "pack") setPackIntentId(crypto.randomUUID());
       if (approved.kind === "reply") setReplyIntentId(crypto.randomUUID());
-      if (owner) { try { removeDraft(owner, draftScope); } catch { /* Do not repeat a successful command for local cleanup failure. */ } }
+      // Private reflection is not part of the submitted contribution. Keep it locally.
+      if (savedSnapshot && !reflection.trim()) { try { await localDraft.clear(savedSnapshot); } catch { /* Do not repeat successful writes. */ } }
       setPreview(null);
       setStatus("已保存到组织讨论。");
       onChanged?.();
@@ -250,14 +262,35 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, owner = "
     }
   }
 
-  async function exportNote() {
-    if (!pack || !exportConfirmed || !canRead) return;
+  async function checkCurrentPack() {
+    if (!pack) throw new Error("ANNOTATION_NOT_FOUND");
+    const { annotation } = await communityApi.annotation(pack.id);
+    if (annotation.id !== pack.id || annotation.organizationId !== organization.organizationId || annotation.visibility !== "organization" || annotation.withdrawnAt || annotation.shareToPlaza) {
+      throw new Error("ORGANIZATION_ACCESS_DENIED");
+    }
+    return annotation;
+  }
+  async function bindReflectionRevision() {
     const approvedContext = context;
     try {
-      await onExportNote(buildPersonalReadingNote(pack, reflection));
+      const current = await checkCurrentPack();
+      if (mounted.current && currentContext.current === approvedContext) { setReflectionRevision(current.revision); setExportConfirmed(false); }
+    } catch (error) {
+      if (mounted.current && currentContext.current === approvedContext) { rejectUnavailableAccess(error); setStatus(errorMessage(error)); }
+    }
+  }
+  async function exportNote() {
+    if (!pack || !exportConfirmed || !canRead || !reflectionRevision) return;
+    const approvedContext = context;
+    const approvedDraft = draftKey;
+    try {
+      await checkCurrentPack();
+      if (!mounted.current || currentContext.current !== approvedContext || currentDraftKey.current !== approvedDraft) return;
+      // Source changes never rewrite the version on which the private reflection began.
+      await onExportNote(buildPersonalReadingNote({ ...pack, revision: reflectionRevision }, reflection));
       if (mounted.current && currentContext.current === approvedContext) setStatus("已导出个人复盘与来源引用。");
     } catch (error) {
-      if (mounted.current && currentContext.current === approvedContext) setStatus(errorMessage(error));
+      if (mounted.current && currentContext.current === approvedContext) { rejectUnavailableAccess(error); setStatus(errorMessage(error)); }
     }
   }
 
@@ -265,7 +298,7 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, owner = "
     <header><div><h2><BookOpen20Regular />读书组</h2><p>精选资料、提出问题、对照原文，并由主持人手动整理。</p></div>
       <Button icon={<Add20Regular />} disabled={!canComment || pending} onClick={() => editInput(() => setCreateOpen(!createOpen))}>创建读书包</Button></header>
     {!canRead ? <p role="status">组织权限尚未确认或已变化，请刷新后重试。</p> : <>
-      <LocalDraftControls owner={owner} scope={draftScope} value={draftValue} onRestore={restoreDraft} />
+      <LocalDraftControls controller={localDraft} owner={owner} scope={draftScope} value={draftValue} onRestore={restoreDraft} />
       {createOpen && <section className="reading-group-form" aria-label="创建组织读书包">
         <label>读书主题<Input value={title} maxLength={160} onChange={(_, data) => editInput(() => setTitle(data.value))} /></label>
         <label>导读与讨论目标<Textarea value={guide} maxLength={6000} onChange={(_, data) => editInput(() => setGuide(data.value))} /></label>
@@ -284,15 +317,20 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, owner = "
       </section>}
       {!!packs.length && <label className="reading-group-select">选择读书包<select value={pack?.id ?? ""} onChange={(event) => {
         setSelectedId(event.target.value); setPreview(null); setEditing(null); setContribution(""); setEvidence("");
-        setSummary(""); setUnresolved(""); setReflection(""); setExportConfirmed(false); setStatus("");
+        setSummary(""); setUnresolved(""); setReflection(""); setReflectionRevision(null); setExportConfirmed(false); setStatus(""); setDiscussionFilter("all"); setDiscussionQuery("");
       }}>{packs.map((item) => <option key={item.id} value={item.id}>{readingPackTitle(item)}</option>)}</select></label>}
       {!pack ? <p>该组织尚无读书包。可直接选择或确认资料，创建第一个读书包。</p> : <>
         <article className="reading-group-pack"><div className="reading-group-row"><strong>主持人：{pack.author.name}</strong>
           <Badge appearance="tint">{replies.some((reply) => isHostSummary(pack, reply)) ? "已有主持人整理" : "讨论中"}</Badge></div>
           <p className="reading-group-body">{pack.body}</p><a href={`/annotations/${encodeURIComponent(pack.id)}`}>查看原批注与文献 · 修订 {pack.revision}</a></article>
+        {thread?.context === context && <ReadingRoundReview pack={pack} replies={replies} onFilter={(filter) => { setDiscussionFilter(filter); setDiscussionQuery(""); }} />}
         <section aria-label="读书组讨论" className="reading-group-thread"><h3>问题与原文对照</h3>
+          <div className="reading-round-filters" role="group" aria-label="讨论筛选">{(["all", "question", "evidence", "summary"] as const).map((filter) => <Button key={filter} size="small" appearance={discussionFilter === filter ? "primary" : "subtle"} aria-pressed={discussionFilter === filter} onClick={() => setDiscussionFilter(filter)}>
+            {{ all: "全部", question: "问题", evidence: "原文对照", summary: "主持人整理" }[filter]} ({replies.filter((reply) => matchesDiscussionFilter(pack, reply, filter)).length})
+          </Button>)}</div>
+          <Input aria-label="检索本组讨论" placeholder="检索问题、作者或原文位置" value={discussionQuery} onChange={(_, data) => setDiscussionQuery(data.value)} />
           {threadError ? <p role="alert">{threadError}</p> : thread?.context !== context ? <p role="status">正在加载讨论…</p> : !replies.length ? <p>尚无贡献，可从一个问题开始。</p> : null}
-          {replies.map((reply) => <article key={reply.id} id={`reply-${reply.id}`}><div className="reading-group-row"><strong>{reply.author.name}</strong><small>修订 {reply.revision}</small>{isHostSummary(pack, reply) && <Badge appearance="tint">主持人手动摘要</Badge>}</div>
+          {replies.filter((reply) => matchesDiscussionFilter(pack, reply, discussionFilter) && `${reply.body} ${reply.author.name}`.toLocaleLowerCase().includes(discussionQuery.trim().toLocaleLowerCase())).map((reply) => <article key={reply.id} id={`reply-${reply.id}`}><div className="reading-group-row"><strong>{reply.author.name}</strong><small>修订 {reply.revision}</small>{isHostSummary(pack, reply) && <Badge appearance="tint">主持人手动摘要</Badge>}</div>
             <p className="reading-group-body">{reply.body}</p>
             {reply.collaboration?.sourceRefs.map((reference) => <SourceRevision key={`${reference.sourceNamespace}:${reference.sourceId}:${reference.revision}`} reference={reference} />)}
             {reply.author.id === viewerId && reply.viewerIsAuthor && <Button size="small" disabled={!canComment || pending} onClick={() => editInput(() => { setEditing(reply); setEditBody(reply.body); })}>更正我的贡献</Button>}
@@ -316,9 +354,15 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, owner = "
           <Button disabled={!canComment || pending} onClick={() => previewContribution("summary")}>预览主持人摘要</Button>
         </section>}
         <section className="reading-group-form" aria-label="返回个人笔记"><h3>个人复盘</h3><p>导出仅包含你在此填写的复盘与来源引用，不会复制组织讨论、资料摘录或原文件。</p>
-          <label>个人复盘<Textarea value={reflection} maxLength={8000} onChange={(_, data) => { setReflection(data.value); setExportConfirmed(false); }} /></label>
+          <label>个人复盘<Textarea value={reflection} maxLength={8000} onChange={(_, data) => {
+            if (!data.value.trim()) setReflectionRevision(null);
+            else if (!reflection.trim()) setReflectionRevision(pack.revision);
+            setReflection(data.value); setExportConfirmed(false);
+          }} /></label>
+          {reflectionRevision && <p>此复盘引用修订 {reflectionRevision}{pack.revision !== reflectionRevision ? `；当前读书包为修订 ${pack.revision}` : ""}。来源更新不会改写你的复盘或引用。</p>}
+          {reflection.trim() && !reflectionRevision && <><p>旧草稿未保存来源版本。请先核对当前来源；你的复盘内容保持不变。</p><Button onClick={() => void bindReflectionRevision()}>核对当前来源并绑定版本</Button></>}
           <Checkbox label="确认仅导出我在此填写的个人复盘与来源引用" checked={exportConfirmed} onChange={(_, data) => setExportConfirmed(Boolean(data.checked))} />
-          <Button icon={<Save20Regular />} disabled={!exportConfirmed || !reflection.trim()} onClick={() => void exportNote()}>导出个人笔记</Button>
+          <Button icon={<Save20Regular />} disabled={!exportConfirmed || !reflection.trim() || !reflectionRevision} onClick={() => void exportNote()}>导出个人笔记</Button>
         </section>
       </>}
       {activePreview && <section className="reading-group-preview" aria-label="提交预览"><h3>提交预览</h3><p>仅组织内：{organization.name}</p>

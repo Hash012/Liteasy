@@ -15,3 +15,7 @@
 .reading-group-preview { background: var(--intuecho-brand-soft); }
 .reading-group-preview > .fui-Button + .fui-Button { margin-left: 8px; }
 .reading-group a { text-decoration: underline; color: var(--intuecho-brand); font-size: 13px; }
+.reading-round-review { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--intuecho-line); border-radius: 6px; background: var(--intuecho-surface-subtle); }
+.reading-round-review small { color: var(--intuecho-muted); }
+.reading-round-summary { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; }
+.reading-round-actions, .reading-round-filters { display: flex; flex-wrap: wrap; gap: 6px; }

@@ -262,3 +262,78 @@ test("server source-revision conflicts preserve summary writing instead of silen
   expect(screen.getByRole("textbox", { name: "主持人手动摘要" })).toHaveValue("My retained summary");
   expect(Object.values(localStorage).join("")).toContain("My retained summary");
 });
+
+test("a second group visit surfaces the previous host summary, unresolved items and pinned evidence", async () => {
+  const previousSummary = replyFixture({
+    id: "previous-summary", author: annotationFixture().author,
+    body: "## 主持人手动摘要\nPrevious round finding\n\n## 未解决项与异议\nBoundary condition still disputed\n\n## 讨论依据\n/source/ref",
+    collaboration: { schemaVersion: 1, kind: "host_summary", parentPackId: "pack_1", sourceRefs: [{ sourceNamespace: "intuecho.reply", sourceId: "evidence-reply", revision: 2 }] }
+  });
+  const question = replyFixture({ id: "question", body: "Which assumption remains?", collaboration: { schemaVersion: 1, kind: "question", parentPackId: "pack_1", sourceRefs: [] } });
+  vi.mocked(communityApi.replies).mockResolvedValue({ replies: [question, previousSummary] });
+  render(<OrganizationReadingGroup {...props} />);
+  const resume = await screen.findByRole("region", { name: "继续上次讨论" });
+  expect(within(resume).getByText("Previous round finding")).toBeInTheDocument();
+  expect(within(resume).getByText("Boundary condition still disputed")).toBeInTheDocument();
+  expect(within(resume).getByText(/不代表所有问题已解决/)).toBeInTheDocument();
+  await userEvent.click(within(resume).getByRole("button", { name: "查看前次摘要与证据" }));
+  const thread = screen.getByRole("region", { name: "读书组讨论" });
+  expect(within(thread).queryByText("Which assumption remains?")).not.toBeInTheDocument();
+  expect(within(thread).getByRole("link", { name: "在 Liteasy 打开此来源版本" })).toHaveAttribute("href", "liteasy://community-sources/intuecho.reply/evidence-reply?revision=2");
+  await userEvent.click(screen.getByRole("button", { name: "问题 (1)" }));
+  expect(within(thread).getByText("Which assumption remains?")).toBeInTheDocument();
+  expect(communityApi.createReply).not.toHaveBeenCalled();
+});
+
+test("personal reflection survives contribution success and switching packs without entering the remote payload", async () => {
+  localStorage.clear();
+  const owner = "synthetic-owner-reflection";
+  const first = annotationFixture();
+  const second = annotationFixture({ id: "pack_2", body: "# Another round", revision: 1 });
+  const user = userEvent.setup();
+  const view = render(<OrganizationReadingGroup {...props} owner={owner} organization={{ ...organization, annotations: [first, second] }} />);
+  await user.type(screen.getByRole("textbox", { name: "个人复盘" }), "MY_PRIVATE_REFLECTION");
+  await user.type(screen.getByRole("textbox", { name: "问题或原文对照" }), "A public-to-group question");
+  await user.click(screen.getByRole("button", { name: "预览贡献" }));
+  await user.click(screen.getByRole("button", { name: "确认提交" }));
+  await screen.findByText("已保存到组织讨论。");
+  expect(JSON.stringify(vi.mocked(communityApi.createReply).mock.calls[0])).not.toContain("MY_PRIVATE_REFLECTION");
+  await user.selectOptions(screen.getByRole("combobox", { name: "选择读书包" }), "pack_2");
+  await user.selectOptions(screen.getByRole("combobox", { name: "选择读书包" }), "pack_1");
+  const { draftRecords } = await import("../communityPersistence");
+  expect(draftRecords<{ reflection: string }>(owner, "reading-group:org_x:pack_1").some((draft) => draft.value.reflection === "MY_PRIVATE_REFLECTION")).toBe(true);
+  view.unmount();
+  render(<OrganizationReadingGroup {...props} owner={owner} organization={{ ...organization, annotations: [first, second] }} />);
+  const restoreButtons = await screen.findAllByRole("button", { name: /恢复本机草稿/ });
+  await user.click(restoreButtons[0]);
+  expect(screen.getByRole("textbox", { name: "个人复盘" })).toHaveValue("MY_PRIVATE_REFLECTION");
+});
+
+test("personal export keeps the original source revision after the discussion updates and rechecks current access", async () => {
+  const onExportNote = vi.fn();
+  const user = userEvent.setup();
+  const view = render(<OrganizationReadingGroup {...props} onExportNote={onExportNote} />);
+  await user.type(screen.getByRole("textbox", { name: "个人复盘" }), "My reading of revision two");
+  const corrected = annotationFixture({ revision: 3, body: "# Corrected current group material" });
+  view.rerender(<OrganizationReadingGroup {...props} organization={{ ...organization, annotations: [corrected] }} onExportNote={onExportNote} />);
+  vi.mocked(communityApi.annotation).mockResolvedValueOnce({ annotation: corrected });
+  await user.click(screen.getByRole("checkbox", { name: "确认仅导出我在此填写的个人复盘与来源引用" }));
+  await user.click(screen.getByRole("button", { name: "导出个人笔记" }));
+  await waitFor(() => expect(onExportNote).toHaveBeenCalledTimes(1));
+  expect(onExportNote.mock.calls[0][0].content).toContain("revision: 2");
+  expect(onExportNote.mock.calls[0][0].content).toContain("revision=2");
+  expect(communityApi.annotation).toHaveBeenCalledWith("pack_1");
+  expect(onExportNote.mock.calls[0][0].content).not.toContain("Corrected current group material");
+});
+
+test("fresh access denial prevents personal export despite a stale permission snapshot", async () => {
+  const onExportNote = vi.fn();
+  vi.mocked(communityApi.annotation).mockRejectedValueOnce(new Error("ORGANIZATION_ACCESS_DENIED"));
+  const user = userEvent.setup();
+  render(<OrganizationReadingGroup {...props} onExportNote={onExportNote} />);
+  await user.type(screen.getByRole("textbox", { name: "个人复盘" }), "Private reflection must stay local");
+  await user.click(screen.getByRole("checkbox", { name: "确认仅导出我在此填写的个人复盘与来源引用" }));
+  await user.click(screen.getByRole("button", { name: "导出个人笔记" }));
+  await screen.findByText("当前无法访问此读书包，请刷新组织权限。");
+  expect(onExportNote).not.toHaveBeenCalled();
+});
