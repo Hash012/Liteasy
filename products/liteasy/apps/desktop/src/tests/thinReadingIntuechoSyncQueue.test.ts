@@ -9,8 +9,14 @@ import {
   THIN_READING_INTUECHO_PENDING_LABEL,
   createHttpIntuechoSyncAdapter,
   createLocalPendingIntuechoSyncAdapter,
-  listThinReadingPendingPublicAnnotations
+  listThinReadingPendingPublicAnnotations as listUnboundAnnotations
 } from "../app/features/thin-reading/thinReadingIntuechoSyncQueue";
+import type { PublicationActorBinding } from "../app/features/forum/publicationActorBinding";
+const actor: PublicationActorBinding = { endpoint: "https://intuecho.example.com", issuer: "https://identity.example.com",
+  subject: "synthetic-a", scopeId: "synthetic-a", scopeType: "user", sessionGeneration: "runtime:1" };
+function listThinReadingPendingPublicAnnotations(document: Parameters<typeof listUnboundAnnotations>[0]) {
+  return listUnboundAnnotations(document).map((item) => ({ ...item, actorBinding: actor }));
+}
 
 function createSyncableFixture() {
   const source = createThinReadingFixture();
@@ -37,6 +43,65 @@ function createSyncableFixture() {
 }
 
 describe("thinReadingIntuechoSyncQueue", () => {
+  test("persists the original operation across edits and only resumes a known actor explicitly", async () => {
+    const { prepareThinReadingPublications } = await import("../app/features/thin-reading/thinReadingIntuechoSyncQueue");
+    const root = createThinReadingDocument({ ...createSyncableFixture(), artifactId: "durable-thin-queue" });
+    const added = addThinReadingAnnotation(root, { body: "Original note", excerpt: "evidence", nodeId: root.rootNodeId, visibility: "pending_public" });
+    const bound = { ...added, annotations: added.annotations.map((annotation) => ({ ...annotation, publication: { actorBinding: actor } })) };
+    const prepared = prepareThinReadingPublications(bound, actor);
+    const operation = prepared.annotations[0].publication?.pendingOperation;
+    expect(operation).toMatchObject({ body: "Original note", queueKey: `durable-thin-queue:${added.annotations[0].id}` });
+    const edited = { ...prepared, annotations: prepared.annotations.map((annotation) => ({ ...annotation, body: "Later edit", updatedAt: "2026-10-03T12:00:00.000Z" })) };
+    const newSession = { ...actor, sessionGeneration: "runtime:2" };
+    expect(prepareThinReadingPublications(edited, newSession).annotations[0].publication?.actorBinding).toEqual(actor);
+    const resumed = prepareThinReadingPublications(edited, newSession, { resumePublication: true });
+    expect(resumed.annotations[0].publication).toMatchObject({ actorBinding: newSession, pendingOperation: operation, outcome: "unknown" });
+    expect(prepareThinReadingPublications(added, actor, { resumePublication: true }).annotations[0].publication).toBeUndefined();
+    const { applyThinReadingAnnotationSyncResults } = await import("../app/features/thin-reading/thinReadingProjection");
+    const reconciled = applyThinReadingAnnotationSyncResults(resumed, [{ annotationId: added.annotations[0].id,
+      status: "synced", intuechoAnnotationId: "remote-1", syncedAt: "2026-10-03T00:00:00.000Z" }],
+      "2026-10-03T00:00:00.000Z", new Map([[added.annotations[0].id, operation!.updatedAt]]));
+    expect(reconciled.annotations[0].syncState).toBeUndefined();
+    expect(reconciled.annotations[0].publication?.pendingOperation).toBeUndefined();
+    expect(listUnboundAnnotations(reconciled)).toHaveLength(1);
+    expect(prepareThinReadingPublications(reconciled, newSession).annotations[0].publication?.pendingOperation?.body).toBe("Later edit");
+  });
+
+  test("binds only a new explicit publication intent and leaves recovered unbound queue items alone", async () => {
+    const { bindThinReadingPublicationIntents } = await import("../app/features/thin-reading/thinReadingIntuechoSyncQueue");
+    const root = createThinReadingDocument({ ...createSyncableFixture(), artifactId: "explicit-intent" });
+    const next = addThinReadingAnnotation(root, { body: "New explicit note", excerpt: "evidence", nodeId: root.rootNodeId, visibility: "pending_public" });
+    expect(bindThinReadingPublicationIntents(root, next, actor).annotations[0].publication?.actorBinding).toEqual(actor);
+    expect(bindThinReadingPublicationIntents(next, { ...next }, actor).annotations[0].publication).toBeUndefined();
+  });
+
+  test("holds unbound and other-account items without sending a batch", async () => {
+    const root = createThinReadingDocument({ ...createSyncableFixture(), artifactId: "actor-bound-queue" });
+    const document = addThinReadingAnnotation(root, { body: "Synthetic note", excerpt: "evidence", nodeId: root.rootNodeId, visibility: "pending_public" });
+    const transport = vi.fn();
+    const adapter = createHttpIntuechoSyncAdapter({ endpoint: actor.endpoint, getActorBinding: () => actor, sessionId: "synthetic-token", transport });
+    const unbound = listUnboundAnnotations(document);
+    expect((await adapter.syncPendingAnnotations(unbound))[0].status).toBe("failed");
+    expect((await adapter.syncPendingAnnotations(unbound.map((item) => ({ ...item,
+      actorBinding: { ...actor, subject: "synthetic-b", scopeId: "synthetic-b" }
+    }))))[0].status).toBe("failed");
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  test("does not apply a late batch receipt after the actor changes", async () => {
+    const root = createThinReadingDocument({ ...createSyncableFixture(), artifactId: "late-actor-queue" });
+    const document = addThinReadingAnnotation(root, { body: "Synthetic note", excerpt: "evidence", nodeId: root.rootNodeId, visibility: "pending_public" });
+    const queue = listThinReadingPendingPublicAnnotations(document);
+    let current = actor;
+    const adapter = createHttpIntuechoSyncAdapter({ endpoint: actor.endpoint, getActorBinding: () => current, sessionId: "synthetic-token",
+      transport: async () => { current = { ...actor, sessionGeneration: "runtime:2" }; return {
+        ok: true, status: 200, json: async () => ({ results: queue.map((item) => ({ annotationId: item.annotationId,
+          queueKey: item.queueKey, status: "synced", syncedAt: "2026-10-03T00:00:00.000Z", intuechoAnnotationId: "remote-1" })) })
+      }; }
+    });
+    expect((await adapter.syncPendingAnnotations(queue))[0].status).toBe("failed");
+  });
+
   test("rejects conflicting duplicate receipts and keeps confirmed batch items out of retries", async () => {
     const root = createThinReadingDocument({ ...createSyncableFixture(), artifactId: "artifact-sync-receipts" });
     let document = addThinReadingAnnotation(root, {
@@ -54,6 +119,7 @@ describe("thinReadingIntuechoSyncQueue", () => {
       syncedAt: "2026-07-28T01:00:00.000Z"
     }));
     const results = await createHttpIntuechoSyncAdapter({
+      getActorBinding: () => actor,
       endpoint: "https://intuecho.example.com",
       sessionId: "desktop-token",
       transport: async () => ({
@@ -220,6 +286,7 @@ describe("thinReadingIntuechoSyncQueue", () => {
       status: 200
     }));
     const adapter = createHttpIntuechoSyncAdapter({
+      getActorBinding: () => actor,
       endpoint: "https://intuecho.example.com/",
       sessionId: "desktop-token",
       transport
@@ -261,6 +328,7 @@ describe("thinReadingIntuechoSyncQueue", () => {
     });
     const transport = vi.fn();
     const results = await createHttpIntuechoSyncAdapter({
+      getActorBinding: () => actor,
       endpoint: "https://intuecho.example.com",
       sessionId: "desktop-token",
       transport
@@ -302,6 +370,7 @@ describe("thinReadingIntuechoSyncQueue", () => {
     }));
 
     const results = await createHttpIntuechoSyncAdapter({
+      getActorBinding: () => actor,
       endpoint: "https://intuecho.example.com",
       sessionId: "desktop-token",
       transport
@@ -325,8 +394,9 @@ describe("thinReadingIntuechoSyncQueue", () => {
       visibility: "pending_public"
     });
     const queue = listThinReadingPendingPublicAnnotations(document);
-    const insecureAdapter = createHttpIntuechoSyncAdapter({ endpoint: "http://intuecho.example.com", sessionId: "desktop-token" });
+    const insecureAdapter = createHttpIntuechoSyncAdapter({ getActorBinding: () => actor, endpoint: "http://intuecho.example.com", sessionId: "desktop-token" });
     const incompleteAdapter = createHttpIntuechoSyncAdapter({
+      getActorBinding: () => actor,
       endpoint: "https://intuecho.example.com",
       sessionId: "desktop-token",
       transport: async () => ({ json: async () => ({ results: [] }), ok: true, status: 200 })
@@ -341,6 +411,7 @@ describe("thinReadingIntuechoSyncQueue", () => {
   });
 
   test("normalizes an HTTPS community endpoint before appending the sync route", async () => {
+    const pathActor = { ...actor, endpoint: "https://intuecho.example.com/community" };
     const root = createThinReadingDocument({ ...createSyncableFixture(), artifactId: "artifact-sync-path" });
     const document = addThinReadingAnnotation(root, {
       body: "可同步批注。",
@@ -356,10 +427,11 @@ describe("thinReadingIntuechoSyncQueue", () => {
     }));
 
     await createHttpIntuechoSyncAdapter({
-      endpoint: "https://intuecho.example.com/community/?preview=true#annotations",
+      getActorBinding: () => pathActor,
+      endpoint: "https://intuecho.example.com/community/",
       sessionId: "desktop-token",
       transport
-    }).syncPendingAnnotations(listThinReadingPendingPublicAnnotations(document));
+    }).syncPendingAnnotations(listThinReadingPendingPublicAnnotations(document).map((item) => ({ ...item, actorBinding: pathActor })));
 
     expect(transport).toHaveBeenCalledWith(expect.objectContaining({
       url: "https://intuecho.example.com/community/v1/thin-reading/annotations:sync"

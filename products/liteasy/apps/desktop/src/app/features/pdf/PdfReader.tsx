@@ -246,6 +246,9 @@ export type PdfAnnotationPublicationChange = {
   literatureHints?: ReturnType<typeof createPdfLiteratureHints>;
   operation: "publish" | "update" | "retract";
   paper: Paper;
+  newPublication?: true;
+  resumePublication?: true;
+  onPreparedPublication?: (publication: PdfAnnotationPublication) => Promise<void>;
   restartReplay?: true;
 };
 
@@ -354,6 +357,9 @@ export async function collectPdfLiteratureHints(
 }
 
 function publicationStatus(publication: PdfAnnotationPublication) {
+  if (publication.state === "failed" && publication.outcome === "unknown") {
+    return `${publication.desiredVisibility === "private" ? "撤回" : "发布"}结果待核实${publication.lastError ? `：${publication.lastError}` : ""}`;
+  }
   if (publication.state === "published") return "已公开到论坛";
   if (publication.state === "pending_retract") return "正在从论坛撤回";
   if (publication.state === "pending_update") return "正在更新论坛版本";
@@ -2673,7 +2679,8 @@ export function PdfReader({
     annotation: PdfAnnotationV2,
     operation: "publish" | "update" | "retract",
     restartReplay = false,
-    restartAttemptKey?: string
+    restartAttemptKey?: string,
+    explicitIntent?: { newPublication?: true; resumePublication?: true }
   ): Promise<PdfAnnotationPublication | undefined> {
     if (!activePaper || !onChangeAnnotationPublication) {
       const publication: PdfAnnotationPublication = {
@@ -2726,6 +2733,17 @@ export function PdfReader({
         ...(hints ? { literatureHints: hints } : {}),
         operation,
         paper: activePaper,
+        ...explicitIntent,
+        onPreparedPublication: async (publication) => {
+          assertReadingAnnotationsReady();
+          const latest = annotationsRef.current.find((item) => item.id === annotation.id);
+          if (!latest || latest.revision !== annotation.revision ||
+            publicationIntentsRef.current.get(annotation.id) !== expectedIntent) {
+            throw new Error("批注或发布范围已变化，请重新确认。");
+          }
+          setCurrentAnnotations((items) => items.map((item) => item.id === annotation.id ? { ...item, publication } : item));
+          await persistReadingAnnotations();
+        },
         ...(restartReplay ? { restartReplay: true as const } : {})
       }));
       transport = { operation, promise };
@@ -2742,7 +2760,7 @@ export function PdfReader({
       const publication: PdfAnnotationPublication = {
         ...annotation.publication,
         desiredVisibility: expectedIntent,
-        lastError: operation === "retract" ? `撤回未完成，论坛仍公开。${message}` : message,
+        lastError: operation === "retract" ? `撤回结果待核实。${message}` : message,
         state: "failed"
       };
       if (publicationIntentsRef.current.get(annotation.id) !== expectedIntent) return publication;
@@ -2772,7 +2790,10 @@ export function PdfReader({
       updatedAt: new Date().toISOString()
     });
     setCurrentAnnotations((current) => current.map((item) => item.id === annotation.id ? pending : item));
-    queueMicrotask(() => void applyPublication(pending, operation));
+    queueMicrotask(() => void applyPublication(pending, operation, false, undefined,
+      annotation.publication.state === "not_published" && !annotation.publication.remoteAnnotationId &&
+        !annotation.publication.pendingOperation && !annotation.publication.pendingCreateOperation
+        ? { newPublication: true } : { resumePublication: true }));
   }
 
   function addAnnotation(kind: Exclude<AnnotationKind, "note" | "text" | "ink">) {

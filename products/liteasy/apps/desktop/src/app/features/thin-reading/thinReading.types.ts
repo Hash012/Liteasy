@@ -4,6 +4,8 @@ import type {
   PaperIdentityInput
 } from "../paper-identity/paperIdentity";
 import type { LiteratureRecord } from "../paper-identity/literature.types";
+import type { PublicationActorBinding } from "../forum/publicationActorBinding";
+import type { ForumAnnotationTarget } from "../forum/forum.types";
 import type {
   DeepDiveTargetV1,
   VisualizationArtifactV1,
@@ -670,6 +672,19 @@ export type ThinReadingAnnotationSyncState =
   | { intuechoAnnotationId: string; status: "synced"; syncedAt: string };
 
 export type ThinReadingAnnotation = {
+  publication?: {
+    actorBinding: PublicationActorBinding;
+    pendingOperation?: {
+      annotationId: string;
+      body: string;
+      createdAt: string;
+      queueKey: string;
+      status: "pending_public";
+      targets: ForumAnnotationTarget[];
+      updatedAt: string;
+    };
+    outcome?: "unknown";
+  };
   artifactId: string;
   body: string;
   createdAt: string;

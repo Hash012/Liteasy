@@ -31,12 +31,16 @@ import {
 } from "../features/pdf/pdfAnnotationIntuechoSync";
 import type { createWorkspaceStore } from "../features/workspace/workspace.store";
 import type { Paper } from "../features/workspace/workspace.types";
+import { normalizePublicationActorBinding, samePublicationActor, type PublicationActorBinding } from "../features/forum/publicationActorBinding";
 
 export type ChangePdfAnnotationPublicationInput = {
   annotation: PdfAnnotationV2;
   literatureHints?: NonNullable<LiteratureResolveInput["hints"]>;
   operation: "publish" | "update" | "retract";
   paper: Paper;
+  newPublication?: true;
+  resumePublication?: true;
+  onPreparedPublication?: (publication: PdfAnnotationPublication) => Promise<void>;
   restartReplay?: true;
 };
 
@@ -46,6 +50,7 @@ type PublicationForumClient = Pick<
 >;
 
 type PdfAnnotationPublicationControllerInput = {
+  getActorBinding?: () => PublicationActorBinding | undefined;
   forumClient: PublicationForumClient;
   literatureClient: Pick<
     LiteratureAuthorityClient,
@@ -152,8 +157,12 @@ function failedPublication(
 ): PdfAnnotationPublication {
   const message = errorMessage(error, "论坛发布请求失败，请稍后重试。");
   return {
+    ...(priorPublication?.actorBinding ? { actorBinding: priorPublication.actorBinding } : {}),
+    ...(priorPublication?.pendingOperation ? { pendingOperation: priorPublication.pendingOperation, outcome: "unknown" as const } : {}),
     desiredVisibility: operation === "retract" ? "private" : "public",
-    lastError: operation === "retract" && !message.includes("论坛仍公开")
+    lastError: priorPublication?.pendingOperation
+      ? `${operation === "retract" ? "撤回" : "发布"}结果待核实。${message}`
+      : operation === "retract" && !message.includes("论坛仍公开")
       ? `撤回未完成，论坛仍公开。${message}`
       : message,
     ...(priorPublication?.remoteAnnotationId
@@ -169,12 +178,16 @@ function failedPublication(
 
 function unknownCreateOutcome(
   error: unknown,
-  pendingCreateOperation: PendingCreateRecovery["operation"]
+  pendingCreateOperation: PendingCreateRecovery["operation"],
+  priorPublication: PdfAnnotationPublication
 ): PdfAnnotationPublication {
   return {
+    actorBinding: priorPublication.actorBinding,
     desiredVisibility: "private",
     lastError: `撤回未完成，论坛发布状态未知。${errorMessage(error, "请稍后重试恢复请求。")}`,
     pendingCreateOperation,
+    pendingOperation: pendingCreateOperation,
+    outcome: "unknown",
     state: "failed"
   };
 }
@@ -222,6 +235,7 @@ function searchDraftFromRequest(request: LiteratureResolveInput): LiteratureSear
 }
 
 export function usePdfAnnotationPublicationController({
+  getActorBinding,
   forumClient,
   literatureClient,
   literatureMetadataRepository,
@@ -234,6 +248,9 @@ export function usePdfAnnotationPublicationController({
   const [resolutionsByPaperId, setResolutionsByPaperId] = useState<Record<string, LiteratureResolutionState>>({});
   const activeResolutionRef = useRef<ActiveResolution | null>(null);
   const forumClientRef = useRef(forumClient);
+  const actorBindingGetterRef = useRef(getActorBinding);
+  actorBindingGetterRef.current = getActorBinding;
+  const boundPapersRef = useRef(new Map<string, Paper>());
   const literatureClientRef = useRef(literatureClient);
   const latestPublicationRef = useRef(new Map<string, PdfAnnotationPublication>());
   const latestPapersRef = useRef(new Map<string, Paper>());
@@ -535,17 +552,64 @@ export function usePdfAnnotationPublicationController({
   }
 
   async function performPublication(
-    input: ChangePdfAnnotationPublicationInput
+    input: ChangePdfAnnotationPublicationInput,
+    requestActor: PublicationActorBinding | undefined,
+    requestClient: PublicationForumClient
   ): Promise<PdfAnnotationPublication> {
-    const queueKey = `${input.annotation.paperIdentity.paperId}:${input.annotation.id}`;
+    const queueKey = `${JSON.stringify(requestActor)}:${input.annotation.paperIdentity.paperId}:${input.annotation.id}`;
     let priorPublication = latestPublicationRef.current.get(queueKey) ?? input.annotation.publication;
     let operation: ForumAnnotationPublicationOperation | undefined;
+    function assertPublicSource() {
+      if (input.paper.libraryReference?.scopeType === "organization") {
+        throw new Error("组织来源尚未允许公开发布；已有论坛批注仍可撤回。");
+      }
+    }
+    function assertCurrentActor() {
+      if (!requestActor || !samePublicationActor(requestActor, actorBindingGetterRef.current?.())) {
+        throw new Error("账号或会话已变化，发布结果需由原账号核实。");
+      }
+    }
+    async function sendOperation(value: ForumAnnotationPublicationOperation) {
+      assertCurrentActor();
+      if (value.operation === "upsert") assertPublicSource();
+      if (!input.onPreparedPublication) throw new Error("发布任务尚未安全保存，未发送到论坛。");
+      const { pendingCreateOperation: _legacyPending, ...prior } = priorPublication;
+      priorPublication = {
+        ...prior,
+        actorBinding: requestActor,
+        desiredVisibility: input.operation === "retract" ? "private" : "public",
+        outcome: "unknown",
+        pendingOperation: value,
+        ...(input.operation === "retract" && value.operation === "upsert" && !prior.remoteAnnotationId
+          ? { pendingCreateOperation: value } : {}),
+        state: input.operation === "retract" ? "pending_retract" : prior.remoteAnnotationId ? "pending_update" : "pending_create"
+      };
+      await input.onPreparedPublication(priorPublication);
+      assertCurrentActor();
+      latestPublicationRef.current.set(queueKey, priorPublication);
+      const response = await requestClient.applyAnnotationPublications([value], requestActor);
+      assertCurrentActor();
+      return response;
+    }
     try {
+      const recordedActor = priorPublication.actorBinding;
+      if (!recordedActor) {
+        if (!input.newPublication || input.restartReplay || priorPublication.pendingOperation ||
+          priorPublication.pendingCreateOperation || priorPublication.remoteAnnotationId) {
+          throw new Error("旧发布任务缺少原账号归属，已保留本地内容，请核实原发布账号。");
+        }
+      } else if (!samePublicationActor(recordedActor, requestActor) &&
+        !(input.resumePublication && samePublicationActor(recordedActor, requestActor, { includeGeneration: false }))) {
+        throw new Error("发布任务属于原账号或先前会话，请使用原账号明确恢复。");
+      }
+      if (requestActor) priorPublication = { ...priorPublication, actorBinding: requestActor };
+      assertCurrentActor();
       if (input.operation === "retract") {
         const latest = latestPublicationRef.current.get(queueKey);
         let remoteAnnotationId = latest?.remoteAnnotationId ?? input.annotation.publication.remoteAnnotationId;
         if (!remoteAnnotationId) {
-          const durableOperation = input.annotation.publication.pendingCreateOperation;
+          const pending = input.annotation.publication.pendingOperation;
+          const durableOperation = pending?.operation === "upsert" ? pending : input.annotation.publication.pendingCreateOperation;
           const recovery = pendingCreateRecoveryRef.current.get(queueKey) ?? (durableOperation ? {
             annotation: {
               ...input.annotation,
@@ -560,30 +624,32 @@ export function usePdfAnnotationPublicationController({
               ? { ...input.annotation.publication }
               : { desiredVisibility: "private", state: "not_published" };
           }
-          const replayResponse = await forumClientRef.current.applyAnnotationPublications([recovery.operation]);
+          const replayResponse = await sendOperation(recovery.operation);
           const replayResult = replayResponse.results[0];
           if (!replayResult || replayResult.state === "failed") {
             return unknownCreateOutcome(
               replayResult?.error ?? "论坛发布响应缺少该批注的可验证结果。",
-              recovery.operation
+              recovery.operation,
+              priorPublication
             );
           }
           try {
             priorPublication = confirmPdfAnnotationPublication(
-              recovery.annotation,
+              { ...recovery.annotation, publication: priorPublication },
               replayResult
             ).publication;
           } catch (error) {
-            return unknownCreateOutcome(error, recovery.operation);
+            return unknownCreateOutcome(error, recovery.operation, priorPublication);
           }
           latestPublicationRef.current.set(queueKey, priorPublication);
           pendingCreateRecoveryRef.current.delete(queueKey);
           remoteAnnotationId = priorPublication.remoteAnnotationId;
           if (!remoteAnnotationId) {
-            return unknownCreateOutcome("恢复回执缺少远端批注 ID。", recovery.operation);
+            return unknownCreateOutcome("恢复回执缺少远端批注 ID。", recovery.operation, priorPublication);
           }
         }
-        operation = createRetractOperation({
+        const durableRetract = input.annotation.publication.pendingOperation;
+        operation = durableRetract?.operation === "retract" ? durableRetract : createRetractOperation({
           ...input.annotation,
           publication: {
             ...input.annotation.publication,
@@ -592,23 +658,26 @@ export function usePdfAnnotationPublicationController({
           }
         });
       } else {
-        const durableOperation = input.restartReplay
-          ? input.annotation.publication.pendingCreateOperation
-          : undefined;
+        assertPublicSource();
+        const durableOperation = input.annotation.publication.pendingOperation ?? (input.restartReplay
+          ? input.annotation.publication.pendingCreateOperation : undefined);
         if (durableOperation) {
           operation = durableOperation;
         } else {
-          const currentPaper = latestPapersRef.current.get(input.paper.id) ?? input.paper;
+          const paperKey = `${JSON.stringify(requestActor)}:${input.paper.id}`;
+          const currentPaper = boundPapersRef.current.get(paperKey) ?? input.paper;
           let confirmedLiterature = input.restartReplay
             ? await literatureMetadataRepository.load(currentPaper.id)
             : currentPaper.literature;
           if (!confirmedLiterature) {
             confirmedLiterature = await literatureMetadataRepository.load(currentPaper.id);
           }
+          assertCurrentActor();
           if (!confirmedLiterature) {
             const pendingResolution = resolveAndConfirm(input.literatureHints, currentPaper);
             if (!pendingResolution) return { ...busyPublication };
             confirmedLiterature = await pendingResolution;
+            assertCurrentActor();
             if (!confirmedLiterature) {
               return { desiredVisibility: "private", state: "not_published" };
             }
@@ -617,14 +686,15 @@ export function usePdfAnnotationPublicationController({
             ...currentPaper,
             literature: confirmedLiterature
           };
-          latestPapersRef.current.set(persistedPaper.id, persistedPaper);
+          assertCurrentActor();
+          boundPapersRef.current.set(paperKey, persistedPaper);
           workspaceStore.updatePapers([persistedPaper]);
           onPaperUpdated(persistedPaper);
           operation = createUpsertOperation(input.annotation, confirmedLiterature);
         }
       }
 
-      const response = await forumClientRef.current.applyAnnotationPublications([operation]);
+      const response = await sendOperation(operation);
       const result = response.results[0];
       if (!result || result.state === "failed") {
         if (input.operation === "publish" && operation.operation === "upsert" &&
@@ -645,13 +715,22 @@ export function usePdfAnnotationPublicationController({
       const currentAnnotation = operation.operation === "retract"
         ? {
             ...input.annotation,
+            revision: operation.revision,
             publication: {
-              ...input.annotation.publication,
+              ...priorPublication,
               remoteAnnotationId: operation.remoteAnnotationId
             }
           }
-        : input.annotation;
-      const publication = confirmPdfAnnotationPublication(currentAnnotation, result).publication;
+        : { ...input.annotation, publication: priorPublication, revision: operation.revision };
+      let publication = confirmPdfAnnotationPublication(currentAnnotation, result).publication;
+      if (operation.operation === "upsert") {
+        const currentPayload = createUpsertOperation(input.annotation, { literatureId: operation.literatureId });
+        if (currentPayload.body !== operation.body || JSON.stringify(currentPayload.sourcePassage) !== JSON.stringify(operation.sourcePassage)) {
+          publication = { ...publication, state: "failed", lastError: "原请求已核实，本地修改尚未发布，请确认更新。" };
+        }
+      } else if (input.operation !== "retract") {
+        publication = { ...publication, desiredVisibility: "public", state: "failed", lastError: "原撤回已核实，请重新确认是否发布。" };
+      }
       latestPublicationRef.current.set(queueKey, publication);
       pendingCreateRecoveryRef.current.delete(queueKey);
       return publication;
@@ -674,9 +753,11 @@ export function usePdfAnnotationPublicationController({
   }
 
   function changePublication(input: ChangePdfAnnotationPublicationInput) {
-    const queueKey = `${input.annotation.paperIdentity.paperId}:${input.annotation.id}`;
+    const requestActor = normalizePublicationActorBinding(actorBindingGetterRef.current?.());
+    const requestClient = forumClientRef.current;
+    const queueKey = `${JSON.stringify(requestActor)}:${input.annotation.paperIdentity.paperId}:${input.annotation.id}`;
     const previous = publicationQueuesRef.current.get(queueKey) ?? Promise.resolve();
-    const result = previous.catch(() => undefined).then(() => performPublication(input));
+    const result = previous.catch(() => undefined).then(() => performPublication(input, requestActor, requestClient));
     const tail = result.then(() => undefined, () => undefined);
     publicationQueuesRef.current.set(queueKey, tail);
     void tail.finally(() => {

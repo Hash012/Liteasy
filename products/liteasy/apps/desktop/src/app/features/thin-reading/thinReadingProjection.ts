@@ -1078,16 +1078,24 @@ export function applyThinReadingAnnotationSyncResults(
     if (annotation.visibility !== "pending_public") {
       return annotation;
     }
-    if (annotation.syncState?.status === "synced" ||
-      (expectedUpdatedAtByAnnotationId && expectedUpdatedAtByAnnotationId.get(annotation.id) !== annotation.updatedAt)) {
+    if (annotation.syncState?.status === "synced") {
       return annotation;
     }
     const result = resultsByAnnotationId.get(annotation.id);
     if (!result || result.status === "pending_public") {
       return annotation;
     }
+    const expectedVersion = expectedUpdatedAtByAnnotationId?.get(annotation.id);
+    if (expectedUpdatedAtByAnnotationId && expectedVersion !== annotation.updatedAt) {
+      // An old receipt confirms only the frozen attempt. Keep a newer local edit
+      // pending so a later explicit sync sends its own version.
+      return result.status === "synced" && annotation.publication && expectedVersion === annotation.publication.pendingOperation?.updatedAt
+        ? { ...annotation, publication: { actorBinding: annotation.publication.actorBinding }, syncState: undefined }
+        : annotation;
+    }
     return result.status === "synced"
-      ? { ...annotation, syncState: { intuechoAnnotationId: result.intuechoAnnotationId, status: "synced" as const, syncedAt: result.syncedAt } }
+      ? { ...annotation, ...(annotation.publication ? { publication: { actorBinding: annotation.publication.actorBinding } } : {}),
+          syncState: { intuechoAnnotationId: result.intuechoAnnotationId, status: "synced" as const, syncedAt: result.syncedAt } }
       : { ...annotation, syncState: { error: result.error, lastAttemptAt: attemptedAt, status: "failed" as const } };
   });
   return freezeDocument({

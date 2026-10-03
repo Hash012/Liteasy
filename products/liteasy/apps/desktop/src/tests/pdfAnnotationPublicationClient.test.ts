@@ -94,6 +94,27 @@ describe("PDF annotation publication operations", () => {
 });
 
 describe("PDF annotation publication client", () => {
+  test("holds an actor-bound request before dispatch and after a late account change", async () => {
+    const actor = { endpoint: "https://community.example.invalid", issuer: "https://identity.example.invalid",
+      subject: "actor-a", scopeType: "user" as const, scopeId: "actor-a", sessionGeneration: "runtime:1" };
+    let current = { ...actor, subject: "actor-b", scopeId: "actor-b" };
+    const operation = createUpsertOperation(annotation(), literature);
+    const fetchImpl = vi.fn(async () => {
+      current = { ...actor, subject: "actor-b", scopeId: "actor-b" };
+      return { ok: true, status: 200, json: async () => ({ results: [{
+        annotationId: operation.annotationId, queueKey: operation.queueKey, remoteAnnotationId: "remote-1",
+        remoteRevision: 1, state: "published", syncedAt: "2026-08-09T03:00:00.000Z"
+      }] }) };
+    });
+    const client = createForumClient({ apiBaseUrl: actor.endpoint, getActorBinding: () => current, sessionId: "synthetic-token", fetchImpl: fetchImpl as unknown as typeof fetch });
+    await expect(client.applyAnnotationPublications([operation], actor)).resolves.toMatchObject({ results: [{ state: "failed", pendingOperation: operation }] });
+    expect(fetchImpl).not.toHaveBeenCalled();
+    current = actor;
+    await expect(client.applyAnnotationPublications([operation], actor)).resolves.toMatchObject({ results: [{ state: "failed", pendingOperation: operation }] });
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(String(fetchImpl.mock.calls[0])).not.toContain("sessionGeneration");
+  });
+
   test("rejects duplicate receipts for one operation without discarding other batch receipts", async () => {
     const first = createUpsertOperation(annotation(), literature);
     const second = createUpsertOperation(annotation({ id: "annotation-local-2" }), literature);

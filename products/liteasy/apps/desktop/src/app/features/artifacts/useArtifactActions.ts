@@ -42,9 +42,12 @@ import {
   truncateThinReadingTitle
 } from "../thin-reading/thinReadingProjection";
 import {
+  bindThinReadingPublicationIntents,
   createHttpIntuechoSyncAdapter,
-  listThinReadingPendingPublicAnnotations
+  listThinReadingPendingPublicAnnotations,
+  prepareThinReadingPublications
 } from "../thin-reading/thinReadingIntuechoSyncQueue";
+import { normalizePublicationActorBinding, samePublicationActor, type PublicationActorBinding } from "../forum/publicationActorBinding";
 import {
   createThinReadingBranchRecoverySnapshot,
   validateThinReadingBranchRecoverySnapshot
@@ -138,6 +141,8 @@ type UseArtifactActionsInput = {
   getMineruFiguresForPaperId?: (paperId: string) => MineruFigure[];
   getIntuechoEndpoint?: () => string;
   getIntuechoSessionId?: () => string | undefined;
+  getActorBinding?: () => PublicationActorBinding | undefined;
+  assertCanPublishThinReading?: (document: ThinReadingDocument) => void | Promise<void>;
   getGenerationSettings?: () => import("../settings/settings.types").SettingsState;
   getAssistantLanguage?: () => string;
   getActiveReaderPaper?: () => Paper | null;
@@ -531,6 +536,8 @@ export function useArtifactActions({
   getMineruFiguresForPaperId,
   getIntuechoEndpoint,
   getIntuechoSessionId,
+  getActorBinding,
+  assertCanPublishThinReading,
   getGenerationSettings,
   getAssistantLanguage,
   getActiveReaderPaper,
@@ -1666,7 +1673,12 @@ export function useArtifactActions({
       onAnalysisHint("旧版薄读仅供查看；请先从深入操作创建新版副本。");
       return;
     }
-    void persistThinReadingDocument(artifactId, nextDocument).catch((error) => {
+    const previous = (artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId) ??
+      artifactStore.getCatalog().find((tab) => tab.artifactId === artifactId))?.thinReadingDocument;
+    const boundDocument = previous
+      ? bindThinReadingPublicationIntents(previous, nextDocument, normalizePublicationActorBinding(getActorBinding?.()))
+      : nextDocument;
+    void persistThinReadingDocument(artifactId, boundDocument as typeof nextDocument).catch((error) => {
       onAnalysisHint(`薄读本地状态保存失败：${error instanceof Error ? error.message : String(error)}`);
     });
   }
@@ -1682,27 +1694,39 @@ export function useArtifactActions({
     if (!endpoint) {
       throw new Error("尚未配置 Intuecho HTTPS 同步端点；批注仍保留在本地等待同步队列。");
     }
-    const pending = listThinReadingPendingPublicAnnotations(input.document);
+    const actor = normalizePublicationActorBinding(getActorBinding?.());
+    if (!actor) throw new Error("请先完成账号验证，再同步公开批注。");
+    if (!assertCanPublishThinReading) throw new Error("无法确认薄读来源是否允许公开，批注已保留在本地。");
+    await assertCanPublishThinReading(input.document);
+    if (!samePublicationActor(actor, getActorBinding?.())) throw new Error("账号或会话已变化，请重新确认同步。");
+    const prepared = prepareThinReadingPublications(input.document, actor, { resumePublication: true });
+    const pending = listThinReadingPendingPublicAnnotations(prepared);
     if (pending.length === 0) {
       return;
     }
+    // This entry is invoked only by the explicit sync action. Persist the exact
+    // original payload, including a prior unknown result, before retrying it.
+    await persistThinReadingDocument(input.artifactId, prepared as Extract<ThinReadingDocument, { version: "liteasy.thin-reading/v2" }>, { commitMode: "after_save" });
+    if (!samePublicationActor(actor, getActorBinding?.())) throw new Error("账号或会话已变化，同步任务仍保留在原账号。");
     const results = await createHttpIntuechoSyncAdapter({
       endpoint,
+      getActorBinding,
       sessionId: getIntuechoSessionId?.()
     }).syncPendingAnnotations(pending);
+    if (!samePublicationActor(actor, getActorBinding?.())) throw new Error("账号或会话已变化，同步结果需由原账号核实。");
     const current = artifactStore.getOpenTabs().find((tab) => tab.artifactId === input.artifactId) ??
       artifactStore.getCatalog().find((tab) => tab.artifactId === input.artifactId);
     if (!current || current.type !== "thin_reading" || !current.thinReadingDocument) {
       return;
     }
-    const expectedUpdatedAtByAnnotationId = new Map(pending.map((item) => [item.annotationId, item.updatedAt]));
+    const expectedUpdatedAtByAnnotationId = new Map(pending.map((item) => [item.annotationId, item.pendingOperation?.updatedAt ?? item.updatedAt]));
     const nextDocument = applyThinReadingAnnotationSyncResults(
       current.thinReadingDocument,
       results,
       new Date().toISOString(),
       expectedUpdatedAtByAnnotationId
     );
-    updateThinReadingDocument(input.artifactId, nextDocument);
+    await persistThinReadingDocument(input.artifactId, nextDocument as Extract<ThinReadingDocument, { version: "liteasy.thin-reading/v2" }>);
     const synced = results.filter((result) => result.status === "synced").length;
     const failed = results.filter((result) => result.status === "failed").length;
     onAnalysisHint(

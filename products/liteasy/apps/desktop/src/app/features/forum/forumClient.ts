@@ -8,8 +8,10 @@ import type {
   ForumPost
 } from "./forum.types";
 import { forumHandoffPayload } from "./forumHandoffPayload";
+import { normalizePublicationActorBinding, samePublicationActor, type PublicationActorBinding } from "./publicationActorBinding";
 
 type ForumClientOptions = {
+  getActorBinding?: () => PublicationActorBinding | undefined;
   apiBaseUrl?: string;
   fetchImpl?: typeof fetch;
   getSessionId?: () => string | undefined;
@@ -24,6 +26,7 @@ export function createForumClient({
   apiBaseUrl = import.meta.env.VITE_FORUM_API_URL ?? "http://127.0.0.1:4040",
   fetchImpl = fetch,
   getSessionId,
+  getActorBinding,
   sessionId
 }: ForumClientOptions = {}) {
   function authenticationHeaders(required: boolean): Record<string, string> {
@@ -130,7 +133,12 @@ export function createForumClient({
   }
 
   return {
-    applyAnnotationPublications: async (operations: readonly ForumAnnotationPublicationOperation[]) => {
+    applyAnnotationPublications: async (operations: readonly ForumAnnotationPublicationOperation[], actorBinding?: PublicationActorBinding) => {
+      const actorIsCurrent = () => !actorBinding || (samePublicationActor(actorBinding, getActorBinding?.()) &&
+        normalizePublicationActorBinding(actorBinding)?.endpoint ===
+          normalizePublicationActorBinding({ ...actorBinding, endpoint: apiBaseUrl })?.endpoint);
+      if (!actorIsCurrent()) return { results: operations.map((operation) => failedPublication(operation,
+        "发布账号或会话已变化，请由原账号核实。", { code: "PUBLICATION_ACTOR_CHANGED" })) };
       const queueKeyCounts = new Map<string, number>();
       for (const operation of operations) {
         queueKeyCounts.set(operation.queueKey, (queueKeyCounts.get(operation.queueKey) ?? 0) + 1);
@@ -151,6 +159,8 @@ export function createForumClient({
       }
       try {
         const body = await postJson<unknown>("/v1/pdf-annotations:sync", { operations: sendable });
+        if (!actorIsCurrent()) return { results: operations.map((operation) => failedPublication(operation,
+          "发布账号或会话已变化，结果待核实。", { code: "PUBLICATION_ACTOR_CHANGED" })) };
         const normalized = normalizePublicationResults(sendable, body);
         const sendableResults = new Map(sendable.map((operation, index) => [operation, normalized[index]]));
         return { results: operations.map((operation) => duplicateFailures.get(operation) ?? sendableResults.get(operation)!) };

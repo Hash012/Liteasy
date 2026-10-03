@@ -1,6 +1,7 @@
 import { freezePaperIdentity } from "../paper-identity/paperIdentity";
 import { sha256Hex } from "../paper-identity/paperIdentity";
 import type { ForumAnnotationTarget, ForumLiteratureReference } from "../forum/forum.types";
+import { normalizePublicationActorBinding, samePublicationActor, type PublicationActorBinding } from "../forum/publicationActorBinding";
 import type {
   ThinReadingAnnotation,
   ThinReadingAnnotationTarget,
@@ -13,6 +14,8 @@ export const THIN_READING_INTUECHO_PENDING_LABEL = "等待 Intuecho 同步";
 export type ThinReadingIntuechoQueueStatus = "pending_public";
 
 export type ThinReadingIntuechoAnnotationQueueItem = {
+  actorBinding?: PublicationActorBinding;
+  pendingOperation?: NonNullable<ThinReadingAnnotation["publication"]>["pendingOperation"];
   annotationId: string;
   artifactId: string;
   body: string;
@@ -77,6 +80,7 @@ function isCommunitySyncableItem(item: ThinReadingIntuechoAnnotationQueueItem) {
 }
 
 function wireAnnotation(item: ThinReadingIntuechoAnnotationQueueItem) {
+  if (item.pendingOperation) return item.pendingOperation;
   return {
     annotationId: item.annotationId,
     body: item.body,
@@ -86,6 +90,44 @@ function wireAnnotation(item: ThinReadingIntuechoAnnotationQueueItem) {
     targets: item.targets,
     updatedAt: item.updatedAt
   };
+}
+
+// Prepare the existing local queue before any network work. Old unbound items
+// remain unbound; a new runtime may resume only a known actor's explicit action.
+export function prepareThinReadingPublications(
+  document: ThinReadingDocument,
+  actor: PublicationActorBinding,
+  options: { resumePublication?: true } = {}
+): ThinReadingDocument {
+  const items = new Map(listThinReadingPendingPublicAnnotations(document).map((item) => [item.annotationId, item]));
+  return {
+    ...document,
+    annotations: document.annotations.map((annotation) => {
+      const item = items.get(annotation.id);
+      if (!item || !samePublicationActor(item.actorBinding, actor, { includeGeneration: !options.resumePublication })) return annotation;
+      return { ...annotation, publication: {
+        actorBinding: { ...actor },
+        pendingOperation: structuredClone(wireAnnotation(item)),
+        outcome: "unknown" as const
+      } };
+    })
+  };
+}
+
+export function bindThinReadingPublicationIntents(
+  previous: ThinReadingDocument,
+  next: ThinReadingDocument,
+  actor: PublicationActorBinding | undefined
+): ThinReadingDocument {
+  if (!normalizePublicationActorBinding(actor)) return next;
+  const previousById = new Map(previous.annotations.map((annotation) => [annotation.id, annotation]));
+  return { ...next, annotations: next.annotations.map((annotation) => {
+    const prior = previousById.get(annotation.id);
+    const newIntent = !prior || (prior.visibility === "private" && !prior.publication && !prior.syncState);
+    return annotation.visibility === "pending_public" && !annotation.publication && newIntent
+      ? { ...annotation, publication: { actorBinding: { ...actor! } } }
+      : annotation;
+  }) };
 }
 
 function mergeResultsInInputOrder(input: {
@@ -178,6 +220,7 @@ function normalizeRemoteResults(input: {
 
 export function createHttpIntuechoSyncAdapter(input: {
   endpoint: string;
+  getActorBinding?: () => PublicationActorBinding | undefined;
   sessionId?: string;
   transport?: ThinReadingIntuechoSyncTransport;
 }): ThinReadingIntuechoSyncAdapter {
@@ -186,12 +229,16 @@ export function createHttpIntuechoSyncAdapter(input: {
       if (items.length === 0) {
         return Object.freeze([]);
       }
-      const syncableItems = items.filter(isCommunitySyncableItem);
+      const actor = normalizePublicationActorBinding(input.getActorBinding?.());
+      const actorItems = items.filter((item) => samePublicationActor(item.actorBinding, actor));
+      const heldItems = items.filter((item) => !actorItems.includes(item));
+      const syncableItems = actorItems.filter(isCommunitySyncableItem);
       const localOnlyItems = items.filter((item) => !item.hasConfirmedLiterature);
       const missingEvidenceItems = items.filter((item) => !localOnlyItems.includes(item) && item.targets.length === 0);
       const localOnlyResults = failedResults(localOnlyItems, LOCAL_IDENTITY_SYNC_ERROR);
       const missingEvidenceResults = failedResults(missingEvidenceItems, "薄读生成内容缺少可核验的原文证据映射，不能公开同步到 Intuecho。");
-      const rejectedResults = [...localOnlyResults, ...missingEvidenceResults];
+      const rejectedResults = [...localOnlyResults, ...missingEvidenceResults,
+        ...failedResults(heldItems, "发布任务缺少原账号归属或属于先前会话，请使用原账号明确恢复。")];
       if (syncableItems.length === 0) {
         return mergeResultsInInputOrder({ items, results: rejectedResults });
       }
@@ -201,6 +248,10 @@ export function createHttpIntuechoSyncAdapter(input: {
           results: [...rejectedResults, ...failedResults(syncableItems, "Intuecho 同步端点必须是 HTTPS 地址。")]
         });
       }
+      if (actor?.endpoint !== normalizePublicationActorBinding({ ...actor, endpoint: input.endpoint })?.endpoint) {
+        return mergeResultsInInputOrder({ items, results: [...rejectedResults,
+          ...failedResults(syncableItems, "论坛端点已变化，请核实原发布目的地。") ] });
+      }
       if (!input.sessionId) {
         return mergeResultsInInputOrder({
           items,
@@ -208,7 +259,7 @@ export function createHttpIntuechoSyncAdapter(input: {
         });
       }
       const idempotencyKey = `thin-reading-sync-${sha256Hex(
-        syncableItems.map((item) => `${item.queueKey}\u0000${item.updatedAt}`).join("\u0001")
+        syncableItems.map((item) => `${item.queueKey}\u0000${wireAnnotation(item).updatedAt}`).join("\u0001")
       )}`;
       const transport = input.transport ?? (async (request) => {
         const response = await fetch(request.url, {
@@ -229,6 +280,11 @@ export function createHttpIntuechoSyncAdapter(input: {
           method: "POST",
           url: syncEndpoint(input.endpoint)
         });
+        const value = await response.json();
+        if (!samePublicationActor(actor, input.getActorBinding?.())) {
+          return mergeResultsInInputOrder({ items, results: [...rejectedResults,
+            ...failedResults(syncableItems, "账号或会话已变化，同步结果需由原账号核实。") ] });
+        }
         if (!response.ok) {
           return mergeResultsInInputOrder({
             items,
@@ -237,7 +293,7 @@ export function createHttpIntuechoSyncAdapter(input: {
         }
         return mergeResultsInInputOrder({
           items,
-          results: [...rejectedResults, ...normalizeRemoteResults({ items: syncableItems, value: await response.json() })]
+          results: [...rejectedResults, ...normalizeRemoteResults({ items: syncableItems, value })]
         });
       } catch (error) {
         return mergeResultsInInputOrder({
@@ -281,6 +337,8 @@ function queueItemForAnnotation(
   const targets = communityTargets(document, annotation, scope);
   const hasConfirmedLiterature = Boolean(scope.paperId && document.literatureRecords?.[scope.paperId]);
   return Object.freeze({
+    ...(annotation.publication ? { actorBinding: normalizePublicationActorBinding(annotation.publication.actorBinding),
+      pendingOperation: annotation.publication.pendingOperation } : {}),
     annotationId: annotation.id,
     artifactId: document.artifactId,
     body: annotation.body,

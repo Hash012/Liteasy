@@ -7,6 +7,7 @@ import {
 } from "../app/features/pdf/PdfReader";
 import {
   pdfAnnotationStorageKey,
+  loadPdfAnnotations,
   savePdfAnnotations,
   type PdfAnnotationPublication,
   type PdfAnnotationV2
@@ -188,6 +189,33 @@ test("publishes one annotation from its visibility checkbox and exposes pending 
     state: "published"
   });
   expect(await screen.findByRole("status", { name: "已公开到论坛" })).toBeInTheDocument();
+});
+
+test("persists the prepared publication envelope from the real reader before returning to the dispatcher", async () => {
+  const binding = { endpoint: "https://community.example.invalid", issuer: "https://identity.example.invalid",
+    subject: "synthetic-a", scopeId: "synthetic-a", scopeType: "user" as const, sessionGeneration: "runtime:1" };
+  let stored: PdfAnnotationV2[] = [];
+  const onChange = vi.fn(async (input: import("../app/features/pdf/PdfReader").PdfAnnotationPublicationChange) => {
+    expect(input.newPublication).toBe(true);
+    const { createUpsertOperation } = await import("../app/features/pdf/pdfAnnotationIntuechoSync");
+    const pendingOperation = createUpsertOperation(input.annotation, { literatureId: "literature-1" });
+    await input.onPreparedPublication?.({ actorBinding: binding, desiredVisibility: "public", state: "pending_create", pendingOperation, outcome: "unknown" });
+    stored = loadPdfAnnotations(pdfAnnotationStorageKey(paper)) as PdfAnnotationV2[];
+    expect(stored[0].publication).toMatchObject({ actorBinding: binding, pendingOperation, outcome: "unknown" });
+    return { actorBinding: binding, desiredVisibility: "public" as const, state: "published" as const, remoteAnnotationId: "remote-1", remoteRevision: 1 };
+  });
+  renderStoredAnnotation(publicationAnnotation(), onChange);
+  await userEvent.click(publicationToggle());
+  await waitFor(() => expect(stored).toHaveLength(1));
+  expect(await screen.findByRole("status", { name: "已公开到论坛" })).toBeInTheDocument();
+});
+
+test("shows an unknown withdrawal without asserting that a lost response left it public", async () => {
+  renderStoredAnnotation(publicationAnnotation({ desiredVisibility: "private", state: "failed", outcome: "unknown",
+    actorBinding: { endpoint: "https://community.example.invalid", issuer: "https://identity.example.invalid",
+      subject: "synthetic-a", scopeId: "synthetic-a", scopeType: "user", sessionGeneration: "runtime:1" },
+    remoteAnnotationId: "remote-1", remoteRevision: 2, lastError: "connection lost" }));
+  expect(await screen.findByRole("status", { name: "撤回结果待核实：connection lost" })).toBeInTheDocument();
 });
 
 test("requeues a current publish revision when note editing races literature hint collection", async () => {

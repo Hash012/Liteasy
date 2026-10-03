@@ -16,7 +16,7 @@ function publicationRevision(annotation: PdfAnnotationV2) {
 
 export function createUpsertOperation(
   annotation: PdfAnnotationV2,
-  literature: LiteratureRecord
+  literature: Pick<LiteratureRecord, "literatureId">
 ): Extract<ForumAnnotationPublicationOperation, { operation: "upsert" }> {
   return {
     annotationId: annotation.id,
