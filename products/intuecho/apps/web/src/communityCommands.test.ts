@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { communityApi } from "./communityApi";
 import { CommunityOutcomeUnknownError, recoverCommand } from "./communityCommands";
 import { commandRecords, draftOwner } from "./communityPersistence";
-import { isIdentitySessionCurrent, resolveIdentitySession } from "./identityClient";
+import { getIdentitySessionGeneration, isIdentitySessionCurrent, resolveIdentitySession } from "./identityClient";
 
 vi.mock("./identityClient", () => ({
   clearRejectedIdentitySession: vi.fn(), notifyAuthenticationRequired: vi.fn(), getIdentitySessionGeneration: vi.fn(() => 0),
@@ -13,7 +13,7 @@ const input = { body: "SYNTHETIC_PRIVATE_BODY", visibility: "private" as const, 
 const owner = draftOwner(session);
 let intentId: string;
 const ok = (value: unknown) => new Response(JSON.stringify(value), { status: 200, headers: { "Content-Type": "application/json" } });
-beforeEach(() => { intentId = crypto.randomUUID(); localStorage.clear(); vi.mocked(resolveIdentitySession).mockResolvedValue(session); vi.mocked(isIdentitySessionCurrent).mockResolvedValue(true); });
+beforeEach(() => { vi.mocked(getIdentitySessionGeneration).mockReturnValue(0); intentId = crypto.randomUUID(); localStorage.clear(); vi.mocked(resolveIdentitySession).mockResolvedValue(session); vi.mocked(isIdentitySessionCurrent).mockResolvedValue(true); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 test("persists a frozen operation before fetch and transport loss never mints another ID or resends", async () => {
@@ -171,4 +171,20 @@ test.each([
   } } : invalid;
   await expect(recoverCommand(owner, original, async () => response as never)).rejects.toThrow("回执不一致");
   expect(commandRecords(owner)[0]).toEqual(original);
+});
+
+test("a new runtime session cannot coalesce onto the prior session's in-flight promise", async () => {
+  let finish!: (response: Response) => void;
+  const send = vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; })); vi.stubGlobal("fetch", send);
+  const first = communityApi.createAnnotation(input, intentId);
+  await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+  vi.mocked(getIdentitySessionGeneration).mockReturnValue(1);
+  const second = communityApi.createAnnotation(input, intentId);
+  const rejected = vi.fn(); void second.catch(rejected);
+  try { await vi.waitFor(() => expect(rejected).toHaveBeenCalledWith(expect.any(CommunityOutcomeUnknownError))); }
+  finally {
+    finish(ok({ annotation: { id: "committed-old-session" } }));
+    await first.catch(() => {}); await second.catch(() => {});
+  }
+  expect(send).toHaveBeenCalledOnce();
 });

@@ -29,7 +29,7 @@ export async function durableCreate<T>(operationType: CommandRecord["operationTy
   const bodyDigest = Array.from(new Uint8Array(digestBytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
   if (!await isIdentitySessionCurrent(session, generation)) throw new Error("账号会话已变化，请重新操作。");
   const operationId = intentId;
-  const intent = JSON.stringify([owner, operationType, operationId]);
+  const intent = JSON.stringify([owner, operationType, operationId, generation]);
   const existing = sending.get(intent);
   if (existing) {
     if (existing.bodyDigest !== bodyDigest) throw new Error("原操作尚未完成，请保持已冻结内容；新内容需要明确的新草稿。");

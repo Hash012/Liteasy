@@ -63,3 +63,18 @@ test("closing before debounce preserves the last typed bytes as an independent r
   view.unmount();
   expect(draftRecords("actor", "new").map((draft) => draft.value)).toContainEqual({ body: "last keystroke" });
 });
+
+test("late successful-send cleanup cannot mark newer unpersisted keystrokes saved", async () => {
+  vi.useFakeTimers();
+  const view = editor();
+  act(() => view.result.current.edit("submitted body"));
+  let submitted!: Awaited<ReturnType<typeof view.result.current.save>>;
+  await act(async () => { submitted = await view.result.current.save(); });
+  act(() => view.result.current.edit("new unsaved keystrokes"));
+  await act(async () => { expect(await view.result.current.clear(submitted)).toBe(true); });
+  expect(view.result.current.status).toContain("尚未保存");
+  expect(view.result.current.draftId).not.toBe(submitted.draftId);
+  await act(async () => { await vi.advanceTimersByTimeAsync(350); });
+  expect(loadDraft("actor", "new", view.result.current.draftId)?.value).toEqual({ body: "new unsaved keystrokes" });
+  expect(view.result.current.status).toContain("草稿已保存");
+});

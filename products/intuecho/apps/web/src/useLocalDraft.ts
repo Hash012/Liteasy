@@ -85,13 +85,21 @@ export function useLocalDraft<T>({ owner, scope, value, onRestore, initialDraftI
   useEffect(() => {
     if (!owner || !enabled || serialized === (session.saved || session.initial)) return;
     setStatus("当前修改尚未保存到浏览器。");
-    const timer = window.setTimeout(() => { void save().catch(() => {}); }, 350);
+    const timer = window.setTimeout(() => {
+      if (JSON.stringify(session.latest) !== (session.saved || session.initial)) void save().catch(() => {});
+    }, 350);
     return () => window.clearTimeout(timer);
   }, [owner, enabled, serialized, session, save]);
   const clear = useCallback(async (snapshot: LocalDraft<T>) => {
     const removed = await removeDraftRevision(owner, scope, snapshot);
     if (removed && session.draftId === snapshot.draftId && session.localRevision === snapshot.localRevision) {
-      session.saved = JSON.stringify(session.latest); session.initial = session.saved; session.localRevision = 0;
+      // Remote completion only covers the submitted snapshot, never keystrokes
+      // typed while the network request was in flight. New work gets a new draft.
+      const submitted = JSON.stringify(snapshot.value);
+      const dirty = JSON.stringify(session.latest) !== submitted;
+      session.epoch += 1; session.draftId = crypto.randomUUID(); session.localRevision = 0;
+      session.saved = dirty ? "" : submitted; session.initial = submitted;
+      if (session.active) setStatus(dirty ? "当前修改尚未保存到浏览器。" : "");
     }
     refresh(); return removed;
   }, [owner, scope, session, refresh]);
