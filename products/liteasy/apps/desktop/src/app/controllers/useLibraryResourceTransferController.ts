@@ -1,5 +1,7 @@
 import { importDownloadedPdf, releaseDownloadedPdf } from "../features/paper-services/paperFullTextTransport";
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
+import { captureAccountSessionRequest } from "../features/account/accountSessionBinding";
+import { planLibraryResourceTransfer, type LibraryResourceTransferPlan } from "../features/library/libraryResourceTransferPlan";
 import type { RecommendationItem } from "../features/recommendations/recommendation.types";
 import { downloadRecommendationPdf } from "../features/recommendations/recommendationPdfClient";
 import {
@@ -33,6 +35,7 @@ import {
 
 type Input = {
   endpoint: string;
+  confirmTransfer?: (plan: LibraryResourceTransferPlan) => Promise<boolean>;
   onRecommendationSaved: (recommendation: RecommendationItem) => void | Promise<void>;
   refreshCloudTrees: () => void | Promise<void>;
   refreshLocalLibrary: () => void | Promise<void>;
@@ -52,14 +55,38 @@ function requireExpectedRevision(target: LibraryResourceTransferTarget) {
 }
 
 export function useLibraryResourceTransferController(input: Input) {
+  const endpointRef = useRef(input.endpoint);
+  endpointRef.current = input.endpoint;
   return useCallback(async (
-    source: LibraryResourceTransferSource,
-    target: LibraryResourceTransferTarget
+    sourceInput: LibraryResourceTransferSource,
+    targetInput: LibraryResourceTransferTarget
   ) => {
+    const plan = planLibraryResourceTransfer(sourceInput, targetInput);
+    const { source, target } = plan;
+    const binding = captureAccountSessionRequest(input.endpoint);
+    const needsAccount = source.area === "collection" || source.area === "organization" ||
+      target.area === "collection" || target.area === "organization" ||
+      (source.area === "recommendation" && Boolean(binding.sessionId));
+    function assertCurrent() {
+      if (!needsAccount) return;
+      binding.assertCurrent();
+      if (endpointRef.current !== input.endpoint) throw new Error("账号或云服务已变化，请重新操作。");
+    }
+    async function guarded<T>(operation: () => T | Promise<T>): Promise<T> {
+      assertCurrent();
+      const result = await operation();
+      assertCurrent();
+      return result;
+    }
+    assertCurrent();
+    if (source.area === "collection" && source.scope.scopeId !== binding.subject) throw new Error("个人云收藏不属于当前账号，请刷新后重试。");
+    if (target.area === "collection" && target.scope?.scopeId !== binding.subject) throw new Error("目标个人云收藏不属于当前账号，请刷新后重试。");
+    if (input.confirmTransfer && !await guarded(() => input.confirmTransfer!(structuredClone(plan)))) throw new Error("已取消资料转移。");
+
     if (target.area === "recommendation") {
       throw new Error("关联推荐不接受拖入内容。");
     }
-    const policyClient = createCloudLibraryStorageClient({ endpoint: input.endpoint });
+    const policyClient = createCloudLibraryStorageClient({ endpoint: input.endpoint, sessionBinding: binding });
     const sourceOrganizationId = source.area === "organization"
       ? source.scope.scopeId
       : undefined;
@@ -70,7 +97,7 @@ export function useLibraryResourceTransferController(input: Input) {
       sourceOrganizationId && sourceOrganizationId === targetOrganizationId
     );
     if (sourceOrganizationId) {
-      const access = await policyClient.getOrganizationStoragePolicy(sourceOrganizationId);
+      const access = await guarded(() => policyClient.getOrganizationStoragePolicy(sourceOrganizationId));
       if (sameOrganization) {
         if (!canManageOrganizationLibrary(access.role)) {
           throw new Error("当前组织角色不能移动组织文献库内容。");
@@ -80,7 +107,7 @@ export function useLibraryResourceTransferController(input: Input) {
       }
     }
     if (targetOrganizationId && !sameOrganization) {
-      const access = await policyClient.getOrganizationStoragePolicy(targetOrganizationId);
+      const access = await guarded(() => policyClient.getOrganizationStoragePolicy(targetOrganizationId));
       if (!canUploadToOrganization(access)) {
         throw new Error("当前组织策略不允许向组织文献库新增内容。");
       }
@@ -103,26 +130,28 @@ export function useLibraryResourceTransferController(input: Input) {
       };
       if (target.area === "local") {
         try {
+        assertCurrent();
         if (pdf?.downloadId) {
-          await importDownloadedPdf(pdf.downloadId, sanitizeExternalPdfFileName(source.recommendation.title), target.localFolderPath);
+          await guarded(() => importDownloadedPdf(pdf.downloadId!, sanitizeExternalPdfFileName(source.recommendation.title), target.localFolderPath));
         } else if (pdf) {
-          await persistPdfByteStream({
+          await guarded(() => persistPdfByteStream({
             fileName: sanitizeExternalPdfFileName(source.recommendation.title),
             stream: new Blob([pdf.bytes.slice().buffer], { type: "application/pdf" }).stream(),
             targetFolderPath: target.localFolderPath
-          });
+          }));
         } else {
-          await addMetadataOnlyLibraryEntry(metadata);
+          await guarded(() => addMetadataOnlyLibraryEntry(metadata));
         }
-        await input.refreshLocalLibrary();
-        await input.onRecommendationSaved(source.recommendation);
+        await guarded(() => input.refreshLocalLibrary());
+        await guarded(() => input.onRecommendationSaved(source.recommendation));
         } finally { if (pdf?.downloadId) await releaseDownloadedPdf(pdf.downloadId); }
         return;
       }
-      const client = createCloudLibraryStorageClient({ endpoint: input.endpoint });
+      assertCurrent();
+      const client = createCloudLibraryStorageClient({ endpoint: input.endpoint, sessionBinding: binding });
       const scope = requireCloudScope(target);
       if (pdf) {
-        await client.uploadDocumentStream({
+        await guarded(() => client.uploadDocumentStream({
           createBody: async () => new Blob(
             [pdf.bytes.slice().buffer],
             { type: "application/pdf" }
@@ -132,34 +161,34 @@ export function useLibraryResourceTransferController(input: Input) {
           folderId: target.folderId,
           onDuplicate: () => false,
           scope
-        });
+        }));
       } else {
-        await client.createMetadataEntry({
+        await guarded(() => client.createMetadataEntry({
           ...metadata,
           expectedRevision: requireExpectedRevision(target),
           folderId: target.folderId,
           scope
-        });
+        }));
       }
-      if (target.area === "collection") await input.onRecommendationSaved(source.recommendation);
-      await input.refreshCloudTrees();
+      if (target.area === "collection") await guarded(() => input.onRecommendationSaved(source.recommendation));
+      await guarded(() => input.refreshCloudTrees());
       return;
     }
 
     if ("folder" in source) {
       if (source.area === "local" && target.area === "local") return;
-      const client = createCloudLibraryStorageClient({ endpoint: input.endpoint });
+      const client = createCloudLibraryStorageClient({ endpoint: input.endpoint, sessionBinding: binding });
       if (source.area !== "local" && target.area !== "local") {
         const targetScope = requireCloudScope(target);
         if (
           source.scope.scopeId === targetScope.scopeId &&
           source.scope.scopeType === targetScope.scopeType
         ) {
-          await client.updateFolder(source.scope, source.folder.folderId, {
+          await guarded(() => client.updateFolder(source.scope, source.folder.folderId, {
             expectedRevision: requireExpectedRevision(target),
             parentFolderId: target.folderId ?? null
-          });
-          await input.refreshCloudTrees();
+          }));
+          await guarded(() => input.refreshCloudTrees());
           return;
         }
       }
@@ -168,44 +197,45 @@ export function useLibraryResourceTransferController(input: Input) {
       async function copyEntryToLocal(entrySource: LibraryResourceEntrySource, folderPath: string) {
         if (entrySource.area === "local") {
           if (!entrySource.entry.path) {
-            const result = await addMetadataOnlyLibraryEntry({
+            const result = await guarded(() => addMetadataOnlyLibraryEntry({
               sourceId: entrySource.entry.id,
               title: entrySource.entry.title
-            });
+            }));
             if (result.created) createdMetadataEntryIds.push(result.documentId);
             return;
           }
-          const bytes = await readLocalLibraryPdf(entrySource.entry.path);
-          await persistDroppedPdfFiles({
+          const bytes = await guarded(() => readLocalLibraryPdf(entrySource.entry.path!));
+          await guarded(() => persistDroppedPdfFiles({
             files: [new File([Uint8Array.from(bytes)], `${entrySource.entry.title}.pdf`, {
               type: "application/pdf"
             })],
             onDuplicate: () => true,
             targetFolderPath: folderPath
-          });
+          }));
           return;
         }
-        if (entrySource.entry.entryKind === "metadata_only") {
-          const result = await addMetadataOnlyLibraryEntry({
-            doi: entrySource.entry.doi,
-            externalUrl: entrySource.entry.externalUrl,
-            sourceId: entrySource.entry.sourceId ?? entrySource.entry.documentId,
-            title: entrySource.entry.title
-          });
+        const cloudEntry = entrySource.entry;
+        if (cloudEntry.entryKind === "metadata_only") {
+          const result = await guarded(() => addMetadataOnlyLibraryEntry({
+            doi: cloudEntry.doi,
+            externalUrl: cloudEntry.externalUrl,
+            sourceId: cloudEntry.sourceId ?? cloudEntry.documentId,
+            title: cloudEntry.title
+          }));
           if (result.created) createdMetadataEntryIds.push(result.documentId);
           return;
         }
-        const stream = await client.downloadDocumentStream(
+        const stream = await guarded(() => client.downloadDocumentStream(
           entrySource.scope,
-          entrySource.entry.documentId,
+          cloudEntry.documentId,
           "export"
-        );
-        await persistPdfByteStream({
-          fileName: entrySource.entry.fileName,
+        ));
+        await guarded(() => persistPdfByteStream({
+          fileName: cloudEntry.fileName,
           onDuplicate: () => true,
           stream,
           targetFolderPath: folderPath
-        });
+        }));
       }
 
       if (target.area === "local") {
@@ -213,27 +243,27 @@ export function useLibraryResourceTransferController(input: Input) {
         if (!parentPath) throw new Error("目标本地目录不可用。");
         let createdRootPath = "";
         const copyLocalTree = async (tree: LibraryResourceFolderTree, parent: string) => {
-          const snapshot = await createLocalLibraryFolder(tree.name, parent);
+          const snapshot = await guarded(() => createLocalLibraryFolder(tree.name, parent));
           const created = snapshot.folders.find((folder) =>
             folder.name === tree.name &&
             folder.parentPath === (parent === snapshot.rootPath ? null : parent)
           );
           if (!created) throw new Error(`无法确认新建目录：${tree.name}`);
           if (!createdRootPath) createdRootPath = created.path;
-          for (const entry of tree.entries) await copyEntryToLocal(entry, created.path);
-          for (const child of tree.children) await copyLocalTree(child, created.path);
+          for (const entry of tree.entries) await guarded(() => copyEntryToLocal(entry, created.path));
+          for (const child of tree.children) await guarded(() => copyLocalTree(child, created.path));
         };
         try {
-          await copyLocalTree(source.tree, parentPath);
+          await guarded(() => copyLocalTree(source.tree, parentPath));
         } catch (error) {
           let cleanupComplete = true;
           if (createdRootPath) {
             try {
-              const trashed = await trashLocalLibraryResource(createdRootPath);
+              const trashed = await guarded(() => trashLocalLibraryResource(createdRootPath));
               const createdTrash = trashed.trashEntries.find((entry) =>
                 entry.originalRelativePath.endsWith(source.tree.name)
               );
-              if (createdTrash) await purgeLocalLibraryTrashItem(createdTrash.trashId);
+              if (createdTrash) await guarded(() => purgeLocalLibraryTrashItem(createdTrash.trashId));
               else cleanupComplete = false;
             } catch {
               cleanupComplete = false;
@@ -241,8 +271,8 @@ export function useLibraryResourceTransferController(input: Input) {
           }
           for (const documentId of createdMetadataEntryIds.reverse()) {
             try {
-              const trashed = await trashLocalMetadataEntry(documentId);
-              await purgeLocalLibraryTrashItem(trashed.trashId);
+              const trashed = await guarded(() => trashLocalMetadataEntry(documentId));
+              await guarded(() => purgeLocalLibraryTrashItem(trashed.trashId));
             } catch {
               cleanupComplete = false;
             }
@@ -252,7 +282,7 @@ export function useLibraryResourceTransferController(input: Input) {
           }
           throw error;
         }
-        await input.refreshLocalLibrary();
+        await guarded(() => input.refreshLocalLibrary());
         return;
       }
 
@@ -262,128 +292,129 @@ export function useLibraryResourceTransferController(input: Input) {
       const copyEntryToCloud = async (entrySource: LibraryResourceEntrySource, folderId: string) => {
         if (entrySource.area === "local") {
           if (!entrySource.entry.path) {
-            const result = await client.createMetadataEntry({
+            const result = await guarded(() => client.createMetadataEntry({
               expectedRevision: revision,
               folderId,
               scope: targetScope,
               sourceId: entrySource.entry.id,
               title: entrySource.entry.title
-            });
+            }));
             revision = result.revision;
             return;
           }
-          const result = await client.uploadDocumentStream({
-            createBody: async () => (await createLocalLibraryPdfStream(entrySource.entry.path!)).stream,
+          const result = await guarded(() => client.uploadDocumentStream({
+            createBody: async () => (await guarded(() => createLocalLibraryPdfStream(entrySource.entry.path!))).stream,
             expectedRevision: revision,
             fileName: `${entrySource.entry.title}.pdf`,
             folderId,
             onDuplicate: () => true,
             scope: targetScope
-          });
+          }));
           if (typeof result.revision === "number") revision = result.revision;
           return;
         }
-        const result = await client.copyEntry({
+        const result = await guarded(() => client.copyEntry({
           documentId: entrySource.entry.documentId,
           expectedRevision: revision,
           source: entrySource.scope,
           target: { ...targetScope, folderId }
-        });
+        }));
         revision = result.revision;
       };
       const copyCloudTree = async (tree: LibraryResourceFolderTree, parentFolderId?: string) => {
-        const created = await client.createFolder(targetScope, tree.name, parentFolderId, revision);
+        const created = await guarded(() => client.createFolder(targetScope, tree.name, parentFolderId, revision));
         revision = created.revision;
         if (!createdRootFolderId) createdRootFolderId = created.folder.folderId;
-        for (const entry of tree.entries) await copyEntryToCloud(entry, created.folder.folderId);
-        for (const child of tree.children) await copyCloudTree(child, created.folder.folderId);
+        for (const entry of tree.entries) await guarded(() => copyEntryToCloud(entry, created.folder.folderId));
+        for (const child of tree.children) await guarded(() => copyCloudTree(child, created.folder.folderId));
       };
       try {
-        await copyCloudTree(source.tree, target.folderId);
+        await guarded(() => copyCloudTree(source.tree, target.folderId));
       } catch (error) {
         if (createdRootFolderId) {
           try {
-            const trashed = await client.trashFolder(targetScope, createdRootFolderId, revision);
-            await client.purgeFolder(targetScope, createdRootFolderId, trashed.revision);
+            const trashed = await guarded(() => client.trashFolder(targetScope, createdRootFolderId, revision));
+            await guarded(() => client.purgeFolder(targetScope, createdRootFolderId, trashed.revision));
           } catch {
             throw new Error(`目录复制失败且目标清理未完成：${error instanceof Error ? error.message : String(error)}`);
           }
         }
         throw error;
       }
-      await input.refreshCloudTrees();
+      await guarded(() => input.refreshCloudTrees());
       return;
     }
 
     if (source.area === "local") {
       if (target.area === "local") return;
-      const client = createCloudLibraryStorageClient({ endpoint: input.endpoint });
+      const client = createCloudLibraryStorageClient({ endpoint: input.endpoint, sessionBinding: binding });
       const scope = requireCloudScope(target);
       if (!source.entry.path) {
-        await client.createMetadataEntry({
+        await guarded(() => client.createMetadataEntry({
           expectedRevision: requireExpectedRevision(target),
           folderId: target.folderId,
           scope,
           sourceId: source.entry.id,
           title: source.entry.title
-        });
+        }));
       } else {
-        await client.uploadDocumentStream({
-          createBody: async () => (await createLocalLibraryPdfStream(source.entry.path!)).stream,
+        await guarded(() => client.uploadDocumentStream({
+          createBody: async () => (await guarded(() => createLocalLibraryPdfStream(source.entry.path!))).stream,
           expectedRevision: requireExpectedRevision(target),
           fileName: `${source.entry.title}.pdf`,
           folderId: target.folderId,
           onDuplicate: () => false,
           scope
-        });
+        }));
       }
-      await input.refreshCloudTrees();
+      await guarded(() => input.refreshCloudTrees());
       return;
     }
 
+    const cloudEntry = source.entry;
     if (target.area === "local") {
-      if (source.entry.entryKind === "metadata_only") {
-        await addMetadataOnlyLibraryEntry({
-          doi: source.entry.doi,
-          externalUrl: source.entry.externalUrl,
-          sourceId: source.entry.sourceId ?? source.entry.documentId,
-          title: source.entry.title
-        });
+      if (cloudEntry.entryKind === "metadata_only") {
+        await guarded(() => addMetadataOnlyLibraryEntry({
+          doi: cloudEntry.doi,
+          externalUrl: cloudEntry.externalUrl,
+          sourceId: cloudEntry.sourceId ?? cloudEntry.documentId,
+          title: cloudEntry.title
+        }));
       } else {
-        const client = createCloudLibraryStorageClient({ endpoint: input.endpoint });
-        const stream = await client.downloadDocumentStream(
+        const client = createCloudLibraryStorageClient({ endpoint: input.endpoint, sessionBinding: binding });
+        const stream = await guarded(() => client.downloadDocumentStream(
           source.scope,
-          source.entry.documentId,
+          cloudEntry.documentId,
           "export"
-        );
-        await persistPdfByteStream({
-          fileName: source.entry.fileName,
+        ));
+        await guarded(() => persistPdfByteStream({
+          fileName: cloudEntry.fileName,
           stream,
           targetFolderPath: target.localFolderPath
-        });
+        }));
       }
-      await input.refreshLocalLibrary();
+      await guarded(() => input.refreshLocalLibrary());
       return;
     }
 
-    const client = createCloudLibraryStorageClient({ endpoint: input.endpoint });
+    const client = createCloudLibraryStorageClient({ endpoint: input.endpoint, sessionBinding: binding });
     const targetScope = requireCloudScope(target);
     if (
       source.scope.scopeId === targetScope.scopeId &&
       source.scope.scopeType === targetScope.scopeType
     ) {
-      await client.updateDocument(source.scope, source.entry.documentId, {
+      await guarded(() => client.updateDocument(source.scope, source.entry.documentId, {
         expectedRevision: requireExpectedRevision(target),
         folderId: target.folderId ?? null
-      });
+      }));
     } else {
-      await client.copyEntry({
+      await guarded(() => client.copyEntry({
         documentId: source.entry.documentId,
         expectedRevision: requireExpectedRevision(target),
         source: source.scope,
         target: { ...targetScope, folderId: target.folderId }
-      });
+      }));
     }
-    await input.refreshCloudTrees();
+    await guarded(() => input.refreshCloudTrees());
   }, [input]);
 }

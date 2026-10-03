@@ -44,5 +44,6 @@ export type LibraryResourceTransferTarget = {
   expectedRevision?: number;
   folderId?: string;
   localFolderPath?: string;
+  folderLabel?: string;
   scope?: CloudLibraryScope;
 };

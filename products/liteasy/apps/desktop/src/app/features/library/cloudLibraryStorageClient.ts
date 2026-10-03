@@ -86,6 +86,7 @@ type CachedCloudDocument = {
 type CreateCloudLibraryStorageClientInput = {
   endpoint: string;
   fetchImpl?: typeof fetch;
+  sessionBinding?: ReturnType<typeof captureAccountSessionRequest>;
 };
 
 function apiUrl(endpoint: string, path: string) {
@@ -145,10 +146,17 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
 
 function createBoundCloudLibraryStorageClient({
   endpoint,
-  fetchImpl = fetch
+  fetchImpl = fetch,
+  sessionBinding
 }: CreateCloudLibraryStorageClientInput) {
-  const binding = captureAccountSessionRequest(endpoint);
-  const { assertCurrent, actorKey } = binding;
+  const binding = sessionBinding ?? captureAccountSessionRequest(endpoint);
+  const { actorKey } = binding;
+  function assertCurrent() {
+    binding.assertCurrent();
+    if (binding.endpoint !== endpoint.replace(/\/+$/, "")) {
+      throw new CloudServiceError({ code: "account_session_changed", message: "账号或云服务已变化，请重新操作。", status: 409 });
+    }
+  }
   function requireSessionId() {
     assertCurrent();
     return binding.sessionId!;
@@ -748,6 +756,7 @@ function createBoundCloudLibraryStorageClient({
 /** Each user operation owns one immutable session, including its follow-up requests. */
 export function createCloudLibraryStorageClient(input: CreateCloudLibraryStorageClientInput) {
   type Client = ReturnType<typeof createBoundCloudLibraryStorageClient>;
+  if (input.sessionBinding) return createBoundCloudLibraryStorageClient(input);
   const methods = Object.keys(createBoundCloudLibraryStorageClient(input)) as Array<keyof Client>;
   return Object.fromEntries(methods.map((method) => [method, (...args: unknown[]) => {
     const operation = createBoundCloudLibraryStorageClient(input);

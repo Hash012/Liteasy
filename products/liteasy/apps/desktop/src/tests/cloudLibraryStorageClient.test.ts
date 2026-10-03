@@ -3,6 +3,7 @@ import { storeAccountSession } from "../app/features/account/accountSessionStora
 import { cacheExternalPdf, readCachedPdf } from "../app/features/library/paperCacheClient";
 import { createCloudLibraryStorageClient } from "../app/features/library/cloudLibraryStorageClient";
 import { personalLibraryScopeId } from "../app/features/library/LibraryPane";
+import { captureAccountSessionRequest } from "../app/features/account/accountSessionBinding";
 
 vi.mock("../app/features/library/paperCacheClient", () => ({
   cacheExternalPdf: vi.fn(async () => "synthetic-cache.pdf"),
@@ -50,6 +51,23 @@ test("sends the verified personal subject unchanged for tree, import and export 
     expect(JSON.parse(String(request!.body))).toMatchObject({ scopeId: subject, scopeType: "user" });
     expect(request!.headers).toMatchObject({ Authorization: "Bearer subject-token" });
   }
+});
+
+test("a transfer binding pins all client methods to the original account", async () => {
+  const endpoint = "https://cloud.example.test";
+  const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ folder: { folderId: "A-folder" }, revision: 1 })));
+  const client = createCloudLibraryStorageClient({ endpoint, fetchImpl, sessionBinding: captureAccountSessionRequest(endpoint) });
+  await client.createFolder({ scopeId: "alice", scopeType: "user" }, "Folder", undefined, 0);
+  storeAccountSession({ sessionId: "session-B", userId: "bob", email: "bob@example.test", name: "Bob", expiresAt: "2099-01-01T00:00:00Z" });
+  await expect(client.getTree({ scopeId: "bob", scopeType: "user" })).rejects.toMatchObject({ code: "account_session_changed" });
+  expect(fetchImpl).toHaveBeenCalledTimes(1);
+});
+
+test("does not reuse a captured transfer token for a different endpoint", async () => {
+  const fetchImpl = vi.fn();
+  const client = createCloudLibraryStorageClient({ endpoint: "https://other.example.test", fetchImpl, sessionBinding: captureAccountSessionRequest("https://cloud.example.test") });
+  await expect(client.getTree({ scopeId: "alice", scopeType: "user" })).rejects.toMatchObject({ code: "account_session_changed" });
+  expect(fetchImpl).not.toHaveBeenCalled();
 });
 
 test("requires a live authorization request before opening a cloud document", async () => {

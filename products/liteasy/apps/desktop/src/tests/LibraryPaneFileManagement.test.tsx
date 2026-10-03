@@ -84,6 +84,11 @@ test("copies a personal cloud PDF to the selected local library through the exis
   renderLibraryPane({ accountSessionAvailable: true, accountScopeId: "user_1", onResourceTransfer });
   fireEvent.contextMenu(await screen.findByRole("button", { name: "Cloud paper", exact: true }));
   fireEvent.click(await screen.findByRole("menuitem", { name: "复制到本机文献库", exact: true }));
+  expect(onResourceTransfer).not.toHaveBeenCalled();
+  const preview = await screen.findByRole("dialog", { name: "确认资料转移" });
+  expect(within(preview).getByText("目标：本机文献库 · /library")).toBeInTheDocument();
+  expect(within(preview).getByText("1 个 PDF，0 条仅元数据条目。")).toBeInTheDocument();
+  fireEvent.click(within(preview).getByRole("button", { name: "确认复制" }));
   await waitFor(() => expect(onResourceTransfer).toHaveBeenCalledWith({ area: "collection", entry, scope: { scopeId: "user_1", scopeType: "user" } }, { area: "local", localFolderPath: "/library" }));
   expect(await screen.findByText("已复制到本机文献库。")).toBeInTheDocument();
 });
@@ -99,6 +104,7 @@ test("keeps a failed personal cloud export visible without reporting success", a
   renderLibraryPane({ accountSessionAvailable: true, accountScopeId: "user_1", onResourceTransfer: vi.fn().mockRejectedValue(new Error("账号已变化，请重新操作。")) });
   fireEvent.contextMenu(await screen.findByRole("button", { name: "Cloud paper", exact: true }));
   fireEvent.click(await screen.findByRole("menuitem", { name: "复制到本机文献库", exact: true }));
+  fireEvent.click(within(await screen.findByRole("dialog", { name: "确认资料转移" })).getByRole("button", { name: "确认复制" }));
   expect(await screen.findByText("账号已变化，请重新操作。")).toBeInTheDocument();
   expect(screen.queryByText("已复制到本机文献库。")).not.toBeInTheDocument();
 });
@@ -108,6 +114,17 @@ test("requires a chosen local library for personal cloud PDF copies", async () =
   renderLibraryPane({ accountSessionAvailable: true, accountScopeId: "user_1", localLibrarySnapshot: null, onResourceTransfer: vi.fn() });
   fireEvent.contextMenu(await screen.findByRole("button", { name: "Cloud paper", exact: true }));
   expect(await screen.findByRole("menuitem", { name: "复制到本机文献库", exact: true })).toHaveAttribute("aria-disabled", "true");
+});
+
+test("cancelling the visible copy preview leaves both libraries untouched", async () => {
+  mockPersonalCollection();
+  const onResourceTransfer = vi.fn();
+  renderLibraryPane({ accountSessionAvailable: true, accountScopeId: "user_1", onResourceTransfer });
+  fireEvent.contextMenu(await screen.findByRole("button", { name: "Cloud paper", exact: true }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "复制到本机文献库", exact: true }));
+  fireEvent.click(within(await screen.findByRole("dialog", { name: "确认资料转移" })).getByRole("button", { name: "取消", exact: true }));
+  expect(await screen.findByText("已取消资料转移。")).toBeInTheDocument();
+  expect(onResourceTransfer).not.toHaveBeenCalled();
 });
 
 test("offers a dedicated bibliography editor from the local paper context menu", async () => {

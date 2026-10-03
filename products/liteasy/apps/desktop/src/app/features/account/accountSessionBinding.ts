@@ -31,5 +31,5 @@ export function captureAccountSessionRequest(endpoint: string) {
       throw new CloudServiceError({ code: "account_session_changed", message: "账号或云服务已变化，请重新操作。", status: 409 });
     }
   }
-  return { actorKey, assertCurrent, generation, sessionId: session?.sessionId };
+  return { actorKey, assertCurrent, endpoint: endpoint.replace(/\/+$/, ""), generation, sessionId: session?.sessionId, subject: session?.userId };
 }

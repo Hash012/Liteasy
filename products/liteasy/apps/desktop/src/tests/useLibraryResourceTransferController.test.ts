@@ -47,6 +47,8 @@ vi.mock("../app/features/library/libraryFileSystemClient", () => local);
 vi.mock("../app/features/recommendations/recommendationPdfClient", () => recommendationPdf);
 
 import { useLibraryResourceTransferController } from "../app/controllers/useLibraryResourceTransferController";
+import { clearStoredAccountSession, storeAccountSession } from "../app/features/account/accountSessionStorage";
+import type { LibraryResourceTransferPlan } from "../app/features/library/libraryResourceTransferPlan";
 
 const organizationScope = (scopeId: string) => ({
   scopeId,
@@ -138,12 +140,13 @@ const matrixTargets: Record<string, LibraryResourceTransferTarget> = {
   recommendation: { area: "recommendation" }
 };
 
-function renderController() {
+function renderController(confirmTransfer?: (plan: LibraryResourceTransferPlan) => Promise<boolean>) {
   const onRecommendationSaved = vi.fn();
   const refreshCloudTrees = vi.fn();
   const refreshLocalLibrary = vi.fn();
   const hook = renderHook(() => useLibraryResourceTransferController({
     endpoint: "http://cloud.test",
+    confirmTransfer,
     onRecommendationSaved,
     refreshCloudTrees,
     refreshLocalLibrary
@@ -153,6 +156,7 @@ function renderController() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  storeAccountSession({ sessionId: "session-A", userId: "user:user-1", email: "same@example.test", name: "Same name", expiresAt: "2099-01-01T00:00:00Z" });
   recommendationPdf.downloadRecommendationPdf.mockResolvedValue(null);
   cloud.copyEntry.mockResolvedValue({ revision: 2 });
   cloud.getOrganizationStoragePolicy.mockResolvedValue({
@@ -172,6 +176,105 @@ beforeEach(() => {
   local.trashLocalMetadataEntry.mockResolvedValue({
     trashId: "trash-metadata-created"
   });
+});
+
+test("cancelling the transfer preview performs no resource operation", async () => {
+  const confirmTransfer = vi.fn().mockResolvedValue(false);
+  const { result } = renderController(confirmTransfer);
+  await expect(result.current(localSource, matrixTargets.collection)).rejects.toThrow("已取消资料转移");
+  expect(cloud.createMetadataEntry).not.toHaveBeenCalled();
+  expect(confirmTransfer).toHaveBeenCalledWith(expect.objectContaining({ action: "copy", pdfCount: 0, metadataCount: 1, targetLabel: "本人云收藏" }));
+});
+
+test("executes the immutable target and metadata snapshot that was reviewed", async () => {
+  let confirm!: (value: boolean) => void;
+  const confirmTransfer = vi.fn(() => new Promise<boolean>((resolve) => { confirm = resolve; }));
+  const { result } = renderController(confirmTransfer);
+  const source = structuredClone(localSource);
+  const target = structuredClone(matrixTargets.collection);
+  const operation = result.current(source, target);
+  expect(cloud.createMetadataEntry).not.toHaveBeenCalled();
+  if (source.area === "local" && "entry" in source) source.entry.title = "Changed after review";
+  target.scope!.scopeId = "another-user";
+  confirm(true);
+  await operation;
+  expect(cloud.createMetadataEntry).toHaveBeenCalledWith(expect.objectContaining({ title: "Local metadata paper", scope: collectionScope }));
+});
+
+test("stops a transfer when the account changes while organization permissions are loading", async () => {
+  let resolvePolicy!: (value: unknown) => void;
+  cloud.getOrganizationStoragePolicy.mockImplementationOnce(() => new Promise((resolve) => { resolvePolicy = resolve; }));
+  const { result, refreshLocalLibrary } = renderController();
+  const operation = result.current(organizationSource, matrixTargets.local);
+  storeAccountSession({ sessionId: "session-B", userId: "user:B", email: "same@example.test", name: "Same name", expiresAt: "2099-01-01T00:00:00Z" });
+  resolvePolicy({ exportPolicy: "all_members", role: "member" });
+  await expect(operation).rejects.toThrow("账号或云服务已变化");
+  expect(local.addMetadataOnlyLibraryEntry).not.toHaveBeenCalled();
+  expect(refreshLocalLibrary).not.toHaveBeenCalled();
+});
+
+test("does not import an old account PDF or run its completion callback after switching", async () => {
+  cloud.downloadDocumentStream.mockImplementationOnce(async () => {
+    clearStoredAccountSession();
+    return new ReadableStream();
+  });
+  const { result, refreshLocalLibrary } = renderController();
+  await expect(result.current({ area: "collection", scope: collectionScope, entry: documentEntry() }, matrixTargets.local)).rejects.toThrow("账号或云服务已变化");
+  expect(local.persistPdfByteStream).not.toHaveBeenCalled();
+  expect(refreshLocalLibrary).not.toHaveBeenCalled();
+});
+
+test("an accepted preview cannot execute after its account signed out", async () => {
+  let accept!: (value: boolean) => void;
+  const { result } = renderController(() => new Promise<boolean>((resolve) => { accept = resolve; }));
+  const operation = result.current(localSource, matrixTargets.collection);
+  clearStoredAccountSession();
+  accept(true);
+  await expect(operation).rejects.toThrow("账号或云服务已变化");
+  expect(cloud.createMetadataEntry).not.toHaveBeenCalled();
+});
+
+test("local to local operations remain available when signed out", async () => {
+  clearStoredAccountSession();
+  const { result } = renderController();
+  await expect(result.current(localSource, matrixTargets.local)).resolves.toBeUndefined();
+  expect(cloud.getOrganizationStoragePolicy).not.toHaveBeenCalled();
+});
+
+test("rejects metadata snapshots from a different personal cloud subject", async () => {
+  const { result } = renderController();
+  await expect(result.current({ ...collectionSource, scope: { scopeType: "user", scopeId: "another-user" } } as LibraryResourceTransferSource, matrixTargets.local)).rejects.toThrow("不属于当前账号");
+  expect(local.addMetadataOnlyLibraryEntry).not.toHaveBeenCalled();
+});
+
+test("a folder review counts both body and metadata entries and stops the next phase after switching", async () => {
+  const confirmTransfer = vi.fn().mockResolvedValue(true);
+  cloud.createFolder.mockImplementationOnce(async () => {
+    clearStoredAccountSession();
+    return { folder: { folderId: "created-for-A" }, revision: 2 };
+  });
+  const source: LibraryResourceFolderSource = {
+    area: "local", folder: { name: "Reviewed", path: "/library/Reviewed", parentPath: null },
+    tree: { name: "Reviewed", children: [], entries: [
+      { area: "local", entry: { id: "pdf", path: "/library/Reviewed/a.pdf", relativePath: "Reviewed/a.pdf", contentHash: "hash", title: "PDF" } },
+      { area: "local", entry: { id: "metadata", path: null, relativePath: null, contentHash: null, title: "Metadata" } }
+    ] }
+  };
+  const { result, refreshCloudTrees } = renderController(confirmTransfer);
+  await expect(result.current(source, matrixTargets.collection)).rejects.toThrow("账号或云服务已变化");
+  expect(confirmTransfer).toHaveBeenCalledWith(expect.objectContaining({ pdfCount: 1, metadataCount: 1, action: "copy" }));
+  expect(cloud.uploadDocumentStream).not.toHaveBeenCalled();
+  expect(cloud.createMetadataEntry).not.toHaveBeenCalled();
+  expect(cloud.trashFolder).not.toHaveBeenCalled();
+  expect(refreshCloudTrees).not.toHaveBeenCalled();
+});
+
+test("same-cloud destination reviews a move instead of claiming a new shared copy", async () => {
+  const confirmTransfer = vi.fn().mockResolvedValue(false);
+  const { result } = renderController(confirmTransfer);
+  await expect(result.current(collectionSource, matrixTargets.collection)).rejects.toThrow("已取消资料转移");
+  expect(confirmTransfer).toHaveBeenCalledWith(expect.objectContaining({ action: "move", targetLabel: "本人云收藏" }));
+  expect(cloud.updateDocument).not.toHaveBeenCalled();
 });
 
 test.each([
@@ -290,6 +393,7 @@ test("rechecks organization export policy and streams the export into the local 
 test("uses the authorized export route when copying a personal PDF to the local library", async () => {
   const { result } = renderController();
   const scope = { scopeId: "8d337604-f670-440a-8f72-aa057b84137d", scopeType: "user" as const };
+  storeAccountSession({ sessionId: "session-uuid", userId: scope.scopeId, email: "alice@example.test", name: "Alice", expiresAt: "2099-01-01T00:00:00Z" });
   await act(() => result.current({ area: "collection", scope, entry: { ...documentEntry(), ...scope } }, matrixTargets.local));
   expect(cloud.downloadDocumentStream).toHaveBeenCalledWith(scope, "document-1", "export");
   expect(local.persistPdfByteStream).toHaveBeenCalledWith(expect.objectContaining({ fileName: "Paper.pdf", targetFolderPath: "/library" }));

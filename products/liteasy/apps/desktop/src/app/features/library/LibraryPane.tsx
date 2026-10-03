@@ -116,6 +116,8 @@ import {
   type OrganizationStorageAccess
 } from "../organization/organizationStoragePolicy";
 import { useCloudLibraryTree } from "./useCloudLibraryTree";
+import { getAccountSessionGeneration } from "../account/accountSessionStorage";
+import { planLibraryResourceTransfer, type LibraryResourceTransferPlan } from "./libraryResourceTransferPlan";
 import "./library.css";
 import type { LiteratureHydrationState } from "../paper-identity/literature.types";
 import {
@@ -538,6 +540,17 @@ function LibraryPaneContent({
     scopeType: "organization"
   });
   const icons = useLibraryIcons();
+  const [transferPlan, setTransferPlan] = useState<LibraryResourceTransferPlan | null>(null);
+  const transferConfirmation = useRef<((accepted: boolean) => void) | null>(null);
+  const sessionGeneration = getAccountSessionGeneration();
+  const transferContext = useRef({ cloudEndpoint, sessionGeneration, localRoot: localLibrarySnapshot?.rootPath });
+  transferContext.current = { cloudEndpoint, sessionGeneration, localRoot: localLibrarySnapshot?.rootPath };
+  useEffect(() => {
+    transferConfirmation.current?.(false);
+    transferConfirmation.current = null;
+    setTransferPlan(null);
+    return () => { transferConfirmation.current?.(false); };
+  }, [cloudEndpoint, sessionGeneration, localLibrarySnapshot?.rootPath]);
   function folderIconKey(area: string, path: string) {
     if (area !== "local") return `folder:${area}:${area === "organization" ? organizationId : ""}:${path}`;
     if (path === "local-metadata-only") return "folder:virtual:metadata";
@@ -588,6 +601,12 @@ function LibraryPaneContent({
     scope: CloudLibraryScope;
   } | null>(null);
   const [pendingNodeIds, setPendingNodeIds] = useState<string[]>([]);
+  useEffect(() => {
+    setPendingNodeIds([]);
+    setMessage("");
+    dragSourceRef.current = null;
+    dropBusy.current = false;
+  }, [cloudEndpoint, sessionGeneration]);
   const [selectedFolderIds, setSelectedFolderIds] = useState<Record<
     "local" | "collection" | "organization",
     string | null
@@ -768,37 +787,59 @@ function LibraryPaneContent({
   }
 
   async function transfer(source: LibraryResourceTransferSource, target: LibraryResourceTransferTarget) {
+    const generation = getAccountSessionGeneration();
     try {
-      if (!onResourceTransfer) throw new Error("当前资源暂不支持转移。");
-      await onResourceTransfer(source, target);
-      setMessage("资源已复制到目标位置。");
+      const plan = await confirmAndTransfer(source, target);
+      setMessage(plan.action === "move" ? "资源已移到目标位置。" : "资源已复制到目标位置。");
       await Promise.all([collection.refresh(), organization.refresh()]);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "资源操作失败。");
+      if (generation === getAccountSessionGeneration() && cloudEndpoint === transferContext.current.cloudEndpoint) setMessage(error instanceof Error ? error.message : "资源操作失败。");
     }
   }
 
+  function finishTransferConfirmation(accepted: boolean) {
+    transferConfirmation.current?.(accepted);
+    transferConfirmation.current = null;
+    setTransferPlan(null);
+  }
+
+  async function confirmAndTransfer(source: LibraryResourceTransferSource, target: LibraryResourceTransferTarget) {
+    if (!onResourceTransfer) throw new Error("当前资源暂不支持转移。");
+    const plan = planLibraryResourceTransfer(source, target);
+    const context = transferContext.current;
+    transferConfirmation.current?.(false);
+    setTransferPlan(plan);
+    const accepted = await new Promise<boolean>((resolve) => { transferConfirmation.current = resolve; });
+    if (!accepted) throw new Error("已取消资料转移。");
+    if (context.sessionGeneration !== getAccountSessionGeneration() || context.cloudEndpoint !== transferContext.current.cloudEndpoint || context.localRoot !== transferContext.current.localRoot) throw new Error("账号或云服务已变化，请重新操作。");
+    await onResourceTransfer(plan.source, plan.target);
+    if (context.sessionGeneration !== getAccountSessionGeneration() || context.cloudEndpoint !== transferContext.current.cloudEndpoint || context.localRoot !== transferContext.current.localRoot) throw new Error("账号或云服务已变化，请重新操作。");
+    return plan;
+  }
+
   async function saveRecommendation(recommendation: RecommendationItem) {
+    const generation = getAccountSessionGeneration();
     if (pendingNodeIds.includes(recommendation.id)) return;
     setPendingNodeIds((current) => [...current, recommendation.id]);
     try {
       await transfer({ area: "recommendation", recommendation }, targetFor(localRecommendations ? "local" : "collection"));
     } finally {
-      setPendingNodeIds((current) => current.filter((id) => id !== recommendation.id));
+      if (generation === getAccountSessionGeneration() && cloudEndpoint === transferContext.current.cloudEndpoint) setPendingNodeIds((current) => current.filter((id) => id !== recommendation.id));
     }
   }
 
   async function runNodeAction(nodeId: string, pendingMessage: string, action: () => Promise<void | string>) {
+    const generation = getAccountSessionGeneration();
     if (pendingNodeIds.includes(nodeId)) return;
     setPendingNodeIds((current) => [...current, nodeId]);
     setMessage(pendingMessage);
     try {
       const outcome = await action();
-      setMessage(outcome ?? "操作已完成。");
+      if (generation === getAccountSessionGeneration() && cloudEndpoint === transferContext.current.cloudEndpoint) setMessage(outcome ?? "操作已完成。");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "资源操作失败，原有内容未改变。");
+      if (generation === getAccountSessionGeneration() && cloudEndpoint === transferContext.current.cloudEndpoint) setMessage(error instanceof Error ? error.message : "资源操作失败，请检查目标位置后重试。");
     } finally {
-      setPendingNodeIds((current) => current.filter((id) => id !== nodeId));
+      if (generation === getAccountSessionGeneration() && cloudEndpoint === transferContext.current.cloudEndpoint) setPendingNodeIds((current) => current.filter((id) => id !== nodeId));
     }
   }
 
@@ -892,6 +933,7 @@ function LibraryPaneContent({
         ? collection.tree?.revision
         : organization.tree?.revision,
       folderId: folder?.id,
+      folderLabel: folder?.label,
       scope: area === "collection" ? collectionScope : organizationScope
     } satisfies LibraryResourceTransferTarget;
   }
@@ -978,6 +1020,7 @@ function LibraryPaneContent({
     }
   }
   async function dropOnTarget(event: ReactDragEvent, area: "local" | "collection" | "organization", folder?: ExplorerFolder) {
+    const generation = getAccountSessionGeneration();
     event.preventDefault(); event.stopPropagation(); setDropHover(null);
     const denied = dropPermission(event, area, folder);
     if (denied) { setMessage(denied); return; }
@@ -1035,7 +1078,7 @@ function LibraryPaneContent({
       }
       await onRefreshLocalLibrary?.();
     } catch (error) { setMessage(error instanceof Error ? error.message : "导入失败，请重试。"); }
-    finally { dropBusy.current = false; dragSourceRef.current = null; }
+    finally { if (generation === getAccountSessionGeneration() && cloudEndpoint === transferContext.current.cloudEndpoint) { dropBusy.current = false; dragSourceRef.current = null; } }
   }
 
   function renderEntry(area: "local" | "collection" | "organization", entry: ExplorerEntry, depth: number) {
@@ -1145,7 +1188,7 @@ function LibraryPaneContent({
                     icon={<DocumentArrowDownRegular />}
                     onClick={() => void runNodeAction(entry.id, "正在复制到本机文献库...", async () => {
                       if (!onResourceTransfer || !localLibrarySnapshot) throw new Error("请先选择本机文献库。");
-                      await onResourceTransfer(entry.source, targetFor("local"));
+                      await confirmAndTransfer(entry.source, targetFor("local"));
                       return "已复制到本机文献库。";
                     })}
                   >复制到本机文献库</MenuItem>
@@ -1451,6 +1494,23 @@ function LibraryPaneContent({
 
   return (
     <div className="library-pane">
+      <Dialog open={transferPlan !== null} onOpenChange={(_, data) => { if (!data.open) finishTransferConfirmation(false); }}>
+        <DialogSurface aria-label="确认资料转移"><DialogBody>
+          <DialogTitle>{transferPlan?.action === "move" ? "移动资料" : "复制资料"}</DialogTitle>
+          <DialogContent>
+            <p>来源：{transferPlan?.sourceLabel}</p>
+            <p>目标：{transferPlan?.targetLabel}</p>
+            <p>{transferPlan?.pdfCount ?? 0} 个 PDF，{transferPlan?.metadataCount ?? 0} 条仅元数据条目。</p>
+            {transferPlan?.recommendationCount ? <p>{transferPlan.recommendationCount} 篇推荐文献：有可用正文时保存 PDF，否则仅保存元数据。</p> : null}
+            <p>仅转移文献 PDF 与元数据；本机批注、派生笔记和白板不随之转移。</p>
+            <p>云端权限、可用配额和重复条目将在提交时再次检查。复制到组织库后，该组织中有权限的成员可访问；个人云收藏不会因此发布到 Intuecho。</p>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => finishTransferConfirmation(false)}>取消</Button>
+            <Button appearance="primary" onClick={() => finishTransferConfirmation(true)}>{transferPlan?.action === "move" ? "确认移动" : "确认复制"}</Button>
+          </DialogActions>
+        </DialogBody></DialogSurface>
+      </Dialog>
       <Dialog open={Boolean(newChild)} onOpenChange={(_, data) => { if (!data.open && !creatingChild) setNewChild(undefined); }}>
         <DialogSurface><DialogBody><DialogTitle>{newChild?.kind === "board" ? "新建论文白板" : "新建 Markdown 笔记"}</DialogTitle>
           <DialogContent><Field label="名称"><Input aria-label="论文附件名称" value={childTitle} onChange={(_, data) => setChildTitle(data.value)} maxLength={1000} /></Field>
