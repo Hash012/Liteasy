@@ -1,5 +1,6 @@
 import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle } from "@fluentui/react-components";
 import { useEffect, useRef, useState } from "react";
+import type { PublicationAuthorProfile } from "./forum.types";
 import { normalizePublicationActorBinding, samePublicationActor, type PublicationActorBinding } from "./publicationActorBinding";
 
 export type PublicationPreview = {
@@ -8,6 +9,7 @@ export type PublicationPreview = {
   body: string;
   excerpts?: readonly { label: string; text: string }[];
   action?: string;
+  authorProfiles?: readonly { label: string; profile: PublicationAuthorProfile }[];
 };
 
 type Pending = { preview: PublicationPreview; actor: PublicationActorBinding; resolve(value: boolean): void };
@@ -41,11 +43,18 @@ export function usePublicationPreview(getActor: () => PublicationActorBinding | 
     confirm,
     dialog: <Dialog open={Boolean(pending)} onOpenChange={(_, data) => { if (!data.open) finish(false); }}>
       <DialogSurface><DialogBody><DialogTitle>{pending?.preview.title ?? "发送预览"}</DialogTitle>
-        <DialogContent>
+        <DialogContent style={{ maxHeight: "65vh", overflowY: "auto" }}>
           <p><strong>接收范围：</strong>{pending?.preview.recipient}</p>
           <p>下面仅列出本次操作涉及的内容。不会附带全文 PDF、其他笔记、聊天记录或本机路径。</p>
           {pending?.preview.body && <section aria-label="批注正文" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{pending.preview.body}</section>}
           {pending?.preview.excerpts?.map((excerpt, index) => <section key={index} style={{ marginBlock: 12 }}><strong>{excerpt.label}</strong><blockquote style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{excerpt.text}</blockquote></section>)}
+          {pending?.preview.authorProfiles?.map(({ label, profile }, index) => <section key={index} aria-label={label}>
+            <strong>{label}</strong>
+            <p>{profile.author.name} · {profile.author.initials}</p>
+            {profile.profile.educationStage && <p>教育阶段：{profile.profile.educationStage}</p>}
+            {profile.profile.institutions.length > 0 && <p>机构：{profile.profile.institutions.map((item) => item.name).join("、")}</p>}
+            <small>这些是作者自行填写的资料，不代表身份或研究结论已获认证。</small>
+          </section>)}
           <p>发送身份：当前登录账号 · {pending?.actor.subject}</p>
         </DialogContent>
         <DialogActions><Button onClick={() => finish(false)}>取消</Button><Button appearance="primary" onClick={() => finish(true)}>{pending?.preview.action ?? "确认发送"}</Button></DialogActions>

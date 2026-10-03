@@ -77,5 +77,6 @@ jobs:
           node products/liteasy/services/api/scripts/verify-postgres-integration.mjs
           node products/intuecho/services/api/scripts/verify-postgres-integration.mjs
           node products/intuecho/services/api/scripts/verify-thin-reading-withdrawal.mjs
+          node products/intuecho/services/api/scripts/verify-desktop-publication-profile.mjs
       - name: Verify dependency locks stayed unchanged
         run: node .github/scripts/check-clean.mjs products/liteasy/services/api/package-lock.json products/intuecho/package-lock.json

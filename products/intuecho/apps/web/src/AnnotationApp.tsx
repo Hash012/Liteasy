@@ -264,7 +264,7 @@ export function AnnotationApp() {
           {view === "messages" && (session ? <ConversationsPage data={inbox.data} error={inbox.error} onConversation={setConversation} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
           {view === "mine" && (session ? <MyAnnotations refresh={refresh} session={session} onCompose={setComposer} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
           {view === "organizations" && (session ? <OrganizationAnnotations refresh={refresh} session={session} onCompose={setComposer} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
-          {view === "notifications" && (session ? <QuietInbox api={communityApi} actorBinding={actorBinding} onOpenAnnotation={(id) => { setDetailId(id); window.history.pushState({}, document.title, `/annotations/${encodeURIComponent(id)}`); }} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
+          {view === "notifications" && (session ? <QuietInbox api={communityApi} actorBinding={actorBinding} onOpenReports={() => { setDetailId(null); window.history.pushState({}, document.title, "/"); setView("reports"); }} onOpenAnnotation={(id) => { setDetailId(id); window.history.pushState({}, document.title, `/annotations/${encodeURIComponent(id)}`); }} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
           {view === "reports" && (session ? <><CommunityReportHistory api={communityApi} actorBinding={actorBinding} /><CommunityReportHistory api={communityApi} actorBinding={actorBinding} review /></> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
           {view === "profile" && (session ? <ProfileEditor refresh={refresh} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
         </>}

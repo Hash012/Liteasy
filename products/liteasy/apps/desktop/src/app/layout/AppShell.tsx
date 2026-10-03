@@ -550,7 +550,7 @@ export function AppShell({
     artifactResultClient: artifactResultClientRef.current,
     loadLocalArtifactResults: () => localArtifactResultClientRef.current.list(),
     artifactResultScopeKey: artifactAccountId && settingsState["models.connection_mode"] !== "direct"
-      ? `${settingsState["models.cloud_proxy_endpoint"]}:${artifactAccountId}`
+      ? JSON.stringify([settingsState["models.cloud_proxy_endpoint"], loadStoredAccountSession()?.issuer ?? "unverified", artifactAccountId])
       : undefined,
     cancelAgentRun: (runId, reason) => agentCancelRunnerRef.current(runId, reason),
     cancelThinReadingVisualization: (input) => cancelVisualizationGenerationRef.current(input),
@@ -575,7 +575,11 @@ export function AppShell({
       title: preview.operation === "retract" ? "确认撤回薄读批注" : "预览将公开的薄读批注",
       recipient: preview.operation === "retract" ? "从 Intuecho 撤回；已有下载副本不会被远程删除" : "Intuecho 公开批注及广场",
       body: preview.items.map((item, index) => `批注 ${index + 1}\n${item.body}`).join("\n\n"),
-      excerpts: preview.items.map((item, index) => ({ label: `批注 ${index + 1} 的选中摘录`, text: item.excerpt })),
+      excerpts: preview.items.flatMap((item, index) => (item.excerpts ?? [{ label: "选中摘录", text: item.excerpt }]).map((excerpt) => ({ label: `批注 ${index + 1} · ${excerpt.label}`, text: excerpt.text }))),
+      authorProfiles: preview.items.flatMap((item, index) => {
+        const profile = item.authorProfile ?? preview.authorProfile;
+        return profile ? [{ label: `批注 ${index + 1} 的公开作者资料`, profile }] : [];
+      }),
       action: preview.operation === "retract" ? "确认撤回" : "确认公开"
     }),
     assertCanPublishThinReading: (document) => {
@@ -1173,7 +1177,7 @@ export function AppShell({
   const objectAgentApiRef = useRef<import("../features/agent-api/agentApi.types").AgentPublicApi>();
   const objectWorkbench = useObjectWorkbenchController({
     artifactScopeId: artifactResourceScope(artifactAccountId && settingsState["models.connection_mode"] !== "direct"
-      ? `${settingsState["models.cloud_proxy_endpoint"]}:${artifactAccountId}` : undefined).id,
+      ? JSON.stringify([settingsState["models.cloud_proxy_endpoint"], loadStoredAccountSession()?.issuer ?? "unverified", artifactAccountId]) : undefined).id,
     scopeId: localWorkspaceScope(accountSession?.userId),
     getApi: () => objectAgentApiRef.current!,
     readPaperBytes: loadPaperPdfBytes,

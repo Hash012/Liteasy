@@ -24,6 +24,8 @@ const publicationActor: PublicationActorBinding = {
   sessionGeneration: "runtime-a:1"
 };
 
+const authorProfile = { author: { id: publicationActor.subject, name: "Synthetic Ada", initials: "SA" }, profile: { revision: 3, educationStage: "graduate", institutions: [{ name: "Synthetic Lab" }] } };
+
 function literature(overrides: Partial<LiteratureRecord> = {}): LiteratureRecord {
   return {
     authors: ["Ada Lovelace"],
@@ -107,6 +109,8 @@ function setup(input: {
   confirmLiterature?: ReturnType<typeof vi.fn>;
   verifyLiterature?: ReturnType<typeof vi.fn>;
   applyAnnotationPublications?: ReturnType<typeof vi.fn>;
+  lookupAnnotationPublications?: ReturnType<typeof vi.fn>;
+  readPublicationAuthorProfile?: ReturnType<typeof vi.fn>;
   onPaperUpdated?: ReturnType<typeof vi.fn>;
 } = {}) {
   const workspaceStore = createWorkspaceStore(input.initialPapers ?? [paper()]);
@@ -122,12 +126,14 @@ function setup(input: {
   const applyAnnotationPublications = input.applyAnnotationPublications ?? vi.fn().mockImplementation(
     async (operations: ForumAnnotationPublicationOperation[]) => ({ results: operations.map((operation) => receipt(operation)) })
   );
+  const lookupAnnotationPublications = input.lookupAnnotationPublications ?? vi.fn().mockImplementation(async (operations: ForumAnnotationPublicationOperation[]) => ({ results: operations.map((operation) => receipt(operation)) }));
+  const readPublicationAuthorProfile = input.readPublicationAuthorProfile ?? vi.fn().mockResolvedValue(authorProfile);
   const onPaperUpdated = input.onPaperUpdated ?? vi.fn();
   const hook = renderHook(() => {
     const controller = usePdfAnnotationPublicationController({
     getActorBinding: input.getActorBinding ?? (() => publicationActor),
     confirmPublication: input.confirmPublication ?? (async () => true),
-    forumClient: { applyAnnotationPublications },
+    forumClient: { applyAnnotationPublications, lookupAnnotationPublications, readPublicationAuthorProfile },
     literatureClient: {
       confirmLiterature,
       resolveLiterature,
@@ -148,6 +154,8 @@ function setup(input: {
   return {
     ...hook,
     applyAnnotationPublications,
+    lookupAnnotationPublications,
+    readPublicationAuthorProfile,
     confirmLiterature,
     loadLiterature,
     loadResolution,
@@ -161,6 +169,64 @@ function setup(input: {
 }
 
 describe("usePdfAnnotationPublicationController", () => {
+  test("previews and persists exactly the author profile revision sent with a new publication", async () => {
+    const preview = vi.fn(async () => true), prepared = vi.fn();
+    const context = setup({ confirmPublication: preview });
+    const result = await context.result.current.actions.changePublication({ annotation: annotation(), operation: "publish",
+      paper: paper({ literature: literature() }), onPreparedPublication: prepared });
+    expect(preview).toHaveBeenCalledWith(expect.objectContaining({ authorProfiles: [{ label: "公开作者资料", profile: authorProfile }] }));
+    expect(prepared).toHaveBeenCalledWith(expect.objectContaining({ authorProfile,
+      pendingOperation: expect.objectContaining({ expectedAuthorProfileRevision: 3 }) }));
+    expect(context.applyAnnotationPublications).toHaveBeenCalledWith([expect.objectContaining({ expectedAuthorProfileRevision: 3 })], publicationActor);
+    expect(result.authorProfile).toEqual(authorProfile);
+  });
+
+  test("drops a late profile read after account generation changes without preparing or sending", async () => {
+    let actor = publicationActor;
+    const pending = deferred<typeof authorProfile>(), preview = vi.fn(async () => true), prepared = vi.fn();
+    const read = vi.fn(() => pending.promise);
+    const context = setup({ getActorBinding: () => actor, confirmPublication: preview, readPublicationAuthorProfile: read });
+    const request = context.result.current.actions.changePublication({ annotation: annotation(), operation: "publish",
+      paper: paper({ literature: literature() }), onPreparedPublication: prepared });
+    await waitFor(() => expect(read).toHaveBeenCalledOnce());
+    actor = { ...publicationActor, sessionGeneration: "new-generation" };
+    pending.resolve(authorProfile);
+    expect((await request).state).toBe("failed");
+    expect(preview).not.toHaveBeenCalled();
+    expect(prepared).not.toHaveBeenCalled();
+    expect(context.applyAnnotationPublications).not.toHaveBeenCalled();
+  });
+
+  test("only a definitive changed-profile rejection permits a fresh explicitly reviewed operation", async () => {
+    const apply = vi.fn(async ([operation]: ForumAnnotationPublicationOperation[]) => ({ results: [{
+      annotationId: operation.annotationId, queueKey: operation.queueKey, state: "failed", code: "AUTHOR_PROFILE_CHANGED", error: "profile changed"
+    }] }));
+    const read = vi.fn().mockResolvedValueOnce(authorProfile).mockResolvedValue({ ...authorProfile, profile: { ...authorProfile.profile, revision: 4 } });
+    const preview = vi.fn(async () => true), context = setup({ applyAnnotationPublications: apply, readPublicationAuthorProfile: read, confirmPublication: preview });
+    const first = await context.result.current.actions.changePublication({ annotation: annotation(), operation: "publish", paper: paper({ literature: literature() }) });
+    expect(first.pendingOperation).toBeUndefined();
+    expect(first.outcome).toBeUndefined();
+    await context.result.current.actions.changePublication({ annotation: annotation({ publication: first }), operation: "publish", paper: paper({ literature: literature() }) });
+    expect(preview).toHaveBeenCalledTimes(2);
+    expect(apply.mock.calls[0][0][0]).toHaveProperty("expectedAuthorProfileRevision", 3);
+    expect(apply.mock.calls[1][0][0]).toHaveProperty("expectedAuthorProfileRevision", 4);
+  });
+
+  test("keeps a legacy unknown create untouched when readonly reconciliation cannot find it", async () => {
+    const { createUpsertOperation } = await import("../app/features/pdf/pdfAnnotationIntuechoSync");
+    const original = createUpsertOperation(annotation(), literature());
+    const lookup = vi.fn(async () => ({ results: [{ annotationId: original.annotationId, queueKey: original.queueKey, state: "failed", error: "not found" }] }));
+    const preview = vi.fn(async () => true), context = setup({ lookupAnnotationPublications: lookup, confirmPublication: preview });
+    const result = await context.result.current.actions.changePublication({ annotation: annotation({ publication: {
+      actorBinding: publicationActor, desiredVisibility: "public", state: "failed", pendingOperation: original, outcome: "unknown"
+    } }), operation: "publish", paper: paper(), resumePublication: true });
+    expect(result.pendingOperation).toEqual(original);
+    expect(result.outcome).toBe("unknown");
+    expect(preview).not.toHaveBeenCalled();
+    expect(context.readPublicationAuthorProfile).not.toHaveBeenCalled();
+    expect(context.applyAnnotationPublications).not.toHaveBeenCalled();
+  });
+
   test("does not prepare or upload when the local publication preview is cancelled", async () => {
     const confirmPublication = vi.fn(async () => false);
     const context = setup({ confirmPublication });
@@ -184,14 +250,15 @@ describe("usePdfAnnotationPublicationController", () => {
     } });
     const reconciled = await context.result.current.actions.changePublication({ annotation: changed,
       operation: "update", paper: paper({ literature: literature() }), resumePublication: true });
-    expect(context.applyAnnotationPublications).toHaveBeenNthCalledWith(1, [original], publicationActor);
+    expect(context.lookupAnnotationPublications).toHaveBeenCalledWith([original], publicationActor);
+    expect(context.applyAnnotationPublications).not.toHaveBeenCalled();
     expect(reconciled).toMatchObject({ state: "failed", remoteAnnotationId: "remote-1" });
     expect(reconciled.lastError).toContain("本地修改尚未发布");
     expect(reconciled.pendingOperation).toBeUndefined();
     const updated = await context.result.current.actions.changePublication({ annotation: { ...changed, publication: reconciled },
       operation: "update", paper: paper({ literature: literature() }), resumePublication: true });
     expect(updated.state).toBe("published");
-    expect(context.applyAnnotationPublications).toHaveBeenNthCalledWith(2, [expect.objectContaining({ body: "A newer local edit", revision: 2 })], publicationActor);
+    expect(context.applyAnnotationPublications).toHaveBeenNthCalledWith(1, [expect.objectContaining({ body: "A newer local edit", revision: 2 })], publicationActor);
   });
 
   test("rejects organization content before publishing while preserving an owner's known withdrawal", async () => {
@@ -234,8 +301,9 @@ describe("usePdfAnnotationPublicationController", () => {
       operation: "publish", paper: paper(), resumePublication: true, onPreparedPublication
     });
     expect(result).toMatchObject({ actorBinding: newerActor, state: "published" });
-    expect(onPreparedPublication).toHaveBeenCalledWith(expect.objectContaining({ actorBinding: newerActor, pendingOperation }));
-    expect(context.applyAnnotationPublications).toHaveBeenCalledWith([pendingOperation], newerActor);
+    expect(onPreparedPublication).not.toHaveBeenCalled();
+    expect(context.lookupAnnotationPublications).toHaveBeenCalledWith([pendingOperation], newerActor);
+    expect(context.applyAnnotationPublications).not.toHaveBeenCalled();
     expect(context.loadLiterature).not.toHaveBeenCalled();
   });
 
@@ -1135,7 +1203,7 @@ describe("usePdfAnnotationPublicationController", () => {
     expect(operations[1]).toMatchObject({ operation: "retract", remoteAnnotationId: "created-remotely" });
   });
 
-  test("replays the exact create after its response is lost and retracts the recovered remote ID", async () => {
+  test("looks up the exact create after its response is lost and retracts the recovered remote ID", async () => {
     const operations: ForumAnnotationPublicationOperation[] = [];
     let upsertAttempts = 0;
     const apply = vi.fn().mockImplementation(async ([operation]: ForumAnnotationPublicationOperation[]) => {
@@ -1155,7 +1223,8 @@ describe("usePdfAnnotationPublicationController", () => {
       })] };
     });
     const currentPaper = paper({ literature: literature() });
-    const context = setup({ applyAnnotationPublications: apply, initialPapers: [currentPaper] });
+    const lookup = vi.fn(async ([operation]: ForumAnnotationPublicationOperation[]) => ({ results: [receipt(operation, { remoteAnnotationId: "created-before-response-loss", remoteRevision: 4 })] }));
+    const context = setup({ applyAnnotationPublications: apply, lookupAnnotationPublications: lookup, initialPapers: [currentPaper] });
 
     const publishing = context.result.current.actions.changePublication({
       annotation: annotation(), operation: "publish", paper: currentPaper
@@ -1176,9 +1245,9 @@ describe("usePdfAnnotationPublicationController", () => {
       remoteRevision: 5,
       state: "not_published"
     });
-    expect(apply).toHaveBeenCalledTimes(3);
-    expect(operations[1]).toEqual(operations[0]);
-    expect(operations[2]).toMatchObject({
+    expect(apply).toHaveBeenCalledTimes(2);
+    expect(lookup).toHaveBeenCalledWith([operations[0]], publicationActor);
+    expect(operations[1]).toMatchObject({
       operation: "retract",
       remoteAnnotationId: "created-before-response-loss"
     });
@@ -1197,7 +1266,8 @@ describe("usePdfAnnotationPublicationController", () => {
       }] };
     });
     const currentPaper = paper({ literature: literature() });
-    const context = setup({ applyAnnotationPublications: apply, initialPapers: [currentPaper] });
+    const lookup = vi.fn(async ([operation]: ForumAnnotationPublicationOperation[]) => ({ results: [{ annotationId: operation.annotationId, queueKey: operation.queueKey, state: "failed", error: "论坛发布请求失败，请稍后重试。" }] }));
+    const context = setup({ applyAnnotationPublications: apply, lookupAnnotationPublications: lookup, initialPapers: [currentPaper] });
 
     const publishing = context.result.current.actions.changePublication({
       annotation: annotation(), operation: "publish", paper: currentPaper
@@ -1218,11 +1288,11 @@ describe("usePdfAnnotationPublicationController", () => {
       pendingCreateOperation: operations[0],
       state: "failed"
     });
-    expect(apply).toHaveBeenCalledTimes(2);
-    expect(operations[1]).toEqual(operations[0]);
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(lookup).toHaveBeenCalledWith([operations[0]], publicationActor);
   });
 
-  test("replays a restart-durable exact create before retracting after controller restart", async () => {
+  test("looks up a restart-durable exact create before retracting after controller restart", async () => {
     const exactCreate: Extract<ForumAnnotationPublicationOperation, { operation: "upsert" }> = {
       annotationId: "annotation-1",
       body: "Exact pre-crash body",
@@ -1247,7 +1317,8 @@ describe("usePdfAnnotationPublicationController", () => {
       })] };
     });
     const currentPaper = paper({ literature: literature() });
-    const context = setup({ applyAnnotationPublications: apply, initialPapers: [currentPaper] });
+    const lookup = vi.fn(async ([operation]: ForumAnnotationPublicationOperation[]) => ({ results: [receipt(operation, { remoteAnnotationId: "created-before-restart", remoteRevision: 7 })] }));
+    const context = setup({ applyAnnotationPublications: apply, lookupAnnotationPublications: lookup, initialPapers: [currentPaper] });
     const restartAnnotation = annotation({
       publication: {
         desiredVisibility: "private",
@@ -1270,9 +1341,9 @@ describe("usePdfAnnotationPublicationController", () => {
       remoteAnnotationId: "created-before-restart",
       state: "not_published"
     });
-    expect(operations).toHaveLength(2);
-    expect(operations[0]).toEqual(exactCreate);
-    expect(operations[1]).toMatchObject({
+    expect(operations).toHaveLength(1);
+    expect(lookup).toHaveBeenCalledWith([exactCreate], publicationActor);
+    expect(operations[0]).toMatchObject({
       operation: "retract",
       remoteAnnotationId: "created-before-restart",
       revision: 7

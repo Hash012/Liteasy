@@ -6,6 +6,24 @@ import type { PublicationActorBinding } from "../app/features/forum/publicationA
 const owner: PublicationActorBinding = { endpoint: "https://forum.example.test", issuer: "https://identity.example.test", subject: "owner", scopeType: "user", scopeId: "owner", sessionGeneration: "epoch:1" };
 
 describe("local publication preview", () => {
+  test("shows the frozen public author fields and every selected evidence excerpt", async () => {
+    const profile = { author: { id: owner.subject, name: "Synthetic Scholar", initials: "SS" }, profile: { revision: 2, educationStage: "graduate", institutions: [{ name: "Synthetic Institute" }] } };
+    function Host() {
+      const controller = usePublicationPreview(() => owner);
+      return <><button onClick={() => void controller.confirm({ title: "发送预览", recipient: "公开论坛", body: "My summary", authorProfiles: [{ label: "公开作者资料", profile }], excerpts: [
+        { label: "正文引用", text: "First source excerpt" }, { label: "证据引用", text: "Second actual wire excerpt" }
+      ] })}>预览</button>{controller.dialog}</>;
+    }
+    render(<Host />);
+    fireEvent.click(screen.getByText("预览"));
+    profile.author.name = "Changed after preview";
+    expect(screen.getByLabelText("公开作者资料")).toHaveTextContent("Synthetic Scholar");
+    expect(screen.getByLabelText("公开作者资料")).toHaveTextContent("Synthetic Institute");
+    expect(screen.getByText("Second actual wire excerpt")).toBeVisible();
+    expect(screen.queryByText("Changed after preview")).not.toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "取消" })); });
+  });
+
   test("takes a fixed local snapshot and requires a separate confirmation", async () => {
     const completed = vi.fn();
     const preview = { title: "发送预览", recipient: "公开论坛", body: "Only this selected note" };

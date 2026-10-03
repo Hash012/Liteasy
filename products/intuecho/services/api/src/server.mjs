@@ -157,7 +157,10 @@ export async function createIntuechoApp({
       "/v1/integrations/desktop/annotation-handoffs",
       "/v1/integrations/desktop/organizations:list",
       "/v1/pdf-annotations:sync",
+      "/v1/pdf-annotations:lookup",
       "/v1/thin-reading/annotations:sync",
+      "/v1/thin-reading/annotations:lookup",
+      "/v1/integrations/desktop/publication-profile",
       "/v1/thin-reading/recommendations:query",
       "/v1/integrations/desktop/works:resolve"
     ]).has(pathname);

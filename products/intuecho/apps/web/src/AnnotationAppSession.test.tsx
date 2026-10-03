@@ -18,6 +18,9 @@ vi.mock("./communityApi", () => ({
   communityApi: {
     preferences: vi.fn(async () => ({ preferences: [] })),
     notifications: vi.fn(async () => ({ notifications: [] })),
+    myReports: vi.fn(async () => ({ reports: [] })),
+    reviewReports: vi.fn(async () => ({ reports: [] })),
+    annotation: vi.fn(),
     plaza: vi.fn(async () => ({ annotations: [] })),
     conversations: vi.fn(async () => ({ conversations: [] })),
     consumeAnnotationHandoff: vi.fn()
@@ -98,4 +101,21 @@ test("keeps work notifications separate from the plaza without a social unread b
   expect(await screen.findByText("暂无通知。可在讨论中主动订阅。")).toBeInTheDocument();
   expect(communityApi.notifications).toHaveBeenCalledTimes(1);
   expect(screen.getByRole("button", { name: "工作通知" })).not.toHaveTextContent(/[0-9]/);
+});
+
+
+test("a report result in the real inbox opens the current user's report records", async () => {
+  window.history.replaceState({}, "", "/");
+  vi.mocked(communityApi.notifications).mockResolvedValueOnce({ notifications: [{ id: "synthetic-result", available: true, kind: "report_result", createdAt: "2026-10-03T00:00:00Z", readAt: null, target: { annotationId: "synthetic-annotation", revision: 1, reportId: "synthetic-report" } }] });
+  vi.mocked(communityApi.myReports).mockResolvedValueOnce({ reports: [{ id: "synthetic-report", annotationId: "synthetic-annotation", revision: 1, reason: "other", detail: "Synthetic report evidence for account A", status: "resolved", resolutionReason: "reviewed", createdAt: "2026-10-03T00:00:00Z", resolvedAt: "2026-10-03T01:00:00Z" }] });
+  render(<AnnotationApp />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "工作通知" }));
+  await screen.findByText("你的举报有处理结果");
+  await user.click(screen.getByRole("button", { name: "查看举报记录" }));
+  expect(await screen.findByText("Synthetic report evidence for account A")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "处理记录" })).toHaveAttribute("aria-current", "page");
+  expect(communityApi.myReports).toHaveBeenCalledTimes(1);
+  expect(communityApi.annotation).not.toHaveBeenCalled();
+  expect(window.location.pathname).toBe("/");
 });

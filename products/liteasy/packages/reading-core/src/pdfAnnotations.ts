@@ -420,6 +420,7 @@ export function confirmPdfAnnotationPublication(
     ...annotation,
     publication: {
       ...(annotation.publication.actorBinding ? { actorBinding: annotation.publication.actorBinding } : {}),
+      ...(annotation.publication.authorProfile ? { authorProfile: annotation.publication.authorProfile } : {}),
       desiredVisibility: receipt.state === "retracted" ? "private" : "public",
       remoteAnnotationId: receipt.remoteAnnotationId,
       remoteRevision: receipt.remoteRevision,

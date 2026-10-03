@@ -554,7 +554,7 @@ test("previews optional author details and binds publication to the reviewed pro
 
 test("an author can explicitly resubmit a pending appeal after reviewing its current audience", async () => {
   const user = userEvent.setup();
-  render(<AnnotationCard annotation={{ ...publicParent, viewerIsAuthor: true, tags: [{ name: "待核查", origin: "platform", state: "appealed" }] }} session={null} onCompose={vi.fn()} />);
+  render(<AnnotationCard annotation={{ ...publicParent, viewerIsAuthor: true, tags: [{ confidence: null, name: "待核查", origin: "platform", state: "appealed" }] }} session={null} onCompose={vi.fn()} />);
   await user.click(screen.getByRole("button", { name: "补充申诉 待核查" }));
   expect(screen.getByText(/历史材料不会自动公开/)).toBeInTheDocument();
   await user.type(screen.getByLabelText("申诉理由"), "This is my updated explicit review material.");
