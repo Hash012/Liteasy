@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { withTransaction } from "./postgres.mjs";
 import { ForumRepositoryError } from "./postgresForumRepository.mjs";
+import { deletePostgresCommunityGovernanceForAccount } from "./communityGovernanceRepository.mjs";
 
 function identifier(value, code) {
   if (typeof value !== "string" || !/^[A-Za-z0-9._:-]{1,200}$/.test(value)) {
@@ -66,6 +67,7 @@ export class PostgresAccountLifecycleRepository {
         return publicResult(prior.rows[0], true);
       }
 
+      await deletePostgresCommunityGovernanceForAccount(client, subjectId);
       const anonymizedAuthorId = `deleted:${randomUUID()}`;
       const handoffs = await client.query("DELETE FROM desktop_draft_handoffs WHERE owner_id = $1", [subjectId]);
       const annotationHandoffs = await client.query("DELETE FROM desktop_annotation_handoffs WHERE owner_id = $1", [subjectId]);

@@ -1,3 +1,5 @@
+import { assertIntuechoAccountActive } from "./accountWriteFence.mjs";
+import { recordPostgresCommunityReplyEvent } from "./communityGovernanceRepository.mjs";
 import { currentOrganizationChoices } from "./organizationChoices.mjs";
 import { annotationContribution } from "./annotationContribution.mjs";
 import { randomUUID } from "node:crypto";
@@ -393,6 +395,7 @@ export class PostgresAnnotationCommunityRepository {
 
   async updateProfile(userId, input) {
     return withTransaction(this.pool, async (client) => {
+      await assertIntuechoAccountActive(client, userId);
       await client.query(`
         INSERT INTO community_user_profiles(user_id, education_stage)
         VALUES ($1, $2)
@@ -412,7 +415,10 @@ export class PostgresAnnotationCommunityRepository {
       throw new AnnotationCommunityError("ORGANIZATION_ACCESS_DENIED", 403);
     }
     const id = `handoff_${randomUUID()}`;
-    const result = await this.pool.query(`INSERT INTO desktop_annotation_handoffs(id, owner_id, payload, expires_at) VALUES ($1, $2, $3::jsonb, now() + interval '5 minutes') RETURNING expires_at`, [id, ownerId, JSON.stringify(input)]);
+    const result = await withTransaction(this.pool, async (client) => {
+      await assertIntuechoAccountActive(client, ownerId);
+      return client.query(`INSERT INTO desktop_annotation_handoffs(id, owner_id, payload, expires_at) VALUES ($1, $2, $3::jsonb, now() + interval '5 minutes') RETURNING expires_at`, [id, ownerId, JSON.stringify(input)]);
+    });
     return { expiresAt: result.rows[0].expires_at, handoffId: id };
   }
 
@@ -961,11 +967,14 @@ export class PostgresAnnotationCommunityRepository {
       throw new AnnotationCommunityError("ORGANIZATION_ACCESS_DENIED", 403);
     }
     return withTransaction(this.pool, async (client) => {
+      await assertIntuechoAccountActive(client, author.id);
+      const profile = await this.profile(author.id, client);
+      if (input.expectedAuthorProfileRevision !== undefined && profile.revision !== input.expectedAuthorProfileRevision) throw new AnnotationCommunityError("AUTHOR_PROFILE_CHANGED", 409);
       const id = `annotation_${randomUUID()}`;
       await client.query(`
         INSERT INTO annotations(id, parent_annotation_id, body, author_id, author_name, author_initials, author_profile_snapshot, visibility, organization_id, share_to_plaza)
         VALUES ($1, NULL, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
-      `, [id, input.body, author.id, author.name, author.initials, JSON.stringify(await this.#profileSnapshot(author.id, client)), input.visibility, input.organizationId ?? null, input.shareToPlaza]);
+      `, [id, input.body, author.id, author.name, author.initials, JSON.stringify({ educationStage: profile.educationStage, institutions: profile.institutions }), input.visibility, input.organizationId ?? null, input.shareToPlaza]);
       await this.#replaceTargets(client, id, input.targets, author.id);
       await client.query("UPDATE annotations SET contribution = $2::jsonb WHERE id = $1", [id, JSON.stringify(annotationContribution(input.contribution))]);
       await this.#replaceUserTags(client, id, input.tags);
@@ -976,6 +985,7 @@ export class PostgresAnnotationCommunityRepository {
 
   async updateAnnotation(id, author, update) {
     return withTransaction(this.pool, async (client) => {
+      await assertIntuechoAccountActive(client, author.id);
       const authorizedRow = await this.#row(id, client, true);
       if (!authorizedRow || authorizedRow.withdrawn_at) throw new AnnotationCommunityError("ANNOTATION_NOT_FOUND", 404);
       if (authorizedRow.author_id !== author.id) throw new AnnotationCommunityError("NOT_ANNOTATION_AUTHOR", 403);
@@ -1142,6 +1152,7 @@ export class PostgresAnnotationCommunityRepository {
         await this.#assignPlatformTags(client, derivedAnnotationId, input.body, input.tags);
         await client.query("UPDATE annotation_replies SET derived_annotation_id = $2 WHERE id = $1", [replyId, derivedAnnotationId]);
       }
+      await recordPostgresCommunityReplyEvent(client, { replyId, annotationId: parentAnnotationId, actorId: author.id });
       const reply = await this.#replyRow(replyId, client);
       return { annotation: derivedAnnotationId ? await this.annotation(derivedAnnotationId, author, client) : null, reply: this.#serializeReply(reply, author) };
     });
@@ -1402,6 +1413,7 @@ export class PostgresAnnotationCommunityRepository {
 
   async rateAnnotation(annotationId, viewer, rating) {
     return withTransaction(this.pool, async (client) => {
+      await assertIntuechoAccountActive(client, viewer.id);
       const authorizedRow = await this.#row(annotationId, client);
       if (!authorizedRow || authorizedRow.withdrawn_at || !await this.#canView(authorizedRow, viewer, client)) throw new AnnotationCommunityError("ANNOTATION_NOT_FOUND", 404);
       const row = await this.#row(annotationId, client, true);
@@ -1415,6 +1427,7 @@ export class PostgresAnnotationCommunityRepository {
 
   async toggleSave(annotationId, viewer) {
     return withTransaction(this.pool, async (client) => {
+      await assertIntuechoAccountActive(client, viewer.id);
       const authorizedRow = await this.#row(annotationId, client);
       if (!authorizedRow || authorizedRow.withdrawn_at || !await this.#canView(authorizedRow, viewer, client)) throw new AnnotationCommunityError("ANNOTATION_NOT_FOUND", 404);
       const row = await this.#row(annotationId, client, true);
@@ -1485,6 +1498,7 @@ export class PostgresAnnotationCommunityRepository {
   async toggleFollow(userId, targetUserId) {
     if (userId === targetUserId) throw new AnnotationCommunityError("CANNOT_FOLLOW_SELF");
     return withTransaction(this.pool, async (client) => {
+      await assertIntuechoAccountActive(client, userId);
       const removed = await client.query("DELETE FROM user_follows WHERE follower_id = $1 AND followed_id = $2 RETURNING followed_id", [userId, targetUserId]);
       const following = removed.rowCount === 0;
       if (following) await client.query("INSERT INTO user_follows(follower_id, followed_id) VALUES ($1, $2)", [userId, targetUserId]);
@@ -1570,10 +1584,13 @@ export class PostgresAnnotationCommunityRepository {
   }
 
   async createConversation(userId, participantId) {
-    if (!await this.#mutual(userId, participantId)) throw new AnnotationCommunityError("MUTUAL_FOLLOW_REQUIRED", 403);
-    const [first, second] = [userId, participantId].sort();
-    const result = await this.pool.query(`INSERT INTO direct_conversations(id, first_user_id, second_user_id) VALUES ($1, $2, $3) ON CONFLICT(first_user_id, second_user_id) DO UPDATE SET first_user_id = EXCLUDED.first_user_id RETURNING id`, [`conversation_${randomUUID()}`, first, second]);
-    return { id: result.rows[0].id };
+    return withTransaction(this.pool, async (client) => {
+      for (const subject of [...new Set([userId, participantId])].sort()) await assertIntuechoAccountActive(client, subject);
+      if (!await this.#mutual(userId, participantId, client)) throw new AnnotationCommunityError("MUTUAL_FOLLOW_REQUIRED", 403);
+      const [first, second] = [userId, participantId].sort();
+      const result = await client.query(`INSERT INTO direct_conversations(id, first_user_id, second_user_id) VALUES ($1, $2, $3) ON CONFLICT(first_user_id, second_user_id) DO UPDATE SET first_user_id = EXCLUDED.first_user_id RETURNING id`, [`conversation_${randomUUID()}`, first, second]);
+      return { id: result.rows[0].id };
+    });
   }
 
   async sendMessage(conversationId, senderId, input) {
@@ -1581,22 +1598,26 @@ export class PostgresAnnotationCommunityRepository {
     const conversation = found.rows[0];
     if (!conversation || !new Set([conversation.first_user_id, conversation.second_user_id]).has(senderId)) throw new AnnotationCommunityError("CONVERSATION_NOT_FOUND", 404);
     const recipientId = conversation.first_user_id === senderId ? conversation.second_user_id : conversation.first_user_id;
-    if (!await this.#mutual(senderId, recipientId)) throw new AnnotationCommunityError("MUTUAL_FOLLOW_REQUIRED", 403);
-    const id = `message_${randomUUID()}`;
-    let invitation = null;
-    if (input.kind === "organization_invitation") {
-      const authorization = await this.#organizationInvitation({
-        ...input.invitation,
-        idempotencyKey: `intuecho-${id}`,
-        invitedUserId: recipientId,
-        inviterId: senderId
-      });
+    return withTransaction(this.pool, async (client) => {
+      for (const subject of [...new Set([senderId, recipientId])].sort()) await assertIntuechoAccountActive(client, subject);
+      if (!await this.#mutual(senderId, recipientId, client)) throw new AnnotationCommunityError("MUTUAL_FOLLOW_REQUIRED", 403);
+      const id = `message_${randomUUID()}`;
+      let invitation = null;
+      if (input.kind === "organization_invitation") {
+        const authorization = await this.#organizationInvitation({
+          ...input.invitation,
+          idempotencyKey: `intuecho-${id}`,
+          invitedUserId: recipientId,
+          inviterId: senderId
+    
+    });
       if (!authorization?.invitationId) throw new AnnotationCommunityError("ORGANIZATION_INVITATION_DENIED", 403);
       invitation = { ...input.invitation, ...authorization };
     }
-    const result = await this.pool.query(`INSERT INTO direct_messages(id, conversation_id, sender_id, message_kind, body, invitation) VALUES ($1, $2, $3, $4, $5, $6::jsonb) RETURNING *`, [id, conversationId, senderId, input.kind, input.body, invitation ? JSON.stringify(invitation) : null]);
+    const result = await client.query(`INSERT INTO direct_messages(id, conversation_id, sender_id, message_kind, body, invitation) VALUES ($1, $2, $3, $4, $5, $6::jsonb) RETURNING *`, [id, conversationId, senderId, input.kind, input.body, invitation ? JSON.stringify(invitation) : null]);
     const row = result.rows[0];
     return { body: row.body, createdAt: row.created_at, id: row.id, invitation: row.invitation, kind: row.message_kind, senderId: row.sender_id };
+    });
   }
 
   async messages(conversationId, viewerId) {
@@ -1609,6 +1630,7 @@ export class PostgresAnnotationCommunityRepository {
 
   async markConversationRead(conversationId, viewerId, messageId) {
     return withTransaction(this.pool, async (client) => {
+      await assertIntuechoAccountActive(client, viewerId);
       const found = await client.query("SELECT * FROM direct_conversations WHERE id = $1", [conversationId]);
       const conversation = found.rows[0];
       if (!conversation || !new Set([conversation.first_user_id, conversation.second_user_id]).has(viewerId)) throw new AnnotationCommunityError("CONVERSATION_NOT_FOUND", 404);
@@ -1635,6 +1657,7 @@ export class PostgresAnnotationCommunityRepository {
 
   async appealPlatformTag(annotationId, tag, userId, reason) {
     return withTransaction(this.pool, async (client) => {
+      await assertIntuechoAccountActive(client, userId);
       const row = await this.#row(annotationId, client, true);
       if (!row) throw new AnnotationCommunityError("ANNOTATION_NOT_FOUND", 404);
       if (row.author_id !== userId) throw new AnnotationCommunityError("NOT_ANNOTATION_AUTHOR", 403);

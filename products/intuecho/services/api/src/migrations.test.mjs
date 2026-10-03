@@ -29,7 +29,9 @@ test("loads ordered immutable forum migrations", () => {
     "020_expand_computer_science_literature_sources.sql",
     "021_add_audited_pmlr_identity.sql",
     "022_preserve_literature_source_artifacts.sql",
-    "023_enforce_version_identity_boundaries.sql"
+    "023_enforce_version_identity_boundaries.sql",
+    "024_annotation_contribution_provenance.sql",
+    "025_community_governance_and_notifications.sql"
   ]);
   assert.match(migrations[0].checksum, /^[a-f0-9]{64}$/);
   assert.match(migrations[0].sql, /CREATE TABLE moderation_audit/);
@@ -79,6 +81,10 @@ test("loads ordered immutable forum migrations", () => {
   assert.match(migrations[22].sql, /literature_identifiers_normalized_format_check/);
   assert.match(migrations[22].sql, /WHEN 'openalex_id'/);
   assert.match(migrations[22].sql, /identifier_kind <> 'pmlr_id'/);
+  assert.match(migrations[23].sql, /contribution/);
+  assert.match(migrations[24].sql, /CREATE TABLE community_preferences/);
+  assert.match(migrations[24].sql, /CREATE TABLE community_notifications/);
+  assert.match(migrations[24].sql, /community_report_audit_append_only/);
   assert.ok(
     migrations[22].sql.indexOf("SET is_legacy_alias = true") <
       migrations[22].sql.indexOf("CREATE UNIQUE INDEX literature_identifiers_confirmable_kind_value_key"),
@@ -94,7 +100,7 @@ test("readiness rejects missing, changed and unknown migrations", async () => {
   }));
   assert.deepEqual(await verifyIntuechoMigrations({
     async query() { return { rows }; }
-  }), { count: 23, current: true });
+  }), { count: 25, current: true });
   await assert.rejects(
     () => verifyIntuechoMigrations({
       async query() { return { rows: [

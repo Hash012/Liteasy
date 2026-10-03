@@ -1,4 +1,5 @@
 import type { z } from "zod";
+export * from "./communityGovernance.js";
 
 export type ConfirmableLiteratureIdentifierKind =
   | "doi"
@@ -317,6 +318,7 @@ export declare const desktopDraftHandoffSchema: z.ZodType<unknown>;
 export declare const annotationVisibilitySchema: z.ZodType<"private" | "organization" | "mutual_followers" | "public">;
 export declare const literatureMetadataSchema: z.ZodType<LegacyLiteratureReference["metadata"]>;
 export type CreateAnnotationInput = {
+  expectedAuthorProfileRevision?: number;
   body: string;
   contribution?: AnnotationContribution;
   organizationId?: string;

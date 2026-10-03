@@ -1,10 +1,12 @@
 import { Button } from "@fluentui/react-components";
-import type { CreateAnnotationInput } from "./community.types";
+import type { AcademicProfile, CreateAnnotationInput } from "./community.types";
 import { ContributionSummary } from "./AnnotationContribution";
 
 const audienceLabels = { private: "仅自己", public: "所有人", mutual_followers: "互相关注的人", organization: "指定组织" };
-export function AnnotationSendPreview({ input, organizationName, pending, onConfirm, onCancel }: {
+export function AnnotationSendPreview({ input, authorName, profile, organizationName, pending, onConfirm, onCancel }: {
   input: CreateAnnotationInput;
+  authorName: string;
+  profile: AcademicProfile;
   organizationName?: string;
   pending: boolean;
   onConfirm: () => void;
@@ -13,6 +15,8 @@ export function AnnotationSendPreview({ input, organizationName, pending, onConf
   return <section className="annotation-send-preview" aria-label="发送预览">
     <h3>确认要发送的内容</h3>
     <p>保存到 Intuecho · 接收方：{organizationName ?? audienceLabels[input.visibility]}{input.shareToPlaza ? " · 同时展示到广场" : " · 不加入广场"}</p>
+    <p>作者资料：{authorName}{profile.educationStage ? ` · ${profile.educationStage}` : ""}{profile.institutions.map((institution) => ` · ${institution.name}`).join("")}</p>
+    <p>学段与机构由本人填写，不代表平台认证。可在个人中心修改或清空。</p>
     <div className="annotation-send-preview-body">{input.body}</div>
     <ContributionSummary value={input.contribution} />
     <ul>{input.targets.map((target, index) => <li key={index}>

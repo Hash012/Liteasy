@@ -52,6 +52,7 @@ function runtime(overrides = {}) {
       ...overrides.accountLifecycleRepository
     },
     annotationCommunityRepository,
+    communityGovernanceRepository: overrides.communityGovernanceRepository,
     adminAuthorizer: {
       async assertPlatformAdmin(identity) { calls.push({ adminAuthorization: identity.subject }); },
       ...overrides.adminAuthorizer
@@ -89,6 +90,26 @@ function runtime(overrides = {}) {
     repository
   };
 }
+
+test("production governance routes bind user and platform-review identities separately", async () => {
+  const calls = [];
+  const instance = runtime({ communityGovernanceRepository: {
+    async notifications(viewer) { calls.push({ notifications: viewer }); return [{ id: "opaque-notification", available: false }]; },
+    async reviewReports(viewer, options) { calls.push({ reviewReports: { viewer, options } }); return []; }
+  } });
+  const app = await createProductionIntuechoApp(instance, config());
+  try {
+    const anonymous = await app.inject({ method: "GET", url: "/v1/me/notifications" });
+    assert.equal(anonymous.statusCode, 401);
+    const inbox = await app.inject({ method: "GET", url: "/v1/me/notifications", headers: { authorization: "Bearer user-token" } });
+    assert.equal(inbox.statusCode, 200, inbox.body);
+    assert.deepEqual(inbox.json(), { notifications: [{ id: "opaque-notification", available: false }] });
+    assert.equal(calls[0].notifications.id, "user-1");
+    const review = await app.inject({ method: "GET", url: "/v1/admin/community-reports", headers: { authorization: "Bearer admin-token" } });
+    assert.equal(review.statusCode, 200, review.body);
+    assert.deepEqual(calls[1], { reviewReports: { viewer: { id: "admin-1" }, options: { platformAdmin: true } } });
+  } finally { await app.close(); }
+});
 
 test("keeps public literature resolution on the Intuecho Web audience", async () => {
   const instance = runtime();

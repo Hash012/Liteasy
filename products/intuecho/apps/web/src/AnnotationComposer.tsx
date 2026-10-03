@@ -5,6 +5,7 @@ import { createAnnotationSchema, type OrganizationChoice } from "@intuecho/contr
 import { canonicalizeInheritedTargets, inheritedTargetsAreCanonical } from "./canonicalizeInheritedTargets";
 import { communityApi } from "./communityApi";
 import type {
+  AcademicProfile,
   AnnotationTarget,
   AnnotationVisibility,
   CommunityAnnotation,
@@ -20,11 +21,12 @@ export type ComposerState = { draft?: CreateAnnotationInput; edit?: CommunityAnn
 
 type Props = {
   context: ComposerState;
+  authorName?: string;
   onClose: () => void;
   onSaved: () => void;
 };
 
-export function AnnotationComposer({ context, onClose, onSaved }: Props) {
+export function AnnotationComposer({ context, authorName = "当前登录账号", onClose, onSaved }: Props) {
   const original = context.edit;
   const parent = context.replyTo;
   const draft = context.draft;
@@ -43,7 +45,7 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
   const [status, setStatus] = useState("");
   const [pending, setPending] = useState(false);
   const [organization, setOrganization] = useState<OrganizationChoice>();
-  const [preview, setPreview] = useState<{ key: string; input: CreateAnnotationInput }>();
+  const [preview, setPreview] = useState<{ key: string; input: CreateAnnotationInput; profile: AcademicProfile }>();
   const sending = useRef(false);
   const draftKey = JSON.stringify([body, tags, targets, visibility, organizationId, shareToPlaza, organization, contribution]);
   useEffect(() => { setPreview(undefined); }, [draftKey]);
@@ -124,7 +126,12 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
     if (!original && !parent) {
       const parsed = createAnnotationSchema.safeParse(input);
       if (!parsed.success) setStatus("请检查批注内容与已确认的关联文献后重试。");
-      else setPreview({ key: draftKey, input: parsed.data });
+      else {
+        try {
+          const { profile } = await communityApi.academicProfile();
+          setPreview({ key: draftKey, input: { ...parsed.data, expectedAuthorProfileRevision: profile.revision }, profile });
+        } catch (error) { setStatus(error instanceof Error ? error.message : "无法核对将公开的作者资料，草稿仍保留。"); }
+      }
       setPending(false);
       return;
     }
@@ -151,7 +158,8 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
       await communityApi.createAnnotation(preview.input);
       onSaved();
     } catch (reason) {
-      setStatus(reason instanceof Error ? reason.message : "发送失败，草稿已保留。");
+      if (reason instanceof Error && reason.message.includes("AUTHOR_PROFILE_CHANGED")) { setPreview(undefined); setStatus("作者资料已变化，请重新预览后发送。"); }
+      else setStatus(reason instanceof Error ? reason.message : "发送失败，草稿已保留。");
       setPending(false);
     } finally {
       sending.current = false;
@@ -182,7 +190,7 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
         </>}
         {!isReplyEdit && (!parent || publishAsAnnotation) && <div className="tag-editor-v2"><label>标签</label><div className="tag-row">{tags.map((tag) => <button type="button" key={tag} onClick={() => setTags(tags.filter((item) => item !== tag))}>#{tag}<Dismiss20Regular /></button>)}</div><div className="tag-input"><Input value={tagInput} onChange={(_, data) => setTagInput(data.value)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === ",") { event.preventDefault(); addTag(); } }} /><Button type="button" icon={<Add20Regular />} onClick={addTag}>添加</Button></div></div>}
         {status && <p className="form-error" role="alert">{status}</p>}
-        {preview && preview.key === draftKey && <AnnotationSendPreview input={preview.input} organizationName={visibility === "organization" ? organization?.name : undefined} pending={pending} onConfirm={() => void confirmSend()} onCancel={() => setPreview(undefined)} />}
+        {preview && preview.key === draftKey && <AnnotationSendPreview authorName={authorName} profile={preview.profile} input={preview.input} organizationName={visibility === "organization" ? organization?.name : undefined} pending={pending} onConfirm={() => void confirmSend()} onCancel={() => setPreview(undefined)} />}
         <div className="drawer-actions"><Button type="button" appearance="secondary" onClick={onClose}>取消</Button><Button type="submit" appearance="primary" icon={<Send20Regular />} disabled={pending || publicationCanonicalizing || !visibility || !body.trim() || (!parent && !isReplyEdit && visibility === "organization" && (!organization || organization.organizationId !== organizationId)) || (Boolean(parent) && publishAsAnnotation && !replyTargetsReady) || (!parent && !isReplyEdit && targets.length === 0)}>{pending ? "正在保存" : original ? "保存修改" : "发布"}</Button></div>
       </form>
     </aside>

@@ -1,3 +1,4 @@
+import type { CommunityPreference, CommunityReport, CommunityReportInput, CommunityReportResolution, CommunityNotification } from "./community-governance/governance.types";
 import type { OrganizationChoice } from "@intuecho/contracts";
 import {
   clearRejectedIdentitySession,
@@ -56,6 +57,14 @@ function writeBody(value: unknown) {
 }
 
 export const communityApi = {
+  preferences: () => request<{ preferences: CommunityPreference[] }>("/v1/me/community-preferences", undefined, true),
+  setPreference: (preference: CommunityPreference) => request<{ preference: CommunityPreference }>("/v1/me/community-preferences", { method: "PUT", body: writeBody(preference) }, true),
+  notifications: () => request<{ notifications: CommunityNotification[] }>("/v1/me/notifications", undefined, true),
+  markNotificationRead: (id: string) => request<{ id: string; read: true }>(`/v1/me/notifications/${encodeURIComponent(id)}/read`, { method: "PUT", body: "{}" }, true),
+  reportAnnotation: (id: string, input: CommunityReportInput) => request<{ report: CommunityReport }>(`/v1/annotations/${encodeURIComponent(id)}/reports`, { method: "POST", body: writeBody(input) }, true),
+  myReports: () => request<{ reports: CommunityReport[] }>("/v1/me/reports", undefined, true),
+  reviewReports: () => request<{ reports: CommunityReport[] }>("/v1/community-reports", undefined, true),
+  resolveReport: (id: string, input: CommunityReportResolution) => request<{ report: CommunityReport }>(`/v1/community-reports/${encodeURIComponent(id)}/resolve`, { method: "POST", body: writeBody(input) }, true),
   plaza: (filters: PlazaFilters = {}) => {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {

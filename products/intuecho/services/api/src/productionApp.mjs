@@ -18,6 +18,7 @@ import {
 } from "./productionIdentity.mjs";
 import { publicIntuechoIdentityConfig } from "./productionConfig.mjs";
 import { registerAnnotationCommunityRoutes } from "./annotationCommunityRoutes.mjs";
+import { registerCommunityGovernanceRoutes } from "./communityGovernanceRoutes.mjs";
 import { createLiteratureRateLimiter } from "./literatureRateLimiter.mjs";
 import { LiteratureRouteError, registerLiteratureRoutes } from "./literatureRoutes.mjs";
 
@@ -232,6 +233,9 @@ export async function createProductionIntuechoApp(runtime, config, { logger = fa
       requireDesktopUser,
       requireUser
     });
+  }
+  if (runtime.communityGovernanceRepository) {
+    registerCommunityGovernanceRoutes(app, runtime.communityGovernanceRepository, { requireUser, requireAdmin });
   }
   registerLiteratureRoutes(app, {
     currentUser: (request) => request.intuechoUser ?? request.intuechoDesktopUser ?? null,

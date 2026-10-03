@@ -1,4 +1,5 @@
 import { z } from "zod";
+export * from "./communityGovernance.js";
 
 const tagSchema = z.string().trim().min(1).max(32);
 const rectangleSchema = z.object({
@@ -474,6 +475,7 @@ export const annotationContributionSchema = z.object({
 });
 
 export const createAnnotationSchema = z.object({
+  expectedAuthorProfileRevision: z.number().int().nonnegative().optional(),
   body: z.string().trim().min(1).max(8000),
   contribution: annotationContributionSchema.optional(),
   organizationId: z.string().trim().min(1).max(200).optional(),

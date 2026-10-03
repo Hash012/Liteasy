@@ -1,3 +1,6 @@
+import { AnnotationGovernanceControls, AnnotationVisibilityGate, CommunityReportHistory, QuietInbox, SubscriptionControls } from "./community-governance/CommunityGovernance";
+import { CommunityGovernanceProvider, useCommunityGovernance } from "./community-governance/CommunityGovernanceProvider";
+import { preferenceFor } from "./community-governance/governance";
 import { OrganizationReadingGroup } from "./reading-group/OrganizationReadingGroup";
 import { getIdentitySessionGeneration } from "./identitySessionGeneration";
 import { intuechoApiBaseUrl } from "./runtimeConfig";
@@ -24,6 +27,8 @@ import {
   webLightTheme
 } from "@fluentui/react-components";
 import {
+  Alert20Regular,
+  ShieldTask20Regular,
   Add20Regular,
   ArrowReset20Regular,
   Bookmark20Filled,
@@ -70,7 +75,7 @@ const DevelopmentAuthForm = import.meta.env.DEV
   ? lazy(() => import("./DevelopmentAuthForm").then((module) => ({ default: module.DevelopmentAuthForm })))
   : null;
 
-type View = "plaza" | "following" | "messages" | "mine" | "organizations" | "profile";
+type View = "plaza" | "following" | "messages" | "mine" | "organizations" | "profile" | "notifications" | "reports";
 type ConversationSelection = { canSend?: boolean; id: string; participant: CommunityAnnotation["author"]; unreadCount?: number };
 const pendingHandoffStorageKey = "intuecho.pending-annotation-handoff.v2";
 const intuechoTheme = {
@@ -171,6 +176,7 @@ export function AnnotationApp() {
     `${session?.sessionId ?? "signed-out"}-${inboxRefresh}`,
     8_000
   );
+  const actorBinding = JSON.stringify([intuechoApiBaseUrl, session?.userId, getIdentitySessionGeneration()]);
   const unreadMessages = inbox.data?.conversations.reduce((total, item) => total + item.unreadCount, 0) ?? 0;
 
   function applySession(next: IdentitySession | null) {
@@ -249,7 +255,8 @@ export function AnnotationApp() {
       view={view}
     />
     {handoffStatus && <div className="handoff-status-v2" role="status">{handoffStatus}</div>}
-    <div className="annotation-workspace" key={session?.sessionId ?? "signed-out"}>
+    <GovernanceScope actorBinding={actorBinding} signedIn={Boolean(session)}>
+    <div className="annotation-workspace" key={actorBinding}>
       <main className="annotation-main">
         {detailId ? <AnnotationDetail annotationId={detailId} refresh={refresh} session={session} onCompose={setComposer} onConversation={setConversation} /> : <>
           {view === "plaza" && <Plaza filters={filters} onFilters={setFilters} refresh={refresh} session={session} onCompose={setComposer} onConversation={setConversation} />}
@@ -257,14 +264,21 @@ export function AnnotationApp() {
           {view === "messages" && (session ? <ConversationsPage data={inbox.data} error={inbox.error} onConversation={setConversation} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
           {view === "mine" && (session ? <MyAnnotations refresh={refresh} session={session} onCompose={setComposer} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
           {view === "organizations" && (session ? <OrganizationAnnotations refresh={refresh} session={session} onCompose={setComposer} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
+          {view === "notifications" && (session ? <QuietInbox api={communityApi} actorBinding={actorBinding} onOpenAnnotation={(id) => { setDetailId(id); window.history.pushState({}, document.title, `/annotations/${encodeURIComponent(id)}`); }} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
+          {view === "reports" && (session ? <><CommunityReportHistory api={communityApi} actorBinding={actorBinding} /><CommunityReportHistory api={communityApi} actorBinding={actorBinding} review /></> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
           {view === "profile" && (session ? <ProfileEditor refresh={refresh} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
         </>}
       </main>
     </div>
-    {session && composer && <ExtractedAnnotationComposer context={composer} onClose={() => setComposer(null)} onSaved={() => { setComposer(null); setRefresh((value) => value + 1); }} />}
+    </GovernanceScope>
+    {session && composer && <ExtractedAnnotationComposer authorName={session.name} context={composer} onClose={() => setComposer(null)} onSaved={() => { setComposer(null); setRefresh((value) => value + 1); }} />}
     {session && conversation && <ConversationDrawer conversation={conversation} session={session!} onInboxChange={() => setInboxRefresh((value) => value + 1)} onClose={() => { setConversation(null); setInboxRefresh((value) => value + 1); }} />}
     {authOpen && <AuthDialog identityMode={identityMode} onAuthenticated={(next) => { applySession(next); setAuthOpen(false); }} onClose={() => setAuthOpen(false)} />}
   </FluentProvider>;
+}
+
+function GovernanceScope({ actorBinding, signedIn, children }: { actorBinding: string; signedIn: boolean; children: ReactNode }) {
+  return signedIn ? <CommunityGovernanceProvider actorBinding={actorBinding} api={communityApi}>{children}</CommunityGovernanceProvider> : <>{children}</>;
 }
 
 function AppHeader({ filters, onChangeFilters, onLogin, onLogout, onPublish, onView, session, unreadMessages, view }: {
@@ -295,6 +309,8 @@ function AppHeader({ filters, onChangeFilters, onLogin, onLogout, onPublish, onV
         <button className={view === "plaza" ? "active" : ""} aria-label="广场" aria-current={view === "plaza" ? "page" : undefined} onClick={() => onView("plaza")}><Globe20Regular /><span className="nav-label">广场</span></button>
         <button className={view === "following" ? "active" : ""} aria-label="关注" aria-current={view === "following" ? "page" : undefined} onClick={() => onView("following")}><PersonHeart20Regular /><span className="nav-label">关注</span></button>
         <button className={view === "messages" ? "active" : ""} aria-label="信息" aria-current={view === "messages" ? "page" : undefined} onClick={() => onView("messages")}><ChatMultiple20Regular /><span className="nav-label">信息</span>{unreadMessages > 0 && <Badge appearance="filled" color="brand" size="small" aria-label={`${unreadMessages} 条未读消息`}>{unreadMessages > 99 ? "99+" : unreadMessages}</Badge>}</button>
+        <button className={view === "notifications" ? "active" : ""} aria-label="工作通知" aria-current={view === "notifications" ? "page" : undefined} onClick={() => onView("notifications")}><Alert20Regular /><span className="nav-label">工作通知</span></button>
+        <button className={view === "reports" ? "active" : ""} aria-label="处理记录" aria-current={view === "reports" ? "page" : undefined} onClick={() => onView("reports")}><ShieldTask20Regular /><span className="nav-label">处理记录</span></button>
         <button className={view === "mine" ? "active" : ""} aria-label="我的批注" aria-current={view === "mine" ? "page" : undefined} onClick={() => onView("mine")}><Library20Regular /><span className="nav-label">我的批注</span></button>
         <button className={view === "organizations" ? "active" : ""} aria-label="组织批注" aria-current={view === "organizations" ? "page" : undefined} onClick={() => onView("organizations")}><PeopleTeam20Regular /><span className="nav-label">组织批注</span></button>
       </div>
@@ -386,6 +402,7 @@ export function AnnotationCard({ annotation, onCompose, onConversation, session 
   onConversation?: (value: ConversationSelection) => void;
   session: IdentitySession | null;
 }) {
+  const governance = useCommunityGovernance();
   const [current, setCurrent] = useState(annotation);
   const [repliesOpen, setRepliesOpen] = useState(false);
   const [status, setStatus] = useState("");
@@ -423,7 +440,7 @@ export function AnnotationCard({ annotation, onCompose, onConversation, session 
       setModerationReason("");
     } catch (reason) { setStatus(reason instanceof Error ? reason.message : "组织治理失败"); }
   }
-  return <article className={`annotation-card${current.withdrawnAt ? " withdrawn" : ""}`}>
+  return <AnnotationVisibilityGate annotation={current} actorBinding={governance?.actorBinding ?? "signed-out"} preferences={governance?.preferences ?? []}><article className={`annotation-card${current.withdrawnAt ? " withdrawn" : ""}`}>
     <header>
       <div className="author-avatar">{current.author.initials}</div>
       <div className="annotation-author"><strong>{current.author.name}</strong><span>{profileLine(current.author.profile)}</span></div>
@@ -451,6 +468,11 @@ export function AnnotationCard({ annotation, onCompose, onConversation, session 
       {current.viewerCanModerate && <Button appearance="subtle" icon={current.withdrawnAt ? <Open20Regular /> : <Delete20Regular />} onClick={() => { setModerationAction(current.withdrawnAt ? "restore" : "withdraw"); setModerationReason(""); }}>{current.withdrawnAt ? "恢复" : "治理撤回"}</Button>}
       <Tooltip content="打开批注详情" relationship="label"><a className="annotation-detail-link" href={`/annotations/${encodeURIComponent(current.id)}`} aria-label="打开批注详情"><Open20Regular /></a></Tooltip>
     </footer>
+    {session && governance && <details className="community-governance-menu"><summary>订阅与内容设置</summary>
+      <SubscriptionControls api={governance.api} actorBinding={governance.actorBinding} preference={preferenceFor(governance.preferences, "thread", current.id)} label="此讨论" onChanged={governance.refresh} />
+      {[...new Set(current.targets.map((target) => target.literature.literatureId).filter(Boolean))].map((id) => <SubscriptionControls key={id} api={governance.api} actorBinding={governance.actorBinding} preference={preferenceFor(governance.preferences, "literature", id)} label="此文献的讨论" onChanged={governance.refresh} />)}
+      <AnnotationGovernanceControls annotation={current} api={governance.api} actorBinding={governance.actorBinding} preferences={governance.preferences} onPreferencesChanged={governance.refresh} />
+    </details>}
     {status && <p className="inline-status" role="status">{status}</p>}
     {repliesOpen && <ReplyThread annotation={current} session={session} onCompose={onCompose} />}
     <Dialog open={Boolean(appealTag)} onOpenChange={(_, data) => !data.open && setAppealTag(null)}>
@@ -459,7 +481,7 @@ export function AnnotationCard({ annotation, onCompose, onConversation, session 
     <Dialog open={Boolean(moderationAction)} onOpenChange={(_, data) => !data.open && setModerationAction(null)}>
       <DialogSurface><DialogBody><DialogTitle>{moderationAction === "withdraw" ? "撤回组织批注" : "恢复组织批注"}</DialogTitle><DialogContent><label className="field-label">治理原因<Textarea value={moderationReason} minLength={3} maxLength={1000} resize="vertical" onChange={(_, data) => setModerationReason(data.value)} /></label></DialogContent><DialogActions><Button appearance="secondary" onClick={() => setModerationAction(null)}>取消</Button><Button appearance="primary" disabled={moderationReason.trim().length < 3} onClick={() => void moderateOrganization()}>确认</Button></DialogActions></DialogBody></DialogSurface>
     </Dialog>
-  </article>;
+  </article></AnnotationVisibilityGate>;
 }
 
 function AnnotationDetail({ annotationId, onCompose, onConversation, refresh, session }: {
@@ -581,6 +603,7 @@ function MyAnnotations({ onCompose, refresh, session }: { onCompose: (value: { e
 }
 
 export function OrganizationAnnotations({ onCompose, refresh, session }: { onCompose: (value: { edit?: CommunityAnnotation; replyTo?: CommunityAnnotation }) => void; refresh: number; session: IdentitySession }) {
+  const governance = useCommunityGovernance();
   const [localRefresh, setLocalRefresh] = useState(0);
   const actorBinding = JSON.stringify([intuechoApiBaseUrl, session.userId, getIdentitySessionGeneration()]);
   const requestKey = `${actorBinding}:${refresh}:${localRefresh}`;
@@ -596,6 +619,7 @@ export function OrganizationAnnotations({ onCompose, refresh, session }: { onCom
       if (!access?.allowedActions.includes("read_body")) return null;
       return <section className="organization-group" key={organization.organizationId}>
         <header><div><strong>{organization.name}</strong><span>{access.role === "owner" ? "负责人" : access.role === "admin" ? "管理员" : "成员"}</span></div><small>{organization.annotations.length} 条</small></header>
+        {governance && <details><summary>组织讨论提醒</summary><SubscriptionControls api={governance.api} actorBinding={actorBinding} preference={preferenceFor(governance.preferences, "organization", organization.organizationId)} label="此组织的讨论" onChanged={governance.refresh} /></details>}
         <OrganizationReadingGroup organization={organization} viewerId={session.userId} actorBinding={actorBinding} access={access} onChanged={() => setLocalRefresh((value) => value + 1)} />
         {organization.annotations.length ? <details><summary>全部组织批注 · {organization.annotations.length}</summary><div className="annotation-list">{organization.annotations.map((annotation) => <AnnotationCard key={`${annotation.id}-${annotation.updatedAt}`} annotation={annotation} onCompose={onCompose} session={session} />)}</div></details> : <EmptyState text="该组织还没有可见批注" />}
       </section>;
@@ -619,7 +643,7 @@ function ProfileForm({ profile }: { profile: AcademicProfile }) {
     try { await communityApi.updateAcademicProfile({ educationStage: educationStage || null, institutions }); setStatus("已保存"); }
     catch (reason) { setStatus(reason instanceof Error ? reason.message : "保存失败"); }
   }
-  return <section className="profile-page"><div className="page-heading"><span>个人中心</span><h1>学术资料</h1></div><form onSubmit={save}><label>学段<Input value={educationStage} onChange={(_, data) => setEducationStage(data.value)} /></label><div className="institution-editor"><div className="section-row"><strong>研究机构</strong><Button type="button" appearance="subtle" icon={<Add20Regular />} onClick={() => setInstitutions([...institutions, { name: "" }])}>添加</Button></div>{institutions.map((institution, index) => <div className="institution-row" key={index}><Input value={institution.name} placeholder="机构名称" onChange={(_, data) => setInstitutions(institutions.map((item, position) => position === index ? { name: data.value } : item))} /><Button type="button" appearance="subtle" icon={<Delete20Regular />} aria-label="删除机构" onClick={() => setInstitutions(institutions.filter((_, position) => position !== index))} /></div>)}</div><div className="profile-actions"><Button appearance="primary" type="submit">保存资料</Button>{status && <span role="status">{status}</span>}</div></form></section>;
+  return <section className="profile-page"><div className="page-heading"><span>个人中心</span><h1>学术资料</h1><p>学段、机构均为可选项，会作为署名资料随批注展示；不代表认证或研究能力评分。可清空后保存。</p></div><form onSubmit={save}><label>学段<Input value={educationStage} onChange={(_, data) => setEducationStage(data.value)} /></label><div className="institution-editor"><div className="section-row"><strong>研究机构</strong><Button type="button" appearance="subtle" icon={<Add20Regular />} onClick={() => setInstitutions([...institutions, { name: "" }])}>添加</Button></div>{institutions.map((institution, index) => <div className="institution-row" key={index}><Input value={institution.name} placeholder="机构名称" onChange={(_, data) => setInstitutions(institutions.map((item, position) => position === index ? { name: data.value } : item))} /><Button type="button" appearance="subtle" icon={<Delete20Regular />} aria-label="删除机构" onClick={() => setInstitutions(institutions.filter((_, position) => position !== index))} /></div>)}</div><div className="profile-actions"><Button appearance="primary" type="submit">保存资料</Button>{status && <span role="status">{status}</span>}</div></form></section>;
 }
 
 function ConversationDrawer({ conversation, onClose, onInboxChange, session }: { conversation: ConversationSelection; onClose: () => void; onInboxChange: () => void; session: IdentitySession }) {

@@ -4,6 +4,7 @@ import { verifyIntuechoMigrations } from "./migrations.mjs";
 import { createIntuechoPool, verifyIntuechoPostgres } from "./postgres.mjs";
 import { PostgresForumRepository } from "./postgresForumRepository.mjs";
 import { PostgresAnnotationCommunityRepository } from "./postgresAnnotationCommunityRepository.mjs";
+import { PostgresCommunityGovernanceRepository } from "./communityGovernanceRepository.mjs";
 import { OrganizationAuthorizationClient } from "./organizationAuthorizationClient.mjs";
 import { createLiteratureProviders } from "./literatureProviders.mjs";
 import { createLiteratureResolver } from "./literatureResolver.mjs";
@@ -36,6 +37,11 @@ export async function startIntuechoProductionRuntime(config, dependencies = {}) 
     }),
     repository: dependencies.literatureRepository ?? annotationCommunityRepository
   });
+  const communityGovernanceRepository = dependencies.communityGovernanceRepository ??
+    new PostgresCommunityGovernanceRepository(pool, {
+      annotationRepository: annotationCommunityRepository,
+      authorizeOrganizationAccess: (input) => organizationAuthorizer.authorizeAccess(input)
+    });
   const accountLifecycleRepository = dependencies.accountLifecycleRepository ??
     new PostgresAccountLifecycleRepository(pool);
   try {
@@ -49,6 +55,7 @@ export async function startIntuechoProductionRuntime(config, dependencies = {}) 
       accountLifecycleRepository,
       adminAuthorizer,
       annotationCommunityRepository,
+      communityGovernanceRepository,
       identityVerifier,
       literatureResolver,
       organizationAuthorizer,

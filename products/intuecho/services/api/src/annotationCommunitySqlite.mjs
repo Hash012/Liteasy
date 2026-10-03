@@ -1,5 +1,6 @@
 import { currentOrganizationChoices } from "./organizationChoices.mjs";
 import { annotationContribution } from "./annotationContribution.mjs";
+import { initializeSqliteCommunityGovernance, recordSqliteCommunityReplyEvent } from "./communityGovernanceRepository.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import {
   hasCrossVersionIdentifierConflict,
@@ -528,6 +529,7 @@ export class SqliteAnnotationCommunityRepository {
     this.authorizeOrganizationVisibility = authorizeOrganizationVisibility;
     this.listOrganizations = listOrganizations;
     initializeAnnotationCommunitySqlite(db);
+    initializeSqliteCommunityGovernance(db);
   }
 
   profile(userId) {
@@ -1340,6 +1342,8 @@ export class SqliteAnnotationCommunityRepository {
     }
     const id = `annotation_${randomUUID()}`;
     this.db.transaction(() => {
+      const profile = this.profile(author.id);
+      if (input.expectedAuthorProfileRevision !== undefined && profile.revision !== input.expectedAuthorProfileRevision) throw new AnnotationCommunityError("AUTHOR_PROFILE_CHANGED", 409);
       this.db.prepare(`
         INSERT INTO annotations_v2(id, parent_annotation_id, body, author_id, author_name, author_initials, author_profile_snapshot_json, visibility, organization_id, share_to_plaza, revision, created_at, updated_at)
         VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
@@ -1512,6 +1516,7 @@ export class SqliteAnnotationCommunityRepository {
         this.#assignPlatformTags(derivedAnnotationId, input.body, input.tags, now);
         this.db.prepare("UPDATE annotation_replies_v2 SET derived_annotation_id = ? WHERE id = ?").run(derivedAnnotationId, replyId);
       }
+      recordSqliteCommunityReplyEvent(this.db, { replyId, annotationId: parentAnnotationId, actorId: author.id });
     })();
     const row = this.db.prepare("SELECT * FROM annotation_replies_v2 WHERE id = ?").get(replyId);
     return { annotation: derivedAnnotationId ? await this.annotation(derivedAnnotationId, author) : null, reply: { ...this.#serializeReply(row), viewerIsAuthor: true } };

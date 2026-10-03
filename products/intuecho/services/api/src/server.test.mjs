@@ -2861,3 +2861,23 @@ test("legacy annotation provenance remains unknown and never implies human autho
     assert.deepEqual(created.json().annotation.contribution, { purpose: "explanation", origin: "unspecified", review: "unreviewed", editedByUser: false });
   });
 });
+
+test("author profile changes invalidate a confirmed public draft without losing the original", async () => {
+  await withApp(async (app, db) => {
+    const old = await app.inject({ method: "GET", url: "/v1/me/academic-profile", headers: userHeader });
+    const revision = old.json().profile.revision;
+    const changed = await app.inject({ method: "PUT", url: "/v1/me/academic-profile", headers: userHeader,
+      payload: { educationStage: "Synthetic research stage", institutions: [{ name: "Synthetic institution" }] } });
+    assert.equal(changed.statusCode, 200);
+    const before = db.prepare("SELECT count(*) AS count FROM annotations_v2").get().count;
+    const rejected = await app.inject({ method: "POST", url: "/v1/annotations", headers: userHeader,
+      payload: annotationV2Payload({ expectedAuthorProfileRevision: revision }) });
+    assert.equal(rejected.statusCode, 409, rejected.body);
+    assert.equal(rejected.json().code ?? rejected.json().error, "AUTHOR_PROFILE_CHANGED");
+    assert.equal(db.prepare("SELECT count(*) AS count FROM annotations_v2").get().count, before);
+    const accepted = await app.inject({ method: "POST", url: "/v1/annotations", headers: userHeader,
+      payload: annotationV2Payload({ expectedAuthorProfileRevision: changed.json().profile.revision }) });
+    assert.equal(accepted.statusCode, 201, accepted.body);
+    assert.equal(accepted.json().annotation.author.profile.institutions[0].name, "Synthetic institution");
+  });
+});

@@ -16,6 +16,8 @@ vi.mock("./identityClient", () => ({
 }));
 vi.mock("./communityApi", () => ({
   communityApi: {
+    preferences: vi.fn(async () => ({ preferences: [] })),
+    notifications: vi.fn(async () => ({ notifications: [] })),
     plaza: vi.fn(async () => ({ annotations: [] })),
     conversations: vi.fn(async () => ({ conversations: [] })),
     consumeAnnotationHandoff: vi.fn()
@@ -86,4 +88,14 @@ test("signing in as B never reuses A's consumed draft", async () => {
   await user.click(screen.getByRole("button", { name: "发布批注" }));
   expect(screen.getByText("New draft")).toBeInTheDocument();
   expect(communityApi.consumeAnnotationHandoff).toHaveBeenCalledTimes(1);
+});
+
+
+test("keeps work notifications separate from the plaza without a social unread badge", async () => {
+  window.history.replaceState({}, "", "/");
+  render(<AnnotationApp />);
+  await userEvent.click(screen.getByRole("button", { name: "工作通知" }));
+  expect(await screen.findByText("暂无通知。可在讨论中主动订阅。")).toBeInTheDocument();
+  expect(communityApi.notifications).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole("button", { name: "工作通知" })).not.toHaveTextContent(/[0-9]/);
 });

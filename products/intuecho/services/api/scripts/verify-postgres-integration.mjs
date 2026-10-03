@@ -9,6 +9,7 @@ import { migrateIntuecho, readIntuechoMigrations, verifyIntuechoMigrations } fro
 import { PostgresAnnotationCommunityRepository } from "../src/postgresAnnotationCommunityRepository.mjs";
 import { PostgresForumRepository } from "../src/postgresForumRepository.mjs";
 import { validateIntuechoPostgresIntegrationDatabases } from "./postgresIntegrationGuard.mjs";
+import { verifyCommunityGovernance } from "./verify-community-governance.mjs";
 
 const applicationUrl = process.env.INTUECHO_TEST_DATABASE_URL;
 const migrationUrl = process.env.INTUECHO_TEST_MIGRATION_DATABASE_URL;
@@ -126,7 +127,8 @@ try {
     "021_add_audited_pmlr_identity.sql",
     "022_preserve_literature_source_artifacts.sql",
     "023_enforce_version_identity_boundaries.sql",
-    "024_annotation_contribution_provenance.sql"
+    "024_annotation_contribution_provenance.sql",
+    "025_community_governance_and_notifications.sql"
   ];
   assert.equal(migrated.applied.every((name) => expectedMigrations.includes(name)), true);
   const stagedMigrationRows = await pool.query("SELECT name FROM schema_migrations ORDER BY name");
@@ -2157,6 +2159,21 @@ try {
      WHERE post.id = $1 AND comment.id = $2
   `, [published.postId, comment.id]);
   const accountLifecycle = new PostgresAccountLifecycleRepository(pool);
+  const communityGovernance = await verifyCommunityGovernance({
+    pool,
+    annotationRepository: annotations,
+    author: { id: "governance-verification-author", name: "Synthetic Governance Author", initials: "GA" },
+    subscriber: { id: "governance-verification-subscriber", name: "Synthetic Governance Subscriber", initials: "GS" },
+    literatureId: confirmedLiterature.literatureId
+  });
+  const previewAuthor = { id: "profile-preview-verification", name: "Synthetic Profile Author", initials: "PA" };
+  const firstProfile = await annotations.updateProfile(previewAuthor.id, { educationStage: null, institutions: [{ name: "Synthetic institution one" }] });
+  const changedProfile = await annotations.updateProfile(previewAuthor.id, { educationStage: null, institutions: [{ name: "Synthetic institution two" }] });
+  const previewInput = { body: "Synthetic profile-bound public preview.", visibility: "public", shareToPlaza: false, tags: [], targets: [wholeDocument] };
+  await assert.rejects(annotations.createAnnotation(previewAuthor, { ...previewInput, expectedAuthorProfileRevision: firstProfile.revision }), (error) => error.code === "AUTHOR_PROFILE_CHANGED" && error.status === 409);
+  const confirmedProfileAnnotation = await annotations.createAnnotation(previewAuthor, { ...previewInput, expectedAuthorProfileRevision: changedProfile.revision });
+  assert.deepEqual(confirmedProfileAnnotation.author.profile.institutions, changedProfile.institutions);
+
   const accountDeletionInput = {
     idempotencyKey: "delete-user-1-integration",
     reason: "Approved forum account deletion integration",
@@ -2165,6 +2182,9 @@ try {
     traceId: "trace-account-delete-1"
   };
   const accountDeletion = await accountLifecycle.deleteAccount(accountDeletionInput);
+  await assert.rejects(annotations.updateProfile(userOne.id, { educationStage: "late", institutions: [] }), (error) => error.code === "ACCOUNT_DELETED" && error.status === 403);
+  await assert.rejects(annotations.createAnnotation(userOne, previewInput), (error) => error.code === "ACCOUNT_DELETED" && error.status === 403);
+  await assert.rejects(annotations.createHandoff(userOne.id, previewInput), (error) => error.code === "ACCOUNT_DELETED" && error.status === 403);
   assert.equal(accountDeletion.replayed, false);
   assert.deepEqual(accountDeletion.result, {
     anonymizedAnnotations: 3,
@@ -2344,6 +2364,8 @@ try {
   process.stdout.write(`${JSON.stringify({
     ...counts.rows[0],
     accountDeletion: true,
+    communityGovernance,
+    authorProfileRevision: true,
     database: application.database,
     migrations: currentMigrations.count,
     verified: true

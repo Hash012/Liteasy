@@ -11,6 +11,7 @@ import type { CommunityAnnotation, CommunityReply } from "./community.types";
 vi.mock("./communityApi", () => ({
   communityApi: {
     createAnnotation: vi.fn(),
+    academicProfile: vi.fn(async () => ({ profile: { educationStage: null, institutions: [], revision: 0 } })),
     createReply: vi.fn(),
     organizationChoices: vi.fn(),
     confirmLiterature: vi.fn(),
@@ -531,4 +532,20 @@ test("previews contributor origin and invalidates source review after text chang
   expect(communityApi.createAnnotation).toHaveBeenCalledWith(expect.objectContaining({
     contribution: { purpose: "replication", origin: "ai_assisted", review: "unreviewed" }
   }));
+});
+
+
+test("previews optional author details and binds publication to the reviewed profile revision", async () => {
+  vi.mocked(communityApi.academicProfile).mockResolvedValueOnce({ profile: { educationStage: "研究生", institutions: [{ name: "Synthetic Institute" }], revision: 7 } });
+  const user = userEvent.setup();
+  render(<AnnotationComposer authorName="Synthetic Author" context={{ draft: {
+    body: "Synthetic reviewed content", tags: [], visibility: "private", shareToPlaza: false,
+    targets: [{ kind: "whole_document", literature: { literatureId: "literature-parent" } }]
+  } }} onClose={vi.fn()} onSaved={vi.fn()} />);
+  await user.click(screen.getByRole("button", { name: "发布" }));
+  const preview = await screen.findByRole("region", { name: "发送预览" });
+  expect(preview).toHaveTextContent("Synthetic Author · 研究生 · Synthetic Institute");
+  expect(communityApi.createAnnotation).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "确认发送" }));
+  expect(communityApi.createAnnotation).toHaveBeenCalledWith(expect.objectContaining({ expectedAuthorProfileRevision: 7 }));
 });

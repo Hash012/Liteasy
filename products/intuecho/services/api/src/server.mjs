@@ -24,6 +24,8 @@ import {
 } from "./storageBoundary.mjs";
 import { SqliteAnnotationCommunityRepository } from "./annotationCommunitySqlite.mjs";
 import { registerAnnotationCommunityRoutes } from "./annotationCommunityRoutes.mjs";
+import { SqliteCommunityGovernanceRepository } from "./communityGovernanceRepository.mjs";
+import { registerCommunityGovernanceRoutes } from "./communityGovernanceRoutes.mjs";
 import { createLiteratureProviders } from "./literatureProviders.mjs";
 import { createLiteratureRateLimiter } from "./literatureRateLimiter.mjs";
 import { createLiteratureResolver } from "./literatureResolver.mjs";
@@ -207,6 +209,11 @@ export async function createIntuechoApp({
     providers: createLiteratureProviders(literatureProviderConfig, { fetchImpl: globalThis.fetch }),
     repository: annotationCommunity
   });
+  const communityGovernance = new SqliteCommunityGovernanceRepository(db, {
+    annotationRepository: annotationCommunity,
+    authorizeOrganizationAccess
+  });
+  registerCommunityGovernanceRoutes(app, communityGovernance, { requireUser, requireAdmin });
   registerAnnotationCommunityRoutes(app, annotationCommunity, {
     currentUser: viewer,
     requireAdmin,
