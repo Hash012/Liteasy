@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AccountSession } from "../account/account.types";
 import {
   createOrganizationActionClient,
   type OrganizationActionTransport
 } from "./organizationActionsClient";
+import { organizationActorBinding, organizationSessionMatchesEndpoint } from "./organizationActorBinding";
 import type { OrganizationRole, OrganizationSummary } from "./organization.types";
 
 type UseOrganizationActionsOptions = {
@@ -44,6 +45,20 @@ export function useOrganizationActions({
   onOrganizationChanged,
   transport
 }: UseOrganizationActionsOptions) {
+  const actorBinding = organizationActorBinding(accountSession, controlPlaneEndpoint);
+  const currentActor = useRef(actorBinding);
+  currentActor.current = actorBinding;
+  const requestEpoch = useRef(0);
+  const mounted = useRef(true);
+  const [stateActor, setStateActor] = useState(actorBinding);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; requestEpoch.current += 1; }; }, []);
+  useEffect(() => { resetOrganizationActions(); }, [actorBinding]);
+
+  function beginRequest() {
+    const epoch = ++requestEpoch.current;
+    return () => mounted.current && currentActor.current === actorBinding && requestEpoch.current === epoch &&
+      organizationActorBinding(accountSession, controlPlaneEndpoint) === actorBinding;
+  }
   const [actionMessage, setActionMessage] = useState<string | undefined>();
   const [actionPending, setActionPending] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -55,13 +70,18 @@ export function useOrganizationActions({
     transport
   }), [controlPlaneEndpoint, transport]);
 
-  function recordActionMessage(message: string) {
+  function recordActionMessage(message: string, analysisMessage = message) {
     setActionMessage(message);
-    onAnalysisHint(message);
+    onAnalysisHint(analysisMessage);
   }
 
   function requireSession() {
+    if (!mounted.current || currentActor.current !== actorBinding || organizationActorBinding(accountSession, controlPlaneEndpoint) !== actorBinding) return null;
     if (accountSession) {
+      if (!organizationSessionMatchesEndpoint(accountSession, controlPlaneEndpoint)) {
+        recordActionMessage("账号或服务地址已变化，请重新登录后管理组织。");
+        return null;
+      }
       return accountSession;
     }
     recordActionMessage("请先登录 Liteasy 账号再管理组织。");
@@ -113,6 +133,7 @@ export function useOrganizationActions({
       return;
     }
 
+    const current = beginRequest();
     setActionPending(true);
     setActionMessage("正在创建组织...");
     try {
@@ -121,19 +142,22 @@ export function useOrganizationActions({
         name: organizationName,
         sessionId: session.sessionId
       });
+      if (!current()) return;
       await onOrganizationChanged?.(result.organization.organizationId);
+      if (!current()) return;
       setCreateOpen(false);
       recordActionMessage(`已创建组织“${result.organization.name}”。`);
     } catch (error) {
-      recordActionMessage(actionErrorMessage(error));
+      if (current()) recordActionMessage(actionErrorMessage(error));
     } finally {
-      setActionPending(false);
+      if (current()) setActionPending(false);
     }
   }
 
   async function joinOrganizationRequest(invitationToken: string) {
     const session = requireSession();
     if (!session) return;
+    const current = beginRequest();
     setActionPending(true);
     setActionMessage("正在加入组织...");
     try {
@@ -142,13 +166,15 @@ export function useOrganizationActions({
         invitationToken,
         sessionId: session.sessionId
       });
+      if (!current()) return;
       await onOrganizationChanged?.(result.organizationId);
+      if (!current()) return;
       setJoinOpen(false);
       recordActionMessage("已加入组织。");
     } catch (error) {
-      recordActionMessage(actionErrorMessage(error));
+      if (current()) recordActionMessage(actionErrorMessage(error));
     } finally {
-      setActionPending(false);
+      if (current()) setActionPending(false);
     }
   }
 
@@ -164,6 +190,7 @@ export function useOrganizationActions({
       return;
     }
 
+    const current = beginRequest();
     setActionPending(true);
     setActionMessage("正在创建邀请...");
     try {
@@ -175,17 +202,18 @@ export function useOrganizationActions({
         sessionId: session.sessionId,
         targetSubject: input.targetSubject
       });
+      if (!current()) return;
       await onOrganizationChanged?.(inviteSummary.organizationId);
+      if (!current()) return;
       const organizationName = inviteSummary.name;
       setInviteSummary(null);
       const token = result.invitation?.invitationToken;
-      recordActionMessage(token
-        ? `已为账号 ${input.targetSubject} 创建 ${organizationName} 的邀请。一次性加入令牌：${token}`
-        : `已为账号 ${input.targetSubject} 创建 ${organizationName} 的邀请。`);
+      const confirmation = `已为账号 ${input.targetSubject} 创建 ${organizationName} 的邀请。`;
+      recordActionMessage(token ? `${confirmation}一次性加入令牌：${token}` : confirmation, confirmation);
     } catch (error) {
-      recordActionMessage(actionErrorMessage(error));
+      if (current()) recordActionMessage(actionErrorMessage(error));
     } finally {
-      setActionPending(false);
+      if (current()) setActionPending(false);
     }
   }
 
@@ -198,6 +226,7 @@ export function useOrganizationActions({
       return;
     }
 
+    const current = beginRequest();
     setActionPending(true);
     setActionMessage("正在退出组织...");
     try {
@@ -210,17 +239,21 @@ export function useOrganizationActions({
         organizationId,
         sessionId: session.sessionId
       });
+      if (!current()) return;
       setLeaveSummary(null);
       await onOrganizationChanged?.();
+      if (!current()) return;
       recordActionMessage(`已退出 ${organizationName}。`);
     } catch (error) {
-      recordActionMessage(actionErrorMessage(error));
+      if (current()) recordActionMessage(actionErrorMessage(error));
     } finally {
-      setActionPending(false);
+      if (current()) setActionPending(false);
     }
   }
 
   function resetOrganizationActions() {
+    requestEpoch.current += 1;
+    setStateActor(currentActor.current);
     setActionMessage(undefined);
     setActionPending(false);
     setCreateOpen(false);
@@ -230,20 +263,20 @@ export function useOrganizationActions({
   }
 
   return {
-    actionMessage,
-    actionPending,
+    actionMessage: stateActor === actorBinding ? actionMessage : undefined,
+    actionPending: stateActor === actorBinding && actionPending,
     closeCreateDialog,
     closeInviteDialog,
     closeJoinDialog,
     closeLeaveDialog,
-    createOpen,
+    createOpen: stateActor === actorBinding && createOpen,
     createOrganizationRequest,
     inviteOrganizationMember,
-    inviteSummary,
-    joinOpen,
+    inviteSummary: stateActor === actorBinding ? inviteSummary : null,
+    joinOpen: stateActor === actorBinding && joinOpen,
     joinOrganizationRequest,
     leaveOrganizationRequest,
-    leaveSummary,
+    leaveSummary: stateActor === actorBinding ? leaveSummary : null,
     openCreateDialog,
     openInviteDialog,
     openJoinDialog,

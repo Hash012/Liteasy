@@ -18,6 +18,31 @@ type OrganizationActionClientInput = {
   transport?: OrganizationActionTransport;
 };
 
+export type OrganizationInvitation = {
+  createdAt: string;
+  createdBy: string;
+  expiresAt: string;
+  invitationId: string;
+  organizationId: string;
+  revision: number;
+  role: "admin" | "member";
+  status: "pending" | "accepted" | "revoked" | "expired";
+  targetSubject: string;
+};
+
+function readInvitation(value: unknown, organizationId: string): OrganizationInvitation {
+  if (!value || typeof value !== "object") throw new Error("邀请列表返回格式无效，请刷新组织权限后重试。");
+  const item = value as Partial<OrganizationInvitation>;
+  if (item.organizationId !== organizationId || !Number.isInteger(item.revision) || item.revision! < 0 ||
+    !["admin", "member"].includes(item.role ?? "") || !["pending", "accepted", "revoked", "expired"].includes(item.status ?? "") ||
+    [item.invitationId, item.targetSubject, item.createdBy].some((field) => typeof field !== "string" || !field.trim()) ||
+    [item.createdAt, item.expiresAt].some((field) => typeof field !== "string" || !Number.isFinite(Date.parse(field)))) {
+    throw new Error("邀请列表返回格式无效，请刷新组织权限后重试。");
+  }
+  return { createdAt: item.createdAt!, createdBy: item.createdBy!, expiresAt: item.expiresAt!, invitationId: item.invitationId!,
+    organizationId, revision: item.revision!, role: item.role!, status: item.status!, targetSubject: item.targetSubject! };
+}
+
 type SessionInput = {
   displayName: string;
   sessionId: string;
@@ -100,6 +125,24 @@ export function createOrganizationActionClient({
         role: input.role,
         targetSubject: input.targetSubject
       });
+    },
+
+    async listInvitations(input: { organizationId: string; sessionId: string }) {
+      const result = await post<{ invitations: unknown }>("invitations/list", input.sessionId, { organizationId: input.organizationId });
+      if (!Array.isArray(result.invitations) || result.invitations.length > 200) throw new Error("邀请列表返回格式无效，请刷新组织权限后重试。");
+      return { invitations: result.invitations.map((value) => readInvitation(value, input.organizationId)) };
+    },
+
+    async revokeInvitation(input: { expectedInvitationRevision: number; expectedRevision: number; invitationId: string; organizationId: string; sessionId: string }) {
+      const result = await post<{ invitation: unknown; organizationRevision: number }>("invitations/revoke", input.sessionId, {
+        expectedInvitationRevision: input.expectedInvitationRevision, expectedRevision: input.expectedRevision,
+        invitationId: input.invitationId, organizationId: input.organizationId, idempotencyKey: idempotencyKey("revoke-invitation")
+      });
+      const invitation = readInvitation(result.invitation, input.organizationId);
+      if (invitation.invitationId !== input.invitationId || invitation.status !== "revoked" || invitation.revision !== input.expectedInvitationRevision + 1 || result.organizationRevision !== input.expectedRevision + 1) {
+        throw new Error("撤回回执与邀请不一致，请刷新组织权限后核实。");
+      }
+      return { invitation, organizationRevision: result.organizationRevision };
     },
 
     acceptInvitation(input: SessionInput & { invitationToken: string }) {

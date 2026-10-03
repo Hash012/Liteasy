@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vitest";
 import type { AccountSession } from "../app/features/account/account.types";
@@ -7,6 +7,8 @@ import type { OrganizationActionTransport } from "../app/features/organization/o
 import type { OrganizationSummary } from "../app/features/organization/organization.types";
 
 const accountSession: AccountSession = {
+  endpoint: "https://cloud.example",
+  issuer: "https://identity.example",
   email: "owner@example.com",
   expiresAt: "2026-08-20T00:00:00.000Z",
   name: "Owner",
@@ -92,4 +94,22 @@ test("does not let an organization administrator govern another administrator", 
   expect(screen.queryByRole("button", { name: "暂停成员 Admin" })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "暂停成员 Member" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /转移所有权/ })).not.toBeInTheDocument();
+});
+
+
+test("a late ownership transfer cannot update another account's organization panel", async () => {
+  let finish!: (result: Response) => void;
+  const transport = vi.fn<OrganizationActionTransport>(() => new Promise((resolve) => { finish = resolve; }));
+  const onChanged = vi.fn();
+  const input = { accountSession, endpoint: "https://cloud.example", onChanged, summary, transport };
+  const { rerender } = render(<OrganizationMemberGovernancePanel {...input} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "展开成员治理" }));
+  await user.click(screen.getByRole("button", { name: "转移所有权给 Member" }));
+  await user.click(screen.getByRole("button", { name: "确认" }));
+  rerender(<OrganizationMemberGovernancePanel {...input} accountSession={{ ...accountSession, userId: "another", sessionId: "another-token" }} />);
+  await act(async () => { finish(response()); });
+  expect(onChanged).not.toHaveBeenCalled();
+  expect(screen.queryByRole("alertdialog", { name: "确认成员治理操作" })).not.toBeInTheDocument();
+  expect(screen.queryByText("转移所有权：Member已完成。")).not.toBeInTheDocument();
 });

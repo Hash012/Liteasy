@@ -1,3 +1,4 @@
+import { OrganizationInvitationPanel } from "./OrganizationInvitationPanel";
 import { OrganizationActivityInbox } from "./OrganizationActivityInbox";
 import type { AccountSession } from "../account/account.types";
 import { Button, Tooltip } from "@fluentui/react-components";
@@ -110,6 +111,7 @@ export function OrganizationSidebarPanel({
           <OrganizationStoragePolicyPanel endpoint={cloudEndpoint} summary={summary} />
         </details>
       ) : null}
+      {accountSession && summary && <OrganizationInvitationPanel session={accountSession} endpoint={cloudEndpoint} summary={summary} onChanged={onOrganizationChanged ?? (() => undefined)} />}
       {accountSession && summary && (summary.myRole === "owner" || summary.myRole === "admin") ? (
         <OrganizationMemberGovernancePanel
           accountSession={accountSession}

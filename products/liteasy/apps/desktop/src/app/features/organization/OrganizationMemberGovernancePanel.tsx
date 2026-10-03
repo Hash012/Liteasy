@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, Tooltip } from "@fluentui/react-components";
 import {
   ArrowSwapRegular,
@@ -13,6 +13,7 @@ import {
   createOrganizationActionClient,
   type OrganizationActionTransport
 } from "./organizationActionsClient";
+import { organizationActorBinding, organizationSessionMatchesEndpoint } from "./organizationActorBinding";
 import type { OrganizationMember, OrganizationSummary } from "./organization.types";
 
 type MemberAction = {
@@ -46,7 +47,11 @@ function canManageMember(summary: OrganizationSummary, member: OrganizationMembe
   return summary.myRole === "admin" && member.role === "member";
 }
 
-export function OrganizationMemberGovernancePanel({
+export function OrganizationMemberGovernancePanel(props: OrganizationMemberGovernancePanelProps) {
+  return <MemberGovernance key={`${organizationActorBinding(props.accountSession, props.endpoint)}:${props.summary.organizationId}:${props.summary.revision}:${props.summary.myRole}`} {...props} />;
+}
+
+function MemberGovernance({
   accountSession,
   endpoint,
   onChanged,
@@ -58,8 +63,18 @@ export function OrganizationMemberGovernancePanel({
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string>();
   const client = createOrganizationActionClient({ endpoint, transport });
+  const mounted = useRef(true);
+  const epoch = useRef(0);
+  const binding = organizationActorBinding(accountSession, endpoint);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; epoch.current += 1; }; }, []);
 
   async function execute(action: MemberAction) {
+    if (!mounted.current || binding !== organizationActorBinding(accountSession, endpoint)) return;
+    if (!organizationSessionMatchesEndpoint(accountSession, endpoint)) {
+      setPendingAction(null); setMessage("账号或服务地址已变化，请重新登录后管理组织。"); return;
+    }
+    const request = ++epoch.current;
+    const current = () => mounted.current && request === epoch.current && binding === organizationActorBinding(accountSession, endpoint);
     setSubmitting(true);
     setMessage(undefined);
     const common = {
@@ -88,13 +103,14 @@ export function OrganizationMemberGovernancePanel({
               : "removed"
         });
       }
+      if (!current()) return;
       setPendingAction(null);
       setMessage(`${actionLabel(action)}已完成。`);
       await onChanged();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "组织成员操作未完成。");
+      if (current()) setMessage(error instanceof Error ? error.message : "组织成员操作未完成。");
     } finally {
-      setSubmitting(false);
+      if (current()) setSubmitting(false);
     }
   }
 

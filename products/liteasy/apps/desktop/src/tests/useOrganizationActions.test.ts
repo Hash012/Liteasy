@@ -6,6 +6,8 @@ import { useOrganizationActions } from "../app/features/organization/useOrganiza
 import type { OrganizationSummary } from "../app/features/organization/organization.types";
 
 const accountSession: AccountSession = {
+  endpoint: "https://cloud.example",
+  issuer: "https://identity.example",
   email: "reader@example.com",
   expiresAt: "2026-08-20T00:00:00Z",
   membershipTier: "pro",
@@ -87,7 +89,7 @@ function renderActions(input: {
   const result = renderHook(() => useOrganizationActions({
     accountSession: input.session === undefined ? accountSession : input.session,
     canCreateOrganization: input.canCreateOrganization ?? true,
-    controlPlaneEndpoint: "http://127.0.0.1:8787",
+    controlPlaneEndpoint: "https://cloud.example",
     onAnalysisHint,
     onOrganizationChanged: input.onOrganizationChanged,
     transport: input.transport ?? actionTransport()
@@ -210,4 +212,95 @@ describe("useOrganizationActions", () => {
     expect(result.current.leaveSummary).toBeNull();
     expect(onAnalysisHint).not.toHaveBeenCalled();
   });
+});
+
+test.each(["create", "join", "invite", "leave"] as const)("ignores a late %s receipt after the account changes", async (operation) => {
+  let finish!: (response: Response) => void;
+  const transport = vi.fn<OrganizationActionTransport>(() => new Promise((resolve) => { finish = resolve; }));
+  const onOrganizationChanged = vi.fn();
+  const onAnalysisHint = vi.fn();
+  const { result, rerender } = renderHook(({ session }) => useOrganizationActions({ accountSession: session, canCreateOrganization: true, controlPlaneEndpoint: "https://cloud.example", onOrganizationChanged, onAnalysisHint, transport }), { initialProps: { session: accountSession } });
+  act(() => { result.current.openInviteDialog({ ...organizationSummary, myRole: "owner" }); result.current.openLeaveDialog(organizationSummary); });
+  let pending!: Promise<void>;
+  act(() => { pending = operation === "create" ? result.current.createOrganizationRequest("Account A organization") : operation === "join" ? result.current.joinOrganizationRequest("synthetic-token") : operation === "invite" ? result.current.inviteOrganizationMember({ role: "member", targetSubject: "recipient-a" }) : result.current.leaveOrganizationRequest(); });
+  rerender({ session: { ...accountSession, userId: "other-user", sessionId: "other-token" } });
+  await act(async () => {
+    finish(jsonResponse({ organization: { organizationId: "old-org", name: "Account A organization" }, organizationId: "old-org", invitation: { invitationToken: "OLD_ACCOUNT_SECRET_TOKEN" } }));
+    await pending;
+  });
+  expect(onOrganizationChanged).not.toHaveBeenCalled();
+  expect(onAnalysisHint).not.toHaveBeenCalled();
+  expect(result.current.actionMessage).toBeUndefined();
+  expect(result.current.inviteSummary).toBeNull();
+  expect(result.current.leaveSummary).toBeNull();
+  expect(result.current.actionPending).toBe(false);
+});
+
+test.each(["endpoint", "reset"] as const)("invalidates an invitation receipt after %s changes", async (change) => {
+  let finish!: (response: Response) => void;
+  const transport = vi.fn<OrganizationActionTransport>(() => new Promise((resolve) => { finish = resolve; }));
+  const onOrganizationChanged = vi.fn();
+  const onAnalysisHint = vi.fn();
+  const { result, rerender } = renderHook(({ endpoint }) => useOrganizationActions({ accountSession, controlPlaneEndpoint: endpoint, onOrganizationChanged, onAnalysisHint, transport }), { initialProps: { endpoint: "https://cloud.example" } });
+  act(() => result.current.openInviteDialog({ ...organizationSummary, myRole: "owner" }));
+  let pending!: Promise<void>;
+  act(() => { pending = result.current.inviteOrganizationMember({ role: "member", targetSubject: "recipient-a" }); });
+  if (change === "endpoint") rerender({ endpoint: "https://other-cloud.example" });
+  else act(() => result.current.resetOrganizationActions());
+  await act(async () => { finish(jsonResponse({ invitation: { invitationToken: "OLD_ENDPOINT_TOKEN" } })); await pending; });
+  expect(onOrganizationChanged).not.toHaveBeenCalled();
+  expect(onAnalysisHint).not.toHaveBeenCalled();
+  expect(result.current.actionMessage).toBeUndefined();
+});
+
+test("does not send a session to a different service endpoint", async () => {
+  const transport = actionTransport();
+  const { result } = renderActions({ session: { ...accountSession, endpoint: "https://original.example" }, transport });
+  await act(() => result.current.joinOrganizationRequest("synthetic-token"));
+  expect(transport).not.toHaveBeenCalled();
+  expect(result.current.actionMessage).toContain("服务地址");
+});
+
+
+test("requires verified subject, issuer and endpoint and never copies invitation tokens into analysis hints", async () => {
+  for (const missing of ["userId", "issuer", "endpoint"] as const) {
+    const transport = actionTransport();
+    const { result, unmount } = renderActions({ session: { ...accountSession, [missing]: undefined }, transport });
+    await act(() => result.current.joinOrganizationRequest("synthetic-token"));
+    expect(transport).not.toHaveBeenCalled();
+    unmount();
+  }
+  const { result, onAnalysisHint } = renderActions();
+  act(() => result.current.openInviteDialog({ ...organizationSummary, myRole: "owner" }));
+  await act(() => result.current.inviteOrganizationMember({ role: "member", targetSubject: "recipient-a" }));
+  expect(result.current.actionMessage).toContain("orginv_");
+  expect(JSON.stringify(onAnalysisHint.mock.calls)).not.toContain("orginv_");
+});
+
+
+test("late failed requests cannot display an old account error after reset", async () => {
+  let reject!: (error: Error) => void;
+  const transport = vi.fn<OrganizationActionTransport>(() => new Promise((_, fail) => { reject = fail; }));
+  const { result, onAnalysisHint } = renderActions({ transport });
+  let pending!: Promise<void>;
+  act(() => { pending = result.current.joinOrganizationRequest("synthetic-old-token"); });
+  act(() => result.current.resetOrganizationActions());
+  await act(async () => { reject(new Error("OLD_ACCOUNT_PRIVATE_ERROR")); await pending; });
+  expect(result.current.actionMessage).toBeUndefined();
+  expect(onAnalysisHint).not.toHaveBeenCalled();
+});
+
+
+test("an old action callback cannot start a request after switching account or unmounting", async () => {
+  const transport = actionTransport(), onAnalysisHint = vi.fn();
+  const { result, rerender, unmount } = renderHook(({ session }) => useOrganizationActions({ accountSession: session,
+    canCreateOrganization: true, controlPlaneEndpoint: "https://cloud.example", onAnalysisHint, transport }), { initialProps: { session: accountSession } });
+  const oldCreate = result.current.createOrganizationRequest;
+  rerender({ session: { ...accountSession, userId: "new-user", sessionId: "new-token" } });
+  await act(() => oldCreate("Old actor organization"));
+  const oldJoin = result.current.joinOrganizationRequest;
+  unmount();
+  await act(() => oldJoin("synthetic-token"));
+  expect(transport).not.toHaveBeenCalled();
+  expect(onAnalysisHint).not.toHaveBeenCalled();
 });
