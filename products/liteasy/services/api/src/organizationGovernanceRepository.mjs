@@ -548,9 +548,13 @@ export class PostgresOrganizationGovernanceRepository {
       async () => {
         const result = await client.query(`
           SELECT invitation.*, organization.status AS organization_status,
-                 organization.owner_subject, organization.revision AS organization_revision
+                 organization.owner_subject, organization.revision AS organization_revision,
+                 inviter.role AS inviter_role, inviter.status AS inviter_status
             FROM organization_invitations invitation
             JOIN organizations organization USING (organization_id)
+            LEFT JOIN organization_members inviter
+              ON inviter.organization_id = invitation.organization_id
+             AND inviter.member_subject = invitation.created_by
            WHERE invitation.token_hash = $1
            FOR UPDATE OF invitation, organization
         `, [tokenHash]);
@@ -567,6 +571,17 @@ export class PostgresOrganizationGovernanceRepository {
         }
         if (invitation.owner_subject === identity.subject) {
           throw new LibraryRepositoryError("organization_member_exists", 409);
+        }
+        // Governance mutations lock this same organization row. Re-evaluate the
+        // inviter under that lock so a pending invitation cannot outlive a loss
+        // of the permission required for its intended role.
+        const inviterRole = actorRole({
+          member_role: invitation.inviter_role,
+          member_status: invitation.inviter_status,
+          owner_subject: invitation.owner_subject
+        }, invitation.created_by);
+        if (inviterRole !== "owner" && !(inviterRole === "admin" && invitation.intended_role === "member")) {
+          throw new LibraryRepositoryError("organization_invitation_inviter_forbidden", 403);
         }
         const member = await client.query(`
           INSERT INTO organization_members(

@@ -311,6 +311,84 @@ try {
     VALUES ($1, $2, 'member')
   `, [governanceOrganizationId, governanceMemberTwo.subject]), /organization_owner_member_duplicate/);
 
+  const inviteGovernanceTarget = async (actor, targetSubject, role) => {
+    const { summary } = await governance.summary(actor, { organizationId: governanceOrganizationId });
+    return governance.invite(actor, {
+      expectedRevision: summary.revision,
+      idempotencyKey: `invite-authority-${targetSubject}`,
+      organizationId: governanceOrganizationId,
+      role,
+      targetSubject,
+      traceId: "trace_invitation_authority"
+    });
+  };
+  const acceptGovernanceInvitation = (invited) => governance.acceptInvitation({
+    audience: "liteasy-desktop", subject: invited.invitation.targetSubject
+  }, {
+    expectedInvitationRevision: invited.invitation.revision,
+    idempotencyKey: `accept-authority-${invited.invitation.targetSubject}`,
+    invitationToken: invited.invitation.invitationToken,
+    traceId: "trace_invitation_authority_accept"
+  });
+  const withdrawnAuthorityInvitation = await inviteGovernanceTarget(governanceAdmin, "inviter_downgraded_target", "member");
+  await governance.changeMemberRole(governanceMemberTwo, {
+    expectedMemberRevision: 0,
+    expectedRevision: withdrawnAuthorityInvitation.organizationRevision,
+    idempotencyKey: "downgrade-pending-inviter",
+    organizationId: governanceOrganizationId,
+    role: "member",
+    targetSubject: governanceAdmin.subject,
+    traceId: "trace_downgrade_pending_inviter"
+  });
+  await assert.rejects(() => acceptGovernanceInvitation(withdrawnAuthorityInvitation), /organization_invitation_inviter_forbidden/);
+  assert.deepEqual((await governance.listForIntuecho({ userSubject: "inviter_downgraded_target" })).organizations, []);
+
+  const revokedInvitation = await inviteGovernanceTarget(governanceMemberTwo, "revoked_invitation_target", "member");
+  await governance.revokeInvitation(governanceMemberTwo, {
+    expectedInvitationRevision: 0,
+    expectedRevision: revokedInvitation.organizationRevision,
+    idempotencyKey: "revoke-pending-invitation-authority",
+    invitationId: revokedInvitation.invitation.invitationId,
+    organizationId: governanceOrganizationId,
+    traceId: "trace_revoke_invitation_authority"
+  });
+  await assert.rejects(() => acceptGovernanceInvitation(revokedInvitation), /organization_invitation_not_pending/);
+  const expiredInvitation = await inviteGovernanceTarget(governanceMemberTwo, "expired_invitation_target", "member");
+  await pool.query(`
+    UPDATE organization_invitations
+       SET created_at = now() - interval '2 days', expires_at = now() - interval '1 day'
+     WHERE invitation_id = $1
+  `, [expiredInvitation.invitation.invitationId]);
+  await assert.rejects(() => acceptGovernanceInvitation(expiredInvitation), /organization_invitation_not_pending/);
+
+  const pendingAdminInvitation = await inviteGovernanceTarget(governanceMemberTwo, "former_owner_admin_target", "admin");
+  const pendingMemberInvitation = await inviteGovernanceTarget(governanceMemberTwo, "former_owner_member_target", "member");
+  const beforeTransfers = await governance.summary(governanceMemberTwo, { organizationId: governanceOrganizationId });
+  const simultaneousTransfers = await Promise.allSettled([governanceOwner, governanceAdmin].map((target) => {
+    const membership = beforeTransfers.summary.members.find((member) => member.subject === target.subject);
+    return governance.transferOwnership(governanceMemberTwo, {
+      expectedMemberRevision: membership.revision,
+      expectedRevision: beforeTransfers.summary.revision,
+      idempotencyKey: `concurrent-owner-transfer-${target.subject}`,
+      organizationId: governanceOrganizationId,
+      targetSubject: target.subject,
+      traceId: "trace_concurrent_owner_transfer"
+    });
+  }));
+  assert.equal(simultaneousTransfers.filter((result) => result.status === "fulfilled").length, 1);
+  for (const rejected of simultaneousTransfers.filter((result) => result.status === "rejected")) {
+    assert.ok(new Set(["40001", "organization_owner_required", "organization_revision_conflict"]).has(rejected.reason.code));
+  }
+  const transferredOwner = simultaneousTransfers.find((result) => result.status === "fulfilled").value.newOwnerSubject;
+  const afterTransfers = await governance.summary({ audience: "liteasy-desktop", subject: transferredOwner }, {
+    organizationId: governanceOrganizationId
+  });
+  assert.equal(afterTransfers.summary.members.filter((member) => member.role === "owner").length, 1);
+  assert.equal(afterTransfers.summary.ownerSubject, transferredOwner);
+  assert.equal(afterTransfers.summary.revision, beforeTransfers.summary.revision + 1);
+  await assert.rejects(() => acceptGovernanceInvitation(pendingAdminInvitation), /organization_invitation_inviter_forbidden/);
+  assert.equal((await acceptGovernanceInvitation(pendingMemberInvitation)).membership.role, "member");
+
   const repository = new PostgresLibraryRepository(pool);
   const empty = await repository.getTree(personalScope);
   assert.equal(empty.tree.revision, 0);

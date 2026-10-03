@@ -130,6 +130,8 @@ Intuecho 的组织可见性和组织邀请使用独立内部边界。服务 toke
 
 `export_original` 保留 owner 在禁用导出策略下的例外，并通过 `policyExceptions: ["owner_export"]` 明示。`edit_own` 要求对象上下文；新增 `share_excerpt`、`publish_public` 和 `run_external_model` 因外发政策待定保持关闭，不能从阅读权限、组织角色或个人模型密钥推导授权。邀请约束中 owner 可邀请 admin/member，admin 仅可邀请 member。机器身份的 memberships 响应只含当前可访问组织的 ID、名称、当前角色和上述快照，不含负责人主体、成员数量或成员名单。
 
+接受邀请时，在锁定邀请和组织的事务内再次判断邀请者当前角色；离组、停用或降级后不再具有该角色邀请资格的邀请返回 `organization_invitation_inviter_forbidden`（403）。已转移职责的原 owner 如仍为 admin，可继续履行其创建的 member 邀请，不能继续授予 admin。该检查与目标主体、有效期、撤回状态和修订校验共同执行，不改变邀请投递渠道。
+
 写操作要求幂等键和预期修订号或等价的受控授权标识，业务写入、幂等结果和审计事件位于同一数据库事务。审计表由数据库触发器禁止更新和删除。PDF 先流式写入私有暂存对象，服务端计算 SHA-256、大小和文件头，再从 S3 暂存对象流式发送给 `LITEASY_PDF_SCANNER_URL`；扫描请求使用部署 Bearer secret，并携带内容长度和 SHA-256。扫描响应必须是最多 16 KiB 的严格 JSON：`clean`、`contentHash`、`scanner`、`version` 四个字段缺一不可，且返回哈希必须与暂存哈希一致。只有 `clean: true` 才会进入数据库 prepare；拒绝返回稳定 422，超时、不可用、非法响应或哈希不一致返回稳定 503，且请求产生的暂存对象会被删除。
 
 扫描时间、引擎、版本和哈希同时持久化到对象与发布工作流。S3 发布和数据库完成都会再次要求有效扫描证明；恢复任务会先补扫并持久化证明，再发布对象。迁移不会为历史对象伪造扫描结果：未验证旧对象不可列出、复制或下载，并阻止服务 readiness。部署升级时反复运行 `npm run maintain:storage`，它每次最多流式补扫 100 个旧对象；输出中的 `pdfSecurity.remaining` 必须为 `0`，之后服务才可启动。
