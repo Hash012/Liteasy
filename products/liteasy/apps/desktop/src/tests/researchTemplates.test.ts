@@ -9,6 +9,7 @@ import { createObjectRepository } from "../app/features/objects/objectRepository
 import { refOf, objectText } from "../app/features/objects/object.types";
 import { liteasyPath, parseLiteasyPath } from "../app/features/resource-filesystem/liteasyPath";
 import { createWorkspaceAgentAssetService } from "../app/features/resource-filesystem/workspaceAgentAssetService";
+import { externalModelAssetService } from "../app/features/models/externalSourcePolicy";
 import { createOperationHost } from "../app/features/workflows/operationHost";
 import { createWorkflowRunner } from "../app/features/workflows/workflowRunner";
 import type { JsonObject } from "../app/features/extensions/extensionSchema";
@@ -53,9 +54,9 @@ test("keeps conflicting source excerpts, revision and confidence separate from e
   expect(result.text).not.toContain("第 1 页");
 });
 
-test("actual template reruns create new notes and preserve user edits plus immutable source revisions", async () => {
+test.each(["unavailable", "organization"] as const)("actual template reruns preserve user edits, immutable source revisions and %s provenance", async (sourceKind) => {
   const scope = crypto.randomUUID(), storage = createObjectStorage(scope, () => scope), repository = createObjectRepository(storage, scope);
-  const assets = createWorkspaceAgentAssetService({ repository, active: () => true });
+  const assets = createWorkspaceAgentAssetService({ repository, active: () => true, getPapers: sourceKind === "organization" ? () => [{ id: "guide", title: "Synthetic organization guide", libraryReference: { scopeType: "organization", scopeId: "synthetic-org", documentId: "synthetic-document", revision: 2 } }] : undefined });
   const source = await repository.projectLegacy("synthetic-guide-version", { kind: "source.document", title: "Synthetic field guide", content: { schema: "liteasy.source-document/v1", payload: {
     paperId: "guide", legacyKey: "synthetic-guide", availability: "local", text: "The original definition.", pages: [{ page: 3, text: "The original definition." }]
   } } });
@@ -72,9 +73,13 @@ test("actual template reruns create new notes and preserve user edits plus immut
   const firstResult = await runner.execute(first.id);
   expect(firstResult.status, firstResult.error).toBe("succeeded");
   const output = (await runner.replay(first.id)).nodes.save as JsonObject;
+  if (sourceKind === "unavailable") expect(output.sourceResolution).toBe("unavailable");
+  else expect(output.sourceReferences).toEqual([{ paperId: "guide", scopeType: "organization", scopeId: "synthetic-org", documentId: "synthetic-document", revision: 2 }]);
+  await expect(externalModelAssetService(assets).read(String(output.path))).rejects.toThrow(sourceKind === "organization" ? "属于组织" : "来源");
   const target = parseLiteasyPath(String(output.path), scope);
   if (target.kind !== "object") throw new Error("note missing");
   const note = await repository.resolveLatest(target.ref.objectId);
+  expect(note.provenance.sourceRefs).toContainEqual(refOf(source));
   expect(objectText(note)).toContain("PDF 物理页：3");
   expect(objectText(note)).toContain(source.revision);
   await repository.editNote(refOf(note), `${objectText(note)}\n\nMy later correction.`);

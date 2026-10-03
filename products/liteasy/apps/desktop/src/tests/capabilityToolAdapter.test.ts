@@ -1,3 +1,4 @@
+import { createAgentApplicationService } from "../app/controllers/agent/agentApplicationService";
 import {
   createManagerCapabilityToolCatalog,
   executeManagerCapabilityTool,
@@ -6,11 +7,19 @@ import {
 import { getRegisteredActionMetadata } from "../app/features/skills/actionRegistry";
 import { createSettingsStore } from "../app/features/settings/settings.store";
 
-test("projects the Liteasy registry into deferred manager tools", () => {
+test("discovers unavailable capabilities with reasons while exposing only executable manager tools", async () => {
   const registered = getRegisteredActionMetadata();
   const tools = createManagerCapabilityToolCatalog(registered);
 
-  expect(tools).toHaveLength(registered.length);
+  const unavailable = ["cloud.upload_documents", "cloud.sync_workspace", "workspace.delete_documents", "workspace.overwrite_documents", "workspace.batch_update_documents"];
+  expect(tools.map((tool) => tool.actionId).sort()).toEqual(registered.map((action) => action.actionId).filter((id) => !unavailable.includes(id)).sort());
+  for (const actionId of unavailable) expect(tools.some((tool) => tool.actionId === actionId)).toBe(false);
+  const api = createAgentApplicationService({ executeCommand: () => ({ events: [], settingsChanged: false }), executeKnowledge: () => ({ message: "" }) });
+  const result = await api.listCapabilities();
+  if (!result.ok) throw new Error(result.error.message);
+  for (const actionId of unavailable) expect(result.data.find((capability) => capability.actionId === actionId)).toMatchObject({ available: false, unavailableReason: expect.stringContaining("尚未接入获准执行器") });
+  expect(result.data.find((capability) => capability.actionId === "layout.split_two")).toMatchObject({ available: true });
+  api.dispose();
   expect(new Set(tools.map((tool) => tool.name)).size).toBe(tools.length);
   expect(getManagerCapabilityToolName("artifact.generate")).toBe(
     "liteasy__artifact__generate"

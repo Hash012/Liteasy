@@ -5,6 +5,7 @@ export type AssetSourceReference = {
   scopeType: "user" | "organization";
   scopeId: string;
   paperId: string;
+  documentId?: string;
   revision?: number;
 };
 

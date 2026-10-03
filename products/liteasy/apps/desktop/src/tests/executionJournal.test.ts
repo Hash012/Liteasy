@@ -88,12 +88,13 @@ describe("createExecutionJournal", () => {
     ]);
   });
 
-  test("runtime records original command input on the semantic plan trace", async () => {
+  test("runtime keeps trace metadata while omitting command bodies and credentials from the general journal", async () => {
     const journal = createExecutionJournal();
+    const privateMessage = "让 UI 变成卡通风格 SYNTHETIC_PRIVATE_SOURCE api_key=SYNTHETIC_SECRET";
 
     await runAgentRuntime(
       {
-        message: "让 UI 变成卡通风格",
+        message: privateMessage,
         mode: "command"
       },
       {
@@ -120,12 +121,16 @@ describe("createExecutionJournal", () => {
       }
     );
 
-    expect(journal.getTrace("trace-plan-journal-input")[0]).toMatchObject({
-      input: "让 UI 变成卡通风格",
+    const trace = journal.getTrace("trace-plan-journal-input");
+    expect(trace[0]).toEqual({
       mode: "command",
       traceId: "trace-plan-journal-input",
       type: "input"
     });
+    expect(trace.map((entry) => entry.type)).toEqual(["input", "plan", "policy", "action_result", "ui_dsl"]);
+    expect(JSON.stringify(trace)).not.toContain(privateMessage);
+    expect(JSON.stringify(trace)).not.toContain("SYNTHETIC_PRIVATE_SOURCE");
+    expect(JSON.stringify(trace)).not.toContain("SYNTHETIC_SECRET");
   });
 
   test("runtime records semantic planner source on the plan trace", async () => {

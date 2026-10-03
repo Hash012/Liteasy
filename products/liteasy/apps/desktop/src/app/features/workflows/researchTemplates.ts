@@ -22,8 +22,9 @@ export function researchTemplateWorkflow(id: ResearchTemplateId) {
       userComment: { type: "string", title: "我的初步评论", maxLength: 4000, default: "" }
     }, required: ["selection", "question", "userComment"], additionalProperties: false },
     outputSchema: { type: "object", properties: { path: { type: "string" }, title: { type: "string" }, kind: { type: "string" }, revision: { type: "string" }, capabilities: { type: "array", items: { type: "string" } }, relatedPaperIds: { type: "array", items: { type: "string" } },
+      sourceResolution: { type: "string", enum: ["unavailable"] },
       sourceReferences: { type: "array", items: { type: "object", properties: {
-        scopeType: { type: "string", enum: ["user", "organization"] }, scopeId: { type: "string" }, paperId: { type: "string" }, revision: { type: "number" }
+        scopeType: { type: "string", enum: ["user", "organization"] }, scopeId: { type: "string" }, paperId: { type: "string" }, documentId: { type: "string" }, revision: { type: "number" }
       }, required: ["scopeType", "scopeId", "paperId"], additionalProperties: false } }
     }, required: ["path", "title"], additionalProperties: false },
     nodes: [
