@@ -1130,7 +1130,7 @@ export class PostgresAnnotationCommunityRepository {
         INSERT INTO annotations(id, parent_annotation_id, body, author_id, author_name, author_initials, author_profile_snapshot, visibility, organization_id, share_to_plaza)
         VALUES ($1, NULL, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
       `, [id, input.body, author.id, author.name, author.initials, JSON.stringify({ educationStage: profile.educationStage, institutions: profile.institutions }), input.visibility, input.organizationId ?? null, input.shareToPlaza]);
-      await client.query("UPDATE annotations SET collaboration = $2::jsonb WHERE id = $1", [id, JSON.stringify(metadata)]);
+      await client.query("UPDATE annotations SET collaboration = $2::jsonb WHERE id = $1", [id, metadata === null ? null : JSON.stringify(metadata)]);
       await this.#replaceTargets(client, id, input.targets, author.id);
       await client.query("UPDATE annotations SET contribution = $2::jsonb WHERE id = $1", [id, JSON.stringify(annotationContribution(input.contribution))]);
       await this.#replaceUserTags(client, id, input.tags);
@@ -1175,7 +1175,7 @@ export class PostgresAnnotationCommunityRepository {
       const oldTags = await this.#tags(id, client);
       const contribution = annotationContribution(update.contribution, row.contribution, (update.body !== undefined && update.body !== row.body) || (update.targets !== undefined && JSON.stringify(update.targets) !== JSON.stringify(oldTargets)));
       await client.query(`INSERT INTO annotation_versions(id, annotation_id, revision, body, author_profile_snapshot, visibility, organization_id, share_to_plaza, targets, tags, changed_by, contribution, collaboration) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12::jsonb, $13::jsonb)`, [`annotation_version_${randomUUID()}`, id, row.revision, row.body, JSON.stringify(row.author_profile_snapshot), row.visibility, row.organization_id, row.share_to_plaza, JSON.stringify(oldTargets), JSON.stringify(oldTags), author.id, JSON.stringify(annotationContribution(undefined, row.contribution)), JSON.stringify(row.collaboration ?? null)]);
-      await client.query("UPDATE annotations SET collaboration = $2::jsonb WHERE id = $1", [id, JSON.stringify(metadata)]);
+      await client.query("UPDATE annotations SET collaboration = $2::jsonb WHERE id = $1", [id, metadata === null ? null : JSON.stringify(metadata)]);
       await client.query(`UPDATE annotations SET body = $2, author_name = $3, author_initials = $4, author_profile_snapshot = $5::jsonb, visibility = $6, organization_id = $7, share_to_plaza = $8, revision = revision + 1, updated_at = now() WHERE id = $1`, [id, update.body ?? row.body, author.name, author.initials, JSON.stringify(await this.#profileSnapshot(author.id, client)), visibility, organizationId, shareToPlaza]);
       if (update.targets) await this.#replaceTargets(client, id, update.targets, author.id);
       await client.query("UPDATE annotations SET contribution = $2::jsonb WHERE id = $1", [id, JSON.stringify(contribution)]);
@@ -1320,7 +1320,7 @@ export class PostgresAnnotationCommunityRepository {
       const derivedAnnotationId = input.publishAsAnnotation ? `annotation_${randomUUID()}` : null;
       const profile = JSON.stringify(await this.#profileSnapshot(author.id, client));
       await client.query(`INSERT INTO annotation_replies(id, parent_annotation_id, derived_annotation_id, body, author_id, author_name, author_initials, author_profile_snapshot, visibility, organization_id) VALUES ($1, $2, NULL, $3, $4, $5, $6, $7::jsonb, $8, $9)`, [replyId, parentAnnotationId, input.body, author.id, author.name, author.initials, profile, effectiveParent.visibility, effectiveParent.organization_id]);
-      await client.query("UPDATE annotation_replies SET collaboration = $2::jsonb WHERE id = $1", [replyId, JSON.stringify(metadata)]);
+      await client.query("UPDATE annotation_replies SET collaboration = $2::jsonb WHERE id = $1", [replyId, metadata === null ? null : JSON.stringify(metadata)]);
       if (derivedAnnotationId) {
         await client.query(`INSERT INTO annotations(id, source_reply_id, body, author_id, author_name, author_initials, author_profile_snapshot, visibility, organization_id, share_to_plaza) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10)`, [derivedAnnotationId, replyId, input.body, author.id, author.name, author.initials, profile, effectiveParent.visibility, effectiveParent.organization_id, effectiveParent.visibility === "public"]);
         await this.#replaceTargets(client, derivedAnnotationId, input.targets, author.id);
@@ -1350,7 +1350,7 @@ export class PostgresAnnotationCommunityRepository {
       await this.#validateSources(metadata, author, row.organization_id, client);
       const profile = JSON.stringify(await this.#profileSnapshot(author.id, client));
       await client.query(`INSERT INTO annotation_reply_versions(id, reply_id, revision, body, author_profile_snapshot, changed_by, collaboration) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7::jsonb)`, [`reply_version_${randomUUID()}`, replyId, row.revision, row.body, JSON.stringify(row.author_profile_snapshot), author.id, JSON.stringify(row.collaboration ?? null)]);
-      await client.query("UPDATE annotation_replies SET collaboration = $2::jsonb WHERE id = $1", [replyId, JSON.stringify(metadata)]);
+      await client.query("UPDATE annotation_replies SET collaboration = $2::jsonb WHERE id = $1", [replyId, metadata === null ? null : JSON.stringify(metadata)]);
       await client.query("UPDATE annotation_replies SET body = $2, author_name = $3, author_initials = $4, author_profile_snapshot = $5::jsonb, revision = revision + 1, updated_at = now() WHERE id = $1", [replyId, input.body, author.name, author.initials, profile]);
       if (row.derived_annotation_id) {
         const derived = await this.#row(row.derived_annotation_id, client, true);
