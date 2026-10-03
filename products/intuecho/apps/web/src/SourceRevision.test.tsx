@@ -55,3 +55,31 @@ test("an identity-generation rerender removes a previously read historical body"
   expect(screen.getByRole("button", { name: "核对引用版本" })).toBeEnabled();
   expect(communityApi.sourceRevision).toHaveBeenCalledTimes(1);
 });
+
+test("compares the pinned historical quote with the authorized current revision without replacing the citation", async () => {
+  vi.mocked(communityApi.sourceRevision)
+    .mockResolvedValueOnce({ ...reference, currentRevision: 4, historical: true, body: "ORIGINAL_QUOTED_CLAIM" })
+    .mockResolvedValueOnce({ ...reference, currentRevision: 4, historical: true, body: "ORIGINAL_QUOTED_CLAIM" })
+    .mockResolvedValueOnce({ ...reference, revision: 4, currentRevision: 4, historical: false, body: "CORRECTED_CURRENT_CLAIM" });
+  render(<SourceRevision reference={reference} />);
+  await userEvent.click(screen.getByRole("button", { name: "核对引用版本" }));
+  await userEvent.click(await screen.findByRole("button", { name: "对照当前版本" }));
+  expect(await screen.findByText("CORRECTED_CURRENT_CLAIM")).toBeInTheDocument();
+  expect(screen.getByText("ORIGINAL_QUOTED_CLAIM")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "在 Liteasy 打开此来源版本" })).toHaveAttribute("href", expect.stringContaining("revision=3"));
+  expect(communityApi.sourceRevision).toHaveBeenNthCalledWith(2, reference);
+  expect(communityApi.sourceRevision).toHaveBeenNthCalledWith(3, { ...reference, revision: 4 });
+  expect(screen.getByText(/原引用仍固定在修订 3/)).toBeInTheDocument();
+});
+
+test("permission rejection during comparison clears both old and current bodies", async () => {
+  vi.mocked(communityApi.sourceRevision)
+    .mockResolvedValueOnce({ ...reference, currentRevision: 4, historical: true, body: "PRIVATE_OLD_CLAIM" })
+    .mockResolvedValueOnce({ ...reference, currentRevision: 4, historical: true, body: "PRIVATE_OLD_CLAIM" })
+    .mockRejectedValueOnce(new Error("SOURCE_NOT_FOUND"));
+  render(<SourceRevision reference={reference} />);
+  await userEvent.click(screen.getByRole("button", { name: "核对引用版本" }));
+  await userEvent.click(await screen.findByRole("button", { name: "对照当前版本" }));
+  expect(await screen.findByRole("status")).toHaveTextContent("无法访问此来源版本");
+  expect(screen.queryByText("PRIVATE_OLD_CLAIM")).not.toBeInTheDocument();
+});

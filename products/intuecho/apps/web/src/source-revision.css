@@ -1,0 +1,3 @@
+.source-revision-comparison { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; margin-top: 12px; }
+.source-revision-comparison > section { min-width: 0; padding: 12px; border: 1px solid var(--intuecho-line); border-radius: 6px; background: var(--intuecho-surface-subtle); }
+.source-revision-comparison p { overflow-wrap: anywhere; white-space: pre-wrap; }
