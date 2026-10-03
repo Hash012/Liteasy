@@ -37,6 +37,14 @@ export class AnnotationCommunityError extends Error {
   }
 }
 
+export function assertExpectedReplyParent(parent, expectedParent) {
+  if (!expectedParent) return;
+  if (Number(parent.revision) !== expectedParent.revision || parent.visibility !== expectedParent.visibility ||
+    (parent.organization_id ?? null) !== (expectedParent.organizationId ?? null)) {
+    throw new AnnotationCommunityError("PARENT_ANNOTATION_REVISION_CONFLICT", 409);
+  }
+}
+
 function normalizeIdentity(kind, value) {
   return normalizeLiteratureIdentifier(kind, value);
 }
@@ -1465,6 +1473,11 @@ export class SqliteAnnotationCommunityRepository {
     const derivedAnnotationId = input.publishAsAnnotation ? `annotation_${randomUUID()}` : null;
     const profile = JSON.stringify(this.#profileSnapshot(author.id));
     this.db.transaction(() => {
+      const currentParent = this.#annotationRow(parentAnnotationId);
+      if (!currentParent || currentParent.withdrawn_at) throw new AnnotationCommunityError("PARENT_ANNOTATION_NOT_FOUND", 404);
+      assertExpectedReplyParent(currentParent, input.expectedParent);
+      if (currentParent.visibility !== parent.visibility || currentParent.organization_id !== parent.organization_id ||
+        currentParent.revision !== parent.revision) throw new AnnotationCommunityError("PARENT_ANNOTATION_NOT_FOUND", 404);
       this.db.prepare(`INSERT INTO annotation_replies_v2(id, parent_annotation_id, derived_annotation_id, body, author_id, author_name, author_initials, author_profile_snapshot_json, visibility, organization_id, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`)
         .run(replyId, parentAnnotationId, null, input.body, author.id, author.name, author.initials ?? initialsFor(author.name), profile, parent.visibility, parent.organization_id, now, now);
       if (derivedAnnotationId) {

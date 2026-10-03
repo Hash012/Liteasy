@@ -250,7 +250,14 @@ export type DesktopAnnotationPublicationBatch = {
   operations: DesktopAnnotationPublicationOperation[];
 };
 
+export type AnnotationParentSnapshot = {
+  revision: number;
+  visibility: "private" | "organization" | "mutual_followers" | "public";
+  organizationId?: string | null;
+};
+
 export type CreateReplyInput = {
+  expectedParent?: AnnotationParentSnapshot;
   body: string;
   publishAsAnnotation?: boolean;
   tags?: string[];
@@ -258,6 +265,7 @@ export type CreateReplyInput = {
 };
 
 export type CreateReply = {
+  expectedParent?: AnnotationParentSnapshot;
   body: string;
   publishAsAnnotation: boolean;
   tags: string[];
@@ -320,6 +328,7 @@ export declare const createAnnotationSchema: z.ZodType<CreateAnnotationInput>;
 export declare const updateAnnotationSchema: z.ZodType<unknown>;
 export declare const academicProfileSchema: z.ZodType<unknown>;
 export declare const createReplySchema: z.ZodType<CreateReply, z.ZodTypeDef, CreateReplyInput>;
+export declare const annotationParentSnapshotSchema: z.ZodType<AnnotationParentSnapshot>;
 export declare const updateReplySchema: z.ZodType<UpdateReply>;
 export declare const updateReplyPublicationSchema: z.ZodType<UpdateReplyPublication, z.ZodTypeDef, UpdateReplyPublicationInput>;
 export declare const followUserSchema: z.ZodType<unknown>;

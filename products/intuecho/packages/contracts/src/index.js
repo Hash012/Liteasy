@@ -502,8 +502,19 @@ export const academicProfileSchema = z.object({
   })).max(20).default([])
 });
 
+export const annotationParentSnapshotSchema = z.object({
+  revision: z.number().int().positive(),
+  visibility: annotationVisibilitySchema,
+  organizationId: z.string().trim().min(1).max(200).nullable().optional()
+}).strict().superRefine((value, context) => {
+  if (value.visibility === "organization" ? !value.organizationId : value.organizationId != null) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["organizationId"], message: "回复确认的组织必须与原批注可见范围一致。" });
+  }
+});
+
 export const createReplySchema = z.object({
   body: z.string().trim().min(1).max(8000),
+  expectedParent: annotationParentSnapshotSchema.optional(),
   publishAsAnnotation: z.boolean().default(false),
   tags: annotationTagsSchema,
   targets: z.array(annotationTargetSchema).max(100).default([])

@@ -35,6 +35,7 @@ const updatedBody: string = updatedReply.body;
 
 const sourcePassageReply: z.input<typeof createReplySchema> = {
   body: "Source passage response",
+  expectedParent: { revision: 2, visibility: "organization", organizationId: "org_reading" },
   publishAsAnnotation: true,
   targets: [{
     anchorHash: "sha256:source-passage",

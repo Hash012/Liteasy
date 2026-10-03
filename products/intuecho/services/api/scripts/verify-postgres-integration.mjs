@@ -923,6 +923,52 @@ try {
   const scopeUserThree = { id: "scope-user-3", initials: "S3", name: "Scope User Three" };
   const scopeUserFour = { id: "scope-user-4", initials: "S4", name: "Scope User Four" };
   const scopeUserFive = { id: "scope-user-5", initials: "S5", name: "Scope User Five" };
+  for (const update of [
+    { visibility: "public", organizationId: null, shareToPlaza: false },
+    { visibility: "organization", organizationId: "org-lifecycle-other" },
+    { body: "A revised organization guide" }
+  ]) {
+    const parent = await lifecycleAnnotations.createAnnotation(scopeUserOne, {
+      body: "A reading guide before its first reply", organizationId: "org-lifecycle", shareToPlaza: false,
+      tags: ["读书包"], targets: [wholeDocument], visibility: "organization"
+    });
+    await lifecycleAnnotations.updateAnnotation(parent.id, scopeUserOne, update);
+    await assert.rejects(() => lifecycleAnnotations.createReply(parent.id, scopeUserTwo, {
+      body: "This was approved for the old audience", publishAsAnnotation: false, tags: [], targets: [],
+      expectedParent: { revision: parent.revision, visibility: parent.visibility, organizationId: parent.organizationId }
+    }), (error) => error.code === "PARENT_ANNOTATION_REVISION_CONFLICT" && error.status === 409);
+    assert.equal(Number((await pool.query("SELECT count(*) FROM annotation_replies WHERE parent_annotation_id = $1", [parent.id])).rows[0].count), 0);
+  }
+  const racingParent = await lifecycleAnnotations.createAnnotation(scopeUserOne, {
+    body: "A reading guide during a concurrent audience change", organizationId: "org-lifecycle", shareToPlaza: false,
+    tags: ["读书包"], targets: [wholeDocument], visibility: "organization"
+  });
+  const audienceChange = await pool.connect();
+  let racingReply;
+  try {
+    await audienceChange.query("BEGIN");
+    await audienceChange.query("UPDATE annotations SET visibility = 'public', organization_id = NULL, revision = revision + 1 WHERE id = $1", [racingParent.id]);
+    racingReply = lifecycleAnnotations.createReply(racingParent.id, scopeUserTwo, {
+      body: "This first reply must not inherit the new public audience", publishAsAnnotation: false, tags: [], targets: [],
+      expectedParent: { revision: racingParent.revision, visibility: "organization", organizationId: "org-lifecycle" }
+    }).then((value) => ({ value }), (error) => ({ error }));
+    const waitDeadline = Date.now() + 5000;
+    let rowLockObserved = false;
+    while (Date.now() < waitDeadline) {
+      const waiting = await pool.query(`SELECT count(*)::int AS count FROM pg_stat_activity
+        WHERE wait_event_type = 'Lock' AND query LIKE 'SELECT * FROM annotations WHERE id = $1 FOR UPDATE%'`);
+      if (waiting.rows[0].count > 0) { rowLockObserved = true; break; }
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.equal(rowLockObserved, true, "the reply must wait on the concurrent parent row lock");
+    await audienceChange.query("COMMIT");
+  } finally {
+    await audienceChange.query("ROLLBACK");
+    audienceChange.release();
+  }
+  const racingResult = await racingReply;
+  assert.equal(racingResult.error?.code, "PARENT_ANNOTATION_REVISION_CONFLICT");
+  assert.equal(Number((await pool.query("SELECT count(*) FROM annotation_replies WHERE parent_annotation_id = $1", [racingParent.id])).rows[0].count), 0);
   await lifecycleAnnotations.toggleFollow(scopeUserOne.id, scopeUserTwo.id);
   await lifecycleAnnotations.toggleFollow(scopeUserTwo.id, scopeUserOne.id);
   await lifecycleAnnotations.toggleFollow(scopeUserTwo.id, scopeUserThree.id);

@@ -1,5 +1,6 @@
 import type {
   AnnotationTarget as ContractAnnotationTarget,
+  AnnotationParentSnapshot,
   LiteratureReference as ContractLiteratureReference,
   LiteratureCandidate,
   LiteratureConfirmInput,
@@ -120,6 +121,7 @@ export type ConversationSummary = {
 
 export type CreateReplyInput = {
   body: string;
+  expectedParent?: AnnotationParentSnapshot;
   publishAsAnnotation: boolean;
   tags: string[];
   targets: AnnotationTarget[];

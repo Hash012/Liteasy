@@ -2131,6 +2131,46 @@ test("reply body and derived projection edits roll back together after a late da
   });
 });
 
+test("first replies reject a changed parent audience, organization, or revision after preview", async () => {
+  await withApp(async (app, db) => {
+    for (const update of [
+      { visibility: "public", organizationId: null, shareToPlaza: false },
+      { visibility: "organization", organizationId: "org-preview-other" },
+      { body: "A changed organization reading guide" }
+    ]) {
+      const created = await app.inject({ headers: userHeader, method: "POST", url: "/v1/annotations", payload: annotationV2Payload({
+        body: "An organization reading guide", visibility: "organization", organizationId: "org-preview", shareToPlaza: false
+      }) });
+      assert.equal(created.statusCode, 201, created.body);
+      const parent = created.json().annotation;
+      const changed = await app.inject({ headers: userHeader, method: "PUT", url: `/v1/annotations/${parent.id}`, payload: update });
+      assert.equal(changed.statusCode, 200, changed.body);
+      const reply = await app.inject({ headers: sameNameHeader, method: "POST", url: `/v1/annotations/${parent.id}/replies`, payload: {
+        body: "This contribution was approved for the original group", publishAsAnnotation: false, tags: [], targets: [],
+        expectedParent: { revision: parent.revision, visibility: parent.visibility, organizationId: parent.organizationId }
+      } });
+      assert.equal(reply.statusCode, 409, reply.body);
+      assert.equal(reply.json().error, "PARENT_ANNOTATION_REVISION_CONFLICT");
+      assert.equal(db.prepare("SELECT count(*) AS count FROM annotation_replies_v2 WHERE parent_annotation_id = ?").get(parent.id).count, 0);
+    }
+  }, { authorizeOrganizationVisibility: async ({ organizationId }) => ["org-preview", "org-preview-other"].includes(organizationId) });
+});
+
+test("a matching parent snapshot creates a reply and omitted snapshots retain legacy behavior", async () => {
+  await withApp(async (app) => {
+    const created = await app.inject({ headers: userHeader, method: "POST", url: "/v1/annotations", payload: annotationV2Payload() });
+    const parent = created.json().annotation;
+    for (const expectedParent of [undefined, { revision: parent.revision, visibility: parent.visibility, organizationId: null }]) {
+      const reply = await app.inject({ headers: sameNameHeader, method: "POST", url: `/v1/annotations/${parent.id}/replies`, payload: {
+        body: "An explicitly approved contribution", publishAsAnnotation: false, tags: [], targets: [],
+        ...(expectedParent ? { expectedParent } : {})
+      } });
+      assert.equal(reply.statusCode, 201, reply.body);
+      assert.equal(reply.json().reply.parentAnnotationId, parent.id);
+    }
+  });
+});
+
 test("SQLite reply lifecycle rechecks state after asynchronous organization authorization", async () => {
   let nextAuthorizationGate = null;
   let nextAccessGate = null;

@@ -1,7 +1,7 @@
 import { currentOrganizationChoices } from "./organizationChoices.mjs";
 import { randomUUID } from "node:crypto";
 import { withTransaction } from "./postgres.mjs";
-import { AnnotationCommunityError, desktopAnnotationPublicationDigest, localSemanticSimilarity } from "./annotationCommunitySqlite.mjs";
+import { AnnotationCommunityError, assertExpectedReplyParent, desktopAnnotationPublicationDigest, localSemanticSimilarity } from "./annotationCommunitySqlite.mjs";
 import {
   hasCrossVersionIdentifierConflict,
   isConcreteConfirmableLiteratureIdentifier,
@@ -1102,6 +1102,7 @@ export class PostgresAnnotationCommunityRepository {
         throw new AnnotationCommunityError("PARENT_ANNOTATION_NOT_FOUND", 404);
       }
       const effectiveParent = currentParent;
+      assertExpectedReplyParent(effectiveParent, input.expectedParent);
       const replyId = `reply_${randomUUID()}`;
       const derivedAnnotationId = input.publishAsAnnotation ? `annotation_${randomUUID()}` : null;
       const profile = JSON.stringify(await this.#profileSnapshot(author.id, client));
