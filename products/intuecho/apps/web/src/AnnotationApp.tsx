@@ -134,6 +134,8 @@ function usePollingRemote<T>(load: () => Promise<T>, key: string, intervalMs: nu
 
 export function AnnotationApp() {
   const [session, setSession] = useState<IdentitySession | null>(() => readIdentitySession());
+  const sessionRef = useRef(session);
+  const sessionGeneration = useRef(0);
   const [identityMode, setIdentityMode] = useState<IdentityMode | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [view, setView] = useState<View>("plaza");
@@ -165,21 +167,35 @@ export function AnnotationApp() {
   const inbox = usePollingRemote(
     () => session ? communityApi.conversations() : Promise.resolve({ conversations: [] as ConversationSummary[] }),
     `${session?.sessionId ?? "signed-out"}-${inboxRefresh}`,
-    8_000,
-    true
+    8_000
   );
   const unreadMessages = inbox.data?.conversations.reduce((total, item) => total + item.unreadCount, 0) ?? 0;
 
+  function applySession(next: IdentitySession | null) {
+    if (sessionRef.current?.sessionId !== next?.sessionId || sessionRef.current?.userId !== next?.userId) {
+      sessionGeneration.current += 1;
+      setComposer(null);
+      setConversation(null);
+      setHandoffStatus("");
+    }
+    sessionRef.current = next;
+    setSession(next);
+  }
+
   useEffect(() => {
-    setAuthRequiredHandler(() => setAuthOpen(true));
+    let active = true;
+    const generation = sessionGeneration.current;
+    setAuthRequiredHandler(() => { applySession(null); setAuthOpen(true); });
     void identityApi.initialize().then((result) => {
+      if (!active || generation !== sessionGeneration.current) return;
       setIdentityMode(result.mode);
-      setSession(result.session);
+      applySession(result.session);
     }).catch(() => {
+      if (!active || generation !== sessionGeneration.current) return;
       setIdentityMode("unavailable");
-      setSession(null);
+      applySession(null);
     });
-    return () => setAuthRequiredHandler(null);
+    return () => { active = false; setAuthRequiredHandler(null); };
   }, []);
 
   useEffect(() => {
@@ -193,16 +209,17 @@ export function AnnotationApp() {
       return;
     }
     let active = true;
+    const generation = sessionGeneration.current;
     setHandoffStatus("正在恢复来自 Liteasy 的批注");
     void communityApi.consumeAnnotationHandoff(handoffId).then((result) => {
-      if (!active) return;
+      if (!active || generation !== sessionGeneration.current) return;
       sessionStorage.removeItem(pendingHandoffStorageKey);
       url.searchParams.delete("handoff");
       window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
       setHandoffStatus("");
       setComposer({ draft: result.draft });
     }).catch((reason) => {
-      if (!active) return;
+      if (!active || generation !== sessionGeneration.current) return;
       setHandoffStatus(reason instanceof Error ? reason.message : "无法恢复来自 Liteasy 的批注");
     });
     return () => { active = false; };
@@ -218,7 +235,11 @@ export function AnnotationApp() {
       filters={filters}
       onChangeFilters={setFilters}
       onLogin={() => setAuthOpen(true)}
-      onLogout={async () => { await identityApi.logout(); setSession(null); setView("plaza"); }}
+      onLogout={async () => {
+        applySession(null);
+        setView("plaza");
+        await identityApi.logout().catch(() => setHandoffStatus("本次页面已退出；远程会话撤销尚未确认。"));
+      }}
       onPublish={() => requireSession(() => setComposer({}))}
       onView={(next) => { setDetailId(null); window.history.pushState({}, document.title, "/"); setView(next); }}
       session={session}
@@ -226,7 +247,7 @@ export function AnnotationApp() {
       view={view}
     />
     {handoffStatus && <div className="handoff-status-v2" role="status">{handoffStatus}</div>}
-    <div className="annotation-workspace">
+    <div className="annotation-workspace" key={session?.sessionId ?? "signed-out"}>
       <main className="annotation-main">
         {detailId ? <AnnotationDetail annotationId={detailId} refresh={refresh} session={session} onCompose={setComposer} onConversation={setConversation} /> : <>
           {view === "plaza" && <Plaza filters={filters} onFilters={setFilters} refresh={refresh} session={session} onCompose={setComposer} onConversation={setConversation} />}
@@ -238,9 +259,9 @@ export function AnnotationApp() {
         </>}
       </main>
     </div>
-    {composer && <ExtractedAnnotationComposer context={composer} onClose={() => setComposer(null)} onSaved={() => { setComposer(null); setRefresh((value) => value + 1); }} />}
-    {conversation && <ConversationDrawer conversation={conversation} session={session!} onInboxChange={() => setInboxRefresh((value) => value + 1)} onClose={() => { setConversation(null); setInboxRefresh((value) => value + 1); }} />}
-    {authOpen && <AuthDialog identityMode={identityMode} onAuthenticated={(next) => { setSession(next); setAuthOpen(false); }} onClose={() => setAuthOpen(false)} />}
+    {session && composer && <ExtractedAnnotationComposer context={composer} onClose={() => setComposer(null)} onSaved={() => { setComposer(null); setRefresh((value) => value + 1); }} />}
+    {session && conversation && <ConversationDrawer conversation={conversation} session={session!} onInboxChange={() => setInboxRefresh((value) => value + 1)} onClose={() => { setConversation(null); setInboxRefresh((value) => value + 1); }} />}
+    {authOpen && <AuthDialog identityMode={identityMode} onAuthenticated={(next) => { applySession(next); setAuthOpen(false); }} onClose={() => setAuthOpen(false)} />}
   </FluentProvider>;
 }
 

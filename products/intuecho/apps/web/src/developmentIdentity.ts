@@ -1,3 +1,4 @@
+import { getIdentitySessionGeneration, invalidateIdentitySession } from "./identitySessionGeneration";
 import type { IdentitySession } from "./identity.types";
 
 const audience = "intuecho-web";
@@ -15,6 +16,7 @@ function loopbackUrl(value: string) {
 }
 
 function store(session: IdentitySession | null) {
+  if (read()?.userId !== session?.userId) invalidateIdentitySession();
   if (session) localStorage.setItem(storageKey, JSON.stringify(session));
   else localStorage.removeItem(storageKey);
 }
@@ -31,13 +33,15 @@ function read() {
 }
 
 async function request(path: string, body: Record<string, unknown>) {
+  const generation = getIdentitySessionGeneration();
   const response = await fetch(`${endpoint}${path}`, {
     body: JSON.stringify({ ...body, audience }),
     headers: { "Content-Type": "application/json" },
     method: "POST"
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.message ?? payload.error ?? "身份服务请求失败");
+  if (generation !== getIdentitySessionGeneration()) throw new Error("账号会话已变化，请重新操作。");
+  if (!response.ok) throw Object.assign(new Error(payload.message ?? payload.error ?? "身份服务请求失败"), { status: response.status });
   if (payload.session?.audience !== audience) throw new Error("身份服务返回了错误的会话类型");
   store(payload.session);
   return payload.session as IdentitySession;
@@ -48,26 +52,31 @@ export const developmentIdentity = {
     return import.meta.env.DEV && loopbackUrl(apiUrl) && loopbackUrl(endpoint);
   },
   clear() {
+    invalidateIdentitySession();
     store(null);
   },
   login(email: string, password: string) {
+    invalidateIdentitySession();
     return request("/v1/account/login", { email, password });
   },
   read,
   register(displayName: string, email: string, password: string) {
+    invalidateIdentitySession();
     return request("/v1/account/register", { displayName, email, password });
   },
   async restore() {
     const session = read();
+    const generation = getIdentitySessionGeneration();
     if (!session) return null;
     try {
       return await request("/v1/account/session", { sessionId: session.sessionId });
     } catch (error) {
-      store(null);
+      if (generation === getIdentitySessionGeneration() && error instanceof Error && "status" in error && error.status === 401) store(null);
       throw error;
     }
   },
   async logout() {
+    invalidateIdentitySession();
     const session = read();
     store(null);
     if (!session) return;

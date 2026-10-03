@@ -4,10 +4,13 @@ import type {
   LiteratureRecord,
   LiteratureResolveResult
 } from "@intuecho/contracts";
+import { clearRejectedIdentitySession, isIdentitySessionCurrent, getIdentitySessionGeneration } from "./identityClient";
 import { communityApi } from "./communityApi";
 
 vi.mock("./identityClient", () => ({
   clearRejectedIdentitySession: vi.fn(),
+  isIdentitySessionCurrent: vi.fn(async () => true),
+  getIdentitySessionGeneration: vi.fn(() => 0),
   notifyAuthenticationRequired: vi.fn(),
   resolveIdentitySession: vi.fn(async () => ({
     audience: "intuecho-web",
@@ -143,4 +146,26 @@ describe("communityApi literature clients", () => {
       visibility: "public"
     });
   });
+});
+
+
+test.each([200, 401])("isolates a late %s response after the caller changes account", async (status) => {
+  let finish!: (response: Response) => void;
+  vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; })));
+  const result = communityApi.myAnnotations();
+  await vi.waitFor(() => expect(finish).toBeDefined());
+  vi.mocked(isIdentitySessionCurrent).mockResolvedValueOnce(false);
+  finish(new Response(JSON.stringify({ annotations: [{ body: "private A" }] }), { status }));
+  await expect(result).rejects.toThrow("账号会话已变化");
+  expect(clearRejectedIdentitySession).not.toHaveBeenCalled();
+  vi.unstubAllGlobals();
+});
+
+test("rejects a request whose session resolution crosses logout", async () => {
+  vi.mocked(getIdentitySessionGeneration).mockReturnValueOnce(0).mockReturnValueOnce(1);
+  const send = vi.fn();
+  vi.stubGlobal("fetch", send);
+  await expect(communityApi.myAnnotations()).rejects.toThrow("账号会话已变化");
+  expect(send).not.toHaveBeenCalled();
+  vi.unstubAllGlobals();
 });

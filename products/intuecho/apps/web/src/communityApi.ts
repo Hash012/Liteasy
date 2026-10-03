@@ -1,6 +1,8 @@
 import type { OrganizationChoice } from "@intuecho/contracts";
 import {
   clearRejectedIdentitySession,
+  getIdentitySessionGeneration,
+  isIdentitySessionCurrent,
   notifyAuthenticationRequired,
   resolveIdentitySession
 } from "./identityClient";
@@ -25,7 +27,9 @@ import type {
 } from "./community.types";
 
 async function request<T>(path: string, init?: RequestInit, authenticated = false): Promise<T> {
+  const generation = getIdentitySessionGeneration();
   const session = await resolveIdentitySession();
+  if (generation !== getIdentitySessionGeneration()) throw new Error("账号会话已变化，请重新操作。");
   if (authenticated && !session) {
     notifyAuthenticationRequired();
     throw new Error("请先登录后再继续。");
@@ -39,8 +43,9 @@ async function request<T>(path: string, init?: RequestInit, authenticated = fals
     }
   });
   const body = await response.json().catch(() => ({}));
+  if (!await isIdentitySessionCurrent(session, generation)) throw new Error("账号会话已变化，请重新操作。");
   if (response.status === 401 && session) {
-    await clearRejectedIdentitySession();
+    await clearRejectedIdentitySession(session, generation);
   }
   if (!response.ok) throw new Error(body.message ?? body.error ?? "请求未能完成");
   return body;

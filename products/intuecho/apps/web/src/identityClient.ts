@@ -1,5 +1,7 @@
-import { UserManager, WebStorageStateStore, type User } from "oidc-client-ts";
+import { OidcClient, UserManager, WebStorageStateStore, type User } from "oidc-client-ts";
 import type { IdentityMode, IdentitySession } from "./identity.types";
+import { getIdentitySessionGeneration, invalidateIdentitySession } from "./identitySessionGeneration";
+export { getIdentitySessionGeneration } from "./identitySessionGeneration";
 import { intuechoApiBaseUrl } from "./runtimeConfig";
 
 const oauthSessionProjectionKey = "intuecho.auth.oauth-session.v1";
@@ -14,6 +16,7 @@ type WebIdentityConfiguration = {
 
 let identityModePromise: Promise<IdentityMode> | null = null;
 let oauthManagerPromise: Promise<UserManager> | null = null;
+let oauthSessionAllowed = true;
 let authRequiredHandler: (() => void) | null = null;
 
 export function setAuthRequiredHandler(handler: (() => void) | null) {
@@ -40,6 +43,7 @@ function readStoredSession(storage: Storage, key: string) {
 }
 
 function storeSession(storage: Storage, key: string, session: IdentitySession | null) {
+  if (readStoredSession(storage, key)?.userId !== session?.userId) invalidateIdentitySession();
   if (session) storage.setItem(key, JSON.stringify(session));
   else storage.removeItem(key);
 }
@@ -115,6 +119,7 @@ async function oauthManager() {
   oauthManagerPromise ??= (async () => {
     const configuration = await loadWebIdentityConfiguration();
     const redirectUri = `${window.location.origin}${window.location.pathname}`;
+    const userStore = new WebStorageStateStore({ store: sessionStorage });
     const manager = new UserManager({
       authority: configuration.issuer,
       automaticSilentRenew: true,
@@ -125,9 +130,15 @@ async function oauthManager() {
       response_type: "code",
       scope: "openid profile email",
       stateStore: new WebStorageStateStore({ store: sessionStorage }),
-      userStore: new WebStorageStateStore({ store: sessionStorage })
+      userStore: {
+        set: (key, value) => oauthSessionAllowed ? userStore.set(key, value) : Promise.resolve(),
+        get: (key) => userStore.get(key),
+        remove: (key) => userStore.remove(key),
+        getAllKeys: () => userStore.getAllKeys()
+      }
     });
     manager.events.addUserLoaded((value) => {
+      if (!oauthSessionAllowed) return;
       storeSession(sessionStorage, oauthSessionProjectionKey, sessionFromOauthUser(value));
     });
     manager.events.addUserUnloaded(() => {
@@ -155,11 +166,15 @@ function sessionFromOauthUser(user: User): IdentitySession {
 }
 
 async function validOauthSession() {
+  if (!oauthSessionAllowed) return null;
+  const generation = getIdentitySessionGeneration();
   const manager = await oauthManager();
   let value = await manager.getUser();
+  if (!oauthSessionAllowed || generation !== getIdentitySessionGeneration()) return null;
   if (value?.expired) {
     value = await manager.signinSilent().catch(() => null);
   }
+  if (!oauthSessionAllowed || generation !== getIdentitySessionGeneration()) return null;
   if (!value || value.expired) {
     storeSession(sessionStorage, oauthSessionProjectionKey, null);
     return null;
@@ -179,11 +194,34 @@ export async function resolveIdentitySession() {
   return null;
 }
 
-export async function clearRejectedIdentitySession() {
-  storeSession(sessionStorage, oauthSessionProjectionKey, null);
-  if (import.meta.env.DEV) {
+export async function isIdentitySessionCurrent(
+  expected: IdentitySession | null,
+  generation = getIdentitySessionGeneration()
+) {
+  const mode = await identityMode();
+  let current = readIdentitySession();
+  if (mode === "development" && import.meta.env.DEV) {
     const { developmentIdentity } = await import("./developmentIdentity");
+    current = developmentIdentity.read();
+  }
+  return generation === getIdentitySessionGeneration() &&
+    current?.sessionId === expected?.sessionId && current?.userId === expected?.userId;
+}
+
+export async function clearRejectedIdentitySession(
+  expected: IdentitySession,
+  generation = getIdentitySessionGeneration()
+) {
+  if (!await isIdentitySessionCurrent(expected, generation)) return;
+  if (await identityMode() === "development" && import.meta.env.DEV) {
+    const { developmentIdentity } = await import("./developmentIdentity");
+    // Recheck after the lazy import; a new login must survive an older 401.
+    if (generation !== getIdentitySessionGeneration() || developmentIdentity.read()?.sessionId !== expected.sessionId) return;
     developmentIdentity.clear();
+  } else {
+    if (generation !== getIdentitySessionGeneration() || readIdentitySession()?.sessionId !== expected.sessionId) return;
+    oauthSessionAllowed = false;
+    storeSession(sessionStorage, oauthSessionProjectionKey, null);
   }
   notifyAuthenticationRequired();
 }
@@ -191,6 +229,7 @@ export async function clearRejectedIdentitySession() {
 export const identityApi = {
   beginOAuthLogin: async () => {
     if (await identityMode() !== "oauth") throw new Error("统一身份登录尚未配置。");
+    oauthSessionAllowed = true;
     await (await oauthManager()).signinRedirect();
   },
   initialize: async (): Promise<{ mode: IdentityMode; session: IdentitySession | null }> => {
@@ -210,16 +249,27 @@ export const identityApi = {
     return { mode, session: null };
   },
   logout: async () => {
+    const generation = invalidateIdentitySession();
+    oauthSessionAllowed = false;
     const mode = await identityMode();
     if (mode === "oauth") {
       const manager = await oauthManager();
-      await manager.revokeTokens(["access_token", "refresh_token"]).catch(() => undefined);
+      const user = await manager.getUser();
+      if (generation !== getIdentitySessionGeneration()) return;
+      manager.stopSilentRenew();
       await manager.removeUser();
       storeSession(sessionStorage, oauthSessionProjectionKey, null);
+      // Revoke detached tokens without UserManager.revokeTokens storing the old user again.
+      const client = new OidcClient(manager.settings);
+      const results = await Promise.allSettled([
+        user?.access_token ? client.revokeToken(user.access_token, "access_token") : Promise.resolve(),
+        user?.refresh_token ? client.revokeToken(user.refresh_token, "refresh_token") : Promise.resolve()
+      ]);
+      if (results.some((result) => result.status === "rejected")) throw new Error("远程会话撤销尚未确认。");
       return;
     }
     if (mode !== "development" || !import.meta.env.DEV) return;
     const { developmentIdentity } = await import("./developmentIdentity");
-    await developmentIdentity.logout();
+    if (generation === getIdentitySessionGeneration()) await developmentIdentity.logout();
   }
 };
