@@ -72,6 +72,7 @@ export class PostgresAccountLifecycleRepository {
       const handoffs = await client.query("DELETE FROM desktop_draft_handoffs WHERE owner_id = $1", [subjectId]);
       const annotationHandoffs = await client.query("DELETE FROM desktop_annotation_handoffs WHERE owner_id = $1", [subjectId]);
       const annotationSyncs = await client.query("DELETE FROM desktop_annotation_syncs WHERE owner_id = $1", [subjectId]);
+      await client.query("DELETE FROM community_command_receipts WHERE actor_id = $1", [subjectId]);
       const annotationPublications = await client.query("DELETE FROM desktop_annotation_publications WHERE owner_id = $1", [subjectId]);
       const annotations = await client.query("DELETE FROM community_annotations WHERE owner_id = $1", [subjectId]);
       const drafts = await client.query("DELETE FROM drafts WHERE owner_id = $1", [subjectId]);

@@ -59,6 +59,7 @@ test("deletes private forum state and anonymizes public authors in one transacti
   assert.equal(result.result.deletedNonPublicAnnotations, 2);
   assert.equal(result.result.deletedDesktopDraftHandoffs, 1);
   assert.equal(result.result.deletedAnnotationPublications, 1);
+  assert.deepEqual(instance.calls.find((call) => call.sql.startsWith("DELETE FROM community_command_receipts"))?.values, [input.subjectId]);
   assert.equal(instance.calls.some((call) => call.sql.includes("author_name = '已注销用户'")), true);
   assert.equal(instance.calls.some((call) => call.sql.startsWith("UPDATE annotation_versions SET changed_by")), true);
   assert.equal(instance.calls.some((call) => call.sql.startsWith("UPDATE annotation_reply_versions SET changed_by")), true);

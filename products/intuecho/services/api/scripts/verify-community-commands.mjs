@@ -1,3 +1,4 @@
+import { PostgresAccountLifecycleRepository } from "../src/accountLifecycleRepository.mjs";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { communityCommandPayload } from "@intuecho/contracts";
@@ -24,5 +25,8 @@ export async function verifyCommunityCommands(repository) {
   await repository.withdraw(annotation.id, actor);
   assert.equal((await repository.lookupCommunityCommand(actor, "create_annotation", input.command.operationId)).available, false);
   await assert.rejects(repository.createAnnotation(actor, input), { code: "COMMAND_RESULT_UNAVAILABLE" });
-  return { concurrentAnnotationReplay: true, concurrentReplyReplay: true, staleEditsRejected: true, noResurrection: true };
+  await new PostgresAccountLifecycleRepository(repository.pool).deleteAccount({ subjectId: actor.id, idempotencyKey: "delete-command-fixture:intuecho", reason: "Synthetic lifecycle fixture", requestedBy: "synthetic-admin", traceId: "synthetic-command-delete" });
+  assert.deepEqual(await repository.lookupCommunityCommand(actor, "create_annotation", input.command.operationId), { status: "not_found" });
+  await assert.rejects(repository.createAnnotation(actor, input), { code: "ACCOUNT_DELETED" });
+  return { accountReceiptCleanup: true, deletedActorCannotResurrect: true, concurrentAnnotationReplay: true, concurrentReplyReplay: true, staleEditsRejected: true, noResurrection: true };
 }
