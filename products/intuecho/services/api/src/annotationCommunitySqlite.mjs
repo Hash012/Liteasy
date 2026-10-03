@@ -1,6 +1,7 @@
 import { currentOrganizationChoices } from "./organizationChoices.mjs";
 import { annotationContribution } from "./annotationContribution.mjs";
 import { initializeSqliteCommunityGovernance, recordSqliteCommunityReplyEvent } from "./communityGovernanceRepository.mjs";
+import { thinReadingSyncPayload } from "./thinReadingSyncPayload.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import {
   hasCrossVersionIdentifierConflict,
@@ -860,6 +861,18 @@ export class SqliteAnnotationCommunityRepository {
       if (publication?.state === "retracted") return { annotationId: item.annotationId, queueKey: item.queueKey,
         status: "failed", error: "ANNOTATION_PUBLICATION_RETRACTED" };
       const prior = this.db.prepare("SELECT * FROM desktop_annotation_syncs_v2 WHERE owner_id = ? AND queue_key = ?").get(author.id, item.queueKey);
+      const failure = (error) => ({ annotationId: item.annotationId, queueKey: item.queueKey, status: "failed", error });
+      if (prior && prior.source_annotation_id !== item.annotationId) return failure("ANNOTATION_PUBLICATION_QUEUE_CONFLICT");
+      if (prior && Date.parse(item.updatedAt) < Date.parse(prior.source_updated_at)) return failure("STALE_ANNOTATION_PUBLICATION");
+      if (prior && Date.parse(item.updatedAt) === Date.parse(prior.source_updated_at)) {
+        const stored = this.db.prepare("SELECT body FROM annotations_v2 WHERE id = ? AND author_id = ?").get(prior.annotation_id, author.id);
+        if (!stored) return failure("REMOTE_ANNOTATION_NOT_FOUND");
+        const targets = this.db.prepare("SELECT target_json,literature_id FROM annotation_targets_v2 WHERE annotation_id = ? ORDER BY position")
+          .all(prior.annotation_id).map((row) => ({ ...parseJson(row.target_json, {}), literature: { literatureId: row.literature_id } }));
+        if (thinReadingSyncPayload({ body: stored.body, targets }) !== thinReadingSyncPayload(item)) return failure("ANNOTATION_PUBLICATION_VERSION_CONFLICT");
+        return { annotationId: item.annotationId, intuechoAnnotationId: prior.annotation_id, queueKey: item.queueKey,
+          status: "synced", syncedAt: prior.updated_at };
+      }
       const id = prior?.annotation_id ?? `annotation_${randomUUID()}`;
       if (!prior) {
         this.db.prepare(`INSERT INTO annotations_v2(id, body, author_id, author_name, author_initials, author_profile_snapshot_json, visibility, organization_id, share_to_plaza, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'public', NULL, 1, 1, ?, ?)`)

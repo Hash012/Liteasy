@@ -2,6 +2,7 @@ import { assertIntuechoAccountActive } from "./accountWriteFence.mjs";
 import { recordPostgresCommunityReplyEvent } from "./communityGovernanceRepository.mjs";
 import { currentOrganizationChoices } from "./organizationChoices.mjs";
 import { annotationContribution } from "./annotationContribution.mjs";
+import { thinReadingSyncPayload } from "./thinReadingSyncPayload.mjs";
 import { randomUUID } from "node:crypto";
 import { withTransaction } from "./postgres.mjs";
 import { AnnotationCommunityError, assertExpectedReplyParent, desktopAnnotationPublicationDigest, localSemanticSimilarity } from "./annotationCommunitySqlite.mjs";
@@ -449,6 +450,25 @@ export class PostgresAnnotationCommunityRepository {
           }
           const priorResult = await client.query("SELECT * FROM desktop_annotation_syncs WHERE owner_id = $1 AND queue_key = $2 FOR UPDATE", [author.id, item.queueKey]);
           const prior = priorResult.rows[0];
+          const failure = (error) => ({ annotationId: item.annotationId, queueKey: item.queueKey, status: "failed", error });
+          if (prior && prior.source_annotation_id !== item.annotationId) {
+            results.push(failure("ANNOTATION_PUBLICATION_QUEUE_CONFLICT")); continue;
+          }
+          if (prior && Date.parse(item.updatedAt) < new Date(prior.source_updated_at).getTime()) {
+            results.push(failure("STALE_ANNOTATION_PUBLICATION")); continue;
+          }
+          if (prior && Date.parse(item.updatedAt) === new Date(prior.source_updated_at).getTime()) {
+            const stored = (await client.query("SELECT body FROM annotations WHERE id = $1 AND author_id = $2 FOR UPDATE", [prior.annotation_id, author.id])).rows[0];
+            if (!stored) { results.push(failure("REMOTE_ANNOTATION_NOT_FOUND")); continue; }
+            const targets = (await client.query("SELECT target,literature_id FROM annotation_targets WHERE annotation_id = $1 ORDER BY position", [prior.annotation_id]))
+              .rows.map((row) => ({ ...row.target, literature: { literatureId: row.literature_id } }));
+            if (thinReadingSyncPayload({ body: stored.body, targets }) !== thinReadingSyncPayload(item)) {
+              results.push(failure("ANNOTATION_PUBLICATION_VERSION_CONFLICT")); continue;
+            }
+            results.push({ annotationId: item.annotationId, intuechoAnnotationId: prior.annotation_id, queueKey: item.queueKey,
+              status: "synced", syncedAt: new Date(prior.updated_at).toISOString() });
+            continue;
+          }
           const id = prior?.annotation_id ?? `annotation_${randomUUID()}`;
           if (!prior) {
             await client.query(`INSERT INTO annotations(id, body, author_id, author_name, author_initials, author_profile_snapshot, visibility, share_to_plaza, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'public', true, $7, $8)`, [id, item.body, author.id, author.name, author.initials, JSON.stringify(await this.#profileSnapshot(author.id, client)), item.createdAt, item.updatedAt]);

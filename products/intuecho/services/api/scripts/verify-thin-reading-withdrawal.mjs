@@ -36,6 +36,15 @@ try {
     author_profile_snapshot,visibility) VALUES ($1,$2,'Preserved reply','synthetic-other','Other','O','{}'::jsonb,'public')`,
     [`reply-${suffix}`, remoteId]);
 
+  const original = { annotationId: "local-1", queueKey, body: "Synthetic original", createdAt, updatedAt: createdAt,
+    targets: [{ kind: "whole_document", literature: { literatureId, literatureRecord: { title: "Display-only hydration" } } }] };
+  assert.equal((await repository.syncDesktopAnnotations(owner, [original]))[0].status, "synced");
+  assert.equal((await repository.syncDesktopAnnotations(owner, [{ ...original, body: "Same-version divergence" }]))[0].error,
+    "ANNOTATION_PUBLICATION_VERSION_CONFLICT");
+  assert.equal((await repository.syncDesktopAnnotations(owner, [{ ...original, annotationId: "forged-source" }]))[0].error,
+    "ANNOTATION_PUBLICATION_QUEUE_CONFLICT");
+  assert.equal((await pool.query("SELECT revision::int FROM annotations WHERE id = $1", [remoteId])).rows[0].revision, 1);
+
   for (const [actor, invalid] of [
     [{ ...owner, id: `other-${suffix}` }, operation], [owner, { ...operation, annotationId: "forged" }],
     [owner, { ...operation, remoteAnnotationId: `forged-${suffix}` }]
@@ -75,7 +84,7 @@ try {
   assert.deepEqual((await pool.query("SELECT visibility,share_to_plaza,revision::int,withdrawn_at FROM annotations WHERE id = $1", [remoteId])).rows[0],
     { visibility: "private", share_to_plaza: false, revision: 2, withdrawn_at: null });
   assert.equal((await pool.query("SELECT body FROM annotation_replies WHERE id = $1", [`reply-${suffix}`])).rows[0].body, "Preserved reply");
-  console.log(JSON.stringify({ verified: true, storage: "postgresql", cases: ["owner-source-remote", "rollback", "concurrent-replay", "no-resurrection", "replies-preserved"] }));
+  console.log(JSON.stringify({ verified: true, storage: "postgresql", cases: ["exact-legacy-replay", "legacy-version-conflict", "owner-source-remote", "rollback", "concurrent-replay", "no-resurrection", "replies-preserved"] }));
 } finally {
   await pool.query("DELETE FROM annotation_replies WHERE id = $1", [`reply-${suffix}`]);
   await pool.query("DELETE FROM desktop_annotation_publications WHERE owner_id = $1 AND queue_key = $2", [owner.id, queueKey]);
