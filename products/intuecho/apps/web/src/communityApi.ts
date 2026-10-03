@@ -68,20 +68,27 @@ export const communityApi = {
   myReports: () => request<{ reports: CommunityReport[] }>("/v1/me/reports", undefined, true),
   reviewReports: () => request<{ reports: CommunityReport[] }>("/v1/community-reports", undefined, true),
   resolveReport: (id: string, input: CommunityReportResolution) => request<{ report: CommunityReport }>(`/v1/community-reports/${encodeURIComponent(id)}/resolve`, { method: "POST", body: writeBody(input) }, true),
-  plaza: (filters: PlazaFilters = {}) => {
+  plaza: (filters: PlazaFilters = {}, signal?: AbortSignal) => {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {
       if (value !== undefined && value !== "") params.set(key, String(value));
     });
-    return request<{ annotations: CommunityAnnotation[]; filters: PlazaFilters }>(`/v1/plaza?${params}`);
+    return request<{ annotations: CommunityAnnotation[]; filters: PlazaFilters }>(`/v1/plaza?${params}`, { signal });
+  },
+  plazaPage: (options: { literatureId?: string; limit?: number; cursor?: string } = {}, signal?: AbortSignal) => {
+    const params = new URLSearchParams();
+    Object.entries(options).forEach(([key, value]) => {
+      if (value !== undefined && value !== "") params.set(key, String(value));
+    });
+    return request<{ annotations: CommunityAnnotation[]; nextCursor: string | null }>(`/v1/plaza/page?${params}`, { signal });
   },
   annotation: (id: string) => request<{ annotation: CommunityAnnotation }>(`/v1/annotations/${encodeURIComponent(id)}`),
-  createAnnotation: (body: CreateAnnotationInput, intentId?: string) => durableCreate("create_annotation", null, body, (payload, identity) => request<{ annotation: CommunityAnnotation }>("/v1/annotations", { method: "POST", body: writeBody(payload) }, true, identity), intentId),
+  createAnnotation: (body: CreateAnnotationInput, intentId: string) => durableCreate("create_annotation", null, body, (payload, identity) => request<{ annotation: CommunityAnnotation }>("/v1/annotations", { method: "POST", body: writeBody(payload) }, true, identity), intentId),
   lookupCommand: (operation: CommandRecord) => request<CommandLookup>(`/v1/community-commands/${operation.operationType}/${encodeURIComponent(operation.operationId)}`, undefined, true),
   consumeAnnotationHandoff: (handoffId: string) => request<{ draft: CreateAnnotationInput; replayed: boolean }>(`/v1/annotation-handoffs/${encodeURIComponent(handoffId)}/consume`, { method: "POST", body: "{}" }, true),
   updateAnnotation: (id: string, body: Partial<CreateAnnotationInput> & { expectedRevision: number }) => request<{ annotation: CommunityAnnotation }>(`/v1/annotations/${encodeURIComponent(id)}`, { method: "PUT", body: writeBody(body) }, true),
   replies: (id: string) => request<{ replies: CommunityReply[] }>(`/v1/annotations/${encodeURIComponent(id)}/replies`),
-  createReply: (id: string, body: CreateReplyInput, intentId?: string) => durableCreate("create_reply", id, body, (payload, identity) => request<{ annotation: CommunityAnnotation | null; reply: CommunityReply }>(`/v1/annotations/${encodeURIComponent(id)}/replies`, { method: "POST", body: writeBody(payload) }, true, identity), intentId),
+  createReply: (id: string, body: CreateReplyInput, intentId: string) => durableCreate("create_reply", id, body, (payload, identity) => request<{ annotation: CommunityAnnotation | null; reply: CommunityReply }>(`/v1/annotations/${encodeURIComponent(id)}/replies`, { method: "POST", body: writeBody(payload) }, true, identity), intentId),
   updateReply: (id: string, body: { body: string; expectedRevision: number }) => request<{ reply: CommunityReply }>(`/v1/replies/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(body) }, true),
   resolveLiterature: (body: LiteratureResolveInput) => request<LiteratureResolveResult>("/v1/literature:resolve", { method: "POST", body: JSON.stringify(body) }, true),
   confirmLiterature: (body: LiteratureConfirmInput) => request<{ literature: LiteratureRecord }>("/v1/literature:confirm", { method: "POST", body: JSON.stringify(body) }, true),

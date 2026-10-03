@@ -136,7 +136,7 @@ describe("communityApi literature clients", () => {
       tags: [],
       targets: [hydratedTarget],
       visibility: "public"
-    });
+    }, "synthetic-explicit-intent");
 
     expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({
       command: { protocolVersion: 1, operationId: expect.any(String), bodyDigest: expect.stringMatching(/^[a-f0-9]{64}$/) },
@@ -168,5 +168,21 @@ test("rejects a request whose session resolution crosses logout", async () => {
   vi.stubGlobal("fetch", send);
   await expect(communityApi.myAnnotations()).rejects.toThrow("账号会话已变化");
   expect(send).not.toHaveBeenCalled();
+  vi.unstubAllGlobals();
+});
+
+
+test("uses the existing latest cursor endpoint with encoded literature and cancellation", async () => {
+  vi.stubGlobal("fetch", fetchMock);
+  fetchMock.mockResolvedValueOnce(ok({ annotations: [], nextCursor: "next" }));
+  const abort = new AbortController();
+  const result = await communityApi.plazaPage({ literatureId: "literature/a", limit: 30, cursor: "opaque+cursor" }, abort.signal);
+  expect(result.nextCursor).toBe("next");
+  const [path, options] = fetchMock.mock.calls[fetchMock.mock.calls.length - 1];
+  const url = new URL(String(path));
+  expect(url.pathname).toBe("/v1/plaza/page");
+  expect(url.searchParams.get("literatureId")).toBe("literature/a");
+  expect(url.searchParams.get("cursor")).toBe("opaque+cursor");
+  expect(options?.signal).toBe(abort.signal);
   vi.unstubAllGlobals();
 });
