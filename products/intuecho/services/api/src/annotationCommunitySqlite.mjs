@@ -1,5 +1,6 @@
 import { currentOrganizationChoices } from "./organizationChoices.mjs";
 import { annotationContribution } from "./annotationContribution.mjs";
+import { platformAppealSummary } from "./tagAppealVisibility.mjs";
 import { initializeSqliteCommunityGovernance, recordSqliteCommunityReplyEvent } from "./communityGovernanceRepository.mjs";
 import { thinReadingSyncPayload } from "./thinReadingSyncPayload.mjs";
 import { createHash, randomUUID } from "node:crypto";
@@ -470,6 +471,9 @@ export function initializeAnnotationCommunitySqlite(db) {
   const appealColumns = new Set(db.prepare("PRAGMA table_info(annotation_tag_appeals_v2)").all().map((column) => column.name));
   if (!appealColumns.has("resolved_by")) db.exec("ALTER TABLE annotation_tag_appeals_v2 ADD COLUMN resolved_by TEXT");
   if (!appealColumns.has("resolution_reason")) db.exec("ALTER TABLE annotation_tag_appeals_v2 ADD COLUMN resolution_reason TEXT");
+  if (!appealColumns.has("submitted_visibility")) db.exec("ALTER TABLE annotation_tag_appeals_v2 ADD COLUMN submitted_visibility TEXT");
+  if (!appealColumns.has("submitted_organization_id")) db.exec("ALTER TABLE annotation_tag_appeals_v2 ADD COLUMN submitted_organization_id TEXT");
+  if (!appealColumns.has("submitted_revision")) db.exec("ALTER TABLE annotation_tag_appeals_v2 ADD COLUMN submitted_revision INTEGER");
   const annotationColumns = new Set(db.prepare("PRAGMA table_info(annotations_v2)").all().map((column) => column.name));
   if (!annotationColumns.has("contribution_json")) db.exec("ALTER TABLE annotations_v2 ADD COLUMN contribution_json TEXT NOT NULL DEFAULT '{}'");
   if (!annotationColumns.has("source_reply_id")) db.exec("ALTER TABLE annotations_v2 ADD COLUMN source_reply_id TEXT");
@@ -2018,12 +2022,14 @@ export class SqliteAnnotationCommunityRepository {
     const slug = tagSlug(tag);
     const assigned = this.db.prepare("SELECT state FROM annotation_tags_v2 WHERE annotation_id = ? AND tag_slug = ? AND origin = 'platform'").get(annotationId, slug);
     if (!assigned) throw new AnnotationCommunityError("PLATFORM_TAG_NOT_FOUND", 404);
-    if (assigned.state !== "active") throw new AnnotationCommunityError("PLATFORM_TAG_APPEAL_NOT_ALLOWED", 409);
-    const id = `appeal_${randomUUID()}`;
+    const pending = this.db.prepare("SELECT * FROM annotation_tag_appeals_v2 WHERE annotation_id = ? AND tag_slug = ? AND submitted_by = ? AND status = 'pending'").get(annotationId, slug, userId);
+    if (assigned.state !== "active" && !(assigned.state === "appealed" && pending)) throw new AnnotationCommunityError("PLATFORM_TAG_APPEAL_NOT_ALLOWED", 409);
+    const id = pending?.id ?? `appeal_${randomUUID()}`;
     const now = new Date().toISOString();
     this.db.transaction(() => {
       this.db.prepare("UPDATE annotation_tags_v2 SET state = 'appealed', updated_at = ? WHERE annotation_id = ? AND tag_slug = ? AND origin = 'platform'").run(now, annotationId, slug);
-      this.db.prepare("INSERT INTO annotation_tag_appeals_v2(id, annotation_id, tag_slug, submitted_by, reason, status, created_at) VALUES (?, ?, ?, ?, ?, 'pending', ?)").run(id, annotationId, slug, userId, reason, now);
+      if (pending) this.db.prepare("UPDATE annotation_tag_appeals_v2 SET reason = ?, submitted_visibility = ?, submitted_organization_id = ?, submitted_revision = ? WHERE id = ? AND status = 'pending'").run(reason, row.visibility, row.organization_id, row.revision, id);
+      else this.db.prepare("INSERT INTO annotation_tag_appeals_v2(id, annotation_id, tag_slug, submitted_by, reason, status, created_at, submitted_visibility, submitted_organization_id, submitted_revision) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)").run(id, annotationId, slug, userId, reason, now, row.visibility, row.organization_id, row.revision);
     })();
     return { appealId: id, status: "pending" };
   }
@@ -2038,27 +2044,17 @@ export class SqliteAnnotationCommunityRepository {
           ON tag.annotation_id = appeal.annotation_id
          AND tag.tag_slug = appeal.tag_slug
          AND tag.origin = 'platform'
-       WHERE appeal.status = ?
+       WHERE appeal.status = ? AND annotation.visibility = 'public'
+         AND (appeal.submitted_visibility = 'public' OR appeal.submitted_visibility IS NULL)
        ORDER BY appeal.created_at, appeal.id
-    `).all(status).map((row) => ({
-      annotationBody: row.annotation_body,
-      annotationId: row.annotation_id,
-      appealId: row.id,
-      authorName: row.author_name,
-      createdAt: row.created_at,
-      reason: row.reason,
-      resolutionReason: row.resolution_reason ?? null,
-      resolvedAt: row.resolved_at ?? null,
-      resolvedBy: row.resolved_by ?? null,
-      status: row.status,
-      submittedBy: row.submitted_by,
-      tag: row.tag_name
-    }));
+    `).all(status).filter((row) => this.#rootAudience(this.#annotationRow(row.annotation_id))?.visibility === "public").map(platformAppealSummary);
   }
 
   resolveTagAppeal(appealId, adminUserId, input, traceId) {
     const appeal = this.db.prepare("SELECT * FROM annotation_tag_appeals_v2 WHERE id = ?").get(appealId);
     if (!appeal) throw new AnnotationCommunityError("TAG_APPEAL_NOT_FOUND", 404);
+    const annotation = this.#annotationRow(appeal.annotation_id);
+    if (appeal.submitted_visibility !== "public" || annotation?.visibility !== "public" || this.#rootAudience(annotation)?.visibility !== "public") throw new AnnotationCommunityError("TAG_APPEAL_NOT_FOUND", 404);
     if (appeal.status !== "pending") throw new AnnotationCommunityError("TAG_APPEAL_ALREADY_RESOLVED", 409);
     const now = new Date().toISOString();
     const tagState = input.decision === "accepted" ? "removed" : "upheld";
@@ -2074,7 +2070,7 @@ export class SqliteAnnotationCommunityRepository {
   }
 
   listAdminAnnotations() {
-    return this.db.prepare("SELECT * FROM annotations_v2 ORDER BY updated_at DESC, id DESC").all().map((row) => ({
+    return this.db.prepare("SELECT * FROM annotations_v2 WHERE visibility = 'public' ORDER BY updated_at DESC, id DESC").all().filter((row) => this.#rootAudience(row)?.visibility === "public").map((row) => ({
       authorId: row.author_id,
       authorName: row.author_name,
       body: row.body,

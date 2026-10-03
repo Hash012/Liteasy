@@ -132,6 +132,8 @@ export type ForumAnnotation = {
 };
 
 export type ForumTagAppeal = {
+  detailsAvailable?: boolean;
+  submittedRevision?: number | null;
   annotationBody: string;
   annotationId: string;
   appealId: string;

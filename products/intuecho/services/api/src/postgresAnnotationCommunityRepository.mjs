@@ -1,4 +1,5 @@
 import { assertIntuechoAccountActive } from "./accountWriteFence.mjs";
+import { platformAppealSummary } from "./tagAppealVisibility.mjs";
 import { recordPostgresCommunityReplyEvent } from "./communityGovernanceRepository.mjs";
 import { currentOrganizationChoices } from "./organizationChoices.mjs";
 import { annotationContribution } from "./annotationContribution.mjs";
@@ -1683,10 +1684,12 @@ export class PostgresAnnotationCommunityRepository {
       if (row.author_id !== userId) throw new AnnotationCommunityError("NOT_ANNOTATION_AUTHOR", 403);
       const found = await client.query(`SELECT annotation_tags.tag_id, annotation_tags.state FROM annotation_tags JOIN tags ON tags.id = annotation_tags.tag_id WHERE annotation_tags.annotation_id = $1 AND tags.slug = $2 AND annotation_tags.origin = 'platform' FOR UPDATE`, [annotationId, tagSlug(tag)]);
       if (!found.rows[0]) throw new AnnotationCommunityError("PLATFORM_TAG_NOT_FOUND", 404);
-      if (found.rows[0].state !== "active") throw new AnnotationCommunityError("PLATFORM_TAG_APPEAL_NOT_ALLOWED", 409);
-      const id = `appeal_${randomUUID()}`;
+      const pending = (await client.query("SELECT * FROM annotation_tag_appeals WHERE annotation_id = $1 AND tag_id = $2 AND submitted_by = $3 AND status = 'pending' FOR UPDATE", [annotationId, found.rows[0].tag_id, userId])).rows[0];
+      if (found.rows[0].state !== "active" && !(found.rows[0].state === "appealed" && pending)) throw new AnnotationCommunityError("PLATFORM_TAG_APPEAL_NOT_ALLOWED", 409);
+      const id = pending?.id ?? `appeal_${randomUUID()}`;
       await client.query(`UPDATE annotation_tags SET state = 'appealed', updated_at = now() WHERE annotation_id = $1 AND tag_id = $2 AND origin = 'platform'`, [annotationId, found.rows[0].tag_id]);
-      await client.query(`INSERT INTO annotation_tag_appeals(id, annotation_id, tag_id, submitted_by, reason) VALUES ($1, $2, $3, $4, $5)`, [id, annotationId, found.rows[0].tag_id, userId, reason]);
+      if (pending) await client.query("UPDATE annotation_tag_appeals SET reason = $2, submitted_visibility = $3, submitted_organization_id = $4, submitted_revision = $5 WHERE id = $1 AND status = 'pending'", [id, reason, row.visibility, row.organization_id, row.revision]);
+      else await client.query(`INSERT INTO annotation_tag_appeals(id, annotation_id, tag_id, submitted_by, reason, submitted_visibility, submitted_organization_id, submitted_revision) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, [id, annotationId, found.rows[0].tag_id, userId, reason, row.visibility, row.organization_id, row.revision]);
       return { appealId: id, status: "pending" };
     });
   }
@@ -1698,30 +1701,27 @@ export class PostgresAnnotationCommunityRepository {
         FROM annotation_tag_appeals appeal
         JOIN annotations annotation ON annotation.id = appeal.annotation_id
         JOIN tags ON tags.id = appeal.tag_id
-       WHERE appeal.status = $1
+       WHERE appeal.status = $1 AND annotation.visibility = 'public'
+         AND (appeal.submitted_visibility = 'public' OR appeal.submitted_visibility IS NULL)
        ORDER BY appeal.created_at, appeal.id
     `, [status]);
-    return result.rows.map((row) => ({
-      annotationBody: row.annotation_body,
-      annotationId: row.annotation_id,
-      appealId: row.id,
-      authorName: row.author_name,
-      createdAt: row.created_at.toISOString(),
-      reason: row.reason,
-      resolutionReason: row.resolution_reason ?? null,
-      resolvedAt: row.resolved_at?.toISOString() ?? null,
-      resolvedBy: row.resolved_by ?? null,
-      status: row.status,
-      submittedBy: row.submitted_by,
-      tag: row.tag_name
-    }));
+    const visible = [];
+    for (const row of result.rows) {
+      const current = await this.#row(row.annotation_id);
+      if (current?.visibility === "public" && (await this.#rootAudience(current))?.visibility === "public") visible.push(platformAppealSummary(row));
+    }
+    return visible;
   }
 
   async resolveTagAppeal(appealId, adminUserId, input, traceId) {
     return withTransaction(this.pool, async (client) => {
+      const reference = (await client.query("SELECT annotation_id FROM annotation_tag_appeals WHERE id = $1", [appealId])).rows[0];
+      if (!reference) throw new AnnotationCommunityError("TAG_APPEAL_NOT_FOUND", 404);
+      const annotation = await this.#row(reference.annotation_id, client, true);
       const found = await client.query("SELECT * FROM annotation_tag_appeals WHERE id = $1 FOR UPDATE", [appealId]);
       const appeal = found.rows[0];
       if (!appeal) throw new AnnotationCommunityError("TAG_APPEAL_NOT_FOUND", 404);
+      if (appeal.submitted_visibility !== "public" || annotation?.visibility !== "public" || (await this.#rootAudience(annotation, client))?.visibility !== "public") throw new AnnotationCommunityError("TAG_APPEAL_NOT_FOUND", 404);
       if (appeal.status !== "pending") throw new AnnotationCommunityError("TAG_APPEAL_ALREADY_RESOLVED", 409);
       const tagState = input.decision === "accepted" ? "removed" : "upheld";
       const resolved = await client.query(`
@@ -1741,8 +1741,10 @@ export class PostgresAnnotationCommunityRepository {
   }
 
   async listAdminAnnotations() {
-    const result = await this.pool.query("SELECT * FROM annotations ORDER BY updated_at DESC, id DESC LIMIT 500");
-    return result.rows.map((row) => ({
+    const result = await this.pool.query("SELECT * FROM annotations WHERE visibility = 'public' ORDER BY updated_at DESC, id DESC LIMIT 500");
+    const visible = [];
+    for (const row of result.rows) if ((await this.#rootAudience(row))?.visibility === "public") visible.push(row);
+    return visible.map((row) => ({
       authorId: row.author_id,
       authorName: row.author_name,
       body: row.body,

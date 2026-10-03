@@ -32,3 +32,8 @@ npm start --workspace=@intuecho/api
 ## 开发测试账号
 
 API 本身不创建账号、不保存密码。公开读取不需要账号；写接口使用 dev-cloud/统一 IdP 签发的 `intuecho-web` Bearer token。测试人员通过 Web 注册 `qa.<姓名或工号>@liteasy.local`，不要使用数据库角色或 confidential client 凭据登录。治理接口还要求 Liteasy 平台管理员身份和新鲜 MFA，没有仓库固定管理员。
+# Platform governance read boundaries
+
+Platform annotation lists and tag-appeal material require a currently public annotation with a consistent public parent audience. A tag appeal also records its submission audience and revision. Historical appeals with an unknown submission audience expose status and identifiers only; their text stays redacted until the author explicitly resubmits it. Changing an annotation from private to public does not publish an earlier private appeal reason.
+
+This read boundary preserves the existing, separately audited platform withdrawal authority, organization moderation authority, and author withdrawal/retained-access rules. It does not grant platform reviewers access to organization or private bodies through list or appeal endpoints.

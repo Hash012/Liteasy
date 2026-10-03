@@ -10,6 +10,7 @@ import { PostgresAnnotationCommunityRepository } from "../src/postgresAnnotation
 import { PostgresForumRepository } from "../src/postgresForumRepository.mjs";
 import { validateIntuechoPostgresIntegrationDatabases } from "./postgresIntegrationGuard.mjs";
 import { verifyCommunityGovernance } from "./verify-community-governance.mjs";
+import { verifyPlatformGovernanceVisibility } from "./verify-platform-governance-visibility.mjs";
 
 const applicationUrl = process.env.INTUECHO_TEST_DATABASE_URL;
 const migrationUrl = process.env.INTUECHO_TEST_MIGRATION_DATABASE_URL;
@@ -128,7 +129,8 @@ try {
     "022_preserve_literature_source_artifacts.sql",
     "023_enforce_version_identity_boundaries.sql",
     "024_annotation_contribution_provenance.sql",
-    "025_community_governance_and_notifications.sql"
+    "025_community_governance_and_notifications.sql",
+    "027_tag_appeal_submission_audience.sql"
   ];
   assert.equal(migrated.applied.every((name) => expectedMigrations.includes(name)), true);
   const stagedMigrationRows = await pool.query("SELECT name FROM schema_migrations ORDER BY name");
@@ -2166,6 +2168,7 @@ try {
     subscriber: { id: "governance-verification-subscriber", name: "Synthetic Governance Subscriber", initials: "GS" },
     literatureId: confirmedLiterature.literatureId
   });
+  const platformGovernance = await verifyPlatformGovernanceVisibility({ pool, literatureId: confirmedLiterature.literatureId });
   const previewAuthor = { id: "profile-preview-verification", name: "Synthetic Profile Author", initials: "PA" };
   const firstProfile = await annotations.updateProfile(previewAuthor.id, { educationStage: null, institutions: [{ name: "Synthetic institution one" }] });
   const changedProfile = await annotations.updateProfile(previewAuthor.id, { educationStage: null, institutions: [{ name: "Synthetic institution two" }] });
@@ -2365,6 +2368,7 @@ try {
     ...counts.rows[0],
     accountDeletion: true,
     communityGovernance,
+    platformGovernance,
     authorProfileRevision: true,
     database: application.database,
     migrations: currentMigrations.count,

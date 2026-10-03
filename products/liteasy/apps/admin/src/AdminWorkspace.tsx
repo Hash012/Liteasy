@@ -454,6 +454,7 @@ export function AdminWorkspace({
   }
 
   function resolveTagAppeal(appeal: ForumTagAppeal, decision: "accepted" | "rejected") {
+    if (appeal.detailsAvailable === false) return;
     confirm(
       decision === "accepted" ? "确认移除平台标签" : "确认维持平台标签",
       `#${appeal.tag} · ${appeal.annotationBody.slice(0, 80)}`,
@@ -950,7 +951,7 @@ function ForumView({ annotations, appeals, busy, error, onModerate, onResolveApp
       <Section title="平台标签申诉">
         {appeals.length ? (
           <div className="admin-table-wrap"><Table size="small"><TableHeader><TableRow><TableHeaderCell>标签</TableHeaderCell><TableHeaderCell>批注</TableHeaderCell><TableHeaderCell>申诉人</TableHeaderCell><TableHeaderCell>理由</TableHeaderCell><TableHeaderCell>操作</TableHeaderCell></TableRow></TableHeader><TableBody>
-            {appeals.map((appeal) => <TableRow key={appeal.appealId}><TableCell>#{appeal.tag}</TableCell><TableCell>{appeal.annotationBody.slice(0, 100)}</TableCell><TableCell>{appeal.authorName}<br /><small>{appeal.submittedBy}</small></TableCell><TableCell>{appeal.reason}</TableCell><TableCell><div className="admin-row-actions"><Button appearance="primary" disabled={busy} onClick={() => onResolveAppeal(appeal, "accepted")}>移除标签</Button><Button appearance="secondary" disabled={busy} onClick={() => onResolveAppeal(appeal, "rejected")}>维持标签</Button></div></TableCell></TableRow>)}
+            {appeals.map((appeal) => <TableRow key={appeal.appealId}><TableCell>#{appeal.tag}</TableCell><TableCell>{appeal.detailsAvailable === false ? "提交时受众未知，等待作者重新提交材料" : appeal.annotationBody.slice(0, 100)}</TableCell><TableCell>{appeal.authorName}<br /><small>{appeal.submittedBy}</small></TableCell><TableCell>{appeal.reason}</TableCell><TableCell><div className="admin-row-actions"><Button appearance="primary" disabled={busy || appeal.detailsAvailable === false} onClick={() => onResolveAppeal(appeal, "accepted")}>移除标签</Button><Button appearance="secondary" disabled={busy || appeal.detailsAvailable === false} onClick={() => onResolveAppeal(appeal, "rejected")}>维持标签</Button></div></TableCell></TableRow>)}
           </TableBody></Table></div>
         ) : <Empty>没有待审核的标签申诉</Empty>}
       </Section>
