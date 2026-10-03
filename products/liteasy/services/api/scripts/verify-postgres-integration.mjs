@@ -132,7 +132,17 @@ try {
     traceId: "trace_governance_create_retry"
   }), createdOrganization);
   const governanceOrganizationId = createdOrganization.organization.organizationId;
-  assert.equal((await governance.list(governanceOwner)).organizations[0].organizationId, governanceOrganizationId);
+  const ownerChoice = (await governance.list(governanceOwner)).organizations[0];
+  assert.equal(ownerChoice.organizationId, governanceOrganizationId);
+  assert.equal(ownerChoice.policyRevision, 0);
+  assert.equal(ownerChoice.authorizationRevision, 0);
+  assert.deepEqual(ownerChoice.policyExceptions, ["owner_export"]);
+  assert.ok(ownerChoice.allowedActions.includes("export_original"));
+  assert.equal(ownerChoice.denialReasons.run_external_model, "organization_external_use_policy_unconfirmed");
+  assert.deepEqual((await governance.listForIntuecho({ userSubject: "unaffiliated_subject" })).organizations, []);
+  assert.deepEqual(await governance.authorizeIntuechoAccess({
+    organizationId: governanceOrganizationId, userSubject: "unaffiliated_subject"
+  }), { allowed: false, role: null });
 
   const memberInvitation = await governance.invite(governanceOwner, {
     expectedRevision: 0,
@@ -165,6 +175,17 @@ try {
   });
   assert.equal(acceptedMember.organizationRevision, 2);
   assert.equal(acceptedMember.membership.subject, governanceMember.subject);
+  const memberChoices = await governance.listForIntuecho({ userSubject: governanceMember.subject });
+  assert.equal(memberChoices.organizations.length, 1);
+  const memberChoice = memberChoices.organizations[0];
+  assert.equal(memberChoice.organizationId, governanceOrganizationId);
+  assert.equal(memberChoice.authorizationRevision, 2);
+  assert.deepEqual(memberChoice.allowedActions, ["read_metadata", "read_body", "comment"]);
+  assert.equal(memberChoice.denialReasons.export_original, "organization_export_forbidden");
+  assert.deepEqual(Object.keys(memberChoice).sort(), [
+    "actionConstraints", "allowedActions", "authorizationRevision", "denialReasons", "myRole",
+    "name", "organizationId", "policyExceptions", "policyRevision"
+  ]);
 
   const adminInvitation = await governance.invite(governanceOwner, {
     expectedRevision: 2,
@@ -216,6 +237,10 @@ try {
     traceId: "trace_governance_suspend_member"
   });
   assert.equal(suspended.organizationRevision, 7);
+  assert.deepEqual((await governance.listForIntuecho({ userSubject: governanceMember.subject })).organizations, []);
+  assert.deepEqual(await governance.authorizeIntuechoAccess({
+    organizationId: governanceOrganizationId, userSubject: governanceMember.subject
+  }), { allowed: false, role: null });
   await assert.rejects(
     () => authorizeLibraryScope(pool, governanceMember, {
       scopeId: governanceOrganizationId,
@@ -277,6 +302,10 @@ try {
   assert.equal(governanceSummary.summary.myRole, "owner");
   assert.equal(governanceSummary.summary.revision, 11);
   assert.equal(governanceSummary.summary.memberCount, 3);
+  const currentOwnerChoice = (await governance.list(governanceMemberTwo)).organizations[0];
+  for (const field of ["allowedActions", "denialReasons", "policyRevision", "authorizationRevision", "policyExceptions", "actionConstraints"]) {
+    assert.deepEqual(governanceSummary.summary[field], currentOwnerChoice[field]);
+  }
   await assert.rejects(() => pool.query(`
     INSERT INTO organization_members(organization_id, member_subject, role)
     VALUES ($1, $2, 'member')

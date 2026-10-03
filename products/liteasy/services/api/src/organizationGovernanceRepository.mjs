@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { LibraryRepositoryError } from "./libraryRepository.mjs";
+import { organizationAccessSnapshot } from "./organizationAccessSnapshot.mjs";
 import { withPostgresTransaction } from "./postgres.mjs";
 
 const memberRoles = new Set(["admin", "member"]);
@@ -252,13 +253,29 @@ export class PostgresOrganizationGovernanceRepository {
   }
 
   async listForIntuecho(input) {
-    return this.#listForSubject(requiredSubject(input.userSubject));
+    const { organizations } = await this.#listForSubject(requiredSubject(input.userSubject));
+    return {
+      organizations: organizations.map((organization) => ({
+        actionConstraints: organization.actionConstraints,
+        allowedActions: organization.allowedActions,
+        authorizationRevision: organization.authorizationRevision,
+        denialReasons: organization.denialReasons,
+        myRole: organization.myRole,
+        name: organization.name,
+        organizationId: organization.organizationId,
+        policyExceptions: organization.policyExceptions,
+        policyRevision: organization.policyRevision
+      }))
+    };
   }
 
   async #listForSubject(subject) {
     const result = await this.pool.query(`
       SELECT organization.organization_id, organization.name, organization.owner_subject,
              organization.revision,
+             COALESCE(policy.upload_policy, 'owner_admins') AS upload_policy,
+             COALESCE(policy.export_policy, 'disabled') AS export_policy,
+             policy.revision AS policy_revision,
              CASE WHEN organization.owner_subject = $1 THEN 'owner' ELSE member.role END AS my_role,
              1 + COUNT(active_member.member_subject)::integer AS member_count
         FROM organizations organization
@@ -268,14 +285,24 @@ export class PostgresOrganizationGovernanceRepository {
         LEFT JOIN organization_members active_member
           ON active_member.organization_id = organization.organization_id
          AND active_member.status = 'active'
+        LEFT JOIN organization_storage_policies policy
+          ON policy.organization_id = organization.organization_id
        WHERE organization.status = 'active'
          AND (organization.owner_subject = $1 OR member.member_subject IS NOT NULL)
-       GROUP BY organization.organization_id, member.role
+       GROUP BY organization.organization_id, member.role,
+                policy.upload_policy, policy.export_policy, policy.revision
        ORDER BY lower(organization.name), organization.organization_id
     `, [subject]);
     return {
       activeOrganizationId: result.rows[0]?.organization_id ?? "",
       organizations: result.rows.map((row) => ({
+        ...organizationAccessSnapshot({
+          authorizationRevision: row.revision,
+          exportPolicy: row.export_policy,
+          policyRevision: row.policy_revision,
+          role: row.my_role,
+          uploadPolicy: row.upload_policy
+        }),
         memberCount: Number(row.member_count),
         myRole: row.my_role,
         name: row.name,
@@ -325,6 +352,13 @@ export class PostgresOrganizationGovernanceRepository {
       `, [organizationId]);
       return {
         summary: {
+          ...organizationAccessSnapshot({
+            authorizationRevision: organization.revision,
+            exportPolicy: policy.rows[0]?.export_policy ?? "disabled",
+            policyRevision: policy.rows[0]?.revision,
+            role,
+            uploadPolicy: policy.rows[0]?.upload_policy ?? "owner_admins"
+          }),
           auditEvents: audits.rows.map((row) => ({
             action: row.action,
             actorSubject: row.actor_id,
