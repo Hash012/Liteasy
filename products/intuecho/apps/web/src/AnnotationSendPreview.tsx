@@ -1,5 +1,6 @@
 import { Button } from "@fluentui/react-components";
 import type { CreateAnnotationInput } from "./community.types";
+import { ContributionSummary } from "./AnnotationContribution";
 
 const audienceLabels = { private: "仅自己", public: "所有人", mutual_followers: "互相关注的人", organization: "指定组织" };
 export function AnnotationSendPreview({ input, organizationName, pending, onConfirm, onCancel }: {
@@ -13,6 +14,7 @@ export function AnnotationSendPreview({ input, organizationName, pending, onConf
     <h3>确认要发送的内容</h3>
     <p>保存到 Intuecho · 接收方：{organizationName ?? audienceLabels[input.visibility]}{input.shareToPlaza ? " · 同时展示到广场" : " · 不加入广场"}</p>
     <div className="annotation-send-preview-body">{input.body}</div>
+    <ContributionSummary value={input.contribution} />
     <ul>{input.targets.map((target, index) => <li key={index}>
       <span>文献 {target.literature.literatureId}</span>
       {target.kind === "source_passage" && <blockquote>{target.excerpt}</blockquote>}

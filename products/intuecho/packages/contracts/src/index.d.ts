@@ -318,6 +318,7 @@ export declare const annotationVisibilitySchema: z.ZodType<"private" | "organiza
 export declare const literatureMetadataSchema: z.ZodType<LegacyLiteratureReference["metadata"]>;
 export type CreateAnnotationInput = {
   body: string;
+  contribution?: AnnotationContribution;
   organizationId?: string;
   shareToPlaza: boolean;
   tags: string[];
@@ -325,6 +326,13 @@ export type CreateAnnotationInput = {
   visibility: "private" | "organization" | "mutual_followers" | "public";
 };
 export declare const createAnnotationSchema: z.ZodType<CreateAnnotationInput>;
+export type AnnotationContribution = {
+  purpose: "explanation" | "question" | "replication" | "curation";
+  origin: "unspecified" | "human" | "ai_assisted" | "ai_generated";
+  review: "unreviewed" | "source_checked";
+  editedByUser?: boolean;
+};
+export declare const annotationContributionSchema: z.ZodType<AnnotationContribution>;
 export declare const updateAnnotationSchema: z.ZodType<unknown>;
 export declare const academicProfileSchema: z.ZodType<unknown>;
 export declare const createReplySchema: z.ZodType<CreateReply, z.ZodTypeDef, CreateReplyInput>;

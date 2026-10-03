@@ -511,3 +511,24 @@ test("keeps the draft local when organization permissions cannot be loaded", asy
   await waitFor(() => expect(screen.getByRole("button", { name: "发布" })).toBeEnabled());
   expect(communityApi.createAnnotation).not.toHaveBeenCalled();
 });
+
+test("previews contributor origin and invalidates source review after text changes", async () => {
+  const user = userEvent.setup();
+  render(<AnnotationComposer context={{ draft: {
+    body: "Synthetic source analysis", tags: [], visibility: "private", shareToPlaza: false,
+    targets: [{ kind: "whole_document", literature: { literatureId: "literature-parent" } }]
+  } }} onClose={vi.fn()} onSaved={vi.fn()} />);
+  await user.selectOptions(screen.getByLabelText("用途"), "replication");
+  await user.selectOptions(screen.getByLabelText("撰写方式"), "ai_assisted");
+  await user.click(screen.getByRole("checkbox", { name: "我已对照原文核查引用" }));
+  await user.type(screen.getByLabelText("批注内容"), " corrected");
+  expect(screen.getByRole("checkbox", { name: "我已对照原文核查引用" })).not.toBeChecked();
+  await user.click(screen.getByRole("button", { name: "发布" }));
+  expect(screen.getByRole("region", { name: "发送预览" })).toHaveTextContent("AI 辅助");
+  expect(screen.getByRole("region", { name: "发送预览" })).toHaveTextContent("复现观察");
+  expect(communityApi.createAnnotation).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "确认发送" }));
+  expect(communityApi.createAnnotation).toHaveBeenCalledWith(expect.objectContaining({
+    contribution: { purpose: "replication", origin: "ai_assisted", review: "unreviewed" }
+  }));
+});

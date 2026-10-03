@@ -14,6 +14,7 @@ import { LiteratureTargetEditor } from "./LiteratureTargetEditor";
 import { ReplyPublicationFields } from "./ReplyPublicationFields";
 import { OrganizationAudienceSelector } from "./OrganizationAudienceSelector";
 import { AnnotationSendPreview } from "./AnnotationSendPreview";
+import { ContributionFields, defaultContribution } from "./AnnotationContribution";
 
 export type ComposerState = { draft?: CreateAnnotationInput; edit?: CommunityAnnotation; replyTo?: CommunityAnnotation };
 
@@ -38,12 +39,13 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
   const [visibility, setVisibility] = useState<AnnotationVisibility | "">(original?.visibility ?? draft?.visibility ?? parent?.visibility ?? "");
   const [organizationId, setOrganizationId] = useState(original?.organizationId ?? draft?.organizationId ?? parent?.organizationId ?? "");
   const [shareToPlaza, setShareToPlaza] = useState(original?.shareToPlaza ?? draft?.shareToPlaza ?? false);
+  const [contribution, setContribution] = useState(original?.contribution ?? draft?.contribution ?? defaultContribution);
   const [status, setStatus] = useState("");
   const [pending, setPending] = useState(false);
   const [organization, setOrganization] = useState<OrganizationChoice>();
   const [preview, setPreview] = useState<{ key: string; input: CreateAnnotationInput }>();
   const sending = useRef(false);
-  const draftKey = JSON.stringify([body, tags, targets, visibility, organizationId, shareToPlaza, organization]);
+  const draftKey = JSON.stringify([body, tags, targets, visibility, organizationId, shareToPlaza, organization, contribution]);
   useEffect(() => { setPreview(undefined); }, [draftKey]);
   const publicationAttempt = useRef(0);
   const publicationCanonicalizingRef = useRef(false);
@@ -107,6 +109,7 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
     }
     const input: CreateAnnotationInput = {
       body,
+      contribution,
       ...(visibility === "organization" ? { organizationId } : {}),
       shareToPlaza,
       tags,
@@ -166,7 +169,7 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
     <aside className="annotation-drawer" role="dialog" aria-modal="true" aria-labelledby="composer-title">
       <header><div><span>{original ? "编辑" : parent ? "回复" : "新批注"}</span><h2 id="composer-title">{parent ? `回复 ${parent.author.name}` : isReplyEdit ? "编辑回复" : "发布批注"}</h2></div><Tooltip content="关闭" relationship="label"><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="关闭" onClick={onClose} /></Tooltip></header>
       <form onSubmit={submit}>
-        <label className="field-label">批注内容<Textarea value={body} onChange={(_, data) => setBody(data.value)} resize="vertical" rows={7} required /></label>
+        <label className="field-label">批注内容<Textarea value={body} onChange={(_, data) => { setBody(data.value); setContribution((current) => ({ ...current, review: "unreviewed" })); }} resize="vertical" rows={7} required /></label>
         {!isReplyEdit && parent && <ReplyPublicationFields disabled={publicationCanonicalizing} publishAsAnnotation={publishAsAnnotation} targets={targets} visibility={parent.visibility} onEnabledChange={setReplyPublication} onTargetsChange={updateReplyTargets} />}
         {!isReplyEdit && !parent && <>
           <div className="visibility-row">
@@ -174,7 +177,8 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
             {visibility === "organization" && <OrganizationAudienceSelector value={organizationId} onChange={setOrganizationId} onResolvedSelection={setOrganization} />}
           </div>
           {visibility === "public" && <Checkbox checked={shareToPlaza} label="发布到广场" onChange={(_, data) => setShareToPlaza(Boolean(data.checked))} />}
-          <LiteratureTargetEditor targets={targets} onChange={setTargets} required />
+          <LiteratureTargetEditor targets={targets} onChange={(value) => { setTargets(value); setContribution((current) => ({ ...current, review: "unreviewed" })); }} required />
+          <ContributionFields value={contribution} onChange={setContribution} />
         </>}
         {!isReplyEdit && (!parent || publishAsAnnotation) && <div className="tag-editor-v2"><label>标签</label><div className="tag-row">{tags.map((tag) => <button type="button" key={tag} onClick={() => setTags(tags.filter((item) => item !== tag))}>#{tag}<Dismiss20Regular /></button>)}</div><div className="tag-input"><Input value={tagInput} onChange={(_, data) => setTagInput(data.value)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === ",") { event.preventDefault(); addTag(); } }} /><Button type="button" icon={<Add20Regular />} onClick={addTag}>添加</Button></div></div>}
         {status && <p className="form-error" role="alert">{status}</p>}

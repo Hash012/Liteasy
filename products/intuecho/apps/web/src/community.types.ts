@@ -44,6 +44,7 @@ export type AnnotationReadTarget = AnnotationReadProjection<ContractAnnotationTa
 export type AnnotationVisibility = "private" | "organization" | "mutual_followers" | "public";
 
 export type CommunityAnnotation = {
+  contribution?: import("@intuecho/contracts").AnnotationContribution;
   author: {
     id: string;
     initials: string;

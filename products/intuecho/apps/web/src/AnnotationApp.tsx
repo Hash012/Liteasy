@@ -59,6 +59,7 @@ import {
 import { communityApi } from "./communityApi";
 import { canonicalizeInheritedTargets } from "./canonicalizeInheritedTargets";
 import { AnnotationComposer as ExtractedAnnotationComposer, type ComposerState } from "./AnnotationComposer";
+import { ContributionSummary } from "./AnnotationContribution";
 import type { IdentityMode, IdentitySession } from "./identity.types";
 import { identityApi, readIdentitySession, setAuthRequiredHandler } from "./identityClient";
 
@@ -432,6 +433,7 @@ export function AnnotationCard({ annotation, onCompose, onConversation, session 
       </div>}
     </header>
     <div className="annotation-content"><p className="annotation-body">{current.body}</p></div>
+    <ContributionSummary value={current.contribution} />
     {current.withdrawnAt && <p className="moderation-state">已由组织管理员撤回</p>}
     {current.originalReply && <p className="derived-reply-context">回复了某条批注</p>}
     {current.originalReply?.status === "parent_deleted" && <p className="deleted-reply-context">原回复对象已删除</p>}

@@ -125,7 +125,8 @@ try {
     "020_expand_computer_science_literature_sources.sql",
     "021_add_audited_pmlr_identity.sql",
     "022_preserve_literature_source_artifacts.sql",
-    "023_enforce_version_identity_boundaries.sql"
+    "023_enforce_version_identity_boundaries.sql",
+    "024_annotation_contribution_provenance.sql"
   ];
   assert.equal(migrated.applied.every((name) => expectedMigrations.includes(name)), true);
   const stagedMigrationRows = await pool.query("SELECT name FROM schema_migrations ORDER BY name");
@@ -767,11 +768,14 @@ try {
   });
   const publicAnnotation = await annotations.createAnnotation(userOne, {
     body: sharedBody,
+    contribution: { purpose: "replication", origin: "ai_assisted", review: "source_checked" },
     shareToPlaza: true,
     tags: ["生产验证"],
     targets: [wholeDocument, derivedPassage],
     visibility: "public"
   });
+  assert.deepEqual(publicAnnotation.contribution, { purpose: "replication", origin: "ai_assisted", review: "source_checked", editedByUser: false });
+  assert.equal(semanticSeed.contribution.origin, "unspecified");
   assert.equal(publicAnnotation.targets.length, 2);
   assert.equal(publicAnnotation.targets.find((target) => target.kind === "derived_passage").evidence.length, 1);
   assert.deepEqual(publicAnnotation.author.profile, {
@@ -813,8 +817,14 @@ try {
   const titleSearch = await annotations.plaza(userOne, { query: "Integration Confirmed Literature" });
   assert.equal(titleSearch.some((annotation) => annotation.id === canonicalRead.id), true);
   await annotations.updateAnnotation(publicAnnotation.id, userOne, {
-    body: `${sharedBody} 编辑后保留历史版本。`
+    body: `${sharedBody} 编辑后保留历史版本。`,
+    contribution: { purpose: "replication", origin: "human", review: "source_checked" }
   });
+  const correctedContribution = await annotations.annotation(publicAnnotation.id, userOne);
+  assert.deepEqual(correctedContribution.contribution, { purpose: "replication", origin: "ai_assisted", review: "unreviewed", editedByUser: true });
+  const preservedContribution = await pool.query("SELECT contribution FROM annotation_versions WHERE annotation_id = $1 AND revision = 1", [publicAnnotation.id]);
+  assert.equal(preservedContribution.rows[0].contribution.origin, "ai_assisted");
+  assert.equal(preservedContribution.rows[0].contribution.review, "source_checked");
 
   const authoredPublicReply = await annotations.createReply(publicAnnotation.id, userOne, {
     body: "公开回复在账号注销时保留正文并去除身份信息。",
@@ -2092,6 +2102,17 @@ try {
     traceId: "trace-delete-projection-root"
   });
   assert.equal(dedicatedDeletion.result.deletedNonPublicAnnotations, 2);
+  const lateReplyRows = await pool.query("SELECT count(*)::int AS count FROM annotation_replies WHERE author_id = $1", [deletionRootUser.id]);
+  await assert.rejects(() => lifecycleAnnotations.createReply(semanticSeed.id, deletionRootUser, {
+    body: "A request authenticated before deletion must not recreate private state.",
+    publishAsAnnotation: false, tags: [], targets: []
+  }), (error) => error.code === "ACCOUNT_DELETED");
+  await assert.rejects(() => lifecycleAnnotations.updateReply(deletionProjection.reply.id, deletionRootUser, { body: "Late edit" }),
+    (error) => error.code === "ACCOUNT_DELETED");
+  await assert.rejects(() => lifecycleAnnotations.updateReplyPublication(deletionProjection.reply.id, deletionRootUser, { published: true, tags: [], targets: [wholeDocument] }),
+    (error) => error.code === "ACCOUNT_DELETED");
+  assert.deepEqual((await pool.query("SELECT count(*)::int AS count FROM annotation_replies WHERE author_id = $1", [deletionRootUser.id])).rows, lateReplyRows.rows);
+
   const retiredProjectionState = await pool.query(`
     SELECT
       (SELECT count(*)::int FROM annotations WHERE id = $1) AS root_count,

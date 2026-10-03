@@ -2815,3 +2815,36 @@ test("organization choices fail closed and membership is rechecked when sending 
     assert.equal(db.prepare("SELECT count(*) AS count FROM desktop_annotation_handoffs_v2").get().count, 0);
   }, { listOrganizations: async () => { if (!available) throw new Error("unavailable"); return []; }, authorizeOrganizationAccess: async () => ({ allowed: available, role: available ? "member" : null }) });
 });
+
+
+test("contribution provenance survives user corrections without claiming scientific verification", async () => {
+  await withApp(async (app, db) => {
+    const input = { body: "Synthetic interpretation", visibility: "private", shareToPlaza: false, tags: [],
+      targets: [{ kind: "whole_document", literature: { literatureId: "literature-1" } }],
+      contribution: { purpose: "question", origin: "ai_generated", review: "source_checked" } };
+    const created = await app.inject({ method: "POST", url: "/v1/annotations", headers: userHeader, payload: input });
+    assert.equal(created.statusCode, 201);
+    const annotation = created.json().annotation;
+    assert.deepEqual(annotation.contribution, { ...input.contribution, editedByUser: false });
+    const updated = await app.inject({ method: "PUT", url: `/v1/annotations/${annotation.id}`, headers: userHeader,
+      payload: { body: "Synthetic correction", contribution: { purpose: "replication", origin: "human", review: "unreviewed" } } });
+    assert.equal(updated.statusCode, 200);
+    assert.deepEqual(updated.json().annotation.contribution, { purpose: "replication", origin: "ai_generated", review: "unreviewed", editedByUser: true });
+    const old = JSON.parse(db.prepare("SELECT snapshot_json FROM annotation_versions_v2 WHERE annotation_id = ? AND revision = 1").get(annotation.id).snapshot_json);
+    assert.equal(old.contribution.origin, "ai_generated");
+    assert.equal(old.contribution.review, "source_checked");
+    const untouched = await app.inject({ method: "PUT", url: `/v1/annotations/${annotation.id}`, headers: userHeader, payload: { tags: ["corrected"] } });
+    assert.equal(untouched.json().annotation.contribution.editedByUser, true);
+  });
+});
+
+test("legacy annotation provenance remains unknown and never implies human authorship", async () => {
+  await withApp(async (app) => {
+    const created = await app.inject({ method: "POST", url: "/v1/annotations", headers: userHeader, payload: {
+      body: "Synthetic legacy draft", visibility: "private", shareToPlaza: false, tags: [],
+      targets: [{ kind: "whole_document", literature: { literatureId: "literature-1" } }]
+    } });
+    assert.equal(created.statusCode, 201);
+    assert.deepEqual(created.json().annotation.contribution, { purpose: "explanation", origin: "unspecified", review: "unreviewed", editedByUser: false });
+  });
+});

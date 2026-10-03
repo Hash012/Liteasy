@@ -1,4 +1,5 @@
 import { currentOrganizationChoices } from "./organizationChoices.mjs";
+import { annotationContribution } from "./annotationContribution.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import {
   hasCrossVersionIdentifierConflict,
@@ -468,6 +469,7 @@ export function initializeAnnotationCommunitySqlite(db) {
   if (!appealColumns.has("resolved_by")) db.exec("ALTER TABLE annotation_tag_appeals_v2 ADD COLUMN resolved_by TEXT");
   if (!appealColumns.has("resolution_reason")) db.exec("ALTER TABLE annotation_tag_appeals_v2 ADD COLUMN resolution_reason TEXT");
   const annotationColumns = new Set(db.prepare("PRAGMA table_info(annotations_v2)").all().map((column) => column.name));
+  if (!annotationColumns.has("contribution_json")) db.exec("ALTER TABLE annotations_v2 ADD COLUMN contribution_json TEXT NOT NULL DEFAULT '{}'");
   if (!annotationColumns.has("source_reply_id")) db.exec("ALTER TABLE annotations_v2 ADD COLUMN source_reply_id TEXT");
   const replyColumns = new Set(db.prepare("PRAGMA table_info(annotation_replies_v2)").all().map((column) => column.name));
   if (!replyColumns.has("moderated_at")) db.exec("ALTER TABLE annotation_replies_v2 ADD COLUMN moderated_at TEXT");
@@ -1326,6 +1328,7 @@ export class SqliteAnnotationCommunityRepository {
         VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
       `).run(id, input.body, author.id, author.name, author.initials ?? initialsFor(author.name), JSON.stringify(this.#profileSnapshot(author.id)), input.visibility, input.organizationId ?? null, input.shareToPlaza ? 1 : 0, now, now);
       this.#replaceTargets(id, input.targets, now, author.id);
+      this.db.prepare("UPDATE annotations_v2 SET contribution_json = ? WHERE id = ?").run(JSON.stringify(annotationContribution(input.contribution)), id);
       this.#replaceUserTags(id, input.tags, now);
       this.#assignPlatformTags(id, input.body, input.tags, now);
     })();
@@ -1359,12 +1362,15 @@ export class SqliteAnnotationCommunityRepository {
       throw new AnnotationCommunityError("ANNOTATION_SCOPE_LOCKED_BY_REPLIES", 409);
     }
     const now = new Date().toISOString();
+    const contribution = annotationContribution(update.contribution, parseJson(row.contribution_json, {}),
+      (update.body !== undefined && update.body !== row.body) || (update.targets !== undefined && JSON.stringify(update.targets) !== JSON.stringify(this.#targets(id, false))));
     this.db.transaction(() => {
       this.db.prepare("INSERT INTO annotation_versions_v2(id, annotation_id, revision, snapshot_json, changed_by, created_at) VALUES (?, ?, ?, ?, ?, ?)")
         .run(`annotation_version_${randomUUID()}`, id, row.revision, JSON.stringify(this.#serialize(row, author, false)), author.id, now);
       this.db.prepare(`UPDATE annotations_v2 SET body = ?, author_name = ?, author_initials = ?, author_profile_snapshot_json = ?, visibility = ?, organization_id = ?, share_to_plaza = ?, revision = revision + 1, updated_at = ? WHERE id = ?`)
         .run(update.body ?? row.body, author.name, author.initials ?? initialsFor(author.name), JSON.stringify(this.#profileSnapshot(author.id)), visibility, organizationId, shareToPlaza ? 1 : 0, now, id);
       if (update.targets) this.#replaceTargets(id, update.targets, now, author.id);
+      this.db.prepare("UPDATE annotations_v2 SET contribution_json = ? WHERE id = ?").run(JSON.stringify(contribution), id);
       if (update.tags) this.#replaceUserTags(id, update.tags, now);
       this.#assignPlatformTags(id, update.body ?? row.body, update.tags ?? this.#tags(id).filter((tag) => tag.origin === "user").map((tag) => tag.name), now);
     })();
@@ -1406,6 +1412,7 @@ export class SqliteAnnotationCommunityRepository {
       author: { id: row.author_id, initials: row.author_initials, name: row.author_name, profile: parseJson(row.author_profile_snapshot_json, {}) },
       body: row.body,
       createdAt: row.created_at,
+      contribution: annotationContribution(undefined, parseJson(row.contribution_json, {})),
       id: row.id,
       organizationId: row.organization_id,
       originalReply: row.source_reply_id ? { replyId: row.source_reply_id, status: sourceReply?.parent_deleted_at ? "parent_deleted" : "available" } : null,
@@ -1524,6 +1531,7 @@ export class SqliteAnnotationCommunityRepository {
           .run(`annotation_version_${randomUUID()}`, derived.id, derived.revision, JSON.stringify(this.#serialize(derived, author, false)), author.id, now);
         this.db.prepare("UPDATE annotations_v2 SET body = ?, author_name = ?, author_initials = ?, author_profile_snapshot_json = ?, revision = revision + 1, updated_at = ? WHERE id = ?")
           .run(input.body, author.name, author.initials ?? initialsFor(author.name), profile, now, derived.id);
+        this.db.prepare("UPDATE annotations_v2 SET contribution_json = ? WHERE id = ?").run(JSON.stringify(annotationContribution(undefined, parseJson(derived.contribution_json, {}), derived.body !== input.body)), derived.id);
       }
     })();
     return { ...this.#serializeReply(this.db.prepare("SELECT * FROM annotation_replies_v2 WHERE id = ?").get(replyId)), viewerIsAuthor: true };
@@ -1586,6 +1594,7 @@ export class SqliteAnnotationCommunityRepository {
           .run(`annotation_version_${randomUUID()}`, derived.id, derived.revision, JSON.stringify(this.#serialize(derived, author, false)), author.id, now);
         this.db.prepare(`UPDATE annotations_v2 SET body = ?, author_name = ?, author_initials = ?, author_profile_snapshot_json = ?, visibility = ?, organization_id = ?, share_to_plaza = ?, revision = ?, withdrawn_at = NULL, updated_at = ? WHERE id = ?`)
           .run(row.body, row.author_name, row.author_initials, row.author_profile_snapshot_json, row.visibility, row.organization_id, row.visibility === "public" ? 1 : 0, derived.revision + 1, now, derivedAnnotationId);
+        this.db.prepare("UPDATE annotations_v2 SET contribution_json = ? WHERE id = ?").run(JSON.stringify(annotationContribution(undefined, parseJson(derived.contribution_json, {}), true)), derived.id);
       }
       this.#replaceTargets(derivedAnnotationId, input.targets, now, author.id);
       this.#replaceUserTags(derivedAnnotationId, input.tags, now);

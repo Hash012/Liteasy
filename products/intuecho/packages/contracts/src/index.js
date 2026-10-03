@@ -467,8 +467,15 @@ export const annotationTargetSchema = z.discriminatedUnion("kind", [
 
 const annotationTagsSchema = z.array(tagSchema).max(20).default([]);
 
+export const annotationContributionSchema = z.object({
+  purpose: z.enum(["explanation", "question", "replication", "curation"]),
+  origin: z.enum(["unspecified", "human", "ai_assisted", "ai_generated"]),
+  review: z.enum(["unreviewed", "source_checked"])
+});
+
 export const createAnnotationSchema = z.object({
   body: z.string().trim().min(1).max(8000),
+  contribution: annotationContributionSchema.optional(),
   organizationId: z.string().trim().min(1).max(200).optional(),
   shareToPlaza: z.boolean().default(false),
   tags: annotationTagsSchema,
@@ -488,6 +495,7 @@ export const createAnnotationSchema = z.object({
 
 export const updateAnnotationSchema = z.object({
   body: z.string().trim().min(1).max(8000).optional(),
+  contribution: annotationContributionSchema.optional(),
   organizationId: z.string().trim().min(1).max(200).nullable().optional(),
   shareToPlaza: z.boolean().optional(),
   tags: annotationTagsSchema.optional(),
@@ -583,6 +591,7 @@ export const annotationModerationSchema = z.object({
 
 export const desktopAnnotationHandoffSchema = z.object({
   body: z.string().trim().max(8000).default(""),
+  contribution: annotationContributionSchema.optional(),
   organizationId: z.string().trim().min(1).max(200).optional(),
   shareToPlaza: z.boolean().default(false),
   tags: annotationTagsSchema,
