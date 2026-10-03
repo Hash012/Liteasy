@@ -1,3 +1,6 @@
+import { OrganizationReadingGroup } from "./reading-group/OrganizationReadingGroup";
+import { getIdentitySessionGeneration } from "./identitySessionGeneration";
+import { intuechoApiBaseUrl } from "./runtimeConfig";
 import {
   Badge,
   Button,
@@ -88,16 +91,14 @@ function initialsFor(name: string) {
 }
 
 function useRemote<T>(load: () => Promise<T>, key: string) {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState("");
+  const [result, setResult] = useState<{ key: string; data: T | null; error: string }>({ key, data: null, error: "" });
   useEffect(() => {
     let active = true;
-    setData(null);
-    setError("");
-    void load().then((value) => active && setData(value)).catch((reason) => active && setError(reason instanceof Error ? reason.message : "请求未能完成"));
+    setResult({ key, data: null, error: "" });
+    void load().then((data) => active && setResult({ key, data, error: "" })).catch((reason) => active && setResult({ key, data: null, error: reason instanceof Error ? reason.message : "请求未能完成" }));
     return () => { active = false; };
   }, [key]);
-  return { data, error };
+  return result.key === key ? result : { data: null, error: "" };
 }
 
 function usePollingRemote<T>(load: () => Promise<T>, key: string, intervalMs: number, preserveData = false) {
@@ -579,9 +580,27 @@ function MyAnnotations({ onCompose, refresh, session }: { onCompose: (value: { e
   return <section className="single-column"><div className="page-heading"><span>个人中心</span><h1>我的批注</h1></div>{error ? <ErrorNotice message={error} /> : !data ? <Loading /> : data.annotations.length ? <div className="annotation-list">{data.annotations.map((annotation) => <AnnotationCard key={`${annotation.id}-${refresh}`} annotation={annotation} onCompose={onCompose} session={session} />)}</div> : <EmptyState text="还没有批注" />}</section>;
 }
 
-function OrganizationAnnotations({ onCompose, refresh, session }: { onCompose: (value: { edit?: CommunityAnnotation; replyTo?: CommunityAnnotation }) => void; refresh: number; session: IdentitySession }) {
-  const { data, error } = useRemote(communityApi.organizationAnnotations, String(refresh));
-  return <section className="single-column"><div className="page-heading"><span>组织</span><h1>组织批注</h1></div>{error ? <ErrorNotice message={error} /> : !data ? <Loading /> : data.organizations.length ? <div className="organization-groups">{data.organizations.map((organization) => <section className="organization-group" key={organization.organizationId}><header><div><strong>{organization.name}</strong><span>{organization.role === "owner" ? "负责人" : organization.role === "admin" ? "管理员" : "成员"}</span></div><small>{organization.annotations.length} 条</small></header>{organization.annotations.length ? <div className="annotation-list">{organization.annotations.map((annotation) => <AnnotationCard key={`${annotation.id}-${annotation.updatedAt}`} annotation={annotation} onCompose={onCompose} session={session} />)}</div> : <EmptyState text="该组织还没有可见批注" />}</section>)}</div> : <EmptyState text="当前没有可访问的组织" />}</section>;
+export function OrganizationAnnotations({ onCompose, refresh, session }: { onCompose: (value: { edit?: CommunityAnnotation; replyTo?: CommunityAnnotation }) => void; refresh: number; session: IdentitySession }) {
+  const [localRefresh, setLocalRefresh] = useState(0);
+  const actorBinding = JSON.stringify([intuechoApiBaseUrl, session.userId, getIdentitySessionGeneration()]);
+  const requestKey = `${actorBinding}:${refresh}:${localRefresh}`;
+  const { data, error } = useRemote(async () => {
+    const [groups, choices] = await Promise.all([communityApi.organizationAnnotations(), communityApi.organizationChoices()]);
+    return { groups: groups.organizations, choices: choices.organizations };
+  }, requestKey);
+  return <section className="single-column">
+    <div className="page-heading"><span>组织</span><h1>组织批注与读书组</h1></div>
+    <Button appearance="subtle" onClick={() => setLocalRefresh((value) => value + 1)}>刷新组织权限</Button>
+    {error ? <ErrorNotice message={error} /> : !data ? <Loading /> : data.groups.length ? <div className="organization-groups">{data.groups.map((organization) => {
+      const access = data.choices.find((choice) => choice.organizationId === organization.organizationId);
+      if (!access?.allowedActions.includes("read_body")) return null;
+      return <section className="organization-group" key={organization.organizationId}>
+        <header><div><strong>{organization.name}</strong><span>{access.role === "owner" ? "负责人" : access.role === "admin" ? "管理员" : "成员"}</span></div><small>{organization.annotations.length} 条</small></header>
+        <OrganizationReadingGroup organization={organization} viewerId={session.userId} actorBinding={actorBinding} access={access} onChanged={() => setLocalRefresh((value) => value + 1)} />
+        {organization.annotations.length ? <details><summary>全部组织批注 · {organization.annotations.length}</summary><div className="annotation-list">{organization.annotations.map((annotation) => <AnnotationCard key={`${annotation.id}-${annotation.updatedAt}`} annotation={annotation} onCompose={onCompose} session={session} />)}</div></details> : <EmptyState text="该组织还没有可见批注" />}
+      </section>;
+    })}</div> : <EmptyState text="当前没有可访问的组织" />}
+  </section>;
 }
 
 function ProfileEditor({ refresh }: { refresh: number }) {

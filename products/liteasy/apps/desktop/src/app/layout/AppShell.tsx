@@ -1,3 +1,6 @@
+import { usePublicationPreview } from "../features/forum/usePublicationPreview";
+import { normalizePublicationActorBinding } from "../features/forum/publicationActorBinding";
+import { assertExternalPaperSources } from "../features/models/externalSourcePolicy";
 import { getRecoveryRuntime, localWorkspaceScope } from "../features/local-recovery/runtimeProfile";
 import { revealResource } from "../features/resource-links/resourceReveal";
 import { useGlobalSearchController } from "../controllers/useGlobalSearchController";
@@ -140,7 +143,7 @@ import {
   type MultimodalVisualizationCapability
 } from "../features/account/accountCapabilitiesClient";
 import { setMultimodalVisualizationPreference } from "../features/visualization/visualizationControlPlaneClient";
-import { loadStoredAccountSession } from "../features/account/accountSessionStorage";
+import { getAccountSessionGeneration, loadStoredAccountSession } from "../features/account/accountSessionStorage";
 import type { RecommendationTransport } from "../features/recommendations/recommendationClient";
 import type { DocumentMetadataTransport } from "../features/metadata/documentMetadataClient";
 import { useLeftRailNavigation, type LeftRailView } from "./useLeftRailNavigation";
@@ -373,7 +376,7 @@ export function AppShell({
   const latestArtifactIdRef = useRef<string | null>(null);
   const latestArtifactTaskIdRef = useRef<string | null>(null);
   const cloudAccessTokenRef = useRef<string | undefined>(undefined);
-  const forum = useForumController({ getSessionId: () => cloudAccessTokenRef.current });
+
   const allowUnauthenticatedLocalDevModel = import.meta.env.DEV &&
     shouldApplyLocalDevCloudDefaults(undefined, localDevCloudEnv);
   const effectiveModelTransport = useMemo(() => modelTransport ?? createBearerModelTransport({
@@ -383,6 +386,20 @@ export function AppShell({
   const resolveIntuechoEndpoint = () =>
     settingsStoreRef.current.getState()["thin_reading.intuecho_endpoint"].trim() ||
     (import.meta.env.VITE_FORUM_API_URL ?? "http://127.0.0.1:4040");
+  const getPublicationActorBinding = () => {
+    const session = loadStoredAccountSession();
+    return normalizePublicationActorBinding(session?.userId && session.issuer ? {
+      endpoint: resolveIntuechoEndpoint(), issuer: session.issuer, subject: session.userId,
+      scopeType: "user", scopeId: session.userId, sessionGeneration: getAccountSessionGeneration()
+    } : undefined);
+  };
+  const publicationPreview = usePublicationPreview(getPublicationActorBinding);
+  const forum = useForumController({
+    apiBaseUrl: resolveIntuechoEndpoint(),
+    getSessionId: () => cloudAccessTokenRef.current,
+    getActorBinding: getPublicationActorBinding
+  });
+
 
   const workspaceSelection = useWorkspaceSelectionController({
     localLibrarySnapshot,
@@ -553,6 +570,12 @@ export function AppShell({
     getMultimodalVisualizationCapability: () => multimodalVisualizationCapabilityRef.current,
     getIntuechoEndpoint: resolveIntuechoEndpoint,
     getIntuechoSessionId: () => cloudAccessTokenRef.current,
+    getActorBinding: getPublicationActorBinding,
+    assertCanPublishThinReading: (document) => {
+      const papers = document.paperIds.map((id) => workspaceStoreRef.current.getState().papers.find((paper) => paper.id === id));
+      if (!papers.length || papers.some((paper) => !paper)) throw new Error("无法确认薄读来源，批注仍保留在本机。");
+      assertExternalPaperSources(papers.filter((paper): paper is Paper => Boolean(paper)));
+    },
     getModelDiagnosticContext: () => {
       const settings = settingsStoreRef.current.getState();
       const provider = getActiveModelProvider(settings);
@@ -1534,6 +1557,8 @@ export function AppShell({
   }), [organizationSummary?.myRole, organizationSummary?.organizationId, pdfPublicationCloudClient]);
   const literatureAuthorityClient = paperServices.literatureClient;
   const pdfAnnotationPublication = usePdfAnnotationPublicationController({
+    confirmPublication: publicationPreview.confirm,
+    getActorBinding: getPublicationActorBinding,
     forumClient: forum.client,
     literatureClient: literatureAuthorityClient,
     literatureMetadataRepository,
@@ -2772,6 +2797,7 @@ export function AppShell({
             }
           }}
         />
+        {publicationPreview.dialog}
         <AppDialogs
           academicProfile={profileActions.academicProfile}
           accountMessage={cloudAccount.model.accountMessage}

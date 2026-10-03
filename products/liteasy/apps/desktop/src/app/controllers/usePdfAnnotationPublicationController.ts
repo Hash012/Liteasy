@@ -1,3 +1,4 @@
+import type { PublicationPreview } from "../features/forum/usePublicationPreview";
 import { normalizeLiteratureIdentifier } from "../features/paper-identity/paperIdentity";
 import { useRef, useState } from "react";
 import type {
@@ -50,6 +51,7 @@ type PublicationForumClient = Pick<
 >;
 
 type PdfAnnotationPublicationControllerInput = {
+  confirmPublication?: (preview: PublicationPreview) => Promise<boolean>;
   getActorBinding?: () => PublicationActorBinding | undefined;
   forumClient: PublicationForumClient;
   literatureClient: Pick<
@@ -236,6 +238,7 @@ function searchDraftFromRequest(request: LiteratureResolveInput): LiteratureSear
 
 export function usePdfAnnotationPublicationController({
   getActorBinding,
+  confirmPublication,
   forumClient,
   literatureClient,
   literatureMetadataRepository,
@@ -573,6 +576,16 @@ export function usePdfAnnotationPublicationController({
       assertCurrentActor();
       if (value.operation === "upsert") assertPublicSource();
       if (!input.onPreparedPublication) throw new Error("发布任务尚未安全保存，未发送到论坛。");
+      const approved = await confirmPublication?.({
+        title: value.operation === "retract" ? "确认撤回论坛批注" : "预览将公开的批注",
+        recipient: value.operation === "retract" ? "从论坛撤回；已下载的副本不会被远程删除" : "Intuecho 公开批注及广场",
+        body: value.operation === "upsert" ? value.body : "该条批注的后续论坛访问将被收回。已有回复和独立派生内容仍遵循其原有权限。",
+        excerpts: value.operation === "upsert" ? [{ label: `${input.paper.title}${value.sourcePassage.page ? ` · 第 ${value.sourcePassage.page} 页` : ""}`, text: value.sourcePassage.excerpt }] : [],
+        action: value.operation === "retract" ? "确认撤回" : "确认公开"
+      });
+      if (!approved) throw new Error("PUBLICATION_PREVIEW_CANCELLED");
+      assertCurrentActor();
+      if (value.operation === "upsert") assertPublicSource();
       const { pendingCreateOperation: _legacyPending, ...prior } = priorPublication;
       priorPublication = {
         ...prior,
@@ -735,6 +748,7 @@ export function usePdfAnnotationPublicationController({
       pendingCreateRecoveryRef.current.delete(queueKey);
       return publication;
     } catch (error) {
+      if (error instanceof Error && error.message === "PUBLICATION_PREVIEW_CANCELLED") return { ...priorPublication, lastError: "已取消本次发送，内容仍保留在本机。" };
       if (input.operation === "publish" && operation?.operation === "upsert" &&
         !priorPublication.remoteAnnotationId) {
         pendingCreateRecoveryRef.current.set(queueKey, {

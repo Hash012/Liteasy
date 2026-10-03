@@ -1,3 +1,4 @@
+import type { PublicationActorBinding } from "../features/forum/publicationActorBinding";
 import { loadDurableEntries, putDurableEntry } from "../features/persistence/durableJsonStore";
 import { useEffect, useRef, useState } from "react";
 import { useArtifactActions } from "../features/artifacts/useArtifactActions";
@@ -73,6 +74,8 @@ type UseArtifactWorkflowControllerInput = {
   getMineruFiguresForPaperId?: (paperId: string) => MineruFigure[];
   getIntuechoEndpoint?: () => string;
   getIntuechoSessionId?: () => string | undefined;
+  getActorBinding?: () => PublicationActorBinding | undefined;
+  assertCanPublishThinReading?: (document: ThinReadingDocument) => void | Promise<void>;
   getGenerationSettings?: () => import("../features/settings/settings.types").SettingsState;
   getAssistantLanguage?: () => string;
   getActiveReaderPaper?: () => Paper | null;
@@ -172,6 +175,8 @@ export function useArtifactWorkflowController({
   getMineruFiguresForPaperId,
   getIntuechoEndpoint,
   getIntuechoSessionId,
+  getActorBinding,
+  assertCanPublishThinReading,
   getGenerationSettings,
   getAssistantLanguage,
   getActiveReaderPaper,
@@ -327,6 +332,8 @@ export function useArtifactWorkflowController({
     getMineruFiguresForPaperId,
     getIntuechoEndpoint,
     getIntuechoSessionId,
+    getActorBinding,
+    assertCanPublishThinReading,
     getGenerationSettings,
     getAssistantLanguage,
     getActiveReaderPaper,

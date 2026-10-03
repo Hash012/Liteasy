@@ -96,6 +96,7 @@ function deferred<T>() {
 }
 
 function setup(input: {
+  confirmPublication?: (preview: import("../app/features/forum/usePublicationPreview").PublicationPreview) => Promise<boolean>;
   getActorBinding?: () => PublicationActorBinding | undefined;
   initialPapers?: Paper[];
   loadLiterature?: ReturnType<typeof vi.fn>;
@@ -125,6 +126,7 @@ function setup(input: {
   const hook = renderHook(() => {
     const controller = usePdfAnnotationPublicationController({
     getActorBinding: input.getActorBinding ?? (() => publicationActor),
+    confirmPublication: input.confirmPublication ?? (async () => true),
     forumClient: { applyAnnotationPublications },
     literatureClient: {
       confirmLiterature,
@@ -159,6 +161,20 @@ function setup(input: {
 }
 
 describe("usePdfAnnotationPublicationController", () => {
+  test("does not prepare or upload when the local publication preview is cancelled", async () => {
+    const confirmPublication = vi.fn(async () => false);
+    const context = setup({ confirmPublication });
+    const persist = vi.fn();
+    const result = await context.result.current.actions.changePublication({
+      annotation: annotation(), operation: "publish", paper: paper({ literature: literature() }), onPreparedPublication: persist
+    });
+    expect(confirmPublication).toHaveBeenCalledWith(expect.objectContaining({ title: "预览将公开的批注", recipient: "Intuecho 公开批注及广场" }));
+    expect(result.lastError).toContain("已取消");
+    expect(result.pendingOperation).toBeUndefined();
+    expect(persist).not.toHaveBeenCalled();
+    expect(context.applyAnnotationPublications).not.toHaveBeenCalled();
+  });
+
   test("does not label a newer local edit as published when reconciling an older frozen operation", async () => {
     const context = setup();
     const { createUpsertOperation } = await import("../app/features/pdf/pdfAnnotationIntuechoSync");
@@ -1340,6 +1356,7 @@ describe("usePdfAnnotationPublicationController", () => {
       const [readerPaper, setReaderPaper] = useState(initialPaper);
       const controller = usePdfAnnotationPublicationController({
         getActorBinding: () => publicationActor,
+        confirmPublication: async () => true,
         forumClient,
         literatureMetadataRepository: { load: vi.fn().mockResolvedValue(literature()) },
         onPaperUpdated: setReaderPaper,
