@@ -42,3 +42,15 @@ test("references check actual source revision and current access before exposing
   await assert.rejects(repository.communitySourceRevision(reader, "intuecho.reply", question.reply.id, 1), { code: "ANNOTATION_NOT_FOUND" });
   await assert.rejects(repository.readingSources("org-first", reader, "Synthetic"), { code: "ORGANIZATION_ACCESS_DENIED" });
 }));
+
+test("public reply history handles nullable organization scope and private history stays private after promotion", async () => fixture(async ({ repository, base }) => {
+  const publicInput = { ...base, visibility: "public", organizationId: undefined };
+  const annotation = await repository.createAnnotation(host, publicInput);
+  const reply = (await repository.createReply(annotation.id, reader, { body: "Original public reply", publishAsAnnotation: false, tags: [], targets: [] })).reply;
+  await repository.updateReply(reply.id, reader, { body: "Current public reply", expectedRevision: 1 });
+  const old = await repository.communitySourceRevision(host, "intuecho.reply", reply.id, 1);
+  assert.equal(old.body, "Original public reply"); assert.equal(old.currentRevision, 2); assert.equal(old.organizationId, null);
+  const privateAnnotation = await repository.createAnnotation(host, { ...base, visibility: "private", organizationId: undefined, body: "Private old body" });
+  await repository.updateAnnotation(privateAnnotation.id, host, { visibility: "public", body: "Explicit public replacement", expectedRevision: 1 });
+  await assert.rejects(repository.communitySourceRevision(reader, "intuecho.annotation", privateAnnotation.id, 1), { code: "SOURCE_NOT_FOUND" });
+}));

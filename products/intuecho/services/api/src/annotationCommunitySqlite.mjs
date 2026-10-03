@@ -1,3 +1,4 @@
+import { scopedPlatformTags } from "./scopedPlatformTags.mjs";
 import { communityPageOptions, communityPageCursor } from "./communityPagination.mjs";
 import { collaborationMetadata, assertSourceSnapshot } from "./collaborationMetadata.mjs";
 import { validateCommunityCommand, assertCommandReplay, commandReceipt, assertExpectedRevision } from "./communityCommands.mjs";
@@ -1442,7 +1443,7 @@ export class SqliteAnnotationCommunityRepository {
       const row = this.db.prepare("SELECT * FROM annotation_replies_v2 WHERE id = ?").get(id);
       if (!row || row.deleted_at || row.moderated_at || row.parent_deleted_at) throw new AnnotationCommunityError("SOURCE_NOT_FOUND", 404);
       const parent = await this.annotation(row.parent_annotation_id, viewer);
-      if (row.visibility !== parent.visibility || row.organization_id !== parent.organizationId) throw new AnnotationCommunityError("SOURCE_NOT_FOUND", 404);
+      if (row.visibility !== parent.visibility || (row.organization_id ?? null) !== (parent.organizationId ?? null)) throw new AnnotationCommunityError("SOURCE_NOT_FOUND", 404);
       current = this.#serializeReply(row); visibility = row.visibility; organizationId = row.organization_id;
       historical = version === current.revision ? current : parseJson(this.db.prepare("SELECT snapshot_json FROM annotation_reply_versions_v2 WHERE reply_id = ? AND revision = ?").get(id, version)?.snapshot_json, null);
     } else throw new AnnotationCommunityError("INVALID_SOURCE_NAMESPACE");
@@ -1586,7 +1587,7 @@ export class SqliteAnnotationCommunityRepository {
       ratingCount: Number(rating.count),
       revision: row.revision,
       shareToPlaza: Boolean(row.share_to_plaza),
-      tags: this.#tags(row.id),
+      tags: scopedPlatformTags(this.#tags(row.id), row),
       targets: this.#targets(row.id, hydrateTargets),
       updatedAt: row.updated_at,
       viewerCanModerate: false,
@@ -2071,7 +2072,7 @@ export class SqliteAnnotationCommunityRepository {
 
   #searchText(row) {
     const targets = this.#targets(row.id);
-    const tags = this.#tags(row.id).map((tag) => tag.name);
+    const tags = scopedPlatformTags(this.#tags(row.id), row).map((tag) => tag.name);
     return [row.body, ...tags, ...targets.flatMap((target) => [target.literature?.literatureRecord?.title, target.literature?.metadata?.title, target.literature?.title, target.excerpt, target.derivedContent?.excerpt, ...(target.evidence ?? []).map((evidence) => evidence.literature?.literatureRecord?.title)])].filter(Boolean).join(" ");
   }
 

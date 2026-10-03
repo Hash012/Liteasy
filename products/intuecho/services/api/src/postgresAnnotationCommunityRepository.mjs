@@ -1,3 +1,4 @@
+import { scopedPlatformTags } from "./scopedPlatformTags.mjs";
 import { communityPageOptions, communityPageCursor } from "./communityPagination.mjs";
 import { collaborationMetadata, assertSourceSnapshot } from "./collaborationMetadata.mjs";
 import { validateCommunityCommand, assertCommandReplay, commandReceipt, assertExpectedRevision } from "./communityCommands.mjs";
@@ -1074,12 +1075,18 @@ export class PostgresAnnotationCommunityRepository {
 
   async #validateSources(metadata, viewer, organizationId, client) {
     const references = [...(metadata?.sourceRefs ?? [])].sort((a, b) => `${a.sourceNamespace}:${a.sourceId}`.localeCompare(`${b.sourceNamespace}:${b.sourceId}`));
+    // Parent-before-reply order also matches reply edits and parent withdrawal.
+    const parents = new Set(references.filter((reference) => reference.sourceNamespace === "intuecho.annotation").map((reference) => reference.sourceId));
+    for (const reference of references.filter((reference) => reference.sourceNamespace === "intuecho.reply")) {
+      const row = await this.#replyRow(reference.sourceId, client);
+      if (row) parents.add(row.parent_annotation_id);
+    }
+    if (parents.size) await client.query("SELECT id FROM annotations WHERE id = ANY($1::text[]) ORDER BY id FOR SHARE", [[...parents].sort()]);
     for (const reference of references) {
       const table = { "intuecho.annotation": "annotations", "intuecho.reply": "annotation_replies", "intuecho.literature": "literature_records" }[reference.sourceNamespace];
       const row = (await client.query(`SELECT * FROM ${table} WHERE id = $1 FOR SHARE`, [reference.sourceId])).rows[0];
       if (!row || row.withdrawn_at || row.deleted_at || row.moderated_at || row.parent_deleted_at) throw new AnnotationCommunityError("SOURCE_NOT_FOUND", 404);
       if (Number(row.revision) !== reference.revision) throw new AnnotationCommunityError("SOURCE_REVISION_CONFLICT", 409);
-      if (reference.sourceNamespace === "intuecho.reply") await client.query("SELECT id FROM annotations WHERE id = $1 FOR SHARE", [row.parent_annotation_id]);
       const snapshot = await this.communitySourceRevision(viewer, reference.sourceNamespace, reference.sourceId, reference.revision, client);
       assertSourceSnapshot(reference, snapshot, organizationId);
     }
@@ -1102,7 +1109,7 @@ export class PostgresAnnotationCommunityRepository {
       const row = await this.#replyRow(id, client);
       if (!row || row.deleted_at || row.moderated_at || row.parent_deleted_at) throw new AnnotationCommunityError("SOURCE_NOT_FOUND", 404);
       const parent = await this.annotation(row.parent_annotation_id, viewer, client);
-      if (row.visibility !== parent.visibility || row.organization_id !== parent.organizationId) throw new AnnotationCommunityError("SOURCE_NOT_FOUND", 404);
+      if (row.visibility !== parent.visibility || (row.organization_id ?? null) !== (parent.organizationId ?? null)) throw new AnnotationCommunityError("SOURCE_NOT_FOUND", 404);
       current = this.#serializeReply(row, viewer); visibility = row.visibility; organizationId = row.organization_id;
       historical = version === current.revision ? current : (await client.query("SELECT body, collaboration FROM annotation_reply_versions WHERE reply_id = $1 AND revision = $2", [id, version])).rows[0];
     } else throw new AnnotationCommunityError("INVALID_SOURCE_NAMESPACE");
@@ -1257,7 +1264,7 @@ export class PostgresAnnotationCommunityRepository {
 
   async #serialize(row, viewer, client = this.pool, prefetched = null) {
     const targets = prefetched?.targets ?? await this.#targets(row.id, client);
-    const tags = prefetched?.tags ?? await this.#tags(row.id, client);
+    const tags = scopedPlatformTags(prefetched?.tags ?? await this.#tags(row.id, client), row);
     const viewerState = prefetched?.viewerState ?? (viewer?.id
       ? await client.query(`SELECT (SELECT rating FROM annotation_ratings WHERE annotation_id = $1 AND user_id = $2) AS rating, EXISTS(SELECT 1 FROM annotation_saves WHERE annotation_id = $1 AND user_id = $2) AS saved`, [row.id, viewer.id])
       : { rows: [{ rating: null, saved: false }] });
@@ -1382,6 +1389,8 @@ export class PostgresAnnotationCommunityRepository {
       const deleted = await client.query("SELECT 1 FROM account_deletion_jobs WHERE subject_id = $1", [author.id]);
       if (deleted.rows[0]) throw new AnnotationCommunityError("ACCOUNT_DELETED", 403);
       if (input.expectedAuthorProfileRevision !== undefined && (await this.profile(author.id, client)).revision !== input.expectedAuthorProfileRevision) throw new AnnotationCommunityError("AUTHOR_PROFILE_CHANGED", 409);
+      const beforeLock = await this.#replyRow(replyId, client);
+      if (beforeLock) await this.#row(beforeLock.parent_annotation_id, client, true);
       const row = await this.#replyRow(replyId, client, true);
       if (!row || row.deleted_at) throw new AnnotationCommunityError("REPLY_NOT_FOUND", 404);
       if (row.author_id !== author.id) throw new AnnotationCommunityError("NOT_REPLY_AUTHOR", 403);
@@ -1411,6 +1420,8 @@ export class PostgresAnnotationCommunityRepository {
       const deleted = await client.query("SELECT 1 FROM account_deletion_jobs WHERE subject_id = $1", [author.id]);
       if (deleted.rows[0]) throw new AnnotationCommunityError("ACCOUNT_DELETED", 403);
       if (input.expectedAuthorProfileRevision !== undefined && (await this.profile(author.id, client)).revision !== input.expectedAuthorProfileRevision) throw new AnnotationCommunityError("AUTHOR_PROFILE_CHANGED", 409);
+      const beforeLock = await this.#replyRow(replyId, client);
+      if (beforeLock) await this.#row(beforeLock.parent_annotation_id, client, true);
       const row = await this.#replyRow(replyId, client, true);
       if (!row || row.deleted_at) throw new AnnotationCommunityError("REPLY_NOT_FOUND", 404);
       if (row.author_id !== author.id) throw new AnnotationCommunityError("NOT_REPLY_AUTHOR", 403);

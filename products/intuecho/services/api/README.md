@@ -57,6 +57,9 @@ provenance. Withdrawn samples cannot contribute to new assignments.
 
 Migration 028 preserves historical tags, pending appeals and append-only audits.
 A legacy platform tag with no `sourceScope` is **not** evidence of safe derivation.
+Unknown or mismatched platform provenance is quarantined from content reads and
+search; public output never exposes corpus-derived platform labels. Stored tags,
+user labels, appeals and audits remain intact for explicit review.
 Before reopening affected existing data, inventory these assignments by audience,
 review their candidate history offline, and explicitly recompute selected active
 assignments using the scoped classifier. Existing normal annotation edits already

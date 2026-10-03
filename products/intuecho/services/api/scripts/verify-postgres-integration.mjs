@@ -1,5 +1,5 @@
 import { verifyCommunityReadScaling } from "./verify-community-read-scaling.mjs";
-import { verifyStructuredCollaboration } from "./verify-structured-collaboration.mjs";
+import { verifyStructuredCollaboration, verifySourceCommitRaces } from "./verify-structured-collaboration.mjs";
 import { verifyScopeDerivedTags } from "./verify-scope-derived-tags.mjs";
 import { verifyCommunityCommands } from "./verify-community-commands.mjs";
 import assert from "node:assert/strict";
@@ -2199,6 +2199,7 @@ try {
   const structuredCommunityEvents = await verifyStructuredCommunityEvents({ pool, literatureId: confirmedLiterature.literatureId });
   await verifyScopeDerivedTags(new PostgresAnnotationCommunityRepository(pool, { authorizeOrganizationVisibility: async () => true }));
   const structuredCollaboration = await verifyStructuredCollaboration(pool);
+  const sourceCommitRaces = await verifySourceCommitRaces(pool);
   const communityCommands = await verifyCommunityCommands(new PostgresAnnotationCommunityRepository(pool));
   const platformGovernance = await verifyPlatformGovernanceVisibility({ pool, literatureId: confirmedLiterature.literatureId });
   const previewAuthor = { id: "profile-preview-verification", name: "Synthetic Profile Author", initials: "PA" };
@@ -2406,6 +2407,7 @@ try {
     communityCommands,
     readScaling,
     structuredCollaboration,
+    sourceCommitRaces,
     scopedDerivedTags: true,
     authorProfileRevision: true,
     database: application.database,
