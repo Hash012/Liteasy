@@ -58,8 +58,13 @@ export function commandRecords(owner: string): CommandRecord[] {
     if (!storageKey?.startsWith(start)) continue;
     try {
       const record = JSON.parse(localStorage.getItem(storageKey) ?? "null");
-      if (record?.owner === owner && record.version === 1) records.push(record.value);
-    } catch { /* A damaged record is never sent automatically. */ }
+      if (record?.owner !== owner || record.version !== 1 || !record.value ||
+        typeof record.value.operationId !== "string" || typeof record.value.bodyDigest !== "string" ||
+        !["create_annotation", "create_reply"].includes(record.value.operationType) ||
+        !["prepared", "outcome_unknown", "committed", "rejected"].includes(record.value.state) ||
+        typeof record.value.updatedAt !== "string") throw new Error("Invalid command record");
+      records.push(record.value);
+    } catch { throw new Error("操作记录损坏，无法安全重试。请保留此浏览器中的记录并核实原操作。"); }
   }
   return records.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }

@@ -15,6 +15,7 @@ export function AnnotationSendPreview({ input, authorName, profile, organization
   return <section className="annotation-send-preview" aria-label="发送预览">
     <h3>确认要发送的内容</h3>
     <p>保存到 Intuecho · 接收方：{organizationName ?? audienceLabels[input.visibility]}{input.shareToPlaza ? " · 同时展示到广场" : " · 不加入广场"}</p>
+    {input.visibility === "public" && !input.shareToPlaza && <p>此内容仍然公开，所有人可见；不加入广场仅影响展示位置。</p>}
     <p>作者资料：{authorName}{profile.educationStage ? ` · ${profile.educationStage}` : ""}{profile.institutions.map((institution) => ` · ${institution.name}`).join("")}</p>
     <p>学段与机构由本人填写，不代表平台认证。可在个人中心修改或清空。</p>
     <div className="annotation-send-preview-body">{input.body}</div>

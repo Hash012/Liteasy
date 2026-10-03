@@ -123,7 +123,7 @@ describe("communityApi literature clients", () => {
   });
 
   test("strips hydrated literature projections from annotation write requests", async () => {
-    fetchMock.mockResolvedValue(ok({ annotation: {} }));
+    fetchMock.mockResolvedValue(ok({ annotation: { id: "annotation-1" } }));
     vi.stubGlobal("fetch", fetchMock);
     const hydratedTarget = {
       kind: "whole_document" as const,
@@ -139,6 +139,7 @@ describe("communityApi literature clients", () => {
     });
 
     expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({
+      command: { protocolVersion: 1, operationId: expect.any(String), bodyDigest: expect.stringMatching(/^[a-f0-9]{64}$/) },
       body: "Canonical write boundary",
       shareToPlaza: true,
       tags: [],

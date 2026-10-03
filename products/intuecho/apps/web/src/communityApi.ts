@@ -1,5 +1,7 @@
+import { CommunityRequestError, durableCreate, type CommandLookup, type RequestIdentity } from "./communityCommands";
+import type { CommandRecord } from "./communityPersistence";
 import type { CommunityPreference, CommunityReport, CommunityReportInput, CommunityReportResolution, CommunityNotification } from "./community-governance/governance.types";
-import type { OrganizationChoice } from "@intuecho/contracts";
+import type { CommunitySourceReference, CollaborationMetadata, OrganizationChoice } from "@intuecho/contracts";
 import {
   clearRejectedIdentitySession,
   getIdentitySessionGeneration,
@@ -27,10 +29,11 @@ import type {
   ReplyPublicationInput
 } from "./community.types";
 
-async function request<T>(path: string, init?: RequestInit, authenticated = false): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, authenticated = false, expectedIdentity?: RequestIdentity): Promise<T> {
   const generation = getIdentitySessionGeneration();
   const session = await resolveIdentitySession();
   if (generation !== getIdentitySessionGeneration()) throw new Error("账号会话已变化，请重新操作。");
+  if (expectedIdentity && (generation !== expectedIdentity.generation || session?.userId !== expectedIdentity.session.userId || session?.issuer !== expectedIdentity.session.issuer)) throw new Error("账号会话已变化，请重新操作。");
   if (authenticated && !session) {
     notifyAuthenticationRequired();
     throw new Error("请先登录后再继续。");
@@ -48,7 +51,7 @@ async function request<T>(path: string, init?: RequestInit, authenticated = fals
   if (response.status === 401 && session) {
     await clearRejectedIdentitySession(session, generation);
   }
-  if (!response.ok) throw new Error(body.message ?? body.error ?? "请求未能完成");
+  if (!response.ok) throw new CommunityRequestError(response.status, body.error ?? "REQUEST_FAILED", body.message ?? body.error ?? "请求未能完成", body);
   return body;
 }
 
@@ -73,12 +76,13 @@ export const communityApi = {
     return request<{ annotations: CommunityAnnotation[]; filters: PlazaFilters }>(`/v1/plaza?${params}`);
   },
   annotation: (id: string) => request<{ annotation: CommunityAnnotation }>(`/v1/annotations/${encodeURIComponent(id)}`),
-  createAnnotation: (body: CreateAnnotationInput) => request<{ annotation: CommunityAnnotation }>("/v1/annotations", { method: "POST", body: writeBody(body) }, true),
+  createAnnotation: (body: CreateAnnotationInput, intentId?: string) => durableCreate("create_annotation", null, body, (payload, identity) => request<{ annotation: CommunityAnnotation }>("/v1/annotations", { method: "POST", body: writeBody(payload) }, true, identity), intentId),
+  lookupCommand: (operation: CommandRecord) => request<CommandLookup>(`/v1/community-commands/${operation.operationType}/${encodeURIComponent(operation.operationId)}`, undefined, true),
   consumeAnnotationHandoff: (handoffId: string) => request<{ draft: CreateAnnotationInput; replayed: boolean }>(`/v1/annotation-handoffs/${encodeURIComponent(handoffId)}/consume`, { method: "POST", body: "{}" }, true),
-  updateAnnotation: (id: string, body: Partial<CreateAnnotationInput>) => request<{ annotation: CommunityAnnotation }>(`/v1/annotations/${encodeURIComponent(id)}`, { method: "PUT", body: writeBody(body) }, true),
+  updateAnnotation: (id: string, body: Partial<CreateAnnotationInput> & { expectedRevision: number }) => request<{ annotation: CommunityAnnotation }>(`/v1/annotations/${encodeURIComponent(id)}`, { method: "PUT", body: writeBody(body) }, true),
   replies: (id: string) => request<{ replies: CommunityReply[] }>(`/v1/annotations/${encodeURIComponent(id)}/replies`),
-  createReply: (id: string, body: CreateReplyInput) => request<{ annotation: CommunityAnnotation | null; reply: CommunityReply }>(`/v1/annotations/${encodeURIComponent(id)}/replies`, { method: "POST", body: writeBody(body) }, true),
-  updateReply: (id: string, body: { body: string }) => request<{ reply: CommunityReply }>(`/v1/replies/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(body) }, true),
+  createReply: (id: string, body: CreateReplyInput, intentId?: string) => durableCreate("create_reply", id, body, (payload, identity) => request<{ annotation: CommunityAnnotation | null; reply: CommunityReply }>(`/v1/annotations/${encodeURIComponent(id)}/replies`, { method: "POST", body: writeBody(payload) }, true, identity), intentId),
+  updateReply: (id: string, body: { body: string; expectedRevision: number }) => request<{ reply: CommunityReply }>(`/v1/replies/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(body) }, true),
   resolveLiterature: (body: LiteratureResolveInput) => request<LiteratureResolveResult>("/v1/literature:resolve", { method: "POST", body: JSON.stringify(body) }, true),
   confirmLiterature: (body: LiteratureConfirmInput) => request<{ literature: LiteratureRecord }>("/v1/literature:confirm", { method: "POST", body: JSON.stringify(body) }, true),
   updateReplyPublication: (id: string, body: ReplyPublicationInput) => request<{ annotation: CommunityAnnotation | null; reply: CommunityReply }>(`/v1/replies/${encodeURIComponent(id)}/publication`, { method: "PUT", body: writeBody(body) }, true),
@@ -94,6 +98,8 @@ export const communityApi = {
   sendMessage: (conversationId: string, body: { body: string; invitation?: { organizationId: string; role: string }; kind: "text" | "organization_invitation" }) => request(`/v1/conversations/${encodeURIComponent(conversationId)}/messages`, { method: "POST", body: JSON.stringify(body) }, true),
   appealTag: (annotationId: string, tag: string, reason: string) => request(`/v1/annotations/${encodeURIComponent(annotationId)}/tags/${encodeURIComponent(tag)}/appeals`, { method: "POST", body: JSON.stringify({ reason }) }, true),
   myAnnotations: () => request<{ annotations: CommunityAnnotation[] }>("/v1/me/annotations", undefined, true),
+  readingSources: (organizationId: string, query = "") => request<{ sources: LiteratureRecord[] }>(`/v1/organizations/${encodeURIComponent(organizationId)}/reading-sources?query=${encodeURIComponent(query)}`, undefined, true),
+  sourceRevision: (reference: CommunitySourceReference) => request<{ sourceNamespace: string; sourceId: string; revision: number; currentRevision: number; historical: boolean; body?: string; literature?: LiteratureRecord; collaboration?: CollaborationMetadata }>(`/v1/community-sources/${encodeURIComponent(reference.sourceNamespace)}/${encodeURIComponent(reference.sourceId)}/revisions/${reference.revision}`, undefined, true),
   organizationChoices: () => request<{ organizations: OrganizationChoice[] }>("/v1/me/organizations", undefined, true),
   organizationAnnotations: () => request<{ organizations: OrganizationAnnotationGroup[] }>("/v1/me/organization-annotations", undefined, true),
   moderateOrganizationAnnotation: (annotationId: string, body: { action: "restore" | "withdraw"; reason: string }) => request(`/v1/annotations/${encodeURIComponent(annotationId)}/organization-moderation`, { method: "POST", body: JSON.stringify(body) }, true),

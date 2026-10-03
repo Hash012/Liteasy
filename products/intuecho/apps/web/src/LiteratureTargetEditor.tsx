@@ -15,7 +15,7 @@ import type { LiteratureCandidate, LiteratureRecord, LiteratureResolveResult } f
 import { communityApi } from "./communityApi";
 import type { AnnotationReadTarget, AnnotationTarget } from "./community.types";
 
-type Props = { onChange: (targets: AnnotationTarget[]) => void; required: boolean; targets: Array<AnnotationTarget | AnnotationReadTarget> };
+type Props = { onConfirmed?: (record: LiteratureRecord) => void; onChange: (targets: AnnotationTarget[]) => void; required: boolean; targets: Array<AnnotationTarget | AnnotationReadTarget> };
 type TargetKind = "whole_document" | "source_passage";
 function recordTitle(record: LiteratureRecord | LiteratureCandidate["record"] | undefined) {
   return record?.title || "已确认文献";
@@ -39,7 +39,7 @@ async function hashExcerpt(excerpt: string) {
   return `sha256:${[...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("")}`;
 }
 
-export function LiteratureTargetEditor({ onChange, required, targets }: Props) {
+export function LiteratureTargetEditor({ onChange, onConfirmed, required, targets }: Props) {
   const attemptRef = useRef(0);
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<TargetKind>("whole_document");
@@ -86,7 +86,9 @@ export function LiteratureTargetEditor({ onChange, required, targets }: Props) {
     try {
       const response = await communityApi.confirmLiterature({ candidateKey: candidate.candidateKey, mode });
       if (attempt !== attemptRef.current) return;
+      if (response.literature.status !== "confirmed") throw new Error("该资料尚未确认，不能加入组织读书包。");
       setConfirmed(response.literature);
+      onConfirmed?.(response.literature);
       setLiteratureRecords((records) => ({ ...records, [response.literature.literatureId]: response.literature }));
       if (kind === "whole_document") void addConfirmed(response.literature, "", "", attempt);
     } catch (reason) {

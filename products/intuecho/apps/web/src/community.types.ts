@@ -44,6 +44,7 @@ export type AnnotationReadTarget = AnnotationReadProjection<ContractAnnotationTa
 export type AnnotationVisibility = "private" | "organization" | "mutual_followers" | "public";
 
 export type CommunityAnnotation = {
+  collaboration?: import("@intuecho/contracts").CollaborationMetadata | null;
   contribution?: import("@intuecho/contracts").AnnotationContribution;
   author: {
     id: string;
@@ -58,7 +59,7 @@ export type CommunityAnnotation = {
   createdAt: string;
   id: string;
   organizationId: string | null;
-  originalReply: { replyId: string; status: "available" | "parent_deleted" } | null;
+  originalReply: { replyId: string; revision?: number; status: "available" | "parent_deleted" } | null;
   ratingAverage: number | null;
   ratingCount: number;
   revision: number;
@@ -90,6 +91,7 @@ export type AcademicProfile = {
 };
 
 export type CommunityReply = {
+  collaboration?: import("@intuecho/contracts").CollaborationMetadata | null;
   author: CommunityAnnotation["author"];
   body: string;
   createdAt: string;
@@ -121,6 +123,8 @@ export type ConversationSummary = {
 };
 
 export type CreateReplyInput = {
+  collaboration?: import("@intuecho/contracts").CollaborationMetadata;
+  expectedAuthorProfileRevision?: number;
   mentionedUserIds?: string[];
   body: string;
   expectedParent?: AnnotationParentSnapshot;
@@ -129,7 +133,7 @@ export type CreateReplyInput = {
   targets: AnnotationTarget[];
 };
 
-export type ReplyPublicationInput = UpdateReplyPublicationInput;
+export type ReplyPublicationInput = UpdateReplyPublicationInput & { expectedRevision?: number; expectedAuthorProfileRevision?: number; expectedParent?: AnnotationParentSnapshot };
 
 export type PlazaFilters = {
   documentType?: string;

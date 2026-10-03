@@ -2,12 +2,13 @@ import type { CommunityAnnotation, CommunityReply } from "../community.types";
 
 export function annotationFixture(overrides: Partial<CommunityAnnotation> = {}): CommunityAnnotation {
   return {
+    collaboration: { schemaVersion: 1, kind: "reading_pack", sourceRefs: [{ sourceNamespace: "intuecho.literature", sourceId: "literature_1", revision: 1 }] },
     author: { id: "host_1", name: "Synthetic host", initials: "SH", profile: { educationStage: null, institutions: [] } },
     body: "# Synthetic reading pack\n\nRead and compare", createdAt: "2026-10-03T00:00:00.000Z",
     id: "pack_1", organizationId: "org_x", originalReply: null, ratingAverage: null, ratingCount: 0,
     revision: 2, shareToPlaza: false,
     tags: [{ confidence: null, name: "读书包", origin: "user", state: "active" }],
-    targets: [{ kind: "whole_document", literature: { literatureId: "literature_1" } }],
+    targets: [{ kind: "whole_document", literature: { literatureId: "literature_1", literatureRecord: { literatureId: "literature_1", title: "已确认文献 Synthetic reading", authors: [], identifiers: [], status: "confirmed", revision: 1, provenance: { mode: "public_registry", provider: "crossref", confirmedAt: "2026-10-03T00:00:00.000Z" } } } }],
     updatedAt: "2026-10-03T00:00:00.000Z", viewerCanModerate: false,
     viewerIsAuthor: false, viewerSaved: false, viewerRating: null, visibility: "organization", withdrawnAt: null,
     ...overrides

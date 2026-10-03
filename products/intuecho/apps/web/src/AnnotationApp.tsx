@@ -59,6 +59,7 @@ import {
   type AnnotationReadTarget,
   type AnnotationTarget,
   type CommunityAnnotation,
+  type CreateAnnotationInput,
   type CommunityReply,
   type ConversationSummary,
   type PaperIdentity,
@@ -66,6 +67,13 @@ import {
 } from "./community.types";
 import { communityApi } from "./communityApi";
 import { canonicalizeInheritedTargets } from "./canonicalizeInheritedTargets";
+import type { CommunitySourceReference } from "@intuecho/contracts";
+import { SourceRevision } from "./SourceRevision";
+import { CommunityOperationCenter } from "./CommunityOperationCenter";
+import { RevisionConflict } from "./RevisionConflict";
+import { LocalDraftControls } from "./LocalDraftControls";
+import { AnnotationSendPreview } from "./AnnotationSendPreview";
+import { draftOwner, saveDraft, removeDraft } from "./communityPersistence";
 import { AnnotationComposer as ExtractedAnnotationComposer, type ComposerState } from "./AnnotationComposer";
 import { ContributionSummary } from "./AnnotationContribution";
 import type { IdentityMode, IdentitySession } from "./identity.types";
@@ -75,7 +83,7 @@ const DevelopmentAuthForm = import.meta.env.DEV
   ? lazy(() => import("./DevelopmentAuthForm").then((module) => ({ default: module.DevelopmentAuthForm })))
   : null;
 
-type View = "plaza" | "following" | "messages" | "mine" | "organizations" | "profile" | "notifications" | "reports";
+type View = "plaza" | "following" | "messages" | "mine" | "organizations" | "profile" | "notifications" | "reports" | "operations";
 type ConversationSelection = { canSend?: boolean; id: string; participant: CommunityAnnotation["author"]; unreadCount?: number };
 const pendingHandoffStorageKey = "intuecho.pending-annotation-handoff.v2";
 const intuechoTheme = {
@@ -147,6 +155,11 @@ export function AnnotationApp() {
   const [authOpen, setAuthOpen] = useState(false);
   const [view, setView] = useState<View>("plaza");
   const [detailId, setDetailId] = useState<string | null>(() => decodeURIComponent(window.location.pathname.match(/^\/annotations\/([^/]+)$/)?.[1] ?? "") || null);
+  const [sourceReference, setSourceReference] = useState<CommunitySourceReference | null>(() => {
+    const match = window.location.pathname.match(/^\/sources\/(intuecho\.(?:annotation|reply|literature))\/([^/]+)$/);
+    const revision = Number(new URLSearchParams(window.location.search).get("revision"));
+    return match && Number.isSafeInteger(revision) && revision > 0 ? { sourceNamespace: match[1] as CommunitySourceReference["sourceNamespace"], sourceId: decodeURIComponent(match[2]), revision } : null;
+  });
   const [composer, setComposer] = useState<ComposerState | null>(null);
   const [conversation, setConversation] = useState<ConversationSelection | null>(null);
   const [refresh, setRefresh] = useState(0);
@@ -176,11 +189,11 @@ export function AnnotationApp() {
     `${session?.sessionId ?? "signed-out"}-${inboxRefresh}`,
     8_000
   );
-  const actorBinding = JSON.stringify([intuechoApiBaseUrl, session?.userId, getIdentitySessionGeneration()]);
+  const actorBinding = JSON.stringify([intuechoApiBaseUrl, session?.issuer, session?.userId, getIdentitySessionGeneration()]);
   const unreadMessages = inbox.data?.conversations.reduce((total, item) => total + item.unreadCount, 0) ?? 0;
 
   function applySession(next: IdentitySession | null) {
-    if (sessionRef.current?.sessionId !== next?.sessionId || sessionRef.current?.userId !== next?.userId) {
+    if (sessionRef.current?.sessionId !== next?.sessionId || sessionRef.current?.userId !== next?.userId || sessionRef.current?.issuer !== next?.issuer) {
       sessionGeneration.current += 1;
       setComposer(null);
       setConversation(null);
@@ -249,7 +262,7 @@ export function AnnotationApp() {
         await identityApi.logout().catch(() => setHandoffStatus("本次页面已退出；远程会话撤销尚未确认。"));
       }}
       onPublish={() => requireSession(() => setComposer({}))}
-      onView={(next) => { setDetailId(null); window.history.pushState({}, document.title, "/"); setView(next); }}
+      onView={(next) => { setSourceReference(null); setDetailId(null); window.history.pushState({}, document.title, "/"); setView(next); }}
       session={session}
       unreadMessages={unreadMessages}
       view={view}
@@ -258,7 +271,7 @@ export function AnnotationApp() {
     <GovernanceScope actorBinding={actorBinding} signedIn={Boolean(session)}>
     <div className="annotation-workspace" key={actorBinding}>
       <main className="annotation-main">
-        {detailId ? <AnnotationDetail annotationId={detailId} refresh={refresh} session={session} onCompose={setComposer} onConversation={setConversation} /> : <>
+        {sourceReference ? <SourceRevision key={actorBinding} reference={sourceReference} /> : detailId ? <AnnotationDetail annotationId={detailId} refresh={refresh} session={session} onCompose={setComposer} onConversation={setConversation} /> : <>
           {view === "plaza" && <Plaza filters={filters} onFilters={setFilters} refresh={refresh} session={session} onCompose={setComposer} onConversation={setConversation} />}
           {view === "following" && (session ? <FollowingAnnotations refresh={refresh} session={session} onCompose={setComposer} onConversation={setConversation} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
           {view === "messages" && (session ? <ConversationsPage data={inbox.data} error={inbox.error} onConversation={setConversation} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
@@ -266,12 +279,13 @@ export function AnnotationApp() {
           {view === "organizations" && (session ? <OrganizationAnnotations refresh={refresh} session={session} onCompose={setComposer} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
           {view === "notifications" && (session ? <QuietInbox api={communityApi} actorBinding={actorBinding} onOpenReports={() => { setDetailId(null); window.history.pushState({}, document.title, "/"); setView("reports"); }} onOpenAnnotation={(id) => { setDetailId(id); window.history.pushState({}, document.title, `/annotations/${encodeURIComponent(id)}`); }} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
           {view === "reports" && (session ? <><CommunityReportHistory api={communityApi} actorBinding={actorBinding} /><CommunityReportHistory api={communityApi} actorBinding={actorBinding} review /></> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
+          {view === "operations" && (session ? <CommunityOperationCenter key={actorBinding} owner={draftOwner(session)} accountName={session.name} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
           {view === "profile" && (session ? <ProfileEditor refresh={refresh} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
         </>}
       </main>
     </div>
     </GovernanceScope>
-    {session && composer && <ExtractedAnnotationComposer authorName={session.name} context={composer} onClose={() => setComposer(null)} onSaved={() => { setComposer(null); setRefresh((value) => value + 1); }} />}
+    {session && composer && <ExtractedAnnotationComposer actorBinding={actorBinding} owner={draftOwner(session)} authorName={session.name} context={composer} onClose={() => setComposer(null)} onSaved={() => { setComposer(null); setRefresh((value) => value + 1); }} />}
     {session && conversation && <ConversationDrawer conversation={conversation} session={session!} onInboxChange={() => setInboxRefresh((value) => value + 1)} onClose={() => { setConversation(null); setInboxRefresh((value) => value + 1); }} />}
     {authOpen && <AuthDialog identityMode={identityMode} onAuthenticated={(next) => { applySession(next); setAuthOpen(false); }} onClose={() => setAuthOpen(false)} />}
   </FluentProvider>;
@@ -311,6 +325,7 @@ function AppHeader({ filters, onChangeFilters, onLogin, onLogout, onPublish, onV
         <button className={view === "messages" ? "active" : ""} aria-label="信息" aria-current={view === "messages" ? "page" : undefined} onClick={() => onView("messages")}><ChatMultiple20Regular /><span className="nav-label">信息</span>{unreadMessages > 0 && <Badge appearance="filled" color="brand" size="small" aria-label={`${unreadMessages} 条未读消息`}>{unreadMessages > 99 ? "99+" : unreadMessages}</Badge>}</button>
         <button className={view === "notifications" ? "active" : ""} aria-label="工作通知" aria-current={view === "notifications" ? "page" : undefined} onClick={() => onView("notifications")}><Alert20Regular /><span className="nav-label">工作通知</span></button>
         <button className={view === "reports" ? "active" : ""} aria-label="处理记录" aria-current={view === "reports" ? "page" : undefined} onClick={() => onView("reports")}><ShieldTask20Regular /><span className="nav-label">处理记录</span></button>
+        <button className={view === "operations" ? "active" : ""} aria-label="空间与操作" aria-current={view === "operations" ? "page" : undefined} onClick={() => onView("operations")}><ShieldTask20Regular /><span className="nav-label">空间与操作</span></button>
         <button className={view === "mine" ? "active" : ""} aria-label="我的批注" aria-current={view === "mine" ? "page" : undefined} onClick={() => onView("mine")}><Library20Regular /><span className="nav-label">我的批注</span></button>
         <button className={view === "organizations" ? "active" : ""} aria-label="组织批注" aria-current={view === "organizations" ? "page" : undefined} onClick={() => onView("organizations")}><PeopleTeam20Regular /><span className="nav-label">组织批注</span></button>
       </div>
@@ -513,23 +528,36 @@ export function ReplyThread({ annotation, onCompose, session }: { annotation: Co
   </section>;
 }
 
-export function ReplyItem({ parent, reply }: { onCompose: (value: { replyTo?: CommunityAnnotation }) => void; parent: CommunityAnnotation; reply: CommunityReply; session: IdentitySession | null }) {
+export function ReplyItem({ parent, reply, session }: { onCompose: (value: { replyTo?: CommunityAnnotation }) => void; parent: CommunityAnnotation; reply: CommunityReply; session: IdentitySession | null }) {
   const [body, setBody] = useState(reply.body);
+  const [baseRevision, setBaseRevision] = useState(reply.revision);
+  const [revisionConflict, setRevisionConflict] = useState(false);
   const [publicationState, setPublicationState] = useState(reply.derivedAnnotationState);
   const [derivedAnnotationId, setDerivedAnnotationId] = useState(reply.derivedAnnotationId);
   const [editing, setEditing] = useState(false);
   const [publicationPending, setPublicationPending] = useState(false);
   const [status, setStatus] = useState("");
   const publicationPendingRef = useRef(false);
+  const [publicationPreview, setPublicationPreview] = useState<{ input: CreateAnnotationInput; profile: AcademicProfile; generation: number }>();
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const owner = draftOwner(session);
+  const scope = `reply-edit:${reply.id}`;
+  const isCurrent = (generation: number) => mounted.current && generation === getIdentitySessionGeneration();
   async function save() {
+    const generation = getIdentitySessionGeneration();
     try {
-      const result = await communityApi.updateReply(reply.id, { body });
+      if (owner) saveDraft(owner, scope, { body, baseRevision });
+      const result = await communityApi.updateReply(reply.id, { body, expectedRevision: baseRevision });
+      if (!isCurrent(generation)) return;
+      setBaseRevision(result.reply.revision);
+      if (owner) { try { removeDraft(owner, scope); } catch { /* Preserve successful remote result. */ } }
       setBody(result.reply.body);
       setEditing(false);
-    } catch (reason) { setStatus(reason instanceof Error ? reason.message : "回复保存失败"); }
+    } catch (reason) { if (isCurrent(generation)) { setStatus(reason instanceof Error ? reason.message : "回复保存失败"); if (reason instanceof Error && reason.message.includes("REPLY_REVISION_CONFLICT")) setRevisionConflict(true); } }
   }
   async function updatePublication(published: boolean) {
-    if (publicationPendingRef.current) return;
+    if (publicationPendingRef.current || (published && publicationPreview)) return;
     publicationPendingRef.current = true;
     setPublicationPending(true);
     setStatus("");
@@ -541,7 +569,7 @@ export function ReplyItem({ parent, reply }: { onCompose: (value: { replyTo?: Co
           setDerivedAnnotationId(result.reply.derivedAnnotationId);
           setStatus("");
         } catch {
-          setStatus("撤回失败，独立批注仍公开");
+          setStatus("撤回结果待核实，请刷新原回复核对当前状态。");
         }
         return;
       }
@@ -555,10 +583,10 @@ export function ReplyItem({ parent, reply }: { onCompose: (value: { replyTo?: Co
         return;
       }
       try {
-        const result = await communityApi.updateReplyPublication(reply.id, { published: true, targets: canonicalTargets, tags: [] });
-        setPublicationState(result.reply.derivedAnnotationState);
-        setDerivedAnnotationId(result.reply.derivedAnnotationId);
-        setStatus("");
+        const generation = getIdentitySessionGeneration();
+        const { profile } = await communityApi.academicProfile();
+        if (!isCurrent(generation)) return;
+        setPublicationPreview({ input: { body, visibility: parent.visibility, ...(parent.organizationId ? { organizationId: parent.organizationId } : {}), shareToPlaza: false, targets: canonicalTargets, tags: [], expectedAuthorProfileRevision: profile.revision }, profile, generation });
       } catch {
         setStatus(publicationState === "withdrawn"
           ? "恢复失败，独立批注仍隐藏"
@@ -569,12 +597,29 @@ export function ReplyItem({ parent, reply }: { onCompose: (value: { replyTo?: Co
       setPublicationPending(false);
     }
   }
+  async function confirmPublication() {
+    const approved = publicationPreview;
+    if (!approved || !isCurrent(approved.generation) || publicationPendingRef.current) return;
+    publicationPendingRef.current = true; setPublicationPending(true);
+    try {
+      const { profile } = await communityApi.academicProfile();
+      if (!isCurrent(approved.generation)) return;
+      if (JSON.stringify(profile) !== JSON.stringify(approved.profile)) { setPublicationPreview(undefined); throw new Error("作者资料已变化，请重新预览。"); }
+      const result = await communityApi.updateReplyPublication(reply.id, { published: true, targets: approved.input.targets, tags: approved.input.tags,
+        expectedRevision: baseRevision, expectedAuthorProfileRevision: profile.revision,
+        expectedParent: { revision: parent.revision, visibility: parent.visibility, organizationId: parent.organizationId } });
+      if (!isCurrent(approved.generation)) return;
+      setPublicationState(result.reply.derivedAnnotationState); setDerivedAnnotationId(result.reply.derivedAnnotationId);
+      setBaseRevision(result.reply.revision); setPublicationPreview(undefined); setStatus("");
+    } catch (error) { if (isCurrent(approved.generation)) setStatus(error instanceof Error && /REVISION_CONFLICT|资料已变化|AUTHOR_PROFILE_CHANGED/.test(error.message) ? error.message : "发布结果待核实，请刷新原回复后核对。"); }
+    finally { publicationPendingRef.current = false; if (isCurrent(approved.generation)) setPublicationPending(false); }
+  }
   const publicationLabel = publicationState === "published" ? "停止独立批注" : publicationState === "withdrawn" ? "恢复独立批注" : "发布为独立批注";
   const publicationCommandLabel = publicationPending
     ? publicationState === "published" ? "正在撤回" : publicationState === "withdrawn" ? "正在恢复" : "正在发布"
     : publicationLabel;
   const publicationStateLabel = publicationState === "published" ? "已发布" : publicationState === "withdrawn" ? "已撤回" : "未发布";
-  return <article className="reply-item"><header><span className="author-avatar">{reply.author.initials}</span><div><strong>{reply.author.name}</strong><small>{new Date(reply.updatedAt).toLocaleDateString("zh-CN")}{reply.revision > 1 ? " · 已编辑" : ""}</small></div></header>{editing ? <><Textarea value={body} onChange={(_, data) => setBody(data.value)} /><div className="reply-edit-actions"><Button size="small" onClick={() => setEditing(false)}>取消</Button><Button size="small" appearance="primary" onClick={() => void save()}>保存</Button></div></> : <p>{body}</p>}<span className={`reply-publication-state ${publicationState}`}>独立批注：{publicationStateLabel}</span>{publicationState === "published" && derivedAnnotationId && <a className="derived-annotation-link" href={`/annotations/${encodeURIComponent(derivedAnnotationId)}`}>查看同步发布的批注</a>}<footer>{reply.viewerIsAuthor && !editing && <Button size="small" appearance="subtle" icon={<Edit20Regular />} onClick={() => setEditing(true)}>编辑</Button>}{reply.viewerIsAuthor && !editing && <Button size="small" appearance="subtle" disabled={publicationPending} onClick={() => void updatePublication(publicationState !== "published")}>{publicationCommandLabel}</Button>}</footer>{status && <p className="inline-status" role="status">{status}</p>}</article>;
+  return <article className="reply-item"><header><span className="author-avatar">{reply.author.initials}</span><div><strong>{reply.author.name}</strong><small>{new Date(reply.updatedAt).toLocaleDateString("zh-CN")}{reply.revision > 1 ? " · 已编辑" : ""}</small></div></header>{editing ? <><LocalDraftControls owner={owner} scope={scope} value={{ body, baseRevision }} onRestore={(draft) => { setBody(draft.body); setBaseRevision(draft.baseRevision); setPublicationPreview(undefined); }} /><Textarea value={body} onChange={(_, data) => { setBody(data.value); setPublicationPreview(undefined); }} /><div className="reply-edit-actions"><Button size="small" onClick={() => setEditing(false)}>取消</Button><Button size="small" appearance="primary" onClick={() => void save()}>保存</Button></div></> : <p>{body}</p>}<span className={`reply-publication-state ${publicationState}`}>独立批注：{publicationStateLabel}</span>{publicationState === "published" && derivedAnnotationId && <a className="derived-annotation-link" href={`/annotations/${encodeURIComponent(derivedAnnotationId)}`}>查看同步发布的批注</a>}<footer>{reply.viewerIsAuthor && !editing && <Button size="small" appearance="subtle" icon={<Edit20Regular />} onClick={() => setEditing(true)}>编辑</Button>}{reply.viewerIsAuthor && !editing && <Button size="small" appearance="subtle" disabled={publicationPending || Boolean(publicationPreview)} onClick={() => void updatePublication(publicationState !== "published")}>{publicationCommandLabel}</Button>}</footer>{revisionConflict && <RevisionConflict baseRevision={baseRevision} loadCurrent={async () => { const current = (await communityApi.replies(parent.id)).replies.find((item) => item.id === reply.id); if (!current) throw new Error("REPLY_NOT_FOUND"); return current; }} onUseRevision={(revision) => { setBaseRevision(revision); setRevisionConflict(false); setPublicationPreview(undefined); }} />}{publicationPreview && <AnnotationSendPreview input={publicationPreview.input} profile={publicationPreview.profile} authorName={reply.author.name} pending={publicationPending} onConfirm={() => void confirmPublication()} onCancel={() => setPublicationPreview(undefined)} />}{status && <p className="inline-status" role="status">{status}</p>}</article>;
 }
 
 function FollowingAnnotations({ onCompose, onConversation, refresh, session }: {
@@ -605,7 +650,7 @@ function MyAnnotations({ onCompose, refresh, session }: { onCompose: (value: { e
 export function OrganizationAnnotations({ onCompose, refresh, session }: { onCompose: (value: { edit?: CommunityAnnotation; replyTo?: CommunityAnnotation }) => void; refresh: number; session: IdentitySession }) {
   const governance = useCommunityGovernance();
   const [localRefresh, setLocalRefresh] = useState(0);
-  const actorBinding = JSON.stringify([intuechoApiBaseUrl, session.userId, getIdentitySessionGeneration()]);
+  const actorBinding = JSON.stringify([intuechoApiBaseUrl, session.issuer, session.userId, getIdentitySessionGeneration()]);
   const requestKey = `${actorBinding}:${refresh}:${localRefresh}`;
   const { data, error } = useRemote(async () => {
     const [groups, choices] = await Promise.all([communityApi.organizationAnnotations(), communityApi.organizationChoices()]);
@@ -620,7 +665,7 @@ export function OrganizationAnnotations({ onCompose, refresh, session }: { onCom
       return <section className="organization-group" key={organization.organizationId}>
         <header><div><strong>{organization.name}</strong><span>{access.role === "owner" ? "负责人" : access.role === "admin" ? "管理员" : "成员"}</span></div><small>{organization.annotations.length} 条</small></header>
         {governance && <details><summary>组织讨论提醒</summary><SubscriptionControls api={governance.api} actorBinding={actorBinding} preference={preferenceFor(governance.preferences, "organization", organization.organizationId)} label="此组织的讨论" onChanged={governance.refresh} /></details>}
-        <OrganizationReadingGroup organization={organization} viewerId={session.userId} actorBinding={actorBinding} access={access} onChanged={() => setLocalRefresh((value) => value + 1)} />
+        <OrganizationReadingGroup owner={draftOwner(session)} organization={organization} viewerId={session.userId} actorBinding={actorBinding} access={access} onChanged={() => setLocalRefresh((value) => value + 1)} />
         {organization.annotations.length ? <details><summary>全部组织批注 · {organization.annotations.length}</summary><div className="annotation-list">{organization.annotations.map((annotation) => <AnnotationCard key={`${annotation.id}-${annotation.updatedAt}`} annotation={annotation} onCompose={onCompose} session={session} />)}</div></details> : <EmptyState text="该组织还没有可见批注" />}
       </section>;
     })}</div> : <EmptyState text="当前没有可访问的组织" />}

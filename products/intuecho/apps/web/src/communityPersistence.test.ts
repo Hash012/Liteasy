@@ -20,3 +20,10 @@ test("storage quota failure cannot be acknowledged as a saved draft or pending o
   expect(() => saveCommand("actor", { operationId: "op", operationType: "create_annotation", bodyDigest: "a".repeat(64), targetId: null, state: "outcome_unknown", updatedAt: "now" })).toThrow("操作记录未能保存");
   expect(commandRecords("actor")).toEqual([]);
 });
+
+test("corrupt command storage fails closed instead of allowing an untracked replacement", () => {
+  saveCommand("actor", { operationId: "op", operationType: "create_annotation", bodyDigest: "a".repeat(64), targetId: null, state: "outcome_unknown", updatedAt: "now" });
+  const storageKey = localStorage.key(0)!;
+  localStorage.setItem(storageKey, "broken-json");
+  expect(() => commandRecords("actor")).toThrow("操作记录损坏");
+});

@@ -7,6 +7,8 @@ import { OrganizationReadingGroup } from "./OrganizationReadingGroup";
 import { annotationFixture, replyFixture } from "./readingGroupFixtures";
 
 vi.mock("../communityApi", () => ({ communityApi: {
+  academicProfile: vi.fn(async () => ({ profile: { educationStage: null, institutions: [], revision: 0 } })),
+  readingSources: vi.fn(async () => ({ sources: [] })),
   annotation: vi.fn(), createAnnotation: vi.fn(), replies: vi.fn(), createReply: vi.fn(), updateReply: vi.fn()
 } }));
 const access: OrganizationAccessSnapshot = {
@@ -41,7 +43,7 @@ test("creates a reading pack only after selecting material and confirming its or
   await waitFor(() => expect(communityApi.createAnnotation).toHaveBeenCalledWith(expect.objectContaining({
     visibility: "organization", organizationId: "org_x", shareToPlaza: false,
     targets: [{ kind: "whole_document", literature: { literatureId: "literature_1" } }]
-  })));
+  }), expect.any(String)));
 });
 
 test("contributes questions and source locations as normal replies without independent publishing", async () => {
@@ -54,7 +56,7 @@ test("contributes questions and source locations as normal replies without indep
   await user.click(screen.getByRole("button", { name: "确认提交" }));
   await waitFor(() => expect(communityApi.createReply).toHaveBeenCalledWith("pack_1", expect.objectContaining({
     publishAsAnnotation: false, tags: [], targets: [], body: expect.stringContaining("Reading 1, section 3")
-  })));
+  }), expect.any(String)));
   expect(screen.queryByRole("textbox", { name: "主持人手动摘要" })).not.toBeInTheDocument();
 });
 
@@ -70,7 +72,7 @@ test("host summaries preserve unresolved disagreements and selected reply revisi
   await user.click(screen.getByRole("button", { name: "确认提交" }));
   await waitFor(() => expect(communityApi.createReply).toHaveBeenCalledWith("pack_1", expect.objectContaining({
     body: expect.stringContaining("修订 3"), publishAsAnnotation: false
-  })));
+  }), expect.any(String)));
   const sent = vi.mocked(communityApi.createReply).mock.calls[0][1].body;
   expect(sent).toContain("The assumption still needs evidence");
   expect(sent).toContain("不代表全员共识");
@@ -142,7 +144,7 @@ test("contributors can correct only their own reply and see the new authoritativ
   await user.click(screen.getByRole("button", { name: "预览更正" }));
   expect(communityApi.updateReply).not.toHaveBeenCalled();
   await user.click(screen.getByRole("button", { name: "确认提交" }));
-  await waitFor(() => expect(communityApi.updateReply).toHaveBeenCalledWith("reply_1", { body: "Corrected reasoning" }));
+  await waitFor(() => expect(communityApi.updateReply).toHaveBeenCalledWith("reply_1", { body: "Corrected reasoning", expectedRevision: 1 }));
   const thread = screen.getByRole("region", { name: "读书组讨论" });
   expect(within(thread).getByText("Corrected reasoning")).toBeInTheDocument();
   expect(within(thread).getByText("修订 2")).toBeInTheDocument();
@@ -207,7 +209,7 @@ test("reading task notifications require an unchecked explicit choice and a conf
   expect(within(screen.getByRole("region", { name: "提交预览" })).getByText(/阅读任务提醒仅发给已订阅且未静音的成员/)).toBeInTheDocument();
   expect(communityApi.createAnnotation).not.toHaveBeenCalled();
   await user.click(screen.getByRole("button", { name: "确认提交" }));
-  await waitFor(() => expect(communityApi.createAnnotation).toHaveBeenCalledWith(expect.objectContaining({ notificationIntent: "reading_task", visibility: "organization", shareToPlaza: false })));
+  await waitFor(() => expect(communityApi.createAnnotation).toHaveBeenCalledWith(expect.objectContaining({ notificationIntent: "reading_task", visibility: "organization", shareToPlaza: false }), expect.any(String)));
 });
 
 test("mention choices use loaded participants, require preview, and reset for another actor", async () => {
@@ -221,8 +223,42 @@ test("mention choices use loaded participants, require preview, and reset for an
   await user.click(screen.getByRole("button", { name: "预览贡献" }));
   expect(within(screen.getByRole("region", { name: "提交预览" })).getByText(/将提及：Synthetic contributor/)).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "确认提交" }));
-  await waitFor(() => expect(communityApi.createReply).toHaveBeenCalledWith("pack_1", expect.objectContaining({ mentionedUserIds: ["member_1"], publishAsAnnotation: false })));
+  await waitFor(() => expect(communityApi.createReply).toHaveBeenCalledWith("pack_1", expect.objectContaining({ mentionedUserIds: ["member_1"], publishAsAnnotation: false }), expect.any(String)));
   rerender(<OrganizationReadingGroup {...props} viewerId="member_2" actorBinding="issuer:member_2:2" />);
   expect(await screen.findByRole("checkbox", { name: "提及 Synthetic contributor" })).not.toBeChecked();
   expect(screen.queryByRole("region", { name: "提交预览" })).not.toBeInTheDocument();
+});
+
+test("an empty organization selects a confirmed material without creating a placeholder annotation", async () => {
+  const user = userEvent.setup();
+  const record = annotationFixture().targets[0].literature.literatureRecord!;
+  vi.mocked(communityApi.readingSources).mockResolvedValueOnce({ sources: [] }).mockResolvedValueOnce({ sources: [record] });
+  render(<OrganizationReadingGroup {...props} organization={{ ...organization, annotations: [] }} />);
+  await user.click(screen.getByRole("button", { name: "创建读书包" }));
+  await user.type(screen.getByRole("textbox", { name: "读书主题" }), "First reading");
+  await user.type(screen.getByRole("textbox", { name: "导读与讨论目标" }), "Review this confirmed source");
+  await user.type(screen.getByRole("textbox", { name: "查找已确认资料" }), "Synthetic reading");
+  await user.click(screen.getByRole("button", { name: "查找可用资料" }));
+  expect(communityApi.readingSources).toHaveBeenCalledWith("org_x", "Synthetic reading");
+  await user.click(await screen.findByRole("checkbox", { name: record.title }));
+  await user.click(screen.getByRole("button", { name: "预览读书包" }));
+  expect(communityApi.createAnnotation).not.toHaveBeenCalled();
+  await user.click(await screen.findByRole("button", { name: "确认提交" }));
+  expect(communityApi.createAnnotation).toHaveBeenCalledTimes(1);
+  expect(communityApi.createAnnotation).toHaveBeenCalledWith(expect.objectContaining({ collaboration: { schemaVersion: 1, kind: "reading_pack", sourceRefs: [{ sourceNamespace: "intuecho.literature", sourceId: "literature_1", revision: 1, locator: { kind: "whole_document" } }] } }), expect.any(String));
+});
+
+test("server source-revision conflicts preserve summary writing instead of silently accepting the client precheck", async () => {
+  const user = userEvent.setup();
+  vi.mocked(communityApi.replies).mockResolvedValue({ replies: [replyFixture()] });
+  vi.mocked(communityApi.createReply).mockRejectedValueOnce(new Error("SOURCE_REVISION_CONFLICT"));
+  render(<OrganizationReadingGroup {...props} owner="actor-a" />);
+  await user.type(screen.getByRole("textbox", { name: "主持人手动摘要" }), "My retained summary");
+  await user.type(screen.getByRole("textbox", { name: "未解决项与异议" }), "An unresolved disagreement");
+  await user.click(await screen.findByRole("checkbox", { name: /引用 Synthetic contributor/ }));
+  await user.click(screen.getByRole("button", { name: "预览主持人摘要" }));
+  await user.click(screen.getByRole("button", { name: "确认提交" }));
+  expect(await screen.findByText("SOURCE_REVISION_CONFLICT")).toBeInTheDocument();
+  expect(screen.getByRole("textbox", { name: "主持人手动摘要" })).toHaveValue("My retained summary");
+  expect(Object.values(localStorage).join("")).toContain("My retained summary");
 });

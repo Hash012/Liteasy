@@ -7,10 +7,10 @@ describe("organization reading group payload boundaries", () => {
   test("selects only current organization materials and never carries excerpts or record payloads into a pack", () => {
     const source = annotationFixture({ targets: [{
       kind: "source_passage", anchorHash: "source-anchor", excerpt: "PRIVATE_EXCERPT", rects: [],
-      literature: { literatureId: "literature_1", literatureRecord: { title: "Synthetic reading", privateUrl: "PRIVATE_URL" } }
+      literature: { literatureId: "literature_1", literatureRecord: { status: "confirmed", revision: 1, title: "Synthetic reading", privateUrl: "PRIVATE_URL" } }
     }] as never });
     const materials = readingMaterials([source, annotationFixture({ id: "foreign", organizationId: "org_other" })], "org_x");
-    expect(materials).toEqual([{ literatureId: "literature_1", title: "Synthetic reading" }]);
+    expect(materials).toEqual([{ literatureId: "literature_1", title: "Synthetic reading", revision: 1 }]);
     const payload = buildReadingPack({ organizationId: "org_x", title: "Selected reading", guide: "Compare the evidence", materials, deadline: "2026-10-15" });
     expect(createAnnotationSchema.safeParse(payload).success).toBe(true);
     expect(payload).toMatchObject({ visibility: "organization", organizationId: "org_x", shareToPlaza: false, tags: ["读书包", "讨论中"] });
@@ -41,7 +41,7 @@ describe("organization reading group payload boundaries", () => {
     expect(payload.body).toContain("不代表全员共识");
     expect(payload.body).not.toContain(contribution.body);
     expect(isHostSummary(pack, replyFixture({ body: payload.body, author: contribution.author }))).toBe(false);
-    expect(isHostSummary(pack, replyFixture({ body: payload.body, author: pack.author }))).toBe(true);
+    expect(isHostSummary(pack, replyFixture({ body: "Updated summary wording", author: pack.author, collaboration: payload.collaboration }))).toBe(true);
   });
 
   test("personal note export includes only new personal writing and a bounded source reference", () => {
@@ -50,8 +50,19 @@ describe("organization reading group payload boundaries", () => {
     expect(note.content).toContain("My independently written reflection");
     expect(note.content).toContain("/annotations/pack_1");
     expect(note.content).toContain("修订 2");
-    expect(note.content).not.toMatch(/PRIVATE_GROUP_BODY|PRIVATE_AUTHOR|org_x|literature_1/);
+    expect(note.content).not.toMatch(/PRIVATE_GROUP_BODY|PRIVATE_AUTHOR|literature_1/);
+    expect(note.content).toContain("sourcePolicy: organization-bound");
+    expect(note.content).toContain("sourceNamespace: intuecho.annotation");
     expect(note.filename).toBe("reading-group-note.md");
     expect(readingPacks([pack, { ...pack, id: "foreign", organizationId: "org_other" }, { ...pack, id: "withdrawn", withdrawnAt: "2026-10-03" }], "org_x")).toEqual([pack]);
   });
+});
+
+test("typed reading packs survive renamed labels and legacy lookalikes remain ordinary", () => {
+  const pack = annotationFixture({ tags: [], body: "Renamed text" });
+  expect(readingPacks([pack, annotationFixture({ id: "legacy", collaboration: null })], "org_x")).toEqual([pack]);
+  expect(isHostSummary(pack, replyFixture({ author: pack.author, body: "## 主持人手动摘要\nLegacy", collaboration: null }))).toBe(false);
+});
+test("unconfirmed or unversioned source projections cannot become confirmed materials", () => {
+  expect(readingMaterials([annotationFixture({ targets: [{ kind: "whole_document", literature: { literatureId: "fake" } }] })], "org_x")).toEqual([]);
 });

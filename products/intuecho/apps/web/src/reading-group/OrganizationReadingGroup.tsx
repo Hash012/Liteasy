@@ -1,7 +1,12 @@
 import { Badge, Button, Checkbox, Input, Textarea } from "@fluentui/react-components";
 import { Add20Regular, BookOpen20Regular, Save20Regular } from "@fluentui/react-icons";
 import { useEffect, useRef, useState } from "react";
-import type { OrganizationAccessSnapshot } from "@intuecho/contracts";
+import type { AcademicProfile } from "../community.types";
+import { LocalDraftControls } from "../LocalDraftControls";
+import { saveDraft, removeDraft } from "../communityPersistence";
+import { LiteratureTargetEditor } from "../LiteratureTargetEditor";
+import { SourceRevision } from "../SourceRevision";
+import type { LiteratureRecord, OrganizationAccessSnapshot } from "@intuecho/contracts";
 import { communityApi } from "../communityApi";
 import type { CommunityAnnotation, CommunityReply, CreateAnnotationInput, CreateReplyInput, OrganizationAnnotationGroup } from "../community.types";
 import { buildPersonalReadingNote, buildReadingPack, buildReadingReply, isHostSummary, readingMaterials, readingPacks, readingPackTitle } from "./readingGroup";
@@ -12,15 +17,16 @@ export type OrganizationReadingGroupProps = {
   organization: OrganizationAnnotationGroup;
   viewerId: string;
   actorBinding: string;
+  owner?: string;
   access?: OrganizationAccessSnapshot;
   onChanged?: () => void;
   onExportNote?: (note: PersonalReadingNote) => void | Promise<void>;
 };
 
-type Preview = { context: string } & (
+type Preview = { context: string; draftKey: string; profile?: AcademicProfile } & (
   | { kind: "pack"; payload: CreateAnnotationInput }
   | { kind: "reply"; payload: CreateReplyInput; references: CommunityReply[] }
-  | { kind: "edit"; reply: CommunityReply; payload: { body: string } }
+  | { kind: "edit"; reply: CommunityReply; payload: { body: string; expectedRevision: number } }
 );
 
 function savePersonalNote(note: PersonalReadingNote) {
@@ -45,12 +51,18 @@ export function OrganizationReadingGroup(props: OrganizationReadingGroupProps) {
   return <ReadingGroupWorkspace key={`${props.actorBinding}:${props.organization.organizationId}`} {...props} />;
 }
 
-function ReadingGroupWorkspace({ organization, viewerId, actorBinding, access, onChanged, onExportNote = savePersonalNote }: OrganizationReadingGroupProps) {
+function ReadingGroupWorkspace({ organization, viewerId, actorBinding, owner = "", access, onChanged, onExportNote = savePersonalNote }: OrganizationReadingGroupProps) {
+  const [packIntentId, setPackIntentId] = useState(() => crypto.randomUUID());
+  const [replyIntentId, setReplyIntentId] = useState(() => crypto.randomUUID());
   const [createdPacks, setCreatedPacks] = useState<CommunityAnnotation[]>([]);
   const packs = readingPacks([...new Map([...createdPacks, ...organization.annotations].map((annotation) => [annotation.id, annotation])).values()], organization.organizationId);
   const [selectedId, setSelectedId] = useState("");
   const pack = packs.find((item) => item.id === selectedId) ?? packs[0];
-  const materials = readingMaterials(organization.annotations, organization.organizationId);
+  const [sourceRecords, setSourceRecords] = useState<LiteratureRecord[]>([]);
+  const [sourceError, setSourceError] = useState("");
+  const [sourceQuery, setSourceQuery] = useState("");
+  const materials = [...new Map([...readingMaterials(organization.annotations, organization.organizationId),
+    ...sourceRecords.filter((record) => record.status === "confirmed").map((record) => ({ literatureId: record.literatureId, title: record.title, revision: record.revision }))].map((material) => [material.literatureId, material])).values()];
   const [createOpen, setCreateOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [guide, setGuide] = useState("");
@@ -81,8 +93,28 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, access, o
   currentContext.current = context;
   const mounted = useRef(true);
   const replies = thread?.context === context ? thread.replies : [];
-  const activePreview = preview?.context === context ? preview : null;
   const isHost = pack?.author.id === viewerId;
+  const draftScope = `reading-group:${organization.organizationId}:${pack?.id ?? "first-pack"}`;
+  const draftValue = { packIntentId, replyIntentId, title, guide, deadline, notifyReadingTask, selectedMaterials, kind, contribution, evidence, summary, unresolved, referenceIds, reflection, editing, editBody };
+  const draftKey = JSON.stringify(draftValue);
+  const currentDraftKey = useRef(draftKey);
+  currentDraftKey.current = draftKey;
+  const activePreview = preview?.context === context && preview.draftKey === draftKey ? preview : null;
+  function restoreDraft(value: typeof draftValue) {
+    setPackIntentId(value.packIntentId); setReplyIntentId(value.replyIntentId); setTitle(value.title); setGuide(value.guide); setDeadline(value.deadline); setNotifyReadingTask(value.notifyReadingTask);
+    setSelectedMaterials(value.selectedMaterials); setKind(value.kind); setContribution(value.contribution); setEvidence(value.evidence);
+    setSummary(value.summary); setUnresolved(value.unresolved); setReferenceIds(value.referenceIds); setReflection(value.reflection);
+    setEditing(value.editing); setEditBody(value.editBody); setPreview(null); setExportConfirmed(false); setCreateOpen(true);
+  }
+  useEffect(() => {
+    if (!canRead || !createOpen) return;
+    let active = true;
+    setSourceError("");
+    void communityApi.readingSources(organization.organizationId).then(({ sources }) => {
+      if (active && mounted.current) setSourceRecords(sources.filter((record) => record.status === "confirmed"));
+    }).catch(() => { if (active && mounted.current) setSourceError("暂时无法读取可用资料，请重试或检索并确认文献。"); });
+    return () => { active = false; };
+  }, [actorBinding, organization.organizationId, canRead, createOpen]);
   const participants = [...new Map([...(pack ? [pack.author] : []), ...replies.map((reply) => reply.author)].filter((author) => author.id !== viewerId).map((author) => [author.id, author])).values()];
 
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -109,6 +141,20 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, access, o
     return () => { active = false; };
   }, [context, canRead, pack?.id]);
 
+  async function searchSources() {
+    if (!canRead || !sourceQuery.trim()) return;
+    const requestedContext = context;
+    setSourceError("");
+    try {
+      const { sources } = await communityApi.readingSources(organization.organizationId, sourceQuery.trim());
+      if (mounted.current && currentContext.current === requestedContext) {
+        setSourceRecords((current) => [...new Map([...current, ...sources.filter((record) => record.status === "confirmed")].map((record) => [record.literatureId, record])).values()]);
+        setPreview(null);
+        if (!sources.length) setSourceError("未找到可用的已确认资料，可继续检索并确认文献。");
+      }
+    } catch (error) { if (mounted.current && currentContext.current === requestedContext) { rejectUnavailableAccess(error); setSourceError(errorMessage(error)); } }
+  }
+
   function rejectUnavailableAccess(error: unknown) {
     if (error instanceof Error && /ORGANIZATION_ACCESS_DENIED|ANNOTATION_NOT_FOUND/.test(error.message)) {
       setUnavailableContext(context);
@@ -120,18 +166,24 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, access, o
     if (!canComment || pending) return;
     try { setPreview(build()); setStatus(""); } catch (error) { setStatus(errorMessage(error)); }
   }
-  function previewPack() {
-    prepare(() => ({ context, kind: "pack", payload: buildReadingPack({
-      organizationId: organization.organizationId, title, guide, deadline, notifyReadingTask,
-      materials: materials.filter((material) => selectedMaterials.includes(material.literatureId))
-    }) }));
+  async function previewPack() {
+    if (!canComment || pending) return;
+    const approvedContext = context;
+    setPending(true); setStatus("");
+    try {
+      const payload = buildReadingPack({ organizationId: organization.organizationId, title, guide, deadline, notifyReadingTask,
+        materials: materials.filter((material) => selectedMaterials.includes(material.literatureId)) });
+      const { profile } = await communityApi.academicProfile();
+      if (mounted.current && currentContext.current === approvedContext && currentDraftKey.current === draftKey) setPreview({ context, draftKey, kind: "pack", profile, payload: { ...payload, expectedAuthorProfileRevision: profile.revision } });
+    } catch (error) { if (mounted.current && currentContext.current === approvedContext) setStatus(errorMessage(error)); }
+    finally { if (mounted.current && currentContext.current === approvedContext) setPending(false); }
   }
   function previewContribution(contributionKind: ReadingContributionKind) {
     if (!pack) return;
     prepare(() => {
       if (mentionedUserIds.some((id) => !participants.some((participant) => participant.id === id))) throw new Error("讨论参与者已变化，请重新选择提及对象。");
       const references = contributionKind === "summary" ? replies.filter((reply) => referenceIds.includes(reply.id)) : [];
-      return { context, kind: "reply", references, payload: buildReadingReply({
+      return { context, draftKey, kind: "reply", references, payload: buildReadingReply({
         pack, kind: contributionKind, body: contributionKind === "summary" ? summary : contribution,
         evidence: contributionKind === "summary" ? undefined : evidence, unresolved, references, viewerId, mentionedUserIds
       }) };
@@ -141,12 +193,16 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, access, o
   async function submitPreview() {
     if (!activePreview || !canComment || pending) return;
     const approved = activePreview;
-    const stillCurrent = () => mounted.current && currentContext.current === approved.context;
+    const stillCurrent = () => mounted.current && currentContext.current === approved.context && currentDraftKey.current === approved.draftKey;
     setPending(true);
     setStatus("");
     try {
+      if (owner) saveDraft(owner, draftScope, draftValue);
       if (approved.kind === "pack") {
-        const result = await communityApi.createAnnotation(approved.payload);
+        const { profile } = await communityApi.academicProfile();
+        if (!stillCurrent()) return;
+        if (JSON.stringify(profile) !== JSON.stringify(approved.profile)) throw new Error("作者资料已变化，请重新预览。");
+        const result = await communityApi.createAnnotation(approved.payload, packIntentId);
         if (!stillCurrent()) return;
         if (result.annotation.organizationId !== organization.organizationId || result.annotation.visibility !== "organization" || result.annotation.shareToPlaza || result.annotation.author.id !== viewerId) {
           throw new Error("读书包回执与批准的作者或组织范围不一致，请刷新核对。");
@@ -164,7 +220,7 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, access, o
             throw new Error("引用的回复已更新，请重新查看后整理摘要。");
           }
         }
-        const result = await communityApi.createReply(pack.id, approved.payload);
+        const result = await communityApi.createReply(pack.id, approved.payload, replyIntentId);
         if (!stillCurrent()) return;
         if (result.reply.parentAnnotationId !== pack.id || result.reply.author.id !== viewerId || result.annotation !== null) {
           throw new Error("回复回执与批准的讨论不一致，请刷新核对。");
@@ -181,13 +237,16 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, access, o
         setThread({ context, replies: replies.map((reply) => reply.id === result.reply.id ? result.reply : reply) });
         setEditing(null);
       }
+      if (approved.kind === "pack") setPackIntentId(crypto.randomUUID());
+      if (approved.kind === "reply") setReplyIntentId(crypto.randomUUID());
+      if (owner) { try { removeDraft(owner, draftScope); } catch { /* Do not repeat a successful command for local cleanup failure. */ } }
       setPreview(null);
       setStatus("已保存到组织讨论。");
       onChanged?.();
     } catch (error) {
       if (stillCurrent()) { rejectUnavailableAccess(error); setStatus(errorMessage(error)); setPreview(null); }
     } finally {
-      if (stillCurrent()) setPending(false);
+      if (mounted.current && currentContext.current === approved.context) setPending(false);
     }
   }
 
@@ -206,20 +265,28 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, access, o
     <header><div><h2><BookOpen20Regular />读书组</h2><p>精选资料、提出问题、对照原文，并由主持人手动整理。</p></div>
       <Button icon={<Add20Regular />} disabled={!canComment || pending} onClick={() => editInput(() => setCreateOpen(!createOpen))}>创建读书包</Button></header>
     {!canRead ? <p role="status">组织权限尚未确认或已变化，请刷新后重试。</p> : <>
+      <LocalDraftControls owner={owner} scope={draftScope} value={draftValue} onRestore={restoreDraft} />
       {createOpen && <section className="reading-group-form" aria-label="创建组织读书包">
         <label>读书主题<Input value={title} maxLength={160} onChange={(_, data) => editInput(() => setTitle(data.value))} /></label>
         <label>导读与讨论目标<Textarea value={guide} maxLength={6000} onChange={(_, data) => editInput(() => setGuide(data.value))} /></label>
+        <label>查找已确认资料<Input value={sourceQuery} onChange={(_, data) => editInput(() => setSourceQuery(data.value))} /></label>
+        <Button onClick={() => void searchSources()} disabled={!sourceQuery.trim() || pending}>查找可用资料</Button>
         <fieldset><legend>精选资料</legend>{materials.map((material) => <Checkbox key={material.literatureId} label={material.title} checked={selectedMaterials.includes(material.literatureId)} onChange={(_, data) => editInput(() => setSelectedMaterials((current) => data.checked ? [...current, material.literatureId] : current.filter((id) => id !== material.literatureId)))} />)}
-          {!materials.length && <p>先在组织内关联已确认的文献，再将其加入读书包。</p>}</fieldset>
-        <label>讨论截止日期（可选）<Input type="date" value={deadline} onChange={(_, data) => editInput(() => setDeadline(data.value))} /></label>
+          {!materials.length && <p>可直接检索并确认第一份文献，无需先发布批注。无法由来源确认的材料暂不能加入。</p>}</fieldset>
+        <LiteratureTargetEditor required={false} targets={[]} onChange={() => {}} onConfirmed={(record) => editInput(() => {
+          setSourceRecords((current) => [...current.filter((item) => item.literatureId !== record.literatureId), record]);
+          setSelectedMaterials((current) => [...new Set([...current, record.literatureId])]);
+        })} />
+        {sourceError && <p role="status">{sourceError}</p>}
+        <label>讨论截止日期（可选，UTC）<Input type="date" value={deadline} onChange={(_, data) => editInput(() => setDeadline(data.value))} /></label>
         <Checkbox label="作为阅读任务提醒已订阅成员" checked={notifyReadingTask} onChange={(_, data) => editInput(() => setNotifyReadingTask(data.checked === true))} />
-        <Button disabled={!canComment || pending} onClick={previewPack}>预览读书包</Button>
+        <Button disabled={!canComment || pending} onClick={() => void previewPack()}>预览读书包</Button>
       </section>}
       {!!packs.length && <label className="reading-group-select">选择读书包<select value={pack?.id ?? ""} onChange={(event) => {
         setSelectedId(event.target.value); setPreview(null); setEditing(null); setContribution(""); setEvidence("");
         setSummary(""); setUnresolved(""); setReflection(""); setExportConfirmed(false); setStatus("");
       }}>{packs.map((item) => <option key={item.id} value={item.id}>{readingPackTitle(item)}</option>)}</select></label>}
-      {!pack ? <p>该组织尚无读书包。可从已关联的资料创建一个。</p> : <>
+      {!pack ? <p>该组织尚无读书包。可直接选择或确认资料，创建第一个读书包。</p> : <>
         <article className="reading-group-pack"><div className="reading-group-row"><strong>主持人：{pack.author.name}</strong>
           <Badge appearance="tint">{replies.some((reply) => isHostSummary(pack, reply)) ? "已有主持人整理" : "讨论中"}</Badge></div>
           <p className="reading-group-body">{pack.body}</p><a href={`/annotations/${encodeURIComponent(pack.id)}`}>查看原批注与文献 · 修订 {pack.revision}</a></article>
@@ -227,11 +294,12 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, access, o
           {threadError ? <p role="alert">{threadError}</p> : thread?.context !== context ? <p role="status">正在加载讨论…</p> : !replies.length ? <p>尚无贡献，可从一个问题开始。</p> : null}
           {replies.map((reply) => <article key={reply.id} id={`reply-${reply.id}`}><div className="reading-group-row"><strong>{reply.author.name}</strong><small>修订 {reply.revision}</small>{isHostSummary(pack, reply) && <Badge appearance="tint">主持人手动摘要</Badge>}</div>
             <p className="reading-group-body">{reply.body}</p>
+            {reply.collaboration?.sourceRefs.map((reference) => <SourceRevision key={`${reference.sourceNamespace}:${reference.sourceId}:${reference.revision}`} reference={reference} />)}
             {reply.author.id === viewerId && reply.viewerIsAuthor && <Button size="small" disabled={!canComment || pending} onClick={() => editInput(() => { setEditing(reply); setEditBody(reply.body); })}>更正我的贡献</Button>}
           </article>)}
         </section>
         {editing && <section className="reading-group-form" aria-label="更正自己的贡献"><label>更正内容<Textarea value={editBody} maxLength={8000} onChange={(_, data) => editInput(() => setEditBody(data.value))} /></label>
-          <Button disabled={!canComment || pending || !editBody.trim()} onClick={() => prepare(() => ({ context, kind: "edit", reply: editing, payload: { body: editBody.trim() } }))}>预览更正</Button>
+          <Button disabled={!canComment || pending || !editBody.trim()} onClick={() => prepare(() => ({ context, draftKey, kind: "edit", reply: editing, payload: { body: editBody.trim(), expectedRevision: editing.revision } }))}>预览更正</Button>
           <Button appearance="subtle" onClick={() => editInput(() => setEditing(null))}>取消更正</Button></section>}
         {!!participants.length && <fieldset><legend>提及讨论参与者（可选，最多 5 人）</legend><p>仅提醒已订阅且未静音的参与者；输入姓名不会自动提及。</p>
           {participants.map((participant) => <Checkbox key={participant.id} label={`提及 ${participant.name}`} checked={mentionedUserIds.includes(participant.id)} disabled={!canComment || pending || (mentionedUserIds.length >= 5 && !mentionedUserIds.includes(participant.id))} onChange={(_, data) => editInput(() => setMentionedUserIds((current) => data.checked ? [...current, participant.id] : current.filter((id) => id !== participant.id)))} />)}
@@ -254,6 +322,7 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, access, o
         </section>
       </>}
       {activePreview && <section className="reading-group-preview" aria-label="提交预览"><h3>提交预览</h3><p>仅组织内：{organization.name}</p>
+        {activePreview.profile && <p>作者资料：{activePreview.profile.educationStage ?? "未填写学段"} · {activePreview.profile.institutions.map((institution) => institution.name).join("、") || "未填写机构"}</p>}
         <p className="reading-group-body">{activePreview.payload.body}</p>
         {activePreview.kind === "pack" && <p>关联 {activePreview.payload.targets.length} 篇文献，仅发送文献引用，不发送原文件。</p>}
         {activePreview.kind === "pack" && activePreview.payload.notificationIntent === "reading_task" && <p>阅读任务提醒仅发给已订阅且未静音的成员。</p>}
