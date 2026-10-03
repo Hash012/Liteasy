@@ -54,7 +54,8 @@ try {
     "024_literature_projections.sql",
     "025_personalization_explicit_opt_in.sql",
     "026_normalize_library_literature_references.sql",
-    "027_visualization_reservation_groups.sql"
+    "027_visualization_reservation_groups.sql",
+    "028_device_control.sql"
   ]);
   await assert.rejects(
     () => pool.query("CREATE TABLE app_role_must_not_create(id text)"),
@@ -1266,6 +1267,15 @@ try {
     "transfer_organization_ownership",
     "change_organization_member_status",
     "leave_organization",
+    "create_organization_invitation",
+    "change_organization_member_role",
+    "create_organization_invitation",
+    "revoke_organization_invitation",
+    "create_organization_invitation",
+    "create_organization_invitation",
+    "create_organization_invitation",
+    "transfer_organization_ownership",
+    "accept_organization_invitation",
     "create_library_folder",
     "create_metadata_entry",
     "upload_pdf",
@@ -1677,7 +1687,7 @@ try {
   process.stdout.write(`${JSON.stringify({
     auditEvents: verifiedAudit.rows[0].count,
     accountDeletion: true,
-    migrations: 27,
+    migrations: migrated.applied.length,
     revision: 12,
     verified: true
   })}\n`);
