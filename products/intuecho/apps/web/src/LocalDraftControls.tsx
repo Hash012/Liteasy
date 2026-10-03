@@ -1,30 +1,24 @@
 import { Button } from "@fluentui/react-components";
-import { useEffect, useState } from "react";
-import { loadDraft, saveDraft } from "./communityPersistence";
+import { useState } from "react";
+import { useLocalDraft, type LocalDraftController } from "./useLocalDraft";
 
-export function LocalDraftControls<T>({ owner, scope, value, onRestore }: {
-  owner: string; scope: string; value: T; onRestore: (value: T) => void;
-}) {
-  const [available, setAvailable] = useState(false);
-  const [status, setStatus] = useState("");
-  const [savedValue, setSavedValue] = useState("");
-  const serialized = JSON.stringify(value);
-  useEffect(() => {
-    setStatus("");
-    try { setAvailable(Boolean(loadDraft(owner, scope))); }
-    catch { setStatus("无法读取本机草稿，请检查浏览器存储。"); }
-  }, [owner, scope]);
+type Props<T> = { owner: string; scope: string; value: T; onRestore: (value: T) => void; controller?: LocalDraftController<T> };
+export function LocalDraftControls<T>(props: Props<T>) {
+  return props.controller ? <DraftButtons owner={props.owner} controller={props.controller} /> : <StandaloneDraftControls {...props} />;
+}
+function StandaloneDraftControls<T>(props: Props<T>) {
+  const controller = useLocalDraft(props);
+  return <DraftButtons owner={props.owner} controller={controller} />;
+}
+function DraftButtons<T>({ owner, controller }: { owner: string; controller: LocalDraftController<T> }) {
+  const [selectedId, setSelectedId] = useState("");
+  const selected = controller.drafts.find((draft) => draft.draftId === selectedId) ?? controller.drafts[0];
   return <section aria-label="本机草稿">
-    <Button type="button" disabled={!owner} onClick={() => {
-      try { saveDraft(owner, scope, value); setSavedValue(serialized); setAvailable(true); setStatus("草稿已保存到此浏览器，仅当前账号可恢复。"); }
-      catch (error) { setStatus(error instanceof Error ? error.message : "草稿尚未保存。"); }
-    }}>保存本机草稿</Button>
-    {available && <Button type="button" onClick={() => {
-      try {
-        const saved = loadDraft<T>(owner, scope);
-        if (saved) { onRestore(saved.value); setStatus("已恢复本机草稿，请重新检查后预览；不会自动发送。"); }
-      } catch { setStatus("无法读取本机草稿。"); }
-    }}>恢复本机草稿</Button>}
-    {status && <p role="status">{status.startsWith("草稿已保存") && savedValue !== serialized ? "当前修改尚未保存到浏览器。" : status}</p>}
+    <Button type="button" disabled={!owner} onClick={() => void controller.save().catch(() => {})}>保存本机草稿</Button>
+    {controller.drafts.length > 1 && <label>选择本机草稿<select aria-label="选择本机草稿" value={selected?.draftId ?? ""} onChange={(event) => setSelectedId(event.target.value)}>
+      {controller.drafts.map((draft) => <option key={draft.draftId} value={draft.draftId}>{draft.conflictOf ? "冲突副本 · " : ""}{new Date(draft.updatedAt).toLocaleString()} · 修订 {draft.localRevision}</option>)}
+    </select></label>}
+    {selected && <Button type="button" onClick={() => controller.restore(selected.draftId)}>恢复本机草稿</Button>}
+    {controller.status && <p role="status">{controller.status}</p>}
   </section>;
 }

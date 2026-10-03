@@ -1,7 +1,7 @@
 import { Button, Checkbox, Input, Textarea, Tooltip } from "@fluentui/react-components";
 import { Add20Regular, Dismiss20Regular, Send20Regular } from "@fluentui/react-icons";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { createAnnotationSchema, type OrganizationChoice } from "@intuecho/contracts";
+import { annotationTargetSchema, annotationContributionSchema, createAnnotationSchema, type OrganizationChoice } from "@intuecho/contracts";
 import { canonicalizeInheritedTargets, inheritedTargetsAreCanonical } from "./canonicalizeInheritedTargets";
 import { communityApi } from "./communityApi";
 import type {
@@ -18,10 +18,11 @@ import { AnnotationSendPreview } from "./AnnotationSendPreview";
 import { getIdentitySessionGeneration } from "./identityClient";
 import { RevisionConflict } from "./RevisionConflict";
 import { LocalDraftControls } from "./LocalDraftControls";
-import { removeDraft, saveDraft } from "./communityPersistence";
+import type { CommandRecord, LocalDraft } from "./communityPersistence";
+import { useLocalDraft } from "./useLocalDraft";
 import { ContributionFields, defaultContribution } from "./AnnotationContribution";
 
-export type ComposerState = { draft?: CreateAnnotationInput; edit?: CommunityAnnotation; replyTo?: CommunityAnnotation };
+export type ComposerState = { draft?: CreateAnnotationInput; edit?: CommunityAnnotation; replyTo?: CommunityAnnotation; restoredDraftId?: string; restoredOperation?: CommandRecord };
 
 type Props = {
   context: ComposerState;
@@ -41,11 +42,11 @@ function ComposerWorkspace({ context, authorName = "当前登录账号", owner =
   const parent = context.replyTo;
   const draft = context.draft;
   const sourceReplyId = original?.originalReply?.replyId;
-  const [intentId, setIntentId] = useState(() => crypto.randomUUID());
+  const [intentId, setIntentId] = useState(() => context.restoredOperation?.operationId ?? crypto.randomUUID());
   const [body, setBody] = useState(original?.body ?? draft?.body ?? "");
   const [tags, setTags] = useState(original?.tags.filter((tag) => tag.origin === "user").map((tag) => tag.name) ?? draft?.tags ?? []);
   const [tagInput, setTagInput] = useState("");
-  const [publishAsAnnotation, setPublishAsAnnotation] = useState(false);
+  const [publishAsAnnotation, setPublishAsAnnotation] = useState(context.restoredOperation?.payload?.publishAsAnnotation === true);
   const [publicationCanonicalizing, setPublicationCanonicalizing] = useState(false);
   const [replyTargetsReady, setReplyTargetsReady] = useState(false);
   const [targets, setTargets] = useState<AnnotationTarget[]>(original?.targets ?? draft?.targets ?? []);
@@ -68,15 +69,27 @@ function ComposerWorkspace({ context, authorName = "当前登录账号", owner =
   const draftScope = original ? `edit:${original.id}` : parent ? `reply:${parent.id}` : "new-annotation";
   const draftValue = { intentId, body, tags, targets, visibility, organizationId, shareToPlaza, contribution, publishAsAnnotation, baseRevision };
   function restoreDraft(value: typeof draftValue) {
+    if (!value || typeof value.intentId !== "string" || typeof value.body !== "string" || !Array.isArray(value.tags) || !value.tags.every((tag) => typeof tag === "string") ||
+      !Array.isArray(value.targets) || !value.targets.every((target) => annotationTargetSchema.safeParse(target).success) || !["", "private", "public", "organization", "mutual_followers"].includes(value.visibility) || typeof value.organizationId !== "string" ||
+      !annotationContributionSchema.safeParse(value.contribution).success) throw new Error("草稿内容格式无法识别，原件保留，可从操作中心导出。");
     setIntentId(value.intentId); setBody(value.body); setTags(value.tags); setTargets(value.targets); setVisibility(value.visibility);
     setOrganizationId(value.organizationId); setShareToPlaza(value.shareToPlaza); setContribution(value.contribution);
     setPublishAsAnnotation(value.publishAsAnnotation); setReplyTargetsReady(inheritedTargetsAreCanonical(value.targets));
     setBaseRevision(value.baseRevision); setPreview(undefined);
   }
-  function persistDraft() { if (owner) saveDraft(owner, draftScope, draftValue); }
-  function saved() {
-    if (owner) { try { removeDraft(owner, draftScope); } catch { /* A successful write is not retried for a local cleanup failure. */ } }
+  const localDraft = useLocalDraft({ owner, scope: draftScope, value: draftValue, onRestore: restoreDraft, initialDraftId: context.restoredDraftId });
+  const recoveryInitialValue = useRef(JSON.stringify(draftValue));
+  function persistDraft() { return owner ? localDraft.save() : Promise.resolve(undefined); }
+  async function saved(snapshot?: LocalDraft<typeof draftValue>) {
+    if (snapshot) { try { await localDraft.clear(snapshot); } catch { /* Never retry a successful remote write for local cleanup. */ } }
     onSaved();
+  }
+  async function close() {
+    try { await persistDraft(); onClose(); }
+    catch (error) { setStatus(error instanceof Error ? error.message : "草稿尚未保存，请保留此窗口。"); }
+  }
+  function checkRecoveryContent() {
+    if (context.restoredOperation && recoveryInitialValue.current !== JSON.stringify(draftValue)) throw new Error("原操作的正文已冻结，请保留原内容核实或重试；新内容请明确新建草稿。");
   }
   useEffect(() => { setPreview(undefined); }, [draftKey]);
   const publicationAttempt = useRef(0);
@@ -129,7 +142,8 @@ function ComposerWorkspace({ context, authorName = "当前登录账号", owner =
     setPending(true);
     setStatus("");
     try {
-      persistDraft();
+      const savedSnapshot = await persistDraft();
+      checkRecoveryContent();
       if (parent && publicationCanonicalizing) throw new Error("正在确认继承的关联文献，请稍候");
       if (parent && publishAsAnnotation && (!replyTargetsReady || !inheritedTargetsAreCanonical(targets))) throw new Error("请重新确认关联文献后再发布独立批注");
       if (!visibility) throw new Error("请选择可见范围；选择前草稿只保留在本机。");
@@ -140,16 +154,21 @@ function ComposerWorkspace({ context, authorName = "当前登录账号", owner =
         shareToPlaza: parent ? false : shareToPlaza, tags, targets, visibility: parent?.visibility ?? visibility
       };
       if (!parent && !sourceReplyId && visibility === "organization" && (!organization || organization.organizationId !== organizationId)) throw new Error("请先确认接收组织的当前权限。");
-      // Same-scope replies freeze a lightweight preview without publication-only fields.
+      // Ordinary replies already show the inherited audience inline. One explicit
+      // send is enough; the API still checks current actor, parent revision and scope.
       if (parent && !publishAsAnnotation) {
         const { profile } = await communityApi.academicProfile();
-        if (stillCurrent()) setPreview({ key: submittedKey, input: structuredClone({ ...input, tags: [], targets: [], expectedAuthorProfileRevision: profile.revision }), profile, generation });
+        if (!stillCurrent()) return;
+        const payload = context.restoredOperation?.payload ?? { body, publishAsAnnotation: false, expectedAuthorProfileRevision: profile.revision,
+          expectedParent: { revision: parent.revision, visibility: parent.visibility, organizationId: parent.organizationId }, tags: [], targets: [] };
+        await communityApi.createReply(parent.id, payload as Parameters<typeof communityApi.createReply>[1], intentId);
+        if (stillCurrent()) await saved(savedSnapshot);
         return;
       }
       if (sourceReplyId) {
         if (!baseRevision) throw new Error("请从原回复打开编辑，以核对回复的当前修订。");
         await communityApi.updateReply(sourceReplyId, { body, expectedRevision: baseRevision });
-        if (stillCurrent()) saved();
+        if (stillCurrent()) await saved(savedSnapshot);
         return;
       }
       const parsed = createAnnotationSchema.safeParse(input);
@@ -172,17 +191,18 @@ function ComposerWorkspace({ context, authorName = "当前登录账号", owner =
     setPending(true);
     setStatus("");
     try {
-      persistDraft();
+      const savedSnapshot = await persistDraft();
+      checkRecoveryContent();
       const { profile } = await communityApi.academicProfile();
       if (!stillCurrent()) return;
       if (JSON.stringify(profile) !== JSON.stringify(approved.profile)) throw new Error("AUTHOR_PROFILE_CHANGED：作者资料已变化，请重新预览后发送。");
       if (original) await communityApi.updateAnnotation(original.id, { ...approved.input, expectedRevision: baseRevision! });
-      else if (parent) await communityApi.createReply(parent.id, { body: approved.input.body, publishAsAnnotation,
+      else if (parent) await communityApi.createReply(parent.id, (context.restoredOperation?.payload ?? { body: approved.input.body, publishAsAnnotation,
         expectedAuthorProfileRevision: profile.revision,
         expectedParent: { revision: parent.revision, visibility: parent.visibility, organizationId: parent.organizationId },
-        tags: approved.input.tags, targets: approved.input.targets }, intentId);
-      else await communityApi.createAnnotation(approved.input, intentId);
-      if (stillCurrent()) saved();
+        tags: approved.input.tags, targets: approved.input.targets }) as Parameters<typeof communityApi.createReply>[1], intentId);
+      else await communityApi.createAnnotation((context.restoredOperation?.payload ?? approved.input) as CreateAnnotationInput, intentId);
+      if (stillCurrent()) await saved(savedSnapshot);
     } catch (reason) {
       if (!stillCurrent()) return;
       if (reason instanceof Error && /AUTHOR_PROFILE_CHANGED|REVISION_CONFLICT/.test(reason.message)) setPreview(undefined);
@@ -203,12 +223,12 @@ function ComposerWorkspace({ context, authorName = "当前登录账号", owner =
   const isReplyEdit = Boolean(sourceReplyId);
   return <div className="drawer-backdrop" role="presentation">
     <aside className="annotation-drawer" role="dialog" aria-modal="true" aria-labelledby="composer-title">
-      <header><div><span>{original ? "编辑" : parent ? "回复" : "新批注"}</span><h2 id="composer-title">{parent ? `回复 ${parent.author.name}` : isReplyEdit ? "编辑回复" : "发布批注"}</h2></div><Tooltip content="关闭" relationship="label"><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="关闭" onClick={onClose} /></Tooltip></header>
+      <header><div><span>{original ? "编辑" : parent ? "回复" : "新批注"}</span><h2 id="composer-title">{parent ? `回复 ${parent.author.name}` : isReplyEdit ? "编辑回复" : "发布批注"}</h2></div><Tooltip content="关闭" relationship="label"><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="关闭" onClick={() => void close()} /></Tooltip></header>
       <form onSubmit={submit}>
-        <LocalDraftControls owner={owner} scope={draftScope} value={draftValue} onRestore={restoreDraft} />
+        <LocalDraftControls controller={localDraft} owner={owner} scope={draftScope} value={draftValue} onRestore={restoreDraft} />
         {baseRevision !== undefined && <p>编辑基于修订 {baseRevision}；冲突时保留你的草稿，请核对最新内容。</p>}
         {parent && !publishAsAnnotation && <p>回复沿用原批注的可见范围，不产生独立批注。</p>}
-        <label className="field-label">批注内容<Textarea value={body} onChange={(_, data) => { setBody(data.value); setContribution((current) => ({ ...current, review: "unreviewed" })); }} resize="vertical" rows={7} required /></label>
+        <label className="field-label">批注内容<Textarea aria-label="批注内容" value={body} onChange={(_, data) => { setBody(data.value); setContribution((current) => ({ ...current, review: "unreviewed" })); }} resize="vertical" rows={7} required /></label>
         {!isReplyEdit && parent && <ReplyPublicationFields disabled={publicationCanonicalizing} publishAsAnnotation={publishAsAnnotation} targets={targets} visibility={parent.visibility} onEnabledChange={setReplyPublication} onTargetsChange={updateReplyTargets} />}
         {!isReplyEdit && !parent && <>
           <div className="visibility-row">
@@ -232,7 +252,7 @@ function ComposerWorkspace({ context, authorName = "当前登录账号", owner =
         }} onUseRevision={(revision) => { setBaseRevision(revision); setRevisionConflict(false); setPreview(undefined); }} />}
         {status && <p className="form-error" role="alert">{status}</p>}
         {preview && preview.key === draftKey && <AnnotationSendPreview authorName={authorName} profile={preview.profile} input={preview.input} replyOnly={Boolean(parent) && !publishAsAnnotation} organizationName={parent?.visibility === "organization" ? `指定组织 · ${parent.organizationId}` : visibility === "organization" ? organization?.name : undefined} pending={pending} onConfirm={() => void confirmSend()} onCancel={() => setPreview(undefined)} />}
-        <div className="drawer-actions"><Button type="button" appearance="secondary" onClick={onClose}>取消</Button><Button type="submit" appearance="primary" icon={<Send20Regular />} disabled={pending || publicationCanonicalizing || !visibility || !body.trim() || (!parent && !isReplyEdit && visibility === "organization" && (!organization || organization.organizationId !== organizationId)) || (Boolean(parent) && publishAsAnnotation && !replyTargetsReady) || (!parent && !isReplyEdit && targets.length === 0)}>{pending ? "正在保存" : original ? "保存修改" : "发布"}</Button></div>
+        <div className="drawer-actions"><Button type="button" appearance="secondary" onClick={() => void close()}>取消</Button><Button type="submit" appearance="primary" icon={<Send20Regular />} disabled={pending || publicationCanonicalizing || !visibility || !body.trim() || (!parent && !isReplyEdit && visibility === "organization" && (!organization || organization.organizationId !== organizationId)) || (Boolean(parent) && publishAsAnnotation && !replyTargetsReady) || (!parent && !isReplyEdit && targets.length === 0)}>{pending ? "正在保存" : original ? "保存修改" : "发布"}</Button></div>
       </form>
     </aside>
   </div>;
