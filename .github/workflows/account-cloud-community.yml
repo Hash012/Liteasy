@@ -1,0 +1,81 @@
+name: Account and community boundaries
+
+on:
+  push:
+    paths:
+      - 'products/liteasy/services/api/**'
+      - 'products/intuecho/**'
+      - 'platform/identity-service/**'
+      - '.github/workflows/account-cloud-community.yml'
+      - '.github/scripts/account-test-databases.sql'
+  pull_request:
+    paths:
+      - 'products/liteasy/services/api/**'
+      - 'products/intuecho/**'
+      - 'platform/identity-service/**'
+      - '.github/workflows/account-cloud-community.yml'
+      - '.github/scripts/account-test-databases.sql'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: account-community-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  isolated-services:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ephemeral-ci-admin
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: products/liteasy/apps/desktop/.nvmrc
+          cache: npm
+          cache-dependency-path: |
+            products/liteasy/services/api/package-lock.json
+            products/intuecho/package-lock.json
+      - name: Validate workflow and gate scripts
+        run: |
+          bash .github/scripts/lint-workflows.sh
+          node --test .github/scripts/*.test.mjs
+      - name: Install locked service and Web dependencies
+        run: |
+          npm ci --prefix products/liteasy/services/api --no-audit --no-fund
+          npm ci --prefix products/intuecho --no-audit --no-fund
+      - name: Unit, contract and SQLite boundary tests
+        run: |
+          npm test --prefix platform/identity-service
+          npm test --prefix products/liteasy/services/api
+          npm test --prefix products/intuecho
+          npm run build --prefix products/intuecho
+      - name: Create isolated test databases and least-privilege roles
+        env:
+          PGPASSWORD: ephemeral-ci-admin
+        run: psql --host=127.0.0.1 --username=postgres --dbname=postgres --set=ON_ERROR_STOP=1 --file=.github/scripts/account-test-databases.sql
+      - name: Real PostgreSQL migrations and concurrency checks
+        env:
+          LITEASY_TEST_DATABASE_URL: postgresql://liteasy_ci_app:ephemeral-liteasy-app@127.0.0.1:5432/liteasy_ci_test
+          LITEASY_TEST_MIGRATION_DATABASE_URL: postgresql://liteasy_ci_migrator:ephemeral-liteasy-migrator@127.0.0.1:5432/liteasy_ci_test
+          INTUECHO_TEST_DATABASE_URL: postgresql://intuecho_ci_app:ephemeral-intuecho-app@127.0.0.1:5432/intuecho_ci_test
+          INTUECHO_TEST_MIGRATION_DATABASE_URL: postgresql://intuecho_ci_migrator:ephemeral-intuecho-migrator@127.0.0.1:5432/intuecho_ci_test
+        run: |
+          node products/liteasy/services/api/scripts/verify-postgres-integration.mjs
+          node products/intuecho/services/api/scripts/verify-postgres-integration.mjs
+          node products/intuecho/services/api/scripts/verify-thin-reading-withdrawal.mjs
+      - name: Verify dependency locks stayed unchanged
+        run: node .github/scripts/check-clean.mjs products/liteasy/services/api/package-lock.json products/intuecho/package-lock.json
