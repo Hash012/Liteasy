@@ -204,6 +204,13 @@ export function registerAnnotationCommunityRoutes(app, repository, {
     annotation: await repository.annotation(request.params.annotationId, currentUser(request))
   })));
 
+  app.get("/v1/community-commands/:operationType/:operationId", async (request, reply) => route(reply, async () => {
+    const viewer = requireUser(request, reply);
+    if (!viewer) return;
+    if (!["create_annotation", "create_reply"].includes(request.params.operationType) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.params.operationId)) throw new AnnotationCommunityError("INVALID_COMMAND");
+    return repository.lookupCommunityCommand(viewer, request.params.operationType, request.params.operationId);
+  }));
+
   app.post("/v1/annotations", async (request, reply) => route(reply, async () => {
     const author = requireUser(request, reply);
     if (!author) return;
@@ -216,6 +223,7 @@ export function registerAnnotationCommunityRoutes(app, repository, {
   app.put("/v1/annotations/:annotationId", async (request, reply) => route(reply, async () => {
     const author = requireUser(request, reply);
     if (!author) return;
+    if (request.body?.expectedRevision === undefined) throw new AnnotationCommunityError("EXPECTED_REVISION_REQUIRED", 428);
     const input = validated(updateAnnotationSchema, request.body, "INVALID_ANNOTATION_UPDATE");
     return { annotation: await repository.updateAnnotation(request.params.annotationId, author, input) };
   }));
@@ -263,6 +271,7 @@ export function registerAnnotationCommunityRoutes(app, repository, {
   app.put("/v1/replies/:replyId", async (request, reply) => route(reply, async () => {
     const author = requireUser(request, reply);
     if (!author) return;
+    if (request.body?.expectedRevision === undefined) throw new AnnotationCommunityError("EXPECTED_REVISION_REQUIRED", 428);
     const input = validated(updateReplySchema, request.body, "INVALID_REPLY_UPDATE");
     return { reply: await repository.updateReply(request.params.replyId, author, input) };
   }));

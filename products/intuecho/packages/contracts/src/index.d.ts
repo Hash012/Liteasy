@@ -260,6 +260,7 @@ export type AnnotationParentSnapshot = {
 };
 
 export type CreateReplyInput = {
+  expectedAuthorProfileRevision?: number;
   command?: CommunityCommand;
   collaboration?: CollaborationMetadata;
   mentionedUserIds?: string[];
@@ -271,6 +272,7 @@ export type CreateReplyInput = {
 };
 
 export type CreateReply = {
+  expectedAuthorProfileRevision?: number;
   command?: CommunityCommand;
   collaboration?: CollaborationMetadata;
   mentionedUserIds?: string[];
@@ -281,15 +283,15 @@ export type CreateReply = {
   targets: AnnotationTarget[];
 };
 
-export type UpdateReply = { body: string; expectedRevision?: number; collaboration?: CollaborationMetadata | null };
+export type UpdateReply = { expectedAuthorProfileRevision?: number; body: string; expectedRevision?: number; collaboration?: CollaborationMetadata | null };
 
 export type UpdateReplyPublicationInput =
-  | { published: false }
-  | { published: true; tags?: string[]; targets: AnnotationTargetInput[] };
+  | { published: false; expectedRevision?: number; expectedParent?: AnnotationParentSnapshot; expectedAuthorProfileRevision?: number }
+  | { published: true; expectedRevision?: number; expectedParent?: AnnotationParentSnapshot; expectedAuthorProfileRevision?: number; tags?: string[]; targets: AnnotationTargetInput[] };
 
 export type UpdateReplyPublication =
-  | { published: false }
-  | { published: true; tags: string[]; targets: AnnotationTarget[] };
+  | { published: false; expectedRevision?: number; expectedParent?: AnnotationParentSnapshot; expectedAuthorProfileRevision?: number }
+  | { published: true; expectedRevision?: number; expectedParent?: AnnotationParentSnapshot; expectedAuthorProfileRevision?: number; tags: string[]; targets: AnnotationTarget[] };
 
 export declare const confirmableLiteratureIdentifierKindSchema: z.ZodType<ConfirmableLiteratureIdentifierKind>;
 export declare const candidateLiteratureAliasKindSchema: z.ZodType<CandidateLiteratureAliasKind>;

@@ -1,3 +1,4 @@
+import { validateCommunityCommand, assertCommandReplay, commandReceipt, assertExpectedRevision } from "./communityCommands.mjs";
 import { desktopAnnotationPublicationPayload } from "@intuecho/contracts";
 import { desktopPublicationLookup } from "./desktopPublicationLookup.mjs";
 import { currentOrganizationChoices } from "./organizationChoices.mjs";
@@ -189,6 +190,7 @@ export function initializeAnnotationCommunitySqlite(db) {
     CREATE TABLE IF NOT EXISTS direct_conversation_reads_v2 (conversation_id TEXT NOT NULL, user_id TEXT NOT NULL, last_read_message_id TEXT NOT NULL, last_read_at TEXT NOT NULL, PRIMARY KEY(conversation_id, user_id));
     CREATE TABLE IF NOT EXISTS annotation_moderation_audit_v2 (id TEXT PRIMARY KEY, annotation_id TEXT NOT NULL, linked_reply_id TEXT, action TEXT NOT NULL, reason TEXT NOT NULL, admin_user_id TEXT NOT NULL, trace_id TEXT NOT NULL, created_at TEXT NOT NULL);
   `);
+  db.exec(`CREATE TABLE IF NOT EXISTS community_command_receipts (actor_id TEXT NOT NULL, operation_type TEXT NOT NULL, operation_id TEXT NOT NULL, body_digest TEXT NOT NULL, resource_id TEXT NOT NULL, target_id TEXT, committed_at TEXT NOT NULL, PRIMARY KEY(actor_id, operation_type, operation_id))`);
   const tagColumns = new Set(db.prepare("PRAGMA table_info(annotation_tags_v2)").all().map((column) => column.name));
   if (!tagColumns.has("source_scope_json")) db.exec("ALTER TABLE annotation_tags_v2 ADD COLUMN source_scope_json TEXT");
   const literatureColumns = new Set(db.prepare("PRAGMA table_info(literature_records_v2)").all().map((column) => column.name));
@@ -1232,6 +1234,8 @@ export class SqliteAnnotationCommunityRepository {
   #assignPlatformTags(annotationId, body, userTags, now) {
     this.db.prepare("DELETE FROM annotation_tags_v2 WHERE annotation_id = ? AND origin = 'platform' AND state = 'active'").run(annotationId);
     const output = this.#annotationRow(annotationId);
+    // Publishing is not permission to use a post as classifier training data.
+    if (output.visibility === "public") return;
     const sourceScope = JSON.stringify({ visibility: output.visibility, organizationId: output.organization_id ?? null, authorId: ["public", "organization"].includes(output.visibility) ? null : output.author_id });
     const excluded = new Set(uniqueTags(userTags).map(tagSlug));
     const examples = this.db.prepare(`
@@ -1362,15 +1366,47 @@ export class SqliteAnnotationCommunityRepository {
     );
   }
 
+  #commandRow(actor, type, operationId) {
+    return operationId ? this.db.prepare("SELECT * FROM community_command_receipts WHERE actor_id = ? AND operation_type = ? AND operation_id = ?").get(actor.id, type, operationId) : null;
+  }
+
+  #recordCommand(actor, type, command, resourceId, targetId, now) {
+    if (command) this.db.prepare("INSERT INTO community_command_receipts(actor_id, operation_type, operation_id, body_digest, resource_id, target_id, committed_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(actor.id, type, command.operationId, command.bodyDigest, resourceId, targetId, now);
+  }
+
+  async lookupCommunityCommand(actor, type, operationId) {
+    const row = this.#commandRow(actor, type, operationId);
+    if (!row) return { status: "not_found" };
+    const receipt = commandReceipt(row);
+    try {
+      let result;
+      if (type === "create_annotation") result = { annotation: await this.annotation(row.resource_id, actor) };
+      else {
+        await this.annotation(row.target_id, actor);
+        const reply = this.db.prepare("SELECT * FROM annotation_replies_v2 WHERE id = ? AND deleted_at IS NULL").get(row.resource_id);
+        if (!reply || reply.moderated_at || reply.parent_deleted_at) throw new AnnotationCommunityError("REPLY_NOT_FOUND", 404);
+        result = { reply: { ...this.#serializeReply(reply), viewerIsAuthor: reply.author_id === actor.id }, annotation: reply.derived_annotation_id ? await this.annotation(reply.derived_annotation_id, actor) : null };
+      }
+      return { status: "committed", receipt, available: true, result };
+    } catch (error) {
+      if (![403, 404].includes(error.status)) throw error;
+      return { status: "committed", receipt, available: false };
+    }
+  }
+
   async createAnnotation(author, input) {
+    const command = validateCommunityCommand("create_annotation", null, input);
     const now = new Date().toISOString();
     if (input.visibility === "organization") {
       if (!await this.#organizationVisible({ organizationId: input.organizationId, userId: author.id })) {
         throw new AnnotationCommunityError("ORGANIZATION_ACCESS_DENIED", 403);
       }
     }
-    const id = `annotation_${randomUUID()}`;
+    let id = `annotation_${randomUUID()}`;
     this.db.transaction(() => {
+      const existing = this.#commandRow(author, "create_annotation", command?.operationId);
+      if (command) assertCommandReplay(existing, command);
+      if (existing) { id = existing.resource_id; return; }
       const profile = this.profile(author.id);
       if (input.expectedAuthorProfileRevision !== undefined && profile.revision !== input.expectedAuthorProfileRevision) throw new AnnotationCommunityError("AUTHOR_PROFILE_CHANGED", 409);
       this.db.prepare(`
@@ -1382,7 +1418,13 @@ export class SqliteAnnotationCommunityRepository {
       this.#replaceUserTags(id, input.tags, now);
       this.#assignPlatformTags(id, input.body, input.tags, now);
       if (input.notificationIntent === "reading_task") recordSqliteCommunitySourceEvent(this.db, { kind: "reading_task", sourceId: id, annotationId: id, actorId: author.id });
+      this.#recordCommand(author, "create_annotation", command, id, null, now);
     })();
+    if (command) {
+      const lookup = await this.lookupCommunityCommand(author, "create_annotation", command.operationId);
+      if (!lookup.available) throw new AnnotationCommunityError("COMMAND_RESULT_UNAVAILABLE", 409);
+      return lookup.result.annotation;
+    }
     return this.annotation(id, author);
   }
 
@@ -1390,6 +1432,7 @@ export class SqliteAnnotationCommunityRepository {
     const authorizedRow = this.#annotationRow(id);
     if (!authorizedRow || authorizedRow.withdrawn_at) throw new AnnotationCommunityError("ANNOTATION_NOT_FOUND", 404);
     if (authorizedRow.author_id !== author.id) throw new AnnotationCommunityError("NOT_ANNOTATION_AUTHOR", 403);
+    assertExpectedRevision(authorizedRow, update.expectedRevision, "ANNOTATION");
     if (authorizedRow.source_reply_id && update.body !== undefined) throw new AnnotationCommunityError("DERIVED_BODY_READ_ONLY");
     if (authorizedRow.source_reply_id && (update.visibility !== undefined || update.organizationId !== undefined || update.shareToPlaza !== undefined)) {
       throw new AnnotationCommunityError("REPLY_VISIBILITY_MISMATCH");
@@ -1416,6 +1459,7 @@ export class SqliteAnnotationCommunityRepository {
     const contribution = annotationContribution(update.contribution, parseJson(row.contribution_json, {}),
       (update.body !== undefined && update.body !== row.body) || (update.targets !== undefined && JSON.stringify(update.targets) !== JSON.stringify(this.#targets(id, false))));
     this.db.transaction(() => {
+      if (update.expectedAuthorProfileRevision !== undefined && this.profile(author.id).revision !== update.expectedAuthorProfileRevision) throw new AnnotationCommunityError("AUTHOR_PROFILE_CHANGED", 409);
       this.db.prepare("INSERT INTO annotation_versions_v2(id, annotation_id, revision, snapshot_json, changed_by, created_at) VALUES (?, ?, ?, ?, ?, ?)")
         .run(`annotation_version_${randomUUID()}`, id, row.revision, JSON.stringify(this.#serialize(row, author, false)), author.id, now);
       this.db.prepare(`UPDATE annotations_v2 SET body = ?, author_name = ?, author_initials = ?, author_profile_snapshot_json = ?, visibility = ?, organization_id = ?, share_to_plaza = ?, revision = revision + 1, updated_at = ? WHERE id = ?`)
@@ -1458,7 +1502,7 @@ export class SqliteAnnotationCommunityRepository {
     const rating = this.db.prepare("SELECT count(*) AS count, avg(rating) AS average FROM annotation_ratings_v2 WHERE annotation_id = ?").get(row.id);
     const viewerRating = viewer?.id ? this.db.prepare("SELECT rating FROM annotation_ratings_v2 WHERE annotation_id = ? AND user_id = ?").get(row.id, viewer.id)?.rating ?? null : null;
     const viewerSaved = viewer?.id ? Boolean(this.db.prepare("SELECT 1 FROM annotation_saves_v2 WHERE annotation_id = ? AND user_id = ?").get(row.id, viewer.id)) : false;
-    const sourceReply = row.source_reply_id ? this.db.prepare("SELECT parent_deleted_at FROM annotation_replies_v2 WHERE id = ?").get(row.source_reply_id) : null;
+    const sourceReply = row.source_reply_id ? this.db.prepare("SELECT parent_deleted_at, revision FROM annotation_replies_v2 WHERE id = ?").get(row.source_reply_id) : null;
     return {
       author: { id: row.author_id, initials: row.author_initials, name: row.author_name, profile: parseJson(row.author_profile_snapshot_json, {}) },
       body: row.body,
@@ -1466,7 +1510,7 @@ export class SqliteAnnotationCommunityRepository {
       contribution: annotationContribution(undefined, parseJson(row.contribution_json, {})),
       id: row.id,
       organizationId: row.organization_id,
-      originalReply: row.source_reply_id ? { replyId: row.source_reply_id, status: sourceReply?.parent_deleted_at ? "parent_deleted" : "available" } : null,
+      originalReply: row.source_reply_id ? { replyId: row.source_reply_id, revision: Number(sourceReply?.revision ?? 1), status: sourceReply?.parent_deleted_at ? "parent_deleted" : "available" } : null,
       ratingAverage: rating.average === null ? null : Number(Number(rating.average).toFixed(2)),
       ratingCount: Number(rating.count),
       revision: row.revision,
@@ -1510,6 +1554,14 @@ export class SqliteAnnotationCommunityRepository {
   }
 
   async createReply(parentAnnotationId, author, input) {
+    const command = validateCommunityCommand("create_reply", parentAnnotationId, input);
+    const existing = this.#commandRow(author, "create_reply", command?.operationId);
+    if (existing) {
+      assertCommandReplay(existing, command);
+      const lookup = await this.lookupCommunityCommand(author, "create_reply", command.operationId);
+      if (!lookup.available) throw new AnnotationCommunityError("COMMAND_RESULT_UNAVAILABLE", 409);
+      return lookup.result;
+    }
     const authorizedParent = this.#annotationRow(parentAnnotationId);
     if (!authorizedParent || authorizedParent.withdrawn_at || !await this.#canView(authorizedParent, author)) throw new AnnotationCommunityError("PARENT_ANNOTATION_NOT_FOUND", 404);
     if (authorizedParent.visibility === "organization" && !await this.#organizationVisible({ organizationId: authorizedParent.organization_id, userId: author.id })) {
@@ -1527,10 +1579,14 @@ export class SqliteAnnotationCommunityRepository {
       throw new AnnotationCommunityError("PARENT_ANNOTATION_NOT_FOUND", 404);
     }
     const now = new Date().toISOString();
-    const replyId = `reply_${randomUUID()}`;
-    const derivedAnnotationId = input.publishAsAnnotation ? `annotation_${randomUUID()}` : null;
+    let replyId = `reply_${randomUUID()}`;
+    let derivedAnnotationId = input.publishAsAnnotation ? `annotation_${randomUUID()}` : null;
     const profile = JSON.stringify(this.#profileSnapshot(author.id));
     this.db.transaction(() => {
+      if (input.expectedAuthorProfileRevision !== undefined && this.profile(author.id).revision !== input.expectedAuthorProfileRevision) throw new AnnotationCommunityError("AUTHOR_PROFILE_CHANGED", 409);
+      const existing = this.#commandRow(author, "create_reply", command?.operationId);
+      if (command) assertCommandReplay(existing, command);
+      if (existing) { replyId = existing.resource_id; derivedAnnotationId = this.db.prepare("SELECT derived_annotation_id FROM annotation_replies_v2 WHERE id = ?").get(replyId)?.derived_annotation_id; return; }
       const currentParent = this.#annotationRow(parentAnnotationId);
       if (!currentParent || currentParent.withdrawn_at) throw new AnnotationCommunityError("PARENT_ANNOTATION_NOT_FOUND", 404);
       assertExpectedReplyParent(currentParent, input.expectedParent);
@@ -1547,6 +1603,7 @@ export class SqliteAnnotationCommunityRepository {
         this.db.prepare("UPDATE annotation_replies_v2 SET derived_annotation_id = ? WHERE id = ?").run(derivedAnnotationId, replyId);
       }
       recordSqliteCommunityReplyEvent(this.db, { replyId, annotationId: parentAnnotationId, actorId: author.id, mentionedUserIds: input.mentionedUserIds });
+      this.#recordCommand(author, "create_reply", command, replyId, parentAnnotationId, now);
     })();
     const row = this.db.prepare("SELECT * FROM annotation_replies_v2 WHERE id = ?").get(replyId);
     return { annotation: derivedAnnotationId ? await this.annotation(derivedAnnotationId, author) : null, reply: { ...this.#serializeReply(row), viewerIsAuthor: true } };
@@ -1556,6 +1613,7 @@ export class SqliteAnnotationCommunityRepository {
     const authorizedRow = this.db.prepare("SELECT * FROM annotation_replies_v2 WHERE id = ?").get(replyId);
     if (!authorizedRow || authorizedRow.deleted_at) throw new AnnotationCommunityError("REPLY_NOT_FOUND", 404);
     if (authorizedRow.author_id !== author.id) throw new AnnotationCommunityError("NOT_REPLY_AUTHOR", 403);
+    assertExpectedRevision(authorizedRow, input.expectedRevision, "REPLY");
     if (authorizedRow.visibility === "organization" && !await this.#organizationVisible({ organizationId: authorizedRow.organization_id, userId: author.id })) {
       throw new AnnotationCommunityError("ORGANIZATION_ACCESS_DENIED", 403);
     }
@@ -1573,6 +1631,7 @@ export class SqliteAnnotationCommunityRepository {
     const now = new Date().toISOString();
     const profile = JSON.stringify(this.#profileSnapshot(author.id));
     this.db.transaction(() => {
+      if (input.expectedAuthorProfileRevision !== undefined && this.profile(author.id).revision !== input.expectedAuthorProfileRevision) throw new AnnotationCommunityError("AUTHOR_PROFILE_CHANGED", 409);
       this.db.prepare("INSERT INTO annotation_reply_versions_v2(id, reply_id, revision, snapshot_json, changed_by, created_at) VALUES (?, ?, ?, ?, ?, ?)")
         .run(`reply_version_${randomUUID()}`, replyId, row.revision, JSON.stringify(this.#serializeReply(row)), author.id, now);
       this.db.prepare("UPDATE annotation_replies_v2 SET body = ?, author_name = ?, author_initials = ?, author_profile_snapshot_json = ?, revision = revision + 1, updated_at = ? WHERE id = ?")
@@ -1593,6 +1652,7 @@ export class SqliteAnnotationCommunityRepository {
     const authorizedRow = this.db.prepare("SELECT * FROM annotation_replies_v2 WHERE id = ?").get(replyId);
     if (!authorizedRow || authorizedRow.deleted_at) throw new AnnotationCommunityError("REPLY_NOT_FOUND", 404);
     if (authorizedRow.author_id !== author.id) throw new AnnotationCommunityError("NOT_REPLY_AUTHOR", 403);
+    assertExpectedRevision(authorizedRow, input.expectedRevision, "REPLY");
     const authorizedParent = this.#annotationRow(authorizedRow.parent_annotation_id);
     if (authorizedRow.visibility === "organization" && !await this.#organizationVisible({ organizationId: authorizedRow.organization_id, userId: author.id })) {
       throw new AnnotationCommunityError("ORGANIZATION_ACCESS_DENIED", 403);
@@ -1610,6 +1670,7 @@ export class SqliteAnnotationCommunityRepository {
     }
     if (input.published && row.moderated_at) throw new AnnotationCommunityError("REPLY_NOT_FOUND", 404);
     const parent = this.#annotationRow(row.parent_annotation_id);
+    if (parent) assertExpectedReplyParent(parent, input.expectedParent);
     if (
       !parent ||
       parent.withdrawn_at ||
@@ -1624,6 +1685,7 @@ export class SqliteAnnotationCommunityRepository {
     const now = new Date().toISOString();
     let derivedAnnotationId = row.derived_annotation_id;
     this.db.transaction(() => {
+      if (input.expectedAuthorProfileRevision !== undefined && this.profile(author.id).revision !== input.expectedAuthorProfileRevision) throw new AnnotationCommunityError("AUTHOR_PROFILE_CHANGED", 409);
       if (!input.published) {
         if (row.moderated_at) {
           this.db.prepare("UPDATE annotation_replies_v2 SET moderated_at = ?, moderation_reason = ?, moderated_by = ?, updated_at = ? WHERE id = ?")

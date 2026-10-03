@@ -47,7 +47,8 @@ All event kinds honor explicit scope subscriptions, overlapping opt-outs, mute, 
 ### Scoped platform-tag upgrade (028)
 
 `local-semantic-scope-v2` constrains candidate selection before its limit: public
-output uses public root annotations; organization output uses the exact same
+output does not sample user posts (there is no explicit classifier-corpus opt-in);
+organization output uses the exact same
 organization; private and mutual-followers output uses the same visibility and
 author. Reply projections are not samples because their inherited audience needs
 additional ancestry validation. No new training permission is implied. The tag
@@ -62,3 +63,31 @@ assignments using the scoped classifier. Existing normal annotation edits alread
 recompute active platform tags. Appealed/removed tags and their audit history must
 be preserved; do not bulk delete user labels or automatically run a production
 recompute. Back up, dry-run a scoped diff, and review before any approved data repair.
+
+
+### Browser command protocol (029)
+
+New browser creates send `command: {protocolVersion:1, operationId, bodyDigest}`
+on the existing annotation/reply POST routes. Hash the UTF-8 shared
+`communityCommandPayload(type, targetId, input)` with SHA-256 before sending.
+The verified actor, command type and UUID identify a retry; a fresh UUID is a new
+user intention even if its body is identical. Different payloads under one key
+return `409 COMMAND_PAYLOAD_CONFLICT`. The receipt and content/event commit in the
+same transaction. PostgreSQL serializes concurrent keys with a transaction lock
+and enforces a composite primary key; SQLite performs receipt insertion in its
+existing synchronous write transaction. No body is copied into the receipt.
+
+`GET /v1/community-commands/:operationType/:operationId` performs no writes and
+returns `not_found` or a committed receipt. Returned content is read through
+current authorization; withdrawn/deleted/inaccessible targets have
+`available:false` and no result. Retrying such a receipt cannot recreate content.
+The browser must persist its frozen command before sending and resolve unknown
+outcomes using lookup, without minting another operation ID.
+
+Compatibility: legacy POSTs without `command` remain accepted during rollout and
+have **no retry guarantee**. Existing readers are unchanged. HTTP content PUTs
+without `expectedRevision` are rejected with 428; stale revisions return 409.
+Internal repository callers remain source-compatible when the field is omitted;
+all new browser edits supply it. Reply publication accepts its own expected
+revision, parent snapshot, and expected author-profile revision. Projection reads
+include the actual `originalReply.revision`, which can differ from the projection.

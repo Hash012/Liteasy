@@ -1514,7 +1514,7 @@ test("reply projections inherit every parent visibility without entering a broad
         const broadened = await app.inject({
           headers: scope.replyHeaders,
           method: "PUT",
-          payload: { shareToPlaza: true, visibility: "public" },
+          payload: { expectedRevision: 1, shareToPlaza: true, visibility: "public" },
           url: `/v1/annotations/${projected.json().annotation.id}`
         });
         assert.equal(broadened.statusCode, 400, broadened.body);
@@ -1622,7 +1622,7 @@ test("reply scope locks and transitive root audiences prevent stale or nested di
     const narrowed = await app.inject({
       headers: userHeader,
       method: "PUT",
-      payload: { organizationId: null, shareToPlaza: false, visibility: "private" },
+      payload: { expectedRevision: 1, organizationId: null, shareToPlaza: false, visibility: "private" },
       url: `/v1/annotations/${publicParent.json().annotation.id}`
     });
     assert.equal(narrowed.statusCode, 409, narrowed.body);
@@ -1643,7 +1643,7 @@ test("reply scope locks and transitive root audiences prevent stale or nested di
     const reassigned = await app.inject({
       headers: userHeader,
       method: "PUT",
-      payload: { organizationId: "org-scope-b" },
+      payload: { expectedRevision: 1, organizationId: "org-scope-b" },
       url: `/v1/annotations/${organizationParent.json().annotation.id}`
     });
     assert.equal(reassigned.statusCode, 409, reassigned.body);
@@ -1812,7 +1812,7 @@ test("reply publication, editing, moderation, deletion, and engagement preserve 
     assert.equal((await app.inject({
       headers: sameNameHeader,
       method: "PUT",
-      payload: { body: "Edited before projection body" },
+      payload: { expectedRevision: 1, body: "Edited before projection body" },
       url: `/v1/replies/${editedBeforePublicationId}`
     })).statusCode, 200);
     const lateProjection = await app.inject({
@@ -1871,7 +1871,7 @@ test("reply publication, editing, moderation, deletion, and engagement preserve 
     const edited = await app.inject({
       headers: sameNameHeader,
       method: "PUT",
-      payload: { body: "Canonical reply body after editing" },
+      payload: { expectedRevision: 1, body: "Canonical reply body after editing" },
       url: `/v1/replies/${replyId}`
     });
     assert.equal(edited.statusCode, 200, edited.body);
@@ -1905,7 +1905,7 @@ test("reply publication, editing, moderation, deletion, and engagement preserve 
     const directBodyEdit = await app.inject({
       headers: sameNameHeader,
       method: "PUT",
-      payload: { body: "Projection must not become canonical" },
+      payload: { expectedRevision: 2, body: "Projection must not become canonical" },
       url: `/v1/annotations/${derivedId}`
     });
     assert.equal(directBodyEdit.statusCode, 400, directBodyEdit.body);
@@ -1913,7 +1913,7 @@ test("reply publication, editing, moderation, deletion, and engagement preserve 
     const directMetadataEdit = await app.inject({
       headers: sameNameHeader,
       method: "PUT",
-      payload: { tags: ["direct metadata revision"] },
+      payload: { expectedRevision: 2, tags: ["direct metadata revision"] },
       url: `/v1/annotations/${derivedId}`
     });
     assert.equal(directMetadataEdit.statusCode, 200, directMetadataEdit.body);
@@ -1968,7 +1968,7 @@ test("reply publication, editing, moderation, deletion, and engagement preserve 
     const editedAfterMetadataChanges = await app.inject({
       headers: sameNameHeader,
       method: "PUT",
-      payload: { body: "Canonical reply remains editable after projection metadata changes" },
+      payload: { expectedRevision: 2, body: "Canonical reply remains editable after projection metadata changes" },
       url: `/v1/replies/${replyId}`
     });
     assert.equal(editedAfterMetadataChanges.statusCode, 200, editedAfterMetadataChanges.body);
@@ -2076,6 +2076,7 @@ test("reply publication, editing, moderation, deletion, and engagement preserve 
     assert.equal(retainedProjection.statusCode, 200, retainedProjection.body);
     assert.deepEqual(retainedProjection.json().annotation.originalReply, {
       replyId: projectedBeforeParentDeletion.json().reply.id,
+      revision: 1,
       status: "parent_deleted"
     });
     const parentDeletedDerivedId = projectedBeforeParentDeletion.json().annotation.id;
@@ -2127,7 +2128,7 @@ test("reply body and derived projection edits roll back together after a late da
     const failed = await app.inject({
       headers: sameNameHeader,
       method: "PUT",
-      payload: { body: "This body must roll back" },
+      payload: { expectedRevision: 1, body: "This body must roll back" },
       url: `/v1/replies/${replyId}`
     });
     assert.equal(failed.statusCode, 500, failed.body);
@@ -2156,7 +2157,7 @@ test("first replies reject a changed parent audience, organization, or revision 
       }) });
       assert.equal(created.statusCode, 201, created.body);
       const parent = created.json().annotation;
-      const changed = await app.inject({ headers: userHeader, method: "PUT", url: `/v1/annotations/${parent.id}`, payload: update });
+      const changed = await app.inject({ headers: userHeader, method: "PUT", url: `/v1/annotations/${parent.id}`, payload: { ...update, expectedRevision: parent.revision } });
       assert.equal(changed.statusCode, 200, changed.body);
       const reply = await app.inject({ headers: sameNameHeader, method: "POST", url: `/v1/annotations/${parent.id}/replies`, payload: {
         body: "This contribution was approved for the original group", publishAsAnnotation: false, tags: [], targets: [],
@@ -2252,7 +2253,7 @@ test("SQLite reply lifecycle rechecks state after asynchronous organization auth
     const pendingUpdate = app.inject({
       headers: sameNameHeader,
       method: "PUT",
-      payload: { body: "Stale update must not commit" },
+      payload: { expectedRevision: 1, body: "Stale update must not commit" },
       url: `/v1/replies/${replyForUpdate.id}`
     });
     await updateGate.waiting;
@@ -2294,7 +2295,7 @@ test("SQLite reply lifecycle rechecks state after asynchronous organization auth
     const pendingMetadataUpdate = app.inject({
       headers: userHeader,
       method: "PUT",
-      payload: { body: "Must not commit behind a stale 404" },
+      payload: { expectedRevision: 1, body: "Must not commit behind a stale 404" },
       url: `/v1/annotations/${updateDuringWithdrawal.id}`
     });
     await metadataGate.waiting;
@@ -2840,13 +2841,13 @@ test("contribution provenance survives user corrections without claiming scienti
     const annotation = created.json().annotation;
     assert.deepEqual(annotation.contribution, { ...input.contribution, editedByUser: false });
     const updated = await app.inject({ method: "PUT", url: `/v1/annotations/${annotation.id}`, headers: userHeader,
-      payload: { body: "Synthetic correction", contribution: { purpose: "replication", origin: "human", review: "unreviewed" } } });
+      payload: { expectedRevision: 1, body: "Synthetic correction", contribution: { purpose: "replication", origin: "human", review: "unreviewed" } } });
     assert.equal(updated.statusCode, 200);
     assert.deepEqual(updated.json().annotation.contribution, { purpose: "replication", origin: "ai_generated", review: "unreviewed", editedByUser: true });
     const old = JSON.parse(db.prepare("SELECT snapshot_json FROM annotation_versions_v2 WHERE annotation_id = ? AND revision = 1").get(annotation.id).snapshot_json);
     assert.equal(old.contribution.origin, "ai_generated");
     assert.equal(old.contribution.review, "source_checked");
-    const untouched = await app.inject({ method: "PUT", url: `/v1/annotations/${annotation.id}`, headers: userHeader, payload: { tags: ["corrected"] } });
+    const untouched = await app.inject({ method: "PUT", url: `/v1/annotations/${annotation.id}`, headers: userHeader, payload: { expectedRevision: 2, tags: ["corrected"] } });
     assert.equal(untouched.json().annotation.contribution.editedByUser, true);
   });
 });

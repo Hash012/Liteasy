@@ -504,6 +504,7 @@ export const createAnnotationSchema = z.object({
 });
 
 export const updateAnnotationSchema = z.object({
+  expectedAuthorProfileRevision: z.number().int().nonnegative().optional(),
   expectedRevision: z.number().int().positive().optional(),
   collaboration: collaborationMetadataSchema.nullable().optional(),
   body: z.string().trim().min(1).max(8000).optional(),
@@ -533,6 +534,7 @@ export const annotationParentSnapshotSchema = z.object({
 });
 
 export const createReplySchema = z.object({
+  expectedAuthorProfileRevision: z.number().int().nonnegative().optional(),
   command: communityCommandSchema.optional(),
   collaboration: collaborationMetadataSchema.optional(),
   mentionedUserIds: z.array(z.string().trim().min(1).max(200)).max(5).optional(),
@@ -551,15 +553,19 @@ export const createReplySchema = z.object({
 });
 
 export const updateReplySchema = z.object({
+  expectedAuthorProfileRevision: z.number().int().nonnegative().optional(),
   expectedRevision: z.number().int().positive().optional(),
   collaboration: collaborationMetadataSchema.nullable().optional(),
   body: z.string().trim().min(1).max(8000)
 });
 
 export const updateReplyPublicationSchema = z.discriminatedUnion("published", [
-  z.object({ published: z.literal(false) }),
+  z.object({ published: z.literal(false), expectedRevision: z.number().int().positive().optional(), expectedParent: annotationParentSnapshotSchema.optional(), expectedAuthorProfileRevision: z.number().int().nonnegative().optional() }),
   z.object({
     published: z.literal(true),
+    expectedRevision: z.number().int().positive().optional(),
+    expectedParent: annotationParentSnapshotSchema.optional(),
+    expectedAuthorProfileRevision: z.number().int().nonnegative().optional(),
     tags: annotationTagsSchema,
     targets: z.array(annotationTargetSchema).min(1).max(100)
   })

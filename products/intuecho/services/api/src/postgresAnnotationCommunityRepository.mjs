@@ -1,3 +1,4 @@
+import { validateCommunityCommand, assertCommandReplay, commandReceipt, assertExpectedRevision } from "./communityCommands.mjs";
 import { desktopPublicationLookup } from "./desktopPublicationLookup.mjs";
 import { assertIntuechoAccountActive } from "./accountWriteFence.mjs";
 import { platformAppealSummary } from "./tagAppealVisibility.mjs";
@@ -898,6 +899,8 @@ export class PostgresAnnotationCommunityRepository {
   async #assignPlatformTags(client, annotationId, body, userTags) {
     await client.query("DELETE FROM annotation_tags WHERE annotation_id = $1 AND origin = 'platform' AND state = 'active'", [annotationId]);
     const output = await this.#row(annotationId, client);
+    // Publishing is not permission to use a post as classifier training data.
+    if (!output || output.visibility === "public") return;
     const sourceScope = { visibility: output.visibility, organizationId: output.organization_id ?? null, authorId: ["public", "organization"].includes(output.visibility) ? null : output.author_id };
     const excluded = new Set(uniqueTags(userTags).map(tagSlug));
     const examples = await client.query(`
@@ -1029,12 +1032,51 @@ export class PostgresAnnotationCommunityRepository {
     );
   }
 
+  async #lockCommand(client, actor, type, command) {
+    if (!command) return null;
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [JSON.stringify([actor.id, type, command.operationId])]);
+    const row = (await client.query("SELECT * FROM community_command_receipts WHERE actor_id = $1 AND operation_type = $2 AND operation_id = $3", [actor.id, type, command.operationId])).rows[0];
+    assertCommandReplay(row, command);
+    return row;
+  }
+
+  async #recordCommand(client, actor, type, command, resourceId, targetId) {
+    if (command) await client.query("INSERT INTO community_command_receipts(actor_id, operation_type, operation_id, body_digest, resource_id, target_id) VALUES ($1, $2, $3, $4, $5, $6)", [actor.id, type, command.operationId, command.bodyDigest, resourceId, targetId]);
+  }
+
+  async lookupCommunityCommand(actor, type, operationId, client = this.pool) {
+    const row = (await client.query("SELECT * FROM community_command_receipts WHERE actor_id = $1 AND operation_type = $2 AND operation_id = $3", [actor.id, type, operationId])).rows[0];
+    if (!row) return { status: "not_found" };
+    const receipt = commandReceipt(row);
+    try {
+      let result;
+      if (type === "create_annotation") result = { annotation: await this.annotation(row.resource_id, actor, client) };
+      else {
+        await this.annotation(row.target_id, actor, client);
+        const reply = await this.#replyRow(row.resource_id, client);
+        if (!reply || reply.deleted_at || reply.moderated_at || reply.parent_deleted_at) throw new AnnotationCommunityError("REPLY_NOT_FOUND", 404);
+        result = { reply: this.#serializeReply(reply, actor), annotation: reply.derived_annotation_id ? await this.annotation(reply.derived_annotation_id, actor, client) : null };
+      }
+      return { status: "committed", receipt, available: true, result };
+    } catch (error) {
+      if (![403, 404].includes(error.status)) throw error;
+      return { status: "committed", receipt, available: false };
+    }
+  }
+
   async createAnnotation(author, input) {
+    const command = validateCommunityCommand("create_annotation", null, input);
     if (input.visibility === "organization" && !await this.#organizationVisible({ organizationId: input.organizationId, userId: author.id })) {
       throw new AnnotationCommunityError("ORGANIZATION_ACCESS_DENIED", 403);
     }
     return withTransaction(this.pool, async (client) => {
       await assertIntuechoAccountActive(client, author.id);
+      const existing = await this.#lockCommand(client, author, "create_annotation", command);
+      if (existing) {
+        const lookup = await this.lookupCommunityCommand(author, "create_annotation", command.operationId, client);
+        if (!lookup.available) throw new AnnotationCommunityError("COMMAND_RESULT_UNAVAILABLE", 409);
+        return lookup.result.annotation;
+      }
       const profile = await this.profile(author.id, client);
       if (input.expectedAuthorProfileRevision !== undefined && profile.revision !== input.expectedAuthorProfileRevision) throw new AnnotationCommunityError("AUTHOR_PROFILE_CHANGED", 409);
       const id = `annotation_${randomUUID()}`;
@@ -1047,6 +1089,7 @@ export class PostgresAnnotationCommunityRepository {
       await this.#replaceUserTags(client, id, input.tags);
       await this.#assignPlatformTags(client, id, input.body, input.tags);
       if (input.notificationIntent === "reading_task") await recordPostgresCommunitySourceEvent(client, { kind: "reading_task", sourceId: id, annotationId: id, actorId: author.id });
+      await this.#recordCommand(client, author, "create_annotation", command, id, null);
       return this.annotation(id, author, client);
     });
   }
@@ -1054,9 +1097,11 @@ export class PostgresAnnotationCommunityRepository {
   async updateAnnotation(id, author, update) {
     return withTransaction(this.pool, async (client) => {
       await assertIntuechoAccountActive(client, author.id);
+      if (update.expectedAuthorProfileRevision !== undefined && (await this.profile(author.id, client)).revision !== update.expectedAuthorProfileRevision) throw new AnnotationCommunityError("AUTHOR_PROFILE_CHANGED", 409);
       const authorizedRow = await this.#row(id, client, true);
       if (!authorizedRow || authorizedRow.withdrawn_at) throw new AnnotationCommunityError("ANNOTATION_NOT_FOUND", 404);
       if (authorizedRow.author_id !== author.id) throw new AnnotationCommunityError("NOT_ANNOTATION_AUTHOR", 403);
+      assertExpectedRevision(authorizedRow, update.expectedRevision, "ANNOTATION");
       if (authorizedRow.source_reply_id && update.body !== undefined) throw new AnnotationCommunityError("DERIVED_BODY_READ_ONLY");
       if (authorizedRow.source_reply_id && (update.visibility !== undefined || update.organizationId !== undefined || update.shareToPlaza !== undefined)) {
         throw new AnnotationCommunityError("REPLY_VISIBILITY_MISMATCH");
@@ -1126,7 +1171,7 @@ export class PostgresAnnotationCommunityRepository {
       ? await client.query(`SELECT (SELECT rating FROM annotation_ratings WHERE annotation_id = $1 AND user_id = $2) AS rating, EXISTS(SELECT 1 FROM annotation_saves WHERE annotation_id = $1 AND user_id = $2) AS saved`, [row.id, viewer.id])
       : { rows: [{ rating: null, saved: false }] };
     const rating = await client.query("SELECT count(*)::int AS count, avg(rating)::double precision AS average FROM annotation_ratings WHERE annotation_id = $1", [row.id]);
-    const sourceReply = row.source_reply_id ? await client.query("SELECT parent_deleted_at FROM annotation_replies WHERE id = $1", [row.source_reply_id]) : { rows: [] };
+    const sourceReply = row.source_reply_id ? await client.query("SELECT parent_deleted_at, revision FROM annotation_replies WHERE id = $1", [row.source_reply_id]) : { rows: [] };
     return {
       author: { id: row.author_id, initials: row.author_initials, name: row.author_name, profile: row.author_profile_snapshot },
       body: row.body,
@@ -1134,7 +1179,7 @@ export class PostgresAnnotationCommunityRepository {
       contribution: annotationContribution(undefined, row.contribution),
       id: row.id,
       organizationId: row.organization_id,
-      originalReply: row.source_reply_id ? { replyId: row.source_reply_id, status: sourceReply.rows[0]?.parent_deleted_at ? "parent_deleted" : "available" } : null,
+      originalReply: row.source_reply_id ? { replyId: row.source_reply_id, revision: Number(sourceReply.rows[0]?.revision ?? 1), status: sourceReply.rows[0]?.parent_deleted_at ? "parent_deleted" : "available" } : null,
       ratingAverage: rating.rows[0].average === null ? null : Number(Number(rating.rows[0].average).toFixed(2)),
       ratingCount: Number(rating.rows[0].count),
       revision: Number(row.revision),
@@ -1188,10 +1233,18 @@ export class PostgresAnnotationCommunityRepository {
   }
 
   async createReply(parentAnnotationId, author, input) {
+    const command = validateCommunityCommand("create_reply", parentAnnotationId, input);
     return withTransaction(this.pool, async (client) => {
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`intuecho-account-deletion:${author.id}`]);
       const deleted = await client.query("SELECT 1 FROM account_deletion_jobs WHERE subject_id = $1", [author.id]);
       if (deleted.rows[0]) throw new AnnotationCommunityError("ACCOUNT_DELETED", 403);
+      const existing = await this.#lockCommand(client, author, "create_reply", command);
+      if (existing) {
+        const lookup = await this.lookupCommunityCommand(author, "create_reply", command.operationId, client);
+        if (!lookup.available) throw new AnnotationCommunityError("COMMAND_RESULT_UNAVAILABLE", 409);
+        return lookup.result;
+      }
+      if (input.expectedAuthorProfileRevision !== undefined && (await this.profile(author.id, client)).revision !== input.expectedAuthorProfileRevision) throw new AnnotationCommunityError("AUTHOR_PROFILE_CHANGED", 409);
       const parent = await this.#row(parentAnnotationId, client, true);
       if (!parent || parent.withdrawn_at || !await this.#canView(parent, author, client)) throw new AnnotationCommunityError("PARENT_ANNOTATION_NOT_FOUND", 404);
       if (parent.visibility === "organization" && !await this.#organizationVisible({ organizationId: parent.organization_id, userId: author.id })) {
@@ -1221,6 +1274,7 @@ export class PostgresAnnotationCommunityRepository {
         await client.query("UPDATE annotation_replies SET derived_annotation_id = $2 WHERE id = $1", [replyId, derivedAnnotationId]);
       }
       await recordPostgresCommunityReplyEvent(client, { replyId, annotationId: parentAnnotationId, actorId: author.id, mentionedUserIds: input.mentionedUserIds });
+      await this.#recordCommand(client, author, "create_reply", command, replyId, parentAnnotationId);
       const reply = await this.#replyRow(replyId, client);
       return { annotation: derivedAnnotationId ? await this.annotation(derivedAnnotationId, author, client) : null, reply: this.#serializeReply(reply, author) };
     });
@@ -1231,9 +1285,11 @@ export class PostgresAnnotationCommunityRepository {
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`intuecho-account-deletion:${author.id}`]);
       const deleted = await client.query("SELECT 1 FROM account_deletion_jobs WHERE subject_id = $1", [author.id]);
       if (deleted.rows[0]) throw new AnnotationCommunityError("ACCOUNT_DELETED", 403);
+      if (input.expectedAuthorProfileRevision !== undefined && (await this.profile(author.id, client)).revision !== input.expectedAuthorProfileRevision) throw new AnnotationCommunityError("AUTHOR_PROFILE_CHANGED", 409);
       const row = await this.#replyRow(replyId, client, true);
       if (!row || row.deleted_at) throw new AnnotationCommunityError("REPLY_NOT_FOUND", 404);
       if (row.author_id !== author.id) throw new AnnotationCommunityError("NOT_REPLY_AUTHOR", 403);
+      assertExpectedRevision(row, input.expectedRevision, "REPLY");
       if (row.visibility === "organization" && !await this.#organizationVisible({ organizationId: row.organization_id, userId: author.id })) throw new AnnotationCommunityError("ORGANIZATION_ACCESS_DENIED", 403);
       const profile = JSON.stringify(await this.#profileSnapshot(author.id, client));
       await client.query(`INSERT INTO annotation_reply_versions(id, reply_id, revision, body, author_profile_snapshot, changed_by) VALUES ($1, $2, $3, $4, $5::jsonb, $6)`, [`reply_version_${randomUUID()}`, replyId, row.revision, row.body, JSON.stringify(row.author_profile_snapshot), author.id]);
@@ -1255,15 +1311,18 @@ export class PostgresAnnotationCommunityRepository {
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`intuecho-account-deletion:${author.id}`]);
       const deleted = await client.query("SELECT 1 FROM account_deletion_jobs WHERE subject_id = $1", [author.id]);
       if (deleted.rows[0]) throw new AnnotationCommunityError("ACCOUNT_DELETED", 403);
+      if (input.expectedAuthorProfileRevision !== undefined && (await this.profile(author.id, client)).revision !== input.expectedAuthorProfileRevision) throw new AnnotationCommunityError("AUTHOR_PROFILE_CHANGED", 409);
       const row = await this.#replyRow(replyId, client, true);
       if (!row || row.deleted_at) throw new AnnotationCommunityError("REPLY_NOT_FOUND", 404);
       if (row.author_id !== author.id) throw new AnnotationCommunityError("NOT_REPLY_AUTHOR", 403);
+    assertExpectedRevision(row, input.expectedRevision, "REPLY");
       const authorizedParent = await this.#row(row.parent_annotation_id, client);
       if (row.visibility === "organization" && !await this.#organizationVisible({ organizationId: row.organization_id, userId: author.id })) {
         throw new AnnotationCommunityError("ORGANIZATION_ACCESS_DENIED", 403);
       }
       if (input.published && row.moderated_at) throw new AnnotationCommunityError("REPLY_NOT_FOUND", 404);
       const parent = await this.#row(row.parent_annotation_id, client, true);
+      if (parent) assertExpectedReplyParent(parent, input.expectedParent);
       if (
         !parent ||
         parent.withdrawn_at ||
