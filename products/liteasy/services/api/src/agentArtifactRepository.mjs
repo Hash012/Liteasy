@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { LibraryRepositoryError } from "./libraryRepository.mjs";
-import { withPostgresTransaction } from "./postgres.mjs";
+import { withAccountWriteTransaction } from "./accountDeletionFence.mjs";
 
 const artifactTypes = new Set(["comparison_table", "layered_graph", "mindmap", "ppt", "thin_reading", "tree"]);
 
@@ -104,7 +104,7 @@ export class PostgresAgentArtifactRepository {
   async save(subjectInput, input, traceId) {
     const subjectId = subject(subjectInput);
     const body = artifact(input);
-    return withPostgresTransaction(this.pool, async (client) => {
+    return withAccountWriteTransaction(this.pool, subjectId, async (client) => {
       const result = await client.query(`
         INSERT INTO agent_artifacts(
           subject_id, artifact_id, artifact_type, title, body, created_at
@@ -140,7 +140,7 @@ export class PostgresAgentArtifactRepository {
     const subjectId = subject(subjectInput);
     const id = artifactId(artifactIdInput);
     const title = text(titleInput, 160, "agent_artifact_title_invalid");
-    return withPostgresTransaction(this.pool, async (client) => {
+    return withAccountWriteTransaction(this.pool, subjectId, async (client) => {
       const current = await client.query(`
         SELECT body FROM agent_artifacts
          WHERE subject_id = $1 AND artifact_id = $2 FOR UPDATE
@@ -168,7 +168,7 @@ export class PostgresAgentArtifactRepository {
   async remove(subjectInput, artifactIdInput, traceId) {
     const subjectId = subject(subjectInput);
     const id = artifactId(artifactIdInput);
-    return withPostgresTransaction(this.pool, async (client) => {
+    return withAccountWriteTransaction(this.pool, subjectId, async (client) => {
       const result = await client.query(`
         DELETE FROM agent_artifacts
          WHERE subject_id = $1 AND artifact_id = $2

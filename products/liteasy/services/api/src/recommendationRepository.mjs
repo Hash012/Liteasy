@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { LibraryRepositoryError } from "./libraryRepository.mjs";
-import { withPostgresTransaction } from "./postgres.mjs";
+import { withAccountWriteTransaction } from "./accountDeletionFence.mjs";
 
 const cacheTtl = "24 hours";
 const candidateTtl = "30 days";
@@ -83,15 +83,11 @@ function scopeKey(scope) {
 }
 
 async function state(client, subject) {
-  await client.query(`
-    INSERT INTO personalization_states(subject_id) VALUES ($1)
-    ON CONFLICT (subject_id) DO NOTHING
-  `, [subject]);
   const result = await client.query(
     "SELECT enabled, version FROM personalization_states WHERE subject_id = $1",
     [subject]
   );
-  return { enabled: result.rows[0].enabled, version: Number(result.rows[0].version) };
+  return { enabled: result.rows[0]?.enabled ?? false, version: Number(result.rows[0]?.version ?? 0) };
 }
 
 export class PostgresRecommendationRepository {
@@ -129,7 +125,7 @@ export class PostgresRecommendationRepository {
   async saveCandidates(subjectInput, values, traceId) {
     const subject = text(subjectInput, 300, "identity_subject_invalid");
     const items = recommendations(values);
-    return withPostgresTransaction(this.pool, async (client) => {
+    return withAccountWriteTransaction(this.pool, subject, async (client) => {
       for (const item of items) {
         await client.query(`
           INSERT INTO recommendation_candidates(candidate_id, subject_id, body, expires_at)
@@ -183,30 +179,32 @@ export class PostgresRecommendationRepository {
     const subject = text(subjectInput, 300, "identity_subject_invalid");
     const scope = cacheScope(input);
     const items = recommendations(input.recommendations);
-    const current = await state(this.pool, subject);
-    if (scope.personalizationVersion !== current.version) {
-      throw new LibraryRepositoryError("personalization_version_conflict", 409);
-    }
-    const result = await this.pool.query(`
-      INSERT INTO recommendation_cache_entries(
-        subject_id, cache_key, personalization_version, body, expires_at
-      ) VALUES ($1, $2, $3, $4::jsonb, now() + interval '${cacheTtl}')
-      ON CONFLICT (subject_id, cache_key) DO UPDATE SET
-        personalization_version = excluded.personalization_version,
-        body = excluded.body, expires_at = excluded.expires_at, created_at = now()
-      RETURNING created_at, expires_at
-    `, [subject, scopeKey(scope), current.version, JSON.stringify({ recommendations: items })]);
-    await this.pool.query(`
-      DELETE FROM recommendation_cache_entries WHERE subject_id = $1 AND cache_key IN (
-        SELECT cache_key FROM recommendation_cache_entries WHERE subject_id = $1
-        ORDER BY created_at DESC, cache_key OFFSET 100
-      )
-    `, [subject]);
-    return {
-      cachedAt: result.rows[0].created_at.toISOString(),
-      expiresAt: result.rows[0].expires_at.toISOString(),
-      ok: true
-    };
+    return withAccountWriteTransaction(this.pool, subject, async (client) => {
+      const current = await state(client, subject);
+      if (scope.personalizationVersion !== current.version) {
+        throw new LibraryRepositoryError("personalization_version_conflict", 409);
+      }
+      const result = await client.query(`
+        INSERT INTO recommendation_cache_entries(
+          subject_id, cache_key, personalization_version, body, expires_at
+        ) VALUES ($1, $2, $3, $4::jsonb, now() + interval '${cacheTtl}')
+        ON CONFLICT (subject_id, cache_key) DO UPDATE SET
+          personalization_version = excluded.personalization_version,
+          body = excluded.body, expires_at = excluded.expires_at, created_at = now()
+        RETURNING created_at, expires_at
+      `, [subject, scopeKey(scope), current.version, JSON.stringify({ recommendations: items })]);
+      await client.query(`
+        DELETE FROM recommendation_cache_entries WHERE subject_id = $1 AND cache_key IN (
+          SELECT cache_key FROM recommendation_cache_entries WHERE subject_id = $1
+          ORDER BY created_at DESC, cache_key OFFSET 100
+        )
+      `, [subject]);
+      return {
+        cachedAt: result.rows[0].created_at.toISOString(),
+        expiresAt: result.rows[0].expires_at.toISOString(),
+        ok: true
+      };
+    });
   }
 
   async clearCache(subjectInput, input) {
@@ -234,7 +232,7 @@ export class PostgresRecommendationRepository {
     const key = idempotencyKey(input.idempotencyKey);
     const operation = "record_recommendation_feedback";
     const requestHash = createHash("sha256").update(JSON.stringify({ action, candidate, subject })).digest("hex");
-    return withPostgresTransaction(this.pool, async (client) => {
+    return withAccountWriteTransaction(this.pool, subject, async (client) => {
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`${subject}:${operation}:${key}`]);
       const prior = await client.query(`
         SELECT request_hash, response_body FROM idempotency_records

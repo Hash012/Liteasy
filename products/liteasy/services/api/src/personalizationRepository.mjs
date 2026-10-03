@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { LibraryRepositoryError } from "./libraryRepository.mjs";
 import { withPostgresTransaction } from "./postgres.mjs";
+import { withAccountWriteTransaction } from "./accountDeletionFence.mjs";
 
 const stages = new Set(["未设置", "本科生", "硕士研究生", "博士研究生", "教师/研究员", "产业研发"]);
 const signalWeights = { paper_opened: 0.15, recommendation_saved: 1 };
@@ -328,7 +329,7 @@ export class PostgresPersonalizationRepository {
     const expected = requireExpectedVersion ? expectedVersion(input.expectedVersion) : undefined;
     const { actorId: _actor, traceId: _trace, ...requestBody } = input;
     const requestHash = createHash("sha256").update(JSON.stringify({ operation, requestBody, subject })).digest("hex");
-    return withPostgresTransaction(this.pool, async (client) => {
+    return withAccountWriteTransaction(this.pool, subject, async (client) => {
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
         `${subject}:${operation}:${key}`
       ]);

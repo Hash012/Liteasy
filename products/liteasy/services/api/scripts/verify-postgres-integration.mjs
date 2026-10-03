@@ -13,6 +13,7 @@ import { PostgresPlatformAdminRepository } from "../src/platformAdminRepository.
 import { PostgresRecommendationRepository } from "../src/recommendationRepository.mjs";
 import { PostgresTeamAnnotationRepository } from "../src/teamAnnotationRepository.mjs";
 import { validatePostgresIntegrationDatabases } from "./postgresIntegrationGuard.mjs";
+import { verifyAccountDeletionConcurrency } from "./accountDeletionConcurrency.mjs";
 
 const connectionString = process.env.LITEASY_TEST_DATABASE_URL;
 if (!connectionString) throw new Error("LITEASY_TEST_DATABASE_URL is required");
@@ -1684,9 +1685,11 @@ try {
     /audit_events_are_append_only/
   );
   const verifiedAudit = await pool.query("SELECT count(*)::int AS count FROM audit_events");
+  await verifyAccountDeletionConcurrency(pool);
   process.stdout.write(`${JSON.stringify({
     auditEvents: verifiedAudit.rows[0].count,
     accountDeletion: true,
+    accountDeletionConcurrency: true,
     migrations: migrated.applied.length,
     revision: 12,
     verified: true

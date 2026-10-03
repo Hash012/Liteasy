@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { authorizeLibraryScope } from "./libraryAuthorization.mjs";
 import { withPostgresTransaction } from "./postgres.mjs";
+import { withAccountWriteTransaction } from "./accountDeletionFence.mjs";
 import {
   LiteratureMetadataValidationError,
   normalizeLiteratureMetadata,
@@ -811,7 +812,7 @@ export class PostgresLibraryRepository {
       scope
     });
     try {
-      return await withPostgresTransaction(this.pool, async (client) => {
+      return await withAccountWriteTransaction(this.pool, input.actorId, async (client) => {
         await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
           `${input.actorId}:upload_pdf:${key}`
         ]);
@@ -965,7 +966,7 @@ export class PostgresLibraryRepository {
             workflow_id: workflowId
           }
         };
-      }, { isolation: "READ COMMITTED" });
+      });
     } catch (error) {
       throw translateConstraint(error);
     }
@@ -992,7 +993,7 @@ export class PostgresLibraryRepository {
       scope
     });
     try {
-      return await withPostgresTransaction(this.pool, async (client) => {
+      return await withAccountWriteTransaction(this.pool, input.actorId, async (client) => {
         await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
           `${input.actorId}:${operation}:${key}`
         ]);
@@ -1136,20 +1137,21 @@ export class PostgresLibraryRepository {
           state: "database_committed",
           workflow_id: workflowId
         } };
-      }, { isolation: "READ COMMITTED" });
+      });
     } catch (error) {
       throw translateConstraint(error);
     }
   }
 
   async completePdfUpload(workflowInput, traceId) {
-    return withPostgresTransaction(this.pool, async (client) => {
+    return withAccountWriteTransaction(this.pool, workflowInput.actor_id, async (client) => {
       const result = await client.query(
         "SELECT * FROM storage_publish_workflows WHERE workflow_id = $1 FOR UPDATE",
         [workflowInput.workflow_id]
       );
       const workflow = result.rows[0];
       if (!workflow) throw new LibraryRepositoryError("storage_workflow_missing", 404);
+      if (workflow.actor_id !== workflowInput.actor_id) throw new LibraryRepositoryError("storage_workflow_identity_mismatch", 409);
       if (workflow.state === "completed") return workflow.response_body;
       if (workflow.state !== "object_published") {
         throw new LibraryRepositoryError("storage_object_not_published", 503);
@@ -1195,7 +1197,7 @@ export class PostgresLibraryRepository {
          WHERE workflow_id = $1
       `, [workflow.workflow_id, JSON.stringify(response)]);
       return response;
-    }, { isolation: "READ COMMITTED" });
+    });
   }
 
   async markPdfObjectPublished(workflowId) {
@@ -1418,7 +1420,7 @@ export class PostgresLibraryRepository {
     const { actorId: _actorId, traceId: _traceId, ...requestInput } = input;
     const hash = requestHash({ operation, scope, input: requestInput });
     try {
-      return await withPostgresTransaction(this.pool, async (client) => {
+      return await withAccountWriteTransaction(this.pool, input.actorId, async (client) => {
         await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
           `${input.actorId}:${operation}:${key}`
         ]);
@@ -1447,7 +1449,7 @@ export class PostgresLibraryRepository {
           traceId: input.traceId
         });
         return response;
-      }, { isolation: "READ COMMITTED" });
+      });
     } catch (error) {
       throw translateConstraint(error);
     }

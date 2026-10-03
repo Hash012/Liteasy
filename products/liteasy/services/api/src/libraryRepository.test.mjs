@@ -199,6 +199,8 @@ function transactionPool(query) {
   const client = {
     async query(sql, values = []) {
       if (/^(BEGIN|COMMIT|ROLLBACK)/.test(sql)) return { rows: [] };
+      if (sql.includes("FROM account_deletion_jobs")) return { rows: [] };
+      if (sql.includes("pg_advisory_xact_lock") && values[0].startsWith("account-deletion:")) return { rows: [] };
       return query(sql, values);
     },
     release() {}
