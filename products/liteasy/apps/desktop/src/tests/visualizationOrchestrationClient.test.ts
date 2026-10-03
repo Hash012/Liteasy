@@ -60,6 +60,7 @@ test("persists before authenticated POST, sends only coordinates, and parses ter
     getCapability: () => capability,
     now: () => new Date("2026-08-10T00:00:00.000Z"),
     storage: window.localStorage,
+    issuer: "https://identity.example/realm-a",
     subjectId: "user-1"
   });
   const result = await client.startAndWait(generation());
@@ -97,6 +98,7 @@ test("polls active requests with server delay clamped to 250..2000", async () =>
       return 1;
     }) as typeof setTimeout,
     storage: window.localStorage,
+    issuer: "https://identity.example/realm-a",
     subjectId: "user-1"
   });
   await expect(client.startAndWait(generation())).resolves.toHaveLength(1);
@@ -122,6 +124,7 @@ test.each([
     getAccessToken: () => "token-1",
     getCapability: () => capability,
     storage: window.localStorage,
+    issuer: "https://identity.example/realm-a",
     subjectId: "user-1"
   });
   await expect(client.startAndWait(generation())).rejects.toMatchObject({ reasonCode: expected });
@@ -137,6 +140,7 @@ test("aborts polling while retaining recovery coordinates", async () => {
     getCapability: () => capability,
     setTimeoutImpl: (() => 1) as typeof setTimeout,
     storage: window.localStorage,
+    issuer: "https://identity.example/realm-a",
     subjectId: "user-1"
   });
   const result = client.startAndWait(generation(controller.signal));
@@ -157,6 +161,7 @@ test("uses a separate bounded cancel request and clears only confirmed cancellat
     getAccessToken: () => "token-1",
     getCapability: () => capability,
     storage: window.localStorage,
+    issuer: "https://identity.example/realm-a",
     subjectId: "user-1"
   });
   window.localStorage.clear();
@@ -175,6 +180,7 @@ test("fails closed on 401, malformed artifact, and local capability denial", asy
     getAccessToken: () => "expired",
     getCapability: () => capability,
     storage: window.localStorage,
+    issuer: "https://identity.example/realm-a",
     subjectId: "user-1"
   });
   await expect(unauthorized.startAndWait(generation())).rejects.toBeInstanceOf(VisualizationOrchestrationClientError);
@@ -190,6 +196,7 @@ test("fails closed on 401, malformed artifact, and local capability denial", asy
     getAccessToken: () => "token-1",
     getCapability: () => capability,
     storage: window.localStorage,
+    issuer: "https://identity.example/realm-a",
     subjectId: "user-2"
   });
   await expect(malformed.startAndWait(generation())).rejects.toMatchObject({ reasonCode: "result_invalid" });
@@ -200,6 +207,7 @@ test("fails closed on 401, malformed artifact, and local capability denial", asy
     getAccessToken: () => "token-1",
     getCapability: () => ({ ...capability, allowed: false }),
     storage: window.localStorage,
+    issuer: "https://identity.example/realm-a",
     subjectId: "user-3"
   });
   await expect(denied.startAndWait(generation())).rejects.toMatchObject({ reasonCode: "capability_unavailable" });

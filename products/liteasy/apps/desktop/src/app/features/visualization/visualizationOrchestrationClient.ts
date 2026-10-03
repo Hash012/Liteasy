@@ -18,6 +18,7 @@ type HttpResponse = {
 
 type ClientInput = {
   endpoint: string;
+  issuer: string;
   fetchImpl?: (input: string, init?: RequestInit) => Promise<HttpResponse>;
   getAccessToken: () => string | undefined;
   getCapability: () => MultimodalVisualizationCapability;
@@ -98,13 +99,14 @@ export function createVisualizationOrchestrationClient({
   fetchImpl = fetch,
   getAccessToken,
   getCapability,
+  issuer,
   now = () => new Date(),
   setTimeoutImpl = setTimeout,
   storage,
   subjectId
 }: ClientInput) {
   const baseUrl = endpoint(endpointInput);
-  const store = createVisualizationPendingRequestStore({ endpoint: baseUrl, now, storage, subjectId });
+  const store = createVisualizationPendingRequestStore({ endpoint: baseUrl, issuer, now, storage, subjectId });
 
   async function request(path: string, init: RequestInit, signal?: AbortSignal) {
     const token = getAccessToken()?.trim();

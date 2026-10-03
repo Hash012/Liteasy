@@ -8,6 +8,7 @@ export type PendingVisualizationRequest = {
 
 type PendingRequestStoreInput = {
   endpoint: string;
+  issuer: string;
   now?: () => Date;
   storage?: Storage;
   subjectId: string;
@@ -45,12 +46,20 @@ function normalizedEndpoint(value: string) {
 
 export function createVisualizationPendingRequestStore({
   endpoint,
+  issuer,
   now = () => new Date(),
   storage = globalThis.localStorage,
   subjectId
 }: PendingRequestStoreInput) {
   if (!subjectId.trim() || subjectId.length > 300) throw new Error("visualization_subject_invalid");
-  const storageKey = `liteasy.visualization.pending.v1:${encodeURIComponent(normalizedEndpoint(endpoint))}:${encodeURIComponent(subjectId)}`;
+  if (!issuer?.trim() || issuer.length > 2_048) throw new Error("visualization_issuer_invalid");
+  const issuerUrl = new URL(issuer);
+  if (!new Set(["http:", "https:"]).has(issuerUrl.protocol) ||
+    issuerUrl.username || issuerUrl.password || issuerUrl.search || issuerUrl.hash) {
+    throw new Error("visualization_issuer_invalid");
+  }
+  // v1 did not bind issuer. Leave its coordinates intact and unclaimed.
+  const storageKey = `liteasy.visualization.pending.v2:${encodeURIComponent(normalizedEndpoint(endpoint))}:${encodeURIComponent(issuer)}:${encodeURIComponent(subjectId)}`;
 
   function read() {
     let values: unknown = [];

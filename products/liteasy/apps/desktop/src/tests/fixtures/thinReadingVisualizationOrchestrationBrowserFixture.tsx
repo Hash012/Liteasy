@@ -91,6 +91,7 @@ export function mountThinReadingVisualizationOrchestrationBrowserFixture(
         getAccessToken: () => "browser-visualization-token",
         getCapability: () => capabilityRef.current,
         storage: window.localStorage,
+        issuer: "https://identity.example/realm-a",
         subjectId: "browser-visualization-subject"
       });
     }

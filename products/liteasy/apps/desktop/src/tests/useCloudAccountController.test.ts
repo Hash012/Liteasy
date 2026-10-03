@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { useCloudAccountController } from "../app/controllers/useCloudAccountController";
+import { createVisualizationPendingRequestStore } from "../app/features/visualization/visualizationPendingRequestStore";
 import { clearStoredAccountSession } from "../app/features/account/accountSessionStorage";
 import { createSeededSettingsStore } from "../app/features/settings/settingsStateHelpers";
 import { availableCapability, readyArtifact } from "./fixtures/visualizationControllerFixtures";
@@ -17,13 +18,13 @@ function createControllerInput() {
   };
 }
 
-describe("useCloudAccountController", () => {
-  beforeEach(() => {
-    clearStoredAccountSession();
-    window.localStorage.clear();
-    window.sessionStorage.clear();
-  });
+beforeEach(() => {
+  clearStoredAccountSession();
+  window.localStorage.clear();
+  window.sessionStorage.clear();
+});
 
+describe("useCloudAccountController", () => {
   test("opens the login dialog when the logged-out reminder is active", async () => {
     const input = createControllerInput();
 
@@ -217,6 +218,8 @@ describe("useCloudAccountController", () => {
           membershipTier: "pro" as const,
           name: "Liteasy Researcher",
           sessionId: "ltsy_session_visualization",
+          endpoint: "http://127.0.0.1:8787",
+          issuer: "https://identity.example/realm-a",
           userId: "user-visualization-1"
         }
       }),
@@ -336,4 +339,52 @@ describe("useCloudAccountController", () => {
     expect(result.current.actions.pendingVisualizationRequests()).toEqual([]);
     expect(visualizationFetch).not.toHaveBeenCalled();
   });
+});
+
+
+test.each(["userId", "issuer", "endpoint"] as const)("does not recover a cloud queue without verified %s binding", async (missing) => {
+  const session = {
+    email: "researcher@liteasy.dev", expiresAt: "2099-12-31T23:59:59Z", membershipTier: "basic",
+    name: "Researcher", sessionId: "account-token", endpoint: "http://127.0.0.1:8787",
+    issuer: "https://identity.example/realm-a", userId: "user-1"
+  };
+  delete (session as Partial<typeof session>)[missing];
+  const visualizationFetch = vi.fn();
+  const { result } = renderHook(() => useCloudAccountController({
+    ...createControllerInput(),
+    accountTransport: async () => ({ json: async () => ({ session }), ok: true, status: 200 }),
+    visualizationFetch: visualizationFetch as unknown as typeof fetch
+  }));
+  await act(async () => result.current.actions.submitAccountLogin({ email: session.email, password: "test-password" }));
+  await expect(result.current.actions.resumeVisualizationGeneration({
+    artifactId: "artifact-1", createdAt: new Date().toISOString(), nodeId: "node-1",
+    requestId: "request-1", requestedArtifactCount: 1
+  }, new AbortController().signal)).rejects.toThrow("visualization_account_session_required");
+  expect(result.current.actions.pendingVisualizationRequests()).toEqual([]);
+  expect(visualizationFetch).not.toHaveBeenCalled();
+});
+
+test("rebinds pending requests when only the verified issuer changes", async () => {
+  const common = { endpoint: "http://127.0.0.1:8787", storage: window.localStorage, subjectId: "user-1" };
+  const request = {
+    artifactId: "artifact-1", createdAt: new Date().toISOString(), nodeId: "node-1",
+    requestId: "request-1", requestedArtifactCount: 1 as const
+  };
+  createVisualizationPendingRequestStore({ ...common, issuer: "https://identity.example/realm-a" }).put(request);
+  let issuer = "https://identity.example/realm-a";
+  const accountTransport = vi.fn(async () => ({
+    json: async () => ({ session: {
+      email: "researcher@liteasy.dev", expiresAt: "2099-12-31T23:59:59Z", membershipTier: "basic",
+      name: "Researcher", sessionId: "unchanged-token", userId: common.subjectId,
+      endpoint: common.endpoint, issuer
+    } }), ok: true, status: 200
+  }));
+  const { result } = renderHook(() => useCloudAccountController({ ...createControllerInput(), accountTransport }));
+  const login = { email: "researcher@liteasy.dev", password: "test-password" };
+  await act(async () => result.current.actions.submitAccountLogin(login));
+  expect(result.current.actions.pendingVisualizationRequests()).toEqual([request]);
+  issuer = "https://identity.example/realm-b";
+  await act(async () => result.current.actions.submitAccountLogin(login));
+  expect(result.current.actions.pendingVisualizationRequests()).toEqual([]);
+  expect(createVisualizationPendingRequestStore({ ...common, issuer: "https://identity.example/realm-a" }).list()).toEqual([request]);
 });

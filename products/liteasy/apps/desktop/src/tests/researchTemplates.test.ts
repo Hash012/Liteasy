@@ -69,7 +69,8 @@ test("actual template reruns create new notes and preserve user edits plus immut
   const runner = createWorkflowRunner(storage, host, scope);
   const input: JsonObject = { selection: [path], question: "Check the definition", userComment: "" };
   const first = await runner.create({ owner: pkg.manifest.id, digest: pkg.digest, definition: plan.definition, input, grantId: grant.id });
-  expect((await runner.execute(first.id)).status).toBe("succeeded");
+  const firstResult = await runner.execute(first.id);
+  expect(firstResult.status, firstResult.error).toBe("succeeded");
   const output = (await runner.replay(first.id)).nodes.save as JsonObject;
   const target = parseLiteasyPath(String(output.path), scope);
   if (target.kind !== "object") throw new Error("note missing");
@@ -82,7 +83,8 @@ test("actual template reruns create new notes and preserve user edits plus immut
   } } });
   expect(changedSource.revision).not.toBe(source.revision);
   const next = await runner.create({ owner: pkg.manifest.id, digest: pkg.digest, definition: plan.definition, input, grantId: grant.id, parentRunId: first.id });
-  expect((await runner.execute(next.id)).status).toBe("succeeded");
+  const nextResult = await runner.execute(next.id);
+  expect(nextResult.status, nextResult.error).toBe("succeeded");
   const nextOutput = (await runner.replay(next.id)).nodes.save as JsonObject;
   const nextTarget = parseLiteasyPath(String(nextOutput.path), scope);
   if (nextTarget.kind !== "object") throw new Error("regenerated note missing");

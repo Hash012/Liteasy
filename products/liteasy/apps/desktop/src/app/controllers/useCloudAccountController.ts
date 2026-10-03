@@ -5,6 +5,7 @@ import type {
   AccountTransport
 } from "../features/account/accountSessionClient";
 import { useAccountSession } from "../features/account/useAccountSession";
+import { accountActorStorageKey } from "../features/account/accountSessionBinding";
 import type { AccountSession } from "../features/account/account.types";
 import { useCloudAvailabilityProbe } from "../features/network/useCloudAvailabilityProbe";
 import type { SettingsState } from "../features/settings/settings.types";
@@ -107,16 +108,17 @@ export function useCloudAccountController({
   multimodalVisualizationRef.current = accountCapabilities.multimodalVisualization;
   const controlPlaneEndpoint = getSettings()["models.control_plane_endpoint"];
   const visualizationClient = useMemo(() => {
-    if (!accountSession) return null;
+    if (!accountSession?.userId || !accountSession.issuer || !accountActorStorageKey(accountSession, controlPlaneEndpoint)) return null;
     return createVisualizationOrchestrationClient({
       endpoint: controlPlaneEndpoint,
       fetchImpl: visualizationFetch,
       getAccessToken: () => accountSession.sessionId,
       getCapability: () => multimodalVisualizationRef.current,
+      issuer: accountSession.issuer,
       storage: visualizationStorage,
-      subjectId: accountSession.userId ?? accountSession.email
+      subjectId: accountSession.userId
     });
-  }, [accountSession?.email, accountSession?.sessionId, accountSession?.userId, controlPlaneEndpoint, visualizationFetch, visualizationStorage]);
+  }, [accountSession?.endpoint, accountSession?.issuer, accountSession?.sessionId, accountSession?.userId, controlPlaneEndpoint, visualizationFetch, visualizationStorage]);
 
   useEffect(() => {
     configureRasterAssetClient(accountSession ? {

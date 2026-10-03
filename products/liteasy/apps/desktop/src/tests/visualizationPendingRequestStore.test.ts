@@ -16,6 +16,7 @@ test("isolates exact pending coordinates by normalized endpoint and subject", ()
     endpoint: "https://api.example/",
     now: () => new Date("2026-08-10T01:00:00.000Z"),
     storage: window.localStorage,
+    issuer: "https://identity.example/realm-a",
     subjectId: "user-1"
   });
   first.put(pending);
@@ -24,11 +25,13 @@ test("isolates exact pending coordinates by normalized endpoint and subject", ()
     endpoint: "https://api.example",
     now: () => new Date("2026-08-10T01:00:00.000Z"),
     storage: window.localStorage,
+    issuer: "https://identity.example/realm-a",
     subjectId: "user-1"
   }).list()).toEqual([pending]);
   expect(createVisualizationPendingRequestStore({
     endpoint: "https://api.example",
     storage: window.localStorage,
+    issuer: "https://identity.example/realm-a",
     subjectId: "user-2"
   }).list()).toEqual([]);
 });
@@ -38,6 +41,7 @@ test("rejects request-id coordinate reuse and removes terminal requests", () => 
     endpoint: "https://api.example",
     now: () => new Date("2026-08-10T01:00:00.000Z"),
     storage: window.localStorage,
+    issuer: "https://identity.example/realm-a",
     subjectId: "user-1"
   });
   store.put(pending);
@@ -52,6 +56,7 @@ test("drops malformed and older-than-24-hour entries", () => {
     endpoint: "https://api.example",
     now: () => new Date("2026-08-11T00:00:00.001Z"),
     storage: window.localStorage,
+    issuer: "https://identity.example/realm-a",
     subjectId: "user-1"
   });
   store.put(pending);
@@ -59,4 +64,38 @@ test("drops malformed and older-than-24-hour entries", () => {
   window.localStorage.setItem(key, JSON.stringify([pending, { requestId: "poisoned", subjectId: "user-2" }]));
   expect(store.list()).toEqual([]);
   expect(window.localStorage.getItem(key)).toBeNull();
+});
+
+
+test("keeps same-endpoint same-subject requests separate across verified issuers", () => {
+  const common = {
+    endpoint: "https://api.example",
+    now: () => new Date("2026-08-10T01:00:00.000Z"),
+    storage: window.localStorage,
+    subjectId: "user-1"
+  };
+  const first = createVisualizationPendingRequestStore({ ...common, issuer: "https://identity.example/realm-a" });
+  const second = createVisualizationPendingRequestStore({ ...common, issuer: "https://identity.example/realm-b" });
+  first.put(pending);
+  expect(second.list()).toEqual([]);
+  second.put({ ...pending, artifactId: "artifact-2" });
+  expect(first.list()).toEqual([pending]);
+  expect(second.list()).toEqual([{ ...pending, artifactId: "artifact-2" }]);
+});
+
+test("leaves unbound v1 recovery coordinates unclaimed and intact", () => {
+  const legacyKey = `liteasy.visualization.pending.v1:${encodeURIComponent("https://api.example")}:user-1`;
+  const legacyValue = JSON.stringify([pending]);
+  window.localStorage.setItem(legacyKey, legacyValue);
+  const store = createVisualizationPendingRequestStore({
+    endpoint: "https://api.example",
+    issuer: "https://identity.example/realm-a",
+    now: () => new Date("2026-08-10T01:00:00.000Z"),
+    storage: window.localStorage,
+    subjectId: "user-1"
+  });
+  expect(store.list()).toEqual([]);
+  store.put({ ...pending, artifactId: "new-artifact" });
+  store.remove(pending.requestId);
+  expect(window.localStorage.getItem(legacyKey)).toBe(legacyValue);
 });

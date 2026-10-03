@@ -630,6 +630,10 @@ describe("LeftPane", () => {
     })} />);
 
     await user.click(screen.getByRole("button", { name: "收藏 Recommended paper" }));
+    expect(onResourceTransfer).not.toHaveBeenCalled();
+    const preview = screen.getByRole("dialog", { name: "确认资料转移" });
+    expect(preview).toHaveTextContent("Recommended paper");
+    await user.click(within(preview).getByRole("button", { name: "确认复制" }));
 
     expect(onResourceTransfer).toHaveBeenCalledWith(
       { area: "recommendation", recommendation: expect.objectContaining({ ...recommendation, fullText: { status: "unknown" } }) },
@@ -637,7 +641,7 @@ describe("LeftPane", () => {
         area: "collection",
         expectedRevision: 3,
         folderId: undefined,
-        scope: { scopeId: "user:user-1", scopeType: "user" }
+        scope: { scopeId: "user-1", scopeType: "user" }
       }
     );
   });

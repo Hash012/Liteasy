@@ -21,7 +21,11 @@ export function researchTemplateWorkflow(id: ResearchTemplateId) {
       question: { type: "string", title: "阅读问题", maxLength: 2000, default: "" },
       userComment: { type: "string", title: "我的初步评论", maxLength: 4000, default: "" }
     }, required: ["selection", "question", "userComment"], additionalProperties: false },
-    outputSchema: { type: "object", properties: { path: { type: "string" }, title: { type: "string" }, kind: { type: "string" }, revision: { type: "string" }, capabilities: { type: "array", items: { type: "string" } }, relatedPaperIds: { type: "array", items: { type: "string" } } }, required: ["path", "title"], additionalProperties: false },
+    outputSchema: { type: "object", properties: { path: { type: "string" }, title: { type: "string" }, kind: { type: "string" }, revision: { type: "string" }, capabilities: { type: "array", items: { type: "string" } }, relatedPaperIds: { type: "array", items: { type: "string" } },
+      sourceReferences: { type: "array", items: { type: "object", properties: {
+        scopeType: { type: "string", enum: ["user", "organization"] }, scopeId: { type: "string" }, paperId: { type: "string" }, revision: { type: "number" }
+      }, required: ["scopeType", "scopeId", "paperId"], additionalProperties: false } }
+    }, required: ["path", "title"], additionalProperties: false },
     nodes: [
       { id: "evidence", title: "读取选中来源", operation: { id: "resources.read", version: "1.0.0" }, input: { maxCharacters: literal(4000) }, map: { items: { source: "input", path: "selection" }, itemField: "path", maxItems: 8 } },
       { id: "template", title: "选择阅读方式", operation: { id: "core.value", version: "1.0.0" }, input: { value: literal({ schema: "liteasy.research-template/v1", template: id }) } },
