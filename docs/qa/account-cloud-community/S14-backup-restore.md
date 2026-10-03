@@ -55,5 +55,21 @@ This drill validates the PostgreSQL data and transaction boundaries through
 migration 024. It does not verify subsequent migration-025 notification data,
 Liteasy S3 recovery, scanner availability, real IdP reauthentication, Windows
 packaging, production recovery time, off-host backup retention, or a live
-operational restore. The shared portable cluster remains running for the parent
-integration work; this agent did not stop it or remove another agent's fixtures.
+operational restore. After all integration runs, the parent stopped only this disposable PostgreSQL
+instance with `pg_ctl -D /tmp/liteasy-account-postgres-THQsE7/data -w stop`.
+The private test data and evidence remain on disk; no system database was stopped.
+
+## Later-events replay completed
+
+The integrated repository now also contains a rerunnable drill that takes the
+backup **before** deletion/withdrawal, derives later commands from the actual
+source ledgers, restores into another new database, and keeps its business role
+unable to connect until replay and verification succeed. Missing, incomplete or
+interrupted replay leaves the gate closed. This complements, and does not change
+the scope of, the earlier snapshot-preservation drill above.
+
+The repository script passed all 15 assertions with all 27 current Intuecho
+migrations. See [the explicit configuration and steps](S14-verification-matrix.md)
+and [the non-secret evidence](S14-before-event-evidence.json). This remains a
+synthetic PostgreSQL drill; real IdP/S3 and production journal operations are not
+accepted by this result.

@@ -58,14 +58,14 @@ source preflight; missing source verification fails closed.
 | Thin-reading private toggle | Explicit confirmed withdrawal adopts the exact owned legacy mapping into the existing PDF operation ledger and makes that community annotation private | No reply deletion or derived-copy cascade | Unknown results retain their exact actor-bound retract operation; successful receipts permit local deletion, while republishing that legacy item remains on hold |
 | Account deletion | Existing product lifecycle and publication account-deletion lock remain | No additional cascade added here | Queue work cannot move into another actor's session |
 
-There is no read-only remote operation lookup endpoint in this slice. For a known
-binding, reconciliation replays the exact existing operation. Unknown legacy
-ownership cannot be established by replay under a guessed account. Organization
-content is not replayed through an upsert merely to discover an ID for withdrawal.
-For thin-reading, a pending create with no known remote identity remains held when
-the user requests withdrawal. The original frozen request and local note remain;
-the UI does not call that withdrawn. Known remote identities use the existing
-desktop publication route, preserving its audience and owner validation.
+PDF and thin-reading now have owner-bound read-only lookup endpoints. A request
+contains only stable identity, source version/timestamp and the canonical operation
+digest; it never sends the body again merely to discover an ID for withdrawal.
+An exact authoritative receipt permits an independently confirmed, durably saved
+retract. A missing/conflicting receipt retains the original local request and an
+unknown outcome. Unbound legacy ownership is never guessed. A legacy PDF request
+without a saved author profile can only be reconciled by lookup, not silently
+rewritten using current profile fields.
 
 ## S09 withdrawal bridge validation
 
@@ -107,7 +107,7 @@ that path does not assign an actor to a recovered legacy task.
 
 A user-requested withdrawal can recover a lost create response without publishing its body again. The desktop sends only the original queue key, source annotation ID, timestamp, and SHA-256 of canonical wire body/targets to `POST /v1/thin-reading/annotations:lookup`. The authenticated owner is selected by the existing desktop audience boundary. The stored mapping, source timestamp, body and target digest must all match before a remote ID is returned. The client also requires the same verified actor, original durable request, unchanged session during the read, unique complete receipts, and an unchanged local document. It persists the resulting existing-ledger retract operation before sending it. Matched batch siblings can finish; unresolved originals remain available for an explicit later lookup. No result never means a successful withdrawal or permission to replay a create.
 
-The shared canonical helper ignores response-only literature hydration but includes all wire body, target, derived-source and evidence fields. No table or migration was added. The route registration escapes its literal colon (`annotations::lookup` and `annotations::sync` in Fastify); external URLs remain unchanged. Root integration must add the lookup URL to the desktop audience allowlists in `server.mjs` and `productionApp.mjs`.
+The shared canonical helper ignores response-only literature hydration but includes all wire body, target, derived-source and evidence fields. No table or migration was added. The route registration escapes its literal colon (`annotations::lookup` and `annotations::sync` in Fastify); external URLs remain unchanged. The lookup URL is included in the desktop audience allowlists in `server.mjs` and `productionApp.mjs`.
 
 Validation: two SQLite lookup regressions first failed on the missing method, and seven desktop recovery tests first failed on the old unconditional hold. The final suite covers owner/source/version/digest conflicts, absent results, duplicate or incomplete receipts, actor/session changes, durable-original substitution, local changes while reading, partial batches and persist-before-retract. SQLite serialization is unchanged across lookups. Route tests use a stub authentication boundary and real Fastify routing. The scoped PostgreSQL script runs the lookup inside `BEGIN READ ONLY` against the separately restored `account_restore_3d8ddc732b_test` database on loopback port 46349, then verifies the existing transaction rollback, concurrent replay, no-resurrection and reply-preservation cases. This is local PostgreSQL evidence, not S3, IdP, deployment, or production acceptance.
 
@@ -115,7 +115,7 @@ Validation: two SQLite lookup regressions first failed on the missing method, an
 
 New thin-reading operations read the authenticated owner's actual community profile before preparation, display and persist that snapshot, and send its optional `expectedAuthorProfileRevision`. PDF operation/storage types expose the same fields for the root-owned controller integration. A changed profile rejects a new write inside the existing publication transaction and account lifecycle lock. Exact committed operations return the prior receipt before checking the current profile; changing the profile parameter under the same operation version conflicts. Thin-reading sync stores its original profile revision inside the existing annotation snapshot JSON, without a new table or migration. Existing wire clients without the optional field retain compatibility. New desktop code holds old unknown operations without a saved profile instead of adding a field or silently borrowing the latest profile.
 
-Every preview item includes its own saved author profile and all source/derived/evidence excerpts from the frozen wire targets. A mixed batch can therefore display different saved profile versions accurately. Root integration owns the PDF controller, common dialog, and the two desktop audience allowlists for `POST /v1/integrations/desktop/publication-profile`.
+Every preview item includes its own saved author profile and all source/derived/evidence excerpts from the frozen wire targets. A mixed batch can therefore display different saved profile versions accurately. The integrated PDF controller and common dialog show the frozen author profile and all excerpts before writing; both server entrypoints include `POST /v1/integrations/desktop/publication-profile` in their desktop audience allowlists. An exact `AUTHOR_PROFILE_CHANGED` rejection permits a new explicit preview; network uncertainty and all unverified outcomes retain their immutable request.
 
 Validation: two service profile regressions and two profile client regressions failed first. Final affected desktop tests plus smoke passed (197 tests); service regression/route tests passed (15 tests), as did 11 existing API publication cases. `scripts/verify-desktop-publication-profile.mjs` passed against the independently restored loopback PostgreSQL database with synthetic scoped rows: real thin/PDF writes, exact replay after profile changes, same-version profile conflicts, and stale-profile no-write checks. It removes only its own random-owner fixtures and never truncates the database. Desktop build reached TypeScript and failed on three pre-existing `AssetSourceReference.paperId` versus `libraryReference.documentId` errors in the merged a0c09e94 baseline. Root reported those fixed by 699b5cbe and owns final integrated build verification; this slice does not claim its build passed.
 

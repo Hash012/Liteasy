@@ -1,6 +1,6 @@
 {
   "format": "liteasy.social-verification/v1",
-  "head": "0d3e45bdd0adddf2d1dfac57283070280ed9e2b8",
+  "head": "b1c5ba7ebfd8f95680ebf4e7413bce80df5ef8ed",
   "branch": "feat/account-cloud-community",
   "environment": {
     "os": "Ubuntu 24.04 on WSL2",
@@ -8,8 +8,28 @@
     "node": "22.13.1 (repository expects 22.23.2)",
     "rust": "1.98.0 (Windows CI expects 1.98.1)",
     "idp": "not_run; no real identity provider used",
-    "databases": [],
-    "isolation_verified": false
+    "databases": [
+      {
+        "product": "liteasy",
+        "database": "account_liteasy_test",
+        "version": "PostgreSQL 16.15",
+        "host": "127.0.0.1",
+        "port": 46349,
+        "migrations": 28,
+        "roles": "separate migrator/application"
+      },
+      {
+        "product": "intuecho",
+        "database": "account_intuecho_test",
+        "version": "PostgreSQL 16.15",
+        "host": "127.0.0.1",
+        "port": 46349,
+        "migrations": 27,
+        "roles": "separate migrator/application"
+      }
+    ],
+    "isolation_verified": true,
+    "database_cleanup": "Only the disposable task instance was stopped with pg_ctl; restricted evidence retained on disk."
   },
   "product_decisions": {
     "D01": "hold",
@@ -24,358 +44,1083 @@
   "results": [
     {
       "scenario_id": "AC01",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`D/tests/localLiteratureMode.test.tsx`、`localFileOperations.test.tsx`、`pdfReaderSearch.test.ts`、`useAccountSession.test.ts`；E-DESKTOP、S01 文档。 未在真实断网原生客户端完成打开→批注→检索→关闭重启全链，也未记录该链的网络捕获。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "desktop-full"
+      ]
     },
     {
       "scenario_id": "AC02",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`D/tests/useLibraryResourceTransferController.test.ts`、`LibraryPaneFileManagement.test.tsx`、`cloudLibraryStorageClient.test.ts`、`artifactLocalRepository.test.ts`；E-DESKTOP、E-CATALOG、S02 红绿记录。 需要真实桌面本机合成资料 + 登录/加入组织，观察无自动上传及所有标签。不得用目录单测代替网络零上传证明。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "desktop-full"
+      ]
     },
     {
       "scenario_id": "AC03",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`D/tests/useAccountSession.test.ts`、`accountSessionBinding.test.ts`、`useCloudLibraryTree.test.ts`、`useArtifactActions.test.ts`、`artifactResultClient.test.ts`；`W/identitySessionIsolation.test.ts`、`oauthSessionIsolation.test.ts`、`AnnotationAppSession.test.tsx`；E-PREVIEW/E-WEB/E-DESKTOP/E-ISSUER。 A→B、旧 401、A→退出→A 由控制器/transport 测试覆盖；真实多窗口 OAuth、浏览器/宿主缓存与关闭重启仍未验收。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "desktop-full",
+        "intuecho-web",
+        "mobile",
+        "organization-focused",
+        "organization-leftpane",
+        "organization-final"
+      ]
     },
     {
       "scenario_id": "AC04",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`I/src/server.test.mjs` 的 `desktop draft handoffs require the desktop audience and remain bound to one subject`；`W/AnnotationAppSession.test.tsx`；E-INTUECHO/E-WEB，`/tmp/liteasy-account-handoff-green.log`。 HTTP fixture 不等于实际 desktop A + browser B + 真实 IdP；该身份组合需集成环境运行。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "intuecho-api",
+        "intuecho-web",
+        "identity"
+      ]
     },
     {
       "scenario_id": "AC05",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`I/src/server.test.mjs` 的 `stable missing-context and expiry errors`；`D/tests/forumClient.test.ts`、`usePdfAnnotationPublicationController.test.tsx`；E-INTUECHO/E-PREVIEW。 未在真实关闭客户端后的过期交接、重新登录及原生深链重建中验收。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "desktop-full",
+        "intuecho-web",
+        "intuecho-api"
+      ]
     },
     {
       "scenario_id": "AC06",
-      "status": "not_run",
+      "status": "passed",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`W/AnnotationComposer.test.tsx`、`I/src/server.test.mjs` 的 `new annotation and handoff requests require an explicit audience before persistence`；`/tmp/liteasy-account-s00-red.log` → `s00-green.log`（25 项）、E-WEB/E-INTUECHO。 仅此 DOM/请求边界通过；真实浏览器键盘/辅助技术验收及 native 不在该结果内。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "intuecho-web",
+        "intuecho-api"
+      ]
     },
     {
       "scenario_id": "AC07",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`D/tests/usePublicationPreview.test.tsx`、`usePdfAnnotationPublicationController.test.tsx`、`useTeamAnnotationController.test.ts`；`W/AnnotationComposer.test.tsx`；E-PREVIEW/E-WEB。 请求 payload 有单测；未以实际联网客户端抓包逐入口证明本机路径、未选批注及附件从未发送。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "pdf-preview",
+        "desktop-full",
+        "intuecho-web",
+        "intuecho-api"
+      ]
     },
     {
       "scenario_id": "AC08",
-      "status": "not_run",
+      "status": "passed",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`I/src/literatureContracts.test.mjs`、`server.test.mjs` 的 `reply projections inherit every parent visibility` / `reply scope locks and transitive root audiences`；`I/scripts/verify-postgres-integration.mjs` scope 循环与锁冲突；E-INTUECHO/E-PG-I。 通过的是既有协议及服务存储边界；不宣称所有已发布旧客户端二进制均完成回归。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "intuecho-api",
+        "intuecho-postgres"
+      ]
     },
     {
       "scenario_id": "AC09",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`W/AnnotationComposer.test.tsx` 的 named organization/permissions unavailable；`I/src/server.test.mjs` organization choices；`L/src/libraryAuthorization.test.mjs`、`organizationAccessSnapshot.test.mjs`；E-WEB/E-INTUECHO/E-LITEASY/E-PG-L。 PG 含权限拒绝，UI 使用 mock authority；完整 Web→Intuecho→Liteasy 服务身份链及真实组织切换尚需部署测试环境。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "liteasy-postgres",
+        "intuecho-postgres",
+        "organization-focused",
+        "organization-leftpane",
+        "organization-final"
+      ]
     },
     {
       "scenario_id": "AC10",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`W/AnnotationComposer.test.tsx` 的 `invalidates preview when content changes`；`D/tests/usePublicationPreview.test.tsx`；`I/src/replyParentSnapshot.test.mjs`、`server.test.mjs` changed-parent 测试；E-PREVIEW/E-WEB/E-PG-I。 既有用例证明多个变化维度；所有桌面/AppShell 新接线的最终组合仍待最终版本检查与实际交互。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "pdf-preview",
+        "intuecho-web",
+        "intuecho-api"
+      ]
     },
     {
       "scenario_id": "AC11",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`D/tests/literatureIdentityConformance.test.ts`、`literatureVersioning.test.ts`、`thinReadingAnchorQuality.test.ts`；`I/src/literatureContracts.test.mjs`、`literatureIdentityConformance.test.mjs`；E-DESKTOP/E-INTUECHO。 尚无同一真实浏览器/桌面流程下多版本文件、精确/近似/不可定位全部状态及授权拒绝截图/抓包。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "desktop-full",
+        "intuecho-web"
+      ]
     },
     {
       "scenario_id": "AC12",
-      "status": "not_run",
+      "status": "passed",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`D/tests/pdfAnnotationPublicationClient.test.ts`、`thinReadingIntuechoSyncQueue.test.ts`、`usePdfAnnotationPublicationController.test.tsx`；E-DESKTOP/E-PREVIEW；[S04-publication-boundaries.md](S04-publication-boundaries.md)。 这是合成响应契约测试，无生产回执或真实网络注入声明。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "desktop-full",
+        "pdf-preview"
+      ]
     },
     {
       "scenario_id": "AC13",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "上述 S04 文档；`D/tests/thinReadingPublicationPersistence.test.ts`、`usePdfAnnotationPublicationController.test.tsx`；`I/src/server.test.mjs` replay 测试；E-PG-I/E-RESTORE。 真实 PG 精确/并发重放已跑，但“服务已 commit→实际断线→native 重启→恢复”的整链未跑。现已增加 unknown thin-reading create 的只读 lookup（原 queue/source/timestamp/canonical digest）；其 PG `BEGIN READ ONLY` 证据见 S04 文档。PDF 路径仍按原冻结 operation 重放。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "intuecho-api",
+        "intuecho-postgres",
+        "profile-lookup-postgres"
+      ]
     },
     {
       "scenario_id": "AC14",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`D/tests/usePdfAnnotationPublicationController.test.tsx`、`thinReadingIntuechoSyncQueue.test.ts`；`I/src/server.test.mjs`、PG mixed-publication fixture；E-PREVIEW/E-DESKTOP/E-PG-I。 mock 响应和实际仓库批次已验；跨服务断线与客户端重启时的完整重试预算未做实际网络演练。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "desktop-full",
+        "intuecho-api"
+      ]
     },
     {
       "scenario_id": "AC15",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`D/tests/usePdfAnnotationPublicationController.test.tsx`、`useArtifactWorkflowController.test.ts`；`I/src/thinReadingWithdrawal.test.mjs`、`I/scripts/verify-thin-reading-withdrawal.mjs`；E-PREVIEW/E-RESTORE/S04 文档。 实际 PG 撤回/重放/回滚通过；客户端取消恰逢远程 commit 并重启的全链未复现。新版只对拥有原 durable intent/digest 的 unknown create 做只读 lookup；缺原请求、未匹配、冲突或旧无主条目仍保留未解决，不重发 create。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "pdf-preview",
+        "profile-lookup-postgres",
+        "withdrawal-postgres"
+      ]
     },
     {
       "scenario_id": "AC16",
-      "status": "not_run",
+      "status": "passed",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`I/src/server.test.mjs` scope locks、changed parent snapshot；`I/scripts/verify-postgres-integration.mjs` 等待父锁、`PARENT_ANNOTATION_REVISION_CONFLICT` 与零新 reply 断言；E-INTUECHO/E-PG-I。 真实合成 PG 边界通过；不由此授权任何 D01 公共升级路径。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "intuecho-api",
+        "intuecho-postgres"
+      ]
     },
     {
       "scenario_id": "AC17",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`W/AnnotationComposer.test.tsx` 的 fixed deleted-parent context；`I/src/server.test.mjs` reply lifecycle；PG projection/parent deletion fixture；E-WEB/E-INTUECHO/E-PG-I。 核心存储/卡片已有证据；所有 feed、索引与 AI 引用入口同步失效不由该 fixture 全部证明，关联 AC30。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "intuecho-postgres",
+        "withdrawal-postgres"
+      ]
     },
     {
       "scenario_id": "AC18",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`W/reading-group/OrganizationReadingGroup.test.tsx`；`D/tests/useArtifactWorkflowController.test.ts`、`workspaceAgentSafety.test.ts`；E-WEB/E-PREVIEW/E-S08。 未批准也未验收“组织讨论→公开摘要”新通道。组内摘要不是公开流程的通过证据。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "desktop-full",
+        "intuecho-api"
+      ]
     },
     {
       "scenario_id": "AC19",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`I/src/server.test.mjs` 的 `direct messages require a current mutual follow...`；PG mutual visibility/projection fixture 与会话创建；E-INTUECHO/E-PG-I。 SQLite 覆盖解除后历史/发送拒绝；PG 日志没有单列完整“解除→所有相关读写+DM历史”同链验收，不将创建会话算解除后的通过。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "intuecho-postgres"
+      ]
     },
     {
       "scenario_id": "AC20",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`L/src/organizationAccessSnapshot.test.mjs`、`libraryAuthorization.test.mjs`、`libraryRepository.test.mjs`；`I/src/organizationAuthorizationClient.test.mjs`、`server.test.mjs`；E-LITEASY/E-PG-L/E-INTUECHO。 实际 PG 含成员/权限变化；带缓存原生客户端及跨服务旧 token 下所有读取/下载/写入链尚需实环境验证。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "liteasy-postgres",
+        "intuecho-postgres",
+        "organization-focused",
+        "organization-leftpane",
+        "organization-final"
+      ]
     },
     {
       "scenario_id": "AC21",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`I/src/server.test.mjs` annotation visibility/reply lifecycle；`I/scripts/verify-postgres-integration.mjs` scope fixture；E-INTUECHO/E-PG-I。 “作者离组后具体哪些回复仍可见”的政策未新定；没有将作者例外扩展为全组织 access 的验收。需要独立离组作者/其他成员/非成员矩阵。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "intuecho-postgres"
+      ]
     },
     {
       "scenario_id": "AC22",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`L/src/libraryAuthorization.test.mjs`、`organizationPolicyRepository.test.mjs`；`D/tests/organizationStoragePolicy.test.ts`、`OrganizationStoragePolicyPanel.test.tsx`；E-LITEASY/E-DESKTOP。 有逻辑/展示测试；尚未单列 owner 在 disabled export 下真实 PDF stream 的端到端记录。变更例外需 D01 批准。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "liteasy-api",
+        "desktop-full"
+      ]
     },
     {
       "scenario_id": "AC23",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`L/src/organizationInvitationAcceptance.test.mjs`、`organizationGovernanceRepository.test.mjs`；`L/scripts/verify-postgres-integration.mjs` invitation/revoke/owner-change fixture；E-LITEASY/E-PG-L。 PG 权限/撤销边界已有证据；未进行两个真实登录主体经 DM 卡片完整接受/误用的浏览器链。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "liteasy-postgres",
+        "organization-focused",
+        "organization-leftpane",
+        "organization-final"
+      ]
     },
     {
       "scenario_id": "AC24",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`L/scripts/verify-postgres-integration.mjs` concurrent owner transfer、唯一 owner、last-owner deletion 拒绝；`L/src/accountLifecycleService.test.mjs`；E-PG-L/E-LITEASY。 并发交接和删除预检分别真实验证；交接与退出/账号删除混合竞争、实际 UI 反馈尚未完成同链演练。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "liteasy-postgres",
+        "liteasy-api",
+        "organization-focused",
+        "organization-leftpane",
+        "organization-final"
+      ]
     },
     {
       "scenario_id": "AC25",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`L/src/server.test.mjs` scope-bound document、PDF export、cross-scope copy；`libraryRepository.test.mjs` source export 复核；`I/src/literatureContracts.test.mjs`；E-LITEASY/E-PG-L。 当前拒绝路径有测试；未建立系统性时间/大小/计数等 side-channel 测量及全部 reference 卡片的实环境校验。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "liteasy-postgres",
+        "intuecho-postgres"
+      ]
     },
     {
       "scenario_id": "AC26",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`L/src/identityVerifier.test.mjs`、`server.test.mjs` mobile client bound；`I/src/identityVerifier.test.mjs`、`productionIdentity.test.mjs`；`ID/authorization.test.mjs`、`keycloakClient.test.mjs`；E-LITEASY/E-IDENTITY/E-INTUECHO。 合成 JWT/JWKS/introspection/mock token 覆盖错误分支；四真实 client 的测试 IdP 登录/refresh/access 组合未跑。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "identity",
+        "liteasy-api",
+        "intuecho-api"
+      ]
     },
     {
       "scenario_id": "AC27",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`I/src/organizationAuthorizationClient.test.mjs`、`server.test.mjs` organization choices fail closed；`D/tests/useAccountSession.test.ts`、`cloudAvailabilityBoundary.test.ts`；E-INTUECHO/E-DESKTOP。 未通过部署环境主动停授权服务，验证两个产品、原生本机阅读与删除回执的整体行为。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "desktop-full",
+        "intuecho-api"
+      ]
     },
     {
       "scenario_id": "AC28",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`D/tests/workspaceAgentSafety.test.ts` 两条组织资料零 model request 回归；`durableWorkflows.test.ts`、`agentRequestScope.test.ts`；E-S08/E-CATALOG。 已跑的是阻断路径；provider+数据范围批准 UI 和获准组织外发流程未获政策批准、未真实调用，不能声称已完成可用外发通道。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "desktop-full"
+      ]
     },
     {
       "scenario_id": "AC29",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`D/tests/workspaceAgentSafety.test.ts`、`promptInjectionGenerativeUi.test.ts`、`policyEngine.test.ts`、`capabilityToolAdapter.test.ts`；E-S08/E-DESKTOP。 单测注入样本不等于完整 paper/community→所有 file/social/invitation/publication 工具链攻击验收；需多入口合成攻击集且无真实发送。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "desktop-full"
+      ]
     },
     {
       "scenario_id": "AC30",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`I/src/thinReadingWithdrawal.test.mjs`、`server.test.mjs` reply lifecycle；`I/scripts/verify-thin-reading-withdrawal.mjs`；`D/tests/cloudLibraryStorageClient.test.ts`、`artifactRevalidation.test.ts`；E-RESTORE/E-PG-I/E-DESKTOP。 PG 旧 publication replay 拒绝已验；所有搜索 snippet/count/recommendation/AI 索引的撤回事件时序和外部缓存清理未统一演练。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "withdrawal-postgres",
+        "intuecho-postgres",
+        "desktop-full"
+      ]
     },
     {
       "scenario_id": "AC31",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`I/src/communityGovernance.test.mjs` 的 dedupe/revoked access/rollback；`W/community-governance/CommunityGovernance.test.tsx`；`D/tests/organizationNotificationStorage.test.ts`、`OrganizationActivityInbox.test.tsx`；E-INTUECHO/E-WEB/E-PG-L、`/tmp/liteasy-account-org-activity-ui.log`。 真实 PG 已覆盖 025–027 通知事务、各来源事件、旧事件/已读保留和撤权脱敏；未启用或发送真实外部邮件/通知，不能断言外部渠道已经验收。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "intuecho-postgres",
+        "liteasy-postgres",
+        "intuecho-web",
+        "desktop-full"
+      ]
     },
     {
       "scenario_id": "AC32",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`L/src/pdfUploadService.test.mjs`、`pdfSecurityScanner.test.mjs`、`server.test.mjs` scanner stable errors；E-LITEASY。 使用 scanner/S3 替身；没有真实 scanner 进程故障、对象存储 staging/最终 bucket 可读性及清理恢复的组合演练。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "liteasy-api"
+      ]
     },
     {
       "scenario_id": "AC33",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`L/src/pdfUploadService.test.mjs` 的 preserves repair state/replays unfinished workflows；`libraryRepository.test.mjs`、`s3ObjectStore.test.mjs`、`storageMaintenance.test.mjs`；E-LITEASY/E-PG-L。 PG 数据库部分真实，S3 为测试替身；缺实际兼容 S3 中断、DB commit 失败/进程杀死后 readiness 恢复及孤儿对象清理。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "liteasy-api",
+        "liteasy-postgres"
+      ]
     },
     {
       "scenario_id": "AC34",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`L/src/pdfUploadService.test.mjs`、`libraryRepository.test.mjs`、`visualizationGenerationRepository.test.mjs`；`D/tests/modelResponseBudget.test.ts`、`useLibraryResourceTransferController.test.ts`；E-LITEASY/E-PG-L/E-DESKTOP。 未跑真实 provider/S3 并发成本与计费故障演练；不能从逻辑限额推导真实费用、账单恰一次或成本收益。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "liteasy-api",
+        "desktop-full"
+      ]
     },
     {
       "scenario_id": "AC35",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`L/src/accountLifecycleService.test.mjs`、`identityAdminClient.test.mjs`、`accountDeletionFence.test.mjs`、`accountDeletionDeviceVisualization.test.mjs`；`I/src/accountLifecycleRepository.test.mjs`；E-IDENTITY/E-LITEASY/E-PG-L/E-PG-I/S13 文档。 PG 验证业务清理/锁，IdP 是合成回执；device/visualization 补充入口只有 mock PG 并发边界。未完成真实 IdP 四 audience、多阶段跨服务中断、全平台退出验证；D03 未改变。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "identity",
+        "liteasy-api",
+        "intuecho-api",
+        "liteasy-postgres",
+        "intuecho-postgres"
+      ]
     },
     {
       "scenario_id": "AC36",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`D/tests/accountDataExport.test.ts`、`AccountDataExportPanel.test.tsx`；`L/src/server.test.mjs` artifact GET 与 revoked identity、`agentArtifactRepository.test.mjs` subject+artifactId/revision；E-EXPORT。原 PDF 转移另见 E-DESKTOP/E-LITEASY。 有实际 ZIP 解包与取消/过期/换号/不同 endpoint/org source 失败关闭测试；尚需 root 最终 build 与真实 Tauri 用户下载、IdP 吊销时导出拒绝。不自动取本机/org，更不是全产品全账户备份。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "desktop-full",
+        "liteasy-api"
+      ]
     },
     {
       "scenario_id": "AC37",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "E-BEFORE-EVENT 15 cases：旧私有/公开状态确实存在；缺 journal、不完整 journal、重放中断均保持 SQLSTATE 42501；删除清私有、公开去标识、撤回保留回复、重复幂等、旧消息/已删作者迟到写入拒绝。原 E-RESTORE 另验证含既有墓碑快照恢复。 已补跑 AC 的真实 PG before-event/replay/gate 部分；尚未验证真实 IdP revocation ledger、S3 资料、生产独立 journal 异地备份/完整性来源和部署路由 readiness。合成角色门禁不是已上线的自动恢复系统，不能声称生产整体通过。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "before-event-recovery",
+        "recovery-guards"
+      ]
     },
     {
       "scenario_id": "AC38",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`W/AnnotationComposer.test.tsx` 的 optional author details/profile revision；`I/src/server.test.mjs` profile snapshot/provenance；E-WEB、`/tmp/liteasy-account-profile-web.log`、E-INTUECHO/E-PG-I。 DOM/API/PG 快照字段已有证据；旧内容是否刷新资料必须遵循明确规则，未做真实多客户端 profile 改动与历史内容整链验收。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "pdf-preview",
+        "intuecho-web",
+        "profile-lookup-postgres"
+      ]
     },
     {
       "scenario_id": "AC39",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`I/src/literatureContracts.test.mjs`、`migrations.test.mjs`、`thinReadingWithdrawal.test.mjs`；E-PG-I/E-RESTORE/E-CATALOG/E-ISSUER；`/tmp/liteasy-account-s03-contracts.log` typecheck。 schema/fixture 和 PG 迁移不等于发布过的旧 desktop/mobile/web 二进制与新服务滚动部署兼容性；最终干净提交 contracts 仍待记录。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "intuecho-api",
+        "intuecho-postgres",
+        "desktop-full"
+      ]
     },
     {
       "scenario_id": "AC40",
-      "status": "not_run",
+      "status": "partial",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`W/reading-group/OrganizationReadingGroup.test.tsx` 11 项、`readingGroup.test.ts` 4 项、`OrganizationAnnotations.test.tsx`；E-WEB、`/tmp/liteasy-account-s07-integrated-web.log`（72 项）。 只有合成 UI/API fixture，没有 3 位自愿参与者试点。`docs/S15-pilot.md` 是脚本，不是用户研究、AI 共识、留存或费用结论。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "intuecho-web"
+      ]
     },
     {
       "scenario_id": "AC41",
       "status": "not_run",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "辅助：E-IDENTITY/E-BUILD，以及 `D/tests/desktopIdentityClient.test.ts`、Rust `desktop_identity::tests`。 缺真实 Windows Credential Manager、系统浏览器 OAuth、refresh、关闭应用后 deep link、切号/退出；未执行 Windows Installer CI。Linux/mock 不能替代。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "rust-check",
+        "desktop-full"
+      ]
     },
     {
       "scenario_id": "AC42",
       "status": "not_run",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "辅助：`/tmp/liteasy-account-rust-check.log`，Rust identity 6/catalog 3 项，E-BUILD/E-CATALOG。 缺真实桌面 Secret Service/session bus、系统浏览器回调、应用关闭/重开与 keyring 撤销流程。WSL cargo check 不等于 Linux native GUI 验收。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "rust-check"
+      ]
     },
     {
       "scenario_id": "AC43",
       "status": "not_run",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "只有跨平台源码及 E-IDENTITY 的模拟状态证据。 缺 macOS Keychain、签名应用、系统浏览器 OAuth/refresh/关闭后回调、切号和退出；未运行 macOS 原生。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": []
     },
     {
       "scenario_id": "AC44",
       "status": "not_run",
       "command": null,
       "exit_code": null,
-      "evidence_paths": [],
-      "notes": ""
+      "evidence_paths": [
+        "docs/qa/account-cloud-community/S14-verification-matrix.md",
+        "docs/qa/account-cloud-community/verification.json#checks"
+      ],
+      "notes": "`L/src/accountLifecycleService.test.mjs` completed replay/resume、`identityAdminClient.test.mjs`、`server.test.mjs` mobile audience；E-IDENTITY/E-LITEASY/E-MOBILE。 未在测试 IdP 启用 mobile 并建立真实活动会话，然后 disable/delete 验证 refresh/access 全拒绝。Mobile 10 文件 19 项与 Web build 不是 Android native，也不是本 AC 的通过。",
+      "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
+      "check_ids": [
+        "identity",
+        "mobile",
+        "liteasy-api"
+      ]
     }
   ],
   "deploy_status": "not_authorized",
-  "known_risks": [],
-  "baseline_note": "Initial S00 inventory; statuses apply only to this account/cloud/community package, not previous desktop acceptance."
+  "known_risks": [
+    "D01–D08 remain HOLD; no new organization external-model/publication, retention, anonymity, pricing, telemetry or invitation-delivery policy enabled.",
+    "Real four-audience IdP, Windows/Linux/macOS keyring/browser OAuth and Android native not run.",
+    "Real S3/scanner crash recovery and production independent journal retention/replay readiness not accepted by synthetic PostgreSQL checks.",
+    "Selected personal cloud export excludes PDF bytes, local files, organization data, Intuecho full account data and credentials; exclusions shown in UI and manifest.",
+    "Five-role pilot is synthetic script only, not real user research or cost/retention evidence.",
+    "Local tool versions differ from repository Node/Rust pins; Windows Installer not requested/run."
+  ],
+  "baseline_note": "Implementation and synthetic validation for this account/cloud/community pack only; no previous installer result is reused as current pack acceptance.",
+  "recorded_at": "2026-10-03T03:14:20.483172+00:00",
+  "checks": [
+    {
+      "id": "desktop-full",
+      "working_directory": "products/liteasy/apps/desktop",
+      "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=4",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "unit/DOM/transport doubles",
+      "log": "/tmp/liteasy-account-desktop-full-final.log",
+      "log_sha256": "8509ceb9f40ee413d110cb0e108b7f2e12b0ee82170a65873f3c310e4b1cd965",
+      "notes": "Before the final organization action/invitation slice; its focused checks are recorded separately. No paid/live-model tests enabled.",
+      "counts": {
+        "passed": 3524,
+        "skipped": 4,
+        "failed": 0
+      }
+    },
+    {
+      "id": "desktop-build",
+      "working_directory": "products/liteasy/apps/desktop",
+      "command": "npm run build",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "TypeScript/Vite/assets",
+      "log": "/tmp/liteasy-account-desktop-build-integrated.log",
+      "log_sha256": "bba711080388edccd95360b5f18412c5ad55c3f51e61e59f760a06d081ba9445",
+      "notes": "Before final organization slice; final build recorded separately.",
+      "counts": {
+        "tauri_resources": 7,
+        "production_assets": 158
+      }
+    },
+    {
+      "id": "desktop-smoke",
+      "working_directory": "products/liteasy/apps/desktop",
+      "command": "npm run ci:smoke",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "resource/casing",
+      "log": "/tmp/liteasy-account-desktop-smoke-final.log",
+      "log_sha256": "f90b666a8c726669c9e661bcaafb41847ddc3f3f60be6b41a435cf4a3198902a",
+      "notes": "",
+      "counts": {
+        "passed": 9
+      }
+    },
+    {
+      "id": "pdf-preview",
+      "working_directory": "products/liteasy/apps/desktop",
+      "command": "node node_modules/vitest/vitest.mjs run src/tests/usePdfAnnotationPublicationController.test.tsx src/tests/usePublicationPreview.test.tsx src/tests/pdfAnnotationStorage.test.ts --maxWorkers=3",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "unit/DOM",
+      "log": "/tmp/liteasy-account-pdf-preview-final.log",
+      "log_sha256": "779091f9f4abc69ca36e80eec84fd9ee4a58f79beb3b077b516ac9d0284de4f4",
+      "notes": "",
+      "counts": {
+        "passed": 83
+      }
+    },
+    {
+      "id": "liteasy-api",
+      "working_directory": "products/liteasy/services/api",
+      "command": "node --test src/*.test.mjs",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "unit/HTTP injection; PG/S3/scanner doubles",
+      "log": "/tmp/liteasy-account-liteasy-api-integrated.log",
+      "log_sha256": "d282d5bfa8385b5d7d248ac384ab1b7db6c384701a0cd82cf0a6098602d9cb7b",
+      "notes": "",
+      "counts": {
+        "passed": 496,
+        "skipped": 4,
+        "failed": 0
+      }
+    },
+    {
+      "id": "intuecho-api",
+      "working_directory": "products/intuecho/services/api",
+      "command": "node --test src/*.test.mjs",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "unit/real SQLite/HTTP injection; identity verifier double",
+      "log": "/tmp/account-intuecho-api-full-final.log",
+      "log_sha256": "db9e0325025aeacc6f9cfc11cc26b338870db63253edfeebd8efdb69cf4559e0",
+      "notes": "Recovery guard was added later and verified separately; counts must not be summed as unique tests.",
+      "counts": {
+        "passed": 279,
+        "failed": 0
+      }
+    },
+    {
+      "id": "intuecho-web",
+      "working_directory": "products/intuecho/apps/web",
+      "command": "node ../../node_modules/vitest/vitest.mjs run",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "DOM/transport doubles",
+      "log": "/tmp/liteasy-s11-inbox-root-web-all.log",
+      "log_sha256": "f07b7092bfe5d5b36049fd375275db60ed744d47f87b91037fc640907abe743b",
+      "notes": "",
+      "counts": {
+        "passed": 88
+      }
+    },
+    {
+      "id": "intuecho-web-build",
+      "working_directory": "products/intuecho/apps/web",
+      "command": "node ../../node_modules/typescript/bin/tsc -b && node ../../node_modules/vite/bin/vite.js build && node scripts/verify-production-assets.mjs",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "TypeScript/Vite/assets",
+      "log": "/tmp/liteasy-s11-inbox-root-web-build.log",
+      "log_sha256": "fcb4b553f7bbd74e9f0e93568d3c055839d2fa5130a6a3504b92ccdaf157f528",
+      "notes": "",
+      "counts": {
+        "production_assets": 3
+      }
+    },
+    {
+      "id": "mobile",
+      "working_directory": "products/liteasy/apps/mobile",
+      "command": "npm test",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "Mobile Web DOM",
+      "log": "/tmp/liteasy-account-mobile-final.log",
+      "log_sha256": "d341e7f5282b1a0e75145e3dedf7f8bd06ec37bb1a40ae460a6c91ee17a6d253",
+      "notes": "Not Android native/IdP.",
+      "counts": {
+        "passed": 19,
+        "files": 10
+      }
+    },
+    {
+      "id": "mobile-build",
+      "working_directory": "products/liteasy/apps/mobile",
+      "command": "npm run build",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "Mobile Web TypeScript/Vite",
+      "log": "/tmp/liteasy-account-mobile-build-final.log",
+      "log_sha256": "b48061918b86f3b7358b83e92fcf5846d4c855730599c8f16375432c42aadbde",
+      "notes": ""
+    },
+    {
+      "id": "liteasy-postgres",
+      "working_directory": "products/liteasy/services/api",
+      "command": "node scripts/verify-postgres-integration.mjs",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "real isolated PostgreSQL",
+      "log": "/tmp/liteasy-account-liteasy-pg-final.log",
+      "log_sha256": "61a3d02972746d9c8cfa17ac5faed065472827e76965214d7620a0e87f4840e3",
+      "notes": "Private loopback test URLs supplied from a mode-0600 file; not included here.",
+      "counts": {
+        "migrations": 28
+      }
+    },
+    {
+      "id": "intuecho-postgres",
+      "working_directory": "products/intuecho/services/api",
+      "command": "node scripts/verify-postgres-integration.mjs",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "real isolated PostgreSQL",
+      "log": "/tmp/account-intuecho-pg-full-final.log",
+      "log_sha256": "52d213bd2167febed9b1ff85a5dccaccef2cb2fbc9ec7aa40d22bdbd999b8d5e",
+      "notes": "Separate product database/roles; synthetic authority fixtures, no real IdP.",
+      "counts": {
+        "migrations": 27
+      }
+    },
+    {
+      "id": "profile-lookup-postgres",
+      "working_directory": "products/intuecho/services/api",
+      "command": "node scripts/verify-desktop-publication-profile.mjs",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "real isolated PostgreSQL",
+      "log": "/tmp/account-intuecho-pg-profile-final.log",
+      "log_sha256": "5e14d555c9f2ed893e643767c1a899a47dedc2a674069fcd9e744416f4dbbace",
+      "notes": ""
+    },
+    {
+      "id": "withdrawal-postgres",
+      "working_directory": "products/intuecho/services/api",
+      "command": "node scripts/verify-thin-reading-withdrawal.mjs",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "real isolated PostgreSQL",
+      "log": "/tmp/account-intuecho-pg-withdrawal-final.log",
+      "log_sha256": "277081337c819576f15a4d10fea8a395a0478309ab60f4be74c298c293799b7a",
+      "notes": ""
+    },
+    {
+      "id": "recovery-guards",
+      "working_directory": "products/intuecho/services/api",
+      "command": "node --test src/postgresIntegrationGuard.test.mjs src/postgresRecoveryGuard.test.mjs",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "strict configuration guards",
+      "log": "/tmp/liteasy-account-recovery-guard-tests.log",
+      "log_sha256": "b775073cd713496e6840c0cde4d8cfc688eccf04ad125c575d1cfd159a68917f",
+      "notes": "",
+      "counts": {
+        "passed": 11
+      }
+    },
+    {
+      "id": "before-event-recovery",
+      "working_directory": ".",
+      "command": "node products/intuecho/services/api/scripts/verify-before-event-replay.mjs --config <private-explicit-test-config.json>",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "real pg_dump/pg_restore and role CONNECT gate",
+      "log": "/tmp/liteasy-account-before-event-repo.log",
+      "log_sha256": "f8a135927c9736201f78e8221b44384c0a0bbc6b0f4e36d2f422f50d9df794c5",
+      "notes": "Only new random synthetic databases. See S14-before-event-evidence.json; not production journal, IdP or S3 acceptance.",
+      "counts": {
+        "assertions": 15,
+        "migrations": 27
+      }
+    },
+    {
+      "id": "identity",
+      "working_directory": "platform/identity-service",
+      "command": "npm test",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "identity adapter HTTP doubles",
+      "log": "/tmp/liteasy-account-identity-full.log",
+      "log_sha256": "f513c81f41bb5c12a08674bdaef24354971e3acbcd4c36d7043b1cf49e3bde5f",
+      "notes": "No real four-client IdP logout.",
+      "counts": {
+        "passed": 7
+      }
+    },
+    {
+      "id": "rust-check",
+      "working_directory": "products/liteasy/apps/desktop",
+      "command": "cargo check --locked --all-targets --no-default-features --manifest-path src-tauri/Cargo.toml",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "Linux Rust compiler",
+      "log": "/tmp/liteasy-account-rust-check.log",
+      "log_sha256": "cec9a4023ed257124714712529c1cbd579d566735166dcd06d3e42205bba8a9f",
+      "notes": "Rust 1.98.0, not workflow 1.98.1 or Windows/native GUI."
+    },
+    {
+      "id": "workflow-lint",
+      "working_directory": ".",
+      "command": "bash .github/scripts/lint-workflows.sh",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "workflow lint",
+      "log": "/tmp/liteasy-account-workflow-lint-final.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "notes": ""
+    },
+    {
+      "id": "workflow-tests",
+      "working_directory": ".",
+      "command": "node --test .github/scripts/*.test.mjs",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "CI gate unit",
+      "log": "/tmp/liteasy-account-workflow-tests-final.log",
+      "log_sha256": "b0986f68b0d22bf0dae346cce9da31d9ebb95cfd8348d8c44a52de13965e66ad",
+      "notes": "",
+      "counts": {
+        "passed": 87
+      }
+    },
+    {
+      "id": "organization-focused",
+      "working_directory": "products/liteasy/apps/desktop",
+      "command": "node node_modules/vitest/vitest.mjs run <8 affected files>",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "DOM/integration fixtures",
+      "counts": {
+        "passed": 49,
+        "files": 8
+      },
+      "log": "/tmp/liteasy-s06-final-focused.log",
+      "log_sha256": "8251a19110dce2d3b4d2c10d4af65853b3859ac3aa9cb92e47511ecc00c644e5"
+    },
+    {
+      "id": "organization-leftpane",
+      "working_directory": "products/liteasy/apps/desktop",
+      "command": "node node_modules/vitest/vitest.mjs run src/tests/LeftPane.test.tsx",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "DOM/integration fixtures",
+      "counts": {
+        "passed": 28
+      },
+      "log": "/tmp/liteasy-s06-leftpane.log",
+      "log_sha256": "ab16abd0d59bd7adbe2b6bf4a1b3a4f5b65120a9adb683b68c376551707e1c59"
+    },
+    {
+      "id": "organization-final",
+      "working_directory": "products/liteasy/apps/desktop",
+      "command": "node node_modules/vitest/vitest.mjs run src/tests/useOrganizationActions.test.ts src/tests/OrganizationInvitationPanel.test.tsx src/tests/OrganizationMemberGovernancePanel.test.tsx --maxWorkers=3",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "DOM/transport doubles",
+      "counts": {
+        "passed": 23
+      },
+      "log": "/tmp/liteasy-account-organization-final.log",
+      "log_sha256": "eee602bdd43fdfa155885b9cea8ef32fbc32c4ccf6fd5264489539413e537862"
+    },
+    {
+      "id": "desktop-final-smoke",
+      "working_directory": "products/liteasy/apps/desktop",
+      "command": "npm run ci:smoke",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "casing/resource",
+      "counts": {
+        "passed": 9
+      },
+      "log": "/tmp/liteasy-account-desktop-smoke-delivery.log",
+      "log_sha256": "6532db0f49dfb147e79fb551dd7fcba58a18744d319634922802c5fa680e353b"
+    },
+    {
+      "id": "desktop-final-build",
+      "working_directory": "products/liteasy/apps/desktop",
+      "command": "npm run build",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "TypeScript/Vite/assets",
+      "counts": {
+        "production_assets": 158,
+        "tauri_resources": 7
+      },
+      "log": "/tmp/liteasy-account-desktop-build-release.log",
+      "log_sha256": "4dcc94e0c2f38f68fd0ac66ea8c0261eb25a17daad11d70ec5f1ed2ded1157e4"
+    }
+  ],
+  "pending_final_checks": [
+    "ci:contracts on a clean commit"
+  ]
 }
