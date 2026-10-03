@@ -8,7 +8,7 @@ import type {
   ForumPost
 } from "./forum.types";
 import { forumHandoffPayload } from "./forumHandoffPayload";
-import { normalizePublicationActorBinding, samePublicationActor, type PublicationActorBinding } from "./publicationActorBinding";
+import { normalizePublicationAuthorProfile, normalizePublicationActorBinding, samePublicationActor, type PublicationActorBinding } from "./publicationActorBinding";
 
 type ForumClientOptions = {
   getActorBinding?: () => PublicationActorBinding | undefined;
@@ -133,6 +133,18 @@ export function createForumClient({
   }
 
   return {
+    readPublicationAuthorProfile: async (actorBinding: PublicationActorBinding) => {
+      const assertActor = () => {
+        if (!samePublicationActor(actorBinding, getActorBinding?.()) || normalizePublicationActorBinding(actorBinding)?.endpoint !==
+          normalizePublicationActorBinding({ ...actorBinding, endpoint: apiBaseUrl })?.endpoint) throw new Error("账号或会话已变化，请重新确认发布资料。");
+      };
+      assertActor();
+      const value = await postJson<unknown>("/v1/integrations/desktop/publication-profile", {});
+      assertActor();
+      const profile = normalizePublicationAuthorProfile(value);
+      if (!profile || profile.author.id !== actorBinding.subject) throw new Error("无法核实当前发布身份和资料，请重新登录后确认。");
+      return profile;
+    },
     applyAnnotationPublications: async (operations: readonly ForumAnnotationPublicationOperation[], actorBinding?: PublicationActorBinding) => {
       const actorIsCurrent = () => !actorBinding || (samePublicationActor(actorBinding, getActorBinding?.()) &&
         normalizePublicationActorBinding(actorBinding)?.endpoint ===

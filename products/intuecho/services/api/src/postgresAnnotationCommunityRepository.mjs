@@ -476,8 +476,11 @@ export class PostgresAnnotationCommunityRepository {
             results.push(failure("STALE_ANNOTATION_PUBLICATION")); continue;
           }
           if (prior && Date.parse(item.updatedAt) === new Date(prior.source_updated_at).getTime()) {
-            const stored = (await client.query("SELECT body FROM annotations WHERE id = $1 AND author_id = $2 FOR UPDATE", [prior.annotation_id, author.id])).rows[0];
+            const stored = (await client.query("SELECT body,author_profile_snapshot FROM annotations WHERE id = $1 AND author_id = $2 FOR UPDATE", [prior.annotation_id, author.id])).rows[0];
             if (!stored) { results.push(failure("REMOTE_ANNOTATION_NOT_FOUND")); continue; }
+            if (stored.author_profile_snapshot?.revision !== item.expectedAuthorProfileRevision) {
+              results.push(failure("ANNOTATION_PUBLICATION_VERSION_CONFLICT")); continue;
+            }
             const targets = (await client.query("SELECT target,literature_id FROM annotation_targets WHERE annotation_id = $1 ORDER BY position", [prior.annotation_id]))
               .rows.map((row) => ({ ...row.target, literature: { literatureId: row.literature_id } }));
             if (thinReadingSyncPayload({ body: stored.body, targets }) !== thinReadingSyncPayload(item)) {
@@ -487,14 +490,20 @@ export class PostgresAnnotationCommunityRepository {
               status: "synced", syncedAt: new Date(prior.updated_at).toISOString() });
             continue;
           }
+          const profile = await this.profile(author.id, client);
+          if (item.expectedAuthorProfileRevision !== undefined && profile.revision !== item.expectedAuthorProfileRevision) {
+            results.push(failure("AUTHOR_PROFILE_CHANGED")); continue;
+          }
+          const profileSnapshot = { educationStage: profile.educationStage, institutions: profile.institutions,
+            ...(item.expectedAuthorProfileRevision === undefined ? {} : { revision: profile.revision }) };
           const id = prior?.annotation_id ?? `annotation_${randomUUID()}`;
           if (!prior) {
-            await client.query(`INSERT INTO annotations(id, body, author_id, author_name, author_initials, author_profile_snapshot, visibility, share_to_plaza, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'public', true, $7, $8)`, [id, item.body, author.id, author.name, author.initials, JSON.stringify(await this.#profileSnapshot(author.id, client)), item.createdAt, item.updatedAt]);
+            await client.query(`INSERT INTO annotations(id, body, author_id, author_name, author_initials, author_profile_snapshot, visibility, share_to_plaza, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'public', true, $7, $8)`, [id, item.body, author.id, author.name, author.initials, JSON.stringify(profileSnapshot), item.createdAt, item.updatedAt]);
             await this.#replaceTargets(client, id, item.targets, author.id);
             await this.#assignPlatformTags(client, id, item.body, []);
             await client.query(`INSERT INTO desktop_annotation_syncs(owner_id, queue_key, source_annotation_id, annotation_id, source_created_at, source_updated_at) VALUES ($1, $2, $3, $4, $5, $6)`, [author.id, item.queueKey, item.annotationId, id, item.createdAt, item.updatedAt]);
           } else if (new Date(item.updatedAt) >= prior.source_updated_at) {
-            await client.query(`UPDATE annotations SET body = $2, author_name = $3, author_initials = $4, author_profile_snapshot = $5::jsonb, revision = revision + 1, updated_at = $6 WHERE id = $1`, [id, item.body, author.name, author.initials, JSON.stringify(await this.#profileSnapshot(author.id, client)), item.updatedAt]);
+            await client.query(`UPDATE annotations SET body = $2, author_name = $3, author_initials = $4, author_profile_snapshot = $5::jsonb, revision = revision + 1, updated_at = $6 WHERE id = $1`, [id, item.body, author.name, author.initials, JSON.stringify(profileSnapshot), item.updatedAt]);
             await this.#replaceTargets(client, id, item.targets, author.id);
             await this.#assignPlatformTags(client, id, item.body, []);
             await client.query(`UPDATE desktop_annotation_syncs SET source_annotation_id = $3, source_updated_at = $4, updated_at = now() WHERE owner_id = $1 AND queue_key = $2`, [author.id, item.queueKey, item.annotationId, item.updatedAt]);
@@ -590,17 +599,20 @@ export class PostgresAnnotationCommunityRepository {
   }
 
   async #upsertDesktopPublication(client, author, operation, operationDigest, prior) {
+    const profile = await this.profile(author.id, client);
+    if (operation.expectedAuthorProfileRevision !== undefined && profile.revision !== operation.expectedAuthorProfileRevision) return this.#publicationFailure(operation, "AUTHOR_PROFILE_CHANGED");
+    const profileSnapshot = { educationStage: profile.educationStage, institutions: profile.institutions };
     const confirmed = await this.#literatureRecord(operation.literatureId, client);
     if (!confirmed) return this.#publicationFailure(operation, "LITERATURE_NOT_FOUND");
     const id = prior?.annotation_id ?? `annotation_${randomUUID()}`;
     let remoteRevision = 1;
     if (!prior) {
-      await client.query(`INSERT INTO annotations(id, body, author_id, author_name, author_initials, author_profile_snapshot, visibility, organization_id, share_to_plaza, revision, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'public', NULL, true, 1, $7, $7)`, [id, operation.body, author.id, author.name, author.initials, JSON.stringify(await this.#profileSnapshot(author.id, client)), operation.updatedAt]);
+      await client.query(`INSERT INTO annotations(id, body, author_id, author_name, author_initials, author_profile_snapshot, visibility, organization_id, share_to_plaza, revision, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'public', NULL, true, 1, $7, $7)`, [id, operation.body, author.id, author.name, author.initials, JSON.stringify(profileSnapshot), operation.updatedAt]);
     } else {
       const annotation = await client.query("SELECT revision FROM annotations WHERE id = $1 AND author_id = $2 FOR UPDATE", [id, author.id]);
       if (!annotation.rows[0]) return this.#publicationFailure(operation, "REMOTE_ANNOTATION_NOT_FOUND");
       remoteRevision = Number(annotation.rows[0].revision) + 1;
-      await client.query("UPDATE annotations SET body = $2, author_name = $3, author_initials = $4, author_profile_snapshot = $5::jsonb, visibility = 'public', organization_id = NULL, share_to_plaza = true, revision = $6, updated_at = $7 WHERE id = $1", [id, operation.body, author.name, author.initials, JSON.stringify(await this.#profileSnapshot(author.id, client)), remoteRevision, operation.updatedAt]);
+      await client.query("UPDATE annotations SET body = $2, author_name = $3, author_initials = $4, author_profile_snapshot = $5::jsonb, visibility = 'public', organization_id = NULL, share_to_plaza = true, revision = $6, updated_at = $7 WHERE id = $1", [id, operation.body, author.name, author.initials, JSON.stringify(profileSnapshot), remoteRevision, operation.updatedAt]);
     }
     await this.#replaceTargets(client, id, [this.#publicationTarget(confirmed.literatureId, operation.sourcePassage)], author.id);
     await this.#assignPlatformTags(client, id, operation.body, []);

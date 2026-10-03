@@ -612,6 +612,7 @@ export const desktopAnnotationHandoffSchema = z.object({
 });
 
 export const desktopCommunityAnnotationSchema = z.object({
+  expectedAuthorProfileRevision: z.number().int().nonnegative().optional(),
   annotationId: z.string().trim().min(1).max(200),
   body: z.string().trim().min(1).max(8000),
   createdAt: z.string().datetime(),
@@ -664,6 +665,7 @@ const desktopPublicationSourcePassageSchema = z.object({
 }).strict();
 
 const desktopPublicationUpsertSchema = desktopPublicationOperationSchema.extend({
+  expectedAuthorProfileRevision: z.number().int().nonnegative().optional(),
   body: z.string().trim().min(1).max(8000),
   literatureId: z.string().trim().min(1).max(200),
   operation: z.literal("upsert"),

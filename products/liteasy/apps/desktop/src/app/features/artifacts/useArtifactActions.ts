@@ -48,9 +48,10 @@ import {
   listThinReadingPendingPublicAnnotations,
   listThinReadingPendingRetractions,
   prepareThinReadingPublications,
+  thinReadingPublicationExcerpts,
   type ThinReadingPublicationPreview
 } from "../thin-reading/thinReadingIntuechoSyncQueue";
-import { normalizePublicationActorBinding, samePublicationActor, type PublicationActorBinding } from "../forum/publicationActorBinding";
+import { normalizePublicationAuthorProfile, normalizePublicationActorBinding, samePublicationActor, type PublicationActorBinding } from "../forum/publicationActorBinding";
 import { createForumClient } from "../forum/forumClient";
 import { lookupThinReadingPublications, sameThinReadingPendingPublication, type ThinReadingMatchedPublication } from "../thin-reading/thinReadingPublicationLookup";
 import {
@@ -1795,14 +1796,23 @@ export function useArtifactActions({
     if (!assertCanPublishThinReading) throw new Error("无法确认薄读来源是否允许公开，批注已保留在本地。");
     await assertCanPublishThinReading(document);
     if (!samePublicationActor(actor, getActorBinding?.())) throw new Error("账号或会话已变化，请重新确认同步。");
-    const prepared = prepareThinReadingPublications(document, actor, { resumePublication: true });
+    const authorProfile = await createForumClient({ apiBaseUrl: endpoint, getActorBinding, sessionId: getIntuechoSessionId?.() })
+      .readPublicationAuthorProfile(actor);
+    if (!samePublicationActor(actor, getActorBinding?.())) throw new Error("账号或会话已变化，请重新确认发布资料。");
+    const prepared = prepareThinReadingPublications(document, actor, { resumePublication: true, authorProfile });
     const pending = listThinReadingPendingPublicAnnotations(prepared);
     if (pending.length === 0) {
       return;
     }
+    const profileById = new Map(prepared.annotations.map((annotation) => [annotation.id, normalizePublicationAuthorProfile(annotation.publication?.authorProfile)]));
+    if (pending.some((item) => !profileById.get(item.annotationId) || profileById.get(item.annotationId)?.author.id !== actor.subject ||
+      item.pendingOperation?.expectedAuthorProfileRevision !== profileById.get(item.annotationId)?.profile.revision)) {
+      throw new Error("原发布任务未保存可核实的资料预览；请先核实结果或撤回，不能直接重发。");
+    }
     if (!confirmPublication) throw new Error("发布预览暂不可用，未发送请求。");
-    if (!await confirmPublication({ actorBinding: actor, operation: "publish", items: pending.map((item) => ({
-      annotationId: item.annotationId, queueKey: item.queueKey, body: item.pendingOperation?.body ?? item.body, excerpt: item.excerpt
+    if (!await confirmPublication({ actorBinding: actor, authorProfile, operation: "publish", items: pending.map((item) => ({
+      annotationId: item.annotationId, queueKey: item.queueKey, body: item.pendingOperation?.body ?? item.body, excerpt: item.excerpt,
+      excerpts: thinReadingPublicationExcerpts(item), authorProfile: profileById.get(item.annotationId)
     })) })) return;
     if (!samePublicationActor(actor, getActorBinding?.())) throw new Error("账号或会话已变化，请重新确认发布。");
     // This entry is invoked only by the explicit sync action. Persist the exact

@@ -1,6 +1,6 @@
 import { freezePaperIdentity } from "../paper-identity/paperIdentity";
 import { sha256Hex } from "../paper-identity/paperIdentity";
-import type { ForumAnnotationTarget, ForumLiteratureReference } from "../forum/forum.types";
+import type { ForumAnnotationTarget, ForumLiteratureReference, PublicationAuthorProfile } from "../forum/forum.types";
 import { normalizePublicationActorBinding, samePublicationActor, type PublicationActorBinding } from "../forum/publicationActorBinding";
 import type {
   ThinReadingAnnotation,
@@ -15,7 +15,9 @@ export type ThinReadingIntuechoQueueStatus = "pending_public";
 export type ThinReadingPublicationPreview = {
   actorBinding: PublicationActorBinding;
   operation: "publish" | "retract";
-  items: readonly { annotationId: string; queueKey: string; body: string; excerpt: string }[];
+  authorProfile?: PublicationAuthorProfile;
+  items: readonly { annotationId: string; queueKey: string; body: string; excerpt: string;
+    excerpts?: readonly { label: string; text: string }[]; authorProfile?: PublicationAuthorProfile }[];
 };
 
 export function listThinReadingPendingRetractions(document: ThinReadingDocument) {
@@ -108,7 +110,7 @@ function wireAnnotation(item: ThinReadingIntuechoAnnotationQueueItem) {
 export function prepareThinReadingPublications(
   document: ThinReadingDocument,
   actor: PublicationActorBinding,
-  options: { resumePublication?: true } = {}
+  options: { resumePublication?: true; authorProfile?: PublicationAuthorProfile } = {}
 ): ThinReadingDocument {
   const items = new Map(listThinReadingPendingPublicAnnotations(document).map((item) => [item.annotationId, item]));
   return {
@@ -117,8 +119,11 @@ export function prepareThinReadingPublications(
       const item = items.get(annotation.id);
       if (!item || !samePublicationActor(item.actorBinding, actor, { includeGeneration: !options.resumePublication })) return annotation;
       return { ...annotation, publication: {
+        ...annotation.publication,
         actorBinding: { ...actor },
-        pendingOperation: structuredClone(wireAnnotation(item)),
+        authorProfile: item.pendingOperation ? annotation.publication?.authorProfile : options.authorProfile,
+        pendingOperation: structuredClone(item.pendingOperation ?? { ...wireAnnotation(item),
+          ...(options.authorProfile ? { expectedAuthorProfileRevision: options.authorProfile.profile.revision } : {}) }),
         outcome: "unknown" as const
       } };
     })
@@ -451,4 +456,21 @@ export function createLocalPendingIntuechoSyncAdapter(): ThinReadingIntuechoSync
       }))
     )
   });
+}
+
+
+export function thinReadingPublicationExcerpts(item: ThinReadingIntuechoAnnotationQueueItem) {
+  const excerpts: { label: string; text: string }[] = [];
+  for (const [index, target] of wireAnnotation(item).targets.entries()) {
+    const prefix = `目标 ${index + 1} · 文献 ${target.literature.literatureId}`;
+    if (target.kind === "source_passage") excerpts.push({ label: `${prefix}${target.page ? ` · 第 ${target.page} 页` : ""}`, text: target.excerpt });
+    if (target.kind === "derived_passage") {
+      excerpts.push({ label: `${prefix} · 生成内容`, text: target.derivedContent.excerpt });
+      for (const [evidenceIndex, evidence] of target.evidence.entries()) excerpts.push({
+        label: `${prefix} · 证据 ${evidenceIndex + 1} · 文献 ${evidence.literature.literatureId}${evidence.page ? ` · 第 ${evidence.page} 页` : ""}`,
+        text: evidence.excerpt
+      });
+    }
+  }
+  return excerpts;
 }

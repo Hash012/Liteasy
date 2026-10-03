@@ -128,6 +128,13 @@ export function registerAnnotationCommunityRoutes(app, repository, {
   }));
 
   if (requireDesktopUser) {
+    app.post("/v1/integrations/desktop/publication-profile", async (request, reply) => route(reply, async () => {
+      const viewer = requireDesktopUser(request, reply);
+      if (!viewer) return;
+      if (!request.body || typeof request.body !== "object" || Array.isArray(request.body) || Object.keys(request.body).length) throw new AnnotationCommunityError("INVALID_PROFILE");
+      return { author: { id: viewer.id, name: viewer.name, initials: viewer.initials }, profile: await repository.profile(viewer.id) };
+    }));
+
     app.post("/v1/integrations/desktop/organizations:list", async (request, reply) => route(reply, async () => {
       const viewer = requireDesktopUser(request, reply);
       return viewer ? { organizations: await repository.organizationChoices(viewer) } : undefined;

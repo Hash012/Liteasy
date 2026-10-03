@@ -10,6 +10,9 @@ function setup(t) {
   registerAnnotationCommunityRoutes(app, { lookupDesktopAnnotations: async (owner, queries) => {
     calls.push({ owner, queries });
     return queries.map((item) => ({ ...item, status: "matched", remoteAnnotationId: "remote-1", publicationRevision: 1 }));
+  }, profile: async (owner) => {
+    calls.push({ profileOwner: owner });
+    return { revision: 3, educationStage: null, institutions: [{ name: "Original University" }] };
   } }, { currentUser: () => null, requireAdmin: () => null, requireUser: () => null,
     requireDesktopUser: (request, reply) => request.headers.authorization === "Bearer synthetic-desktop"
       ? { id: "verified-owner" } : (reply.code(401).send({ error: "AUTH_REQUIRED" }), null) });
@@ -36,4 +39,18 @@ test("lookup route rejects body, owner and malformed digest additions without in
     assert.equal(response.statusCode, 400);
   }
   assert.equal(calls.length, 0);
+});
+
+
+test("publication profile route reads only the authenticated owner and rejects owner overrides", async (t) => {
+  const { app, calls } = setup(t);
+  const request = { method: "POST", url: "/v1/integrations/desktop/publication-profile", payload: {} };
+  assert.equal((await app.inject(request)).statusCode, 401);
+  const headers = { authorization: "Bearer synthetic-desktop" };
+  assert.equal((await app.inject({ ...request, headers, payload: { ownerId: "another" } })).statusCode, 400);
+  const response = await app.inject({ ...request, headers });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().author.id, "verified-owner");
+  assert.deepEqual(response.json().profile, { revision: 3, educationStage: null, institutions: [{ name: "Original University" }] });
+  assert.deepEqual(calls, [{ profileOwner: "verified-owner" }]);
 });

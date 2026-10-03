@@ -674,10 +674,12 @@ export type ThinReadingAnnotationSyncState =
 export type ThinReadingAnnotation = {
   publication?: {
     actorBinding: PublicationActorBinding;
+    authorProfile?: import("../forum/forum.types").PublicationAuthorProfile;
     remoteAnnotationId?: string;
     pendingRetract?: Extract<ForumAnnotationPublicationOperation, { operation: "retract" }>;
     retractReceipt?: ForumAnnotationPublicationReceipt;
     pendingOperation?: {
+      expectedAuthorProfileRevision?: number;
       annotationId: string;
       body: string;
       createdAt: string;

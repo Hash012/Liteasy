@@ -127,6 +127,7 @@ export function desktopAnnotationPublicationDigest(operation) {
     ...(operation.operation === "upsert"
       ? {
           body: operation.body,
+          ...(operation.expectedAuthorProfileRevision === undefined ? {} : { expectedAuthorProfileRevision: operation.expectedAuthorProfileRevision }),
           literatureId: operation.literatureId,
           sourcePassage: {
             anchorHash: operation.sourcePassage.anchorHash,
@@ -883,25 +884,30 @@ export class SqliteAnnotationCommunityRepository {
       if (prior && prior.source_annotation_id !== item.annotationId) return failure("ANNOTATION_PUBLICATION_QUEUE_CONFLICT");
       if (prior && Date.parse(item.updatedAt) < Date.parse(prior.source_updated_at)) return failure("STALE_ANNOTATION_PUBLICATION");
       if (prior && Date.parse(item.updatedAt) === Date.parse(prior.source_updated_at)) {
-        const stored = this.db.prepare("SELECT body FROM annotations_v2 WHERE id = ? AND author_id = ?").get(prior.annotation_id, author.id);
+        const stored = this.db.prepare("SELECT body,author_profile_snapshot_json FROM annotations_v2 WHERE id = ? AND author_id = ?").get(prior.annotation_id, author.id);
         if (!stored) return failure("REMOTE_ANNOTATION_NOT_FOUND");
+        if (parseJson(stored.author_profile_snapshot_json, {}).revision !== item.expectedAuthorProfileRevision) return failure("ANNOTATION_PUBLICATION_VERSION_CONFLICT");
         const targets = this.db.prepare("SELECT target_json,literature_id FROM annotation_targets_v2 WHERE annotation_id = ? ORDER BY position")
           .all(prior.annotation_id).map((row) => ({ ...parseJson(row.target_json, {}), literature: { literatureId: row.literature_id } }));
         if (thinReadingSyncPayload({ body: stored.body, targets }) !== thinReadingSyncPayload(item)) return failure("ANNOTATION_PUBLICATION_VERSION_CONFLICT");
         return { annotationId: item.annotationId, intuechoAnnotationId: prior.annotation_id, queueKey: item.queueKey,
           status: "synced", syncedAt: prior.updated_at };
       }
+      const profile = this.profile(author.id);
+      if (item.expectedAuthorProfileRevision !== undefined && profile.revision !== item.expectedAuthorProfileRevision) return failure("AUTHOR_PROFILE_CHANGED");
+      const profileSnapshot = { educationStage: profile.educationStage, institutions: profile.institutions,
+        ...(item.expectedAuthorProfileRevision === undefined ? {} : { revision: profile.revision }) };
       const id = prior?.annotation_id ?? `annotation_${randomUUID()}`;
       if (!prior) {
         this.db.prepare(`INSERT INTO annotations_v2(id, body, author_id, author_name, author_initials, author_profile_snapshot_json, visibility, organization_id, share_to_plaza, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'public', NULL, 1, 1, ?, ?)`)
-          .run(id, item.body, author.id, author.name, author.initials ?? initialsFor(author.name), JSON.stringify(this.#profileSnapshot(author.id)), item.createdAt, item.updatedAt);
+          .run(id, item.body, author.id, author.name, author.initials ?? initialsFor(author.name), JSON.stringify(profileSnapshot), item.createdAt, item.updatedAt);
         this.#replaceTargets(id, item.targets, syncedAt, author.id);
         this.#assignPlatformTags(id, item.body, [], syncedAt);
         this.db.prepare("INSERT INTO desktop_annotation_syncs_v2(owner_id, queue_key, source_annotation_id, annotation_id, source_created_at, source_updated_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
           .run(author.id, item.queueKey, item.annotationId, id, item.createdAt, item.updatedAt, syncedAt);
       } else if (Date.parse(item.updatedAt) >= Date.parse(prior.source_updated_at)) {
         this.db.prepare("UPDATE annotations_v2 SET body = ?, author_name = ?, author_initials = ?, author_profile_snapshot_json = ?, revision = revision + 1, updated_at = ? WHERE id = ?")
-          .run(item.body, author.name, author.initials ?? initialsFor(author.name), JSON.stringify(this.#profileSnapshot(author.id)), item.updatedAt, id);
+          .run(item.body, author.name, author.initials ?? initialsFor(author.name), JSON.stringify(profileSnapshot), item.updatedAt, id);
         this.#replaceTargets(id, item.targets, syncedAt, author.id);
         this.#assignPlatformTags(id, item.body, [], syncedAt);
         this.db.prepare("UPDATE desktop_annotation_syncs_v2 SET source_annotation_id = ?, source_updated_at = ?, updated_at = ? WHERE owner_id = ? AND queue_key = ?")
@@ -965,6 +971,9 @@ export class SqliteAnnotationCommunityRepository {
   }
 
   #upsertDesktopPublication(author, operation, operationDigest, prior) {
+    const profile = this.profile(author.id);
+    if (operation.expectedAuthorProfileRevision !== undefined && profile.revision !== operation.expectedAuthorProfileRevision) return this.#publicationFailure(operation, "AUTHOR_PROFILE_CHANGED");
+    const profileSnapshot = { educationStage: profile.educationStage, institutions: profile.institutions };
     const confirmed = this.#literatureRecord(operation.literatureId);
     if (!confirmed) return this.#publicationFailure(operation, "LITERATURE_NOT_FOUND");
     const now = new Date().toISOString();
@@ -972,13 +981,13 @@ export class SqliteAnnotationCommunityRepository {
     let remoteRevision = 1;
     if (!prior) {
       this.db.prepare(`INSERT INTO annotations_v2(id, body, author_id, author_name, author_initials, author_profile_snapshot_json, visibility, organization_id, share_to_plaza, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'public', NULL, 1, 1, ?, ?)`)
-        .run(id, operation.body, author.id, author.name, author.initials ?? initialsFor(author.name), JSON.stringify(this.#profileSnapshot(author.id)), operation.updatedAt, operation.updatedAt);
+        .run(id, operation.body, author.id, author.name, author.initials ?? initialsFor(author.name), JSON.stringify(profileSnapshot), operation.updatedAt, operation.updatedAt);
     } else {
       const annotation = this.db.prepare("SELECT revision FROM annotations_v2 WHERE id = ? AND author_id = ?").get(id, author.id);
       if (!annotation) return this.#publicationFailure(operation, "REMOTE_ANNOTATION_NOT_FOUND");
       remoteRevision = Number(annotation.revision) + 1;
       this.db.prepare("UPDATE annotations_v2 SET body = ?, author_name = ?, author_initials = ?, author_profile_snapshot_json = ?, visibility = 'public', organization_id = NULL, share_to_plaza = 1, revision = ?, updated_at = ? WHERE id = ?")
-        .run(operation.body, author.name, author.initials ?? initialsFor(author.name), JSON.stringify(this.#profileSnapshot(author.id)), remoteRevision, operation.updatedAt, id);
+        .run(operation.body, author.name, author.initials ?? initialsFor(author.name), JSON.stringify(profileSnapshot), remoteRevision, operation.updatedAt, id);
     }
     this.#replaceTargets(id, [this.#publicationTarget(confirmed.literatureId, operation.sourcePassage)], now, author.id);
     this.#assignPlatformTags(id, operation.body, [], now);

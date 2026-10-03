@@ -98,3 +98,36 @@ test("lookup holds absent, stale, substituted and divergent originals without ex
   assert.equal(repository.lookupDesktopAnnotations(owner, [{ ...query, queueKey: "missing" }])[0].status, "not_found");
   assert.deepEqual(db.serialize(), before);
 });
+
+
+test("fences thin-reading profile changes before a new write while replaying exact committed originals", (t) => {
+  const { db, repository } = setup(t);
+  const profile = repository.updateProfile(owner.id, { educationStage: "undergraduate", institutions: [{ name: "Synthetic University" }] });
+  const guarded = { ...operation, annotationId: "guarded", queueKey: "profile-guarded", expectedAuthorProfileRevision: profile.revision };
+  assert.equal(repository.syncDesktopAnnotations(owner, [{ ...guarded, expectedAuthorProfileRevision: 0 }])[0].error, "AUTHOR_PROFILE_CHANGED");
+  const [first] = repository.syncDesktopAnnotations(owner, [guarded]);
+  assert.equal(first.status, "synced");
+  repository.updateProfile(owner.id, { educationStage: null, institutions: [] });
+  assert.deepEqual(repository.syncDesktopAnnotations(owner, [guarded]), [first]);
+  assert.equal(repository.syncDesktopAnnotations(owner, [{ ...guarded, expectedAuthorProfileRevision: profile.revision + 1 }])[0].error,
+    "ANNOTATION_PUBLICATION_VERSION_CONFLICT");
+  assert.equal(repository.syncDesktopAnnotations(owner, [{ ...guarded, updatedAt: "2026-10-04T01:00:00.000Z" }])[0].error, "AUTHOR_PROFILE_CHANGED");
+  assert.deepEqual(JSON.parse(db.prepare("SELECT author_profile_snapshot_json profile FROM annotations_v2 WHERE id=?").get(first.intuechoAnnotationId).profile).institutions,
+    [{ name: "Synthetic University" }]);
+});
+
+test("fences PDF profile revisions but preserves exact receipts across later profile edits", (t) => {
+  const { repository } = setup(t);
+  const profile = repository.updateProfile(owner.id, { educationStage: null, institutions: [{ name: "Original institution" }] });
+  const guarded = { annotationId: "pdf-guarded", queueKey: "pdf-profile", revision: 1, operation: "upsert", updatedAt: timestamp,
+    body: "PDF note", literatureId: "literature-1", sourcePassage: { anchorHash: "source-anchor", excerpt: "Original source", rects: [] },
+    expectedAuthorProfileRevision: profile.revision };
+  assert.equal(repository.applyDesktopAnnotationPublications(owner, [{ ...guarded, expectedAuthorProfileRevision: 0 }])[0].error, "AUTHOR_PROFILE_CHANGED");
+  const [first] = repository.applyDesktopAnnotationPublications(owner, [guarded]);
+  assert.equal(first.state, "published");
+  repository.updateProfile(owner.id, { educationStage: null, institutions: [] });
+  assert.deepEqual(repository.applyDesktopAnnotationPublications(owner, [guarded]), [first]);
+  assert.equal(repository.applyDesktopAnnotationPublications(owner, [{ ...guarded, expectedAuthorProfileRevision: profile.revision + 1 }])[0].error,
+    "ANNOTATION_PUBLICATION_VERSION_CONFLICT");
+  assert.equal(repository.applyDesktopAnnotationPublications(owner, [{ ...guarded, revision: 2 }])[0].error, "AUTHOR_PROFILE_CHANGED");
+});

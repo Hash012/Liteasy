@@ -57,6 +57,7 @@ type ForumAnnotationPublicationOperationBase = {
 export type ForumAnnotationPublicationOperation =
   | (ForumAnnotationPublicationOperationBase & {
       body: string;
+      expectedAuthorProfileRevision?: number;
       literatureId: string;
       operation: "upsert";
       sourcePassage: {
@@ -70,3 +71,21 @@ export type ForumAnnotationPublicationOperation =
       operation: "retract";
       remoteAnnotationId: string;
     });
+
+
+export type PublicationAuthorProfile = {
+  author: { id: string; name: string; initials: string };
+  profile: { revision: number; educationStage: string | null; institutions: { name: string }[] };
+};
+
+export function normalizePublicationAuthorProfile(value: unknown): PublicationAuthorProfile | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const candidate = value as Partial<PublicationAuthorProfile>;
+  const { author, profile } = candidate;
+  if (!author || typeof author.id !== "string" || !author.id.trim() || typeof author.name !== "string" || !author.name.trim() ||
+      typeof author.initials !== "string" || !profile || !Number.isSafeInteger(profile.revision) || profile.revision < 0 ||
+      (profile.educationStage !== null && typeof profile.educationStage !== "string") || !Array.isArray(profile.institutions) ||
+      profile.institutions.some((institution) => !institution || typeof institution.name !== "string" || !institution.name.trim())) return undefined;
+  return { author: { id: author.id, name: author.name, initials: author.initials }, profile: { revision: profile.revision,
+    educationStage: profile.educationStage, institutions: profile.institutions.map(({ name }) => ({ name })) } };
+}

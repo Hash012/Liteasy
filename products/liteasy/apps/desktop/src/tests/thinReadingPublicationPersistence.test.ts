@@ -1,4 +1,4 @@
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { createArtifactStore } from "../app/features/artifacts/artifact.store";
 import { useArtifactActions } from "../app/features/artifacts/useArtifactActions";
 import { addThinReadingAnnotation, createThinReadingDocument, setThinReadingAnnotationPublic } from "../app/features/thin-reading/thinReadingProjection";
@@ -7,8 +7,20 @@ import type { PublicationActorBinding } from "../app/features/forum/publicationA
 import { prepareThinReadingPublications } from "../app/features/thin-reading/thinReadingIntuechoSyncQueue";
 import type { ThinReadingDocument } from "../app/features/thin-reading/thinReading.types";
 
+const { readAuthorProfile } = vi.hoisted(() => ({ readAuthorProfile: vi.fn() }));
+vi.mock("../app/features/forum/forumClient", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../app/features/forum/forumClient")>();
+  return { ...original, createForumClient: (...args: Parameters<typeof original.createForumClient>) => ({
+    ...original.createForumClient(...args), readPublicationAuthorProfile: readAuthorProfile
+  }) };
+});
+
 const actor: PublicationActorBinding = { endpoint: "https://community.example.invalid", issuer: "https://identity.example.invalid",
   subject: "synthetic-a", scopeId: "synthetic-a", scopeType: "user", sessionGeneration: "runtime:1" };
+
+const authorProfile = { author: { id: actor.subject, name: "Synthetic Owner", initials: "SO" },
+  profile: { revision: 3, educationStage: "undergraduate", institutions: [{ name: "Original University" }] } };
+beforeEach(() => { readAuthorProfile.mockReset(); readAuthorProfile.mockResolvedValue(authorProfile); });
 
 function fixture() {
   const root = createThinReadingDocument({ ...createThinReadingFixture(), artifactId: "durable-publication" });
@@ -265,5 +277,56 @@ test.each(["original", "local-note"])("holds a changed local %s while its lookup
   vi.stubGlobal("fetch", transport);
   await expect(context.actions.syncThinReadingAnnotations({ artifactId: document.artifactId, document })).rejects.toThrow("原发布请求");
   expect(transport).toHaveBeenCalledOnce();
+  expect(context.save).not.toHaveBeenCalled();
+});
+
+
+test("previews and persists the exact author profile and all wire evidence before a new publication", async () => {
+  const preview = vi.fn(async () => true);
+  const context = setup({ confirmPublication: preview });
+  const transport = vi.fn(async (_url: string, request: RequestInit) => {
+    const operation = JSON.parse(String(request.body)).annotations[0];
+    expect(operation.expectedAuthorProfileRevision).toBe(3);
+    expect(context.save.mock.calls[0][0].thinReadingDocument.annotations[0].publication.authorProfile).toEqual(authorProfile);
+    expect(preview.mock.calls[0][0].items[0].authorProfile).toEqual(authorProfile);
+    const excerpts = preview.mock.calls[0][0].items[0].excerpts.map((item: { text: string }) => item.text);
+    for (const target of operation.targets) {
+      if (target.excerpt) expect(excerpts).toContain(target.excerpt);
+      if (target.derivedContent) expect(excerpts).toContain(target.derivedContent.excerpt);
+      for (const evidence of target.evidence ?? []) expect(excerpts).toContain(evidence.excerpt);
+    }
+    return { ok: true, status: 200, json: async () => ({ results: [] }) };
+  });
+  vi.stubGlobal("fetch", transport);
+  await context.actions.syncThinReadingAnnotations({ artifactId: context.document.artifactId, document: context.document });
+  expect(readAuthorProfile).toHaveBeenCalledOnce();
+  expect(transport).toHaveBeenCalledOnce();
+});
+
+test("preserves the saved profile fence and preview when reconciling an unknown original after a profile edit", async () => {
+  const preview = vi.fn(async () => true);
+  const context = setup({ confirmPublication: preview });
+  const original = prepareThinReadingPublications(context.document, actor, { authorProfile });
+  context.store.upsertTab({ artifactId: original.artifactId, title: "Original", type: "thin_reading", thinReadingDocument: original });
+  readAuthorProfile.mockResolvedValue({ ...authorProfile, profile: { revision: 4, educationStage: null, institutions: [] } });
+  const transport = vi.fn(async (_url: string, request: RequestInit) => {
+    expect(JSON.parse(String(request.body)).annotations[0]).toEqual(original.annotations[0].publication?.pendingOperation);
+    return { ok: true, status: 200, json: async () => ({ results: [] }) };
+  });
+  vi.stubGlobal("fetch", transport);
+  await context.actions.syncThinReadingAnnotations({ artifactId: original.artifactId, document: original });
+  expect(preview.mock.calls[0][0].items[0].authorProfile).toEqual(authorProfile);
+  expect(transport).toHaveBeenCalledOnce();
+});
+
+test("does not retrofit a profile fence onto an old unknown original or send when profile reads fail", async () => {
+  const context = setup();
+  const original = prepareThinReadingPublications(context.document, actor);
+  const transport = vi.fn();
+  vi.stubGlobal("fetch", transport);
+  await expect(context.actions.syncThinReadingAnnotations({ artifactId: original.artifactId, document: original })).rejects.toThrow("资料预览");
+  expect(transport).not.toHaveBeenCalled();
+  readAuthorProfile.mockRejectedValue(new Error("profile unavailable"));
+  await expect(context.actions.syncThinReadingAnnotations({ artifactId: context.document.artifactId, document: context.document })).rejects.toThrow("profile unavailable");
   expect(context.save).not.toHaveBeenCalled();
 });

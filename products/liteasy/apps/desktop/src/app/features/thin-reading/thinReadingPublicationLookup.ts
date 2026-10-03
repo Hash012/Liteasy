@@ -13,7 +13,8 @@ export type ThinReadingMatchedPublication = Extract<DesktopCommunityAnnotationLo
 
 export function sameThinReadingPendingPublication(left: PendingOperation, right: PendingOperation) {
   return Boolean(left && right && left.annotationId === right.annotationId && left.queueKey === right.queueKey &&
-    left.updatedAt === right.updatedAt && left.createdAt === right.createdAt && thinReadingSyncPayload(left) === thinReadingSyncPayload(right));
+    left.updatedAt === right.updatedAt && left.createdAt === right.createdAt &&
+    left.expectedAuthorProfileRevision === right.expectedAuthorProfileRevision && thinReadingSyncPayload(left) === thinReadingSyncPayload(right));
 }
 
 // Only called by an explicit withdrawal. It sends identity/version/digest, never

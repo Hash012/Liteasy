@@ -2,7 +2,7 @@ import type { PaperIdentity } from "./paperIdentity";
 import { isGuideAnnotation, type GuideAnnotation } from "./literatureGuide.types";
 import { isPdfInkStroke, isPdfInkStrokeGroup, type PdfInkStroke } from "./pdfInk";
 import { isPdfTextBoxImages, type PdfTextBoxImages } from "./pdfTextBoxImages";
-import { normalizePublicationActorBinding, type ForumAnnotationPublicationOperation, type PublicationActorBinding } from "./annotationPublication";
+import { normalizePublicationAuthorProfile, normalizePublicationActorBinding, type ForumAnnotationPublicationOperation, type PublicationActorBinding } from "./annotationPublication";
 
 export type PdfAnnotationKind = "highlight" | "underline" | "note" | "text" | "ink";
 export type PdfHighlightColor = "yellow" | "red" | "blue" | "green" | "pink";
@@ -21,6 +21,7 @@ export type PdfAnnotationRect = {
 
 export type PdfAnnotationPublication = {
   actorBinding?: PublicationActorBinding;
+  authorProfile?: import("./annotationPublication").PublicationAuthorProfile;
   desiredVisibility: "private" | "public";
   lastError?: string;
   outcome?: "unknown";
@@ -184,6 +185,7 @@ function isPendingCreateOperation(
   const candidate = value as Partial<NonNullable<PdfAnnotationPublication["pendingCreateOperation"]>>;
   const sourcePassage = candidate.sourcePassage;
   return candidate.operation === "upsert" &&
+    (candidate.expectedAuthorProfileRevision === undefined || (Number.isSafeInteger(candidate.expectedAuthorProfileRevision) && candidate.expectedAuthorProfileRevision >= 0)) &&
     typeof candidate.annotationId === "string" && candidate.annotationId.length > 0 &&
     typeof candidate.body === "string" && typeof candidate.literatureId === "string" &&
     candidate.literatureId.length > 0 && typeof candidate.queueKey === "string" &&
@@ -201,11 +203,14 @@ function isPublication(value: unknown): value is PdfAnnotationPublication {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const candidate = value as Partial<PdfAnnotationPublication>;
   if (candidate.actorBinding !== undefined && !normalizePublicationActorBinding(candidate.actorBinding)) return false;
+  if (candidate.authorProfile !== undefined && (!normalizePublicationAuthorProfile(candidate.authorProfile) ||
+      candidate.authorProfile.author.id !== candidate.actorBinding?.subject)) return false;
   if (candidate.outcome !== undefined && candidate.outcome !== "unknown") return false;
   if (candidate.pendingOperation !== undefined) {
     const operation = candidate.pendingOperation;
     if (!operation || typeof operation !== "object" || Array.isArray(operation)) return false;
-    const valid = operation.operation === "upsert" ? isPendingCreateOperation(operation) :
+    const valid = operation.operation === "upsert" ? isPendingCreateOperation(operation) &&
+      (operation.expectedAuthorProfileRevision === undefined || (Number.isSafeInteger(operation.expectedAuthorProfileRevision) && operation.expectedAuthorProfileRevision >= 0)) :
       operation.operation === "retract" && typeof operation.annotationId === "string" && Boolean(operation.annotationId) &&
       typeof operation.queueKey === "string" && Boolean(operation.queueKey) &&
       Number.isInteger(operation.revision) && operation.revision > 0 &&

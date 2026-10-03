@@ -1,5 +1,5 @@
 import type { ForumAnnotationPublicationOperation } from "../../../../../../packages/reading-core/src/annotationPublication";
-export type { ForumAnnotationPublicationOperation } from "../../../../../../packages/reading-core/src/annotationPublication";
+export type { ForumAnnotationPublicationOperation, PublicationAuthorProfile } from "../../../../../../packages/reading-core/src/annotationPublication";
 
 export type ForumPaperIdentity = {
   id: string;
