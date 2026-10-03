@@ -1,3 +1,4 @@
+import { verifyCommunityReadScaling } from "./verify-community-read-scaling.mjs";
 import { verifyStructuredCollaboration } from "./verify-structured-collaboration.mjs";
 import { verifyScopeDerivedTags } from "./verify-scope-derived-tags.mjs";
 import { verifyCommunityCommands } from "./verify-community-commands.mjs";
@@ -138,7 +139,8 @@ try {
     "027_tag_appeal_submission_audience.sql",
     "028_scope_derived_tags.sql",
     "029_community_command_receipts.sql",
-    "030_structured_collaboration.sql"
+    "030_structured_collaboration.sql",
+    "031_community_read_indexes.sql"
   ];
   assert.equal(migrated.applied.every((name) => expectedMigrations.includes(name)), true);
   const stagedMigrationRows = await pool.query("SELECT name FROM schema_migrations ORDER BY name");
@@ -1995,7 +1997,7 @@ try {
   assert.equal(organizationFeed[0].annotations[0].viewerCanModerate, true);
   assert.equal(organizationFeed[0].annotations[0].withdrawnAt !== null, true);
   await annotations.moderateOrganizationAnnotation({ action: "restore", annotationId: organizationAnnotation.id, reason: "组织管理员恢复 PostgreSQL 治理集成验证内容。", traceId: "trace-org-moderate-2", userId: userTwo.id });
-  assert.equal(organizationModerations.length, 2);
+  assert.equal(organizationModerations.length, 3, "two moderation writes plus the feed current-access recheck");
 
   assert.deepEqual(await annotations.toggleFollow(userOne.id, userTwo.id), {
     following: true,
@@ -2385,6 +2387,7 @@ try {
     /account_lifecycle_audit_is_append_only/
   );
 
+  const readScaling = await verifyCommunityReadScaling(pool);
   const counts = await pool.query(`
     SELECT
       (SELECT count(*)::int FROM posts) AS posts,
@@ -2401,6 +2404,7 @@ try {
     structuredCommunityEvents: { ...structuredCommunityEvents, preservesLegacyReplyReadState: true },
     platformGovernance,
     communityCommands,
+    readScaling,
     structuredCollaboration,
     scopedDerivedTags: true,
     authorProfileRevision: true,

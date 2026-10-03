@@ -786,8 +786,8 @@ function postgresHarness() {
     async query(sql, values = []) {
       const query = sql.trim();
       if (query.startsWith("BEGIN ") || query === "COMMIT" || query === "ROLLBACK" || query.includes("pg_advisory_xact_lock")) return { rows: [] };
-      if (query.includes("FROM literature_identifiers") && query.includes("identifier_kind = ANY")) {
-        return { rows: identifiers.filter((item) => values[0].includes(item.identifier_kind)) };
+      if (query.includes("FROM literature_identifiers") && query.includes("unnest($1::text[], $2::text[])")) {
+        return { rows: identifiers.filter((item) => values[0].some((kind, index) => item.identifier_kind === kind && item.normalized_value === values[1][index])) };
       }
       if (query.startsWith("SELECT literature_id FROM literature_identifiers")) {
         return { rows: identifiers.filter((item) => values[0].includes(item.literature_id)).map((item) => ({ literature_id: item.literature_id })) };

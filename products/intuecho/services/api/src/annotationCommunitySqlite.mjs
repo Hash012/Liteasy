@@ -1,3 +1,4 @@
+import { communityPageOptions, communityPageCursor } from "./communityPagination.mjs";
 import { collaborationMetadata, assertSourceSnapshot } from "./collaborationMetadata.mjs";
 import { validateCommunityCommand, assertCommandReplay, commandReceipt, assertExpectedRevision } from "./communityCommands.mjs";
 import { desktopAnnotationPublicationPayload } from "@intuecho/contracts";
@@ -195,6 +196,7 @@ export function initializeAnnotationCommunitySqlite(db) {
   for (const table of ["annotations_v2", "annotation_replies_v2"]) {
     if (!db.prepare(`PRAGMA table_info(${table})`).all().some((column) => column.name === "collaboration_json")) db.exec(`ALTER TABLE ${table} ADD COLUMN collaboration_json TEXT`);
   }
+  db.exec("CREATE INDEX IF NOT EXISTS annotations_v2_public_page_idx ON annotations_v2(created_at DESC, id DESC) WHERE share_to_plaza = 1 AND visibility = 'public' AND withdrawn_at IS NULL; CREATE INDEX IF NOT EXISTS literature_identifiers_v2_exact_lookup_idx ON literature_identifiers_v2(identifier_kind, normalized_value, literature_id)");
   const tagColumns = new Set(db.prepare("PRAGMA table_info(annotation_tags_v2)").all().map((column) => column.name));
   if (!tagColumns.has("source_scope_json")) db.exec("ALTER TABLE annotation_tags_v2 ADD COLUMN source_scope_json TEXT");
   const literatureColumns = new Set(db.prepare("PRAGMA table_info(literature_records_v2)").all().map((column) => column.name));
@@ -1169,9 +1171,9 @@ export class SqliteAnnotationCommunityRepository {
   #matchingLiteratureIds(identifiers, allowMultiple = false, includeCandidateAliases = false) {
     const keys = new Set((identifiers ?? []).map((identifier) => `${identifier.kind}:${normalizeIdentity(identifier.kind, identifier.value)}`));
     const literatureIds = new Set();
-    const rows = includeCandidateAliases
-      ? this.db.prepare("SELECT literature_id, identifier_kind, normalized_value FROM literature_identifiers_v2 WHERE NOT (identifier_kind = 'arxiv_id' AND is_legacy_alias = 1)").all()
-      : this.db.prepare("SELECT literature_id, identifier_kind, normalized_value FROM literature_identifiers_v2 WHERE identifier_role = 'confirmable' AND NOT (identifier_kind = 'arxiv_id' AND is_legacy_alias = 1)").all();
+    const normalized = (identifiers ?? []).map((identifier) => [identifier.kind, normalizeIdentity(identifier.kind, identifier.value)]);
+    if (!normalized.length) return literatureIds;
+    const rows = this.db.prepare(`SELECT literature_id, identifier_kind, normalized_value FROM literature_identifiers_v2 WHERE (${normalized.map(() => "(identifier_kind = ? AND normalized_value = ?)").join(" OR ")}) AND (? = 1 OR identifier_role = 'confirmable') AND NOT (identifier_kind = 'arxiv_id' AND is_legacy_alias = 1)`).all(...normalized.flat(), includeCandidateAliases ? 1 : 0);
     for (const row of rows) {
       let value;
       try {
@@ -1818,8 +1820,31 @@ export class SqliteAnnotationCommunityRepository {
     return rows.map((row) => ({ ...this.#serializeReply(row), viewerIsAuthor: Boolean(viewer?.id && row.author_id === viewer.id) }));
   }
 
+  async plazaPage(viewer, options = {}) {
+    const { limit, after } = communityPageOptions(options);
+    let cursor = after;
+    const visible = [];
+    while (visible.length <= limit) {
+      const rows = this.db.prepare(`SELECT * FROM annotations_v2
+        WHERE share_to_plaza = 1 AND visibility = 'public' AND withdrawn_at IS NULL
+          AND (? IS NULL OR (created_at, id) < (?, ?))
+          AND (? IS NULL OR EXISTS(SELECT 1 FROM annotation_targets_v2 target WHERE target.annotation_id = annotations_v2.id AND target.literature_id = ?)
+            OR EXISTS(SELECT 1 FROM annotation_targets_v2 target JOIN annotation_target_evidence_v2 evidence ON evidence.target_id = target.id WHERE target.annotation_id = annotations_v2.id AND evidence.literature_id = ?))
+        ORDER BY created_at DESC, id DESC LIMIT 200`).all(cursor?.[0] ?? null, cursor?.[0] ?? null, cursor?.[1] ?? null, options.literatureId || null, options.literatureId || null, options.literatureId || null);
+      for (const row of rows) {
+        if (this.#rootAudience(row)) visible.push(row);
+        if (visible.length > limit) break;
+      }
+      if (visible.length > limit || rows.length < 200) break;
+      const last = rows.at(-1); cursor = [last.created_at, last.id];
+    }
+    const selected = visible.slice(0, limit);
+    return { annotations: selected.map((row) => this.#serialize(row, viewer)), nextCursor: visible.length > limit ? communityPageCursor(selected.at(-1)) : null };
+  }
+
   async plaza(viewer, filters = {}) {
-    let rows = this.db.prepare("SELECT * FROM annotations_v2 WHERE share_to_plaza = 1 AND visibility = 'public' AND withdrawn_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 500").all();
+    if (!filters.query && filters.sort !== "recommended" && !filters.institution && !filters.educationStage && !filters.documentType && !filters.literatureIdentityValue) return (await this.plazaPage(viewer, filters)).annotations;
+    let rows = this.db.prepare("SELECT * FROM annotations_v2 WHERE share_to_plaza = 1 AND visibility = 'public' AND withdrawn_at IS NULL ORDER BY created_at DESC, id DESC").all();
     if (filters.literatureId) {
       rows = rows.filter((row) => Boolean(this.db.prepare(`
         SELECT 1 FROM annotation_targets_v2 target
@@ -1881,17 +1906,18 @@ export class SqliteAnnotationCommunityRepository {
          AND annotation.withdrawn_at IS NULL
          AND (
            (annotation.visibility = 'public' AND annotation.share_to_plaza = 1) OR
-           annotation.visibility = 'mutual_followers'
+           (annotation.visibility = 'mutual_followers' AND EXISTS (SELECT 1 FROM user_follows_v2 reciprocal WHERE reciprocal.follower_id = annotation.author_id AND reciprocal.followed_id = ?))
          )
        ORDER BY annotation.updated_at DESC, annotation.id DESC
-       LIMIT 100
-    `).all(viewer.id);
+
+    `).all(viewer.id, viewer.id);
     const annotations = [];
     for (const authorizedRow of rows) {
       if (!await this.#canView(authorizedRow, viewer)) continue;
       const row = this.#annotationRow(authorizedRow.id);
       if (!this.#sameAudienceState(authorizedRow, row) || row.withdrawn_at || !this.#rootAudience(row)) continue;
       annotations.push(this.#serialize(row, viewer));
+      if (annotations.length >= 100) break;
     }
     return annotations;
   }
@@ -1908,10 +1934,13 @@ export class SqliteAnnotationCommunityRepository {
     } catch {
       throw new AnnotationCommunityError("ORGANIZATION_AUTHORIZATION_UNAVAILABLE", 503);
     }
-    return memberships.map((membership) => {
-      const canModerate = new Set(["owner", "admin"]).has(membership.role);
+    const organizations = [];
+    for (const membership of memberships) {
+      const access = await this.#organizationAccess({ organizationId: membership.organizationId, userId: viewer.id });
+      if (!access.allowed) continue;
+      const canModerate = new Set(["owner", "admin"]).has(access.role);
       const rows = this.db.prepare(`SELECT * FROM annotations_v2 WHERE organization_id = ? AND visibility = 'organization' AND (? = 1 OR withdrawn_at IS NULL) ORDER BY updated_at DESC, id DESC`).all(membership.organizationId, canModerate ? 1 : 0);
-      return {
+      organizations.push({
         ...membership,
         annotations: rows.flatMap((authorizedRow) => {
           const row = this.#annotationRow(authorizedRow.id);
@@ -1919,8 +1948,9 @@ export class SqliteAnnotationCommunityRepository {
             ? [{ ...this.#serialize(row, viewer), viewerCanModerate: canModerate }]
             : [];
         })
-      };
-    });
+      });
+    }
+    return organizations;
   }
 
   async rateAnnotation(annotationId, viewer, rating) {

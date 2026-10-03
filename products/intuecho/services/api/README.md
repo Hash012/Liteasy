@@ -119,3 +119,33 @@ includes `historical`, current `visibility` and `organizationId`. Deleted/withdr
 sources are unavailable. Historical annotation snapshots whose audience differs
 from the current one are unavailable, so publishing a revision cannot expose an
 older private body. This endpoint is a controlled read, not an export exception.
+
+
+### Bounded latest reads and scope checks (031)
+
+`GET /v1/plaza/page?limit=30&cursor=...&literatureId=...` returns
+`{annotations,nextCursor}` in `(created_at DESC,id DESC)` order. Its optional exact
+literature filter runs before pagination. It scans past invalid ancestry rather
+than letting a fixed candidate limit permanently hide valid results. Cursors
+preserve PostgreSQL microseconds; no access is granted by cursor contents.
+Simple legacy latest-plaza reads use the same bounded path. Legacy semantic and
+recommended queries retain their whole-corpus ranking semantics without the old
+500-candidate cutoff; those ranking paths remain a separate scalability limit.
+
+PostgreSQL latest pages batch targets, evidence, literature, tags, rating and saved
+state in a request-local hydration pass, then recheck current annotation state.
+This is not a shared content cache. Identifier matching now uses normalized exact
+kind/value SQL predicates backed by an index. Following reads filter reciprocal
+follow access before selecting visible rows; organization feeds reauthorize each
+organization against current authority instead of trusting its listed membership.
+
+`node scripts/benchmark-community-reads.mjs` requires the guarded loopback *_test
+application/migration database URLs and all migrations already applied. It inserts
+only synthetic, run-unique fixtures and reports 100/1000/10000-row page query counts,
+15-iteration p95, query plans and a detail-read comparison. It also traverses every
+fixture page (including microsecond ties), checks withdrawal and organization
+revocation. It does not reset schemas; use isolated disposable databases. The same
+scenario runs in `verify-postgres-integration.mjs`. These are local synthetic
+measurements, not production capacity claims; projection ancestry and legacy
+ranked feeds still have additional work that this root-annotation benchmark does
+not characterize.

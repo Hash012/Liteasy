@@ -118,6 +118,8 @@ export function registerAnnotationCommunityRoutes(app, repository, {
     }
   }
 
+  app.get("/v1/plaza/page", async (request, reply) => route(reply, async () => repository.plazaPage(currentUser(request), { limit: request.query?.limit, cursor: request.query?.cursor, literatureId: String(request.query?.literatureId ?? "").slice(0, 200) })));
+
   app.get("/v1/plaza", async (request, reply) => route(reply, async () => ({
     annotations: await repository.plaza(currentUser(request), plazaFilters(request.query)),
     filters: plazaFilters(request.query)

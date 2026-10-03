@@ -1,3 +1,4 @@
+import { communityPageOptions, communityPageCursor } from "./communityPagination.mjs";
 import { collaborationMetadata, assertSourceSnapshot } from "./collaborationMetadata.mjs";
 import { validateCommunityCommand, assertCommandReplay, commandReceipt, assertExpectedRevision } from "./communityCommands.mjs";
 import { desktopPublicationLookup } from "./desktopPublicationLookup.mjs";
@@ -817,14 +818,15 @@ export class PostgresAnnotationCommunityRepository {
 
   async #matchingLiteratureIds(identifiers, client = this.pool, lock = false, allowMultiple = false, includeCandidateAliases = false) {
     const keys = new Set((identifiers ?? []).map((identifier) => `${identifier.kind}:${normalizeIdentity(identifier.kind, identifier.value)}`));
-    const kinds = [...new Set((identifiers ?? []).map((identifier) => identifier.kind))];
+    const kinds = (identifiers ?? []).map((identifier) => identifier.kind);
+    const normalized = (identifiers ?? []).map((identifier) => normalizeIdentity(identifier.kind, identifier.value));
     if (kinds.length === 0) return new Set();
     const result = await client.query(`
       SELECT literature_id, identifier_kind, identifier_role, normalized_value
         FROM literature_identifiers
-       WHERE identifier_kind = ANY($1::text[])
+       WHERE (identifier_kind, normalized_value) IN (SELECT * FROM unnest($1::text[], $2::text[]))
          AND NOT (identifier_kind = 'arxiv_id' AND is_legacy_alias)
-    `, [kinds]);
+    `, [kinds, normalized]);
     const literatureIds = new Set();
     for (const row of result.rows) {
       if (!includeCandidateAliases && row.identifier_role !== "confirmable") continue;
@@ -1214,14 +1216,53 @@ export class PostgresAnnotationCommunityRepository {
     return result.rows;
   }
 
-  async #serialize(row, viewer, client = this.pool) {
-    const targets = await this.#targets(row.id, client);
-    const tags = await this.#tags(row.id, client);
-    const viewerState = viewer?.id
+  async #serializeMany(rows, viewer) {
+    if (!rows.length) return [];
+    const ids = rows.map((row) => row.id);
+    const targets = (await this.pool.query("SELECT id, annotation_id, literature_id, target FROM annotation_targets WHERE annotation_id = ANY($1::text[]) ORDER BY position", [ids])).rows;
+    const evidence = targets.length ? (await this.pool.query("SELECT target_id, literature_id, evidence FROM annotation_target_evidence WHERE target_id = ANY($1::text[]) ORDER BY position", [targets.map((target) => target.id)])).rows : [];
+    const literatureIds = [...new Set([...targets, ...evidence].map((item) => item.literature_id))];
+    const literatureRows = literatureIds.length ? (await this.pool.query("SELECT * FROM literature_records WHERE id = ANY($1::text[]) AND confirmation_status = 'confirmed'", [literatureIds])).rows : [];
+    const identifiers = literatureIds.length ? (await this.pool.query("SELECT literature_id, identifier_kind AS kind, identifier_role AS role, CASE identifier_role WHEN 'candidate_alias' THEN 'metadata' ELSE 'public_registry' END AS source, normalized_value AS value FROM literature_identifiers WHERE literature_id = ANY($1::text[]) AND NOT (identifier_kind = 'arxiv_id' AND is_legacy_alias) ORDER BY identifier_kind, normalized_value", [literatureIds])).rows : [];
+    const records = new Map();
+    for (const row of literatureRows) {
+      // Reuse canonical serialization with request-local already-batched identifiers.
+      const record = await this.#literatureSnapshot(row.id, { query: async () => ({ rows: identifiers.filter((item) => item.literature_id === row.id).map(({ literature_id, ...identifier }) => identifier) }) }, row);
+      if (record.identifiers.some(isConcreteConfirmableLiteratureIdentifier)) records.set(row.id, record);
+    }
+    const hydrate = (target, literatureId) => records.has(literatureId) ? { ...target, literature: { ...target.literature, literatureRecord: records.get(literatureId) } } : target;
+    const tags = (await this.pool.query(`SELECT annotation_tags.annotation_id, tags.name, annotation_tags.origin, annotation_tags.state, annotation_tags.confidence, annotation_tags.classifier_version AS "classifierVersion", annotation_tags.source_scope AS "sourceScope" FROM annotation_tags JOIN tags ON tags.id = annotation_tags.tag_id WHERE annotation_tags.annotation_id = ANY($1::text[]) AND annotation_tags.state <> 'removed' ORDER BY annotation_tags.origin, tags.name`, [ids])).rows;
+    const ratings = (await this.pool.query("SELECT annotation_id, count(*)::int AS count, avg(rating)::double precision AS average, max(CASE WHEN user_id = $2 THEN rating END) AS viewer_rating FROM annotation_ratings WHERE annotation_id = ANY($1::text[]) GROUP BY annotation_id", [ids, viewer?.id ?? null])).rows;
+    const saves = viewer?.id ? (await this.pool.query("SELECT annotation_id FROM annotation_saves WHERE annotation_id = ANY($1::text[]) AND user_id = $2", [ids, viewer.id])).rows : [];
+    const replyIds = rows.map((row) => row.source_reply_id).filter(Boolean);
+    const replies = replyIds.length ? (await this.pool.query("SELECT id, parent_deleted_at, revision FROM annotation_replies WHERE id = ANY($1::text[])", [replyIds])).rows : [];
+    // Never retain this hydration across requests or reuse it for authorization.
+    const current = new Map((await this.pool.query("SELECT * FROM annotations WHERE id = ANY($1::text[])", [ids])).rows.map((row) => [row.id, row]));
+    const output = [];
+    for (const row of rows) {
+      const latest = current.get(row.id);
+      if (!this.#sameAudienceState(row, latest) || latest.withdrawn_at || Number(latest.revision) !== Number(row.revision) || !await this.#rootAudience(latest)) continue;
+      const aggregate = ratings.find((item) => item.annotation_id === row.id) ?? { count: 0, average: null, viewer_rating: null };
+      const prefetched = {
+        targets: targets.filter((target) => target.annotation_id === row.id).map((target) => ({ ...hydrate(target.target, target.literature_id), ...(target.target.kind === "derived_passage" ? { evidence: evidence.filter((item) => item.target_id === target.id).map((item) => hydrate(item.evidence, item.literature_id)) } : {}) })),
+        tags: tags.filter((tag) => tag.annotation_id === row.id).map(({ annotation_id, ...tag }) => tag),
+        viewerState: { rows: [{ rating: aggregate.viewer_rating, saved: saves.some((item) => item.annotation_id === row.id) }] },
+        rating: { rows: [aggregate] },
+        sourceReply: { rows: replies.filter((reply) => reply.id === row.source_reply_id) }
+      };
+      output.push(await this.#serialize(row, viewer, this.pool, prefetched));
+    }
+    return output;
+  }
+
+  async #serialize(row, viewer, client = this.pool, prefetched = null) {
+    const targets = prefetched?.targets ?? await this.#targets(row.id, client);
+    const tags = prefetched?.tags ?? await this.#tags(row.id, client);
+    const viewerState = prefetched?.viewerState ?? (viewer?.id
       ? await client.query(`SELECT (SELECT rating FROM annotation_ratings WHERE annotation_id = $1 AND user_id = $2) AS rating, EXISTS(SELECT 1 FROM annotation_saves WHERE annotation_id = $1 AND user_id = $2) AS saved`, [row.id, viewer.id])
-      : { rows: [{ rating: null, saved: false }] };
-    const rating = await client.query("SELECT count(*)::int AS count, avg(rating)::double precision AS average FROM annotation_ratings WHERE annotation_id = $1", [row.id]);
-    const sourceReply = row.source_reply_id ? await client.query("SELECT parent_deleted_at, revision FROM annotation_replies WHERE id = $1", [row.source_reply_id]) : { rows: [] };
+      : { rows: [{ rating: null, saved: false }] });
+    const rating = prefetched?.rating ?? await client.query("SELECT count(*)::int AS count, avg(rating)::double precision AS average FROM annotation_ratings WHERE annotation_id = $1", [row.id]);
+    const sourceReply = prefetched?.sourceReply ?? (row.source_reply_id ? await client.query("SELECT parent_deleted_at, revision FROM annotation_replies WHERE id = $1", [row.source_reply_id]) : { rows: [] });
     return {
       author: { id: row.author_id, initials: row.author_initials, name: row.author_name, profile: row.author_profile_snapshot },
       body: row.body,
@@ -1476,7 +1517,30 @@ export class PostgresAnnotationCommunityRepository {
     return result.rows.map((row) => this.#serializeReply(row, viewer));
   }
 
+  async plazaPage(viewer, options = {}) {
+    const { limit, after } = communityPageOptions(options);
+    let cursor = after;
+    const visible = [];
+    while (visible.length <= limit) {
+      const result = await this.pool.query(`SELECT annotations.*, annotations.created_at::text AS cursor_created_at FROM annotations
+        WHERE share_to_plaza AND visibility = 'public' AND withdrawn_at IS NULL
+          AND ($1::timestamptz IS NULL OR (created_at, id) < ($1::timestamptz, $2::text))
+          AND ($3::text IS NULL OR EXISTS(SELECT 1 FROM annotation_targets target WHERE target.annotation_id = annotations.id AND target.literature_id = $3)
+            OR EXISTS(SELECT 1 FROM annotation_targets target JOIN annotation_target_evidence evidence ON evidence.target_id = target.id WHERE target.annotation_id = annotations.id AND evidence.literature_id = $3))
+        ORDER BY created_at DESC, id DESC LIMIT 200`, [cursor?.[0] ?? null, cursor?.[1] ?? null, options.literatureId || null]);
+      for (const row of result.rows) {
+        if (await this.#rootAudience(row)) visible.push(row);
+        if (visible.length > limit) break;
+      }
+      if (visible.length > limit || result.rows.length < 200) break;
+      const last = result.rows.at(-1); cursor = [last.cursor_created_at, last.id];
+    }
+    const selected = visible.slice(0, limit);
+    return { annotations: await this.#serializeMany(selected, viewer), nextCursor: visible.length > limit ? communityPageCursor(selected.at(-1)) : null };
+  }
+
   async plaza(viewer, filters = {}) {
+    if (!filters.query && filters.sort !== "recommended" && !filters.institution && !filters.educationStage && !filters.documentType && !filters.literatureIdentityValue) return (await this.plazaPage(viewer, filters)).annotations;
     const values = [];
     const clauses = ["annotations.share_to_plaza", "annotations.visibility = 'public'", "annotations.withdrawn_at IS NULL"];
     if (filters.institution) {
@@ -1513,7 +1577,7 @@ export class PostgresAnnotationCommunityRepository {
         SELECT 1 FROM annotation_targets target JOIN annotation_target_evidence evidence ON evidence.target_id = target.id WHERE target.annotation_id = annotations.id AND evidence.literature_id = ANY($${idsIndex}::text[])
       )`);
     }
-    const result = await this.pool.query(`SELECT annotations.* FROM annotations WHERE ${clauses.join(" AND ")} ORDER BY annotations.created_at DESC, annotations.id DESC LIMIT 500`, values);
+    const result = await this.pool.query(`SELECT annotations.* FROM annotations WHERE ${clauses.join(" AND ")} ORDER BY annotations.created_at DESC, annotations.id DESC`, values);
     let serialized = [];
     for (const authorizedRow of result.rows) {
       const row = await this.#row(authorizedRow.id);
@@ -1551,10 +1615,10 @@ export class PostgresAnnotationCommunityRepository {
          AND annotation.withdrawn_at IS NULL
          AND (
            (annotation.visibility = 'public' AND annotation.share_to_plaza = true) OR
-           annotation.visibility = 'mutual_followers'
+           (annotation.visibility = 'mutual_followers' AND EXISTS (SELECT 1 FROM user_follows reciprocal WHERE reciprocal.follower_id = annotation.author_id AND reciprocal.followed_id = $1))
          )
        ORDER BY annotation.updated_at DESC, annotation.id DESC
-       LIMIT 100
+
     `, [viewer.id]);
     const annotations = [];
     for (const authorizedRow of result.rows) {
@@ -1562,6 +1626,7 @@ export class PostgresAnnotationCommunityRepository {
       const row = await this.#row(authorizedRow.id);
       if (!this.#sameAudienceState(authorizedRow, row) || row.withdrawn_at || !await this.#rootAudience(row)) continue;
       annotations.push(await this.#serialize(row, viewer));
+      if (annotations.length >= 100) break;
     }
     return annotations;
   }
@@ -1580,7 +1645,9 @@ export class PostgresAnnotationCommunityRepository {
     }
     const organizations = [];
     for (const membership of memberships) {
-      const canModerate = new Set(["owner", "admin"]).has(membership.role);
+      const access = await this.#organizationAccess({ organizationId: membership.organizationId, userId: viewer.id });
+      if (!access.allowed) continue;
+      const canModerate = new Set(["owner", "admin"]).has(access.role);
       const result = await this.pool.query(`SELECT * FROM annotations WHERE organization_id = $1 AND visibility = 'organization' AND ($2::boolean OR withdrawn_at IS NULL) ORDER BY updated_at DESC, id DESC`, [membership.organizationId, canModerate]);
       const annotations = [];
       for (const authorizedRow of result.rows) {

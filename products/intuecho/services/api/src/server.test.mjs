@@ -900,7 +900,7 @@ test("does not serialize untouched PostgreSQL legacy rows as canonical literatur
   };
   const pool = {
     async query(sql) {
-      if (sql.includes("identifier_kind = ANY")) {
+      if (sql.includes("unnest($1::text[], $2::text[])")) {
         return { rows: [{ identifier_kind: "doi", normalized_value: "10.1000/legacy", literature_id: "legacy-postgres" }] };
       }
       if (sql.startsWith("SELECT * FROM literature_records")) return { rows: [legacyRow] };
