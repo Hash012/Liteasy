@@ -1,0 +1,11 @@
+import type { z } from "zod";
+export type CommunityCommandType = "create_annotation" | "create_reply";
+export type CommunityCommand = { protocolVersion: 1; operationId: string; bodyDigest: string };
+export type CommunitySourceReference = { sourceNamespace: "intuecho.annotation" | "intuecho.reply" | "intuecho.literature"; sourceId: string; revision: number; locator?: { kind: "whole_document" | "source_passage"; page?: number; anchorHash?: string } };
+export type CollaborationMetadata = { schemaVersion: 1; kind: "reading_pack" | "question" | "host_summary" | "dissent" | "reflection"; parentPackId?: string; sourceRefs: CommunitySourceReference[]; discussionDueAt?: string };
+export type CommunityCommandReceipt = { operationId: string; operationType: CommunityCommandType; bodyDigest: string; resourceId: string; committedAt: string };
+export type CommunityCommandLookup<Result = unknown> = { status: "not_found" } | { status: "committed"; receipt: CommunityCommandReceipt; available: boolean; result?: Result };
+export declare const communityCommandSchema: z.ZodType<CommunityCommand>;
+export declare const communitySourceReferenceSchema: z.ZodType<CommunitySourceReference>;
+export declare const collaborationMetadataSchema: z.ZodType<CollaborationMetadata>;
+export declare function communityCommandPayload(operationType: CommunityCommandType, targetId: string | null, input: unknown): string;

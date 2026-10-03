@@ -1,3 +1,5 @@
+import { communityCommandSchema, collaborationMetadataSchema } from "./communityCommands.js";
+export * from "./communityCommands.js";
 import { z } from "zod";
 export * from "./communityGovernance.js";
 
@@ -475,6 +477,8 @@ export const annotationContributionSchema = z.object({
 });
 
 export const createAnnotationSchema = z.object({
+  command: communityCommandSchema.optional(),
+  collaboration: collaborationMetadataSchema.optional(),
   notificationIntent: z.literal("reading_task").optional(),
   expectedAuthorProfileRevision: z.number().int().nonnegative().optional(),
   body: z.string().trim().min(1).max(8000),
@@ -485,7 +489,7 @@ export const createAnnotationSchema = z.object({
   targets: z.array(annotationTargetSchema).min(1).max(100),
   visibility: annotationVisibilitySchema
 }).superRefine((value, context) => {
-  if (value.notificationIntent === "reading_task" && (value.visibility !== "organization" || !value.tags.includes("读书包"))) {
+  if (value.notificationIntent === "reading_task" && (value.visibility !== "organization" || !(value.collaboration?.kind === "reading_pack" || value.tags.includes("读书包")))) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["notificationIntent"], message: "阅读任务提醒必须属于组织读书包。" });
   }
   if (value.shareToPlaza && value.visibility !== "public") {
@@ -500,6 +504,8 @@ export const createAnnotationSchema = z.object({
 });
 
 export const updateAnnotationSchema = z.object({
+  expectedRevision: z.number().int().positive().optional(),
+  collaboration: collaborationMetadataSchema.nullable().optional(),
   body: z.string().trim().min(1).max(8000).optional(),
   contribution: annotationContributionSchema.optional(),
   organizationId: z.string().trim().min(1).max(200).nullable().optional(),
@@ -527,6 +533,8 @@ export const annotationParentSnapshotSchema = z.object({
 });
 
 export const createReplySchema = z.object({
+  command: communityCommandSchema.optional(),
+  collaboration: collaborationMetadataSchema.optional(),
   mentionedUserIds: z.array(z.string().trim().min(1).max(200)).max(5).optional(),
   body: z.string().trim().min(1).max(8000),
   expectedParent: annotationParentSnapshotSchema.optional(),
@@ -543,6 +551,8 @@ export const createReplySchema = z.object({
 });
 
 export const updateReplySchema = z.object({
+  expectedRevision: z.number().int().positive().optional(),
+  collaboration: collaborationMetadataSchema.nullable().optional(),
   body: z.string().trim().min(1).max(8000)
 });
 

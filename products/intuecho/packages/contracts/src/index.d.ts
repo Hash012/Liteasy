@@ -1,3 +1,5 @@
+import type { CommunityCommand, CollaborationMetadata } from "./communityCommands.js";
+export * from "./communityCommands.js";
 import type { z } from "zod";
 export * from "./communityGovernance.js";
 
@@ -258,6 +260,8 @@ export type AnnotationParentSnapshot = {
 };
 
 export type CreateReplyInput = {
+  command?: CommunityCommand;
+  collaboration?: CollaborationMetadata;
   mentionedUserIds?: string[];
   expectedParent?: AnnotationParentSnapshot;
   body: string;
@@ -267,6 +271,8 @@ export type CreateReplyInput = {
 };
 
 export type CreateReply = {
+  command?: CommunityCommand;
+  collaboration?: CollaborationMetadata;
   mentionedUserIds?: string[];
   expectedParent?: AnnotationParentSnapshot;
   body: string;
@@ -275,7 +281,7 @@ export type CreateReply = {
   targets: AnnotationTarget[];
 };
 
-export type UpdateReply = { body: string };
+export type UpdateReply = { body: string; expectedRevision?: number; collaboration?: CollaborationMetadata | null };
 
 export type UpdateReplyPublicationInput =
   | { published: false }
@@ -320,6 +326,8 @@ export declare const desktopDraftHandoffSchema: z.ZodType<unknown>;
 export declare const annotationVisibilitySchema: z.ZodType<"private" | "organization" | "mutual_followers" | "public">;
 export declare const literatureMetadataSchema: z.ZodType<LegacyLiteratureReference["metadata"]>;
 export type CreateAnnotationInput = {
+  command?: CommunityCommand;
+  collaboration?: CollaborationMetadata;
   notificationIntent?: "reading_task";
   expectedAuthorProfileRevision?: number;
   body: string;
