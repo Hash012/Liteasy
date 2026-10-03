@@ -125,7 +125,7 @@ function reportResult(row) {
     status: row.status, createdAt: iso(row.created_at), resolvedAt: iso(row.resolved_at), resolutionReason: row.resolution_reason };
 }
 function sameAudience(row, annotation) {
-  return row.visibility === annotation.visibility && (row.organization_id ?? null) === annotation.organizationId && row.revision === annotation.revision && !row.withdrawn_at;
+  return row.visibility === annotation.visibility && (row.organization_id ?? null) === annotation.organizationId && Number(row.revision) === annotation.revision && !row.withdrawn_at;
 }
 function* audit(actorId, action, row, reason, now) {
   yield statement("INSERT INTO community_report_audit(id, actor_id, action, report_id, annotation_id, reason_code, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", [`reportaudit_${randomUUID()}`, actorId, action, row.id, row.annotation_id, reason, now]);
