@@ -10,6 +10,7 @@ import type { CommunityAnnotation, CommunityReply } from "./community.types";
 
 vi.mock("./communityApi", () => ({
   communityApi: {
+    appealTag: vi.fn(async () => ({ appealId: "appeal-1" })),
     createAnnotation: vi.fn(),
     academicProfile: vi.fn(async () => ({ profile: { educationStage: null, institutions: [], revision: 0 } })),
     createReply: vi.fn(),
@@ -548,4 +549,16 @@ test("previews optional author details and binds publication to the reviewed pro
   expect(communityApi.createAnnotation).not.toHaveBeenCalled();
   await user.click(screen.getByRole("button", { name: "确认发送" }));
   expect(communityApi.createAnnotation).toHaveBeenCalledWith(expect.objectContaining({ expectedAuthorProfileRevision: 7 }));
+});
+
+
+test("an author can explicitly resubmit a pending appeal after reviewing its current audience", async () => {
+  const user = userEvent.setup();
+  render(<AnnotationCard annotation={{ ...publicParent, viewerIsAuthor: true, tags: [{ name: "待核查", origin: "platform", state: "appealed" }] }} session={null} onCompose={vi.fn()} />);
+  await user.click(screen.getByRole("button", { name: "补充申诉 待核查" }));
+  expect(screen.getByText(/历史材料不会自动公开/)).toBeInTheDocument();
+  await user.type(screen.getByLabelText("申诉理由"), "This is my updated explicit review material.");
+  expect(communityApi.appealTag).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "提交申诉" }));
+  expect(communityApi.appealTag).toHaveBeenCalledWith(publicParent.id, "待核查", "This is my updated explicit review material.");
 });
