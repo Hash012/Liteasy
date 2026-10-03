@@ -5,7 +5,7 @@ import { assertAccountGate, requiredAccountSuites } from "./account-boundary-pol
 import { accountCommands, evidenceSummary, runCommands } from "./run-account-boundary-suite.mjs";
 
 test("Desktop-only publication, account, and organization changes require service regression", () => {
-  for (const file of ["features/pdf/pdfAnnotationPublicationClient.ts", "features/account/useAccountSession.ts", "controllers/useOrganizationActions.ts", "features/agent/runtime/assetSourceReferences.ts"]) {
+  for (const file of ["features/pdf/pdfAnnotationPublicationClient.ts", "features/account/useAccountSession.ts", "controllers/useOrganizationActions.ts", "features/agent/runtime/assetSourceReferences.ts", "features/models/externalSourcePolicy.ts", "features/local-mcp/localAssetMcp.ts", "features/objects/objectRepository.ts"]) {
     assert.deepEqual(requiredAccountSuites([`products/liteasy/apps/desktop/src/app/${file}`]), { services: true, clients: ["desktop"] });
   }
   assert.deepEqual(requiredAccountSuites(["docs/example.md", "products/liteasy/apps/desktop/src/app/styles/pdf.css"]), { services: false, clients: [] });
