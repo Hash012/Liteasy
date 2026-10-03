@@ -5,7 +5,7 @@ import type {
 } from "../paper-identity/paperIdentity";
 import type { LiteratureRecord } from "../paper-identity/literature.types";
 import type { PublicationActorBinding } from "../forum/publicationActorBinding";
-import type { ForumAnnotationTarget } from "../forum/forum.types";
+import type { ForumAnnotationTarget, ForumAnnotationPublicationOperation, ForumAnnotationPublicationReceipt } from "../forum/forum.types";
 import type {
   DeepDiveTargetV1,
   VisualizationArtifactV1,
@@ -674,6 +674,9 @@ export type ThinReadingAnnotationSyncState =
 export type ThinReadingAnnotation = {
   publication?: {
     actorBinding: PublicationActorBinding;
+    remoteAnnotationId?: string;
+    pendingRetract?: Extract<ForumAnnotationPublicationOperation, { operation: "retract" }>;
+    retractReceipt?: ForumAnnotationPublicationReceipt;
     pendingOperation?: {
       annotationId: string;
       body: string;

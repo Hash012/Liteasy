@@ -45,9 +45,12 @@ import {
   bindThinReadingPublicationIntents,
   createHttpIntuechoSyncAdapter,
   listThinReadingPendingPublicAnnotations,
-  prepareThinReadingPublications
+  listThinReadingPendingRetractions,
+  prepareThinReadingPublications,
+  type ThinReadingPublicationPreview
 } from "../thin-reading/thinReadingIntuechoSyncQueue";
 import { normalizePublicationActorBinding, samePublicationActor, type PublicationActorBinding } from "../forum/publicationActorBinding";
+import { createForumClient } from "../forum/forumClient";
 import {
   createThinReadingBranchRecoverySnapshot,
   validateThinReadingBranchRecoverySnapshot
@@ -143,6 +146,7 @@ type UseArtifactActionsInput = {
   getIntuechoSessionId?: () => string | undefined;
   getActorBinding?: () => PublicationActorBinding | undefined;
   assertCanPublishThinReading?: (document: ThinReadingDocument) => void | Promise<void>;
+  confirmPublication?: (preview: ThinReadingPublicationPreview) => Promise<boolean>;
   getGenerationSettings?: () => import("../settings/settings.types").SettingsState;
   getAssistantLanguage?: () => string;
   getActiveReaderPaper?: () => Paper | null;
@@ -538,6 +542,7 @@ export function useArtifactActions({
   getIntuechoSessionId,
   getActorBinding,
   assertCanPublishThinReading,
+  confirmPublication,
   getGenerationSettings,
   getAssistantLanguage,
   getActiveReaderPaper,
@@ -1683,6 +1688,60 @@ export function useArtifactActions({
     });
   }
 
+  async function syncThinReadingRetractions(
+    artifactId: string,
+    document: Extract<ThinReadingDocument, { version: "liteasy.thin-reading/v2" }>,
+    actor: PublicationActorBinding,
+    endpoint: string
+  ) {
+    const candidates = listThinReadingPendingRetractions(document);
+    if (candidates.some((annotation) => !samePublicationActor(annotation.publication?.actorBinding, actor, { includeGeneration: false }))) {
+      throw new Error("撤回任务缺少原账号归属，请使用原账号核实；本地批注已保留。");
+    }
+    if (candidates.some((annotation) => !annotation.publication?.pendingRetract && !annotation.publication?.remoteAnnotationId && annotation.syncState?.status !== "synced")) {
+      throw new Error("原发布结果尚未核实，无法确认撤回对象；原请求和本地批注已保留。");
+    }
+    if (!confirmPublication) throw new Error("撤回预览暂不可用，未发送请求。");
+    if (!await confirmPublication({ actorBinding: actor, operation: "retract", items: candidates.map((annotation) => ({
+      annotationId: annotation.id, queueKey: `${artifactId}:${annotation.id}`, body: annotation.body, excerpt: annotation.excerpt
+    })) })) return;
+    if (!samePublicationActor(actor, getActorBinding?.())) throw new Error("账号或会话已变化，请重新确认撤回。");
+    const ids = new Set(candidates.map((annotation) => annotation.id));
+    const prepared = { ...document, annotations: document.annotations.map((annotation) => {
+      if (!ids.has(annotation.id)) return annotation;
+      const remoteAnnotationId = annotation.publication?.pendingRetract?.remoteAnnotationId ?? annotation.publication?.remoteAnnotationId ??
+        (annotation.syncState?.status === "synced" ? annotation.syncState.intuechoAnnotationId : "");
+      const pendingRetract = annotation.publication?.pendingRetract ?? {
+        annotationId: annotation.id, queueKey: `${artifactId}:${annotation.id}`, remoteAnnotationId,
+        operation: "retract" as const, revision: 2, updatedAt: annotation.updatedAt
+      };
+      return { ...annotation, publication: { ...annotation.publication, actorBinding: actor, remoteAnnotationId,
+        pendingRetract, outcome: "unknown" as const }, syncState: undefined };
+    }) };
+    await persistThinReadingDocument(artifactId, prepared, { commitMode: "after_save" });
+    if (!samePublicationActor(actor, getActorBinding?.())) throw new Error("账号或会话已变化，撤回任务保留在原账号。");
+    const operations = prepared.annotations.flatMap((annotation) => ids.has(annotation.id) && annotation.publication?.pendingRetract
+      ? [annotation.publication.pendingRetract] : []);
+    const response = await createForumClient({ apiBaseUrl: endpoint, getActorBinding, sessionId: getIntuechoSessionId?.() })
+      .applyAnnotationPublications(operations, actor);
+    if (!samePublicationActor(actor, getActorBinding?.())) throw new Error("账号或会话已变化，撤回结果需由原账号核实。");
+    const current = (artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId) ??
+      artifactStore.getCatalog().find((tab) => tab.artifactId === artifactId))?.thinReadingDocument;
+    if (!current || current.version !== "liteasy.thin-reading/v2") return;
+    const byId = new Map(response.results.map((result) => [result.annotationId, result]));
+    const next = { ...current, annotations: current.annotations.map((annotation) => {
+      const result = byId.get(annotation.id);
+      if (!result || !annotation.publication?.pendingRetract) return annotation;
+      if (result.state === "retracted") return { ...annotation, visibility: "private" as const, syncState: undefined,
+        publication: { actorBinding: actor, remoteAnnotationId: result.remoteAnnotationId, retractReceipt: result } };
+      return { ...annotation, syncState: { status: "failed" as const, lastAttemptAt: new Date().toISOString(),
+        error: result.state === "failed" ? `撤回结果待核实。${result.error}` : "撤回回执无法核实。" } };
+    }) };
+    await persistThinReadingDocument(artifactId, next);
+    const count = response.results.filter((result) => result.state === "retracted").length;
+    onAnalysisHint(`已确认撤回 ${count} 条批注；未确认的任务和本地原件继续保留。`);
+  }
+
   async function syncThinReadingAnnotations(input: {
     artifactId: string;
     document: ThinReadingDocument;
@@ -1696,14 +1755,31 @@ export function useArtifactActions({
     }
     const actor = normalizePublicationActorBinding(getActorBinding?.());
     if (!actor) throw new Error("请先完成账号验证，再同步公开批注。");
+    const current = (artifactStore.getOpenTabs().find((tab) => tab.artifactId === input.artifactId) ??
+      artifactStore.getCatalog().find((tab) => tab.artifactId === input.artifactId))?.thinReadingDocument;
+    const document = { ...input.document, annotations: input.document.annotations.map((annotation) => {
+      const stored = current?.annotations.find((item) => item.id === annotation.id);
+      return !annotation.publication && stored?.publication && stored.updatedAt === annotation.updatedAt &&
+        stored.body === annotation.body && stored.excerpt === annotation.excerpt && stored.visibility === annotation.visibility
+        ? { ...annotation, publication: stored.publication } : annotation;
+    }) };
+    if (listThinReadingPendingRetractions(document).length > 0) {
+      await syncThinReadingRetractions(input.artifactId, document, actor, endpoint);
+      return;
+    }
     if (!assertCanPublishThinReading) throw new Error("无法确认薄读来源是否允许公开，批注已保留在本地。");
-    await assertCanPublishThinReading(input.document);
+    await assertCanPublishThinReading(document);
     if (!samePublicationActor(actor, getActorBinding?.())) throw new Error("账号或会话已变化，请重新确认同步。");
-    const prepared = prepareThinReadingPublications(input.document, actor, { resumePublication: true });
+    const prepared = prepareThinReadingPublications(document, actor, { resumePublication: true });
     const pending = listThinReadingPendingPublicAnnotations(prepared);
     if (pending.length === 0) {
       return;
     }
+    if (!confirmPublication) throw new Error("发布预览暂不可用，未发送请求。");
+    if (!await confirmPublication({ actorBinding: actor, operation: "publish", items: pending.map((item) => ({
+      annotationId: item.annotationId, queueKey: item.queueKey, body: item.pendingOperation?.body ?? item.body, excerpt: item.excerpt
+    })) })) return;
+    if (!samePublicationActor(actor, getActorBinding?.())) throw new Error("账号或会话已变化，请重新确认发布。");
     // This entry is invoked only by the explicit sync action. Persist the exact
     // original payload, including a prior unknown result, before retrying it.
     await persistThinReadingDocument(input.artifactId, prepared as Extract<ThinReadingDocument, { version: "liteasy.thin-reading/v2" }>, { commitMode: "after_save" });
@@ -1714,14 +1790,14 @@ export function useArtifactActions({
       sessionId: getIntuechoSessionId?.()
     }).syncPendingAnnotations(pending);
     if (!samePublicationActor(actor, getActorBinding?.())) throw new Error("账号或会话已变化，同步结果需由原账号核实。");
-    const current = artifactStore.getOpenTabs().find((tab) => tab.artifactId === input.artifactId) ??
+    const currentTab = artifactStore.getOpenTabs().find((tab) => tab.artifactId === input.artifactId) ??
       artifactStore.getCatalog().find((tab) => tab.artifactId === input.artifactId);
-    if (!current || current.type !== "thin_reading" || !current.thinReadingDocument) {
+    if (!currentTab || currentTab.type !== "thin_reading" || !currentTab.thinReadingDocument) {
       return;
     }
     const expectedUpdatedAtByAnnotationId = new Map(pending.map((item) => [item.annotationId, item.pendingOperation?.updatedAt ?? item.updatedAt]));
     const nextDocument = applyThinReadingAnnotationSyncResults(
-      current.thinReadingDocument,
+      currentTab.thinReadingDocument,
       results,
       new Date().toISOString(),
       expectedUpdatedAtByAnnotationId

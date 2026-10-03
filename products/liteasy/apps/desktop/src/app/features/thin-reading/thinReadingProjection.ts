@@ -1048,9 +1048,10 @@ export function setThinReadingAnnotationPublic(
 ): ThinReadingDocument {
   const annotations = document.annotations.map((annotation) =>
     annotation.id === annotationId
+      && !(publicRequested && (annotation.publication?.pendingRetract || annotation.publication?.retractReceipt))
       ? {
           ...annotation,
-          syncState: publicRequested ? undefined : undefined,
+          syncState: publicRequested ? undefined : annotation.syncState,
           updatedAt: new Date().toISOString(),
           visibility: publicRequested ? "pending_public" as const : "private" as const
         }
@@ -1094,7 +1095,7 @@ export function applyThinReadingAnnotationSyncResults(
         : annotation;
     }
     return result.status === "synced"
-      ? { ...annotation, ...(annotation.publication ? { publication: { actorBinding: annotation.publication.actorBinding } } : {}),
+      ? { ...annotation, ...(annotation.publication ? { publication: { actorBinding: annotation.publication.actorBinding, remoteAnnotationId: result.intuechoAnnotationId } } : {}),
           syncState: { intuechoAnnotationId: result.intuechoAnnotationId, status: "synced" as const, syncedAt: result.syncedAt } }
       : { ...annotation, syncState: { error: result.error, lastAttemptAt: attemptedAt, status: "failed" as const } };
   });
@@ -1109,7 +1110,9 @@ export function deleteThinReadingAnnotation(
   document: ThinReadingDocument,
   annotationId: string
 ): ThinReadingDocument {
-  const annotations = document.annotations.filter((annotation) => annotation.id !== annotationId);
+  const annotations = document.annotations.filter((annotation) => annotation.id !== annotationId ||
+    (!annotation.publication?.retractReceipt && Boolean(annotation.publication?.pendingOperation ||
+      annotation.publication?.pendingRetract || annotation.publication?.remoteAnnotationId || annotation.syncState?.status === "synced")));
   return freezeDocument({
     ...document,
     annotations,

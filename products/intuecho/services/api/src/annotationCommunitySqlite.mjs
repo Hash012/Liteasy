@@ -854,6 +854,9 @@ export class SqliteAnnotationCommunityRepository {
   syncDesktopAnnotations(author, items) {
     const syncedAt = new Date().toISOString();
     return this.db.transaction(() => items.map((item) => {
+      const publication = this.db.prepare("SELECT state FROM desktop_annotation_publications_v2 WHERE owner_id = ? AND queue_key = ?").get(author.id, item.queueKey);
+      if (publication?.state === "retracted") return { annotationId: item.annotationId, queueKey: item.queueKey,
+        status: "failed", error: "ANNOTATION_PUBLICATION_RETRACTED" };
       const prior = this.db.prepare("SELECT * FROM desktop_annotation_syncs_v2 WHERE owner_id = ? AND queue_key = ?").get(author.id, item.queueKey);
       const id = prior?.annotation_id ?? `annotation_${randomUUID()}`;
       if (!prior) {
@@ -957,7 +960,16 @@ export class SqliteAnnotationCommunityRepository {
   }
 
   #retractDesktopPublication(author, operation, operationDigest, prior) {
-    if (!prior) return this.#publicationFailure(operation, "ANNOTATION_PUBLICATION_NOT_FOUND");
+    const legacy = !prior
+      ? this.db.prepare("SELECT * FROM desktop_annotation_syncs_v2 WHERE owner_id = ? AND queue_key = ?").get(author.id, operation.queueKey)
+      : null;
+    if (!prior && (!legacy || legacy.source_annotation_id !== operation.annotationId)) {
+      return this.#publicationFailure(operation, "ANNOTATION_PUBLICATION_NOT_FOUND");
+    }
+    if (legacy && Date.parse(operation.updatedAt) < Date.parse(legacy.source_updated_at)) {
+      return this.#publicationFailure(operation, "STALE_ANNOTATION_PUBLICATION");
+    }
+    prior ??= legacy;
     if (prior.annotation_id !== operation.remoteAnnotationId) return this.#publicationFailure(operation, "REMOTE_ANNOTATION_MISMATCH");
     const annotation = this.db.prepare("SELECT revision FROM annotations_v2 WHERE id = ? AND author_id = ?").get(prior.annotation_id, author.id);
     if (!annotation) return this.#publicationFailure(operation, "REMOTE_ANNOTATION_NOT_FOUND");
@@ -965,8 +977,13 @@ export class SqliteAnnotationCommunityRepository {
     const remoteRevision = Number(annotation.revision) + 1;
     this.db.prepare("UPDATE annotations_v2 SET visibility = 'private', organization_id = NULL, share_to_plaza = 0, revision = ?, updated_at = ? WHERE id = ?")
       .run(remoteRevision, operation.updatedAt, prior.annotation_id);
-    this.db.prepare("UPDATE desktop_annotation_publications_v2 SET source_revision = ?, source_updated_at = ?, operation_digest = ?, state = 'retracted', remote_revision = ?, synced_at = ? WHERE owner_id = ? AND queue_key = ?")
-      .run(operation.revision, operation.updatedAt, operationDigest, remoteRevision, now, author.id, operation.queueKey);
+    if (legacy) {
+      this.db.prepare("INSERT INTO desktop_annotation_publications_v2(owner_id, queue_key, source_annotation_id, annotation_id, source_revision, source_updated_at, operation_digest, state, remote_revision, synced_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'retracted', ?, ?)")
+        .run(author.id, operation.queueKey, operation.annotationId, prior.annotation_id, operation.revision, operation.updatedAt, operationDigest, remoteRevision, now);
+    } else {
+      this.db.prepare("UPDATE desktop_annotation_publications_v2 SET source_revision = ?, source_updated_at = ?, operation_digest = ?, state = 'retracted', remote_revision = ?, synced_at = ? WHERE owner_id = ? AND queue_key = ?")
+        .run(operation.revision, operation.updatedAt, operationDigest, remoteRevision, now, author.id, operation.queueKey);
+    }
     return this.#publicationResult(operation, { annotation_id: prior.annotation_id, remote_revision: remoteRevision, state: "retracted", synced_at: now });
   }
 

@@ -435,6 +435,12 @@ export class PostgresAnnotationCommunityRepository {
       async (client) => {
         const results = [];
         for (const item of items) {
+          const publication = await client.query("SELECT state FROM desktop_annotation_publications WHERE owner_id = $1 AND queue_key = $2 FOR UPDATE", [author.id, item.queueKey]);
+          if (publication.rows[0]?.state === "retracted") {
+            results.push({ annotationId: item.annotationId, queueKey: item.queueKey,
+              status: "failed", error: "ANNOTATION_PUBLICATION_RETRACTED" });
+            continue;
+          }
           const priorResult = await client.query("SELECT * FROM desktop_annotation_syncs WHERE owner_id = $1 AND queue_key = $2 FOR UPDATE", [author.id, item.queueKey]);
           const prior = priorResult.rows[0];
           const id = prior?.annotation_id ?? `annotation_${randomUUID()}`;
@@ -564,14 +570,29 @@ export class PostgresAnnotationCommunityRepository {
   }
 
   async #retractDesktopPublication(client, author, operation, operationDigest, prior) {
-    if (!prior) return this.#publicationFailure(operation, "ANNOTATION_PUBLICATION_NOT_FOUND");
+    const legacy = !prior ? (await client.query(
+      "SELECT * FROM desktop_annotation_syncs WHERE owner_id = $1 AND queue_key = $2 FOR UPDATE",
+      [author.id, operation.queueKey]
+    )).rows[0] : null;
+    if (!prior && (!legacy || legacy.source_annotation_id !== operation.annotationId)) {
+      return this.#publicationFailure(operation, "ANNOTATION_PUBLICATION_NOT_FOUND");
+    }
+    if (legacy && Date.parse(operation.updatedAt) < new Date(legacy.source_updated_at).getTime()) {
+      return this.#publicationFailure(operation, "STALE_ANNOTATION_PUBLICATION");
+    }
+    prior ??= legacy;
     if (prior.annotation_id !== operation.remoteAnnotationId) return this.#publicationFailure(operation, "REMOTE_ANNOTATION_MISMATCH");
     const annotation = await client.query("SELECT revision FROM annotations WHERE id = $1 AND author_id = $2 FOR UPDATE", [prior.annotation_id, author.id]);
     if (!annotation.rows[0]) return this.#publicationFailure(operation, "REMOTE_ANNOTATION_NOT_FOUND");
     const remoteRevision = Number(annotation.rows[0].revision) + 1;
     await client.query("UPDATE annotations SET visibility = 'private', organization_id = NULL, share_to_plaza = false, revision = $2, updated_at = $3 WHERE id = $1", [prior.annotation_id, remoteRevision, operation.updatedAt]);
     const syncedAt = new Date().toISOString();
-    await client.query("UPDATE desktop_annotation_publications SET source_revision = $3, source_updated_at = $4, operation_digest = $5, state = 'retracted', remote_revision = $6, synced_at = $7 WHERE owner_id = $1 AND queue_key = $2", [author.id, operation.queueKey, operation.revision, operation.updatedAt, operationDigest, remoteRevision, syncedAt]);
+    if (legacy) {
+      await client.query("INSERT INTO desktop_annotation_publications(owner_id, queue_key, source_annotation_id, annotation_id, source_revision, source_updated_at, operation_digest, state, remote_revision, synced_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'retracted', $8, $9)",
+        [author.id, operation.queueKey, operation.annotationId, prior.annotation_id, operation.revision, operation.updatedAt, operationDigest, remoteRevision, syncedAt]);
+    } else {
+      await client.query("UPDATE desktop_annotation_publications SET source_revision = $3, source_updated_at = $4, operation_digest = $5, state = 'retracted', remote_revision = $6, synced_at = $7 WHERE owner_id = $1 AND queue_key = $2", [author.id, operation.queueKey, operation.revision, operation.updatedAt, operationDigest, remoteRevision, syncedAt]);
+    }
     return this.#publicationResult(operation, { annotation_id: prior.annotation_id, remote_revision: remoteRevision, state: "retracted", synced_at: syncedAt });
   }
 

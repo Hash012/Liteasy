@@ -1548,6 +1548,23 @@ describe("ThinReadingTab", () => {
     }));
   });
 
+  test("hands an explicit private toggle to withdrawal and preserves the linked original", async () => {
+    const root = makeDocument();
+    const added = addThinReadingAnnotation(root, { body: "Synthetic published note", excerpt: "self-attention",
+      nodeId: root.rootNodeId, visibility: "pending_public" });
+    const document = { ...added, annotations: added.annotations.map((annotation) => ({ ...annotation,
+      syncState: { status: "synced" as const, intuechoAnnotationId: "remote-1", syncedAt: "2026-10-03T00:00:00.000Z" }
+    })) };
+    const sync = vi.fn(async () => undefined);
+    renderTab(document, vi.fn(), undefined, sync);
+    const entry = screen.getByText("Synthetic published note").closest("article")!;
+    expect(within(entry).getByRole("button", { name: "删除" })).toBeDisabled();
+    fireEvent.click(within(entry).getByRole("checkbox", { name: "公开" }));
+    await waitFor(() => expect(sync).toHaveBeenCalledWith(expect.objectContaining({ document: expect.objectContaining({
+      annotations: [expect.objectContaining({ visibility: "private", syncState: expect.objectContaining({ intuechoAnnotationId: "remote-1" }) })]
+    }) })));
+  });
+
   test("does not add a pending-review marker to legacy unsupported summary sentences", () => {
     const fixture = createThinReadingFixture();
     const unsupportedSeed: ThinReadingNodeSeed = {

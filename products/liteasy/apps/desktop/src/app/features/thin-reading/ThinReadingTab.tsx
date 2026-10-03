@@ -30,7 +30,7 @@ import {
   type PageGraphAnchorView
 } from "../associations/AssociationGraphLayer";
 import { useAnchorRects } from "../associations/useAnchorRects";
-import { listThinReadingPendingPublicAnnotations } from "./thinReadingIntuechoSyncQueue";
+import { listThinReadingPendingPublicAnnotations, listThinReadingPendingRetractions } from "./thinReadingIntuechoSyncQueue";
 import { getThinReadingPaperTypeLabel } from "./thinReadingPromptRegistry";
 import { getThinReadingUiCopy } from "./thinReadingI18n";
 import { MermaidPreview } from "../mermaid/MermaidPreview";
@@ -445,6 +445,7 @@ export function ThinReadingTab({
     () => listThinReadingPendingPublicAnnotations(document),
     [document]
   );
+  const pendingRetractions = useMemo(() => listThinReadingPendingRetractions(document), [document]);
   const canGoBack = Boolean(parent);
   const paperTypeLabel = activeNode.paperType
     ? getThinReadingPaperTypeLabel(activeNode.paperType, document.targetLanguage)
@@ -554,7 +555,8 @@ export function ThinReadingTab({
 
   function updateAndSyncPublic(nextDocument: ThinReadingDocument) {
     update(nextDocument);
-    if (!onSyncIntuecho || listThinReadingPendingPublicAnnotations(nextDocument).length === 0) return;
+    if (!onSyncIntuecho || (listThinReadingPendingPublicAnnotations(nextDocument).length === 0 &&
+      listThinReadingPendingRetractions(nextDocument).length === 0)) return;
     setSyncingIntuecho(true);
     void onSyncIntuecho({ artifactId, document: nextDocument })
       .catch((error) => setGenerationError(error instanceof Error ? error.message : String(error)))
@@ -1371,13 +1373,15 @@ export function ThinReadingTab({
                   <>
                     <p>{annotation.body}</p>
                     {annotation.visibility === "pending_public" ? <span className="thin-reading__pending">{labels.pendingSync}</span> : null}
-                    {annotation.syncState?.status === "synced" ? <span className="thin-reading__pending">{labels.synced}</span> : null}
+                    {annotation.syncState?.status === "synced" && annotation.visibility === "pending_public" ? <span className="thin-reading__pending">{labels.synced}</span> : null}
+                    {annotation.publication?.retractReceipt ? <span className="thin-reading__pending">{labels.retracted}</span> :
+                      pendingRetractions.some((item) => item.id === annotation.id) ? <span className="thin-reading__pending">{labels.retractionPending}</span> : null}
                     {annotation.syncState?.status === "failed" ? <span className="thin-reading__pending">{labels.syncFailed}</span> : null}
                     <div className="thin-reading__annotation-actions">
                       <label>
                         <input
                           checked={annotation.visibility === "pending_public"}
-                          disabled={syncingIntuecho}
+                          disabled={syncingIntuecho || Boolean(annotation.publication?.pendingRetract || annotation.publication?.retractReceipt)}
                           onChange={(event) => updateAndSyncPublic(setThinReadingAnnotationPublic(document, annotation.id, event.currentTarget.checked))}
                           type="checkbox"
                         />
@@ -1387,15 +1391,17 @@ export function ThinReadingTab({
                         setEditingAnnotationId(annotation.id);
                         setEditingAnnotationBody(annotation.body);
                       }} type="button">{labels.edit}</button>
-                      <button disabled={syncingIntuecho} onClick={() => update(deleteThinReadingAnnotation(document, annotation.id))} type="button">{labels.delete}</button>
+                      <button disabled={syncingIntuecho || (!annotation.publication?.retractReceipt && Boolean(annotation.publication?.pendingOperation ||
+                        annotation.publication?.pendingRetract || annotation.publication?.remoteAnnotationId || annotation.syncState?.status === "synced"))}
+                        onClick={() => update(deleteThinReadingAnnotation(document, annotation.id))} type="button">{labels.delete}</button>
                     </div>
                   </>
                 )}
               </article>
             )) : <p className="thin-reading__annotation-empty">{labels.annotationEmpty}</p>}
-            {pendingPublicQueue.length > 0 ? (
+            {pendingPublicQueue.length + pendingRetractions.length > 0 ? (
               <div className="thin-reading__pending-summary">
-                <span>{labels.pendingSync} · {pendingPublicQueue.length}</span>
+                <span>{pendingRetractions.length ? labels.retractionPending : labels.pendingSync} · {pendingPublicQueue.length + pendingRetractions.length}</span>
                 <button disabled={!onSyncIntuecho || syncingIntuecho} onClick={() => void syncIntuecho()} type="button">{labels.syncNow}</button>
               </div>
             ) : null}

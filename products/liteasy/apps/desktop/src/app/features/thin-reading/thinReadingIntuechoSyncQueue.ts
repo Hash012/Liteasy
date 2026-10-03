@@ -12,6 +12,17 @@ import type {
 export const THIN_READING_INTUECHO_PENDING_LABEL = "等待 Intuecho 同步";
 
 export type ThinReadingIntuechoQueueStatus = "pending_public";
+export type ThinReadingPublicationPreview = {
+  actorBinding: PublicationActorBinding;
+  operation: "publish" | "retract";
+  items: readonly { annotationId: string; queueKey: string; body: string; excerpt: string }[];
+};
+
+export function listThinReadingPendingRetractions(document: ThinReadingDocument) {
+  return document.annotations.filter((annotation) => annotation.visibility === "private" &&
+    !annotation.publication?.retractReceipt && Boolean(annotation.publication?.pendingRetract ||
+      annotation.publication?.pendingOperation || annotation.publication?.remoteAnnotationId || annotation.syncState?.status === "synced"));
+}
 
 export type ThinReadingIntuechoAnnotationQueueItem = {
   actorBinding?: PublicationActorBinding;
@@ -330,7 +341,8 @@ function queueItemForAnnotation(
   annotation: ThinReadingAnnotation
 ): ThinReadingIntuechoAnnotationQueueItem | null {
   const node = document.nodes[annotation.nodeId];
-  if (!node || annotation.visibility !== "pending_public" || annotation.syncState?.status === "synced") {
+  if (!node || annotation.visibility !== "pending_public" || annotation.syncState?.status === "synced" ||
+    annotation.publication?.pendingRetract || annotation.publication?.retractReceipt) {
     return null;
   }
   const scope = freezeScope(node.recommendationScope);

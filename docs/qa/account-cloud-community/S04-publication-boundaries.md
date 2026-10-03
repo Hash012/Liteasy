@@ -55,13 +55,39 @@ source preflight; missing source verification fails closed.
 | General annotation delete / withdraw | Existing owned lifecycle route, separate from this desktop queue slice | Existing independent projection and moderation rules remain | No global remote erasure claim |
 | Governance hide / audience narrowing | Existing server governance checks and reply scope locks remain | No new privilege to promote another author's private reply | Search, recommendation, notification and AI behavior need their own integration evidence |
 | Organization departure / revocation | Existing membership revalidation and explicit author exceptions remain | Does not grant access to other organization material; ambiguous original-thread visibility stays a D02 decision | No removal of the user's own local originals; previously downloaded copies are not claimed recovered |
-| Thin-reading private toggle | Legacy route currently supports upsert; a local private toggle alone is not remote withdrawal | No remote cascade is inferred | A remote withdrawal integration remains required; see the follow-up S09 slice |
+| Thin-reading private toggle | Explicit confirmed withdrawal adopts the exact owned legacy mapping into the existing PDF operation ledger and makes that community annotation private | No reply deletion or derived-copy cascade | Unknown results retain their exact actor-bound retract operation; successful receipts permit local deletion, while republishing that legacy item remains on hold |
 | Account deletion | Existing product lifecycle and publication account-deletion lock remain | No additional cascade added here | Queue work cannot move into another actor's session |
 
 There is no read-only remote operation lookup endpoint in this slice. For a known
 binding, reconciliation replays the exact existing operation. Unknown legacy
 ownership cannot be established by replay under a guessed account. Organization
 content is not replayed through an upsert merely to discover an ID for withdrawal.
+For thin-reading, a pending create with no known remote identity remains held when
+the user requests withdrawal. The original frozen request and local note remain;
+the UI does not call that withdrawn. Known remote identities use the existing
+desktop publication route, preserving its audience and owner validation.
+
+## S09 withdrawal bridge validation
+
+The bridge checks owner, queue key, source annotation ID and remote ID in the
+existing transaction. Concurrent exact retracts return the same receipt. The
+legacy sync endpoint rejects both old and newer upserts once the publication
+ledger is retracted, so that versionless endpoint cannot resurrect the item.
+Withdrawn originals remain local, and replies are preserved.
+
+`thinReadingWithdrawal.test.mjs` exercises real SQLite transactions: three tests
+failed before the bridge, then four passed. The new scoped
+`scripts/verify-thin-reading-withdrawal.mjs` uses the existing strict PostgreSQL
+test guard and performs no schema reset. It passed against the newly created
+isolated PostgreSQL database with migration 024: exact ownership, actual rollback
+after an injected ledger write failure, concurrent replay, legacy no-resurrection,
+and reply preservation. It removes only its random synthetic fixtures afterwards.
+This is local PostgreSQL integration evidence, not a production acceptance claim.
+
+Thin-reading dispatch also requires an explicit preview callback containing only
+the pending bodies, excerpts, verified actor and action. The saved envelope from
+the explicit create action is reused when the UI immediately requests sync;
+that path does not assign an actor to a recovered legacy task.
 
 ## Validation level
 
