@@ -4,7 +4,7 @@
 
 - Review baseline: `3188438c95dfc7f73b5ccf20a05ef69391e646cf`.
 - Desktop implementation commits, in order: `269c02fa`, `0195733d`, `6a81e61c`.
-- Final Desktop code candidate: `6a81e61c`. Root integration candidate is tracked separately; these results do not replace its final SHA checks.
+- Original Desktop code candidate: `6a81e61c`; integration follow-up: `ccc2158f` (see below). Root integration candidate is tracked separately; these results do not replace its final SHA checks.
 - Worktree: `Liteasy-review-desktop-boundaries`, branch `feat/review-desktop-boundaries`.
 - Environment: Linux x86_64; Node `v22.13.1` through `/home/tjm/.cache/ms-playwright-go/1.50.1` in `PATH`; npm `9.2.0`; Vitest `3.2.4`; JSDOM and fake-indexeddb.
 - Dependencies installed independently with `npm ci --ignore-scripts`; no dependency symlink, lockfile change, version change, Rust change, or shared schema change.
@@ -127,3 +127,25 @@ Commands ran from `products/liteasy/apps/desktop` with the Node path above:
 No new schema version, migration, dependency, role, invitation policy, public-sharing policy or payment policy is introduced. Existing object schema data stays readable; new provenance lives in existing repository metadata and source refs. Existing legacy indexes fall back to their stored object when reconstructing lineage. Old confirmations/grants without trustworthy expiry/session data are intentionally not silently reapproved.
 
 A rollback that restores the old external read/write paths can reintroduce the reproduced provenance bypass. Prefer a forward correction or disable the affected external tool entry while keeping local reading available. Preserve object revisions, source metadata, source refs, drafts and operation receipts; do not delete them to recover compatibility. Existing committed local writes remain writes even when their later UI refresh or account callback is cancelled. The new space view only projects state and can be removed without rewriting the underlying upload/publication/notification records.
+
+
+## Integration follow-up: strict receipts and security assertions
+
+The root full-suite run found three regressions; all three were reproduced locally before correction. Commit `ccc2158f` fixes the real receipt contract and updates the two obsolete security assertions without skipping tests or weakening the boundary.
+
+- `researchTemplates.ts` retains strict output validation and now accepts the actual optional `sourceResolution: "unavailable"` field plus the existing optional cloud `documentId` in source references. It does not discard provenance to pass validation. The real workflow regression now runs both unresolved and organization source cases, checks successful local output, pinned source revision, preservation of later user edits, and rejection by the external-model asset boundary. The organization fixture also exercises the actual library-reference shape with document ID.
+- `executionJournal.test.ts` asserts the complete ordered trace metadata while proving that synthetic private body text and a synthetic API key are absent from the general journal.
+- `capabilityToolAdapter.test.ts` asserts that the five specific unsupported cloud/bulk/delete actions are absent from callable tools, remain discoverable with `available: false` and a reason, and that a real local layout action remains available. Existing input validation, approval and execution assertions remain.
+
+Executed on Linux/Node as above:
+
+```sh
+npx vitest run src/tests/researchTemplates.test.ts src/tests/executionJournal.test.ts src/tests/capabilityToolAdapter.test.ts
+# Before correction: 3 failed, 13 passed. After correction: 17 passed.
+npx vitest run src/tests/assetSourceReferences.test.ts src/tests/extensionStudio.test.ts src/tests/durableWorkflows.test.ts src/tests/researchTemplateViews.test.tsx
+# 20 passed.
+npx tsc --noEmit
+# exit 0.
+```
+
+`git diff --check` also passed. No lock/version/shared-schema artifact changed. Per coordination, the root reruns the complete suite, smoke/build and clean contracts on its final integrated SHA; the earlier build/contracts entries above are not relabeled as this follow-up's results. Native/IdP/production layers remain **not_run**.
