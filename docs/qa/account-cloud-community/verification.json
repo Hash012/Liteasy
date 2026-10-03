@@ -1,0 +1,381 @@
+{
+  "format": "liteasy.social-verification/v1",
+  "head": "0d3e45bdd0adddf2d1dfac57283070280ed9e2b8",
+  "branch": "feat/account-cloud-community",
+  "environment": {
+    "os": "Ubuntu 24.04 on WSL2",
+    "architecture": "x86_64",
+    "node": "22.13.1 (repository expects 22.23.2)",
+    "rust": "1.98.0 (Windows CI expects 1.98.1)",
+    "idp": "not_run; no real identity provider used",
+    "databases": [],
+    "isolation_verified": false
+  },
+  "product_decisions": {
+    "D01": "hold",
+    "D02": "hold",
+    "D03": "hold",
+    "D04": "hold",
+    "D05": "hold",
+    "D06": "hold",
+    "D07": "hold",
+    "D08": "hold"
+  },
+  "results": [
+    {
+      "scenario_id": "AC01",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC02",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC03",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC04",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC05",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC06",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC07",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC08",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC09",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC10",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC11",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC12",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC13",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC14",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC15",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC16",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC17",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC18",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC19",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC20",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC21",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC22",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC23",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC24",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC25",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC26",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC27",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC28",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC29",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC30",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC31",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC32",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC33",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC34",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC35",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC36",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC37",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC38",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC39",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC40",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC41",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC42",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC43",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "AC44",
+      "status": "not_run",
+      "command": null,
+      "exit_code": null,
+      "evidence_paths": [],
+      "notes": ""
+    }
+  ],
+  "deploy_status": "not_authorized",
+  "known_risks": [],
+  "baseline_note": "Initial S00 inventory; statuses apply only to this account/cloud/community package, not previous desktop acceptance."
+}

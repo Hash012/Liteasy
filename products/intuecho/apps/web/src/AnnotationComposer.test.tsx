@@ -119,6 +119,42 @@ beforeEach(() => {
 });
 afterEach(() => cleanup());
 
+
+test("requires an audience for a new draft before any upload", async () => {
+  const user = userEvent.setup();
+  render(<AnnotationComposer context={{ draft: {
+    body: "Synthetic private research question",
+    tags: [],
+    targets: [{ kind: "whole_document", literature: { literatureId: "literature-parent" } }],
+    // An older/local draft has no approved audience yet.
+    visibility: undefined as never, shareToPlaza: undefined as never
+  } }} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+  expect(screen.getByLabelText("可见范围")).toHaveValue("");
+  expect(screen.getByRole("button", { name: "发布" })).toBeDisabled();
+  expect(communityApi.createAnnotation).not.toHaveBeenCalled();
+  await user.selectOptions(screen.getByLabelText("可见范围"), "private");
+  await user.click(screen.getByRole("button", { name: "发布" }));
+  expect(communityApi.createAnnotation).toHaveBeenCalledWith(expect.objectContaining({
+    body: "Synthetic private research question", visibility: "private", shareToPlaza: false
+  }));
+});
+
+test("does not opt an explicitly public new draft into the plaza", () => {
+  render(<AnnotationComposer context={{ draft: {
+    body: "Synthetic public summary", tags: [], visibility: "public", shareToPlaza: undefined as never,
+    targets: [{ kind: "whole_document", literature: { literatureId: "literature-parent" } }]
+  } }} onClose={vi.fn()} onSaved={vi.fn()} />);
+  expect(screen.getByLabelText("可见范围")).toHaveValue("public");
+  expect(screen.getByRole("checkbox", { name: "发布到广场" })).not.toBeChecked();
+});
+
+test("preserves an existing public annotation audience and plaza choice", () => {
+  render(<AnnotationComposer context={{ edit: publicParent }} onClose={vi.fn()} onSaved={vi.fn()} />);
+  expect(screen.getByLabelText("可见范围")).toHaveValue("public");
+  expect(screen.getByRole("checkbox", { name: "发布到广场" })).toBeChecked();
+});
+
 test("keeps a reply pure until independent publication is explicitly enabled", async () => {
   const user = userEvent.setup();
   render(<AnnotationComposer context={{ replyTo: publicParent }} onClose={vi.fn()} onSaved={vi.fn()} />);

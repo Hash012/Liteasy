@@ -32,9 +32,9 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
   const [publicationCanonicalizing, setPublicationCanonicalizing] = useState(false);
   const [replyTargetsReady, setReplyTargetsReady] = useState(false);
   const [targets, setTargets] = useState<AnnotationTarget[]>(original?.targets ?? draft?.targets ?? []);
-  const [visibility, setVisibility] = useState<AnnotationVisibility>(original?.visibility ?? draft?.visibility ?? parent?.visibility ?? "public");
+  const [visibility, setVisibility] = useState<AnnotationVisibility | "">(original?.visibility ?? draft?.visibility ?? parent?.visibility ?? "");
   const [organizationId, setOrganizationId] = useState(original?.organizationId ?? draft?.organizationId ?? parent?.organizationId ?? "");
-  const [shareToPlaza, setShareToPlaza] = useState(original?.shareToPlaza ?? draft?.shareToPlaza ?? true);
+  const [shareToPlaza, setShareToPlaza] = useState(original?.shareToPlaza ?? draft?.shareToPlaza ?? false);
   const [status, setStatus] = useState("");
   const [pending, setPending] = useState(false);
   const publicationAttempt = useRef(0);
@@ -92,6 +92,11 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
       setPending(false);
       return;
     }
+    if (!visibility) {
+      setStatus("请选择可见范围；选择前草稿只保留在本机。");
+      setPending(false);
+      return;
+    }
     const input: CreateAnnotationInput = {
       body,
       ...(visibility === "organization" ? { organizationId } : {}),
@@ -127,7 +132,7 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
         {!isReplyEdit && parent && <ReplyPublicationFields disabled={publicationCanonicalizing} publishAsAnnotation={publishAsAnnotation} targets={targets} visibility={parent.visibility} onEnabledChange={setReplyPublication} onTargetsChange={updateReplyTargets} />}
         {!isReplyEdit && !parent && <>
           <div className="visibility-row">
-            <label>可见范围<select value={visibility} onChange={(event) => { const next = event.target.value as AnnotationVisibility; setVisibility(next); if (next !== "public") setShareToPlaza(false); }}><option value="public">公开</option><option value="private">仅自己</option><option value="organization">指定组织</option><option value="mutual_followers">仅互相关注</option></select></label>
+            <label>可见范围<select value={visibility} onChange={(event) => { const next = event.target.value as AnnotationVisibility | ""; setVisibility(next); if (next !== "public") setShareToPlaza(false); }}><option value="" disabled>请选择接收范围</option><option value="public">公开</option><option value="private">仅自己</option><option value="organization">指定组织</option><option value="mutual_followers">仅互相关注</option></select></label>
             {visibility === "organization" && <label>组织 ID<Input value={organizationId} onChange={(_, data) => setOrganizationId(data.value)} required /></label>}
           </div>
           {visibility === "public" && <Checkbox checked={shareToPlaza} label="发布到广场" onChange={(_, data) => setShareToPlaza(Boolean(data.checked))} />}
@@ -135,7 +140,7 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
         </>}
         {!isReplyEdit && (!parent || publishAsAnnotation) && <div className="tag-editor-v2"><label>标签</label><div className="tag-row">{tags.map((tag) => <button type="button" key={tag} onClick={() => setTags(tags.filter((item) => item !== tag))}>#{tag}<Dismiss20Regular /></button>)}</div><div className="tag-input"><Input value={tagInput} onChange={(_, data) => setTagInput(data.value)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === ",") { event.preventDefault(); addTag(); } }} /><Button type="button" icon={<Add20Regular />} onClick={addTag}>添加</Button></div></div>}
         {status && <p className="form-error" role="alert">{status}</p>}
-        <div className="drawer-actions"><Button type="button" appearance="secondary" onClick={onClose}>取消</Button><Button type="submit" appearance="primary" icon={<Send20Regular />} disabled={pending || publicationCanonicalizing || !body.trim() || (Boolean(parent) && publishAsAnnotation && !replyTargetsReady) || (!parent && !isReplyEdit && targets.length === 0)}>{pending ? "正在保存" : original ? "保存修改" : "发布"}</Button></div>
+        <div className="drawer-actions"><Button type="button" appearance="secondary" onClick={onClose}>取消</Button><Button type="submit" appearance="primary" icon={<Send20Regular />} disabled={pending || publicationCanonicalizing || !visibility || !body.trim() || (Boolean(parent) && publishAsAnnotation && !replyTargetsReady) || (!parent && !isReplyEdit && targets.length === 0)}>{pending ? "正在保存" : original ? "保存修改" : "发布"}</Button></div>
       </form>
     </aside>
   </div>;
