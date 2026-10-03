@@ -25,7 +25,7 @@ export function accountCommands(suite, files = []) {
   ];
   if (suite === "desktop") {
     const tests = files.filter((file) => file.startsWith(`${desktop}/src/tests/`) && /\.test\.tsx?$/.test(file)
-      && /(?:account|sessionBinding|sessionRuntime|organization|publication|forum|community|libraryResourceTransfer|assetSource|provenance|spaceOperation|agentToolPolicy|agentCapability)/i.test(path.basename(file)));
+      && /(?:account|sessionBinding|sessionRuntime|identity|cloud|organization|publication|forum|community|libraryResourceTransfer|source|resourceReference|provenance|spaceOperation|agent|capability|policy|durableWorkflow|extensionStudio|actionRegistry|planExecutor|runtimeOrchestrator|contextBuilder|localAssetMcp)/i.test(path.basename(file)));
     if (!tests.length) throw new Error("Account contract test selection is empty");
     return [npm(desktop, "run", "ci:smoke"), npm(desktop, "run", "ci:contracts"),
       npm(desktop, "test", "--", ...tests.map((file) => path.relative(desktop, file)))];

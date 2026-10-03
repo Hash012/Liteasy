@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 const clients = ["desktop", "admin", "mobile"];
-const desktopBoundary = /(?:account|session|auth|community|forum|publication|organization|transfer|provenance|source|operation|space|permission|personalCenter|capability|policy|agent-api|agent-runtime|local-mcp|workflow|features\/objects\/)/i;
+const desktopBoundary = /(?:account|session|auth|identity|cloud|community|forum|publication|organization|transfer|provenance|source|resourceReference|operation|space|permission|personalCenter|capability|policy|agent|local-mcp|workflow|features\/objects\/)/i;
 
 // Paths are data, never shell fragments. Shared contracts and authority changes
 // exercise every client; a Desktop-only sharing change still exercises real PG.

@@ -18,6 +18,16 @@ test("authority and shared-contract changes include every client, without instal
   for (const client of ["admin", "mobile"]) assert.deepEqual(requiredAccountSuites([`products/liteasy/apps/${client}/src/App.tsx`]), { services: true, clients: [client] });
 });
 
+test("cloud storage, identity, Agent and references select their actual Desktop tests", () => {
+  const base = "products/liteasy/apps/desktop";
+  const names = ["desktopIdentityClient.test.ts", "cloudLibraryStorageClient.test.ts", "useCloudLibraryTree.test.ts", "workspaceAgentSafety.test.ts", "resourceReferences.test.tsx", "agentApplicationService.test.ts", "durableWorkflows.test.ts"];
+  for (const relative of ["features/library/cloudLibraryStorageClient.ts", "controllers/useCloudLibraryTree.ts", "controllers/agent/agentApplicationService.ts"]) {
+    assert.deepEqual(requiredAccountSuites([`${base}/src/app/${relative}`]), { services: true, clients: ["desktop"] });
+  }
+  const command = accountCommands("desktop", names.map((name) => `${base}/src/tests/${name}`)).at(-1);
+  for (const name of names) assert.ok(command.args.includes(`src/tests/${name}`), name);
+});
+
 test("failed real PG process is a failing suite and stops later commands", () => {
   let count = 0;
   const results = runCommands(accountCommands("services-postgres"), () => ({ status: ++count === 2 ? 1 : 0 }));
