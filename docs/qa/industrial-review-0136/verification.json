@@ -1,0 +1,353 @@
+{
+  "testedSha": "a2864a38cefd9118d312deacac8be1d3cff68786",
+  "baselineSha": "1b73dc5493c84d1e12515854572c89f18792629a",
+  "taskArchiveSha256": "25e9d0ac379bcee93e6745a33aaa6f9276df4df5690b0cd33d729981807561bb",
+  "appVersions": {
+    "desktop": "0.1.36",
+    "intuechoWeb": "existing workspace version unchanged"
+  },
+  "environment": {
+    "os": "Ubuntu 24.04.3 LTS / WSL2",
+    "kernel": "6.18.33.2-microsoft-standard-WSL2",
+    "architecture": "x86_64",
+    "node": "22.13.1",
+    "requestedNode": "22.23.2",
+    "browser": "151.0.7922.34",
+    "database": "API tests use local SQLite; no real PostgreSQL validation"
+  },
+  "sourceBinding": {
+    "intuechoTreeAtWebChecks": "d3744e7f76d85bf726bb575cb38c234ba98fb687",
+    "intuechoTreeAtCandidate": "d3744e7f76d85bf726bb575cb38c234ba98fb687",
+    "note": "Reuse unchanged-scope checks per AGENTS.md. Final browser/build/contracts ran on clean candidate. Later QA-only commit does not change tested source."
+  },
+  "checks": [
+    {
+      "id": "M00-red",
+      "command": "vitest run src/communityIsolation.test.ts",
+      "cwd": "isolated baseline extraction at 1b73dc5493c84d1e12515854572c89f18792629a",
+      "exitCode": 1,
+      "result": "Expected failure: 6 failed, 2 passed; complete valid annotation fixture.",
+      "layer": "repository-unit",
+      "sourceBinding": "Original baseline command/persistence modules, new regression test; identity/browser transport substitutions.",
+      "log": {
+        "path": "/tmp/industrial-m00-red.log",
+        "sha256": "665ed81896d2265db3bc94cc08bf77d2749f822565ea832e55aa2f3006f006f3"
+      }
+    },
+    {
+      "id": "M04-desktop-red",
+      "command": "npm test -- src/tests/useCommunitySourceController.test.tsx",
+      "cwd": "products/liteasy/apps/desktop",
+      "exitCode": 1,
+      "result": "Expected failure before reflection implementation: 2 failed, 8 passed.",
+      "layer": "repository-unit",
+      "sourceBinding": "Pre-fix controller plus new preservation regressions; not candidate acceptance.",
+      "log": {
+        "path": "/tmp/industrial-m04-red.log",
+        "sha256": "585309757c757f57fa6a0aeec1def90f7064601c6334a07ee7f084400d5cb7db"
+      }
+    },
+    {
+      "id": "M00-cleanup-red",
+      "command": "vitest run src/useLocalDraft.test.tsx",
+      "cwd": "products/intuecho/apps/web",
+      "exitCode": 1,
+      "result": "Expected failure reproducing cleanup of newly typed but not yet persisted bytes.",
+      "layer": "repository-unit",
+      "sourceBinding": "Pre-fix useLocalDraft working copy; final full Web suite covers the fix.",
+      "log": {
+        "path": "/tmp/industrial-m00-cleanup-red.log",
+        "sha256": "56511545f9247578cbe789412f67990bbf7b34ba160e8ed93d18a1ae0a10cfaa"
+      }
+    },
+    {
+      "id": "web-all",
+      "command": "npm run test --workspace=@intuecho/web",
+      "cwd": "products/intuecho",
+      "exitCode": 0,
+      "result": "22 files, 168 tests passed. Execution HEAD 465f5ffa; complete products/intuecho Git tree identical to final candidate.",
+      "layer": "repository-unit",
+      "sourceBinding": "Tested files match the candidate; no later changes in the validated scope.",
+      "log": {
+        "path": "/tmp/industrial-web-final-tests.log",
+        "sha256": "e63bacc973e303838e9b804b63cb4c0852189a663f3f7e25bc0f06f04778ca2b"
+      }
+    },
+    {
+      "id": "api-all",
+      "command": "npm run test --workspace=@intuecho/api",
+      "cwd": "products/intuecho",
+      "exitCode": 0,
+      "result": "298 tests passed; local SQLite/in-process HTTP/fixtures, not real PostgreSQL.",
+      "layer": "repository-unit",
+      "sourceBinding": "Tested files match the candidate; no later changes in the validated scope.",
+      "log": {
+        "path": "/tmp/industrial-api-tests.log",
+        "sha256": "a2c53e7f8489336b3e516bda8f7367a98dbdb10a1c06ac9d28b809db0aab4810"
+      }
+    },
+    {
+      "id": "contract-types",
+      "command": "npm run test --workspace=@intuecho/contracts",
+      "cwd": "products/intuecho",
+      "exitCode": 0,
+      "result": "TypeScript contract checks passed.",
+      "layer": "repository-unit",
+      "sourceBinding": "Tested files match the candidate; no later changes in the validated scope.",
+      "log": {
+        "path": "/tmp/industrial-contracts-tests.log",
+        "sha256": "0b855b0564a8e1a34a9fdf7341f7b76c4b2ce9f1a81622ac80b7870a3028e1fb"
+      }
+    },
+    {
+      "id": "web-build",
+      "command": "npm run build",
+      "cwd": "products/intuecho",
+      "exitCode": 0,
+      "result": "TypeScript, Vite, production asset verification and API syntax checks passed; existing chunk warning.",
+      "layer": "production-build",
+      "sourceBinding": "Tested files match the candidate; no later changes in the validated scope.",
+      "log": {
+        "path": "/tmp/industrial-web-final-build.log",
+        "sha256": "ee98aef766d0c2ff2c2079864c52d88c3ab38833a961041933b3f131ce2512d5"
+      }
+    },
+    {
+      "id": "desktop-focused",
+      "command": "npm test -- src/tests/useCommunitySourceController.test.tsx src/tests/communityReflectionDrafts.test.ts src/tests/communitySourceReference.test.ts",
+      "cwd": "products/liteasy/apps/desktop",
+      "exitCode": 0,
+      "result": "3 files, 20 tests passed; JSDOM/fake IndexedDB and storage failure injection.",
+      "layer": "repository-unit",
+      "sourceBinding": "Tested files match the candidate; no later changes in the validated scope.",
+      "log": {
+        "path": "/tmp/industrial-m04-green.log",
+        "sha256": "51bbb723c6e350b307ab995c7875bedc3cdb17f4ded7257aded210320f72eee0"
+      }
+    },
+    {
+      "id": "desktop-smoke",
+      "command": "npm run ci:smoke",
+      "cwd": "products/liteasy/apps/desktop",
+      "exitCode": 0,
+      "result": "2 files, 9 tests passed; no resource/casing changes after this run.",
+      "layer": "repository-unit",
+      "sourceBinding": "Tested files match the candidate; no later changes in the validated scope.",
+      "log": {
+        "path": "/tmp/industrial-desktop-smoke.log",
+        "sha256": "fddfde4f6595fb88371533df6ef9a22e4d8b4a97bc5d1f3fbed56b2f4ebe0564"
+      }
+    },
+    {
+      "id": "desktop-build",
+      "command": "npm run build",
+      "cwd": "products/liteasy/apps/desktop",
+      "exitCode": 0,
+      "result": "Production build and 158 asset checks passed; existing chunk warning.",
+      "layer": "production-build",
+      "sourceBinding": "Executed on clean candidate a2864a38cefd9118d312deacac8be1d3cff68786",
+      "log": {
+        "path": "/tmp/industrial-desktop-final-build.log",
+        "sha256": "ed4467081c0c568ff51b5f5fa09455fe929cc07ad9bd8f81fd11d91181f82c06"
+      }
+    },
+    {
+      "id": "desktop-contracts",
+      "command": "npm run ci:contracts",
+      "cwd": "products/liteasy/apps/desktop",
+      "exitCode": 0,
+      "result": "Tracked resources, regenerated schemas, TypeScript and lock/schema cleanliness passed.",
+      "layer": "production-build",
+      "sourceBinding": "Executed on clean candidate a2864a38cefd9118d312deacac8be1d3cff68786",
+      "log": {
+        "path": "/tmp/industrial-desktop-contracts.log",
+        "sha256": "6d3a9e9f55f3c7bdca841e7d683bccb4dfd715c44bb6a25579e77400086fe078"
+      }
+    },
+    {
+      "id": "browser-11",
+      "command": "LITEASY_CHROMIUM_EXECUTABLE=/home/tjm/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome LITEASY_BROWSER_REPORT_DIR=/tmp/liteasy-industrial-final-a2864a38 node products/intuecho/scripts/industrial-community-browser.mjs",
+      "cwd": ".",
+      "exitCode": 0,
+      "result": "11/11 passed; no page errors or blocked external requests.",
+      "layer": "browser-real-storage",
+      "sourceBinding": "Before/after candidate SHA and clean working tree independently recorded by runner.",
+      "log": {
+        "path": "/tmp/industrial-browser-final.log",
+        "sha256": "26002ffb6f2d087794ba73888757fa7cbaf772145cb362d819b231d3d8dbe4dd"
+      }
+    }
+  ],
+  "sourceSha256": {
+    "products/intuecho/apps/web/src/AnnotationApp.tsx": "97d5f6e56887acebeb89e39b6a163dc1ac972eaf44dfad336531ec8f4501bd4b",
+    "products/intuecho/apps/web/src/AnnotationComposer.test.tsx": "5d628032b1f761e24c11b8779a881e788eeab274fa421845893e141f79b97f4d",
+    "products/intuecho/apps/web/src/AnnotationComposer.tsx": "458c110a685e40c220e2f3263204b40cb7e751bedd2bfc92611bb888d1d62776",
+    "products/intuecho/apps/web/src/CommunityOperationCenter.test.tsx": "6f8ae396c774a9a9668e2a8246364e3eab779a9e3d75f01a446c19732963c8ee",
+    "products/intuecho/apps/web/src/CommunityOperationCenter.tsx": "3f162219dae4da69bd09a06bdda8b76e30847632026a4779cba340eee0a1db7b",
+    "products/intuecho/apps/web/src/LocalDraftControls.tsx": "55564ecfa4ca35f2bfd39dbb1930e1839b83a0d9aed0359b58da3694ca910934",
+    "products/intuecho/apps/web/src/Plaza.test.tsx": "024f78efa18bdaafa128d9c44a891ebe46d39b61524c3f9ae724efcb8a15050e",
+    "products/intuecho/apps/web/src/SourceRevision.test.tsx": "0da470645fb80a5fededec08b47e57df6bfd654c7f4fb2b5ba7300da9b9d48c9",
+    "products/intuecho/apps/web/src/SourceRevision.tsx": "4026b5b9bb5a2b4c054c9af5fe83bbd8d104471b829a4fa0fae2ee0e51e1ffd7",
+    "products/intuecho/apps/web/src/annotation-app.css": "f0975151db321e037e355f08f7e0d179692ca43888d01a3ff99e26b4ae657048",
+    "products/intuecho/apps/web/src/communityApi.test.ts": "d1dbb50dbd258521bedb83b9dad4299a69abac69d346f8531915a69afc82779a",
+    "products/intuecho/apps/web/src/communityApi.ts": "34d849135e6a9db71cfddef139a2eba2426795c3ae3c3059348361e0440ef21d",
+    "products/intuecho/apps/web/src/communityCommands.test.ts": "1400aa17449a655881818b81e23d3c2347fdc6c0ae51733d48d0998567e1b97b",
+    "products/intuecho/apps/web/src/communityCommands.ts": "5ab20cc8a48afdc6756bfe28e5a55eaf181a93fb8301eb08587cfe7ad58cd100",
+    "products/intuecho/apps/web/src/communityIsolation.test.ts": "5c28ae7d601a96bd74844751f8db6ce022ad702a10bcd71f49133a87c11bb132",
+    "products/intuecho/apps/web/src/communityNavigation.test.ts": "ac7c19e97d76e7b6e9af2ac038749905243ba70457a63d6242f22cdf4248ad5d",
+    "products/intuecho/apps/web/src/communityNavigation.ts": "c6a498423e627134359bf6181ad607b1408c9c691fd67cf255731031db076752",
+    "products/intuecho/apps/web/src/communityPersistence.test.ts": "d9e79d3e0eb2c00bb981719756621f7f26cb6a96da96642d5117d454d0bb9a7a",
+    "products/intuecho/apps/web/src/communityPersistence.ts": "e2545af7ee5faba0b02a920d2228b4197041873fb54a284835ffbe4bdf36f547",
+    "products/intuecho/apps/web/src/reading-group/OrganizationReadingGroup.test.tsx": "0135bcae47ad855a2d1a9cc4a831f7eed2a96cde1d934fd12ea7739827755482",
+    "products/intuecho/apps/web/src/reading-group/OrganizationReadingGroup.tsx": "8ed3d2d9714592c20393e95e6afd45e4287d09398bda3664e9dba246d20dc0b3",
+    "products/intuecho/apps/web/src/reading-group/ReadingRoundReview.tsx": "108b56cfe39f81fa6b9092209c808e9455cf587cc415743cd8dfe62c50149037",
+    "products/intuecho/apps/web/src/reading-group/reading-group.css": "cc96c710dfb1baf424cbcc89b3601668ce56986aa795f18eef2dfc1d73084801",
+    "products/intuecho/apps/web/src/source-revision.css": "8eb9dcc1097953fa6f208db040388a99df409b1370fff4af891f902144ced219",
+    "products/intuecho/apps/web/src/useLocalDraft.test.tsx": "1affc3af4654b414a8e1ea5688148707bb0f5535a846bfa7cc4b7c8313c4f163",
+    "products/intuecho/apps/web/src/useLocalDraft.ts": "56dd16c0524754e8c37167d9601541c5af1d4706361f85cd82483065cccfc40c",
+    "products/intuecho/apps/web/src/usePlazaFeed.test.tsx": "f01123de6411b6033cc34dd960f0170a96c0af142a294f1bed4bc86a7398a2b5",
+    "products/intuecho/apps/web/src/usePlazaFeed.ts": "5991ea111869b4a786fbb2e7015eb630a9a2bc7d87e6f2da0c875fc442e27031",
+    "products/intuecho/scripts/industrial-community-browser.mjs": "583dca16acf7c26f408cebf17b61f5c73a2207f247d3725c4c35747e67c37e99",
+    "products/intuecho/scripts/industrial-community-fixture.mjs": "6013df44ea17aef2f532c7b9109e51f8485a80bc983b85bce6c4e704b9f659ce",
+    "products/liteasy/apps/desktop/src/app/controllers/useCommunitySourceController.tsx": "1e237300452155264ab8a17de384506799b24e913c7877b5e24593d8face378d",
+    "products/liteasy/apps/desktop/src/app/features/forum/communityReflectionDrafts.ts": "23ed71bba6c247f8f7f3436c65b4ec15ad131ce7c5873539af28395124baae8c",
+    "products/liteasy/apps/desktop/src/tests/communityReflectionDrafts.test.ts": "8d84f6872b6949444dbeef2d61bd5c5e17b2e44457a0062cdb0d97d6fd1507e9",
+    "products/liteasy/apps/desktop/src/tests/useCommunitySourceController.test.tsx": "661edad259df518456b76e3c63b45ebe8cd269d7c437bd8f25019a7edf9a29d2"
+  },
+  "lockSha256": {
+    "products/intuecho/package-lock.json": "eedd29baba83be59ae6909824cd74039b6b481831e30bf9e995172ccc00749ab",
+    "products/liteasy/apps/desktop/package-lock.json": "d56bf63a3ef2824f938d170c7f299763fe520aa37e5520c8270cedefde0ec056",
+    "products/liteasy/apps/desktop/src-tauri/Cargo.lock": "a869878097602ebbe72b90cf128e3290abbf5cdccc3b00d8adcdfa23c1c679eb"
+  },
+  "browserEvidence": {
+    "directory": "/tmp/liteasy-industrial-final-a2864a38",
+    "reportSha256": "5faa1bb25dde8badaa3a7c1567ae610cc3611e342e8e632668ca6967661acde2",
+    "report": {
+      "sourceCommit": "a2864a38cefd9118d312deacac8be1d3cff68786",
+      "sourceCommitAfter": "a2864a38cefd9118d312deacac8be1d3cff68786",
+      "dirtyPathsBefore": [],
+      "dirtyPaths": [],
+      "cleanUnchangedSource": true,
+      "runtime": "v22.13.1",
+      "platform": "linux",
+      "architecture": "x64",
+      "browser": "151.0.7922.34",
+      "method": "Actual Vite React application and unchanged browser source modules in isolated Chromium contexts; actual localStorage and Web Locks, synthetic loopback HTTP API/identity only.",
+      "limitations": [
+        "Synthetic HTTP server, not PostgreSQL or a real identity provider",
+        "No real accounts or deployed services",
+        "Not native Windows or installer acceptance"
+      ],
+      "blockedRequests": [],
+      "pageErrors": [],
+      "results": [
+        {
+          "id": "P01-independent-intents-and-cross-tab-locks",
+          "status": "pass",
+          "durationMs": 4743,
+          "realBrowserWebLocks": true,
+          "commits": 3,
+          "delayedResponseLossRecovered": true
+        },
+        {
+          "id": "P02-corruption-isolated-and-exportable",
+          "status": "pass",
+          "durationMs": 2884,
+          "healthyPresent": true,
+          "created": "fixture-annotation-created-4",
+          "originalPreserved": true
+        },
+        {
+          "id": "P04-late-lookup-cannot-regress-committed",
+          "status": "pass",
+          "durationMs": 4205,
+          "conditionalTransitionPreservedCommit": true
+        },
+        {
+          "id": "P05-invalid-lookup-stays-unknown",
+          "status": "pass",
+          "durationMs": 2267,
+          "rejected": true,
+          "state": "outcome_unknown"
+        },
+        {
+          "id": "M00-delayed-commit-after-tab-close",
+          "status": "pass",
+          "durationMs": 4837,
+          "tabClosedBeforeCommit": true,
+          "notFoundRetainedIntentWithoutResend": true,
+          "lateCommitRecovered": true
+        },
+        {
+          "id": "P03-real-editor-two-drafts-conflict-and-close",
+          "status": "pass",
+          "durationMs": 8993,
+          "independentDrafts": 2,
+          "conflictVersionsPreserved": true,
+          "staleCleanupRejected": true,
+          "closeRecovered": true
+        },
+        {
+          "id": "M00-real-storage-quota-keeps-editor-bytes",
+          "status": "pass",
+          "durationMs": 3444,
+          "realQuotaExceeded": true,
+          "editorPreservedUnsavedText": true
+        },
+        {
+          "id": "M01-three-pages-retry-back-refresh",
+          "status": "pass",
+          "durationMs": 6253,
+          "records": 65,
+          "pages": 3,
+          "retryPreservedExistingCards": true,
+          "backAndRefreshReauthorized": true
+        },
+        {
+          "id": "M01-filter-change-ignores-old-response",
+          "status": "pass",
+          "durationMs": 3091,
+          "staleResponseIgnored": true,
+          "allLegacyFiltersPreserved": true
+        },
+        {
+          "id": "M01-revocation-clears-authorized-pages",
+          "status": "pass",
+          "durationMs": 2857,
+          "actorInvalidationClearedFeedAndSession": true
+        },
+        {
+          "id": "M01-operation-original-and-reauthorized-result",
+          "status": "pass",
+          "durationMs": 4041,
+          "originalRequiresConfirmation": true,
+          "noImplicitResend": true,
+          "resultFreshlyAuthorized": true,
+          "withdrawnBodyNotShown": true
+        }
+      ]
+    }
+  },
+  "layers": {
+    "isolated-source-probe": "red baseline repository regressions replace pack probes; pack probes not counted as acceptance",
+    "repository-unit": "passed in explicitly listed scopes",
+    "browser-real-storage": "passed with synthetic HTTP/identity",
+    "postgres-real": "not_run: isolated server unavailable",
+    "native-client": "not_run: no Windows/macOS/native runtime acceptance",
+    "idp-s3-scanner-real": "not_run: dedicated external test infrastructure not configured",
+    "voluntary-pilot": "not_run: no voluntary real-user session"
+  },
+  "notValidated": [
+    "Exact .nvmrc Node 22.23.2 runtime",
+    "All desktop tests outside affected source/reflection scope",
+    "Windows installer build and installed runtime",
+    "Complete M02/M05/M06 journeys and M07 minimum-client-version negotiation",
+    "Real cloud failures, migrations, cross-device synchronization and M08 human outcomes"
+  ],
+  "publication": {
+    "pushed": false,
+    "merged": false,
+    "installerTriggered": false,
+    "reason": "Task master explicitly prohibits automatic push/merge/release/deploy."
+  }
+}

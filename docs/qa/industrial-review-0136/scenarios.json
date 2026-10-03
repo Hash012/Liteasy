@@ -1,0 +1,259 @@
+{
+  "commit": "a2864a38cefd9118d312deacac8be1d3cff68786",
+  "meaning": "Actually executed evidence, scoped by layer. Pass applies only to the stated layer; not production/native/human acceptance.",
+  "scenarios": [
+    {
+      "id": "IQ01",
+      "task": "M00",
+      "expectation": "P01–P05改为期望新行为的仓库红绿测试。",
+      "status": "pass",
+      "evidence": "M00-red, web-all; corrected valid-fixture P01–P05.",
+      "layer": "repository-unit"
+    },
+    {
+      "id": "IQ02",
+      "task": "M00",
+      "expectation": "两个组织的独立新建可并行；同ID的重复发送只产生一项内容和事件。",
+      "status": "pass",
+      "evidence": "P01-independent-intents-and-cross-tab-locks; SQLite service command tests. Identity/events in browser remain fixture data, not PG proof.",
+      "layer": "browser-real-storage + repository-unit"
+    },
+    {
+      "id": "IQ03",
+      "task": "M00",
+      "expectation": "两新稿互不覆盖；旧完成回调不能删新稿；损坏记录可隔离导出。",
+      "status": "pass",
+      "evidence": "P03, P02 export, useLocalDraft late-cleanup and quota regressions.",
+      "layer": "browser-real-storage + repository-unit"
+    },
+    {
+      "id": "IQ04",
+      "task": "M01",
+      "expectation": "65条授权合成内容分3页可见，无重无漏；筛选改变和撤权后无旧结果冒出。",
+      "status": "pass",
+      "evidence": "M01-three-pages-retry-back-refresh, filter-change, revocation.",
+      "layer": "browser-real-storage"
+    },
+    {
+      "id": "IQ05",
+      "task": "M01",
+      "expectation": "未知操作核实后能打开原稿/已创建内容；无权内容只显示允许的通用状态。",
+      "status": "pass",
+      "evidence": "M01-operation-original-and-reauthorized-result and CommunityOperationCenter tests.",
+      "layer": "browser-real-storage + repository-unit"
+    },
+    {
+      "id": "IQ06",
+      "task": "M02",
+      "expectation": "不登录完成本地打开→标注→关闭重开。",
+      "status": "not_run",
+      "evidence": "This full journey was not exercised in this bounded candidate; no inference from existing tests or build success.",
+      "layer": "outside-validated-slice"
+    },
+    {
+      "id": "IQ07",
+      "task": "M02",
+      "expectation": "A退出后B看不到A的云缓存；OS原件保留。",
+      "status": "not_run",
+      "evidence": "This full journey was not exercised in this bounded candidate; no inference from existing tests or build success.",
+      "layer": "outside-validated-slice"
+    },
+    {
+      "id": "IQ08",
+      "task": "M02",
+      "expectation": "同账号第二设备恢复明确支持的数据；冲突两版保留。",
+      "status": "not_run",
+      "evidence": "This full journey was not exercised in this bounded candidate; no inference from existing tests or build success.",
+      "layer": "outside-validated-slice"
+    },
+    {
+      "id": "IQ09",
+      "task": "M03",
+      "expectation": "有权成员在普通组内回复不重复审批；扩受众必须重新批准。",
+      "status": "pass",
+      "evidence": "AnnotationComposer tests: single explicit ordinary reply, publication approval, actor/profile/parent/audience changes.",
+      "layer": "repository-unit"
+    },
+    {
+      "id": "IQ10",
+      "task": "M03",
+      "expectation": "邀请撤回/过期/角色变化后拒绝且保留可用操作路径。",
+      "status": "not_run",
+      "evidence": "This full journey was not exercised in this bounded candidate; no inference from existing tests or build success.",
+      "layer": "outside-validated-slice"
+    },
+    {
+      "id": "IQ11",
+      "task": "M03",
+      "expectation": "组内资料→团队批注→Intuecho讨论副本关系明确，源正文不自动公开。",
+      "status": "not_run",
+      "evidence": "This full journey was not exercised in this bounded candidate; no inference from existing tests or build success.",
+      "layer": "outside-validated-slice"
+    },
+    {
+      "id": "IQ12",
+      "task": "M04",
+      "expectation": "输入反思后切当前/历史修订和关弹窗，能恢复未保存输入。",
+      "status": "pass",
+      "evidence": "Desktop 20 focused tests + Web OrganizationReadingGroup tests; not native UI acceptance.",
+      "layer": "repository-unit"
+    },
+    {
+      "id": "IQ13",
+      "task": "M04",
+      "expectation": "来源更正后旧引用仍可查看，当前访问权必须通过。",
+      "status": "pass",
+      "evidence": "SourceRevision and useCommunitySourceController tests: fixed citation, fresh authorization, body cleared on denial.",
+      "layer": "repository-unit"
+    },
+    {
+      "id": "IQ14",
+      "task": "M04",
+      "expectation": "同一小组第二次活动能找到未解决问题、前次摘要与证据。",
+      "status": "pass",
+      "evidence": "OrganizationReadingGroup return-visit card/filter tests: host summary, recorded unresolved items and fixed evidence; no actual human second meeting.",
+      "layer": "repository-unit"
+    },
+    {
+      "id": "IQ15",
+      "task": "M05",
+      "expectation": "同一批次部分失败可逐项恢复，无原文件静默覆盖。",
+      "status": "not_run",
+      "evidence": "This full journey was not exercised in this bounded candidate; no inference from existing tests or build success.",
+      "layer": "outside-validated-slice"
+    },
+    {
+      "id": "IQ16",
+      "task": "M05",
+      "expectation": "恶意文档/社区内容不能触发新社交权限。",
+      "status": "not_run",
+      "evidence": "This full journey was not exercised in this bounded candidate; no inference from existing tests or build success.",
+      "layer": "outside-validated-slice"
+    },
+    {
+      "id": "IQ17",
+      "task": "M05",
+      "expectation": "关闭local-only网络时所有适用Agent turn保持零外发，同时本地任务可完成。",
+      "status": "not_run",
+      "evidence": "This full journey was not exercised in this bounded candidate; no inference from existing tests or build success.",
+      "layer": "outside-validated-slice"
+    },
+    {
+      "id": "IQ18",
+      "task": "M06",
+      "expectation": "断网本地完整任务成功，不因社区故障白屏或强制登录。",
+      "status": "not_run",
+      "evidence": "This full journey was not exercised in this bounded candidate; no inference from existing tests or build success.",
+      "layer": "outside-validated-slice"
+    },
+    {
+      "id": "IQ19",
+      "task": "M06",
+      "expectation": "切面板/弹窗不丢焦点和阅读位置；200%缩放不遮挡关键控件。",
+      "status": "not_run",
+      "evidence": "This full journey was not exercised in this bounded candidate; no inference from existing tests or build success.",
+      "layer": "outside-validated-slice"
+    },
+    {
+      "id": "IQ20",
+      "task": "M06",
+      "expectation": "固定资料与机器测量，目标先协商，不把建议档位宣称容量上限。",
+      "status": "not_run",
+      "evidence": "This full journey was not exercised in this bounded candidate; no inference from existing tests or build success.",
+      "layer": "outside-validated-slice"
+    },
+    {
+      "id": "IQ21",
+      "task": "M07",
+      "expectation": "新旧客户端协议组合行为准确；旧客户端不会无提示覆盖。",
+      "status": "partial",
+      "evidence": "Existing protocol1 command/expectedRevision tests pass. Some legacy creates remain accepted; no complete minClientVersion negotiation. See M07-compatibility.md.",
+      "layer": "repository-unit"
+    },
+    {
+      "id": "IQ22",
+      "task": "M07",
+      "expectation": "PG/S3分步失败不产生假完成，恢复日志不足时不开受影响远端读取。",
+      "status": "not_run",
+      "evidence": "This full journey was not exercised in this bounded candidate; no inference from existing tests or build success.",
+      "layer": "outside-validated-slice"
+    },
+    {
+      "id": "IQ23",
+      "task": "M07",
+      "expectation": "windows installer已构建与已安装运行分项；Linux/macOS据实列示。",
+      "status": "not_run",
+      "evidence": "This full journey was not exercised in this bounded candidate; no inference from existing tests or build success.",
+      "layer": "outside-validated-slice"
+    },
+    {
+      "id": "IQ24",
+      "task": "M08",
+      "expectation": "试点用户可独立说清谁能看并完成组内回复。",
+      "status": "not_run",
+      "evidence": "This full journey was not exercised in this bounded candidate; no inference from existing tests or build success.",
+      "layer": "outside-validated-slice"
+    },
+    {
+      "id": "IQ25",
+      "task": "M08",
+      "expectation": "至少一次真实的下一轮复用观察；没发生如实记录。",
+      "status": "not_run",
+      "evidence": "This full journey was not exercised in this bounded candidate; no inference from existing tests or build success.",
+      "layer": "outside-validated-slice"
+    },
+    {
+      "id": "IQ26",
+      "task": "M08",
+      "expectation": "开发者介入、失败原因、版本和网络环境有记录，无敏感正文。",
+      "status": "not_run",
+      "evidence": "This full journey was not exercised in this bounded candidate; no inference from existing tests or build success.",
+      "layer": "outside-validated-slice"
+    },
+    {
+      "id": "IQ27",
+      "task": "M00",
+      "probe": "P01",
+      "expectation": "原未知意图保持冻结；不同draft/operation可以发送",
+      "status": "pass",
+      "evidence": "P01: unrelated organization intent proceeds; original frozen intent preserved.",
+      "layer": "browser-real-storage + repository-unit"
+    },
+    {
+      "id": "IQ28",
+      "task": "M00",
+      "probe": "P02",
+      "expectation": "坏记录隔离；健康列表和独立新操作可用",
+      "status": "pass",
+      "evidence": "P02: healthy list/send and explicit damaged-record export.",
+      "layer": "browser-real-storage + repository-unit"
+    },
+    {
+      "id": "IQ29",
+      "task": "M00",
+      "probe": "P03",
+      "expectation": "不同draft不会覆盖；删除带版本条件",
+      "status": "pass",
+      "evidence": "P03 + conditional deletion and late callback tests.",
+      "layer": "browser-real-storage + repository-unit"
+    },
+    {
+      "id": "IQ30",
+      "task": "M00",
+      "probe": "P04",
+      "expectation": "迟到not_found不能回退已提交记录",
+      "status": "pass",
+      "evidence": "P04: delayed not_found cannot regress a committed operation.",
+      "layer": "browser-real-storage + repository-unit"
+    },
+    {
+      "id": "IQ31",
+      "task": "M00",
+      "probe": "P05",
+      "expectation": "无效lookup回复保持unknown并提示协议错误",
+      "status": "pass",
+      "evidence": "P05: malformed lookup stays unknown; no automatic resend.",
+      "layer": "browser-real-storage + repository-unit"
+    }
+  ]
+}
