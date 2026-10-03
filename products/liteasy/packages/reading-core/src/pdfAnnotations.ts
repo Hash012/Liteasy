@@ -2,7 +2,7 @@ import type { PaperIdentity } from "./paperIdentity";
 import { isGuideAnnotation, type GuideAnnotation } from "./literatureGuide.types";
 import { isPdfInkStroke, isPdfInkStrokeGroup, type PdfInkStroke } from "./pdfInk";
 import { isPdfTextBoxImages, type PdfTextBoxImages } from "./pdfTextBoxImages";
-import type { ForumAnnotationPublicationOperation } from "./annotationPublication";
+import { normalizePublicationActorBinding, type ForumAnnotationPublicationOperation, type PublicationActorBinding } from "./annotationPublication";
 
 export type PdfAnnotationKind = "highlight" | "underline" | "note" | "text" | "ink";
 export type PdfHighlightColor = "yellow" | "red" | "blue" | "green" | "pink";
@@ -20,8 +20,11 @@ export type PdfAnnotationRect = {
 };
 
 export type PdfAnnotationPublication = {
+  actorBinding?: PublicationActorBinding;
   desiredVisibility: "private" | "public";
   lastError?: string;
+  outcome?: "unknown";
+  pendingOperation?: ForumAnnotationPublicationOperation;
   pendingCreateOperation?: Extract<ForumAnnotationPublicationOperation, { operation: "upsert" }>;
   remoteAnnotationId?: string;
   remoteRevision?: number;
@@ -197,6 +200,19 @@ function isPendingCreateOperation(
 function isPublication(value: unknown): value is PdfAnnotationPublication {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const candidate = value as Partial<PdfAnnotationPublication>;
+  if (candidate.actorBinding !== undefined && !normalizePublicationActorBinding(candidate.actorBinding)) return false;
+  if (candidate.outcome !== undefined && candidate.outcome !== "unknown") return false;
+  if (candidate.pendingOperation !== undefined) {
+    const operation = candidate.pendingOperation;
+    if (!operation || typeof operation !== "object" || Array.isArray(operation)) return false;
+    const valid = operation.operation === "upsert" ? isPendingCreateOperation(operation) :
+      operation.operation === "retract" && typeof operation.annotationId === "string" && Boolean(operation.annotationId) &&
+      typeof operation.queueKey === "string" && Boolean(operation.queueKey) &&
+      Number.isInteger(operation.revision) && operation.revision > 0 &&
+      typeof operation.updatedAt === "string" && Number.isFinite(Date.parse(operation.updatedAt)) &&
+      typeof operation.remoteAnnotationId === "string" && Boolean(operation.remoteAnnotationId.trim());
+    if (!valid || !candidate.actorBinding) return false;
+  }
   const hasRemoteAnnotation = typeof candidate.remoteAnnotationId === "string" && candidate.remoteAnnotationId.trim().length > 0;
   const hasFailureExplanation = typeof candidate.lastError === "string" && candidate.lastError.trim().length > 0;
   const hasPendingCreate = isPendingCreateOperation(candidate.pendingCreateOperation);
@@ -265,11 +281,11 @@ function isAnnotation(value: unknown): value is PdfAnnotationV2 {
   if (typeof candidate.revision !== "number" || !Number.isInteger(candidate.revision) || candidate.revision <= 0 ||
     !isPublication(candidate.publication)) return false;
   const pendingCreate = candidate.publication.pendingCreateOperation;
-  return !pendingCreate || (
-    pendingCreate.annotationId === candidate.id &&
-    pendingCreate.queueKey === `${candidate.paperIdentity!.paperId}:${candidate.id}` &&
-    pendingCreate.revision <= candidate.revision
-  );
+  return [pendingCreate, candidate.publication.pendingOperation].every((pending) => !pending || (
+    pending.annotationId === candidate.id &&
+    pending.queueKey === `${candidate.paperIdentity!.paperId}:${candidate.id}` &&
+    pending.revision <= candidate.revision!
+  ));
 }
 
 function isVersionOneAnnotation(value: unknown): value is PdfAnnotationV1 {
@@ -398,6 +414,7 @@ export function confirmPdfAnnotationPublication(
   return {
     ...annotation,
     publication: {
+      ...(annotation.publication.actorBinding ? { actorBinding: annotation.publication.actorBinding } : {}),
       desiredVisibility: receipt.state === "retracted" ? "private" : "public",
       remoteAnnotationId: receipt.remoteAnnotationId,
       remoteRevision: receipt.remoteRevision,

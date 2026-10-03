@@ -16,6 +16,51 @@ import { createRetractOperation } from "../app/features/pdf/pdfAnnotationIntuech
 const annotationKey = "liteasy.pdf-annotations/v1:test:paper";
 const autoPublicKey = "liteasy.pdf-annotations-auto-public/v1:test:paper";
 
+const actorBinding = {
+  endpoint: "https://community.example.invalid",
+  issuer: "https://identity.example.invalid",
+  subject: "synthetic-user-a",
+  scopeType: "user" as const,
+  scopeId: "synthetic-user-a",
+  sessionGeneration: "synthetic-runtime:1"
+};
+
+test("holds a damaged publication actor envelope while preserving the local note", () => {
+  const recovered = recoverPdfAnnotationPrivateState({
+    annotations: [{
+      ...annotation("local-note-retained"),
+      publication: {
+        actorBinding: { ...actorBinding, issuer: "http://identity.example.invalid" },
+        desiredVisibility: "public",
+        state: "pending_create"
+      },
+      revision: 1
+    }],
+    version: 2
+  });
+  expect(recovered.annotations[0].text).toBe("local-note-retained");
+  expect(recovered.annotations[0].publication.state).toBe("failed");
+  expect(recovered.replayItems).toEqual([]);
+});
+
+test("keeps the original actor on a confirmed publication receipt", () => {
+  const [current] = normalizePdfAnnotations([{
+    ...annotation("bound-publication"),
+    publication: { actorBinding, desiredVisibility: "public", state: "pending_create" },
+    revision: 1
+  }]);
+  const confirmed = confirmPdfAnnotationPublication(current, {
+    annotationId: current.id,
+    queueKey: `${current.paperIdentity.paperId}:${current.id}`,
+    remoteAnnotationId: "synthetic-remote",
+    remoteRevision: 1,
+    sourceRevision: 1,
+    state: "published",
+    syncedAt: "2026-10-03T00:00:00.000Z"
+  });
+  expect(confirmed.publication).toMatchObject({ actorBinding, state: "published" });
+});
+
 function setTauriRuntime(enabled: boolean) {
   Object.defineProperty(window, "__TAURI_INTERNALS__", {
     configurable: true,
