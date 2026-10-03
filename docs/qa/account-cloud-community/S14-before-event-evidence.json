@@ -1,0 +1,67 @@
+{
+  "schema": "liteasy.synthetic-postgres-recovery-evidence/v1",
+  "recordedAt": "2026-10-03T03:07:05.400948+00:00",
+  "repositoryHead": "644c8bd4cab02c093e6b6c7261d455df77b4984b",
+  "workingTreeEvidence": true,
+  "script": "products/intuecho/services/api/scripts/verify-before-event-replay.mjs",
+  "scriptSha256": "06462a9f6a5daf5576e4fae0828f4db7196232891eb906ed16c9bdbd047a34c0",
+  "configurationGuard": "products/intuecho/services/api/scripts/postgresRecoveryGuard.mjs",
+  "configurationGuardSha256": "16739c16b7aa32d80f24d2827a4fc4c5772b833d42370532bcecd1d8a15baefe",
+  "command": "node products/intuecho/services/api/scripts/verify-before-event-replay.mjs --config <private-explicit-test-config.json>",
+  "fixturePolicy": "synthetic_only; new_random_databases; isolated_loopback_instance; no_existing_application_database_connected_or_reset",
+  "guardTests": {
+    "files": [
+      "products/intuecho/services/api/src/postgresIntegrationGuard.test.mjs",
+      "products/intuecho/services/api/src/postgresRecoveryGuard.test.mjs"
+    ],
+    "passed": 11,
+    "failed": 0,
+    "log": "/tmp/liteasy-account-recovery-guard-tests.log"
+  },
+  "runLog": "/tmp/liteasy-account-before-event-repo.log",
+  "privateResultLocation": "/tmp/liteasy-account-postgres-THQsE7/repository-recovery-evidence/before-event-drill-507a91a66c/result.json",
+  "result": {
+    "verified": true,
+    "storage": "postgresql",
+    "boundary": "synthetic-before-event-backup-later-ledger-replay",
+    "cases": [
+      "backup-predates-deletion-and-withdrawal",
+      "later-events-derived-from-source-ledgers",
+      "older-restore-demonstrably-has-private-and-public-stale-state",
+      "business-connect-denied-before-replay",
+      "missing-journal-keeps-gate-closed",
+      "incomplete-journal-keeps-gate-closed",
+      "partial-replay-keeps-gate-closed",
+      "deletion-replay-removes-private-data",
+      "retained-public-data-anonymized-under-D03",
+      "withdrawal-replay-hides-publication-and-preserves-replies",
+      "exact-repeat-is-idempotent",
+      "old-publication-cannot-resurrect",
+      "deleted-owner-late-write-rejected",
+      "business-connect-opens-only-after-all-replay-and-verification",
+      "restored-app-is-not-privileged"
+    ],
+    "notRun": [
+      "real-IdP",
+      "S3",
+      "production-independent-journal-backup",
+      "production-routing-readiness"
+    ],
+    "sourceDatabase": "account_before_source_507a91a66c_test",
+    "restoredDatabase": "account_before_restore_507a91a66c_test",
+    "sourceMigrations": 27,
+    "restoredMigrations": 27,
+    "lastMigration": "027_tag_appeal_submission_audience.sql",
+    "backupFinishedAt": "2026-10-03T03:04:26.987Z",
+    "backupSha256": "56780d5855e987ff394d658a342fcf22d303e0b01a8024be989d8a11bc65c037",
+    "journalSha256": "f8d4939cfb296cf27474bd4b42c0d08eaeeadc9a5245714d1cf420b5b5d4fd25",
+    "laterEvents": 2
+  },
+  "limits": [
+    "No real IdP revocation or refresh/access-token test",
+    "No S3/scanner recovery",
+    "No production independent journal backup or routing readiness acceptance",
+    "No Windows/macOS/Linux native application acceptance",
+    "New synthetic databases/roles and private dumps are retained for review; no secret configuration or dump is committed"
+  ]
+}

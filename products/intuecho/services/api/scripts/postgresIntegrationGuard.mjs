@@ -4,7 +4,7 @@ function forbidden() {
   throw new Error("intuecho_integration_database_forbidden");
 }
 
-function explicitPoolConfig(value) {
+export function validateIntuechoPostgresIntegrationDatabase(value) {
   let parsed;
   try {
     parsed = new URL(value);
@@ -35,8 +35,8 @@ function explicitPoolConfig(value) {
 }
 
 export function validateIntuechoPostgresIntegrationDatabases(applicationUrl, migrationUrl) {
-  const application = explicitPoolConfig(applicationUrl);
-  const migration = explicitPoolConfig(migrationUrl);
+  const application = validateIntuechoPostgresIntegrationDatabase(applicationUrl);
+  const migration = validateIntuechoPostgresIntegrationDatabase(migrationUrl);
   if (
     application.database !== migration.database ||
     application.host !== migration.host ||
