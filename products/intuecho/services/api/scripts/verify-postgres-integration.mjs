@@ -8,6 +8,7 @@ import { PostgresAccountLifecycleRepository } from "../src/accountLifecycleRepos
 import { migrateIntuecho, readIntuechoMigrations, verifyIntuechoMigrations } from "../src/migrations.mjs";
 import { PostgresAnnotationCommunityRepository } from "../src/postgresAnnotationCommunityRepository.mjs";
 import { PostgresForumRepository } from "../src/postgresForumRepository.mjs";
+import { validateIntuechoPostgresIntegrationDatabases } from "./postgresIntegrationGuard.mjs";
 
 const applicationUrl = process.env.INTUECHO_TEST_DATABASE_URL;
 const migrationUrl = process.env.INTUECHO_TEST_MIGRATION_DATABASE_URL;
@@ -15,21 +16,11 @@ const migration014Only = process.env.INTUECHO_MIGRATION_014_ONLY === "1";
 if (!applicationUrl || !migrationUrl) {
   throw new Error("INTUECHO_TEST_DATABASE_URL and INTUECHO_TEST_MIGRATION_DATABASE_URL are required");
 }
-const application = new URL(applicationUrl);
-const migration = new URL(migrationUrl);
-if (
-  !new Set(["127.0.0.1", "::1", "localhost"]).has(application.hostname) ||
-  migration.hostname !== application.hostname ||
-  application.pathname !== migration.pathname ||
-  !application.pathname.endsWith("_test") ||
-  application.username === migration.username
-) {
-  throw new Error("intuecho_integration_database_forbidden");
-}
+const { application, migration } = validateIntuechoPostgresIntegrationDatabases(applicationUrl, migrationUrl);
 
 const { Pool } = pg;
-const pool = new Pool({ connectionString: applicationUrl, max: 4, ssl: false });
-const migrationPool = new Pool({ connectionString: migrationUrl, max: 1, ssl: false });
+const pool = new Pool({ ...application, max: 4, ssl: false });
+const migrationPool = new Pool({ ...migration, max: 1, ssl: false });
 
 async function waitForAdvisoryWait(minimum, timeoutMs = 5000) {
   const deadline = Date.now() + timeoutMs;
@@ -60,7 +51,7 @@ try {
   let migrated;
   try {
     const legacyMigration = await migrateIntuecho(migrationPool, {
-      applicationRole: application.username,
+      applicationRole: application.user,
       directory: legacyDirectory
     });
     assert.deepEqual(legacyMigration.applied, legacyMigrations.map((item) => item.name));
@@ -92,7 +83,7 @@ try {
       )
     `);
     migrated = await migrateIntuecho(migrationPool, {
-      applicationRole: application.username,
+      applicationRole: application.user,
       directory: projectionDirectory
     });
   } finally {
@@ -297,7 +288,7 @@ try {
     ) VALUES ($1, 'openalex_id', 'W170000001', 'public_registry')
   `, [legacyAggregateId]);
   const sourceConfirmedMigration = await migrateIntuecho(migrationPool, {
-    applicationRole: application.username
+    applicationRole: application.user
   });
   assert.deepEqual(sourceConfirmedMigration.applied, [
     "016_source_confirmed_literature_identity.sql",
@@ -2271,7 +2262,7 @@ try {
   process.stdout.write(`${JSON.stringify({
     ...counts.rows[0],
     accountDeletion: true,
-    database: application.pathname.slice(1),
+    database: application.database,
     migrations: migrated.applied.length,
     verified: true
   })}\n`);
