@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { withPostgresTransaction } from "./postgres.mjs";
+import { withAccountWriteTransaction } from "./accountDeletionFence.mjs";
 
 export class VisualizationRepositoryError extends Error {
   constructor(code, status = 400) {
@@ -741,7 +742,7 @@ export class PostgresVisualizationRepository {
     if (typeof input?.enabled !== "boolean") throw new VisualizationRepositoryError("visualization_preference_invalid");
     const key = operationKey(input?.idempotencyKey);
     const traceId = required(input, "traceId");
-    return withPostgresTransaction(this.pool, async (client) => {
+    return withAccountWriteTransaction(this.pool, id, async (client) => {
       return idempotentAdminMutation(client, {
         actorId: id,
         idempotencyKey: key,

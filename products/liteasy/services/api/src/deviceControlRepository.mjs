@@ -1,5 +1,5 @@
 import { emptyDeviceState, DeviceControlError } from "../../../packages/device-control/src/service.mjs";
-import { withPostgresTransaction } from "./postgres.mjs";
+import { withAccountWriteTransaction } from "./accountDeletionFence.mjs";
 
 /** One bounded account transaction serializes device consent, idempotency and task leases together. */
 export class PostgresDeviceControlRepository {
@@ -7,7 +7,7 @@ export class PostgresDeviceControlRepository {
   async transaction(subjectId, operation) {
     for (let attempt = 0; ; attempt++) {
       try {
-        return await withPostgresTransaction(this.pool, async (client) => {
+        return await withAccountWriteTransaction(this.pool, subjectId, async (client) => {
           await client.query("INSERT INTO device_control_accounts(subject_id,state) VALUES ($1,$2::jsonb) ON CONFLICT DO NOTHING", [subjectId, JSON.stringify(emptyDeviceState())]);
           const result = await client.query("SELECT state FROM device_control_accounts WHERE subject_id=$1 FOR UPDATE", [subjectId]);
           const state = result.rows[0].state; const before = JSON.stringify(state);

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { withPostgresTransaction } from "./postgres.mjs";
+import { withAccountWriteTransaction } from "./accountDeletionFence.mjs";
 
 const activeStates = new Set(["cancel_requested", "queued", "running"]);
 const terminalStates = new Set(["cancelled", "failed", "omitted", "succeeded"]);
@@ -131,7 +132,7 @@ export class PostgresVisualizationGenerationRepository {
       subjectId: subject
     });
     const currentTime = this.now();
-    return withPostgresTransaction(this.pool, async (client) => {
+    return withAccountWriteTransaction(this.pool, subject, async (client) => {
       const inserted = await client.query(`
         INSERT INTO visualization_generation_requests(
           subject_id, request_id, artifact_id, artifact_revision, node_id,
@@ -155,7 +156,7 @@ export class PostgresVisualizationGenerationRepository {
         throw new VisualizationGenerationRepositoryError("visualization_request_id_reused", 409);
       }
       return publicProjection(existing);
-    }, { isolation: "READ COMMITTED" });
+    });
   }
 
   async get(subjectInput, requestInputValue) {
