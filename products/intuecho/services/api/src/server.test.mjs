@@ -1307,6 +1307,19 @@ test("desktop publication operations keep confirmed literature metadata server-o
     });
     assert.deepEqual(repeatedRetract.json().results[0], retracted);
 
+    const oldPublishAfterRetract = await app.inject({
+      headers: desktopHeader,
+      method: "POST",
+      payload: { operations: [publicationOperation({ literatureId })] },
+      url: "/v1/pdf-annotations:sync"
+    });
+    assert.equal(oldPublishAfterRetract.statusCode, 200, oldPublishAfterRetract.body);
+    assert.equal(oldPublishAfterRetract.json().results[0].error, "STALE_ANNOTATION_PUBLICATION");
+    assert.deepEqual(db.prepare("SELECT visibility, share_to_plaza FROM annotations_v2 WHERE id = ?").get(created.remoteAnnotationId), {
+      share_to_plaza: 0,
+      visibility: "private"
+    });
+
     const otherOwner = await app.inject({
       headers: otherDesktopHeader,
       method: "POST",

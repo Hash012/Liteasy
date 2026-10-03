@@ -1672,6 +1672,12 @@ try {
   const [publicationRetracted] = await annotations.applyDesktopAnnotationPublications(userOne, [retractOperation]);
   assert.equal(publicationRetracted.state, "retracted");
   assert.deepEqual((await annotations.applyDesktopAnnotationPublications(userOne, [retractOperation]))[0], publicationRetracted);
+  const [oldPublishAfterRetract] = await annotations.applyDesktopAnnotationPublications(userOne, [publicationOperation]);
+  assert.equal(oldPublishAfterRetract.error, "STALE_ANNOTATION_PUBLICATION");
+  assert.deepEqual((await pool.query("SELECT visibility, share_to_plaza FROM annotations WHERE id = $1", [publicationCreated.remoteAnnotationId])).rows[0], {
+    share_to_plaza: false,
+    visibility: "private"
+  });
   const [otherOwnerPublication] = await annotations.applyDesktopAnnotationPublications(userTwo, [publicationOperation]);
   assert.notEqual(otherOwnerPublication.remoteAnnotationId, publicationCreated.remoteAnnotationId);
   const publicationRow = await pool.query("SELECT visibility, share_to_plaza FROM annotations WHERE id = $1", [publicationCreated.remoteAnnotationId]);
