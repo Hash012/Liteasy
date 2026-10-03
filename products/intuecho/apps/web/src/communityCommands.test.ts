@@ -109,3 +109,18 @@ test("a second client instance cannot send a new command for an in-flight draft"
   await expect(otherClient.createAnnotation(input, intentId)).rejects.toThrow("原操作已提交");
   expect(commandRecords(owner).map((record) => record.operationId)).toEqual([intentId]);
 });
+
+test.each(["COMMAND_RESULT_UNAVAILABLE", "COMMAND_PAYLOAD_CONFLICT"])("%s preserves the original unresolved operation instead of claiming no commit", async (code) => {
+  const intentId = crypto.randomUUID();
+  const send = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ error: code }), { status: 409 }));
+  vi.stubGlobal("fetch", send);
+  await expect(communityApi.createAnnotation(input, intentId)).rejects.toThrow("待核实");
+  const [operation] = commandRecords(owner);
+  expect(operation).toMatchObject({ operationId: intentId, state: "outcome_unknown", payload: input });
+  await expect(communityApi.createAnnotation(input, intentId)).rejects.toThrow("待核实");
+  expect(send).toHaveBeenCalledTimes(1);
+  send.mockResolvedValueOnce(ok({ status: "committed", available: false, receipt: { operationId: intentId, operationType: "create_annotation", bodyDigest: operation.bodyDigest, resourceId: "old-annotation", committedAt: "now" } }));
+  await recoverCommand(owner, operation, communityApi.lookupCommand);
+  expect(commandRecords(owner)[0]).toMatchObject({ state: "committed", resourceId: "old-annotation" });
+  expect(commandRecords(owner)[0].payload).toBeUndefined();
+});

@@ -54,7 +54,8 @@ export async function durableCreate<T>(operationType: CommandRecord["operationTy
       saveCommand(owner, { ...record, resourceId: resource.id, payload: undefined, state: "committed", updatedAt: new Date().toISOString() });
       return result;
     } catch (error) {
-      if (error instanceof CommunityRequestError && error.status >= 400 && error.status < 500) {
+      if (error instanceof CommunityRequestError && error.status >= 400 && error.status < 500
+        && !["COMMAND_RESULT_UNAVAILABLE", "COMMAND_PAYLOAD_CONFLICT", "COMMAND_DIGEST_MISMATCH"].includes(error.code)) {
         saveCommand(owner, { ...record, state: "rejected", updatedAt: new Date().toISOString() });
         throw error;
       }

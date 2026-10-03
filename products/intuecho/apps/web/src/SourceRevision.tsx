@@ -6,18 +6,24 @@ import { getIdentitySessionGeneration } from "./identityClient";
 import { desktopSourceUrl } from "./reading-group/readingGroup";
 
 export function SourceRevision({ reference }: { reference: CommunitySourceReference }) {
+  const binding = JSON.stringify([getIdentitySessionGeneration(), reference]);
+  return <SourceRevisionContent key={binding} reference={reference} />;
+}
+
+function SourceRevisionContent({ reference }: { reference: CommunitySourceReference }) {
   const [result, setResult] = useState<Awaited<ReturnType<typeof communityApi.sourceRevision>>>();
   const [status, setStatus] = useState("");
   const [pending, setPending] = useState(false);
   const mounted = useRef(true);
-  const current = useRef(reference);
-  current.current = reference;
+  const referenceKey = JSON.stringify(reference);
+  const current = useRef(referenceKey);
+  current.current = referenceKey;
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => { setResult(undefined); setStatus(""); }, [reference.sourceNamespace, reference.sourceId, reference.revision]);
   async function read() {
     const requested = reference;
     const generation = getIdentitySessionGeneration();
-    const stillCurrent = () => mounted.current && generation === getIdentitySessionGeneration() && current.current === requested;
+    const stillCurrent = () => mounted.current && generation === getIdentitySessionGeneration() && current.current === JSON.stringify(requested);
     setPending(true); setResult(undefined); setStatus("");
     try {
       const value = await communityApi.sourceRevision(requested);
