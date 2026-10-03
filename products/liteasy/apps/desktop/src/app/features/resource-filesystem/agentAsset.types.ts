@@ -12,7 +12,7 @@ export type AgentAsset = {
   summary?: string;
   relatedPaperIds?: string[];
   /** Trusted adapter source provenance; not an authorization supplied by a model. */
-  sourceReferences?: Array<NonNullable<import("../workspace/workspace.types").Paper["libraryReference"]>>;
+  sourceReferences?: import("./assetSourceReferences").AssetSourceReference[];
   structuredType?: { id: string; version: string };
 };
 export type AgentAssetSearch = { query: string; limit?: number; signal?: AbortSignal };

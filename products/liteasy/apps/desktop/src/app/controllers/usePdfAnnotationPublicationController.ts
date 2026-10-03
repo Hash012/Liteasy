@@ -563,7 +563,7 @@ export function usePdfAnnotationPublicationController({
     let priorPublication = latestPublicationRef.current.get(queueKey) ?? input.annotation.publication;
     let operation: ForumAnnotationPublicationOperation | undefined;
     function assertPublicSource() {
-      if (input.paper.libraryReference?.scopeType === "organization") {
+      if (input.paper.libraryReference?.scopeType === "organization" || input.paper.sourcePath?.startsWith("org://")) {
         throw new Error("组织来源尚未允许公开发布；已有论坛批注仍可撤回。");
       }
     }

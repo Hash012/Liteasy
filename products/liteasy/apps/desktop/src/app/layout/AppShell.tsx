@@ -1541,6 +1541,7 @@ export function AppShell({
   } = organizationShell.model;
   const teamAnnotations = useTeamAnnotationController({
     accountSession,
+    confirmShare: publicationPreview.confirm,
     endpoint: externalKnowledgeEndpoint,
     organizationSummary
   });

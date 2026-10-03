@@ -115,6 +115,7 @@ function renderController(input?: {
   const hook = renderHook(() => useTeamAnnotationController({
     accountSession: input?.account === undefined ? accountSession : input.account,
     createClient,
+    confirmShare: async () => true,
     endpoint: "https://cloud.example.test",
     organizationSummary: input?.summary === undefined
       ? organizationSummary(input?.role)
@@ -190,4 +191,15 @@ test("does not bind local papers or unauthenticated sessions", () => {
 
   const unauthenticated = renderController({ account: null });
   expect(unauthenticated.result.current.readerBindings(organizationPaper)).toEqual({});
+});
+
+test("rejects a delayed team annotation response after switching accounts", async () => {
+  let complete!: (value: { annotations: TeamAnnotation[] }) => void;
+  const list = vi.fn(() => new Promise<{ annotations: TeamAnnotation[] }>((resolve) => { complete = resolve; }));
+  const createClient = (() => ({ list })) as unknown as typeof createTeamAnnotationClient;
+  const hook = renderHook(({ session }) => useTeamAnnotationController({ accountSession: session, createClient, endpoint: "https://cloud.example.test" }), { initialProps: { session: accountSession } });
+  const pending = hook.result.current.readerBindings(organizationPaper).loadOrganizationAnnotations!(organizationPaper);
+  hook.rerender({ session: { ...accountSession, userId: "other-user", sessionId: "other-token" } });
+  complete({ annotations: [annotation] });
+  await expect(pending).rejects.toThrow("账号或服务已变化");
 });

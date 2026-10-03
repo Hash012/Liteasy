@@ -193,3 +193,17 @@ test("fails closed before transport when no account session is available", async
   await expect(client.list()).rejects.toThrow("请先登录");
   expect(transport).not.toHaveBeenCalled();
 });
+
+test("does not return a prior account's artifact response after an account or endpoint switch", async () => {
+  let token = "account-a";
+  let base = "https://cloud-a.example.test";
+  let complete!: (value: unknown) => void;
+  const client = createArtifactResultClient({ getAccessToken: () => token, getBaseEndpoint: () => base,
+    transport: async () => ({ ok: true, status: 200, json: () => new Promise((resolve) => { complete = resolve; }) }) });
+  const pending = client.list();
+  await vi.waitFor(() => expect(complete).toBeDefined());
+  token = "account-b";
+  base = "https://cloud-b.example.test";
+  complete({ artifacts: [document] });
+  await expect(pending).rejects.toThrow("账号或服务已变化");
+});

@@ -199,3 +199,15 @@ test("malformed provider items cannot crash bibliography normalization", async (
   const result = await createMetadataProviderClient({ provider: "crossref", endpoint: "https://api.crossref.org" }).resolveLiterature({ purpose: "liteasy_pdf_annotation", query: "Valid" });
   expect(result).toMatchObject({ status: "ambiguous", candidates: [{ record: { title: "Valid title", authors: ["Alice Smith"] } }] });
 });
+
+test("organization PDF text is not sent to configured third-party parsing services", async () => {
+  const fetch = vi.fn();
+  const read = vi.fn();
+  vi.stubGlobal("fetch", fetch);
+  await expect(extractWithConfiguredMineru({
+    config: { provider: "mineru", endpoint: "https://parser.example.test" }, mode: "official",
+    paper: { id: "legacy-org-source", title: "Internal manual", sourcePath: "org://group/shared-library/internal.pdf" }, loadPdfSource: read
+  })).rejects.toThrow("属于组织");
+  expect(fetch).not.toHaveBeenCalled();
+  expect(read).not.toHaveBeenCalled();
+});

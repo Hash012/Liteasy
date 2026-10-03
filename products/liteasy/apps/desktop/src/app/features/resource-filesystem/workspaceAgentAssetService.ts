@@ -1,3 +1,4 @@
+import { paperSourceReferences } from "./assetSourceReferences";
 import { relativeImagePath } from "./attachmentPath";
 import type { AgentArtifactResult } from "../artifacts/artifact.types";
 import { artifactContextText } from "../artifacts/artifactContext";
@@ -38,7 +39,7 @@ export type WorkspaceAgentAssetInput = {
 export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput) {
   const scope = input.repository.scopeId;
   const sourceReferences = (paperIds: string[]) => (input.getPapers?.() ?? []).filter((paper) => paperIds.includes(paper.id))
-    .flatMap((paper) => paper.libraryReference ? [paper.libraryReference] : []);
+    .flatMap(paperSourceReferences);
   const check = (signal?: AbortSignal) => {
     signal?.throwIfAborted();
     if (!input.active()) throw new AgentAssetError("scope_changed", "账号已切换，请重新选择资产。");
@@ -329,7 +330,7 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
     const paperStat = (paper: Paper): AgentAsset => ({ path: liteasyPath(scope, { kind: "paper", paperId: paper.id }),
       title: paper.literature?.title || paper.title, kind: "paper", revision: paper.contentHash,
       capabilities: readCapabilities(), relatedPaperIds: [paper.id],
-      sourceReferences: paper.libraryReference ? [paper.libraryReference] : [],
+      sourceReferences: paperSourceReferences(paper),
       summary: [Array.isArray(paper.authors) ? paper.authors.join("、") : paper.authors, paper.year].filter(Boolean).join(" · "),
     });
     const findPaper = (path: string) => {

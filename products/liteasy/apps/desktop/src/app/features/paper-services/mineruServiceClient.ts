@@ -1,3 +1,4 @@
+import { assertExternalPaperSources } from "../models/externalSourcePolicy";
 import { unzipSync, strFromU8 } from "fflate";
 import { buildPdfChunksFromPages } from "../import/pdfTextExtractor";
 import type { MineruFigure } from "../import/import.types";
@@ -45,6 +46,7 @@ export async function extractWithConfiguredMineru(input: {
   const stored = await loadDurableEntries("paper-services");
   const cached = stored[key] as { chunks?: ReturnType<typeof buildPdfChunksFromPages>; figures?: MineruFigure[]; batchId?: string; uploadUrl?: string; uploaded?: boolean; endpoint?: string; sourcePath?: string; contentHash?: string } | undefined;
   if (cached?.chunks?.length && (cached.contentHash && paper.contentHash ? cached.contentHash === paper.contentHash : cached.sourcePath === paper.sourcePath)) return { chunks: cached.chunks, figures: cached.figures ?? [] };
+  assertExternalPaperSources([paper]);
   const check = async (response: Response) => { if (!response.ok) throw new Error(`MinerU 请求失败（HTTP ${response.status}），已保留解析任务。`); return response.json(); };
   let result: { chunks: ReturnType<typeof buildPdfChunksFromPages>; figures: MineruFigure[] };
   if (input.mode === "custom") {
