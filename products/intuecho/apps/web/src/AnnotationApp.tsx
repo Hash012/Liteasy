@@ -66,6 +66,8 @@ import {
   type PlazaFilters
 } from "./community.types";
 import { communityApi } from "./communityApi";
+import { readPlazaHistory, usePlazaFeed } from "./usePlazaFeed";
+import { plazaFiltersFromLocation, readCommunityRoute } from "./communityNavigation";
 import { canonicalizeInheritedTargets } from "./canonicalizeInheritedTargets";
 import type { CommunitySourceReference } from "@intuecho/contracts";
 import { SourceRevision } from "./SourceRevision";
@@ -73,7 +75,8 @@ import { CommunityOperationCenter } from "./CommunityOperationCenter";
 import { RevisionConflict } from "./RevisionConflict";
 import { LocalDraftControls } from "./LocalDraftControls";
 import { AnnotationSendPreview } from "./AnnotationSendPreview";
-import { draftOwner, saveDraft, removeDraft } from "./communityPersistence";
+import { draftOwner, type CommandRecord } from "./communityPersistence";
+import { useLocalDraft } from "./useLocalDraft";
 import { AnnotationComposer as ExtractedAnnotationComposer, type ComposerState } from "./AnnotationComposer";
 import { ContributionSummary } from "./AnnotationContribution";
 import type { IdentityMode, IdentitySession } from "./identity.types";
@@ -154,34 +157,18 @@ export function AnnotationApp() {
   const [identityMode, setIdentityMode] = useState<IdentityMode | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [view, setView] = useState<View>("plaza");
-  const [detailId, setDetailId] = useState<string | null>(() => decodeURIComponent(window.location.pathname.match(/^\/annotations\/([^/]+)$/)?.[1] ?? "") || null);
-  const [sourceReference, setSourceReference] = useState<CommunitySourceReference | null>(() => {
-    const match = window.location.pathname.match(/^\/sources\/(intuecho\.(?:annotation|reply|literature))\/([^/]+)$/);
-    const revision = Number(new URLSearchParams(window.location.search).get("revision"));
-    return match && Number.isSafeInteger(revision) && revision > 0 ? { sourceNamespace: match[1] as CommunitySourceReference["sourceNamespace"], sourceId: decodeURIComponent(match[2]), revision } : null;
-  });
+  const [detailId, setDetailId] = useState<string | null>(() => readCommunityRoute().annotationId);
+  const [sourceReference, setSourceReference] = useState<CommunitySourceReference | null>(() => readCommunityRoute().source);
+  const restoringInitialNavigation = useRef(true);
   const [composer, setComposer] = useState<ComposerState | null>(null);
   const [conversation, setConversation] = useState<ConversationSelection | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [inboxRefresh, setInboxRefresh] = useState(0);
   const [filters, setFilters] = useState<PlazaFilters>(() => {
-    const params = new URLSearchParams(window.location.search);
-    const kind = params.get("literatureIdentityKind") as PaperIdentity["kind"] | null;
-    return {
-      ...(params.get("literatureId") ? { literatureId: params.get("literatureId")! } : {}),
-      ...(kind && new Set([
-        "doi",
-        "arxiv_id",
-        "semantic_scholar_id",
-        "openalex_id",
-        "openreview_id",
-        "dblp_key",
-        "pmlr_id",
-        "title_authors_year_hash"
-      ]).has(kind) ? { literatureIdentityKind: kind } : {}),
-      ...(params.get("literatureIdentityValue") ? { literatureIdentityValue: params.get("literatureIdentityValue")! } : {}),
-      sort: "recommended"
-    };
+    const explicit = plazaFiltersFromLocation();
+    if (explicit) return explicit;
+    const initialActor = JSON.stringify([intuechoApiBaseUrl, session?.issuer, session?.userId, getIdentitySessionGeneration()]);
+    return readPlazaHistory(initialActor)?.filters ?? { sort: "recommended" };
   });
   const [handoffStatus, setHandoffStatus] = useState("");
   const inbox = usePollingRemote(
@@ -193,6 +180,14 @@ export function AnnotationApp() {
   const unreadMessages = inbox.data?.conversations.reduce((total, item) => total + item.unreadCount, 0) ?? 0;
 
   function applySession(next: IdentitySession | null) {
+    if (restoringInitialNavigation.current) {
+      restoringInitialNavigation.current = false;
+      if (window.location.pathname === "/" && !plazaFiltersFromLocation()) {
+        const nextActor = JSON.stringify([intuechoApiBaseUrl, next?.issuer, next?.userId, getIdentitySessionGeneration()]);
+        const saved = readPlazaHistory(nextActor);
+        if (saved) setFilters(saved.filters);
+      }
+    }
     if (sessionRef.current?.sessionId !== next?.sessionId || sessionRef.current?.userId !== next?.userId || sessionRef.current?.issuer !== next?.issuer) {
       sessionGeneration.current += 1;
       setComposer(null);
@@ -246,6 +241,44 @@ export function AnnotationApp() {
     return () => { active = false; };
   }, [identityMode, session?.sessionId]);
 
+  useEffect(() => {
+    const onPopState = () => {
+      const route = readCommunityRoute();
+      setSourceReference(route.source);
+      setDetailId(route.annotationId);
+      if (!route.annotationId && !route.source) {
+        setView("plaza");
+        setFilters(plazaFiltersFromLocation() ?? readPlazaHistory(actorBinding)?.filters ?? { sort: "recommended" });
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [actorBinding]);
+
+  function openAnnotation(id: string, replyId?: string) {
+    setSourceReference(null);
+    setDetailId(id);
+    window.history.pushState({}, document.title, `/annotations/${encodeURIComponent(id)}${replyId ? `#reply-${encodeURIComponent(replyId)}` : ""}`);
+    window.scrollTo(0, 0);
+  }
+
+  async function restoreOperation(record: CommandRecord) {
+    const generation = sessionGeneration.current;
+    const payload = record.payload;
+    if (!payload || !session) throw new Error("原稿不可用，请先确认当前账号。");
+    if (typeof payload.organizationId === "string" && payload.organizationId) {
+      const { organizations } = await communityApi.organizationChoices();
+      if (!organizations.some((organization) => organization.organizationId === payload.organizationId && organization.allowedActions.includes("read_body"))) {
+        throw new Error("当前组织内容不可访问；原始恢复记录仍保留。");
+      }
+    }
+    const replyTo = record.operationType === "create_reply" && record.targetId
+      ? (await communityApi.annotation(record.targetId)).annotation : undefined;
+    if (replyTo?.withdrawnAt) throw new Error("原讨论已撤回；原始恢复记录仍保留。");
+    if (generation !== sessionGeneration.current) return;
+    setComposer({ draft: payload as CreateAnnotationInput, replyTo, restoredOperation: record, restoredDraftId: record.draftId });
+  }
+
   function requireSession(operation: () => void) {
     if (!session) setAuthOpen(true);
     else operation();
@@ -270,16 +303,22 @@ export function AnnotationApp() {
     {handoffStatus && <div className="handoff-status-v2" role="status">{handoffStatus}</div>}
     <GovernanceScope actorBinding={actorBinding} signedIn={Boolean(session)}>
     <div className="annotation-workspace" key={actorBinding}>
-      <main className="annotation-main">
+      <main className="annotation-main" onClick={(event) => {
+        if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+        const anchor = (event.target as Element).closest<HTMLAnchorElement>("a.annotation-detail-link");
+        const match = anchor?.pathname.match(/^\/annotations\/([^/]+)$/);
+        if (match) { event.preventDefault(); openAnnotation(decodeURIComponent(match[1])); }
+      }}>
         {sourceReference ? <SourceRevision key={actorBinding} reference={sourceReference} /> : detailId ? <AnnotationDetail annotationId={detailId} refresh={refresh} session={session} onCompose={setComposer} onConversation={setConversation} /> : <>
-          {view === "plaza" && <Plaza filters={filters} onFilters={setFilters} refresh={refresh} session={session} onCompose={setComposer} onConversation={setConversation} />}
+          {view === "plaza" && identityMode === null && <Loading />}
+          {view === "plaza" && identityMode !== null && <Plaza actorKey={actorBinding} filters={filters} onFilters={setFilters} refresh={refresh} session={session} onCompose={setComposer} onConversation={setConversation} />}
           {view === "following" && (session ? <FollowingAnnotations refresh={refresh} session={session} onCompose={setComposer} onConversation={setConversation} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
           {view === "messages" && (session ? <ConversationsPage data={inbox.data} error={inbox.error} onConversation={setConversation} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
           {view === "mine" && (session ? <MyAnnotations refresh={refresh} session={session} onCompose={setComposer} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
           {view === "organizations" && (session ? <OrganizationAnnotations refresh={refresh} session={session} onCompose={setComposer} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
           {view === "notifications" && (session ? <QuietInbox api={communityApi} actorBinding={actorBinding} onOpenReports={() => { setDetailId(null); window.history.pushState({}, document.title, "/"); setView("reports"); }} onOpenAnnotation={(id) => { setDetailId(id); window.history.pushState({}, document.title, `/annotations/${encodeURIComponent(id)}`); }} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
           {view === "reports" && (session ? <><CommunityReportHistory api={communityApi} actorBinding={actorBinding} /><CommunityReportHistory api={communityApi} actorBinding={actorBinding} review /></> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
-          {view === "operations" && (session ? <CommunityOperationCenter key={actorBinding} owner={draftOwner(session)} accountName={session.name} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
+          {view === "operations" && (session ? <CommunityOperationCenter key={actorBinding} owner={draftOwner(session)} accountName={session.name} onRestoreOperation={restoreOperation} onOpenResult={openAnnotation} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
           {view === "profile" && (session ? <ProfileEditor refresh={refresh} /> : <SignedOut onLogin={() => setAuthOpen(true)} />)}
         </>}
       </main>
@@ -352,7 +391,8 @@ function AppHeader({ filters, onChangeFilters, onLogin, onLogout, onPublish, onV
   </header>;
 }
 
-function Plaza({ filters, onCompose, onConversation, onFilters, refresh, session }: {
+export function Plaza({ filters, onCompose, onConversation, onFilters, refresh, session, actorKey = "signed-out" }: {
+  actorKey?: string;
   filters: PlazaFilters;
   onCompose: (value: { edit?: CommunityAnnotation; replyTo?: CommunityAnnotation }) => void;
   onConversation: (value: ConversationSelection) => void;
@@ -361,7 +401,8 @@ function Plaza({ filters, onCompose, onConversation, onFilters, refresh, session
   session: IdentitySession | null;
 }) {
   const key = JSON.stringify(filters) + refresh;
-  const { data, error } = useRemote(() => communityApi.plaza(filters), key);
+  const feed = usePlazaFeed({ filters, actorKey, refresh });
+  const { annotations, error, loading, loaded } = feed;
   const [activeFilters, setActiveFilters] = useState(filters);
   const [filtersOpen, setFiltersOpen] = useState(false);
   useEffect(() => setActiveFilters(filters), [key]);
@@ -380,12 +421,13 @@ function Plaza({ filters, onCompose, onConversation, onFilters, refresh, session
   return <div className="plaza-layout">
     <section className="plaza-feed">
       <div className="plaza-heading">
-        <div><span>公开批注</span><h1>广场</h1><p>{data ? `${data.annotations.length} 条批注` : "正在整理内容"}</p></div>
+        <div><span>公开批注</span><h1>广场</h1><p>{loaded ? `${annotations.length} 条批注` : "正在整理内容"}</p></div>
         <div className="plaza-tools">
           <div className="sort-control" aria-label="排序方式">
           <button className={filters.sort === "recommended" ? "active" : ""} onClick={() => changeSort("recommended")}>推荐</button>
           <button className={filters.sort === "latest" ? "active" : ""} onClick={() => changeSort("latest")}>最新</button>
           </div>
+          <Button appearance="subtle" icon={<ArrowReset20Regular />} aria-label="刷新广场" disabled={loading} onClick={feed.reload}>刷新</Button>
           <Button appearance="subtle" icon={<Filter20Regular />} aria-expanded={filtersOpen} onClick={() => setFiltersOpen((open) => !open)}>筛选{filterCount ? ` ${filterCount}` : ""}</Button>
         </div>
       </div>
@@ -398,7 +440,16 @@ function Plaza({ filters, onCompose, onConversation, onFilters, refresh, session
         <Button appearance="subtle" size="small" icon={<ArrowReset20Regular />} onClick={clearFilters}>清除</Button>
       </div>}
       {filtersOpen && <section className="filter-panel" aria-label="筛选批注"><PlazaFilters value={activeFilters} onChange={setActiveFilters} /><div className="filter-actions"><Button appearance="subtle" icon={<ArrowReset20Regular />} disabled={!draftFilterCount} onClick={clearFilters}>清除</Button><Button appearance="primary" onClick={() => { onFilters(activeFilters); setFiltersOpen(false); }}>应用筛选</Button></div></section>}
-      {error ? <ErrorNotice message={error} /> : !data ? <Loading /> : data.annotations.length ? <div className="annotation-list">{data.annotations.map((annotation) => <AnnotationCard key={`${annotation.id}-${refresh}`} annotation={annotation} session={session} onCompose={onCompose} onConversation={onConversation} />)}</div> : <EmptyState text="没有符合条件的公开批注" />}
+      {feed.legacyFilterNotice && <p className="plaza-pagination-note" role="note">{feed.legacyFilterNotice}</p>}
+      {annotations.length > 0 && <div className="annotation-list">{annotations.map((annotation) => <AnnotationCard key={`${annotation.id}-${refresh}`} annotation={annotation} session={session} onCompose={onCompose} onConversation={onConversation} />)}</div>}
+      {error && <ErrorNotice message={error} />}
+      {loading && <Loading />}
+      {!loading && !error && loaded && !annotations.length && <EmptyState text="没有符合条件的公开批注" />}
+      <div className="plaza-pagination" aria-label="广场分页">
+        {!loading && error && <Button onClick={() => void feed.loadMore()}>重试加载</Button>}
+        {!error && feed.nextCursor && <Button disabled={loading} onClick={() => void feed.loadMore()}>加载更多批注</Button>}
+        {feed.paged && loaded && !feed.nextCursor && !loading && !error && annotations.length > 0 && <span>已显示全部 {annotations.length} 条批注</span>}
+      </div>
     </section>
   </div>;
 }
@@ -411,7 +462,8 @@ function PlazaFilters({ value, onChange }: { value: PlazaFilters; onChange: (val
   </div>;
 }
 
-export function AnnotationCard({ annotation, onCompose, onConversation, session }: {
+export function AnnotationCard({ annotation, onCompose, onConversation, session, initialRepliesOpen = false }: {
+  initialRepliesOpen?: boolean;
   annotation: CommunityAnnotation;
   onCompose: (value: { edit?: CommunityAnnotation; replyTo?: CommunityAnnotation }) => void;
   onConversation?: (value: ConversationSelection) => void;
@@ -419,7 +471,7 @@ export function AnnotationCard({ annotation, onCompose, onConversation, session 
 }) {
   const governance = useCommunityGovernance();
   const [current, setCurrent] = useState(annotation);
-  const [repliesOpen, setRepliesOpen] = useState(false);
+  const [repliesOpen, setRepliesOpen] = useState(initialRepliesOpen);
   const [status, setStatus] = useState("");
   const [appealTag, setAppealTag] = useState<string | null>(null);
   const [appealReason, setAppealReason] = useState("");
@@ -507,7 +559,7 @@ function AnnotationDetail({ annotationId, onCompose, onConversation, refresh, se
   session: IdentitySession | null;
 }) {
   const { data, error } = useRemote(() => communityApi.annotation(annotationId), `${annotationId}:${refresh}`);
-  return <section className="single-column annotation-detail"><div className="page-heading"><span>批注</span><h1>详情</h1></div>{error ? <ErrorNotice message={error} /> : !data ? <Loading /> : <AnnotationCard annotation={data.annotation} session={session} onCompose={onCompose} onConversation={onConversation} />}</section>;
+  return <section className="single-column annotation-detail"><div className="page-heading"><span>批注</span><h1>详情</h1></div>{error ? <ErrorNotice message={error} /> : !data ? <Loading /> : <AnnotationCard key={data.annotation.id} initialRepliesOpen={window.location.hash.startsWith("#reply-")} annotation={data.annotation} session={session} onCompose={onCompose} onConversation={onConversation} />}</section>;
 }
 
 function TargetChip({ target }: { target: AnnotationReadTarget }) {
@@ -522,6 +574,14 @@ function TargetChip({ target }: { target: AnnotationReadTarget }) {
 
 export function ReplyThread({ annotation, onCompose, session }: { annotation: CommunityAnnotation; onCompose: (value: { replyTo?: CommunityAnnotation }) => void; session: IdentitySession | null }) {
   const { data, error } = useRemote(() => communityApi.replies(annotation.id), annotation.id);
+  useEffect(() => {
+    if (data && window.location.hash.startsWith("#reply-")) {
+      try {
+        const id = decodeURIComponent(window.location.hash.slice(1));
+        document.getElementById(id)?.scrollIntoView?.({ block: "center" });
+      } catch { /* A malformed URL fragment must not prevent reading authorized replies. */ }
+    }
+  }, [data]);
   return <section className="reply-thread">
     <div className="reply-heading"><strong>回复</strong>{session && <Button size="small" appearance="subtle" icon={<Add20Regular />} onClick={() => onCompose({ replyTo: annotation })}>写回复</Button>}</div>
     {error ? <ErrorNotice message={error} /> : !data ? <Spinner size="tiny" /> : data.replies.length ? data.replies.map((reply) => <ReplyItem key={reply.id} parent={annotation} reply={reply} session={session} onCompose={onCompose} />) : <span className="empty-replies">暂无回复</span>}
@@ -543,15 +603,25 @@ export function ReplyItem({ parent, reply, session }: { onCompose: (value: { rep
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const owner = draftOwner(session);
   const scope = `reply-edit:${reply.id}`;
+  const localDraft = useLocalDraft({ owner, scope, value: { body, baseRevision }, enabled: editing,
+    onRestore: (draft) => {
+      if (!draft || typeof draft.body !== "string" || !Number.isSafeInteger(draft.baseRevision) || draft.baseRevision < 1) throw new Error("本机回复草稿格式无效，原始记录已保留，请导出后核对。");
+      setBody(draft.body); setBaseRevision(draft.baseRevision); setPublicationPreview(undefined);
+    }
+  });
   const isCurrent = (generation: number) => mounted.current && generation === getIdentitySessionGeneration();
+  async function closeEdit() {
+    try { if (owner) await localDraft.save(); setEditing(false); }
+    catch (error) { setStatus(error instanceof Error ? error.message : "草稿未保存，请保留此窗口。"); }
+  }
   async function save() {
     const generation = getIdentitySessionGeneration();
     try {
-      if (owner) saveDraft(owner, scope, { body, baseRevision });
+      const savedDraft = owner ? await localDraft.save() : undefined;
       const result = await communityApi.updateReply(reply.id, { body, expectedRevision: baseRevision });
       if (!isCurrent(generation)) return;
       setBaseRevision(result.reply.revision);
-      if (owner) { try { removeDraft(owner, scope); } catch { /* Preserve successful remote result. */ } }
+      if (savedDraft) { try { await localDraft.clear(savedDraft); } catch { /* A cleanup failure must not repeat a successful remote edit. */ } }
       setBody(result.reply.body);
       setEditing(false);
     } catch (reason) { if (isCurrent(generation)) { setStatus(reason instanceof Error ? reason.message : "回复保存失败"); if (reason instanceof Error && reason.message.includes("REPLY_REVISION_CONFLICT")) setRevisionConflict(true); } }
@@ -619,7 +689,7 @@ export function ReplyItem({ parent, reply, session }: { onCompose: (value: { rep
     ? publicationState === "published" ? "正在撤回" : publicationState === "withdrawn" ? "正在恢复" : "正在发布"
     : publicationLabel;
   const publicationStateLabel = publicationState === "published" ? "已发布" : publicationState === "withdrawn" ? "已撤回" : "未发布";
-  return <article className="reply-item"><header><span className="author-avatar">{reply.author.initials}</span><div><strong>{reply.author.name}</strong><small>{new Date(reply.updatedAt).toLocaleDateString("zh-CN")}{reply.revision > 1 ? " · 已编辑" : ""}</small></div></header>{editing ? <><LocalDraftControls owner={owner} scope={scope} value={{ body, baseRevision }} onRestore={(draft) => { setBody(draft.body); setBaseRevision(draft.baseRevision); setPublicationPreview(undefined); }} /><Textarea value={body} onChange={(_, data) => { setBody(data.value); setPublicationPreview(undefined); }} /><div className="reply-edit-actions"><Button size="small" onClick={() => setEditing(false)}>取消</Button><Button size="small" appearance="primary" onClick={() => void save()}>保存</Button></div></> : <p>{body}</p>}<span className={`reply-publication-state ${publicationState}`}>独立批注：{publicationStateLabel}</span>{publicationState === "published" && derivedAnnotationId && <a className="derived-annotation-link" href={`/annotations/${encodeURIComponent(derivedAnnotationId)}`}>查看同步发布的批注</a>}<footer>{reply.viewerIsAuthor && !editing && <Button size="small" appearance="subtle" icon={<Edit20Regular />} onClick={() => setEditing(true)}>编辑</Button>}{reply.viewerIsAuthor && !editing && <Button size="small" appearance="subtle" disabled={publicationPending || Boolean(publicationPreview)} onClick={() => void updatePublication(publicationState !== "published")}>{publicationCommandLabel}</Button>}</footer>{revisionConflict && <RevisionConflict baseRevision={baseRevision} loadCurrent={async () => { const current = (await communityApi.replies(parent.id)).replies.find((item) => item.id === reply.id); if (!current) throw new Error("REPLY_NOT_FOUND"); return current; }} onUseRevision={(revision) => { setBaseRevision(revision); setRevisionConflict(false); setPublicationPreview(undefined); }} />}{publicationPreview && <AnnotationSendPreview input={publicationPreview.input} profile={publicationPreview.profile} authorName={reply.author.name} pending={publicationPending} onConfirm={() => void confirmPublication()} onCancel={() => setPublicationPreview(undefined)} />}{status && <p className="inline-status" role="status">{status}</p>}</article>;
+  return <article className="reply-item" id={`reply-${reply.id}`}><header><span className="author-avatar">{reply.author.initials}</span><div><strong>{reply.author.name}</strong><small>{new Date(reply.updatedAt).toLocaleDateString("zh-CN")}{reply.revision > 1 ? " · 已编辑" : ""}</small></div></header>{editing ? <><LocalDraftControls controller={localDraft} owner={owner} scope={scope} value={{ body, baseRevision }} onRestore={(draft) => { setBody(draft.body); setBaseRevision(draft.baseRevision); setPublicationPreview(undefined); }} /><Textarea value={body} onChange={(_, data) => { setBody(data.value); setPublicationPreview(undefined); }} /><div className="reply-edit-actions"><Button size="small" onClick={() => void closeEdit()}>取消</Button><Button size="small" appearance="primary" onClick={() => void save()}>保存</Button></div></> : <p>{body}</p>}<span className={`reply-publication-state ${publicationState}`}>独立批注：{publicationStateLabel}</span>{publicationState === "published" && derivedAnnotationId && <a className="derived-annotation-link" href={`/annotations/${encodeURIComponent(derivedAnnotationId)}`}>查看同步发布的批注</a>}<footer>{reply.viewerIsAuthor && !editing && <Button size="small" appearance="subtle" icon={<Edit20Regular />} onClick={() => setEditing(true)}>编辑</Button>}{reply.viewerIsAuthor && !editing && <Button size="small" appearance="subtle" disabled={publicationPending || Boolean(publicationPreview)} onClick={() => void updatePublication(publicationState !== "published")}>{publicationCommandLabel}</Button>}</footer>{revisionConflict && <RevisionConflict baseRevision={baseRevision} loadCurrent={async () => { const current = (await communityApi.replies(parent.id)).replies.find((item) => item.id === reply.id); if (!current) throw new Error("REPLY_NOT_FOUND"); return current; }} onUseRevision={(revision) => { setBaseRevision(revision); setRevisionConflict(false); setPublicationPreview(undefined); }} />}{publicationPreview && <AnnotationSendPreview input={publicationPreview.input} profile={publicationPreview.profile} authorName={reply.author.name} pending={publicationPending} onConfirm={() => void confirmPublication()} onCancel={() => setPublicationPreview(undefined)} />}{status && <p className="inline-status" role="status">{status}</p>}</article>;
 }
 
 function FollowingAnnotations({ onCompose, onConversation, refresh, session }: {

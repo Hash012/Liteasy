@@ -508,3 +508,9 @@ a { color: inherit; text-decoration: none; }
 @media (max-width: 350px) {
   .sidebar-nav-items > button { width: 36px; min-width: 34px; }
 }
+
+.plaza-pagination { display: flex; justify-content: center; gap: 12px; padding: 20px 0 28px; color: var(--intuecho-muted); }
+.plaza-pagination-note { padding: 10px 12px; border: 1px solid var(--intuecho-line); border-radius: 6px; color: var(--intuecho-muted); font-size: 13px; }
+.operation-storage-summary, .operation-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.operation-storage-summary { justify-content: space-between; padding: 12px 0; color: var(--intuecho-muted); font-size: 13px; }
+.operation-identifier { margin: 10px 0; color: var(--intuecho-muted); font-size: 12px; overflow-wrap: anywhere; }
