@@ -152,3 +152,11 @@ scenario runs in `verify-postgres-integration.mjs`. These are local synthetic
 measurements, not production capacity claims; projection ancestry and legacy
 ranked feeds still have additional work that this root-annotation benchmark does
 not characterize.
+
+
+Desktop version-evidence reads use the separate
+`GET /v1/integrations/desktop/community-sources/:namespace/:id/revisions/:revision`
+alias with a verified `liteasy-desktop` token. Web tokens are rejected there and
+Desktop tokens are rejected on the Web alias. Both aliases call the same current
+permission and historical-scope checks; neither writes a receipt or copies body
+into a handoff payload.

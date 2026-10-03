@@ -139,3 +139,28 @@ for (const entrypoint of ["development", "production"]) {
     assert.deepEqual(audienceChecks, ["liteasy-desktop", "liteasy-desktop", "liteasy-desktop"]);
   });
 }
+
+for (const entrypoint of ["development", "production"]) {
+  test(`${entrypoint} Desktop version evidence uses its own audience and rechecks withdrawal`, async (t) => {
+    const { app, db } = await setup(t, entrypoint);
+    const created = await app.inject({ method: "POST", url: "/v1/annotations", headers: webHeaders, payload: {
+      body: "Synthetic evidence before correction", visibility: "public", shareToPlaza: false, tags: [],
+      targets: [{ kind: "whole_document", literature: { literatureId: "literature-1" } }]
+    } });
+    assert.equal(created.statusCode, 201, created.body);
+    const id = created.json().annotation.id;
+    assert.equal((await app.inject({ method: "PUT", url: `/v1/annotations/${id}`, headers: webHeaders, payload: { body: "Synthetic corrected evidence", expectedRevision: 1 } })).statusCode, 200);
+    const desktopUrl = `/v1/integrations/desktop/community-sources/intuecho.annotation/${id}/revisions/1`;
+    const before = db.serialize();
+    const source = await app.inject({ method: "GET", url: desktopUrl, headers });
+    assert.equal(source.statusCode, 200, source.body);
+    assert.equal(source.json().revision, 1); assert.equal(source.json().currentRevision, 2);
+    assert.equal(source.json().body, "Synthetic evidence before correction");
+    assert.deepEqual(db.serialize(), before);
+    assert.equal((await app.inject({ method: "GET", url: desktopUrl, headers: webHeaders })).statusCode, 403);
+    assert.equal((await app.inject({ method: "GET", url: desktopUrl })).statusCode, 401);
+    assert.equal((await app.inject({ method: "GET", url: `/v1/community-sources/intuecho.annotation/${id}/revisions/1`, headers })).statusCode, 403);
+    assert.equal((await app.inject({ method: "DELETE", url: `/v1/annotations/${id}`, headers: webHeaders })).statusCode, 200);
+    assert.equal((await app.inject({ method: "GET", url: desktopUrl, headers })).statusCode, 404);
+  });
+}

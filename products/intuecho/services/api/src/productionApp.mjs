@@ -44,6 +44,7 @@ function requireAdmin(request) {
 
 function isDesktopIntegrationRequest(request) {
   const pathname = request.url.split("?", 1)[0];
+  if (request.method === "GET" && /^\/v1\/integrations\/desktop\/community-sources\/intuecho\.(annotation|reply|literature)\/[^/]+\/revisions\/[1-9]\d*$/.test(pathname)) return true;
   return request.method === "POST" && new Set([
     "/v1/integrations/desktop/draft-handoffs",
     "/v1/integrations/desktop/annotation-handoffs",

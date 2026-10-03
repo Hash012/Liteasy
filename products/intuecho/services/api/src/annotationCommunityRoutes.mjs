@@ -131,6 +131,11 @@ export function registerAnnotationCommunityRoutes(app, repository, {
   }));
 
   if (requireDesktopUser) {
+    app.get("/v1/integrations/desktop/community-sources/:sourceNamespace/:sourceId/revisions/:revision", async (request, reply) => route(reply, async () => {
+      const viewer = requireDesktopUser(request, reply);
+      return viewer ? repository.communitySourceRevision(viewer, request.params.sourceNamespace, request.params.sourceId, request.params.revision) : undefined;
+    }));
+
     app.post("/v1/integrations/desktop/publication-profile", async (request, reply) => route(reply, async () => {
       const viewer = requireDesktopUser(request, reply);
       if (!viewer) return;
