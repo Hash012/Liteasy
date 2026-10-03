@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { LibraryRepositoryError } from "./libraryRepository.mjs";
 import { organizationAccessSnapshot } from "./organizationAccessSnapshot.mjs";
 import { withPostgresTransaction } from "./postgres.mjs";
+import { withAccountWriteTransaction } from "./accountDeletionFence.mjs";
 
 const memberRoles = new Set(["admin", "member"]);
 const memberStatuses = new Set(["active", "removed", "suspended"]);
@@ -207,7 +208,7 @@ export class PostgresOrganizationGovernanceRepository {
   async create(identityValue, input) {
     const identity = requiredIdentity(identityValue);
     const name = organizationName(input.name);
-    return withPostgresTransaction(this.pool, (client) => idempotentMutation(
+    return withAccountWriteTransaction(this.pool, identity.subject, (client) => idempotentMutation(
       client,
       identity,
       input,
@@ -415,7 +416,7 @@ export class PostgresOrganizationGovernanceRepository {
     const revision = identity.audience === "service" && input.expectedRevision === undefined
       ? null
       : expectedRevision(input.expectedRevision);
-    return withPostgresTransaction(this.pool, (client) => idempotentMutation(
+    return withAccountWriteTransaction(this.pool, [identity.subject, targetSubject], (client) => idempotentMutation(
       client,
       identity,
       input,
@@ -539,7 +540,7 @@ export class PostgresOrganizationGovernanceRepository {
       "organization_invitation_revision_invalid"
     );
     const tokenHash = hashToken(token);
-    return withPostgresTransaction(this.pool, (client) => idempotentMutation(
+    return withAccountWriteTransaction(this.pool, identity.subject, (client) => idempotentMutation(
       client,
       identity,
       input,
@@ -635,7 +636,7 @@ export class PostgresOrganizationGovernanceRepository {
       "organization_invitation_revision_invalid"
     );
     const invitationId = requiredOrganizationId(input.invitationId);
-    return withPostgresTransaction(this.pool, (client) => idempotentMutation(
+    return withAccountWriteTransaction(this.pool, identity.subject, (client) => idempotentMutation(
       client,
       identity,
       input,
@@ -688,7 +689,7 @@ export class PostgresOrganizationGovernanceRepository {
     const organizationId = requiredOrganizationId(input.organizationId);
     const organizationRevision = expectedRevision(input.expectedRevision);
     const memberRevision = expectedRevision(input.expectedMemberRevision, "organization_member_revision_invalid");
-    return withPostgresTransaction(this.pool, (client) => idempotentMutation(
+    return withAccountWriteTransaction(this.pool, identity.subject, (client) => idempotentMutation(
       client,
       identity,
       input,
@@ -728,7 +729,7 @@ export class PostgresOrganizationGovernanceRepository {
     const targetSubject = requiredSubject(input.targetSubject);
     const targetRevision = expectedRevision(input.expectedMemberRevision, "organization_member_revision_invalid");
     const role = memberRole(input.role);
-    return withPostgresTransaction(this.pool, (client) => idempotentMutation(
+    return withAccountWriteTransaction(this.pool, [identity.subject, targetSubject], (client) => idempotentMutation(
       client,
       identity,
       input,
@@ -769,7 +770,7 @@ export class PostgresOrganizationGovernanceRepository {
     const targetSubject = requiredSubject(input.targetSubject);
     const targetRevision = expectedRevision(input.expectedMemberRevision, "organization_member_revision_invalid");
     const status = memberStatus(input.status);
-    return withPostgresTransaction(this.pool, (client) => idempotentMutation(
+    return withAccountWriteTransaction(this.pool, status === "active" ? [identity.subject, targetSubject] : identity.subject, (client) => idempotentMutation(
       client,
       identity,
       input,
@@ -823,7 +824,7 @@ export class PostgresOrganizationGovernanceRepository {
     const organizationRevision = expectedRevision(input.expectedRevision);
     const targetSubject = requiredSubject(input.targetSubject);
     const targetRevision = expectedRevision(input.expectedMemberRevision, "organization_member_revision_invalid");
-    return withPostgresTransaction(this.pool, (client) => idempotentMutation(
+    return withAccountWriteTransaction(this.pool, [identity.subject, targetSubject], (client) => idempotentMutation(
       client,
       identity,
       input,

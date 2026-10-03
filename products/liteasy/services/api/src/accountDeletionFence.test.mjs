@@ -4,6 +4,7 @@ import { PostgresLibraryRepository } from "./libraryRepository.mjs";
 import { PostgresPersonalizationRepository } from "./personalizationRepository.mjs";
 import { PostgresRecommendationRepository } from "./recommendationRepository.mjs";
 import { PostgresAgentArtifactRepository } from "./agentArtifactRepository.mjs";
+import { withAccountWriteTransaction } from "./accountDeletionFence.mjs";
 
 const subject = "deleted_user";
 const scope = { scopeType: "user", scopeId: subject };
@@ -65,4 +66,15 @@ test("reading recommendation context never recreates private account state", asy
   const { queries, pool } = deletedAccountPool();
   await new PostgresRecommendationRepository(pool).context(subject);
   assert.equal(queries.some(({ sql }) => /INSERT|UPDATE|DELETE/.test(sql)), false);
+});
+
+test("multi-account grants lock each subject once in stable order before checking deletion", async () => {
+  const queries = [];
+  const client = { async query(sql, values) { queries.push({ sql, values }); return { rows: [] }; }, release() {} };
+  const pool = { async connect() { return client; } };
+  assert.equal(await withAccountWriteTransaction(pool, ["z", "a", "z"], async () => "granted"), "granted");
+  assert.deepEqual(queries.filter(({ sql }) => sql.includes("pg_advisory_xact_lock")).map(({ values }) => values[0]), ["account-deletion:a", "account-deletion:z"]);
+  const firstCheck = queries.findIndex(({ sql }) => sql.includes("account_deletion_jobs"));
+  assert.ok(firstCheck > queries.findLastIndex(({ sql }) => sql.includes("pg_advisory_xact_lock")));
+  await assert.rejects(() => withAccountWriteTransaction(pool, [], () => assert.fail("invalid grant")), /identity_subject_invalid/);
 });

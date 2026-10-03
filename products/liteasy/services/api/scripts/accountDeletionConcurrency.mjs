@@ -3,13 +3,13 @@ import { randomUUID } from "node:crypto";
 import { PostgresAccountLifecycleRepository } from "../src/accountLifecycleRepository.mjs";
 import { PostgresAgentArtifactRepository } from "../src/agentArtifactRepository.mjs";
 
-function deferred() {
+export function deferred() {
   let resolve;
   const promise = new Promise((finish) => { resolve = finish; });
   return { promise, resolve };
 }
 
-async function within(promise) {
+export async function within(promise) {
   let timer;
   try {
     return await Promise.race([promise, new Promise((_, reject) => {
@@ -20,7 +20,7 @@ async function within(promise) {
   }
 }
 
-function observedPool(pool, { commitReached, allowCommit, lockReached } = {}) {
+export function observedPool(pool, { commitReached, allowCommit, lockReached } = {}) {
   return {
     async connect() {
       const client = await pool.connect();
@@ -40,7 +40,7 @@ function observedPool(pool, { commitReached, allowCommit, lockReached } = {}) {
   };
 }
 
-async function assertBlocked(pool, pid) {
+export async function assertBlocked(pool, pid) {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const result = await pool.query("SELECT cardinality(pg_blocking_pids($1)) > 0 AS blocked", [pid]);
     if (result.rows[0].blocked) return;

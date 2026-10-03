@@ -14,6 +14,7 @@ import { PostgresPlatformAdminRepository } from "../src/platformAdminRepository.
 import { PostgresRecommendationRepository } from "../src/recommendationRepository.mjs";
 import { PostgresTeamAnnotationRepository } from "../src/teamAnnotationRepository.mjs";
 import { validatePostgresIntegrationDatabases } from "./postgresIntegrationGuard.mjs";
+import { verifyOrganizationLifecycleConcurrency } from "./organizationLifecycleConcurrency.mjs";
 import { verifyAccountDeletionConcurrency } from "./accountDeletionConcurrency.mjs";
 
 const connectionString = process.env.LITEASY_TEST_DATABASE_URL;
@@ -1688,10 +1689,12 @@ try {
   const verifiedAudit = await pool.query("SELECT count(*)::int AS count FROM audit_events");
   await verifyAccountDeletionConcurrency(pool);
   await verifyOrganizationActivity(pool);
+  const organizationLifecycleConcurrency = await verifyOrganizationLifecycleConcurrency(pool);
   process.stdout.write(`${JSON.stringify({
     auditEvents: verifiedAudit.rows[0].count,
     accountDeletion: true,
     accountDeletionConcurrency: true,
+    organizationLifecycleConcurrency,
     organizationActivity: true,
     migrations: migrated.applied.length,
     revision: 12,

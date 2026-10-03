@@ -168,7 +168,9 @@ export class PostgresAccountLifecycleRepository {
         `, [input.subjectId, `accountdelete_${randomUUID()}`, input.actorId, input.reason]);
       }
       return deletionView(result.rows[0]);
-    });
+    // Ownership grants hold the same account lock. Read their committed state
+    // after waiting, rather than retaining a pre-lock SERIALIZABLE snapshot.
+    }, { isolation: "READ COMMITTED" });
   }
 
   async markDeletionStage(input) {

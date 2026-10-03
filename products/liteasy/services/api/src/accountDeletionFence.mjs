@@ -5,13 +5,21 @@ import { withPostgresTransaction } from "./postgres.mjs";
 // Keep the lock through the write: a delayed authenticated request cannot recreate
 // private data after deletion, including when a retained job is restored from backup.
 export async function withAccountWriteTransaction(pool, subject, operation) {
-  if (typeof subject !== "string" || !subject) {
+  const subjects = Array.isArray(subject) ? subject : [subject];
+  if (!subjects.length || subjects.some((value) => typeof value !== "string" || !value)) {
     throw new AccountLifecycleError("identity_subject_invalid", 400);
   }
   return withPostgresTransaction(pool, async (client) => {
-    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`account-deletion:${subject}`]);
-    const deletion = await client.query("SELECT 1 FROM account_deletion_jobs WHERE subject_id = $1", [subject]);
-    if (deletion.rows[0]) throw new AccountLifecycleError("account_deletion_started", 409);
+    // Multi-account grants (such as ownership transfer) lock in stable order to
+    // serialize against both accounts' deletion without inverted-lock deadlocks.
+    const orderedSubjects = [...new Set(subjects)].sort();
+    for (const value of orderedSubjects) {
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`account-deletion:${value}`]);
+    }
+    for (const value of orderedSubjects) {
+      const deletion = await client.query("SELECT 1 FROM account_deletion_jobs WHERE subject_id = $1", [value]);
+      if (deletion.rows[0]) throw new AccountLifecycleError("account_deletion_started", 409);
+    }
     return operation(client);
   // The tombstone query must see a deletion committed while the lock was waiting.
   }, { isolation: "READ COMMITTED" });
