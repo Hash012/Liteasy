@@ -106,7 +106,7 @@
 | AC / 判定 | 当前实现 | 具体测试与证据 | 缺口或待运行环境 |
 | --- | --- | --- | --- |
 | AC38 公开资料预览 — `partial` | composer 预览作者可选公开字段及 profile revision；来源贡献者展示绑定审阅快照，改变需重审；不以 profile 推断权限。 | `W/AnnotationComposer.test.tsx` 的 optional author details/profile revision；`I/src/server.test.mjs` profile snapshot/provenance；E-WEB、`/tmp/liteasy-account-profile-web.log`、E-INTUECHO/E-PG-I。 | DOM/API/PG 快照字段已有证据；旧内容是否刷新资料必须遵循明确规则，未做真实多客户端 profile 改动与历史内容整链验收。 |
-| AC39 新旧协议共存 — `partial` | 增量 migration 保持既有 PDF/thin-reading/reply 契约；ambiguous draft 无默认 public；旧 unbound 队列/目录保留不认领；旧 publication 重放不能复活已撤回内容。 | `I/src/literatureContracts.test.mjs`、`migrations.test.mjs`、`thinReadingWithdrawal.test.mjs`；E-PG-I/E-RESTORE/E-CATALOG/E-ISSUER；`/tmp/liteasy-account-s03-contracts.log` typecheck。 | schema/fixture 和 PG 迁移不等于发布过的旧 desktop/mobile/web 二进制与新服务滚动部署兼容性；最终干净提交 contracts 仍待记录。 |
+| AC39 新旧协议共存 — `partial` | 增量 migration 保持既有 PDF/thin-reading/reply 契约；ambiguous draft 无默认 public；旧 unbound 队列/目录保留不认领；旧 publication 重放不能复活已撤回内容。 | `I/src/literatureContracts.test.mjs`、`migrations.test.mjs`、`thinReadingWithdrawal.test.mjs`；E-PG-I/E-RESTORE/E-CATALOG/E-ISSUER；`/tmp/liteasy-account-s03-contracts.log` typecheck。 | schema/fixture 和 PG 迁移不等于发布过的旧 desktop/mobile/web 二进制与新服务滚动部署兼容性；最终干净提交 contracts 已通过，见机器记录。 |
 | AC40 小组贡献可复用结论 — `partial` | Web reading-group 建包需选材预览；问题/定位普通 reply；主持摘要保留异议和引用 revision；个人 reflection 可导出，不自动独立公开。 | `W/reading-group/OrganizationReadingGroup.test.tsx` 11 项、`readingGroup.test.ts` 4 项、`OrganizationAnnotations.test.tsx`；E-WEB、`/tmp/liteasy-account-s07-integrated-web.log`（72 项）。 | 只有合成 UI/API fixture，没有 3 位自愿参与者试点。`docs/S15-pilot.md` 是脚本，不是用户研究、AI 共识、留存或费用结论。 |
 | AC41 Windows 原生 — `not_run` | Tauri identity 世代/本机退出/远程回执实现、资源和安全配置存在。 | 辅助：E-IDENTITY/E-BUILD，以及 `D/tests/desktopIdentityClient.test.ts`、Rust `desktop_identity::tests`。 | 缺真实 Windows Credential Manager、系统浏览器 OAuth、refresh、关闭应用后 deep link、切号/退出；未执行 Windows Installer CI。Linux/mock 不能替代。 |
 | AC42 Linux 原生 — `not_run` | 同一 Tauri host；纯状态 Rust 测试和 cargo check 可在 WSL/Linux 运行。 | 辅助：`/tmp/liteasy-account-rust-check.log`，Rust identity 6/catalog 3 项，E-BUILD/E-CATALOG。 | 缺真实桌面 Secret Service/session bus、系统浏览器回调、应用关闭/重开与 keyring 撤销流程。WSL cargo check 不等于 Linux native GUI 验收。 |
@@ -176,3 +176,7 @@ node products/intuecho/services/api/scripts/verify-before-event-replay.mjs --con
 | `D/app/features/library/paperCacheClient.ts` | native PDF 字节按 content hash 的本机缓存属于设备文件层，不能把它强制等同云账户所有权；任何云资料使用仍必须经当前 scope 的授权/调用入口。离线 OS 原件不因注销删除。 |
 
 最终提交和受影响检查结果见 `verification.json`；以上 `partial`、政策 HOLD、三平台 native 与真实 IdP `not_run` 不因编译通过自动消失。
+
+## 最终干净提交门禁
+
+最终桌面构建 `/tmp/liteasy-account-desktop-build-release.log` 退出 0，158 个生产资产验证通过；新增组织切片后的 smoke 9 项通过。`npm run ci:contracts` 在整个工作树干净的 `ac406293` 上运行，退出 0，原门禁确认生成文件与锁文件无变化，日志 `/tmp/liteasy-account-contracts-final.log`。之后仅更新验收文档，不再修改实现或生成文件。完整命令、日志 hash、代码提交和层次见 `verification.json`；不因此升级任何真实 IdP/native/S3 的未验项。

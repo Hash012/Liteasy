@@ -1,6 +1,6 @@
 {
   "format": "liteasy.social-verification/v1",
-  "head": "b1c5ba7ebfd8f95680ebf4e7413bce80df5ef8ed",
+  "head": "ac4062936626cdacee3800de991a6ab6f75af1dc",
   "branch": "feat/account-cloud-community",
   "environment": {
     "os": "Ubuntu 24.04 on WSL2",
@@ -129,8 +129,8 @@
     {
       "scenario_id": "AC06",
       "status": "passed",
-      "command": null,
-      "exit_code": null,
+      "command": "See check_ids and checks for executed commands at the stated layer.",
+      "exit_code": 0,
       "evidence_paths": [
         "docs/qa/account-cloud-community/S14-verification-matrix.md",
         "docs/qa/account-cloud-community/verification.json#checks"
@@ -163,8 +163,8 @@
     {
       "scenario_id": "AC08",
       "status": "passed",
-      "command": null,
-      "exit_code": null,
+      "command": "See check_ids and checks for executed commands at the stated layer.",
+      "exit_code": 0,
       "evidence_paths": [
         "docs/qa/account-cloud-community/S14-verification-matrix.md",
         "docs/qa/account-cloud-community/verification.json#checks"
@@ -231,8 +231,8 @@
     {
       "scenario_id": "AC12",
       "status": "passed",
-      "command": null,
-      "exit_code": null,
+      "command": "See check_ids and checks for executed commands at the stated layer.",
+      "exit_code": 0,
       "evidence_paths": [
         "docs/qa/account-cloud-community/S14-verification-matrix.md",
         "docs/qa/account-cloud-community/verification.json#checks"
@@ -297,8 +297,8 @@
     {
       "scenario_id": "AC16",
       "status": "passed",
-      "command": null,
-      "exit_code": null,
+      "command": "See check_ids and checks for executed commands at the stated layer.",
+      "exit_code": 0,
       "evidence_paths": [
         "docs/qa/account-cloud-community/S14-verification-matrix.md",
         "docs/qa/account-cloud-community/verification.json#checks"
@@ -682,12 +682,13 @@
         "docs/qa/account-cloud-community/S14-verification-matrix.md",
         "docs/qa/account-cloud-community/verification.json#checks"
       ],
-      "notes": "`I/src/literatureContracts.test.mjs`、`migrations.test.mjs`、`thinReadingWithdrawal.test.mjs`；E-PG-I/E-RESTORE/E-CATALOG/E-ISSUER；`/tmp/liteasy-account-s03-contracts.log` typecheck。 schema/fixture 和 PG 迁移不等于发布过的旧 desktop/mobile/web 二进制与新服务滚动部署兼容性；最终干净提交 contracts 仍待记录。",
+      "notes": "`I/src/literatureContracts.test.mjs`、`migrations.test.mjs`、`thinReadingWithdrawal.test.mjs`；E-PG-I/E-RESTORE/E-CATALOG/E-ISSUER；`/tmp/liteasy-account-s03-contracts.log` typecheck。 schema/fixture 和 PG 迁移不等于发布过的旧 desktop/mobile/web 二进制与新服务滚动部署兼容性；最终干净提交 contracts 已通过，见 clean-contracts 检查。",
       "checks_note": "Exact executed commands and exit codes are in checks; a partial scenario is not a passed E2E run.",
       "check_ids": [
         "intuecho-api",
         "intuecho-postgres",
-        "desktop-full"
+        "desktop-full",
+        "clean-contracts"
       ]
     },
     {
@@ -777,7 +778,7 @@
     "Local tool versions differ from repository Node/Rust pins; Windows Installer not requested/run."
   ],
   "baseline_note": "Implementation and synthetic validation for this account/cloud/community pack only; no previous installer result is reused as current pack acceptance.",
-  "recorded_at": "2026-10-03T03:14:20.483172+00:00",
+  "recorded_at": "2026-10-03T03:19:30.463123+00:00",
   "checks": [
     {
       "id": "desktop-full",
@@ -1055,7 +1056,7 @@
     {
       "id": "organization-focused",
       "working_directory": "products/liteasy/apps/desktop",
-      "command": "node node_modules/vitest/vitest.mjs run <8 affected files>",
+      "command": "node node_modules/vitest/vitest.mjs run src/tests/useOrganizationActions.test.ts src/tests/OrganizationInvitationPanel.test.tsx src/tests/OrganizationMemberGovernancePanel.test.tsx src/tests/useOrganizationShellController.test.ts src/tests/OrganizationPresentation.test.tsx src/tests/AppDialogs.test.tsx src/tests/AppShell.test.tsx src/tests/organizationAccessPresentation.test.tsx",
       "exit_code": 0,
       "status": "passed",
       "layer": "DOM/integration fixtures",
@@ -1118,9 +1119,33 @@
       },
       "log": "/tmp/liteasy-account-desktop-build-release.log",
       "log_sha256": "4dcc94e0c2f38f68fd0ac66ea8c0261eb25a17daad11d70ec5f1ed2ded1157e4"
+    },
+    {
+      "id": "clean-contracts",
+      "head": "ac4062936626cdacee3800de991a6ab6f75af1dc",
+      "working_directory": "products/liteasy/apps/desktop",
+      "command": "npm run ci:contracts",
+      "exit_code": 0,
+      "status": "passed",
+      "layer": "clean-commit resource/schema/TypeScript/generated-file gate",
+      "log": "/tmp/liteasy-account-contracts-final.log",
+      "log_sha256": "bb507941c4dc2677e4c3c668ef829562c2c52e1ab4eecd0b9c74f5cc96286acb",
+      "notes": "Whole worktree was clean before running; generated paths and locks remain identical. Subsequent changes are documentation only."
     }
   ],
-  "pending_final_checks": [
-    "ci:contracts on a clean commit"
-  ]
+  "pending_final_checks": [],
+  "delivery": {
+    "implementation_head": "b1c5ba7e",
+    "validated_clean_head": "ac4062936626cdacee3800de991a6ab6f75af1dc",
+    "worktree": "/home/tjm/proj/Liteasy-account-integration",
+    "original_main_head": "ff9ea211",
+    "original_main_changes_preserved": [
+      ".gitignore",
+      "docs/agent-dev/2026-09-27-desktop-agent-terminal-evaluation.md"
+    ],
+    "pushed": false,
+    "merged_to_main": false,
+    "installer_requested": false,
+    "production_deployed": false
+  }
 }
