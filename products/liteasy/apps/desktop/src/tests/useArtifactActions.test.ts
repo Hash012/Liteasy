@@ -1,4 +1,6 @@
 import { createLocalArtifactResultClient } from "../app/features/artifacts/localArtifactResultClient";
+import { createArtifactResultClient } from "../app/features/artifacts/artifactResultClient";
+import { clearStoredAccountSession, storeAccountSession } from "../app/features/account/accountSessionStorage";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createArtifactStore } from "../app/features/artifacts/artifact.store";
@@ -229,6 +231,7 @@ function renderArtifactActions(options: {
   locked?: boolean;
   modelAccessAvailable?: boolean;
   mineruFiguresByPaperId?: Record<string, MineruFigure[]>;
+  resourceScope?: ReturnType<typeof artifactResourceScope>;
   saveArtifactResult?: (document: { artifactId: string }) => Promise<string>;
   selectedPapers?: Paper[];
 } = {}) {
@@ -274,6 +277,7 @@ function renderArtifactActions(options: {
       },
       confirmDuplicateGeneration: options.confirmDuplicateGeneration,
       getCurrentResourceScopeId: options.getCurrentResourceScopeId,
+      resourceScope: options.resourceScope,
       getAssistantLanguage: options.assistantLanguage
         ? () => options.assistantLanguage!
         : undefined,
@@ -307,6 +311,7 @@ function renderArtifactActions(options: {
     runAgentAnalysis,
     deleteArtifactResult,
     saveArtifactResult,
+    rerender: hook.rerender,
     result: hook.result
   };
 }
@@ -317,7 +322,64 @@ describe("useArtifactActions", () => {
   });
 
   afterEach(() => {
+    clearStoredAccountSession();
     vi.useRealTimers();
+  });
+
+  test("rejects an old cloud generation before HTTP save after logout and login to the same account", async () => {
+    const session = { userId: "verified-a", sessionId: "old-a-token", email: "a@example.invalid", name: "A", expiresAt: "2030-01-01T00:00:00Z" };
+    storeAccountSession(session);
+    const scope = artifactResourceScope("https://cloud.example.invalid:verified-a");
+    const transport = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ path: "liteasy://agent-artifacts/saved" }) }));
+    const cloud = createArtifactResultClient({ getBaseEndpoint: () => "https://cloud.example.invalid", transport });
+    const actions = renderArtifactActions({ imported: true, resourceScope: scope,
+      getCurrentResourceScopeId: () => scope.id, saveArtifactResult: cloud.save });
+    let finish!: (run: AgentRun) => void;
+    actions.runAgentAnalysis.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    act(() => { actions.result.current.startAnalysisForPapers("ppt", [paper]); });
+    clearStoredAccountSession();
+    storeAccountSession({ ...session, sessionId: "new-a-token" });
+    actions.rerender();
+    finish(createCompletedPptRun());
+    await waitForArtifactTask(actions.artifactStore, "failed");
+    expect(actions.saveArtifactResult).not.toHaveBeenCalled();
+    expect(transport).not.toHaveBeenCalled();
+    expect(actions.artifactStore.getCatalog()).toHaveLength(0);
+    expect(actions.artifactStore.getTasks()[0].status).toBe("failed");
+    act(() => { actions.result.current.startAnalysisForPapers("ppt", [paper]); });
+    await waitForArtifactTask(actions.artifactStore);
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(transport).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: "Bearer new-a-token" })
+    }));
+    expect(actions.artifactStore.getCatalog()).toHaveLength(1);
+  });
+
+  test("does not send an old cloud task to the model after queued import crosses a login", async () => {
+    storeAccountSession({ userId: "verified-a", sessionId: "old-a-token", email: "a@example.invalid", name: "A", expiresAt: "2030-01-01T00:00:00Z" });
+    const scope = artifactResourceScope("https://cloud.example.invalid:verified-a");
+    const actions = renderArtifactActions({ resourceScope: scope, getCurrentResourceScopeId: () => scope.id });
+    act(() => { actions.result.current.startAnalysisForPapers("ppt", [paper]); });
+    clearStoredAccountSession();
+    storeAccountSession({ userId: "verified-a", sessionId: "new-a-token", email: "a@example.invalid", name: "A", expiresAt: "2030-01-01T00:00:00Z" });
+    actions.rerender();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1200); });
+    expect(actions.runAgentAnalysis).not.toHaveBeenCalled();
+    expect(actions.saveArtifactResult).not.toHaveBeenCalled();
+    expect(actions.artifactStore.getTasks()[0].status).toBe("failed");
+  });
+
+  test("account login changes do not invalidate generation into the device library", async () => {
+    const actions = renderArtifactActions({ imported: true });
+    let finish!: (run: AgentRun) => void;
+    actions.runAgentAnalysis.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    act(() => { actions.result.current.startAnalysisForPapers("ppt", [paper]); });
+    clearStoredAccountSession();
+    storeAccountSession({ userId: "verified-a", sessionId: "new-a-token", email: "a@example.invalid", name: "A", expiresAt: "2030-01-01T00:00:00Z" });
+    finish(createCompletedPptRun());
+    await waitForArtifactTask(actions.artifactStore);
+    expect(actions.saveArtifactResult).toHaveBeenCalledTimes(1);
+    expect(actions.artifactStore.getCatalog()).toHaveLength(1);
   });
 
   test("retains only the requested papers in generation recovery", async () => {

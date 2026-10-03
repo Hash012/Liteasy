@@ -201,6 +201,32 @@ describe("resource file service", () => {
     expect(client.save).toHaveBeenCalledTimes(1);
   });
 
+  test("keeps persisted account resource identity stable while replacing the execution session", async () => {
+    const { client } = clientWithDocuments([artifact()]);
+    let generation = "boot:1";
+    const scope = artifactResourceScope("cloud:account-a");
+    const service = createArtifactResourceService({ client, scope, getCurrentSessionGeneration: () => generation });
+    const original = await service.stat("liteasy://agent-artifacts/slides-1");
+    generation = "boot:3";
+    await expect(service.saveArtifact(artifact())).rejects.toMatchObject({ code: "scope_changed" });
+    expect(client.save).not.toHaveBeenCalled();
+    const next = createArtifactResourceService({ client, scope, getCurrentSessionGeneration: () => generation });
+    expect((await next.stat("liteasy://agent-artifacts/slides-1")).canonicalUri).toBe(original.canonicalUri);
+    await expect(next.saveArtifact(artifact())).resolves.toMatchObject({ publishable: true });
+  });
+
+  test("does not publish a committed result after relogin to the same persistent scope", async () => {
+    const { client } = clientWithDocuments([]);
+    let generation = "boot:1";
+    vi.mocked(client.save).mockImplementationOnce(async () => {
+      generation = "boot:3";
+      return "liteasy://agent-artifacts/slides-1";
+    });
+    const service = createArtifactResourceService({ client, scope: artifactResourceScope("cloud:account-a"), getCurrentSessionGeneration: () => generation });
+    await expect(service.saveArtifact(artifact())).resolves.toMatchObject({ status: "saved", publishable: false });
+    expect(client.save).toHaveBeenCalledTimes(1);
+  });
+
   test("keeps a successful storage receipt when cancellation arrives after commit", async () => {
     const { client } = clientWithDocuments([]);
     const controller = new AbortController();

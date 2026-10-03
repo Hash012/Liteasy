@@ -15,7 +15,7 @@ fn find_legacy_catalog(app_data: &Path, path: &Path) -> Result<Option<PathBuf>, 
     let mut candidates = Vec::new();
     let legacy_unscoped_path = app_data.join("artifact-catalog.v1.json");
     if legacy_unscoped_path.is_file() {
-        candidates.push(legacy_unscoped_path);
+        return Ok(Some(legacy_unscoped_path));
     }
     if directory.is_dir() {
         for entry in fs::read_dir(&directory)
@@ -36,7 +36,6 @@ fn find_legacy_catalog(app_data: &Path, path: &Path) -> Result<Option<PathBuf>, 
     candidates.dedup();
     match candidates.len() {
         0 => Ok(None),
-        1 => Ok(candidates.pop()),
         count => Err(format!(
             "Found {count} legacy account-scoped artifact catalogs; refusing to choose or merge them automatically"
         )),
@@ -62,15 +61,19 @@ fn catalog_path_at(app_data: &Path) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-fn catalog_path(app: &AppHandle) -> Result<PathBuf, String> {
+fn catalog_path(app: &AppHandle, load_legacy: bool) -> Result<PathBuf, String> {
     let app_data = crate::data_location::root(&app)
         .map_err(|error| format!("Could not resolve artifact catalog directory: {error}"))?;
-    catalog_path_at(&app_data)
+    if load_legacy {
+        catalog_path_at(&app_data)
+    } else {
+        Ok(app_data.join("artifact-catalog/catalog.v1.json"))
+    }
 }
 
 #[tauri::command]
 pub fn load_artifact_catalog_state(app: AppHandle) -> Result<Option<Value>, String> {
-    let path = catalog_path(&app)?;
+    let path = catalog_path(&app, true)?;
     if !path.exists() {
         return Ok(None);
     }
@@ -100,7 +103,7 @@ pub fn save_artifact_catalog_state(app: AppHandle, snapshot: Value) -> Result<()
         ));
     }
 
-    let path = catalog_path(&app)?;
+    let path = catalog_path(&app, false)?;
     let parent = path
         .parent()
         .ok_or_else(|| "Artifact catalog path has no parent".to_string())?;
@@ -170,7 +173,7 @@ mod tests {
     }
 
     #[test]
-    fn migrates_the_only_legacy_account_catalog_without_an_account_identity() {
+    fn keeps_even_one_legacy_account_catalog_separate_without_verified_ownership() {
         let root = temporary_directory("single");
         let legacy = root
             .join("artifact-catalog")
@@ -179,11 +182,10 @@ mod tests {
         fs::create_dir_all(legacy.parent().expect("legacy parent")).expect("legacy directory");
         fs::write(&legacy, b"{\"artifacts\":[]}").expect("legacy catalog");
 
-        let current = catalog_path_at(&root).expect("catalog path");
-
-        assert_eq!(current, root.join("artifact-catalog/catalog.v1.json"));
-        assert!(current.is_file());
-        assert!(!legacy.exists());
+        let error = catalog_path_at(&root).expect_err("account ownership must not be guessed");
+        assert!(error.contains("1 legacy account-scoped artifact catalogs"));
+        assert!(!root.join("artifact-catalog/catalog.v1.json").exists());
+        assert!(legacy.is_file());
         fs::remove_dir_all(root).expect("remove temporary directory");
     }
 

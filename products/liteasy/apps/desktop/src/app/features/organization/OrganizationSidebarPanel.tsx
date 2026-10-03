@@ -1,3 +1,4 @@
+import { OrganizationActivityInbox } from "./OrganizationActivityInbox";
 import type { AccountSession } from "../account/account.types";
 import { Button, Tooltip } from "@fluentui/react-components";
 import {
@@ -85,6 +86,7 @@ export function OrganizationSidebarPanel({
           <Button appearance="subtle" aria-label="退出组织" icon={<SignOutRegular />} onClick={() => onLeaveOrganization?.(summary)} />
         </Tooltip> : null}
       </div>}
+      {accountSession && <OrganizationActivityInbox session={accountSession} endpoint={cloudEndpoint} />}
       {actionMessage ? (
         <div aria-label="组织操作反馈" className="organization-action-feedback" role="status">
           <div className="organization-action-feedback-message">{actionMessage}</div>

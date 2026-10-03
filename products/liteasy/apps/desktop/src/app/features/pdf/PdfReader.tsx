@@ -1,3 +1,4 @@
+import { paperSourceReferences } from "../resource-filesystem/assetSourceReferences";
 import { applyPdfReadingColors, pdfReadingPalette } from "./pdfReadingColors";
 import { PdfAppearanceControl, type PdfAppearance } from "./PdfAppearanceControl";
 import { MarkdownEditor } from "../markdown/MarkdownEditor";
@@ -3132,7 +3133,7 @@ export function PdfReader({
 
   const guide = useLiteratureGuide({
     scope: annotationStorageKey, title: activePaper?.title ?? "", pageCount,
-    sourceReference: activePaper?.libraryReference,
+    sourceReference: activePaper ? paperSourceReferences(activePaper)[0] : undefined,
     ready: Boolean(pdfDocument && annotationStorageKey && hydratedAnnotationStorageKey === annotationStorageKey && !annotationLoadError),
     count: annotations.filter((annotation) => annotation.aiGuide).length, generate: onGenerateGuide,
     readPage: async (page) => {

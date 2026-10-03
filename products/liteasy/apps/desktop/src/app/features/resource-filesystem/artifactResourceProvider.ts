@@ -27,6 +27,7 @@ type ArtifactProviderInput = {
   client: ArtifactResultClient;
   scope: ResourceScope;
   getCurrentScopeId?: () => string;
+  getCurrentSessionGeneration?: () => string;
 };
 
 function artifactFiles(document: AgentArtifactResult, canonicalDocument: string) {
@@ -47,7 +48,17 @@ function artifactFiles(document: AgentArtifactResult, canonicalDocument: string)
 
 export function createArtifactResourceProvider(input: ArtifactProviderInput) {
   const boundary = { scope: { ...input.scope }, getCurrentScopeId: input.getCurrentScopeId };
-  const check = (signal?: AbortSignal) => assertResourceScope(boundary, signal);
+  // A persistent account scope survives login. The execution binding must not:
+  // an old A task cannot resume with A's new credentials after A -> logout -> A.
+  const sessionGeneration = input.getCurrentSessionGeneration?.();
+  const isCurrentSession = () => !input.getCurrentSessionGeneration ||
+    input.getCurrentSessionGeneration() === sessionGeneration;
+  const check = (signal?: AbortSignal) => {
+    assertResourceScope(boundary, signal);
+    if (!isCurrentSession()) {
+      throw new ResourceFileError("scope_changed", "账号会话已变化，请重新发起产物操作。");
+    }
+  };
   async function describe(document: AgentArtifactResult, ref?: ResourceRef, canonicalDocument = canonicalResourceJson(document)) {
     if (!isArtifactResult(document)) throw new ResourceFileError("invalid_content", "产物格式无效，无法作为资源打开。");
     const revision = await resourceContentRevision(canonicalDocument);
@@ -142,6 +153,7 @@ export function createArtifactResourceProvider(input: ArtifactProviderInput) {
   };
   return {
     ...provider,
+    assertCurrent: check,
     async saveArtifact(document: AgentArtifactResult, options: { signal?: AbortSignal } = {}) {
       check(options.signal);
       // Match the existing formal API's normalization, also for the local adapter.
@@ -153,7 +165,8 @@ export function createArtifactResourceProvider(input: ArtifactProviderInput) {
       const resultPath = await input.client.save(snapshot, options.signal);
       // A successful storage receipt cannot be undone by a late cancellation.
       // Keep the committed scope separate from permission to publish in the UI.
-      const publishable = !boundary.getCurrentScopeId || boundary.getCurrentScopeId() === boundary.scope.id;
+      const publishable = isCurrentSession() &&
+        (!boundary.getCurrentScopeId || boundary.getCurrentScopeId() === boundary.scope.id);
       return { status: "saved" as const, publishable, resultPath, resource };
     }
   };
@@ -161,5 +174,5 @@ export function createArtifactResourceProvider(input: ArtifactProviderInput) {
 
 export function createArtifactResourceService(input: ArtifactProviderInput) {
   const provider = createArtifactResourceProvider(input);
-  return { ...createResourceFileService([provider]), saveArtifact: provider.saveArtifact };
+  return { ...createResourceFileService([provider]), assertCurrent: provider.assertCurrent, saveArtifact: provider.saveArtifact };
 }

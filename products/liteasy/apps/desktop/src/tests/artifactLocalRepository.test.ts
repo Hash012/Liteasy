@@ -632,3 +632,21 @@ describe("artifactLocalRepository", () => {
     ]);
   });
 });
+
+
+test("preserves even one legacy account catalog without relabeling it as device data", async () => {
+  localStorage.clear();
+  vi.stubGlobal("indexedDB", undefined);
+  const key = "liteasy.artifact-catalog.v1:account-a";
+  const serialized = JSON.stringify({ version: "liteasy.artifact-catalog/v1", artifacts: [{ artifactId: "a-private", title: "A private result", type: "tree" }] });
+  localStorage.setItem(key, serialized);
+  try {
+    const repository = createArtifactLocalRepository();
+    await expect(repository.list()).rejects.toThrow("请确认归属");
+    expect(localStorage.getItem(key)).toBe(serialized);
+    expect(localStorage.getItem("liteasy.artifact-catalog.v1")).toBeNull();
+    await repository.replace([{ artifactId: "device-new", title: "New local result", type: "tree" } as never]);
+    expect((await repository.list()).map((item) => item.artifactId)).toEqual(["device-new"]);
+    expect(localStorage.getItem(key)).toBe(serialized);
+  } finally { vi.unstubAllGlobals(); }
+});

@@ -1,3 +1,4 @@
+import { verifyOrganizationActivity } from "./verify-organization-activity.mjs";
 import assert from "node:assert/strict";
 import pg from "pg";
 import { PostgresAccountLifecycleRepository } from "../src/accountLifecycleRepository.mjs";
@@ -1686,10 +1687,12 @@ try {
   );
   const verifiedAudit = await pool.query("SELECT count(*)::int AS count FROM audit_events");
   await verifyAccountDeletionConcurrency(pool);
+  await verifyOrganizationActivity(pool);
   process.stdout.write(`${JSON.stringify({
     auditEvents: verifiedAudit.rows[0].count,
     accountDeletion: true,
     accountDeletionConcurrency: true,
+    organizationActivity: true,
     migrations: migrated.applied.length,
     revision: 12,
     verified: true

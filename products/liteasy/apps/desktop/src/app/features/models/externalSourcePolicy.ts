@@ -3,7 +3,7 @@ import type { Paper } from "../workspace/workspace.types";
 import type { AgentAsset } from "../resource-filesystem/agentAsset.types";
 import type { AgentAssetService } from "../resource-filesystem/agentAssetService";
 
-export type ModelSourceReference = AssetSourceReference;
+export type ModelSourceReference = Pick<AssetSourceReference, "scopeType" | "scopeId"> & Partial<Pick<AssetSourceReference, "paperId" | "revision">>;
 const deniedMessage = "该资料属于组织，当前尚未允许发送给外部 AI 或第三方服务。可继续在阅读器中阅读；自备 API 不会改变资料权限。";
 
 /** D01 is not approved. Reading/export permission does not authorize model use. */

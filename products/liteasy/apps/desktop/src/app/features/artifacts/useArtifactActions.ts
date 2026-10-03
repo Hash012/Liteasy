@@ -1,4 +1,5 @@
 import { artifactPromptTask, getGenerationPrompt } from "../ai-prompts/generationPrompts";
+import { getAccountSessionGeneration } from "../account/accountSessionStorage";
 import { createArtifactResourceService, artifactResourceScope } from "../resource-filesystem/artifactResourceProvider";
 import type { ResourceScope } from "../resource-filesystem/resourceFile.types";
 import { parseAuthoredArtifact, type AuthoredArtifact } from "../artifact-workflow/authoredArtifact";
@@ -560,7 +561,14 @@ export function useArtifactActions({
   runAgentAnalysis
 }: UseArtifactActionsInput) {
   const resources = createArtifactResourceService({ client: artifactResultClient,
-    scope: resourceScope ?? artifactResourceScope(), getCurrentScopeId: getCurrentResourceScopeId });
+    scope: resourceScope ?? artifactResourceScope(), getCurrentScopeId: getCurrentResourceScopeId,
+    getCurrentSessionGeneration: resourceScope?.kind === "account" ? getAccountSessionGeneration : undefined });
+  const runArtifactAnalysis: typeof runAgentAnalysis = async (...args) => {
+    resources.assertCurrent();
+    const result = await runAgentAnalysis(...args);
+    resources.assertCurrent();
+    return result;
+  };
   const saveArtifact = async (document: Parameters<ArtifactResultClient["save"]>[0], signal?: AbortSignal) => {
     const receipt = await resources.saveArtifact(document, { signal });
     if (!receipt.publishable) throw new ArtifactSavedOutsideCurrentScope();
@@ -756,8 +764,8 @@ export function useArtifactActions({
       artifactStore.updateTask(taskId, { recovery: { papers: scopedPapers, chunks: importedChunksByPaperId, options: effectiveGenerationOptions } });
       syncArtifacts(taskId);
       const agentRun = effectiveGenerationOptions
-        ? await runAgentAnalysis(artifactType, onProgress, effectiveGenerationOptions)
-        : await runAgentAnalysis(artifactType, onProgress);
+        ? await runArtifactAnalysis(artifactType, onProgress, effectiveGenerationOptions)
+        : await runArtifactAnalysis(artifactType, onProgress);
       if (artifactStore.getTask(taskId)?.status === "cancelled" || agentRun.status === "cancelled") {
         artifactStore.cancelTask(taskId);
         syncArtifacts(taskId);
@@ -1494,7 +1502,7 @@ export function useArtifactActions({
         syncArtifacts(taskId);
       };
       try {
-        const agentRun = await runAgentAnalysis("thin_reading", onProgress, generationOptions);
+        const agentRun = await runArtifactAnalysis("thin_reading", onProgress, generationOptions);
         if (artifactStore.getTask(taskId)?.status === "cancelled") return;
         if (agentRun.status !== "completed") {
           throw new Error(`薄读 Agent run 未完成：${agentRun.status}`);

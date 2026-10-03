@@ -571,6 +571,13 @@ export function AppShell({
     getIntuechoEndpoint: resolveIntuechoEndpoint,
     getIntuechoSessionId: () => cloudAccessTokenRef.current,
     getActorBinding: getPublicationActorBinding,
+    confirmPublication: (preview) => publicationPreview.confirm({
+      title: preview.operation === "retract" ? "确认撤回薄读批注" : "预览将公开的薄读批注",
+      recipient: preview.operation === "retract" ? "从 Intuecho 撤回；已有下载副本不会被远程删除" : "Intuecho 公开批注及广场",
+      body: preview.items.map((item, index) => `批注 ${index + 1}\n${item.body}`).join("\n\n"),
+      excerpts: preview.items.map((item, index) => ({ label: `批注 ${index + 1} 的选中摘录`, text: item.excerpt })),
+      action: preview.operation === "retract" ? "确认撤回" : "确认公开"
+    }),
     assertCanPublishThinReading: (document) => {
       const papers = document.paperIds.map((id) => workspaceStoreRef.current.getState().papers.find((paper) => paper.id === id));
       if (!papers.length || papers.some((paper) => !paper)) throw new Error("无法确认薄读来源，批注仍保留在本机。");

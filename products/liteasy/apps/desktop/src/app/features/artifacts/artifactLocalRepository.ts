@@ -198,15 +198,10 @@ function createIndexedDbTransport(): ArtifactCatalogTransport {
       const current = await readSnapshot();
       if (current !== null) return current;
       const legacyNames = await legacyDatabaseNames();
-      if (legacyNames.length > 1) {
-        throw new Error("检测到多个旧账号产物目录，请先选择并备份需要迁移的数据");
+      if (legacyNames.length > 0) {
+        throw new Error("旧账号产物仍保留在原目录；请确认归属并备份后再显式导入，不会自动纳入本机资料。");
       }
-      if (legacyNames.length === 0) return null;
-      const legacy = await readSnapshot(legacyNames[0]);
-      if (legacy && typeof legacy === "object") {
-        await writeSnapshot(legacy as ArtifactCatalogSnapshot);
-      }
-      return legacy;
+      return null;
     },
     async save(snapshot) {
       await writeSnapshot(snapshot);
@@ -217,19 +212,13 @@ function createIndexedDbTransport(): ArtifactCatalogTransport {
 function createLocalStorageTransport(): ArtifactCatalogTransport {
   return {
     async load() {
-      let serialized = window.localStorage.getItem(browserStorageKey);
+      const serialized = window.localStorage.getItem(browserStorageKey);
       if (serialized === null) {
         const legacyScopedKeys = Array.from({ length: window.localStorage.length }, (_, index) =>
           window.localStorage.key(index)
         ).filter((key): key is string => Boolean(key?.startsWith(`${browserStorageKey}:`))).sort();
-        if (legacyScopedKeys.length > 1) {
-          throw new Error("检测到多个旧账号产物目录，请先选择并备份需要迁移的数据");
-        }
-        const legacyScopedKey = legacyScopedKeys[0];
-        serialized = legacyScopedKey ? window.localStorage.getItem(legacyScopedKey) : null;
-        if (serialized !== null) {
-          window.localStorage.setItem(browserStorageKey, serialized);
-          window.localStorage.removeItem(legacyScopedKey!);
+        if (legacyScopedKeys.length > 0) {
+          throw new Error("旧账号产物仍保留在原目录；请确认归属并备份后再显式导入，不会自动纳入本机资料。");
         }
       }
       return serialized ? JSON.parse(serialized) : null;

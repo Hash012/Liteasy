@@ -9,7 +9,7 @@ export type AssetSourceReference = {
 };
 
 export function paperSourceReferences(paper: Pick<Paper, "id" | "libraryReference" | "sourcePath">): AssetSourceReference[] {
-  if (paper.libraryReference) return [paper.libraryReference];
+  if (paper.libraryReference) return [{ ...paper.libraryReference, paperId: paper.id }];
   const legacyOrganization = paper.sourcePath?.match(/^org:\/\/([^/]+)\/shared-library\//);
   return legacyOrganization ? [{ scopeType: "organization", scopeId: legacyOrganization[1], paperId: paper.id }] : [];
 }

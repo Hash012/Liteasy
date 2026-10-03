@@ -1,3 +1,4 @@
+import { readOrganizationActivity } from "./organizationActivity.mjs";
 import { randomUUID } from "node:crypto";
 import http from "node:http";
 import path from "node:path";
@@ -213,7 +214,8 @@ function errorMessage(code) {
     session_revoked: "Your session has ended. Sign in again.",
     support_access_required: "A current support access grant is required.",
     account_lifecycle_in_progress: "This account change is already running. Retry shortly.",
-    account_lifecycle_pending_retry: "The account is disabled, but deletion is incomplete. Retry with the same operation key.",
+    account_deletion_started: "Account deletion has started; private data cannot be changed.",
+    account_lifecycle_pending_retry: "The account change or session revocation is not yet confirmed. Retry with the same operation key.",
     account_owns_organization: "Transfer or delete organizations owned by this account first.",
     admin_self_disable_forbidden: "The current administrator cannot disable or delete their own account.",
     identity_session_revocation_unconfirmed: "The identity service did not confirm complete session revocation.",
@@ -834,6 +836,12 @@ export function createCloudRequestHandler(runtime, config) {
           idempotencyKey: body.idempotencyKey,
           traceId
         }));
+        return;
+      }
+
+      if (request.method === "POST" && url.pathname === "/v1/org/activity/list") {
+        const identity = await runtime.identityVerifier.verifyAuthorizationHeader(request.headers.authorization, "liteasy-desktop");
+        sendJson(response, 200, await readOrganizationActivity(runtime.pool, identity));
         return;
       }
 
