@@ -3,7 +3,7 @@ import test from "node:test";
 import Database from "better-sqlite3";
 import Fastify from "fastify";
 import { SqliteAnnotationCommunityRepository } from "./annotationCommunitySqlite.mjs";
-import { SqliteCommunityGovernanceRepository, recordSqliteCommunityReplyEvent } from "./communityGovernanceRepository.mjs";
+import { PostgresCommunityGovernanceRepository, SqliteCommunityGovernanceRepository, recordSqliteCommunityReplyEvent } from "./communityGovernanceRepository.mjs";
 import { registerCommunityGovernanceRoutes } from "./communityGovernanceRoutes.mjs";
 
 async function fixture(run) {
@@ -142,3 +142,27 @@ test("an explicit scope unsubscribe suppresses overlapping broader subscriptions
   reply("after_optout", "overlap");
   assert.equal(db.prepare("SELECT count(*) AS count FROM community_notifications").get().count, 1);
 }));
+
+test("PostgreSQL bigint revisions compare to the authorized numeric snapshot and tombstones fence new writes", async () => {
+  const calls = [];
+  let deleted = false;
+  const client = { release() {}, async query(sql, values) {
+    calls.push({ sql, values });
+    if (sql.startsWith("SELECT 1 FROM account_deletion_jobs")) return { rows: deleted ? [{ present: 1 }] : [] };
+    if (sql.startsWith("SELECT * FROM annotations")) return { rows: [{ id: "a", visibility: "public", organization_id: null, revision: "3", withdrawn_at: null }] };
+    if (sql.startsWith("SELECT count(*)")) return { rows: [{ count: "0" }] };
+    return { rows: [] };
+  } };
+  const repository = new PostgresCommunityGovernanceRepository({ connect: async () => client }, { annotationRepository: { annotation: async () => ({ id: "a", visibility: "public", organizationId: null, revision: 3 }) } });
+  const result = await repository.submitReport({ id: "actor" }, "a", { ...report, revision: 3 });
+  assert.equal(result.revision, 3);
+  const accountLock = calls.findIndex((call) => call.values?.[0] === "intuecho-account-deletion:actor");
+  const tombstoneCheck = calls.findIndex((call) => call.sql.startsWith("SELECT 1 FROM account_deletion_jobs"));
+  const insert = calls.findIndex((call) => call.sql.startsWith("INSERT INTO community_reports"));
+  assert.ok(accountLock >= 0 && accountLock < tombstoneCheck && tombstoneCheck < insert);
+  calls.length = 0;
+  deleted = true;
+  await assert.rejects(repository.setPreference({ id: "actor" }, preference("thread", "a", { subscribed: false })), (error) => error.code === "ACCOUNT_DELETED");
+  assert.equal(calls.some((call) => call.sql.startsWith("INSERT")), false);
+  assert.equal(calls.at(-1).sql, "ROLLBACK");
+});
