@@ -160,3 +160,20 @@ alias with a verified `liteasy-desktop` token. Web tokens are rejected there and
 Desktop tokens are rejected on the Web alias. Both aliases call the same current
 permission and historical-scope checks; neither writes a receipt or copies body
 into a handoff payload.
+
+### Existing departed-member exceptions (RV22)
+
+`src/departedOrganizationRights.test.mjs` and the shared
+`scripts/verify-departed-organization-rights.mjs` execute the same five-actor matrix
+against SQLite and PostgreSQL: root author, reply author, member, former admin and
+outsider, across parent, thread replies, projection and historical reads. Existing
+behavior is preserved: a departed root author can read their parent/thread/history;
+a departed reply author cannot read that parent or reply history, but can read
+their own projection/history. The root author also retains access to its projection.
+Ordinary members/former admins/outsiders lose all of these controlled reads.
+Organization edits, new replies, republishing and former-admin moderation are
+rejected; authors can still delete their own parent/reply. Being able to read the
+other author's projection does not allow deleting it. These observations document
+current D02 exceptions; they do not grant general organization export rights.
+The standalone PostgreSQL script uses the existing loopback *_test guards and
+only creates synthetic fixtures in an already-migrated isolated test database.

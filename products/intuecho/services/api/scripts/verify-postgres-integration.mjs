@@ -1,3 +1,4 @@
+import { verifyPostgresDepartedOrganizationRights } from "./verify-departed-organization-rights.mjs";
 import { verifyCommunityReadScaling } from "./verify-community-read-scaling.mjs";
 import { verifyStructuredCollaboration, verifySourceCommitRaces } from "./verify-structured-collaboration.mjs";
 import { verifyScopeDerivedTags } from "./verify-scope-derived-tags.mjs";
@@ -2388,6 +2389,7 @@ try {
     /account_lifecycle_audit_is_append_only/
   );
 
+  const departedOrganizationRights = await verifyPostgresDepartedOrganizationRights(pool);
   const readScaling = await verifyCommunityReadScaling(pool);
   const counts = await pool.query(`
     SELECT
@@ -2406,6 +2408,7 @@ try {
     platformGovernance,
     communityCommands,
     readScaling,
+    departedOrganizationRights,
     structuredCollaboration,
     sourceCommitRaces,
     scopedDerivedTags: true,
