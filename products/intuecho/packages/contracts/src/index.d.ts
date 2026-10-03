@@ -308,7 +308,15 @@ export declare const communityRecommendationQuerySchema: z.ZodType<unknown>;
 export declare const desktopDraftHandoffSchema: z.ZodType<unknown>;
 export declare const annotationVisibilitySchema: z.ZodType<"private" | "organization" | "mutual_followers" | "public">;
 export declare const literatureMetadataSchema: z.ZodType<LegacyLiteratureReference["metadata"]>;
-export declare const createAnnotationSchema: z.ZodType<unknown>;
+export type CreateAnnotationInput = {
+  body: string;
+  organizationId?: string;
+  shareToPlaza: boolean;
+  tags: string[];
+  targets: AnnotationTarget[];
+  visibility: "private" | "organization" | "mutual_followers" | "public";
+};
+export declare const createAnnotationSchema: z.ZodType<CreateAnnotationInput>;
 export declare const updateAnnotationSchema: z.ZodType<unknown>;
 export declare const academicProfileSchema: z.ZodType<unknown>;
 export declare const createReplySchema: z.ZodType<CreateReply, z.ZodTypeDef, CreateReplyInput>;

@@ -79,14 +79,7 @@ export type OrganizationAnnotationGroup = {
   role: "owner" | "admin" | "member";
 };
 
-export type CreateAnnotationInput = {
-  body: string;
-  organizationId?: string;
-  shareToPlaza: boolean;
-  tags: string[];
-  targets: AnnotationTarget[];
-  visibility: AnnotationVisibility;
-};
+export type { CreateAnnotationInput } from "@intuecho/contracts";
 
 export type AcademicProfile = {
   educationStage: string | null;

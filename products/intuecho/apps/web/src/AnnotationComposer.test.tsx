@@ -12,6 +12,7 @@ vi.mock("./communityApi", () => ({
   communityApi: {
     createAnnotation: vi.fn(),
     createReply: vi.fn(),
+    organizationChoices: vi.fn(),
     confirmLiterature: vi.fn(),
     replies: vi.fn(),
     resolveLiterature: vi.fn(),
@@ -112,6 +113,11 @@ function deferred<T>() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(communityApi.organizationChoices).mockResolvedValue({ organizations: [{
+    organizationId: "org-x", name: "Synthetic Reading Group", role: "member",
+    allowedActions: ["read_metadata", "comment"], authorizationRevision: 3,
+    policyRevision: 2, policyExceptions: [], actionConstraints: { inviteRoles: [] }, denialReasons: {}
+  }] });
   createReply.mockResolvedValue({ annotation: null, reply: { ...publishedReply, derivedAnnotationId: null, derivedAnnotationState: "none" } });
   resolveLiterature.mockResolvedValue({ candidate: legacyCandidate, confirmationMode: "candidate", status: "exact", unavailableProviders: [] });
   confirmLiterature.mockResolvedValue({ literature: confirmedLiterature });
@@ -135,6 +141,9 @@ test("requires an audience for a new draft before any upload", async () => {
   expect(communityApi.createAnnotation).not.toHaveBeenCalled();
   await user.selectOptions(screen.getByLabelText("可见范围"), "private");
   await user.click(screen.getByRole("button", { name: "发布" }));
+  expect(communityApi.createAnnotation).not.toHaveBeenCalled();
+  expect(screen.getByRole("region", { name: "发送预览" })).toHaveTextContent("Synthetic private research question");
+  await user.click(screen.getByRole("button", { name: "确认发送" }));
   expect(communityApi.createAnnotation).toHaveBeenCalledWith(expect.objectContaining({
     body: "Synthetic private research question", visibility: "private", shareToPlaza: false
   }));
@@ -458,4 +467,43 @@ test("renders one reply with one projection link and independent projection cont
 test("shows the fixed deleted-parent context on a derived card", () => {
   render(<AnnotationCard annotation={{ ...publicParent, originalReply: { replyId: "reply-source", status: "parent_deleted" } }} session={null} onCompose={vi.fn()} />);
   expect(screen.getByText("原回复对象已删除")).toBeVisible();
+});
+
+
+test("selects a named organization and invalidates preview when content changes", async () => {
+  const user = userEvent.setup();
+  render(<AnnotationComposer context={{ draft: {
+    body: "Synthetic group question", tags: [], visibility: "organization", shareToPlaza: false,
+    targets: [{ kind: "whole_document", literature: { literatureId: "literature-parent" } }]
+  } }} onClose={vi.fn()} onSaved={vi.fn()} />);
+  expect(screen.queryByLabelText("组织 ID")).not.toBeInTheDocument();
+  await screen.findByRole("option", { name: "Synthetic Reading Group · 成员" });
+  await user.selectOptions(screen.getByRole("combobox", { name: "接收组织" }), "org-x");
+  await user.click(screen.getByRole("button", { name: "发布" }));
+  expect(screen.getByRole("region", { name: "发送预览" })).toHaveTextContent("Synthetic Reading Group");
+  expect(communityApi.createAnnotation).not.toHaveBeenCalled();
+  await user.type(screen.getByLabelText("批注内容"), " changed");
+  expect(screen.queryByRole("button", { name: "确认发送" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "发布" }));
+  vi.mocked(communityApi.createAnnotation).mockRejectedValueOnce(new Error("当前账号已不具备该组织的访问权限。"));
+  await user.click(screen.getByRole("button", { name: "确认发送" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("当前账号已不具备");
+  expect(screen.getByLabelText("批注内容")).toHaveValue("Synthetic group question changed");
+  expect(communityApi.createAnnotation).toHaveBeenCalledWith(expect.objectContaining({
+    body: "Synthetic group question changed", organizationId: "org-x", visibility: "organization", shareToPlaza: false
+  }));
+});
+
+test("keeps the draft local when organization permissions cannot be loaded", async () => {
+  const user = userEvent.setup();
+  vi.mocked(communityApi.organizationChoices).mockRejectedValueOnce(new Error("unavailable"));
+  render(<AnnotationComposer context={{ draft: {
+    body: "Synthetic unavailable group", tags: [], visibility: "organization", shareToPlaza: false,
+    organizationId: "org-x", targets: [{ kind: "whole_document", literature: { literatureId: "literature-parent" } }]
+  } }} onClose={vi.fn()} onSaved={vi.fn()} />);
+  expect(await screen.findByRole("alert")).toHaveTextContent("无法确认组织权限");
+  expect(screen.getByRole("button", { name: "发布" })).toBeDisabled();
+  await user.click(screen.getByRole("button", { name: "重新加载组织" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "发布" })).toBeEnabled());
+  expect(communityApi.createAnnotation).not.toHaveBeenCalled();
 });

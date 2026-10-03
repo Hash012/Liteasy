@@ -1,3 +1,4 @@
+import type { OrganizationChoice } from "@intuecho/contracts";
 import {
   clearRejectedIdentitySession,
   notifyAuthenticationRequired,
@@ -79,6 +80,7 @@ export const communityApi = {
   sendMessage: (conversationId: string, body: { body: string; invitation?: { organizationId: string; role: string }; kind: "text" | "organization_invitation" }) => request(`/v1/conversations/${encodeURIComponent(conversationId)}/messages`, { method: "POST", body: JSON.stringify(body) }, true),
   appealTag: (annotationId: string, tag: string, reason: string) => request(`/v1/annotations/${encodeURIComponent(annotationId)}/tags/${encodeURIComponent(tag)}/appeals`, { method: "POST", body: JSON.stringify({ reason }) }, true),
   myAnnotations: () => request<{ annotations: CommunityAnnotation[] }>("/v1/me/annotations", undefined, true),
+  organizationChoices: () => request<{ organizations: OrganizationChoice[] }>("/v1/me/organizations", undefined, true),
   organizationAnnotations: () => request<{ organizations: OrganizationAnnotationGroup[] }>("/v1/me/organization-annotations", undefined, true),
   moderateOrganizationAnnotation: (annotationId: string, body: { action: "restore" | "withdraw"; reason: string }) => request(`/v1/annotations/${encodeURIComponent(annotationId)}/organization-moderation`, { method: "POST", body: JSON.stringify(body) }, true),
   rateAnnotation: (annotationId: string, rating: number) => request<{ ratingAverage: number; ratingCount: number; viewerRating: number }>(`/v1/annotations/${encodeURIComponent(annotationId)}/rating`, { method: "PUT", body: JSON.stringify({ rating }) }, true),

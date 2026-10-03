@@ -1,6 +1,7 @@
 import { Button, Checkbox, Input, Textarea, Tooltip } from "@fluentui/react-components";
 import { Add20Regular, Dismiss20Regular, Send20Regular } from "@fluentui/react-icons";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { createAnnotationSchema, type OrganizationChoice } from "@intuecho/contracts";
 import { canonicalizeInheritedTargets, inheritedTargetsAreCanonical } from "./canonicalizeInheritedTargets";
 import { communityApi } from "./communityApi";
 import type {
@@ -11,6 +12,8 @@ import type {
 } from "./community.types";
 import { LiteratureTargetEditor } from "./LiteratureTargetEditor";
 import { ReplyPublicationFields } from "./ReplyPublicationFields";
+import { OrganizationAudienceSelector } from "./OrganizationAudienceSelector";
+import { AnnotationSendPreview } from "./AnnotationSendPreview";
 
 export type ComposerState = { draft?: CreateAnnotationInput; edit?: CommunityAnnotation; replyTo?: CommunityAnnotation };
 
@@ -37,6 +40,11 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
   const [shareToPlaza, setShareToPlaza] = useState(original?.shareToPlaza ?? draft?.shareToPlaza ?? false);
   const [status, setStatus] = useState("");
   const [pending, setPending] = useState(false);
+  const [organization, setOrganization] = useState<OrganizationChoice>();
+  const [preview, setPreview] = useState<{ key: string; input: CreateAnnotationInput }>();
+  const sending = useRef(false);
+  const draftKey = JSON.stringify([body, tags, targets, visibility, organizationId, shareToPlaza, organization]);
+  useEffect(() => { setPreview(undefined); }, [draftKey]);
   const publicationAttempt = useRef(0);
   const publicationCanonicalizingRef = useRef(false);
 
@@ -105,6 +113,18 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
       targets,
       visibility
     };
+    if (!parent && !sourceReplyId && visibility === "organization" && (!organization || organization.organizationId !== organizationId)) {
+      setStatus("请先确认接收组织的当前权限。");
+      setPending(false);
+      return;
+    }
+    if (!original && !parent) {
+      const parsed = createAnnotationSchema.safeParse(input);
+      if (!parsed.success) setStatus("请检查批注内容与已确认的关联文献后重试。");
+      else setPreview({ key: draftKey, input: parsed.data });
+      setPending(false);
+      return;
+    }
     try {
       if (sourceReplyId) await communityApi.updateReply(sourceReplyId, { body });
       else if (original) await communityApi.updateAnnotation(original.id, input);
@@ -114,6 +134,22 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
     } catch (reason) {
       setStatus(reason instanceof Error ? reason.message : "批注保存失败");
       setPending(false);
+    }
+  }
+
+  async function confirmSend() {
+    if (!preview || preview.key !== draftKey || sending.current) return;
+    sending.current = true;
+    setPending(true);
+    setStatus("");
+    try {
+      await communityApi.createAnnotation(preview.input);
+      onSaved();
+    } catch (reason) {
+      setStatus(reason instanceof Error ? reason.message : "发送失败，草稿已保留。");
+      setPending(false);
+    } finally {
+      sending.current = false;
     }
   }
 
@@ -133,14 +169,15 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
         {!isReplyEdit && !parent && <>
           <div className="visibility-row">
             <label>可见范围<select value={visibility} onChange={(event) => { const next = event.target.value as AnnotationVisibility | ""; setVisibility(next); if (next !== "public") setShareToPlaza(false); }}><option value="" disabled>请选择接收范围</option><option value="public">公开</option><option value="private">仅自己</option><option value="organization">指定组织</option><option value="mutual_followers">仅互相关注</option></select></label>
-            {visibility === "organization" && <label>组织 ID<Input value={organizationId} onChange={(_, data) => setOrganizationId(data.value)} required /></label>}
+            {visibility === "organization" && <OrganizationAudienceSelector value={organizationId} onChange={setOrganizationId} onResolvedSelection={setOrganization} />}
           </div>
           {visibility === "public" && <Checkbox checked={shareToPlaza} label="发布到广场" onChange={(_, data) => setShareToPlaza(Boolean(data.checked))} />}
           <LiteratureTargetEditor targets={targets} onChange={setTargets} required />
         </>}
         {!isReplyEdit && (!parent || publishAsAnnotation) && <div className="tag-editor-v2"><label>标签</label><div className="tag-row">{tags.map((tag) => <button type="button" key={tag} onClick={() => setTags(tags.filter((item) => item !== tag))}>#{tag}<Dismiss20Regular /></button>)}</div><div className="tag-input"><Input value={tagInput} onChange={(_, data) => setTagInput(data.value)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === ",") { event.preventDefault(); addTag(); } }} /><Button type="button" icon={<Add20Regular />} onClick={addTag}>添加</Button></div></div>}
         {status && <p className="form-error" role="alert">{status}</p>}
-        <div className="drawer-actions"><Button type="button" appearance="secondary" onClick={onClose}>取消</Button><Button type="submit" appearance="primary" icon={<Send20Regular />} disabled={pending || publicationCanonicalizing || !visibility || !body.trim() || (Boolean(parent) && publishAsAnnotation && !replyTargetsReady) || (!parent && !isReplyEdit && targets.length === 0)}>{pending ? "正在保存" : original ? "保存修改" : "发布"}</Button></div>
+        {preview && preview.key === draftKey && <AnnotationSendPreview input={preview.input} organizationName={visibility === "organization" ? organization?.name : undefined} pending={pending} onConfirm={() => void confirmSend()} onCancel={() => setPreview(undefined)} />}
+        <div className="drawer-actions"><Button type="button" appearance="secondary" onClick={onClose}>取消</Button><Button type="submit" appearance="primary" icon={<Send20Regular />} disabled={pending || publicationCanonicalizing || !visibility || !body.trim() || (!parent && !isReplyEdit && visibility === "organization" && (!organization || organization.organizationId !== organizationId)) || (Boolean(parent) && publishAsAnnotation && !replyTargetsReady) || (!parent && !isReplyEdit && targets.length === 0)}>{pending ? "正在保存" : original ? "保存修改" : "发布"}</Button></div>
       </form>
     </aside>
   </div>;
