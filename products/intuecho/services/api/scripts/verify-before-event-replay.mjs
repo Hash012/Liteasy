@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, generateKeyPairSync } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { migrateIntuecho, readIntuechoMigrations, verifyIntuechoMigrations } from "../src/migrations.mjs";
 import { PostgresAnnotationCommunityRepository } from "../src/postgresAnnotationCommunityRepository.mjs";
 import { PostgresAccountLifecycleRepository } from "../src/accountLifecycleRepository.mjs";
+import { sealRecoveryJournal, verifyRecoveryJournal, verifyReplayCompletion } from "./recoveryJournal.mjs";
 import { validateIntuechoRecoveryTestConfig } from "./postgresRecoveryGuard.mjs";
 
 // See docs/qa/account-cloud-community/S14-verification-matrix.md. This creates
@@ -152,11 +153,17 @@ try {
   assert.deepEqual(journal.events[0].input, deletionInput);
   assert.deepEqual(journal.events[1].input, withdrawalInput);
   const journalFile = path.join(directory, "later-events.json");
-  const journalBytes = JSON.stringify(journal, null, 2);
+  // Synthetic independent producer key for this drill; production must pin the
+  // real producer key outside the restored backup and supply its latest watermark.
+  const producer = generateKeyPairSync("ed25519");
+  const trustedProducerKey = producer.publicKey.export({ type: "spki", format: "pem" });
+  const { bytes: journalBytes, checkpoint } = sealRecoveryJournal(journal, producer.privateKey);
+  const requiredThrough = journal.highWatermark;
   const journalDigest = digest(journalBytes);
   fs.writeFileSync(journalFile, journalBytes, { mode: 0o600 });
-  fs.writeFileSync(path.join(directory, "recovery-manifest.json"), JSON.stringify({ backupSha256: backupDigest, journalSha256: journalDigest, expectedEvents: 2, highWatermark: journal.highWatermark }, null, 2), { mode: 0o600 });
+  fs.writeFileSync(path.join(directory, "recovery-manifest.json"), JSON.stringify(checkpoint, null, 2), { mode: 0o600 });
   result.laterEvents = 2;
+  result.checkpointAuthentication = "ed25519-synthetic-producer-key";
   result.journalSha256 = journalDigest;
   result.cases.push("backup-predates-deletion-and-withdrawal", "later-events-derived-from-source-ledgers");
   step = "restore-older-backup-with-business-connect-revoked";
@@ -176,16 +183,13 @@ try {
   result.cases.push("older-restore-demonstrably-has-private-and-public-stale-state", "business-connect-denied-before-replay");
   async function replay(file, { failBeforeWithdrawal = false } = {}) {
     const bytes = fs.readFileSync(file, "utf8");
-    assert.equal(digest(bytes), journalDigest, "untrusted-or-incomplete-journal");
     assert.equal(digest(fs.readFileSync(backup)), backupDigest, "changed-backup");
-    const events = JSON.parse(bytes);
-    assert.equal(events.targetDatabase, restored.database);
-    assert.equal(events.sourceDatabase, source.database);
-    assert.equal(events.backupSha256, backupDigest);
-    assert.equal(events.highWatermark, journal.highWatermark);
-    assert.equal(events.events.length, 2);
+    const events = verifyRecoveryJournal({ bytes, checkpoint, publicKey: trustedProducerKey,
+      backupSha256: backupDigest, sourceDatabase: source.database, targetDatabase: restored.database, requiredThrough });
+    const applied = [];
     const receipts = [];
-    for (const event of events.events) {
+    for (const entry of events.events) {
+      const event = entry.event;
       if (event.kind === "delete") receipts.push(await lifecycle.deleteAccount(event.input));
       else if (event.kind === "withdraw") {
         if (failBeforeWithdrawal) throw new Error("synthetic-replay-interrupted");
@@ -193,7 +197,9 @@ try {
         assert.equal(receipt.state, "retracted");
         receipts.push(receipt);
       } else throw new Error("unsupported-journal-event");
+      applied.push({ sequence: entry.sequence, hash: entry.hash });
     }
+    verifyReplayCompletion(events, applied);
     return receipts;
   }
   step = "exercise-closed-recovery-gate";
@@ -201,7 +207,7 @@ try {
   await denied(restored.business);
   const incomplete = path.join(directory, "incomplete-events.json");
   fs.writeFileSync(incomplete, JSON.stringify({ ...journal, events: [journal.events[0]] }), { mode: 0o600 });
-  await assert.rejects(() => replay(incomplete), /untrusted-or-incomplete-journal/);
+  await assert.rejects(() => replay(incomplete), /recovery_journal_untrusted_or_incomplete/);
   await denied(restored.business);
   await assert.rejects(() => replay(journalFile, { failBeforeWithdrawal: true }), /synthetic-replay-interrupted/);
   await denied(restored.business);
