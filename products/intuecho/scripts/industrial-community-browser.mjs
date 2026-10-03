@@ -13,6 +13,9 @@ import { createCommunityFixture, deferredFixtureRequest } from "./industrial-com
 // All storage belongs to new disposable browser contexts. Production endpoints
 // cannot be selected: the runner always creates its own two loopback origins.
 const root = fileURLToPath(new URL("../../..", import.meta.url));
+const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+const sourceCommit = git("rev-parse", "HEAD");
+const dirtyPathsBefore = git("status", "--porcelain").split("\n").filter(Boolean);
 const webRoot = path.join(root, "products/intuecho/apps/web");
 const output = process.env.LITEASY_BROWSER_REPORT_DIR ?? await mkdtemp(path.join(tmpdir(), "liteasy-industrial-browser-"));
 await mkdir(output, { recursive: true });
@@ -392,8 +395,10 @@ try {
     return { originalRequiresConfirmation: true, noImplicitResend: true, resultFreshlyAuthorized: true, withdrawnBodyNotShown: true };
   });
 } finally {
-  const report = { sourceCommit: execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim(),
-    dirtyPaths: execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" }).trim().split("\n").filter(Boolean),
+  const sourceCommitAfter = git("rev-parse", "HEAD");
+  const dirtyPaths = git("status", "--porcelain").split("\n").filter(Boolean);
+  const report = { sourceCommit, sourceCommitAfter, dirtyPathsBefore, dirtyPaths,
+    cleanUnchangedSource: sourceCommit === sourceCommitAfter && dirtyPathsBefore.length === 0 && dirtyPaths.length === 0,
     runtime: process.version, platform: process.platform, architecture: process.arch, browser: browser.version(),
     method: "Actual Vite React application and unchanged browser source modules in isolated Chromium contexts; actual localStorage and Web Locks, synthetic loopback HTTP API/identity only.",
     limitations: ["Synthetic HTTP server, not PostgreSQL or a real identity provider", "No real accounts or deployed services", "Not native Windows or installer acceptance"],
