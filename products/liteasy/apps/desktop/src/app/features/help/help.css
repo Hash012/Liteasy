@@ -84,3 +84,17 @@
     flex-shrink: 0;
   }
 }
+
+.help-home { max-width:760px; margin:12px auto; padding:8px 16px; }
+.help-home > h1 { font-size:26px; font-weight:600; line-height:1.4; margin:0 0 8px; }
+.help-home > p { font-size:14px; line-height:1.7; color:var(--colorNeutralForeground2); }
+.help-journeys { display:grid; gap:8px; margin:28px 0; }
+.help-journeys > button { width:100%; padding:16px 8px; justify-content:flex-start; text-align:left; gap:16px; height:auto; white-space:normal; }
+.help-journeys > button > svg { flex-shrink:0; font-size:24px; color:var(--colorBrandForeground1); }
+.help-journeys span { display:grid; gap:8px; }
+.help-journeys strong { font-size:16px; font-weight:600; line-height:1.5; }
+.help-journeys small { color:var(--colorNeutralForeground2); font-size:13px; font-weight:400; }
+.help-diagnostics { margin-top:20px; }
+.help-diagnostics > summary { padding:8px; cursor:pointer; }
+.help-results li { padding:12px 0; border:0; }
+.help-results p { color:var(--colorNeutralForeground2); font-size:13px; line-height:1.6; padding-left:12px; }

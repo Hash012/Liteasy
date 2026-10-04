@@ -43,3 +43,10 @@
 .profile-notice, .profile-empty { padding: 10px; background: var(--colorNeutralBackground2); border-radius: 4px; font-size: 12px; color: var(--colorNeutralForeground2); line-height: 1.6; }
 
 .assistant-memory-notice { padding: 6px 12px; font-size: 12px; color: var(--colorNeutralForeground3); border-bottom: 1px solid var(--colorNeutralStroke2); }
+
+.profile-page { width:100%; max-width:960px; margin-inline:auto; padding:16px; box-sizing:border-box; container-type:inline-size; }
+.profile-page .workbench-page-header { padding:8px 0 24px; }
+.profile-page h3 { font-size:17px; }
+.profile-page .profile-personalization { border:0; background:transparent; padding:0; }
+.profile-page .personal-profile-fieldset { border:0; border-top:1px solid var(--colorNeutralStroke2); border-radius:0; padding:16px 0; }
+@container (min-width:600px) { .profile-page .personal-profile-inline-controls { grid-template-columns:1fr 1fr; } }

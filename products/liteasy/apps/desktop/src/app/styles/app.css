@@ -6431,3 +6431,8 @@ button.pdf-overlay-mark:focus-visible {
 .assistant-session-digest small { color: var(--colorNeutralForeground3); }
 .assistant-session-digest ul { padding-left: 20px; margin: 0; }
 .assistant-active-session .assistant-active-session-title { display: block; max-width: 100%; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* List density is independent from document typography and display scaling. */
+.app-frame[data-list-density="comfortable"] :is(.library-paper-row, .library-file-row, .library-folder-row, .library-collection-row) { min-height: 38px; }
+.app-frame[data-list-density="compact"] :is(.library-paper-row, .library-file-row, .library-folder-row, .library-collection-row) { min-height: 30px; padding-block: 2px; }
+.app-frame[data-list-density="compact"] :is(.library-paper-row, .library-file-row) .library-tag-chips { display:none; }

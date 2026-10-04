@@ -1713,7 +1713,7 @@ function LibraryPaneContent({
             {!accountSessionAvailable ? (
               <button className="library-inline-button" onClick={onLoginRequired} type="button">登录</button>
             ) : collection.status === "error" ? (
-              <ErrorState message={collection.message} onRetry={() => void collection.refresh()} />
+              <><ErrorState message={collection.message} onRetry={() => void collection.refresh()} /><p className="library-scope-description">仅云端收藏受影响，本地阅读仍可继续。</p></>
             ) : collection.status === "loading" ? (
               <div className="library-empty-collection">加载中…</div>
             ) : renderTree("collection", collectionTree, query ? "没有匹配的收藏" : "收藏为空")}

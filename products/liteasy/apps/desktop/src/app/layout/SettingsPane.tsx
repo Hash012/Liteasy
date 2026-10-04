@@ -1,3 +1,4 @@
+import { WorkbenchPageHeader } from "../features/workbench/WorkbenchPage";
 import { ProfileRecoveryPanel } from "../features/local-recovery/ProfileRecoveryPanel";
 import { LocalArchivePanel } from "../features/local-archive/LocalArchivePanel";
 import { LocalFileOperationsTool } from "../controllers/LocalFileOperationsTool";
@@ -54,7 +55,7 @@ export function SettingsPane(props: SettingsPaneProps) {
   const extensions = useExtensionWorkbench();
   const scope = props.localScope ?? "local";
   const currentScope = useRef(scope); currentScope.current = scope;
-  const [category, setCategory] = useState<SettingsCategory>("all");
+  const [category, setCategory] = useState<SettingsCategory>("appearance");
   const [query, setQuery] = useState("");
   useEffect(() => {
     const detail = extensions?.settingsRequest;
@@ -106,8 +107,7 @@ export function SettingsPane(props: SettingsPaneProps) {
     searchRef.current?.focus();
   }
   return <section aria-label="应用设置" className="settings-page">
-    <header className="settings-page-header">
-      <div><h1>设置</h1><p>让 Liteasy 更适合你的研究习惯</p></div>
+    <WorkbenchPageHeader title="设置" description="按任务查找设置；应用界面与文档阅读分别配置。" actions={
       <Input ref={searchRef} className="settings-search" aria-label="搜索设置"
         placeholder="搜索设置，如模型、主题、保存位置" value={query}
         contentBefore={<SearchRegular aria-hidden="true" />}
@@ -116,7 +116,7 @@ export function SettingsPane(props: SettingsPaneProps) {
         </Tooltip> : undefined}
         onChange={(_, data) => { setQuery(data.value); resetScroll(); }}
         onKeyDown={(event) => { if (event.key === "Escape" && query) { event.stopPropagation(); clearSearch(); } }} />
-    </header>
+    } />
     <div className="settings-page-body">
       <nav aria-label="设置分类" className="settings-categories">
         {settingsCategories.map((item) => <Button key={item.id} appearance="subtle"

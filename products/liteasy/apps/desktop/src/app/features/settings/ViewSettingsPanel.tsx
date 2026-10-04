@@ -1,149 +1,74 @@
 import { SystemFontPicker } from "./SystemFontPicker";
 import { normalizeReadingFontFamily, readingFontOptions } from "./readingFonts";
-import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
-import { Button, Tooltip, Field, Input, Option, Radio, RadioGroup, Dropdown, Switch } from "@fluentui/react-components";
+import { Field, Input, Option, Radio, RadioGroup, Dropdown, Switch, Select } from "@fluentui/react-components";
+import { SettingRow } from "../workbench/WorkbenchPage";
 import type { SettingsState, UpdateSettingCommand } from "./settings.types";
 import { isHexColor, normalizeDisplayScale, pdfBackgroundPresets, viewDisplayScaleOptions, viewFontOptions, viewFontSizeOptions } from "./viewSettings";
 import { normalizeAppearancePreference } from "../theme/appearancePreference";
-import { DarkThemeRegular, WeatherSunnyRegular, DesktopRegular } from "@fluentui/react-icons";
 
-type ViewSettingsPanelProps = {
-  onUpdateSetting?: (command: UpdateSettingCommand) => void;
-  settings?: Partial<SettingsState>;
-};
-
-const defaultFont = viewFontOptions[0].value;
-const defaultFontSize = "14";
-const defaultPdfBackground = "paper";
-const defaultCustomPdfBackground = "#ffffff";
-
+type ViewSettingsPanelProps = { onUpdateSetting?: (command: UpdateSettingCommand) => void; settings?: Partial<SettingsState> };
 export function ViewSettingsPanel({ onUpdateSetting, settings }: ViewSettingsPanelProps) {
-  const workbench = useObjectWorkbench();
-  const fontFamily = settings?.["view.font_family"] ?? defaultFont;
-  const fontSize = settings?.["view.font_size"] ?? defaultFontSize;
+  const fontFamily = settings?.["view.font_family"] ?? viewFontOptions[0].value;
+  const fontSize = settings?.["view.font_size"] ?? "14";
+  const readingFont = normalizeReadingFontFamily(settings?.["view.reader_font_family"]);
   const displayScale = normalizeDisplayScale(settings?.["view.display_scale"]);
-  const pdfBackground = settings?.["view.pdf_background"] ?? defaultPdfBackground;
-  const customPdfBackground = settings?.["view.pdf_custom_background"] ?? defaultCustomPdfBackground;
-  const colorPickerValue = isHexColor(customPdfBackground)
-    ? customPdfBackground
-    : defaultCustomPdfBackground;
-  const update = (target: UpdateSettingCommand["target"], value: string | boolean) =>
-    onUpdateSetting?.({ intent: "update_setting", target, value });
-
-  return (
-    <div aria-label="View 显示设置" className="view-settings-panel">
-      <Field label="外观" hint="跟随系统自动切换，或选定你喜欢的外观。">
-        <RadioGroup
-          aria-label="外观"
-          className="appearance-options"
-          value={normalizeAppearancePreference(settings?.["view.theme"])}
-          onChange={(_, data) => update("view.theme", data.value)}
-        >
-          <Radio value="system" label={<span><DesktopRegular aria-hidden="true" />跟随系统</span>} />
-          <Radio value="light" label={<span><WeatherSunnyRegular aria-hidden="true" />浅色</span>} />
-          <Radio value="dark" label={<span><DarkThemeRegular aria-hidden="true" />深色</span>} />
-        </RadioGroup>
-      </Field>
-
-      <Field hint="关闭或移走最后一个页面后收起面板；全部页面关闭时保留起始页。">
-        <Switch label="自动收起空面板" checked={settings?.["view.close_empty_panels"] !== false}
-          onChange={(_, data) => update("view.close_empty_panels", data.checked)} />
-      </Field>
-
-      <Field label={<span>界面字体 {workbench ? <Tooltip content="解释此设置" relationship="description"><Button size="small" appearance="subtle" onClick={() => workbench.explain({ type: "setting", key: "view.font_family" })}>解释</Button></Tooltip> : null}</span>}>
-        <SystemFontPicker label="界面字体" value={fontFamily} options={viewFontOptions} onChange={(value) => update("view.font_family", value)} />
-      </Field>
-
-      <Field label="Markdown 编辑方式" hint="即时预览中，点击正文直接编辑，其他段落保持阅读排版。">
-        <RadioGroup aria-label="Markdown 编辑方式" value={settings?.["view.markdown_mode"] ?? "live"} onChange={(_, data) => update("view.markdown_mode", data.value)}>
-          <Radio value="live" label="即时预览 · 边读边写" />
-          <Radio value="manual" label="手动切换 · 编辑、保存、阅读" />
-        </RadioGroup>
-      </Field>
-      <Field hint="停止输入约 1.5 秒后保存已有文件。发现版本冲突时暂停；新建笔记仍需首次保存。">
-        <Switch label="Markdown 自动保存" checked={settings?.["view.markdown_autosave"] !== false} disabled={settings?.["view.markdown_mode"] === "manual"}
-          onChange={(_, data) => update("view.markdown_autosave", data.checked)} />
-      </Field>
-
-      <Field label="非 PDF 阅读字体" hint="用于论文阅读模式、电子书和 Markdown/TXT。文档内可单独设置字体，选择“跟随阅读设置”可恢复统一字体。">
-        <SystemFontPicker label="非 PDF 阅读字体" value={normalizeReadingFontFamily(settings?.["view.reader_font_family"])}
-          options={readingFontOptions} onChange={(value) => update("view.reader_font_family", value)} />
-      </Field>
-
-      <Field label={<span>界面字号 {workbench ? <Tooltip content="解释此设置" relationship="description"><Button size="small" appearance="subtle" onClick={() => workbench.explain({ type: "setting", key: "view.font_size" })}>解释</Button></Tooltip> : null}</span>}>
-        <Dropdown
-          aria-label="界面字号"
-          onOptionSelect={(_, data) => data.optionValue && update("view.font_size", data.optionValue)}
-          selectedOptions={[fontSize]}
-          size="small"
-          value={viewFontSizeOptions.find((option) => option.value === fontSize)?.label ?? `${fontSize} px`}
-        >
-          {viewFontSizeOptions.map((option) => (
-            <Option key={option.value} value={option.value}>{option.label}</Option>
-          ))}
-        </Dropdown>
-      </Field>
-
-      <Field
-        label={<span>显示比例 {workbench ? <Tooltip content="解释此设置" relationship="description"><Button size="small" appearance="subtle" onClick={() => workbench.explain({ type: "setting", key: "view.display_scale" })}>解释</Button></Tooltip> : null}</span>}
-        hint="Ctrl + 加号 / 减号缩放，Ctrl + 0 恢复默认"
-      >
-        <Dropdown
-          aria-label="显示比例"
-          onOptionSelect={(_, data) => data.optionValue && update("view.display_scale", data.optionValue)}
-          selectedOptions={[displayScale]}
-          size="small"
-          value={viewDisplayScaleOptions.find((option) => option.value === displayScale)?.label ?? `${displayScale}%`}
-        >
-          {viewDisplayScaleOptions.map((option) => (
-            <Option key={option.value} value={option.value}>{option.label}</Option>
-          ))}
-        </Dropdown>
-      </Field>
-
-      <Field label={<span>PDF 阅读底色 {workbench ? <Tooltip content="解释此设置" relationship="description"><Button size="small" appearance="subtle" onClick={() => workbench.explain({ type: "setting", key: "view.pdf_background" })}>解释</Button></Tooltip> : null}</span>}>
-        <RadioGroup
-          aria-label="PDF 阅读底色"
-          className="view-settings-backgrounds"
-          onChange={(_, data) => update("view.pdf_background", data.value)}
-          value={pdfBackground}
-        >
-          {pdfBackgroundPresets.map((preset) => (
-            <Radio
-              key={preset.value}
-              label={
-                <span className="view-settings-color-label">
-                  <span aria-hidden="true" className="view-settings-color-swatch" style={{ backgroundColor: preset.color }} />
-                  {preset.label}
-                </span>
-              }
-              value={preset.value}
-            />
-          ))}
-        </RadioGroup>
-      </Field>
-
-      <Switch label="PDF 保留图片原色" checked={settings?.["view.pdf_preserve_images"] !== false}
-        onChange={(_, data) => update("view.pdf_preserve_images", data.checked)} />
-      {pdfBackground === "custom" ? (
-        <Field label="自定义颜色" hint="输入十六进制颜色或使用系统拾色器">
-          <div className="view-settings-custom-color">
-            <Input
-              aria-label="自定义 PDF 底色"
-              onChange={(_, data) => update("view.pdf_custom_background", data.value)}
-              size="small"
-              value={customPdfBackground}
-            />
-            <input
-              aria-label="选择自定义 PDF 底色"
-              className="view-settings-native-color"
-              onChange={(event) => update("view.pdf_custom_background", event.target.value)}
-              type="color"
-              value={colorPickerValue}
-            />
-          </div>
-        </Field>
-      ) : null}
+  const pdfBackground = settings?.["view.pdf_background"] ?? "paper";
+  const customPdfBackground = settings?.["view.pdf_custom_background"] ?? "#ffffff";
+  const update = (target: UpdateSettingCommand["target"], value: string | boolean) => onUpdateSetting?.({ intent: "update_setting", target, value });
+  return <div aria-label="View 显示设置" className="view-settings-panel">
+    <h3 className="settings-group-title">应用界面</h3>
+    <SettingRow title="界面主题" description="跟随系统自动切换；原始 PDF 的颜色独立设置。">
+      <Select aria-label="外观" value={normalizeAppearancePreference(settings?.["view.theme"])} onChange={(_, data) => update("view.theme", data.value)}>
+        <option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option>
+      </Select>
+    </SettingRow>
+    <SettingRow title="列表密度" description="调整文献列表的行距与辅助信息，不改变正文字号。">
+      <Select aria-label="列表密度" value={settings?.["view.list_density"] ?? "comfortable"} onChange={(_, data) => update("view.list_density", data.value)}>
+        <option value="comfortable">舒适</option><option value="compact">紧凑</option>
+      </Select>
+    </SettingRow>
+    <SettingRow title="界面字体"><SystemFontPicker label="界面字体" value={fontFamily} options={viewFontOptions} onChange={(value) => update("view.font_family", value)} /></SettingRow>
+    <SettingRow title="界面字号">
+      <Dropdown aria-label="界面字号" selectedOptions={[fontSize]} value={viewFontSizeOptions.find((option) => option.value === fontSize)?.label ?? `${fontSize} px`}
+        onOptionSelect={(_, data) => data.optionValue && update("view.font_size", data.optionValue)}>
+        {viewFontSizeOptions.map((option) => <Option key={option.value} value={option.value}>{option.label}</Option>)}
+      </Dropdown>
+    </SettingRow>
+    <SettingRow title="显示比例" description="Ctrl + 加号 / 减号缩放，Ctrl + 0 恢复默认。">
+      <Dropdown aria-label="显示比例" selectedOptions={[displayScale]} value={viewDisplayScaleOptions.find((option) => option.value === displayScale)?.label ?? `${displayScale}%`}
+        onOptionSelect={(_, data) => data.optionValue && update("view.display_scale", data.optionValue)}>
+        {viewDisplayScaleOptions.map((option) => <Option key={option.value} value={option.value}>{option.label}</Option>)}
+      </Dropdown>
+    </SettingRow>
+    <SettingRow title="自动收起空面板" description="关闭最后一个页面后收起面板，保留起始页。">
+      <Switch aria-label="自动收起空面板" checked={settings?.["view.close_empty_panels"] !== false} onChange={(_, data) => update("view.close_empty_panels", data.checked)} />
+    </SettingRow>
+    <h3 className="settings-group-title">文档阅读</h3>
+    <SettingRow title="非 PDF 阅读字体" description="用于重排阅读、电子书、Markdown 与 TXT；保留文档内的单独设置。">
+      <SystemFontPicker label="非 PDF 阅读字体" value={readingFont} options={readingFontOptions} onChange={(value) => update("view.reader_font_family", value)} />
+    </SettingRow>
+    <div className="settings-reading-preview" aria-label="阅读字体预览" style={{ fontFamily: readingFont }}>
+      阅读应该连续，而不是被控件打断。<br />Reading begins with a question.<small>阅读字体预览 · 18 px / 1.7</small>
     </div>
-  );
+    <SettingRow title="Markdown 编辑方式" description="即时预览中，点击正文编辑，其他段落保持阅读排版。">
+      <RadioGroup aria-label="Markdown 编辑方式" value={settings?.["view.markdown_mode"] ?? "live"} onChange={(_, data) => update("view.markdown_mode", data.value)}>
+        <Radio value="live" label="即时预览 · 边读边写" /><Radio value="manual" label="手动切换 · 编辑、保存、阅读" />
+      </RadioGroup>
+    </SettingRow>
+    <SettingRow title="Markdown 自动保存" description="停止输入约 1.5 秒后保存；发现版本冲突时暂停。新笔记需要首次保存。">
+      <Switch aria-label="Markdown 自动保存" checked={settings?.["view.markdown_autosave"] !== false} disabled={settings?.["view.markdown_mode"] === "manual"} onChange={(_, data) => update("view.markdown_autosave", data.checked)} />
+    </SettingRow>
+    <h3 className="settings-group-title">PDF 原文</h3>
+    <SettingRow title="PDF 阅读底色" description="仅影响显示，不修改原文件。">
+      <RadioGroup aria-label="PDF 阅读底色" className="view-settings-backgrounds" value={pdfBackground} onChange={(_, data) => update("view.pdf_background", data.value)}>
+        {pdfBackgroundPresets.map((preset) => <Radio key={preset.value} value={preset.value} label={<span className="view-settings-color-label"><span aria-hidden className="view-settings-color-swatch" style={{ backgroundColor: preset.color }} />{preset.label}</span>} />)}
+      </RadioGroup>
+    </SettingRow>
+    <SettingRow title="PDF 保留图片原色"><Switch aria-label="PDF 保留图片原色" checked={settings?.["view.pdf_preserve_images"] !== false} onChange={(_, data) => update("view.pdf_preserve_images", data.checked)} /></SettingRow>
+    {pdfBackground === "custom" ? <Field label="自定义颜色" hint="输入十六进制颜色或使用系统拾色器"><div className="view-settings-custom-color">
+      <Input aria-label="自定义 PDF 底色" value={customPdfBackground} onChange={(_, data) => update("view.pdf_custom_background", data.value)} />
+      <input aria-label="选择自定义 PDF 底色" className="view-settings-native-color" type="color" value={isHexColor(customPdfBackground) ? customPdfBackground : "#ffffff"} onChange={(event) => update("view.pdf_custom_background", event.target.value)} />
+    </div></Field> : null}
+    <p className="settings-save-contract">外观更改即时生效；表单中需要确认的更改使用各自的保存按钮。</p>
+  </div>;
 }

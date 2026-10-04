@@ -157,6 +157,7 @@ type AssistantPaneProps = {
   onImportSelectedSet?: ActionContext["importSelectedSet"];
   lazyPaperContext?: boolean;
   onPreparePapersForContext?: (paperIds: string[]) => Promise<void>;
+  onExpand?: () => void;
   onMoveDockItem?: ActionContext["moveDockItem"];
   onOpenAcademicArchive?: ActionContext["openAcademicArchive"];
   onOpenArtifact?: (artifactId: string) => void;
@@ -309,6 +310,7 @@ export function AssistantPane({
   onImportSelectedSet,
   onPreparePapersForContext,
   lazyPaperContext = false,
+  onExpand,
   onMoveDockItem,
   onOpenAcademicArchive,
   onOpenArtifact,
@@ -2232,6 +2234,7 @@ export function AssistantPane({
     >
       <AssistantSessionToolbar
         messages={assistantState.messages}
+        onExpand={onExpand}
         title={activeSession?.title ?? "新对话"}
         kind={activeSession?.kind ?? "conversation"}
         historyOpen={historyOpen}

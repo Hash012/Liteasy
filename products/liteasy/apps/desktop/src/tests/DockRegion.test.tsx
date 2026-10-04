@@ -248,3 +248,16 @@ test("keyboard navigation crosses tool and document tabs and moves focus to the 
   expect(onActivateItem).toHaveBeenLastCalledWith("settings");
   expect(settings).toHaveFocus();
 });
+
+test("document tab titles change without changing their close or activation identity", async () => {
+  const close = vi.fn(); const activate = vi.fn();
+  const props = { regionId: "main" as const, layout: { activeItemId: "paper-note" as const, itemIds: ["paper-note" as const] },
+    onActivateItem: activate, onCloseItem: close, onMoveItem: vi.fn(), renderItem: () => <div>Draft stays mounted</div> };
+  const view = render(<DockRegion {...props} itemTitles={{ "paper-note": "Cicada · 笔记" }} />);
+  await userEvent.click(screen.getByRole("tab", { name: "Cicada · 笔记" }));
+  expect(activate).toHaveBeenCalledWith("paper-note");
+  view.rerender(<DockRegion {...props} itemTitles={{ "paper-note": "Mechanism comparison · 笔记" }} />);
+  expect(screen.getByRole("tab", { name: "Mechanism comparison · 笔记" })).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "关闭 Mechanism comparison · 笔记" }));
+  expect(close).toHaveBeenCalledWith("paper-note");
+});

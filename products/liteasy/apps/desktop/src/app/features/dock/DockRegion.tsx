@@ -93,6 +93,7 @@ type DockRegionProps = {
     selected: boolean;
     title: string;
   }>;
+  itemTitles?: Partial<Record<DockItemId, string>>;
   layout: DockRegionLayout;
   onActivateItem: (itemId: DockItemId) => void;
   onCloseItem: (itemId: DockItemId) => void;
@@ -146,6 +147,7 @@ function canAcceptDockPayload(
 
 export function DockRegion({
   dynamicTabs = [],
+  itemTitles = {},
   layout,
   onActivateItem,
   onCloseItem,
@@ -164,7 +166,7 @@ export function DockRegion({
   const regionElement = useRef<HTMLElement>(null);
   const tabStrip = useRef<HTMLDivElement>(null);
   const [tabsOverflow, setTabsOverflow] = useState(false);
-  const tabSignature = JSON.stringify([layout.itemIds, dynamicTabs.map(({ id, title }) => [id, title])]);
+  const tabSignature = JSON.stringify([layout.itemIds, itemTitles, dynamicTabs.map(({ id, title }) => [id, title])]);
   const selectedTabId = dynamicTabs.find((tab) => tab.selected)?.id ?? layout.activeItemId;
   function measureOverflow() {
     const strip = tabStrip.current;
@@ -270,7 +272,7 @@ export function DockRegion({
   }
 
   const tabOptions = [
-    ...layout.itemIds.map((itemId) => ({ id: itemId, title: dockItemRegistry[itemId].title,
+    ...layout.itemIds.map((itemId) => ({ id: itemId, title: itemTitles[itemId] ?? dockItemRegistry[itemId].title,
       icon: getDockItemIcon(itemId), selected: !activeDynamicTab && layout.activeItemId === itemId,
       activate: () => onActivateItem(itemId) })),
     ...dynamicTabs.map((tab) => ({ id: tab.id, title: tab.title, icon: tab.icon,
@@ -367,7 +369,7 @@ export function DockRegion({
               role="tablist"
             >
               {layout.itemIds.map((itemId) => {
-                const descriptor = dockItemRegistry[itemId];
+                const descriptor = { ...dockItemRegistry[itemId], title: itemTitles[itemId] ?? dockItemRegistry[itemId].title };
                 const active =
                   !activeDynamicTab && layout.activeItemId === itemId;
                 const tooltipContent =

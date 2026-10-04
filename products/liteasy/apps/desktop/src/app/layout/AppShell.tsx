@@ -471,8 +471,8 @@ export function AppShell({
   }
 
   function openDockedLeftRailView(view: LeftRailView) {
-    if (view === "settings") {
-      workbenchNavigation.open("settings");
+    if (view === "settings" || view === "profile" || view === "organization") {
+      workbenchNavigation.open(view);
       return;
     }
     leftRail.setLeftRailView(view);
@@ -1542,7 +1542,7 @@ export function AppShell({
     }),
   });
   const metadataEditor = useBibliographicMetadataController({
-    scope: objectWorkbench.repository.scopeId, entries: readingLibrary.entries, save: readingLibrary.saveBibliography,
+    scope: objectWorkbench.repository.scopeId, entries: readingLibrary.entries, selected: readingLibrary.selected, save: readingLibrary.saveBibliography,
   });
   function openBibliographicEditor(entry: import("../features/library/readingCatalog.types").ReadingCatalogEntry) {
     if (!metadataEditor.open(entry)) return;
@@ -2341,6 +2341,7 @@ export function AppShell({
             await workspaceActions.ensurePapersImported(papers);
             setAnalysisHint(`已将 ${papers.length} 篇 @ 文献加入本轮上下文，未改变锁定集合。`);
           }}
+          onExpand={regionId !== "main" ? () => { revealDockRegion("main"); moveDockItem("assistant", "main"); } : undefined}
           onMoveDockItem={runtimeActionContext.moveDockItem}
           onOpenAcademicArchive={runtimeActionContext.openAcademicArchive}
           onOpenArtifact={(artifactId) => {
@@ -2604,6 +2605,10 @@ export function AppShell({
     return (
       <DockRegion
         dynamicTabs={dynamicTabs}
+        itemTitles={{ "note-file-reader": externalNote.session ? `${externalNote.session.snapshot.name} · 笔记` : undefined,
+          "paper-note": paperAttachments.session ? `${paperAttachments.session.object.title} · 笔记` : undefined,
+          "document-reader": readingLibrary.active?.document.title, "board": objectWorkbench.board?.title,
+          "metadata-editor": metadataEditor.entry ? `${metadataEditor.entry.title} · 信息` : undefined }}
         layout={dock.layout.regions[regionId]}
         onActivateItem={(itemId) => activateDockItem(regionId, itemId)}
         onCloseItem={(item) => { dock.closeItem(item); if (item === "board") objectWorkbench.setVisible(false); }}
@@ -2757,7 +2762,7 @@ export function AppShell({
     <MarkdownEditingContext.Provider value={{ mode: settingsState["view.markdown_mode"] ?? "live", autosave: settingsState["view.markdown_autosave"] !== false }}>
     <WorkflowInvocation model={extensionWorkflows} />
     <div ref={immersive.root} className={appFrameClassName} data-theme-scope={appFrameScope} style={appFrameStyle}
-      data-reading-focus={immersive.mode} data-focus-edge={immersive.edge} onClickCapture={immersive.onClickCapture}>
+      data-list-density={settingsState["view.list_density"] ?? "comfortable"} data-reading-focus={immersive.mode} data-focus-edge={immersive.edge} onClickCapture={immersive.onClickCapture}>
       <ImmersiveReadingControls {...immersive} />
       {workspaceShell.pageSwitcher.mode ? <WorkspacePageSwitcher mode={workspaceShell.pageSwitcher.mode}
         options={workspaceShell.pageSwitcher.options} currentKey={workspaceShell.pageSwitcher.currentKey}

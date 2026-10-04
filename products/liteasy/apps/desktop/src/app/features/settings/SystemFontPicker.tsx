@@ -34,8 +34,10 @@ export function SystemFontPicker({ label, value, options, onChange }: { label: s
       {matches.slice(0, 100).map((font) => <Option key={font.value} value={font.value} style={{ fontFamily: font.value }}>{font.label}</Option>)}
       {custom && !choices.some((font) => font.label === query.trim()) ? <Option text={`使用字体：${query.trim()}`} value={fontFamilyCss(query.trim())}>使用字体：{query.trim()}</Option> : null}
     </Combobox>
+    <details className="system-font-options"><summary>系统字体与手动输入</summary>
     <Button size="small" appearance="subtle" disabled={busy} onClick={() => { cached = undefined; void load(); }}>{busy ? "读取中…" : "读取系统字体"}</Button>
     {matches.length > 100 ? <small>输入名称搜索全部 {fonts.length} 种系统字体</small> : null}
     {error ? <small role="status">{error}</small> : null}
+    </details>
   </div>;
 }

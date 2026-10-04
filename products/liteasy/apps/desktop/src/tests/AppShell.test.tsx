@@ -205,9 +205,23 @@ test("persists the local personalization switch from the logged-out personal cen
   render(<AppShell initialPapers={[]} localLibraryLoader={async () => localLibrarySnapshot} />);
   await enterLocalWorkbench(user);
   await user.click(screen.getByRole("button", { name: "个人中心", exact: true }));
-  const profile = screen.getByRole("region", { name: "左边栏个人中心" });
+  const profile = screen.getByRole("region", { name: "个人中心" });
+  expect(profile.closest('[data-region="main"]')).not.toBeNull();
   await user.click(within(profile).getByRole("switch", { name: "使用画像个性化" }));
   await waitFor(() => expect(JSON.parse(localStorage.getItem("liteasy.local-literature.v1") ?? "{}")["profile.local_enabled"]).toBe(true));
   await user.click(within(profile).getByRole("tab", { name: "已记偏好", exact: true }));
   expect(within(profile).getByRole("switch", { name: "从对话自动整理偏好" })).toBeEnabled();
+});
+
+
+test("expands the assistant into main without remounting or clearing its draft", async () => {
+  const user = userEvent.setup();
+  render(<AppShell initialPapers={[]} localLibraryLoader={async () => localLibrarySnapshot} />);
+  await enterLocalWorkbench(user);
+  const input = screen.getByPlaceholderText("输入你的问题或命令");
+  await user.type(input, "Preserve this research question");
+  await user.click(screen.getByRole("button", { name: "在主区打开对话" }));
+  expect(screen.getByPlaceholderText("输入你的问题或命令")).toBe(input);
+  expect(input).toHaveValue("Preserve this research question");
+  expect(input.closest('[data-region="main"]')).not.toBeNull();
 });

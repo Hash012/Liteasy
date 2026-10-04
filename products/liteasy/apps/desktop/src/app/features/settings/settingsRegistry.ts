@@ -45,6 +45,7 @@ export const settingsRegistry: Record<SettingKey, { label: string; help?: string
   "view.close_empty_panels": { label: "自动收起空面板", help: "关闭或移走最后一个页面后自动收起面板。关闭此选项可保留空面板。", restartRequirement: "none" },
   "view.markdown_mode": { label: "Markdown 编辑方式", help: "即时预览把阅读与编辑放在同一正文中；手动模式保留编辑、保存、阅读切换。", dependencies: [], restartRequirement: "none" },
   "view.markdown_autosave": { label: "Markdown 自动保存", help: "即时预览模式下，停止输入后保存已有文件；外部修改或保存失败会暂停，保留草稿。", dependencies: [], restartRequirement: "none" },
+  "view.list_density": { label: "列表密度", help: "调整列表行距与辅助信息，不改变正文。", restartRequirement: "none" },
   "view.theme": { label: "外观", help: "选择浅色、深色，或随系统自动切换。即时生效并在本机记住选择，PDF 保留原有阅读底色。", dependencies: [], restartRequirement: "none" },
   "view.font_size": { ...{ help: "调整应用界面字号。不会修改论文 PDF 文件。", dependencies: [], restartRequirement: "none" }, label: "界面字号" },
   "view.display_scale": { help: "整体调整应用界面、面板和控件的显示比例。Ctrl + 加号或减号调整，Ctrl + 0 恢复 100%。不会修改 PDF 文件。", dependencies: [], restartRequirement: "none", label: "显示比例" },

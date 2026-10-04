@@ -47,7 +47,7 @@ test("Agent and help remain reachable after closing, moving and reopening the wo
   await help.getByRole("button", { name: "笔记与研究白板", exact: true }).click();
   await expect(help.locator(".help-results li")).toHaveCount(2);
   await help.getByRole("textbox", { name: "搜索帮助" }).fill("no-such-manual-topic-123");
-  await expect(help).toContainText("没有匹配的帮助条目。");
+  await expect(help).toContainText("没有匹配的帮助条目");
   await page.getByRole("button", { name: "关闭 帮助", exact: true }).click();
   await expect(help).toHaveCount(0);
   await page.keyboard.press("F1");

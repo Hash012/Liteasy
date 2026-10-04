@@ -93,6 +93,7 @@ function loadPersistedViewSettings(): Partial<SettingsState> {
       "view.close_empty_panels": parsed["view.close_empty_panels"] !== false,
       "view.markdown_mode": parsed["view.markdown_mode"] === "manual" ? "manual" : "live",
       "view.markdown_autosave": parsed["view.markdown_autosave"] !== false,
+      "view.list_density": parsed["view.list_density"] === "compact" ? "compact" : "comfortable",
       "view.theme": normalizeAppearancePreference(parsed["view.theme"]),
       "view.font_family": typeof parsed["view.font_family"] === "string" ? parsed["view.font_family"] : undefined,
       "view.reader_font_family": normalizeReadingFontFamily(parsed["view.reader_font_family"]),
@@ -119,6 +120,7 @@ function persistViewSettings(state: SettingsState) {
         "view.close_empty_panels": state["view.close_empty_panels"] !== false,
         "view.markdown_mode": state["view.markdown_mode"] ?? "live",
         "view.markdown_autosave": state["view.markdown_autosave"] !== false,
+        "view.list_density": state["view.list_density"] ?? "comfortable",
         "view.theme": state["view.theme"],
         "view.font_family": state["view.font_family"],
         "view.reader_font_family": state["view.reader_font_family"],
@@ -137,7 +139,7 @@ function persistViewSettings(state: SettingsState) {
 export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.env) {
   const cloudEndpoint = releaseEndpoint(runtimeEnv.VITE_LITEASY_CLOUD_URL, "http://127.0.0.1:8787");
   const forumEndpoint = releaseEndpoint(runtimeEnv.VITE_FORUM_API_URL, "");
-  const state: SettingsState & SelectionLookupSettings & Record<GenerationPromptSettingKey, string> & { "assistant.context_window": string; "view.close_empty_panels": boolean; "view.markdown_mode": "live" | "manual"; "view.markdown_autosave": boolean } = {
+  const state: SettingsState & SelectionLookupSettings & Record<GenerationPromptSettingKey, string> & { "view.list_density": "comfortable" | "compact"; "assistant.context_window": string; "view.close_empty_panels": boolean; "view.markdown_mode": "live" | "manual"; "view.markdown_autosave": boolean } = {
     ...loadGenerationPrompts() as Record<GenerationPromptSettingKey, string>,
     ...loadLookupSettings(),
     "thin_reading.mode": "fast",
@@ -172,6 +174,7 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
     "view.close_empty_panels": true,
     "view.markdown_mode": "live",
     "view.markdown_autosave": true,
+    "view.list_density": "comfortable",
     "view.theme": "system",
     "view.font_family": '"Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", sans-serif',
     "view.reader_font_family": defaultReadingFontFamily,
@@ -200,6 +203,7 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
         (!Number.isInteger(Number(command.value)) || Number(command.value) < 4096 || Number(command.value) > 262144)) {
         throw new Error("上下文上限应为 4096 至 262144 之间的整数。");
       }
+      if (command.target === "view.list_density" && !["compact", "comfortable"].includes(String(command.value))) throw new Error("invalid_list_density");
       if (command.target === "view.theme" && !isAppearancePreference(command.value)) {
         throw new Error("invalid_appearance_preference");
       }

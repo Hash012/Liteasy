@@ -43,11 +43,13 @@ test("renders MinerU figures as one ordered, reusable paper resource", async () 
     />
   );
 
-  expect(screen.getByRole("heading", { name: "论文插图" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: paper.title })).toBeInTheDocument();
   expect(screen.getByText("第 1 页")).toBeInTheDocument();
   expect(screen.getByText("第 4 页")).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "用作提问材料" }));
-  await user.click(screen.getByRole("button", { name: "制作展示内容" }));
+  await user.click(screen.getByRole("button", { name: "对话与生成" }));
+  await user.click(screen.getByRole("menuitem", { name: "加入对话" }));
+  await user.click(screen.getByRole("button", { name: "对话与生成" }));
+  await user.click(screen.getByRole("menuitem", { name: "制作展示内容" }));
   expect(onAsk).toHaveBeenCalledOnce();
   expect(onPresent).toHaveBeenCalledOnce();
 });

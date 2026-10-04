@@ -1,4 +1,4 @@
-import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Dropdown, Option, ProgressBar, Tooltip } from "@fluentui/react-components";
+import { Menu, MenuTrigger, MenuPopover, MenuList, MenuItem, Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Dropdown, Option, ProgressBar, Tooltip } from "@fluentui/react-components";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
   ArrowClockwiseRegular,
@@ -8,6 +8,7 @@ import {
   DismissRegular,
   DocumentTextRegular,
   ImageMultipleRegular,
+  MoreHorizontalRegular,
   TranslateRegular
 } from "@fluentui/react-icons";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
@@ -456,10 +457,10 @@ export function PaperResourceTab({
         <div>
           <span className="paper-resource-tab__eyebrow">
             {isFigureCollection || isMultimodal ? <ImageMultipleRegular aria-hidden="true" /> : <DocumentTextRegular aria-hidden="true" />}
-            MinerU 多模态素材
+            {isFigureCollection ? "文献插图" : isMultimodal ? "重排阅读" : "文本阅读"}
           </span>
-          <h1>{isFigureCollection ? "论文插图" : isMultimodal ? "论文提取图文版" : "论文提取文本"}</h1>
-          <p title={paper.title}>{paper.title}</p>
+          <h1>{paper.title}</h1>
+          <details className="paper-resource-tab__source"><summary>解析详情</summary><p>由已导入的论文生成。公式、图表与引用请结合原始 PDF 核对。</p><small>解析来源：{textChunks.some((chunk) => chunk.textExtraction === "mineru") ? "MinerU" : "PDF 文本提取"}</small></details>
         </div>
         <div className="paper-resource-tab__actions">
           {!isFigureCollection ? <MarkdownFontControl {...font} /> : null}
@@ -477,22 +478,12 @@ export function PaperResourceTab({
           >
             {translating ? "正在翻译" : savedTranslations.length > 0 && !translatedContent ? "查看译文" : translatedContent ? "翻译其他语言" : "翻译文本"}
           </Button> : null}
-          <Button
-            appearance="secondary"
-            disabled={itemCount === 0}
-            icon={<ChatRegular />}
-            onClick={onUseInConversation}
-          >
-            用作提问材料
-          </Button>
-          <Button
-            appearance="primary"
-            disabled={itemCount === 0}
-            icon={<DocumentTextRegular />}
-            onClick={onCreatePresentation}
-          >
-            制作展示内容
-          </Button>
+          <Menu><MenuTrigger disableButtonEnhancement><Tooltip content="对话与生成" relationship="description"><Button appearance="subtle" aria-label="对话与生成" icon={<MoreHorizontalRegular />} /></Tooltip></MenuTrigger>
+            <MenuPopover><MenuList>
+              <MenuItem disabled={itemCount === 0 || !onUseInConversation} icon={<ChatRegular />} onClick={onUseInConversation}>加入对话</MenuItem>
+              <MenuItem disabled={itemCount === 0 || !onCreatePresentation} icon={<DocumentTextRegular />} onClick={onCreatePresentation}>制作展示内容</MenuItem>
+            </MenuList></MenuPopover>
+          </Menu>
         </div>
       </header>
       {translating ? (
@@ -636,7 +627,7 @@ export function PaperResourceTab({
               const pageFigures = orderedFigures.filter((figure) => figure.page === page);
               return (
                 <article className="paper-resource-tab__multimodal-page" key={page} data-reading-page={page}>
-                  <header><span>第 {page} 页</span><small>MinerU 图文提取</small></header>
+                  <header><span>第 {page} 页</span><small>重排阅读</small></header>
                   {pageChunks.map((chunk, index) => <MineruMarkdown content={chunk.snippet} figures={pageFigures} key={`${chunk.paperId}-${chunk.page}-${index}`} />)}
                   {pageFigures.map((figure) => (
                     <figure key={figure.id}>
@@ -654,7 +645,7 @@ export function PaperResourceTab({
           <section className="paper-resource-tab__text-list" aria-label="按页排列的论文提取文本">
             {readableChunks.map((chunk, index) => (
               <article key={`${chunk.paperId}-${chunk.page}-${index}`} data-reading-page={chunk.sourceMarkdown ? undefined : chunk.page}>
-                <header><span>{chunk.sourceMarkdown ? "完整论文" : `第 ${chunk.page} 页`}</span><small>{chunk.sourceMarkdown ? "MinerU Markdown" : chunk.textExtraction === "mineru" ? "MinerU 精准提取" : "PDF 文本提取"}</small></header>
+                <header><span>{chunk.sourceMarkdown ? "完整论文" : `第 ${chunk.page} 页`}</span><small>文本阅读</small></header>
                 <MineruMarkdown content={chunk.snippet} figures={orderedFigures} />
               </article>
             ))}

@@ -1,3 +1,4 @@
+import { WorkbenchPageHeader } from "../workbench/WorkbenchPage";
 import { SpaceOperationsPanel, type SpaceOperationsView } from "../spaces/SpaceOperationsPanel";
 import type { AccountSession } from "../account/account.types";
 import { AccountDataExportPanel } from "../account/AccountDataExportPanel";
@@ -41,7 +42,8 @@ type PersonalCenterPanelProps = {
 export function PersonalCenterPanel(props: PersonalCenterPanelProps) {
   const [section, setSection] = useState("research");
   const { accountSession, profileMemory: memory } = props;
-  return <section aria-label="左边栏个人中心" className="personal-center-panel profile-page">
+  return <section aria-label="个人中心" className="personal-center-panel profile-page">
+    <WorkbenchPageHeader title="个人中心" description="管理研究兴趣、个性化偏好与本机数据。" />
     <header className="profile-identity">
       <div className="profile-avatar" aria-hidden="true"><PersonRegular /></div>
       <div className="profile-identity-text"><strong>{accountSession?.name ?? "本机研究者"}</strong><span>{accountSession ? props.workspaceSourceType === "organization_shared" ? props.organizationSummary?.name ?? "组织文库" : "本机文库" : "未登录 · 本机档案可用"}</span></div>

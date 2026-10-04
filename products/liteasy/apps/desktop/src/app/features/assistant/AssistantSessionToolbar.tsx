@@ -3,7 +3,7 @@ import { conversationDigest } from "./assistantSessionHistory";
 import type { AssistantMessage } from "./assistant.types";
 import type { DragEventHandler } from "react";
 import { Button, Popover, PopoverSurface, PopoverTrigger, Tooltip } from "@fluentui/react-components";
-import { ArrowLeftRegular, ArrowRightRegular, ComposeRegular, DocumentRegular, SettingsRegular, StopRegular } from "@fluentui/react-icons";
+import { ArrowLeftRegular, ArrowRightRegular, OpenRegular, ComposeRegular, DocumentRegular, SettingsRegular, StopRegular } from "@fluentui/react-icons";
 
 type Props = {
   title: string;
@@ -18,6 +18,7 @@ type Props = {
   onCancel(): void;
   onOpenArtifact?: () => void;
   onOpenSettings?: () => void;
+  onExpand?: () => void;
   onDragStart: DragEventHandler<HTMLDivElement>;
 };
 
@@ -40,6 +41,7 @@ export function AssistantSessionToolbar(props: Props) {
       </Popover>
     </div>
     <div aria-label="会话操作" className="assistant-session-actions">
+      {props.onExpand ? <Tooltip content="在主区打开完整对话，保留当前消息与草稿" relationship="description"><Button appearance="subtle" className="assistant-toolbar-button" aria-label="在主区打开对话" icon={<OpenRegular />} onClick={props.onExpand} /></Tooltip> : null}
       {props.onOpenArtifact ? <Tooltip content="打开产物" positioning="below" relationship="description">
         <Button appearance="subtle" className="assistant-toolbar-button" aria-label="打开产物" icon={<DocumentRegular />} onClick={props.onOpenArtifact} />
       </Tooltip> : null}

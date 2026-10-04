@@ -8,11 +8,11 @@ describe("SettingsPane", () => {
     const user = userEvent.setup();
     const onUpdateSetting = vi.fn();
     render(<SettingsPane documentMetadataSyncResult={null} documentMetadataSyncStatus="idle" settings={{ "view.theme": "system" }} onUpdateSetting={onUpdateSetting} />);
-    const appearance = within(screen.getByRole("radiogroup", { name: "外观" }));
-    expect(appearance.getByRole("radio", { name: "跟随系统" })).toBeChecked();
-    await user.click(appearance.getByRole("radio", { name: "深色" }));
+    const appearance = screen.getByRole("combobox", { name: "外观" });
+    expect(appearance).toHaveValue("system");
+    await user.selectOptions(appearance, "dark");
     expect(onUpdateSetting).toHaveBeenLastCalledWith({ intent: "update_setting", target: "view.theme", value: "dark" });
-    await user.click(appearance.getByRole("radio", { name: "浅色" }));
+    await user.selectOptions(appearance, "light");
     expect(onUpdateSetting).toHaveBeenLastCalledWith({ intent: "update_setting", target: "view.theme", value: "light" });
   });
 
@@ -25,6 +25,7 @@ describe("SettingsPane", () => {
       onUpdateSetting={onUpdateSetting}
       settings={{ "network.recommendation.style": "classic", "network.recommendation.enabled": true }}
     />);
+    await user.click(screen.getByRole("button", { name: "论文与推荐", exact: true }));
     const panel = within(screen.getByRole("region", { name: "论文推荐设置" }));
     expect(panel.getByRole("combobox", { name: "推荐风格" })).toHaveValue("classic");
     expect(panel.getByText("侧重与研究主题相关、积累引用的基础文献。")).toBeInTheDocument();
@@ -113,7 +114,7 @@ describe("SettingsPane", () => {
 
     await user.click(within(pane).getByRole("button", { name: "外观与阅读" }));
     expect(within(pane).getByLabelText("文献元数据同步")).not.toBeVisible();
-    expect(within(pane).getByRole("radiogroup", { name: "外观" })).toBeVisible();
+    expect(within(pane).getByRole("combobox", { name: "外观" })).toBeVisible();
   });
 
   test("updates View font and PDF eye-care background settings", async () => {

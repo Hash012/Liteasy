@@ -106,14 +106,14 @@ test("help UI searches, opens provider content and handles missing articles and 
   expect(await screen.findByText("Markdown 内容")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "帮助首页" }));
   await user.type(screen.getByRole("textbox", { name: "搜索帮助" }), "无结果");
-  expect(await screen.findByText("没有匹配的帮助条目。")).toBeInTheDocument();
+  expect(await screen.findByText("没有匹配的帮助条目")).toBeInTheDocument();
   search.mockRejectedValueOnce(new Error("offline"));
   await user.click(screen.getByRole("button", { name: "刷新帮助" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "帮助内容加载失败",
   );
   await user.click(screen.getByRole("button", { name: "重试" }));
-  expect(await screen.findByText("没有匹配的帮助条目。")).toBeInTheDocument();
+  expect(await screen.findByText("没有匹配的帮助条目")).toBeInTheDocument();
 });
 
 test("context entry and F1 reveal help; stale provider reads cannot replace the new article", async () => {

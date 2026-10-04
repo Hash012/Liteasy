@@ -41,6 +41,7 @@ type AssistantSidebarProps = {
   onImportSelectedSet?: ActionContext["importSelectedSet"];
   lazyPaperContext?: boolean;
   onPreparePapersForContext?: (paperIds: string[]) => Promise<void>;
+  onExpand?: () => void;
   onMoveDockItem?: ActionContext["moveDockItem"];
   onOpenAcademicArchive?: ActionContext["openAcademicArchive"];
   onOpenCitation?: (citation: Citation) => void;
@@ -89,6 +90,7 @@ export function AssistantSidebar({
   onImportSelectedSet,
   onPreparePapersForContext,
   lazyPaperContext,
+  onExpand,
   onMoveDockItem,
   onOpenAcademicArchive,
   onOpenArtifact,
@@ -141,6 +143,7 @@ export function AssistantSidebar({
           onImportSelectedSet={onImportSelectedSet}
           lazyPaperContext={lazyPaperContext}
           onPreparePapersForContext={onPreparePapersForContext}
+          onExpand={onExpand}
           onMoveDockItem={onMoveDockItem}
           onOpenAcademicArchive={onOpenAcademicArchive}
           onOpenArtifact={onOpenArtifact}

@@ -755,7 +755,7 @@ describe("LeftPane", () => {
 
   test("keeps the local personal center editable while logged out", () => {
     render(<LeftPane {...createProps({ accountSession: null, leftRailView: "profile" })} />);
-    expect(screen.getByLabelText("左边栏个人中心")).toBeInTheDocument();
+    expect(screen.getByLabelText("个人中心")).toBeInTheDocument();
     expect(screen.getByText("未登录 · 本机档案可用")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "登录", exact: true })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "保存学术档案" })).toBeEnabled();

@@ -1,0 +1,31 @@
+/* Composition tokens inherit Fluent's theme and never recolor authored documents. */
+.fluent-app-root, .fui-FluentProvider {
+  --workbench-shell: var(--colorNeutralBackground3);
+  --workbench-navigation: var(--colorNeutralBackground2);
+  --workbench-content: var(--colorNeutralBackground1);
+  --workbench-overlay: var(--colorNeutralBackground1);
+  --workbench-text: var(--colorNeutralForeground1);
+  --workbench-muted: var(--colorNeutralForeground2);
+  --workbench-border: var(--colorNeutralStroke2);
+  --workbench-page-title: 26px;
+  --workbench-section-title: 17px;
+  --workbench-page-padding: 24px;
+}
+.workbench-page-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px 24px; padding:var(--workbench-page-padding, 24px); color:var(--workbench-text); }
+.workbench-page-header > div:first-child { min-width:0; flex:1 1 180px; }
+.workbench-page-header h1 { font-size:var(--workbench-page-title, 26px); line-height:1.35; font-weight:600; margin:0; overflow-wrap:anywhere; }
+.workbench-page-header p { margin:6px 0 0; color:var(--workbench-muted); line-height:1.6; font-size:13px; }
+.workbench-page-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.workbench-empty-state { max-width:520px; margin:32px auto; padding:24px 16px; text-align:center; color:var(--workbench-muted); overflow-wrap:anywhere; }
+.workbench-empty-state > svg { font-size:36px; color:var(--colorBrandForeground1); }
+.workbench-empty-state h2 { color:var(--workbench-text); font-size:20px; font-weight:600; margin:16px 0 8px; }
+.workbench-empty-state p { font-size:14px; line-height:1.7; margin:0 0 20px; }
+.workbench-empty-state .workbench-page-actions { justify-content:center; }
+.workbench-setting-row { display:grid; grid-template-columns:minmax(0, 1fr) minmax(180px, 44%); gap:12px 24px; padding-block:14px; align-items:start; }
+.workbench-setting-row strong { font-weight:600; font-size:14px; line-height:1.5; }
+.workbench-setting-row p { margin:4px 0 0; font-size:13px; line-height:1.6; color:var(--workbench-muted); }
+.workbench-setting-control { min-width:0; }
+.workbench-setting-control > :is(.fui-Select, .fui-Dropdown, .system-font-picker) { width:100%; min-width:0; }
+@container (max-width:580px) { .workbench-setting-row { grid-template-columns:minmax(0, 1fr); gap:8px; } .workbench-page-header { padding:16px; } }
+@media (prefers-reduced-motion: reduce) { .workbench-page-actions * { transition:none; animation:none; } }
+@media (forced-colors: active) { .workbench-setting-control :focus-visible { outline:2px solid Highlight; } }

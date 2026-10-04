@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Button, Input, Select } from "@fluentui/react-components";
-import { AddRegular, ArrowDownloadRegular, ArrowUploadRegular } from "@fluentui/react-icons";
+import { WorkbenchPageHeader, WorkbenchEmptyState } from "../workbench/WorkbenchPage";
+import { Button, Input, Select, Spinner } from "@fluentui/react-components";
+import { AddRegular, ArrowDownloadRegular, ArrowUploadRegular, PuzzlePieceRegular } from "@fluentui/react-icons";
 import { useExtensionWorkbench } from "./extensionWorkbenchContext";
 import { validateExtensionPackage, type ValidatedExtension } from "./extensionPackage";
 import type { ExtensionInstallation } from "./extensionPackageStore";
@@ -24,21 +25,29 @@ export function ExtensionLibrary() {
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const file = useRef<HTMLInputElement>(null);
   const generation = useRef(0);
   const load = async () => {
     if (!host) return;
     const current = ++generation.current;
+    setLoading(true); setLoadError("");
+    try {
     const states = await host.packages.store.list();
     const results = await Promise.all(states.map(async (state) => { try { return { state, pkg: await host.packages.store.get(state.id, state.version) }; } catch (e) { return { state, error: String(e) }; } }));
     const versions = Object.fromEntries(await Promise.all(states.map(async (state) => [state.id, await host.packages.store.versions(state.id)])));
     if (current === generation.current) { setItems(results); setVersions(versions); }
+    } catch (error) { if (current === generation.current) setLoadError(error instanceof Error ? error.message : String(error)); }
+    finally { if (current === generation.current) setLoading(false); }
   };
+  useEffect(() => { setItems([]); setVersions({}); }, [host?.packages.store]);
   useEffect(() => { void load(); return () => { generation.current++; }; }, [host?.packages.store, host?.packages.snapshot]);
   if (!host) return <p role="status">正在加载扩展…</p>;
   async function run(action: () => Promise<unknown>) { setBusy(true); setMessage(""); try { await action(); await load(); } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); } finally { setBusy(false); } }
-  return <section className="extension-page" aria-label="扩展">
-    <header><div><h1>扩展</h1><p>用基础组件组合适合自己的阅读与研究方式。</p></div><div className="extension-toolbar"><Button icon={<AddRegular />} onClick={host.openStudio}>制作扩展</Button><Button onClick={host.openRuns}>运行记录</Button></div></header>
+  const filtered = items.filter((item) => [item.pkg?.manifest.name, item.state.id, ...item.pkg?.manifest.contributes.views.map((view) => view.title) ?? [], ...item.pkg?.manifest.contributes.commands.map((command) => command.title) ?? []].join(" ").toLowerCase().includes(query.toLowerCase()));
+  return <section className="extension-page" aria-label="扩展" aria-busy={loading}>
+    <WorkbenchPageHeader title="扩展" description="把常用的阅读与研究步骤保存下来，下次继续使用。" actions={<><Button appearance="subtle" icon={<AddRegular />} onClick={host.openStudio}>制作扩展</Button><Button appearance="subtle" onClick={host.openRuns}>运行记录</Button></>} />
     <div className="extension-toolbar"><Input aria-label="搜索扩展" placeholder="搜索扩展、页面或命令" value={query} onChange={(_, data) => setQuery(data.value)} /><Button icon={<ArrowUploadRegular />} disabled={busy} onClick={() => file.current?.click()}>导入本地包</Button><Button disabled={busy} onClick={() => void run(async () => { const previous = items.find((item) => item.state.id === "plugin.paper-lens"); await host.packages.store.install(await paperLensPackage(), previous?.state.revision ?? null); })}>添加论文比较板</Button></div>
     <input hidden ref={file} type="file" accept=".json" onChange={(event) => { const selected = event.target.files?.[0]; event.target.value = ""; if (selected) void run(async () => {
       if (selected.size > 24 * 1024 * 1024) throw new Error("包文件超过 24 MB。");
@@ -48,7 +57,7 @@ export function ExtensionLibrary() {
       setMessage("已导入。检查能力说明后启用。");
     }); }} />
     {message || host.error ? <p role="status">{message || host.error}</p> : null}
-    <div className="extension-library-grid">{items.filter((item) => [item.pkg?.manifest.name, item.state.id, ...item.pkg?.manifest.contributes.views.map((view) => view.title) ?? [], ...item.pkg?.manifest.contributes.commands.map((command) => command.title) ?? []].join(" ").toLowerCase().includes(query.toLowerCase())).map(({ state, pkg, error }) => <article className="extension-library-card" key={state.id}>
+    <div className="extension-library-grid">{filtered.map(({ state, pkg, error }) => <article className="extension-library-card" key={state.id}>
       <h2>{pkg?.manifest.name ?? "不可用扩展"}</h2><p>{state.version} · {state.enabled ? "已启用" : "已停用"}</p>
       {pkg?.manifest.permissions.length ? <details><summary>请求的能力</summary><ul>{pkg.manifest.permissions.map((permission, i) => <li key={i}>{permission.capability} · {permission.scopeRef}</li>)}</ul><p>实际执行时还需绑定本轮资料、保存位置和模型连接。</p></details> : <p>声明式组件与本地组合。</p>}
       {error ? <p role="alert">{error}</p> : null}
@@ -56,7 +65,7 @@ export function ExtensionLibrary() {
       {(versions[state.id]?.length ?? 0) > 1 ? <Select aria-label={`切换 ${pkg?.manifest.name ?? state.id} 的版本`} value={state.version} disabled={busy} onChange={(_, data) => void run(() => host.packages.store.rollback(state.id, data.value, state.revision))}>{versions[state.id].map((version) => <option key={version} value={version}>{version}</option>)}</Select> : null}
       {state.enabled && pkg ? <div className="extension-entry-list">{pkg.manifest.contributes.views.map((view) => <Button key={view.id} appearance="subtle" onClick={() => void run(() => host.openView(state.id, view.id))}>{view.title}</Button>)}{pkg.manifest.contributes.commands.map((command) => <Button key={command.id} appearance="subtle" onClick={() => void run(() => host.invoke(state.id, command.id))}>{command.title}</Button>)}</div> : null}
     </article>)}</div>
-    {!items.length ? <p>可以从论文比较板开始，也可以导入自己或 AI 制作的扩展包。</p> : null}
+    {loading ? <Spinner label="正在加载扩展" /> : loadError ? <WorkbenchEmptyState error icon={<PuzzlePieceRegular />} title="扩展列表未能载入" description={loadError} actions={<Button onClick={() => void load()}>重试</Button>} /> : !items.length ? <WorkbenchEmptyState icon={<PuzzlePieceRegular />} title="还没有添加扩展" description="导入自己的扩展，或添加内置的论文比较板，了解如何组织资料与研究成果。" actions={<Button appearance="primary" icon={<ArrowUploadRegular />} onClick={() => file.current?.click()}>导入扩展</Button>} /> : !filtered.length ? <WorkbenchEmptyState icon={<PuzzlePieceRegular />} title="没有匹配的扩展" description="试试扩展名称、页面名称或命令，也可以清除筛选。" actions={<Button onClick={() => setQuery("")}>清除筛选</Button>} /> : null}
     <details><summary>恢复与数据</summary><p>停用或卸载保留已创建的笔记、白板、配置和版本记录。</p><Button disabled={busy} onClick={() => void run(() => host.packages.store.disableAll())}>停用所有第三方扩展</Button></details>
   </section>;
 }

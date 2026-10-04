@@ -15,3 +15,8 @@
 .workflow-run-layout pre { overflow: auto; max-height: 360px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .workflow-run-layout details { border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; padding: 10px; margin-block: 8px; }
 @media(max-width: 700px) { .workflow-run-layout { grid-template-columns: minmax(0, 1fr); } }
+.extension-page { container-type:inline-size; background:var(--colorNeutralBackground1); }
+.extension-page > .workbench-page-header { padding:0 0 16px; margin:0; }
+.extension-page .extension-toolbar > .fui-Input { min-width:0; max-width:100%; }
+.extension-library-card h2 { font-size:17px; font-weight:600; line-height:1.5; }
+.extension-library-card p { color:var(--colorNeutralForeground2); font-size:13px; line-height:1.65; }

@@ -50,8 +50,9 @@ describe("dock layout", () => {
   test("opens a missing activity item in its preferred region", () => {
     const layout = openDockItem(createDefaultDockLayout(), "organization");
 
-    expect(layout.regions.left.itemIds).toEqual(["library", "organization"]);
-    expect(layout.regions.left.activeItemId).toBe("organization");
+    expect(layout.regions.left.itemIds).toEqual(["library"]);
+    expect(layout.regions.main.itemIds).toEqual(["organization"]);
+    expect(layout.regions.main.activeItemId).toBe("organization");
   });
 
   test("keeps the artifact library in the left rail and artifacts in the center", () => {

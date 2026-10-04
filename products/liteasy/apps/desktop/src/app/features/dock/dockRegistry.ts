@@ -9,7 +9,7 @@ import type {
 const sideToolRegions: DockRegionId[] = ["left", "main", "right", "bottom"];
 
 const coreDockItems: Record<CoreDockItemId, DockItemDescriptor> = {
-  "metadata-editor": { allowedRegions: sideToolRegions, id: "metadata-editor", preferredRegion: "right", title: "元信息" },
+  "metadata-editor": { allowedRegions: sideToolRegions, id: "metadata-editor", preferredRegion: "right", title: "文献信息" },
   "workflow-runs": { allowedRegions: sideToolRegions, id: "workflow-runs", preferredRegion: "main", title: "运行记录" },
   "extension-library": { allowedRegions: sideToolRegions, id: "extension-library", preferredRegion: "main", title: "扩展" },
   "workflow-studio": { allowedRegions: sideToolRegions, id: "workflow-studio", preferredRegion: "main", title: "制作工作台" },
@@ -37,13 +37,13 @@ const coreDockItems: Record<CoreDockItemId, DockItemDescriptor> = {
   organization: {
     allowedRegions: sideToolRegions,
     id: "organization",
-    preferredRegion: "left",
+    preferredRegion: "main",
     title: "组织",
   },
   profile: {
     allowedRegions: sideToolRegions,
     id: "profile",
-    preferredRegion: "left",
+    preferredRegion: "main",
     title: "个人中心",
   },
   settings: {

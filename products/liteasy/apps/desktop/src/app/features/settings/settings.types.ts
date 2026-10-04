@@ -38,6 +38,7 @@ export type SettingKey =
   | "view.close_empty_panels"
   | "view.markdown_mode"
   | "view.markdown_autosave"
+  | "view.list_density"
   | "view.theme"
   | "view.font_size"
   | "view.display_scale"
@@ -77,6 +78,7 @@ export type SettingsState = Partial<Record<GenerationPromptSettingKey, string>> 
   "view.close_empty_panels"?: boolean;
   "view.markdown_mode"?: "live" | "manual";
   "view.markdown_autosave"?: boolean;
+  "view.list_density"?: "comfortable" | "compact";
   "view.theme": AppearancePreference;
   "view.font_size": string;
   "view.display_scale": string;
