@@ -395,3 +395,33 @@ test("selected cards move together in one undoable layout operation", async () =
   for (const item of before) expect(restored.find((p) => p.placementId === item.placementId)?.position).toEqual(item.position);
   unmount();
 });
+
+test("opening and creating cards never waits for a full asset catalog scan", async () => {
+  const scopeId = crypto.randomUUID();
+  const { result, unmount } = renderHook(() => useObjectWorkbenchController({ scopeId,
+    getApi: () => { throw new Error("No AI"); }, getPapers: () => [],
+    getSettings: () => createSettingsStore().getState(), openEvidence: vi.fn() }));
+  const repository = result.current.repository;
+  const unrelated = await repository.create({ kind: "content.note", title: "Large unrelated document",
+    content: { schema: "liteasy.note/v1", payload: { text: "outside the canvas\n".repeat(5000), origin: "user" } } });
+  const search = vi.spyOn(repository, "search").mockRejectedValue(new Error("A slow full-library scan must not block the canvas"));
+  act(() => result.current.setVisible(true));
+  await waitFor(() => expect(result.current.board?.kind).toBe("workspace.board"));
+  await act(async () => {
+    await Promise.all([result.current.createNote("First", { x: 100, y: 100 }), result.current.createNote("Second", { x: 500, y: 100 })]);
+  });
+  expect(result.current.placements).toHaveLength(2);
+  expect(result.current.objects.map((object) => object.title)).toEqual(expect.arrayContaining(["First", "Second"]));
+  expect(result.current.objects.some((object) => object.objectId === unrelated.objectId)).toBe(false);
+  await act(async () => { await result.current.place([refOf(unrelated)]); });
+  expect(result.current.placements).toHaveLength(3);
+  const placed = result.current.placements.find((p) => p.ref.objectId === unrelated.objectId)!;
+  await act(async () => { await result.current.removePlacement(placed.placementId); });
+  expect(await repository.listPlacements(result.current.board!.objectId)).toHaveLength(2);
+  expect((await repository.get(refOf(unrelated))).content).toEqual(unrelated.content);
+  expect(search).not.toHaveBeenCalled();
+  search.mockRestore();
+  await act(async () => { await result.current.refresh(); });
+  expect(result.current.objects.some((object) => object.objectId === unrelated.objectId)).toBe(true);
+  unmount();
+});

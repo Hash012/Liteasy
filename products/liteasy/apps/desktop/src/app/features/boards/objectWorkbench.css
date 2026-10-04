@@ -158,7 +158,10 @@
 .object-placement.is-editing {
   cursor: default;
   user-select: text;
+  padding: 6px;
 }
+.object-placement.is-editing > .visual-block-base,
+.object-placement.is-editing .object-surface.has-editor { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 .object-placement.is-selected {
   border-color: var(--colorBrandStroke1, #0f6cbd);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--colorBrandStroke1, #0f6cbd) 45%, transparent);
@@ -225,8 +228,10 @@
   gap: 6px;
   min-height: 0;
   flex: 1 1 auto;
-  overflow: auto;
+  overflow: hidden;
 }
+.object-card-editor-field { display: flex; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+.object-card-editor-field > :is(.markdown-live-editor, .markdown-source-editor) { flex: 1; min-height: 0; width: 100%; }
 .object-card-editor > .fui-Textarea {
   flex: 1 1 auto;
   min-height: 48px;
@@ -237,6 +242,8 @@
 }
 .object-card-editor > .object-toolbar {
   justify-content: flex-end;
+  flex: 0 0 auto;
+  gap: 4px;
 }
 .object-card-editor [role="alert"] {
   color: var(--colorPaletteRedForeground1, #b10e1e);

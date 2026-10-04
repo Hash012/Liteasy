@@ -603,3 +603,15 @@ test("legacy Vault catalog filtering reads identities without loading file bodie
   expect(reads.mock.calls.some(([key]) => key === `head/${file.objectId}`)).toBe(false);
   expect((await repository.get(refOf(file))).content).toEqual(file.content);
 });
+
+test("board discovery skips unrelated bodies and still recognizes legacy title indexes", async () => {
+  const f = fixture();
+  const unrelated = await f.repository.create(note("Unrelated"));
+  const board = await f.repository.create(boardDraft);
+  const indexed = (await f.storage.get(`title/${board.objectId}`))!;
+  const { kind: _kind, ...legacy } = indexed.value as Record<string, unknown>;
+  await f.storage.commit([{ key: indexed.key, expected: indexed.version, row: { ...indexed, value: legacy } }]);
+  const read = vi.spyOn(f.storage, "get");
+  expect((await f.repository.findBoard())?.objectId).toBe(board.objectId);
+  expect(read).not.toHaveBeenCalledWith(`head/${unrelated.objectId}`);
+});

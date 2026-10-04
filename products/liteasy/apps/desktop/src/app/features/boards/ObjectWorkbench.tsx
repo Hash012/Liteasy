@@ -97,7 +97,7 @@ export type WorkbenchViewModel = {
   setStatus(value: string): void;
   selectBoard(object: ObjectEnvelope): Promise<void>;
   createBoard(title: string): Promise<unknown>;
-  createNote(text: string, position?: Placement["position"]): Promise<unknown>;
+  createNote(text: string, position?: Placement["position"]): Promise<ObjectRef[] | undefined>;
   place(refs: ObjectRef[]): Promise<unknown>;
   removePlacement(id: string): Promise<unknown>;
   restoreLayout?(direction: "undo" | "redo"): Promise<unknown>;
@@ -156,6 +156,11 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
       setPanel("context");
     },
   };
+  useEffect(() => {
+    if (model.visible && (panel === "boards" || panel === "library")) {
+      void actions.current.refresh().catch((error) => actions.current.setStatus(String(error)));
+    }
+  }, [model.visible, model.repository, panel]);
   const previousTraySize = useRef(model.tray.length);
   useEffect(() => {
     if (model.tray.length > previousTraySize.current) setPanel("context");
@@ -163,17 +168,19 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
   }, [model.tray.length]);
   const [selected, setSelected] = useState<string[]>([]);
   const [newCard, setNewCard] = useState<string>();
+  const [createdRef, setCreatedRef] = useState<ObjectRef>();
+  useEffect(() => {
+    if (!createdRef) return;
+    const created = model.placements.find((p) => p.ref.objectId === createdRef.objectId);
+    if (created) { setSelected([created.placementId]); setNewCard(created.placementId); setCreatedRef(undefined); }
+  }, [createdRef, model.placements]);
   const selection = useRef(selected); selection.current = selected;
   const visiblePlacements = useVisiblePlacements(model.placements, viewport, zoom, selected, model.visible);
   const navigation = useCanvasNavigation({ viewport, canvas, zoom, setZoom, visible: model.visible, boardId: model.board?.objectId,
     placements: model.placements, selected, setSelected, create: async (position) => {
-      const before = new Set(model.placements.map((p) => p.placementId));
-      await model.createNote("新笔记", position);
-      requestAnimationFrame(() => {
-        if (actions.current.board?.objectId !== model.board?.objectId && model.board) return;
-        const created = actions.current.placements.find((p) => !before.has(p.placementId));
-        if (created) { setSelected([created.placementId]); setNewCard(created.placementId); }
-      });
+      const refs = await model.createNote("新笔记", position);
+      if (actions.current.board?.objectId !== model.board?.objectId && model.board) return;
+      if (refs?.[0]) setCreatedRef(refs[0]);
     },
     remove: model.removePlacement, error: (failure) => model.setStatus(String(failure)) });
   const [edges, setEdges] = useState<

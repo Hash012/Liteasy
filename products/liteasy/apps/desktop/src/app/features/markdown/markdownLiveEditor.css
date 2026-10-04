@@ -14,7 +14,10 @@
 .markdown-live-preview .markdown-content > :last-child { margin-bottom: 0; }
 .markdown-live-preview img { max-width: 100%; }
 .markdown-save-status { color: var(--colorNeutralForeground3); font-size: 12px; }
-.notes-editor .markdown-live-editor, .object-card-editor .markdown-live-editor { flex: 1; height: 100%; min-height: 200px; }
+.notes-editor .markdown-live-editor { flex: 1; height: 100%; min-height: 200px; }
+.markdown-live-editor.is-compact { min-height: 0; border: 0; background: transparent; }
+.markdown-live-editor.is-compact .cm-content { padding: 4px 8px 12px; }
+.markdown-live-editor.is-compact .cm-scroller { font: inherit; }
 .external-note-source.markdown-live-editor { min-height: 0; }
 .external-note-source .cm-content { box-sizing: border-box; width: 100%; max-width: 900px; margin-inline: auto; padding: 24px 32px 60px; }
 @media (max-width: 760px) { .external-note-source .cm-content { padding-inline: 16px; } }

@@ -703,6 +703,26 @@ export function createObjectRepository(
     } while (after);
     return { objects, cursor: undefined as string | undefined };
   }
+  async function findBoard() {
+    let after = "";
+    do {
+      const rows = await storage.list("title/", after, 1000);
+      for (const row of rows) {
+        after = row.key;
+        const entry = row.value as { objectId: string; lifecycle: string; kind?: ObjectEnvelope["kind"] };
+        if (entry.lifecycle !== "active" || (entry.kind && entry.kind !== "workspace.board")) continue;
+        // Older title indexes omitted kind. Preserve those boards without loading
+        // the bodies of modern, unrelated notes and imported documents.
+        try {
+          const object = await resolveLatest(entry.objectId);
+          if (object.kind === "workspace.board" && object.lifecycle === "active") return object;
+        } catch (error) {
+          if (!(error instanceof ObjectStoreError) || error.code !== "unsupported_schema") throw error;
+        }
+      }
+      if (rows.length < 1000) return;
+    } while (after);
+  }
   async function editNote(ref: ObjectRef, text: string, title?: string, sourceRefs: ObjectRef[] = [], actor: "user" | "agent" = "user") {
     if (await storage.get(`visual-block/${ref.objectId}/${ref.revision}`)) throw new ObjectStoreError("capability_denied", "此卡片包含结构化字段，请用组件编辑器或 liteasy_block_update 保存；普通笔记写入不会破坏其类型。");
     const head = await storage.get(headKey(ref.objectId));
@@ -1518,6 +1538,7 @@ export function createObjectRepository(
     relate,
     captureFragment: captureObject,
     createAndPlace: captureObject,
+    findBoard,
     applyBoardPatch,
     restoreBoardLayout,
     listPlacements,

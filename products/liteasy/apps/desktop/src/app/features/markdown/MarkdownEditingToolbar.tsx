@@ -1,11 +1,11 @@
 import "./markdownSourceEditor.css";
 import { useId, useState, type ReactElement, type ReactNode } from "react";
-import { Button, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip } from "@fluentui/react-components";
+import { Button, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Popover, PopoverSurface, PopoverTrigger, Tooltip } from "@fluentui/react-components";
 import {
   ChevronDownRegular, ChevronRightRegular,
   ArrowRedoRegular, ArrowUndoRegular, CodeRegular, ImageRegular, LinkRegular, LinkAddRegular, MoreHorizontalRegular,
   TableRegular, TextBoldRegular, TextBulletListLtrRegular, TextItalicRegular, TextNumberListLtrRegular,
-  TextQuoteRegular, TextStrikethroughRegular,
+  TextQuoteRegular, TextStrikethroughRegular, TextFontRegular,
 } from "@fluentui/react-icons";
 import type { MarkdownCommand } from "./markdownEditing";
 
@@ -37,9 +37,10 @@ const more: Action[] = [
   { command: "outdent", label: "减少缩进" },
 ];
 
-export function MarkdownEditingToolbar({ execute, undo, redo, canUndo, canRedo, insertReference }: {
+export function MarkdownEditingToolbar({ execute, undo, redo, canUndo, canRedo, insertReference, presentation = "inline" }: {
   execute(command: MarkdownCommand): void; undo(): void; redo(): void; canUndo: boolean; canRedo: boolean;
   insertReference?(): void;
+  presentation?: "inline" | "popover";
 }) {
   const [expanded, setExpanded] = useState(true);
   const controlsId = useId();
@@ -52,12 +53,7 @@ export function MarkdownEditingToolbar({ execute, undo, redo, canUndo, canRedo, 
     </Tooltip></MenuTrigger>
     <MenuPopover><MenuList>{items.map((item) => <MenuItem key={item.command} icon={item.icon} onClick={() => execute(item.command)}>{item.label}</MenuItem>)}</MenuList></MenuPopover>
   </Menu>;
-  return <div className="markdown-toolbar-shell">
-    <Button className="markdown-toolbar-toggle" appearance="subtle" size="small" icon={expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}
-      aria-label={expanded ? "收起 Markdown 工具栏" : "展开 Markdown 工具栏"} aria-expanded={expanded} aria-controls={controlsId}
-      title={expanded ? "收起格式工具，保留更多编辑空间" : "展开格式工具"}
-      onMouseDown={(event) => event.preventDefault()} onClick={() => setExpanded((value) => !value)}>格式工具</Button>
-    <div id={controlsId} hidden={!expanded} className="markdown-editing-toolbar" role="group" aria-label="Markdown 编辑工具栏">
+  const tools = <div id={controlsId} hidden={presentation === "inline" && !expanded} className="markdown-editing-toolbar" role="group" aria-label="Markdown 编辑工具栏">
     <div className="markdown-editing-group" role="group" aria-label="编辑历史">
       {button("撤销", <ArrowUndoRegular />, undo, !canUndo, "撤销 · Ctrl/⌘ Z")}
       {button("重做", <ArrowRedoRegular />, redo, !canRedo, "重做 · Ctrl/⌘ Shift Z")}
@@ -77,6 +73,20 @@ export function MarkdownEditingToolbar({ execute, undo, redo, canUndo, canRedo, 
       {insertReference ? button("插入文件引用", <LinkAddRegular />, insertReference, false, "插入文件引用 · [[") : null}
       {menu("更多 Markdown 工具", <MoreHorizontalRegular />, more)}
     </div>
-    </div>
+    </div>;
+  if (presentation === "popover") return <div className="markdown-toolbar-compact">
+    <Popover positioning="above-start">
+      <PopoverTrigger disableButtonEnhancement><Tooltip content="格式工具 · 支持 Ctrl/⌘ B、I、K" relationship="description">
+        <Button size="small" appearance="subtle" icon={<TextFontRegular />} aria-label="卡片格式工具" onMouseDown={(event) => event.preventDefault()}>格式</Button>
+      </Tooltip></PopoverTrigger>
+      <PopoverSurface className="markdown-toolbar-popover" aria-label="卡片 Markdown 格式工具">{tools}</PopoverSurface>
+    </Popover>
+  </div>;
+  return <div className="markdown-toolbar-shell">
+    <Button className="markdown-toolbar-toggle" appearance="subtle" size="small" icon={expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}
+      aria-label={expanded ? "收起 Markdown 工具栏" : "展开 Markdown 工具栏"} aria-expanded={expanded} aria-controls={controlsId}
+      title={expanded ? "收起格式工具，保留更多编辑空间" : "展开格式工具"}
+      onMouseDown={(event) => event.preventDefault()} onClick={() => setExpanded((value) => !value)}>格式工具</Button>
+    {tools}
   </div>;
 }

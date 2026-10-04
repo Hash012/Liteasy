@@ -98,7 +98,7 @@ async function fixture() {
     submit: vi.fn(),
     saveAnswer: vi.fn(),
     openSource: vi.fn(),
-    refresh: vi.fn(),
+    refresh: vi.fn().mockResolvedValue(undefined),
   };
   return { repository, note, board, placement, model };
 }

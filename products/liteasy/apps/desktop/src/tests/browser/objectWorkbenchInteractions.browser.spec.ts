@@ -253,3 +253,52 @@ test("board closes from details, notes edit in place, every resize handle works,
     animations: "disabled",
   });
 });
+
+for (const mode of ["live", "manual"] as const) {
+  test(`small ${mode} cards keep their body usable with formatting outside the card`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/");
+    if (mode === "manual") {
+      await page.getByRole("navigation", { name: "左边栏导航" }).getByRole("button", { name: "设置", exact: true }).click();
+      const settings = page.getByRole("region", { name: "应用设置" });
+      await settings.getByRole("button", { name: "外观与阅读" }).click();
+      await settings.getByRole("radio", { name: "手动切换 · 编辑、保存、阅读" }).check();
+    }
+    await page.getByRole("button", { name: "研究白板", exact: true }).click();
+    const board = page.locator("section.object-workbench");
+    const viewport = board.getByLabel("白板卡片区域", { exact: true });
+    await expect(viewport).toBeVisible();
+    const started = Date.now();
+    await viewport.dblclick({ position: { x: 140, y: 120 } });
+    const card = board.locator(".object-placement");
+    const editor = card.getByRole("textbox", { name: "编辑卡片正文", exact: true });
+    await expect(editor).toBeFocused();
+    testInfo.annotations.push({ type: "create-card-ms", description: String(Date.now() - started) });
+    const body = mode === "live" ? card.locator(".cm-scroller") : editor;
+    expect((await body.boundingBox())!.height).toBeGreaterThan(80);
+    await editor.fill("Research notes");
+    await editor.press("Control+Home");
+    await editor.press("Control+Shift+ArrowRight");
+    await card.getByRole("button", { name: "卡片格式工具" }).click();
+    const formatting = page.getByLabel("卡片 Markdown 格式工具", { exact: true });
+    await expect(formatting).toBeVisible();
+    expect(await card.getByRole("button", { name: "加粗", exact: true }).count()).toBe(0);
+    await formatting.getByRole("button", { name: "加粗", exact: true }).click();
+    await expect(editor).toBeFocused();
+    // Closing a portaled tool popup must not save or unmount the active editor.
+    await card.getByRole("button", { name: "卡片格式工具" }).click();
+    await expect(formatting).not.toBeVisible();
+    await expect(editor).toBeVisible();
+    await editor.fill(Array.from({ length: 25 }, (_, i) => `Line ${i + 1}: Editable research notes`).join("\n"));
+    await editor.press("Control+End");
+    await expect.poll(() => body.evaluate((node) => node.scrollTop)).toBeGreaterThan(100);
+    expect(await card.evaluate((node) => Array.from(node.querySelectorAll("*"))
+      .filter((child) => child.scrollHeight > child.clientHeight + 2 && /^(auto|scroll)$/.test(getComputedStyle(child).overflowY)).length)).toBe(1);
+    await card.screenshot({ path: testInfo.outputPath(`compact-card-${mode}.png`) });
+    await editor.press("Control+Enter");
+    await expect(editor).toHaveCount(0);
+    await expect(card).toContainText("Line 25");
+    await page.reload();
+    await expect(card).toContainText("Line 25");
+  });
+}

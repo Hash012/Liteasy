@@ -108,6 +108,9 @@
   border-color: var(--accent-1);
   box-shadow: 0 0 0 2px rgba(27, 102, 179, 0.14), 0 7px 20px rgba(24, 34, 47, 0.16);
 }
+.pdf-whiteboard-editor { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.pdf-whiteboard-editor > :is(.markdown-live-editor, .markdown-source-editor) { flex: 1; min-height: 0; }
+.pdf-whiteboard-editor > button { flex: 0 0 auto; align-self: flex-end; }
 
 .pdf-whiteboard-node-header {
   display: flex;

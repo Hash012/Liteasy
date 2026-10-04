@@ -92,3 +92,23 @@ test("collapsing the shared toolbar preserves the draft, selection and undo hist
   await user.click(screen.getByRole("button", { name: "撤销", exact: true }));
   expect(editor).toHaveValue("研究结论");
 });
+
+test("compact cards reveal formatting outside the editor without losing the selected text", async () => {
+  function CompactEditor() {
+    const [value, setValue] = useState("研究结论");
+    return <MarkdownSourceEditor documentKey="card" value={value} onChange={setValue} compact toolbar="popover" />;
+  }
+  const user = userEvent.setup();
+  const { container } = render(<CompactEditor />);
+  const editor = screen.getByRole("textbox") as HTMLTextAreaElement;
+  select(editor, 2, 4);
+  expect(screen.queryByRole("group", { name: "Markdown 编辑工具栏" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "卡片格式工具" }));
+  const tools = screen.getByRole("group", { name: "Markdown 编辑工具栏" });
+  expect(container.contains(tools)).toBe(false);
+  await user.click(screen.getByRole("button", { name: "加粗", exact: true }));
+  expect(editor).toHaveValue("研究**结论**");
+  expect(editor).toHaveFocus();
+  fireEvent.keyDown(editor, { key: "z", ctrlKey: true });
+  expect(editor).toHaveValue("研究结论");
+});

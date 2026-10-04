@@ -539,9 +539,9 @@ export const ObjectPlacementCard = memo(function ObjectPlacementCard({
                         }
                       }}
                     />
-) : <div onKeyDown={(event) => { event.stopPropagation(); if (event.key === "Escape" && !saving) { event.preventDefault(); if (object.kind === "content.note") void save(); else setEditing(false); } if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void save(); } }}
+) : <div className="object-card-editor-field" onKeyDown={(event) => { event.stopPropagation(); if (event.key === "Escape" && !saving) { event.preventDefault(); if (object.kind === "content.note") void save(); else setEditing(false); } if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void save(); } }}
                       onBlur={(event) => { if ((markdownPreference.mode === "manual" || markdownPreference.autosave) && object.kind === "content.note" && event.relatedTarget instanceof Node && !cardRef.current?.contains(event.relatedTarget) && !(event.relatedTarget instanceof Element && event.relatedTarget.closest("[role=dialog], [role=menu], .fui-PopoverSurface"))) void save(); }}>
-                      <MarkdownEditor documentKey={object.objectId} label="编辑卡片正文" value={draft} onChange={setDraft} readOnly={saving} autoFocus />
+                      <MarkdownEditor documentKey={object.objectId} label="编辑卡片正文" value={draft} onChange={setDraft} readOnly={saving} autoFocus compact toolbar="popover" />
                     </div>}
                     {editorError ? (
                       <span role="alert">{editorError}</span>

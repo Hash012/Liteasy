@@ -161,7 +161,10 @@ export function useObjectWorkbenchController(input: {
     const generation = ++refreshGeneration.current;
     const [next, items] = await Promise.all([repository.resolveLatest(boardId), repository.listPlacements(boardId)]);
     const cached = new Set(objectCache.current.map((item) => `${item.objectId}:${item.revision}`));
-    const refs = [...new Map(items.filter((item) => !cached.has(`${item.ref.objectId}:${item.ref.revision}`)).map((item) => [JSON.stringify(item.ref), item.ref])).values()];
+    const contextRefs = tray.flatMap(({ ref }) => "objectId" in ref
+      ? pendingFragments.get(ref.objectId)?.sourceRefs ?? [ref] : []);
+    const refs = [...new Map([...items.map((item) => item.ref), ...contextRefs]
+      .filter((ref) => !cached.has(`${ref.objectId}:${ref.revision}`)).map((ref) => [JSON.stringify(ref), ref])).values()];
     const loaded = await Promise.all(refs.map((ref) => repository.get(ref).catch(() => undefined)));
     if (!active() || generation !== refreshGeneration.current || boardRef.current?.objectId !== boardId) return;
     boardRef.current = next; setBoard(next); updatePlacements(items);
@@ -174,6 +177,7 @@ export function useObjectWorkbenchController(input: {
     const fileProjections = await repository.fileProjectionIds();
     let cursor: string | undefined;
     do {
+      if (!active() || generation !== refreshGeneration.current) return;
       const page = await repository.search("", cursor, fileProjections);
       all.push(...page.objects);
       cursor = page.cursor;
@@ -223,7 +227,7 @@ export function useObjectWorkbenchController(input: {
   }, [repository, tickets]);
   useEffect(() => {
     if (visible)
-      void refresh().catch((e) => {
+      void (async () => { await ensureBoard(); await refreshBoard(); })().catch((e) => {
         if (active()) setStatus(String(e.message ?? e));
       });
   }, [visible, repository]);
@@ -232,7 +236,7 @@ export function useObjectWorkbenchController(input: {
     boardRef.current = object;
     setOpened(undefined);
     setVisible(true);
-    await refresh();
+    await refreshBoard();
   }
   const boardFiles = useBoardFileController({ repository, board, active, select: selectBoard, setStatus });
   async function openLink(link: string) {
@@ -336,9 +340,7 @@ export function useObjectWorkbenchController(input: {
   async function ensureBoard() {
     if (boardRef.current)
       return repository.resolveLatest(boardRef.current.objectId);
-    const existing = (await repository.search()).objects.find(
-      (o) => o.kind === "workspace.board",
-    );
+    const existing = await repository.findBoard();
     const next =
       existing ??
       (await repository.create(
@@ -1354,7 +1356,7 @@ export function useObjectWorkbenchController(input: {
             },
           },
         });
-      }),
+      }, false, true),
     place: (refs: ObjectRef[]) =>
       perform(async () => {
         const board = await ensureBoard();
@@ -1363,7 +1365,7 @@ export function useObjectWorkbenchController(input: {
           operationId: crypto.randomUUID(),
           add: refs,
         });
-      }),
+      }, false, true),
     removePlacement: (placementId: string) =>
       perform(async () => {
         const board = await ensureBoard();
@@ -1372,7 +1374,7 @@ export function useObjectWorkbenchController(input: {
           operationId: crypto.randomUUID(),
           remove: [placementId],
         });
-      }),
+      }, false, true),
     restoreLayout: (direction: "undo" | "redo") => perform(async () => {
       const board = await currentBoardFor();
       await repository.restoreBoardLayout(refOf(board), direction, crypto.randomUUID());
@@ -1494,7 +1496,7 @@ export function useObjectWorkbenchController(input: {
             },
           });
         } else throw new Error("请拖入摘录或粘贴文字。");
-      });
+      }, false, true);
     },
     saveAnswer: () =>
       perform(async () => {

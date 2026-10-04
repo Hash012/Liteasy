@@ -49,3 +49,9 @@
 .markdown-editing-toolbar[hidden] { display: none; }
 .markdown-toolbar-shell .fui-Button { flex-shrink: 0; border-radius: 4px; font-weight: 400; }
 .markdown-toolbar-toggle { margin: 2px 4px; }
+.markdown-toolbar-compact { flex: 0 0 auto; display: flex; align-items: center; min-height: 28px; padding: 0 2px; }
+.markdown-toolbar-compact .fui-Button { min-width: 0; font-weight: 400; }
+.markdown-toolbar-popover { width: min(360px, calc(100vw - 32px)); padding: 4px; }
+.markdown-toolbar-popover .markdown-editing-toolbar { max-height: min(240px, 60vh); padding: 4px; background: transparent; }
+.markdown-source-editor.is-compact { min-height: 0; border: 0; background: transparent; }
+.markdown-source-editor.is-compact .markdown-source-input textarea { padding: 4px 8px 12px; min-height: 0; font: inherit; }

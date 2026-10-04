@@ -108,8 +108,8 @@ function PdfWhiteboardNodeView({ data, selected }: NodeProps<WhiteboardFlowNode>
       </header>
       {item.kind === "markdown" ? (
         editing ? (
-          <div className="nodrag nopan nowheel" onKeyDown={(event) => event.stopPropagation()} onBlur={(event) => { if (!event.relatedTarget || !event.currentTarget.contains(event.relatedTarget) && !(event.relatedTarget instanceof Element && event.relatedTarget.closest(".fui-PopoverSurface, .fui-MenuPopover, [role=dialog]"))) setEditing(false); }}>
-            <MarkdownEditor documentKey={item.id} label="白板文字内容" autoFocus value={item.content.markdown} onChange={(text) => data.onChangeMarkdown(item.id, text)} />
+          <div className="pdf-whiteboard-editor nodrag nopan nowheel" onKeyDown={(event) => event.stopPropagation()} onBlur={(event) => { if (!event.relatedTarget || !event.currentTarget.contains(event.relatedTarget) && !(event.relatedTarget instanceof Element && event.relatedTarget.closest(".fui-PopoverSurface, .fui-MenuPopover, [role=dialog]"))) setEditing(false); }}>
+            <MarkdownEditor documentKey={item.id} label="白板文字内容" autoFocus compact toolbar="popover" value={item.content.markdown} onChange={(text) => data.onChangeMarkdown(item.id, text)} />
             <button type="button" onClick={() => setEditing(false)}>完成编辑</button>
           </div>
         ) : (
