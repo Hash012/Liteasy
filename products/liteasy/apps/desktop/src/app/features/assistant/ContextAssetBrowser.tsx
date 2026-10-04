@@ -1,3 +1,4 @@
+import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
 import { MarkdownEditor } from "../markdown/MarkdownEditor";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ResourceReferencesContext } from "../resource-links/ResourceReferencesContext";
@@ -205,6 +206,7 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
           <Input aria-label="搜索全部上下文资产" className="context-asset-search" contentBefore={<SearchRegular />}
             placeholder="搜索标题、项目、类别、内容说明或路径；多个关键词可组合" value={query}
             onChange={(_, data) => setQuery(data.value)} />
+          <SearchOptions query={query} onChange={setQuery} tags={catalog.flatMap((asset) => asset.searchMetadata?.tags ?? [])} />
           <div className="context-asset-workspace">
             <nav className="context-asset-filters" aria-label="上下文资产筛选">
               <strong>类别</strong>
@@ -234,7 +236,7 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
                     }} /> : null}
                   <button className="context-asset-card-preview" type="button" aria-label={`预览 ${asset.label}`}
                     aria-pressed={previewId === asset.id} onClick={() => setPreviewId(asset.id)}>
-                    <span className="context-asset-card-heading">{categoryOf(asset) === "项目" ? <FolderRegular /> : <DocumentRegular />}<strong>{asset.label}</strong></span>
+                    <span className="context-asset-card-heading">{categoryOf(asset) === "项目" ? <FolderRegular /> : <DocumentRegular />}<strong><SearchHighlight text={asset.label} query={query} /></strong></span>
                     <span className="context-asset-badges"><span>{categoryOf(asset)}</span>{asset.readOnly ? <span>{getAssistantReadOnlyLabel(asset)}</span> : asset.readOnly === false ? <span className="context-asset-editable">可编辑</span> : null}
                       {asset.token && addedIds.has(asset.token.id) ? <span>已加入对话</span> : null}</span>
                     {asset.projectTitle ? <span className="context-asset-card-project">{asset.projectTitle}</span> : null}

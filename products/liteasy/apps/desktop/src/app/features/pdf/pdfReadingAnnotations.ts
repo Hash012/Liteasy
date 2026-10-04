@@ -8,6 +8,7 @@ export type ReadingMarkStyle = { kind?: "highlight" | "underline" | "note"; colo
 
 /** Both reader views operate on the PDF reader's live annotations, never a second store. */
 export type PdfReadingAnnotations = {
+  searchMetadata?: import("../search/searchQuery").SearchMetadata;
   scopeKey: string;
   lookup?: SelectionLookupPort;
   paperId?: string;

@@ -1,3 +1,4 @@
+import { highlightSearchText } from "../search/searchDomHighlight";
 import { useContext, useEffect, useRef } from "react";
 import { ReferenceSourceContext } from "./ResourceReferencesContext";
 import { VisualResourceContext } from "../visual-blocks/AssetImage";
@@ -40,6 +41,10 @@ export function revealRenderedResource(root: HTMLElement | null, target: Resourc
   if (!element && target.quote) {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); let node;
     while ((node = walker.nextNode())) { if (node.textContent?.toLowerCase().includes(target.quote.toLowerCase())) { element = node.parentElement ?? undefined; break; } }
+  }
+  if (element && target.quote) {
+    const hit = highlightSearchText(element, JSON.stringify(target.quote), 0);
+    if (!hit.ranges.length) { const fallback = highlightSearchText(root, JSON.stringify(target.quote), 0); element = fallback.element ?? element; }
   }
   if (element) { element.scrollIntoView?.({ block: "center" }); element.classList.add("resource-search-location"); setTimeout(() => element?.classList.remove("resource-search-location"), 3000); }
 }

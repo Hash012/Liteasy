@@ -1,3 +1,5 @@
+import { compileSearchQuery } from "../search/searchQuery";
+import { catalogSearchMetadata } from "../search/searchMetadata";
 import type { ReadingCatalogEntry, ReadingCatalogFormat, ReadingCatalogStatus } from "./readingCatalog.types";
 import { assetTypeLabels, inferAssetType } from "./libraryAssetMetadata";
 
@@ -14,6 +16,8 @@ export type ReadingCatalogFilters = {
   author?: string;
   subject?: string;
   tags?: string[];
+  excludeTags?: string[];
+  scope?: "metadata" | "name";
 };
 
 const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
@@ -26,20 +30,19 @@ function normalize(value: string) {
 export function indexReadingCatalog(entries: readonly ReadingCatalogEntry[]) {
   return entries.map((entry) => ({
     entry,
-    search: normalize([
+    search: [
       entry.title, ...(entry.authors ?? []), entry.publication, entry.doi,
       entry.identifier, entry.language, entry.publishedAt,
       entry.abstract, ...(entry.tags ?? []), entry.collection, entry.year,
       entry.format, entry.fileName, entry.physicalPath, entry.liteasyPath,
       entry.assetType, assetTypeLabels[entry.assetType || inferAssetType(entry.format)], ...(entry.subjects ?? [])
-    ].filter((value) => value !== undefined).join(" ")),
+    ].filter((value) => value !== undefined).join(" "),
     added: Math.max(0, Date.parse(entry.addedAt ?? "") || 0)
   }));
 }
 
 export function queryReadingCatalog(index: ReturnType<typeof indexReadingCatalog>, filters: ReadingCatalogFilters) {
-  // Quoted phrases and whitespace-separated words can be freely combined.
-  const terms = Array.from(normalize(filters.query).matchAll(/"([^"]+)"|(\S+)/g), (match) => match[1] ?? match[2]);
+  const compiled = compileSearchQuery(filters.query);
   const rows = index.filter(({ entry, search }) => (
     (filters.format === "all" || entry.format === filters.format)
     && (filters.status === "all" || (entry.readingStatus ?? "unread") === filters.status)
@@ -49,7 +52,8 @@ export function queryReadingCatalog(index: ReturnType<typeof indexReadingCatalog
     && (!filters.author || (entry.authors ?? []).some((author) => normalize(author).includes(normalize(filters.author!))))
     && (!filters.subject || (entry.subjects ?? []).some((subject) => normalize(subject).includes(normalize(filters.subject!))))
     && (filters.tags ?? []).every((tag) => (entry.tags ?? []).some((value) => normalize(value) === normalize(tag)))
-    && terms.every((term) => search.includes(term))
+    && !(filters.excludeTags ?? []).some((tag) => (entry.tags ?? []).some((value) => normalize(value) === normalize(tag)))
+    && compiled.matches(filters.scope === "name" ? [entry.title, entry.fileName].filter(Boolean).join(" ") : search, catalogSearchMetadata(entry))
   ));
   rows.sort((left, right) => {
     let order = 0;

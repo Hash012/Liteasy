@@ -1,3 +1,6 @@
+import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
+import { compileSearchQuery, type SearchMetadata } from "../search/searchQuery";
+import { annotationNoteLabels, noteLabels } from "../notes/noteLabels";
 import { useMemo, useState } from "react";
 import { Button, Input, Select } from "@fluentui/react-components";
 import { ArrowLeftRegular, LocationRegular, SearchRegular } from "@fluentui/react-icons";
@@ -7,7 +10,8 @@ import { PdfAnnotationMarkdown } from "./PdfAnnotationMarkdown";
 import { comparePdfAnnotationsByReadingOrder } from "./pdfAnnotationReadingOrder";
 
 const labels = { highlight: "高亮", underline: "划线", note: "便笺", text: "文本框", ink: "手绘" };
-export function PdfAnnotationsOverview({ annotations, teamAnnotations, paperIdentity, error, onNavigate, onClose }: {
+export function PdfAnnotationsOverview({ annotations, teamAnnotations, paperIdentity, searchMetadata, error, onNavigate, onClose }: {
+  searchMetadata?: SearchMetadata;
   annotations: PdfAnnotationV2[]; teamAnnotations: TeamAnnotation[]; paperIdentity?: PdfAnnotation["paperIdentity"]; error?: string;
   onNavigate(annotation: PdfAnnotation): void; onClose(): void;
 }) {
@@ -24,13 +28,15 @@ export function PdfAnnotationsOverview({ annotations, teamAnnotations, paperIden
     }
     return items.sort((a, b) => comparePdfAnnotationsByReadingOrder(a.annotation, b.annotation));
   }, [annotations, teamAnnotations, paperIdentity]);
+  const compiled = useMemo(() => compileSearchQuery(query), [query]);
   const filtered = useMemo(() => entries.filter(({ annotation, author }) => (kind === "all" || annotation.kind === kind)
-    && [annotation.excerpt, annotation.note, annotation.text, author, String(annotation.page)].join(" ").toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())), [entries, query, kind]);
+    && compiled.matches([annotation.excerpt, annotation.note, annotation.text, author, String(annotation.page)].join(" "), { format: "pdf", ...searchMetadata, tags: [...(searchMetadata?.tags ?? []), ...annotationNoteLabels(annotation as PdfAnnotationV2).flatMap((label) => [label, noteLabels[label]])] })), [entries, compiled, kind, searchMetadata]);
   return <section className="pdf-overview" aria-label="全部批注">
     <header className="pdf-overview-header">
       <Button appearance="subtle" icon={<ArrowLeftRegular />} onClick={onClose}>返回 PDF</Button>
       <strong>全部批注 · {entries.length}</strong>
       <Input aria-label="搜索全部批注" placeholder="搜索摘录、批注或页码" contentBefore={<SearchRegular />} value={query} onChange={(_, data) => { setQuery(data.value); setLimit(80); }} />
+      <SearchOptions query={query} onChange={setQuery} tags={Object.values(noteLabels)} />
       <Select aria-label="筛选批注类型" value={kind} onChange={(_, data) => { setKind(data.value); setLimit(80); }}>
         <option value="all">全部类型</option>{Object.entries(labels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
       </Select>
@@ -42,7 +48,7 @@ export function PdfAnnotationsOverview({ annotations, teamAnnotations, paperIden
         <header><strong>{labels[annotation.kind]} · 第 {annotation.page} 页</strong>{author ? <span>团队 · {author}</span> : null}
           <Button appearance="subtle" icon={<LocationRegular />} aria-label={`定位第 ${annotation.page} 页${labels[annotation.kind]}：${annotation.excerpt}`}
             onClick={() => onNavigate(annotation)}>定位原文</Button></header>
-        {annotation.kind !== "text" && annotation.kind !== "ink" && annotation.excerpt ? <blockquote>{annotation.excerpt}</blockquote> : null}
+        {annotation.kind !== "text" && annotation.kind !== "ink" && annotation.excerpt ? <blockquote><SearchHighlight text={annotation.excerpt} query={query} /></blockquote> : null}
         {annotation.note ? <PdfAnnotationMarkdown value={annotation.note} images={annotation.images} /> : <p className="pdf-overview-muted">{annotation.kind === "ink" ? "手绘批注，点击定位原文查看笔迹。" : annotation.kind === "text" ? "空白文本框" : "未添加备注"}</p>}
       </li>)}</ol>
       {filtered.length > limit ? <Button onClick={() => setLimit((value) => value + 80)}>显示更多批注（剩余 {filtered.length - limit} 条）</Button> : null}

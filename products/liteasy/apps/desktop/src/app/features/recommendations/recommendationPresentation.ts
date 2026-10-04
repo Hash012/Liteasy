@@ -1,3 +1,5 @@
+import { compileSearchQuery } from "../search/searchQuery";
+import { recommendationKeywords } from "./recommendationKeywords";
 import { bibliographicDate } from "../paper-services/bibliographicMetadata";
 import { normalizeLiteratureIdentifier } from "../paper-identity/paperIdentity";
 import type { LiteratureAuthorityClient } from "../paper-identity/literatureAuthorityClient";
@@ -52,11 +54,11 @@ export async function loadRecommendationMetadata(item: RecommendationItem, clien
 
 export type RecommendationSort = "recommended" | "newest" | "citations";
 export function filterRecommendations(items: RecommendationItem[], query: string, access: boolean, year: string, sort: RecommendationSort) {
-  const terms = query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
+  const compiled = compileSearchQuery(query);
   const result = items.filter((item) => (!access || item.fullText?.status === "available") &&
-    (!year || recommendationDateLabel(item).slice(0, 4) === year) && terms.every((term) =>
+    (!year || recommendationDateLabel(item).slice(0, 4) === year) && compiled.matches(
       [item.title, ...(item.authors ?? []), item.venue, ...(item.subjects ?? []), ...(item.keywords ?? []), item.abstract]
-        .filter(Boolean).join(" ").toLocaleLowerCase().includes(term)));
+        .filter(Boolean).join(" "), { format: item.fullText?.status === "available" ? "pdf" : "html",  tags: [...(item.subjects ?? []), ...(item.keywords ?? []), ...recommendationKeywords(item, items).map((tag) => tag.label)] }));
   if (sort === "newest") result.sort((a, b) => {
     const date = (item: RecommendationItem) => recommendationDateLabel(item) === "日期未知" ? "" : recommendationDateLabel(item);
     return date(b).localeCompare(date(a));

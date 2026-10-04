@@ -364,7 +364,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
         <small>AI 讲解 · {guideCategories[explanation.aiGuide.category]} · 请结合原文判断</small>
         <Button appearance="subtle" size="small" onClick={() => { setGuideId(undefined); locate(explanation.id); }}>查看或编辑批注</Button>
       </aside> : null}
-      {panel ? <PaperReadingNavigator panel={panel} onPanelChange={openPanel} onClose={closePanel} navigation={navigation} /> : null}
+      {panel ? <PaperReadingNavigator metadata={session.searchMetadata} panel={panel} onPanelChange={openPanel} onClose={closePanel} navigation={navigation} /> : null}
       {showComments ? <aside aria-label="阅读模式批注" className="paper-reading-comments">
         <strong>批注 · 与 PDF 共用</strong>
         {!session.ready ? <p role="status">正在恢复批注…</p> : null}

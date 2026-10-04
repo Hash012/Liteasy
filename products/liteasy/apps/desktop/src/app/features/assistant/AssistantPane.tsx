@@ -1,3 +1,5 @@
+import { catalogSearchMetadata } from "../search/searchMetadata";
+import type { ReadingCatalogEntry } from "../library/readingCatalog.types";
 import { conversationTurnsFromMessages } from "./assistantConversationContext";
 import { GenerationPromptEditor } from "../ai-prompts/GenerationPromptEditor";
 import { artifactPromptTask, getGenerationPrompt, settingsWithGenerationPrompt, type GenerationPromptTask } from "../ai-prompts/generationPrompts";
@@ -173,6 +175,7 @@ type AssistantPaneProps = {
   readerConversationContext?: ReaderConversationContext | null;
   runtimeOrganizationName?: string;
   availablePapers?: Paper[];
+  searchEntries?: ReadingCatalogEntry[];
   contextSuggestions?: AssistantComposerSuggestion[];
   contextCatalogStatus?: string;
   onRefreshContextCatalog?: () => void;
@@ -331,6 +334,7 @@ export function AssistantPane({
   selectedPapers = [],
   availablePapers = selectedPapers,
   contextSuggestions = [],
+  searchEntries = [],
   selectedSetStatus,
   settingsStore
 }: AssistantPaneProps) {
@@ -807,6 +811,7 @@ export function AssistantPane({
       };
       return {
         detail: paper.sourcePath ?? "整篇论文",
+        searchMetadata: catalogSearchMetadata(searchEntries.find((entry) => entry.id === paper.id) ?? { id: paper.id, title: paper.title, format: "pdf", subjects: paper.literature?.subjects }),
         category: "论文", description: "整篇论文问答；也可在项目中按页选择原文或图片。", readOnly: true,
         preview: contextPreviewText((importedChunksByPaperId[paper.id] ?? []).map((chunk) => `第 ${chunk.page} 页\n${chunk.snippet}`).join("\n\n")) ||
           [paper.title, paper.authors?.length ? `作者：${typeof paper.authors === "string" ? paper.authors : paper.authors.join("、")}` : "",
@@ -855,7 +860,7 @@ export function AssistantPane({
     return [...artifactSlashSuggestions, ...commandSuggestions, ...paperSuggestions, ...contextSuggestions, ...pageSuggestions, ...skillSuggestions];
   }
 
-  const composerSuggestions = useMemo(buildComposerSuggestions, [availablePapers, contextSuggestions, importedChunksByPaperId]);
+  const composerSuggestions = useMemo(buildComposerSuggestions, [availablePapers, contextSuggestions, importedChunksByPaperId, searchEntries]);
 
   function setMode(mode: AssistantMode) {
     const adapted = adaptDefaultUiIntent({

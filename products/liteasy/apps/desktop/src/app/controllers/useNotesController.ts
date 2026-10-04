@@ -1,3 +1,5 @@
+import { compileSearchQuery } from "../features/search/searchQuery";
+import { noteSearchMetadata } from "../features/search/searchMetadata";
 import { noteLabelKey, resolvedNoteLabels, type NoteLabelOverrides } from "../features/notes/noteLabels";
 import { formatPaperAnchorText } from "../features/paper-anchors/paperAnchorEntity";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -776,12 +778,11 @@ export function useNotesController(input: {
             : visibleItems.get(item.key)?.entryId,
       });
   }
+  const searchQuery = compileSearchQuery(query);
   const items = [...visibleItems.values()]
     .map((item) => ({ ...item, labels: resolvedNoteLabels(item, labelOverrides.get(noteLabelKey(item.target))) }))
     .filter((item) =>
-      `${item.title}\n${item.text}\n${item.source}`
-        .toLocaleLowerCase()
-        .includes(query.toLocaleLowerCase()),
+      searchQuery.matches(`${item.title}\n${item.text}\n${item.source}`, noteSearchMetadata(item)),
     )
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const model: NotesViewModel = {

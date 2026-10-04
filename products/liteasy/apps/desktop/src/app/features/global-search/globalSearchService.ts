@@ -1,3 +1,4 @@
+import { compileSearchQuery } from "../search/searchQuery";
 import { contentFingerprint, type SemanticIndex, type IndexRecord } from "../semantic-index/semanticIndexClient";
 import type { SearchCoverage, SearchDocument, SearchGroup, SearchHit, SearchSource } from "./globalSearch.types";
 
@@ -16,7 +17,7 @@ export function parseSearchQuery(query: string) {
 }
 export function searchSnippet(text: string, clauses: string[]) {
   const positions = clauses.map((clause) => text.toLowerCase().indexOf(clause)).filter((i) => i >= 0);
-  const start = Math.max(0, Math.min(...positions, text.length) - 65);
+  const start = positions.length ? Math.max(0, Math.min(...positions) - 65) : 0;
   return `${start ? "…" : ""}${text.slice(start, start + 260).trim()}${start + 260 < text.length ? "…" : ""}`;
 }
 const manifestPath = "global-search:manifest";
@@ -33,7 +34,7 @@ function documentRecords(document: SearchDocument, capacity: number) {
       // Titles live in their own metadata section; repeating them here matches every body chunk.
       records.push({ id: `${document.id}:${section.key}:${offset}`, path: document.id, revision: document.revision,
         text, tokens: "", payload: { ...section.locator, ...(line === undefined ? {} : { line }), documentId: document.id,
-          revision: document.revision, title: document.title, group: section.group, text } });
+          metadata: section.metadata ?? document.metadata, revision: document.revision, title: document.title, group: section.group, text } });
       if (offset + 4000 >= section.text.length) break;
     }
   }
@@ -41,7 +42,7 @@ function documentRecords(document: SearchDocument, capacity: number) {
 }
 /** Rebuildable lexical cache. The current authorized corpus and live revisions remain authoritative. */
 export function createGlobalSearchService(input: { index: SemanticIndex; source: SearchSource; active(): boolean; capacity?: number }) {
-  let current = new Map<string, SearchDocument>(), coverage = blankCoverage();
+  let current = new Map<string, SearchDocument>(), admitted = new Map<string, number>(), coverage = blankCoverage();
   const check = (signal: AbortSignal) => { signal.throwIfAborted(); if (!input.active()) throw new Error("工作区已切换，请重新搜索。"); };
   async function removeRejectedDocument(path: string, signal: AbortSignal) {
     const saved = await input.index.lookup([manifestPath], signal);
@@ -60,7 +61,7 @@ export function createGlobalSearchService(input: { index: SemanticIndex; source:
     async refresh(signal: AbortSignal, progress: (count: number) => void) {
       check(signal);
       // Drop the admissible set first; an interrupted refresh must never serve old snippets.
-      current = new Map(); coverage = blankCoverage();
+      current = new Map(); admitted = new Map(); coverage = blankCoverage();
       const corpus = await input.source.collect(signal, progress); check(signal);
       const saved = await input.index.lookup([manifestPath], signal);
       const before = (saved[0]?.payload ?? {}) as Record<string, string>;
@@ -82,7 +83,7 @@ export function createGlobalSearchService(input: { index: SemanticIndex; source:
         if (before[document.id] !== after[document.id]) {
           changed.push({ document, count: records.length });
         }
-        check(signal); next.set(document.id, document);
+        check(signal); next.set(document.id, document); admitted.set(document.id, records.length);
         if (coverage.limited) break;
       }
       // Prune against the actual bounded selection, including changed documents
@@ -108,21 +109,45 @@ export function createGlobalSearchService(input: { index: SemanticIndex; source:
       return coverage;
     },
     async search(query: string, group: SearchGroup | undefined, offset: number, signal: AbortSignal) {
-      check(signal); const clauses = parseSearchQuery(query);
-      if (!clauses.length) return { hits: [] as SearchHit[], nextOffset: null as number | null, coverage };
-      const result = await input.index.literalQuery(clauses, { group, offset, limit: 20 }, signal);
+      check(signal); const compiled = compileSearchQuery(query);
+      if (compiled.error) throw new Error(compiled.error);
+      const clauses = compiled.terms;
+      if (!query.trim() || !compiled.hasText && !compiled.advanced) return { hits: [] as SearchHit[], nextOffset: null as number | null, coverage };
+      let result: { hits: IndexRecord[]; nextOffset: number | null };
+      if (compiled.advanced) {
+        // Scan only admitted chunks, yielding between bounded batches. RE2 guarantees linear matching.
+        const rows: IndexRecord[] = []; let scanned = 0, matched = 0, more = false;
+        outer: for (const document of current.values()) {
+          const records = documentRecords(document, admitted.get(document.id) ?? 0).records;
+          let emitted = false;
+          for (const row of records) {
+            if (++scanned % 64 === 0) { await new Promise((resolve) => setTimeout(resolve, 0)); check(signal); }
+            const payload = row.payload as SearchHit;
+            if (group && payload.group !== group) continue;
+            if (!compiled.hasText && (emitted || !group && payload.group !== "metadata")) continue;
+            if (!compiled.matches(payload.text, payload.metadata)) continue;
+            emitted = true;
+            if (matched++ < offset) continue;
+            if (rows.length === 20) { more = true; break outer; }
+            rows.push(row);
+          }
+        }
+        result = { hits: rows, nextOffset: more ? offset + 20 : null };
+      } else result = await input.index.literalQuery(clauses, { group, offset, limit: 20 }, signal);
       const hits: SearchHit[] = [];
       const verified = new Map<string, boolean>();
       for (const row of result.hits) {
         check(signal); const document = current.get(row.path);
         if (!document || row.revision !== document.revision) continue;
-        const hit = { ...(row.payload as Omit<SearchHit, "id" | "snippet">), id: row.id,
-          snippet: searchSnippet((row.payload as { text: string }).text, clauses) };
+        const hit: SearchHit = { ...(row.payload as Omit<SearchHit, "id" | "snippet">), id: row.id,
+          snippet: searchSnippet((row.payload as { text: string }).text, compiled.ranges((row.payload as { text: string }).text).map((range) => (row.payload as { text: string }).text.slice(range.start, range.end))) };
         // A filename match opens the file, not a fabricated location in its body.
         if (hit.group !== "metadata") {
-          const at = clauses.map((clause) => hit.text.toLowerCase().indexOf(clause)).filter((i) => i >= 0).sort((a, b) => a - b)[0] ?? 0;
+          const match = compiled.ranges(hit.text)[0];
+          const at = match?.start ?? 0;
           hit.line = (hit.line ?? 1) + (hit.text.slice(0, at).match(/\n/g)?.length ?? 0);
-          if (!hit.quote) hit.quote = hit.text.slice(at, at + (clauses.find((clause) => hit.text.toLowerCase().indexOf(clause) === at)?.length ?? 80));
+          if (match) hit.matchedText = hit.text.slice(match.start, match.end);
+          if (!hit.quote && match) hit.quote = hit.text.slice(match.start, match.end);
         }
         if (!verified.has(row.path)) verified.set(row.path, await input.source.verify(hit, signal));
         if (verified.get(row.path)) hits.push(hit);
@@ -130,6 +155,7 @@ export function createGlobalSearchService(input: { index: SemanticIndex; source:
       }
       check(signal); return { hits, nextOffset: result.nextOffset, coverage };
     },
+    tags() { return [...new Set([...current.values()].flatMap((document) => [...(document.metadata?.tags ?? []), ...document.sections.flatMap((section) => section.metadata?.tags ?? [])]))].sort(); },
     async verify(hit: SearchHit, signal: AbortSignal) {
       check(signal);
       if (!current.has(hit.documentId) || !(await input.source.verify(hit, signal))) throw new Error("来源已修改、删除或不再授权，请刷新搜索。");

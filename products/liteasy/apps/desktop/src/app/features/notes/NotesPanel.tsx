@@ -1,3 +1,4 @@
+import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
 import { NoteLabelFilter, emptyNoteFilter, matchesNoteFilter } from "./NoteLabelFilter";
 import { noteLabelEntries, noteLabels, resolvedNoteLabels, type NoteLabel } from "./noteLabels";
 import { useMarkdownEditing } from "../markdown/MarkdownEditingContext";
@@ -182,6 +183,7 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
         value={model.query}
         onChange={(_, data) => model.search(data.value)}
       />
+      <SearchOptions query={model.query} onChange={model.search} tags={Object.values(noteLabels)} />
       <NoteLabelFilter value={filter} onChange={setFilter} />
       {model.error && (
         <p role="alert" className="notes-error">
@@ -338,7 +340,7 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
                 >
                   <span className="notes-item-title">
                     <LibraryItemIcon itemKey={noteIconKey(item)} kind={item.object?.kind === "workspace.board" || /\.canvas$/i.test(item.title) ? "board" : item.target.kind === "pdf-annotation" ? "pdf" : "note"} />
-                    <strong title={item.title}>{item.title}</strong>
+                    <strong title={item.title}><SearchHighlight text={item.title} query={model.query} /></strong>
                   </span>
                   <span className="notes-item-source" title={item.source}>{item.source}</span>
                   {item.labels.length > 0 && <span className="notes-item-labels" aria-label="笔记标签">

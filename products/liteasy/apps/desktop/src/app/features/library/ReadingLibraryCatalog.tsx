@@ -1,3 +1,4 @@
+import { SearchOptions } from "../search/SearchOptions";
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { readingResourceCapabilities } from "../reading-library/readingResourceCapabilities";
 import { Button, Input, Select, Tooltip } from "@fluentui/react-components";
@@ -77,6 +78,7 @@ export function ReadingLibraryCatalog({ entries, loading = false, message, onImp
     </header>
     <div className="reading-catalog-controls" role="search" aria-label="筛查阅读库">
       <Input ref={searchInput} className="reading-catalog-search" aria-label="搜索文献与文件" placeholder="搜索标题、作者、DOI、摘要、标签或路径" contentBefore={<SearchRegular />} value={filters.query} onChange={(_, data) => updateFilter("query", data.value)} contentAfter={filters.query ? <Tooltip content="清空搜索" relationship="description"><Button appearance="transparent" size="small" icon={<DismissRegular />} aria-label="清空搜索" onClick={() => { updateFilter("query", ""); searchInput.current?.focus(); }} /></Tooltip> : undefined} />
+      <SearchOptions query={filters.query} onChange={(value) => updateFilter("query", value)} tags={entries.flatMap((entry) => entry.tags ?? [])} />
       <div className="reading-catalog-filters">
         <Select aria-label="筛选文件格式" value={filters.format} onChange={(_, data) => updateFilter("format", data.value as ReadingCatalogFormat | "all")}>
           <option value="all">全部格式</option>{Object.entries(readingCatalogFormatLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}

@@ -1,3 +1,5 @@
+import { catalogSearchMetadata } from "../features/search/searchMetadata";
+import type { ReadingCatalogEntry } from "../features/library/readingCatalog.types";
 import { useMemo, useRef } from "react";
 import type { AssistantComposerSuggestion } from "../features/assistant/assistant.types";
 import { createResourceReferenceService } from "../features/resource-links/resourceReferenceService";
@@ -13,15 +15,17 @@ import { subscribeNoteFiles } from "../features/note-files/noteFileService";
 import { hashText } from "../features/context/objectContext";
 
 export function useResourceLinksController(input: { repository: ObjectRepository; assets: AgentAssetService;
+  entries?: ReadingCatalogEntry[];
   suggestions: AssistantComposerSuggestion[]; papers: Paper[]; open(path: string): void | Promise<unknown> }) {
   const latest = useRef(input); latest.current = input;
   const scope = input.repository.scopeId;
   const suggestions = useMemo(() => [...input.suggestions.filter((item) => item.resourcePath), ...input.papers.map((paper): AssistantComposerSuggestion => ({
+    searchMetadata: catalogSearchMetadata(input.entries?.find((entry) => entry.id === paper.id) ?? { id: paper.id, title: paper.title, format: "pdf", subjects: paper.literature?.subjects }),
     id: `paper-${paper.id}`, trigger: "@", label: paper.literature?.title || paper.title, category: "论文", detail: paper.sourcePath,
     resourcePath: liteasyPath(scope, { kind: "paper", paperId: paper.id }),
     resolveToken: async () => { const attachments = await latest.current.assets.context(liteasyPath(scope, { kind: "paper", paperId: paper.id }));
       return { id: `paper-${paper.id}`, kind: "object", label: paper.title, prompt: "", contextRefs: attachments.flatMap((item) => item.refs) }; },
-  }))], [input.suggestions, input.papers, scope]);
+  }))], [input.entries, input.suggestions, input.papers, scope]);
   const catalog = useRef(suggestions); catalog.current = suggestions;
   const service = useMemo(() => createResourceReferenceService({ scope, assets: input.assets,
     active: () => latest.current.repository.scopeId === scope,

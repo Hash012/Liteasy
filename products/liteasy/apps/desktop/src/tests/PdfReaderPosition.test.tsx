@@ -8,7 +8,7 @@ import { ObjectWorkbenchContext, type ObjectWorkbenchPort } from "../app/feature
 import { buildOriginalReaderPaper, type OriginalFileDescriptor } from "../app/features/original-files/originalFileService";
 import type { Paper } from "../app/features/workspace/workspace.types";
 
-vi.mock("../app/features/objects/objectStorage", () => ({ createObjectStorage: vi.fn() }));
+vi.mock("../app/features/objects/objectStorage", async (load) => ({ ...await load<object>(), createObjectStorage: vi.fn() }));
 vi.mock("pdfjs-dist/legacy/build/pdf.mjs", async (load) => ({ ...await load<object>(), getDocument: vi.fn() }));
 const bytes = new TextEncoder().encode("%PDF-1.7\nsynthetic position test");
 const original: OriginalFileDescriptor = { id: "grant-before-restart", path: "/synthetic/book.pdf", fileName: "book.pdf", format: "pdf", sizeBytes: bytes.length, modifiedUnixMs: 1 };

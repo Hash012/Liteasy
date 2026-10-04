@@ -77,3 +77,34 @@ test("title-only matches do not flood book results and reopening or focus does n
   await dialog.getByRole("combobox", { name: "搜索范围" }).selectOption("body");
   await expect(dialog.getByText(/已索引内容中未找到匹配项/)).toBeVisible();
 });
+
+test("tag/format exclusions combine with regex and navigation paints only the matched book text", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
+  await page.goto("/");
+  await page.evaluate(async () => {
+    const { createReadingLibraryRepository } = await import("/src/app/features/reading-library/readingLibraryRepository.ts");
+    const { createObjectStorage } = await import("/src/app/features/objects/objectStorage.ts");
+    const library = createReadingLibraryRepository(createObjectStorage("local", () => "local"), "local");
+    for (const [name, tags] of [["Research", ["精读"]], ["Translation", ["精读", "翻译"]]] as const) {
+      const text = "Unrelated opening. Episodic memory 42 is the actual match. Unrelated ending.";
+      const { entry } = await library.importFile(`${name}.md`, new TextEncoder().encode(text), { format: "markdown", title: name, authors: [],
+        chapters: [{ id: "1", title: "Chapter", content: text, plainText: text, format: "markdown" }], toc: [], resources: [], warnings: [] });
+      await library.updateMetadata(entry.id, { tags: [...tags], assetType: "note" });
+    }
+  });
+  await page.getByRole("button", { name: "搜索工作区", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "搜索工作区" });
+  await dialog.getByRole("textbox", { name: "搜索词或引号短语" }).fill('/memory \\d+/i tag:精读 -tag:翻译 format:md');
+  await dialog.getByRole("combobox", { name: "搜索范围" }).selectOption("body");
+  await expect(dialog.locator(".global-search-hit")).toHaveCount(1);
+  await expect(dialog.locator("mark")).toHaveText("memory 42");
+  await dialog.locator(".global-search-hit").click();
+  await expect(dialog).not.toBeVisible();
+  await expect.poll(() => page.evaluate(() => [...(CSS.highlights.get("liteasy-search-match") ?? [])].map((range) => range.toString()))).toEqual(["memory 42"]);
+  const reader = page.getByLabel("文件阅读器");
+  await reader.getByRole("button", { name: "搜索正文", exact: true }).click();
+  await reader.getByRole("textbox", { name: "搜索书内文字" }).fill('/memory \\d+/i -tag:精读');
+  await expect(reader.getByText("没有找到匹配的文字")).toBeVisible();
+  await reader.getByRole("textbox", { name: "搜索书内文字" }).fill('/memory \\d+/i tag:精读');
+  await expect(reader.getByText("1 处匹配")).toBeVisible();
+});

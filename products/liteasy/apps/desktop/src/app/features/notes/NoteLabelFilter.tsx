@@ -1,3 +1,4 @@
+import { SearchOptions } from "../search/SearchOptions";
 import { Button, Checkbox, Input, Popover, PopoverSurface, PopoverTrigger, Select } from "@fluentui/react-components";
 import { FilterRegular } from "@fluentui/react-icons";
 import { isAiOnlyNote, noteLabelEntries, type NoteLabel } from "./noteLabels";
@@ -20,6 +21,7 @@ export function NoteLabelFilter({ value, onChange, query, onQueryChange }: {
       </Button></PopoverTrigger>
       <PopoverSurface aria-label="笔记标签筛选" className="notes-filter-popover">
         {onQueryChange && <Input aria-label="搜索批注内容" placeholder="搜索原文或批注" value={query ?? ""} onChange={(_, data) => onQueryChange(data.value)} />}
+        {onQueryChange && <SearchOptions query={query ?? ""} onChange={onQueryChange} tags={noteLabelEntries.map(([, label]) => label)} />}
         <label>包含标签<Select aria-label="包含笔记标签" value={value.label} onChange={(_, data) => onChange({ ...value, label: data.value as NoteLabel | "" })}>
           <option value="">全部笔记</option>
           {noteLabelEntries.map(([id, title]) => <option key={id} value={id}>{title}</option>)}

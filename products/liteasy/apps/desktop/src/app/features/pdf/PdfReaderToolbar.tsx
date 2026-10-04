@@ -1,3 +1,4 @@
+import { SearchOptions } from "../search/SearchOptions";
 import {
   Button,
   Checkbox,
@@ -59,6 +60,7 @@ type PdfReaderToolbarProps = {
   onZoomOut: () => void;
   pageCount: number;
   parserStatus?: ReactNode;
+  searchTags?: readonly string[];
   searchOpen: boolean;
   searchQuery: string;
   searchResultCount: number;
@@ -97,6 +99,7 @@ export function PdfReaderToolbar({
   onZoomOut,
   pageCount,
   parserStatus,
+  searchTags,
   searchOpen,
   searchQuery,
   searchResultCount,
@@ -323,6 +326,7 @@ export function PdfReaderToolbar({
             size="small"
             value={searchQuery}
           />
+          <SearchOptions query={searchQuery} onChange={onChangeSearchQuery} tags={searchTags} />
           <span aria-live="polite" className="pdf-find-result-count">
             {searchQuery.trim()
               ? searchResultCount > 0

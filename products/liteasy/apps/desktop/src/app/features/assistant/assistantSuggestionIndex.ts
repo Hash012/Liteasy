@@ -1,3 +1,4 @@
+import { compileSearchQuery, formatFromName } from "../search/searchQuery";
 import type { AssistantComposerSuggestion } from "./assistant.types";
 
 type SuggestionTrigger = AssistantComposerSuggestion["trigger"];
@@ -5,6 +6,7 @@ type SuggestionTrigger = AssistantComposerSuggestion["trigger"];
 type IndexedSuggestion = {
   suggestion: AssistantComposerSuggestion;
   searchable: string;
+  original: string;
   page: boolean;
 };
 
@@ -57,10 +59,11 @@ export function createAssistantSuggestionIndex(
     if (seen.has(suggestion.id)) continue;
     seen.add(suggestion.id);
     const label = suggestion.label;
+    const original = [label, suggestion.detail, suggestion.category, suggestion.projectTitle, suggestion.description, ...(suggestion.keywords ?? []), getAssistantReadOnlyLabel(suggestion)].filter(Boolean).join(" ");
     buckets[suggestion.trigger].push({
       suggestion,
-      searchable: normalize([label, suggestion.detail, suggestion.category, suggestion.projectTitle,
-        suggestion.description, ...(suggestion.keywords ?? []), getAssistantReadOnlyLabel(suggestion)].filter(Boolean).join(" ")),
+      original,
+      searchable: normalize(original),
       page: suggestion.token?.kind === "page"
     });
     if (suggestion.trigger === "/") commands.push(suggestion.insertText ?? `/${label}`);
@@ -71,7 +74,9 @@ export function createAssistantSuggestionIndex(
   const index: AssistantSuggestionIndex = {
     commands,
     search(trigger, query, limit = 100, options = {}) {
-      const normalizedQuery = normalize(query).trim().replace(/\s+/g, " ");
+      const compiled = compileSearchQuery(query);
+      const advanced = compiled.advanced || Boolean(compiled.error) || /["“”]/.test(query);
+      const normalizedQuery = advanced ? query : normalize(query).trim().replace(/\s+/g, " ");
       const resultLimit = Number.isNaN(limit) ? 0 : Math.max(0, Math.floor(limit));
       const key = JSON.stringify([trigger, normalizedQuery, resultLimit, Boolean(options.includePages)]);
       const cached = cache.get(key);
@@ -87,7 +92,7 @@ export function createAssistantSuggestionIndex(
       for (const previous of cache.values()) {
         // A truncated menu is not the full candidate pool. Also, a new page
         // query can reveal candidates that were hidden in its earlier prefix.
-        if (previous.trigger === trigger && previous.complete &&
+        if (!advanced && !compileSearchQuery(previous.query).advanced && !compileSearchQuery(previous.query).error && !/["“”]/.test(previous.query) && previous.trigger === trigger && previous.complete &&
           previous.query.length > longestPrefix && normalizedQuery.startsWith(previous.query) &&
           (!allowPages || previous.allowPages)) {
           candidates = previous.matches;
@@ -100,7 +105,11 @@ export function createAssistantSuggestionIndex(
       if (resultLimit > 0) {
         for (const candidate of candidates) {
           if (candidate.page && !allowPages) continue;
-          if (!parts.every((part) => candidate.searchable.includes(part))) continue;
+          if (advanced) {
+            const suggestion = candidate.suggestion;
+            const fallbackFormat = suggestion.category === "论文" ? "pdf" : suggestion.category === "白板" ? "canvas" : suggestion.category === "笔记" ? "markdown" : formatFromName(suggestion.label);
+            if (!compiled.matches(candidate.original, suggestion.searchMetadata ?? { format: fallbackFormat, assetType: suggestion.category === "笔记" ? "note" : suggestion.category === "白板" ? "board" : undefined, tags: suggestion.keywords })) continue;
+          } else if (!parts.every((part) => candidate.searchable.includes(part))) continue;
           matches.push(candidate);
           if (matches.length >= resultLimit) break;
         }

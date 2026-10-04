@@ -6,12 +6,16 @@ import { ChevronRightRegular, DismissRegular, DocumentBulletListRegular, Documen
 import type { ArtifactType } from "../artifacts/artifact.types";
 import type { LocalLibrarySnapshot } from "../library/localLibrary.types";
 import type { Paper } from "../workspace/workspace.types";
+import type { ReadingCatalogEntry } from "../library/readingCatalog.types";
+import { catalogSearchMetadata } from "../search/searchMetadata";
+import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
 import { aiPaperMatches, buildAiPaperFolders, type AiPaperFolder } from "./aiPaperSelection";
 import "./aiWorkbench.css";
 
 // Keep the feature independent of controllers; the shell supplies these callbacks.
 export type AiWorkbenchDialogProps = {
   open: boolean; papers: Paper[]; openedPapers: Paper[]; activePaperId?: string;
+  searchEntries?: ReadingCatalogEntry[];
   snapshot: LocalLibrarySnapshot | null; selectedIds: string[]; confirmed: Paper[] | null;
   message: string; selectionValid: boolean;
   onClose(): void; onToggle(id: string): void; onIncludeOpened(): void; onClear(): void;
@@ -33,15 +37,16 @@ export function AiWorkbenchDialog(props: AiWorkbenchDialogProps) {
   const [limits, setLimits] = useState<Record<string, number>>({});
   useEffect(() => { if (props.open) { setQuery(""); setView("recent"); setLimits({}); setTask(undefined); setPrompt(undefined); } }, [props.open]);
   const selected = new Set(props.selectedIds);
-  const folders = useMemo(() => buildAiPaperFolders(props.papers, props.snapshot, query), [props.papers, props.snapshot, query]);
+  const metadata = useMemo(() => new Map(props.searchEntries?.map((entry) => [entry.id, catalogSearchMetadata(entry)])), [props.searchEntries]);
+  const folders = useMemo(() => buildAiPaperFolders(props.papers, props.snapshot, query, metadata), [props.papers, props.snapshot, query, metadata]);
   const openedIds = new Set(props.openedPapers.map((paper) => paper.id));
-  const recent = props.papers.filter((paper) => openedIds.has(paper.id) && aiPaperMatches(paper, query));
+  const recent = props.papers.filter((paper) => openedIds.has(paper.id) && aiPaperMatches(paper, query, metadata.get(paper.id)));
   function paperRows(papers: Paper[], key: string) {
     const limit = limits[key] ?? 50;
     return <>
       {papers.slice(0, limit).map((paper) => <div className={`ai-paper-row${selected.has(paper.id) ? " selected" : ""}`} key={paper.id}>
         <Checkbox checked={selected.has(paper.id)} disabled={!paper.sourcePath} onChange={() => props.onToggle(paper.id)}
-          label={<span className="ai-paper-label"><strong>{paper.title}</strong><small>{paper.id === props.activePaperId ? "当前阅读" : openedIds.has(paper.id) ? "已打开" : paper.sourcePath?.split(/[\\/]/).at(-1)}{!paper.sourcePath ? "全文不可用" : ""}</small></span>} />
+          label={<span className="ai-paper-label"><strong><SearchHighlight text={paper.title} query={query} /></strong><small>{paper.id === props.activePaperId ? "当前阅读" : openedIds.has(paper.id) ? "已打开" : paper.sourcePath?.split(/[\\/]/).at(-1)}{!paper.sourcePath ? "全文不可用" : ""}</small></span>} />
       </div>)}
       {papers.length > limit ? <Button appearance="subtle" onClick={() => setLimits((previous) => ({ ...previous, [key]: limit + 50 }))}>显示更多论文（{papers.length - limit}）</Button> : null}
     </>;
@@ -62,6 +67,7 @@ export function AiWorkbenchDialog(props: AiWorkbenchDialogProps) {
           <section className="ai-workbench-papers" aria-label="选择任务论文">
             <h3>1. 选择论文</h3>
             <Input aria-label="搜索任务论文" contentBefore={<SearchRegular />} value={query} onChange={(_, data) => setQuery(data.value)} placeholder="搜索标题、作者或文件名" />
+            <SearchOptions query={query} onChange={setQuery} tags={[...metadata.values()].flatMap((item) => item.tags ?? [])} />
             <TabList selectedValue={view} onTabSelect={(_, data) => setView(String(data.value))}>
               <Tab value="recent">近期论文（{props.openedPapers.length}）</Tab><Tab value="library">文献目录</Tab>
             </TabList>

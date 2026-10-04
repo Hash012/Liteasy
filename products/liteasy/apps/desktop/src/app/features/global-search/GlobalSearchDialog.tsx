@@ -1,3 +1,4 @@
+import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
 import { useEffect, useRef } from "react";
 import { Button, Dialog, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Select, Spinner, Tooltip } from "@fluentui/react-components";
 import { ArrowClockwiseRegular, BookmarkAddRegular, DismissRegular, SearchRegular, DeleteRegular } from "@fluentui/react-icons";
@@ -14,6 +15,7 @@ export function GlobalSearchDialog({ model }: { model: GlobalSearchController })
       <DialogContent className="global-search-content">
         <div className="global-search-tools">
           <Input ref={input} aria-label="搜索词或引号短语" placeholder={'搜索文献、笔记、批注… 支持 "完整短语"'} value={model.query} contentBefore={<SearchRegular />} onChange={(_, data) => model.setQuery(data.value)} />
+          <SearchOptions query={model.query} onChange={model.setQuery} tags={model.tags} />
           <Select aria-label="搜索范围" value={model.group ?? "all"} onChange={(_, data) => model.setGroup(data.value === "all" ? undefined : data.value as SearchGroup)}><option value="all">全部内容</option>{Object.entries(searchGroups).map(([key, title]) => <option key={key} value={key}>{title}</option>)}</Select>
           <Tooltip content="刷新来源与索引" relationship="label"><Button icon={<ArrowClockwiseRegular />} aria-label="刷新来源与索引" onClick={model.refresh} disabled={model.busy} /></Tooltip>
           <Tooltip content="保存查询" relationship="label"><Button icon={<BookmarkAddRegular />} aria-label="保存查询" onClick={() => void model.saveQuery()} disabled={!model.query.trim()} /></Tooltip>
@@ -27,7 +29,7 @@ export function GlobalSearchDialog({ model }: { model: GlobalSearchController })
           {Object.entries(searchGroups).map(([group, label]) => {
             const hits = model.hits.filter((hit) => hit.group === group);
             return hits.length ? <section key={group}><h3>{label}</h3>{hits.map((hit) => <button type="button" className="global-search-hit" key={hit.id} onClick={() => void model.open(hit)}>
-              <strong>{hit.title}</strong><small>{hit.page ? `第 ${hit.page} 页` : hit.line ? `第 ${hit.line} 行附近` : label}</small><span>{hit.snippet}</span>
+              <strong><SearchHighlight text={hit.title} query={model.query} /></strong><small>{hit.page ? `第 ${hit.page} 页` : hit.line ? `第 ${hit.line} 行附近` : label}</small><span><SearchHighlight text={hit.snippet} query={model.query} /></span>
             </button>)}</section> : null;
           })}
           {!model.busy && model.query.trim() && !model.error && !model.hits.length ? <p>已索引内容中未找到匹配项。可调整关键词或查看索引覆盖情况。</p> : null}

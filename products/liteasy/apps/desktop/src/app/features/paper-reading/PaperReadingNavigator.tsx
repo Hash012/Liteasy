@@ -1,3 +1,6 @@
+import { SearchOptions } from "../search/SearchOptions";
+import { highlightSearchText } from "../search/searchDomHighlight";
+import type { SearchMetadata } from "../search/searchQuery";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Field, Input, Tab, TabList, Tooltip } from "@fluentui/react-components";
 import { ArrowDownRegular, ArrowUpRegular, DeleteRegular, DismissRegular } from "@fluentui/react-icons";
@@ -5,7 +8,8 @@ import { findReadingBlocks } from "./paperReadingNavigation";
 import type { usePaperReadingNavigation } from "./usePaperReadingNavigation";
 
 export type ReadingPanel = "contents" | "search" | "bookmarks";
-export function PaperReadingNavigator({ panel, onPanelChange, onClose, navigation }: {
+export function PaperReadingNavigator({ panel, onPanelChange, onClose, navigation, metadata }: {
+  metadata?: SearchMetadata;
   panel: ReadingPanel;
   onPanelChange: (panel: ReadingPanel) => void;
   onClose: () => void;
@@ -15,7 +19,7 @@ export function PaperReadingNavigator({ panel, onPanelChange, onClose, navigatio
   const deferredQuery = useDeferredValue(query);
   const [selected, setSelected] = useState(-1);
   const searchRef = useRef<HTMLInputElement>(null);
-  const hits = useMemo(() => findReadingBlocks(navigation.blocks, deferredQuery), [navigation.blocks, deferredQuery]);
+  const hits = useMemo(() => findReadingBlocks(navigation.blocks, deferredQuery, metadata), [navigation.blocks, deferredQuery, metadata]);
   const headings = navigation.blocks.filter((block) => block.level);
   const pages = navigation.blocks.filter((block, i, blocks) => block.page && blocks.findIndex((item) => item.page === block.page) === i);
   useEffect(() => { if (panel === "search") searchRef.current?.focus(); }, [panel]);
@@ -23,7 +27,7 @@ export function PaperReadingNavigator({ panel, onPanelChange, onClose, navigatio
   const selectHit = (index: number) => {
     if (!hits.length) return;
     const next = (index + hits.length) % hits.length;
-    setSelected(next); navigation.goToBlock(hits[next].block);
+    setSelected(next); navigation.goToBlock(hits[next].block); highlightSearchText(hits[next].block.element, deferredQuery);
   };
   return <aside className="paper-reading-navigation" aria-label="阅读导航">
     <div className="paper-reading-navigation-header"><strong>阅读导航</strong>
@@ -45,6 +49,7 @@ export function PaperReadingNavigator({ panel, onPanelChange, onClose, navigatio
         onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) {
           event.preventDefault(); selectHit(selected < 0 ? (event.shiftKey ? hits.length - 1 : 0) : selected + (event.shiftKey ? -1 : 1));
         } }} /></Field>
+      <SearchOptions query={query} onChange={setQuery} tags={metadata?.tags} />
       <div className="paper-reading-search-controls"><span role="status">{deferredQuery.trim() ? `${hits.length === 100 ? "前 " : ""}${hits.length} 个匹配段落${selected >= 0 ? ` · ${selected + 1}/${hits.length}` : ""}` : "输入内容开始查找"}</span>
         <Tooltip content="上一个匹配段落（Shift + Enter）" relationship="description"><Button size="small" aria-label="上一个匹配段落" icon={<ArrowUpRegular />} disabled={!hits.length} onClick={() => selectHit(selected < 0 ? hits.length - 1 : selected - 1)} /></Tooltip>
         <Tooltip content="下一个匹配段落（Enter）" relationship="description"><Button size="small" aria-label="下一个匹配段落" icon={<ArrowDownRegular />} disabled={!hits.length} onClick={() => selectHit(selected + 1)} /></Tooltip>

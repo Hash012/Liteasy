@@ -1273,15 +1273,6 @@ export function AppShell({
   const extensionWorkflows = useExtensionWorkflowController({ scope: objectWorkbench.repository.scopeId, assets: objectWorkbench.agentAssets, packages: objectWorkbench.extensions, settings: settingsState, modelTransport: effectiveModelTransport, open: async (path) => { await openAgentAsset(path); }, showRuns: () => workbenchNavigation.open("workflow-runs") });
   const extensionStudio = useExtensionStudioController({ assets: objectWorkbench.agentAssets, model: objectWorkbench, runner: extensionWorkflows.runner, requestWorkflow: extensionWorkflows.request, settings: settingsState, modelTransport: effectiveModelTransport });
   const extensionWorkbench = useExtensionWorkbenchController({ model: objectWorkbench, openDock: workbenchNavigation.open, openAsset: async (path) => openAgentAsset(path), workflows: extensionWorkflows, studio: extensionStudio, runWorkflow: extensionWorkflows.request });
-  const assistantContextSuggestions = useAssistantContextCatalog({
-    artifacts: artifactCatalog,
-    objects: objectWorkbench.objects,
-    port: objectWorkbench.port,
-    repository: objectWorkbench.repository,
-    projects: paperProjects,
-    papers: workspaceState.papers,
-    settings: settingsState,
-  });
   const readingLibrary = useReadingLibraryController({
     localLibraryRootPath: localLibrarySnapshot?.rootPath,
     scopeId: objectWorkbench.repository.scopeId,
@@ -1290,6 +1281,16 @@ export function AppShell({
     importPdfs: (files, targetFolderPath) => workspaceActions.addDroppedPdfFiles(files, targetFolderPath),
     onOpenReader: () => { workbenchNavigation.open("document-reader"); workspaceShell.focusRegion(dock.findItemRegion("document-reader") ?? "main"); },
     openPaper: openPaperInReader
+  });
+  const assistantContextSuggestions = useAssistantContextCatalog({
+    entries: readingLibrary.entries,
+    artifacts: artifactCatalog,
+    objects: objectWorkbench.objects,
+    port: objectWorkbench.port,
+    repository: objectWorkbench.repository,
+    projects: paperProjects,
+    papers: workspaceState.papers,
+    settings: settingsState,
   });
   const originalFiles = useOriginalFileOpenController({
     scopeId: objectWorkbench.repository.scopeId,
@@ -1324,7 +1325,7 @@ export function AppShell({
   const searchablePapers = useMemo(() => [...new Map([...workspaceState.papers, ...originalReaderPapers].map((paper) => [paper.id, paper])).values()], [workspaceState.papers, originalReaderPapers]);
   const globalSearch = useGlobalSearchController({ repository: objectWorkbench.repository, papers: searchablePapers,
     open: async (hit) => {
-      if (hit.paperId && hit.page) { openEvidenceInReader({ paperId: hit.paperId, page: hit.page, evidenceId: hit.annotationId || hit.id, quote: hit.quote || hit.text.slice(0, 250) }); return; }
+      if (hit.paperId && hit.page) { openEvidenceInReader({ paperId: hit.paperId, page: hit.page, evidenceId: hit.annotationId || hit.id, searchAnnotation: hit.annotationId && hit.matchedText ? { id: hit.annotationId, quote: hit.matchedText } : undefined, quote: hit.quote || hit.text.slice(0, 250) }); return; }
       if (hit.paperId) { openPaperInReader(hit.paperId); return; }
       if (hit.readingId) {
         const entry = readingLibrary.entries.find((entry) => entry.id === hit.readingId);
@@ -1351,7 +1352,7 @@ export function AppShell({
     "active-pages": () => workspaceShell.pageSwitcher.show("active")
   }, commandAvailability);
   const resourceLinks = useResourceLinksController({ repository: objectWorkbench.repository, assets: objectWorkbench.agentAssets,
-    suggestions: assistantContextSuggestions, papers: workspaceState.papers, open: openAgentAsset });
+    entries: readingLibrary.entries, suggestions: assistantContextSuggestions, papers: workspaceState.papers, open: openAgentAsset });
   const artifactSessionNavigation = useArtifactSessionNavigationController({
     tasks: artifactTasks, scopeId: assistantScopeId,
     openAssistant: () => workbenchNavigation.open("assistant")
@@ -2370,6 +2371,7 @@ export function AppShell({
           runtimeWorkspace={workspaceState.workspaceSource}
           availablePapers={workspaceState.papers}
           onOpenAsset={openAgentAsset}
+          searchEntries={readingLibrary.entries}
           contextSuggestions={assistantContextSuggestions}
           contextCatalogStatus={paperProjects.error || undefined}
           onRefreshContextCatalog={paperProjects.error ? paperProjects.refresh : undefined}
@@ -2774,6 +2776,7 @@ export function AppShell({
       <GlobalSearchDialog model={globalSearch} />
       {workbenchCommands.open ? <WorkbenchCommandsDialog onClose={workbenchCommands.close} onExecute={workbenchCommands.execute} /> : null}
       <AiWorkbenchDialog open={aiWorkbench.open} papers={aiWorkbench.papers} openedPapers={openReaderPapers}
+        searchEntries={readingLibrary.entries}
         activePaperId={openReaderPapers.find((paper) => `pdf-${paper.id}` === workspaceShell.activeSurfaceId)?.id ?? activeReaderPaper?.id}
         snapshot={localLibrarySnapshot} selectedIds={aiWorkbench.selectedIds} confirmed={aiWorkbench.confirmed}
         message={aiWorkbench.message} selectionValid={aiWorkbench.selectionValid}

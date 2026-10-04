@@ -13,6 +13,7 @@ import type { ReaderConversationContext } from "../features/assistant/assistantC
 import type { FrontendAgentClient } from "../features/agent-api/frontendAgentClient";
 import type { ExecutionJournal } from "../features/generative-ui/executionJournal";
 import type { AcademicProfile } from "../features/profile/profile.types";
+import type { ReadingCatalogEntry } from "../features/library/readingCatalog.types";
 
 import type { AssistantHistoryPersistence } from "../features/assistant/assistantHistoryPersistence";
 
@@ -60,6 +61,7 @@ type AssistantSidebarProps = {
   runtimeWorkspace?: Partial<WorkspaceSource>;
   selectedPaperCount: number;
   availablePapers?: Paper[];
+  searchEntries?: ReadingCatalogEntry[];
   contextSuggestions?: AssistantComposerSuggestion[];
   contextCatalogStatus?: string;
   onRefreshContextCatalog?: () => void;
@@ -109,6 +111,7 @@ export function AssistantSidebar({
   runtimeWorkspace,
   selectedPaperCount,
   availablePapers,
+  searchEntries,
   contextSuggestions,
   contextCatalogStatus,
   onRefreshContextCatalog,
@@ -160,6 +163,7 @@ export function AssistantSidebar({
           runtimeOrganizationName={runtimeOrganizationName}
           runtimeWorkspace={runtimeWorkspace}
           availablePapers={availablePapers}
+          searchEntries={searchEntries}
           contextSuggestions={contextSuggestions}
           contextCatalogStatus={contextCatalogStatus}
           onRefreshContextCatalog={onRefreshContextCatalog}

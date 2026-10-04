@@ -1,3 +1,5 @@
+import { SearchOptions } from "../search/SearchOptions";
+import { compileSearchQuery } from "../search/searchQuery";
 import { ARTIFACT_CONTEXT_MIME } from "../object-transfer/contextTransfer";
 import { ResourceLocationButton } from "../resource-filesystem/ResourceLocationButton";
 import {
@@ -43,7 +45,7 @@ import type {
   ArtifactTab,
   ArtifactType
 } from "./artifact.types";
-import { artifactDateValue, artifactSearchText, artifactTypeLabels, groupArtifactsByPaper, indexArtifactPapers, matchesArtifactPaper, normalizeArtifactSearch, unlinkedPaperFilter } from "./artifactLibraryIndex";
+import { artifactDateValue, artifactSearchText, artifactTypeLabels, groupArtifactsByPaper, indexArtifactPapers, matchesArtifactPaper, unlinkedPaperFilter } from "./artifactLibraryIndex";
 import "./artifactLibrary.css";
 
 type ArtifactLibraryPaneProps = {
@@ -116,23 +118,24 @@ export function ArtifactLibraryPane({
   const [paperFilter, setPaperFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [sort, setSort] = useState("recent");
-  const searchQuery = normalizeArtifactSearch(query);
+  const searchQuery = query;
+  const compiled = useMemo(() => compileSearchQuery(query), [query]);
   const visibleCatalog = useMemo(() => accountAvailable ? artifactCatalog : [], [accountAvailable, artifactCatalog]);
   const catalogById = useMemo(() => new Map(visibleCatalog.map((artifact) => [artifact.artifactId, artifact])), [visibleCatalog]);
   const papers = useMemo(() => indexArtifactPapers(visibleCatalog), [visibleCatalog]);
   const filterActive = Boolean(searchQuery || paperFilter || typeFilter);
   const filteredArtifacts = useMemo(() => visibleCatalog.filter((artifact) =>
     matchesArtifactPaper(artifact, paperFilter) && (!typeFilter || artifact.type === typeFilter) &&
-    normalizeArtifactSearch(artifactSearchText(artifact)).includes(searchQuery)
+    compiled.matches(artifactSearchText(artifact), { assetType: "artifact", format: "json", tags: [artifact.type, artifactTypeLabels[artifact.type]] })
   ).sort((a, b) => sort === "title" ? a.title.localeCompare(b.title) : artifactDateValue(b.createdAt) - artifactDateValue(a.createdAt)),
-  [visibleCatalog, paperFilter, typeFilter, searchQuery, sort]);
+  [visibleCatalog, paperFilter, typeFilter, compiled, sort]);
   const filteredExports = useMemo(() => exportRecords.filter((record) => {
     const artifact = catalogById.get(record.artifactId);
     return matchesArtifactPaper(artifact, paperFilter) && (!typeFilter || artifact?.type === typeFilter) &&
-      normalizeArtifactSearch([record.title, record.fileName, formatLabels[record.format],
-        record.location === "desktop" ? record.path : "", artifact ? artifactSearchText(artifact) : ""].join(" ")).includes(searchQuery);
+      compiled.matches([record.title, record.fileName, formatLabels[record.format],
+        record.location === "desktop" ? record.path : "", artifact ? artifactSearchText(artifact) : ""].join(" "), { format: record.format, assetType: "artifact", tags: artifact ? [artifact.type, artifactTypeLabels[artifact.type]] : [] });
   }).sort((a, b) => sort === "title" ? a.fileName.localeCompare(b.fileName) : artifactDateValue(b.exportedAt) - artifactDateValue(a.exportedAt)),
-  [exportRecords, catalogById, paperFilter, typeFilter, searchQuery, sort]);
+  [exportRecords, catalogById, paperFilter, typeFilter, compiled, sort]);
 
   function beginRename(artifact: ArtifactTab) {
     setDialogError(undefined);
@@ -211,6 +214,7 @@ export function ArtifactLibraryPane({
         value={query}
       />
 
+      <SearchOptions query={query} onChange={setQuery} tags={Object.values(artifactTypeLabels)} />
       <Select aria-label="按来源论文筛选" value={paperFilter} onChange={(_, data) => setPaperFilter(data.value)} size="small">
         <option value="">全部来源论文</option>
         {papers.map(({ paper, count }) => <option key={paper.id} value={paper.id}>{paper.title}（{count}）</option>)}

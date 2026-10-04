@@ -1,3 +1,4 @@
+import { DocumentFindBar } from "../search/DocumentFindBar";
 import { useResourceReveal, revealOffset } from "../resource-links/resourceReveal";
 import { useContext, useLayoutEffect, useRef, useState } from "react";
 import { Textarea } from "@fluentui/react-components";
@@ -13,6 +14,7 @@ import "./markdownSourceEditor.css";
 export function MarkdownSourceEditor({ value, onChange, documentKey, className = "", label = "Markdown 源码", readOnly = false, autoFocus = false }: {
   value: string; onChange(value: string): void; documentKey: string; className?: string; label?: string; readOnly?: boolean; autoFocus?: boolean;
 }) {
+  const [findOpen, setFindOpen] = useState(false);
   const references = useContext(ResourceReferencesContext);
   const [editingLink, setEditingLink] = useState(false);
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -91,7 +93,8 @@ export function MarkdownSourceEditor({ value, onChange, documentKey, className =
     history.current.record(value, next, selection.current, after);
     selection.current = after; setEditingLink(true); apply({ value: next, selection: after });
   };
-  return <div className={`markdown-source-editor ${className}`}>
+  return <div className={`markdown-source-editor ${className}`} onKeyDownCapture={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") { event.preventDefault(); event.stopPropagation(); setFindOpen(true); } }}>
+    {findOpen ? <DocumentFindBar text={value} onClose={() => setFindOpen(false)} onNavigate={(range) => { const element = textarea.current; if (!element) return; element.focus({ preventScroll: true }); element.setSelectionRange(range.start, range.end); element.scrollTop = Math.max(0, (value.slice(0, range.start).split("\n").length - 1) * (parseFloat(getComputedStyle(element).lineHeight) || 24) - element.clientHeight / 2); }} /> : null}
     <MarkdownEditingToolbar execute={execute} undo={() => travel(true)} redo={() => travel(false)} canUndo={history.current.canUndo} canRedo={history.current.canRedo} insertReference={references ? insertReference : undefined} />
     {wiki && references ? <WikiLinkEditor key={`${documentKey}:${wiki.start}`} raw={value.slice(wiki.start + 2, wiki.end - 2)} target={{ getBoundingClientRect: () => textarea.current ? textareaCaret(textarea.current, wiki.start) : new DOMRect() }}
       onChange={(raw) => editWiki(raw)} onFinish={(raw, beforeLast) => editWiki(raw, true, beforeLast)} onHistory={(undo) => { setEditingLink(false); travel(undo); }} /> : null}

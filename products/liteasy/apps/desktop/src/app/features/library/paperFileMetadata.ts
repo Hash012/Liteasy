@@ -1,3 +1,4 @@
+export const PAPER_FILE_METADATA_SAVED_EVENT = "liteasy:paper-file-metadata-saved";
 import { resolveLocalAccountKey } from "./localAccountKey";
 import {
   isUserPaperArtifactStoreAvailable,
@@ -96,5 +97,6 @@ export async function savePaperFileMetadata(paperId: string, value: unknown): Pr
   } else if (browserStorageError) {
     throw browserStorageError;
   }
+  window.dispatchEvent(new CustomEvent(PAPER_FILE_METADATA_SAVED_EVENT, { detail: paperId }));
   return normalized;
 }

@@ -1,3 +1,4 @@
+import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
 import { writeAssetContextTransfer } from "../object-transfer/assetContextTransfer";
 import { ResourceTagChips } from "../resource-tags/ResourceTagChips";
 import { recommendationKeywords } from "./recommendationKeywords";
@@ -35,6 +36,7 @@ export function RecommendationList({ items, service, selectedId, pendingIds, can
   return <div className="recommendation-browser">
     <div className="recommendation-filters">
       <Input aria-label="搜索推荐论文" placeholder="搜索标题、作者、主题" contentBefore={<SearchRegular />} value={query} onChange={(_, data) => setQuery(data.value)} />
+      <SearchOptions query={query} onChange={setQuery} tags={[...tags.values()].flatMap((items) => items.map((tag) => tag.label))} />
       <div className="recommendation-filter-row">
         <Select aria-label="推荐排序" value={sort} onChange={(event) => setSort(event.target.value as RecommendationSort)}>
           <option value="recommended">推荐顺序</option><option value="newest">最新发表</option><option value="citations">引用最多</option>
@@ -75,7 +77,7 @@ export function RecommendationList({ items, service, selectedId, pendingIds, can
           onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); onOpen?.(item); } }}>
           <DocumentRegular aria-hidden="true" />
           <span className="recommendation-row-content">
-            <span className="recommendation-title-line"><span className="recommendation-compact-title">{item.title}</span><time>{recommendationDateLabel(item)}</time></span>
+            <span className="recommendation-title-line"><span className="recommendation-compact-title"><SearchHighlight text={item.title} query={query} /></span><time>{recommendationDateLabel(item)}</time></span>
             <span className="recommendation-row-meta">
               {item.venue ? <span className="recommendation-venue">{item.venue}</span> : null}
               {item.fullText?.status === "available" ? <span className="recommendation-access-label">PDF 已验证</span> : null}

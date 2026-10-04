@@ -1,3 +1,4 @@
+import { catalogSearchMetadata } from "../search/searchMetadata";
 import { lazy, Suspense, useRef, useState, type ReactNode } from "react";
 import { Button, Spinner } from "@fluentui/react-components";
 import { ArrowLeftRegular } from "@fluentui/react-icons";
@@ -24,7 +25,7 @@ export function ReadingLibrarySurface(props: {
       </div>
       {props.message || saveError ? <p role="status">{saveError || props.message}</p> : null}
       <Suspense fallback={<Spinner label="正在准备阅读器…" />}>
-        <ReadingDocumentReader key={`${props.scopeId}:${props.active.id}`} document={props.active.document} documentId={props.active.id} storageScope={props.scopeId} resourcePath={activeEntry?.liteasyPath}
+        <ReadingDocumentReader searchMetadata={activeEntry ? catalogSearchMetadata(activeEntry) : undefined} key={`${props.scopeId}:${props.active.id}`} document={props.active.document} documentId={props.active.id} storageScope={props.scopeId} resourcePath={activeEntry?.liteasyPath}
           onProgressChange={(progress) => {
             const id = props.active!.id, key = `${props.scopeId}:${id}`;
             if (!activeEntry || progress < 1 || activeEntry.readingStatus === "finished" || finished.current.has(key)) return;

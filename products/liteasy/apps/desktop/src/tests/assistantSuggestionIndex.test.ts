@@ -140,3 +140,14 @@ describe("assistant suggestion index", () => {
     console.info(`Assistant catalog ${size}: build ${buildMs.toFixed(1)} ms; nine searches ${searchMs.toFixed(1)} ms`);
   });
 });
+
+it("supports regex and metadata conditions without poisoning later incremental queries", () => {
+  const first = { ...suggestion("1", "Memory 42"), searchMetadata: { format: "markdown", tags: ["精读"], assetType: "note" } };
+  const second = { ...suggestion("2", "Memory 7"), searchMetadata: { format: "pdf", tags: ["精读", "翻译"] } };
+  const index = createAssistantSuggestionIndex([first, second]);
+  expect(index.search("@", '/Memory \\d+/ tag:精读 -tag:翻译 -format:pdf')).toEqual([first]);
+  expect(index.search("@", '"Memory')).toEqual([]);
+  expect(index.search("@", '"Memory 42"')).toEqual([first]);
+  expect(index.search("@", '/Memory|')).toEqual([]);
+  expect(index.search("@", '/Memory|unknown/')).toEqual([first, second]);
+});

@@ -261,3 +261,54 @@ test("notes and connected filenames remain searchable independently of their bod
   expect(hits.every((hit) => hit.group === "metadata" && hit.snippet.includes("巴赫"))).toBe(true);
   expect((await service.search("巴赫", "note", 0, signal())).hits).toEqual([]);
 });
+
+test("advanced search applies tags and formats before pagination and keeps filter-only files unique", async () => {
+  const f = fixture();
+  f.setDocuments(Array.from({ length: 50 }, (_, i) => {
+    const value = document(String(i).padStart(2, "0"), `Memory number ${i}`);
+    return { ...value, metadata: { tags: i < 5 ? ["翻译"] : ["精读"], format: "markdown", assetType: "note" },
+      sections: [{ key: "meta", group: "metadata" as const, text: value.title, locator: { path: value.sections[0].locator.path } }, ...value.sections] };
+  }));
+  await f.service.refresh(signal(), () => {});
+  const query = '/memory number \\d+/i tag:精读 -tag:翻译 format:md -type:book';
+  const first = await f.service.search(query, "note", 0, signal());
+  const second = await f.service.search(query, "note", first.nextOffset!, signal());
+  expect(first.hits).toHaveLength(20); expect(second.hits).toHaveLength(20);
+  expect(first.hits[0]).toMatchObject({ documentId: "05", quote: "Memory number 5", matchedText: "Memory number 5" });
+  expect(new Set([...first.hits, ...second.hits].map((hit) => hit.documentId)).size).toBe(40);
+  const onlyTags = await f.service.search('tag:精读 -format:pdf', undefined, 0, signal());
+  expect(onlyTags.hits).toHaveLength(20); expect(onlyTags.hits.every((hit) => hit.group === "metadata")).toBe(true);
+  await expect(f.service.search('/[/', undefined, 0, signal())).rejects.toThrow("正则表达式");
+});
+
+test("regex scanning cannot read beyond the admitted corpus and can be canceled", async () => {
+  const f = fixture(3); f.setDocuments([document("bounded", "x".repeat(10000) + " unadmitted needle")]);
+  await f.service.refresh(signal(), () => {});
+  expect((await f.service.search('/unadmitted/', undefined, 0, signal())).hits).toEqual([]);
+  const request = new AbortController(); request.abort();
+  await expect(f.service.search('/x+/', undefined, 0, request.signal)).rejects.toThrow();
+});
+
+test("library tags and note labels are indexed and verified independently of body revisions", async () => {
+  const { createReadingLibraryRepository } = await import("../app/features/reading-library/readingLibraryRepository");
+  const { createNotesRepository } = await import("../app/features/notes/notesRepository");
+  const scope = crypto.randomUUID(), storage = createObjectStorage(scope, () => scope), repository = createObjectRepository(storage, scope);
+  const library = createReadingLibraryRepository(storage, scope);
+  const { entry: file } = await library.importFile("记忆.md", new TextEncoder().encode("# memory"), {
+    title: "Memory note", format: "markdown", authors: [], chapters: [{ id: "1", title: "memory", format: "markdown", content: "memory body", plainText: "memory body" }], toc: [], resources: [], warnings: [],
+  });
+  await library.updateMetadata(file.id, { tags: ["精读"], assetType: "note" });
+  const note = await repository.create({ kind: "content.note", title: "Translated", content: { schema: "liteasy.note/v1", payload: { origin: "user", text: "memory translated" } } });
+  const notes = createNotesRepository(storage); await notes.setLabel({ kind: "object", ref: refOf(note) }, "translation", true);
+  const source = createWorkspaceSearchSource({ repository, files: createNoteFileService(scope, () => scope), getPapers: () => [], active: () => true });
+  const service = createGlobalSearchService({ source, active: () => true, index: createSemanticIndex({ scope, workspace: "advanced", model: "literal", active: () => true }) });
+  await service.refresh(signal(), () => {});
+  const tagged = await service.search('memory tag:精读 format:md', "body", 0, signal());
+  expect(tagged.hits).toHaveLength(1);
+  expect((await service.search('tag:翻译结果', "note", 0, signal())).hits).toHaveLength(1);
+  await library.updateMetadata(file.id, { tags: ["忽略"] });
+  await expect(service.verify(tagged.hits[0], signal())).rejects.toThrow("来源已修改");
+  expect((await service.search('memory tag:精读', "body", 0, signal())).hits).toEqual([]);
+  await service.refresh(signal(), () => {});
+  expect((await service.search('tag:忽略', undefined, 0, signal())).hits).toHaveLength(1);
+});

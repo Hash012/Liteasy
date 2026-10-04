@@ -1,3 +1,5 @@
+import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
+import { compileSearchQuery } from "../search/searchQuery";
 import type { PaperServiceConfig } from "../paper-services/paperServiceTransport";
 import { ExtensionActions } from "../extensions/ExtensionActions";
 import { RecommendationList } from "../recommendations/RecommendationList";
@@ -368,19 +370,19 @@ function sortTree(tree: ExplorerTree): ExplorerTree {
 }
 
 function filterTree(tree: ExplorerTree, query: string, category = "", matches?: Set<string>, fileFolders?: Set<string>): ExplorerTree {
+  const compiled = compileSearchQuery(query);
   const entryMatches = (entry: ExplorerEntry) => {
     if (matches) return matches.has(entry.id);
     const categoryMatches = !category || entry.metadata?.category === category;
     if (!categoryMatches) return false;
     if (!query) return true;
-    return [entry.label, entry.metadata?.category, ...(entry.metadata?.tags ?? [])]
-      .some((value) => value?.toLocaleLowerCase().includes(query));
+    return compiled.matches([entry.label, entry.metadata?.category, ...(entry.metadata?.tags ?? [])].join(" "), { tags: entry.metadata?.tags, format: "pdf", assetType: entry.metadata?.assetType });
   };
   if (!query && !category && !matches) return tree;
   const filterFolders = (folders: ExplorerFolder[]): ExplorerFolder[] => folders.flatMap((folder) => {
     const children = filterFolders(folder.children);
     const entries = folder.entries.filter(entryMatches);
-    return (!matches && !category && folder.label.toLocaleLowerCase().includes(query)) || children.length > 0 || entries.length > 0 || fileFolders?.has(libraryFolderKey(folder.id))
+    return (!matches && !category && !compiled.advanced && compiled.textMatches(folder.label)) || children.length > 0 || entries.length > 0 || fileFolders?.has(libraryFolderKey(folder.id))
       ? [{ ...folder, children, entries, unfilteredFolder: folder }]
       : [];
   });
@@ -611,7 +613,7 @@ function LibraryPaneContent({
     "local" | "collection" | "organization",
     string | null
   >>({ collection: null, local: null, organization: null });
-  const query = search.trim().toLocaleLowerCase();
+  const query = search.trim();
   const visiblePaperMetadata = useMemo(() => {
     const result = { ...paperMetadataById };
     for (const entry of fileLibrary?.entries ?? []) {
@@ -649,7 +651,7 @@ function LibraryPaneContent({
   }, [fileLibrary?.entries, localLibrarySnapshot, papers, visiblePaperMetadata]);
   const catalogById = useMemo(() => new Map(catalogEntries.map((entry) => [entry.id, entry])), [catalogEntries]);
   const fileIndex = useMemo(() => indexReadingCatalog(catalogEntries), [catalogEntries]);
-  const hasFilters = Boolean(query || selectedCategory || fileFilters.format !== "all" || fileFilters.status !== "all" || fileFilters.year || fileFilters.assetType || fileFilters.author || fileFilters.subject || fileFilters.tags?.length);
+  const hasFilters = Boolean(query || selectedCategory || fileFilters.format !== "all" || fileFilters.status !== "all" || fileFilters.year || fileFilters.assetType || fileFilters.author || fileFilters.subject || fileFilters.tags?.length || fileFilters.excludeTags?.length);
   const filteredIds = useMemo(() => hasFilters
     ? new Set(queryReadingCatalog(fileIndex, { ...fileFilters, query: search, collection: selectedCategory }).map((entry) => entry.id)) : undefined,
     [fileIndex, hasFilters, search, selectedCategory, fileFilters]);
@@ -1166,7 +1168,7 @@ function LibraryPaneContent({
                 title={entry.bodyAvailable ? entry.label : `${entry.label}（仅元数据）`}
                 type="button"
               >
-                {entry.label}
+                <SearchHighlight text={entry.label} query={search} />
               </button>
             </MenuTrigger>
             <MenuPopover>
@@ -1535,9 +1537,11 @@ function LibraryPaneContent({
           size="small"
           value={search}
         />
+        <SearchOptions query={search} onChange={setSearch} tags={catalogEntries.flatMap((entry) => entry.tags ?? [])} />
         <Popover positioning="below-start">
           <PopoverTrigger disableButtonEnhancement><Tooltip content="筛选本地文件" relationship="description"><Button appearance="subtle" size="small" aria-label="筛选本地文件" icon={<FilterRegular />} /></Tooltip></PopoverTrigger>
           <PopoverSurface className="library-file-filters">
+            <Field label="检索字段"><Select aria-label="文件检索字段" value={fileFilters.scope ?? "metadata"} onChange={(_, data) => setFileFilters((value) => ({ ...value, scope: data.value as "metadata" | "name" }))}><option value="metadata">标题与元信息</option><option value="name">仅名称</option></Select></Field>
             <Field label="格式"><Select aria-label="筛选文件格式" value={fileFilters.format} onChange={(_, data) => setFileFilters((value) => ({ ...value, format: data.value as ReadingCatalogFilters["format"] }))}>
               <option value="all">全部格式</option>{Object.entries(readingCatalogFormatLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </Select></Field>

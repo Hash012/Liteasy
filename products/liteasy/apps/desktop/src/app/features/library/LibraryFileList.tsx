@@ -1,3 +1,4 @@
+import { SearchHighlight } from "../search/SearchOptions";
 import { libraryFileDragType, libraryFolderKey } from "./libraryFolderMembership";
 import { useMemo, useState, useEffect } from "react";
 import { LibraryItemIcon, LibraryIconMenuItem } from "./LibraryItemIcon";
@@ -59,7 +60,7 @@ export function LibraryFileList({ access, query, category, filters, folderPath, 
             }
           }}>
           <LibraryItemIcon itemKey={`file:local:${entry.id}`} kind={entry.format} fileName={entry.fileName} />
-          <span className="library-file-name">{entry.title}<LibraryTagChips entry={entry} /></span>
+          <span className="library-file-name"><SearchHighlight text={entry.title} query={query} /><LibraryTagChips entry={entry} /></span>
           <small>{entry.format === "other" ? entry.fileName?.split(".").pop()?.toUpperCase() : readingCatalogFormatLabels[entry.format]}</small>
         </button></MenuTrigger><MenuPopover><MenuList>
           <LibraryIconMenuItem itemKey={`file:local:${entry.id}`} title={entry.title} />

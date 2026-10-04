@@ -1,3 +1,4 @@
+import { PAPER_FILE_METADATA_SAVED_EVENT } from "../features/library/paperFileMetadata";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { createSemanticIndex } from "../features/semantic-index/semanticIndexClient";
@@ -43,14 +44,14 @@ export function useGlobalSearchController(input: { repository: ObjectRepository;
   }, [storage]);
   useEffect(() => {
     const changed = () => { dirty.current = true; abort.current?.abort(); setHits([]); setNextOffset(null); setRevision((value) => value + 1); };
-    const offObjects = subscribeObjectStorage(scope, (keys) => { if (!keys || keys.some((key) => /^(head\/|reading-library\/(file|metadata)\/)/.test(key))) changed(); });
+    const offObjects = subscribeObjectStorage(scope, (keys) => { if (!keys || keys.some((key) => /^(head\/|reading-library\/(file|metadata)\/|notes\/labels\/)/.test(key))) changed(); });
     const offFiles = subscribeNoteFiles(scope, changed);
     const paperChanged = (event: Event) => {
       const paperId = (event as CustomEvent<unknown>).detail;
       if (typeof paperId === "string" && latest.current.papers.some((paper) => paper.id === paperId)) changed();
     };
-    window.addEventListener(PAPER_FULLTEXT_SAVED_EVENT, paperChanged); window.addEventListener(PAPER_ANNOTATIONS_SAVED_EVENT, paperChanged);
-    return () => { offObjects(); offFiles(); window.removeEventListener(PAPER_FULLTEXT_SAVED_EVENT, paperChanged); window.removeEventListener(PAPER_ANNOTATIONS_SAVED_EVENT, paperChanged); };
+    window.addEventListener(PAPER_FILE_METADATA_SAVED_EVENT, paperChanged); window.addEventListener(PAPER_FULLTEXT_SAVED_EVENT, paperChanged); window.addEventListener(PAPER_ANNOTATIONS_SAVED_EVENT, paperChanged);
+    return () => { offObjects(); offFiles(); window.removeEventListener(PAPER_FILE_METADATA_SAVED_EVENT, paperChanged); window.removeEventListener(PAPER_FULLTEXT_SAVED_EVENT, paperChanged); window.removeEventListener(PAPER_ANNOTATIONS_SAVED_EVENT, paperChanged); };
   }, [scope]);
   useEffect(() => { dirty.current = true; abort.current?.abort(); setRevision((value) => value + 1); setHits([]); setNextOffset(null); }, [papersSignature]);
   const run = (offset = 0) => {
@@ -76,7 +77,7 @@ export function useGlobalSearchController(input: { repository: ObjectRepository;
     const timer = window.setTimeout(() => runRef.current(), 250);
     return () => { window.clearTimeout(timer); abort.current?.abort(); };
   }, [visible, query, group, revision, service]);
-  return { visible: stateScope === scope && visible, query, group, hits: stateScope === scope ? hits : [], coverage: stateScope === scope ? coverage : undefined, nextOffset, busy, progress, error, saved: stateScope === scope ? saved : [],
+  return { tags: stateScope === scope ? service.tags() : [], visible: stateScope === scope && visible, query, group, hits: stateScope === scope ? hits : [], coverage: stateScope === scope ? coverage : undefined, nextOffset, busy, progress, error, saved: stateScope === scope ? saved : [],
     show() { setVisible(true); },
     close() { abort.current?.abort(); setVisible(false); },
     setQuery, setGroup,

@@ -25,6 +25,13 @@ test("live Markdown renders in place, autosaves, preserves concurrent writes and
   await expect(workspace.locator(".katex")).toBeVisible();
   await expect(workspace.getByRole("button", { name: "编辑", exact: true })).toHaveCount(0);
   const editor = workspace.getByRole("textbox", { name: "Markdown 正文", exact: true });
+  await editor.focus(); await editor.press("Control+f");
+  const find = workspace.getByRole("search", { name: "Markdown 正文检索" });
+  await find.getByRole("textbox", { name: "查找 Markdown 正文" }).fill('/Last p[a-z]+/ format:md');
+  await expect(find.getByRole("status")).toHaveText("0 / 1");
+  await find.getByRole("button", { name: "下一个匹配" }).click();
+  await expect(find.getByRole("status")).toHaveText("1 / 1");
+  await find.getByRole("button", { name: "关闭正文检索" }).click();
   await editor.focus(); await editor.press("Control+End"); await page.keyboard.insertText(" Auto saved.");
   const read = () => page.evaluate(async () => {
     const directory = await (await navigator.storage.getDirectory()).getDirectoryHandle("Live Vault");

@@ -1,3 +1,4 @@
+import { compileSearchQuery, type SearchMetadata } from "../search/searchQuery";
 export type ReadingBlock = { key: string; text: string; element: HTMLElement; level: number; page?: string };
 export type ReadingLocation = { key: string; offset: number; ratio: number; view: string };
 export type ReadingBookmark = { id: string; label: string; location: ReadingLocation };
@@ -68,15 +69,15 @@ export function restoreReadingLocation(location: ReadingLocation, blocks: Readin
   } else scroller.scrollTop = location.ratio * Math.max(0, scroller.scrollHeight - scroller.clientHeight);
 }
 
-export function findReadingBlocks(blocks: ReadingBlock[], query: string) {
-  const needle = query.trim().toLocaleLowerCase();
-  if (!needle) return [];
+export function findReadingBlocks(blocks: ReadingBlock[], query: string, metadata?: SearchMetadata) {
+  const compiled = compileSearchQuery(query, { phrase: true });
+  if (!compiled.hasText || !compiled.metadata(metadata)) return [];
   return blocks.flatMap((block) => {
-    const index = block.text.toLocaleLowerCase().indexOf(needle);
-    if (index < 0) return [];
-    const start = Math.max(0, index - 28);
-    return [{ block, before: `${start ? "…" : ""}${block.text.slice(start, index)}`, match: block.text.slice(index, index + needle.length),
-      after: `${block.text.slice(index + needle.length, index + needle.length + 72)}${index + needle.length + 72 < block.text.length ? "…" : ""}` }];
+    if (!compiled.textMatches(block.text)) return [];
+    const match = compiled.ranges(block.text)[0]; if (!match) return [];
+    const start = Math.max(0, match.start - 28);
+    return [{ block, before: `${start ? "…" : ""}${block.text.slice(start, match.start)}`, match: block.text.slice(match.start, match.end),
+      after: `${block.text.slice(match.end, match.end + 72)}${match.end + 72 < block.text.length ? "…" : ""}` }];
   }).slice(0, 100);
 }
 

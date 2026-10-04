@@ -1,3 +1,6 @@
+import { catalogSearchMetadata, noteSearchMetadata } from "../features/search/searchMetadata";
+import type { ReadingCatalogEntry } from "../features/library/readingCatalog.types";
+import { parseLiteasyPath } from "../features/resource-filesystem/liteasyPath";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AssistantComposerSuggestion, AssistantContextToken } from "../features/assistant/assistant.types";
 import type { ArtifactTab } from "../features/artifacts/artifact.types";
@@ -38,6 +41,7 @@ function useStableCatalogItems<T>(items: T[]) {
 }
 
 export function useAssistantContextCatalog(input: {
+  entries?: ReadingCatalogEntry[];
   artifacts: ArtifactTab[];
   objects: ObjectEnvelope[];
   port: ObjectWorkbenchPort;
@@ -303,6 +307,18 @@ export function useAssistantContextCatalog(input: {
         resolveToken: () => resolvePath(liteasyPath(scopeId, { kind: "artifact-annotation", artifactId: artifact.artifactId, annotationId: note.id })),
       }))),
     ];
-    return suggestions;
-  }, [artifacts, objects, titles, helpArticles, annotations, input.repository, input.projects?.catalog, input.settings, catalog, files, scopeId]);
+    const metadataByPath = new Map((input.entries ?? []).filter((entry) => entry.liteasyPath).map((entry) => {
+      try { const target = parseLiteasyPath(entry.liteasyPath!, scopeId); return [target.kind === "paper" ? `paper:${target.paperId}` : target.kind === "object" ? `object:${target.ref.objectId}` : "", catalogSearchMetadata(entry)] as const; }
+      catch { return ["", {}] as const; }
+    }));
+    return suggestions.map((suggestion) => {
+      if (!suggestion.resourcePath) return suggestion;
+      try {
+        const target = parseLiteasyPath(suggestion.resourcePath, scopeId);
+        const metadata = metadataByPath.get(target.kind === "paper" ? `paper:${target.paperId}` : target.kind === "object" ? `object:${target.ref.objectId}` : "");
+        const object = target.kind === "object" ? objects.find((object) => object.objectId === target.ref.objectId) : undefined;
+        return { ...suggestion, searchMetadata: metadata ?? (target.kind === "external-file" || object ? noteSearchMetadata({ target, object } as NotesItem) : undefined) };
+      } catch { return suggestion; }
+    });
+  }, [input.entries, artifacts, objects, titles, helpArticles, annotations, input.repository, input.projects?.catalog, input.settings, catalog, files, scopeId]);
 }

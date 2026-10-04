@@ -86,6 +86,7 @@ export type AssistantContextToken = {
 };
 
 export type AssistantComposerSuggestion = {
+  searchMetadata?: import("../search/searchQuery").SearchMetadata;
   /** Canonical locator for shared references and selecting content fragments. */
   resourcePath?: string;
   /** Resolve a library locator only when the user selects it. */

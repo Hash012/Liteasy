@@ -20,9 +20,9 @@ export function LibraryFacetFilters({ entries, filters, onChange }: { entries: R
     <Field label="学科"><Input aria-label="筛选学科" value={filters.subject ?? ""} onChange={(_, data) => onChange({ ...filters, subject: data.value })} placeholder="按学科筛选" /></Field>
     <Field label="标签"><Input aria-label="查找标签" value={query} onChange={(_, data) => setQuery(data.value)} placeholder="查找库内标签" /></Field>
     <div className="library-tag-selector" aria-label="标签筛选">
-      {visible.slice(0, 60).map(([tag, count]) => <Button key={tag} size="small" appearance="subtle"
+      {visible.slice(0, 60).map(([tag, count]) => <span key={tag}><Button size="small" appearance="subtle"
         className="library-tag-chip library-tag-tag" aria-pressed={filters.tags?.includes(tag) ?? false}
-        onClick={() => onChange({ ...filters, tags: filters.tags?.includes(tag) ? filters.tags.filter((value) => value !== tag) : [...(filters.tags ?? []), tag] })}>{tag}<small>{count}</small></Button>)}
+        onClick={() => onChange({ ...filters, tags: filters.tags?.includes(tag) ? filters.tags.filter((value) => value !== tag) : [...(filters.tags ?? []), tag], excludeTags: filters.excludeTags?.filter((value) => value !== tag) })}>{tag}<small>{count}</small></Button><Button size="small" appearance="subtle" aria-label={`排除标签 ${tag}`} title={`排除标签 ${tag}`} aria-pressed={filters.excludeTags?.includes(tag) ?? false} onClick={() => onChange({ ...filters, tags: filters.tags?.filter((value) => value !== tag), excludeTags: filters.excludeTags?.includes(tag) ? filters.excludeTags.filter((value) => value !== tag) : [...(filters.excludeTags ?? []), tag] })}>{filters.excludeTags?.includes(tag) ? "已排除" : "−"}</Button></span>)}
       {!visible.length ? <small>没有匹配标签，可右键文件添加。</small> : null}
       {visible.length > 60 ? <small>还有 {visible.length - 60} 个标签，请输入名称查找。</small> : null}
     </div>

@@ -1,6 +1,6 @@
 {
   "name": "liteasy-desktop",
-  "version": "0.1.39",
+  "version": "0.1.40",
   "private": true,
   "type": "module",
   "scripts": {
@@ -54,6 +54,7 @@
     "katex": "^0.16.47",
     "mermaid": "^11.16.0",
     "pdfjs-dist": "^5.6.205",
+    "re2js": "2.8.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",

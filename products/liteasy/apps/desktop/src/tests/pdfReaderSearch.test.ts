@@ -25,8 +25,8 @@ describe("PDF reader search", () => {
       matchCase: true,
       wholeWords: true
     })).toEqual([
-      { length: 5, page: 1, start: 0 },
-      { length: 5, page: 1, start: 22 }
+      { length: 5, page: 1, start: 0, quote: "Graph" },
+      { length: 5, page: 1, start: 22, quote: "Graph" }
     ]);
   });
 

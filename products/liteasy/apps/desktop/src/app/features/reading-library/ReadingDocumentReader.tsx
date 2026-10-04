@@ -1,3 +1,6 @@
+import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
+import { compileSearchQuery, type SearchMetadata } from "../search/searchQuery";
+import { highlightSearchText } from "../search/searchDomHighlight";
 import { useResourceReveal } from "../resource-links/resourceReveal";
 import { SystemFontPicker } from "../settings/SystemFontPicker";
 import { defaultReadingFontCss, readingFontOptions } from "../settings/readingFonts";
@@ -35,20 +38,17 @@ function readPosition(key: string, chapters: ReadingChapter[]): Position {
     : { chapterId: chapters[0]?.id ?? "", ratio: 0 };
 }
 
-function findMatches(document: ParsedReadingDocument, query: string, onlyChapter?: string): SearchResult[] {
+function findMatches(document: ParsedReadingDocument, query: string, onlyChapter?: string, metadata?: SearchMetadata): SearchResult[] {
   if (!query.trim()) return [];
-  const term = query.trim().toLocaleLowerCase();
+  const compiled = compileSearchQuery(query, { phrase: true });
+  if (!compiled.hasText || !compiled.metadata(metadata ?? { format: document.format })) return [];
   const matches: SearchResult[] = [];
   for (const chapter of document.chapters) {
     if (onlyChapter && chapter.id !== onlyChapter) continue;
-    const lower = chapter.plainText.toLocaleLowerCase();
-    let from = 0;
-    let occurrence = 0;
-    for (let found = lower.indexOf(term, from); found !== -1 && matches.length < 100; found = lower.indexOf(term, from)) {
-      matches.push({ chapterId: chapter.id, chapterTitle: chapter.title, occurrence, excerpt: `${found > 28 ? "…" : ""}${chapter.plainText.slice(Math.max(0, found - 28), found + term.length + 70).replace(/\s+/g, " ")}` });
-      from = found + term.length;
-      occurrence += 1;
-    }
+    if (!compiled.textMatches(chapter.plainText)) continue;
+    const ranges = compiled.ranges(chapter.plainText, 100 - matches.length);
+    ranges.forEach((range, occurrence) => matches.push({ chapterId: chapter.id, chapterTitle: chapter.title, occurrence,
+      excerpt: `${range.start > 28 ? "…" : ""}${chapter.plainText.slice(Math.max(0, range.start - 28), range.end + 70).replace(/\s+/g, " ")}` }));
     if (matches.length >= 100) break;
   }
   return matches;
@@ -75,6 +75,7 @@ const EpubContent = memo(function EpubContent({ chapter, document }: { chapter: 
 });
 
 export type ReadingDocumentReaderProps = {
+  searchMetadata?: SearchMetadata;
   document: ParsedReadingDocument;
   documentId: string;
   resourcePath?: string;
@@ -87,7 +88,7 @@ export function ReadingDocumentReader(props: ReadingDocumentReaderProps) {
   return <ReaderSession key={`${props.storageScope}\u0000${props.documentId}`} {...props} />;
 }
 
-function ReaderSession({ document, documentId, storageScope, onProgressChange, resourcePath }: ReadingDocumentReaderProps) {
+function ReaderSession({ searchMetadata, document, documentId, storageScope, onProgressChange, resourcePath }: ReadingDocumentReaderProps) {
   const settingsKey = `liteasy.reading.preferences.v1:${encodeURIComponent(storageScope)}`;
   const positionKey = `liteasy.reading.position.v1:${encodeURIComponent(storageScope)}:${encodeURIComponent(documentId)}`;
   const [preferences, setPreferences] = useState(() => readPreferences(settingsKey));
@@ -107,7 +108,7 @@ function ReaderSession({ document, documentId, storageScope, onProgressChange, r
   progressCallback.current = onProgressChange;
   const chapterIndex = Math.max(0, document.chapters.findIndex((chapter) => chapter.id === position.chapterId));
   const chapter = document.chapters[chapterIndex];
-  const matches = useMemo(() => findMatches(document, deferredQuery, searchScope === "chapter" ? chapter?.id : undefined), [document, deferredQuery, searchScope, chapter?.id]);
+  const matches = useMemo(() => findMatches(document, deferredQuery, searchScope === "chapter" ? chapter?.id : undefined, searchMetadata), [document, deferredQuery, searchScope, chapter?.id, searchMetadata]);
   const lengths = useMemo(() => document.chapters.map((item) => Math.max(1, item.plainText.length)), [document]);
   const totalLength = lengths.reduce((sum, length) => sum + length, 0);
   const progress = totalLength ? (lengths.slice(0, chapterIndex).reduce((sum, length) => sum + length, 0) + (lengths[chapterIndex] ?? 0) * position.ratio) / totalLength : 0;
@@ -143,7 +144,7 @@ function ReaderSession({ document, documentId, storageScope, onProgressChange, r
         let occurrence = 0, from = 0;
         while ((from = prefix.indexOf(term, from)) >= 0) { occurrence++; from += term.length; }
         updatePosition({ chapterId: item.id, ratio: 0 }); setQuery(target.quote);
-        setJump({ occurrence, query: target.quote, nonce: Date.now() }); return;
+        setJump({ occurrence, query: JSON.stringify(target.quote), nonce: Date.now() }); return;
       }
       line = nextLine;
     }
@@ -172,20 +173,10 @@ function ReaderSession({ document, documentId, storageScope, onProgressChange, r
         if (!target) return;
         target.scrollIntoView?.({ block: "start" });
       } else if (jump.query && jump.occurrence !== undefined) {
-        const walker = window.document.createTreeWalker(article, NodeFilter.SHOW_TEXT);
-        const nodes: Text[] = [];
-        let text = "";
-        while (walker.nextNode()) { const node = walker.currentNode as Text; nodes.push(node); text += node.textContent; }
-        const lower = text.toLocaleLowerCase();
-        const term = jump.query.trim().toLocaleLowerCase();
-        let index = -term.length;
-        for (let occurrence = 0; occurrence <= jump.occurrence; occurrence += 1) { index = lower.indexOf(term, index + term.length); if (index < 0) break; }
-        if (index >= 0) {
-          let offset = 0;
-          const node = nodes.find((item) => { const found = offset + item.length > index; offset += item.length; return found; });
-          node?.parentElement?.setAttribute("data-reading-search-hit", "true");
-          node?.parentElement?.scrollIntoView?.({ block: "center" });
-        } else return;
+        const hit = highlightSearchText(article, jump.query, jump.occurrence);
+        if (!hit.element) return;
+        hit.element.setAttribute("data-reading-search-hit", "true");
+        hit.element.scrollIntoView?.({ block: "center" });
       }
       const scroller = scrollRef.current;
       if (scroller) {
@@ -231,10 +222,11 @@ function ReaderSession({ document, documentId, storageScope, onProgressChange, r
     <div className="reading-document__body">
       {sidebar && !focus ? <aside className="reading-document__sidebar" aria-label={sidebar === "contents" ? "阅读目录" : "正文搜索"}>
         {sidebar === "contents" ? <><div className="reading-document__section-label">目录 <span>{document.chapters.length} 节</span></div><nav aria-label="章节目录">{document.toc.map((item) => <button aria-current={item.chapterId === chapter.id ? "location" : undefined} className="reading-document__toc-entry" key={item.id} onClick={() => goTo(item.chapterId, item.anchor)} style={{ paddingInlineStart: 12 + item.depth * 12 }}>{item.label}</button>)}</nav></> : <>
+          <SearchOptions query={query} onChange={setQuery} tags={searchMetadata?.tags} />
           <Input autoFocus aria-label="搜索书内文字" placeholder="搜索书内文字" contentBefore={<SearchRegular />} value={query} onChange={(_, data) => setQuery(data.value)} />
           <Select aria-label="搜索范围" value={searchScope} onChange={(_, data) => setSearchScope(data.value)}><option value="book">整本文档</option><option value="chapter">当前章节</option></Select>
           <p className="reading-document__search-count" role="status">{deferredQuery.trim() ? matches.length ? `${matches.length >= 100 ? "前 " : ""}${matches.length} 处匹配` : "没有找到匹配的文字" : "输入关键词，在正文中快速定位"}</p>
-          <div className="reading-document__search-results">{matches.map((match, index) => <button key={`${match.chapterId}-${index}`} onClick={() => goTo(match.chapterId, undefined, match.occurrence)}><strong>{match.chapterTitle}</strong><span>{match.excerpt}</span></button>)}</div>
+          <div className="reading-document__search-results">{matches.map((match, index) => <button aria-label={`${match.chapterTitle} ${match.excerpt}`} key={`${match.chapterId}-${index}`} onClick={() => goTo(match.chapterId, undefined, match.occurrence)}><strong>{match.chapterTitle}</strong><span><SearchHighlight text={match.excerpt} query={deferredQuery} /></span></button>)}</div>
         </>}
       </aside> : null}
       <div className="reading-document__scroll" ref={scrollRef} tabIndex={0} aria-label="文档阅读区域" onKeyDown={(event) => {

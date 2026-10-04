@@ -1,3 +1,7 @@
+import { highlightSearchText } from "../search/searchDomHighlight";
+import { compileSearchQuery } from "../search/searchQuery";
+import { noteLabels } from "../notes/noteLabels";
+import { usePaperSearchMetadata } from "../search/usePaperSearchMetadata";
 import { NoteLabelFilter, emptyNoteFilter, matchesNoteFilter } from "../notes/NoteLabelFilter";
 import { annotationNoteLabels } from "../notes/noteLabels";
 import { paperSourceReferences } from "../resource-filesystem/assetSourceReferences";
@@ -306,6 +310,7 @@ type PdfReaderProps = {
 
 
 export type PdfEvidenceTarget = {
+  searchAnnotation?: { id: string; quote: string };
   evidenceId: string;
   page: number;
   pageTextEnd?: number;
@@ -1191,7 +1196,7 @@ function PdfPageView({
       return;
     }
     const rects = searchMatches.flatMap((match) => {
-      const range = findQuoteRangeInTextLayer(textLayer, searchQuery, match.start);
+      const range = findQuoteRangeInTextLayer(textLayer, match.quote ?? searchQuery, match.start);
       if (!range) return [];
       const active = match === activeSearchMatch;
       return buildAnnotationRects(range, getElementContentRect(pageElement)).map((rect) => ({
@@ -1668,6 +1673,7 @@ export function PdfReader({
   const [teamAnnotationNoteDraft, setTeamAnnotationNoteDraft] = useState("");
   const [mutatingTeamAnnotationId, setMutatingTeamAnnotationId] = useState<string | null>(null);
   const pdfDisplaySource = resolvePdfDisplaySource(activePaper?.sourcePath);
+  const searchMetadata = usePaperSearchMetadata(activePaper, objectWorkbench?.scopeId);
   const annotationStorageKey = pdfAnnotationStorageKey(activePaper);
   const annotationScopeRef = useRef(annotationStorageKey);
   annotationScopeRef.current = annotationStorageKey;
@@ -1751,18 +1757,19 @@ export function PdfReader({
   const searchMatches = useMemo(
     () => findPdfReaderSearchMatches(pageTexts, searchQuery, {
       matchCase: searchMatchCase,
-      wholeWords: searchWholeWords
+      wholeWords: searchWholeWords, metadata: searchMetadata
     }),
-    [pageTexts, searchMatchCase, searchQuery, searchWholeWords]
+    [pageTexts, searchMatchCase, searchQuery, searchWholeWords, searchMetadata]
   );
   const activeSearchMatch = activeSearchIndex >= 0 ? searchMatches[activeSearchIndex] : undefined;
   const annotationsInReadingOrder = useMemo(
     () => sortPdfAnnotationsByReadingOrder(annotations),
     [annotations]
   );
+  const annotationSearch = compileSearchQuery(annotationQuery);
   const filteredAnnotations = annotationsInReadingOrder.filter((annotation) =>
     matchesNoteFilter(annotationNoteLabels(annotation), annotationFilter) &&
-    `${annotation.excerpt} ${annotation.note ?? ""} ${annotation.text} ${annotation.quickAsk?.answer ?? ""} ${annotation.review?.text ?? ""}`.toLocaleLowerCase().includes(annotationQuery.trim().toLocaleLowerCase()));
+    annotationSearch.matches(`${annotation.excerpt} ${annotation.note ?? ""} ${annotation.text} ${annotation.quickAsk?.answer ?? ""} ${annotation.review?.text ?? ""}`, { ...searchMetadata, tags: [...(searchMetadata.tags ?? []), ...annotationNoteLabels(annotation).flatMap((label) => [label, noteLabels[label]])] }));
   const popupAnnotation = useMemo(
     () => annotations.find((annotation) => annotation.id === annotationPopup?.annotationId) ?? null,
     [annotationPopup?.annotationId, annotations]
@@ -2294,7 +2301,8 @@ export function PdfReader({
     );
     setReaderView("document");
     setFocusedPage(targetPage);
-    setSidebarMode("thumbnails");
+    setSidebarMode(targetEvidence.searchAnnotation ? "annotations" : "thumbnails");
+    if (targetEvidence.searchAnnotation) { setAnnotationQuery(""); setAnnotationFilter(emptyNoteFilter); setActiveAnnotationId(targetEvidence.searchAnnotation.id); }
     setSidebarCollapsed(false);
     setStatus(`已定位到第 ${targetPage} 页的 Agent 引用证据。`);
 
@@ -2309,6 +2317,16 @@ export function PdfReader({
 
     return () => window.cancelAnimationFrame(frame);
   }, [activePaper?.id, pageCount, targetEvidence]);
+
+  useEffect(() => {
+    const target = targetEvidence?.paperId === activePaper?.id ? targetEvidence.searchAnnotation : undefined;
+    if (!target) return;
+    const frame = requestAnimationFrame(() => {
+      const element = [...(workspaceRef.current?.querySelectorAll<HTMLElement>("[data-search-annotation]") ?? [])].find((element) => element.dataset.searchAnnotation === target.id);
+      if (element) { element.scrollIntoView?.({ block: "nearest" }); highlightSearchText(element, JSON.stringify(target.quote)); }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [targetEvidence, activePaper?.id, annotations, activeAnnotationId]);
 
   function clearBrowserSelection() {
     window.getSelection()?.removeAllRanges();
@@ -3526,7 +3544,7 @@ export function PdfReader({
       style={{ "--pdf-reading-background": pdfBackground } as CSSProperties}
     >
       {readingView?.({ scopeKey: annotationStorageKey ?? "", ready: Boolean(annotationStorageKey && hydratedAnnotationStorageKey === annotationStorageKey && !annotationLoadError),
-        lookup: selectionLookup, paperId: activePaper?.id, paperTitle: activePaper?.title,
+        searchMetadata, lookup: selectionLookup, paperId: activePaper?.id, paperTitle: activePaper?.title,
         error: annotationLoadError || annotationSaveError, annotations: hydratedAnnotationStorageKey === annotationStorageKey ? annotationsInReadingOrder.filter((annotation) => guide.visible || !annotation.aiGuide) : [], guideControls,
         pageTexts, pageCount, focusedPage, selectedId: readingAnnotationId,
         create: createReadingAnnotation, update: updateReadingAnnotation,
@@ -3728,6 +3746,7 @@ export function PdfReader({
                             activeAnnotationId === annotation.id ? "expanded" : ""
                           }`}
                           key={annotation.id}
+                          data-search-annotation={annotation.id}
                         >
                           {annotation.kind === "highlight" && annotation.color && (
                             <div
@@ -3990,6 +4009,7 @@ export function PdfReader({
                 </>
               )}
               searchOpen={searchOpen}
+              searchTags={searchMetadata.tags}
               searchQuery={searchQuery}
               searchResultCount={searchMatches.length}
               inkActive={inkMode !== null}
@@ -4041,7 +4061,7 @@ export function PdfReader({
               <PdfPagesOverview document={pdfDocument} count={pageCount} currentPage={focusedPage}
                 annotations={annotations} onNavigate={navigateToPage} onClose={closeOverview} />
             ) : readerView === "annotations" ? (
-              <PdfAnnotationsOverview annotations={filteredAnnotations} teamAnnotations={teamAnnotations}
+              <PdfAnnotationsOverview searchMetadata={searchMetadata} annotations={filteredAnnotations} teamAnnotations={teamAnnotations}
                 paperIdentity={activePaper ? resolvePaperIdentity(activePaper) : undefined}
                 error={annotationLoadError} onNavigate={locateAnnotation} onClose={closeOverview} />
             ) : <div className="pdf-document-frame" ref={documentFrameRef}>
