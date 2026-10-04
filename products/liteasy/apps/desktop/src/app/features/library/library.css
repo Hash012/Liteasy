@@ -1,4 +1,5 @@
 .library-pane {
+  container: library-pane / inline-size;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -480,6 +481,31 @@
 .library-paper-content .library-paper-title {
   width: 100%;
   padding-block: 2px;
+}
+
+.library-paper-title-text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Tags are supplementary; never let them turn a tree entry into a tall card. */
+.library-pane .library-tag-chips { flex-wrap: nowrap; }
+
+@container library-pane (max-width: 360px) {
+  .library-paper-row .library-tag-chips,
+  .library-file-row .library-tag-chips,
+  .library-paper-row > input,
+  .library-paper-row > .library-paper-icon,
+  .library-paper-row > .library-entry-status,
+  .library-paper-row > [aria-label="位置与 Liteasy Path"],
+  .library-file-row > .library-item-icon,
+  .library-file-row > small { display: none; }
+  .library-paper-content { padding-block: 0; }
+  .library-paper-title { white-space: nowrap; }
+  .library-attachment-count { min-width: 22px; padding-inline: 3px; }
 }
 
 .library-paper-metadata {

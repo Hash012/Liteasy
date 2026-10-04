@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { createFullscreenViewportSync } from "../features/workbench/fullscreenViewport";
 
 export type ReadingFocusMode = "off" | "reading" | "fullscreen";
 export type ReadingFocusEdge = "top" | "left" | "right" | "bottom";
@@ -18,6 +20,14 @@ export function useImmersiveReadingController() {
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const previousFocus = useRef<HTMLElement | null>(null);
   const openingClick = useRef<{ time: number; x: number; y: number }>();
+  const viewport = useRef<ReturnType<typeof createFullscreenViewportSync>>();
+  const syncNativeViewport = useCallback((force = false) => {
+    viewport.current ??= createFullscreenViewportSync(
+      () => getCurrentWindow().innerSize(),
+      (size) => getCurrentWebview().setSize(size),
+    );
+    return viewport.current.sync(force);
+  }, []);
 
   const reveal = useCallback((next?: ReadingFocusEdge) => {
     clearTimeout(timer.current);
@@ -40,11 +50,19 @@ export function useImmersiveReadingController() {
       // the Windows taskbar area. Keep the window foreground after the transition.
       const host = getCurrentWindow();
       await host.setFullscreen(value);
+      // A maximized WebView can retain the old work-area bounds after the native
+      // window covers the taskbar. Fit the child surface as well as the window.
+      try {
+        await getCurrentWebview().setAutoResize(true);
+        await syncNativeViewport(true);
+      } catch {
+        setError("窗口已切换，但阅读区域未能调整到完整尺寸。请按 F11 重试。");
+      }
       if (value) await host.setFocus().catch(() => { /* Fullscreen remains valid if the OS denies focus. */ });
     }
     else if (value) await document.documentElement.requestFullscreen();
     else if (document.fullscreenElement) await document.exitFullscreen();
-  }, []);
+  }, [syncNativeViewport]);
   const exit = useCallback(() => {
     const wasFullscreen = current.current === "fullscreen";
     ++transition.current;
@@ -95,19 +113,22 @@ export function useImmersiveReadingController() {
     if (isTauri()) {
       const host = getCurrentWindow();
       void host.onResized(async () => {
+        if (disposed) return;
         const request = transition.current;
         try {
           const full = await host.isFullscreen();
+          if (!disposed && (full || pending.current || current.current === "fullscreen")) await syncNativeViewport();
           if (!disposed && request === transition.current && !pending.current && !full && current.current === "fullscreen") update("off");
         } catch { /* F11 / Escape remain usable if the host cannot report state. */ }
       }).then((cleanup) => { if (disposed) cleanup(); else unlisten = cleanup; }).catch(() => {});
     }
     return () => {
       disposed = true; unlisten?.(); clearTimeout(timer.current);
+      viewport.current?.dispose(); viewport.current = undefined;
       window.removeEventListener("keydown", keydown, true);
       document.removeEventListener("fullscreenchange", fullscreenChanged);
     };
-  }, [exit, toggleFullscreen, update]);
+  }, [exit, toggleFullscreen, update, syncNativeViewport]);
 
   useEffect(() => {
     if (mode !== "fullscreen") return;

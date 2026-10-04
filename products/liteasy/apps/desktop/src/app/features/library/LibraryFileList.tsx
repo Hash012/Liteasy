@@ -47,7 +47,7 @@ export function LibraryFileList({ access, query, category, filters, folderPath, 
               writeAssetContextTransfer(event.dataTransfer, scope, { kind: "path", path: entry.liteasyPath }, entry.title);
             }
           }}
-          aria-label={`选择文件 ${entry.title}`} aria-pressed={access.selectedId === entry.id}
+          aria-label={`选择文件 ${entry.title}`} title={entry.title} aria-pressed={access.selectedId === entry.id}
           data-reading-entry={entry.format !== "other" ? "true" : undefined}
           onClick={() => access.onInspect(entry)} onFocus={() => access.onInspect(entry)}
           onDoubleClick={() => access.onOpen(entry)} onKeyDown={(event) => {

@@ -1,10 +1,12 @@
 import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { useImmersiveReadingController } from "../app/controllers/useImmersiveReadingController";
+import { PhysicalSize } from "@tauri-apps/api/dpi";
 
-const host = vi.hoisted(() => ({ native: false, fullscreen: false, setFullscreen: vi.fn(), setFocus: vi.fn(), isFullscreen: vi.fn(), onResized: vi.fn(), resized: () => {}, unlisten: vi.fn() }));
+const host = vi.hoisted(() => ({ native: false, fullscreen: false, setFullscreen: vi.fn(), setFocus: vi.fn(), isFullscreen: vi.fn(), onResized: vi.fn(), resized: () => {}, unlisten: vi.fn(), innerSize: vi.fn(), setSize: vi.fn(), setAutoResize: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => host.native }));
 vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: () => host }));
+vi.mock("@tauri-apps/api/webview", () => ({ getCurrentWebview: () => host }));
 let full: Element | null;
 const request = vi.fn();
 const leave = vi.fn();
@@ -18,6 +20,9 @@ beforeEach(() => {
   host.setFullscreen.mockImplementation(async (value: boolean) => { host.fullscreen = value; });
   host.setFocus.mockResolvedValue(undefined);
   host.isFullscreen.mockImplementation(async () => host.fullscreen);
+  host.innerSize.mockImplementation(async () => new PhysicalSize(2560, host.fullscreen ? 1440 : 1380));
+  host.setSize.mockResolvedValue(undefined);
+  host.setAutoResize.mockResolvedValue(undefined);
   host.onResized.mockImplementation(async (callback: () => void) => { host.resized = callback; return host.unlisten; });
 });
 afterEach(() => { vi.useRealTimers(); });
@@ -95,8 +100,14 @@ test("native fullscreen uses Tauri commands and follows external window changes"
   const { result, unmount } = renderHook(useImmersiveReadingController);
   await act(async () => result.current.toggleFullscreen());
   expect(host.setFullscreen).toHaveBeenCalledWith(true); expect(host.setFocus).toHaveBeenCalledOnce(); expect(request).not.toHaveBeenCalled();
+  expect(host.setAutoResize).toHaveBeenCalledWith(true);
+  expect(host.setSize).toHaveBeenLastCalledWith(new PhysicalSize(2560, 1440));
+  host.innerSize.mockResolvedValueOnce(new PhysicalSize(3840, 2160));
+  await act(async () => { await host.resized(); });
+  expect(host.setSize).toHaveBeenLastCalledWith(new PhysicalSize(3840, 2160));
   await act(async () => { fireEvent.keyDown(window, { key: "Escape" }); });
   expect(host.setFullscreen).toHaveBeenLastCalledWith(false); expect(result.current.mode).toBe("off");
+  expect(host.setSize).toHaveBeenLastCalledWith(new PhysicalSize(2560, 1380));
   await act(async () => result.current.toggleFullscreen());
   act(() => document.dispatchEvent(new Event("fullscreenchange")));
   expect(result.current.mode).toBe("fullscreen");
@@ -104,6 +115,17 @@ test("native fullscreen uses Tauri commands and follows external window changes"
   await act(async () => { await host.resized(); });
   await waitFor(() => expect(result.current.mode).toBe("off"));
   unmount(); expect(host.unlisten).toHaveBeenCalledOnce();
+});
+
+test("a viewport fitting error does not misreport an active native fullscreen as windowed", async () => {
+  host.native = true;
+  host.setSize.mockRejectedValueOnce(new Error("resize failed"));
+  const { result } = renderHook(useImmersiveReadingController);
+  await act(async () => result.current.toggleFullscreen());
+  expect(result.current.mode).toBe("fullscreen");
+  expect(result.current.error).toContain("完整尺寸");
+  await act(async () => result.current.exit());
+  expect(result.current.mode).toBe("off");
 });
 
 test("a rejected native exit keeps the exit controls available for retry", async () => {

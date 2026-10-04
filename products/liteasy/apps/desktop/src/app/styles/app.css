@@ -995,7 +995,7 @@ body {
   gap: 18px;
   flex: 1;
   min-height: 0;
-  padding: 6px 0 12px;
+  padding: 6px 12px 12px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -1158,6 +1158,8 @@ body {
   gap: 6px;
 }
 
+.assistant-message-token-row { justify-content: flex-end; max-width: 100%; }
+
 .assistant-message-token {
   align-items: center;
   border: 1px solid rgba(47, 111, 167, 0.18);
@@ -1165,6 +1167,8 @@ body {
   background: #e9f4ff;
   color: #285b86;
   display: inline-flex;
+  flex: 0 1 auto;
+  width: fit-content;
   gap: 6px;
   max-width: 100%;
   min-height: 26px;
@@ -5981,7 +5985,7 @@ button.pdf-overlay-mark:focus-visible {
 }
 /* The mirror must keep exactly the textarea's glyph advances and line wraps. */
 .assistant-user-message-content .assistant-inline-context { padding: 1px 4px; margin-inline: 2px; }
-.assistant-message-token strong { min-width: 0; overflow-wrap: anywhere; }
+.assistant-message-token strong { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .assistant-command-chip::before {
   content: attr(data-prefix);
   visibility: hidden;

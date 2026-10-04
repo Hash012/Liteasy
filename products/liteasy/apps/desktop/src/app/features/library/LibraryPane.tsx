@@ -1168,7 +1168,7 @@ function LibraryPaneContent({
                 title={entry.bodyAvailable ? entry.label : `${entry.label}（仅元数据）`}
                 type="button"
               >
-                <SearchHighlight text={entry.label} query={search} />
+                <span className="library-paper-title-text"><SearchHighlight text={entry.label} query={search} /></span>
               </button>
             </MenuTrigger>
             <MenuPopover>

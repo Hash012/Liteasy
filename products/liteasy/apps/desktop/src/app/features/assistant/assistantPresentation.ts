@@ -1,6 +1,12 @@
 import type { AssistantMode, SelectedSetStatus } from "./assistant.types";
 import type { AgentApiErrorCode } from "../agent-api/agentApi.types";
 
+/** Display only: the complete context label and message remain available to the model. */
+export function compactContextLabel(label: string) {
+  const characters = Array.from(label);
+  return characters.length > 20 ? `${characters.slice(0, 20).join("")}…` : label;
+}
+
 const assistantErrorMessages: Record<AgentApiErrorCode, string> = {
   confirmation_not_found: "确认请求已失效，请重新执行该操作。",
   execution_failed: "AI 任务未完成，请稍后重试。",

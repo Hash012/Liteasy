@@ -5,6 +5,26 @@ import { AssistantMessageList } from "../app/features/assistant/AssistantMessage
 import type { AssistantMessage } from "../app/features/assistant/assistant.types";
 
 describe("AssistantMessageList", () => {
+  test("shortens context titles to 20 characters without changing the source or copied message", async () => {
+    const user = userEvent.setup();
+    const title = "Larimar: Large Language Models with Episodic Memory Control";
+    const content = `${title} Cicada 请比较两篇论文`;
+    const tokens = [{ id: "long", kind: "paper" as const, label: title, prompt: "", detail: "本地文献库" },
+      { id: "short", kind: "paper" as const, label: "Cicada", prompt: "" }];
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const { container } = render(<AssistantMessageList mode="qa" onModeChange={vi.fn()} messages={[
+      { id: "context-titles", role: "user", content, contextTokens: tokens },
+    ]} />);
+    const chips = container.querySelectorAll(".assistant-message-token strong");
+    expect(chips[0]).toHaveTextContent("Larimar: Large Langu…");
+    expect(chips[1]).toHaveTextContent("Cicada");
+    expect(chips[0].parentElement).toHaveAttribute("title", `${title}\n本地文献库`);
+    expect(container.querySelector(".assistant-user-message-content .assistant-inline-context")).toHaveAttribute("aria-label", title);
+    await user.click(screen.getByRole("button", { name: `复制：${content}` }));
+    expect(writeText).toHaveBeenCalledWith(`[${title}] [Cicada] ${content}`);
+    expect(tokens[0].label).toBe(title);
+  });
   test("shows partial and omitted source coverage separately from the model answer", async () => {
     render(<AssistantMessageList mode="qa" onModeChange={vi.fn()} messages={[{ id: "coverage", role: "assistant", content: "基于选段的分析",
       contextCoverage: { total: 3, full: 1, partial: 1, omitted: 1, items: [

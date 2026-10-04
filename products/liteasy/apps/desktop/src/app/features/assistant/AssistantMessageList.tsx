@@ -7,7 +7,7 @@ import type {
   AssistantMessage,
   AssistantMode
 } from "./assistant.types";
-import { getAuditVerdictLabel } from "./assistantPresentation";
+import { compactContextLabel, getAuditVerdictLabel } from "./assistantPresentation";
 import { DynamicCanvas } from "../generative-ui/DynamicCanvas";
 import type { UIDslActionRef } from "../generative-ui/generativeUi.types";
 import { AgentActivityCard } from "./AgentActivityCard";
@@ -62,7 +62,7 @@ function ExpandableUserMessage({ value, contextTokens = [] }: { value: string; c
         ref={contentRef}
       >
         {inlineContextParts(value, contextTokens).map((part, index) => part.token
-          ? <strong className="assistant-inline-context" title={displayPath(part.token.detail ?? part.token.label)} key={index}>{part.text}</strong>
+          ? <strong className="assistant-inline-context" aria-label={part.token.label} title={contextTokenTitle(part.token)} key={index}>{compactContextLabel(part.text)}</strong>
           : part.text)}
       </div>
       {foldable ? (
@@ -79,6 +79,11 @@ function ExpandableUserMessage({ value, contextTokens = [] }: { value: string; c
       ) : null}
     </div>
   );
+}
+
+function contextTokenTitle(token: AssistantContextToken) {
+  const detail = token.detail && displayPath(token.detail);
+  return detail && detail !== token.label ? `${token.label}\n${detail}` : token.label;
 }
 
 function getPublicAuditStatusLabel(status: "blocked" | "passed" | "warning") {
@@ -169,8 +174,8 @@ export function AssistantMessageList({
               {message.contextTokens?.length ? (
                 <div className="assistant-message-token-row">
                   {message.contextTokens.map((token) => (
-                    <span className={`assistant-message-token ${token.kind}`} key={token.id} title={displayPath(token.detail ?? token.label)} tabIndex={0}>
-                      <strong>{token.label}</strong>
+                    <span className={`assistant-message-token ${token.kind}`} key={token.id} aria-label={token.label} title={contextTokenTitle(token)} tabIndex={0}>
+                      <strong>{compactContextLabel(token.label)}</strong>
                     </span>
                   ))}
                 </div>

@@ -37,6 +37,17 @@ test("triple-click opens Markdown in immersion, edges reveal panels, F11 toggles
   await page.keyboard.press("F11");
   await expect(frame).toHaveAttribute("data-reading-focus", "fullscreen");
   await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
+  // The reclaimed taskbar strip must belong to the reading viewport, including
+  // after the native window reports a larger monitor client area.
+  for (const height of [1000, 1080]) {
+    await page.setViewportSize({ width: 1600, height });
+    await expect.poll(async () => {
+      const bounds = await scroll.boundingBox();
+      return bounds ? Math.abs(bounds.y) + Math.abs(bounds.y + bounds.height - height) : Infinity;
+    }).toBeLessThan(2);
+    expect(await page.evaluate((y) => document.elementsFromPoint(800, y).some(element => element.closest(".reading-document__scroll")), height - 12)).toBe(true);
+  }
+  await page.setViewportSize({ width: 1600, height: 1000 });
   await page.mouse.move(800, 400);
   await page.mouse.move(1599, 400);
   await expect(composer).toBeVisible();
@@ -87,6 +98,10 @@ test("a PDF tab enters immersion without remounting the document and restores it
   const stage = page.locator(".pdf-stage");
   expect((await stage.boundingBox())!.width).toBeGreaterThan(1550);
   expect((await stage.boundingBox())!.height).toBeGreaterThan(950);
+  await expect.poll(async () => {
+    const bounds = await stage.boundingBox();
+    return bounds ? Math.abs(bounds.y) + Math.abs(bounds.y + bounds.height - 1000) : Infinity;
+  }).toBeLessThan(2);
   expect(await handle!.evaluate((element) => element.isConnected)).toBe(true);
   await page.emulateMedia({ colorScheme: "dark" });
   await page.screenshot({ path: testInfo.outputPath("immersive-pdf-dark.png") });
