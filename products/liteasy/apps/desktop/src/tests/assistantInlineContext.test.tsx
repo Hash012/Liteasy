@@ -135,7 +135,9 @@ test("adjacent resources remain separate tags and native paths only appear in no
   const tags = container.querySelectorAll(".assistant-message-token");
   expect(tags).toHaveLength(2);
   expect(tags[0]).toHaveTextContent(/^CicN$/);
-  expect(tags[0]).toHaveAttribute("title", String.raw`D:\LiteasyData\AgentMem\Larimar.pdf`);
+  expect(tags[0]).toHaveAttribute("title", `CicN\n${String.raw`D:\LiteasyData\AgentMem\Larimar.pdf`}`);
+  expect(tags[0]).toHaveAttribute("aria-label", "CicN");
+  expect(tags[1]).toHaveTextContent(/^Cicada$/);
   expect(container.querySelector(".assistant-messages")).not.toHaveTextContent("LiteasyData");
 });
 
