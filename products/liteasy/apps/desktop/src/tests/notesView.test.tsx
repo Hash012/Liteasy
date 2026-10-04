@@ -423,6 +423,8 @@ it("combines note labels and exclusions and keeps personal additions to AI conte
     await user.click(await screen.findByRole("checkbox", { name: "隐藏翻译结果" }));
     await user.click(screen.getByRole("checkbox", { name: "隐藏纯 AI 内容" }));
     await user.keyboard("{Escape}");
+    // Fluent restores the background accessibility tree after its exit transition.
+    await screen.findByRole("button", { name: "查看笔记 修改过的导读" });
     expect(screen.queryByRole("button", { name: "查看笔记 论文译文" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "查看笔记 纯生成内容" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "查看笔记 修改过的导读" })).toBeInTheDocument();
@@ -430,6 +432,7 @@ it("combines note labels and exclusions and keeps personal additions to AI conte
     await user.click(screen.getByRole("button", { name: "标签筛选 · 2" }));
     await user.selectOptions(await screen.findByRole("combobox", { name: "包含笔记标签" }), "user-edited");
     await user.keyboard("{Escape}");
+    await screen.findByRole("button", { name: "查看笔记 修改过的导读" });
     expect(screen.queryByRole("button", { name: "查看笔记 我的观察" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "查看笔记 修改过的导读" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "清除筛选" }));
