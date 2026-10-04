@@ -23,6 +23,7 @@ type AssistantComposerProps = {
   modelPicker?: ReactNode;
   thinkingDepth?: ThinkingDepth;
   onThinkingDepthChange?: (depth: ThinkingDepth) => void;
+  thinkingRules?: ReactNode;
   contextTokens?: AssistantContextToken[];
   contextLoading?: boolean;
   contextScopeId?: string;
@@ -60,6 +61,7 @@ export function AssistantComposer({
   modelPicker,
   thinkingDepth = "balanced",
   onThinkingDepthChange,
+  thinkingRules,
   contextTokens = [],
   contextLoading = false,
   contextScopeId,
@@ -340,14 +342,14 @@ export function AssistantComposer({
         <Tooltip content="按类别和项目浏览资料，组合添加到上下文" relationship="description">
           <Button appearance="subtle" aria-label="添加上下文" className="assistant-add-context" icon={<AddRegular />} onClick={() => openAssetBrowser()} />
         </Tooltip>
-        {onThinkingDepthChange ? <Popover positioning="above" trapFocus>
+        {onThinkingDepthChange ? <Popover positioning={{ position: "above", autoSize: "height", overflowBoundaryPadding: 12 }} trapFocus>
           <PopoverTrigger disableButtonEnhancement>
-            <Tooltip content={`思考深度：${thinkingDepthLabels[thinkingDepth]}`} relationship="description">
+            <Tooltip content={`思考深度与规矩：${thinkingDepthLabels[thinkingDepth]}`} relationship="description">
               <Button aria-label={`调整思考深度：${thinkingDepthLabels[thinkingDepth]}`} appearance="subtle"
                 className="assistant-thinking-trigger" icon={thinkingDepth === "quick" ? <FlashRegular /> : <BrainCircuitRegular />} />
             </Tooltip>
           </PopoverTrigger>
-          <PopoverSurface aria-label="思考深度设置" className="assistant-thinking-popover">
+          <PopoverSurface aria-label="思考深度设置" className={`assistant-thinking-popover${thinkingRules ? " assistant-thinking-popover-with-rules" : ""}`}>
             <div className="assistant-thinking-depth">
               <strong>思考深度 · {thinkingDepthLabels[thinkingDepth]}</strong>
               <Slider aria-label="思考深度" aria-valuetext={thinkingDepthLabels[thinkingDepth]} min={0} max={2} step={1}
@@ -356,6 +358,10 @@ export function AssistantComposer({
               <div className="assistant-thinking-labels"><span>快速</span><span>均衡</span><span>熟虑</span></div>
               <p className="assistant-thinking-description">快速优先简洁回应；熟虑加强分析与核验，通常需要更长时间。</p>
             </div>
+            {thinkingRules ? <section className="assistant-thinking-rules" aria-label="思考规矩">
+              <strong>思考规矩</strong>
+              {thinkingRules}
+            </section> : null}
           </PopoverSurface>
         </Popover> : null}
         {contextUsage ? <ContextUsageIndicator usage={contextUsage} /> : null}

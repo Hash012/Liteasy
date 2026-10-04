@@ -63,6 +63,8 @@ export const objectContentSchema = z.discriminatedUnion("kind", [
         text: z.string(),
         origin: z.enum(["user", "external", "derived"]),
         assetIds: z.array(id).optional(),
+        userEditedAt: z.iso.datetime().optional(),
+        agentEditedAt: z.iso.datetime().optional(),
       }),
     ),
   }),

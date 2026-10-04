@@ -577,22 +577,32 @@ test("queues a follow-up and interrupts at the next SDK tool boundary", async ()
   await user.click(screen.getByRole("button", { name: "发送" }));
   expect(composer).toHaveValue("");
   await user.type(composer, "第二条消息");
+  expect(screen.queryByRole("combobox", { name: "生成风格" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "调整思考深度：均衡" }));
+  const thinkingRules = await screen.findByRole("region", { name: "思考规矩" });
+  expect(within(thinkingRules).getByRole("combobox", { name: "生成风格" })).toBeInTheDocument();
+  fireEvent.change(screen.getByRole("slider", { name: "思考深度" }), { target: { value: "2" } });
   await user.selectOptions(screen.getByRole("combobox", { name: "生成风格" }), "deep");
+  await user.keyboard("{Escape}");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(composer).toHaveValue("");
   expect(screen.getByText("已暂存 · 当前工具调用结束后生效")).toBeInTheDocument();
   expect(send).toHaveBeenCalledTimes(1);
 
-  await user.selectOptions(screen.getByRole("combobox", { name: "生成风格" }), "hint");
+  await user.click(screen.getByRole("button", { name: "调整思考深度：熟虑" }));
+  await user.selectOptions(await screen.findByRole("combobox", { name: "生成风格" }), "hint");
+  await user.keyboard("{Escape}");
   await user.type(composer, "准备撤回的第三条消息");
   await user.click(screen.getByRole("button", { name: "发送" }));
   const thirdMessage = screen.getByText("准备撤回的第三条消息").closest("article");
   if (!thirdMessage) throw new Error("queued user message article not found");
   await user.click(within(thirdMessage).getByRole("button", { name: "撤回" }));
   expect(composer).toHaveValue("准备撤回的第三条消息");
+  await user.click(screen.getByRole("button", { name: "调整思考深度：熟虑" }));
   await user.click(screen.getByRole("button", { name: "自定义系统提示词", exact: true }));
   expect(screen.getByRole("textbox", { name: "本次系统提示词" })).toHaveValue(presetGenerationPrompt("assistant", "hint"));
+  await user.keyboard("{Escape}");
   expect(thirdMessage).not.toBeInTheDocument();
   await user.clear(composer);
 
@@ -604,6 +614,7 @@ test("queues a follow-up and interrupts at the next SDK tool boundary", async ()
   ));
   await waitFor(() => expect(send).toHaveBeenCalledTimes(2));
   expect(send.mock.calls[1][0].systemPrompt).toBe(presetGenerationPrompt("assistant", "deep"));
+  expect(send.mock.calls[1][0].thinkingDepth).toBe("deliberate");
   expect(await screen.findByText("第二条消息已经执行")).toBeInTheDocument();
   expect(screen.queryByText("已暂存 · 当前工具调用结束后生效")).not.toBeInTheDocument();
 });

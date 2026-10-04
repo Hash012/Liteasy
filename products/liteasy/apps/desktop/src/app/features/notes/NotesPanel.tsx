@@ -1,3 +1,4 @@
+import { isAiOnlyNote, noteLabelEntries, noteLabels, resolvedNoteLabels, type NoteLabel } from "./noteLabels";
 import { useMarkdownEditing } from "../markdown/MarkdownEditingContext";
 import { NotesInlineEditor } from "./NotesInlineEditor";
 import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
@@ -5,6 +6,11 @@ import { ResourceLocationButton } from "../resource-filesystem/ResourceLocationB
 import { useEffect, useMemo, useState } from "react";
 import {
   Button,
+  Checkbox,
+  MenuItemCheckbox,
+  Popover,
+  PopoverTrigger,
+  PopoverSurface,
   Input,
   Menu,
   MenuItem,
@@ -29,6 +35,7 @@ import {
   NoteRegular,
   SaveRegular,
   SearchRegular,
+  FilterRegular,
 } from "@fluentui/react-icons";
 import {
   OBJECT_TRANSFER_MIME,
@@ -84,8 +91,16 @@ function noteIconKey(item: NotesItem) {
 }
 function NotesPanelContent({ model }: { model: NotesViewModel }) {
   const preference = useMarkdownEditing();
+  const [labelFilter, setLabelFilter] = useState<NoteLabel | "">("");
+  const [hideTranslations, setHideTranslations] = useState(false);
+  const [hideAiOnly, setHideAiOnly] = useState(false);
+  const labeledItems = useMemo(() => model.items.map((item) => ({ ...item, labels: item.labels ?? resolvedNoteLabels(item) })), [model.items]);
+  const filteredItems = labeledItems.filter((item) => (!labelFilter || item.labels.includes(labelFilter)) &&
+    (!hideTranslations || !item.labels.includes("translation")) && (!hideAiOnly || !isAiOnlyNote(item.labels)));
+  const filterCount = Number(Boolean(labelFilter)) + Number(hideTranslations) + Number(hideAiOnly);
+  const selected = filteredItems.find((item) => item.key === model.selected?.key);
   const [visibleCount, setVisibleCount] = useState(100);
-  useEffect(() => setVisibleCount(100), [model.folderId, model.query]);
+  useEffect(() => setVisibleCount(100), [model.folderId, model.query, labelFilter, hideTranslations, hideAiOnly]);
   const [folderName, setFolderName] = useState<string>();
   const [draft, setDraft] = useState<string>();
   const [editingItem, setEditingItem] = useState<NotesItem>();
@@ -174,6 +189,27 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
         value={model.query}
         onChange={(_, data) => model.search(data.value)}
       />
+      <div className="notes-label-filters">
+        <Popover positioning="below-start" trapFocus>
+          <PopoverTrigger disableButtonEnhancement>
+            <Button size="small" appearance={filterCount ? "secondary" : "subtle"} icon={<FilterRegular />}>
+              {filterCount ? `标签筛选 · ${filterCount}` : "标签筛选"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverSurface aria-label="笔记标签筛选" className="notes-filter-popover">
+            <label>包含标签
+              <Select aria-label="包含笔记标签" value={labelFilter} onChange={(_, data) => setLabelFilter(data.value as NoteLabel | "")}>
+                <option value="">全部笔记</option>
+                {noteLabelEntries.map(([id, title]) => <option key={id} value={id}>{title}</option>)}
+              </Select>
+            </label>
+            <Checkbox label="隐藏翻译结果" checked={hideTranslations} onChange={(_, data) => setHideTranslations(data.checked === true)} />
+            <Checkbox label="隐藏纯 AI 内容" checked={hideAiOnly} onChange={(_, data) => setHideAiOnly(data.checked === true)} />
+            <small>按已记录的来源和编辑痕迹筛选；来源不明的旧笔记会保留。可在笔记操作中补充标签。</small>
+          </PopoverSurface>
+        </Popover>
+        {filterCount > 0 && <Button size="small" appearance="subtle" onClick={() => { setLabelFilter(""); setHideTranslations(false); setHideAiOnly(false); }}>清除筛选</Button>}
+      </div>
       {model.error && (
         <p role="alert" className="notes-error">
           {model.error}
@@ -226,7 +262,7 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
         >
           <div className="notes-breadcrumb">
             {folder ? path(folder) : "所有笔记"}
-            <span>{model.items.length}</span>
+            <span>{filterCount ? `${filteredItems.length} / ${model.items.length}` : model.items.length}</span>
           </div>
           {notesFolderChildren(model.folderId, model.folders).length > 0 && (
             <div className="notes-child-folders" aria-label="子目录">
@@ -303,13 +339,13 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
               </div>
             </form>
           )}
-          {!model.busy && !model.items.length && draft === undefined && (
+          {!model.busy && !filteredItems.length && draft === undefined && (
             <p className="notes-empty">
-              此目录还没有笔记。可以新建笔记，或将内容引用拖到这里。
+              {filterCount ? "没有符合筛选条件的笔记。试试清除筛选。" : "此目录还没有笔记。可以新建笔记，或将内容引用拖到这里。"}
             </p>
           )}
           <div className="notes-list" role="list" aria-label="笔记条目">
-            {model.items.slice(0, visibleCount).map((item) => (
+            {filteredItems.slice(0, visibleCount).map((item) => (
               <article
                 key={item.key}
                 role="listitem"
@@ -332,6 +368,9 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
                     <strong title={item.title}>{item.title}</strong>
                   </span>
                   <span className="notes-item-source" title={item.source}>{item.source}</span>
+                  {item.labels.length > 0 && <span className="notes-item-labels" aria-label="笔记标签">
+                    {item.labels.map((label) => <span key={label} className={`notes-label notes-label-${label}`}>{noteLabels[label]}</span>)}
+                  </span>}
                 </button>
                 <Menu>
                   <MenuTrigger disableButtonEnhancement>
@@ -346,6 +385,15 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
                   </MenuTrigger>
                   <MenuPopover>
                     <MenuList>
+                      {model.setLabel && <Menu>
+                        <MenuTrigger disableButtonEnhancement><MenuItem>笔记标签</MenuItem></MenuTrigger>
+                        <MenuPopover><MenuList checkedValues={{ labels: item.labels }} onCheckedValueChange={(_, data) => {
+                          const label = noteLabelEntries.find(([id]) => data.checkedItems.includes(id) !== item.labels.includes(id))?.[0];
+                          if (label) run(model.setLabel!(item, label, data.checkedItems.includes(label)));
+                        }}>
+                          {noteLabelEntries.map(([id, title]) => <MenuItemCheckbox key={id} name="labels" value={id}>{title}</MenuItemCheckbox>)}
+                        </MenuList></MenuPopover>
+                      </Menu>}
                       <LibraryIconMenuItem itemKey={noteIconKey(item)} title={item.title} />
                       <MenuItem
                         icon={<ArrowUpRightRegular />}
@@ -389,11 +437,11 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
               </article>
             ))}
           </div>
-          {visibleCount < model.items.length ? <Button onClick={() => setVisibleCount((count) => count + 100)}>显示更多（已显示 {visibleCount} / {model.items.length}）</Button> : null}
-          {model.selected &&
+          {visibleCount < filteredItems.length ? <Button onClick={() => setVisibleCount((count) => count + 100)}>显示更多（已显示 {visibleCount} / {filteredItems.length}）</Button> : null}
+          {selected &&
             draft === undefined &&
             (() => {
-              const item = model.selected;
+              const item = selected;
               const quote =
                 item.annotation?.excerpt ||
                 (item.object?.kind === "content.fragment"

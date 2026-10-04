@@ -703,7 +703,7 @@ export function createObjectRepository(
     } while (after);
     return { objects, cursor: undefined as string | undefined };
   }
-  async function editNote(ref: ObjectRef, text: string, title?: string, sourceRefs: ObjectRef[] = []) {
+  async function editNote(ref: ObjectRef, text: string, title?: string, sourceRefs: ObjectRef[] = [], actor: "user" | "agent" = "user") {
     if (await storage.get(`visual-block/${ref.objectId}/${ref.revision}`)) throw new ObjectStoreError("capability_denied", "此卡片包含结构化字段，请用组件编辑器或 liteasy_block_update 保存；普通笔记写入不会破坏其类型。");
     const head = await storage.get(headKey(ref.objectId));
     const current = readObject(head);
@@ -723,7 +723,9 @@ export function createObjectRepository(
         title: title ?? current.title,
         content: {
           schema: "liteasy.note/v1",
-          payload: { ...current.content.payload, text },
+          payload: { ...current.content.payload, text,
+            ...(text !== current.content.payload.text ? { [actor === "agent" ? "agentEditedAt" : "userEditedAt"]: new Date().toISOString() } : {}),
+          },
         },
         ...current.provenance,
         sourceRefs: [...current.provenance.sourceRefs, ...sourceRefs],

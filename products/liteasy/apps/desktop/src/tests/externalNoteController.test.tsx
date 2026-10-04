@@ -1,3 +1,6 @@
+import "fake-indexeddb/auto";
+import { createNotesRepository } from "../app/features/notes/notesRepository";
+import { createObjectStorage } from "../app/features/objects/objectStorage";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { useExternalNoteController } from "../app/controllers/useExternalNoteController";
@@ -23,6 +26,10 @@ test("keeps only unsaved inactive drafts and saves them with their original disk
   await act(async () => result.current.save());
   expect(writeFile).toHaveBeenCalledWith({ mountId: "vault", path: "a.md", text: "unsaved A", expectedVersion: "v1" });
   expect(result.current.session?.snapshot.text).toBe("unsaved A");
+  await waitFor(async () => {
+    const labels = await createNotesRepository(createObjectStorage("scope", () => "scope")).listLabels();
+    expect(labels.get("external-file:vault:a.md")).toEqual({ "user-edited": true });
+  });
 });
 
 test("a poll started before saving cannot roll a successful save back to stale content", async () => {

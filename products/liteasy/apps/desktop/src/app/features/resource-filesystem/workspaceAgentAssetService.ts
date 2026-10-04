@@ -269,7 +269,7 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
       check(options.signal);
       const next = before === after && !options.sourceRefs?.length ? object : object.kind === "workspace.board"
         ? await writeAgentBoard(input.repository, object, after, () => input.active() && !options.signal?.aborted, options.sourceRefs)
-        : await input.repository.editNote(refOf(object), after, undefined, options.sourceRefs);
+        : await input.repository.editNote(refOf(object), after, undefined, options.sourceRefs, "agent");
       const warnings: string[] = [];
       // The body commit is authoritative; a delayed index refresh must not report it as failed.
       if (input.active() && next !== object) {
@@ -433,12 +433,12 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
         const project = await input.projects.ensurePaperProject({ paperId: paper.id, title: paper.title });
         check(options.signal);
         const asset = options.kind === "note"
-          ? await input.projects.createNote(project.projectId, options.text ?? "", options.title, options.sourceRefs, `mcp:${options.operationId}`)
+          ? await input.projects.createNote(project.projectId, options.text ?? "", options.title, options.sourceRefs, `mcp:${options.operationId}`, `agent:${options.operationId}`)
           : await input.projects.createBoard(project.projectId, options.title, `mcp:${options.operationId}`, options.sourceRefs);
         return objectStat(await input.repository.resolveLatest(asset.ref!.objectId));
       }
       const object = await input.repository.create(options.kind === "note"
-        ? { kind: "content.note", title: options.title, sourceRefs: options.sourceRefs, content: { schema: "liteasy.note/v1", payload: { text: options.text ?? "", origin: "user" } } }
+        ? { kind: "content.note", runId: `agent:${options.operationId}`, title: options.title, sourceRefs: options.sourceRefs, content: { schema: "liteasy.note/v1", payload: { text: options.text ?? "", origin: "user" } } }
         : { kind: "workspace.board", title: options.title, sourceRefs: options.sourceRefs, content: { schema: "liteasy.board/v1", payload: { description: "" } } }, `mcp-create:${options.operationId}`);
       return objectStat(await input.repository.resolveLatest(object.objectId));
     },

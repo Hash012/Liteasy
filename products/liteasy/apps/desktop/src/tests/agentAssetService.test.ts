@@ -288,3 +288,15 @@ describe("workspace agent assets", () => {
     await expect(service.read(asset.path)).rejects.toMatchObject({ code: "unavailable" });
   });
 });
+
+test.each([false, true])("records Agent creation and writes for a note (paper attached: %s)", async (attached) => {
+  const f = fixture();
+  const created = await f.service.create({ kind: "note", title: "AI reading note", text: "Generated summary", operationId: crypto.randomUUID(),
+    ...(attached ? { paperPath: liteasyPath(f.scopeId, { kind: "paper", paperId: f.paper.id }) } : {}) });
+  const found = (await f.repository.search("AI reading note")).objects[0];
+  expect(found.createdBy.type).toBe("agent");
+  await f.service.write(created.path, { text: "Revised summary", expectedRevision: created.revision! });
+  const updated = await f.repository.resolveLatest(found.objectId);
+  expect(updated.content.payload).toHaveProperty("agentEditedAt");
+  expect(updated.content.payload).not.toHaveProperty("userEditedAt");
+});

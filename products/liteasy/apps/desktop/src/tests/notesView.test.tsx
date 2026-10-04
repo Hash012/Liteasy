@@ -377,3 +377,62 @@ describe("native Notes sources", () => {
     expect(JSON.stringify(artifact)).toBe(before);
   });
 });
+
+it("tracks actual user and Agent note edits without treating no-op saves as personal contributions", async () => {
+  const f = fixture();
+  const generated = await f.repository.create({ ...note("AI 正文"), runId: "test-generation" });
+  const unchanged = await f.repository.editNote(refOf(generated), "AI 正文");
+  expect(unchanged.content.payload).not.toHaveProperty("userEditedAt");
+  const agentEdited = await f.repository.editNote(refOf(unchanged), "AI 修改正文", undefined, [], "agent");
+  expect(agentEdited.content.payload).toHaveProperty("agentEditedAt");
+  expect(agentEdited.content.payload).not.toHaveProperty("userEditedAt");
+  const edited = await f.repository.editNote(refOf(agentEdited), "加入我的观察");
+  expect(edited.content.payload).toHaveProperty("userEditedAt");
+  const { result } = renderHook(() => useNotesController(f.input));
+  await waitFor(() => expect(result.current.model.items).toHaveLength(1));
+  expect(result.current.model.items[0].labels).toEqual(expect.arrayContaining(["user-edited", "ai-generated"]));
+  expect(result.current.model.items[0].editable).toBe(true);
+  await act(() => result.current.model.setLabel!(result.current.model.items[0], "translation", true));
+  expect(result.current.model.items[0].labels).toContain("translation");
+  const labels = await f.restart().listLabels();
+  expect([...labels.values()]).toEqual([{ translation: true }]);
+  const latest = await f.repository.resolveLatest(edited.objectId);
+  expect(latest.revision).toBe(edited.revision); // Label changes must not change body or revision.
+  const next = await f.repository.editNote(refOf(latest), "再次修改正文");
+  await act(() => result.current.model.refresh());
+  expect(result.current.model.items[0].object?.revision).toBe(next.revision);
+  expect(result.current.model.items[0].labels).toContain("translation");
+});
+
+it("combines note labels and exclusions and keeps personal additions to AI content visible", async () => {
+  const { mockFocusLayout } = await import("./fixtures/mockFocusLayout");
+  const restore = mockFocusLayout();
+  try {
+    const f = fixture();
+    await f.repository.create(note("我的观察"));
+    await f.repository.create({ ...note("纯生成内容"), runId: "ai-1" });
+    const revised = await f.repository.create({ ...note("修改过的导读"), runId: "ai-2" });
+    await f.repository.editNote(refOf(revised), "我的补充理解");
+    const translation = await f.repository.create({ ...note("论文译文"), runId: "ai-3" });
+    await f.notes.setLabel({ kind: "object", ref: refOf(translation), followLatest: true }, "translation", true);
+    function Harness() { const { model } = useNotesController(f.input); return <FluentProvider theme={webLightTheme}><NotesPanel model={model} /></FluentProvider>; }
+    render(<Harness />);
+    const user = userEvent.setup();
+    await screen.findByRole("button", { name: "查看笔记 论文译文" });
+    await user.click(screen.getByRole("button", { name: "标签筛选" }));
+    await user.click(await screen.findByRole("checkbox", { name: "隐藏翻译结果" }));
+    await user.click(screen.getByRole("checkbox", { name: "隐藏纯 AI 内容" }));
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("button", { name: "查看笔记 论文译文" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "查看笔记 纯生成内容" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "查看笔记 修改过的导读" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "查看笔记 我的观察" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "标签筛选 · 2" }));
+    await user.selectOptions(await screen.findByRole("combobox", { name: "包含笔记标签" }), "user-edited");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("button", { name: "查看笔记 我的观察" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "查看笔记 修改过的导读" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "清除筛选" }));
+    expect(screen.getByRole("button", { name: "查看笔记 论文译文" })).toBeInTheDocument();
+  } finally { restore(); }
+});

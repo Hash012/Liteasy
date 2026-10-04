@@ -1,3 +1,6 @@
+import { createNotesRepository } from "../features/notes/notesRepository";
+import { createObjectStorage } from "../features/objects/objectStorage";
+import { notifyNotesSourcesChanged } from "../features/notes/notesPort";
 import { useMarkdownAutosave } from "../features/markdown/useMarkdownAutosave";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createNoteFileService, type NoteFileSnapshot } from "../features/note-files/noteFileService";
@@ -10,6 +13,7 @@ const keyOf = (file: NoteFileSnapshot) => `${file.mountId}\0${file.path}`;
 export function useExternalNoteController(input: { scopeId: string; visible: boolean; autosave?: boolean; onOpen(): void }) {
   const latest = useRef(input); latest.current = input;
   const files = useMemo(() => createNoteFileService(input.scopeId, () => latest.current.scopeId), [input.scopeId]);
+  const notes = useMemo(() => createNotesRepository(createObjectStorage(input.scopeId, () => latest.current.scopeId)), [input.scopeId]);
   const [session, setSession] = useState<NoteSession>();
   const current = useRef(session); current.current = session;
   const drafts = useRef(new Map<string, NoteSession>());
@@ -86,6 +90,14 @@ export function useExternalNoteController(input: { scopeId: string; visible: boo
       drafts.current.delete(keyOf(file));
       replace({ snapshot: saved, draft: current.current?.draft ?? text, changed: false, editing: current.current?.editing ?? active.editing });
       setNotice(copy ? "草稿已另存为副本，原文件保持不变。" : "已保存到原文件。");
+      if (text !== file.text) {
+        // Metadata must not hold the disk-write lock or delay the next autosave.
+        void notes.setLabel({ kind: "external-file", mountId: file.mountId, path }, "user-edited", true)
+          .then(() => { if (valid()) notifyNotesSourcesChanged(); })
+          .catch(() => {
+            if (valid() && operation === generation.current) setNotice("正文已保存；编辑痕迹标签暂未保存，可在笔记操作中补充。");
+          });
+      }
     } catch (failure) {
       if (valid() && operation === generation.current) setError(failure instanceof Error ? failure.message : String(failure));
     } finally { if (valid() && operation === generation.current) setBusy(false); }

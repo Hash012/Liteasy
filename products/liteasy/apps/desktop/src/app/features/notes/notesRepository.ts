@@ -1,3 +1,4 @@
+import { noteLabelKey, noteLabelEntries, type NoteLabel, type NoteLabelOverrides } from "./noteLabels";
 import { z } from "zod";
 import { objectRefSchema } from "../objects/object.types";
 import type {
@@ -99,6 +100,21 @@ export function createNotesRepository(storage: ObjectStorage) {
   return {
     listFolders,
     listReferences,
+    async listLabels(): Promise<Map<string, NoteLabelOverrides>> {
+      return new Map((await rows("notes/labels/")).map((row) => {
+        const value = row.value as Record<string, unknown> | null;
+        const labels = Object.fromEntries(noteLabelEntries.flatMap(([id]) =>
+          typeof value?.[id] === "boolean" ? [[id, value[id]]] : [])) as NoteLabelOverrides;
+        return [decodeURIComponent(row.key.slice("notes/labels/".length)), labels];
+      }));
+    },
+    async setLabel(target: NotesTarget, label: NoteLabel, enabled: boolean) {
+      notesTargetSchema.parse(target);
+      if (!noteLabelEntries.some(([id]) => id === label)) throw new Error("未知笔记标签。");
+      const key = `notes/labels/${encodeURIComponent(noteLabelKey(target))}`;
+      const old = await storage.get(key);
+      await storage.commit([change(key, { ...(old?.value as NoteLabelOverrides ?? {}), [label]: enabled }, old)]);
+    },
     async importedObjectIds(): Promise<Set<string>> {
       return new Set((await rows("notes/imported/")).flatMap((row) => {
         const value = row.value as { objectId?: unknown } | null;

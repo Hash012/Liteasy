@@ -1,3 +1,4 @@
+import { noteLabelKey, resolvedNoteLabels, type NoteLabelOverrides } from "../features/notes/noteLabels";
 import { formatPaperAnchorText } from "../features/paper-anchors/paperAnchorEntity";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -105,6 +106,7 @@ export function useNotesController(input: {
     `external:${mountId}:${path}`;
   const [folders, setFolders] = useState<NotesFolder[]>(DEFAULT_NOTES_FOLDERS);
   const folderIndex = useMemo(() => new Map(folders.map((folder) => [folder.folderId, folder])), [folders]);
+  const [labelOverrides, setLabelOverrides] = useState(new Map<string, NoteLabelOverrides>());
   const [sources, setSources] = useState<NotesItem[]>([]);
   const [references, setReferences] = useState<NotesReference[]>([]);
   const [folderId, setFolderId] = useState(NOTES_ROOT);
@@ -138,7 +140,6 @@ export function useNotesController(input: {
     };
     const editable =
       object.kind === "content.note" &&
-      object.createdBy.type === "user" &&
       object.content.payload.origin !== "external";
     return {
       key: notesTargetKey(target),
@@ -467,8 +468,8 @@ export function useNotesController(input: {
         for (const placement of await repository.listPlacements(board.objectId))
           boardMembers.set(placement.ref.objectId, board.title);
       const objectMap = new Map(all.map((object) => [object.objectId, object]));
-      const [nextFolders, nextReferences, paperProjects, importedObjects] = await Promise.all([
-        notes.listFolders(), notes.listReferences(), projects.listProjects(), notes.importedObjectIds(),
+      const [nextFolders, nextReferences, paperProjects, importedObjects, nextLabels] = await Promise.all([
+        notes.listFolders(), notes.listReferences(), projects.listProjects(), notes.importedObjectIds(), notes.listLabels(),
       ]);
       const paperMembership = new Map<string, string>();
       for (const project of paperProjects) {
@@ -498,7 +499,6 @@ export function useNotesController(input: {
           (object) =>
             object.kind === "workspace.board" ||
             (object.kind === "content.note" &&
-              object.createdBy.type === "user" &&
               object.content.payload.origin !== "external"),
         )
         .map((object) => {
@@ -570,6 +570,7 @@ export function useNotesController(input: {
         if (!active() || generation !== request.current) return;
         setFolders([...nextFolders, ...externalCache.current.folders]);
         setReferences(nextReferences);
+        setLabelOverrides(nextLabels);
         setSources([...indexed.values()]);
       };
       await publish();
@@ -633,6 +634,7 @@ export function useNotesController(input: {
     setExternalWarning("");
     setSources([]);
     setReferences([]);
+    setLabelOverrides(new Map());
     setFolders(DEFAULT_NOTES_FOLDERS);
     setFolderId(NOTES_ROOT);
     setQuery("");
@@ -682,7 +684,6 @@ export function useNotesController(input: {
         const object = await repository.get(target.ref);
         const userNote =
           object.kind === "content.note" &&
-          object.createdBy.type === "user" &&
           object.content.payload.origin !== "external";
         normalized = {
           ...target,
@@ -776,6 +777,7 @@ export function useNotesController(input: {
       });
   }
   const items = [...visibleItems.values()]
+    .map((item) => ({ ...item, labels: resolvedNoteLabels(item, labelOverrides.get(noteLabelKey(item.target))) }))
     .filter((item) =>
       `${item.title}\n${item.text}\n${item.source}`
         .toLocaleLowerCase()
@@ -792,6 +794,9 @@ export function useNotesController(input: {
     error,
     sourceWarning: externalWarning || sourceWarning,
     selected: items.find((item) => item.key === selectedKey),
+    setLabel: (item, label, enabled) => perform(async () => {
+      await notes.setLabel(item.target, label, enabled);
+    }),
     selectFolder: (id) => {
       setFolderId(id);
       setSelectedKey("");
@@ -884,6 +889,7 @@ export function useNotesController(input: {
             text,
             expectedVersion: item.file.version,
           });
+          if (text !== item.file.text) await notes.setLabel(item.target, "user-edited", true);
           await refreshFiles();
           return;
         }

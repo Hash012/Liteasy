@@ -1,6 +1,8 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, expect, test, vi } from "vitest";
+import { FluentProvider, webLightTheme } from "@fluentui/react-components";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { mockFocusLayout } from "./fixtures/mockFocusLayout";
 import { AssistantPane } from "../app/features/assistant/AssistantPane";
 import { artifactPromptTask, getGenerationPrompt, presetGenerationPrompt } from "../app/features/ai-prompts/generationPrompts";
 import { runAgentArtifactAnalysis } from "../app/controllers/agent/runAgentArtifactAnalysis";
@@ -18,7 +20,9 @@ function client() {
     close: vi.fn(), cancel: vi.fn(), confirm: vi.fn()
   } as unknown as FrontendAgentClient & { send: typeof send };
 }
-afterEach(() => localStorage.clear());
+let restoreFocusLayout: () => void;
+beforeEach(() => { restoreFocusLayout = mockFocusLayout(); });
+afterEach(() => { restoreFocusLayout(); localStorage.clear(); });
 
 test.each([
   ["制作PPT", "ppt"], ["制作提纲", "tree"], ["生成思维导图", "mindmap"],
@@ -33,9 +37,9 @@ test.each([
     });
     return "正在生成学习资料";
   });
-  render(<AssistantPane agentClient={agentClient} availablePapers={[paper]} selectedPapers={[paper]}
+  render(<FluentProvider theme={webLightTheme}><AssistantPane agentClient={agentClient} availablePapers={[paper]} selectedPapers={[paper]}
     onGenerateArtifact={onGenerateArtifact}
-    selectedSetStatus={{ importedCount: 1, selectedCount: 1, selectionLocked: true }} />);
+    selectedSetStatus={{ importedCount: 1, selectedCount: 1, selectionLocked: true }} /></FluentProvider>);
   const input = screen.getByPlaceholderText("输入你的问题或命令");
   await user.type(input, "/");
   const menu = screen.getByLabelText("输入候选");
@@ -46,7 +50,9 @@ test.each([
   expect(document.querySelector(".assistant-command-chip")?.textContent).toBe(label);
   expect(onGenerateArtifact).not.toHaveBeenCalled();
   await user.type(input, "面向初学者，包含对比表");
-  await user.selectOptions(screen.getByRole("combobox", { name: "生成风格" }), "concise");
+  await user.click(screen.getByRole("button", { name: "调整思考深度：均衡" }));
+  await user.selectOptions(await screen.findByRole("combobox", { name: "生成风格" }), "concise");
+  await user.keyboard("{Escape}");
   const systemPrompt = presetGenerationPrompt(artifactPromptTask(type), "concise");
   await user.click(screen.getByRole("button", { name: "发送", exact: true }));
   await waitFor(() => expect(onGenerateArtifact).toHaveBeenCalledWith(type, [paper.id], expect.stringContaining("面向初学者，包含对比表"), undefined, systemPrompt));

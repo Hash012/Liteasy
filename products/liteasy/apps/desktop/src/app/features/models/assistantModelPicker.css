@@ -7,6 +7,9 @@
 .assistant-model-options small, .assistant-model-hint { color: var(--colorNeutralForeground3); font-size: 12px; font-weight: 400; }
 .assistant-model-hint { margin: 0; }
 .assistant-thinking-popover { width: min(250px, calc(100vw - 40px)); }
+.assistant-thinking-popover-with-rules { width: min(420px, calc(100vw - 40px)); max-height: min(560px, calc(100dvh - 32px)); overflow-y: auto; box-sizing: border-box; }
+.assistant-thinking-rules { display: grid; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--colorNeutralStroke2); min-width: 0; }
+.assistant-thinking-rules .generation-prompt-toolbar { align-items: flex-start; flex-direction: column; gap: 8px; }
 .assistant-thinking-popover .assistant-thinking-depth { width: 100%; max-width: none; gap: 8px; color: var(--colorNeutralForeground1); }
 .assistant-thinking-popover .assistant-thinking-labels { color: var(--colorNeutralForeground2); }
 .assistant-thinking-description { margin: 0; color: var(--colorNeutralForeground3); font-size: 12px; }

@@ -2289,8 +2289,6 @@ export function AssistantPane({
         <span>{contextCatalogStatus}</span>
         {onRefreshContextCatalog ? <Button appearance="subtle" size="small" onClick={onRefreshContextCatalog}>重试</Button> : null}
       </div> : null}
-      <GenerationPromptEditor key={promptTask} task={promptTask} value={generationPrompts[promptTask]}
-        onChange={(value) => setGenerationPrompts((drafts) => ({ ...drafts, [promptTask]: value }))} />
       <AssistantComposer
         contextUsage={contextUsage ?? [...assistantState.messages].reverse()
           .find((message) => message.agentActivity?.contextUsage)?.agentActivity?.contextUsage ?? {
@@ -2303,6 +2301,8 @@ export function AssistantPane({
           disabled={assistantState.pending || !historyReady || queuedAssistantTurnsRef.current.length > 0} />}
         thinkingDepth={thinkingDepth}
         onThinkingDepthChange={setThinkingDepth}
+        thinkingRules={<GenerationPromptEditor key={promptTask} task={promptTask} value={generationPrompts[promptTask]}
+          onChange={(value) => setGenerationPrompts((drafts) => ({ ...drafts, [promptTask]: value }))} />}
         editing={Boolean(editingMessageId)}
         input={input}
         inputRef={inputRef}

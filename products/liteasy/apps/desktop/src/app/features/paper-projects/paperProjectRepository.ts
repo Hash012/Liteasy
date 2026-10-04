@@ -258,11 +258,12 @@ export function createPaperProjectRepository(storage: ObjectStorage, scopeId: st
       description: `来自「${source.title}」的独立副本，修改不会改变论文来源。`.slice(0, 12000),
     });
   }
-  async function createNote(projectId: string, text: string, title = "项目笔记", sourceRefs: ObjectRef[] = [], operationId: string = crypto.randomUUID()): Promise<PaperProjectAsset> {
+  async function createNote(projectId: string, text: string, title = "项目笔记", sourceRefs: ObjectRef[] = [], operationId: string = crypto.randomUUID(), runId?: string): Promise<PaperProjectAsset> {
     await getProject(projectId);
     const note = await objects.create({
       kind: "content.note",
       title: title.trim() || "项目笔记",
+      runId,
       sourceRefs,
       ...(sourceRefs.length ? { derivedFrom: sourceRefs } : {}),
       content: { schema: "liteasy.note/v1", payload: { text, origin: sourceRefs.length ? "derived" : "user" } },

@@ -23,6 +23,7 @@ export type NotesReference = {
   createdAt: string;
 };
 export type NotesItem = {
+  labels?: import("./noteLabels").NoteLabel[];
   paperAnchors?: import("../paper-anchors/paperAnchorEntity").PaperAnchorEntity[];
   key: string;
   target: NotesTarget;
@@ -52,6 +53,7 @@ export type NotesViewModel = {
   error: string;
   sourceWarning?: string;
   selected?: NotesItem;
+  setLabel?(item: NotesItem, label: import("./noteLabels").NoteLabel, enabled: boolean): Promise<void>;
   selectFolder(folderId: string): void;
   selectItem(item: NotesItem): void;
   search(query: string): void;

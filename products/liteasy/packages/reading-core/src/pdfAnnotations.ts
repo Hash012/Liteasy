@@ -65,6 +65,8 @@ type PdfAnnotationBase = {
   review?: PdfAnnotationReview;
   quickAsk?: { question: string; answer: string; pageText: string; abstractText: string };
   aiGuide?: GuideAnnotation;
+  /** Set only by an actual user change to the annotation body. */
+  userEditedAt?: string;
   normalizedStart?: number;
   opacity?: number;
   manualSize?: boolean;
@@ -396,6 +398,9 @@ export function revisePdfAnnotation(annotation: PdfAnnotationV2, edit: PdfAnnota
   return {
     ...annotation,
     ...edit,
+    ...((edit.note !== undefined && edit.note !== annotation.note) ||
+      (edit.text !== undefined && edit.text !== annotation.text)
+      ? { userEditedAt: edit.updatedAt } : {}),
     ...(edit.publication ? { publication: { ...edit.publication } } : {}),
     ...(edit.rects ? { rects: edit.rects.map((rect) => ({ ...rect })) } : {}),
     revision: currentRevision + 1
