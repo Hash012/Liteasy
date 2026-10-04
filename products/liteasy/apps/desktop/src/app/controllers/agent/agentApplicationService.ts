@@ -44,7 +44,6 @@ import {
   type AgentStateStore
 } from "./agentStatePersistence";
 import {
-  compactAssistantConversationHistory,
   type AssistantConversationTurn
 } from "../../features/assistant/assistantConversationContext";
 
@@ -62,7 +61,7 @@ export type AgentCommandExecutionInput = {
   reportProgress: (input: { phase: string; progress: number; summary: string }) => void;
   reportDelta: (delta: string) => void;
   reportAssetWrite?: (receipt: AgentJsonValue) => void;
-  reportContextUsage?: (usage: { usedTokens: number; maxTokens: number; estimated: boolean }) => void;
+  reportContextUsage?: (usage: import("../../features/assistant/assistant.types").AgentContextUsage) => void;
   reportManagerActivity: (input: AgentManagerActivity) => void;
   reportSubtaskDelta: (input: { delta: string; label: string; subtaskId: string }) => void;
   runId: string;
@@ -84,7 +83,7 @@ export function collectAgentConversationHistory(
       turns.push({ assistant, user: run.input.message });
     }
   }
-  return compactAssistantConversationHistory(turns);
+  return turns; // Budgeting happens at the model boundary; stored history must remain retrievable.
 }
 
 export type AgentKnowledgeExecutionResult = {

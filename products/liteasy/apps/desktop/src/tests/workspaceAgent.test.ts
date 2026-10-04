@@ -166,3 +166,42 @@ test("applies local profile preferences to actual workspace model requests, and 
   expect(fixture.read).not.toHaveBeenCalled();
   fixture.api.dispose();
 });
+
+test("retains early requests beyond eight and twelve turns in the same session", async () => {
+  const fixture = setup(Array.from({ length: 15 }, (_, i) => action({ message: `答复 ${i}` })));
+  const session = await fixture.api.createSession({ consumer: "frontend" });
+  if (!session.ok) throw new Error(session.error.message);
+  try {
+    for (let i = 0; i < 15; i++) {
+      const run = await fixture.api.submitTurn({ sessionId: session.data.sessionId, idempotencyKey: crypto.randomUUID(), input: { mode: "qa", message: i === 0 ? "研究约束：EXPERIMENT-73，禁止丢失" : `继续讨论第 ${i} 轮` } });
+      expect(run.ok).toBe(true);
+      if (run.ok) expect(run.data.status).toBe("completed");
+    }
+    expect(fixture.prompts.at(-1)).toContain("EXPERIMENT-73");
+    expect(fixture.prompts.at(-1)).toContain("答复 0");
+  } finally { fixture.api.dispose(); }
+});
+
+test("recovers exact older content through session history when the working window is compacted", async () => {
+  const longAnswer = "older text ".repeat(1500) + "DECISION-73" + " more text".repeat(1500);
+  const fixture = setup([action({ message: longAnswer }), action({ message: longAnswer }),
+    action({ action: "history", query: "DECISION-73", offset: 16000 }), action({ message: "已核对早期原文中的 DECISION-73。" })]);
+  fixture.environment.knowledge.settings["assistant.context_window"] = "8192";
+  const session = await fixture.api.createSession({ consumer: "frontend" });
+  if (!session.ok) throw new Error(session.error.message);
+  try {
+    for (const message of ["讨论第一次实验", "讨论第二次实验", "核对最初的实验编号"]) {
+      const run = await fixture.api.submitTurn({ sessionId: session.data.sessionId, idempotencyKey: crypto.randomUUID(), input: { mode: "qa", message } });
+      expect(run.ok).toBe(true);
+      if (run.ok) {
+        expect(run.data.status).toBe("completed");
+        if (message === "核对最初的实验编号") {
+          expect(run.data.events).toContainEqual(expect.objectContaining({ type: "context.usage", history: expect.objectContaining({ totalTurns: 2, compactedTurns: 2 }) }));
+          expect(run.data.events).toContainEqual(expect.objectContaining({ type: "manager.activity", label: "回顾历史对话", status: "completed" }));
+        }
+      }
+    }
+    expect(fixture.prompts.at(-1)).toContain("DECISION-73");
+    expect(fixture.read).not.toHaveBeenCalled();
+  } finally { fixture.api.dispose(); }
+});

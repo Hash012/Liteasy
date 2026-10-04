@@ -578,3 +578,24 @@ test("accepts a paused clarification when recovering supported run statuses", as
   const { inspectAgentStateSnapshot } = await import("../app/controllers/agent/agentStatePersistence");
   expect(inspectAgentStateSnapshot(saved).issues).toEqual([]);
 });
+
+test("restored sessions retain the earliest completed turns for budgeted history retrieval", async () => {
+  const memory = createMemoryStore();
+  const first = createPersistentService({ stateStore: memory.store });
+  const session = await createSession(first);
+  for (let index = 0; index < 15; index++) {
+    const result = await first.submitTurn({ sessionId: session.sessionId, idempotencyKey: `history-${index}`,
+      input: { mode: "qa", message: index === 0 ? "原始约束 RESTART-73" : `问题 ${index}` } });
+    expect(result.ok).toBe(true);
+  }
+  let history: unknown;
+  const restored = createAgentApplicationService({ stateStore: memory.store,
+    executeCommand: () => ({ events: [], settingsChanged: false }),
+    executeKnowledge: (input) => { history = input.conversationHistory; return { message: "继续此前任务" }; } });
+  const result = await restored.submitTurn({ sessionId: session.sessionId, idempotencyKey: "after-restart",
+    input: { mode: "qa", message: "回顾最初的约束" } });
+  expect(result.ok).toBe(true);
+  expect(history).toHaveLength(15);
+  expect(history).toEqual(expect.arrayContaining([{ user: "原始约束 RESTART-73", assistant: "answer" }]));
+  restored.dispose();
+});

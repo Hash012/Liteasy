@@ -1,3 +1,4 @@
+import { conversationTurnsFromMessages } from "./assistantConversationContext";
 import { GenerationPromptEditor } from "../ai-prompts/GenerationPromptEditor";
 import { artifactPromptTask, getGenerationPrompt, settingsWithGenerationPrompt, type GenerationPromptTask } from "../ai-prompts/generationPrompts";
 import { mergeAssistantAssetWrites, parseAssistantAssetWrites } from "./assistantAssetWrites";
@@ -373,6 +374,7 @@ export function AssistantPane({
   );
   const [activeSessionId, setActiveSessionId] = useState(initialSessionRef.current.id);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [embeddedUsage, setEmbeddedUsage] = useState<{ sessionId: string; usage: AgentContextUsage }>();
   const [generationPrompts, setGenerationPrompts] = useState<Partial<Record<GenerationPromptTask, string>>>({});
   const [input, setInput] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -1505,8 +1507,15 @@ export function AssistantPane({
               importedChunksByPaperId[paperId] ?? []
             ]))
           : importedChunksByPaperId;
+        const embeddedSessionId = activeSessionIdRef.current;
+        let latestUsage: AgentContextUsage | undefined;
         const answer = await generateAssistantAnswer({
           auditTransport,
+          conversationHistory: conversationTurnsFromMessages(assistantStoreRef.current.getState().messages),
+          onContextUsage: (usage) => {
+            latestUsage = usage;
+            setEmbeddedUsage({ sessionId: embeddedSessionId, usage });
+          },
           enableVisualizationDecisionPlanner: true,
           importedChunksByPaperId: scopedChunks,
           mode,
@@ -1518,6 +1527,7 @@ export function AssistantPane({
           thinReadingExternalPdfTransport: modelTransport
         });
         const assistantMessage = createMessage("assistant", answer.content);
+        if (latestUsage) assistantMessage.agentActivity = { ...completeAgentActivity(createAgentActivity(), "completed"), contextUsage: latestUsage };
         assistantMessage.audit = answer.citations.length ? answer.audit : undefined;
         assistantMessage.citations = answer.citations;
         assistantMessage.confidence = answer.confidence;
@@ -2221,6 +2231,7 @@ export function AssistantPane({
       }}
     >
       <AssistantSessionToolbar
+        messages={assistantState.messages}
         title={activeSession?.title ?? "新对话"}
         kind={activeSession?.kind ?? "conversation"}
         historyOpen={historyOpen}
@@ -2290,7 +2301,7 @@ export function AssistantPane({
         {onRefreshContextCatalog ? <Button appearance="subtle" size="small" onClick={onRefreshContextCatalog}>重试</Button> : null}
       </div> : null}
       <AssistantComposer
-        contextUsage={contextUsage ?? [...assistantState.messages].reverse()
+        contextUsage={contextUsage ?? (embeddedUsage?.sessionId === activeSessionId ? embeddedUsage.usage : undefined) ?? [...assistantState.messages].reverse()
           .find((message) => message.agentActivity?.contextUsage)?.agentActivity?.contextUsage ?? {
             usedTokens: 0,
             maxTokens: Number(settingsStoreRef.current.getState()["assistant.context_window"]) || 32768,

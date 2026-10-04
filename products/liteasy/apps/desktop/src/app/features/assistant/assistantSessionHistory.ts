@@ -1,3 +1,4 @@
+import { contextInstructionText } from "./inlineContext";
 import type { createAssistantStore } from "./assistant.store";
 import type { AssistantContextToken, AssistantMessage, AssistantMode, AssistantState } from "./assistant.types";
 import type { ReaderConversationContext } from "./assistantContext.types";
@@ -95,8 +96,29 @@ function createTimestamp(now: () => number) {
   return new Date(now()).toISOString();
 }
 
-function getConversationTitle(messages: AssistantMessage[], fallback: string) {
-  return messages.find((message) => message.role === "user")?.content.trim() || fallback;
+export function getConversationTitle(messages: AssistantMessage[], fallback: string) {
+  const first = messages.find((message) => message.role === "user");
+  if (!first) return fallback;
+  const request = contextInstructionText(first.content, first.contextTokens ?? []).trim();
+  const topics: Array<[RegExp, string]> = [
+    [/投稿|选题|\bidea[s]?\b/i, "研究选题"], [/对比|比较|compare/i, "文献比较"],
+    [/翻译|translate/i, "翻译与理解"], [/总结|概括|摘要|summari/i, "内容总结"],
+    [/写入|修改|笔记|编辑|\bedit\b/i, "笔记整理"], [/解释|讲解|分析|explain|analy/i, "阅读与分析"],
+  ];
+  const intent = topics.find(([pattern]) => pattern.test(request))?.[1];
+  const subjects = (first.contextTokens ?? []).slice(0, 2).map((token) => {
+    const name = token.label.replace(/^[@/$]/, "").split(/[:：]/)[0].trim();
+    return name.length > 18 ? `${name.slice(0, 17)}…` : name;
+  });
+  const title = intent && subjects.length ? [...subjects, intent].join(" · ") : request.replace(/\s+/g, " ");
+  return title.length > 48 ? `${title.slice(0, 47)}…` : title || fallback;
+}
+
+export function conversationDigest(messages: AssistantMessage[]) {
+  const requests = messages.filter((message) => message.role === "user");
+  const latest = [...messages].reverse().find((message) => message.role === "assistant" && message.content.trim());
+  return { turns: requests.length, requests: requests.slice(-3).map((message) => contextInstructionText(message.content, message.contextTokens ?? []).slice(0, 320)),
+    latest: latest?.content.slice(0, 1600) ?? "" };
 }
 
 function formatArtifactLiveOutput(value: string | undefined) {
@@ -288,14 +310,13 @@ export function archiveAssistantSession({
   }
 
   const messages = [...state.messages];
-  const firstUserMessage = messages.find((message) => message.role === "user");
 
   return [
     {
       id: createSessionId(now, randomId),
       messages,
       mode: state.mode,
-      title: firstUserMessage?.content ?? "未命名会话"
+      title: getConversationTitle(messages, "未命名会话")
     },
     ...currentHistory
   ];

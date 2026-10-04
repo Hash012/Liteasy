@@ -1180,14 +1180,14 @@ body {
 }
 
 .assistant-context-token {
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+  border: 1px solid var(--colorBrandStroke2);
+  border-radius: 6px;
+  background: var(--colorBrandBackground2);
   color: var(--colorBrandForeground1, #185a97);
   cursor: pointer;
   font-size: calc(12px * var(--app-font-ratio, 1));
   max-width: 100%;
-  padding: 2px 0;
+  padding: 3px 7px;
   overflow-wrap: anywhere;
 }
 
@@ -6198,7 +6198,15 @@ button.pdf-overlay-mark:focus-visible {
 
 .assistant-inline-context {
   color: var(--colorBrandForeground1, #185a97);
+  background: var(--colorBrandBackground2);
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--colorBrandStroke2);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
+/* The mirror must keep exactly the textarea's glyph advances and line wraps. */
+.assistant-user-message-content .assistant-inline-context { padding: 1px 4px; margin-inline: 2px; }
+.assistant-message-token strong { min-width: 0; overflow-wrap: anywhere; }
 .assistant-command-chip::before {
   content: attr(data-prefix);
   visibility: hidden;
@@ -6418,3 +6426,8 @@ button.pdf-overlay-mark:focus-visible {
 .pdf-appearance-options small { color: var(--colorNeutralForeground2); line-height: 1.5; }
 
 .pdf-reader[data-pdf-night="true"] .pdf-overlay-mark.search-result { mix-blend-mode: normal; border-color: #f0d57a; }
+
+.assistant-session-digest { width: min(420px, calc(100vw - 40px)); max-height: min(560px, 75dvh); overflow: auto; overflow-wrap: anywhere; display: grid; gap: 8px; }
+.assistant-session-digest small { color: var(--colorNeutralForeground3); }
+.assistant-session-digest ul { padding-left: 20px; margin: 0; }
+.assistant-active-session .assistant-active-session-title { display: block; max-width: 100%; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

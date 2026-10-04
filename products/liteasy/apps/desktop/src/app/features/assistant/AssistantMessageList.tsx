@@ -1,3 +1,4 @@
+import { displayPath } from "../resource-filesystem/displayPath";
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import { formatModelExecutionLabel } from "../models/modelExecution";
 import type {
@@ -61,7 +62,7 @@ function ExpandableUserMessage({ value, contextTokens = [] }: { value: string; c
         ref={contentRef}
       >
         {inlineContextParts(value, contextTokens).map((part, index) => part.token
-          ? <strong className="assistant-inline-context" title={part.token.detail} key={index}>{part.text}</strong>
+          ? <strong className="assistant-inline-context" title={displayPath(part.token.detail ?? part.token.label)} key={index}>{part.text}</strong>
           : part.text)}
       </div>
       {foldable ? (
@@ -168,9 +169,8 @@ export function AssistantMessageList({
               {message.contextTokens?.length ? (
                 <div className="assistant-message-token-row">
                   {message.contextTokens.map((token) => (
-                    <span className={`assistant-message-token ${token.kind}`} key={token.id}>
+                    <span className={`assistant-message-token ${token.kind}`} key={token.id} title={displayPath(token.detail ?? token.label)} tabIndex={0}>
                       <strong>{token.label}</strong>
-                      {token.detail ? <span>{token.detail}</span> : null}
                     </span>
                   ))}
                 </div>

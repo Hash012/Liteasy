@@ -119,3 +119,53 @@ test("a context name containing 薄读 never becomes a generation command, but e
   await user.click(screen.getByRole("button", { name: "更新并发送" }));
   await waitFor(() => expect(generate).toHaveBeenCalledWith("ppt", undefined, expect.stringContaining("根据 注意力薄读 生成 PPT"), note.contextRefs, getGenerationPrompt("ppt")));
 });
+
+test("adjacent resources remain separate tags and native paths only appear in normalized tooltips", async () => {
+  const path = String.raw`\\?\D:\LiteasyData\AgentMem\Larimar.pdf`;
+  const { input, user, container } = setup(vi.fn(async () => ({ ...note, detail: path })));
+  await user.type(input, "@CicN");
+  await user.click(screen.getByRole("button", { name: /^@ CicN/ }));
+  await waitFor(() => expect(input).toHaveValue("CicN "));
+  await user.type(input, "@Cicada");
+  await user.click(screen.getByRole("button", { name: /^@ Cicada/ }));
+  expect(container.querySelectorAll(".assistant-input-highlight .assistant-inline-context")).toHaveLength(2);
+  expect(screen.getByRole("button", { name: "移除上下文：CicN" })).toHaveAttribute("title", String.raw`D:\LiteasyData\AgentMem\Larimar.pdf`);
+  await user.click(screen.getByRole("button", { name: "发送" }));
+  await screen.findByText("已处理。");
+  const tags = container.querySelectorAll(".assistant-message-token");
+  expect(tags).toHaveLength(2);
+  expect(tags[0]).toHaveTextContent(/^CicN$/);
+  expect(tags[0]).toHaveAttribute("title", String.raw`D:\LiteasyData\AgentMem\Larimar.pdf`);
+  expect(container.querySelector(".assistant-messages")).not.toHaveTextContent("LiteasyData");
+});
+
+test("a follow-up preserves the last context reading until its own request reports usage", async () => {
+  let finish!: () => void;
+  let count = 0;
+  let history: unknown;
+  const api = createAgentApplicationService({ executeCommand: () => ({ events: [], settingsChanged: false }),
+    executeKnowledge: async (input) => {
+      if (++count === 2) {
+        history = input.conversationHistory;
+        await new Promise<void>((resolve) => { finish = resolve; });
+      }
+      input.reportContextUsage?.({ usedTokens: count === 1 ? 16384 : 8192, maxTokens: 32768, estimated: true,
+        history: { totalTurns: count - 1, includedTurns: count - 1, compactedTurns: 0 } });
+      return { message: count === 1 ? "实验编号是 73" : "仍然保留编号 73" };
+    } });
+  const view = render(<AssistantPane agentClient={createFrontendAgentClient(api)} selectedSetStatus={{ importedCount: 0, selectedCount: 0, selectionLocked: false }} />);
+  const user = userEvent.setup(), input = screen.getByPlaceholderText("输入你的问题或命令");
+  await user.type(input, "记住实验编号 73"); await user.click(screen.getByRole("button", { name: "发送" }));
+  await screen.findByText("实验编号是 73");
+  expect(screen.getByRole("meter")).toHaveAttribute("aria-valuenow", "16384");
+  await user.type(input, "再说一遍"); await user.click(screen.getByRole("button", { name: "发送" }));
+  await waitFor(() => expect(finish).toBeTypeOf("function"));
+  expect(history).toEqual([{ user: expect.stringContaining("记住实验编号 73"), assistant: "实验编号是 73" }]);
+  expect(screen.getByRole("meter")).toHaveAttribute("aria-valuenow", "16384");
+  await act(async () => finish());
+  await screen.findByText("仍然保留编号 73");
+  expect(screen.getByRole("meter")).toHaveAttribute("aria-valuenow", "8192");
+  await user.hover(screen.getByRole("meter"));
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("完整载入 1 轮");
+  view.unmount(); api.dispose();
+});

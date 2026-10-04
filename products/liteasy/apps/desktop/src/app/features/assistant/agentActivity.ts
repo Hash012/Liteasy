@@ -98,7 +98,8 @@ export function completeAgentActivity(
 /** Projects the stable public activity events emitted by the active Manager. */
 export function applyAgentActivityEvent(activity: AgentActivity, event: AgentEvent): AgentActivity {
   if (event.type === "context.usage") return { ...activity, contextUsage: {
-    usedTokens: event.usedTokens, maxTokens: event.maxTokens, estimated: event.estimated
+    usedTokens: event.usedTokens, maxTokens: event.maxTokens, estimated: event.estimated,
+    history: event.history, workingTokens: event.workingTokens
   } };
   if (event.type === "run.started") return { ...activity, startedAt: event.emittedAt };
   if (event.type === "context.prepared" || event.type === "progress.started" || event.type === "analysis.subtask.delta") {

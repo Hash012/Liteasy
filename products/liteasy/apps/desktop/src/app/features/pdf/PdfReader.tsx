@@ -3106,7 +3106,7 @@ export function PdfReader({
     assertReadingAnnotationsReady();
     if (!Number.isInteger(input.page) || input.page < 1 || (pdfDocument && input.page > pdfDocument.numPages) || (!input.note.trim() && !input.excerpt.trim())) throw new Error("请选择页码并填写批注。");
     const duplicate = annotationsRef.current.find((item) => item.page === input.page && item.excerpt === input.excerpt && item.note === input.note.trim() && (!input.kind || item.kind === input.kind) && (!input.color || item.color === input.color));
-    if (duplicate) { await persistReadingAnnotations(); setReadingAnnotationId(duplicate.id); return; }
+    if (duplicate) { await persistReadingAnnotations(); return; }
     const now = new Date().toISOString();
     const scope = annotationStorageKey;
     let rects = readingQuoteRects(pageCharModelsRef.current.get(input.page), input.excerpt);
@@ -3121,7 +3121,7 @@ export function PdfReader({
       ...(input.lookupKind ? { lookupKind: input.lookupKind } : {}),
       paperIdentity: resolvePaperIdentity(activePaper!), publication: { desiredVisibility: "private", state: "not_published" } };
     setCurrentAnnotations((current) => [...current, annotation]);
-    setReadingAnnotationId(annotation.id);
+    // Creating a mark in reading mode is not a request to navigate or open its sidebar.
     await persistReadingAnnotations();
   }
 

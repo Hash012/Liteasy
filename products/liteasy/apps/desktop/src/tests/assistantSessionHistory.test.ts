@@ -237,3 +237,12 @@ test("includes artifact internals in a server-authorized diagnostic session", ()
   expect(failed.messages[1].content).toContain("Provider：openai");
   expect(failed.messages[1].content).toContain("Model：gpt-5.5");
 });
+
+test("summarizes attached paper topics instead of putting their full names into the session title", () => {
+  const user: AssistantMessage = { id: "user", role: "user", content: "Larimar: Large Language Models with Episodic Memory Control Cicada 分析这两篇论文，给几个 VLDB 投稿 idea。",
+    contextTokens: [{ id: "larimar", kind: "paper", label: "Larimar: Large Language Models with Episodic Memory Control", prompt: "" },
+      { id: "cicada", kind: "paper", label: "Cicada", prompt: "" }] };
+  const session = snapshotAssistantSession({ session: createAssistantSession(), state: { mode: "qa", pending: false, messages: [user] } });
+  expect(session.title).toBe("Larimar · Cicada · 研究选题");
+  expect(session.messages[0].content).toBe(user.content);
+});

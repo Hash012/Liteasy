@@ -35,7 +35,10 @@ export function usePaperReadingNavigation(contentRef: RefObject<HTMLElement>, sc
     clearTimeout(timer.current);
     timer.current = setTimeout(persist, 400);
   }
+  const selecting = useRef(false);
   function restorePosition() {
+    const selection = window.getSelection();
+    if (selecting.current || (selection && !selection.isCollapsed && contentRef.current?.contains(selection.anchorNode))) return;
     const { blocks, scroller, view } = indexRef.current;
     const position = history.current.positions[view];
     if (scroller && position) restoreReadingLocation(position, blocks, scroller);
@@ -77,10 +80,18 @@ export function usePaperReadingNavigation(contentRef: RefObject<HTMLElement>, sc
         for (const body of scroller.querySelectorAll(".mineru-markdown")) resize.observe(body);
       }
     };
+    const startSelection = () => { selecting.current = true; };
+    const endSelection = () => { selecting.current = false; };
+    root.addEventListener("pointerdown", startSelection);
+    window.addEventListener("pointerup", endSelection);
+    window.addEventListener("pointercancel", endSelection);
     rebuild();
     const observer = new MutationObserver(rebuild);
     observer.observe(root, { childList: true, subtree: true, characterData: true });
     return () => {
+      root.removeEventListener("pointerdown", startSelection);
+      window.removeEventListener("pointerup", endSelection);
+      window.removeEventListener("pointercancel", endSelection);
       cancelAnimationFrame(frame);
       clearTimeout(timer.current);
       observer.disconnect(); resize?.disconnect(); scroller?.removeEventListener("scroll", onScroll);

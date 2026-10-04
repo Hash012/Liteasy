@@ -1,6 +1,7 @@
+import { formatAssistantConversationContext } from "../../features/assistant/assistantConversationContext";
 import { getAccountSessionGeneration } from "../../features/account/accountSessionStorage";
 import { artifactPromptTask, getGenerationPrompt, settingsWithGenerationPrompt, withGenerationPrompt } from "../../features/ai-prompts/generationPrompts";
-import { agentContextLimit, withModelContextBudget } from "../../features/context/modelContextBudget";
+import { agentContextLimit, modelInputTokens, withModelContextBudget } from "../../features/context/modelContextBudget";
 import { runWorkspaceAgent } from "./runWorkspaceAgent";
 import type { AgentAssetService } from "../../features/resource-filesystem/agentAssetService";
 import { thinkingDepthInstruction } from "../../features/assistant/thinkingDepth";
@@ -214,10 +215,13 @@ async function executeKnowledgeTurn(
     }
     const settings = environment.knowledge.settings;
     const gateway = withModelContextBudget(createModelGatewayFromSettings(settings, { cloudTransport: environment.knowledge.modelTransport }), agentContextLimit(settings["assistant.context_window"]), input.reportContextUsage);
+    const basePrompt = withGenerationPrompt(contextSnapshotPrompt(input.context.objectSnapshot, question), getGenerationPrompt("assistant", settings));
+    const limit = agentContextLimit(settings["assistant.context_window"]);
+    const historyBudget = Math.max(0, limit - Math.min(4096, Math.floor(limit / 4)) - modelInputTokens({ prompt: basePrompt, images }) - 100);
     const result = await gateway.generateAnswer({
       model: getModelForSettings(settings),
       provider: getActiveModelProvider(settings),
-      prompt: withGenerationPrompt(contextSnapshotPrompt(input.context.objectSnapshot, question), getGenerationPrompt("assistant", settings)),
+      prompt: `${basePrompt}\n${formatAssistantConversationContext(conversationHistory, historyBudget)}`,
       ...(images.length ? { images } : {}),
       requireLive: true,
       signal

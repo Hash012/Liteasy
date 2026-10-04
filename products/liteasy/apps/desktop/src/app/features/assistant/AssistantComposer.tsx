@@ -1,4 +1,5 @@
 import "../models/assistantModelPicker.css";
+import { displayPath } from "../resource-filesystem/displayPath";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Button, Popover, PopoverSurface, PopoverTrigger, Slider, Tooltip } from "@fluentui/react-components";
 import { thinkingDepths, thinkingDepthLabels, type ThinkingDepth } from "./thinkingDepth";
@@ -217,7 +218,7 @@ export function AssistantComposer({
               className={`assistant-context-token ${token.kind}`}
               key={token.id}
               onClick={() => onRemoveContextToken?.(token.id)}
-              title={token.detail ?? token.prompt}
+              title={displayPath(token.detail ?? token.prompt)}
               type="button"
             >
               <strong>{token.label.replace(/^[@/$]/, "")}</strong>

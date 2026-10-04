@@ -58,6 +58,8 @@ export type AgentActivityEntry = {
  * without exposing implementation details or credentials.
  */
 export type AgentContextUsage = {
+  history?: import("./conversationWindow").ConversationWindowInfo;
+  workingTokens?: number;
   usedTokens: number;
   maxTokens: number;
   estimated: boolean;

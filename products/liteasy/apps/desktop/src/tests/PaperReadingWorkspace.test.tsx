@@ -81,6 +81,7 @@ test("selected reading text retains its page and comment across mode changes and
   window.getSelection()?.removeAllRanges();
   window.getSelection()?.addRange(range);
   fireEvent.mouseUp(paragraph);
+  await user.click(screen.getByText("补充批注与页码"));
   expect(screen.getByRole("combobox", { name: "批注页码" })).toHaveValue("2");
   // This fixture has extracted text but no PDF document/geometry. Keep a page note rather than guess a highlight.
   await user.selectOptions(screen.getByRole("combobox", { name: "标记类型" }), "note");
@@ -212,4 +213,25 @@ test("resolves a PDF annotation jump when the extracted reading text mounts late
   view.rerender(<PaperReadingWorkspace session={session} chunks={chunks}>{paragraphs}</PaperReadingWorkspace>);
   view.rerender(<PaperReadingWorkspace session={{ ...session, annotations: [original, next], selectedId: next.id }} chunks={chunks}>{paragraphs}</PaperReadingWorkspace>);
   await waitFor(() => expect(document.querySelector("[data-reading-comment-match]")).toHaveTextContent(next.excerpt));
+});
+
+test("selecting text opens floating tools without opening or resizing the comments sidebar", async () => {
+  const session: PdfReadingAnnotations = { scopeKey: "stable-selection", ready: true, annotations: [], pageTexts: { 2: chunks[0].snippet }, pageCount: 2, focusedPage: 2,
+    create: vi.fn(), update: vi.fn(), remove: vi.fn(), openPdf: vi.fn() };
+  const { container } = render(content(session));
+  await userEvent.click(screen.getByRole("button", { name: "批注（0）" }));
+  expect(container.querySelector(".paper-reading-body")).not.toHaveClass("with-comments");
+  const paragraph = screen.getByText(chunks[0].snippet), range = document.createRange();
+  range.selectNodeContents(paragraph);
+  window.getSelection()?.removeAllRanges(); window.getSelection()?.addRange(range);
+  fireEvent.mouseUp(paragraph);
+  expect(screen.getByRole("region", { name: "阅读选段操作" })).toBeInTheDocument();
+  expect(container.querySelector(".paper-reading-body")).not.toHaveClass("with-comments");
+  expect(screen.queryByRole("complementary", { name: "阅读模式批注" })).not.toBeInTheDocument();
+  expect(window.getSelection()?.toString()).toBe(chunks[0].snippet);
+  await userEvent.click(screen.getByRole("button", { name: "划线", exact: true }));
+  expect(session.create).toHaveBeenCalledWith(expect.objectContaining({ excerpt: chunks[0].snippet, page: 2, kind: "underline" }));
+  expect(window.getSelection()?.toString()).toBe(chunks[0].snippet);
+  fireEvent.keyDown(paragraph, { key: "Escape" });
+  expect(screen.queryByRole("region", { name: "阅读选段操作" })).not.toBeInTheDocument();
 });

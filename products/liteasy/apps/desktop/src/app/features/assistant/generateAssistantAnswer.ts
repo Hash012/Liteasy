@@ -1,4 +1,4 @@
-import { agentContextLimit, withModelContextBudget, type ModelContextUsage } from "../context/modelContextBudget";
+import { agentContextLimit, modelInputTokens, withModelContextBudget, type ModelContextUsage } from "../context/modelContextBudget";
 import { generateAdaptiveThinReading } from "../thin-reading/adaptiveThinReading";
 import { formatAnswer } from "./answerFormatter";
 import type { AssistantMode } from "./assistant.types";
@@ -4712,7 +4712,6 @@ export async function generateAssistantAnswer({
      * 这里仍然把文献片段作为明确“参考片段”传入，避免 memory 抢过证据优先级。
      */
     agentCoreContext ? `Agent核心上下文：\n${formatAgentCorePromptContext(agentCoreContext)}` : "",
-    formatAssistantConversationContext(conversationHistory),
     `问题：${question}`,
     `参考文献：${selectedPapers.map((paper) => paper.title).join("；")}`,
     artifactType ? `目标产物模态：${artifactType}` : "",
@@ -4738,7 +4737,9 @@ export async function generateAssistantAnswer({
   const generation = await gateway.generateAnswer({
     model,
     onDelta,
-    prompt,
+    prompt: `${prompt}\n${formatAssistantConversationContext(conversationHistory, Math.max(0,
+      agentContextLimit(settings["assistant.context_window"]) - Math.min(4096, Math.floor(agentContextLimit(settings["assistant.context_window"]) / 4))
+      - modelInputTokens({ prompt: withGenerationPrompt(prompt, getGenerationPrompt(artifactPromptTask(artifactType), settings)) }) - 100))}`,
     provider,
     signal
   });
