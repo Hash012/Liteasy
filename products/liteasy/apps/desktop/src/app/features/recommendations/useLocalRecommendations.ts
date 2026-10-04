@@ -27,15 +27,19 @@ export function useLocalRecommendations(input: { assets?: AgentAssetService; ena
   const publicDocuments = documents.filter((document) => !input.context?.views.find((view) => view.id === document.id)?.private || preferences.sendPrivateText);
   const queries = publicDocuments.length ? [...publicDocuments, ...(preferences.sendPrivateText && preferences.useAnnotations ? input.context?.views.filter((view) => view.kind === "annotation" && view.provenance === "user-note").slice(0, 3).map((view) => ({ id: view.id, title: view.title, abstract: view.text })) ?? [] : [])]
     : documents.length || !preferences.useProfile || !preferences.sendPrivateText ? [] : [...new Set([...(input.profile?.topics ?? []).slice(0, 3), ...(input.profile?.methods ?? []).slice(0, 1), ...(input.profile?.datasets ?? []).slice(0, 1)].filter((query) => query.trim()))].slice(0, 3);
-  const signature = JSON.stringify([scope, input.enabled, input.contextPending, input.config, queries, input.style, input.sort, input.profile, input.context, preferences]);
+  // Preserve the visible list only within the same account, selection and privacy settings.
+  const sourceKey = JSON.stringify([scope, input.scopeId, input.enabled, input.config, input.papers.map((paper) => paper.id),
+    input.context?.documents.map((document) => document.id), input.style, input.sort, input.profile, preferences]);
+  const signature = JSON.stringify([sourceKey, input.enabled, input.contextPending, input.config, queries, input.style, input.sort, input.profile, input.context, preferences]);
   const latest = useRef(signature); latest.current = signature;
   const controller = useRef<AbortController>();
   const [refresh, setRefresh] = useState(0);
-  const [state, setState] = useState({ signature, items: [] as RecommendationItem[], status: "idle" as RecommendationStatus, pending: false, message: "" });
+  const [state, setState] = useState({ signature, sourceKey, items: [] as RecommendationItem[], status: "idle" as RecommendationStatus, pending: false, message: "" });
+  const retained = state.sourceKey === sourceKey ? state.items : [];
   useEffect(() => {
     const abort = new AbortController(); controller.current = abort;
     const active = () => !abort.signal.aborted && latest.current === signature;
-    const update = (next: Partial<typeof state>) => { if (active()) setState((current) => ({ ...current, signature, ...next })); };
+    const update = (next: Partial<typeof state>) => { if (active()) setState((current) => ({ ...current, signature, sourceKey, ...next })); };
     const feedback = () => read<Feedback[]>(feedbackKey, []).filter((row) => row && typeof row.id === "string" && ["saved", "dismissed"].includes(row.action));
     const filter = (items: RecommendationItem[]) => {
       const history = feedback(), hidden = new Set([...read<string[]>(oldFeedbackKey, []), ...history.filter((row) => row.action === "dismissed").map((row) => row.id)]);
@@ -44,20 +48,21 @@ export function useLocalRecommendations(input: { assets?: AgentAssetService; ena
       return preferences.hybridEnabled || input.sort === "retrieved_at" ? ranked : personalizeRecommendationOrder(ranked, preferences.useProfile ? input.profile : undefined);
     };
     if (!input.enabled) { update({ items: [], pending: false, status: "disabled", message: "联网推荐已关闭。" }); return () => abort.abort(); }
-    if (input.contextPending) { update({ items: [], pending: true, status: "loading", message: "正在准备文献与相关批注…" }); return () => abort.abort(); }
+    if (input.contextPending) { update({ items: retained, pending: true, status: retained.length ? "ready" : "loading", message: "正在准备文献与相关批注…" }); return () => abort.abort(); }
     if (!queries.length && !input.context?.views.length) { update({ items: [], pending: false, status: "idle", message: "选择文献或在个人中心填写研究兴趣，即可获取关联推荐。" }); return () => abort.abort(); }
     const cache = read<{ key: string; items: RecommendationItem[] }[]>(cacheKey, []);
     const cacheId = JSON.stringify(["bibliographic-v4", input.config, queries, input.style]);
     const rawCached = cache.find((entry) => entry?.key === cacheId)?.items;
     const valid = (items: unknown) => Array.isArray(items) ? items.filter((item) => hasReadableRecommendationMetadata(item) && item && typeof item.id === "string" && typeof item.title === "string" && typeof item.relevanceScore === "number") as RecommendationItem[] : [];
     const cached = valid(rawCached);
-    update({ items: filter(cached), pending: true, status: cached.length ? "ready" : "loading", message: cached.length ? "已显示本机缓存，正在更新…" : "正在查找关联文献…" });
+    const previous = cached.length ? cached : retained;
+    update({ items: filter(previous), pending: true, status: previous.length ? "ready" : "loading", message: previous.length ? "已显示本机缓存，正在更新…" : "正在查找关联文献…" });
     const timer = setTimeout(() => { void (async () => {
-      let items = cached, notice = "";
+      let items = previous, notice = "";
       try {
         if (queries.length && navigator.onLine !== false) {
           if (!input.config) throw new Error("请在设置 → 文献服务选择自备 API，并填写地址与密钥。");
-          items = await fetchLocalRecommendations(input.config, queries, input.style, abort.signal, { citations: preferences.hybridEnabled, onCandidates: (partial) => update({ items: filter(partial), status: "ready", message: "正在补充引用关系与关联匹配…" }) });
+          items = await fetchLocalRecommendations(input.config, queries, input.style, abort.signal, { citations: preferences.hybridEnabled, onCandidates: (partial) => { if (partial.length) update({ items: filter(partial), status: "ready", message: "正在补充引用关系与关联匹配…" }); } });
           if (!active()) return;
           try { localStorage.setItem(cacheKey, JSON.stringify([{ key: cacheId, items }, ...cache.filter((entry) => entry?.key !== cacheId)].slice(0, 8))); }
           catch { notice = "本机缓存保存失败，请检查存储空间。"; }
@@ -77,10 +82,10 @@ export function useLocalRecommendations(input: { assets?: AgentAssetService; ena
     })(); }, 350);
     return () => { clearTimeout(timer); abort.abort(); };
   }, [signature, refresh]);
-  const current = state.signature === signature ? state : { items: [], status: "idle" as const, pending: false, message: "" };
+  const current = state.signature === signature ? state : { items: retained, status: retained.length ? "ready" as const : "idle" as const, pending: input.enabled, message: "" };
   return { recommendationItems: current.items, recommendationStatus: current.status, recommendationPending: current.pending, recommendationMessage: current.message,
     refreshRecommendations: () => setRefresh((value) => value + 1),
-    clearRecommendationCache: async () => { controller.current?.abort(); localStorage.removeItem(cacheKey); setState({ signature, items: [], pending: false, status: "idle", message: "已清除本机推荐缓存。" }); },
+    clearRecommendationCache: async () => { controller.current?.abort(); localStorage.removeItem(cacheKey); setState({ signature, sourceKey, items: [], pending: false, status: "idle", message: "已清除本机推荐缓存。" }); },
     recordRecommendationFeedback: async (candidate: RecommendationItem, action: "saved" | "dismissed") => {
       const rows = read<Feedback[]>(feedbackKey, []); const id = candidate.canonicalId ?? candidate.id;
       try { localStorage.setItem(feedbackKey, JSON.stringify([...rows.filter((value) => value.id !== id), { id, action, at: Date.now() }].slice(-500))); }
