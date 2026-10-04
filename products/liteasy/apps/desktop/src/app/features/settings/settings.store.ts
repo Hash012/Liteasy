@@ -1,3 +1,4 @@
+import { languageFontKeys, normalizeLanguageFont } from "./typography";
 import { getRecoveryRuntime } from "../local-recovery/runtimeProfile";
 import { agentContextLimit } from "../context/modelContextBudget";
 import { defaultReadingFontFamily, normalizeReadingFontFamily } from "./readingFonts";
@@ -97,6 +98,7 @@ function loadPersistedViewSettings(): Partial<SettingsState> {
       "view.theme": normalizeAppearancePreference(parsed["view.theme"]),
       "view.font_family": typeof parsed["view.font_family"] === "string" ? parsed["view.font_family"] : undefined,
       "view.reader_font_family": normalizeReadingFontFamily(parsed["view.reader_font_family"]),
+      ...Object.fromEntries(languageFontKeys.map((key) => [key, normalizeLanguageFont(parsed[key])])),
       "view.font_size": normalizeViewFontSize(parsed["view.font_size"]),
       "view.display_scale": normalizeDisplayScale(parsed["view.display_scale"]),
       "view.pdf_background": ["paper", "warm", "mint", "night", "custom"].includes(String(parsed["view.pdf_background"]))
@@ -124,6 +126,7 @@ function persistViewSettings(state: SettingsState) {
         "view.theme": state["view.theme"],
         "view.font_family": state["view.font_family"],
         "view.reader_font_family": state["view.reader_font_family"],
+        ...Object.fromEntries(languageFontKeys.map((key) => [key, state[key] ?? ""])),
         "view.font_size": state["view.font_size"],
         "view.display_scale": state["view.display_scale"],
         "view.pdf_preserve_images": state["view.pdf_preserve_images"],
@@ -139,7 +142,7 @@ function persistViewSettings(state: SettingsState) {
 export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.env) {
   const cloudEndpoint = releaseEndpoint(runtimeEnv.VITE_LITEASY_CLOUD_URL, "http://127.0.0.1:8787");
   const forumEndpoint = releaseEndpoint(runtimeEnv.VITE_FORUM_API_URL, "");
-  const state: SettingsState & SelectionLookupSettings & Record<GenerationPromptSettingKey, string> & { "view.list_density": "comfortable" | "compact"; "assistant.context_window": string; "view.close_empty_panels": boolean; "view.markdown_mode": "live" | "manual"; "view.markdown_autosave": boolean } = {
+  const state: SettingsState & Record<(typeof languageFontKeys)[number], string> & SelectionLookupSettings & Record<GenerationPromptSettingKey, string> & { "view.list_density": "comfortable" | "compact"; "assistant.context_window": string; "view.close_empty_panels": boolean; "view.markdown_mode": "live" | "manual"; "view.markdown_autosave": boolean } = {
     ...loadGenerationPrompts() as Record<GenerationPromptSettingKey, string>,
     ...loadLookupSettings(),
     "thin_reading.mode": "fast",
@@ -178,6 +181,10 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
     "view.theme": "system",
     "view.font_family": '"Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", sans-serif',
     "view.reader_font_family": defaultReadingFontFamily,
+    "view.font_family_zh": "",
+    "view.font_family_en": "",
+    "view.reader_font_family_zh": "",
+    "view.reader_font_family_en": "",
     "view.font_size": "14",
     "view.display_scale": "100",
     "view.pdf_background": "paper",
@@ -210,7 +217,9 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
       if (command.target === "network.recommendation.style" && !isRecommendationStyle(command.value)) {
         throw new Error("invalid_recommendation_style");
       }
-      state[command.target] = (command.target === "view.reader_font_family"
+      state[command.target] = ((languageFontKeys as readonly string[]).includes(command.target)
+        ? normalizeLanguageFont(command.value)
+        : command.target === "view.reader_font_family"
         ? normalizeReadingFontFamily(command.value)
         : command.target === "view.display_scale"
         ? normalizeDisplayScale(command.value)
@@ -230,8 +239,8 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
       if (command.target.startsWith("view.")) {
         persistViewSettings(state);
       }
-      if (command.target === "view.font_family") {
-        globalThis.dispatchEvent?.(new CustomEvent(typographyChangeEvent, { detail: state["view.font_family"] }));
+      if (command.target.includes("font_family")) {
+        globalThis.dispatchEvent?.(new CustomEvent(typographyChangeEvent, { detail: { ...state } }));
       }
       if (command.target === "view.theme") {
         notifyAppearancePreference(state["view.theme"]);

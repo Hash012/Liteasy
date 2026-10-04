@@ -2,9 +2,48 @@ import { afterEach, expect, test } from "vitest";
 import { createSettingsStore } from "../app/features/settings/settings.store";
 import { resolvePdfReadingBackground } from "../app/features/settings/viewSettings";
 import { defaultReadingFontFamily } from "../app/features/settings/readingFonts";
+import { languageFontKeys, resolveTypography } from "../app/features/settings/typography";
 
 afterEach(() => {
   globalThis.localStorage?.removeItem("liteasy.view-settings.v1");
+});
+
+test("four script preferences persist independently while legacy fonts remain available", () => {
+  localStorage.setItem("liteasy.view-settings.v1", JSON.stringify({ "view.font_family": '"Old UI", sans-serif', "view.reader_font_family": '"Old Reader", serif' }));
+  const store = createSettingsStore();
+  expect(resolveTypography(store.getState())).toMatchObject({ interfaceFamily: '"Old UI", sans-serif', readerFamily: '"Old Reader", serif', css: "" });
+  for (const [index, key] of languageFontKeys.entries()) store.apply({ intent: "update_setting", target: key, value: `"Font ${index}", serif` });
+  const restored = createSettingsStore().getState();
+  for (const [index, key] of languageFontKeys.entries()) expect(restored[key]).toBe(`"Font ${index}", serif`);
+  expect(restored["view.font_family"]).toBe('"Old UI", sans-serif');
+  expect(restored["view.reader_font_family"]).toBe('"Old Reader", serif');
+  store.apply({ intent: "update_setting", target: "view.reader_font_family_en", value: "" });
+  const reset = resolveTypography(createSettingsStore().getState());
+  expect(reset.readerFamily).not.toContain("Liteasy-reader-en");
+  expect(reset.readerFamily).toContain("Old Reader");
+  expect(reset.interfaceFamily).toContain("Liteasy-ui-en");
+});
+
+test("invalid script fonts cannot inject styles or discard valid sibling preferences", () => {
+  localStorage.setItem("liteasy.view-settings.v1", JSON.stringify({ "view.font_family_zh": {}, "view.font_family_en": "bad; } body { color: red", "view.reader_font_family_zh": '"Noto Serif CJK SC", serif' }));
+  const store = createSettingsStore();
+  expect(store.getState()["view.font_family_zh"]).toBe("");
+  expect(store.getState()["view.font_family_en"]).toBe("");
+  expect(store.getState()["view.reader_font_family_zh"]).toBe('"Noto Serif CJK SC", serif');
+  store.apply({ intent: "update_setting", target: "view.reader_font_family_en", value: "x".repeat(513) });
+  expect(store.getState()["view.reader_font_family_en"]).toBe("");
+  expect(resolveTypography(store.getState()).css).not.toContain("color: red");
+});
+
+test("reader scripts can independently follow interface fonts without overriding the other script", () => {
+  const store = createSettingsStore();
+  store.apply({ intent: "update_setting", target: "view.font_family_zh", value: '"Chinese UI", serif' });
+  store.apply({ intent: "update_setting", target: "view.reader_font_family_zh", value: "inherit" });
+  store.apply({ intent: "update_setting", target: "view.reader_font_family_en", value: '"English Reader", serif' });
+  const result = resolveTypography(store.getState());
+  expect(result.css).toContain('font-family: "Liteasy-reader-zh-0"; src: local("Chinese UI")');
+  expect(result.css).toContain('font-family: "Liteasy-reader-en-0"; src: local("English Reader")');
+  expect(result.interfaceFamily).not.toContain("Liteasy-reader");
 });
 
 test("persists View preferences without persisting unrelated settings", () => {

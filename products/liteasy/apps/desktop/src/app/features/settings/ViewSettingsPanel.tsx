@@ -1,16 +1,15 @@
 import { SystemFontPicker } from "./SystemFontPicker";
-import { normalizeReadingFontFamily, readingFontOptions } from "./readingFonts";
+import { chineseFontOptions, englishFontOptions, normalizeLanguageFont, resolveTypography } from "./typography";
 import { Field, Input, Option, Radio, RadioGroup, Dropdown, Switch, Select } from "@fluentui/react-components";
 import { SettingRow } from "../workbench/WorkbenchPage";
 import type { SettingsState, UpdateSettingCommand } from "./settings.types";
-import { isHexColor, normalizeDisplayScale, pdfBackgroundPresets, viewDisplayScaleOptions, viewFontOptions, viewFontSizeOptions } from "./viewSettings";
+import { isHexColor, normalizeDisplayScale, pdfBackgroundPresets, viewDisplayScaleOptions, viewFontSizeOptions } from "./viewSettings";
 import { normalizeAppearancePreference } from "../theme/appearancePreference";
 
 type ViewSettingsPanelProps = { onUpdateSetting?: (command: UpdateSettingCommand) => void; settings?: Partial<SettingsState> };
 export function ViewSettingsPanel({ onUpdateSetting, settings }: ViewSettingsPanelProps) {
-  const fontFamily = settings?.["view.font_family"] ?? viewFontOptions[0].value;
+  const typography = resolveTypography(settings);
   const fontSize = settings?.["view.font_size"] ?? "14";
-  const readingFont = normalizeReadingFontFamily(settings?.["view.reader_font_family"]);
   const displayScale = normalizeDisplayScale(settings?.["view.display_scale"]);
   const pdfBackground = settings?.["view.pdf_background"] ?? "paper";
   const customPdfBackground = settings?.["view.pdf_custom_background"] ?? "#ffffff";
@@ -27,7 +26,9 @@ export function ViewSettingsPanel({ onUpdateSetting, settings }: ViewSettingsPan
         <option value="comfortable">舒适</option><option value="compact">紧凑</option>
       </Select>
     </SettingRow>
-    <SettingRow title="界面字体"><SystemFontPicker label="界面字体" value={fontFamily} options={viewFontOptions} onChange={(value) => update("view.font_family", value)} /></SettingRow>
+    <SettingRow title="界面中文字体"><SystemFontPicker label="界面中文字体" value={normalizeLanguageFont(settings?.["view.font_family_zh"])} options={[{ label: "沿用原界面字体", value: "" }, ...chineseFontOptions]} onChange={(value) => update("view.font_family_zh", value)} /></SettingRow>
+    <SettingRow title="界面英文字体" description="用于英文、数字与半角标点；中文字体独立选择。"><SystemFontPicker label="界面英文字体" value={normalizeLanguageFont(settings?.["view.font_family_en"])} options={[{ label: "沿用原界面字体", value: "" }, ...englishFontOptions]} onChange={(value) => update("view.font_family_en", value)} /></SettingRow>
+    <div className="settings-reading-preview" aria-label="界面字体预览" style={{ fontFamily: typography.interfaceFamily }}>文献库 · Library · 2026<small>中英混排预览</small></div>
     <SettingRow title="界面字号">
       <Dropdown aria-label="界面字号" selectedOptions={[fontSize]} value={viewFontSizeOptions.find((option) => option.value === fontSize)?.label ?? `${fontSize} px`}
         onOptionSelect={(_, data) => data.optionValue && update("view.font_size", data.optionValue)}>
@@ -44,10 +45,13 @@ export function ViewSettingsPanel({ onUpdateSetting, settings }: ViewSettingsPan
       <Switch aria-label="自动收起空面板" checked={settings?.["view.close_empty_panels"] !== false} onChange={(_, data) => update("view.close_empty_panels", data.checked)} />
     </SettingRow>
     <h3 className="settings-group-title">文档阅读</h3>
-    <SettingRow title="非 PDF 阅读字体" description="用于重排阅读、电子书、Markdown 与 TXT；保留文档内的单独设置。">
-      <SystemFontPicker label="非 PDF 阅读字体" value={readingFont} options={readingFontOptions} onChange={(value) => update("view.reader_font_family", value)} />
+    <SettingRow title="阅读中文字体" description="用于论文重排阅读、电子书、Markdown 与 TXT；文档内的单独字体设置优先，原始 PDF 保留其排版。">
+      <SystemFontPicker label="阅读中文字体" value={normalizeLanguageFont(settings?.["view.reader_font_family_zh"])} options={[{ label: "沿用原阅读字体", value: "" }, { label: "跟随界面中文字体", value: "inherit" }, ...chineseFontOptions]} onChange={(value) => update("view.reader_font_family_zh", value)} />
     </SettingRow>
-    <div className="settings-reading-preview" aria-label="阅读字体预览" style={{ fontFamily: readingFont }}>
+    <SettingRow title="阅读英文字体">
+      <SystemFontPicker label="阅读英文字体" value={normalizeLanguageFont(settings?.["view.reader_font_family_en"])} options={[{ label: "沿用原阅读字体", value: "" }, { label: "跟随界面英文字体", value: "inherit" }, ...englishFontOptions]} onChange={(value) => update("view.reader_font_family_en", value)} />
+    </SettingRow>
+    <div className="settings-reading-preview" aria-label="阅读字体预览" style={{ fontFamily: typography.readerFamily }}>
       阅读应该连续，而不是被控件打断。<br />Reading begins with a question.<small>阅读字体预览 · 18 px / 1.7</small>
     </div>
     <SettingRow title="Markdown 编辑方式" description="即时预览中，点击正文编辑，其他段落保持阅读排版。">

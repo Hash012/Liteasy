@@ -1,3 +1,5 @@
+import { resolveTypography } from "../settings/typography";
+import type { SettingsState } from "../settings/settings.types";
 import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 import { FluentProvider, webDarkTheme, webLightTheme } from "@fluentui/react-components";
 import {
@@ -10,12 +12,9 @@ import {
   viewSettingsStorageKey
 } from "./appearancePreference";
 
-function readFontFamily() {
-  try {
-    const font = JSON.parse(localStorage.getItem(viewSettingsStorageKey) ?? "{}")?.["view.font_family"];
-    return typeof font === "string" && font.trim() ? font : webLightTheme.fontFamilyBase;
-  }
-  catch { return webLightTheme.fontFamilyBase; }
+function readTypography(): Partial<SettingsState> {
+  try { return JSON.parse(localStorage.getItem(viewSettingsStorageKey) ?? "{}") ?? {}; }
+  catch { return {}; }
 }
 
 const darkMediaQuery = "(prefers-color-scheme: dark)";
@@ -25,7 +24,9 @@ export function initializeApplicationAppearance() {
 }
 
 export function ApplicationThemeProvider({ children }: { children: ReactNode }) {
-  const [fontFamily, setFontFamily] = useState<string>(readFontFamily);
+  const [fontSettings, setFontSettings] = useState(readTypography);
+  const typography = useMemo(() => resolveTypography(fontSettings), [fontSettings]);
+  const fontFamily = typography.interfaceFamily;
   const [preference, setPreference] = useState(readAppearancePreference);
   const [systemDark, setSystemDark] = useState(() => globalThis.matchMedia?.(darkMediaQuery).matches ?? false);
   const scheme = resolveColorScheme(preference, systemDark);
@@ -37,10 +38,11 @@ export function ApplicationThemeProvider({ children }: { children: ReactNode }) 
     };
     const onTypographyChange = (event: Event) => {
       const font = (event as CustomEvent<unknown>).detail;
-      if (typeof font === "string" && font.trim()) setFontFamily(font);
+      if (typeof font === "string" && font.trim()) setFontSettings({ "view.font_family": font });
+      else if (font && typeof font === "object") setFontSettings(font as Partial<SettingsState>);
     };
     const onStorageChange = (event: StorageEvent) => {
-      if (event.key === viewSettingsStorageKey || event.key === null) { setPreference(readAppearancePreference()); setFontFamily(readFontFamily()); }
+      if (event.key === viewSettingsStorageKey || event.key === null) { setPreference(readAppearancePreference()); setFontSettings(readTypography()); }
     };
     window.addEventListener(typographyChangeEvent, onTypographyChange);
     window.addEventListener(appearanceChangeEvent, onPreferenceChange);
@@ -69,6 +71,7 @@ export function ApplicationThemeProvider({ children }: { children: ReactNode }) 
 
   return (
     <FluentProvider theme={theme} className="fluent-app-root" applyStylesToPortals>
+      <style data-liteasy-typography>{typography.css}</style>
       {children}
     </FluentProvider>
   );

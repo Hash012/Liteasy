@@ -138,12 +138,22 @@ describe("SettingsPane", () => {
     const pane = screen.getByLabelText("应用设置");
     await user.click(within(pane).getByRole("button", { name: "外观与阅读" }));
 
-    const readerFont = within(pane).getByRole("combobox", { name: "非 PDF 阅读字体" });
+    for (const [label, key] of [["界面中文字体", "view.font_family_zh"], ["界面英文字体", "view.font_family_en"], ["阅读中文字体", "view.reader_font_family_zh"]]) {
+      const picker = within(pane).getByRole("combobox", { name: label });
+      await user.clear(picker);
+      await user.type(picker, "Custom Font");
+      await user.click(screen.getByRole("option", { name: "使用字体：Custom Font" }));
+      expect(onUpdateSetting).toHaveBeenLastCalledWith({ intent: "update_setting", target: key, value: '"Custom Font", sans-serif' });
+    }
+    expect(within(pane).getByLabelText("界面字体预览")).toBeInTheDocument();
+    expect(within(pane).getByLabelText("阅读字体预览")).toBeInTheDocument();
+
+    const readerFont = within(pane).getByRole("combobox", { name: "阅读英文字体" });
     await user.clear(readerFont);
     await user.type(readerFont, "Research Serif");
     await user.click(screen.getByRole("option", { name: "使用字体：Research Serif" }));
     expect(onUpdateSetting).toHaveBeenLastCalledWith({
-      intent: "update_setting", target: "view.reader_font_family", value: '"Research Serif", sans-serif'
+      intent: "update_setting", target: "view.reader_font_family_en", value: '"Research Serif", sans-serif'
     });
 
     await user.click(within(pane).getByRole("combobox", { name: "显示比例" }));

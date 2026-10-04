@@ -35,6 +35,10 @@ export type SettingKey =
   | "models.control_plane_endpoint"
   | "view.font_family"
   | "view.reader_font_family"
+  | "view.font_family_zh"
+  | "view.font_family_en"
+  | "view.reader_font_family_zh"
+  | "view.reader_font_family_en"
   | "view.close_empty_panels"
   | "view.markdown_mode"
   | "view.markdown_autosave"
@@ -75,6 +79,10 @@ export type SettingsState = Partial<Record<GenerationPromptSettingKey, string>> 
   "models.control_plane_endpoint": string;
   "view.font_family": string;
   "view.reader_font_family": string;
+  "view.font_family_zh"?: string;
+  "view.font_family_en"?: string;
+  "view.reader_font_family_zh"?: string;
+  "view.reader_font_family_en"?: string;
   "view.close_empty_panels"?: boolean;
   "view.markdown_mode"?: "live" | "manual";
   "view.markdown_autosave"?: boolean;

@@ -103,6 +103,7 @@ import type { VisualizationTabData } from "../features/visualization/visualizati
 import type { RetrievalChunk } from "../features/retrieval/retrieval.types";
 import { cloneSettingsState } from "../features/settings/settingsStateHelpers";
 import type { SettingsState } from "../features/settings/settings.types";
+import { resolveTypography } from "../features/settings/typography";
 import { resolvePdfReadingBackground } from "../features/settings/viewSettings";
 import { useProfileActions } from "../features/profile/useProfileActions";
 import {
@@ -2732,13 +2733,13 @@ export function AppShell({
     startAnalysis: artifactWorkflow.actions.startAnalysisForPapers
   });
 
+  const typography = resolveTypography(settingsState);
   const appFrameStyle = {
     ...(runtimeTheme.kind === "generated"
       ? (createGeneratedThemeStyle(runtimeTheme.theme) as CSSProperties)
       : {}),
-    fontFamily: settingsState["view.font_family"],
-    "--reader-font-family": settingsState["view.reader_font_family"] === "inherit"
-      ? settingsState["view.font_family"] : settingsState["view.reader_font_family"],
+    fontFamily: typography.interfaceFamily,
+    "--reader-font-family": typography.readerFamily,
     fontSize: `${settingsState["view.font_size"]}px`
   } as CSSProperties;
   const appFrameClassName = `app-frame workspace-frame${

@@ -110,3 +110,30 @@ test("updates interface and portal fonts immediately, including when storage is 
   }
   expect(getComputedStyle(provider).getPropertyValue("--fontFamilyMonospace").trim()).toBe(webLightTheme.fontFamilyMonospace);
 });
+
+test("applies script fonts to Fluent portals without persistence and restores external changes", () => {
+  mockSystemAppearance(false);
+  const store = createSettingsStore();
+  const { container } = render(<ApplicationThemeProvider>
+    <Dialog open modalType="non-modal"><DialogSurface><DialogBody><DialogTitle>字体 Fonts</DialogTitle></DialogBody></DialogSurface></Dialog>
+  </ApplicationThemeProvider>);
+  const provider = container.querySelector(".fluent-app-root")!;
+  const portal = screen.getByRole("dialog").closest(".fluent-app-root")!;
+  const blocked = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("blocked"); });
+  act(() => {
+    store.apply({ intent: "update_setting", target: "view.font_family_zh", value: '"Noto Sans CJK SC", sans-serif' });
+    store.apply({ intent: "update_setting", target: "view.font_family_en", value: '"Georgia", serif' });
+    store.apply({ intent: "update_setting", target: "view.reader_font_family_en", value: '"Cambria", serif' });
+  });
+  for (const element of [provider, portal]) {
+    expect(getComputedStyle(element).getPropertyValue("--fontFamilyBase")).toContain("Liteasy-ui-zh-0");
+    expect(getComputedStyle(element).getPropertyValue("--fontFamilyNumeric")).toContain("Liteasy-ui-en-0");
+    expect(getComputedStyle(element).getPropertyValue("--fontFamilyBase")).not.toContain("Liteasy-reader");
+  }
+  expect(container.querySelector("[data-liteasy-typography]")?.textContent).toContain('local("Cambria")');
+  blocked.mockRestore();
+  localStorage.setItem(viewSettingsStorageKey, JSON.stringify({ "view.font_family_en": '"Arial", sans-serif' }));
+  act(() => window.dispatchEvent(new StorageEvent("storage", { key: viewSettingsStorageKey })));
+  expect(container.querySelector("[data-liteasy-typography]")?.textContent).toContain('local("Arial")');
+  expect(container.querySelector("[data-liteasy-typography]")?.textContent).not.toContain('local("Georgia")');
+});
