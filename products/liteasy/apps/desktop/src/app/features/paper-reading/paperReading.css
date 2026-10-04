@@ -13,6 +13,8 @@
 .paper-reading-body { display: grid; grid-template-columns: minmax(0, 1fr); flex: 1; min-height: 0; overflow: hidden; }
 .paper-reading-body.with-comments { grid-template-columns: minmax(0, 1fr) 280px; }
 .paper-reading-content { min-height: 0; min-width: 0; overflow: hidden; }
+/* Shared Markdown theme rules must retain the document's chosen palette. */
+.paper-reading-content { --ink-1: var(--paper-reading-ink); --ink-2: var(--paper-reading-ink); --paper-2: var(--paper-reading-background); --line-1: var(--paper-reading-border); --accent-1: var(--paper-reading-link); }
 .paper-reading-content .paper-resource-tab { background: var(--paper-reading-background); color: var(--paper-reading-ink); }
 .paper-reading-content .paper-resource-tab__header h1, .paper-reading-content .paper-resource-tab__eyebrow { display: none; }
 .paper-reading-content .paper-resource-tab__header { gap: 8px; flex-wrap: wrap; }
