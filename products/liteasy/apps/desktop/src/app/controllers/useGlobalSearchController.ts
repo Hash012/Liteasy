@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { createSemanticIndex } from "../features/semantic-index/semanticIndexClient";
 import { createGlobalSearchService } from "../features/global-search/globalSearchService";
-import { createWorkspaceSearchSource } from "../features/global-search/workspaceSearchSource";
+import { createWorkspaceSearchSource, paperSearchSignature } from "../features/global-search/workspaceSearchSource";
 import type { SearchCoverage, SearchGroup, SearchHit } from "../features/global-search/globalSearch.types";
 import { createNoteFileService, subscribeNoteFiles } from "../features/note-files/noteFileService";
 import { createObjectStorage, subscribeObjectStorage } from "../features/objects/objectStorage";
@@ -14,6 +14,7 @@ type SavedSearch = { query: string; group?: SearchGroup };
 export function useGlobalSearchController(input: { repository: ObjectRepository; papers: Paper[]; open(hit: SearchHit): Promise<void> }) {
   const latest = useRef(input); latest.current = input;
   const scope = input.repository.scopeId;
+  const papersSignature = paperSearchSignature(input.papers);
   const [stateScope, setStateScope] = useState(scope);
   const [visible, setVisible] = useState(false), [query, setQuery] = useState(""), [group, setGroup] = useState<SearchGroup>();
   const [hits, setHits] = useState<SearchHit[]>([]), [coverage, setCoverage] = useState<SearchCoverage>();
@@ -27,12 +28,13 @@ export function useGlobalSearchController(input: { repository: ObjectRepository;
       source: createWorkspaceSearchSource({ repository: input.repository, files: createNoteFileService(scope, () => latest.current.repository.scopeId), active, getPapers: () => latest.current.papers }),
     });
   }, [input.repository, scope]);
+  const completed = useRef<{ service: typeof service; query: string; group?: SearchGroup; revision: number }>();
   // The admissible source set belongs to the service instance, even when the
   // replacement repository still represents the same account scope.
   useEffect(() => { dirty.current = true; }, [service]);
   const storage = useMemo(() => createObjectStorage(scope, () => latest.current.repository.scopeId), [scope]);
   useEffect(() => {
-    let active = true; setStateScope(scope); dirty.current = true; abort.current?.abort(); setHits([]); setCoverage(undefined); setSaved([]); setQuery("");
+    let active = true; setStateScope(scope); dirty.current = true; abort.current?.abort(); setHits([]); setCoverage(undefined); setSaved([]); setQuery(""); setNextOffset(null); setBusy(false); completed.current = undefined;
     void storage.get("global-search/saved/v1").then((row) => {
       if (!active || !Array.isArray(row?.value)) return;
       setSaved((row.value as SavedSearch[]).filter((item) => item && typeof item.query === "string" && item.query.length <= 2048 && (!item.group || ["metadata", "body", "note", "annotation", "artifact"].includes(item.group))).slice(0, 20));
@@ -41,39 +43,46 @@ export function useGlobalSearchController(input: { repository: ObjectRepository;
   }, [storage]);
   useEffect(() => {
     const changed = () => { dirty.current = true; abort.current?.abort(); setHits([]); setNextOffset(null); setRevision((value) => value + 1); };
-    const offObjects = subscribeObjectStorage(scope, (keys) => { if (!keys || keys.some((key) => /^(head\/|reading-library\/)/.test(key))) changed(); });
+    const offObjects = subscribeObjectStorage(scope, (keys) => { if (!keys || keys.some((key) => /^(head\/|reading-library\/(file|metadata)\/)/.test(key))) changed(); });
     const offFiles = subscribeNoteFiles(scope, changed);
-    window.addEventListener("focus", changed);
-    window.addEventListener(PAPER_FULLTEXT_SAVED_EVENT, changed); window.addEventListener(PAPER_ANNOTATIONS_SAVED_EVENT, changed);
-    return () => { offObjects(); offFiles(); window.removeEventListener("focus", changed); window.removeEventListener(PAPER_FULLTEXT_SAVED_EVENT, changed); window.removeEventListener(PAPER_ANNOTATIONS_SAVED_EVENT, changed); };
+    const paperChanged = (event: Event) => {
+      const paperId = (event as CustomEvent<unknown>).detail;
+      if (typeof paperId === "string" && latest.current.papers.some((paper) => paper.id === paperId)) changed();
+    };
+    window.addEventListener(PAPER_FULLTEXT_SAVED_EVENT, paperChanged); window.addEventListener(PAPER_ANNOTATIONS_SAVED_EVENT, paperChanged);
+    return () => { offObjects(); offFiles(); window.removeEventListener(PAPER_FULLTEXT_SAVED_EVENT, paperChanged); window.removeEventListener(PAPER_ANNOTATIONS_SAVED_EVENT, paperChanged); };
   }, [scope]);
-  useEffect(() => { dirty.current = true; setRevision((value) => value + 1); setHits([]); }, [input.papers]);
+  useEffect(() => { dirty.current = true; abort.current?.abort(); setRevision((value) => value + 1); setHits([]); setNextOffset(null); }, [papersSignature]);
   const run = (offset = 0) => {
     abort.current?.abort(); const request = new AbortController(); abort.current = request;
-    setBusy(true); setError(""); if (!offset) { setHits([]); setNextOffset(null); }
+    setBusy(true); setError(""); if (!offset) { completed.current = undefined; setHits([]); setNextOffset(null); }
     // Serialize refresh writes after the canceled predecessor settles; no older index pass can win.
     serial.current = serial.current.catch(() => {}).then(async () => {
       request.signal.throwIfAborted();
-      if (dirty.current) { setProgress(0); const value = await service.refresh(request.signal, (count) => { if (count % 10 === 0 || count < 10) setProgress(count); }); request.signal.throwIfAborted(); setCoverage(value); dirty.current = false; }
+      if (dirty.current) { setProgress(0); const value = await service.refresh(request.signal, (count) => { if (!request.signal.aborted && (count % 10 === 0 || count < 10)) setProgress(count); }); request.signal.throwIfAborted(); setCoverage(value); dirty.current = false; }
       const value = await service.search(query, group, offset, request.signal); request.signal.throwIfAborted();
       setHits((previous) => offset ? [...previous, ...value.hits] : value.hits); setNextOffset(value.nextOffset); setCoverage(value.coverage);
-    }).catch((cause) => { if (!request.signal.aborted) { setError(cause instanceof Error ? cause.message : String(cause)); dirty.current = true; } })
+      completed.current = { service, query, group, revision };
+    }).catch((cause) => { if (!request.signal.aborted) { setError(cause instanceof Error ? cause.message : String(cause)); } })
       .finally(() => { if (abort.current === request) setBusy(false); });
   };
   const runRef = useRef(run); runRef.current = run;
   useEffect(() => {
-    if (!visible) { abort.current?.abort(); return; }
-    setHits([]); setNextOffset(null); abort.current?.abort();
+    if (!visible) { abort.current?.abort(); setBusy(false); return; }
+    const previous = completed.current;
+    if (!dirty.current && previous?.service === service && previous.query === query && previous.group === group && previous.revision === revision) return;
+    completed.current = undefined; setHits([]); setNextOffset(null); abort.current?.abort(); setBusy(false); setError("");
+    if (!query.trim()) return;
     const timer = window.setTimeout(() => runRef.current(), 250);
     return () => { window.clearTimeout(timer); abort.current?.abort(); };
   }, [visible, query, group, revision, service]);
   return { visible: stateScope === scope && visible, query, group, hits: stateScope === scope ? hits : [], coverage: stateScope === scope ? coverage : undefined, nextOffset, busy, progress, error, saved: stateScope === scope ? saved : [],
-    show() { dirty.current = true; setVisible(true); setRevision((value) => value + 1); },
+    show() { setVisible(true); },
     close() { abort.current?.abort(); setVisible(false); },
     setQuery, setGroup,
     refresh() { dirty.current = true; run(); },
     loadMore() { if (nextOffset !== null) run(nextOffset); },
-    cancel() { abort.current?.abort(); dirty.current = true; setBusy(false); },
+    cancel() { abort.current?.abort(); setBusy(false); },
     async open(hit: SearchHit) {
       const request = new AbortController(); abort.current?.abort(); abort.current = request; setError("");
       try { await service.verify(hit, request.signal); await latest.current.open(hit); request.signal.throwIfAborted(); setVisible(false); }

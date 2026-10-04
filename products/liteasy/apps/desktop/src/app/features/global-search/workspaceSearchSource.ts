@@ -12,6 +12,17 @@ import { loadPdfAnnotations, normalizePdfAnnotationPrivateState, pdfAnnotationSt
 import type { Paper } from "../workspace/workspace.types";
 import type { SearchDocument, SearchHit, SearchSection, SearchSource } from "./globalSearch.types";
 
+function paperMetadataText(paper: Paper) {
+  return [paper.title, paper.literature?.title, paper.literature?.abstract,
+    Array.isArray(paper.authors) ? paper.authors.join(" ") : paper.authors, paper.year, paper.doi].filter(Boolean).join("\n");
+}
+
+/** Only fields consumed by search invalidate the corpus; array identity and reader UI state do not. */
+export function paperSearchSignature(papers: Paper[]) {
+  return JSON.stringify(papers.map((paper) => [paper.id, paper.contentHash, paper.sourcePath, paperMetadataText(paper)])
+    .sort((a, b) => a[0]!.localeCompare(b[0]!)));
+}
+
 /** Reads only current scoped records and explicitly connected folders; never invokes a parser or model. */
 export function createWorkspaceSearchSource(input: { repository: ObjectRepository; files: NoteFileService; getPapers(): Paper[]; active(): boolean }) : SearchSource {
   const scope = input.repository.scopeId;
@@ -19,8 +30,7 @@ export function createWorkspaceSearchSource(input: { repository: ObjectRepositor
   const check = (signal: AbortSignal) => { signal.throwIfAborted(); if (!input.active()) throw new Error("工作区已切换。"); };
   async function paperDocument(paper: Paper, signal: AbortSignal): Promise<SearchDocument> {
     const path = liteasyPath(scope, { kind: "paper", paperId: paper.id });
-    const sections: SearchSection[] = [{ key: "metadata", group: "metadata", text: [paper.title, paper.literature?.title,
-      paper.literature?.abstract, Array.isArray(paper.authors) ? paper.authors.join(" ") : paper.authors, paper.year, paper.doi].filter(Boolean).join("\n"), locator: { path, paperId: paper.id } }];
+    const sections: SearchSection[] = [{ key: "metadata", group: "metadata", text: paperMetadataText(paper), locator: { path, paperId: paper.id } }];
     let coverage: SearchDocument["coverage"] = "metadata", detail = "只有元信息；正文尚未提取。";
     try {
       const fulltext = normalizePaperFulltext(await loadUserPaperArtifact({ artifactKind: "fulltext", paperId: paper.id })); check(signal);
@@ -46,7 +56,8 @@ export function createWorkspaceSearchSource(input: { repository: ObjectRepositor
       coverage = "partial"; detail = "仅检索白板文字卡片；命中可打开白板，布局节点定位暂不支持。";
     }
     return { id: `file:${await contentFingerprint(target)}`, title: title || file.name, revision: file.version ?? await contentFingerprint(file.text), coverage, detail,
-      sections: [{ key: "file", group: /\.canvas$/i.test(path) ? "artifact" : "note", text: `${text}`, locator: { path: target, line: 1 } }] };
+      sections: [{ key: "metadata", group: "metadata", text: title || file.name, locator: { path: target } },
+        { key: "file", group: /\.canvas$/i.test(path) ? "artifact" : "note", text: `${text}`, locator: { path: target, line: 1 } }] };
   }
   return {
     async collect(signal, progress) {
@@ -85,10 +96,18 @@ export function createWorkspaceSearchSource(input: { repository: ObjectRepositor
           const path = liteasyPath(scope, { kind: "object", ref: refOf(object), followLatest: true });
           const unavailable = object.kind === "source.document" && !sourceDocumentBodyCapability(object).available;
           const text = unavailable ? file?.fileName ?? object.title : objectText(object);
+          const sections: SearchSection[] = [{ key: "metadata", group: "metadata",
+            text: [file?.title || object.title, file?.fileName, file?.authors.join(" "), file?.publishedAt,
+              file?.publication, file?.identifier, file?.abstract].filter(Boolean).join("\n"),
+            locator: { path, ...(file ? { readingId: file.id } : {}) } }];
+          if (!unavailable) sections.push({ key: "object",
+            group: object.kind === "source.document" ? "body" : object.kind === "artifact.document" || object.kind === "workspace.board"
+              ? "artifact" : object.kind === "content.fragment" ? "annotation" : "note",
+            text, locator: { path, line: 1, ...(file ? { readingId: file.id } : {}) } });
           if (!append({ id: `object:${object.objectId}`, title: file?.title || object.title, revision: object.revision,
             coverage: unavailable ? "metadata" : file?.contextTruncated || object.kind === "workspace.board" ? "partial" : "indexed",
             detail: unavailable ? "此格式只保存原文件，正文未提取。" : file?.contextTruncated ? "仅索引导入时保留的文本节选。" : object.kind === "workspace.board" ? "仅检索白板描述；卡片内容通过独立笔记检索。" : undefined,
-            sections: [{ key: "object", group: unavailable ? "metadata" : object.kind === "source.document" ? "body" : object.kind === "artifact.document" || object.kind === "workspace.board" ? "artifact" : object.kind === "content.fragment" ? "annotation" : "note", text, locator: { path, line: 1, ...(file ? { readingId: file.id } : {}) } }] })) break;
+            sections })) break;
       }
       for (const mount of await input.files.listMounts()) {
         check(signal); if (limited) break;

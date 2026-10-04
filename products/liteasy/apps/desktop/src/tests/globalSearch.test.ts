@@ -202,3 +202,62 @@ test("a managed Canvas uses its board title and artifact group instead of exposi
   await service.refresh(signal(), () => {});
   expect((await service.search("comparison", "artifact", 0, signal())).hits[0]).toMatchObject({ title: "Research synthesis", group: "artifact" });
 });
+
+test("a book title matches once in metadata without admitting unrelated body chunks or mixed-field terms", async () => {
+  const f = fixture();
+  f.setDocuments([{ id: "book", title: "巴赫传", revision: "1", coverage: "indexed", sections: [
+    { key: "metadata", group: "metadata", text: "巴赫传\n作者", locator: { path: "book" } },
+    { key: "body", group: "body", text: "这里是关于城市生活的叙述，与检索主题无关。\n".repeat(400) + "赋格的结构。", locator: { path: "book", line: 1 } },
+  ] }]);
+  await f.service.refresh(signal(), () => {});
+  const result = await f.service.search("巴赫", undefined, 0, signal());
+  expect(result.hits).toHaveLength(1);
+  expect(result.hits[0]).toMatchObject({ group: "metadata", title: "巴赫传", snippet: "巴赫传\n作者" });
+  expect(result.hits[0].line).toBeUndefined();
+  expect(result.hits[0].quote).toBeUndefined();
+  expect(result.nextOffset).toBeNull();
+  expect((await f.service.search("巴赫", "body", 0, signal())).hits).toEqual([]);
+  expect((await f.service.search("巴赫 赋格", undefined, 0, signal())).hits).toEqual([]);
+});
+
+test("imported books retain a filename hit and only real body matches, including matches late in the book", async () => {
+  const { createReadingLibraryRepository } = await import("../app/features/reading-library/readingLibraryRepository");
+  const scope = crypto.randomUUID(), storage = createObjectStorage(scope, () => scope);
+  const library = createReadingLibraryRepository(storage, scope);
+  const text = "这段叙述与所查询的人物无关。\n".repeat(900) + "巴赫的赋格结构值得分析。";
+  const imported = await library.importFile("巴赫传.epub", new TextEncoder().encode("synthetic fixture"), {
+    format: "epub", title: "巴赫传", authors: ["Test Author"], chapters: [{ id: "ch1", title: "第一章", plainText: text, content: text, format: "text" }],
+    toc: [], resources: [], warnings: [],
+  });
+  const source = createWorkspaceSearchSource({ repository: createObjectRepository(storage, scope), files: createNoteFileService(scope, () => scope), getPapers: () => [], active: () => true });
+  const service = createGlobalSearchService({ index: createSemanticIndex({ scope, workspace: "test", model: "literal", active: () => true }), source, active: () => true });
+  await service.refresh(signal(), () => {});
+  const result = await service.search("巴赫", undefined, 0, signal());
+  expect(result.hits.filter((hit) => hit.group === "metadata")).toHaveLength(1);
+  const bodies = result.hits.filter((hit) => hit.group === "body");
+  expect(bodies.length).toBeGreaterThan(0);
+  expect(bodies.length).toBeLessThanOrEqual(2); // Chunk overlap may retain the same genuine occurrence twice.
+  for (const hit of bodies) {
+    expect(hit).toMatchObject({ readingId: imported.entry.id, quote: "巴赫" });
+    expect(hit.snippet).toContain("巴赫的赋格");
+    expect(hit.line).toBeGreaterThan(800);
+  }
+  expect(result.nextOffset).toBeNull();
+  expect((await service.search("巴赫传.epub", "metadata", 0, signal())).hits).toHaveLength(1);
+});
+
+test("notes and connected filenames remain searchable independently of their body", async () => {
+  const scope = crypto.randomUUID(), repository = createObjectRepository(createObjectStorage(scope, () => scope), scope);
+  await repository.create({ kind: "content.note", title: "巴赫笔记", content: { schema: "liteasy.note/v1", payload: { origin: "user", text: "尚未写入内容。" } } });
+  const files = createNoteFileService(scope, () => scope);
+  vi.spyOn(files, "listMounts").mockResolvedValue([{ id: "m", name: "Folder", kind: "directory", location: "/synthetic" }]);
+  vi.spyOn(files, "listEntries").mockResolvedValue([{ mountId: "m", kind: "file", name: "巴赫.md", path: "巴赫.md" }]);
+  vi.spyOn(files, "readFile").mockResolvedValue({ mountId: "m", kind: "file", name: "巴赫.md", path: "巴赫.md", text: "无关的正文。", version: "v1" });
+  const source = createWorkspaceSearchSource({ repository, files, getPapers: () => [], active: () => true });
+  const service = createGlobalSearchService({ index: createSemanticIndex({ scope, workspace: "test", model: "literal", active: () => true }), source, active: () => true });
+  await service.refresh(signal(), () => {});
+  const hits = (await service.search("巴赫", undefined, 0, signal())).hits;
+  expect(hits.map((hit) => hit.title).sort()).toEqual(["巴赫.md", "巴赫笔记"]);
+  expect(hits.every((hit) => hit.group === "metadata" && hit.snippet.includes("巴赫"))).toBe(true);
+  expect((await service.search("巴赫", "note", 0, signal())).hits).toEqual([]);
+});

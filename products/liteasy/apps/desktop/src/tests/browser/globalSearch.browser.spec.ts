@@ -39,3 +39,41 @@ test("top-center search works with keyboard, local bodies, saved queries and sou
   await search.click(); await expect(dialog).toBeVisible(); await page.keyboard.press("Escape"); await expect(dialog).not.toBeVisible();
   await expect(search).toBeFocused();
 });
+
+test("title-only matches do not flood book results and reopening or focus does not restart the search", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
+  await page.goto("/");
+  const search = page.getByRole("toolbar", { name: "工作区命令栏" }).getByRole("button", { name: "搜索工作区", exact: true });
+  await expect(search).toBeVisible();
+  await page.evaluate(async () => {
+    const { createReadingLibraryRepository } = await import("/src/app/features/reading-library/readingLibraryRepository.ts");
+    const { createObjectStorage } = await import("/src/app/features/objects/objectStorage.ts");
+    const body = "与人物关键词无关的日常叙述。\n".repeat(1200);
+    await createReadingLibraryRepository(createObjectStorage("local", () => "local"), "local").importFile("巴赫传.epub", new TextEncoder().encode("synthetic book"), {
+      format: "epub", title: "巴赫传", authors: ["Test Author"], chapters: [{ id: "1", title: "第一章", content: body, plainText: body, format: "text" }],
+      toc: [], resources: [], warnings: [],
+    });
+  });
+  await search.click();
+  const dialog = page.getByRole("dialog", { name: "搜索工作区" });
+  await dialog.getByRole("textbox", { name: "搜索词或引号短语" }).fill("巴赫");
+  await expect(dialog.locator(".global-search-hit")).toHaveCount(1);
+  await expect(dialog.locator(".global-search-hit")).toContainText("文件与元信息");
+  await expect(dialog.locator(".global-search-status")).not.toContainText("正在检索");
+  await page.evaluate(() => {
+    const tracker = window as Window & { searchRestarts?: number };
+    tracker.searchRestarts = 0;
+    new MutationObserver(() => {
+      if (document.querySelector(".global-search-status")?.textContent?.includes("正在检索")) tracker.searchRestarts!++;
+    }).observe(document.body, { childList: true, subtree: true, characterData: true });
+    window.dispatchEvent(new Event("focus"));
+  });
+  await dialog.getByRole("button", { name: "保存查询", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await search.click();
+  await page.waitForTimeout(500); // Cross the controller's debounce to detect an unintended restart.
+  await expect(dialog.locator(".global-search-hit")).toHaveCount(1);
+  expect(await page.evaluate(() => (window as Window & { searchRestarts?: number }).searchRestarts)).toBe(0);
+  await dialog.getByRole("combobox", { name: "搜索范围" }).selectOption("body");
+  await expect(dialog.getByText(/已索引内容中未找到匹配项/)).toBeVisible();
+});

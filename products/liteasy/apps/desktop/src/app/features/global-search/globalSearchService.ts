@@ -28,9 +28,11 @@ function documentRecords(document: SearchDocument, capacity: number) {
     for (let offset = 0; offset < section.text.length; offset += 2800) {
       if (records.length >= capacity) return { records, limited: true };
       const text = section.text.slice(offset, offset + 4000);
-      const line = (section.locator.line ?? 1) + (section.text.slice(0, offset).match(/\n/g)?.length ?? 0);
+      const line = section.group === "metadata" ? undefined
+        : (section.locator.line ?? 1) + (section.text.slice(0, offset).match(/\n/g)?.length ?? 0);
+      // Titles live in their own metadata section; repeating them here matches every body chunk.
       records.push({ id: `${document.id}:${section.key}:${offset}`, path: document.id, revision: document.revision,
-        text: `${document.title}\n${text}`, tokens: "", payload: { ...section.locator, line, documentId: document.id,
+        text, tokens: "", payload: { ...section.locator, ...(line === undefined ? {} : { line }), documentId: document.id,
           revision: document.revision, title: document.title, group: section.group, text } });
       if (offset + 4000 >= section.text.length) break;
     }
@@ -116,9 +118,12 @@ export function createGlobalSearchService(input: { index: SemanticIndex; source:
         if (!document || row.revision !== document.revision) continue;
         const hit = { ...(row.payload as Omit<SearchHit, "id" | "snippet">), id: row.id,
           snippet: searchSnippet((row.payload as { text: string }).text, clauses) };
-        const at = clauses.map((clause) => hit.text.toLowerCase().indexOf(clause)).filter((i) => i >= 0).sort((a, b) => a - b)[0] ?? 0;
-        hit.line = (hit.line ?? 1) + (hit.text.slice(0, at).match(/\n/g)?.length ?? 0);
-        if (!hit.quote) hit.quote = hit.text.slice(at, at + (clauses.find((clause) => hit.text.toLowerCase().indexOf(clause) === at)?.length ?? 80));
+        // A filename match opens the file, not a fabricated location in its body.
+        if (hit.group !== "metadata") {
+          const at = clauses.map((clause) => hit.text.toLowerCase().indexOf(clause)).filter((i) => i >= 0).sort((a, b) => a - b)[0] ?? 0;
+          hit.line = (hit.line ?? 1) + (hit.text.slice(0, at).match(/\n/g)?.length ?? 0);
+          if (!hit.quote) hit.quote = hit.text.slice(at, at + (clauses.find((clause) => hit.text.toLowerCase().indexOf(clause) === at)?.length ?? 80));
+        }
         if (!verified.has(row.path)) verified.set(row.path, await input.source.verify(hit, signal));
         if (verified.get(row.path)) hits.push(hit);
         else { current.delete(row.path); await removeRejectedDocument(row.path, signal); }
