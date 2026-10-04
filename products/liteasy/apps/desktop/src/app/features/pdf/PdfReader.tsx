@@ -1,3 +1,5 @@
+import { NoteLabelFilter, emptyNoteFilter, matchesNoteFilter } from "../notes/NoteLabelFilter";
+import { annotationNoteLabels } from "../notes/noteLabels";
 import { paperSourceReferences } from "../resource-filesystem/assetSourceReferences";
 import { applyPdfReadingColors, pdfReadingPalette } from "./pdfReadingColors";
 import { PdfAppearanceControl, type PdfAppearance } from "./PdfAppearanceControl";
@@ -1600,15 +1602,32 @@ export function PdfReader({
   const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
-    try { return Math.max(160, Math.min(480, Number(localStorage.getItem("liteasy.pdf-sidebar-width")) || 180)); }
+    try { return Math.max(160, Math.min(1600, Number(localStorage.getItem("liteasy.pdf-sidebar-width")) || 180)); }
     catch { return 180; }
   });
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const [sidebarLimit, setSidebarLimit] = useState(480);
+  const visibleSidebarWidth = Math.min(sidebarWidth, sidebarLimit);
+  useEffect(() => {
+    const element = workspaceRef.current;
+    if (!element) return;
+    const measure = () => {
+      if (element.clientWidth > 0) setSidebarLimit(Math.max(160, Math.floor(element.clientWidth * 0.7)));
+    };
+    measure();
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : undefined;
+    observer?.observe(element);
+    window.addEventListener("resize", measure);
+    return () => { observer?.disconnect(); window.removeEventListener("resize", measure); };
+  }, []);
   const sidebarResizeRef = useRef<{ x: number; width: number } | null>(null);
   useEffect(() => {
     try { localStorage.setItem("liteasy.pdf-sidebar-width", String(sidebarWidth)); } catch { /* Width remains usable. */ }
   }, [sidebarWidth]);
   const [readerView, setReaderView] = useState<PdfReaderView>("document");
   const readingScrollTop = useRef(0);
+  const [annotationFilter, setAnnotationFilter] = useState(emptyNoteFilter);
+  const [annotationQuery, setAnnotationQuery] = useState("");
   const [sidebarMode, setSidebarMode] = useState<PdfSidebarMode>("annotations");
   const [stageWidth, setStageWidth] = useState(960);
   const [status, setStatus] = useState("选择文段后可添加高亮、划线，或把选中文段交给 AI。");
@@ -1741,6 +1760,9 @@ export function PdfReader({
     () => sortPdfAnnotationsByReadingOrder(annotations),
     [annotations]
   );
+  const filteredAnnotations = annotationsInReadingOrder.filter((annotation) =>
+    matchesNoteFilter(annotationNoteLabels(annotation), annotationFilter) &&
+    `${annotation.excerpt} ${annotation.note ?? ""} ${annotation.text} ${annotation.quickAsk?.answer ?? ""} ${annotation.review?.text ?? ""}`.toLocaleLowerCase().includes(annotationQuery.trim().toLocaleLowerCase()));
   const popupAnnotation = useMemo(
     () => annotations.find((annotation) => annotation.id === annotationPopup?.annotationId) ?? null,
     [annotationPopup?.annotationId, annotations]
@@ -3080,7 +3102,7 @@ export function PdfReader({
       paperId: activePaper!.id, contentHash: activePaper!.contentHash, snapshot: { annotations: annotationsRef.current, autoPublic: autoPublicAnnotations, version: 2 } });
   }
 
-  async function createReadingAnnotation(input: { page: number; excerpt: string; note: string } & ReadingMarkStyle) {
+  async function createReadingAnnotation(input: { page: number; excerpt: string; note: string; lookupKind?: PdfAnnotationV2["lookupKind"] } & ReadingMarkStyle) {
     assertReadingAnnotationsReady();
     if (!Number.isInteger(input.page) || input.page < 1 || (pdfDocument && input.page > pdfDocument.numPages) || (!input.note.trim() && !input.excerpt.trim())) throw new Error("请选择页码并填写批注。");
     const duplicate = annotationsRef.current.find((item) => item.page === input.page && item.excerpt === input.excerpt && item.note === input.note.trim() && (!input.kind || item.kind === input.kind) && (!input.color || item.color === input.color));
@@ -3096,6 +3118,7 @@ export function PdfReader({
     const annotation: PdfAnnotationV2 = { id: `reading-${crypto.randomUUID()}`, kind: input.kind ?? (rects.length ? "highlight" : "note"),
       color: rects.length ? input.color ?? "yellow" : undefined, createdAt: now, updatedAt: now, revision: 1,
       page: input.page, excerpt: input.excerpt, note: input.note.trim(), text: "阅读批注", rects,
+      ...(input.lookupKind ? { lookupKind: input.lookupKind } : {}),
       paperIdentity: resolvePaperIdentity(activePaper!), publication: { desiredVisibility: "private", state: "not_published" } };
     setCurrentAnnotations((current) => [...current, annotation]);
     setReadingAnnotationId(annotation.id);
@@ -3546,7 +3569,8 @@ export function PdfReader({
       <div
         aria-label="PDF 阅读工作区"
         hidden={Boolean(readingView)}
-        style={{ "--pdf-sidebar-width": `${sidebarWidth}px`, "--pdf-whiteboard-width": `${whiteboardWidth}px` } as CSSProperties}
+        ref={workspaceRef}
+        style={{ "--pdf-sidebar-width": `${visibleSidebarWidth}px`, "--pdf-whiteboard-width": `${whiteboardWidth}px` } as CSSProperties}
         className={`pdf-workspace ${sidebarCollapsed ? "sidebar-collapsed" : "sidebar-open"} ${
           whiteboardOpen && (!objectWorkbench || legacyBoardPreview) ? "whiteboard-open" : ""
         }`}
@@ -3557,17 +3581,17 @@ export function PdfReader({
         >
           {!sidebarCollapsed ? <div
             aria-label="调整批注栏宽度" aria-orientation="vertical" role="separator" tabIndex={0}
-            aria-valuemin={160} aria-valuemax={480} aria-valuenow={sidebarWidth}
+            aria-valuemin={160} aria-valuemax={sidebarLimit} aria-valuenow={visibleSidebarWidth}
             className="pdf-sidebar-resizer"
             onPointerDown={(event) => {
               if (event.button !== 0) return;
-              sidebarResizeRef.current = { x: event.clientX, width: sidebarWidth };
+              sidebarResizeRef.current = { x: event.clientX, width: visibleSidebarWidth };
               event.currentTarget.setPointerCapture(event.pointerId);
               event.preventDefault();
             }}
             onPointerMove={(event) => {
               const drag = sidebarResizeRef.current;
-              if (drag) setSidebarWidth(Math.max(160, Math.min(480, drag.width + event.clientX - drag.x)));
+              if (drag) setSidebarWidth(Math.max(160, Math.min(sidebarLimit, drag.width + event.clientX - drag.x)));
             }}
             onPointerUp={() => { sidebarResizeRef.current = null; }}
             onPointerCancel={() => { sidebarResizeRef.current = null; }}
@@ -3575,8 +3599,8 @@ export function PdfReader({
             onKeyDown={(event) => {
               if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
               event.preventDefault();
-              setSidebarWidth((width) => event.key === "Home" ? 160 : event.key === "End" ? 480 :
-                Math.max(160, Math.min(480, width + (event.key === "ArrowLeft" ? -16 : 16))));
+              setSidebarWidth((width) => event.key === "Home" ? 160 : event.key === "End" ? sidebarLimit :
+                Math.max(160, Math.min(sidebarLimit, Math.min(width, sidebarLimit) + (event.key === "ArrowLeft" ? -16 : 16))));
             }}
           /> : null}
           {sidebarCollapsed ? (
@@ -3591,6 +3615,7 @@ export function PdfReader({
             </button>
           ) : (
             <>
+              <div className="pdf-sidebar-controls">
               <div className="pdf-sidebar-switcher">
                 <button aria-label="目录" aria-pressed={sidebarMode === "outline"}
                   className={sidebarMode === "outline" ? "active" : ""}
@@ -3632,6 +3657,8 @@ export function PdfReader({
                 </button>
               </div>
 
+              {sidebarMode === "annotations" && <NoteLabelFilter value={annotationFilter} onChange={setAnnotationFilter} query={annotationQuery} onQueryChange={setAnnotationQuery} />}
+              </div>
               {sidebarMode === "outline" ? (
                 <PdfOutline document={pdfDocument} onNavigate={({ page, topRatio }) => navigateToPage(page, "auto", topRatio)} />
               ) : ((readerView === "pages" && sidebarMode === "thumbnails") || (readerView === "annotations" && sidebarMode === "annotations")) ? (
@@ -3693,9 +3720,9 @@ export function PdfReader({
                     />
                     新批注自动公开到论坛
                   </label></details>
-                  {annotations.length > 0 ? (
+                  {filteredAnnotations.length > 0 ? (
                     <ul className="pdf-annotation-list">
-                      {annotationsInReadingOrder.map((annotation) => (
+                      {filteredAnnotations.map((annotation) => (
                         <li
                           className={`pdf-annotation-item ${annotation.kind} ${
                             activeAnnotationId === annotation.id ? "expanded" : ""
@@ -3820,7 +3847,7 @@ export function PdfReader({
                       ))}
                     </ul>
                   ) : (
-                    <div className="pdf-empty-note">暂无批注</div>
+                    <div className="pdf-empty-note">{annotations.length ? "没有符合筛选条件的批注" : "暂无批注"}</div>
                   )}
                   {loadOrganizationAnnotations ? (
                     <section aria-label="团队批注" className="pdf-team-annotations">
@@ -4014,7 +4041,7 @@ export function PdfReader({
               <PdfPagesOverview document={pdfDocument} count={pageCount} currentPage={focusedPage}
                 annotations={annotations} onNavigate={navigateToPage} onClose={closeOverview} />
             ) : readerView === "annotations" ? (
-              <PdfAnnotationsOverview annotations={annotations} teamAnnotations={teamAnnotations}
+              <PdfAnnotationsOverview annotations={filteredAnnotations} teamAnnotations={teamAnnotations}
                 paperIdentity={activePaper ? resolvePaperIdentity(activePaper) : undefined}
                 error={annotationLoadError} onNavigate={locateAnnotation} onClose={closeOverview} />
             ) : <div className="pdf-document-frame" ref={documentFrameRef}>
@@ -4091,7 +4118,7 @@ export function PdfReader({
                   lookup={selectionLookup} text={selection.excerpt} paperId={activePaper?.id} paperTitle={activePaper?.title}
                   context={selectionLookupContext(pageTexts[selection.page] ?? "", selection.excerpt, selection.normalizedStart)}
                   onClose={() => { setLookupOpen(false); setLookupDismissed(true); }}
-                  onSave={hydratedAnnotationStorageKey === annotationStorageKey && !annotationLoadError ? (note) => createReadingAnnotation({ page: selection.page, excerpt: selection.excerpt, note }) : undefined}
+                  onSave={hydratedAnnotationStorageKey === annotationStorageKey && !annotationLoadError ? (note, lookupKind) => createReadingAnnotation({ page: selection.page, excerpt: selection.excerpt, note, lookupKind }) : undefined}
                   onExplain={onQuickAsk ? () => {
                     quickAskAbortRef.current?.abort(); quickAskAbortRef.current = null;
                     setQuickAskPending(false); setQuickAskSelection(selection); setQuickAskQuestion("请结合所在句子解释这个单词或短语在论文中的具体含义，说明它与常见释义的关系。");

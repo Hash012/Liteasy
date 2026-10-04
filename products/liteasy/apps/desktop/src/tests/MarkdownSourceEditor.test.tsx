@@ -77,3 +77,18 @@ test("switching files or loading an external revision clears undo without changi
   expect(editor).toHaveValue("another file");
   expect(changed).toHaveBeenCalledTimes(1);
 });
+
+test("collapsing the shared toolbar preserves the draft, selection and undo history", async () => {
+  const user = userEvent.setup();
+  render(<Editor />);
+  const editor = screen.getByRole("textbox") as HTMLTextAreaElement;
+  select(editor, 2, 4);
+  await user.click(screen.getByRole("button", { name: "收起 Markdown 工具栏" }));
+  expect(screen.queryByRole("button", { name: "加粗", exact: true })).not.toBeInTheDocument();
+  expect(editor).toHaveValue("研究结论");
+  await user.click(screen.getByRole("button", { name: "展开 Markdown 工具栏" }));
+  await user.click(screen.getByRole("button", { name: "加粗", exact: true }));
+  expect(editor).toHaveValue("研究**结论**");
+  await user.click(screen.getByRole("button", { name: "撤销", exact: true }));
+  expect(editor).toHaveValue("研究结论");
+});

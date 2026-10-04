@@ -254,10 +254,6 @@
 .notes-inline-editor .markdown-live-editor { height: 340px; }
 .notes-editor > .markdown-live-editor { height: 300px; justify-content: initial; gap: 0; }
 
-.notes-label-filters { display: flex; align-items: center; gap: 4px; padding: 0 8px 6px; flex-wrap: wrap; }
-.notes-filter-popover { display: grid; gap: 8px; width: min(290px, calc(100vw - 40px)); }
-.notes-filter-popover > label { display: grid; gap: 6px; }
-.notes-filter-popover small { color: var(--colorNeutralForeground3); }
 .notes-item-labels { display: flex; flex-wrap: wrap; gap: 4px; }
 .notes-label { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 11px; line-height: 18px; color: var(--colorNeutralForeground2); background: var(--colorNeutralBackground3); }
 .notes-label-user-edited, .notes-label-personal { color: var(--colorPaletteGreenForeground1); background: var(--colorPaletteGreenBackground1); }

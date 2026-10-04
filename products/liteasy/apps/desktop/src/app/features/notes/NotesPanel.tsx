@@ -1,4 +1,5 @@
-import { isAiOnlyNote, noteLabelEntries, noteLabels, resolvedNoteLabels, type NoteLabel } from "./noteLabels";
+import { NoteLabelFilter, emptyNoteFilter, matchesNoteFilter } from "./NoteLabelFilter";
+import { noteLabelEntries, noteLabels, resolvedNoteLabels, type NoteLabel } from "./noteLabels";
 import { useMarkdownEditing } from "../markdown/MarkdownEditingContext";
 import { NotesInlineEditor } from "./NotesInlineEditor";
 import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
@@ -6,11 +7,7 @@ import { ResourceLocationButton } from "../resource-filesystem/ResourceLocationB
 import { useEffect, useMemo, useState } from "react";
 import {
   Button,
-  Checkbox,
   MenuItemCheckbox,
-  Popover,
-  PopoverTrigger,
-  PopoverSurface,
   Input,
   Menu,
   MenuItem,
@@ -35,7 +32,6 @@ import {
   NoteRegular,
   SaveRegular,
   SearchRegular,
-  FilterRegular,
 } from "@fluentui/react-icons";
 import {
   OBJECT_TRANSFER_MIME,
@@ -91,16 +87,13 @@ function noteIconKey(item: NotesItem) {
 }
 function NotesPanelContent({ model }: { model: NotesViewModel }) {
   const preference = useMarkdownEditing();
-  const [labelFilter, setLabelFilter] = useState<NoteLabel | "">("");
-  const [hideTranslations, setHideTranslations] = useState(false);
-  const [hideAiOnly, setHideAiOnly] = useState(false);
+  const [filter, setFilter] = useState(emptyNoteFilter);
   const labeledItems = useMemo(() => model.items.map((item) => ({ ...item, labels: item.labels ?? resolvedNoteLabels(item) })), [model.items]);
-  const filteredItems = labeledItems.filter((item) => (!labelFilter || item.labels.includes(labelFilter)) &&
-    (!hideTranslations || !item.labels.includes("translation")) && (!hideAiOnly || !isAiOnlyNote(item.labels)));
-  const filterCount = Number(Boolean(labelFilter)) + Number(hideTranslations) + Number(hideAiOnly);
+  const filteredItems = labeledItems.filter((item) => matchesNoteFilter(item.labels, filter));
+  const filterCount = Number(Boolean(filter.label)) + Number(filter.hideTranslations) + Number(filter.hideLookup) + Number(filter.hideAiOnly);
   const selected = filteredItems.find((item) => item.key === model.selected?.key);
   const [visibleCount, setVisibleCount] = useState(100);
-  useEffect(() => setVisibleCount(100), [model.folderId, model.query, labelFilter, hideTranslations, hideAiOnly]);
+  useEffect(() => setVisibleCount(100), [model.folderId, model.query, filter]);
   const [folderName, setFolderName] = useState<string>();
   const [draft, setDraft] = useState<string>();
   const [editingItem, setEditingItem] = useState<NotesItem>();
@@ -189,27 +182,7 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
         value={model.query}
         onChange={(_, data) => model.search(data.value)}
       />
-      <div className="notes-label-filters">
-        <Popover positioning="below-start" trapFocus>
-          <PopoverTrigger disableButtonEnhancement>
-            <Button size="small" appearance={filterCount ? "secondary" : "subtle"} icon={<FilterRegular />}>
-              {filterCount ? `标签筛选 · ${filterCount}` : "标签筛选"}
-            </Button>
-          </PopoverTrigger>
-          <PopoverSurface aria-label="笔记标签筛选" className="notes-filter-popover">
-            <label>包含标签
-              <Select aria-label="包含笔记标签" value={labelFilter} onChange={(_, data) => setLabelFilter(data.value as NoteLabel | "")}>
-                <option value="">全部笔记</option>
-                {noteLabelEntries.map(([id, title]) => <option key={id} value={id}>{title}</option>)}
-              </Select>
-            </label>
-            <Checkbox label="隐藏翻译结果" checked={hideTranslations} onChange={(_, data) => setHideTranslations(data.checked === true)} />
-            <Checkbox label="隐藏纯 AI 内容" checked={hideAiOnly} onChange={(_, data) => setHideAiOnly(data.checked === true)} />
-            <small>按已记录的来源和编辑痕迹筛选；来源不明的旧笔记会保留。可在笔记操作中补充标签。</small>
-          </PopoverSurface>
-        </Popover>
-        {filterCount > 0 && <Button size="small" appearance="subtle" onClick={() => { setLabelFilter(""); setHideTranslations(false); setHideAiOnly(false); }}>清除筛选</Button>}
-      </div>
+      <NoteLabelFilter value={filter} onChange={setFilter} />
       {model.error && (
         <p role="alert" className="notes-error">
           {model.error}

@@ -249,3 +249,29 @@ test("double-clicking navigation buttons replaces pages with an overview and loc
   fireEvent.click(within(notes).getByRole("button", { name: /定位第 1 页高亮/ }));
   expect(screen.getByLabelText("PDF.js 页面列表")).toBeInTheDocument();
 });
+
+test("filters sidebar annotations by lookup origin and text without hiding their PDF marks", async () => {
+  const { mockFocusLayout } = await import("./fixtures/mockFocusLayout");
+  const restore = mockFocusLayout();
+  try {
+    savePdfAnnotations(pdfAnnotationStorageKey(paper), [
+      annotation({ id: "personal", excerpt: "Personal passage", note: "自己的实验观察" }),
+      annotation({ id: "lookup", excerpt: "synchronize", note: "v. 同步\n来源：必应词典", lookupKind: "dictionary" }),
+    ]);
+    render(<PdfReader selectedPapers={[paper]} zoom={100} />);
+    const user = userEvent.setup();
+    await screen.findByRole("button", { name: "编辑批注：synchronize" });
+    await user.click(screen.getByRole("button", { name: "标签筛选" }));
+    await user.click(await screen.findByRole("checkbox", { name: "隐藏查词结果" }));
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("button", { name: "编辑批注：synchronize" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "编辑批注：Personal passage" })).toBeInTheDocument();
+    expect(document.querySelectorAll("button.pdf-overlay-mark.highlight")).toHaveLength(2);
+    await user.click(screen.getByRole("button", { name: "标签筛选 · 1" }));
+    await user.type(await screen.findByRole("textbox", { name: "搜索批注内容" }), "不存在的关键词");
+    await user.keyboard("{Escape}");
+    expect(screen.getByText("没有符合筛选条件的批注")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "清除筛选" }));
+    expect(screen.getByRole("button", { name: "编辑批注：synchronize" })).toBeInTheDocument();
+  } finally { restore(); }
+});

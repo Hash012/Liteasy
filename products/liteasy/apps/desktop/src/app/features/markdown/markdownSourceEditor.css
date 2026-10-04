@@ -15,10 +15,11 @@
   align-items: center;
   gap: 4px 8px;
   padding: 6px 8px;
-  border-bottom: 1px solid var(--colorNeutralStroke2);
   background: var(--colorNeutralBackground2);
+  max-height: 112px;
+  overflow: auto;
 }
-.markdown-editing-group { display: flex; align-items: center; gap: 2px; }
+.markdown-editing-group { display: flex; flex-wrap: wrap; min-width: 0; align-items: center; gap: 2px; }
 .markdown-editing-group + .markdown-editing-group { border-left: 1px solid var(--colorNeutralStroke2); padding-left: 8px; }
 .markdown-source-editor .markdown-source-input {
   flex: 1 1 0;
@@ -43,3 +44,8 @@
   line-height: 1.7;
   tab-size: 2;
 }
+
+.markdown-toolbar-shell { flex: 0 0 auto; min-width: 0; border-bottom: 1px solid var(--colorNeutralStroke2); background: var(--colorNeutralBackground2); }
+.markdown-editing-toolbar[hidden] { display: none; }
+.markdown-toolbar-shell .fui-Button { flex-shrink: 0; border-radius: 4px; font-weight: 400; }
+.markdown-toolbar-toggle { margin: 2px 4px; }

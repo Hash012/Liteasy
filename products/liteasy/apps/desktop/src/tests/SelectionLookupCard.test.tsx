@@ -21,7 +21,7 @@ test("direct AI lookup sends a single minimal request and can save its Markdown 
   await screen.findByText("：领域。");
   expect(query).toHaveBeenCalledExactlyOnceWith({ text: "field", paperId: "PRIVATE_ID", mode: "explain", signal: expect.any(AbortSignal) });
   await userEvent.click(screen.getByRole("button", { name: "保存为批注" }));
-  expect(onSave).toHaveBeenCalledWith("**field**：领域。\n来源：AI 查词");
+  expect(onSave).toHaveBeenCalledWith("**field**：领域。\n来源：AI 查词", "explanation");
 });
 
 test("upgrades a dictionary result to AI lookup without forwarding the sentence or previous result", async () => {
@@ -73,7 +73,7 @@ test("shows compact senses and saves the full result through the supplied annota
   expect(screen.getByText("字段")).toBeVisible();
   expect(screen.getByText("A research field.")).toBeVisible();
   await userEvent.click(screen.getByRole("button", { name: "保存为批注" }));
-  expect(onSave).toHaveBeenCalledWith(expect.stringContaining("来源：必应词典"));
+  expect(onSave).toHaveBeenCalledWith(expect.stringContaining("来源：必应词典"), "dictionary");
   await userEvent.click(screen.getByRole("button", { name: "结合本句解释" }));
   expect(onExplain).toHaveBeenCalledTimes(1);
 });

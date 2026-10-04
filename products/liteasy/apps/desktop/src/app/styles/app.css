@@ -3282,8 +3282,9 @@ body {
   position: relative;
   z-index: 18;
   border-bottom: 1px solid var(--line-1);
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 2px 8px rgba(24, 34, 47, 0.05);
+  background: var(--colorNeutralBackground1);
+  color: var(--colorNeutralForeground1);
+  box-shadow: var(--shadow2);
 }
 
 .pdf-reader-top {
@@ -4434,7 +4435,7 @@ body {
   padding: 8px;
 }
 
-.pdf-annotation-editor button {
+.pdf-annotation-editor > button {
   justify-self: start;
   border: 1px solid rgba(27, 102, 179, 0.32);
   border-radius: 999px;
@@ -4638,6 +4639,7 @@ button.pdf-overlay-mark:focus-visible {
 }
 
 .pdf-overlay-mark.underline {
+  border-radius: 0;
   background: none;
   color: inherit;
   text-decoration: underline;

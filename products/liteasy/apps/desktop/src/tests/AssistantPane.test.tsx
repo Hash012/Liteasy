@@ -1,3 +1,4 @@
+import { mockFocusLayout } from "./fixtures/mockFocusLayout";
 import { generationPromptTasks } from "../app/features/ai-prompts/generationPrompts";
 import { createAgentApplicationService } from "../app/controllers/agent/agentApplicationService";
 import { createFrontendAgentClient } from "../app/features/agent-api/frontendAgentClient";
@@ -5,7 +6,7 @@ import { ObjectWorkbenchContext, type ObjectWorkbenchPort } from "../app/feature
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
-import { afterEach, vi } from "vitest";
+import { afterEach, beforeEach, vi } from "vitest";
 import {
   AssistantPane as RuntimeAssistantPane,
   hasPaperGroundedAuditScope
@@ -61,7 +62,10 @@ function AssistantPane(props: ComponentProps<typeof RuntimeAssistantPane>) {
   );
 }
 
+let restoreFocusLayout: () => void;
+beforeEach(() => { restoreFocusLayout = mockFocusLayout(); });
 afterEach(() => {
+  restoreFocusLayout();
   vi.unstubAllGlobals();
 });
 

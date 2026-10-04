@@ -1,6 +1,8 @@
-import type { ReactElement, ReactNode } from "react";
+import "./markdownSourceEditor.css";
+import { useId, useState, type ReactElement, type ReactNode } from "react";
 import { Button, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip } from "@fluentui/react-components";
 import {
+  ChevronDownRegular, ChevronRightRegular,
   ArrowRedoRegular, ArrowUndoRegular, CodeRegular, ImageRegular, LinkRegular, LinkAddRegular, MoreHorizontalRegular,
   TableRegular, TextBoldRegular, TextBulletListLtrRegular, TextItalicRegular, TextNumberListLtrRegular,
   TextQuoteRegular, TextStrikethroughRegular,
@@ -39,6 +41,8 @@ export function MarkdownEditingToolbar({ execute, undo, redo, canUndo, canRedo, 
   execute(command: MarkdownCommand): void; undo(): void; redo(): void; canUndo: boolean; canRedo: boolean;
   insertReference?(): void;
 }) {
+  const [expanded, setExpanded] = useState(true);
+  const controlsId = useId();
   const button = (label: string, icon: ReactElement | undefined, action: () => void, disabled = false, hint = label) =>
     <Tooltip key={label} content={hint} relationship="description"><Button size="small" appearance="subtle" icon={icon}
       aria-label={label} disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={action} /></Tooltip>;
@@ -48,7 +52,12 @@ export function MarkdownEditingToolbar({ execute, undo, redo, canUndo, canRedo, 
     </Tooltip></MenuTrigger>
     <MenuPopover><MenuList>{items.map((item) => <MenuItem key={item.command} icon={item.icon} onClick={() => execute(item.command)}>{item.label}</MenuItem>)}</MenuList></MenuPopover>
   </Menu>;
-  return <div className="markdown-editing-toolbar" role="group" aria-label="Markdown 编辑工具栏">
+  return <div className="markdown-toolbar-shell">
+    <Button className="markdown-toolbar-toggle" appearance="subtle" size="small" icon={expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}
+      aria-label={expanded ? "收起 Markdown 工具栏" : "展开 Markdown 工具栏"} aria-expanded={expanded} aria-controls={controlsId}
+      title={expanded ? "收起格式工具，保留更多编辑空间" : "展开格式工具"}
+      onMouseDown={(event) => event.preventDefault()} onClick={() => setExpanded((value) => !value)}>格式工具</Button>
+    <div id={controlsId} hidden={!expanded} className="markdown-editing-toolbar" role="group" aria-label="Markdown 编辑工具栏">
     <div className="markdown-editing-group" role="group" aria-label="编辑历史">
       {button("撤销", <ArrowUndoRegular />, undo, !canUndo, "撤销 · Ctrl/⌘ Z")}
       {button("重做", <ArrowRedoRegular />, redo, !canRedo, "重做 · Ctrl/⌘ Shift Z")}
@@ -67,6 +76,7 @@ export function MarkdownEditingToolbar({ execute, undo, redo, canUndo, canRedo, 
       {insert.map((item) => button(item.label, item.icon, () => execute(item.command), false, item.shortcut ? `${item.label} · ${item.shortcut}` : item.label))}
       {insertReference ? button("插入文件引用", <LinkAddRegular />, insertReference, false, "插入文件引用 · [[") : null}
       {menu("更多 Markdown 工具", <MoreHorizontalRegular />, more)}
+    </div>
     </div>
   </div>;
 }

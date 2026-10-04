@@ -1,10 +1,10 @@
-.bibliographic-editor { display: flex; flex-direction: column; height: 100%; min-height: 0; color: var(--colorNeutralForeground1); background: var(--colorNeutralBackground1); }
+.bibliographic-editor { display: flex; flex-direction: column; height: 100%; min-height: 0; color: var(--colorNeutralForeground1); background: var(--colorNeutralBackground1); container: bibliographic / inline-size; }
 .bibliographic-editor > header { padding: 16px; border-bottom: 1px solid var(--colorNeutralStroke2); flex-shrink: 0; }
 .bibliographic-editor h2 { margin: 0 0 6px; font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
 .bibliographic-editor > header span { color: var(--colorNeutralForeground2); font-size: 12px; overflow-wrap: anywhere; }
 .bibliographic-editor-fields { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 16px 20px; }
-.bibliographic-field { display: grid; grid-template-columns: 78px minmax(0, 1fr); align-items: start; gap: 8px; margin: 8px 0; }
-.bibliographic-field > label { padding-top: 6px; color: var(--colorNeutralForeground2); font-weight: 400; text-align: right; }
+.bibliographic-field { display: grid; grid-template-columns: 8em minmax(0, 1fr); align-items: start; gap: 8px; margin: 8px 0; }
+.bibliographic-field > label { padding-top: 6px; color: var(--colorNeutralForeground2); font-weight: 400; text-align: right; white-space: nowrap; }
 .bibliographic-field > :not(label) { min-width: 0; }
 .bibliographic-field textarea { min-width: 0; width: 100%; box-sizing: border-box; }
 .bibliographic-field.is-multiline { grid-template-columns: minmax(0, 1fr); gap: 4px; }
@@ -22,3 +22,8 @@
 .bibliographic-editor > footer p { margin: 0 0 8px; font-size: 12px; }
 .bibliographic-editor [role="alert"] { color: var(--colorStatusDangerForeground1); }
 .bibliographic-editor-empty { padding: 16px; color: var(--colorNeutralForeground2); }
+
+@container bibliographic (max-width: 340px) {
+  .bibliographic-field { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .bibliographic-field > label { text-align: left; }
+}

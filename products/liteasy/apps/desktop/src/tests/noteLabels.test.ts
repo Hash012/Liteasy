@@ -33,3 +33,12 @@ test("allows explicit correction without guessing provenance from old content", 
   expect(isAiOnlyNote(inferredNoteLabels(unknown))).toBe(false);
   expect(resolvedNoteLabels(item, { translation: true, "ai-guide": false })).toEqual(["translation", "ai-generated"]);
 });
+
+test("identifies persisted lookup provenance and bounded legacy dictionary footers", () => {
+  const translated = { ...annotation, aiGuide: undefined, lookupKind: "translation" as const };
+  expect(inferredNoteLabels({ ...item, annotation: translated })).toContain("translation");
+  expect(inferredNoteLabels({ ...item, annotation: translated })).not.toContain("personal");
+  const dictionary = { ...annotation, aiGuide: undefined, note: "v. 同步\n来源：必应词典" };
+  expect(inferredNoteLabels({ ...item, annotation: dictionary })).toContain("lookup");
+  expect(inferredNoteLabels({ ...item, annotation: { ...dictionary, note: "我查阅了必应词典，自己的结论" } })).toEqual(["personal"]);
+});

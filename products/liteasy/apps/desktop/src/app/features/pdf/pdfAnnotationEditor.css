@@ -76,3 +76,12 @@
 .pdf-annotation-summary[draggable="true"] {
   cursor: grab;
 }
+
+.pdf-annotation-note-editor :is(.markdown-live-editor, .markdown-source-editor) {
+  height: clamp(220px, 38dvh, 360px);
+  min-height: 180px;
+  max-height: min(480px, 65dvh);
+  resize: vertical;
+}
+.pdf-annotation-note-editor .markdown-live-editor .cm-content { padding: 10px 12px 24px; }
+.pdf-annotation-note-editor .markdown-source-input textarea { padding: 10px 12px 24px; }

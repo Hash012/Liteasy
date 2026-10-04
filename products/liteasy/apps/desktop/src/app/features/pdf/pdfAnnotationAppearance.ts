@@ -39,6 +39,7 @@ export function getOverlayStyle(kind: AnnotationKind, rect: PdfAnnotationRect, c
       left: `${rect.left}%`,
       top: `${rect.top}%`,
       width: `${rect.width}%`,
+      borderRadius: 0,
       borderBottom: `2px solid ${color ? getHighlightColor(color) : "rgba(27, 102, 179, 0.8)"}`
     };
   }

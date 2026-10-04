@@ -319,7 +319,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
               initialMode={lookupMode}
               paperId={session.paperId} paperTitle={session.paperTitle}
               onClose={() => { setLookupOpen(false); setLookupDismissed(true); }}
-              onSave={session.ready && draft.page ? (translation) => session.create({ page: Number(draft.page), excerpt: draft.excerpt, note: translation }) : undefined}
+              onSave={session.ready && draft.page ? (translation, lookupKind) => session.create({ page: Number(draft.page), excerpt: draft.excerpt, note: translation, lookupKind }) : undefined}
               onExplain={session.quickAsk && draft.page ? () => { setSystemPrompt(undefined); setQuestion("请结合所在句子解释这个单词或短语在论文中的具体含义，说明它与常见释义的关系。"); setAsking(true); setLookupOpen(false); setLookupDismissed(true); } : undefined} /> : null}
             {asking && session.quickAsk ? <form aria-label="阅读速问" onSubmit={(event) => {
               event.preventDefault(); if (!question.trim() || busy) return;

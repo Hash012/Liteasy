@@ -1,0 +1,4 @@
+.notes-label-filters { display: flex; align-items: center; gap: 4px; padding: 0 8px 6px; flex-wrap: wrap; min-width: 0; }
+.notes-filter-popover { display: grid; gap: 8px; width: min(290px, calc(100vw - 40px)); max-height: calc(100dvh - 32px); overflow: auto; box-sizing: border-box; }
+.notes-filter-popover > label { display: grid; gap: 6px; }
+.notes-filter-popover small { color: var(--colorNeutralForeground3); }

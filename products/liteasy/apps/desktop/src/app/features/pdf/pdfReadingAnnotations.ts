@@ -22,7 +22,7 @@ export type PdfReadingAnnotations = {
   readerControls?: ReactNode;
   guideControls?: ReactNode;
   extensionActions?(input: { page: number; excerpt: string }): ReactNode;
-  create(input: { page: number; excerpt: string; note: string } & ReadingMarkStyle): Promise<void>;
+  create(input: { page: number; excerpt: string; note: string; lookupKind?: PdfAnnotationV2["lookupKind"] } & ReadingMarkStyle): Promise<void>;
   update(id: string, revision: number, note: string, style?: ReadingMarkStyle): Promise<void>;
   remove(id: string): Promise<void>;
   openPdf(id: string): void;

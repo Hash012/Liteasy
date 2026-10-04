@@ -144,3 +144,8 @@
 .pdf-entry-review [role="alert"] {
   color: var(--colorPaletteRedForeground1);
 }
+
+.pdf-sidebar-controls { min-width: 0; }
+.pdf-sidebar-controls .notes-label-filters { padding-top: 4px; border-bottom: 1px solid var(--colorNeutralStroke2); }
+.pdf-annotation-list { grid-template-columns: minmax(0, 1fr); }
+.pdf-annotation-item, .pdf-annotation-summary { min-width: 0; max-width: 100%; }

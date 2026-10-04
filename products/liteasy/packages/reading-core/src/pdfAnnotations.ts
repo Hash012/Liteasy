@@ -65,6 +65,7 @@ type PdfAnnotationBase = {
   review?: PdfAnnotationReview;
   quickAsk?: { question: string; answer: string; pageText: string; abstractText: string };
   aiGuide?: GuideAnnotation;
+  lookupKind?: "dictionary" | "translation" | "explanation";
   /** Set only by an actual user change to the annotation body. */
   userEditedAt?: string;
   normalizedStart?: number;

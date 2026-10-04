@@ -14,7 +14,7 @@
 .notes-editor .markdown-live-editor, .object-card-editor .markdown-live-editor { flex: 1; height: 100%; min-height: 200px; }
 .external-note-source.markdown-live-editor { min-height: 0; }
 .extension-markdown-editor .markdown-live-editor { height: 320px; }
-.pdf-annotation-note-editor .markdown-live-editor, .paper-reading-comment-editor .markdown-live-editor { height: 220px; }
+.paper-reading-comment-editor .markdown-live-editor { height: 220px; }
 .object-tool-panel .markdown-live-editor { min-width: 200px; height: 260px; flex: 1; }
 .pdf-entry-review .markdown-live-editor { height: 220px; }
 

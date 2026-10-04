@@ -10,7 +10,7 @@ import "./selectionLookup.css";
 export function SelectionLookupCard({ lookup, text, context, paperId, paperTitle, initialMode = "auto", onClose, onExplain, onSave }: {
   lookup: SelectionLookupPort; text: string; context?: string; paperId?: string; paperTitle?: string;
   initialMode?: "auto" | "explain";
-  onClose(): void; onExplain?(): void; onSave?(note: string): Promise<void>;
+  onClose(): void; onExplain?(): void; onSave?(note: string, kind?: Exclude<SelectionLookupResult["kind"], "missing">): Promise<void>;
 }) {
   const [result, setResult] = useState<SelectionLookupResult>();
   const [pending, setPending] = useState(false);
@@ -87,7 +87,7 @@ export function SelectionLookupCard({ lookup, text, context, paperId, paperTitle
       }}>复制结果</Button></Tooltip> : null}
       {available && onSave ? <Button size="small" disabled={saving} onClick={() => {
         setSaving(true); setError("");
-        void onSave(lookupResultNote(result)).then(() => setMessage("查询结果已保存为批注。"))
+        void onSave(lookupResultNote(result), result.kind === "missing" ? undefined : result.kind).then(() => setMessage("查询结果已保存为批注。"))
           .catch((failure) => setError(String(failure))).finally(() => setSaving(false));
       }}>{saving ? "正在保存…" : "保存为批注"}</Button> : null}
       {onExplain ? <Button size="small" disabled={pending} onClick={onExplain}>结合本句解释</Button> : null}
