@@ -18,6 +18,8 @@
 .help-header strong {
   flex: 1;
 }
+.help-tour-entry { margin: 20px 0; padding: 16px; border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; background: var(--colorNeutralBackground2); }
+.help-tour-entry p { margin: 10px 0 0; color: var(--colorNeutralForeground2); font-size: 13px; line-height: 1.7; }
 .help-workspace {
   display: flex;
   gap: 16px;

@@ -560,6 +560,7 @@ export function DockRegion({
                 <div
                   aria-labelledby={`dock-tab-${regionId}-${itemId}`}
                   className="dock-item-host"
+                  data-tour-page={itemId}
                   hidden={!active}
                   key={itemId}
                   role="tabpanel"

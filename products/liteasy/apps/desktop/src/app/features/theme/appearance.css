@@ -151,18 +151,6 @@ html[data-color-scheme="dark"] .assistant-message-token span { color: var(--ink-
 html[data-color-scheme="dark"] :is(.library-button.danger, .assistant-session-button.danger, .pdf-text-box-error) { color: var(--danger-ink); background: var(--paper-2); }
 html[data-color-scheme="dark"] :is(.profile-login-status, .activity-login-badge) { background: #3e3020; border-color: #755837; color: var(--warning-ink); }
 
-/* Rich text follows its containing surface, including reader-specific palettes. */
-html[data-color-scheme="dark"] .markdown-content :is(th, td) { border-color: var(--line-1); }
-html[data-color-scheme="dark"] .markdown-content :is(th, :not(pre) > code, .markdown-content__code-block) {
-  background: var(--paper-2); color: var(--ink-1); border-color: var(--line-1);
-}
-html[data-color-scheme="dark"] .markdown-content__code-language { border-color: var(--line-1); color: var(--ink-2); }
-html[data-color-scheme="dark"] .markdown-content :is(blockquote, .markdown-content__image > span, .markdown-content__image-unavailable) { color: var(--ink-2); }
-html[data-color-scheme="dark"] .markdown-content a { color: var(--accent-1); }
-html[data-color-scheme="dark"] .markdown-content blockquote { border-color: var(--accent-1); }
-html[data-color-scheme="dark"] .markdown-content img { border-color: var(--line-1); }
-html[data-color-scheme="dark"] .pdf-annotation-markdown :is(pre, code, th) { background: var(--paper-2); }
-
 /* Mermaid's authored SVG uses its own light palette; its controls use the app
    palette so labels stay legible without altering the diagram's semantics. */
 html[data-color-scheme="dark"] .mermaid-preview { border-color: var(--line-1); }

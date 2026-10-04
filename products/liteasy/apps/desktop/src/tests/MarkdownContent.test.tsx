@@ -16,6 +16,31 @@ import { MineruMarkdown } from "../app/features/import/MineruMarkdown";
 import { PdfAnnotationMarkdown } from "../app/features/pdf/PdfAnnotationMarkdown";
 
 describe("shared MarkdownContent", () => {
+  test("copies fenced code as plain text and reports clipboard failures", async () => {
+    const user = userEvent.setup();
+    const write = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
+    const source = 'const html = "<script>literal</script>";\n\treturn html;';
+    const view = render(<MarkdownContent value={`\`\`\`ts\n${source}\n\`\`\``} />);
+    try {
+      await user.click(screen.getByRole("button", { name: "复制代码" }));
+      expect(write).toHaveBeenCalledWith(source);
+      expect(screen.getByRole("status")).toHaveTextContent("已复制");
+      expect(view.container.querySelector("script")).toBeNull();
+      write.mockRejectedValueOnce(new Error("Clipboard unavailable"));
+      await user.click(screen.getByRole("button", { name: "已复制代码" }));
+      expect(screen.getByRole("status")).toHaveTextContent("复制失败");
+      expect(screen.getByLabelText("ts 代码")).toHaveTextContent('const html = "<script>literal</script>";');
+    } finally { write.mockRestore(); }
+  });
+
+  test("keeps table semantics and column alignment inside a keyboard-accessible scroll area", () => {
+    render(<MarkdownContent value={"| Name | Value |\n| :--- | ---: |\n| Test | 42 |"} />);
+    const region = screen.getByRole("region", { name: "表格，可横向滚动" });
+    expect(region).toHaveAttribute("tabindex", "0");
+    expect(region).toContainElement(screen.getByRole("table"));
+    expect(screen.getByRole("cell", { name: "42" })).toHaveStyle({ textAlign: "right" });
+  });
+
   test("defers diagrams until streaming completes and keeps completed diagrams mounted during prose updates", async () => {
     diagramRender.mockClear();
     const value = "```mermaid\nflowchart LR\nA --> B\n```";

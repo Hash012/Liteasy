@@ -67,8 +67,7 @@ export function MineruMarkdown({ content, figures = [] }: MineruMarkdownProps) {
             ? <a {...props} href={safe} rel="noreferrer" target="_blank">{children}</a>
             : <span>{children}</span>;
         },
-        img: (props) => <MarkdownImage {...props} figures={figures} />,
-        table: ({ children, ...props }) => <div className="mineru-markdown__table-scroll"><table {...props}>{children}</table></div>
+        img: (props) => <MarkdownImage {...props} figures={figures} />
       }}
       rehypePluginsBeforeMath={[rehypeRaw, [rehypeSanitize, mineruSanitizeSchema]]}
       urlTransform={(url, key) => (

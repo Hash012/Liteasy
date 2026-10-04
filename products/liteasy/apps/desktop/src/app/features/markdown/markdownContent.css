@@ -1,31 +1,108 @@
+/* Shared document typography. Neutral fills follow the containing surface's ink,
+   including reader palettes that differ from the application theme. */
 .markdown-content {
+  --markdown-rule: color-mix(in srgb, currentColor 18%, transparent);
+  --markdown-fill: color-mix(in srgb, currentColor 5%, transparent);
+  --markdown-muted: color-mix(in srgb, currentColor 75%, transparent);
+  --markdown-link: var(--paper-reading-link, var(--reading-link, var(--accent-1, var(--colorBrandForegroundLink, #0969b5))));
+  --markdown-code-font: "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   min-width: 0;
   overflow-wrap: anywhere;
-  line-height: 1.6;
+  line-height: var(--markdown-line-height, 1.7);
+  text-align: start;
 }
+
+.markdown-content :where(h1, h2, h3, h4, h5, h6) {
+  color: inherit;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 1.5em 0 .65em;
+  text-wrap: pretty;
+}
+.markdown-content h1 { font-size: var(--markdown-h1-size, 2em); }
+.markdown-content h2 { font-size: var(--markdown-h2-size, 1.5em); }
+.markdown-content h3 { font-size: 1.25em; }
+.markdown-content h4 { font-size: 1.1em; }
+.markdown-content h5 { font-size: 1em; }
+.markdown-content h6 { font-size: .9em; color: var(--markdown-muted); }
+.markdown-content :where(h1, h2) { padding-bottom: .3em; border-bottom: 1px solid var(--markdown-rule); }
+.markdown-content :where(p, ul, ol, blockquote, figure, .markdown-content__table-scroll, .markdown-content__code-block) {
+  margin: 0 0 var(--markdown-block-gap, 1em);
+}
+.markdown-content :where(strong, b) { font-weight: 600; }
+.markdown-content :where(ul, ol) { padding-inline-start: 1.8em; }
+.markdown-content li + li { margin-top: .3em; }
+.markdown-content li > :where(ul, ol) { margin-block: .3em 0; }
+.markdown-content li > p { margin-bottom: .5em; }
+.markdown-content li > :last-child { margin-bottom: 0; }
+.markdown-content .contains-task-list { list-style: none; padding-inline-start: 1.6em; }
+.markdown-content .task-list-item > input { margin-inline: -1.4em .5em; accent-color: var(--markdown-link); vertical-align: middle; }
+.markdown-content blockquote {
+  padding: .55em 1em;
+  border-inline-start: 3px solid var(--markdown-rule);
+  border-radius: 0 4px 4px 0;
+  background: var(--markdown-fill);
+  color: inherit;
+}
+.markdown-content blockquote > :first-child { margin-top: 0; }
+.markdown-content blockquote > :last-child { margin-bottom: 0; }
+.markdown-content hr { height: 0; border: 0; border-top: 1px solid var(--markdown-rule); margin: 1.75em 0; }
+.markdown-content a { color: var(--markdown-link); text-decoration: none; text-underline-offset: 3px; }
+.markdown-content a:hover { text-decoration: underline; }
+.markdown-content :where(a, pre, .markdown-content__table-scroll):focus-visible { outline: 2px solid var(--markdown-link); outline-offset: 2px; border-radius: 3px; }
+
+.markdown-content__table-scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+.markdown-content table { border-collapse: collapse; border-spacing: 0; width: max-content; max-width: 100%; font-size: .95em; }
+.markdown-content :where(th, td) { border: 1px solid var(--markdown-rule); padding: .5em .85em; vertical-align: top; }
+.markdown-content th { font-weight: 600; background: var(--markdown-fill); }
+.markdown-content tbody tr:nth-child(even) { background: var(--markdown-fill); }
+.markdown-content :where(th, td) > :last-child { margin-bottom: 0; }
+
+.markdown-content :not(pre) > code {
+  border: 0;
+  border-radius: 4px;
+  background: var(--markdown-fill);
+  color: inherit;
+  font: .9em/1.5 var(--markdown-code-font);
+  padding: .15em .35em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.markdown-content__code-block { min-width: 0; border: 1px solid var(--markdown-rule); border-radius: 6px; background: var(--markdown-fill); color: inherit; overflow: hidden; }
+.markdown-content__code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px 4px 14px;
+  border-bottom: 1px solid var(--markdown-rule);
+  color: var(--markdown-muted);
+  font: .8em/1.5 var(--markdown-code-font);
+}
+.markdown-content__code-copy { color: inherit; min-width: 28px; }
+.markdown-content .markdown-content__code-block pre {
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+  max-height: min(560px, 65vh);
+  overflow: auto;
+  padding: 14px 16px;
+  background: transparent;
+  font: .9em/1.65 var(--markdown-code-font);
+  tab-size: 4;
+}
+.markdown-content__code-block pre code { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; white-space: pre; overflow-wrap: normal; }
+.markdown-content__code-block > p { margin: 0; padding: 8px 14px; font-size: .85em; }
+
+.markdown-content__image { display: grid; justify-items: start; gap: 6px; margin: .5em 0; max-width: 100%; }
+.markdown-content img { display: block; border: 0; border-radius: 4px; height: auto; max-height: 80vh; max-width: 100%; object-fit: contain; }
+.markdown-content__image > span, .markdown-content__image-unavailable { color: var(--markdown-muted); font-size: .85em; }
+.markdown-content .katex-display { margin: 1.2em 0; max-width: 100%; overflow-x: auto; overflow-y: hidden; padding: .3em 0; }
+.markdown-content .mermaid-preview { margin: 1em 0; max-width: 100%; }
+.markdown-content .footnotes { margin-top: 2em; border-top: 1px solid var(--markdown-rule); padding-top: 1em; font-size: .85em; }
+.markdown-content .footnotes h2 { font-size: 1em; border: 0; }
 .markdown-content > :first-child { margin-top: 0; }
 .markdown-content > :last-child { margin-bottom: 0; }
-.markdown-content p, .markdown-content ul, .markdown-content ol,
-.markdown-content blockquote, .markdown-content table, .markdown-content__code-block { margin: 0 0 12px; }
-.markdown-content ul, .markdown-content ol { padding-left: 22px; }
-.markdown-content blockquote { border-left: 3px solid #8db6d5; color: #526d80; padding: 3px 0 3px 12px; }
-.markdown-content table { border-collapse: collapse; display: block; max-width: 100%; overflow-x: auto; }
-.markdown-content th, .markdown-content td { border: 1px solid #d4e0e8; padding: 6px 8px; text-align: left; }
-.markdown-content th { background: #f1f6fa; }
-.markdown-content .katex-display { max-width: 100%; overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
-.markdown-content :not(pre) > code { border: 1px solid #d8e2e9; border-radius: 4px; background: #f2f5f7; color: #284c63; font: .9em ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px 4px; }
-.markdown-content__code-block { border: 1px solid #cad7e0; border-radius: 6px; background: #f5f7f9; overflow: hidden; }
-.markdown-content__code-language { border-bottom: 1px solid #d8e2e9; display: block; font: 11px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace; padding: 5px 9px; }
-.markdown-content__code-block pre { margin: 0; max-height: 480px; overflow: auto; padding: 10px 12px; }
-.markdown-content__code-block code { font: 12px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre; }
-.markdown-content__code-block > p { padding: 8px 12px; }
-.markdown-content a { color: #0f67a8; text-decoration: underline; text-underline-offset: 2px; }
-.markdown-content__image { display: grid; gap: 4px; margin: 8px 0; max-width: 100%; }
-.markdown-content img { border: 1px solid #d6e0e7; border-radius: 6px; height: auto; max-height: 420px; max-width: 100%; object-fit: contain; }
-.markdown-content__image > span, .markdown-content__image-unavailable { color: #62798a; font-size: calc(11px * var(--app-font-ratio, 1)); }
-.markdown-content .mermaid-preview { margin: 10px 0 14px; max-width: 100%; }
 .markdown-content--inline { display: inline; }
 .markdown-content--inline .markdown-content__image { display: inline-grid; }
-.assistant-markdown .markdown-content__code-block { background: #18232c; color: #edf5fa; }
-.assistant-markdown .markdown-content__code-language { border-color: rgba(255, 255, 255, .12); color: #b8cbd8; }
 .resource-search-location { outline: 2px solid var(--colorBrandStroke1); outline-offset: 3px; border-radius: 4px; }

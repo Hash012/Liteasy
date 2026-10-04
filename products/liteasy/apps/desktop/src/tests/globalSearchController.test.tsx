@@ -45,7 +45,8 @@ test("unchanged papers, focus and reopening preserve completed results without r
   const hook = renderHook(({ papers }) => useGlobalSearchController({ repository, papers, open: async () => {} }), { initialProps: { papers } });
   act(() => hook.result.current.show());
   await settle();
-  expect(collect).not.toHaveBeenCalled();
+  expect(collect).toHaveBeenCalledTimes(1); // Opening prepares the index before typing.
+  expect(verify).not.toHaveBeenCalled();
   act(() => hook.result.current.setQuery("owned"));
   await waitFor(() => expect(hook.result.current.hits).toHaveLength(1));
   const hits = hook.result.current.hits;
@@ -124,4 +125,45 @@ test("changes while closed invalidate cached results and account changes never r
   hook.rerender({ repository: { scopeId: crypto.randomUUID() } as ObjectRepository, title: "Other scope" });
   expect(hook.result.current.hits).toEqual([]);
   expect(hook.result.current.query).toBe("");
+});
+
+test("typing and closing during a slow warmup reuse one index pass and only search the latest query", async () => {
+  let finish!: () => void;
+  const gate = new Promise<void>((resolve) => { finish = resolve; });
+  collect.mockImplementation(async () => {
+    await gate;
+    return { limited: false, documents: [{ id: "note", title: "Owned", revision: "1", coverage: "indexed",
+      sections: [{ key: "body", group: "note", text: "owned recovered", locator: { path: "synthetic:note" } }] }] };
+  });
+  const repository = { scopeId: crypto.randomUUID() } as ObjectRepository;
+  const hook = renderHook(() => useGlobalSearchController({ repository, papers: [], open: async () => {} }));
+  act(() => hook.result.current.show());
+  await waitFor(() => expect(collect).toHaveBeenCalledTimes(1));
+  for (const query of ["ow", "own", "owned"]) {
+    act(() => hook.result.current.setQuery(query));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
+  }
+  act(() => hook.result.current.close());
+  expect((collect.mock.calls[0][0] as AbortSignal).aborted).toBe(false);
+  await act(async () => { finish(); await gate; });
+  act(() => hook.result.current.show());
+  await waitFor(() => expect(hook.result.current.hits).toHaveLength(1));
+  expect(hook.result.current.query).toBe("owned");
+  expect(collect).toHaveBeenCalledTimes(1);
+  expect(verify).toHaveBeenCalledTimes(1);
+});
+
+test("an edit cancels obsolete warmup and only the new corpus can supply results", async () => {
+  let finish!: () => void;
+  const gate = new Promise<void>((resolve) => { finish = resolve; });
+  collect.mockImplementationOnce(async () => { await gate; return { limited: false, documents: [] }; });
+  const repository = { scopeId: crypto.randomUUID() } as ObjectRepository;
+  const hook = renderHook(({ title }) => useGlobalSearchController({ repository, papers: [{ id: "p", title }], open: async () => {} }), { initialProps: { title: "before" } });
+  act(() => { hook.result.current.show(); hook.result.current.setQuery("owned"); });
+  await waitFor(() => expect(collect).toHaveBeenCalledTimes(1));
+  hook.rerender({ title: "after" });
+  expect((collect.mock.calls[0][0] as AbortSignal).aborted).toBe(true);
+  await act(async () => { finish(); await gate; });
+  await waitFor(() => expect(hook.result.current.hits).toHaveLength(1));
+  expect(collect).toHaveBeenCalledTimes(2);
 });

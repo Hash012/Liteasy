@@ -36,19 +36,16 @@
 .reading-document__page { max-width: var(--reading-width); margin: 0 auto; padding: 44px 44px 64px; overflow-wrap: anywhere; font-family: var(--reading-font-family, Georgia, serif); font-size: var(--reading-font-size); line-height: var(--reading-line-height); letter-spacing: .01em; }
 .reading-document__page .markdown-content { color: inherit; font: inherit; line-height: inherit; }
 .reading-document__page .markdown-content p { line-height: inherit; }
-.reading-document__page :is(p, blockquote, pre, figure, table, ul, ol) { margin-block: 1.05em; }
-.reading-document__page :is(h1, h2, h3, h4, h5, h6) { line-height: 1.4; font-weight: 600; margin-block: 1.6em .8em; }
-.reading-document__page h1 { font-size: 1.8em; }.reading-document__page h2 { font-size: 1.4em; }.reading-document__page h3 { font-size: 1.2em; }
-.reading-document__page a { color: var(--reading-link); text-underline-offset: 3px; }
-.reading-document__page img { display: block; max-width: 100%; max-height: 80vh; height: auto; object-fit: contain; margin: 1.5em auto; }
-.reading-document__page table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; font-size: .88em; }
-.reading-document__page :is(th, td) { padding: .5em .8em; border: 1px solid var(--reading-rule); }
-.reading-document__page th, .reading-document__page .markdown-content__code-block, .reading-document__page .markdown-content :not(pre) > code { background: var(--reading-hover); color: var(--reading-ink); border-color: var(--reading-rule); }
-.reading-document__page .markdown-content__code-language, .reading-document__page .markdown-content img { border-color: var(--reading-rule); }
-.reading-document__page .markdown-content__image-unavailable { color: var(--reading-muted); }
-.reading-document__page blockquote { margin-inline: 0; padding-inline-start: 1.2em; border-inline-start: 3px solid var(--reading-rule); color: var(--reading-muted); }
-.reading-document__page pre { overflow-x: auto; padding: 16px; background: var(--reading-hover); border-radius: 6px; font-size: .8em; }
-.reading-document__page code { font-size: .88em; }.reading-document__page pre code { font-size: inherit; }
+.reading-document__page:not(:has(.markdown-content)) :is(p, blockquote, pre, figure, table, ul, ol) { margin-block: 1.05em; }
+.reading-document__page:not(:has(.markdown-content)) :is(h1, h2, h3, h4, h5, h6) { line-height: 1.4; font-weight: 600; margin-block: 1.6em .8em; }
+.reading-document__page:not(:has(.markdown-content)) h1 { font-size: 1.8em; }.reading-document__page:not(:has(.markdown-content)) h2 { font-size: 1.4em; }.reading-document__page:not(:has(.markdown-content)) h3 { font-size: 1.2em; }
+.reading-document__page:not(:has(.markdown-content)) a { color: var(--reading-link); text-underline-offset: 3px; }
+.reading-document__page:not(:has(.markdown-content)) img { display: block; max-width: 100%; max-height: 80vh; height: auto; object-fit: contain; margin: 1.5em auto; }
+.reading-document__page:not(:has(.markdown-content)) table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; font-size: .88em; }
+.reading-document__page:not(:has(.markdown-content)) :is(th, td) { padding: .5em .8em; border: 1px solid var(--reading-rule); }
+.reading-document__page:not(:has(.markdown-content)) blockquote { margin-inline: 0; padding-inline-start: 1.2em; border-inline-start: 3px solid var(--reading-rule); color: var(--reading-muted); }
+.reading-document__page:not(:has(.markdown-content)) pre { overflow-x: auto; padding: 16px; background: var(--reading-hover); border-radius: 6px; font-size: .8em; }
+.reading-document__page:not(:has(.markdown-content)) code { font-size: .88em; }.reading-document__page:not(:has(.markdown-content)) pre code { font-size: inherit; }
 .reading-document__chapter-caption { font: 11px/1.5 var(--fontFamilyBase, sans-serif); letter-spacing: .1em; color: var(--reading-muted); margin-bottom: 26px; }
 .reading-document__plain-text { white-space: pre-wrap; tab-size: 4; }
 .reading-document__notes { font: 12px/1.7 var(--fontFamilyBase, sans-serif); color: var(--reading-muted); margin-top: 36px; padding: 12px 0; border-top: 1px solid var(--reading-rule); }

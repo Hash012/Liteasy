@@ -73,7 +73,8 @@ flowchart LR
     fireEvent.click(screen.getByRole("button", { name: "深入阅读“梯度下降”" }));
     expect(onDeepen).toHaveBeenCalledWith("梯度下降", second);
     expect(onDeepen).toHaveBeenCalledTimes(1);
-    expect(screen.getAllByRole("button")).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /^深入阅读/ })).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "复制代码" })).toBeVisible();
     expect(screen.getByText("[[[行内代码]]]")).toBeVisible();
     expect(screen.getByText("[[[代码块]]]")).toBeVisible();
     expect(screen.getByRole("link", { name: "普通链接" })).toHaveAttribute("href", "https://example.org");

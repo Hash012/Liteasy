@@ -1,0 +1,26 @@
+.onboarding-invitation { display: flex; align-items: flex-start; gap: 14px; padding: 18px; margin: 0 0 24px; border: 1px solid var(--colorBrandStroke2); border-radius: 8px; background: var(--colorBrandBackground2); text-align: start; }
+.onboarding-invitation > svg { flex-shrink: 0; width: 28px; height: 28px; color: var(--colorBrandForeground1); }
+.onboarding-invitation strong { font-size: 16px; font-weight: 600; }
+.onboarding-invitation p { font-size: 13px; line-height: 1.7; margin: 6px 0 12px; color: var(--colorNeutralForeground2); }
+.onboarding-invitation > div > div { display: flex; gap: 8px; flex-wrap: wrap; }
+.onboarding-backdrop { background: transparent; overflow: hidden; }
+.onboarding-dim { position: fixed; inset: 0; background: rgb(0 0 0 / 65%); }
+.onboarding-spotlight { position: fixed; box-sizing: border-box; border-radius: 8px; border: 2px solid #88c6fa; box-shadow: 0 0 0 100vmax rgb(0 0 0 / 65%), inset 0 0 0 1px rgb(255 255 255 / 60%); pointer-events: none; transition: left 220ms ease, top 220ms ease, width 220ms ease, height 220ms ease; }
+.fui-DialogSurface.onboarding-card { position: fixed; inset: auto; transform: none; margin: 0; box-sizing: border-box; width: min(360px, calc(100vw - 24px)); max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); padding: 20px; overflow-y: auto; border-radius: 8px; border: 1px solid var(--colorNeutralStroke2); background: var(--colorNeutralBackground1); color: var(--colorNeutralForeground1); box-shadow: var(--shadow28); transition: left 220ms ease, top 220ms ease; }
+.onboarding-card-header { display: flex; align-items: center; gap: 8px; color: var(--colorNeutralForeground3); font-size: 12px; }
+.onboarding-card-header > :first-child { flex: 1; }
+.onboarding-card-header > button { margin: -8px -8px -8px 0; }
+.onboarding-progress { display: flex; gap: 4px; margin: 14px 0 20px; }
+.onboarding-progress > span { flex: 1; height: 3px; background: var(--colorNeutralStroke2); border-radius: 2px; }
+.onboarding-progress > .is-complete { background: var(--colorBrandBackground); }
+.onboarding-copy { animation: onboarding-copy-in 180ms ease-out; }
+.onboarding-copy h2 { font-size: 20px; line-height: 1.45; font-weight: 600; margin: 0 0 12px; outline: none; }
+.onboarding-copy p { font-size: 14px; line-height: 1.75; margin: 0 0 14px; }
+.onboarding-copy .onboarding-tip { padding: 12px; border-radius: 6px; background: var(--colorNeutralBackground3); color: var(--colorNeutralForeground2); font-size: 12px; }
+.onboarding-copy small { color: var(--colorNeutralForeground3); }
+.onboarding-actions { display: flex; align-items: center; gap: 4px; margin-top: 20px; }
+.onboarding-actions > :first-child { margin-right: auto; }
+.onboarding-timer { margin: 12px 0 -12px; height: 2px; background: var(--colorBrandBackground); transform-origin: left; animation: onboarding-countdown 12s linear forwards; }
+@keyframes onboarding-copy-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes onboarding-countdown { to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .onboarding-spotlight, .fui-DialogSurface.onboarding-card { transition: none; } .onboarding-copy, .onboarding-timer { animation: none; } }

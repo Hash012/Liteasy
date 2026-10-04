@@ -5,6 +5,7 @@ import {
   ArrowClockwiseRegular,
   BookOpenRegular,
   HomeRegular,
+  PlayRegular,
   SearchRegular,
 } from "@fluentui/react-icons";
 import { MarkdownContent } from "../markdown/MarkdownContent";
@@ -12,7 +13,7 @@ import { LocalDiagnosticsPanel } from "../local-diagnostics/LocalDiagnosticsPane
 import type { HelpViewModel } from "./help.types";
 import "./help.css";
 
-export function HelpPanel({ model }: { model: HelpViewModel }) {
+export function HelpPanel({ model, onStartTour, tourError }: { model: HelpViewModel; onStartTour?: () => void; tourError?: string }) {
   const [catalog, setCatalog] = useState(false);
   const home = !catalog && !model.query.trim() && !model.topic && !model.articleRef;
   const journeys = [
@@ -25,6 +26,9 @@ export function HelpPanel({ model }: { model: HelpViewModel }) {
       <header className="help-header">
         <BookOpenRegular aria-hidden />
         <strong>用户手册</strong>
+        {onStartTour ? <Tooltip content="播放新手导览，并恢复常用页面展开的默认布局" relationship="description">
+          <Button appearance="subtle" data-tour="replay" icon={<PlayRegular />} aria-label="播放新手导览" onClick={onStartTour} />
+        </Tooltip> : null}
         <Tooltip content="帮助首页" relationship="description">
           <Button
             appearance="subtle"
@@ -42,6 +46,7 @@ export function HelpPanel({ model }: { model: HelpViewModel }) {
           />
         </Tooltip>
       </header>
+      {tourError ? <p role="alert">{tourError}</p> : null}
       <Input
         aria-label="搜索帮助"
         placeholder="搜索问题、功能或操作"
@@ -85,6 +90,7 @@ export function HelpPanel({ model }: { model: HelpViewModel }) {
             </div>
           ) : home && journeys.length ? (
             <div className="help-home"><h1>你现在想完成什么？</h1><p>从一个任务开始，也可以随时查阅完整手册。</p>
+              {onStartTour ? <div className="help-tour-entry"><Button appearance="primary" icon={<PlayRegular />} onClick={onStartTour}>跟着导览认识 Liteasy</Button><p>逐步认识文献库、阅读、笔记与 AI。播放将恢复导览默认布局，展开常用页面，并保留已打开的资料。</p></div> : null}
               <div className="help-journeys">{journeys.map((item) => <Button key={item.id} appearance="subtle" onClick={() => model.openArticle(item.article!.ref)}><BookOpenRegular aria-hidden /><span><strong>{item.title}</strong><small>{item.detail}</small></span></Button>)}</div>
               <Button appearance="subtle" onClick={() => setCatalog(true)}>完整文档目录</Button>
 

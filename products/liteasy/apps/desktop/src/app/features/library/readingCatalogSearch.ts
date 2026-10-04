@@ -30,6 +30,8 @@ function normalize(value: string) {
 export function indexReadingCatalog(entries: readonly ReadingCatalogEntry[]) {
   return entries.map((entry) => ({
     entry,
+    metadata: catalogSearchMetadata(entry),
+    nameSearch: [entry.title, entry.fileName].filter(Boolean).join(" "),
     search: [
       entry.title, ...(entry.authors ?? []), entry.publication, entry.doi,
       entry.identifier, entry.language, entry.publishedAt,
@@ -43,7 +45,7 @@ export function indexReadingCatalog(entries: readonly ReadingCatalogEntry[]) {
 
 export function queryReadingCatalog(index: ReturnType<typeof indexReadingCatalog>, filters: ReadingCatalogFilters) {
   const compiled = compileSearchQuery(filters.query);
-  const rows = index.filter(({ entry, search }) => (
+  const rows = index.filter(({ entry, search, nameSearch, metadata }) => (
     (filters.format === "all" || entry.format === filters.format)
     && (filters.status === "all" || (entry.readingStatus ?? "unread") === filters.status)
     && (!filters.collection || entry.collection === filters.collection)
@@ -53,7 +55,7 @@ export function queryReadingCatalog(index: ReturnType<typeof indexReadingCatalog
     && (!filters.subject || (entry.subjects ?? []).some((subject) => normalize(subject).includes(normalize(filters.subject!))))
     && (filters.tags ?? []).every((tag) => (entry.tags ?? []).some((value) => normalize(value) === normalize(tag)))
     && !(filters.excludeTags ?? []).some((tag) => (entry.tags ?? []).some((value) => normalize(value) === normalize(tag)))
-    && compiled.matches(filters.scope === "name" ? [entry.title, entry.fileName].filter(Boolean).join(" ") : search, catalogSearchMetadata(entry))
+    && compiled.matches(filters.scope === "name" ? nameSearch : search, metadata)
   ));
   rows.sort((left, right) => {
     let order = 0;

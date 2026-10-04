@@ -1,8 +1,10 @@
 import { useResourceReveal, observeRenderedResource, rehypeResourcePositions } from "../resource-links/resourceReveal";
 import {
   Children, Component, createContext, createElement, isValidElement, lazy, memo, Suspense, useContext, useMemo,
-  useState, useRef, type ReactNode
+  useState, useRef, useEffect, type ReactNode
 } from "react";
+import { Button, Tooltip } from "@fluentui/react-components";
+import { CheckmarkRegular, CopyRegular } from "@fluentui/react-icons";
 import ReactMarkdown, { type Components, type Options, type UrlTransform } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
@@ -124,6 +126,21 @@ const MarkdownDiagram = memo(function MarkdownDiagram({ code }: { code: string }
   );
 });
 
+function CodeCopyButton({ text }: { text: string }) {
+  const [status, setStatus] = useState<"idle" | "copied" | "failed">("idle");
+  useEffect(() => {
+    if (status === "idle") return;
+    const timeout = window.setTimeout(() => setStatus("idle"), 2400);
+    return () => window.clearTimeout(timeout);
+  }, [status]);
+  const label = status === "copied" ? "已复制代码" : status === "failed" ? "复制失败，请选择代码后复制" : "复制代码";
+  return <Tooltip content={label} relationship="label"><Button appearance="subtle" size="small" className="markdown-content__code-copy"
+    aria-label={label} icon={status === "copied" ? <CheckmarkRegular /> : <CopyRegular />} onClick={async () => {
+      try { await navigator.clipboard.writeText(text); setStatus("copied"); }
+      catch { setStatus("failed"); }
+    }}>{status === "copied" ? <span role="status">已复制</span> : status === "failed" ? <span role="status">复制失败</span> : null}</Button></Tooltip>;
+}
+
 function MarkdownPre({ children }: { children?: ReactNode }) {
   const streaming = useContext(StreamingContext);
   const inline = useContext(InlineContext);
@@ -137,15 +154,21 @@ function MarkdownPre({ children }: { children?: ReactNode }) {
   if (inline) return <code>{text || children}</code>;
   return (
     <div className="markdown-content__code-block">
-      {language ? <span className="markdown-content__code-language">{language}</span> : null}
+      <div className="markdown-content__code-header">
+        <span className="markdown-content__code-language">{language ?? "代码"}</span>
+        {code ? <CodeCopyButton text={text} /> : null}
+      </div>
       {diagram && streaming ? <p role="status">图表生成完成后显示预览。</p> : null}
       {oversized ? <p>图表内容较多，已保留文本视图。</p> : null}
-      <pre>{children}</pre>
+      <pre tabIndex={0} aria-label={language ? `${language} 代码` : "代码"}>{children}</pre>
     </div>
   );
 }
 
 export const markdownComponents: Components = {
+  table: ({ children, node: _node, ...props }) => <div className="markdown-content__table-scroll" tabIndex={0} role="region" aria-label="表格，可横向滚动">
+    <table {...props}>{children}</table>
+  </div>,
   a: ({ children, href, node: _node, ...props }) => href
     ? <a {...props} href={href} rel="noreferrer" target={href.startsWith("#") ? undefined : "_blank"}>{children}</a>
     : <span>{children}</span>,

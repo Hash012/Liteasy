@@ -139,14 +139,6 @@
 }
 .thin-reading__summary-paragraph { max-width: 36em; }
 .thin-reading__markdown { max-width: 36em; }
-.thin-reading__markdown h1,
-.thin-reading__markdown h2,
-.thin-reading__markdown h3,
-.thin-reading__markdown h4,
-.thin-reading__markdown h5,
-.thin-reading__markdown h6 { font-family: var(--reader-font-family, serif); font-size: 1.12em; line-height: 1.5; margin: 1.25em 0 .5em; max-width: none; }
-.thin-reading__markdown > :first-child { margin-top: 0; }
-.thin-reading__markdown li > p { margin-bottom: .3em; }
 .thin-reading__markdown .thin-reading__deepen-term {
   background: #eef5fa;
   border: 0;

@@ -1,3 +1,4 @@
+import { mapSearchBatch, searchBatches } from "./searchBatches";
 import { inferAssetType } from "../library/libraryAssetMetadata";
 import { catalogSearchMetadata, noteSearchMetadata } from "../search/searchMetadata";
 import { loadPaperFileMetadata } from "../library/paperFileMetadata";
@@ -52,8 +53,9 @@ export function createWorkspaceSearchSource(input: { repository: ObjectRepositor
     const sections: SearchSection[] = [{ key: "metadata", group: "metadata", text: [catalog.title, catalog.abstract, catalog.authors?.join(" "), catalog.year, paper.doi, ...(metadata.tags ?? [])].filter(Boolean).join("\n"), locator: { path, paperId: paper.id } }];
     let coverage: SearchDocument["coverage"] = "metadata", detail = "只有元信息；正文尚未提取。";
     try {
-      const fulltext = normalizePaperFulltext(await loadUserPaperArtifact({ artifactKind: "fulltext", paperId: paper.id })); check(signal);
-      const snapshot = normalizePdfAnnotationPrivateState(await loadUserPaperArtifact({ artifactKind: "annotations", paperId: paper.id })); check(signal);
+      const [body, savedAnnotations] = await Promise.all([loadUserPaperArtifact({ artifactKind: "fulltext", paperId: paper.id }), loadUserPaperArtifact({ artifactKind: "annotations", paperId: paper.id })]); check(signal);
+      const fulltext = normalizePaperFulltext(body);
+      const snapshot = normalizePdfAnnotationPrivateState(savedAnnotations);
       for (const page of fulltext?.pages ?? []) if (page.text.trim()) sections.push({ key: `page:${page.page}`, group: "body", text: page.text, locator: { path, paperId: paper.id, page: page.page } });
       const annotations = snapshot?.annotations ?? loadPdfAnnotations(pdfAnnotationStorageKey(paper));
       for (const annotation of annotations) {
@@ -98,6 +100,29 @@ export function createWorkspaceSearchSource(input: { repository: ObjectRepositor
       sections: [{ key: "metadata", group: "metadata", text: title || file.name, locator: { path: target } },
         { key: "file", group: /\.canvas$/i.test(path) ? "artifact" : "note", text: `${text}`, locator: { path: target, line: 1 } }] };
   }
+  async function verifyHit(hit: SearchHit, signal: AbortSignal, cached: MetadataSnapshot, mounts?: Awaited<ReturnType<NoteFileService["listMounts"]>>) {
+    check(signal);
+    try {
+      const target = parseLiteasyPath(hit.path, scope);
+      if (target.kind === "paper") {
+        const paper = input.getPapers().find((paper) => paper.id === target.paperId);
+        if (!paper) return false;
+        const current = await paperDocument(paper, signal, cached); check(signal);
+        return current.revision === hit.revision;
+      }
+      if (target.kind === "object") {
+        const object = await input.repository.resolveLatest(target.ref.objectId); check(signal);
+        if (object.kind === "source.document" && !cached.files.some((file) => file.ref.objectId === object.objectId)) return false;
+        return object.lifecycle === "active" && await objectRevision(object, await objectMetadata(object, cached), cached) === hit.revision;
+      }
+      if (target.kind === "external-file") {
+        if (!(mounts ?? await input.files.listMounts()).some((mount) => mount.id === target.mountId)) return false;
+        const current = await externalDocument(target.mountId, target.path, signal, undefined, cached); check(signal);
+        return current.revision === hit.revision;
+      }
+      return false;
+    } catch { check(signal); return false; }
+  }
   return {
     async collect(signal, progress) {
       const documents: SearchDocument[] = []; const boardTitles = new Map<string, string>(); let limited = false, characters = 0;
@@ -111,81 +136,81 @@ export function createWorkspaceSearchSource(input: { repository: ObjectRepositor
         }); documents.push({ ...document, sections, ...(truncated ? { coverage: "partial" as const, detail: "本次索引已到达容量上限，只保留部分文字。" } : {}) }); progress(documents.length); return true;
       };
       const cached = await snapshot(); check(signal);
-      for (const paper of input.getPapers()) { check(signal); if (!append(await paperDocument(paper, signal, cached))) break; }
+      papers: for (const batch of searchBatches(input.getPapers())) {
+        check(signal);
+        for (const document of await mapSearchBatch(batch, signal, (paper) => paperDocument(paper, signal, cached))) if (!append(document)) break papers;
+      }
       const library = new Map((cached.files).map((file) => [file.ref.objectId, file])); check(signal);
       const projections = await input.repository.fileProjectionIds();
       const titles = await input.repository.searchTitles("", 3001); check(signal);
       limited ||= titles.length > 3000;
-      for (const title of titles.slice(0, 3000)) {
-          if (documents.length >= 3000 || characters >= 16_000_000) { limited = true; break; }
-          if (projections.has(title.objectId) || title.kind === "conversation.message" || title.kind === "source.document" && !library.has(title.objectId)) continue;
-          let object;
-          try { object = await input.repository.resolveLatest(title.objectId); check(signal); }
-          catch { check(signal); append({ id: `object:${title.objectId}`, title: title.title, revision: "unavailable", sections: [], coverage: "failed", detail: "资产当前不可读取；可能已移除或格式不受支持。" }); continue; }
-          if (object.lifecycle !== "active") continue;
-          if (object.kind === "conversation.message") continue;
-          if (object.kind === "workspace.board") {
-            try {
-              const binding = await input.repository.getBoardFileBinding<{ mountId: string; path: string }>(object.objectId); check(signal);
-              if (binding && typeof binding.mountId === "string" && typeof binding.path === "string") boardTitles.set(`${binding.mountId}:${binding.path}`, object.title);
-            } catch { check(signal); /* A missing binding does not hide the board's description. */ }
-          }
-          const file = library.get(object.objectId);
-          const display = file ? applyBibliographicMetadata({ ...file, ...cached.metadata[file.id] }, cached.metadata[file.id]?.bibliographic) : undefined;
-          // Extracted PDF pages are indexed above with real page locators, not as duplicated source snapshots.
-          if (object.kind === "source.document" && !file) continue;
-          const path = liteasyPath(scope, { kind: "object", ref: refOf(object), followLatest: true });
-          const unavailable = object.kind === "source.document" && !sourceDocumentBodyCapability(object).available;
-          const text = unavailable ? file?.fileName ?? object.title : objectText(object);
-          const sections: SearchSection[] = [{ key: "metadata", group: "metadata",
-            text: [display?.title || object.title, file?.fileName, display?.authors?.join(" "), display?.publishedAt,
-              display?.publication, display?.identifier, display?.abstract].filter(Boolean).join("\n"),
-            locator: { path, ...(file ? { readingId: file.id } : {}) } }];
-          if (!unavailable) sections.push({ key: "object",
-            group: object.kind === "source.document" ? "body" : object.kind === "artifact.document" || object.kind === "workspace.board"
-              ? "artifact" : object.kind === "content.fragment" ? "annotation" : "note",
-            text, locator: { path, line: 1, ...(file ? { readingId: file.id } : {}) } });
-          const metadata = await objectMetadata(object, cached); check(signal);
-          if (!append({ metadata, id: `object:${object.objectId}`, title: display?.title || object.title, revision: await objectRevision(object, metadata, cached),
-            coverage: unavailable ? "metadata" : file?.contextTruncated || object.kind === "workspace.board" ? "partial" : "indexed",
-            detail: unavailable ? "此格式只保存原文件，正文未提取。" : file?.contextTruncated ? "仅索引导入时保留的文本节选。" : object.kind === "workspace.board" ? "仅检索白板描述；卡片内容通过独立笔记检索。" : undefined,
-            sections })) break;
+      const readObject = async (title: typeof titles[number]): Promise<SearchDocument | undefined> => {
+        check(signal);
+        if (projections.has(title.objectId) || title.kind === "conversation.message" || title.kind === "source.document" && !library.has(title.objectId)) return undefined;
+        let object;
+        try { object = await input.repository.resolveLatest(title.objectId); check(signal); }
+        catch { check(signal); return { id: `object:${title.objectId}`, title: title.title, revision: "unavailable", sections: [], coverage: "failed", detail: "资产当前不可读取；可能已移除或格式不受支持。" }; }
+        if (object.lifecycle !== "active") return undefined;
+        if (object.kind === "conversation.message") return undefined;
+        if (object.kind === "workspace.board") {
+          try {
+            const binding = await input.repository.getBoardFileBinding<{ mountId: string; path: string }>(object.objectId); check(signal);
+            if (binding && typeof binding.mountId === "string" && typeof binding.path === "string") boardTitles.set(`${binding.mountId}:${binding.path}`, object.title);
+          } catch { check(signal); /* A missing binding does not hide the board's description. */ }
+        }
+        const file = library.get(object.objectId);
+        const display = file ? applyBibliographicMetadata({ ...file, ...cached.metadata[file.id] }, cached.metadata[file.id]?.bibliographic) : undefined;
+        // Extracted PDF pages are indexed above with real page locators, not as duplicated source snapshots.
+        if (object.kind === "source.document" && !file) return undefined;
+        const path = liteasyPath(scope, { kind: "object", ref: refOf(object), followLatest: true });
+        const unavailable = object.kind === "source.document" && !sourceDocumentBodyCapability(object).available;
+        const text = unavailable ? file?.fileName ?? object.title : objectText(object);
+        const sections: SearchSection[] = [{ key: "metadata", group: "metadata",
+          text: [display?.title || object.title, file?.fileName, display?.authors?.join(" "), display?.publishedAt,
+            display?.publication, display?.identifier, display?.abstract].filter(Boolean).join("\n"),
+          locator: { path, ...(file ? { readingId: file.id } : {}) } }];
+        if (!unavailable) sections.push({ key: "object",
+          group: object.kind === "source.document" ? "body" : object.kind === "artifact.document" || object.kind === "workspace.board"
+            ? "artifact" : object.kind === "content.fragment" ? "annotation" : "note",
+          text, locator: { path, line: 1, ...(file ? { readingId: file.id } : {}) } });
+        const metadata = await objectMetadata(object, cached); check(signal);
+        return { metadata, id: `object:${object.objectId}`, title: display?.title || object.title, revision: await objectRevision(object, metadata, cached),
+          coverage: unavailable ? "metadata" : file?.contextTruncated || object.kind === "workspace.board" ? "partial" : "indexed",
+          detail: unavailable ? "此格式只保存原文件，正文未提取。" : file?.contextTruncated ? "仅索引导入时保留的文本节选。" : object.kind === "workspace.board" ? "仅检索白板描述；卡片内容通过独立笔记检索。" : undefined,
+          sections };
+      };
+      objects: for (const batch of searchBatches(titles.slice(0, 3000))) {
+        if (documents.length >= 3000 || characters >= 16_000_000) { limited = true; break; }
+        for (const document of await mapSearchBatch(batch, signal, readObject)) if (document && !append(document)) break objects;
       }
       for (const mount of await input.files.listMounts()) {
         check(signal); if (limited) break;
         try {
-          for (const entry of await input.files.listEntries(mount.id)) {
-            check(signal); if (entry.kind !== "file") continue;
-            try { if (!append(await externalDocument(mount.id, entry.path, signal, boardTitles.get(`${mount.id}:${entry.path}`), cached))) break; }
-            catch (error) { check(signal); append({ id: `unavailable:${mount.id}:${entry.path}`, title: entry.name, revision: "unavailable", sections: [], coverage: "failed", detail: String(error) }); }
+          entries: for (const batch of searchBatches((await input.files.listEntries(mount.id)).filter((entry) => entry.kind === "file"))) {
+            check(signal);
+            if (documents.length >= 3000 || characters >= 16_000_000) { limited = true; break; }
+            const values = await mapSearchBatch(batch, signal, async (entry): Promise<SearchDocument> => {
+              try { return await externalDocument(mount.id, entry.path, signal, boardTitles.get(`${mount.id}:${entry.path}`), cached); }
+              catch (error) { check(signal); return { id: `unavailable:${mount.id}:${entry.path}`, title: entry.name, revision: "unavailable", sections: [], coverage: "failed", detail: String(error) }; }
+            });
+            for (const document of values) if (!append(document)) break entries;
           }
         } catch (error) { check(signal); append({ id: `unavailable:${mount.id}`, title: mount.name, revision: "unavailable", sections: [], coverage: "failed", detail: "连接目录暂不可读取。" }); }
       }
       check(signal); return { documents, limited };
     },
-    async verify(hit: SearchHit, signal: AbortSignal) {
+    async verify(hit, signal) {
       check(signal);
+      try { return await verifyHit(hit, signal, await snapshot()); }
+      catch { check(signal); return false; }
+    },
+    async verifyMany(hits, signal) {
+      check(signal); if (!hits.length) return [];
       try {
-        const target = parseLiteasyPath(hit.path, scope);
-        if (target.kind === "paper") {
-          const paper = input.getPapers().find((paper) => paper.id === target.paperId);
-          if (!paper) return false;
-          const current = await paperDocument(paper, signal); check(signal);
-          return current.revision === hit.revision;
-        }
-        if (target.kind === "object") {
-          const object = await input.repository.resolveLatest(target.ref.objectId); check(signal);
-          if (object.kind === "source.document" && !(await reading.list()).some((file) => file.ref.objectId === object.objectId)) return false;
-          const cached = await snapshot(); check(signal);
-          return object.lifecycle === "active" && await objectRevision(object, await objectMetadata(object, cached), cached) === hit.revision;
-        }
-        if (target.kind === "external-file") {
-          if (!(await input.files.listMounts()).some((mount) => mount.id === target.mountId)) return false;
-          const current = await externalDocument(target.mountId, target.path, signal); check(signal);
-          return current.revision === hit.revision;
-        }
-        return false;
-      } catch { check(signal); return false; }
+        const needsMounts = hits.some((hit) => parseLiteasyPath(hit.path, scope).kind === "external-file");
+        const [cached, mounts] = await Promise.all([snapshot(), needsMounts ? input.files.listMounts().catch(() => []) : Promise.resolve([])]); check(signal);
+        return await mapSearchBatch(hits, signal, (hit) => verifyHit(hit, signal, cached, mounts));
+      } catch { check(signal); return hits.map(() => false); }
     },
   };
 }

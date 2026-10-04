@@ -23,13 +23,6 @@
 .paper-reading-content .paper-resource-tab__text-list article { background: var(--paper-reading-surface); border-color: var(--paper-reading-border); }
 .paper-reading-content .mineru-markdown { font-family: var(--paper-reading-font); font-size: var(--paper-reading-size); line-height: var(--paper-reading-line-height); max-width: var(--paper-reading-width); color: var(--paper-reading-ink); text-align: var(--paper-reading-alignment); padding: 12px 0; }
 .paper-reading-content .mineru-markdown p { margin-block: var(--paper-reading-paragraph-spacing); }
-.paper-reading-content .mineru-markdown a { color: var(--paper-reading-link); }
-.paper-reading-content .mineru-markdown h1 { font-size: 1.65em; }
-.paper-reading-content .mineru-markdown h2 { font-size: 1.4em; }
-.paper-reading-content .mineru-markdown h3 { font-size: 1.2em; }
-.paper-reading-content .mineru-markdown :is(h1, h2, h3, h4, h5, h6, blockquote, th) { color: inherit; }
-.paper-reading-content .mineru-markdown :is(pre, code, th, .mineru-markdown__formula--block) { background: var(--paper-reading-background); color: inherit; border-color: var(--paper-reading-border); }
-.paper-reading-content .mineru-markdown :is(th, td) { border-color: var(--paper-reading-border); }
 .paper-reading-content .paper-resource-tab__reading-pane > article > header { color: var(--paper-reading-ink); border-color: var(--paper-reading-border); }
 .paper-reading-content [data-reading-comment-match] { background: var(--colorBrandBackground2); outline: 2px solid var(--colorBrandStroke1); outline-offset: 3px; border-radius: 4px; }
 .paper-reading-content :is([data-reading-navigation-match], [data-reading-comment-match]) { color: var(--paper-reading-ink); background: color-mix(in srgb, var(--paper-reading-link) 15%, var(--paper-reading-surface)); outline: 2px solid var(--paper-reading-link); outline-offset: 3px; border-radius: 4px; }

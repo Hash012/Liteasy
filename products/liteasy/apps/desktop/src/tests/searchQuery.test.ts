@@ -30,6 +30,7 @@ describe("shared asset search", () => {
     const text = "前缀 ＡＩ\n  记忆 suffix";
     const range = compileSearchQuery('"ai 记忆"').ranges(text)[0];
     expect(text.slice(range.start, range.end)).toBe("ＡＩ\n  记忆");
+    expect(compileSearchQuery("memory").ranges("İ  memory")).toEqual([{ start: 3, end: 9 }]);
     const query = updateSearchFacet('/memory|记忆/i tag:精读', "tag", "AI 生成", true, true);
     expect(compileSearchQuery(query).matches("记忆", { tags: ["精读"] })).toBe(true);
     expect(compileSearchQuery(query).matches("记忆", { tags: ["精读", "AI 生成"] })).toBe(false);

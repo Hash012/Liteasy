@@ -13,4 +13,5 @@ export type SearchCorpus = { documents: SearchDocument[]; limited: boolean };
 export interface SearchSource {
   collect(signal: AbortSignal, progress: (count: number) => void): Promise<SearchCorpus>;
   verify(hit: SearchHit, signal: AbortSignal): Promise<boolean>;
+  verifyMany?(hits: SearchHit[], signal: AbortSignal): Promise<boolean[]>;
 }

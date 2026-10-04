@@ -1,5 +1,6 @@
 import { DocumentRegular, FolderOpenRegular, BookOpenRegular, BeakerRegular, PlayCircleRegular, ArrowUndoRegular, AppsRegular, HistoryRegular, BookRegular, BotRegular, QuestionCircleRegular, SearchRegular, SettingsRegular } from "@fluentui/react-icons";
 import { LiteasyMark } from "./LiteasyMark";
+import { OnboardingInvitation } from "../onboarding/OnboardingTour";
 import { commandKeys, workbenchCommands, type WorkbenchCommandId } from "./workbenchCommands";
 import { useWorkbenchCommands, useWorkbenchCommandAvailability } from "./workbenchCommandsContext";
 import "./workbenchWelcome.css";
@@ -23,6 +24,7 @@ export function WorkbenchWelcome({ compact = false }: { compact?: boolean }) {
     <div className="workbench-welcome-content">
       <LiteasyMark className="workbench-welcome-mark" />
       {!compact ? <>
+        <OnboardingInvitation />
         <h1>打开资料，继续你的工作</h1>
         <div className="workbench-task-presets" role="group" aria-label="任务布局">
           {workbenchCommands.filter(command => command.id.startsWith("preset-")).map(command => <button key={command.id} type="button" title={command.description} disabled={!execute} onClick={() => execute?.(command.id)}><WorkbenchCommandIcon id={command.id} />{command.title}</button>)}

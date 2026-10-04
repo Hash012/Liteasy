@@ -8,6 +8,7 @@ import {
   splitDockRegion,
   removeDockRegion,
   resizeDockBoundary,
+  normalizeDockLayout,
   type DockBoundaryResize,
 } from "./dockLayout";
 import {
@@ -37,6 +38,9 @@ export function useDockLayout() {
   }
 
   return {
+    replaceLayout(next: DockLayout) {
+      updateLayout(() => normalizeDockLayout(next));
+    },
     activateItem(regionId: DockRegionId, itemId: DockItemId) {
       updateLayout((current) => activateDockItem(current, regionId, itemId));
     },

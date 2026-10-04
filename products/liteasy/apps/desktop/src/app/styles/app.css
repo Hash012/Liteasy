@@ -1360,134 +1360,7 @@ body {
 .assistant-agent-empty { font-size: 12px; margin: 5px 0 5px 24px; }
 @media (prefers-reduced-motion: reduce) { .assistant-agent-activity.working .assistant-agent-activity-status { animation: none; } }
 
-.assistant-markdown {
-  min-width: 0;
-  width: 100%;
-}
-
-.assistant-markdown > :first-child {
-  margin-top: 0;
-}
-
-.assistant-markdown > :last-child {
-  margin-bottom: 0;
-}
-
-.assistant-markdown p,
-.assistant-markdown ul,
-.assistant-markdown ol,
-.assistant-markdown blockquote,
-.assistant-markdown table,
-.assistant-markdown .assistant-markdown-code-block {
-  margin: 0 0 12px;
-}
-
-.assistant-markdown ul,
-.assistant-markdown ol {
-  padding-left: 22px;
-}
-
-.assistant-markdown blockquote {
-  border-left: 3px solid #8db6d5;
-  color: #526d80;
-  padding: 3px 0 3px 12px;
-}
-
-.assistant-markdown table {
-  border-collapse: collapse;
-  display: block;
-  max-width: 100%;
-  overflow-x: auto;
-}
-
-.assistant-markdown .katex-display {
-  max-width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 2px 0;
-}
-
-.assistant-markdown th,
-.assistant-markdown td {
-  border: 1px solid #d4e0e8;
-  padding: 6px 8px;
-  text-align: left;
-}
-
-.assistant-markdown th {
-  background: #f1f6fa;
-}
-
-.assistant-markdown :not(pre) > code {
-  border: 1px solid #d8e2e9;
-  border-radius: 4px;
-  background: #f2f5f7;
-  color: #284c63;
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 0.9em;
-  padding: 1px 4px;
-}
-
-.assistant-markdown-code-block {
-  border: 1px solid #cad7e0;
-  border-radius: 7px;
-  background: #18232c;
-  color: #edf5fa;
-  overflow: hidden;
-}
-
-.assistant-markdown-code-language {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  color: #b8cbd8;
-  display: block;
-  font: 11px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace;
-  padding: 5px 9px;
-  text-transform: lowercase;
-}
-
-.assistant-markdown-code-block pre {
-  margin: 0;
-  overflow: auto;
-  padding: 10px 12px;
-}
-
-.assistant-markdown-code-block code {
-  font: 12px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace;
-  white-space: pre;
-}
-
-.assistant-markdown a {
-  color: #0f67a8;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.assistant-markdown-image {
-  display: grid;
-  gap: 4px;
-  margin: 8px 0;
-  max-width: 100%;
-}
-
-.assistant-markdown-image img {
-  border: 1px solid #d6e0e7;
-  border-radius: 7px;
-  height: auto;
-  max-height: 420px;
-  max-width: 100%;
-  object-fit: contain;
-}
-
-.assistant-markdown-image > span,
-.assistant-markdown-image-unavailable {
-  color: #62798a;
-  font-size: calc(11px * var(--app-font-ratio, 1));
-}
-
-.assistant-markdown .mermaid-preview {
-  margin: 10px 0 14px;
-  max-width: 100%;
-}
+.assistant-markdown { min-width: 0; width: 100%; }
 
 .assistant-agent-activity-details {
   display: grid;
@@ -4919,6 +4792,10 @@ button.pdf-overlay-mark:focus-visible {
 }
 
 .pdf-annotation-markdown {
+  --markdown-h1-size: 1.5em;
+  --markdown-h2-size: 1.25em;
+  --markdown-block-gap: .65em;
+  --markdown-line-height: 1.55;
   color: var(--ink-1);
   font-size: 12px;
   line-height: 1.55;
@@ -4938,108 +4815,6 @@ button.pdf-overlay-mark:focus-visible {
 .pdf-annotation-markdown.is-empty {
   color: var(--ink-3);
   margin: 0;
-}
-
-.pdf-annotation-markdown > :first-child {
-  margin-top: 0;
-}
-
-.pdf-annotation-markdown > :last-child {
-  margin-bottom: 0;
-}
-
-.pdf-annotation-markdown p,
-.pdf-annotation-markdown ul,
-.pdf-annotation-markdown ol,
-.pdf-annotation-markdown blockquote,
-.pdf-annotation-markdown pre,
-.pdf-annotation-markdown table,
-.pdf-annotation-markdown h1,
-.pdf-annotation-markdown h2,
-.pdf-annotation-markdown h3,
-.pdf-annotation-markdown h4,
-.pdf-annotation-markdown h5,
-.pdf-annotation-markdown h6 {
-  margin: 6px 0;
-}
-
-.pdf-annotation-markdown h1,
-.pdf-annotation-markdown h2,
-.pdf-annotation-markdown h3,
-.pdf-annotation-markdown h4,
-.pdf-annotation-markdown h5,
-.pdf-annotation-markdown h6 {
-  line-height: 1.3;
-}
-
-.pdf-annotation-markdown h1 {
-  font-size: 16px;
-}
-
-.pdf-annotation-markdown h2 {
-  font-size: 15px;
-}
-
-.pdf-annotation-markdown h3,
-.pdf-annotation-markdown h4,
-.pdf-annotation-markdown h5,
-.pdf-annotation-markdown h6 {
-  font-size: 13px;
-}
-
-.pdf-annotation-markdown ul,
-.pdf-annotation-markdown ol {
-  padding-left: 20px;
-}
-
-.pdf-annotation-markdown blockquote {
-  border-left: 3px solid #8bb9df;
-  color: var(--ink-2);
-  padding-left: 8px;
-}
-
-.pdf-annotation-markdown code {
-  background: #edf1f5;
-  border-radius: 3px;
-  font-family: "Cascadia Code", Consolas, monospace;
-  font-size: 0.92em;
-  padding: 1px 3px;
-}
-
-.pdf-annotation-markdown pre {
-  background: #edf1f5;
-  border-radius: 5px;
-  overflow: auto;
-  padding: 7px;
-}
-
-.pdf-annotation-markdown pre code {
-  background: transparent;
-  padding: 0;
-}
-
-.pdf-annotation-markdown a {
-  color: var(--accent-1);
-  text-decoration: underline;
-}
-
-.pdf-annotation-markdown table {
-  border-collapse: collapse;
-  display: block;
-  max-width: 100%;
-  overflow-x: auto;
-}
-
-.pdf-annotation-markdown th,
-.pdf-annotation-markdown td {
-  border: 1px solid var(--line-1);
-  padding: 3px 6px;
-  text-align: left;
-}
-
-.pdf-annotation-markdown th {
-  background: #edf1f5;
-  font-weight: 600;
 }
 
 @media (max-width: 1080px) {

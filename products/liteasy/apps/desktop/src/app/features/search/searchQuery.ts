@@ -65,6 +65,14 @@ export function foldSearchText(value: string, matchCase = false) {
   return { text, starts, ends };
 }
 
+/** Matching needs a string, not two UTF-16 offset arrays for every document. */
+function matchText(value: string, matchCase = false) {
+  // Preserve the existing per-code-point folding for combining marks/contextual sigma.
+  if (/[\p{M}Σ]/u.test(value)) return foldSearchText(value, matchCase).text;
+  const normalized = value.normalize("NFKC");
+  return (matchCase ? normalized : normalized.toLowerCase()).replace(/\s+/gu, " ");
+}
+
 export function compileSearchQuery(query: string, options: { phrase?: boolean; matchCase?: boolean; wholeWords?: boolean } = {}) {
   let tokens: Token[] = [], error = "";
   const patterns: RE2JS[] = [];
@@ -81,14 +89,19 @@ export function compileSearchQuery(query: string, options: { phrase?: boolean; m
       catch { throw new Error("正则表达式无效或使用了不支持的语法（如反向引用、环视）。"); }
     }
   } catch (cause) { error = cause instanceof Error ? cause.message : String(cause); }
+  const needles = terms.map((term) => matchText(term, options.matchCase).trim());
+  const facets = (["tag", "format", "type"] as const).map((field) => ({ field,
+    selected: tokens.filter((token) => token.field === field).map((token) => ({ ...token,
+      normalized: field === "format" ? searchFormat(token.value) : normalizeSearchValue(token.value) })),
+  })).filter(({ selected }) => selected.length);
   const whole = (text: string, start: number, end: number) => !options.wholeWords || (!/[\p{L}\p{N}_]/u.test(text[start - 1] ?? "") && !/[\p{L}\p{N}_]/u.test(text[end] ?? ""));
   const metadata = (item: SearchMetadata = {}) => {
     if (error) return false;
-    const tags = new Set((item.tags ?? []).map(normalizeSearchValue));
-    for (const field of ["tag", "format", "type"] as const) {
-      const selected = tokens.filter((token) => token.field === field);
-      const has = (token: Token) => field === "tag" ? tags.has(normalizeSearchValue(token.value)) : field === "format"
-        ? searchFormat(item.format) === searchFormat(token.value) : normalizeSearchValue(item.assetType ?? "") === normalizeSearchValue(token.value);
+    if (!facets.length) return true;
+    const tags = facets.some(({ field }) => field === "tag") ? new Set((item.tags ?? []).map(normalizeSearchValue)) : undefined;
+    for (const { field, selected } of facets) {
+      const has = (token: typeof selected[number]) => field === "tag" ? tags!.has(token.normalized) : field === "format"
+        ? searchFormat(item.format) === token.normalized : normalizeSearchValue(item.assetType ?? "") === token.normalized;
       if (selected.some((token) => token.exclude && has(token))) return false;
       const included = selected.filter((token) => !token.exclude);
       if (included.length && !(field === "tag" ? included.every(has) : included.some(has))) return false;
@@ -99,14 +112,18 @@ export function compileSearchQuery(query: string, options: { phrase?: boolean; m
     if (error) return [];
     const matches: SearchRange[] = [];
     if (terms.length) {
-      const folded = foldSearchText(value, options.matchCase);
-      for (const term of terms) {
-        const needle = foldSearchText(term, options.matchCase).text.trim();
+      const normalized = matchText(value, options.matchCase);
+      // Most page/filename text retains its UTF-16 offsets. Only allocate maps
+      // when width folding or collapsed whitespace actually changes positions.
+      const direct = normalized.length === value.length && value.normalize("NFKC") === value
+        && (options.matchCase || value.toLowerCase().length === value.length) && !/[\p{M}Σ]/u.test(value);
+      const folded = direct ? { text: normalized, starts: undefined, ends: undefined } : foldSearchText(value, options.matchCase);
+      for (const needle of needles) {
         if (!needle) continue;
         for (let from = 0, count = 0; count < limit;) {
           const start = folded.text.indexOf(needle, from); if (start < 0) break;
           const end = start + needle.length; from = end;
-          if (whole(folded.text, start, end)) { matches.push({ start: folded.starts[start], end: folded.ends[end - 1] }); count++; }
+          if (whole(folded.text, start, end)) { matches.push({ start: folded.starts ? folded.starts[start] : start, end: folded.ends ? folded.ends[end - 1] : end }); count++; }
         }
       }
     }
@@ -126,9 +143,8 @@ export function compileSearchQuery(query: string, options: { phrase?: boolean; m
   }
   function textMatches(value: string) {
     if (error) return false;
-    const folded = terms.length ? foldSearchText(value, options.matchCase).text : "";
-    return terms.every((term) => {
-      const needle = foldSearchText(term, options.matchCase).text.trim();
+    const folded = needles.length ? matchText(value, options.matchCase) : "";
+    return needles.every((needle) => {
       let from = 0, at;
       while ((at = folded.indexOf(needle, from)) >= 0) { if (whole(folded, at, at + needle.length)) return true; from = at + Math.max(1, needle.length); }
       return false;

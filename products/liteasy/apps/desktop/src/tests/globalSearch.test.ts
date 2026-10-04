@@ -61,6 +61,72 @@ test("cached unchanged sources avoid rewrites and overlapping chunks retain phra
   expect(upsert.mock.calls.flatMap(([records]) => records).every((record) => record.id === "global-search:manifest")).toBe(true);
   expect((await f.service.search('"meaningful phrase across boundary"', undefined, 0, signal())).hits.length).toBeGreaterThan(0);
 });
+
+test("small documents share bounded index writes instead of a disk transaction per file", async () => {
+  const f = fixture(); f.setDocuments(Array.from({ length: 100 }, (_, i) => document(`n-${i}`, "word\n".repeat(10))));
+  const upsert = vi.spyOn(f.index, "upsert");
+  await f.service.refresh(signal(), () => {});
+  const writes = upsert.mock.calls.filter(([records]) => records.some((record) => record.path !== "global-search:manifest"));
+  expect(writes.map(([records]) => records.length)).toEqual([32, 32, 32, 4]);
+});
+
+test("large manifests survive restart without rewriting unchanged sources, and missing pages force repair", async () => {
+  const f = fixture(450);
+  f.setDocuments(Array.from({ length: 450 }, (_, i) => document(`${String(i).padStart(3, "0")}-${"long-path".repeat(25)}`, "retained evidence")));
+  await f.service.refresh(signal(), () => {});
+  const manifest = (await f.index.lookup(["global-search:manifest"]))[0];
+  expect(manifest.payload).toMatchObject({ version: 2 });
+  const pages = (manifest.payload as { pages: string[] }).pages;
+  expect(pages.length).toBeGreaterThan(1);
+  for (const row of await f.index.lookup(pages)) expect(new TextEncoder().encode(JSON.stringify(row.payload)).length).toBeLessThan(60000);
+  const restarted = createGlobalSearchService({ source: f.source, index: f.index, active: () => true, capacity: 450 });
+  const write = vi.spyOn(f.index, "upsert");
+  await restarted.refresh(signal(), () => {});
+  expect(write.mock.calls.flatMap(([rows]) => rows).every((row) => row.path === "global-search:manifest")).toBe(true);
+  expect((await restarted.search("retained", "note", 0, signal())).hits).toHaveLength(20);
+  await f.index.upsert([{ id: pages[0], path: "global-search:manifest", revision: manifest.revision, text: "", tokens: "", payload: null }]);
+  write.mockClear();
+  await restarted.refresh(signal(), () => {});
+  expect(write.mock.calls.flatMap(([rows]) => rows).filter((row) => row.path !== "global-search:manifest")).toHaveLength(450);
+  expect((await restarted.search("retained", "note", 0, signal())).hits).toHaveLength(20);
+});
+
+test("source reads and hit verification are bounded concurrent batches with one mount snapshot", async () => {
+  const scope = crypto.randomUUID(), files = createNoteFileService(scope, () => scope);
+  const mounts = vi.spyOn(files, "listMounts").mockResolvedValue([{ id: "m", name: "Folder", kind: "directory", location: "/synthetic" }]);
+  vi.spyOn(files, "listEntries").mockResolvedValue(Array.from({ length: 24 }, (_, i) => ({ mountId: "m", kind: "file", name: `note-${i}.md`, path: `note-${i}.md` })));
+  let inFlight = 0, peak = 0;
+  const read = vi.spyOn(files, "readFile").mockImplementation(async (mountId, path) => {
+    inFlight++; peak = Math.max(peak, inFlight);
+    await new Promise((resolve) => setTimeout(resolve, 1)); inFlight--;
+    return { mountId, path, name: path, kind: "file", text: "unique evidence", version: "v1" };
+  });
+  const source = createWorkspaceSearchSource({ repository: createObjectRepository(createObjectStorage(scope, () => scope), scope), files, getPapers: () => [], active: () => true });
+  const service = createGlobalSearchService({ index: createSemanticIndex({ scope, workspace: "batch", model: "literal", active: () => true }), source, active: () => true });
+  await service.refresh(signal(), () => {});
+  expect(peak).toBe(6); expect(read).toHaveBeenCalledTimes(24);
+  read.mockClear(); mounts.mockClear(); peak = 0;
+  const result = await service.search("unique", "note", 0, signal());
+  expect(result.hits).toHaveLength(20);
+  expect(read).toHaveBeenCalledTimes(20); // Still validate live file bytes, never trust stale snippets.
+  expect(mounts).toHaveBeenCalledTimes(1);
+  expect(peak).toBe(6);
+});
+
+test("a delayed old query cannot prune documents restored by a newer refresh", async () => {
+  const f = fixture(); f.setDocuments([document("note", "old evidence")]);
+  await f.service.refresh(signal(), () => {});
+  let finish!: () => void;
+  const gate = new Promise<void>((resolve) => { finish = resolve; });
+  const verify = vi.spyOn(f.source, "verify").mockImplementationOnce(async () => { await gate; return false; });
+  const old = f.service.search("old", undefined, 0, signal());
+  await vi.waitFor(() => expect(verify).toHaveBeenCalledTimes(1));
+  f.setDocuments([document("note", "new evidence", "2")]);
+  await f.service.refresh(signal(), () => {});
+  finish(); await expect(old).rejects.toThrow("索引已更新");
+  expect((await f.service.search("new", undefined, 0, signal())).hits).toHaveLength(1);
+  expect((await f.index.literalQuery(["new"])).hits).toHaveLength(1);
+});
 test.each([
   { retainedLast: false, remainBeyondCapacity: false }, { retainedLast: true, remainBeyondCapacity: false },
   { retainedLast: false, remainBeyondCapacity: true }, { retainedLast: true, remainBeyondCapacity: true }

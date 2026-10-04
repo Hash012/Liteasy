@@ -193,7 +193,7 @@ export function AssistantComposer({
   const lastToken = contextTokens[contextTokens.length - 1];
 
   return (
-    <div className="assistant-input-wrap">
+    <div className="assistant-input-wrap" data-tour="assistant-composer">
       {pending ? (
         <div className="assistant-command-feedback">
           当前回复仍在执行；发送的新消息会先暂存，可随后选择执行时机。
@@ -341,7 +341,7 @@ export function AssistantComposer({
       <div className="assistant-composer-actions">
         {modelPicker}
         <Tooltip content="按类别和项目浏览资料，组合添加到上下文" relationship="description">
-          <Button appearance="subtle" aria-label="添加上下文" className="assistant-add-context" icon={<AddRegular />} onClick={() => openAssetBrowser()} />
+          <Button appearance="subtle" aria-label="添加上下文" data-tour="add-context" className="assistant-add-context" icon={<AddRegular />} onClick={() => openAssetBrowser()} />
         </Tooltip>
         {onThinkingDepthChange ? <Popover positioning={{ position: "above", autoSize: "height", overflowBoundaryPadding: 12 }} trapFocus>
           <PopoverTrigger disableButtonEnhancement>

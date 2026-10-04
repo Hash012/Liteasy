@@ -72,6 +72,9 @@ import { makeObjectTransfer, writeObjectTransfer } from "../features/object-tran
 import { PAPER_CONTEXT_MIME } from "../features/object-transfer/contextTransfer";
 import { dockItemRegistry, isBaseDockRegionId, isExtensionDockItemId } from "../features/dock/dockRegistry";
 import { useHelpController } from "../controllers/useHelpController";
+import { useOnboardingController } from "../controllers/useOnboardingController";
+import { OnboardingContext } from "../features/onboarding/onboardingContext";
+import { OnboardingTour } from "../features/onboarding/OnboardingTour";
 import { useWorkbenchCommandsController } from "../controllers/useWorkbenchCommandsController";
 import { useWorkbenchStartController } from "../controllers/useWorkbenchStartController";
 import { WorkbenchCommandAvailabilityContext, WorkbenchCommandsContext } from "../features/workbench/workbenchCommandsContext";
@@ -1217,6 +1220,12 @@ export function AppShell({
     keyboardShortcutEnabled: false,
     onOpen: () => workbenchNavigation.open("help")
   });
+  const onboarding = useOnboardingController({
+    dock, resetPaneSizes: paneLayout.resetLayout, restoreVisibility: workbenchNavigation.restoreVisibility,
+    activate: activateDockItem, open: workbenchNavigation.open,
+    openManual: (articleId) => help.port.open({ providerId: "liteasy", articleId }),
+    leaveFocus: immersive.exit, closeBoard: () => objectWorkbench.setVisible(false),
+  });
 
   const externalNote = useExternalNoteController({ autosave: settingsState["view.markdown_mode"] !== "manual" && settingsState["view.markdown_autosave"] !== false,
     scopeId: objectWorkbench.repository.scopeId,
@@ -2282,7 +2291,7 @@ export function AppShell({
       onCloseReader={() => { readingLibrary.closeReader(); openDockedLeftRailView("library"); dock.closeItem("document-reader"); }}
       onMetadataChange={readingLibrary.updateMetadata} onExport={readingLibrary.exportFile} onRemove={readingLibrary.remove}
       renderLocation={(entry) => <ResourceLocationButton target={readingLibrary.target(entry)} />} />;
-    if (itemId === "help") return <HelpPanel model={help.model} />;
+    if (itemId === "help") return <HelpPanel model={help.model} onStartTour={onboarding.start} tourError={onboarding.error} />;
     if (isLeftRailDockItem(itemId)) {
       return <LeftPane {...leftPaneProps} leftRailView={itemId} />;
     }
@@ -2758,6 +2767,7 @@ export function AppShell({
     <WorkbenchCommandsContext.Provider value={workbenchCommands.execute}>
     <NotesContext.Provider value={notes.port}>
     <HelpContext.Provider value={help.port}>
+    <OnboardingContext.Provider value={onboarding}>
     <ObjectWorkbenchContext.Provider value={objectWorkbench.port}>
     <ExtensionWorkbenchContext.Provider value={extensionWorkbench}>
     <VisualAssetContext.Provider value={objectWorkbench.agentAssets}>
@@ -2767,6 +2777,7 @@ export function AppShell({
     <div ref={immersive.root} className={appFrameClassName} data-theme-scope={appFrameScope} style={appFrameStyle}
       data-list-density={settingsState["view.list_density"] ?? "comfortable"} data-reading-focus={immersive.mode} data-focus-edge={immersive.edge} onClickCapture={immersive.onClickCapture}>
       <ImmersiveReadingControls {...immersive} />
+      <OnboardingTour model={onboarding} />
       {workspaceShell.pageSwitcher.mode ? <WorkspacePageSwitcher mode={workspaceShell.pageSwitcher.mode}
         options={workspaceShell.pageSwitcher.options} currentKey={workspaceShell.pageSwitcher.currentKey}
         onModeChange={workspaceShell.pageSwitcher.show} onSelect={workspaceShell.pageSwitcher.select}
@@ -2953,6 +2964,7 @@ export function AppShell({
     </VisualAssetContext.Provider>
     </ExtensionWorkbenchContext.Provider>
     </ObjectWorkbenchContext.Provider>
+    </OnboardingContext.Provider>
     </HelpContext.Provider>
     </NotesContext.Provider>
     </WorkbenchCommandsContext.Provider>

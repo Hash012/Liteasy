@@ -69,7 +69,7 @@ export function WorkspaceCommandBar({ state, windowControls, onOpenAi, onOpenSea
       </div>
       <div className="shell-workspace-title" data-tauri-drag-region={windowControls?.available ? true : undefined} title={recovery ? `隔离恢复资料 · 离线 / ${title}` : title}>{recovery ? "隔离恢复资料 · 离线" : windowControls?.available && title ? `Liteasy · ${title}` : title || "Liteasy"}</div>
       </div>
-      {onOpenSearch ? <Button {...restoreSearchFocus} appearance="outline" className="shell-global-search" icon={<SearchRegular />} aria-label="搜索工作区" title={`搜索工作区 · ${commandShortcut("global-search")}`} onClick={onOpenSearch}><span className="shell-global-search-label">搜索工作区</span><kbd>{commandShortcut("global-search")}</kbd></Button> : null}
+      {onOpenSearch ? <Button {...restoreSearchFocus} appearance="outline" className="shell-global-search" data-tour="global-search" icon={<SearchRegular />} aria-label="搜索工作区" title={`搜索工作区 · ${commandShortcut("global-search")}`} onClick={onOpenSearch}><span className="shell-global-search-label">搜索工作区</span><kbd>{commandShortcut("global-search")}</kbd></Button> : null}
       <div className="shell-command-wing shell-command-wing-end">
       <div className="shell-commands">
         {onOpenAi ? <Tooltip content="选择论文并使用 AI 能力" relationship="description"><Button {...restoreAiFocus} appearance="primary" className="shell-ai-button" aria-label="AI 工作台" onClick={onOpenAi}>AI</Button></Tooltip> : null}
