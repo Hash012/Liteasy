@@ -15,11 +15,11 @@ export function GlobalSearchDialog({ model }: { model: GlobalSearchController })
       <DialogContent className="global-search-content">
         <div className="global-search-tools">
           <Input ref={input} aria-label="搜索词或引号短语" placeholder={'搜索文献、笔记、批注… 支持 "完整短语"'} value={model.query} contentBefore={<SearchRegular />} onChange={(_, data) => model.setQuery(data.value)} />
-          <SearchOptions query={model.query} onChange={model.setQuery} tags={model.tags} />
           <Select aria-label="搜索范围" value={model.group ?? "all"} onChange={(_, data) => model.setGroup(data.value === "all" ? undefined : data.value as SearchGroup)}><option value="all">全部内容</option>{Object.entries(searchGroups).map(([key, title]) => <option key={key} value={key}>{title}</option>)}</Select>
           <Tooltip content="刷新来源与索引" relationship="label"><Button icon={<ArrowClockwiseRegular />} aria-label="刷新来源与索引" onClick={model.refresh} disabled={model.busy} /></Tooltip>
           <Tooltip content="保存查询" relationship="label"><Button icon={<BookmarkAddRegular />} aria-label="保存查询" onClick={() => void model.saveQuery()} disabled={!model.query.trim()} /></Tooltip>
         </div>
+        <SearchOptions presentation="inline" query={model.query} onChange={model.setQuery} tags={model.tags} />
         {model.saved.length > 0 ? <div className="global-search-saved" aria-label="保存的查询">{model.saved.map((item, index) => <span key={index}><Button size="small" appearance="subtle" onClick={() => { model.setQuery(item.query); model.setGroup(item.group); }}>{item.query}{item.group ? ` · ${searchGroups[item.group]}` : ""}</Button><Button size="small" appearance="subtle" icon={<DeleteRegular />} aria-label={`删除查询 ${item.query}`} onClick={() => void model.saveQuery(item)} /></span>)}</div> : null}
         {model.error ? <p role="alert">{model.error}</p> : null}
         <div className="global-search-status" role="status">{model.busy ? <><Spinner size="tiny" /> 正在检索 · 已检查 {model.progress} 项 <Button size="small" appearance="subtle" onClick={model.cancel}>取消</Button></> : model.coverage ? <>{model.coverage.indexed} 项已索引 · {model.coverage.partial} 项部分正文 · {model.coverage.metadata} 项仅元信息{model.coverage.failed ? ` · ${model.coverage.failed} 项读取失败` : ""}</> : "搜索仅使用当前工作区可访问的本地内容。"}</div>

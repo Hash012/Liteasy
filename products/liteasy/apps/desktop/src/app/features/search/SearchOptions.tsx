@@ -1,36 +1,38 @@
 import { useId, useMemo, useState } from "react";
-import { Button, Field, Input, Popover, PopoverSurface, PopoverTrigger, Select, Tooltip } from "@fluentui/react-components";
-import { FilterRegular, AddRegular, DismissRegular } from "@fluentui/react-icons";
-import { compileSearchQuery, updateSearchFacet, type SearchFacet } from "./searchQuery";
+import { Button, Popover, PopoverSurface, PopoverTrigger, Tooltip } from "@fluentui/react-components";
+import { ChevronDownRegular, ChevronRightRegular, FilterRegular, DismissRegular } from "@fluentui/react-icons";
+import { compileSearchQuery, updateSearchFacet } from "./searchQuery";
+import { SearchFilterFields, searchConditionLabel } from "./SearchFilterFields";
 import "./search.css";
 
-const formats = ["pdf", "markdown", "txt", "epub", "mobi", "fb2", "html", "canvas", "json", "csv", "docx", "pptx", "png", "other"];
-const types: Record<string, string> = { "journal-article": "期刊论文", "conference-paper": "会议论文", book: "图书", webpage: "网页", report: "报告", preprint: "预印本", note: "笔记", thesis: "学位论文", "book-section": "图书章节", board: "白板", artifact: "产物", other: "其他" };
-
 /** One query representation for every search surface, including saved searches. */
-export function SearchOptions({ query, onChange, tags = [] }: { query: string; onChange(value: string): void; tags?: readonly string[] }) {
-  const [field, setField] = useState<SearchFacet>("tag"), [exclude, setExclude] = useState(false), [value, setValue] = useState("");
+export function SearchOptions({ query, onChange, tags = [], presentation = "popover" }: {
+  query: string; onChange(value: string): void; tags?: readonly string[]; presentation?: "popover" | "inline";
+}) {
+  const [expanded, setExpanded] = useState(false);
   const id = useId();
   const compiled = useMemo(() => compileSearchQuery(query), [query]);
-  const choices = field === "tag" ? [...new Set(tags)].sort() : field === "format" ? formats : Object.keys(types);
-  return <span className="search-options">
-    <Popover positioning="below-start"><PopoverTrigger disableButtonEnhancement><Tooltip content="标签、格式、类别与正则检索" relationship="description">
-      <Button size="small" appearance="subtle" icon={<FilterRegular />} aria-label="高级检索条件" />
-    </Tooltip></PopoverTrigger><PopoverSurface className="search-options-surface">
-      <strong>检索条件</strong>
-      <div className="search-options-fields">
-        <Field label="条件"><Select aria-label="检索条件类型" value={field} onChange={(_, data) => { setField(data.value as SearchFacet); setValue(""); }}><option value="tag">标签</option><option value="format">格式</option><option value="type">类别</option></Select></Field>
-        <Field label="规则"><Select aria-label="包含或排除" value={exclude ? "exclude" : "include"} onChange={(_, data) => setExclude(data.value === "exclude")}><option value="include">包含</option><option value="exclude">排除</option></Select></Field>
-        <Field label="值"><Input aria-label="检索条件值" list={id} value={value} onChange={(_, data) => setValue(data.value)} placeholder={field === "tag" ? "输入或选择标签" : field === "format" ? "例如 pdf" : "例如 book"} /><datalist id={id}>{choices.map((choice) => <option key={choice} value={choice}>{field === "type" ? types[choice] : choice}</option>)}</datalist></Field>
-        <Button icon={<AddRegular />} disabled={!value.trim() || Boolean(compiled.error)} onClick={() => { onChange(updateSearchFacet(query, field, value.trim(), exclude, true)); setValue(""); }}>添加条件</Button>
+  const facets = compiled.tokens.filter((token) => token.field);
+  const content = <SearchFilterFields query={query} onChange={onChange} tags={tags} />;
+  return <div className={`search-options${presentation === "inline" ? " search-options-inline" : ""}`}>
+    {presentation === "inline" ? <>
+      <div className="search-filter-toggle-row">
+        <Button size="small" appearance="subtle" icon={expanded ? <ChevronDownRegular /> : <ChevronRightRegular />} aria-label="高级检索条件"
+          aria-expanded={expanded} aria-controls={id} onClick={() => setExpanded((value) => !value)}>筛选条件{facets.length ? ` · ${facets.length}` : ""}</Button>
+        <span className="search-filter-toggle-hint">标签、格式、类别 · 包含或排除</span>
       </div>
-      <div className="search-condition-list">{compiled.tokens.filter((token) => token.field).map((token, i) => <Button key={i} size="small" icon={<DismissRegular />} aria-label={`移除条件 ${token.raw}`} onClick={() => onChange(updateSearchFacet(query, token.field!, token.value, Boolean(token.exclude), false))}>{token.exclude ? "排除" : "包含"} · {token.value}</Button>)}</div>
-      <p>多个标签需同时持有；多个格式或类别匹配任意一项。排除条件始终生效。</p>
-      <p>正则：<code>/memory|记忆/i</code> 或 <code>re:"第[一二三]章"</code>；可与筛选条件组合。支持 i、m、s，不支持环视与反向引用。</p>
-      <p>例如：<code>记忆 tag:精读 -tag:翻译 format:pdf -type:book</code></p>
-    </PopoverSurface></Popover>
+      {expanded ? <div id={id} className="search-options-inline-panel">{content}</div> : facets.length ? <div className="search-condition-list" aria-label="当前筛选条件">
+        {facets.map((token, index) => <Tooltip key={index} content={searchConditionLabel(token.field!, token.value, Boolean(token.exclude))} relationship="description">
+          <Button size="small" appearance="subtle" className={`search-filter-chip${token.exclude ? " is-excluded" : ""}`} icon={<DismissRegular />} iconPosition="after"
+            aria-label={`移除${searchConditionLabel(token.field!, token.value, Boolean(token.exclude))}`}
+            onClick={() => onChange(updateSearchFacet(query, token.field!, token.value, Boolean(token.exclude), false))}>{searchConditionLabel(token.field!, token.value, Boolean(token.exclude))}</Button>
+        </Tooltip>)}
+      </div> : null}
+    </> : <Popover positioning="below-start"><PopoverTrigger disableButtonEnhancement><Tooltip content="自定义标签、格式、类别筛选" relationship="description">
+      <Button size="small" appearance={facets.length ? "secondary" : "subtle"} icon={<FilterRegular />} aria-label="高级检索条件">{facets.length || null}</Button>
+    </Tooltip></PopoverTrigger><PopoverSurface className="search-options-surface" aria-label="自定义检索条件">{content}</PopoverSurface></Popover>}
     {compiled.error ? <small role="alert" className="search-query-error">{compiled.error}</small> : null}
-  </span>;
+  </div>;
 }
 
 export function SearchHighlight({ text, query }: { text: string; query: string }) {

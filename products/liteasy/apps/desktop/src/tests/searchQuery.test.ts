@@ -1,11 +1,19 @@
 import { describe, expect, test } from "vitest";
-import { compileSearchQuery, updateSearchFacet } from "../app/features/search/searchQuery";
+import { clearSearchFacets, compileSearchQuery, updateSearchFacet } from "../app/features/search/searchQuery";
 import { highlightSearchText } from "../app/features/search/searchDomHighlight";
 import { queryReadingCatalog, indexReadingCatalog } from "../app/features/library/readingCatalogSearch";
 import { findPdfReaderSearchMatches } from "../app/features/pdf/pdfReaderSearch";
 import { buildAiPaperFolders } from "../app/features/ai-workbench/aiPaperSelection";
 
 describe("shared asset search", () => {
+  test("visual facet aliases replace each other and clearing facets preserves regex and phrases", () => {
+    const query = '"episodic memory" /chapter \\d+/i format:md -tag:"AI translation"';
+    expect(updateSearchFacet(query, "format", "markdown", true, true)).toBe('"episodic memory" /chapter \\d+/i -tag:"AI translation" -format:"markdown"');
+    expect(updateSearchFacet(query, "format", "markdown", false, false)).toBe('"episodic memory" /chapter \\d+/i -tag:"AI translation"');
+    expect(clearSearchFacets(query)).toBe('"episodic memory" /chapter \\d+/i');
+    expect(clearSearchFacets('"unfinished tag:example')).toBe('"unfinished tag:example');
+  });
+
   test("combines required tags, alternative formats/types and exclusions before matching text", () => {
     const query = compileSearchQuery('memory tag:"精读" tag:"2024" -tag:翻译 format:pdf format:md -format:txt type:book type:note -type:report');
     expect(query.matches("Episodic MEMORY", { tags: ["精读", "2024"], format: "markdown", assetType: "note" })).toBe(true);

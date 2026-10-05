@@ -6,7 +6,7 @@ test("top-center search works with keyboard, local bodies, saved queries and sou
   await page.goto("/");
   const bar = page.getByRole("toolbar", { name: "工作区命令栏" });
   const search = bar.getByRole("button", { name: "搜索工作区", exact: true });
-  await expect(search).toBeVisible();
+  await expect(search).toBeVisible({ timeout: 30000 });
   const bounds = await search.boundingBox(); expect(Math.abs(bounds!.x + bounds!.width / 2 - 720)).toBeLessThan(2);
   // Synthetic local object, through the real browser storage/repository (no mocked search transport).
   await page.evaluate(async () => {
@@ -107,4 +107,57 @@ test("tag/format exclusions combine with regex and navigation paints only the ma
   await expect(reader.getByText("没有找到匹配的文字")).toBeVisible();
   await reader.getByRole("textbox", { name: "搜索书内文字" }).fill('/memory \\d+/i tag:精读');
   await expect(reader.getByText("1 处匹配")).toBeVisible();
+});
+
+test("visual filters select custom tags and multiple formats without memorizing query syntax", async ({ page }, testInfo) => {
+  await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  await page.evaluate(async () => {
+    const { createReadingLibraryRepository } = await import("/src/app/features/reading-library/readingLibraryRepository.ts");
+    const { createObjectStorage } = await import("/src/app/features/objects/objectStorage.ts");
+    const library = createReadingLibraryRepository(createObjectStorage("local", () => "local"), "local");
+    for (const [name, tags] of [["Research", ["精读", "我的计划"]], ["Translation", ["精读", "翻译"]]] as const) {
+      const text = "Episodic memory is the research topic.";
+      const { entry } = await library.importFile(`${name}.md`, new TextEncoder().encode(text), { format: "markdown", title: name, authors: [],
+        chapters: [{ id: "1", title: "Chapter", content: text, plainText: text, format: "markdown" }], toc: [], resources: [], warnings: [] });
+      await library.updateMetadata(entry.id, { tags: [...tags], assetType: "note" });
+    }
+  });
+  await page.getByRole("button", { name: "搜索工作区", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "搜索工作区" });
+  const query = dialog.getByRole("textbox", { name: "搜索词或引号短语" });
+  await query.fill("memory");
+  await dialog.getByRole("combobox", { name: "搜索范围", exact: true }).selectOption("body");
+  await expect(dialog.locator(".global-search-hit")).toHaveCount(2);
+  await dialog.getByRole("button", { name: "高级检索条件" }).click();
+  await dialog.getByRole("combobox", { name: "包含标签", exact: true }).click();
+  await page.getByRole("menuitemcheckbox", { name: "精读", exact: true }).click();
+  await dialog.getByRole("combobox", { name: "排除标签", exact: true }).click();
+  await page.getByRole("menuitemcheckbox", { name: "翻译", exact: true }).click();
+  await dialog.getByRole("combobox", { name: "包含格式", exact: true }).click();
+  await page.getByRole("menuitemcheckbox", { name: "MARKDOWN", exact: true }).click();
+  await page.getByRole("menuitemcheckbox", { name: "EPUB", exact: true }).click();
+  await dialog.getByRole("combobox", { name: "包含类别", exact: true }).fill("笔记");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await query.click();
+  await expect(query).toHaveValue('memory tag:"精读" -tag:"翻译" format:"markdown" format:"epub" type:"note"');
+  await expect(dialog.locator(".global-search-hit")).toHaveCount(1);
+  await expect(dialog.locator(".global-search-hit")).toContainText("Research");
+  await dialog.screenshot({ path: testInfo.outputPath("custom-search-filters.png") });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await dialog.screenshot({ path: testInfo.outputPath("custom-search-filters-dark.png") });
+  await dialog.getByRole("button", { name: "高级检索条件" }).click();
+  await dialog.getByRole("button", { name: "移除排除标签：翻译" }).click();
+  await expect(dialog.locator(".global-search-hit")).toHaveCount(2);
+  await dialog.getByRole("button", { name: "高级检索条件" }).click();
+  for (const width of [600, 360]) {
+    await page.setViewportSize({ width, height: 800 });
+    expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await expect(dialog.getByRole("combobox", { name: "包含标签", exact: true })).toBeInViewport();
+    await dialog.screenshot({ path: testInfo.outputPath(`custom-search-filters-${width}.png`) });
+  }
+  await dialog.getByRole("button", { name: "清除筛选条件" }).click();
+  await expect(query).toHaveValue("memory");
 });

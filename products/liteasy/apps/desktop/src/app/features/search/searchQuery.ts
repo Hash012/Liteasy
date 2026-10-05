@@ -155,6 +155,13 @@ export function compileSearchQuery(query: string, options: { phrase?: boolean; m
 }
 export function updateSearchFacet(query: string, field: SearchFacet, value: string, exclude: boolean, enabled: boolean) {
   let tokens: Token[]; try { tokens = tokenize(query); } catch { return query; }
-  const retained = tokens.filter((token) => token.field !== field || normalizeSearchValue(token.value) !== normalizeSearchValue(value));
+  const normalized = (value: string) => field === "format" ? searchFormat(value) : normalizeSearchValue(value);
+  const retained = tokens.filter((token) => token.field !== field || normalized(token.value) !== normalized(value));
   return [...retained.map((token) => token.raw), ...(enabled ? [`${exclude ? "-" : ""}${field}:${JSON.stringify(value)}`] : [])].join(" ");
+}
+
+/** Clear only visual facets; keep the user's keywords, phrases and regex intact. */
+export function clearSearchFacets(query: string) {
+  try { return tokenize(query).filter((token) => !token.field).map((token) => token.raw).join(" "); }
+  catch { return query; }
 }
