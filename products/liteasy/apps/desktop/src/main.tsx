@@ -1,3 +1,6 @@
+import { initializeUiLanguage } from "./app/controllers/initializeUiLanguage";
+import { message } from "./app/shared/i18n/i18n";
+import "./app/shared/i18n/language.css";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { restoreWebDavPreferences, reportWebDavRestoreError } from "./app/features/webdav/webdavPreferences";
@@ -13,6 +16,7 @@ async function start() {
     initializeLocalDevelopment();
   }
   if (!recovery) { try { await restoreWebDavPreferences(); } catch (error) { reportWebDavRestoreError(error); } }
+  await initializeUiLanguage();
   const { default: App } = await import("./App");
   initializeApplicationAppearance();
   ReactDOM.createRoot(document.getElementById("root")!).render(
@@ -25,5 +29,5 @@ async function start() {
 }
 void start().catch((error) => {
   const root = document.getElementById("root");
-  if (root) { root.setAttribute("role", "alert"); root.textContent = `Liteasy 未能打开资料：${error instanceof Error ? error.message : String(error)}。原资料保持不变，请关闭此窗口后重试。`; }
+  if (root) { root.setAttribute("role", "alert"); root.textContent = message("app.startup.failed", { detail: error instanceof Error ? error.message : String(error) }); }
 });

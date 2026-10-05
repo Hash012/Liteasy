@@ -1,3 +1,4 @@
+import type { UiLanguagePreference } from "../../shared/i18n/localePolicy";
 import type { RecommendationStyle } from "../recommendations/recommendation.types";
 import type { AppearancePreference } from "../theme/appearancePreference";
 
@@ -43,6 +44,7 @@ export type SettingKey =
   | "view.markdown_mode"
   | "view.markdown_autosave"
   | "view.list_density"
+  | "view.language"
   | "view.theme"
   | "view.font_size"
   | "view.display_scale"
@@ -87,6 +89,7 @@ export type SettingsState = Partial<Record<GenerationPromptSettingKey, string>> 
   "view.markdown_mode"?: "live" | "manual";
   "view.markdown_autosave"?: boolean;
   "view.list_density"?: "comfortable" | "compact";
+  "view.language"?: UiLanguagePreference;
   "view.theme": AppearancePreference;
   "view.font_size": string;
   "view.display_scale": string;

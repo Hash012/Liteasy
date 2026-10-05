@@ -1,3 +1,5 @@
+import { message } from "../../shared/i18n/i18n";
+import { useUiTranslation } from "../../shared/i18n/useUiTranslation";
 import { DocumentRegular, FolderOpenRegular, BookOpenRegular, BeakerRegular, PlayCircleRegular, ArrowUndoRegular, AppsRegular, HistoryRegular, BookRegular, BotRegular, QuestionCircleRegular, SearchRegular, SettingsRegular } from "@fluentui/react-icons";
 import { LiteasyMark } from "./LiteasyMark";
 import { OnboardingInvitation } from "../onboarding/OnboardingTour";
@@ -18,15 +20,16 @@ export function ShortcutKeys({ id }: { id: WorkbenchCommandId }) {
   </span>;
 }
 export function WorkbenchWelcome({ compact = false }: { compact?: boolean }) {
+  useUiTranslation();
   const execute = useWorkbenchCommands();
   const availability = useWorkbenchCommandAvailability();
-  return <section className={`workbench-welcome${compact ? " is-compact" : ""}`} aria-label={compact ? "Liteasy" : "开始使用 Liteasy"}>
+  return <section className={`workbench-welcome${compact ? " is-compact" : ""}`} aria-label={compact ? "Liteasy" : message("welcome.aria")}>
     <div className="workbench-welcome-content">
       <LiteasyMark className="workbench-welcome-mark" />
       {!compact ? <>
         <OnboardingInvitation />
-        <h1>打开资料，继续你的工作</h1>
-        <div className="workbench-task-presets" role="group" aria-label="任务布局">
+        <h1>{message("welcome.heading")}</h1>
+        <div className="workbench-task-presets" role="group" aria-label={message("welcome.layouts")}>
           {workbenchCommands.filter(command => command.id.startsWith("preset-")).map(command => <button key={command.id} type="button" title={command.description} disabled={!execute} onClick={() => execute?.(command.id)}><WorkbenchCommandIcon id={command.id} />{command.title}</button>)}
         </div>
         <div className="workbench-welcome-actions">
@@ -38,7 +41,7 @@ export function WorkbenchWelcome({ compact = false }: { compact?: boolean }) {
             </button>)}
         </div>
         <button type="button" className="workbench-welcome-more" disabled={!execute} onClick={() => execute?.("commands")}>
-          <SearchRegular aria-hidden="true" /><span>查看全部快捷操作</span><ShortcutKeys id="commands" />
+          <SearchRegular aria-hidden="true" /><span>{message("commands.all.title")}</span><ShortcutKeys id="commands" />
         </button>
       </> : null}
     </div>

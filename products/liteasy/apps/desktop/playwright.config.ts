@@ -5,6 +5,8 @@ const externalBaseUrl = process.env.PLAYWRIGHT_BASE_URL;
 export default defineConfig({
   testDir: "./src/tests/browser",
   use: {
+    // Existing UI assertions run in Chinese; language-switch tests opt into other locales.
+    locale: "zh-CN",
     baseURL: externalBaseUrl ?? "http://127.0.0.1:1425",
     ...(process.env.PLAYWRIGHT_EXECUTABLE_PATH
       ? { launchOptions: { executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH } }

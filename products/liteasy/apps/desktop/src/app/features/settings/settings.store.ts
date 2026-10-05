@@ -1,3 +1,5 @@
+import { isUiLanguagePreference, type UiLanguagePreference } from "../../shared/i18n/localePolicy";
+import { readUiLanguagePreference, notifyUiLanguagePreference, persistUiLanguagePreference } from "./uiLanguagePreference";
 import { languageFontKeys, normalizeLanguageFont } from "./typography";
 import { getRecoveryRuntime } from "../local-recovery/runtimeProfile";
 import { agentContextLimit } from "../context/modelContextBudget";
@@ -95,6 +97,7 @@ function loadPersistedViewSettings(): Partial<SettingsState> {
       "view.markdown_mode": parsed["view.markdown_mode"] === "manual" ? "manual" : "live",
       "view.markdown_autosave": parsed["view.markdown_autosave"] !== false,
       "view.list_density": parsed["view.list_density"] === "compact" ? "compact" : "comfortable",
+      "view.language": readUiLanguagePreference(),
       "view.theme": normalizeAppearancePreference(parsed["view.theme"]),
       "view.font_family": typeof parsed["view.font_family"] === "string" ? parsed["view.font_family"] : undefined,
       "view.reader_font_family": normalizeReadingFontFamily(parsed["view.reader_font_family"]),
@@ -123,6 +126,7 @@ function persistViewSettings(state: SettingsState) {
         "view.markdown_mode": state["view.markdown_mode"] ?? "live",
         "view.markdown_autosave": state["view.markdown_autosave"] !== false,
         "view.list_density": state["view.list_density"] ?? "comfortable",
+        "view.language": state["view.language"] ?? readUiLanguagePreference(),
         "view.theme": state["view.theme"],
         "view.font_family": state["view.font_family"],
         "view.reader_font_family": state["view.reader_font_family"],
@@ -142,7 +146,7 @@ function persistViewSettings(state: SettingsState) {
 export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.env) {
   const cloudEndpoint = releaseEndpoint(runtimeEnv.VITE_LITEASY_CLOUD_URL, "http://127.0.0.1:8787");
   const forumEndpoint = releaseEndpoint(runtimeEnv.VITE_FORUM_API_URL, "");
-  const state: SettingsState & Record<(typeof languageFontKeys)[number], string> & SelectionLookupSettings & Record<GenerationPromptSettingKey, string> & { "view.list_density": "comfortable" | "compact"; "assistant.context_window": string; "view.close_empty_panels": boolean; "view.markdown_mode": "live" | "manual"; "view.markdown_autosave": boolean } = {
+  const state: SettingsState & Record<(typeof languageFontKeys)[number], string> & SelectionLookupSettings & Record<GenerationPromptSettingKey, string> & { "view.language": UiLanguagePreference; "view.list_density": "comfortable" | "compact"; "assistant.context_window": string; "view.close_empty_panels": boolean; "view.markdown_mode": "live" | "manual"; "view.markdown_autosave": boolean } = {
     ...loadGenerationPrompts() as Record<GenerationPromptSettingKey, string>,
     ...loadLookupSettings(),
     "thin_reading.mode": "fast",
@@ -178,6 +182,7 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
     "view.markdown_mode": "live",
     "view.markdown_autosave": true,
     "view.list_density": "comfortable",
+    "view.language": readUiLanguagePreference(),
     "view.theme": "system",
     "view.font_family": '"Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", sans-serif',
     "view.reader_font_family": defaultReadingFontFamily,
@@ -197,6 +202,7 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
 
   return {
     apply(command: UpdateSettingCommand) {
+      if (command.target === "view.language" && !isUiLanguagePreference(command.value)) throw new Error("invalid_ui_language");
       if (command.target === "view.markdown_mode" && !["live", "manual"].includes(String(command.value))) throw new Error("invalid_markdown_mode");
       if (command.target === "view.markdown_autosave" && typeof command.value !== "boolean") throw new Error("invalid_markdown_autosave");
       if (command.target === "view.close_empty_panels" && typeof command.value !== "boolean") throw new Error("invalid_empty_panel_preference");
@@ -237,7 +243,15 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
         catch { /* Keep the preference active in this session. */ }
       }
       if (command.target.startsWith("view.")) {
-        persistViewSettings(state);
+        if (command.target === "view.language") {
+          // Changing the UI language must not rewrite unknown/newer view preferences.
+          persistUiLanguagePreference(state["view.language"]);
+          notifyUiLanguagePreference(state["view.language"]);
+        } else {
+          // Do not overwrite a language choice made by another settings instance.
+          state["view.language"] = readUiLanguagePreference();
+          persistViewSettings(state);
+        }
       }
       if (command.target.includes("font_family")) {
         globalThis.dispatchEvent?.(new CustomEvent(typographyChangeEvent, { detail: { ...state } }));
@@ -263,6 +277,7 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
       return state[command.target]!;
     },
     getState() {
+      state["view.language"] = readUiLanguagePreference();
       return state;
     }
   };

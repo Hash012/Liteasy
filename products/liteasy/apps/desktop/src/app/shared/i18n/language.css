@@ -1,0 +1,4 @@
+.ui-language-setting { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-inline-size: 0; max-inline-size: 26rem; }
+.ui-language-setting small { color: var(--colorNeutralForeground2); overflow-wrap: anywhere; }
+.ui-language-setting [role="alert"] { color: var(--colorPaletteRedForeground1); }
+/* Do not change document content, fonts, PDF layout, or the existing FluentProvider. */

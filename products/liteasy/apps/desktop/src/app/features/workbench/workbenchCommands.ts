@@ -1,19 +1,20 @@
+import { message } from "../../shared/i18n/i18n";
 export const workbenchCommands = [
-  { id: "global-search", title: "搜索工作区", description: "检索当前工作区的文献、正文、笔记、批注和产物。", key: "f", shift: true, alt: false, keys: ["Mod", "Shift", "F"], search: "search find 搜索 查找 全文 全局" },
-  { id: "open-file", title: "打开 PDF / EPUB 原文件", description: "直接阅读所选文件，不复制到文献库；关闭页面会释放读取授权。", key: "o", shift: false, alt: false, keys: ["Mod", "O"], search: "open pdf epub book 打开 本地 原文件 电子书" },
-  { id: "open-note", title: "打开 Markdown 原文件", description: "选择本地笔记，直接阅读原位置文件；编辑后保存回原文件。", key: "o", shift: false, alt: true, keys: ["Mod", "Alt", "O"], search: "open markdown note 打开 本地 原文件 笔记" },
-  { id: "open-folder", title: "连接笔记文件夹", description: "在原位置引用文件夹，保留目录层级；不复制或上传内容。", key: "o", shift: true, alt: false, keys: ["Mod", "Shift", "O"], search: "open folder vault 文件夹 目录 连接 引用" },
-  { id: "page-history", title: "回溯历史页面", description: "按访问时间查看页面，用方向键选择并按 Enter 打开。", key: "h", shift: false, alt: false, keys: ["Mod", "H"], search: "history recent 历史 页面 回溯" },
-  { id: "preset-reading", title: "阅读布局", description: "收起周边面板，保留中央内容与所有已打开页面。", key: "", shift: false, alt: false, keys: [], search: "read preset 专注 阅读 布局" },
-  { id: "preset-research", title: "研究布局", description: "展开文献库和对话工具，保留你的面板位置与宽度。", key: "", shift: false, alt: false, keys: [], search: "research preset 研究 布局" },
-  { id: "preset-processing", title: "处理布局", description: "打开运行记录，查看现有工作流任务；不会启动任务。", key: "", shift: false, alt: false, keys: [], search: "processing preset 处理 布局 工作流 运行 任务" },
-  { id: "preset-custom", title: "恢复自定义布局", description: "恢复本次切换预设前的面板展开状态。", key: "", shift: false, alt: false, keys: [], search: "custom layout 自定义 布局 恢复" },
-  { id: "library", title: "打开文献库", description: "复制导入 PDF、电子书等资料，双击文件开始阅读。", key: "l", shift: true, alt: false, keys: ["Mod", "Shift", "L"], search: "library import files 文献 导入 阅读 文件" },
-  { id: "assistant", title: "开始 AI 对话", description: "打开 AI 栏，选择模型，输入你的第一条消息。", key: "i", shift: false, alt: true, keys: ["Mod", "Alt", "I"], search: "chat agent assistant 人工智能 助手 聊天" },
-  { id: "settings", title: "打开设置", description: "配置模型 API、数据保存路径和浅色或深色外观。", key: ",", shift: false, alt: false, keys: ["Mod", ","], search: "settings preferences theme 设置 主题 模型" },
-  { id: "help", title: "查看使用指南", description: "了解文件整理、论文阅读与 AI 分析的基础操作。", key: "F1", shift: false, alt: false, keys: ["F1"], search: "help guide 手册 帮助 快捷键" },
-  { id: "active-pages", title: "切换活跃页面", description: "查看所有已打开页面，用方向键快速切换。", key: "t", shift: false, alt: false, keys: ["Mod", "T"], search: "tabs pages 活跃 页面 切换" },
-  { id: "commands", title: "查看全部快捷操作", description: "搜索常用功能，或查看对应快捷键。", key: "p", shift: true, alt: false, keys: ["Mod", "Shift", "P"], search: "commands shortcuts 命令 快捷键" }
+  { id: "global-search", get title() { return message("commands.globalSearch.title"); }, get description() { return message("commands.globalSearch.description"); }, key: "f", shift: true, alt: false, keys: ["Mod", "Shift", "F"], search: "search find 搜索 查找 全文 全局" },
+  { id: "open-file", get title() { return message("commands.openFile.title"); }, get description() { return message("commands.openFile.description"); }, key: "o", shift: false, alt: false, keys: ["Mod", "O"], search: "open pdf epub book 打开 本地 原文件 电子书" },
+  { id: "open-note", get title() { return message("commands.openNote.title"); }, get description() { return message("commands.openNote.description"); }, key: "o", shift: false, alt: true, keys: ["Mod", "Alt", "O"], search: "open markdown note 打开 本地 原文件 笔记" },
+  { id: "open-folder", get title() { return message("commands.openFolder.title"); }, get description() { return message("commands.openFolder.description"); }, key: "o", shift: true, alt: false, keys: ["Mod", "Shift", "O"], search: "open folder vault 文件夹 目录 连接 引用" },
+  { id: "page-history", get title() { return message("commands.history.title"); }, get description() { return message("commands.history.description"); }, key: "h", shift: false, alt: false, keys: ["Mod", "H"], search: "history recent 历史 页面 回溯" },
+  { id: "preset-reading", get title() { return message("commands.reading.title"); }, get description() { return message("commands.reading.description"); }, key: "", shift: false, alt: false, keys: [], search: "read preset 专注 阅读 布局" },
+  { id: "preset-research", get title() { return message("commands.research.title"); }, get description() { return message("commands.research.description"); }, key: "", shift: false, alt: false, keys: [], search: "research preset 研究 布局" },
+  { id: "preset-processing", get title() { return message("commands.processing.title"); }, get description() { return message("commands.processing.description"); }, key: "", shift: false, alt: false, keys: [], search: "processing preset 处理 布局 工作流 运行 任务" },
+  { id: "preset-custom", get title() { return message("commands.custom.title"); }, get description() { return message("commands.custom.description"); }, key: "", shift: false, alt: false, keys: [], search: "custom layout 自定义 布局 恢复" },
+  { id: "library", get title() { return message("commands.library.title"); }, get description() { return message("commands.library.description"); }, key: "l", shift: true, alt: false, keys: ["Mod", "Shift", "L"], search: "library import files 文献 导入 阅读 文件" },
+  { id: "assistant", get title() { return message("commands.assistant.title"); }, get description() { return message("commands.assistant.description"); }, key: "i", shift: false, alt: true, keys: ["Mod", "Alt", "I"], search: "chat agent assistant 人工智能 助手 聊天" },
+  { id: "settings", get title() { return message("commands.settings.title"); }, get description() { return message("commands.settings.description"); }, key: ",", shift: false, alt: false, keys: ["Mod", ","], search: "settings preferences theme 设置 主题 模型" },
+  { id: "help", get title() { return message("commands.help.title"); }, get description() { return message("commands.help.description"); }, key: "F1", shift: false, alt: false, keys: ["F1"], search: "help guide 手册 帮助 快捷键" },
+  { id: "active-pages", get title() { return message("commands.pages.title"); }, get description() { return message("commands.pages.description"); }, key: "t", shift: false, alt: false, keys: ["Mod", "T"], search: "tabs pages 活跃 页面 切换" },
+  { id: "commands", get title() { return message("commands.all.title"); }, get description() { return message("commands.all.description"); }, key: "p", shift: true, alt: false, keys: ["Mod", "Shift", "P"], search: "commands shortcuts 命令 快捷键" }
 ] as const;
 
 export type WorkbenchCommandId = typeof workbenchCommands[number]["id"];

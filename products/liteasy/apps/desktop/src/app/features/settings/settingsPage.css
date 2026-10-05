@@ -37,6 +37,8 @@
 .settings-categories { display: flex; flex-direction: column; gap: 4px; padding: 16px 8px; overflow-y: auto; border-right: 1px solid var(--colorNeutralStroke2); }
 .settings-page .settings-categories button { justify-content: flex-start; gap: 8px; min-height: 36px; flex-shrink: 0; color: var(--colorNeutralForeground2); border: 1px solid transparent; font-weight: 400; }
 .settings-page .settings-categories button[aria-pressed="true"] { color: var(--colorBrandForeground1); background: var(--colorBrandBackground2); border-color: var(--colorBrandStroke2); font-weight: 600; }
+.settings-categories .settings-category-label { min-width: 0; text-align: start; white-space: normal; overflow-wrap: anywhere; }
+.settings-categories .fui-Button__icon { flex-shrink: 0; }
 .settings-content { min-width: 0; overflow: auto; padding: 20px 24px 40px; scrollbar-gutter: stable; }
 .settings-card { max-width: 860px; margin: 0 auto 16px; border: 0; border-radius: 0; background: transparent; overflow: hidden; }
 .settings-card[hidden] { display: none; }
@@ -65,6 +67,7 @@
   .settings-page .settings-search { max-width: none; margin: 0; }
   .settings-page-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .settings-categories { flex-direction: row; padding: 8px; border-right: 0; border-bottom: 1px solid var(--colorNeutralStroke2); overflow-x: auto; }
+  .settings-categories .settings-category-label { white-space: nowrap; }
   .settings-content { padding: 16px 12px 24px; }
   .settings-card-header { padding: 16px; }
   .settings-card-content { padding: 16px; }

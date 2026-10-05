@@ -31,9 +31,12 @@
     "test:multimodal-release": "npm run build && vitest run src/tests/staticScienceConformance.test.ts src/tests/interactiveMathConformance.test.ts src/tests/processRasterConformance.test.ts src/tests/staticScienceReleaseGate.test.ts src/tests/interactiveMathReleaseGate.test.ts src/tests/processRasterReleaseGate.test.ts src/tests/multimodalEvaluation.test.ts src/tests/visualizationDecisionEvaluation.test.ts src/tests/visualizationPerformance.test.ts src/tests/multimodalReleaseGate.test.ts src/tests/builtinSkillRegistry.test.ts src/tests/visualizationRendererRegistry.test.ts && npm run benchmark:visualization",
     "tauri": "tauri",
     "schema:objects": "vite-node scripts/write-object-schemas.ts",
-    "ci:smoke": "vitest run src/tests/sourceModuleCasing.test.ts src/tests/tauriResourceConfig.test.ts",
+    "ci:smoke": "vitest run src/tests/sourceModuleCasing.test.ts src/tests/tauriResourceConfig.test.ts && npm run i18n:check",
     "ci:contracts": "npm run verify:tauri-resources -- --require-git-tracked && npm run schema:visualization && npm run schema:objects && npm run schema:resources && tsc --noEmit && node ../../../../.github/scripts/check-clean.mjs package-lock.json src-tauri/Cargo.lock ../../packages/shared",
-    "schema:resources": "vite-node scripts/write-resource-schemas.ts && vite-node scripts/write-extension-schemas.ts"
+    "schema:resources": "vite-node scripts/write-resource-schemas.ts && vite-node scripts/write-extension-schemas.ts",
+    "i18n:check": "node scripts/check-i18n.mjs",
+    "i18n:audit": "node scripts/audit-i18n.mjs",
+    "test:i18n": "vitest run src/tests/uiLanguage.test.tsx src/tests/uiLanguagePolicy.test.ts src/tests/i18nCatalog.test.ts"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",
@@ -65,7 +68,9 @@
     "remark-math": "^6.0.0",
     "tesseract.js": "^6.0.1",
     "three": "^0.185.1",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "i18next": "26.4.2",
+    "react-i18next": "17.0.15"
   },
   "devDependencies": {
     "@napi-rs/canvas": "^0.1.100",

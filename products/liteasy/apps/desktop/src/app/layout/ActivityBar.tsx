@@ -1,3 +1,5 @@
+import { message } from "../shared/i18n/i18n";
+import { useUiTranslation } from "../shared/i18n/useUiTranslation";
 import { Button, Tooltip } from "@fluentui/react-components";
 import {
   BookRegular,
@@ -35,11 +37,11 @@ const activityItems: Array<{
   label: string;
   view: LeftRailView;
 }> = [
-  { icon: <BookRegular />, label: "文献库", view: "library" },
-  { icon: <FolderOpenRegular />, label: "产物库", view: "artifact-library" },
-  { icon: <PeopleRegular />, label: "组织", view: "organization" },
-  { icon: <PersonRegular />, label: "个人中心", view: "profile" },
-  { icon: <SettingsRegular />, label: "设置", view: "settings" },
+  { icon: <BookRegular />, get label() { return message("shell.library"); }, view: "library" },
+  { icon: <FolderOpenRegular />, get label() { return message("shell.artifacts"); }, view: "artifact-library" },
+  { icon: <PeopleRegular />, get label() { return message("shell.organization"); }, view: "organization" },
+  { icon: <PersonRegular />, get label() { return message("shell.profile"); }, view: "profile" },
+  { icon: <SettingsRegular />, get label() { return message("shell.settings"); }, view: "settings" },
 ];
 
 export function ActivityBar({
@@ -57,12 +59,13 @@ export function ActivityBar({
   onToggleActiveView,
   onSelectView,
 }: ActivityBarProps) {
+  useUiTranslation();
   return (
-    <nav aria-label="左边栏导航" className="activity-bar">
+    <nav aria-label={message("shell.navigation")} className="activity-bar">
 
       {activityItems.map((item) => (
         <Tooltip
-          content={item.view === "library" ? `文献库 · ${commandShortcut("library")} · 双击展开大窗口` : item.view === "settings" ? `设置 · ${commandShortcut("settings")}` : item.label}
+          content={item.view === "library" ? message("shell.library.tooltip", { shortcut: commandShortcut("library") }) : item.view === "settings" ? message("shell.settings.tooltip", { shortcut: commandShortcut("settings") }) : item.label}
           key={item.view}
           positioning="after"
           relationship="description"
@@ -93,20 +96,20 @@ export function ActivityBar({
             type="button"
           >
             {item.view === "profile" && !accountSessionAvailable ? (
-              <span className="activity-login-badge">未登录</span>
+              <span className="activity-login-badge">{message("shell.signedOut")}</span>
             ) : null}
           </Button>
         </Tooltip>
       ))}
       {onOpenNotes ? (
         <Tooltip
-          content="笔记 / Notes"
+          content={message("shell.notesTooltip")}
           positioning="after"
           relationship="description"
         >
           <Button
             appearance="subtle"
-            aria-label="笔记"
+            aria-label={message("shell.notes")}
             aria-pressed={notesOpen}
             className={`activity-button${notesOpen ? " active" : ""}`}
             icon={<NoteRegular />}
@@ -120,7 +123,7 @@ export function ActivityBar({
         </Tooltip>
       ) : null}
       {onOpenAgent ? (
-        <Tooltip content={`AI 对话 · ${commandShortcut("assistant")}`} positioning="after" relationship="description">
+        <Tooltip content={message("shell.assistant.tooltip", { shortcut: commandShortcut("assistant") })} positioning="after" relationship="description">
           <Button
             appearance="subtle"
             aria-label="Agent"
@@ -138,13 +141,13 @@ export function ActivityBar({
       ) : null}
       {onOpenHelp ? (
         <Tooltip
-          content="帮助 · F1"
+          content={message("shell.helpTooltip")}
           positioning="after"
           relationship="description"
         >
           <Button
             appearance="subtle"
-            aria-label="帮助"
+            aria-label={message("shell.help")}
             aria-pressed={helpOpen}
             className={`activity-button${helpOpen ? " active" : ""}`}
             icon={<QuestionCircleRegular />}

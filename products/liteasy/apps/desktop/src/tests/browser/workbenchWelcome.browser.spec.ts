@@ -28,7 +28,7 @@ test("empty center offers theme-aware vector branding, working entry points and 
   const settings = page.getByRole("region", { name: "应用设置" });
   await expect(settings.getByRole("textbox", { name: "搜索设置" })).toBeFocused();
   await settings.getByRole("textbox", { name: "搜索设置" }).fill("主题");
-  await settings.getByRole("radio", { name: "深色", exact: true }).check();
+  await settings.getByRole("combobox", { name: "外观", exact: true }).selectOption("dark");
   await page.getByRole("button", { name: "关闭 设置", exact: true }).click();
   await expect(welcome).toBeVisible();
   expect(await mark.evaluate((element) => getComputedStyle(element).color)).not.toBe(lightColor);
@@ -38,6 +38,7 @@ test("empty center offers theme-aware vector branding, working entry points and 
   await welcome.screenshot({ path: testInfo.outputPath("welcome-narrow-dark.png") });
   await welcome.getByRole("button", { name: /查看使用指南/ }).click();
   const help = page.getByRole("region", { name: "帮助", exact: true });
+  await help.getByRole("button", { name: "完整文档目录", exact: true }).click();
   await help.getByRole("button", { name: "第一次使用：读完并留下第一条研究笔记", exact: true }).click();
   await expect(help.getByRole("heading", { name: "再连接 AI" })).toBeVisible();
   await expect(help.getByRole("table")).toContainText("Ctrl + Shift + L");

@@ -1,3 +1,5 @@
+import { message } from "../shared/i18n/i18n";
+import { useUiTranslation } from "../shared/i18n/useUiTranslation";
 import { WorkbenchPageHeader } from "../features/workbench/WorkbenchPage";
 import { ProfileRecoveryPanel } from "../features/local-recovery/ProfileRecoveryPanel";
 import { LocalArchivePanel } from "../features/local-archive/LocalArchivePanel";
@@ -52,6 +54,7 @@ const categoryIcons: Record<SettingsCategory, ReactElement> = {
 };
 
 export function SettingsPane(props: SettingsPaneProps) {
+  useUiTranslation();
   const extensions = useExtensionWorkbench();
   const scope = props.localScope ?? "local";
   const currentScope = useRef(scope); currentScope.current = scope;
@@ -106,36 +109,36 @@ export function SettingsPane(props: SettingsPaneProps) {
     resetScroll();
     searchRef.current?.focus();
   }
-  return <section aria-label="应用设置" className="settings-page">
-    <WorkbenchPageHeader title="设置" description="按任务查找设置；应用界面与文档阅读分别配置。" actions={
-      <Input ref={searchRef} className="settings-search" aria-label="搜索设置"
-        placeholder="搜索设置，如模型、主题、保存位置" value={query}
+  return <section aria-label={message("settings.page.aria")} className="settings-page">
+    <WorkbenchPageHeader title={message("settings.page.title")} description={message("settings.page.description")} actions={
+      <Input ref={searchRef} className="settings-search" aria-label={message("settings.search.label")}
+        placeholder={message("settings.search.placeholder")} value={query}
         contentBefore={<SearchRegular aria-hidden="true" />}
-        contentAfter={query ? <Tooltip content="清除搜索" relationship="description">
-          <Button appearance="subtle" size="small" aria-label="清除设置搜索" icon={<DismissRegular />} onClick={clearSearch} />
+        contentAfter={query ? <Tooltip content={message("settings.search.clear")} relationship="description">
+          <Button appearance="subtle" size="small" aria-label={message("settings.search.clearAria")} icon={<DismissRegular />} onClick={clearSearch} />
         </Tooltip> : undefined}
         onChange={(_, data) => { setQuery(data.value); resetScroll(); }}
         onKeyDown={(event) => { if (event.key === "Escape" && query) { event.stopPropagation(); clearSearch(); } }} />
     } />
     <div className="settings-page-body">
-      <nav aria-label="设置分类" className="settings-categories">
+      <nav aria-label={message("settings.categories.aria")} className="settings-categories">
         {settingsCategories.map((item) => <Button key={item.id} appearance="subtle"
           aria-pressed={!searching && category === item.id} icon={categoryIcons[item.id]}
           onClick={() => { setCategory(item.id); setQuery(""); resetScroll(); }}>
-          {item.label}
+          <span className="settings-category-label">{item.label}</span>
         </Button>)}
       </nav>
       <div className="settings-content" ref={contentRef}>
-        {searching ? <p className="settings-search-summary" role="status">找到 {visibleSections.length + visibleExtensionCount} 个设置分组 · 搜索全部分类</p> : null}
+        {searching ? <p className="settings-search-summary" role="status">{message("settings.search.results", { count: visibleSections.length + visibleExtensionCount })}</p> : null}
         {searching && visibleSections.length + visibleExtensionCount === 0 ? <div className="settings-empty">
-          <SearchRegular aria-hidden="true" /><h2>没有找到相关设置</h2>
-          <p>试试“API”“字体”或“同步”等关键词。</p>
-          <Button onClick={clearSearch}>清除搜索</Button>
+          <SearchRegular aria-hidden="true" /><h2>{message("settings.search.none")}</h2>
+          <p>{message("settings.search.hint")}</p>
+          <Button onClick={clearSearch}>{message("settings.search.clear")}</Button>
         </div> : null}
         <ExtensionSettings query={query} category={category} />
         {/* Keep forms mounted so switching categories or searching never discards unsaved input. */}
         {settingsSections.map((section) => <section key={section.id}
-          aria-label={section.id === "recommendations" ? "论文推荐设置" : section.title}
+          aria-label={section.id === "recommendations" ? message("settings.recommendations.aria") : section.title}
           className="settings-card" hidden={!visibleIds.has(section.id)}>
           <header className="settings-card-header">
             <h2 id={`${id}-${section.id}`}>{section.title}</h2>

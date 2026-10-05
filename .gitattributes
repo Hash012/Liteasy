@@ -6,3 +6,4 @@ products/liteasy/apps/mobile/**/*.kts text eol=lf
 products/liteasy/apps/mobile/**/*.gradle text eol=lf
 products/liteasy/apps/mobile/src-tauri/gen/android/gradlew text eol=lf
 products/liteasy/apps/desktop/src/app/features/help/manual/** text eol=lf
+products/liteasy/apps/desktop/src/app/shared/i18n/messageTypes.ts text eol=lf
