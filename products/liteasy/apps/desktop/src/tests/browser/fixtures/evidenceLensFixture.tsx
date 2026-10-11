@@ -2,6 +2,7 @@ import { FluentProvider, webDarkTheme, webLightTheme } from "@fluentui/react-com
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { EvidenceLens } from "../../../app/features/evidence/components/EvidenceLens";
+import { AssistantMessageList } from "../../../app/features/assistant/AssistantMessageList";
 import { MessageEvidence } from "../../../app/features/evidence/components/MessageEvidence";
 import { evidenceReportFromAnchors } from "../../../app/features/evidence/evidenceAdapters";
 import { projectEvidenceReport, type EvidenceReportV1 } from "../../../app/features/evidence/evidenceReport";
@@ -12,6 +13,11 @@ import "./evidenceLensFixture.css";
 // Test-only synthetic data. This entry is never imported by AppShell or a production entry.
 const params = new URLSearchParams(location.search);
 const dark = params.get("theme") === "dark";
+if (params.get("entry") === "assistant") {
+  await import("../../../app/styles/app.css");
+  await import("../../../app/features/theme/appearance.css");
+  document.documentElement.dataset.colorScheme = dark ? "dark" : "light";
+}
 const longDoi = `10.0000/${"long-doi".repeat(24)}`;
 const report: EvidenceReportV1 = {
   schema: "liteasy.evidence-report/v1", id: "fixture-report", runId: "fixture-run", answerRevision: "fixture-answer", generatedAt: "2026-10-11",
@@ -29,8 +35,9 @@ function Fixture() {
   const [opened, setOpened] = useState("");
   return <FluentProvider theme={dark ? webDarkTheme : webLightTheme} style={{ minHeight: "100vh" }}>
     <main><h1>证据界面验收</h1><p>固定测试资料：不调用模型或业务服务，不代表真实论文已核验。</p>
-      <section className="fixture-answer"><p>正文与证据分层呈现。先看结论，需要时再展开来源、条件和反证。</p>
-        {params.get("entry") === "message" ? <MessageEvidence message={message} papers={[{ id: "fixture-paper", title: "消息生产入口测试论文" }]} onOpenCitation={citation => setOpened(`消息原文：${citation.paperId} 第 ${citation.page} 页`)} />
+      <section className="fixture-answer" style={params.get("entry") === "assistant" ? { display: "flex", flexDirection: "column", height: "75vh", minHeight: 0 } : undefined}><p>正文与证据分层呈现。先看结论，需要时再展开来源、条件和反证。</p>
+        {params.get("entry") === "assistant" ? <AssistantMessageList messages={[message]} mode="qa" onModeChange={() => undefined} papers={[{ id: "fixture-paper", title: "消息生产入口测试论文" }]} onOpenCitation={citation => setOpened(`消息原文：${citation.paperId} 第 ${citation.page} 页`)} />
+          : params.get("entry") === "message" ? <MessageEvidence message={message} papers={[{ id: "fixture-paper", title: "消息生产入口测试论文" }]} onOpenCitation={citation => setOpened(`消息原文：${citation.paperId} 第 ${citation.page} 页`)} />
           : <EvidenceLens report={projected} onOpenPassage={passage => setOpened(`原文第 ${passage.locator.page} 页`)} />}
       </section>
       {opened ? <aside aria-label="已打开的来源">{opened}</aside> : null}

@@ -95,3 +95,17 @@ test("source-only answers expose excerpts immediately and keep checks secondary"
   await expect(page.getByRole("complementary")).toHaveText("消息原文：fixture-paper 第 3 页");
   await page.screenshot({ path: testInfo.outputPath("source-preview-360-dark.png"), fullPage: true });
 });
+
+
+for (const theme of ["light", "dark"]) {
+  test(`actual message list and application styles preserve evidence access at 320px ${theme}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 320, height: 1000 });
+    await page.goto(`${fixture}?entry=assistant&theme=${theme}`);
+    await page.getByRole("button", { name: /1 篇来源.*1 处引用/ }).click();
+    await expect(page.getByRole("blockquote")).toContainText("消息入口保存的真实测试摘录。");
+    await noHorizontalOverflow(page);
+    await page.getByRole("button", { name: "打开原文" }).click();
+    await expect(page.getByRole("complementary")).toHaveText("消息原文：fixture-paper 第 3 页");
+    await page.screenshot({ path: testInfo.outputPath(`message-list-320-${theme}.png`), fullPage: true });
+  });
+}
