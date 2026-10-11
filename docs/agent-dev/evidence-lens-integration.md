@@ -31,3 +31,14 @@
 4. 全套桌面测试、smoke、build、干净提交 contracts；浏览器交互与 QA 记录。
 
 当前开发机为 Linux。Windows 原生 PDF 跳转和真实模型核验只有实际执行成功后才能记为已验证；不会以 fixture 或 Linux 构建冒充。没有独立语义核验能力时交付可解释的未核验状态，P1 研究循环不作为 P0 UI 的隐式前提。
+
+## 已实现接口（2026-10-11）
+
+- `evidenceReport.ts`：严格报告 schema；`parseEvidenceReport` 单独恢复；`projectEvidenceReport` 使用当前答案版本、可访问来源、当前来源版本和执行器授予的 `trustedVerificationIds`，而非相信 JSON 自己声明核验。精确定位还需 `verifiedPassageIds`。
+- `evidenceAdapters.ts`：原文实体／真实资产读取快照投影；`bindEvidenceSnapshots` 防止报告替换实际引文与位置。
+- `components/MessageEvidence.tsx`：实际聊天来源解析、范围检查、复用 workbench／引用导航。`components/EvidenceLens.tsx` 只做展示。
+- `thin-reading/thinReadingEvidenceReport.ts`：根／深节点统一适配、外部摘要覆盖、持久化冻结与保守恢复。
+- `evidenceCopy.ts`：复制和捕获附带原文快照与 Liteasy 链接，不输出旧概率评分。
+- `workspaceWriteConfirmation.ts`：接入原有审批状态机，具体操作批准后重验证并返回写入回执。
+
+真实执行、红绿测试、浏览器数据和明确未验证项见 [验收记录](../qa/evidence-lens-final-review.md)。
