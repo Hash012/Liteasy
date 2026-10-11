@@ -881,7 +881,7 @@ test("adds grounded user and assistant messages in qa mode when selected set is 
   expect(screen.getAllByText(/第 2 页/).length).toBeGreaterThan(0);
   expect(screen.queryByText(/demo-1 p\.2/)).not.toBeInTheDocument();
   expect(screen.queryByText(/审计模型|审计评分/)).not.toBeInTheDocument();
-  expect(screen.getAllByText(/未核验/).length).toBeGreaterThan(0);
+  expect(screen.getByText("未逐条核验")).toBeInTheDocument();
 });
 
 test("archives the current assistant session when starting a new one", async () => {

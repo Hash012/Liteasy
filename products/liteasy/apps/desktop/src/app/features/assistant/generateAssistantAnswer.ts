@@ -4849,6 +4849,8 @@ export async function generateAssistantAnswer(input: GenerateAssistantAnswerInpu
   const owner = result.analysis?.run.id ?? "answer";
   const anchors = paperAnchorsFromCitations(result.citations, input.selectedPapers, owner);
   const evidenceReport = evidenceReportFromAnchors({ id: owner, runId: owner, answer: result.content, anchors,
-    audit: result.audit, claims: result.analysis?.claims.filter(claim => claim.evidenceIds.length > 0) });
+    // The retrieval matrix contains source summaries, not claims parsed from this answer.
+    // Keep it in analysis; without answer-level bindings this report lists sources only.
+    audit: result.audit });
   return { ...result, evidenceReport };
 }

@@ -899,6 +899,7 @@ test("generates cloud-proxy answers through an injected live transport", async (
 
   expect(result.content).toContain("云端回答：这篇综述如何定义向量数据库系统？");
   expect(result.content).toContain("demo-2 p.4");
+  expect(result.evidenceReport.claims).toEqual([]);
   expect(result.audit).toMatchObject({
     model: "remote_service",
     checkerKind: "remote_service",
