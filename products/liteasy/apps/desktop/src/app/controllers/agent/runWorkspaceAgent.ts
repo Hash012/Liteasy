@@ -103,19 +103,31 @@ export async function runWorkspaceAgent(input: AgentCommandExecutionInput, envir
     history: { totalTurns: historyView.totalTurns, includedTurns: historyView.includedTurns, compactedTurns: historyView.compactedTurns },
     workingTokens: observations.length ? contextTokens(JSON.stringify(observations)) : 0
   });
-  const complete = (message: string, trace?: unknown): AgentKnowledgeExecutionResult => ({
-    message,
-    metadata: JSON.parse(JSON.stringify({
-      executionTrace: trace,
-      researchLoop: research,
-      evidenceReport: evidenceReportFromAssetReads({ id: input.runId, answer: message, scopeId: scope, reads: [...reads.values()] }),
-      assetWrites: writes,
-      assetReads: [...reads.values()].map(({ asset, offset, totalCharacters, text, truncated }) => ({
-        path: asset.path, title: asset.title, revision: asset.revision, offset,
-        includedCharacters: text.length, totalCharacters, status: truncated ? "partial" : "full"
-      }))
-    })) as AgentJsonValue
-  });
+  const complete = (message: string, trace?: unknown): AgentKnowledgeExecutionResult => {
+    if (research?.stopReason && !["task_completed", "waiting_confirmation"].includes(research.stopReason)) {
+      const findings = research.gaps.filter((gap) => gap.status === "addressed" && gap.resolution.trim()).map((gap) => {
+        const sources = gap.evidencePaths.flatMap((path) => {
+          const read = reads.get(path);
+          return read?.text ? [assetMarkdownLink(read.asset.title, read.asset.path)] : [];
+        });
+        return sources.length ? `${gap.resolution}\n\n来源：${sources.join(" · ")}` : "";
+      }).filter(Boolean);
+      if (findings.length) message += `\n\n### 已整理的线索（未独立核验）\n\n${findings.join("\n\n")}`;
+    }
+    return {
+      message,
+      metadata: JSON.parse(JSON.stringify({
+        executionTrace: trace,
+        researchLoop: research,
+        evidenceReport: evidenceReportFromAssetReads({ id: input.runId, answer: message, scopeId: scope, reads: [...reads.values()] }),
+        assetWrites: writes,
+        assetReads: [...reads.values()].map(({ asset, offset, totalCharacters, text, truncated }) => ({
+          path: asset.path, title: asset.title, revision: asset.revision, offset,
+          includedCharacters: text.length, totalCharacters, status: truncated ? "partial" : "full"
+        }))
+      })) as AgentJsonValue
+    };
+  };
   // A greeting does not enumerate the library, read attached files, or invoke
   // a planner. Other requests use one decision call, which can answer directly.
   const greeting = /^(?:hello|hi|hey|你好|您好|嗨|早上好|晚上好|谢谢|thanks)[!！。，,.\s]*$/i.test(input.request.input.message.trim());

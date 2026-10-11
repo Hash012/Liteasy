@@ -272,3 +272,27 @@ test("a model interruption retains a read checkpoint and never replays a mutatio
     expect(fixture.write).not.toHaveBeenCalled();
   } finally { fixture.api.dispose(); }
 });
+
+
+test("partial research keeps read-backed findings and clickable sources alongside unresolved gaps", async () => {
+  const fixture = setup([
+    action({ action: "read", path: paperPath }),
+    action({ action: "research", text: JSON.stringify({ plan: ["读取机制与反例"], gaps: [
+      { id: "mechanism", kind: "missing_source", question: "机制是什么？", status: "addressed", evidencePaths: [paperPath], resolution: "Cicada 使用乐观并发控制与分布式时间戳。" },
+      { id: "counterexample", kind: "missing_source", question: "没有找到反例，请补充实验资料。", status: "blocked", evidencePaths: [], resolution: "" }
+    ] }) })
+  ]);
+  try {
+    const run = await fixture.submit("研究 Cicada 的机制与反例", false);
+    const result = run.events.filter((event) => event.type === "assistant.message").at(-1);
+    if (!result || result.type !== "assistant.message") throw new Error("missing research response");
+    expect(result.message).toContain("没有找到反例，请补充实验资料。");
+    expect(result.message).toContain("已整理的线索（未独立核验）");
+    expect(result.message).toContain("Cicada 使用乐观并发控制与分布式时间戳。");
+    expect(result.message).toContain(`[《Cicada》](${paperPath})`);
+    const { evidenceAnswerRevision } = await import("../app/features/evidence/evidenceReport");
+    expect(result.metadata).toMatchObject({ researchLoop: { stopReason: "needs_review", semanticStatus: "unverified" }, evidenceReport: { answerRevision: evidenceAnswerRevision(result.message) } });
+    expect(fixture.prompts).toHaveLength(2);
+    expect(fixture.write).not.toHaveBeenCalled();
+  } finally { fixture.api.dispose(); }
+});
