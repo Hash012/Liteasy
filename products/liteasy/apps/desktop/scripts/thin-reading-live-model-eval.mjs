@@ -40,6 +40,7 @@ if (provider !== "openai" && provider !== "deepseek") {
 }
 
 const generationMode = process.env.LITEASY_THIN_READING_LIVE_EVAL_MODE;
+const researchLoopEval = process.env.LITEASY_RESEARCH_LOOP_LIVE_EVAL === "1";
 if (generationMode && generationMode !== "fast" && generationMode !== "rigorous") {
   throw new Error("LITEASY_THIN_READING_LIVE_EVAL_MODE must be fast or rigorous.");
 }
@@ -64,7 +65,7 @@ if (provider === "openai") {
 } else if (!process.env.DEEPSEEK_API_KEY) {
   throw new Error("DEEPSEEK_API_KEY must be configured in development/dev-cloud/.env.local");
 }
-console.log(`Starting thin-reading live eval (provider=${provider}, case=${generationMode ? "public-real-pdf" : process.env.LITEASY_THIN_READING_LIVE_EVAL_CASE ?? "colbert"}, mode=${generationMode ?? "legacy"}).`);
+console.log(`Starting ${researchLoopEval ? "research ablation" : "thin-reading"} live eval (provider=${provider}, case=${researchLoopEval || generationMode ? "public-real-pdf" : process.env.LITEASY_THIN_READING_LIVE_EVAL_CASE ?? "colbert"}, mode=${researchLoopEval ? "three-strategies" : generationMode ?? "legacy"}).`);
 const cloud = spawn(process.execPath, [resolve(repositoryRoot, "development/dev-cloud/server.mjs")], {
   cwd: desktopDir,
   env,
@@ -103,13 +104,13 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 try {
   console.log("Waiting for the local dev cloud health check.");
   await waitForHealth(endpoint);
-  console.log("Dev cloud is ready; starting Vitest with a 120-second live-test timeout.");
+  console.log(`Dev cloud is ready; starting Vitest with a ${researchLoopEval ? 600 : 120}-second live-test timeout.`);
   // Run Vitest through this Node executable. Spawning the generated `vitest.cmd`
   // shim directly fails with EINVAL on current Windows Node releases.
   const vitestBinary = resolve(desktopDir, "node_modules", "vitest", "vitest.mjs");
   evaluator = spawn(
     process.execPath,
-    [vitestBinary, "run", "src/tests/thinReadingLiveModelEval.test.ts", "--reporter=verbose", "--testTimeout=120000"],
+    [vitestBinary, "run", researchLoopEval ? "src/tests/researchLoopLiveEval.test.ts" : "src/tests/thinReadingLiveModelEval.test.ts", "--reporter=verbose", `--testTimeout=${researchLoopEval ? 600000 : 120000}`],
     {
       cwd: desktopDir,
       env: {
@@ -129,9 +130,9 @@ try {
     evaluator.on("exit", (code) => resolveExit(code ?? 1));
   });
   if (exitCode === 0) {
-    console.log("Thin-reading live model eval passed through the desktop generation path.");
+    console.log(`${researchLoopEval ? "Research ablation" : "Thin-reading live model"} eval passed through the desktop generation path.`);
   } else {
-    console.error(`Thin-reading live model eval failed with exit code ${exitCode}.`);
+    console.error(`${researchLoopEval ? "Research ablation" : "Thin-reading live model"} eval failed with exit code ${exitCode}.`);
   }
   process.exitCode = exitCode;
 } finally {
