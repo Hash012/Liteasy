@@ -87,6 +87,7 @@ export function collectAgentConversationHistory(
 }
 
 export type AgentKnowledgeExecutionResult = {
+  confirmation?: HumanConfirmationRequest;
   citations?: AgentCitation[];
   confidence?: number;
   message: string;
@@ -114,6 +115,7 @@ export type AgentApplicationPorts = {
     input: AgentCommandExecutionInput
   ) => Promise<RuntimeExecutionResult> | RuntimeExecutionResult;
   executeConfirmation?: (input: {
+    reportAssetWrite?: (receipt: AgentJsonValue) => void;
     confirmation: HumanConfirmationRequest;
     context: ResolvedAgentContext;
     request: ResolveAgentConfirmationRequest;
@@ -937,7 +939,11 @@ export function createAgentApplicationService(
               type: "ui.render"
             });
           }
-          finishRun(stored, run, "completed");
+          if (knowledgeResult.confirmation) {
+            applyRuntimeResult(stored, run, context, { events: [knowledgeResult.confirmation], settingsChanged: false });
+          } else {
+            finishRun(stored, run, "completed");
+          }
         }
       } catch (error) {
         if (!isCancelled(run)) {
@@ -1014,6 +1020,7 @@ export function createAgentApplicationService(
       if (!(await persistState())) return persistenceError();
       try {
         const runtimeResult = await ports.executeConfirmation({
+          reportAssetWrite(receipt) { emit(stored, run, { receipt, type: "asset.written" }); },
           confirmation: pending.confirmation,
           context: pending.context,
           request,

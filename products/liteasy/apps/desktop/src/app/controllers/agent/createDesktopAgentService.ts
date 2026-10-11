@@ -1,3 +1,4 @@
+import { executeWorkspaceWriteConfirmation, WORKSPACE_WRITE_ACTION } from "./workspaceWriteConfirmation";
 import { formatAssistantConversationContext } from "../../features/assistant/assistantConversationContext";
 import { getAccountSessionGeneration } from "../../features/account/accountSessionStorage";
 import { artifactPromptTask, getGenerationPrompt, settingsWithGenerationPrompt, withGenerationPrompt } from "../../features/ai-prompts/generationPrompts";
@@ -325,10 +326,12 @@ export function createDesktopAgentService(
       });
       return result;
     },
-    async executeConfirmation({ confirmation }) {
+    async executeConfirmation(input) {
+      const { confirmation } = input;
       // 确认可能在原计划生成很久后发生，执行前重新读取最新 UI/权限上下文。
       // plan 与 action 参数仍来自服务端保存的 confirmation，调用方无法修改。
       const environment = options.getEnvironment();
+      if (confirmation.action.actionId === WORKSPACE_WRITE_ACTION) return executeWorkspaceWriteConfirmation(input, environment);
       const result = await executeConfirmedSemanticPlan(
         confirmation,
         createDesktopRuntimeContext(environment)

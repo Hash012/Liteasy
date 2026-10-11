@@ -1,3 +1,4 @@
+import type { AgentRun } from "../app/features/agent-api/agentApi.types";
 import { createDesktopAgentService, type DesktopAgentEnvironment } from "../app/controllers/agent/createDesktopAgentService";
 import { createOpenAIAgentsSdkManager } from "../app/controllers/agent/createOpenAIAgentsSdkManager";
 import { createSettingsStore } from "../app/features/settings/settings.store";
@@ -57,7 +58,16 @@ function setup(responses: string[]) {
     if (!run.ok) throw new Error(run.error.message);
     return run.data;
   };
-  return { api, submit, read, search, write, prompts, managerRun, resolveObjectContext, environment, getText: () => text };
+  const approve = async (run: AgentRun) => {
+    expect(run.status).toBe("waiting_confirmation");
+    expect(write).not.toHaveBeenCalled();
+    const confirmation = run.events.find((event) => event.type === "confirmation.required");
+    if (!confirmation || confirmation.type !== "confirmation.required") throw new Error("Missing confirmation");
+    const result = await api.resolveConfirmation({ sessionId: run.sessionId, confirmationId: confirmation.confirmationId, decision: "approve" });
+    if (!result.ok) throw new Error(result.error.message);
+    return result.data;
+  };
+  return { api, submit, approve, read, search, write, prompts, managerRun, resolveObjectContext, environment, getText: () => text };
 }
 
 test("an attached note stays on the manager route and is actually written using paper evidence", async () => {
@@ -68,7 +78,7 @@ test("an attached note stays on the manager route and is actually written using 
     action({ action: "write", path: notePath, expectedRevision: "v1", text: "## Cicada 要义\n乐观并发控制与分布式时间戳。" }),
     action({ message: "已将 Cicada 要义写入 CicN。" })
   ]);
-  const run = await fixture.submit("往这个笔记里面，写入 cicada 的要义。");
+  const run = await fixture.approve(await fixture.submit("往这个笔记里面，写入 cicada 的要义。"));
   expect(run.status).toBe("completed");
   expect(fixture.managerRun).toHaveBeenCalledOnce();
   expect(fixture.resolveObjectContext).not.toHaveBeenCalled();
@@ -78,8 +88,8 @@ test("an attached note stays on the manager route and is actually written using 
   expect(fixture.write).toHaveBeenCalledOnce();
   expect(run.events).toEqual(expect.arrayContaining([
     expect.objectContaining({ type: "context.usage", maxTokens: 32768, estimated: true }),
-    expect.objectContaining({ type: "manager.activity", label: "已保存 · CicN", status: "completed" }),
-    expect.objectContaining({ type: "assistant.message", metadata: expect.objectContaining({ assetWrites: [expect.objectContaining({ previousRevision: "v1" })] }) })
+    expect.objectContaining({ type: "asset.written", receipt: expect.objectContaining({ previousRevision: "v1" }) }),
+    expect.objectContaining({ type: "assistant.message", message: expect.stringContaining("已保存") })
   ]));
   fixture.api.dispose();
 });
@@ -116,9 +126,9 @@ test("a read-only user question cannot authorize a model-requested write", async
     action({ message: "该笔记只有标题。" })
   ]);
   const run = await fixture.submit("这个笔记包含什么？");
-  expect(run.status).toBe("completed");
+  expect(run.status).toBe("waiting_confirmation");
   expect(fixture.write).not.toHaveBeenCalled();
-  expect(run.events).toContainEqual(expect.objectContaining({ type: "manager.activity", status: "failed", detail: expect.stringContaining("没有要求修改") }));
+  expect(run.events).toContainEqual(expect.objectContaining({ type: "confirmation.required", summary: expect.stringContaining("确认前不会修改") }));
   fixture.api.dispose();
 });
 
@@ -141,7 +151,7 @@ test("reads and writes an attached note through equivalent URLs while exposing r
     action({ action: "write", path: "liteasy://objects/cicn", expectedRevision: "v1", text: "\nhello", message: "将 hello 追加到笔记末尾。" }),
     action({ message: `已更新 [《CicN》](${notePath})。` })
   ]);
-  const run = await fixture.submit("往这里写入 hello");
+  const run = await fixture.approve(await fixture.submit("往这里写入 hello"));
   expect(fixture.read).toHaveBeenCalledWith(notePath, expect.anything());
   expect(fixture.write).toHaveBeenCalledWith(notePath, expect.objectContaining({ expectedRevision: "v1" }));
   expect(fixture.search).not.toHaveBeenCalled();
@@ -204,4 +214,16 @@ test("recovers exact older content through session history when the working wind
     expect(fixture.prompts.at(-1)).toContain("DECISION-73");
     expect(fixture.read).not.toHaveBeenCalled();
   } finally { fixture.api.dispose(); }
+});
+
+test("negated write words do not authorize a valid model write", async () => {
+  const fixture = setup([
+    action({ action: "read", path: notePath }),
+    action({ action: "write", path: notePath, expectedRevision: "v1", text: "unauthorized" }),
+    action({ message: "只讨论写入。" })
+  ]);
+  await fixture.submit("不要修改笔记，只讨论写入");
+  expect(fixture.write).not.toHaveBeenCalled();
+  expect(fixture.getText()).toBe("# CicN");
+  fixture.api.dispose();
 });
