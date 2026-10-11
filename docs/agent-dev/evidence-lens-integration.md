@@ -42,3 +42,11 @@
 - `workspaceWriteConfirmation.ts`：接入原有审批状态机，具体操作批准后重验证并返回写入回执。
 
 真实执行、红绿测试、浏览器数据和明确未验证项见 [验收记录](../qa/evidence-lens-final-review.md)。
+
+## 追加交付：展示与研究闭环
+
+- 来源型回答首次展开直接给出前两段摘录和真实导航；论断型默认四条，全部内容仍可在同栏 Inspector 检索。失败／超时保留可见状态，核验执行细节折叠。仅元信息的来源也可分页查看完整列表。
+- `features/research-loop/researchLoop.ts` 拥有结构化计划、缺口、决策和停止原因。`runWorkspaceAgent` 的 `research` 工具直接参与现有 search/read/answer 循环；未解决缺口不能提前完成或发起写入。规划判断不是独立语义核验。
+- `AssistantPane` 与历史解析保存研究快照，状态卡区分完成、复核、预算耗尽、等待条件和中断。恢复的快照仅用于展示；不会恢复工具执行权限。再次提问是新轮次，需重新读取来源并重查版本。
+- 实际研究范围为现有资产服务可以读取的材料；复用现有账号、组织权限和单次写入确认。简单问候无需调用研究工具，不自动加载正文。
+- `scripts/research-loop-eval.mjs` 对公开 PDF 做直接模型、固定窗口检索、生产工具循环对照；`scripts/research-loop-score.mjs` 仅处理独立人工标签，不调用模型或读取密钥。质量指标未标注时为 `not_measured`。
