@@ -1,3 +1,4 @@
+import { parseEvidenceReport } from "../evidence/evidenceReport";
 import { parseSavedAssistantAssetWrites } from "./assistantAssetWrites";
 import { createObjectStorage } from "../objects/objectStorage";
 import { invoke, isTauri } from "@tauri-apps/api/core";
@@ -39,6 +40,7 @@ export function parseAssistantHistory(value: unknown): AssistantHistorySnapshot 
       messages: session.messages.map(({ queuedDelivery: _queued, confirmation: _confirmation, ...message }) => ({
         ...message,
         assetWrites: parseSavedAssistantAssetWrites(message.assetWrites),
+        evidenceReport: parseEvidenceReport(message.evidenceReport),
         ...(message.artifactTask && ["queued", "running"].includes(message.artifactTask.status) ? {
           artifactTask: { ...message.artifactTask, status: "cancelled" as const }
         } : {}),
@@ -50,7 +52,7 @@ export function parseAssistantHistory(value: unknown): AssistantHistorySnapshot 
         } } : {})
       })),
       ...(session.status === "running" && !session.messages.some((message) => message.agentActivity) ? {
-        messages: [...session.messages.map(({ queuedDelivery: _queued, confirmation: _confirmation, ...message }) => message), {
+        messages: [...session.messages.map(({ queuedDelivery: _queued, confirmation: _confirmation, ...message }) => ({ ...message, evidenceReport: parseEvidenceReport(message.evidenceReport) })), {
           id: `${session.id}:interrupted`, role: "assistant" as const,
           content: "上次运行已中断，已保留现有消息；可重新发送以继续。"
         }]

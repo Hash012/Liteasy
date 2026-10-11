@@ -14,6 +14,7 @@ export type { AssistantMode };
 export type AssistantConfirmationRequest = HumanConfirmationRequest | AgentConfirmationRequest;
 
 export type AssistantMessage = {
+  evidenceReport?: import("../evidence/evidenceReport").EvidenceReportV1;
   assetWrites?: import("./assistantAssetWrites").AssistantAssetWrite[];
   contextCoverage?: import("./contextCoverageReport").ContextCoverageReport;
   thinkingDepth?: import("./thinkingDepth").ThinkingDepth;
