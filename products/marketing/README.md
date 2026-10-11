@@ -30,4 +30,14 @@ MARKETING_BASE_URL=http://127.0.0.1:8090 npm run verify:browser
 
 营销站没有登录功能，不接收 Liteasy 或 Intuecho 的账号密码。
 
-部署页面需要在加载 `app.js` 前设置公开的 `window.LITEASY_WAITLIST_URL`，该地址是体验申请的真实提交目标。未设置时表单会明确提示入口尚未开放，不会显示虚假的提交成功状态。
+页面默认向同域 `/api/waitlist` 提交 JSON 申请。部署在不同 API 域名时，可以在加载 `app.js` 前设置 `window.LITEASY_WAITLIST_URL` 覆盖该地址。服务端在安装包可用时返回短时 `downloadUrl`，页面会在申请保存成功后自动开始下载；安装包未就绪时只确认申请已记录，不会显示虚假的下载成功状态。
+
+预发布环境的服务配置示例位于 `waitlist/.env.example`。只有经过评审和签名的 Windows 安装包才能写入 `WAITLIST_INSTALLER_PATH`；`WAITLIST_DOWNLOAD_SECRET` 使用独立随机值并只保存在服务器运行配置中。下载地址包含短时签名，不能绕过体验申请直接访问。
+
+## 页面图片
+
+首页使用 `assets/new/program-main.webp`，五步阅读分别使用 `workflow-1.webp` 到 `workflow-5.webp`；步骤切换支持淡入、局部聚光、轻微平移和系统减少动态效果设置。依据章节使用 `proof.webp`；论文阅读和结构表达使用 `paper-read.webp`、`mindmap.webp`。页面使用无损 WebP，PNG 原图保留，完整图片可从工作流下方链接打开。
+
+首页背景优先下载；下方配图延迟加载。工作流进入视口附近后依次预加载其余步骤，点击时复用已加载资源，避免打开页面时同时下载全部截图。替换 PNG 后，应重新生成同名 WebP 并一起上传（例如 `cwebp -lossless -m 6 assets/new/program-main.png -o assets/new/program-main.webp`）。静态部署需要包含这些 WebP 文件。
+
+科学图解为 `assets/science-optics.svg`，使用页面的浅纸色、绿色和橙红色展示凸透镜光路示意。数学与几何、过程演示保留现有示意；视觉重绘入口已移除。`thin-reading produce.png` 暂不展示，五步流程直接展示阅读结果。

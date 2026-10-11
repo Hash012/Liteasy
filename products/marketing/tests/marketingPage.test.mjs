@@ -8,7 +8,7 @@ const script = await readFile(new URL("app.js", root), "utf8");
 
 test("publishes the Liteasy evidence-led thin-reading promise", () => {
   assert.match(html, /<title>Liteasy \|/);
-  assert.match(html, /先读懂最想知道的，再像研究者一样探索深入。/);
+  assert.match(html, /先读懂最想知道的，再像研究者一样深入探索。/);
   assert.match(html, /来自论文/);
   assert.match(html, /来自外部来源/);
   assert.match(html, /AI 独立理解/);
@@ -28,11 +28,17 @@ test("keeps development language and the retired brand out of public copy", () =
   }
 });
 
-test("keeps one conversion goal and truthful fallback status", () => {
+test("connects the forum, download gate, and real application flow", () => {
   assert.ok((html.match(/href="#waitlist"/g) ?? []).length >= 2);
   assert.match(html, /data-waitlist-form/);
-  assert.match(script, /体验申请入口尚未开放/);
-  assert.doesNotMatch(script, /提交成功|申请成功/);
+  assert.match(html, /href="https:\/\/community\.staging\.liteasyclaw\.com\/"/);
+  assert.match(html, /data-download-link>Download/);
+  assert.match(html, /提交体验申请并获取安装包/);
+  assert.match(script, /fetch\(waitlistUrl/);
+  assert.match(script, /安装包面向已提交体验申请的用户开放/);
+  assert.match(script, /window\.location\.assign\(result\.downloadUrl\)/);
+  assert.match(html, /styles\.css\?v=20261011-1/);
+  assert.match(html, /app\.js\?v=20261011-2/);
 });
 
 test("declares the preserved semantic page framework", () => {
@@ -54,12 +60,13 @@ test("offers the approved five-step researcher workflow", () => {
 });
 
 test("offers Thin Reading's parallel multimodal understanding modes", () => {
-  for (const label of ["论文原图", "结构表达", "科学图解", "数学与几何", "过程演示", "视觉重绘"]) {
+  for (const label of ["论文原图", "结构表达", "科学图解", "数学与几何", "过程演示"]) {
     assert.match(`${html}\n${script}`, new RegExp(label));
   }
-  for (const key of ["sourceFigure", "structure", "science", "math", "process", "illustration"]) {
+  for (const key of ["sourceFigure", "structure", "science", "math", "process"]) {
     assert.match(script, new RegExp(`\\b${key}: \\{`));
   }
+  assert.doesNotMatch(`${html}\n${script}`, /视觉重绘|result-illustration/);
   for (const retired of ["关系图", "对比表", "汇报与文档"]) {
     assert.doesNotMatch(`${html}\n${script}`, new RegExp(retired));
   }
@@ -73,7 +80,7 @@ test("presents association recommendations as an interactive reading canvas", ()
   assert.doesNotMatch(`${html}\n${script}`, /逐层返回/);
   assert.match(html, /从一个概念，<br \/>走进一片研究/);
   assert.match(html, /相关推荐/);
-  assert.match(html, /association-graph-product\.png/);
+  assert.match(html, /association-graph-product\.webp/);
 });
 
 test("ships an accessible Intuecho shared-reading visual", async () => {
@@ -85,7 +92,7 @@ test("ships an accessible Intuecho shared-reading visual", async () => {
 test("connects every tab to an existing panel", () => {
   const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]));
   const tabs = [...html.matchAll(/<button\s+([^>]*\brole="tab"[^>]*)>/g)].map((match) => match[1]);
-  assert.equal(tabs.length, 11);
+  assert.equal(tabs.length, 10);
   const tabIds = tabs.map((attributes) => attributes.match(/\bid="([^"]+)"/)?.[1]);
   assert.equal(new Set(tabIds).size, tabs.length);
   for (const attributes of tabs) {
@@ -100,7 +107,7 @@ test("declares an accessible mobile navigation toggle", () => {
 });
 
 test("gives every marketing SVG a title and description", async () => {
-  for (const file of ["map-visual.svg", "tree-visual.svg", "thin-reading-visual.svg", "intuecho-reading-visual.svg"]) {
+  for (const file of ["map-visual.svg", "tree-visual.svg", "thin-reading-visual.svg", "intuecho-reading-visual.svg", "science-optics.svg"]) {
     const svg = await readFile(new URL(`assets/${file}`, root), "utf8");
     assert.match(svg, /<title\b[^>]*>[^<]+<\/title>/);
     assert.match(svg, /<desc\b[^>]*>[^<]+<\/desc>/);
