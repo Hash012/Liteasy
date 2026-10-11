@@ -317,10 +317,9 @@ export function prepareMultiPaperAnalysis(
   const createdAt = now().toISOString();
   const paperClaims: AnalysisClaim[] = evidence.map((item) => ({
     analysisRunId,
-    confidence: item.relevance,
     evidenceIds: [item.id],
     id: createId("claim"),
-    stance: "supported",
+    stance: "unverified",
     text: item.summary
   }));
   const evidencePrompt = evidence.length > 0
@@ -380,18 +379,11 @@ export function completeMultiPaperAnalysis(input: {
   throwIfAborted(input.signal);
   const createId = input.createId ?? defaultIdFactory();
   const completedAt = (input.now ?? (() => new Date()))().toISOString();
-  const hasCoverageGap = input.prepared.run.coverage.missingPaperIds.length > 0;
-  const stance: AnalysisClaim["stance"] = input.prepared.evidence.length === 0
-    ? "insufficient"
-    : input.auditVerdict === "pass" && !hasCoverageGap
-      ? "supported"
-      : input.auditVerdict === "fail"
-        ? "insufficient"
-        : "mixed";
+  // A retrieval score or a legacy whole-answer audit is not a claim-level verifier.
+  const stance: AnalysisClaim["stance"] = "unverified";
   const synthesisClaim: AnalysisClaim = {
     analysisRunId: input.prepared.run.id,
-    confidence: Number(clamp(input.auditScore).toFixed(2)),
-    evidenceIds: input.prepared.evidence.map((item) => item.id),
+    evidenceIds: [],
     id: createId("claim"),
     stance,
     text: input.answer
@@ -403,7 +395,7 @@ export function completeMultiPaperAnalysis(input: {
     run: {
       ...input.prepared.run,
       completedAt,
-      status: stance === "supported" ? "completed" : "needs_review"
+      status: "needs_review"
     }
   };
 }

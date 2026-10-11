@@ -44,8 +44,10 @@ test("object answers preserve exact paper entities through public events and the
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "Explain the note");
   await user.click(screen.getByRole("button", { name: "发送" }));
   expect(await screen.findByText("A grounded answer 〔Original paper · 第 3 页〕.")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: /篇来源/ }));
+  await user.click(screen.getByRole("button", { name: "查看全部证据" }));
   expect(screen.getByText(unlocated.snapshot.quote)).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "打开原文证据 2：Unlocated paper 页码未记录" })).toBeDisabled();
-  await user.click(screen.getByRole("button", { name: "打开原文证据 1：Original paper 第 3 页" }));
+  expect(screen.getAllByRole("button", { name: "打开原文" })[1]).toBeDisabled();
+  await user.click(screen.getAllByRole("button", { name: "打开原文" })[0]);
   await waitFor(() => expect(onOpenCitation).toHaveBeenCalledWith(expect.objectContaining({ paperAnchor: anchor })));
 });

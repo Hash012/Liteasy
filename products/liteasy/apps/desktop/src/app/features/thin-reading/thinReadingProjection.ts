@@ -1,3 +1,4 @@
+import { thinReadingEvidenceReport, freezeThinReadingEvidenceReport } from "./thinReadingEvidenceReport";
 import type {
   AdvanceThinReadingDocumentInput,
   CreateThinReadingDocumentInput,
@@ -588,6 +589,8 @@ function freezeGenerationAudit(audit: ThinReadingGenerationAudit): ThinReadingGe
 
 function freezeEvidence(evidence: ThinReadingNodeEvidence): ThinReadingNodeEvidence {
   const frozen = {
+    evidenceReport: evidence.evidenceReport ? freezeThinReadingEvidenceReport(evidence.evidenceReport) : undefined,
+    readingReview: evidence.readingReview ? Object.freeze({ ...evidence.readingReview }) : undefined,
     anchors: evidence.anchors
       ? Object.freeze(evidence.anchors.map(freezeAnchor))
       : undefined,
@@ -631,7 +634,7 @@ function freezeNode(node: ThinReadingNode): ThinReadingNode {
   return Object.freeze({
     ...node,
     childIds: Object.freeze([...node.childIds]),
-    evidence: freezeEvidence(node.evidence),
+    evidence: freezeEvidence({ ...node.evidence, evidenceReport: thinReadingEvidenceReport({ id: `${node.id}:evidence`, summary: node.summary, evidence: node.evidence }) }),
     omittedSections: Object.freeze(node.omittedSections.map((token) => Object.freeze({ ...token }))),
     recommendationScope: freezeScope(node.recommendationScope),
     recommendations: Object.freeze(node.recommendations.map(freezeRecommendation)),

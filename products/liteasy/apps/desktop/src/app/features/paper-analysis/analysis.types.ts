@@ -36,10 +36,10 @@ export type AnalysisEvidence = {
 
 export type AnalysisClaim = {
   analysisRunId: string;
-  confidence: number;
+  confidence?: number;
   evidenceIds: string[];
   id: string;
-  stance: "contradicted" | "insufficient" | "mixed" | "supported";
+  stance: "contradicted" | "insufficient" | "mixed" | "supported" | "unverified";
   text: string;
 };
 

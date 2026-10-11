@@ -1,3 +1,4 @@
+import { parseEvidenceReport } from "../evidence/evidenceReport";
 import { catalogSearchMetadata } from "../search/searchMetadata";
 import type { ReadingCatalogEntry } from "../library/readingCatalog.types";
 import { conversationTurnsFromMessages } from "./assistantConversationContext";
@@ -1178,6 +1179,7 @@ export function AssistantPane({
     if (event.type === "assistant.message") {
       let assetWrites: AssistantMessage["assetWrites"];
       let audit: AnswerAuditResult | undefined;
+      let evidenceReport: AssistantMessage["evidenceReport"];
       let paperAnchors: AssistantMessage["paperAnchors"];
       let contextCoverage: AssistantMessage["contextCoverage"];
       let executionTrace: ModelExecutionTrace | undefined;
@@ -1185,12 +1187,14 @@ export function AssistantPane({
         const metadata = event.metadata as {
           assetWrites?: unknown;
           audit?: AnswerAuditResult;
+          evidenceReport?: unknown;
           executionTrace?: ModelExecutionTrace;
           paperAnchors?: unknown;
           contextCoverage?: unknown;
         };
         assetWrites = parseAssistantAssetWrites(metadata.assetWrites);
         audit = metadata.audit;
+        evidenceReport = parseEvidenceReport(metadata.evidenceReport);
         executionTrace = metadata.executionTrace;
         if (Array.isArray(metadata.paperAnchors)) paperAnchors = collectPaperAnchors(metadata.paperAnchors);
         contextCoverage = parseContextCoverageReport(metadata.contextCoverage);
@@ -1199,6 +1203,7 @@ export function AssistantPane({
         ...message,
         assetWrites: assetWrites ? mergeAssistantAssetWrites(message.assetWrites, assetWrites) : message.assetWrites,
         audit: event.citations?.length ? audit : undefined,
+        evidenceReport,
         citations: event.citations,
         paperAnchors,
         contextCoverage,
@@ -1537,6 +1542,7 @@ export function AssistantPane({
         if (latestUsage) assistantMessage.agentActivity = { ...completeAgentActivity(createAgentActivity(), "completed"), contextUsage: latestUsage };
         assistantMessage.audit = answer.citations.length ? answer.audit : undefined;
         assistantMessage.citations = answer.citations;
+        assistantMessage.evidenceReport = answer.evidenceReport;
         assistantMessage.confidence = answer.confidence;
         assistantMessage.executionTrace = answer.executionTrace;
         assistantMessage.uiDsl = answer.uiDsl;

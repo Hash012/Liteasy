@@ -1,3 +1,5 @@
+import { evidenceAnswerRevision } from "../evidence/evidenceReport";
+import { thinReadingEvidenceReport } from "./thinReadingEvidenceReport";
 import type { ThinReadingGenerationContext, ThinReadingNodeSeed } from "./thinReading.types";
 import type { PreparedMultiPaperAnalysis } from "../paper-analysis/analysis.types";
 import type { GenerateAnswerInput, ModelGenerationResult } from "../models/modelGateway";
@@ -212,9 +214,11 @@ export async function generateAdaptiveThinReading(input: {
       }).slice(0, 1) : [],
       readingReview: { mode, note: reviewNote, status: mode === "fast" || !checkpoint.review ? "unverified" : "advisory" },
       paperEvidenceSpans: input.prepared.evidence.filter((item) => evidenceIds.includes(item.id)).map((item) => ({
-        id: item.id, paperId: item.paperId, page: item.page, quote: item.quote, confidence: item.relevance
+        id: item.id, paperId: item.paperId, page: item.page, quote: item.quote, confidence: item.relevance,
+        paperAnchor: item.paperAnchor, pageTextStart: item.pageTextStart, pageTextEnd: item.pageTextEnd, textExtraction: item.textExtraction
       }))
     }
   };
+  seed.evidence.evidenceReport = thinReadingEvidenceReport({ id: `${input.context.artifactId}:evidence:${evidenceAnswerRevision(key)}`, summary, evidence: seed.evidence });
   return { evidenceLoop: undefined, evidencePlan: undefined, evidenceReview: undefined, evidenceToolCalls: undefined, generation: checkpoint.generation!, rootSeed: seed, qualityGate: { attempts: repaired ? 2 : 1, repaired, repairReasons } };
 }

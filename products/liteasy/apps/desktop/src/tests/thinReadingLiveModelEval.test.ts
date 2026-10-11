@@ -12,8 +12,10 @@ import type { ThinReadingPaperType } from "../app/features/thin-reading/thinRead
 const liveEndpoint = process.env.LITEASY_THIN_READING_LIVE_EVAL_ENDPOINT;
 const liveProvider = process.env.LITEASY_THIN_READING_LIVE_EVAL_PROVIDER ?? "openai";
 const liveCaseId = process.env.LITEASY_THIN_READING_LIVE_EVAL_CASE ?? "colbert";
-const externalLiveTest = liveEndpoint && liveCaseId === "bert-external" ? test : test.skip;
-const chineseBranchLiveTest = liveEndpoint && liveCaseId === "bert-zh-branch" ? test : test.skip;
+const liveGenerationMode = process.env.LITEASY_THIN_READING_LIVE_EVAL_MODE;
+const adaptiveLiveTest = liveEndpoint && (liveGenerationMode === "fast" || liveGenerationMode === "rigorous") ? test : test.skip;
+const externalLiveTest = !liveGenerationMode && liveEndpoint && liveCaseId === "bert-external" ? test : test.skip;
+const chineseBranchLiveTest = !liveGenerationMode && liveEndpoint && liveCaseId === "bert-zh-branch" ? test : test.skip;
 
 type LiveThinReadingGoldCase = {
   acceptablePaperTypes?: readonly ThinReadingPaperType[];
@@ -264,7 +266,7 @@ const liveGoldCases: Record<string, LiveThinReadingGoldCase> = {
 };
 
 const liveCase = liveGoldCases[liveCaseId];
-const rootLiveTest = liveEndpoint && liveCase ? test : test.skip;
+const rootLiveTest = !liveGenerationMode && liveEndpoint && liveCase ? test : test.skip;
 
 rootLiveTest("meets a live thin-reading quality gate through the desktop model path", async () => {
   if (!liveCase) {
@@ -575,4 +577,75 @@ chineseBranchLiveTest("keeps Chinese terminology and parent continuity in a live
   expect(quality.metrics.sentenceBoundaryCoverage.score).toBe(1);
   expect(quality.metrics.terminologyRetention.score).toBe(1);
   expect(quality.passed, `live quality issues=${quality.issues.map((issue) => issue.code).join(",")}`).toBe(true);
+}, 120_000);
+
+
+adaptiveLiveTest("records real public PDF evidence through the selected adaptive production path", async () => {
+  const { readFile, mkdir, writeFile } = await import("node:fs/promises");
+  const { createHash } = await import("node:crypto");
+  const { resolve, dirname } = await import("node:path");
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const { pathToFileURL } = await import("node:url");
+  pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(resolve(process.cwd(), "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs")).href;
+  const { parseEvidenceReport, evidenceCounts } = await import("../app/features/evidence/evidenceReport");
+  const { paperAnchorFromEvidence, paperAnchorOpenRequest } = await import("../app/features/paper-anchors/paperAnchorEntity");
+  const { getModelForSettings } = await import("../app/features/models/modelPolicy");
+  const sourcePath = resolve(process.cwd(), "src/tests/assets/papers/colbert-late-interaction.pdf");
+  const bytes = await readFile(sourcePath);
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  const document = await pdfjs.getDocument({ data: new Uint8Array(bytes), standardFontDataUrl: `${resolve(process.cwd(), "node_modules/pdfjs-dist/standard_fonts")}/` }).promise;
+  const pageTexts = new Map<number, string>();
+  try {
+    // Explicitly a three-page partial-text exercise, not a full-paper semantic evaluation.
+    for (let pageNumber = 1; pageNumber <= Math.min(document.numPages, 3); pageNumber++) {
+      const page = await document.getPage(pageNumber);
+      const content = await page.getTextContent();
+      pageTexts.set(pageNumber, content.items.flatMap((item) => "str" in item ? [item.str] : []).join(" "));
+    }
+  } finally { await document.destroy(); }
+  const paperId = "live-public-colbert";
+  const title = "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT";
+  const chunks: RetrievalChunk[] = [...pageTexts].map(([page, snippet]) => ({ paperId, paperTitle: title, page, snippet, summary: snippet.slice(0, 300), pageTextStart: 0, pageTextEnd: snippet.length, textExtraction: "embedded", tags: [] }));
+  const store = createSettingsStore();
+  store.apply({ intent: "update_setting", target: "models.cloud_proxy_endpoint", value: liveEndpoint! });
+  store.apply({ intent: "update_setting", target: "models.default_provider", value: liveProvider });
+  const started = Date.now();
+  const monotonicStarted = performance.now();
+  const outputPath = resolve(process.cwd(), "test-results", `evidence-lens-live-${liveGenerationMode}.json`);
+  const metrics: Record<string, unknown> = { caseId: "public-colbert-three-pages", sourceSha256: sha256, generationMode: liveGenerationMode, provider: liveProvider, requestedModel: getModelForSettings(store.getState()), actualModelIdentity: "not exposed by transport", inputPages: [...pageTexts.keys()], coverage: "partial_text", environment: "Linux scripted desktop generation; not native Windows or UI", tokens: "not exposed by transport", cost: "not measured" };
+  try {
+    const result = await generateAssistantAnswer({ artifactType: "thin_reading", importedChunksByPaperId: { [paperId]: chunks }, mode: "qa", question: "请用中文简要解释 ColBERT 的 late interaction 和 MaxSim，并指出当前材料的局限。只依据提供的前三页，为主要说明选择对应的 paperEvidence。", selectedPapers: [{ id: paperId, title }], settings: store.getState(), thinReadingContext: { artifactId: `live-evidence-${crypto.randomUUID()}`, depth: 0, generationMode: liveGenerationMode as "fast" | "rigorous", paperIds: [paperId], primaryPaperId: paperId, primaryPaperTitle: title, source: { kind: "root_overview" }, targetLanguage: "zh-CN" } });
+    metrics.elapsedMs = Date.now() - started;
+    metrics.monotonicElapsedMs = Math.round(performance.now() - monotonicStarted);
+    metrics.execution = result.executionTrace;
+    expect(result.executionTrace).toMatchObject({ mode: "live", provider: liveProvider, source: "cloud_proxy" });
+    const seed = result.thinReading?.rootSeed;
+    expect(seed?.summary.length).toBeGreaterThan(24);
+    expect(seed?.evidence.readingReview?.mode).toBe(liveGenerationMode);
+    const report = parseEvidenceReport(seed?.evidence.evidenceReport);
+    expect(report).toBeDefined();
+    expect(report!.passages.length).toBeGreaterThan(0);
+    expect(report!.claims.every((claim) => claim.assessment === "unverified")).toBe(true);
+    expect(report!.verifications).toEqual([]);
+    const spans = seed!.evidence.paperEvidenceSpans ?? [];
+    const normalized = (value: string) => value.normalize("NFKC").replace(/\s+/g, " ").trim();
+    const located = spans.filter((span) => !!span.page && normalized(pageTexts.get(span.page) ?? "").includes(normalized(span.quote)) && !!paperAnchorOpenRequest(paperAnchorFromEvidence(span)));
+    metrics.actualQuoteLocationMatches = located.length;
+    metrics.quoteCount = spans.length;
+    metrics.sourceNavigationRequestsValid = located.length;
+    metrics.summaryCharacters = seed!.summary.length;
+    metrics.report = evidenceCounts(report!);
+    metrics.readingReviewStatus = seed!.evidence.readingReview?.status;
+    metrics.status = "passed";
+    expect(located).toHaveLength(spans.length);
+  } catch (error) {
+    metrics.status = "failed";
+    metrics.elapsedMs = Date.now() - started;
+    metrics.monotonicElapsedMs = Math.round(performance.now() - monotonicStarted);
+    throw error;
+  } finally {
+    await mkdir(dirname(outputPath), { recursive: true });
+    await writeFile(outputPath, JSON.stringify(metrics, null, 2) + "\n");
+    console.log(`Evidence Lens live metrics: ${JSON.stringify(metrics)}`);
+  }
 }, 120_000);

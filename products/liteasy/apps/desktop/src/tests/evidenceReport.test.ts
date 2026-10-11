@@ -74,3 +74,29 @@ describe("EvidenceReport authority and projection", () => {
     expect(evidenceReportFromAnchors({ id: "r", answer: "x", anchors: [anchor, other] }).sources).toHaveLength(2);
   });
 });
+
+it("does not trust self-asserted verifier receipts or exact-text claims from persisted JSON", () => {
+  const value = reviewed();
+  value.passages[0].locatorIntegrity = "exact_text";
+  value.passages[0].locator = { page: 2, start: 0, end: 12, precision: "text" };
+  const projected = projectEvidenceReport(value, { currentRevisions: context.currentRevisions });
+  expect(projected.claims[0].assessment).toBe("unverified");
+  expect(projected.passages[0].locatorIntegrity).toBe("page_only");
+});
+
+it("requires exact answer-span text and never rewrites unrelated Markdown", () => {
+  const value = report();
+  value.claims[0].textSpan = { textRevision: value.answerRevision, start: 0, end: 5, exactText: "claim" };
+  expect(projectEvidenceReport(value, { answerText: "claim" }).claims[0].textSpan).toBeDefined();
+  expect(projectEvidenceReport(value, { answerText: "other" }).claims[0].textSpan).toBeUndefined();
+});
+
+it("rejects altered saved quote snapshots and source paths disguised as a paper", async () => {
+  const { bindEvidenceSnapshots, accessibleEvidenceSources } = await import("../app/features/evidence/evidenceAdapters");
+  const anchor = paperAnchorFromEvidence({ id: "e1", paperId: "p1", page: 2, quote: "actual quote" });
+  anchor.source.documentHash = "v1";
+  const altered = report(); altered.passages[0].quote = "not present in the paper";
+  expect(bindEvidenceSnapshots(altered, [anchor]).passages).toEqual([]);
+  const disguised = report(); disguised.sources[0].resourcePath = "liteasy://objects/other?scope=organization%3Aprivate";
+  expect(accessibleEvidenceSources(disguised, [anchor]).size).toBe(0);
+});

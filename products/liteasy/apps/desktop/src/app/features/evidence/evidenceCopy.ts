@@ -2,14 +2,14 @@ import type { AssistantMessage } from "../assistant/assistant.types";
 import { getAnswerDisplayText } from "../assistant/answerFormatter";
 import { formatPaperAnchorText, type PaperAnchorEntity } from "../paper-anchors/paperAnchorEntity";
 import { liteasyPath, parseLiteasyPath } from "../resource-filesystem/liteasyPath";
-import { evidenceReportFromAnchors } from "./evidenceAdapters";
+import { bindEvidenceSnapshots, evidenceReportFromAnchors } from "./evidenceAdapters";
 import { parseEvidenceReport } from "./evidenceReport";
 const label = (value: string) => value.replace(/[\\\[\]]/g, character => `\\${character}`).replace(/\r?\n/g, " ");
 
 /** Portable source appendix; never exports an uncalibrated score or a generated assertion of support. */
 export function copyAnswerWithEvidence(message: AssistantMessage, anchors: readonly PaperAnchorEntity[], scopeId?: string) {
   const text = formatPaperAnchorText(getAnswerDisplayText(message.content), anchors);
-  const report = parseEvidenceReport(message.evidenceReport) ?? evidenceReportFromAnchors({ id: message.id, answer: message.content, anchors });
+  const report = bindEvidenceSnapshots(parseEvidenceReport(message.evidenceReport) ?? evidenceReportFromAnchors({ id: message.id, answer: message.content, anchors }), anchors);
   const lines = report.sources.flatMap(source => {
     if (source.scopeId && source.scopeId !== scopeId) return [];
     let path = source.resourcePath;

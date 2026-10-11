@@ -299,8 +299,10 @@ test("shows public workflow audit summaries after a public Agent run when enable
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "解释论文的方法");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(await screen.findByText("公开审计过程")).toBeInTheDocument();
-  expect(screen.getByText("选中文献证据覆盖不足")).toBeInTheDocument();
+  await user.click(await screen.findByRole("button", { name: /0 篇来源/ }));
+  await user.click(screen.getByRole("button", { name: "查看全部证据" }));
+  expect(screen.getByText("流程检查记录（非逐条语义核验）")).toBeInTheDocument();
+  expect(screen.getByText(/选中文献证据覆盖不足/)).toBeInTheDocument();
   expect(listPublicWorkflowAuditSummaries).toHaveBeenCalledWith({
     runId: "run-public-audit",
     sessionId: "session-public-audit"
@@ -647,7 +649,7 @@ test("renders command result DSL after a theme command while keeping the empty l
   expect(screen.queryByLabelText("AI助手初始消息区")).not.toBeInTheDocument();
   expect(await screen.findByLabelText("动态界面：已应用卡通风格。")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "恢复默认" })).toBeInTheDocument();
-  expect(screen.getByText("执行审计：已回放 5 条 journal 事实。")).toBeInTheDocument();
+  expect(screen.getByText(/执行审计：已回放 5 条 journal 事实。/)).toBeInTheDocument();
 });
 
 test("renders model-assisted command result DSL when the model returns valid UI JSON", async () => {
@@ -785,9 +787,9 @@ test("renders model-assisted journal audit commentary after command execution", 
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   await waitFor(() => {
-    expect(screen.getByText("模型审计：journal 与动态 UI 事实一致。")).toBeInTheDocument();
+    expect(screen.getByText(/模型审计：journal 与动态 UI 事实一致。/)).toBeInTheDocument();
   });
-  expect(screen.getByText("执行审计：已回放 5 条 journal 事实。")).toBeInTheDocument();
+  expect(screen.getByText(/执行审计：已回放 5 条 journal 事实。/)).toBeInTheDocument();
   expect(
     modelTransport.mock.calls.some(([request]) =>
       String(request.body).includes("不改写 journal 事实")
@@ -874,11 +876,12 @@ test("adds grounded user and assistant messages in qa mode when selected set is 
 
   expect(screen.getAllByText("总结这篇论文的核心方法").length).toBeGreaterThan(0);
   expect(await screen.findByText(/云端回答：总结这篇论文的核心方法/)).toBeInTheDocument();
-  await user.click(screen.getByText("查看引用原文"));
+  await user.click(screen.getByRole("button", { name: /篇来源/ }));
+  await user.click(screen.getByRole("button", { name: "查看全部证据" }));
   expect(screen.getAllByText(/第 2 页/).length).toBeGreaterThan(0);
   expect(screen.queryByText(/demo-1 p\.2/)).not.toBeInTheDocument();
-  expect(screen.getByText("审计模型 gpt-5-mini-auditor")).toBeInTheDocument();
-  expect(screen.getByText("审计评分 0.84 · 通过")).toBeInTheDocument();
+  expect(screen.queryByText(/审计模型|审计评分/)).not.toBeInTheDocument();
+  expect(screen.getAllByText(/未核验/).length).toBeGreaterThan(0);
 });
 
 test("archives the current assistant session when starting a new one", async () => {
@@ -1072,7 +1075,8 @@ test("uses the user question to retrieve a different cited chunk", async () => {
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(await screen.findByText(/云端回答：这篇综述如何定义向量数据库系统？/)).toBeInTheDocument();
-  await user.click(screen.getByText("查看引用原文"));
+  await user.click(screen.getByRole("button", { name: /篇来源/ }));
+  await user.click(screen.getByRole("button", { name: "查看全部证据" }));
   expect(screen.getAllByText(/第 4 页/).length).toBeGreaterThan(0);
   expect(screen.getAllByText(/vector database management systems/).length).toBeGreaterThan(0);
 });

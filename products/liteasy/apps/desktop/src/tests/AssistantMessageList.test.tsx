@@ -76,10 +76,13 @@ describe("AssistantMessageList", () => {
     render(<AssistantMessageList messages={messages} mode="qa" onModeChange={vi.fn()} papers={[{ id: "paper-1", title: "Attention Paper" }]} onOpenCitation={onOpenCitation} />);
 
     expect(screen.getByText("回答内容")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "打开原文证据 1：Attention Paper 第 3 页" }));
+    await user.click(screen.getByRole("button", { name: /1 篇来源/ }));
+    await user.click(screen.getByRole("button", { name: "查看全部证据" }));
+    await user.click(screen.getByRole("button", { name: "打开原文" }));
     expect(onOpenCitation).toHaveBeenCalledWith(messages[0].citations![0]);
     expect(screen.queryByText(/paper-1/)).not.toBeInTheDocument();
-    expect(screen.getByText("审计评分 0.91 · 通过")).toBeInTheDocument();
+    expect(screen.queryByText(/审计评分|0.91|审计模型/)).not.toBeInTheDocument();
+    expect(screen.getByText("未逐条核验")).toBeInTheDocument();
     expect(screen.getByText(/使用模型：/)).toBeInTheDocument();
   });
 
@@ -187,7 +190,7 @@ describe("AssistantMessageList", () => {
     expect(onWait).toHaveBeenCalledWith("queued-user-message");
   });
 
-  test("renders user-safe public workflow audit summaries without internal identifiers", () => {
+  test("renders user-safe public workflow audit summaries without internal identifiers", async () => {
     const messages: AssistantMessage[] = [
       {
         content: "思维导图已生成",
@@ -215,10 +218,12 @@ describe("AssistantMessageList", () => {
 
     render(<AssistantMessageList messages={messages} mode="qa" onModeChange={vi.fn()} />);
 
-    expect(screen.getByText("公开审计过程")).toBeInTheDocument();
-    expect(screen.getByText("选中文献证据覆盖不足")).toBeInTheDocument();
-    expect(screen.getByText("证据与来源：需复核")).toBeInTheDocument();
-    expect(screen.getByText("已尝试自动修复，但仍需人工复核。")).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: /0 篇来源/ }));
+    await userEvent.setup().click(screen.getByRole("button", { name: "查看全部证据" }));
+    expect(screen.getByText("流程检查记录（非逐条语义核验）")).toBeInTheDocument();
+    expect(screen.getByText(/选中文献证据覆盖不足/)).toBeInTheDocument();
+    expect(screen.getByText(/证据与来源：需复核/)).toBeInTheDocument();
+    expect(screen.getByText(/已尝试自动修复，但仍需人工复核。/)).toBeInTheDocument();
     expect(screen.queryByText(/trace-|run-|session-|stepId/)).not.toBeInTheDocument();
   });
 

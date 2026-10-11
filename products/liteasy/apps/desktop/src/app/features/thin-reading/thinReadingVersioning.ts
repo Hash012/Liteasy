@@ -1,3 +1,4 @@
+import { parseEvidenceReport } from "../evidence/evidenceReport";
 import { parseVisualizationArtifact } from "../visualization/visualizationArtifact.schema";
 import type {
   ThinReadingDocument,
@@ -1068,18 +1069,28 @@ function isPersistedThinReadingDocument(
   });
 }
 
+function sanitizeEvidenceReports<T extends ThinReadingDocument>(document: T): T {
+  // An optional damaged report must not destroy an otherwise readable saved artifact.
+  return { ...document, nodes: Object.fromEntries(Object.entries(document.nodes).map(([id, node]) => {
+    if (node.evidence.evidenceReport === undefined) return [id, node];
+    const report = parseEvidenceReport(node.evidence.evidenceReport);
+    const { evidenceReport: _discarded, ...evidence } = node.evidence;
+    return [id, { ...node, evidence: report ? { ...evidence, evidenceReport: report } : evidence }];
+  })) };
+}
+
 function parseV1(value: Record<string, unknown>): ThinReadingDocumentV1 {
   if (!isPersistedThinReadingDocument(value, v1DocumentVersion)) {
     throw new Error("thin_reading_document_invalid");
   }
-  return value as unknown as ThinReadingDocumentV1;
+  return sanitizeEvidenceReports(value as unknown as ThinReadingDocumentV1);
 }
 
 function parseV2(value: Record<string, unknown>): ThinReadingDocumentV2 {
   if (!isPersistedThinReadingDocument(value, v2DocumentVersion)) {
     throw new Error("thin_reading_document_invalid");
   }
-  return value as unknown as ThinReadingDocumentV2;
+  return sanitizeEvidenceReports(value as unknown as ThinReadingDocumentV2);
 }
 
 export function isThinReadingV1(value: unknown): value is ThinReadingDocumentV1 {

@@ -1,3 +1,5 @@
+import { evidenceReportFromAnchors } from "../evidence/evidenceAdapters";
+import { paperAnchorsFromCitations } from "../paper-anchors/paperAnchorEntity";
 import { agentContextLimit, modelInputTokens, withModelContextBudget, type ModelContextUsage } from "../context/modelContextBudget";
 import { generateAdaptiveThinReading } from "../thin-reading/adaptiveThinReading";
 import { formatAnswer } from "./answerFormatter";
@@ -4408,7 +4410,7 @@ async function generateThinReadingWithQualityRepair(input: {
   throw new Error("薄读 Agent 结构质量门未返回结果。");
 }
 
-export async function generateAssistantAnswer({
+async function generateAssistantAnswerInternal({
   agentCoreContext,
   artifactType,
   auditTransport,
@@ -4839,4 +4841,14 @@ export async function generateAssistantAnswer({
             answer: generatedAnswerText
           })
   };
+}
+
+/** Build reports only from host-resolved retrieval records, never from generated audit JSON. */
+export async function generateAssistantAnswer(input: GenerateAssistantAnswerInput) {
+  const result = await generateAssistantAnswerInternal(input);
+  const owner = result.analysis?.run.id ?? "answer";
+  const anchors = paperAnchorsFromCitations(result.citations, input.selectedPapers, owner);
+  const evidenceReport = evidenceReportFromAnchors({ id: owner, runId: owner, answer: result.content, anchors,
+    audit: result.audit, claims: result.analysis?.claims.filter(claim => claim.evidenceIds.length > 0) });
+  return { ...result, evidenceReport };
 }

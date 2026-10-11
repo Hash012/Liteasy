@@ -1676,3 +1676,20 @@ describe("ThinReadingTab", () => {
     expect(screen.queryByLabelText("本轮外部来源")).not.toBeInTheDocument();
   });
 });
+
+test.each([false, true])("opens the actual PDF locator from the Evidence Lens on root/deep layer %s", async (deep) => {
+  const user = userEvent.setup();
+  let document = makeDocument();
+  if (deep) document = advanceThinReadingDocument(document, {
+    parentNodeId: document.activeNodeId, title: "深入说明", source: { kind: "omitted_section", label: "机制", sectionKey: "mechanism" },
+    seed: { summary: document.nodes[document.activeNodeId].summary, evidence: document.nodes[document.activeNodeId].evidence, omittedSections: [], recommendations: [], withinPaperClosure: true }
+  });
+  const onOpenEvidence = vi.fn();
+  renderTab(document, vi.fn(), onOpenEvidence);
+  const lens = within(screen.getByLabelText("回答证据"));
+  await user.click(lens.getByRole("button", { name: /篇来源/ }));
+  await user.click(lens.getByRole("button", { name: "查看全部证据" }));
+  await user.click(lens.getAllByRole("button", { name: "打开原文" })[0]);
+  expect(onOpenEvidence).toHaveBeenCalledWith({ evidenceId: "evidence-attention-self-attention", page: 2, paperId: "paper-attention", quote: "Self-attention replaces recurrence in the encoder." });
+  expect(lens.getByRole("button", { name: /篇来源/ })).not.toHaveTextContent("有支持");
+});

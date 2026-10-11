@@ -54,7 +54,7 @@ export function evidenceReportFromAnchors(input: {
 
 /** Fail closed when a persisted/generated report tries to introduce sources not in the host snapshot. */
 export function accessibleEvidenceSources(report: EvidenceReportV1, anchors: readonly PaperAnchorEntity[]) {
-  return new Set(report.sources.filter(source => anchors.some(anchor => source.paperId === anchor.source.paperId &&
+  return new Set(report.sources.filter(source => source.kind === "paper_pdf" && !source.resourcePath && anchors.some(anchor => source.paperId === anchor.source.paperId &&
     source.documentHash === anchor.source.documentHash && JSON.stringify(source.objectRef) === JSON.stringify(anchor.source.objectRef)))
     .map(source => source.id));
 }

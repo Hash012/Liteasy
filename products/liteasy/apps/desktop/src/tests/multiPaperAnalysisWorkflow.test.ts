@@ -1,3 +1,4 @@
+import { createEvidenceBackedBaseGraph } from "../app/features/intuition-graph/createBaseGraph";
 import {
   buildAnalysisSubtasks,
   generateAssistantAnswer
@@ -239,8 +240,8 @@ test("marks synthesis for review when a selected paper has no evidence", () => {
   expect(completed.run.status).toBe("needs_review");
   expect(completed.run.coverage.missingPaperIds).toEqual(["paper-b"]);
   expect(completed.claims.at(-1)).toMatchObject({
-    evidenceIds: prepared.evidence.map((item) => item.id),
-    stance: "mixed"
+    evidenceIds: [],
+    stance: "unverified"
   });
 });
 
@@ -317,12 +318,12 @@ test("assistant generation uses the evidence matrix and returns an auditable ana
   expect(result.analysis).toMatchObject({
     run: {
       coverage: { ratio: 1 },
-      status: "completed"
+      status: "needs_review"
     }
   });
   expect(result.analysis?.claims.at(-1)).toMatchObject({
-    evidenceIds: result.analysis.evidence.map((item) => item.id),
-    stance: "supported"
+    evidenceIds: [],
+    stance: "unverified"
   });
 });
 
@@ -401,7 +402,7 @@ test("a single selected paper still creates AnalysisRun metadata for modal outpu
     evidence: [expect.objectContaining({ paperId: "paper-a" })],
     run: {
       coverage: { ratio: 1 },
-      status: "completed"
+      status: "needs_review"
     }
   });
   expect(result.artifactWorkflow).toEqual(expect.objectContaining({
@@ -410,4 +411,17 @@ test("a single selected paper still creates AnalysisRun metadata for modal outpu
     }),
     status: "verified"
   }));
+});
+
+test("retrieval relevance and a legacy passing audit do not certify claims or bind the whole answer", () => {
+  const prepared = prepareMultiPaperAnalysis({ query: "method", selectedPapers: [{ id: "paper-a", title: "Paper A" }], importedChunksByPaperId: { "paper-a": [chunk("paper-a", "Paper A", 1, "an unrelated method", ["method"])] } });
+  const completed = completeMultiPaperAnalysis({ prepared, answer: "An unsupported semantic conclusion.", auditScore: 0.99, auditVerdict: "pass" });
+  expect(completed.claims.every((claim) => claim.stance === "unverified")).toBe(true);
+  expect(completed.claims.every((claim) => claim.confidence === undefined)).toBe(true);
+  expect(completed.claims.at(-1)?.evidenceIds).toEqual([]);
+  expect(completed.evidence).toHaveLength(1);
+  expect(completed.run.status).toBe("needs_review");
+  const graph = createEvidenceBackedBaseGraph({ analysis: completed, artifactId: "evidence-graph", workId: "work" });
+  expect(graph.nodes.every((node) => !("confidence" in node) || node.confidence === undefined)).toBe(true);
+  expect(graph.edges.every((edge) => edge.label === "来源线索")).toBe(true);
 });

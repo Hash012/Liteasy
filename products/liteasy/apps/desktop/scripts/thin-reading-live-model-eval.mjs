@@ -39,6 +39,10 @@ if (provider !== "openai" && provider !== "deepseek") {
   throw new Error(`Unsupported live thin-reading provider: ${provider}`);
 }
 
+const generationMode = process.env.LITEASY_THIN_READING_LIVE_EVAL_MODE;
+if (generationMode && generationMode !== "fast" && generationMode !== "rigorous") {
+  throw new Error("LITEASY_THIN_READING_LIVE_EVAL_MODE must be fast or rigorous.");
+}
 const host = "127.0.0.1";
 const port = await findAvailablePort(8787, host);
 const endpoint = `http://${host}:${port}`;
@@ -60,7 +64,7 @@ if (provider === "openai") {
 } else if (!process.env.DEEPSEEK_API_KEY) {
   throw new Error("DEEPSEEK_API_KEY must be configured in development/dev-cloud/.env.local");
 }
-console.log(`Starting thin-reading live eval (provider=${provider}, case=${process.env.LITEASY_THIN_READING_LIVE_EVAL_CASE ?? "colbert"}).`);
+console.log(`Starting thin-reading live eval (provider=${provider}, case=${generationMode ? "public-real-pdf" : process.env.LITEASY_THIN_READING_LIVE_EVAL_CASE ?? "colbert"}, mode=${generationMode ?? "legacy"}).`);
 const cloud = spawn(process.execPath, [resolve(repositoryRoot, "development/dev-cloud/server.mjs")], {
   cwd: desktopDir,
   env,

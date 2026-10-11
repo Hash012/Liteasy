@@ -1,3 +1,4 @@
+import { evidenceReportFromAnchors } from "../../features/evidence/evidenceAdapters";
 import { executeWorkspaceWriteConfirmation, WORKSPACE_WRITE_ACTION } from "./workspaceWriteConfirmation";
 import { formatAssistantConversationContext } from "../../features/assistant/assistantConversationContext";
 import { getAccountSessionGeneration } from "../../features/account/accountSessionStorage";
@@ -232,7 +233,8 @@ async function executeKnowledgeTurn(
       citations: paperAnchors.flatMap((anchor) => anchor.locator.page ? [{
         paperAnchor: anchor, paperId: anchor.source.paperId, page: anchor.locator.page, snippet: anchor.snapshot.quote,
       }] : []),
-      metadata: JSON.parse(JSON.stringify({ paperAnchors, resourceSnapshot, contextCoverage })),
+      metadata: JSON.parse(JSON.stringify({ paperAnchors, resourceSnapshot, contextCoverage,
+        evidenceReport: evidenceReportFromAnchors({ id: input.runId, answer: result.answer, anchors: paperAnchors }) })),
     };
   }
   const answer = await generateAssistantAnswer({
@@ -268,6 +270,7 @@ async function executeKnowledgeTurn(
       analysis: answer.analysis,
       artifactWorkflow: answer.artifactWorkflow,
       audit: answer.audit,
+      evidenceReport: answer.evidenceReport,
       executionTrace: answer.executionTrace,
       thinReading: answer.thinReading
     })),

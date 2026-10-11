@@ -83,6 +83,8 @@ export function evidenceAnswerRevision(value: string) {
 
 export type EvidenceProjectionContext = {
   trustedVerificationIds?: ReadonlySet<string>;
+  verifiedPassageIds?: ReadonlySet<string>;
+  answerText?: string;
   answerRevision?: string;
   streaming?: boolean;
   /** Supplied by an authorized source resolver, never by a generated report. */
@@ -100,7 +102,7 @@ export function projectEvidenceReport(report: EvidenceReportV1, context: Evidenc
     const revision = source.revision ?? source.documentHash ?? source.objectRef?.revision;
     const current = context.currentRevisions?.get(source.id);
     const stale = current && revision !== current || passage.sourceRevision && passage.sourceRevision !== revision;
-    const integrity = stale ? "stale" : passage.locatorIntegrity === "exact_text" && (!revision || !current || passage.locator.precision !== "text")
+    const integrity = stale ? "stale" : passage.locatorIntegrity === "exact_text" && (!revision || !current || !context.verifiedPassageIds?.has(passage.id) || passage.locator.precision !== "text")
       ? passage.locator.page ? "page_only" : "unknown" : passage.locatorIntegrity;
     return { ...passage, locatorIntegrity: integrity } as EvidencePassage;
   });
@@ -131,7 +133,7 @@ export function projectEvidenceReport(report: EvidenceReportV1, context: Evidenc
       else if (claim.assessment === "insufficient") assessment = "insufficient";
     }
     return { ...claim, edges, assessment,
-      textSpan: answerMatches && claim.textSpan?.textRevision === report.answerRevision ? claim.textSpan : undefined };
+      textSpan: answerMatches && claim.textSpan?.textRevision === report.answerRevision && context.answerText?.slice(claim.textSpan.start, claim.textSpan.end) === claim.textSpan.exactText ? claim.textSpan : undefined };
   });
   return { ...report, sources, passages, claims };
 }

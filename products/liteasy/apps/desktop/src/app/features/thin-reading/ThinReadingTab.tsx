@@ -1,5 +1,6 @@
 import { GenerationPromptDialog } from "../ai-prompts/GenerationPromptDialog";
-import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
+import { EvidenceLens } from "../evidence/components/EvidenceLens";
+import { thinReadingEvidenceReport } from "./thinReadingEvidenceReport";
 import { paperAnchorFromEvidence, paperAnchorLabel, paperAnchorOpenRequest } from "../paper-anchors/paperAnchorEntity";
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { Button, Switch, Tooltip } from "@fluentui/react-components";
@@ -915,6 +916,7 @@ export function ThinReadingTab({
     ...span, paperTitle: papers.find((paper) => paper.id === span.paperId)?.title,
   }));
   const summarySentences = getSummarySentences(activeNode);
+  const evidenceReport = thinReadingEvidenceReport({ id: `${artifactId}:${activeNode.id}:evidence`, summary: activeNode.summary, evidence: activeNode.evidence, anchors: paperAnchors });
   const sourceFigures = inlineFigures as readonly ThinReadingSourceFigure[];
   const activeVisualizations = [
     ...(document.version === "liteasy.thin-reading/v2" ? (activeNode as ThinReadingNodeV2).visualizations : []),
@@ -1271,9 +1273,11 @@ export function ThinReadingTab({
                 </>}
               />
             </div>
-            <PaperAnchorReferences anchors={paperAnchors}
-              onOpen={onOpenEvidence ? (anchor) => {
-                const request = paperAnchorOpenRequest(anchor);
+            <EvidenceLens report={evidenceReport}
+              canOpenPassage={(passage) => !!onOpenEvidence && paperAnchors.some((anchor) => anchor.id === passage.evidenceAnchorId && !!paperAnchorOpenRequest(anchor))}
+              onOpenPassage={onOpenEvidence ? (passage) => {
+                const anchor = paperAnchors.find((candidate) => candidate.id === passage.evidenceAnchorId);
+                const request = anchor ? paperAnchorOpenRequest(anchor) : null;
                 if (request) onOpenEvidence(request);
               } : undefined} />
           </section>

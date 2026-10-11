@@ -1,3 +1,4 @@
+import { evidenceReportFromAssetReads } from "../../features/evidence/evidenceAdapters";
 import { workspaceWriteConfirmation } from "./workspaceWriteConfirmation";
 import { studioTools, type StudioToolName } from "../../features/workflow-studio/extensionStudioService";
 import { conversationWindow, readConversationHistory } from "../../features/assistant/conversationWindow";
@@ -98,6 +99,7 @@ export async function runWorkspaceAgent(input: AgentCommandExecutionInput, envir
     message,
     metadata: JSON.parse(JSON.stringify({
       executionTrace: trace,
+      evidenceReport: evidenceReportFromAssetReads({ id: input.runId, answer: message, scopeId: scope, reads: [...reads.values()] }),
       assetWrites: writes,
       assetReads: [...reads.values()].map(({ asset, offset, totalCharacters, text, truncated }) => ({
         path: asset.path, title: asset.title, revision: asset.revision, offset,

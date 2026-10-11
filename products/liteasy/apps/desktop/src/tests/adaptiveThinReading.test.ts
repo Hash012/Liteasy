@@ -192,3 +192,15 @@ test.each([
   expect(reading.rootSeed.summary).not.toBe("");
   expect(reading.rootSeed.summary).not.toMatch(/^```markdown/);
 });
+
+ test.each(["fast", "rigorous"] as const)("%s production generation records sources without inventing independent verification", async (mode) => {
+  const input = fixture(mode);
+  const reading = await generateAdaptiveThinReading({ ...input, gateway: { generateAnswer: async () => ({ ...result("可供对照的摘要"), answer: JSON.stringify({ summary: "可供对照的摘要", paperEvidence: [input.prepared.evidence[0].id] }) }) } });
+  const report = reading.rootSeed.evidence.evidenceReport!;
+  expect(report.sources).toHaveLength(1);
+  expect(report.passages[0].quote).toBe(input.prepared.evidence[0].quote);
+  expect(report.passages[0].locatorIntegrity).toBe("page_only");
+  expect(report.claims).toEqual([]);
+  expect(report.verifications).toEqual([]);
+  expect(reading.rootSeed.evidence.readingReview?.status).toBe("unverified");
+});

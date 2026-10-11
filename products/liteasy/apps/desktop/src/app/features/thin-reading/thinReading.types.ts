@@ -549,6 +549,7 @@ export type ThinReadingGenerationAudit = {
 };
 
 export type ThinReadingNodeEvidenceV1 = {
+  evidenceReport?: import("../evidence/evidenceReport").EvidenceReportV1;
   readingReview?: { mode: "fast" | "rigorous"; note: string; status: "unverified" | "advisory" };
   anchors?: readonly ThinReadingAnchor[];
   claims?: readonly ThinReadingClaim[];

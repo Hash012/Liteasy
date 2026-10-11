@@ -1,3 +1,5 @@
+import { copyAnswerWithEvidence } from "../evidence/evidenceCopy";
+import { MessageEvidence } from "../evidence/components/MessageEvidence";
 import { displayPath } from "../resource-filesystem/displayPath";
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import { formatModelExecutionLabel } from "../models/modelExecution";
@@ -7,13 +9,12 @@ import type {
   AssistantMessage,
   AssistantMode
 } from "./assistant.types";
-import { compactContextLabel, getAuditVerdictLabel } from "./assistantPresentation";
+import { compactContextLabel } from "./assistantPresentation";
 import { DynamicCanvas } from "../generative-ui/DynamicCanvas";
 import type { UIDslActionRef } from "../generative-ui/generativeUi.types";
 import { AgentActivityCard } from "./AgentActivityCard";
 import { AssistantMarkdown } from "./AssistantMarkdown";
-import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
-import { collectPaperAnchors, formatPaperAnchorText, paperAnchorsFromCitations } from "../paper-anchors/paperAnchorEntity";
+import { collectPaperAnchors, paperAnchorsFromCitations } from "../paper-anchors/paperAnchorEntity";
 import {
   ArrowClockwiseRegular,
   ChevronDownRegular,
@@ -86,12 +87,6 @@ function contextTokenTitle(token: AssistantContextToken) {
   return detail && detail !== token.label ? `${token.label}\n${detail}` : token.label;
 }
 
-function getPublicAuditStatusLabel(status: "blocked" | "passed" | "warning") {
-  if (status === "passed") return "通过";
-  if (status === "warning") return "注意";
-  return "需复核";
-}
-
 type AssistantMessageListProps = {
   papers?: Paper[];
   onOpenArtifact?: (artifactId: string) => void;
@@ -141,7 +136,7 @@ export function AssistantMessageList({
   const selectedMessageId = useRef("");
   const captureInput = (message: AssistantMessage) => {
     const paperAnchors = collectPaperAnchors(message.paperAnchors ?? [], paperAnchorsFromCitations(message.citations ?? [], papers, message.id));
-    const text = formatPaperAnchorText(getAnswerDisplayText(message.content || message.agentActivity?.generatedContent || ""), paperAnchors);
+    const text = copyAnswerWithEvidence({ ...message, content: message.content || message.agentActivity?.generatedContent || "" }, paperAnchors, workbench?.scopeId);
     const excerpt = selectedMessageId.current === message.id && selectedText.current && text.includes(selectedText.current)
       ? selectedText.current : text;
     return { messageId: message.id, text, excerpt, paperAnchors,
@@ -272,48 +267,8 @@ export function AssistantMessageList({
                   onAction={(action) => onDynamicAction?.(action, message.uiDsl?.audit.traceId ?? "")}
                 />
               ) : null}
-              <PaperAnchorReferences anchors={paperAnchors} className="assistant-citation-card"
-                onOpen={onOpenCitation ? (anchor) => {
-                  const citation = message.citations?.find((entry) => entry.paperId === anchor.source.paperId &&
-                    entry.page === anchor.locator.page && entry.snippet === anchor.snapshot.quote);
-                  if (citation) onOpenCitation(citation);
-                } : undefined} />
-              {message.audit ? (
-                <div className={`assistant-audit-card ${message.audit.verdict}`}>
-                  <strong>模型审计</strong>
-                  <span>审计模型 {message.audit.model}</span>
-                  <span>
-                    审计评分 {message.audit.score.toFixed(2)} · {getAuditVerdictLabel(message.audit.verdict)}
-                  </span>
-                  <span>{message.audit.rationale}</span>
-                </div>
-              ) : null}
-              {message.publicWorkflowAudits?.length ? (
-                <div className={`assistant-public-audit-card ${message.publicWorkflowAudits[0].status}`}>
-                  <strong>公开审计过程</strong>
-                  {message.publicWorkflowAudits.map((audit, auditIndex) => (
-                    <div className="assistant-public-audit-summary" key={`${message.id}-public-audit-${auditIndex}`}>
-                      {audit.issueLabels.length ? (
-                        <div className="assistant-public-audit-issues">
-                          {audit.issueLabels.map((label) => (
-                            <span key={label}>{label}</span>
-                          ))}
-                        </div>
-                      ) : null}
-                      <div className="assistant-public-audit-checks">
-                        {audit.checks.map((check) => (
-                          <div className="assistant-public-audit-check" key={check.label}>
-                            <span>
-                              {check.label}：{getPublicAuditStatusLabel(check.status)}
-                            </span>
-                            {check.summary ? <small>{check.summary}</small> : null}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
+              {message.role === "assistant" ? <MessageEvidence message={message} papers={papers}
+                onOpenAsset={onOpenAsset} onOpenCitation={onOpenCitation} /> : null}
               {message.executionTrace ? (
                 <details className="assistant-execution-trace"><summary>生成信息</summary>
                   使用模型：{formatModelExecutionLabel(message.executionTrace)}
@@ -398,7 +353,7 @@ export function AssistantMessageList({
                     <button
                       aria-label="复制回复"
                       className="assistant-message-action"
-                      onClick={() => void navigator.clipboard?.writeText(formatPaperAnchorText(getAnswerDisplayText(message.content), paperAnchors))}
+                      onClick={() => void navigator.clipboard?.writeText(copyAnswerWithEvidence(message, paperAnchors, workbench?.scopeId))}
                       title="复制回复"
                       type="button"
                     >
