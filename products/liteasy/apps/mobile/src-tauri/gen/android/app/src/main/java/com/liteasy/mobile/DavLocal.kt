@@ -51,15 +51,16 @@ class DavLocal(context: Context, private val scope: String) {
             result[path] = if (item.has("deletedAt")) null else LocalDavFile(version, attachment)
             val metadata = JSONObject((record("sync-metadata:$id") as? JSONObject)?.toString() ?: "{}")
                 .put("version", 1).put("id", id).put("path", path).put("kind", item.getString("kind"))
-            for (key in listOf("title", "collection", "tags", "note", "sourceUrl", "text", "createdAt", "updatedAt", "deletedAt", "page", "lastReadAt")) {
+            for (key in listOf("title", "collection", "tags", "note", "sourceUrl", "createdAt", "updatedAt", "deletedAt", "page", "lastReadAt")) {
                 if (item.has(key)) metadata.put(key, item.get(key)) else metadata.remove(key)
             }
+            metadata.remove("text")
             result["$METADATA_PREFIX$id.json"] = materialize("$METADATA_PREFIX$id.json", metadata)
             (record("annotations:$id") as? JSONObject)?.let { result[annotationPath(id)] = materialize(annotationPath(id), it) }
         }
         result
     }
-    fun applyBatch(decisions: List<DavDecision>, downloaded: Map<String, File>, remote: DavManifest) = synchronized(store) {
+    fun applyBatch(decisions: List<DavDecision>, downloaded: Map<String, File>, remote: DavManifest, connection: String) = synchronized(store) {
         val before = scan()
         require(decisions.all { before[it.path]?.version == it.local }) { "同步期间本地内容发生变化，请重新同步。" }
         val openId = store.openDocument(scope)
@@ -78,10 +79,10 @@ class DavLocal(context: Context, private val scope: String) {
         }
         // Files first, then their descriptions. All CAS checks precede this batch under the library mutex.
         store.syncTransaction {
-            for (decision in decisions.sortedBy { it.path.startsWith('.') }) apply(decision.path, decision.remote, downloaded[decision.path], incomingIds)
+            for (decision in decisions.sortedBy { it.path.startsWith('.') }) apply(decision.path, decision.remote, downloaded[decision.path], incomingIds, connection)
         }
     }
-    private fun apply(path: String, version: DavVersion?, bytes: File?, incomingIds: Map<String, String>) {
+    private fun apply(path: String, version: DavVersion?, bytes: File?, incomingIds: Map<String, String>, connection: String) {
         if (path.startsWith(METADATA_PREFIX)) {
             if (version == null || bytes == null) return
             val metadata = JSONObject(bytes.readText())
@@ -92,7 +93,7 @@ class DavLocal(context: Context, private val scope: String) {
             require((metadata.getString("kind") == "pdf") == item.getString("syncPath").endsWith(".pdf", true)) { "资料类型与文件不符。" }
             if (item.has("deletedAt") && metadata.has("deletedAt")) item.put("deletedAt", metadata.get("deletedAt"))
             for (key in listOf("kind", "title", "collection", "tags", "note", "sourceUrl", "text", "createdAt", "updatedAt", "page", "lastReadAt")) {
-                if (metadata.has(key)) item.put(key, metadata.get(key)) else if (key in listOf("sourceUrl", "text", "lastReadAt")) item.remove(key)
+                if (metadata.has(key)) item.put(key, metadata.get(key)) else if (key in listOf("sourceUrl", "lastReadAt")) item.remove(key)
             }
             item.put("revision", item.getInt("revision") + 1); store.syncSaveItem(scope, item)
             record("sync-metadata:${item.getString("id")}", metadata); return
@@ -118,11 +119,25 @@ class DavLocal(context: Context, private val scope: String) {
             if (existing != null) { existing.put("deletedAt", Instant.now().toString()).put("revision", existing.getInt("revision") + 1); store.syncSaveItem(scope, existing) }
             return
         }
-        require(bytes != null && bytes.length() == version.size && DavTransport.hash(bytes) == version.hash) { "下载内容校验失败。" }
         val id = version.documentId ?: incomingIds[path] ?: existing?.getString("id") ?: "file-${LibraryStore.digest(path.toByteArray()).take(32)}"
         val input = JSONObject().put("filename", path.substringAfterLast('/')).put("title", path.substringAfterLast('/'))
             .put("mimeType", if (path.endsWith(".pdf", true)) "application/pdf" else java.net.URLConnection.guessContentTypeFromName(path) ?: "application/octet-stream")
-        val item = bytes.inputStream().use { store.importStream(scope, input, it, id) }
-        item.put("syncPath", path); store.syncSaveItem(scope, item)
+        val item = if (bytes != null) {
+            require(bytes.length() == version.size && DavTransport.hash(bytes) == version.hash) { "下载内容校验失败。" }
+            bytes.inputStream().use { store.importStream(scope, input, it, id) }
+        } else {
+            val cached = store.attachment(scope, version.hash)
+            val value = store.syncItem(scope, id) ?: JSONObject().put("id", id).put("title", input.getString("title"))
+                .put("collection", "收件箱").put("note", "").put("tags", JSONArray()).put("createdAt", Instant.now().toString())
+                .put("updatedAt", Instant.now().toString()).put("page", 1).put("pinned", false).put("revision", 0)
+            value.remove("deletedAt")
+            if (value.optString("contentHash") != version.hash) value.remove("text")
+            value.put("kind", if (path.endsWith(".pdf", true)) "pdf" else if (input.getString("mimeType").startsWith("image/")) "image" else "file")
+                .put("filename", input.getString("filename")).put("mimeType", input.getString("mimeType"))
+                .put("contentHash", version.hash).put("size", version.size)
+                .put("downloaded", cached.exists() && cached.length() == version.size && DavTransport.hash(cached) == version.hash)
+                .put("revision", value.getInt("revision") + 1)
+        }
+        item.put("syncPath", path).put("syncConnection", connection); store.syncSaveItem(scope, item)
     }
 }

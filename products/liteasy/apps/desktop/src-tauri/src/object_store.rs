@@ -111,7 +111,7 @@ fn commit(
     tx.commit().map_err(|e| e.to_string())
 }
 #[tauri::command]
-pub fn object_store_get(
+pub async fn object_store_get(
     app: AppHandle,
     scope: String,
     key: String,
@@ -120,8 +120,30 @@ pub fn object_store_get(
     if key.starts_with("asset/") {
         if let Some(ref mut row) = row {
             let hash = row.value["sha256"].as_str().ok_or("persistence_failed")?;
-            let bytes = std::fs::read(asset_path(&app, &scope, hash)?)
-                .map_err(|_| "persistence_failed: missing asset")?;
+            let hash = hash.to_owned();
+            let destination = asset_path(&app, &scope, &hash)?;
+            if !destination.exists() {
+                let relative = row.value["syncPath"]
+                    .as_str()
+                    .ok_or("persistence_failed: missing asset")?;
+                validate_sync_asset_path(&scope, relative, &hash)?;
+                let root = crate::local_library::library_root(&app)?;
+                let source = crate::webdav::local::safe_path(&root, relative)?;
+                crate::webdav::ensure_webdav_file(app.clone(), source.to_string_lossy().into())
+                    .await?;
+                if crate::desktop_identity::local_object_scope()? != scope {
+                    return Err("object_forbidden".into());
+                }
+                let bytes = crate::webdav::local::read_file(&source)?.ok_or("附件下载内容缺失")?;
+                if crate::webdav::model::digest(&bytes) != hash
+                    || row.value["byteLength"].as_u64() != Some(bytes.len() as u64)
+                {
+                    return Err("附件下载校验失败。".into());
+                }
+                crate::local_library::write_bytes_atomically(&destination, &bytes)?;
+            }
+            let bytes =
+                std::fs::read(destination).map_err(|_| "persistence_failed: missing asset")?;
             if format!("{:x}", Sha256::digest(&bytes)) != hash {
                 return Err("persistence_failed: asset hash mismatch".into());
             }
@@ -406,15 +428,12 @@ pub(crate) fn sync_export(
     }
     for hash in hashes {
         if let Some(mut row) = get(&connection, scope, &format!("asset/{hash}"))? {
-            let bytes = std::fs::read(asset_path(app, scope, &hash)?).map_err(|e| e.to_string())?;
-            size += bytes.len() * 4 / 3;
-            if size > 128 * 1024 * 1024 {
-                return Err("笔记附件同步数据超过 128 MiB。".into());
-            }
-            if format!("{:x}", Sha256::digest(&bytes)) != hash {
-                return Err("笔记附件校验失败。".into());
-            }
-            row.value["base64"] = Value::String(STANDARD.encode(bytes));
+            let path = sync_asset_path(scope, &hash)?;
+            row.value
+                .as_object_mut()
+                .ok_or("附件格式无效")?
+                .remove("base64");
+            row.value["syncPath"] = Value::String(path);
             records.push(row);
         }
     }
@@ -501,21 +520,36 @@ pub(crate) fn sync_import(
                 .as_str()
                 .ok_or("附件缺少校验值")?
                 .to_owned();
-            let bytes = STANDARD
-                .decode(row.value["base64"].as_str().ok_or("附件内容缺失")?)
-                .map_err(|_| "附件编码无效")?;
             if row.key != format!("asset/{hash}")
                 || row.value["assetId"].as_str() != Some(hash.as_str())
-                || crate::webdav::model::digest(&bytes) != hash
-                || row.value["byteLength"].as_u64() != Some(bytes.len() as u64)
+                || row.value["byteLength"]
+                    .as_u64()
+                    .is_none_or(|size| size > crate::webdav::model::MAX_FILE_BYTES)
             {
-                return Err("附件校验失败。".into());
+                return Err("附件校验信息无效。".into());
             }
-            crate::local_library::write_bytes_atomically(&asset_path(app, scope, &hash)?, &bytes)?;
-            row.value
-                .as_object_mut()
-                .ok_or("附件格式无效")?
-                .remove("base64");
+            if let Some(base64) = row.value["base64"].as_str() {
+                let bytes = STANDARD.decode(base64).map_err(|_| "附件编码无效")?;
+                if crate::webdav::model::digest(&bytes) != hash
+                    || row.value["byteLength"].as_u64() != Some(bytes.len() as u64)
+                {
+                    return Err("附件校验失败。".into());
+                }
+                crate::local_library::write_bytes_atomically(
+                    &asset_path(app, scope, &hash)?,
+                    &bytes,
+                )?;
+                row.value
+                    .as_object_mut()
+                    .ok_or("附件格式无效")?
+                    .remove("base64");
+            } else {
+                validate_sync_asset_path(
+                    scope,
+                    row.value["syncPath"].as_str().ok_or("附件位置缺失")?,
+                    &hash,
+                )?;
+            }
         }
     }
     let mut previous_rows: Vec<ObjectRow> = previous
@@ -700,6 +734,16 @@ mod tests {
         ));
     }
     #[test]
+    fn deferred_assets_are_bound_to_their_account_and_content() {
+        let hash = "a".repeat(64);
+        let path = sync_asset_path("local", &hash).unwrap();
+        assert!(validate_sync_asset_path("local", &path, &hash).is_ok());
+        assert!(validate_sync_asset_path("user:bob", &path, &hash).is_err());
+        assert!(validate_sync_asset_path("local", &path, &"b".repeat(64)).is_err());
+        assert!(sync_asset_path("local", "../outside").is_err());
+        assert!(validate_sync_asset_path("local", "../../outside", &hash).is_err());
+    }
+    #[test]
     fn extension_sync_never_transfers_activation_and_keeps_packages_immutable() {
         for prefix in [
             "extension-grant/",
@@ -835,4 +879,66 @@ mod tests {
         }
         std::fs::remove_dir_all(directory).unwrap();
     }
+}
+
+fn sync_asset_path(scope: &str, hash: &str) -> Result<String, String> {
+    if hash.len() != 64
+        || !hash
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    {
+        return Err("附件校验值无效。".into());
+    }
+    Ok(format!(
+        ".liteasy/sync-data/objects/{}/assets/{hash}",
+        crate::webdav::model::digest(scope.as_bytes())
+    ))
+}
+fn validate_sync_asset_path(scope: &str, path: &str, hash: &str) -> Result<(), String> {
+    if path != sync_asset_path(scope, hash)? {
+        return Err("附件同步位置与账号或内容不匹配。".into());
+    }
+    Ok(())
+}
+pub(crate) fn sync_asset_files(
+    app: &AppHandle,
+    scope: &str,
+    snapshot: &[u8],
+) -> Result<Vec<(String, Option<Vec<u8>>)>, String> {
+    let value: Value = serde_json::from_slice(snapshot).map_err(|_| "附件条目损坏")?;
+    let mut files = Vec::new();
+    for row in value["records"].as_array().ok_or("对象快照缺少条目")? {
+        if !row["key"]
+            .as_str()
+            .is_some_and(|key| key.starts_with("asset/"))
+        {
+            continue;
+        }
+        let hash = row["value"]["sha256"].as_str().ok_or("附件缺少校验值")?;
+        let relative = row["value"]["syncPath"].as_str().ok_or("附件位置缺失")?;
+        validate_sync_asset_path(scope, relative, hash)?;
+        let root = crate::local_library::library_root(app)?;
+        let bytes = crate::webdav::local::read_file(&asset_path(app, scope, hash)?)?.or(
+            crate::webdav::local::read_file(&crate::webdav::local::safe_path(&root, relative)?)?,
+        );
+        if bytes.is_none()
+            && crate::webdav::on_demand::attachment_version(&root, relative)?.is_none_or(
+                |version| {
+                    version.hash != hash
+                        || Some(version.size) != row["value"]["byteLength"].as_u64()
+                },
+            )
+        {
+            return Err("附件内容缺失，已停止同步以保护条目。".into());
+        }
+        if let Some(bytes) = &bytes {
+            if crate::webdav::model::digest(bytes) != hash
+                || row["value"]["byteLength"].as_u64() != Some(bytes.len() as u64)
+            {
+                return Err("附件内容校验失败。".into());
+            }
+        }
+        files.push((relative.into(), bytes));
+    }
+    Ok(files)
 }

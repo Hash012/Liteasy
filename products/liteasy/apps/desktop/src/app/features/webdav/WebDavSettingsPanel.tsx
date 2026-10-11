@@ -36,7 +36,7 @@ export function WebDavSettingsPanel({ embedded = false }: { embedded?: boolean }
   return <section className={embedded ? "settings-embedded-panel" : "sidebar-section"} aria-label="WebDAV 同步">
     {!embedded ? <div className="sidebar-section-header"><CloudSyncRegular aria-hidden="true" /><span>WebDAV 同步</span></div> : null}
     <div className="sidebar-section-content">
-      <p>选择要在设备间同步的内容。文献文件、批注、笔记与白板分别同步；其他设备使用相同服务器和同步库名称，并登录同一账号（离线设备均使用访客身份）。</p>
+      <p>选择要在设备间同步的内容。先同步文献条目和分类，PDF 与文献附件在打开时下载，下载后可离线读取；其他设备使用相同服务器和同步库名称，并登录同一账号（离线设备均使用访客身份）。</p>
       {desktop ? <div style={{ display: "grid", gap: 8 }}>
         <Field label="服务器地址"><Input aria-label="WebDAV 服务器地址" placeholder="https://dav.example.com/" value={settings.endpoint} disabled={disabled} onChange={(_, data) => setSettings({ ...settings, endpoint: data.value })} /></Field>
         <Field label="用户名"><Input aria-label="WebDAV 用户名" autoComplete="username" value={settings.username} disabled={disabled} onChange={(_, data) => setSettings({ ...settings, username: data.value })} /></Field>

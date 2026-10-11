@@ -3,6 +3,7 @@ import { type LibraryItem, type LibraryRepository, type ImportResource, maxImpor
 import { decodeBytes, encodeBytes, hasNativeHost, nativeRequest } from "../../platform/native";
 
 class NativeLibraryRepository implements LibraryRepository {
+  ensureAvailable(scope: string, id: string, expectedHash?: string) { return nativeRequest<LibraryItem>("ensureAvailable", { scope, id, expectedHash }); }
   list(scope: string) { return nativeRequest<LibraryItem[]>("list", { scope }); }
   update(scope: string, item: LibraryItem) { return nativeRequest<LibraryItem>("update", { scope, item }); }
   readRecord<T>(scope: string, key: string) { return nativeRequest<T | undefined>("readRecord", { scope, key }); }
@@ -25,6 +26,7 @@ class NativeLibraryRepository implements LibraryRepository {
   }
 
   async readBytes(scope: string, id: string, expectedHash?: string) {
+    await this.ensureAvailable(scope, id, expectedHash);
     const { size } = await nativeRequest<{ size: number }>("fileInfo", { scope, id, expectedHash });
     if (!Number.isSafeInteger(size) || size < 0 || size > maxImportBytes) throw new Error("文件大小无效。");
     const bytes = new Uint8Array(size);

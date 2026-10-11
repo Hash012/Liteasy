@@ -32,6 +32,16 @@ class DavSyncTest {
         val received = store.syncItem(b, original.getString("id"))!!
         assertEquals(original.getString("contentHash"), received.getString("contentHash"))
         assertEquals("保留备注", received.getString("note"))
+        assertFalse(received.getBoolean("downloaded"))
+        assertFalse(store.attachment(b, original.getString("contentHash")).exists())
+        val before = remote.downloads
+        second.run()
+        assertEquals(before, remote.downloads)
+        second.ensureAvailable(original.getString("id"), original.getString("contentHash"))
+        assertEquals(before + 1, remote.downloads)
+        second.ensureAvailable(original.getString("id"), original.getString("contentHash"))
+        assertEquals(before + 1, remote.downloads)
+        assertTrue(store.syncItem(b, original.getString("id"))!!.getBoolean("downloaded"))
         assertEquals(unrelated, remote.value.files[".liteasy/sync-data/keys/account/encrypted.json"])
         val deleted = store.syncItem(a, original.getString("id"))!!.put("deletedAt", "2026-09-30T00:00:00Z")
         store.dispatch(a, JSONObject().put("operation", "update").put("item", deleted))
@@ -109,8 +119,40 @@ class DavSyncTest {
         assertEquals(0, read(b).getJSONArray("annotations").length())
         assertTrue(read(b).getJSONObject("sync").getJSONObject("tombstones").has("note"))
     }
+    @Test fun textBodiesRemainOutOfEntryMetadataAndLoadWhenOpened() {
+        val remote = FakeRemote(); val (a, first) = device(remote); val (b, second) = device(remote)
+        val text = "正文".repeat(1024)
+        val item = store.dispatch(a, JSONObject().put("operation", "importText").put("input", JSONObject().put("title", "长文字资料").put("text", text))) as JSONObject
+        first.run(); second.run()
+        val id = item.getString("id")
+        assertFalse(store.syncItem(b, id)!!.has("text"))
+        assertFalse(store.syncItem(b, id)!!.getBoolean("downloaded"))
+        assertEquals(text, second.ensureAvailable(id, item.getString("contentHash")).getString("text"))
+        val local = DavLocal(context, b).scan()
+        assertFalse(JSONObject(local["${DavLocal.METADATA_PREFIX}$id.json"]!!.file.readText()).has("text"))
+        second.run(); assertEquals(text, store.syncItem(b, id)!!.getString("text"))
+    }
+    @Test fun onDemandFailureRetainsRemoteItemAndRetriesWithoutOverwritingMetadata() {
+        val remote = FakeRemote(); val (a, first) = device(remote); val (b, second) = device(remote)
+        val item = pdf(a); first.run(); second.run(); val id = item.getString("id"); val hash = item.getString("contentHash")
+        remote.corrupt = true
+        try { second.ensureAvailable(id, hash); fail("Corrupt download must fail") } catch (_: IllegalArgumentException) { }
+        assertFalse(store.attachment(b, hash).exists()); assertFalse(store.syncItem(b, id)!!.getBoolean("downloaded"))
+        remote.corrupt = false
+        remote.duringDownload = {
+            val local = store.syncItem(b, id)!!.put("note", "下载时编辑的备注")
+            store.dispatch(b, JSONObject().put("operation", "update").put("item", local))
+        }
+        assertEquals("下载时编辑的备注", second.ensureAvailable(id, hash).getString("note"))
+        assertTrue(store.attachment(b, hash).exists())
+        store.attachment(b, hash).writeText("corrupt cache")
+        second.ensureAvailable(id, hash)
+        assertEquals(hash, DavTransport.hash(store.attachment(b, hash)))
+        try { second.ensureAvailable(id, "f".repeat(64)); fail("Stale expected hash must fail") } catch (_: IllegalArgumentException) { }
+    }
     private class FakeRemote : DavRemote {
         var value = DavManifest(); var exists = false; var revision = 0; var failPublish = false
+        var downloads = 0; var corrupt = false
         var duringDownload: (() -> Unit)? = null
         private val objects = mutableMapOf<String, ByteArray>()
         override fun prepare() { }
@@ -125,7 +167,7 @@ class DavSyncTest {
             val bytes = file.readBytes(); check(LibraryStore.digest(bytes) == version.hash); objects[version.hash] = bytes
         }
         override fun download(version: DavVersion, target: File) {
-            duringDownload?.invoke(); target.writeBytes(objects[version.hash] ?: error("Missing test object"))
+            downloads++; duringDownload?.invoke(); target.writeBytes(if (corrupt) "corrupt".toByteArray() else objects[version.hash] ?: error("Missing test object"))
         }
     }
 }

@@ -1,6 +1,7 @@
 mod engine;
 pub(crate) mod local;
 pub(crate) mod model;
+pub(crate) mod on_demand;
 mod options;
 mod secrets;
 mod transport;
@@ -160,6 +161,10 @@ pub async fn save_webdav_settings(
     }
     secrets::save_password(&settings, &root, encryption_password)?;
     local::save_json(&settings_path(&root)?, &settings)?;
+    local::save_json(
+        &local::state_directory(&root)?.join("last-connection.json"),
+        &settings.key(),
+    )?;
     if !old.endpoint.is_empty() && old.key() != settings.key() {
         old.credential(&root)?
             .delete_credential()
@@ -239,6 +244,10 @@ pub async fn sync_webdav(
     let root = crate::local_library::library_root(&app)?;
     let settings = load_settings(&root)?;
     let remote = settings.remote(&root)?;
+    local::save_json(
+        &local::state_directory(&root)?.join("last-connection.json"),
+        &settings.key(),
+    )?;
     let _ = app.emit(
         "webdav-progress",
         Progress {
@@ -277,9 +286,10 @@ pub async fn sync_webdav(
         &remote,
         current,
         resolutions,
+        true,
         |path| workspace::includes(&settings.sync, &scope, path),
         |path, expected, version, bytes| {
-            if path.starts_with(".liteasy/sync-data/") {
+            if path.starts_with(".liteasy/sync-data/") && path.split('/').nth(4) != Some("assets") {
                 workspace::queue(&root, &settings, &scope, path, expected, bytes)?;
                 let target = local::safe_path(&root, path)?;
                 return match bytes {
@@ -295,6 +305,58 @@ pub async fn sync_webdav(
         },
     )
     .await?;
+    crate::local_library::notify_webdav_change(&app)?;
     result.restart_required = workspace::has_pending(&root, &scope)?;
     Ok(result)
+}
+
+#[tauri::command]
+pub async fn ensure_webdav_file(app: AppHandle, source_path: String) -> Result<(), String> {
+    let _guard = OPERATION.lock().await;
+    let root = crate::local_library::library_root(&app)?;
+    let relative = Path::new(&source_path)
+        .strip_prefix(&root)
+        .map_err(|_| "附件不在当前文献库中。")?
+        .to_str()
+        .ok_or("附件路径无效。")?
+        .replace(std::path::MAIN_SEPARATOR, "/");
+    local::safe_path(&root, &relative)?;
+    if !root.join(".liteasy/webdav/settings.json").exists() {
+        if on_demand::library_entries(&root)?
+            .iter()
+            .any(|entry| entry.relative_path.as_deref() == Some(&relative))
+        {
+            return Err("请重新连接此文献的 WebDAV 同步库后下载附件。".into());
+        }
+        return Ok(());
+    }
+    let settings = load_settings(&root)?;
+    if on_demand::paths(&root, &settings.key(), &relative)?.is_empty() {
+        return Ok(());
+    }
+    let remote = settings.remote(&root)?;
+    on_demand::download(
+        &root,
+        &settings.key(),
+        &remote,
+        &relative,
+        |path, expected, version, bytes| {
+            crate::local_library::with_local_library_index_transaction(&app, || {
+                if crate::local_library::library_root(&app)? != root {
+                    return Err("文献库已切换，请重新打开附件。".into());
+                }
+                crate::local_library::apply_webdav_file_at(
+                    &root,
+                    path,
+                    expected,
+                    Some(version),
+                    Some(bytes),
+                )
+            })
+        },
+    )
+    .await?;
+    // Reconcile the file watcher/index before notifying readers of the new cache.
+    crate::local_library::notify_webdav_change(&app)?;
+    Ok(())
 }

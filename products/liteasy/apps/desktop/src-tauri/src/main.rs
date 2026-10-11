@@ -158,6 +158,7 @@ fn main() {
                 webdav::disconnect_webdav,
                 webdav::verify_webdav,
                 webdav::sync_webdav,
+                webdav::ensure_webdav_file,
                 webdav::workspace::restore_webdav_preferences,
                 webdav::workspace::acknowledge_webdav_preferences,
                 note_files::note_files_dispatch,

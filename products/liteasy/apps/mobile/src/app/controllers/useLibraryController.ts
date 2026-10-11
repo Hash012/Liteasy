@@ -12,6 +12,7 @@ export function useLibraryController(scope = "local", repository: LibraryReposit
   const activeScope = useRef(scope);
   const loadedScope = useRef(scope);
   const mounted = useRef(false);
+  const openRequest = useRef(0);
   activeScope.current = scope;
   useEffect(() => {
     if (!hasNativeHost()) return;
@@ -26,6 +27,7 @@ export function useLibraryController(scope = "local", repository: LibraryReposit
 
   useEffect(() => {
     mounted.current = true;
+    openRequest.current += 1;
     setItems([]); setSelectedId(undefined); setError(""); setBusy(false);
     const onError = (reason: unknown) => { if (mounted.current && activeScope.current === scope) setError(String(reason)); };
     void refresh().catch(onError);
@@ -56,12 +58,19 @@ export function useLibraryController(scope = "local", repository: LibraryReposit
   });
   const update = (item: LibraryItem) => run(async () => { await repository.update(scope, item); });
   const open = (item: LibraryItem) => {
-    setSelectedId(item.id);
-    void update({ ...item, lastReadAt: new Date().toISOString() });
+    const ticket = ++openRequest.current;
+    void run(async () => {
+      const available = repository.ensureAvailable ? await repository.ensureAvailable(scope, item.id, item.contentHash) : item;
+      if (activeScope.current !== scope || ticket !== openRequest.current) return;
+      const saved = await repository.update(scope, { ...available, lastReadAt: new Date().toISOString() });
+      if (activeScope.current !== scope || ticket !== openRequest.current) return;
+      setItems((previous) => previous.map((value) => value.id === saved.id ? saved : value));
+      setSelectedId(item.id);
+    });
   };
   const visibleItems = loadedScope.current === scope ? items : [];
   return { items: visibleItems, error, busy, refresh, importResource, importFiles, update, open, selectedId,
     selected: visibleItems.find((item) => item.id === selectedId), close: () => {
-      setSelectedId(undefined); void refresh().catch((reason) => { if (mounted.current) setError(String(reason)); });
+      openRequest.current += 1; setSelectedId(undefined); void refresh().catch((reason) => { if (mounted.current) setError(String(reason)); });
     }, repository, scope };
 }

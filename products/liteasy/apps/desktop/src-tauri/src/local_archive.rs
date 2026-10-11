@@ -188,11 +188,13 @@ fn selected_records(
                 if read_count > 512 {
                     return Err("当前账户笔记超过本次归档范围上限，请先整理后分批导出。".into());
                 }
-                if let Some(row) = crate::object_store::object_store_get(
-                    app.clone(),
-                    scope.into(),
-                    format!("head/{object}"),
-                )? {
+                if let Some(row) =
+                    tauri::async_runtime::block_on(crate::object_store::object_store_get(
+                        app.clone(),
+                        scope.into(),
+                        format!("head/{object}"),
+                    ))?
+                {
                     let row = serde_json::to_value(row).map_err(|e| e.to_string())?;
                     total += row.to_string().len();
                     if total > 16 * 1024 * 1024 {
@@ -217,9 +219,11 @@ fn selected_records(
         .collect();
     for id in runs {
         let key = format!("workflow-run/{id}");
-        if let Some(row) =
-            crate::object_store::object_store_get(app.clone(), scope.into(), key.clone())?
-        {
+        if let Some(row) = tauri::async_runtime::block_on(crate::object_store::object_store_get(
+            app.clone(),
+            scope.into(),
+            key.clone(),
+        ))? {
             let row = serde_json::to_value(row).map_err(|e| e.to_string())?;
             versions.push((
                 key,
@@ -382,7 +386,11 @@ pub async fn local_archive_commit(
             }
         }
         for (key, version) in pending.versions {
-            let row = crate::object_store::object_store_get(app.clone(), scope.clone(), key)?;
+            let row = tauri::async_runtime::block_on(crate::object_store::object_store_get(
+                app.clone(),
+                scope.clone(),
+                key,
+            ))?;
             let row = serde_json::to_value(row).map_err(|e| e.to_string())?;
             if row["version"] != version {
                 return Err("预览后笔记或运行记录已更改，请重新预览。".into());

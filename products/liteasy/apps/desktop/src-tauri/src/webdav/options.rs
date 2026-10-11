@@ -51,6 +51,17 @@ impl Default for SyncOptions {
 }
 impl SyncOptions {
     pub fn includes(&self, path: &str) -> bool {
+        if path.starts_with(".liteasy/sync-data/objects/")
+            && path.split('/').nth(4) == Some("assets")
+        {
+            return self.workspace
+                || self.external_folders
+                || self.extension_packages
+                || self.extension_configuration
+                || self.extension_workflows
+                || self.extension_runs
+                || self.extension_snapshots;
+        }
         if let Some(path) = path.strip_prefix(".liteasy/sync-data/") {
             return match path.split('/').next().unwrap_or("") {
                 "extension-packages" => self.extension_packages,

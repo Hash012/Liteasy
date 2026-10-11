@@ -17,7 +17,7 @@ class MobilePlugin(private val activity: Activity) : Plugin(activity) {
     fun dispatch(invoke: Invoke) {
         val request = invoke.getArgs().getJSONObject("request")
         val operation = request.getString("operation")
-        val queue = if (operation in setOf("beginLogin", "cancelLogin", "logout", "accountRequest", "tasksSnapshot", "taskResult", "pairDesktop", "unpairDesktop", "cancelTask")) network else executor
+        val queue = if (operation in setOf("beginLogin", "cancelLogin", "logout", "accountRequest", "tasksSnapshot", "taskResult", "pairDesktop", "unpairDesktop", "cancelTask", "ensureAvailable")) network else executor
         queue.execute {
             try {
                 val scope = request.optString("scope", "local")
@@ -46,6 +46,7 @@ class MobilePlugin(private val activity: Activity) : Plugin(activity) {
                         val destination = account.activeScope(); require(destination != "local") { "请先登录账号。" }
                         LibraryStore.get(activity).copyGuestLibrary(destination)
                     }
+                    "ensureAvailable" -> DavSync(activity, scope).ensureAvailable(request.getString("id"), request.optString("expectedHash").ifEmpty { null })
                     "syncSettings" -> DavSync(activity, scope).publicSettings()
                     "configureSync" -> { DavSync(activity, scope).configure(request.getJSONObject("settings")); null }
                     "syncStatus" -> DavSync(activity, scope).status()

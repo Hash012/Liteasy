@@ -31,7 +31,7 @@ export function SyncSettingsView({ scope, onChanged }: { scope: string; onChange
     finally { setBusy(false); }
   };
   return <section className="sync-settings" aria-label="文件同步"><h2>文件同步</h2>
-    <p>使用与桌面端相同的 WebDAV 地址和同步库名称。资料保留在本机，可离线阅读。</p>
+    <p>使用与桌面端相同的 WebDAV 地址和同步库名称。先同步资料条目，打开条目时下载附件，下载后可离线阅读。</p>
     {!available ? <p>请在安装的 Android 应用中配置同步。</p> : <>
       <div className="form-stack">
         <Field label="WebDAV 地址"><Input type="url" value={settings.endpoint} placeholder="https://…" onChange={(_, data) => { setSettings({ ...settings, endpoint: data.value }); setSaved(false); }} /></Field>

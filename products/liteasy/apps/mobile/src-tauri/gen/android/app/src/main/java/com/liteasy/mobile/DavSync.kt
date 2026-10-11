@@ -82,7 +82,7 @@ class DavSync(private val context: Context, private val scope: String, private v
                         files[decision.path]?.let { remote.upload(it.version, it.file, File(operation, "verify")); uploaded++ }
                         target.files[decision.path] = decision.local
                     }
-                    DavAction.DOWNLOAD -> decision.remote?.let { version ->
+                    DavAction.DOWNLOAD -> decision.remote?.takeIf { decision.path.startsWith('.') }?.let { version ->
                         require(!decision.path.startsWith(DavLocal.METADATA_PREFIX) || version.size <= DavModel.MAX_MANIFEST_BYTES) { "资料元数据超过容量限制，原数据未修改。" }
                         val file = File(downloadCache, version.hash)
                         if (!file.exists() || file.length() != version.size || DavTransport.hash(file) != version.hash) {
@@ -124,7 +124,7 @@ class DavSync(private val context: Context, private val scope: String, private v
             if (target.files != original.value.files || original.revision == null) remote.publish(target, original.revision)
             else require(remote.manifest().revision == original.revision) { "远端数据已变化，请重新同步。" }
             progress("保存资料")
-            local.applyBatch(decisions.filter { it.action == DavAction.DOWNLOAD }, downloads, target)
+            local.applyBatch(decisions.filter { it.action == DavAction.DOWNLOAD }, downloads, target, connection)
             val baseline = DavManifest(2, base?.files?.toSortedMap() ?: sortedMapOf())
             for (decision in decisions) if (decision.action != DavAction.CONFLICT) baseline.files[decision.path] = target.files[decision.path]
             local.record(baselineKey, JSONObject(String(DavJson.encode(baseline))))
@@ -141,6 +141,51 @@ class DavSync(private val context: Context, private val scope: String, private v
             local.record("sync-status", JSONObject().put("state", "error").put("error", message).put("finishedAt", Instant.now().toString()))
             throw error
         } finally { transport = null; operation.deleteRecursively() }
+    }
+    // Attachment reads share the sync lock, but networking never holds the library mutex.
+    fun ensureAvailable(id: String, expectedHash: String?): JSONObject = operationLock().withLock {
+        val store = LibraryStore.get(context)
+        val item = store.syncItem(scope, id) ?: error("资料不存在。")
+        require(!item.has("deletedAt")) { "资料已删除，请刷新资料库。" }
+        val hash = item.getString("contentHash")
+        require(expectedHash == null || expectedHash == hash) { "资料版本已更新，请返回资料库刷新后再打开。" }
+        val cached = store.attachment(scope, hash)
+        if (cached.exists() && cached.length() == item.getLong("size") && DavTransport.hash(cached) == hash) {
+            if (!item.optBoolean("downloaded")) { item.put("downloaded", true); store.syncSaveItem(scope, item) }
+            return@withLock hydrateText(store, item, cached)
+        }
+        val config = settings() ?: error("请先配置文件同步，再下载此附件。")
+        val connection = LibraryStore.digest("${config.getString("endpoint")}\n${config.getString("username")}\n${config.getString("collection")}".toByteArray())
+        require(item.optString("syncConnection") == connection) { "附件属于另一同步库，请重新连接原同步库。" }
+        val path = item.getString("syncPath")
+        require(DavModel.allowedPath(path) && !path.startsWith('.')) { "附件路径无效。" }
+        val version = DavVersion(hash, item.getLong("size"), id.takeIf { item.getString("kind") == "pdf" })
+        val temporary = File(local.directory, "open-${UUID.randomUUID()}")
+        val remote = remoteFactory(config); transport = remote
+        try {
+            require(local.directory.usableSpace > version.size + 1024 * 1024) { "设备存储空间不足，请释放空间后重试。" }
+            remote.download(version, temporary)
+            require(temporary.length() == version.size && DavTransport.hash(temporary) == hash) { "下载内容校验失败。" }
+            synchronized(store) {
+                val current = store.syncItem(scope, id) ?: error("资料已移除。")
+                require(!current.has("deletedAt") && current.getString("contentHash") == hash && current.optString("syncPath") == path) { "下载期间资料发生变化，请重新打开。" }
+                if (cached.exists() && (cached.length() != version.size || DavTransport.hash(cached) != hash)) {
+                    check(cached.renameTo(File(local.directory, "corrupt-$hash-${UUID.randomUUID()}"))) { "无法保留损坏的附件缓存，请检查存储空间。" }
+                }
+                // importStream validates PDF bytes and atomically installs the content-addressed cache.
+                val saved = temporary.inputStream().use { store.importStream(scope, current, it, id) }
+                hydrateText(store, saved, store.attachment(scope, hash))
+            }
+        } finally { temporary.delete(); transport = null }
+    }
+    private fun hydrateText(store: LibraryStore, item: JSONObject, file: File): JSONObject {
+        if (item.getString("kind") == "text" && !item.has("text")) {
+            require(file.length() <= 8L * 1024 * 1024) { "文字内容过大，请使用文件阅读。" }
+            val text = file.readText()
+            require(text.length <= 2_000_000) { "文字内容过长，请使用文件阅读。" }
+            item.put("text", text); store.syncSaveItem(scope, item)
+        }
+        return item
     }
     fun resolve(request: JSONObject) {
         val status = status() as? JSONObject ?: error("没有待处理冲突。")

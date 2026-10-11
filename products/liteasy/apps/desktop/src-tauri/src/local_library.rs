@@ -1735,6 +1735,12 @@ fn scan_local_library_root(root: &Path) -> Result<LocalLibrarySnapshot, String> 
     };
 
     write_index(&root, &next_index)?;
+    for remote_entry in crate::webdav::on_demand::library_entries(root)? {
+        entries.retain(|entry| {
+            entry.id != remote_entry.id && entry.relative_path != remote_entry.relative_path
+        });
+        entries.push(remote_entry);
+    }
     let marker = ensure_library_marker(&root)?;
     Ok(LocalLibrarySnapshot {
         entries,
@@ -1790,6 +1796,12 @@ fn snapshot_from_index(
         }
     }
     entries.sort_by(|left, right| left.title.cmp(&right.title).then(left.id.cmp(&right.id)));
+    for remote_entry in crate::webdav::on_demand::library_entries(root)? {
+        entries.retain(|entry| {
+            entry.id != remote_entry.id && entry.relative_path != remote_entry.relative_path
+        });
+        entries.push(remote_entry);
+    }
     let marker = ensure_library_marker(root)?;
     Ok(LocalLibrarySnapshot {
         entries,
@@ -2276,7 +2288,11 @@ fn resolve_existing_resource(root: &Path, requested_path: &str) -> Result<PathBu
 }
 
 #[tauri::command]
-pub fn read_local_library_pdf(app: AppHandle, source_path: String) -> Result<Vec<u8>, String> {
+pub async fn read_local_library_pdf(
+    app: AppHandle,
+    source_path: String,
+) -> Result<Vec<u8>, String> {
+    crate::webdav::ensure_webdav_file(app.clone(), source_path.clone()).await?;
     let root = library_root(&app)?;
     let source = resolve_existing_resource(&root, &source_path)?;
     if !source.is_file()
@@ -2328,11 +2344,12 @@ fn resolve_readable_library_pdf(root: &Path, source_path: &str) -> Result<(PathB
 }
 
 #[tauri::command]
-pub fn local_library_pdf_info(
+pub async fn local_library_pdf_info(
     app: AppHandle,
     source_path: String,
 ) -> Result<LocalLibraryPdfInfo, String> {
     let root = library_root(&app)?;
+    crate::webdav::ensure_webdav_file(app.clone(), source_path.clone()).await?;
     let (_, byte_length) = resolve_readable_library_pdf(&root, &source_path)?;
     Ok(LocalLibraryPdfInfo { byte_length })
 }
@@ -5957,4 +5974,26 @@ mod webdav_recovery_tests {
         .is_err());
         fs::remove_dir_all(root).unwrap();
     }
+}
+
+pub(crate) fn notify_webdav_change(app: &AppHandle) -> Result<(), String> {
+    with_local_library_index_transaction(app, || {
+        let root = library_root(app)?;
+        let mut index = read_index(&root)?;
+        index.revision = index.revision.saturating_add(1);
+        write_index(&root, &index)
+    })?;
+    let snapshot = load_local_library_snapshot(app.clone())?;
+    let _ = app.emit(
+        "local-library-changed",
+        LocalLibraryChangedEvent {
+            external_deletion: false,
+            full_rescan: true,
+            operation_id: None,
+            paths: vec![snapshot.root_path.clone()],
+            revision: snapshot.revision,
+            snapshot,
+        },
+    );
+    Ok(())
 }

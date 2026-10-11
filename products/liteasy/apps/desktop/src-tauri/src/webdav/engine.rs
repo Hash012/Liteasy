@@ -159,6 +159,7 @@ pub(super) async fn sync_library(
         remote,
         current,
         resolutions,
+        false,
         |_| true,
         apply,
         progress,
@@ -172,10 +173,16 @@ pub(super) async fn sync_selected(
     remote: &Remote,
     mut current: Manifest,
     resolutions: Option<Vec<Resolution>>,
+    on_demand: bool,
     includes: impl Fn(&str) -> bool,
     apply: impl Fn(&str, Option<&str>, Option<&model::FileVersion>, Option<&[u8]>) -> Result<(), String>,
     progress: impl Fn(Progress),
 ) -> Result<SyncResult, String> {
+    let materialized = current.clone();
+    let mut pending = super::on_demand::load(root, connection_key)?;
+    if on_demand {
+        super::on_demand::overlay(root, &mut current.files, &pending)?;
+    }
     current.files.retain(|path, _| includes(path));
     let checkpoint =
         local::state_directory(&root)?.join(format!("baseline-{}.json", connection_key));
@@ -200,11 +207,21 @@ pub(super) async fn sync_selected(
     {
         return Err("远端清单缺少已同步的记录，已停止同步以保护数据。".into());
     }
+    let mut comparison_base = baseline.clone();
+    if on_demand {
+        for (path, entry) in &pending {
+            if local::current_hash(root, path)? != entry.cached_hash {
+                comparison_base
+                    .files
+                    .insert(path.clone(), entry.cached_version.clone());
+            }
+        }
+    }
     // Disabled categories retain their remote records and previous baseline; absence
     // from today's scan is never a deletion. Re-enabling resumes the three-way merge.
     let selected_base = Manifest {
         schema_version: baseline.schema_version,
-        files: baseline
+        files: comparison_base
             .files
             .iter()
             .filter(|(path, _)| includes(path))
@@ -285,7 +302,7 @@ pub(super) async fn sync_selected(
         }
         let local_version = current.files.get(path).and_then(Option::as_ref);
         let remote_version = manifest.files.get(path).and_then(Option::as_ref);
-        let base = baseline.files.get(path).and_then(Option::as_ref);
+        let base = comparison_base.files.get(path).and_then(Option::as_ref);
         let mut decision = if !baseline.files.contains_key(path)
             && manifest.files.contains_key(path)
             && remote_version.is_none()
@@ -377,27 +394,80 @@ pub(super) async fn sync_selected(
         remote.publish(&manifest, etag.as_deref()).await?;
     }
     for (path, version) in acknowledgements {
+        if pending
+            .get(&path)
+            .is_some_and(|entry| version.as_ref() != Some(&entry.version))
+        {
+            pending.remove(&path);
+        }
         baseline.files.insert(path, version);
+    }
+    if on_demand {
+        super::on_demand::save(root, connection_key, &pending)?;
     }
     // Deletions precede creations so renames preserve document IDs.
     downloads.sort_by_key(|(_, _, version)| version.is_some());
     for (path, previous, version) in downloads {
+        if on_demand && super::on_demand::is_attachment(&path) && version.is_some() {
+            let version = version.expect("attachment version");
+            let cached_hash = local::current_hash(root, &path)?;
+            // Preserve local edits that happened after the scan, including edits to an old cache.
+            let expected = pending
+                .get(&path)
+                .filter(|v| previous.as_ref() == Some(&v.version))
+                .map(|v| v.cached_hash.as_deref())
+                .unwrap_or_else(|| previous.as_ref().map(|v| v.hash.as_str()));
+            if cached_hash.as_deref() != expected {
+                return Err("同步期间本地附件发生变化，请重试。".into());
+            }
+            if version
+                .document_id
+                .as_deref()
+                .is_some_and(super::document_is_open)
+                || super::artifact_is_open(&path)
+            {
+                result.deferred.push(path);
+                continue;
+            }
+            let cached_version = materialized
+                .files
+                .get(&path)
+                .and_then(Option::as_ref)
+                .cloned()
+                .or_else(|| pending.get(&path).and_then(|v| v.cached_version.clone()));
+            pending.insert(
+                path.clone(),
+                super::on_demand::PendingFile {
+                    version: version.clone(),
+                    cached_hash,
+                    cached_version,
+                },
+            );
+            super::on_demand::save(root, connection_key, &pending)?;
+            baseline.files.insert(path, Some(version));
+            local::save_json(&checkpoint, &baseline)?;
+            continue;
+        }
+        let previous_hash = pending
+            .get(&path)
+            .filter(|v| previous.as_ref() == Some(&v.version))
+            .map(|v| v.cached_hash.as_deref())
+            .unwrap_or_else(|| previous.as_ref().map(|v| v.hash.as_str()));
         let bytes = if let Some(v) = &version {
             Some(remote.download(&v.hash, v.size).await?)
         } else {
             None
         };
-        if let Err(error) = apply(
-            &path,
-            previous.as_ref().map(|v| v.hash.as_str()),
-            version.as_ref(),
-            bytes.as_deref(),
-        ) {
+        if let Err(error) = apply(&path, previous_hash, version.as_ref(), bytes.as_deref()) {
             if error == "webdav_document_open" {
                 result.deferred.push(path);
                 continue;
             }
             return Err(error);
+        }
+        pending.remove(&path);
+        if on_demand {
+            super::on_demand::save(root, connection_key, &pending)?;
         }
         if version.is_some() {
             result.downloaded += 1;
@@ -489,6 +559,256 @@ mod tests {
             let _ = fs::remove_dir_all(&self.0);
         }
     }
+    impl Library {
+        fn demand_key(&self) -> String {
+            let settings = super::super::Settings {
+                endpoint: "https://example.org/dav/".into(),
+                username: "reader".into(),
+                collection: "test".into(),
+                ..Default::default()
+            };
+            local::save_json(
+                &local::state_directory(&self.0)
+                    .unwrap()
+                    .join("settings.json"),
+                &settings,
+            )
+            .unwrap();
+            settings.key()
+        }
+        async fn sync_demand(&self, server: &Server) -> Result<SyncResult, String> {
+            let mut files = Files::new();
+            local::collect(&self.0, &self.0, &mut files)?;
+            let snapshot = crate::local_library::webdav_snapshot_at(&self.0)?;
+            for entry in snapshot.entries {
+                if let Some(Some(version)) =
+                    entry.relative_path.and_then(|path| files.get_mut(&path))
+                {
+                    version.document_id = Some(entry.id);
+                }
+            }
+            sync_selected(
+                &self.0,
+                &self.demand_key(),
+                &server.remote,
+                Manifest {
+                    schema_version: 2,
+                    files,
+                },
+                None,
+                true,
+                |_| true,
+                |p, e, v, b| crate::local_library::apply_webdav_file_at(&self.0, p, e, v, b),
+                |_| {},
+            )
+            .await
+        }
+        async fn open_demand(&self, server: &Server, path: &str) -> Result<(), String> {
+            super::super::on_demand::download(
+                &self.0,
+                &self.demand_key(),
+                &server.remote,
+                path,
+                |p, e, v, b| {
+                    crate::local_library::apply_webdav_file_at(&self.0, p, e, Some(v), Some(b))
+                },
+            )
+            .await
+        }
+    }
+    #[test]
+    fn on_demand_lists_remote_items_without_fetching_and_caches_verified_content_on_open() {
+        *super::super::OPEN_DOCUMENTS.lock().unwrap() = Some(BTreeSet::new());
+        let server = Server::start();
+        let a = Library::new();
+        let b = Library::new();
+        fs::write(a.0.join("paper.pdf"), b"%PDF-1.7 attachment").unwrap();
+        runtime().block_on(async {
+            a.sync(&server, vec![]).await.unwrap();
+            let version = a.current().files["paper.pdf"].clone().unwrap();
+            let object_path = format!("/liteasy/test/objects/{}", version.hash);
+            let object = server
+                .state
+                .lock()
+                .unwrap()
+                .objects
+                .remove(&object_path)
+                .unwrap();
+            assert_eq!(b.sync_demand(&server).await.unwrap().downloaded, 0);
+            assert!(!b.0.join("paper.pdf").exists());
+            let snapshot = crate::local_library::webdav_snapshot_at(&b.0).unwrap();
+            assert_eq!(snapshot.entries[0].id, version.document_id.clone().unwrap());
+            assert_eq!(
+                snapshot.entries[0].content_hash.as_deref(),
+                Some(version.hash.as_str())
+            );
+            assert_eq!(b.sync_demand(&server).await.unwrap().deleted, 0);
+            assert!(b.open_demand(&server, "paper.pdf").await.is_err());
+            assert!(!b.0.join("paper.pdf").exists());
+            assert_eq!(
+                super::super::on_demand::load(&b.0, &b.demand_key())
+                    .unwrap()
+                    .len(),
+                1
+            );
+            server
+                .state
+                .lock()
+                .unwrap()
+                .objects
+                .insert(object_path.clone(), object);
+            b.open_demand(&server, "paper.pdf").await.unwrap();
+            assert_eq!(
+                fs::read(b.0.join("paper.pdf")).unwrap(),
+                b"%PDF-1.7 attachment"
+            );
+            assert_eq!(b.current().files["paper.pdf"], Some(version));
+            server.state.lock().unwrap().objects.remove(&object_path);
+            b.open_demand(&server, "paper.pdf").await.unwrap(); // offline cache: no GET
+            assert_eq!(b.sync_demand(&server).await.unwrap().uploaded, 0);
+        });
+    }
+    #[test]
+    fn on_demand_keeps_object_asset_descriptions_small_and_fetches_only_selected_payloads() {
+        *super::super::OPEN_DOCUMENTS.lock().unwrap() = Some(BTreeSet::new());
+        let server = Server::start();
+        let a = Library::new();
+        let b = Library::new();
+        let bytes = b"large binary attachment";
+        let asset = format!(
+            ".liteasy/sync-data/objects/{}/assets/{}",
+            model::digest(b"local"),
+            model::digest(bytes)
+        );
+        let metadata = format!(
+            ".liteasy/sync-data/objects/{}/records.json",
+            model::digest(b"local")
+        );
+        crate::local_library::write_bytes_atomically(&a.0.join(&asset), bytes).unwrap();
+        crate::local_library::write_bytes_atomically(
+            &a.0.join(&metadata),
+            br#"{"version":1,"records":[{"key":"asset/description"}]}"#,
+        )
+        .unwrap();
+        runtime().block_on(async {
+            a.sync(&server, vec![]).await.unwrap();
+            let object_path = format!("/liteasy/test/objects/{}", model::digest(bytes));
+            let object = server
+                .state
+                .lock()
+                .unwrap()
+                .objects
+                .remove(&object_path)
+                .unwrap();
+            assert_eq!(b.sync_demand(&server).await.unwrap().downloaded, 1);
+            assert!(b.0.join(&metadata).is_file());
+            assert!(!b.0.join(&asset).exists());
+            assert_eq!(b.sync_demand(&server).await.unwrap().uploaded, 0);
+            server
+                .state
+                .lock()
+                .unwrap()
+                .objects
+                .insert(object_path, object);
+            b.open_demand(&server, &asset).await.unwrap();
+            assert_eq!(fs::read(b.0.join(&asset)).unwrap(), bytes);
+        });
+    }
+    #[test]
+    fn on_demand_fetches_new_reading_content_when_the_pdf_is_already_cached() {
+        *super::super::OPEN_DOCUMENTS.lock().unwrap() = Some(BTreeSet::new());
+        let server = Server::start();
+        let a = Library::new();
+        let b = Library::new();
+        fs::write(a.0.join("paper.pdf"), b"%PDF-1.7 original").unwrap();
+        runtime().block_on(async {
+            a.sync(&server, vec![]).await.unwrap();
+            b.sync_demand(&server).await.unwrap();
+            b.open_demand(&server, "paper.pdf").await.unwrap();
+            let id = a.current().files["paper.pdf"]
+                .as_ref()
+                .unwrap()
+                .document_id
+                .clone()
+                .unwrap();
+            let artifact = format!(
+                ".liteasy/paper-artifacts/{}/fulltext.v1.json",
+                crate::user_paper_store::paper_artifact_directory_name(&id).unwrap()
+            );
+            crate::local_library::write_bytes_atomically(
+                &a.0.join(&artifact),
+                br#"{"text":"large extracted text"}"#,
+            )
+            .unwrap();
+            a.sync(&server, vec![]).await.unwrap();
+            assert_eq!(b.sync_demand(&server).await.unwrap().downloaded, 0);
+            assert!(!b.0.join(&artifact).exists());
+            b.open_demand(&server, "paper.pdf").await.unwrap();
+            assert_eq!(
+                fs::read(b.0.join(artifact)).unwrap(),
+                br#"{"text":"large extracted text"}"#
+            );
+        });
+    }
+    #[test]
+    fn on_demand_tracks_rename_deletion_updates_and_preserves_local_edits() {
+        *super::super::OPEN_DOCUMENTS.lock().unwrap() = Some(BTreeSet::new());
+        let server = Server::start();
+        let a = Library::new();
+        let b = Library::new();
+        fs::write(a.0.join("paper.pdf"), b"%PDF-1.7 original").unwrap();
+        runtime().block_on(async {
+            a.sync(&server, vec![]).await.unwrap();
+            b.sync_demand(&server).await.unwrap();
+            fs::rename(a.0.join("paper.pdf"), a.0.join("renamed.pdf")).unwrap();
+            a.sync(&server, vec![]).await.unwrap();
+            b.sync_demand(&server).await.unwrap();
+            assert_eq!(
+                super::super::on_demand::load(&b.0, &b.demand_key())
+                    .unwrap()
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                vec!["renamed.pdf"]
+            );
+            b.open_demand(&server, "renamed.pdf").await.unwrap();
+            fs::write(a.0.join("renamed.pdf"), b"%PDF-1.7 remote update").unwrap();
+            a.sync(&server, vec![]).await.unwrap();
+            b.sync_demand(&server).await.unwrap();
+            assert_eq!(
+                fs::read(b.0.join("renamed.pdf")).unwrap(),
+                b"%PDF-1.7 original"
+            );
+            fs::write(b.0.join("renamed.pdf"), b"%PDF-1.7 local edit").unwrap();
+            assert!(b.open_demand(&server, "renamed.pdf").await.is_err());
+            // Comparing against the old materialized version preserves edit/edit conflicts.
+            assert_eq!(b.sync_demand(&server).await.unwrap().conflicts.len(), 1);
+            assert!(!super::super::on_demand::load(&b.0, &b.demand_key())
+                .unwrap()
+                .is_empty());
+            assert_eq!(
+                fs::read(b.0.join("renamed.pdf")).unwrap(),
+                b"%PDF-1.7 local edit"
+            );
+            fs::remove_file(a.0.join("renamed.pdf")).unwrap();
+            // A fresh device also acknowledges a remote tombstone without downloading the old body.
+            let c = Library::new();
+            c.sync_demand(&server).await.unwrap();
+            let result = a.sync(&server, vec![]).await.unwrap();
+            assert!(result.conflicts.is_empty());
+            let (mut manifest, etag) = server.remote.manifest().await.unwrap();
+            manifest.files.insert("renamed.pdf".into(), None);
+            server
+                .remote
+                .publish(&manifest, etag.as_deref())
+                .await
+                .unwrap();
+            c.sync_demand(&server).await.unwrap();
+            assert!(super::super::on_demand::load(&c.0, &c.demand_key())
+                .unwrap()
+                .is_empty());
+        });
+    }
     #[test]
     fn device_fixtures_stay_isolated_when_parallel_clock_readings_repeat() {
         let workers: Vec<_> = (0..16)
@@ -561,6 +881,7 @@ mod tests {
                 &server.remote,
                 a.current(),
                 None,
+                false,
                 |p| !p.starts_with(".liteasy/sync-data/objects/"),
                 |p, e, v, b| crate::local_library::apply_webdav_file_at(&a.0, p, e, v, b),
                 |_| {},

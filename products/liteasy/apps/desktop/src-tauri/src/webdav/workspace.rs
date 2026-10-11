@@ -113,19 +113,27 @@ pub fn prepare(
     }
     let credentials = secrets::merge_descriptors(root, &scope, &browser.credentials)?;
     let mut snapshots = std::collections::BTreeSet::new();
-    let mut stage = |path: String, bytes: Vec<u8>| -> Result<(), String> {
-        write_bytes_atomically(&local::safe_path(root, &path)?, &bytes)?;
+    let mut stage = |path: String, bytes: Option<Vec<u8>>| -> Result<(), String> {
+        if let Some(bytes) = bytes {
+            write_bytes_atomically(&local::safe_path(root, &path)?, &bytes)?;
+        }
         snapshots.insert(path);
         Ok(())
     };
     if settings.sync.workspace {
         if let Some(bytes) = object_snapshot(app, &scope, false, "objects")? {
-            stage(scoped_path("objects", &scope, "records.json"), bytes)?;
+            for (path, payload) in crate::object_store::sync_asset_files(app, &scope, &bytes)? {
+                stage(path, payload)?;
+            }
+            stage(scoped_path("objects", &scope, "records.json"), Some(bytes))?;
         }
     }
     if settings.sync.external_folders {
         if let Some(bytes) = object_snapshot(app, &scope, true, "external")? {
-            stage(scoped_path("external", &scope, "records.json"), bytes)?;
+            for (path, payload) in crate::object_store::sync_asset_files(app, &scope, &bytes)? {
+                stage(path, payload)?;
+            }
+            stage(scoped_path("external", &scope, "records.json"), Some(bytes))?;
         }
     }
     for (category, enabled) in [
@@ -142,7 +150,10 @@ pub fn prepare(
             if let Some(bytes) =
                 object_snapshot(app, &scope, settings.sync.external_folders, category)?
             {
-                stage(scoped_path(category, &scope, "records.json"), bytes)?;
+                for (path, payload) in crate::object_store::sync_asset_files(app, &scope, &bytes)? {
+                    stage(path, payload)?;
+                }
+                stage(scoped_path(category, &scope, "records.json"), Some(bytes))?;
             }
         }
     }
@@ -154,7 +165,7 @@ pub fn prepare(
         {
             stage(
                 scoped_path(category, &scope, &format!("mount-{}.json", mount.id)),
-                encode(&files.sync_export(&mount.id)?)?,
+                Some(encode(&files.sync_export(&mount.id)?)?),
             )?;
         }
     }
@@ -162,7 +173,7 @@ pub fn prepare(
         if let Some(value) = crate::assistant_history::load_assistant_history(app.clone())? {
             stage(
                 scoped_path("history", &scope, "assistant.json"),
-                encode(&value)?,
+                Some(encode(&value)?),
             )?;
         }
     }
@@ -172,7 +183,7 @@ pub fn prepare(
         {
             stage(
                 scoped_path("objects", &scope, "catalog.json"),
-                encode(&value)?,
+                Some(encode(&value)?),
             )?;
         }
     }
@@ -187,14 +198,14 @@ pub fn prepare(
         }
         stage(
             scoped_path("preferences", &scope, "settings.json"),
-            serde_json::to_vec(&browser.preferences).map_err(|e| e.to_string())?,
+            Some(serde_json::to_vec(&browser.preferences).map_err(|e| e.to_string())?),
         )?;
     }
     if settings.sync.api_keys {
         let path = scoped_path("keys", &scope, "encrypted.json");
         let previous = local::read_file(&local::safe_path(root, &path)?)?;
         if let Some(bytes) = secrets::export(settings, root, &credentials, previous.as_deref())? {
-            stage(path, bytes)?;
+            stage(path, Some(bytes))?;
         }
     }
     // Remove obsolete staging only for enabled categories. Disabled categories never become deletions.

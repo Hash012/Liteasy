@@ -1,11 +1,15 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { notifyNotesSourcesChanged } from "../features/notes/notesPort";
 import { autoSyncWebDav, clearWebDavStatus, webdavStatus } from "../features/webdav/webdavClient";
 
 // Mounted with the application, so closing Settings does not stop automatic sync.
 export function useWebDavSyncController(openDocumentIds: string[] = [], libraryRootPath: string | null = null) {
-  useEffect(() => { clearWebDavStatus(); }, [libraryRootPath]);
+  const currentRoot = useRef(libraryRootPath);
+  const openRequest = useRef(0);
+  currentRoot.current = libraryRootPath;
+  useEffect(() => () => { currentRoot.current = null; openRequest.current += 1; }, []);
+  useEffect(() => { openRequest.current += 1; clearWebDavStatus(); }, [libraryRootPath]);
   useEffect(() => {
     let previous = webdavStatus.getSnapshot().result;
     return webdavStatus.subscribe(() => {
@@ -30,4 +34,17 @@ export function useWebDavSyncController(openDocumentIds: string[] = [], libraryR
       window.removeEventListener("online", run);
     };
   }, []);
+  return {
+    openPaper(sourcePath: string | undefined, ready: () => void, failed: (error: unknown) => void, progress?: (message: string) => void) {
+      const ticket = ++openRequest.current;
+      if (!isTauri() || !sourcePath || !libraryRootPath ||
+        !sourcePath.replace(/\\/g, "/").startsWith(`${libraryRootPath.replace(/\\/g, "/")}/`)) { ready(); return; }
+      progress?.("正在获取文献附件…");
+      void invoke("ensure_webdav_file", { sourcePath }).then(() => {
+        if (currentRoot.current === libraryRootPath && openRequest.current === ticket) { progress?.(""); ready(); }
+      }).catch((error) => {
+        if (currentRoot.current === libraryRootPath && openRequest.current === ticket) failed(error);
+      });
+    }
+  };
 }

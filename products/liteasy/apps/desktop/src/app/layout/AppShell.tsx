@@ -366,7 +366,7 @@ export function AppShell({
     Partial<Record<DockRegionId, string>>
   >({});
   const [openReaderPaperIds, setOpenReaderPaperIds] = useState<string[]>(initialOpenReaderPaperIds);
-  useWebDavSyncController(openReaderPaperIds, localLibrarySnapshot?.rootPath ?? null);
+  const webdavSync = useWebDavSyncController(openReaderPaperIds, localLibrarySnapshot?.rootPath ?? null);
   const [activeReaderPaperId, setActiveReaderPaperId] = useState<string | null>(
     initialOpenReaderPaperIds[0] ?? null
   );
@@ -1734,17 +1734,21 @@ export function AppShell({
       return;
     }
 
-    void profileActions.recordPersonalizationSignal({
-      kind: "paper_opened",
-      title: paper.title
-    });
-    setOpenReaderPaperIds((current) =>
-      current.includes(paperId) ? current : [...current, paperId]
-    );
-    setActiveReaderPaperId(paperId);
-    setActivePaperResourceId(null);
-    setActiveCenterArtifactId(null);
-    setActiveVisualizationId(null);
+    webdavSync.openPaper(paper.sourcePath, () => {
+      void profileActions.recordPersonalizationSignal({
+        kind: "paper_opened",
+        title: paper.title
+      });
+      setOpenReaderPaperIds((current) =>
+        current.includes(paperId) ? current : [...current, paperId]
+      );
+      setActiveReaderPaperId(paperId);
+      setActivePaperResourceId(null);
+      setActiveCenterArtifactId(null);
+      setActiveVisualizationId(null);
+    }, (error) => {
+      setAnalysisHint(error instanceof Error ? error.message : String(error));
+    }, setAnalysisHint);
   }
 
   function openLiteratureVersion(literature: LiteratureRecord, relation: LiteratureRelation) {
