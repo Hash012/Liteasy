@@ -63,3 +63,43 @@
   .evidence-lens__claim .evidence-lens__status { margin-left: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .evidence-lens * { animation: none !important; transition: none !important; } }
+
+/* Progressive disclosure: useful excerpts first; execution diagnostics on demand. */
+.evidence-lens__summary-icon { flex: 0 0 auto; color: var(--colorNeutralForeground3); }
+.evidence-lens__summary-text { align-items: center; flex: 1; gap: 2px 8px; }
+.evidence-lens__summary-text > span + span::before { content: "·"; margin-right: 8px; color: var(--colorNeutralForeground4); }
+.evidence-lens__summary-text > .evidence-lens__counts::before { content: none; }
+.evidence-lens__counts { margin-left: auto; }
+.evidence-lens__counts span { border-radius: 4px; padding: 0 4px; background: var(--colorNeutralBackground3); }
+.evidence-lens__expanded { position: relative; padding: 10px; border-color: var(--colorNeutralStroke2); }
+.evidence-lens .evidence-lens__inspect-action { display: flex; margin-left: auto; font-size: 12px; }
+.evidence-lens__claims > li + li { border-top: 1px solid var(--colorNeutralStroke3); }
+.evidence-lens__claim-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; line-height: 1.6; }
+.evidence-lens__status { display: inline-flex; align-items: center; gap: 4px; padding: 1px 5px; border-radius: 4px; background: var(--colorNeutralBackground3); font-weight: 400; }
+.evidence-lens__status svg { flex: 0 0 auto; }
+.evidence-lens__status--supported { color: var(--colorPaletteGreenForeground1); background: var(--colorPaletteGreenBackground1); }
+.evidence-lens__status--conditional, .evidence-lens__status--insufficient { color: var(--colorPaletteMarigoldForeground1); background: var(--colorPaletteMarigoldBackground1); }
+.evidence-lens__status--contested, .evidence-lens__status--contradicted { color: var(--colorPaletteRedForeground1); background: var(--colorPaletteRedBackground1); }
+.evidence-lens__source-title, .evidence-lens__peek-claim { display: -webkit-box !important; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.evidence-lens__peek header { position: sticky; top: -10px; padding: 4px 0; background: var(--colorNeutralBackground2); z-index: 1; }
+.evidence-lens__peek-claim { font-weight: 600; }
+.evidence-lens__source-preview blockquote { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; max-height: none; }
+.evidence-lens__passage { padding: 10px 0 0; }
+.evidence-lens__passage-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.evidence-lens__version { min-width: 0; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--colorNeutralForeground3); font-size: 11px; }
+.evidence-lens__checks { border-top: 1px solid var(--colorNeutralStroke2); padding-top: 8px; }
+.evidence-lens__checks summary { cursor: pointer; min-height: 28px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; border-radius: 4px; padding: 2px 0; }
+.evidence-lens__checks summary::after { content: "+"; margin-left: auto; font-size: 14px; }
+.evidence-lens__checks[open] summary::after { content: "−"; }
+.evidence-lens__checks summary > span:last-of-type { color: var(--colorNeutralForeground3); }
+.evidence-lens__checks summary:focus-visible { outline: 2px solid var(--colorStrokeFocus2); outline-offset: 2px; }
+.evidence-lens__check-records { padding: 4px 8px; border-left: 2px solid var(--colorNeutralStroke2); margin: 4px 0; }
+.evidence-lens__check-records > div + div { margin-top: 8px; }
+@container (max-width: 350px) {
+  .evidence-lens__summary-icon { display: none; }
+  .evidence-lens__counts { margin-left: 0; }
+  .evidence-lens__claim .evidence-lens__status { margin-left: 16px; }
+}
+.evidence-lens__inspector .evidence-lens__source-title { display: block !important; -webkit-line-clamp: unset; overflow: visible; }
+.evidence-lens__inspector .evidence-lens__version { white-space: normal; overflow-wrap: anywhere; }
+.evidence-lens__claim-text, .evidence-lens__peek-claim { font-size: 13px; }

@@ -95,9 +95,9 @@ test("does not advertise reviewed claims while streaming and bounds default rend
   expect(screen.getByRole("button", { name: /生成中 · 未核验/ })).toBeVisible();
   expect(screen.queryByText(/有支持/)).not.toBeInTheDocument();
   expand();
-  expect(screen.getAllByRole("button", { name: /查看论断/ })).toHaveLength(12);
+  expect(screen.getAllByRole("button", { name: /查看论断/ })).toHaveLength(4);
   fireEvent.click(screen.getByRole("button", { name: "显示更多" }));
-  expect(screen.getAllByRole("button", { name: /查看论断/ })).toHaveLength(24);
+  expect(screen.getAllByRole("button", { name: /查看论断/ })).toHaveLength(8);
 });
 
 test("lets the authorized resolver open a non-PDF file snapshot without a page", async () => {
@@ -111,4 +111,38 @@ test("lets the authorized resolver open a non-PDF file snapshot without a page",
   expect(screen.getByRole("button", { name: "打开原文" })).toBeEnabled();
   fireEvent.click(screen.getByRole("button", { name: "打开原文" }));
   await waitFor(() => expect(navigate).toHaveBeenCalledWith(value.passages[0]));
+});
+
+test("reveals source excerpts on the first expansion without an empty intermediate screen", () => {
+  const value = report(); value.claims = [];
+  value.sources[0].revision = "version-42";
+  render(<EvidenceLens report={value} onOpenPassage={vi.fn()} />);
+  expand();
+  expect(screen.getByText("实验只在小样本上成立。")).toBeVisible();
+  expect(screen.getByRole("button", { name: "打开原文" })).toBeEnabled();
+  expect(screen.getByText(/version-42/)).toBeInTheDocument();
+});
+
+test("keeps failed check status visible while collapsing detailed execution records", () => {
+  const value = report(); value.claims = [];
+  value.verifications = [{ id: "check", checkerKind: "structural_rules", origin: "structural_rules", status: "timed_out", evaluatedClaimIds: [], reviewedPassageIds: [], finding: "远端响应超过时限，已回退结构检查。" }];
+  const { container } = render(<EvidenceLens report={value} />);
+  expand();
+  const details = container.querySelector("details.evidence-lens__checks")!;
+  expect(details).not.toHaveAttribute("open");
+  expect(within(details.querySelector("summary")!).getByText(/检查超时/)).toBeVisible();
+  fireEvent.click(within(details as HTMLElement).getByText(/核验说明/));
+  expect(screen.getByText("远端响应超过时限，已回退结构检查。")).toBeVisible();
+});
+
+
+test("makes every metadata-only source reachable in the inspector", () => {
+  const value = report(); value.claims = []; value.passages = [];
+  value.sources = Array.from({ length: 15 }, (_, index) => ({ id: `source-${index}`, kind: "paper_abstract", title: `仅元信息来源 ${index + 1}`, coverage: "metadata_only" }));
+  render(<EvidenceLens report={value} />);
+  fireEvent.click(screen.getByRole("button", { name: /15 篇来源/ }));
+  fireEvent.click(screen.getByRole("button", { name: "查看全部证据" }));
+  expect(screen.queryByText(/仅元信息来源 15/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "显示更多" }));
+  expect(screen.getByText(/仅元信息来源 15/)).toBeVisible();
 });

@@ -73,8 +73,25 @@ test("records 50-claim 100-passage expansion latency with bounded initial DOM", 
     await new Promise(requestAnimationFrame); await new Promise(requestAnimationFrame);
     return performance.now() - start;
   });
-  await expect(page.getByRole("button", { name: /查看论断/ })).toHaveCount(12);
+  await expect(page.getByRole("button", { name: /查看论断/ })).toHaveCount(4);
   await expect(page.getByRole("article")).toHaveCount(0);
   expect(latencyMs).toBeLessThan(1000);
-  await testInfo.attach("evidence-expansion-metrics", { body: JSON.stringify({ fixture: true, claims: 50, passages: 100, latencyMs, renderedClaims: 12 }), contentType: "application/json" });
+  await testInfo.attach("evidence-expansion-metrics", { body: JSON.stringify({ fixture: true, claims: 50, passages: 100, latencyMs, renderedClaims: 4 }), contentType: "application/json" });
+});
+
+test("source-only answers expose excerpts immediately and keep checks secondary", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 360, height: 900 });
+  await page.goto(`${fixture}?entry=message&theme=dark`);
+  const trigger = page.getByRole("button", { name: /1 篇来源.*1 处引用/ });
+  await expect(trigger).toBeVisible();
+  await trigger.click();
+  await expect(page.getByRole("blockquote")).toContainText("消息入口保存的真实测试摘录。");
+  await expect(page.locator("details.evidence-lens__checks")).not.toHaveAttribute("open", "");
+  await page.locator("details.evidence-lens__checks summary").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("尚无独立核验记录。引用存在不代表结论成立。")).toBeVisible();
+  await noHorizontalOverflow(page);
+  await page.getByRole("button", { name: "打开原文" }).click();
+  await expect(page.getByRole("complementary")).toHaveText("消息原文：fixture-paper 第 3 页");
+  await page.screenshot({ path: testInfo.outputPath("source-preview-360-dark.png"), fullPage: true });
 });
