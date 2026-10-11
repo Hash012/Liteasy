@@ -48,7 +48,7 @@ export function AgentActivityCard({ activity, onOpenAsset }: { activity: AgentAc
   const current = [...entries].reverse().find((entry) => entry.status === "running");
   const duration = elapsedLabel(activity, now);
   const statusText = activity.status === "working" ? current?.label ?? "正在处理…"
-    : ({ completed: "已完成", cancelled: "已停止", failed: "未能完成", waiting: "等待你的操作" } as const)[activity.status];
+    : toUserVisibleAgentActivityText(activity.statusText) || ({ completed: "已完成", cancelled: "已停止", failed: "未能完成", waiting: "等待你的操作" } as const)[activity.status];
   const completedOperations = entries.filter((entry) => entry.status === "completed" && ["tool", "output"].includes(entry.kind));
 
   return <section aria-label="Agent 工作状态" className={`assistant-agent-activity ${activity.status}`}>

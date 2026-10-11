@@ -1,4 +1,5 @@
 import { parseEvidenceReport } from "../evidence/evidenceReport";
+import { parseResearchTask } from "../research-loop/researchLoop";
 import { catalogSearchMetadata } from "../search/searchMetadata";
 import type { ReadingCatalogEntry } from "../library/readingCatalog.types";
 import { conversationTurnsFromMessages } from "./assistantConversationContext";
@@ -1117,7 +1118,16 @@ export function AssistantPane({
           : run.status === "failed"
             ? "failed"
             : "waiting";
-    updateAgentActivity(activityMessageId, (activity) => completeAgentActivity(activity, status));
+    updateAgentMessage(activityMessageId, (message) => {
+      if (!message.agentActivity) return message;
+      const reason = message.researchLoop?.stopReason;
+      const unfinished = reason && reason !== "task_completed";
+      const statusText = reason === "loop_exhausted" || reason === "context_exhausted" ? "已暂停 · 预算已用完"
+        : reason === "needs_review" ? "已暂停 · 需要复核"
+          : reason === "request_user" ? "等待补充研究条件"
+            : reason === "interrupted" ? "研究已中断" : reason === "waiting_confirmation" ? "等待确认修改" : undefined;
+      return { ...message, agentActivity: { ...completeAgentActivity(message.agentActivity, status), ...(unfinished ? { status: reason === "interrupted" ? "failed" as const : "waiting" as const, connectionText: "本轮已结束" } : {}), ...(statusText ? { statusText } : {}) } };
+    });
   }
 
   function rememberPendingClarification(events: AgentRuntimeEvent[], previousInput: string) {
@@ -1180,6 +1190,7 @@ export function AssistantPane({
       let assetWrites: AssistantMessage["assetWrites"];
       let audit: AnswerAuditResult | undefined;
       let evidenceReport: AssistantMessage["evidenceReport"];
+      let researchLoop: AssistantMessage["researchLoop"];
       let paperAnchors: AssistantMessage["paperAnchors"];
       let contextCoverage: AssistantMessage["contextCoverage"];
       let executionTrace: ModelExecutionTrace | undefined;
@@ -1188,6 +1199,7 @@ export function AssistantPane({
           assetWrites?: unknown;
           audit?: AnswerAuditResult;
           evidenceReport?: unknown;
+          researchLoop?: unknown;
           executionTrace?: ModelExecutionTrace;
           paperAnchors?: unknown;
           contextCoverage?: unknown;
@@ -1195,6 +1207,7 @@ export function AssistantPane({
         assetWrites = parseAssistantAssetWrites(metadata.assetWrites);
         audit = metadata.audit;
         evidenceReport = parseEvidenceReport(metadata.evidenceReport);
+        researchLoop = parseResearchTask(metadata.researchLoop);
         executionTrace = metadata.executionTrace;
         if (Array.isArray(metadata.paperAnchors)) paperAnchors = collectPaperAnchors(metadata.paperAnchors);
         contextCoverage = parseContextCoverageReport(metadata.contextCoverage);
@@ -1204,6 +1217,7 @@ export function AssistantPane({
         assetWrites: assetWrites ? mergeAssistantAssetWrites(message.assetWrites, assetWrites) : message.assetWrites,
         audit: event.citations?.length ? audit : undefined,
         evidenceReport,
+        researchLoop,
         citations: event.citations,
         paperAnchors,
         contextCoverage,

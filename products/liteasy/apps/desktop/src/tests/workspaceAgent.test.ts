@@ -227,3 +227,48 @@ test("negated write words do not authorize a valid model write", async () => {
   expect(fixture.getText()).toBe("# CicN");
   fixture.api.dispose();
 });
+
+const researchAction = (status: "open" | "addressed" | "blocked", evidencePaths: string[] = []) => action({ action: "research", text: JSON.stringify({
+  plan: ["读取并对照当前文库来源", "检索局限与相反证据", "保留有来源的结论"],
+  gaps: [{ id: "counterevidence", kind: "missing_source", question: "Cicada 有哪些局限或反例？", status, evidencePaths, resolution: status === "addressed" ? "已读取本地相关材料，未独立核验，答案保留适用条件。" : "" }]
+}) });
+
+test("research gaps drive actual search/read and prevent a premature completed answer", async () => {
+  const fixture = setup([
+    researchAction("open"),
+    action({ message: "没有任何问题，研究完成。" }),
+    action({ action: "search", query: "Cicada limitations counterexample" }),
+    action({ action: "read", path: paperPath }),
+    researchAction("addressed", [paperPath]),
+    action({ message: "依据读到的材料整理结论，仍需独立核验。" })
+  ]);
+  try {
+    const run = await fixture.submit("研究 Cicada 的局限和反证", false);
+    expect(fixture.search).toHaveBeenCalledWith(expect.objectContaining({ query: "Cicada limitations counterexample" }));
+    expect(fixture.read).toHaveBeenCalledOnce();
+    expect(fixture.prompts[2]).toContain("unresolved_gaps");
+    const result = run.events.filter((event) => event.type === "assistant.message").at(-1);
+    expect(result).toMatchObject({ message: "依据读到的材料整理结论，仍需独立核验。", metadata: { researchLoop: {
+      status: "completed", stopReason: "task_completed", semanticStatus: "unverified", checkpoint: { mutations: "confirmation_required", readAssets: [expect.objectContaining({ path: paperPath })] }
+    } } });
+    expect(fixture.write).not.toHaveBeenCalled();
+  } finally { fixture.api.dispose(); }
+});
+
+test("blocked research stops with unresolved questions instead of claiming task completion", async () => {
+  const fixture = setup([researchAction("blocked")]);
+  try {
+    const run = await fixture.submit("研究 Cicada 的局限", false);
+    expect(fixture.prompts).toHaveLength(1);
+    expect(run.events).toContainEqual(expect.objectContaining({ type: "assistant.message", message: expect.stringContaining("仍有问题需要复核"), metadata: expect.objectContaining({ researchLoop: expect.objectContaining({ stopReason: "needs_review", status: "needs_review" }) }) }));
+  } finally { fixture.api.dispose(); }
+});
+
+test("a model interruption retains a read checkpoint and never replays a mutation", async () => {
+  const fixture = setup([researchAction("open"), action({ action: "read", path: paperPath })]);
+  try {
+    const run = await fixture.submit("研究 Cicada 的局限", false);
+    expect(run.events).toContainEqual(expect.objectContaining({ type: "assistant.message", metadata: expect.objectContaining({ researchLoop: expect.objectContaining({ stopReason: "interrupted", checkpoint: expect.objectContaining({ readAssets: [expect.objectContaining({ path: paperPath, revision: "v1" })] }) }) }) }));
+    expect(fixture.write).not.toHaveBeenCalled();
+  } finally { fixture.api.dispose(); }
+});

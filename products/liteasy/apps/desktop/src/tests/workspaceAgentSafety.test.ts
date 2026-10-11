@@ -112,6 +112,28 @@ test("does not send organization-owned papers to a model even when they can be r
   fixture.api.dispose();
 });
 
+test("a lost response after a committed write cannot replay approval after restart", async () => {
+  const fixture = setup([
+    action({ action: "read", path: notePath }),
+    action({ action: "write", path: notePath, expectedRevision: "v1", text: "\nPersisted exactly once." })
+  ], { afterCommit: async () => { throw new Error("Connection lost after commit"); } });
+  const proposal = await fixture.submit("追加这份笔记");
+  const confirmation = proposal.events.find((event) => event.type === "confirmation.required");
+  if (!confirmation || confirmation.type !== "confirmation.required") throw new Error("Missing confirmation");
+  const request = { sessionId: proposal.sessionId, confirmationId: confirmation.confirmationId, decision: "approve" as const };
+  try {
+    const first = await fixture.api.resolveConfirmation(request);
+    expect(first).toMatchObject({ ok: true, data: { status: "failed" } });
+    expect(fixture.getText()).toContain("Persisted exactly once.");
+    expect(await fixture.api.resolveConfirmation(request)).toMatchObject({ ok: false, error: { code: "confirmation_not_found" } });
+    fixture.api.dispose();
+    const restored = fixture.createApi();
+    try { expect(await restored.resolveConfirmation(request)).toMatchObject({ ok: false, error: { code: "confirmation_not_found" } }); }
+    finally { restored.dispose(); }
+    expect(fixture.write).toHaveBeenCalledOnce();
+  } finally { fixture.api.dispose(); }
+});
+
 test("a selected local note cannot smuggle an organization source into model context", async () => {
   const fixture = setup([action({ message: "Should never call the model" })]);
   fixture.stat.mockImplementation(async (path) => path === notePath ? { ...note, sourceReferences: [{

@@ -1,5 +1,6 @@
 import { mockFocusLayout } from "./fixtures/mockFocusLayout";
 import { generationPromptTasks } from "../app/features/ai-prompts/generationPrompts";
+import { startResearchTask, stopResearchTask } from "../app/features/research-loop/researchLoop";
 import { createAgentApplicationService } from "../app/controllers/agent/agentApplicationService";
 import { createFrontendAgentClient } from "../app/features/agent-api/frontendAgentClient";
 import { ObjectWorkbenchContext, type ObjectWorkbenchPort } from "../app/features/objects/objectWorkbenchPort";
@@ -449,6 +450,29 @@ test("projects public Agent streaming events into the expandable work status car
     "aria-pressed",
     "true"
   );
+});
+
+test.each([
+  ["needs_review", "已暂停 · 需要复核"],
+  ["loop_exhausted", "已暂停 · 预算已用完"],
+  ["interrupted", "研究已中断"]
+] as const)("shows %s separately from a completed research task", async (reason, label) => {
+  const user = userEvent.setup();
+  const agentClient: FrontendAgentClient = {
+    cancel: vi.fn(), close: vi.fn(), connect: vi.fn(), confirm: vi.fn(),
+    getSession: () => ({ sessionId: "research-session", status: "active" }),
+    send: vi.fn(async () => ({ ok: true as const, data: {
+      apiVersion: "liteasy.agent/v1" as const, createdAt: "2026-10-11T00:00:00Z", idempotencyKey: "research-key", input: { message: "分析证据", mode: "qa" as const },
+      sessionId: "research-session", runId: "research-run", status: "completed" as const,
+      events: [{ apiVersion: "liteasy.agent/v1" as const, sessionId: "research-session", runId: "research-run", eventId: "research-answer", sequence: 1, emittedAt: "2026-10-11T00:00:01Z", type: "assistant.message" as const,
+        message: "研究尚未完成，已保留待解决问题。", metadata: JSON.parse(JSON.stringify({ researchLoop: stopResearchTask(startResearchTask("research-run", "分析证据"), reason) })) }]
+    } })), subscribe: vi.fn(() => vi.fn())
+  };
+  render(<AssistantPane agentClient={agentClient} onGenerateArtifact={() => "unused"} selectedSetStatus={{ importedCount: 1, selectedCount: 1, selectionLocked: true }} />);
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "分析证据");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+  expect(await screen.findByText(label, { exact: false })).toBeInTheDocument();
+  expect(screen.queryByText(/^已完成 ·/)).not.toBeInTheDocument();
 });
 
 test("queues a follow-up and interrupts at the next SDK tool boundary", async () => {
