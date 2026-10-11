@@ -6,7 +6,7 @@ import { artifactPromptTask, getGenerationPrompt, withGenerationPrompt } from ".
 import { getActiveModelEndpoint, getActiveModelProvider, getModelForSettings } from "../models/modelPolicy";
 import { createModelGatewayFromSettings } from "../models/modelRuntime";
 import { assertExternalPaperSources } from "../models/externalSourcePolicy";
-import { createHttpModelAuditClient, type ModelAuditTransport } from "../models/modelAuditClient";
+import { auditWithRemoteFailure, createHttpModelAuditClient, type ModelAuditTransport } from "../models/modelAuditClient";
 import type { ModelTransport, ModelTransportResponse } from "../models/modelHttpClient";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { SettingsState } from "../settings/settings.types";
@@ -4767,8 +4767,12 @@ export async function generateAssistantAnswer({
     model: "gpt-5-mini-auditor",
     provider: getActiveModelProvider(settings),
     question,
-    retrievalConfidence: groundedAnswer.confidence
-  }).catch(() => localAudit);
+    retrievalConfidence: groundedAnswer.confidence,
+    signal
+  }).catch((error: unknown) => {
+    if (signal?.aborted || isAbortError(error)) throw error;
+    return auditWithRemoteFailure(localAudit, error);
+  });
   if (signal?.aborted) {
     throw new Error("Assistant answer generation was cancelled");
   }

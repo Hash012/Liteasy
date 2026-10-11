@@ -38,11 +38,13 @@ test("posts generated answers and citations to the model audit endpoint", async 
     retrievalConfidence: 0.86
   });
 
-  expect(result).toEqual({
-    model: "gpt-5-mini-auditor",
-    rationale: "云端审计确认回答有引用支撑。",
+  expect(result).toMatchObject({
+    model: "remote_service",
+    checkerKind: "remote_service",
+    semanticStatus: "unverified",
+    reportedModel: "gpt-5-mini-auditor",
     score: 0.91,
-    verdict: "pass"
+    verdict: "review"
   });
   expect(requests).toEqual([
     {

@@ -899,11 +899,13 @@ test("generates cloud-proxy answers through an injected live transport", async (
 
   expect(result.content).toContain("云端回答：这篇综述如何定义向量数据库系统？");
   expect(result.content).toContain("demo-2 p.4");
-  expect(result.audit).toEqual({
-    model: "gpt-5-mini-auditor",
-    rationale: "回答包含可追溯引用，且引用片段覆盖问题关键词。",
+  expect(result.audit).toMatchObject({
+    model: "remote_service",
+    checkerKind: "remote_service",
+    semanticStatus: "unverified",
+    reportedModel: "gpt-5-mini-auditor",
     score: 0.86,
-    verdict: "pass"
+    verdict: "review"
   });
   expect(result.executionTrace).toEqual({
     backend: "http_service",
@@ -981,7 +983,8 @@ test("keeps generation on the unified cloud model path when stale local-direct s
   });
 
   expect(result.content).toContain("云端回答：");
-  expect(result.audit.model).toBe("gpt-5-mini-auditor");
+  expect(result.audit.model).toBe("remote_service");
+  expect(result.audit.semanticStatus).toBe("unverified");
   expect(result.audit.score).toBeGreaterThanOrEqual(0.8);
   expect(result.executionTrace).toEqual({
     backend: "http_service",
@@ -1043,11 +1046,13 @@ test("uses the cloud audit endpoint after http model generation", async () => {
   });
 
   expect(result.answer).toBe("真实模型回答");
-  expect(result.audit).toEqual({
-    model: "gpt-5-mini-auditor",
-    rationale: "云端审计确认回答有引用支撑。",
+  expect(result.audit).toMatchObject({
+    model: "remote_service",
+    checkerKind: "remote_service",
+    semanticStatus: "unverified",
+    reportedModel: "gpt-5-mini-auditor",
     score: 0.91,
-    verdict: "pass"
+    verdict: "review"
   });
   expect(requests[0].url).toBe("https://liteasy.example.com/model-proxy/v1/model/audit");
   expect(JSON.parse(requests[0].body)).toMatchObject({
@@ -8223,4 +8228,18 @@ test("runs at most two responsibility Subagents for a genuinely large thin-readi
       status: "failed"
     })
   ]);
+});
+
+test.each([
+  ["HTTP failure", async () => ({ ok: false, status: 500, json: async () => ({}) }), "http_error"],
+  ["invalid JSON", async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError("provider-private-body"); } }), "invalid_response"]
+] as const)("retains failed remote audit provenance after %s", async (_, auditTransport, reason) => {
+  const result = await generateAssistantAnswer({
+    auditTransport,
+    importedChunksByPaperId: {}, mode: "qa", modelTransport: liveModelTransport,
+    question: "解释方法", selectedPapers: [], settings: createSettingsStore().getState()
+  });
+  expect(result.audit).toMatchObject({ checkerKind: "structural_rules", status: "failed", semanticStatus: "unverified", remoteAttempt: { status: "failed", reason } });
+  expect(result.audit.verdict).not.toBe("pass");
+  expect(result.audit.rationale).not.toContain("provider-private-body");
 });

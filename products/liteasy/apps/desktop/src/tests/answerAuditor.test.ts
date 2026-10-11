@@ -8,9 +8,12 @@ test("marks answers without traceable citations for review", () => {
       retrievalConfidence: 0.64
     })
   ).toEqual({
-    model: "gpt-5-mini-auditor",
-    rationale: "回答缺少足够的可追溯依据，需要人工复核。",
-    score: 0.29,
+    model: "structural_rules",
+    checkerKind: "structural_rules",
+    status: "completed",
+    semanticStatus: "unverified",
+    rationale: "回答或引用片段不足；尚未进行逐条语义核验。",
+    score: 0,
     verdict: "fail"
   });
 });
