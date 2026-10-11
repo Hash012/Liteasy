@@ -27,7 +27,7 @@ export function MessageEvidence({ message, papers, onOpenCitation, onOpenAsset }
   const sourceIds = accessibleEvidenceSources(report, anchors);
   // Opening still resolves through the workbench/asset service and its current permissions.
   for (const source of report.sources) {
-    if (source.resourcePath && workbench?.scopeId) {
+    if (source.kind === "object" && source.resourcePath && workbench?.scopeId && source.scopeId === workbench.scopeId) {
       try { parseLiteasyPath(source.resourcePath, workbench.scopeId); sourceIds.add(source.id); } catch { /* Different scope stays inaccessible. */ }
     }
   }
@@ -44,7 +44,7 @@ export function MessageEvidence({ message, papers, onOpenCitation, onOpenAsset }
   const canOpen = (passage: EvidencePassage) => {
     if (passage.locatorIntegrity === "stale") return false;
     const source = sourceMap.get(passage.sourceId);
-    if (source?.resourcePath) return !!onOpenAsset;
+    if (source?.kind === "object" && source.resourcePath) return !!onOpenAsset;
     const anchor = resolveAnchor(passage);
     return !!anchor?.locator.page && !!(workbench?.openPaperAnchor || onOpenCitation);
   };
@@ -53,7 +53,7 @@ export function MessageEvidence({ message, papers, onOpenCitation, onOpenAsset }
   return <EvidenceLens report={projected} canOpenPassage={canOpen} onOpenPassage={async passage => {
     if (!canOpen(passage)) throw new Error("来源暂不可用。");
     const source = sourceMap.get(passage.sourceId);
-    if (source?.resourcePath) { await onOpenAsset?.(source.resourcePath); return; }
+    if (source?.kind === "object" && source.resourcePath) { await onOpenAsset?.(source.resourcePath); return; }
     const anchor = resolveAnchor(passage)!;
     if (workbench?.openPaperAnchor) await workbench.openPaperAnchor(anchor);
     else onOpenCitation?.(message.citations?.find(citation => citation.paperId === anchor.source.paperId && citation.page === anchor.locator.page && citation.snippet === anchor.snapshot.quote) ?? { paperAnchor: anchor, paperId: anchor.source.paperId, page: anchor.locator.page!, snippet: anchor.snapshot.quote });

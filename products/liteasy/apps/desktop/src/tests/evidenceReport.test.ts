@@ -101,3 +101,18 @@ it("rejects altered saved quote snapshots and source paths disguised as a paper"
   const disguised = report(); disguised.sources[0].resourcePath = "liteasy://objects/other?scope=organization%3Aprivate";
   expect(accessibleEvidenceSources(disguised, [anchor]).size).toBe(0);
 });
+
+
+it("restores paper title and coverage from host snapshots rather than saved report assertions", async () => {
+  const { bindEvidenceSnapshots } = await import("../app/features/evidence/evidenceAdapters");
+  const anchor = paperAnchorFromEvidence({ id: "e1", paperId: "p1", page: 2, quote: "actual quote" });
+  anchor.source.documentHash = "v1";
+  anchor.presentation.title = "真实论文";
+  const value = report(); value.sources[0].title = "伪造论文"; value.sources[0].coverage = "full_text";
+  const bound = bindEvidenceSnapshots(value, [anchor]);
+  expect(bound.sources[0]).toMatchObject({ title: "真实论文", coverage: "partial_text" });
+  expect(bound.passages).toHaveLength(1);
+  expect(value.sources[0].title).toBe("伪造论文");
+  anchor.snapshot.quote = "";
+  expect(bindEvidenceSnapshots(value, [anchor]).sources[0].coverage).toBe("metadata_only");
+});

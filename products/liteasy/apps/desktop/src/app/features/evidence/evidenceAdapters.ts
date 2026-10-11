@@ -77,15 +77,24 @@ export function evidenceReportFromAssetReads(input: {
 
 /** A saved report may organize snapshots, never replace the host's actual retrieved quote or locator. */
 export function bindEvidenceSnapshots(report: EvidenceReportV1, anchors: readonly PaperAnchorEntity[]): EvidenceReportV1 {
-  const sources = new Map(report.sources.map(source => [source.id, source]));
+  const matchesSource = (anchor: PaperAnchorEntity, source: EvidenceReportV1["sources"][number]) =>
+    anchor.source.paperId === source.paperId && anchor.source.documentHash === source.documentHash &&
+    anchor.source.objectRef?.objectId === source.objectRef?.objectId &&
+    anchor.source.objectRef?.revision === source.objectRef?.revision;
+  const boundSources = report.sources.map(source => {
+    if (source.kind !== "paper_pdf") return source;
+    const snapshots = anchors.filter(anchor => matchesSource(anchor, source));
+    return { ...source, title: snapshots[0]?.presentation.title ?? "来源不可用",
+      coverage: snapshots.some(anchor => anchor.snapshot.quote.trim()) ? "partial_text" as const : "metadata_only" as const };
+  });
+  const sources = new Map(boundSources.map(source => [source.id, source]));
   const passages = report.passages.filter(passage => {
     const source = sources.get(passage.sourceId);
     if (source?.kind !== "paper_pdf") return true;
-    return anchors.some(anchor => anchor.id === passage.evidenceAnchorId && anchor.source.paperId === source.paperId &&
-      anchor.source.documentHash === source.documentHash &&
+    return anchors.some(anchor => anchor.id === passage.evidenceAnchorId && matchesSource(anchor, source) &&
       anchor.snapshot.quote === passage.quote && anchor.locator.page === passage.locator.page &&
       anchor.locator.pageTextStart === passage.locator.start && anchor.locator.pageTextEnd === passage.locator.end);
   });
   // Keep unknown edges for the projector to notice incomplete review coverage and downgrade it.
-  return { ...report, passages };
+  return { ...report, sources: boundSources, passages };
 }
