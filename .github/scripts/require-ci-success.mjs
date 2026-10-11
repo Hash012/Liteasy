@@ -3,22 +3,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export function requireCiSuccess(results, { buildInstaller = false } = {}) {
-  for (const job of ["policy", "frontend"]) {
+export function requireCiSuccess(results) {
+  for (const job of ["policy", "frontend", "windows"]) {
     assert.equal(results?.[job]?.result, "success", `${job}: ${results?.[job]?.result ?? "missing result"}`);
   }
-  const windowsResult = results?.windows?.result;
-  if (buildInstaller) {
-    assert.equal(windowsResult, "success", `windows: ${windowsResult ?? "missing result"}`);
-    return;
-  }
-  assert.ok(windowsResult === "success" || windowsResult === "cancelled", `windows: ${windowsResult ?? "missing result"}`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const results = JSON.parse(process.env.CI_RESULTS ?? "{}");
-  const buildInstaller = process.env.BUILD_INSTALLER === "true";
-  requireCiSuccess(results, { buildInstaller });
+  requireCiSuccess(results);
   const message = process.env.BUILD_INSTALLER === "true"
     ? "All requested checks, Windows Release compilation and NSIS packaging passed. Installation and UI acceptance require manual verification.\n"
     : "Basic checks and Windows development compilation passed. This run did not validate production embedding, Release linking or NSIS packaging.\n";
