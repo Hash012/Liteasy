@@ -1,0 +1,6 @@
+html, body { margin: 0; padding: 0; }
+main { max-width: 850px; margin: auto; padding: 12px; box-sizing: border-box; }
+h1 { font-size: 18px; }
+p { overflow-wrap: anywhere; }
+.fixture-answer { border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; padding: 10px; }
+aside { margin-top: 12px; border-top: 1px solid var(--colorNeutralStroke2); padding: 8px; }

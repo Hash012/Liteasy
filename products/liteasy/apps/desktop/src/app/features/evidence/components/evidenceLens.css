@@ -1,0 +1,65 @@
+.evidence-lens {
+  container-type: inline-size;
+  min-width: 0;
+  width: 100%;
+  color: var(--colorNeutralForeground1, inherit);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.evidence-lens, .evidence-lens * { box-sizing: border-box; }
+.evidence-lens button { min-height: 28px; max-width: 100%; }
+.evidence-lens .evidence-lens__summary {
+  width: 100%; min-height: 36px; justify-content: flex-start;
+  padding: 4px 6px; font-weight: 400; text-align: left;
+  color: var(--colorNeutralForeground2, inherit); border-radius: 6px;
+}
+.evidence-lens__summary-text, .evidence-lens__counts { display: flex; flex-wrap: wrap; gap: 2px 10px; min-width: 0; }
+.evidence-lens__summary-text > span { min-width: 0; }
+.evidence-lens__counts { gap: 2px 6px; }
+.evidence-lens__expanded, .evidence-lens__inspector {
+  margin-top: 4px; padding: 8px; border: 1px solid var(--colorNeutralStroke2, #80808040); border-radius: 8px;
+  min-width: 0; background: var(--colorNeutralBackground1, transparent);
+}
+.evidence-lens__claims { padding: 0; margin: 4px 0 0; list-style: none; }
+.evidence-lens__claims > li { min-width: 0; margin: 0; padding: 0; }
+.evidence-lens .evidence-lens__claim {
+  display: flex; align-items: flex-start; gap: 6px; width: 100%; padding: 8px 4px; text-align: left; font-weight: 400;
+}
+.evidence-lens__claim-number { flex: 0 0 auto; color: var(--colorNeutralForeground3, inherit); font-variant-numeric: tabular-nums; }
+.evidence-lens__claim-text { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.evidence-lens__status { font-size: 11px; color: var(--colorNeutralForeground2, inherit); flex: 0 0 auto; }
+.evidence-lens__peek {
+  width: min(380px, 100%); max-height: min(420px, 65vh); overflow: auto; overscroll-behavior: contain;
+  margin: 4px 0 8px auto; padding: 10px;
+  background: var(--colorNeutralBackground2, transparent); border: 1px solid var(--colorNeutralStroke1, #80808060); border-radius: 8px;
+  box-shadow: var(--shadow4, 0 2px 4px #00000012);
+}
+.evidence-lens header { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+.evidence-lens header strong { font-size: 12px; min-width: 0; }
+.evidence-lens p { margin: 6px 0; }
+.evidence-lens__passage { min-width: 0; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--colorNeutralStroke2, #80808040); }
+.evidence-lens__passage strong { display: block; font-size: 12px; overflow-wrap: anywhere; }
+.evidence-lens__metadata { display: flex; flex-wrap: wrap; gap: 3px 8px; color: var(--colorNeutralForeground3, inherit); font-size: 11px; margin-top: 4px; }
+.evidence-lens blockquote {
+  margin: 8px 0; padding: 2px 8px; border-left: 2px solid var(--colorBrandStroke2, #80808060);
+  white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.55;
+  max-height: 180px; overflow: auto;
+}
+.evidence-lens__peek blockquote { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; max-height: none; }
+.evidence-lens__checks, .evidence-lens__empty, .evidence-lens__passage small { color: var(--colorNeutralForeground3, inherit); font-size: 11px; }
+.evidence-lens__passage small { display: block; }
+.evidence-lens__checks { margin-top: 8px; }
+.evidence-lens__filter { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+.evidence-lens__filter > * { min-width: 0; max-width: 100%; }
+.evidence-lens__inspector-body { max-height: min(640px, 70vh); overflow: auto; overscroll-behavior: contain; min-width: 0; }
+.evidence-lens__claim-detail { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--colorNeutralStroke2, #80808040); }
+.evidence-lens__claim-detail h4 { margin: 8px 0 4px; font-size: 12px; font-weight: 600; line-height: 1.5; }
+@container (max-width: 350px) {
+  .evidence-lens__summary-text { gap: 2px 6px; font-size: 11px; }
+  .evidence-lens__counts { flex-basis: 100%; }
+  .evidence-lens__expanded, .evidence-lens__inspector { padding: 6px; }
+  .evidence-lens .evidence-lens__claim { flex-wrap: wrap; }
+  .evidence-lens__claim .evidence-lens__status { margin-left: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .evidence-lens * { animation: none !important; transition: none !important; } }
