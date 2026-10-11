@@ -82,6 +82,7 @@ it("does not trust self-asserted verifier receipts or exact-text claims from per
   const projected = projectEvidenceReport(value, { currentRevisions: context.currentRevisions });
   expect(projected.claims[0].assessment).toBe("unverified");
   expect(projected.passages[0].locatorIntegrity).toBe("page_only");
+  expect(projected.verifications[0]).toMatchObject({ checkerKind: "none", origin: "legacy", status: "skipped" });
 });
 
 it("requires exact answer-span text and never rewrites unrelated Markdown", () => {

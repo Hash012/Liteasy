@@ -135,7 +135,13 @@ export function projectEvidenceReport(report: EvidenceReportV1, context: Evidenc
     return { ...claim, edges, assessment,
       textSpan: answerMatches && claim.textSpan?.textRevision === report.answerRevision && context.answerText?.slice(claim.textSpan.start, claim.textSpan.end) === claim.textSpan.exactText ? claim.textSpan : undefined };
   });
-  return { ...report, sources, passages, claims };
+  const verifications = report.verifications.map(record => record.origin === "independent_verifier" && !context.trustedVerificationIds?.has(record.id)
+    ? { ...record, checkerKind: "none" as const, origin: "legacy" as const, status: "skipped" as const,
+        checkerIdentity: undefined, finding: "历史核验声明缺少可验证执行回执；尚未逐条核验。" }
+    : record.answerRevision !== report.answerRevision || !answerMatches
+      ? { ...record, finding: "回答已变化或生成尚未完成，此记录不适用于当前回答。" }
+      : record);
+  return { ...report, sources, passages, claims, verifications };
 }
 
 export function evidenceCounts(report: EvidenceReportV1) {
