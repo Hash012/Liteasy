@@ -1,15 +1,27 @@
 import { z } from "zod";
 
-export const researchReviewSchema = z.strictObject({
-  plan: z.array(z.string().trim().min(1).max(300)).min(1).max(8),
-  gaps: z.array(z.strictObject({
-    id: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/),
-    kind: z.enum(["missing_source", "conflicting_evidence", "unsupported_claim", "user_constraint"]),
-    question: z.string().trim().min(1).max(600),
-    status: z.enum(["open", "addressed", "blocked"]),
-    evidencePaths: z.array(z.string().max(8192)).max(12),
-    resolution: z.string().max(1200)
-  })).max(16)
+const gapSchema = z.strictObject({
+  id: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/),
+  kind: z.enum(["missing_source", "conflicting_evidence", "unsupported_claim", "user_constraint"]),
+  question: z.string().trim().min(1).max(600),
+  status: z.enum(["open", "addressed", "blocked"]),
+  evidencePaths: z.array(z.string().max(8192)).max(12),
+  resolution: z.string().max(1200)
+});
+const planText = z.string().trim().min(1).max(300);
+const planStepSchema = z.union([
+  planText,
+  // Models sometimes add presentation metadata. Recognize only known text fields;
+  // never evaluate arbitrary objects, status/permissions, or executable actions.
+  z.object({ step: planText.optional(), title: planText.optional() })
+    .refine((step) => !!(step.step || step.title), "计划步骤需要 step 或 title 文本")
+    .transform((step) => step.step ?? step.title!)
+]);
+export const researchReviewSchema = z.object({
+  plan: z.array(planStepSchema).min(1).max(8),
+  // Planning data is non-authoritative. Unknown model fields are stripped, not
+  // forwarded into saved state, verification labels, or write authorization.
+  gaps: z.array(gapSchema.strip()).max(16)
 }).superRefine((value, context) => {
   if (new Set(value.gaps.map((gap) => gap.id)).size !== value.gaps.length) context.addIssue({ code: "custom", message: "缺口 ID 不得重复" });
 });
@@ -42,7 +54,7 @@ const savedTaskSchema = z.strictObject({
   schema: z.literal("liteasy.research-loop/v1"),
   task: z.strictObject({ id: z.string().max(200), goal: z.string().max(4000) }),
   plan: z.array(z.string().max(300)).max(8),
-  gaps: researchReviewSchema.shape.gaps,
+  gaps: z.array(gapSchema).max(16),
   decision: z.enum(["retrieve_more", "compare", "revise", "abstain", "request_user"]).optional(),
   stopReason: z.enum(["task_completed", "needs_review", "loop_exhausted", "context_exhausted", "request_user", "waiting_confirmation", "interrupted"]).optional(),
   status: z.enum(["running", "completed", "needs_review", "exhausted", "waiting_user", "interrupted"]),
@@ -69,9 +81,11 @@ export function parseResearchTask(raw: unknown): ResearchTask | undefined {
 export function reviewResearchTask(task: ResearchTask, raw: unknown, readAssets: ResearchTask["checkpoint"]["readAssets"], remainingOperations: number): ResearchTask {
   const review = researchReviewSchema.parse(raw);
   const paths = new Set(readAssets.filter((asset) => asset.includedCharacters > 0).map((asset) => asset.path));
-  const gaps = review.gaps.map((gap): EvidenceGap => {
-    const previous = task.gaps.find((item) => item.id === gap.id);
-    if (previous && previous.kind !== gap.kind) throw new Error("已有缺口的类别不能更改；请保留原问题并单独记录新的缺口。");
+  const gaps = review.gaps.map((proposed): EvidenceGap => {
+    const previous = task.gaps.find((item) => item.id === proposed.id);
+    // Keep the original category's evidence threshold if a later model response
+    // casually reclassifies the same question. This cannot downgrade conflicts.
+    const gap = { ...proposed, kind: previous?.kind ?? proposed.kind };
     const evidencePaths = [...new Set(gap.evidencePaths)].filter((path) => paths.has(path));
     const minimum = gap.kind === "conflicting_evidence" ? 2 : 1;
     // User constraints can only be clarified by another user turn, never resolved by a model assertion.
@@ -109,4 +123,10 @@ export function researchTaskSummary(task: ResearchTask): string {
   return [heading, questions.length ? `待解决问题：\n${questions.join("\n")}` : ""].filter(Boolean).join("\n\n");
 }
 
-export const researchToolInstruction = "证据密集的比较、综合或研究任务可用 action=research, text=JSON 提交计划及缺口；简单问答无需调用。格式 {plan:[步骤],gaps:[{id,kind:missing_source/conflicting_evidence/unsupported_claim/user_constraint,question,status:open/addressed/blocked,evidencePaths:[实际已读的完整路径],resolution}]}。宿主返回 retrieve_more/compare/revise/abstain/request_user；按该决定补充读取、对照实际段落或删改无依据的结论，再 research 更新同一缺口，不可直接消失。addressed 只是你的判断，不能称为独立核验；冲突至少读取两个不同来源。需要用户选择范围时用 user_constraint。";
+export const researchToolInstruction = [
+  "证据密集的比较、综合或研究任务可用 action=research, text=JSON字符串 提交计划及缺口；简单问答无需调用。",
+  'text 内部JSON的完整示例：{"plan":["读取论文并查找相反依据"],"gaps":[{"id":"g1","kind":"missing_source","question":"主张在什么条件下成立？","status":"open","evidencePaths":[],"resolution":""}]}。plan 用字符串数组，不需要额外字段。',
+  "kind 只能是 missing_source/conflicting_evidence/unsupported_claim/user_constraint；status 只能是 open/addressed/blocked。宿主返回 retrieve_more/compare/revise/abstain/request_user，按该决定补充读取、对照实际段落或删改无依据的结论，再 research 更新同一 id；保持类别，不得让未解决的缺口直接消失。",
+  "addressed 必须填写实际已读的完整 evidencePaths 和简短 resolution；这只是你的判断，不能称为独立核验。冲突至少读取两个不同来源。需要用户选择范围时用 user_constraint。",
+  '若现有资料范围确实无法回答，保留原 id/kind/question，将 status 改成 "blocked"，在 resolution 简要解释缺少什么；不要重复读取同一来源或直接 answer 宣称完成。'
+].join("\n");

@@ -1,4 +1,4 @@
-import { parseResearchTask, reviewResearchTask, startResearchTask, stopResearchTask } from "../app/features/research-loop/researchLoop";
+import { parseResearchTask, researchReviewSchema, reviewResearchTask, startResearchTask, stopResearchTask } from "../app/features/research-loop/researchLoop";
 import { parseAssistantHistory } from "../app/features/assistant/assistantHistoryPersistence";
 
 const initial = () => startResearchTask("run-1", "比较两篇论文的证据与反例");
@@ -64,4 +64,34 @@ test("research checkpoints survive chat history while invalid optional state is 
   expect(parsed?.sessions[0].messages[0].researchLoop).toEqual(task);
   expect(parsed?.sessions[0].messages[1].researchLoop).toBeUndefined();
   expect(parseResearchTask({ ...task, status: "completed", stopReason: "task_completed" })?.status).toBe("needs_review");
+});
+
+test("normalizes the actual live-model step/status plan objects and ignores extra presentation fields", () => {
+  const raw = {
+    plan: [{ step: "读取 ColBERT 第1-5页原文", status: "in_progress" }, { title: "提取 late interaction 与 MaxSim 的定义", status: "pending" }],
+    gaps: [gap()], user_constraints: [], semanticStatus: "verified", writeAuthorized: true
+  };
+  const parsed = researchReviewSchema.parse(raw);
+  expect(parsed).toEqual({ plan: ["读取 ColBERT 第1-5页原文", "提取 late interaction 与 MaxSim 的定义"], gaps: [gap()] });
+  const task = reviewResearchTask(initial(), raw, [], 12);
+  expect(task).toMatchObject({ semanticStatus: "unverified", decision: "retrieve_more", checkpoint: { mutations: "confirmation_required" } });
+  expect(task).not.toHaveProperty("writeAuthorized");
+  expect(task).not.toHaveProperty("user_constraints");
+  expect(researchReviewSchema.safeParse({ plan: [{ action: "write", content: "unrecognized plan" }], gaps: [] }).success).toBe(false);
+});
+
+test("accepts live-model extra root fields without adopting claimed verification or authority", () => {
+  for (const extra of [{ user_constraints: [] }, { semanticStatus: "unverified" }, { semanticStatus: "verified", checker: "invented", write: true }]) {
+    const task = reviewResearchTask(initial(), { ...review([gap({ status: "addressed", evidencePaths: ["invented"], resolution: "claimed completion", permission: "write" })]), ...extra }, [], 10);
+    expect(task).toMatchObject({ semanticStatus: "unverified", decision: "retrieve_more" });
+    expect(task.gaps[0]).toMatchObject({ status: "open", evidencePaths: [] });
+    expect(task.gaps[0]).not.toHaveProperty("permission");
+  }
+});
+
+test("normalizing a reclassified gap preserves its original two-source requirement", () => {
+  const first = reviewResearchTask(initial(), review([gap({ kind: "conflicting_evidence" })]), [read("p1")], 10);
+  const next = reviewResearchTask(first, review([gap({ kind: "missing_source", status: "addressed", evidencePaths: ["p1"], resolution: "single source agrees" })]), [read("p1")], 9);
+  expect(next.gaps[0]).toMatchObject({ kind: "conflicting_evidence", status: "open" });
+  expect(next.decision).toBe("compare");
 });
