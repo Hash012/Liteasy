@@ -1,3 +1,5 @@
+import { citationPaper, normalizeCitationDoi, type CitationPaper } from "../citation-graph/citationGraph";
+import { createCitationGraphClient } from "../citation-graph/citationGraphClient";
 import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
 import { compileSearchQuery } from "../search/searchQuery";
 import type { PaperServiceConfig } from "../paper-services/paperServiceTransport";
@@ -18,6 +20,7 @@ import { writeAssetContextTransfer } from "../object-transfer/assetContextTransf
 import { liteasyPath } from "../resource-filesystem/liteasyPath";
 import { ResourceLocationButton } from "../resource-filesystem/ResourceLocationButton";
 import {
+  lazy, Suspense,
   useEffect,
   useMemo,
   useRef,
@@ -44,7 +47,7 @@ import {
   MenuTrigger,
   Select,
   Textarea,
-  Tooltip
+  Tooltip, useRestoreFocusTarget
 } from "@fluentui/react-components";
 import {
   AddRegular,
@@ -65,6 +68,7 @@ import {
   FolderRegular,
   LightbulbRegular,
   OrganizationRegular,
+  ShareRegular,
   OpenRegular,
   DocumentArrowUpRegular,
   SearchRegular,
@@ -136,6 +140,8 @@ export type LibraryPaperChildItem = {
   label: string;
   meta?: string;
 };
+
+const CitationGraphDialog = lazy(() => import("../citation-graph/CitationGraphDialog"));
 
 type LibraryPaneProps = {
   expanded?: boolean;
@@ -649,6 +655,20 @@ function LibraryPaneContent({
     }
     return [...entries.values()];
   }, [fileLibrary?.entries, localLibrarySnapshot, papers, visiblePaperMetadata]);
+  const restoreLibraryFocus = useRestoreFocusTarget();
+  const [citationGraphOpen, setCitationGraphOpen] = useState(false);
+  const citationClient = useMemo(() => createCitationGraphClient(recommendationService),
+    [recommendationService?.provider, recommendationService?.endpoint, contextScopeId, sessionGeneration, localLibrarySnapshot?.rootPath]);
+  const citationPapers = useMemo<CitationPaper[]>(() => {
+    const known = new Map(papers.map((paper) => [paper.id, paper]));
+    return catalogEntries.filter((entry) => entry.format === "pdf").map((entry) => {
+      const paper = known.get(entry.id);
+      const base = paper ? citationPaper(paper) : { id: entry.id, title: entry.title };
+      return { ...base, title: entry.title, authors: entry.authors ?? base.authors, year: entry.year ?? base.year,
+        doi: entry.bibliographicRevision ? normalizeCitationDoi(entry.doi) : normalizeCitationDoi(entry.doi) ?? base.doi,
+        openAlexId: entry.bibliographicRevision && normalizeCitationDoi(entry.doi) !== base.doi ? undefined : base.openAlexId };
+    });
+  }, [catalogEntries, papers]);
   const catalogById = useMemo(() => new Map(catalogEntries.map((entry) => [entry.id, entry])), [catalogEntries]);
   const fileIndex = useMemo(() => indexReadingCatalog(catalogEntries), [catalogEntries]);
   const hasFilters = Boolean(query || selectedCategory || fileFilters.format !== "all" || fileFilters.status !== "all" || fileFilters.year || fileFilters.assetType || fileFilters.author || fileFilters.subject || fileFilters.tags?.length || fileFilters.excludeTags?.length);
@@ -1478,6 +1498,7 @@ function LibraryPaneContent({
         <Button
           appearance="subtle"
           aria-label={label}
+          {...restoreLibraryFocus}
           disabled={disabled}
           icon={icon}
           onClick={action}
@@ -1573,10 +1594,22 @@ function LibraryPaneContent({
       <p className="library-drag-help">将文件拖到目录名称上导入；拖动库内条目可整理位置。</p>
       {message || fileLibrary?.message ? <div aria-live="polite" className="library-resource-action-message">{message || fileLibrary?.message}</div> : null}
 
+      {citationGraphOpen ? <Suspense fallback={<p role="status">正在打开文献引用图…</p>}>
+        <CitationGraphDialog key={`${contextScopeId}:${sessionGeneration}:${localLibrarySnapshot?.rootPath}`} papers={citationPapers} client={citationClient}
+          initialPaperId={activePaperId ?? selectedPaperIds[0]} onClose={() => setCitationGraphOpen(false)}
+          onOpenPaper={onOpenPaper} onOpenRecommendation={onOpenRecommendation}
+          onRetrieveMetadata={onRetrievePaperMetadata ? async (id) => {
+            const paper = papers.find((item) => item.id === id);
+            if (!paper) return "请先打开这篇论文，再获取元信息。";
+            return onRetrievePaperMetadata(paper);
+          } : undefined} />
+      </Suspense> : null}
+
       <section aria-label="本地文献库" className={`library-section${dropHover?.key === dropKey("local") ? dropHover.allowed ? " is-drop-target" : " is-drop-blocked" : ""}`}
         onDragEnter={(event) => hoverTarget(event, "local")} onDragOver={(event) => hoverTarget(event, "local")} onDragLeave={(event) => leaveTarget(event, "local")} onDrop={(event) => void dropOnTarget(event, "local")}>
         <SectionHeader
           actions={<>
+            {iconAction("文献引用图", <ShareRegular />, () => setCitationGraphOpen(true))}
             {iconAction("新建本地目录", <FolderAddRegular />, () => openCreateFolderDialog("local"), !localLibrarySnapshot)}
             {iconAction(fileLibrary ? "导入文件" : "导入 PDF", <AddRegular />, openLocalPdfPicker, fileLibrary ? fileLibrary.pending : !localLibrarySnapshot)}
             {iconAction("从 Zotero 导出目录导入 PDF", <FolderOpenRegular />, () => zoteroDirectoryInputRef.current?.click(), !localLibrarySnapshot)}

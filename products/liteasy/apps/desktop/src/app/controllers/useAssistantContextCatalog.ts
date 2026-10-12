@@ -197,6 +197,10 @@ export function useAssistantContextCatalog(input: {
           assertCurrentScope();
           return readObjectContextPreview(input.repository, await input.repository.resolveLatest(object.objectId), assertCurrentScope);
         },
+        loadThumbnail: object.assets.some((asset) => asset.mediaType.startsWith("image/")) ? async () => {
+          assertCurrentScope();
+          return readObjectContextPreview(input.repository, await input.repository.resolveLatest(object.objectId), assertCurrentScope, 1);
+        } : undefined,
         description: object.kind === "source.document" ? "原始来源只读；长文按本轮问题选段并标明覆盖范围。" : "加入时固定版本，可与其他论文或项目一起使用。",
         detail: `${object.kind === "workspace.board" ? "研究白板" : "笔记"}/${object.title}`,
         resolveToken: async () => resolveObject(refOf(await input.repository.resolveLatest(object.objectId))),
@@ -249,6 +253,11 @@ export function useAssistantContextCatalog(input: {
             assertCurrentScope();
             const object = asset.role === "derived" ? await input.repository.resolveLatest(asset.ref!.objectId) : await input.repository.get(asset.ref!);
             return readObjectContextPreview(input.repository, object, assertCurrentScope);
+          } : undefined,
+          loadThumbnail: asset.kind === "image" && asset.ref ? async () => {
+            assertCurrentScope();
+            const object = asset.role === "derived" ? await input.repository.resolveLatest(asset.ref!.objectId) : await input.repository.get(asset.ref!);
+            return readObjectContextPreview(input.repository, object, assertCurrentScope, 1);
           } : undefined,
           resolveToken: () => resolveAsset(asset),
           ...((asset.role === "source" || asset.kind === "text" || asset.kind === "image") && asset.ref ? { createEditableCopy: async () => {

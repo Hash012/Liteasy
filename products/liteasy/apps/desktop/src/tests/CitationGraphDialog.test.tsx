@@ -1,0 +1,35 @@
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { expect, it, vi } from "vitest";
+import CitationGraphDialog from "../app/features/citation-graph/CitationGraphDialog";
+import type { CitationGraph } from "../app/features/citation-graph/citationGraph";
+import { parseCitationWork } from "../app/features/citation-graph/citationGraphClient";
+vi.mock("../app/features/citation-graph/CitationGraphCanvas", () => ({ CitationGraphCanvas: ({ graph }: { graph: CitationGraph }) => <div data-testid="graph">{graph.edges.map((edge) => <span key={edge.id}>{edge.id}</span>)}</div> }));
+const seed = parseCitationWork({ id: "https://openalex.org/W1", doi: "https://doi.org/10.1234/seed", title: "种子论文", referenced_works: ["https://openalex.org/W2"] })!;
+const external = parseCitationWork({ id: "https://openalex.org/W2", title: "发现论文", cited_by_count: 123 })!;
+const papers = [{ id: "local", title: "种子论文", doi: "10.1234/seed" }];
+const client = () => ({ loadLibrary: vi.fn(async () => ({ works: [seed], errors: [], identified: 1 })), expand: vi.fn(async () => ({ works: [external], edges: [{ id: "W1:W2", source: "W1", target: "W2" }], errors: [], limited: false })) });
+it("loads on request, sends direction/top K, opens discoveries through the existing details flow", async () => {
+  const service = client(); const open = vi.fn(); const close = vi.fn();
+  render(<CitationGraphDialog papers={papers} client={service} onClose={close} onOpenRecommendation={open} />);
+  expect(service.loadLibrary).not.toHaveBeenCalled();
+  expect(screen.getByRole("button", { name: "向外搜索一圈" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "加载引用关系" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "向外搜索一圈" })).toBeEnabled());
+  fireEvent.change(screen.getByRole("combobox", { name: "引用方向" }), { target: { value: "references" } });
+  fireEvent.change(screen.getByRole("combobox", { name: "引用量 Top K" }), { target: { value: "20" } });
+  fireEvent.click(screen.getByRole("button", { name: "向外搜索一圈" }));
+  await waitFor(() => expect(service.expand).toHaveBeenCalledWith(seed, [seed], "references", 20, expect.any(AbortSignal)));
+  expect(await screen.findByText("W1:W2")).toBeInTheDocument();
+  fireEvent.doubleClick(within(screen.getByRole("list", { name: "引用图论文列表" })).getByRole("button", { name: /发现论文/ }));
+  expect(open).toHaveBeenCalledWith(expect.objectContaining({ title: "发现论文", sourceUrl: "https://openalex.org/W2" }));
+  expect(close).toHaveBeenCalledOnce();
+});
+it("aborts closing queries so a late reply cannot update another dialog", async () => {
+  let resolve!: (value: { works: typeof seed[]; errors: string[]; identified: number }) => void;
+  const service = client(); service.loadLibrary.mockImplementation(() => new Promise((done) => { resolve = done; }));
+  const view = render(<CitationGraphDialog papers={papers} client={service} onClose={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "加载引用关系" }));
+  const signal = service.loadLibrary.mock.calls[0][1];
+  view.unmount(); expect(signal.aborted).toBe(true);
+  await act(async () => resolve({ works: [seed], errors: [], identified: 1 }));
+});

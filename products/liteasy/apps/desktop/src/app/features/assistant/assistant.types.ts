@@ -101,6 +101,7 @@ export type AssistantComposerSuggestion = {
   readOnly?: boolean;
   unavailableReason?: string;
   preview?: string;
+  loadThumbnail?: () => Promise<import("./contextAssetPreview").ContextAssetPreview>;
   loadPreview?: () => Promise<import("./contextAssetPreview").ContextAssetPreview>;
   /** Preserve the source; create a separately editable project asset. */
   createEditableCopy?: () => Promise<AssistantContextToken>;

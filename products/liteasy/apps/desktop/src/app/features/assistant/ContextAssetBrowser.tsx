@@ -1,3 +1,4 @@
+import { ContextAssetThumbnail } from "./ContextAssetThumbnail";
 import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
 import { MarkdownEditor } from "../markdown/MarkdownEditor";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -29,7 +30,7 @@ const PAGE_SIZE = 60;
 const categoryOf = (asset: AssistantComposerSuggestion) => asset.category ?? "其他资产";
 const available = (asset: AssistantComposerSuggestion) => !asset.unavailableReason && Boolean(asset.token || asset.resolveToken);
 
-/** Uses the same catalog as @ mentions; no secondary asset inventory or eager reads. */
+/** Uses the same catalog as @ mentions; visible images have bounded, read-only thumbnail loading. */
 export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQuery = "", initialPreviewId, onClose,
   onAddContextToken, onResolveContextToken, onChooseReference }: ContextAssetBrowserProps) {
   const references = useContext(ResourceReferencesContext);
@@ -236,6 +237,7 @@ export function ContextAssetBrowser({ suggestions, contextTokens = [], initialQu
                     }} /> : null}
                   <button className="context-asset-card-preview" type="button" aria-label={`预览 ${asset.label}`}
                     aria-pressed={previewId === asset.id} onClick={() => setPreviewId(asset.id)}>
+                    <ContextAssetThumbnail asset={asset} />
                     <span className="context-asset-card-heading">{categoryOf(asset) === "项目" ? <FolderRegular /> : <DocumentRegular />}<strong><SearchHighlight text={asset.label} query={query} /></strong></span>
                     <span className="context-asset-badges"><span>{categoryOf(asset)}</span>{asset.readOnly ? <span>{getAssistantReadOnlyLabel(asset)}</span> : asset.readOnly === false ? <span className="context-asset-editable">可编辑</span> : null}
                       {asset.token && addedIds.has(asset.token.id) ? <span>已加入对话</span> : null}</span>

@@ -1,0 +1,4 @@
+.context-asset-thumbnail { width: 100%; height: 132px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: var(--colorNeutralBackground3); border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; overflow: hidden; font-size: 11px; color: var(--colorNeutralForeground3); }
+.context-asset-thumbnail img { width: 100%; height: 100%; object-fit: contain; }
+.context-asset-thumbnail.compact { width: 52px; height: 48px; flex: 0 0 52px; }
+.context-asset-thumbnail.compact > span { display: none; }

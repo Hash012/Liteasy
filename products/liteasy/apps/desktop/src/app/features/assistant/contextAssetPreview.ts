@@ -21,7 +21,7 @@ function previewObjectText(object: ObjectEnvelope) {
 
 /** Read only: opening a preview must not capture objects or create context snapshots. */
 export async function readObjectContextPreview(repository: ObjectRepository, object: ObjectEnvelope,
-  assertCurrent: () => void): Promise<ContextAssetPreview> {
+  assertCurrent: () => void, maxImages = 6): Promise<ContextAssetPreview> {
   assertCurrent();
   let text = previewObjectText(object);
   const objects = [object];
@@ -40,7 +40,7 @@ export async function readObjectContextPreview(repository: ObjectRepository, obj
   const descriptors = [...new Map(objects.flatMap((entry) => entry.assets
     .filter((asset) => asset.mediaType.startsWith("image/"))
     .map((asset) => [asset.assetId, { asset, title: entry.title }] as const))).values()];
-  const images = await Promise.all(descriptors.slice(0, 6).map(async ({ asset, title }, index) => {
+  const images = await Promise.all(descriptors.slice(0, maxImages).map(async ({ asset, title }, index) => {
     const image = await repository.readAsset(asset.assetId);
     assertCurrent();
     return { url: `data:${image.mediaType};base64,${image.base64}`, label: descriptors.length === 1 ? title : `${title} · 图片 ${index + 1}` };

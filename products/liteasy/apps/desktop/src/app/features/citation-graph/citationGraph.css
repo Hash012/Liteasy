@@ -1,0 +1,29 @@
+.citation-graph-dialog { width: min(1440px, 96vw) !important; max-width: 96vw !important; height: min(880px, 92vh); }
+.citation-graph-dialog > div { height: 100%; min-height: 0; }
+.citation-graph-content { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow: hidden !important; }
+.citation-graph-toolbar, .citation-graph-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.citation-graph-toolbar label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.citation-graph-legend, .citation-graph-hint, .citation-graph-status { font-size: 12px; color: var(--colorNeutralForeground3); margin: 0; }
+.citation-graph-legend .local { color: var(--colorBrandForeground1); }
+.citation-graph-legend .discovered { color: var(--colorPaletteGreenForeground1); }
+.citation-graph-workspace { display: grid; grid-template-columns: minmax(180px, 22%) minmax(200px, 1fr) minmax(180px, 22%); flex: 1; min-height: 200px; gap: 8px; }
+.citation-graph-list, .citation-graph-details { overflow: auto; padding: 8px; border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; }
+.citation-graph-list > div[role="list"] { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.citation-graph-list button { text-align: left; justify-content: start; font-weight: 400; }
+.citation-graph-list button span { overflow-wrap: anywhere; }
+.citation-graph-list small { display: block; margin-top: 4px; color: var(--colorNeutralForeground3); }
+.citation-graph-details { overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; }
+.citation-graph-details button { margin: 4px 4px 4px 0; }
+.citation-graph-canvas { min-height: 200px; background: var(--colorNeutralBackground2); border-radius: 8px; overflow: hidden; }
+.citation-graph-dot { width: 140px; text-align: center; color: var(--colorNeutralForeground1); }
+.citation-graph-dot-circle { display: block; width: 22px; height: 22px; margin: 0 auto 6px; border-radius: 50%; background: var(--colorBrandBackground); border: 2px solid var(--colorBrandStroke1); }
+.citation-graph-dot.discovered .citation-graph-dot-circle { background: var(--colorNeutralBackground1); border-color: var(--colorPaletteGreenForeground1); }
+.citation-graph-dot.selected .citation-graph-dot-circle { outline: 3px solid var(--colorBrandBackground2); outline-offset: 3px; }
+.citation-graph-dot.faded { opacity: .3; }
+.citation-graph-node-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 12px; }
+.citation-graph-dot .react-flow__handle { opacity: 0; top: 11px; }
+.citation-graph-status { min-height: 20px; max-height: 70px; overflow: auto; }
+@media (max-width: 850px) { .citation-graph-workspace { grid-template-columns: 150px minmax(180px, 1fr); } .citation-graph-details { grid-column: 1 / -1; max-height: 130px; } }
+.citation-graph-dot .react-flow__handle { left: 50%; right: auto; transform: translate(-50%, -50%); }
+
+.citation-graph-zoom { display: flex; gap: 4px; }

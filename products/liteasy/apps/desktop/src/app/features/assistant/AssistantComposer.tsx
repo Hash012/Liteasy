@@ -1,7 +1,8 @@
+import { ContextAssetThumbnail } from "./ContextAssetThumbnail";
 import "../models/assistantModelPicker.css";
 import { displayPath } from "../resource-filesystem/displayPath";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { Button, Popover, PopoverSurface, PopoverTrigger, Slider, Tooltip } from "@fluentui/react-components";
+import { Button, Popover, PopoverSurface, PopoverTrigger, Slider, Tooltip, useRestoreFocusTarget } from "@fluentui/react-components";
 import { thinkingDepths, thinkingDepthLabels, type ThinkingDepth } from "./thinkingDepth";
 import { AddRegular, BrainCircuitRegular, EyeRegular, FlashRegular, GridRegular, MicRegular, SendRegular } from "@fluentui/react-icons";
 import type { AgentContextUsage, AssistantComposerSuggestion, AssistantContextToken } from "./assistant.types";
@@ -88,6 +89,7 @@ export function AssistantComposer({
   const [caret, setCaret] = useState(input.length);
   const [activeIndex, setActiveIndex] = useState(0);
   const [dismissed, setDismissed] = useState(false);
+  const restoreContextFocus = useRestoreFocusTarget();
   const [browserQuery, setBrowserQuery] = useState<string | null>(null);
   const [browserPreviewId, setBrowserPreviewId] = useState<string>();
   const insertionCaret = useRef<number>();
@@ -241,6 +243,7 @@ export function AssistantComposer({
               onClick={() => selectSuggestion(suggestion)}
               type="button"
             >
+              <ContextAssetThumbnail asset={suggestion} compact />
               <span className="assistant-suggestion-trigger">{suggestion.trigger}</span>
               <span className="assistant-suggestion-main">
                 <strong>{suggestion.label}</strong>
@@ -341,7 +344,7 @@ export function AssistantComposer({
       <div className="assistant-composer-actions">
         {modelPicker}
         <Tooltip content="按类别和项目浏览资料，组合添加到上下文" relationship="description">
-          <Button appearance="subtle" aria-label="添加上下文" data-tour="add-context" className="assistant-add-context" icon={<AddRegular />} onClick={() => openAssetBrowser()} />
+          <Button {...restoreContextFocus} appearance="subtle" aria-label="添加上下文" data-tour="add-context" className="assistant-add-context" icon={<AddRegular />} onClick={() => openAssetBrowser()} />
         </Tooltip>
         {onThinkingDepthChange ? <Popover positioning={{ position: "above", autoSize: "height", overflowBoundaryPadding: 12 }} trapFocus>
           <PopoverTrigger disableButtonEnhancement>
