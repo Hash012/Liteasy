@@ -836,6 +836,61 @@ mod tests {
         assert!(get(&db, "A", "head/saved").unwrap().is_some());
     }
     #[test]
+    fn assistant_send_survives_exit_as_one_committed_transaction() {
+        const CHILD: &str = "LITEASY_ASSISTANT_CRASH_TEST_PATH";
+        if let Ok(path) = std::env::var(CHILD) {
+            let mut db = Connection::open(path).unwrap();
+            initialize(&db).unwrap();
+            let mut message = create("assistant/v2/message/a/u1");
+            message.row.as_mut().unwrap().value = serde_json::json!({"id": "u1", "role": "user", "content": "synthetic question", "requestId": "request-1", "contextSnapshotRefs": [{"objectId": "result", "revision": "r1"}]});
+            let mut intent = create("assistant/v2/outbox/a");
+            intent.row.as_mut().unwrap().value = serde_json::json!([{"requestId": "request-1", "userMessageId": "u1", "state": "pending"}]);
+            let mut draft = create("assistant/v2/draft/window/a");
+            draft.row.as_mut().unwrap().value =
+                serde_json::json!({"input": "", "tokens": [], "readerContexts": []});
+            commit(&mut db, "A", &[message, intent, draft]).unwrap();
+            db.execute_batch("BEGIN IMMEDIATE; INSERT INTO object_records VALUES ('A','assistant/v2/message/a/uncommitted','v1','{}');").unwrap();
+            std::process::exit(74);
+        }
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!(
+            "liteasy-assistant-crash-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("objects.sqlite3");
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "object_store::tests::assistant_send_survives_exit_as_one_committed_transaction",
+            ])
+            .env(CHILD, &path)
+            .status()
+            .unwrap();
+        assert_eq!(status.code(), Some(74));
+        {
+            let db = Connection::open(&path).unwrap();
+            initialize(&db).unwrap();
+            let message = get(&db, "A", "assistant/v2/message/a/u1").unwrap().unwrap();
+            assert_eq!(message.value["requestId"], "request-1");
+            assert_eq!(message.value["contextSnapshotRefs"][0]["revision"], "r1");
+            assert!(get(&db, "A", "assistant/v2/outbox/a").unwrap().is_some());
+            assert!(get(&db, "A", "assistant/v2/draft/window/a")
+                .unwrap()
+                .is_some());
+            assert!(get(&db, "A", "assistant/v2/message/a/uncommitted")
+                .unwrap()
+                .is_none());
+            assert!(get(&db, "B", "assistant/v2/message/a/u1")
+                .unwrap()
+                .is_none());
+        }
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[test]
     fn interrupted_process_recovers_only_committed_records() {
         const CHILD: &str = "LITEASY_OBJECT_CRASH_TEST_PATH";
         if let Ok(path) = std::env::var(CHILD) {

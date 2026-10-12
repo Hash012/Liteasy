@@ -3,7 +3,7 @@ import { webcrypto } from "node:crypto";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, test, vi } from "vitest";
-import { AssistantPane } from "../app/features/assistant/AssistantPane";
+import { AssistantSessionController as AssistantPane } from "../app/controllers/assistant/AssistantSessionController";
 import { ObjectWorkbenchContext, type ObjectWorkbenchPort } from "../app/features/objects/objectWorkbenchPort";
 import { useObjectWorkbenchController, type ObjectWorkbenchController } from "../app/controllers/useObjectWorkbenchController";
 import { createAgentApplicationService } from "../app/controllers/agent/agentApplicationService";

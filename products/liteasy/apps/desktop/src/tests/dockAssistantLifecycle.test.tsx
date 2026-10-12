@@ -4,7 +4,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vitest";
 import { DockSurfaceSlot } from "../app/features/dock/DockSurfaceSlot";
-import { AssistantPane } from "../app/features/assistant/AssistantPane";
+import { AssistantSessionController as AssistantPane } from "../app/controllers/assistant/AssistantSessionController";
 import { createAgentApplicationService } from "../app/controllers/agent/agentApplicationService";
 import { createFrontendAgentClient } from "../app/features/agent-api/frontendAgentClient";
 

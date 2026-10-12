@@ -1896,6 +1896,13 @@ describe("useArtifactActions", () => {
     expect(runAgentAnalysis).not.toHaveBeenCalled();
     expect(onArtifactTasksChanged).not.toHaveBeenCalled();
     expect(artifactStore.getTasks()).toEqual([]);
+    const otherTask = artifactStore.createTask("tree");
+    artifactStore.updateTask(otherTask, { status: "running", sourcePaperIds: [paper.id, secondPaper.id],
+      recovery: { papers: [paper, secondPaper], chunks: {}, options: { supplementalContext: "original task input" } } });
+    let receipt: { message: string; taskIds: string[] } | undefined;
+    act(() => { receipt = result.current.startAnalysisWithReceipt("tree", [paper, secondPaper], { supplementalContext: "different requested input" }); });
+    expect(receipt).toEqual({ message: "已取消重复生成“树形展开”产物。", taskIds: [] });
+    expect(artifactStore.getTasks().map((task) => task.id)).toEqual([otherTask]);
   });
 
   test("continues duplicate generation only after confirmation", () => {

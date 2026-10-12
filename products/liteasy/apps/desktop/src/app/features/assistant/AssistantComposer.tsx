@@ -203,7 +203,7 @@ export function AssistantComposer({
       ) : null}
       {editing ? (
         <div className="assistant-editing-banner">
-          <span>正在重新编辑上一条输入</span>
+          <span>正在编辑原问题；发送后创建分支，原讨论保留</span>
           <button className="assistant-editing-cancel" onClick={onCancelEdit} type="button">
             取消编辑
           </button>

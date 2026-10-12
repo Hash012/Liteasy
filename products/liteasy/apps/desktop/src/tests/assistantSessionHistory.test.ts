@@ -131,9 +131,10 @@ test("projects artifact progress into a stable generation session", () => {
   expect(completed.id).toBe(running.id);
   expect(completed.createdAt).toBe(running.createdAt);
   expect(completed.kind).toBe("artifact_generation");
+  expect(completed.messages.every((message) => message.role !== "user")).toBe(true);
   expect(completed.status).toBe("completed");
-  expect(completed.messages[1].content).not.toContain("进度：");
-  expect(completed.messages[1].content).toContain("完整结果");
+  expect(completed.messages[0].content).not.toContain("进度：");
+  expect(completed.messages[0].content).toContain("完整结果");
 });
 
 test("keeps all pages of one thin-reading artifact in its paper-bound session", () => {
@@ -181,14 +182,14 @@ test("projects safe artifact failures into the AI generation session", () => {
   }, undefined, () => 0);
 
   expect(failed.status).toBe("failed");
-  expect(failed.messages[1].content).toContain("错误信息");
-  expect(failed.messages[1].content).toContain("错误编号：model_authentication_failed");
-  expect(failed.messages[1].content).toContain("请登录或重新登录 Liteasy 账号，再使用模型服务。");
-  expect(failed.messages[1].content).not.toContain("OpenAI Responses API");
-  expect(failed.messages[1].content).not.toContain("http://127.0.0.1:8787");
-  expect(failed.messages[1].content).not.toContain("Provider：openai");
-  expect(failed.messages[1].content).not.toContain("Model：gpt-5.5");
-  expect(failed.messages[1].content).toContain("请联系管理员并提供失败时间");
+  expect(failed.messages[0].content).toContain("错误信息");
+  expect(failed.messages[0].content).toContain("错误编号：model_authentication_failed");
+  expect(failed.messages[0].content).toContain("请登录或重新登录 Liteasy 账号，再使用模型服务。");
+  expect(failed.messages[0].content).not.toContain("OpenAI Responses API");
+  expect(failed.messages[0].content).not.toContain("http://127.0.0.1:8787");
+  expect(failed.messages[0].content).not.toContain("Provider：openai");
+  expect(failed.messages[0].content).not.toContain("Model：gpt-5.5");
+  expect(failed.messages[0].content).toContain("请联系管理员并提供失败时间");
 });
 
 test("classifies the desktop login preflight as model authentication failure", () => {
@@ -207,10 +208,10 @@ test("classifies the desktop login preflight as model authentication failure", (
     type: "thin_reading"
   }, undefined, () => 0);
 
-  expect(failed.messages[1].content).toContain("错误编号：model_authentication_failed");
-  expect(failed.messages[1].content).toContain("请登录或重新登录 Liteasy 账号，再使用模型服务。");
-  expect(failed.messages[1].content).not.toContain("生成任务未完成，请稍后重试");
-  expect(failed.messages[1].content).not.toContain("内部异常");
+  expect(failed.messages[0].content).toContain("错误编号：model_authentication_failed");
+  expect(failed.messages[0].content).toContain("请登录或重新登录 Liteasy 账号，再使用模型服务。");
+  expect(failed.messages[0].content).not.toContain("生成任务未完成，请稍后重试");
+  expect(failed.messages[0].content).not.toContain("内部异常");
 });
 
 test("includes artifact internals in a server-authorized diagnostic session", () => {
@@ -232,10 +233,10 @@ test("includes artifact internals in a server-authorized diagnostic session", ()
     type: "tree"
   }, undefined, () => 0, { developerDiagnostics: true });
 
-  expect(failed.messages[1].content).toContain("内部异常：OpenAI Responses API 请求失败（401）");
-  expect(failed.messages[1].content).toContain("服务端点：http://127.0.0.1:8787");
-  expect(failed.messages[1].content).toContain("Provider：openai");
-  expect(failed.messages[1].content).toContain("Model：gpt-5.5");
+  expect(failed.messages[0].content).toContain("内部异常：OpenAI Responses API 请求失败（401）");
+  expect(failed.messages[0].content).toContain("服务端点：http://127.0.0.1:8787");
+  expect(failed.messages[0].content).toContain("Provider：openai");
+  expect(failed.messages[0].content).toContain("Model：gpt-5.5");
 });
 
 test("summarizes attached paper topics instead of putting their full names into the session title", () => {

@@ -7,7 +7,7 @@ import { beforeEach, expect, test, vi } from "vitest";
 import { useAssistantContextCatalog } from "../app/controllers/useAssistantContextCatalog";
 import { useObjectWorkbenchController, type ObjectWorkbenchController } from "../app/controllers/useObjectWorkbenchController";
 import { createSettingsStore } from "../app/features/settings/settings.store";
-import { AssistantPane } from "../app/features/assistant/AssistantPane";
+import { AssistantSessionController as AssistantPane } from "../app/controllers/assistant/AssistantSessionController";
 import { ObjectWorkbenchContext } from "../app/features/objects/objectWorkbenchPort";
 import { createAgentApplicationService } from "../app/controllers/agent/agentApplicationService";
 import { createFrontendAgentClient } from "../app/features/agent-api/frontendAgentClient";

@@ -11,6 +11,7 @@ import type {
 
 export type FrontendAgentClient = {
   cancel: (runId: string, reason?: string) => Promise<AgentApiResult<AgentRun>>;
+  detach?: () => void;
   close: () => Promise<AgentApiResult<AgentSession>>;
   connect: () => Promise<AgentApiResult<AgentSession>>;
   confirm: (
@@ -18,6 +19,8 @@ export type FrontendAgentClient = {
     decision: ResolveAgentConfirmationRequest["decision"]
   ) => Promise<AgentApiResult<AgentRun>>;
   createSessionClient: (clientSessionId: string) => FrontendAgentClient;
+  getRun?: (runId: string) => Promise<AgentApiResult<AgentRun>>;
+  findRunByRequest?: (idempotencyKey: string) => Promise<AgentApiResult<AgentRun | null>>;
   getSession: () => AgentSession | null;
   listPublicWorkflowAuditSummaries: (input: {
     runId?: string;
@@ -44,6 +47,7 @@ export function createFrontendAgentClient(
 ): FrontendAgentClient {
   let session: AgentSession | null = null;
   let requestSequence = 0;
+  let connecting: Promise<AgentApiResult<AgentSession>> | undefined;
   const listeners = new Set<AgentEventListener>();
   let unsubscribeApi: (() => void) | null = null;
 
@@ -54,26 +58,21 @@ export function createFrontendAgentClient(
     return `${sessionId}:frontend-turn:${requestSequence}:${randomPart}`;
   };
 
-  const connect = async () => {
-    if (session?.status === "active") {
-      return { data: session, ok: true } as const;
-    }
-    const result = await api.createSession({
-      clientSessionId: options.clientSessionId,
-      consumer: "frontend",
-      principalId: options.principalId
-    });
-    if (result.ok) {
-      session = result.data;
-      unsubscribeApi = api.subscribe(session.sessionId, (event) => {
-        listeners.forEach((listener) => listener(event));
-      });
-    }
-    return result;
+  const attach = () => {
+    if (session && !unsubscribeApi) unsubscribeApi = api.subscribe(session.sessionId, (event) => listeners.forEach((listener) => listener(event)));
+  };
+  const connect = async (): Promise<AgentApiResult<AgentSession>> => {
+    if (session?.status === "active") { attach(); return { data: session, ok: true }; }
+    connecting ??= api.createSession({ clientSessionId: options.clientSessionId, consumer: "frontend", principalId: options.principalId })
+      .then((result) => { if (result.ok) { session = result.data; attach(); } return result; })
+      .finally(() => { connecting = undefined; });
+    return connecting;
   };
 
 
+
   return {
+    detach() { unsubscribeApi?.(); unsubscribeApi = null; listeners.clear(); },
     async cancel(runId, reason) {
       const connected = await connect();
       if (!connected.ok) return connected;
@@ -119,6 +118,19 @@ export function createFrontendAgentClient(
         decision,
         sessionId: activeSession.sessionId
       });
+    },
+
+    async getRun(runId) {
+      const connected = await connect();
+      if (!connected.ok) return connected;
+      return api.getRun({ runId, sessionId: connected.data.sessionId });
+    },
+
+    async findRunByRequest(idempotencyKey) {
+      const connected = await connect();
+      if (!connected.ok) return connected;
+      if (!api.findRunByRequest) return { ok: false, error: { code: "unsupported_operation", message: "执行方不支持核对发送回执。", retryable: false } };
+      return api.findRunByRequest({ sessionId: connected.data.sessionId, idempotencyKey });
     },
 
     getSession() {

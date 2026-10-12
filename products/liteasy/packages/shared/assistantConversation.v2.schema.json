@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "liteasy.conversation/v2"
+    },
+    "conversationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scopeId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "origin": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "direct_chat",
+            "conversation_action",
+            "workflow_entry",
+            "automation",
+            "legacy_unknown"
+          ]
+        },
+        "entryPoint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "initiatedBy": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "user",
+                "automation",
+                "import"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "parentConversationId": {
+          "type": "string"
+        },
+        "triggerMessageId": {
+          "type": "string"
+        },
+        "parentTaskId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "entryPoint",
+        "initiatedBy"
+      ],
+      "additionalProperties": false
+    },
+    "title": {
+      "type": "string"
+    },
+    "titleSource": {
+      "type": "string",
+      "enum": [
+        "automatic",
+        "user"
+      ]
+    },
+    "lifecycle": {
+      "type": "string",
+      "enum": [
+        "active",
+        "archived",
+        "tombstoned"
+      ]
+    },
+    "activeBranchId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "parentConversationId": {
+      "type": "string"
+    },
+    "branchBoundaryMessageId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "conversationId",
+    "scopeId",
+    "origin",
+    "title",
+    "titleSource",
+    "lifecycle",
+    "activeBranchId"
+  ],
+  "additionalProperties": false,
+  "$id": "https://schemas.liteasy.app/assistantConversation.v2.schema.json"
+}

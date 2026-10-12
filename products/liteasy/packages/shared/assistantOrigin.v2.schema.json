@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "direct_chat",
+        "conversation_action",
+        "workflow_entry",
+        "automation",
+        "legacy_unknown"
+      ]
+    },
+    "entryPoint": {
+      "type": "string",
+      "minLength": 1
+    },
+    "initiatedBy": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "user",
+            "automation",
+            "import"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "parentConversationId": {
+      "type": "string"
+    },
+    "triggerMessageId": {
+      "type": "string"
+    },
+    "parentTaskId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "kind",
+    "entryPoint",
+    "initiatedBy"
+  ],
+  "additionalProperties": false,
+  "$id": "https://schemas.liteasy.app/assistantOrigin.v2.schema.json"
+}

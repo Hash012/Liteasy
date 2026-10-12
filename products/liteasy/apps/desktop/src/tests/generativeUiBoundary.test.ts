@@ -65,11 +65,12 @@ describe("generative UI boundaries", () => {
   });
 
   test("assistant input entrypoint delegates to the IntentInputAdapter", () => {
-    const source = readFileSync(join(repoSrc, "app/features/assistant/AssistantPane.tsx"), "utf8");
+    const source = readFileSync(join(repoSrc, "app/controllers/assistant/AssistantSessionController.tsx"), "utf8");
 
     expect(source).toMatch(/adaptDefaultUiIntent/);
     expect(source).toMatch(/adaptTextIntent/);
-    expect(source).not.toMatch(/input\.trim\(\)/);
+    const sendEntry = source.slice(source.indexOf("async function handleSend"), source.indexOf("function handleEditMessage"));
+    expect(sendEntry).not.toMatch(/input\.trim\(\)/);
   });
 
   test("runtime orchestrator delegates planner and policy context construction", () => {
@@ -102,7 +103,7 @@ describe("generative UI boundaries", () => {
   });
 
   test("assistant dynamic action entrypoint delegates ActionRefs to the runtime bridge", () => {
-    const source = readFileSync(join(repoSrc, "app/features/assistant/AssistantPane.tsx"), "utf8");
+    const source = readFileSync(join(repoSrc, "app/controllers/assistant/AssistantSessionController.tsx"), "utf8");
 
     expect(source).toMatch(/executeUIDslActionRef/);
     expect(source).toMatch(/action:\s*"trigger_action"/);

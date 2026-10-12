@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
-import { AssistantPane } from "../app/features/assistant/AssistantPane";
+import { AssistantSessionController as AssistantPane } from "../app/controllers/assistant/AssistantSessionController";
 import { getGenerationPrompt } from "../app/features/ai-prompts/generationPrompts";
 import type { ArtifactTask } from "../app/features/artifacts/artifact.types";
 
@@ -31,16 +31,16 @@ describe("AssistantPane multi-session registry", () => {
           events: [{
             apiVersion: "liteasy.agent/v1",
             emittedAt: "2026-07-30T00:00:01.000Z",
-            eventId: `event-${clientSessionId}`,
+            eventId: `event-${clientSessionId}-${send.mock.calls.length}`,
             message: `answer:${input.message}`,
-            runId: `run-${clientSessionId}`,
+            runId: `run-${clientSessionId}-${send.mock.calls.length}`,
             sequence: 1,
             sessionId: `public-${clientSessionId}`,
             type: "assistant.message"
           }],
           idempotencyKey: `key-${clientSessionId}`,
           input,
-          runId: `run-${clientSessionId}`,
+          runId: `run-${clientSessionId}-${send.mock.calls.length}`,
           sessionId: `public-${clientSessionId}`,
           status: "completed"
         },
@@ -287,6 +287,7 @@ describe("AssistantPane multi-session registry", () => {
       <AssistantPane
         agentClient={{ close: vi.fn() } as never}
         artifactTasks={[artifactTask({ agentRunId: "run-artifact-1" })]}
+        artifactSessionOpenRequest={{ requestId: "explicit-task-open", taskId: "artifact-task-1" }}
         onCancelArtifactTask={onCancelArtifactTask}
         onGenerateArtifact={() => "unused"}
         selectedSetStatus={{
@@ -312,6 +313,7 @@ describe("AssistantPane multi-session registry", () => {
       <AssistantPane
         agentClient={agentClient}
         artifactTasks={[firstTask]}
+        artifactSessionOpenRequest={{ requestId: "explicit-task-open", taskId: firstTask.id }}
         onActiveSessionChange={onActiveSessionChange}
         onGenerateArtifact={() => "unused"}
         onOpenArtifact={onOpenArtifact}

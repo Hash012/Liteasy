@@ -26,6 +26,7 @@ export type AgentManagerActivity = {
 export type AgentArtifactType = "comparison_table" | "layered_graph" | "mindmap" | "ppt" | "thin_reading" | "tree";
 
 export type AgentRunStatus =
+  | "interrupted"
   | "cancelled"
   | "completed"
   | "failed"
@@ -92,6 +93,8 @@ export type SubmitAgentTurnRequest = {
   attachments?: AgentAttachment[];
   idempotencyKey: string;
   input: {
+    conversationHistory?: import("../assistant/assistantConversationContext").AssistantConversationTurn[];
+    branchId?: string;
     networkMode?: "online" | "local-only";
     artifactType?: AgentArtifactType;
     systemPrompt?: string;
@@ -336,6 +339,7 @@ export type AgentPublicApi = {
   createSession: (
     input: CreateAgentSessionRequest
   ) => Promise<AgentApiResult<AgentSession>>;
+  findRunByRequest?: (input: { sessionId: string; idempotencyKey: string }) => Promise<AgentApiResult<AgentRun | null>>;
   getRun: (input: {
     runId: string;
     sessionId: string;

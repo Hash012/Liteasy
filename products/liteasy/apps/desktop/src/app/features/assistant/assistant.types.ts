@@ -14,6 +14,12 @@ export type { AssistantMode };
 export type AssistantConfirmationRequest = HumanConfirmationRequest | AgentConfirmationRequest;
 
 export type AssistantMessage = {
+  kind?: "user_message" | "assistant_message" | "task_reference" | "result_reference" | "system_notice";
+  taskReference?: { taskId: string; title: string };
+  requestId?: string;
+  runId?: string;
+  contextSnapshotRefs?: import("../context/objectContext").ContextRef[];
+
   researchLoop?: import("../research-loop/researchLoop").ResearchTask;
   evidenceReport?: import("../evidence/evidenceReport").EvidenceReportV1;
   assetWrites?: import("./assistantAssetWrites").AssistantAssetWrite[];

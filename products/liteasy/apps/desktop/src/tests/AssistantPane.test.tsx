@@ -9,9 +9,9 @@ import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, vi } from "vitest";
 import {
-  AssistantPane as RuntimeAssistantPane,
+  AssistantSessionController as RuntimeAssistantPane,
   hasPaperGroundedAuditScope
-} from "../app/features/assistant/AssistantPane";
+} from "../app/controllers/assistant/AssistantSessionController";
 import { presetGenerationPrompt } from "../app/features/ai-prompts/generationPrompts";
 import { createSettingsStore } from "../app/features/settings/settings.store";
 import type { FrontendAgentClient } from "../app/features/agent-api/frontendAgentClient";
@@ -166,26 +166,17 @@ test.each([false, true])("creates a background thin-reading session without chan
   expect(screen.queryByRole("button", { name: "中断薄读" })).not.toBeInTheDocument();
 });
 
-test("preserves a question asked from generation details when task progress changes", async () => {
+test("task details require a saved result before starting a discussion", async () => {
   const task = { id: "task-details", artifactId: "thin-paper", type: "thin_reading" as const,
     message: "正在生成", status: "running" as const, stage: "generating_answer" as const, progress: 30 };
   const props = { onGenerateArtifact: () => "unused", artifactSessionOpenRequest: { requestId: "open", taskId: task.id },
     selectedSetStatus: { importedCount: 1, selectedCount: 1, selectionLocked: true } };
   const { rerender } = render(<AssistantPane {...props} artifactTasks={[task]} />);
   await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("生成：薄读"));
-  const user = userEvent.setup();
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "解释这一段");
-  await user.click(screen.getByRole("button", { name: "发送", exact: true }));
-  await screen.findByText(/云端回答：解释这一段/);
-  expect(screen.getByLabelText("当前会话")).toHaveAttribute("data-session-kind", "conversation");
-  rerender(<AssistantPane {...props} artifactTasks={[{ ...task, progress: 60 }]} />);
-  expect(screen.getAllByText("解释这一段", { exact: true }).length).toBeGreaterThan(0);
-  expect(screen.getByText(/云端回答：解释这一段/)).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "历史" }));
-  await user.click(screen.getByRole("button", { name: "打开会话：生成：薄读" }));
-  await user.click(screen.getByRole("button", { name: "历史" }));
-  await user.click(screen.getByRole("button", { name: "打开会话：解释这一段" }));
-  expect(screen.getByText(/云端回答：解释这一段/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "围绕此结果提问" })).toBeDisabled();
+  expect(screen.queryByPlaceholderText("输入你的问题或命令")).not.toBeInTheDocument();
+  rerender(<AssistantPane {...props} artifactTasks={[{ ...task, status: "completed", stage: "completed", progress: 100 }]} />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "围绕此结果提问" })).toBeEnabled());
 });
 
 test("keeps the cancel target on a resumed older layer after a newer layer completed", async () => {
@@ -393,7 +384,7 @@ test("projects public Agent streaming events into the expandable work status car
         { ...base, eventId: "stream-write", sequence: 7.5, type: "asset.written" as const,
           receipt: { asset: { title: "CicN", path: "liteasy://objects/note-cicn?scope=local", revision: "r2" }, changed: true, addedLines: 12, removedLines: 1 } },
         { ...base, eventId: "stream-complete", sequence: 8, type: "run.completed" as const }
-      ] as AgentEvent[];
+      ].map((event, index) => ({ ...event, sequence: index + 1 })) as AgentEvent[];
       events.forEach((event) => listeners.forEach((listener) => listener(event)));
       return {
         data: {
@@ -1757,7 +1748,7 @@ test.each([["生成PPT", "ppt"], ["/制作提纲", "tree"]] as const)("lazy pape
   expect(fixture.captureFulltext).not.toHaveBeenCalled();
   expect(generate).not.toHaveBeenCalled();
   await act(async () => { finishPrepare(); });
-  await waitFor(() => expect(generate).toHaveBeenCalledWith(type, ["cicada"], expect.any(String), [fixture.noteRef, fixture.fulltextRef], generationPromptTasks[type].prompt));
+  await waitFor(() => expect(generate).toHaveBeenCalledWith(type, ["cicada"], expect.any(String), [fixture.noteRef, fixture.fulltextRef], generationPromptTasks[type].prompt, expect.objectContaining({ kind: "conversation_action", parentConversationId: expect.any(String), triggerMessageId: expect.any(String) })));
   expect(fixture.captureFulltext).toHaveBeenCalledWith(["cicada"]);
   expect(fixture.captureMetadata).not.toHaveBeenCalled();
   expect(fixture.submit).not.toHaveBeenCalled();

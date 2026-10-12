@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
-import { AssistantPane } from "../app/features/assistant/AssistantPane";
+import { AssistantSessionController as AssistantPane } from "../app/controllers/assistant/AssistantSessionController";
 import { createAssistantHistoryPersistence, parseAssistantHistory, type AssistantHistorySnapshot } from "../app/features/assistant/assistantHistoryPersistence";
 import { createAssistantSession } from "../app/features/assistant/assistantSessionHistory";
 
@@ -79,12 +79,12 @@ test("a failed disk write can be retried and a rapid remount retains the latest 
   expect(save).toHaveBeenCalledTimes(2);
 });
 
-test("retains partial answers and marks interrupted work without replaying queued actions", () => {
+test("retains partial answers and queued intent while unknown owner state stays unknown", () => {
   const snapshot = structuredClone(original);
   snapshot.sessions[0].status = "running";
   snapshot.sessions[0].messages[0].queuedDelivery = { policy: "after_run" };
   const restored = parseAssistantHistory(snapshot)!;
-  expect(restored.sessions[0].status).toBe("cancelled");
-  expect(restored.sessions[0].messages[0].queuedDelivery).toBeUndefined();
-  expect(restored.sessions[0].messages.at(-1)?.content).toContain("上次运行已中断");
+  expect(restored.sessions[0].status).toBe("unknown");
+  expect(restored.sessions[0].messages[0].queuedDelivery).toEqual({ policy: "after_run" });
+  expect(restored.sessions[0].messages.at(-1)?.content).toBe("已保存的回答");
 });

@@ -62,6 +62,7 @@ export function conversationTurnsFromMessages(messages: readonly import("./assis
   const turns: AssistantConversationTurn[] = [];
   let user = "";
   for (const message of messages) {
+    if (message.kind === "task_reference" || message.kind === "system_notice") continue;
     if (message.role === "user") user = message.content;
     else if (user && message.content.trim() && (!message.agentActivity || message.agentActivity.status === "completed")) {
       turns.push({ user, assistant: message.content }); user = "";

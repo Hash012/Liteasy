@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "liteasy.workflow-task/v2"
+    },
+    "taskId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "origin": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "direct_chat",
+            "conversation_action",
+            "workflow_entry",
+            "automation",
+            "legacy_unknown"
+          ]
+        },
+        "entryPoint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "initiatedBy": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "user",
+                "automation",
+                "import"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "parentConversationId": {
+          "type": "string"
+        },
+        "triggerMessageId": {
+          "type": "string"
+        },
+        "parentTaskId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "entryPoint",
+        "initiatedBy"
+      ],
+      "additionalProperties": false
+    },
+    "workflowId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workflowVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "inputSnapshotId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "resultRefs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "objectId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "revision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "selectorId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        },
+        "required": [
+          "objectId",
+          "revision"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "relatedConversationId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "origin",
+    "workflowId",
+    "workflowVersion",
+    "inputSnapshotId",
+    "runIds",
+    "resultRefs"
+  ],
+  "additionalProperties": false,
+  "$id": "https://schemas.liteasy.app/assistantTaskBinding.v2.schema.json"
+}

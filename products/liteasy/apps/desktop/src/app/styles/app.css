@@ -6215,3 +6215,17 @@ button.pdf-overlay-mark:focus-visible {
 .app-frame[data-list-density="comfortable"] :is(.library-paper-row, .library-file-row, .library-folder-row, .library-collection-row) { min-height: 38px; }
 .app-frame[data-list-density="compact"] :is(.library-paper-row, .library-file-row, .library-folder-row, .library-collection-row) { min-height: 30px; padding-block: 2px; }
 .app-frame[data-list-density="compact"] :is(.library-paper-row, .library-file-row) .library-tag-chips { display:none; }
+
+.assistant-target-tabs { display: flex; gap: 4px; padding: 4px 8px; border-bottom: 1px solid var(--line-1); }
+.assistant-history-panel { min-width: 0; max-height: 45vh; overflow: auto; }
+.assistant-history-item { position: relative; min-width: 0; }
+.assistant-history-restore { overflow-wrap: anywhere; text-align: start; }
+.assistant-history-item-meta { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.assistant-task-reference { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border: 1px solid var(--line-1); border-radius: 6px; padding: 8px; margin: 8px; }
+.assistant-task-reference strong { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.assistant-task-discussion, .assistant-recovery-notice { padding: 8px; border-top: 1px solid var(--line-1); }
+.assistant-save-status { margin: 2px 8px; font-size: 11px; color: var(--text-2); }
+.assistant-user-message-content .assistant-markdown { display: inline; }
+.assistant-user-message-content .assistant-markdown p { margin: 0; }
+.assistant-user-message-content table, .assistant-user-message-content pre { max-width: 100%; overflow-x: auto; }
+.assistant-new-content { position: sticky; top: 0; z-index: 1; }

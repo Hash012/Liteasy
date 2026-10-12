@@ -488,7 +488,7 @@ test("repairs a run that was interrupted by application restart", async () => {
   const second = createPersistentService({ stateStore: restartMemory.store });
   const restored = await second.getRun({ runId, sessionId: session.sessionId });
 
-  expect(restored).toMatchObject({ data: { status: "failed" }, ok: true });
+  expect(restored).toMatchObject({ data: { status: "interrupted" }, ok: true });
   if (restored.ok) {
     expect(restored.data.events.at(-1)).toMatchObject({
       message: "Agent 运行因应用重启而中断。",

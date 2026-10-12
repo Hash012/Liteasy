@@ -9,7 +9,7 @@ describe("AssistantHistoryPanel", () => {
     render(<AssistantHistoryPanel history={[]} onRestoreSession={vi.fn()} />);
 
     expect(screen.getByLabelText("历史会话面板")).toBeInTheDocument();
-    expect(screen.getByText("暂无历史会话。新建会话后，当前对话会进入这里。")).toBeInTheDocument();
+    expect(screen.getByText("暂无历史会话或匹配记录。")).toBeInTheDocument();
   });
 
   test("restores a selected archived session", async () => {

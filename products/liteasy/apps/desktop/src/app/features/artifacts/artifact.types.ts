@@ -73,6 +73,10 @@ export type ArtifactOutlineNode = {
 };
 
 export type ArtifactTask = {
+  origin?: import("../assistant/assistantSessionContracts").AssistantOrigin;
+  retryOfRunId?: string;
+  attempt?: number;
+
   recovery?: {
     papers: import("../workspace/workspace.types").Paper[];
     chunks: Record<string, import("../retrieval/retrieval.types").RetrievalChunk[]>;

@@ -1,5 +1,5 @@
 import type { AssistantComposerSuggestion } from "../features/assistant/assistant.types";
-import { AssistantPane } from "../features/assistant/AssistantPane";
+import { AssistantSessionController as AssistantPane } from "../controllers/assistant/AssistantSessionController";
 import type { ArtifactTask, ArtifactType } from "../features/artifacts/artifact.types";
 import type { AssistantSessionHistoryItem, ArtifactSessionOpenRequest } from "../features/assistant/assistantSessionHistory";
 import type { ModelTransport } from "../features/models/modelHttpClient";
@@ -38,7 +38,7 @@ type AssistantSidebarProps = {
   onApplyThemePreset?: ActionContext["applyThemePreset"];
   onResumeArtifactTask?: (taskId: string) => Promise<void>;
   onCancelArtifactTask?: (taskId: string) => string | Promise<string>;
-  onGenerateArtifact: (artifactType: ArtifactType, paperIds?: string[], context?: string, contextRefs?: import("../features/context/objectContext").ContextRef[], systemPrompt?: string) => string;
+  onGenerateArtifact: (artifactType: ArtifactType, paperIds?: string[], context?: string, contextRefs?: import("../features/context/objectContext").ContextRef[], systemPrompt?: string, origin?: import("../features/assistant/assistantSessionContracts").AssistantOrigin) => import("../features/assistant/assistantSessionHistory").AssistantTaskStartResult;
   onImportSelectedSet?: ActionContext["importSelectedSet"];
   lazyPaperContext?: boolean;
   onPreparePapersForContext?: (paperIds: string[]) => Promise<void>;

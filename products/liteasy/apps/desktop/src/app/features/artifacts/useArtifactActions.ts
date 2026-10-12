@@ -106,6 +106,7 @@ type VerifiedMindmapMetadata = {
 };
 
 export type AgentArtifactGenerationOptions = {
+  origin?: import("../assistant/assistantSessionContracts").AssistantOrigin;
   systemPrompt?: string;
   contextRefs?: ContextRef[];
   knowledgeSnapshot?: {
@@ -1050,6 +1051,9 @@ export function useArtifactActions({
     const pendingTask = artifactStore.getTasks().find((task) => task.type === artifactType &&
       (task.status === "queued" || task.status === "running") &&
       JSON.stringify(task.recovery?.options?.contextRefs ?? []) === JSON.stringify(generationOptions?.contextRefs ?? []) &&
+      task.recovery?.options?.systemPrompt === generationOptions?.systemPrompt &&
+      task.recovery?.options?.supplementalContext === generationOptions?.supplementalContext &&
+      task.origin?.triggerMessageId === generationOptions?.origin?.triggerMessageId &&
       task.sourcePaperIds?.length === sourcePaperIds.length && sourcePaperIds.every((id) => task.sourcePaperIds?.includes(id)));
     if (pendingTask) {
       if (artifactType === "thin_reading") { openThinReadingPreview(pendingTask.id, scopedPapers); syncArtifacts(pendingTask.id); }
@@ -1077,7 +1081,7 @@ export function useArtifactActions({
       }
     }
     const taskId = artifactStore.createTask(artifactType);
-    artifactStore.updateTask(taskId, { recovery: { papers: scopedPapers, chunks: {}, options: generationOptions }, sourcePaperIds, message: "正在准备论文，解析完成后自动开始生成。", stage: "waiting_for_import", progress: 5 });
+    artifactStore.updateTask(taskId, { origin: generationOptions?.origin ?? { kind: "workflow_entry", entryPoint: "ai_workbench", initiatedBy: { type: "user", id: "local" } }, recovery: { papers: scopedPapers, chunks: {}, options: generationOptions }, sourcePaperIds, message: "正在准备论文，解析完成后自动开始生成。", stage: "waiting_for_import", progress: 5 });
     if (artifactType === "thin_reading") openThinReadingPreview(taskId, scopedPapers);
     syncArtifacts(taskId);
     const begin = () => {
@@ -1108,6 +1112,22 @@ export function useArtifactActions({
       : importStatus === "already_imported" ? "论文已准备好，正在生成产物。" : "正在解析论文，完成后将自动生成产物。";
     onAnalysisHint(message);
     return message;
+  }
+
+  function startAnalysisWithReceipt(artifactType: ArtifactType, papers: Paper[], options?: AgentArtifactGenerationOptions) {
+    const before = new Set(artifactStore.getTasks().map((task) => task.id));
+    const message = startAnalysisForPapers(artifactType, papers, options);
+    const taskIds = artifactStore.getTasks().filter((task) => !before.has(task.id)).map((task) => task.id);
+    if (!taskIds.length) {
+      const pending = artifactStore.getTasks().find((task) => task.type === artifactType && ["queued", "running"].includes(task.status) &&
+        JSON.stringify(task.recovery?.options?.contextRefs ?? []) === JSON.stringify(options?.contextRefs ?? []) &&
+        task.recovery?.options?.systemPrompt === options?.systemPrompt &&
+        task.recovery?.options?.supplementalContext === options?.supplementalContext &&
+        task.origin?.triggerMessageId === options?.origin?.triggerMessageId &&
+        task.sourcePaperIds?.length === papers.length && papers.every((paper) => task.sourcePaperIds?.includes(paper.id)));
+      if (pending) taskIds.push(pending.id);
+    }
+    return { message, taskIds };
   }
 
   function startAnalysis(artifactType: ArtifactType) {
@@ -1896,6 +1916,7 @@ export function useArtifactActions({
     restoreArtifactResult,
     startAnalysis,
     startAnalysisForPapers,
+    startAnalysisWithReceipt,
     startArtifactTask,
     syncThinReadingAnnotations,
     syncArtifacts,

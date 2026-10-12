@@ -164,7 +164,7 @@ export function inspectAgentStateSnapshot(value: unknown): AgentStateInspection 
     if (!Array.isArray(candidate.runs)) issues.push(`${path}.runs`);
     else candidate.runs.forEach((run, runIndex) => {
       if (!isAgentRun(run) || run.sessionId !== session.sessionId || runIds.has(run.runId) || requestIds.has(run.idempotencyKey) ||
-        !["running", "waiting_confirmation", "waiting_clarification", "completed", "failed", "cancelled"].includes(run.status) ||
+        !["interrupted", "running", "waiting_confirmation", "waiting_clarification", "completed", "failed", "cancelled"].includes(run.status) ||
         run.events.some(event => event.runId !== run.runId || event.sessionId !== session.sessionId)) {
         issues.push(`${path}.runs[${runIndex}]`);
         return;

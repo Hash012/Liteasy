@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { mockFocusLayout } from "./fixtures/mockFocusLayout";
 import { createAgentApplicationService } from "../app/controllers/agent/agentApplicationService";
 import { createFrontendAgentClient } from "../app/features/agent-api/frontendAgentClient";
-import { AssistantPane } from "../app/features/assistant/AssistantPane";
+import { AssistantSessionController as AssistantPane } from "../app/controllers/assistant/AssistantSessionController";
 import { artifactPromptTask, getGenerationPrompt } from "../app/features/ai-prompts/generationPrompts";
 import { createAssistantHistoryPersistence } from "../app/features/assistant/assistantHistoryPersistence";
 import { ObjectWorkbenchContext, type ObjectWorkbenchPort } from "../app/features/objects/objectWorkbenchPort";
@@ -75,7 +75,7 @@ test("a normal conversation request to generate PPT enters the artifact workflow
   const { user, onGenerateArtifact, submit, executeKnowledge } = await renderRouting({ locked: true });
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "生成PPT");
   await user.click(screen.getByRole("button", { name: "发送" }));
-  await waitFor(() => expect(onGenerateArtifact).toHaveBeenCalledWith("ppt", [lockedPaper.id], expect.stringContaining("生成PPT"), undefined, getGenerationPrompt("ppt")));
+  await waitFor(() => expect(onGenerateArtifact).toHaveBeenCalledWith("ppt", [lockedPaper.id], expect.stringContaining("生成PPT"), undefined, getGenerationPrompt("ppt"), expect.objectContaining({ kind: "conversation_action", parentConversationId: expect.any(String), triggerMessageId: expect.any(String) })));
   expect(await screen.findByText("产物任务已启动。")).toBeInTheDocument();
   expect(submit).not.toHaveBeenCalled();
   expect(executeKnowledge).not.toHaveBeenCalled();
@@ -89,7 +89,7 @@ test.each([
   await dropNote(container);
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), command);
   await user.click(screen.getByRole("button", { name: "发送" }));
-  await waitFor(() => expect(onGenerateArtifact).toHaveBeenCalledWith(type, undefined, expect.stringContaining(command.slice(1)), [noteRef], getGenerationPrompt(artifactPromptTask(type))));
+  await waitFor(() => expect(onGenerateArtifact).toHaveBeenCalledWith(type, undefined, expect.stringContaining(command.slice(1)), [noteRef], getGenerationPrompt(artifactPromptTask(type)), expect.objectContaining({ kind: "conversation_action", parentConversationId: expect.any(String), triggerMessageId: expect.any(String) })));
   expect(await screen.findByText("产物任务已启动。")).toBeInTheDocument();
   expect(submit).not.toHaveBeenCalled();
   expect(screen.queryByText(/当前命令尚不支持这些资源/)).not.toBeInTheDocument();
@@ -116,7 +116,7 @@ test.each([
   await waitFor(() => expect(capture).toHaveBeenCalledWith([lockedPaper.id]));
   expect(onGenerateArtifact).not.toHaveBeenCalled();
   await act(async () => { finishCapture([paperRef]); });
-  await waitFor(() => expect(onGenerateArtifact).toHaveBeenCalledWith(type, [lockedPaper.id], expect.stringContaining(command.slice(1)), [noteRef, paperRef], getGenerationPrompt(artifactPromptTask(type))));
+  await waitFor(() => expect(onGenerateArtifact).toHaveBeenCalledWith(type, [lockedPaper.id], expect.stringContaining(command.slice(1)), [noteRef, paperRef], getGenerationPrompt(artifactPromptTask(type)), expect.objectContaining({ kind: "conversation_action", parentConversationId: expect.any(String), triggerMessageId: expect.any(String) })));
   expect(submit).not.toHaveBeenCalled();
 });
 
@@ -201,5 +201,5 @@ test("sends the chosen thinking depth with the turn and uses it in artifact auth
   await waitFor(() => expect(screen.queryByRole("slider", { name: "思考深度", hidden: true })).not.toBeInTheDocument());
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "生成PPT");
   await user.click(screen.getByRole("button", { name: "发送" }));
-  await waitFor(() => expect(onGenerateArtifact).toHaveBeenCalledWith("ppt", undefined, expect.stringContaining("思考深度：快速"), undefined, getGenerationPrompt("ppt")));
+  await waitFor(() => expect(onGenerateArtifact).toHaveBeenCalledWith("ppt", undefined, expect.stringContaining("思考深度：快速"), undefined, getGenerationPrompt("ppt"), expect.objectContaining({ kind: "conversation_action", parentConversationId: expect.any(String), triggerMessageId: expect.any(String) })));
 });

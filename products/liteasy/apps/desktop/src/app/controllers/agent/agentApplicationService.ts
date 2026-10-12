@@ -506,7 +506,7 @@ export function createAgentApplicationService(
         stored.requestRuns.set(run.idempotencyKey, run.runId);
         if (run.status === "running") {
           repairedInterruptedRun = true;
-          run.status = "failed";
+          run.status = "interrupted";
           run.completedAt = now().toISOString();
           emit(stored, run, createRunFailureEvent(
             "Agent 运行因应用重启而中断。",
@@ -704,7 +704,7 @@ export function createAgentApplicationService(
       }
       const stored = result.data;
       stored.runs.forEach((run) => {
-        if (!["cancelled", "completed", "failed"].includes(run.status)) {
+        if (!["interrupted", "cancelled", "completed", "failed"].includes(run.status)) {
           abortControllers.get(run.runId)?.abort("session closed");
           pendingConfirmations.forEach((pending, confirmationId) => {
             if (pending.runId === run.runId) {
@@ -764,6 +764,8 @@ export function createAgentApplicationService(
       if (existingRunId) {
         const existingRun = stored.runs.get(existingRunId)!;
         if (
+          JSON.stringify(existingRun.input.conversationHistory) !== JSON.stringify(request.input.conversationHistory) ||
+          existingRun.input.branchId !== request.input.branchId ||
           existingRun.input.message !== request.input.message ||
           existingRun.input.mode !== request.input.mode ||
           existingRun.input.networkMode !== request.input.networkMode ||
@@ -837,7 +839,7 @@ export function createAgentApplicationService(
         emit(stored, run, { type: "context.prepared", snapshotId: run.contextSnapshotId });
 
         const executionInput: AgentCommandExecutionInput = {
-          conversationHistory: collectAgentConversationHistory(stored.runs.values(), runId),
+          conversationHistory: request.input.conversationHistory ?? collectAgentConversationHistory(stored.runs.values(), runId),
           context,
           coreTurn: prepared.turn,
           reportProgress(progress) {
@@ -1061,7 +1063,7 @@ export function createAgentApplicationService(
       if (!run) {
         return apiError("run_not_found", `Agent run not found: ${runId}`);
       }
-      if (["cancelled", "completed", "failed"].includes(run.status)) {
+      if (["interrupted", "cancelled", "completed", "failed"].includes(run.status)) {
         return { data: run, ok: true };
       }
       abortControllers.get(runId)?.abort(reason);
@@ -1076,6 +1078,14 @@ export function createAgentApplicationService(
       abortControllers.delete(runId);
       if (!(await persistState())) return persistenceError();
       return { data: run, ok: true };
+    },
+
+    async findRunByRequest({ sessionId, idempotencyKey }) {
+      await ensureHydrated();
+      const sessionResult = getStoredSession(sessionId);
+      if (!sessionResult.ok) return sessionResult;
+      const runId = sessionResult.data.requestRuns.get(idempotencyKey);
+      return { ok: true, data: runId ? sessionResult.data.runs.get(runId) ?? null : null };
     },
 
     async getRun({ runId, sessionId }) {

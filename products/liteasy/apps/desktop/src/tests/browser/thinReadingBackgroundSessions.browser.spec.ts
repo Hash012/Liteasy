@@ -20,20 +20,21 @@ test("generates reading layers in the background and opens their session only fr
         : "## 外部记忆\n\n这一层解释状态如何被读取。",
         paperEvidence: [], omittedSections: [], recommendedFigures: [] });
     }
-    await route.fulfill({ contentType: "text/event-stream", body:
+    if (body.stream) await route.fulfill({ contentType: "text/event-stream", body:
       `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\ndata: [DONE]\n\n` });
+    else await route.fulfill({ json: { choices: [{ message: { content } }] } });
   });
   try {
     await page.goto("/?pdf-highlight-fixture#importable");
     await page.getByRole("button", { name: "设置", exact: true }).click();
+    await page.getByRole("region", { name: "应用设置" }).getByRole("button", { name: "AI 与助手", exact: true }).click();
     await page.getByLabel("AI 接入方式").selectOption("direct");
     await page.getByLabel("模型 ID", { exact: true }).fill("background-reading-model");
     await page.getByLabel("API key", { exact: true }).fill("browser-only-key");
     await page.getByRole("button", { name: "保存并测试", exact: true }).click();
     await expect(page.getByLabel("测试响应")).toHaveValue("连接测试响应。");
     await page.getByRole("button", { name: "文献库", exact: true }).click();
-    await page.getByLabel("选择 das24a.pdf").check();
-    await page.getByRole("button", { name: "das24a.pdf", exact: true }).dblclick();
+    await page.getByRole("tab", { name: "das24a.pdf", exact: true }).click();
     await page.getByRole("button", { name: "关闭 Liteasy Chat", exact: true }).click();
     await expect(page.locator(".assistant-pane")).not.toBeVisible();
     await page.getByRole("button", { name: "AI 薄读", exact: true }).click();

@@ -29,11 +29,11 @@ import {
   StarRegular
 } from "@fluentui/react-icons";
 import { Button, Tooltip } from "@fluentui/react-components";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { getAnswerDisplayText } from "./answerFormatter";
 import type { Paper } from "../workspace/workspace.types";
 import type { Citation } from "../retrieval/retrieval.types";
-import { inlineContextParts } from "./inlineContext";
+import { AssistantUserMarkdown } from "./AssistantUserMarkdown";
 
 function ExpandableUserMessage({ value, contextTokens = [] }: { value: string; contextTokens?: AssistantContextToken[] }) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -62,9 +62,7 @@ function ExpandableUserMessage({ value, contextTokens = [] }: { value: string; c
         className={`assistant-answer-text assistant-user-message-content${foldable && !expanded ? " collapsed" : ""}`}
         ref={contentRef}
       >
-        {inlineContextParts(value, contextTokens).map((part, index) => part.token
-          ? <strong className="assistant-inline-context" aria-label={part.token.label} title={contextTokenTitle(part.token)} key={index}>{compactContextLabel(part.text)}</strong>
-          : part.text)}
+        <AssistantUserMarkdown value={value} tokens={contextTokens} />
       </div>
       {foldable ? (
         <Button
@@ -88,6 +86,10 @@ function contextTokenTitle(token: AssistantContextToken) {
 }
 
 type AssistantMessageListProps = {
+  targetId?: string;
+  scrollAnchor?: { messageId: string; offset: number };
+  onScrollAnchor?: (anchor: { messageId: string; offset: number }) => void;
+  onOpenTask?: (taskId: string) => void;
   papers?: Paper[];
   onOpenArtifact?: (artifactId: string) => void;
   onOpenAsset?: import("../resource-filesystem/assetNavigation").OpenAgentAsset;
@@ -110,6 +112,10 @@ type AssistantMessageListProps = {
 };
 
 export function AssistantMessageList({
+  targetId,
+  scrollAnchor,
+  onScrollAnchor,
+  onOpenTask,
   papers = [],
   onOpenArtifact,
   onOpenAsset,
@@ -130,6 +136,26 @@ export function AssistantMessageList({
   onWithdrawQueuedMessage,
   onToggleFavoriteMessage
 }: AssistantMessageListProps) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const followingRef = useRef(true);
+  const anchors = useRef(new Map<string, { messageId: string; offset: number }>());
+  const [newContent, setNewContent] = useState(false);
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const anchor = anchors.current.get(targetId ?? "") ?? scrollAnchor;
+    const message = anchor ? [...list.querySelectorAll<HTMLElement>("[data-message-id]")].find((item) => item.dataset.messageId === anchor.messageId) : undefined;
+    if (message && anchor) list.scrollTop = message.offsetTop - list.offsetTop - anchor.offset;
+    else list.scrollTop = list.scrollHeight;
+    followingRef.current = list.scrollHeight - list.clientHeight - list.scrollTop < 32;
+    setNewContent(false);
+  }, [targetId]);
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    if (followingRef.current) list.scrollTop = list.scrollHeight;
+    else setNewContent(true);
+  }, [messages]);
   const workbench = useObjectWorkbench();
   const [captureStatus, setCaptureStatus] = useState("");
   const selectedText = useRef("");
@@ -149,14 +175,30 @@ export function AssistantMessageList({
   }
 
   return (
-    <div className="assistant-messages" onMouseUp={(event) => {
+    <div className="assistant-messages" ref={listRef} role="log" aria-label="对话消息" aria-live="off" onScroll={() => {
+      const list = listRef.current;
+      if (!list) return;
+      followingRef.current = list.scrollHeight - list.clientHeight - list.scrollTop < 32;
+      if (followingRef.current) setNewContent(false);
+      const top = list.getBoundingClientRect().top;
+      const message = [...list.querySelectorAll<HTMLElement>("[data-message-id]")].find((item) => item.getBoundingClientRect().bottom > top);
+      if (message?.dataset.messageId) {
+        const anchor = { messageId: message.dataset.messageId, offset: message.getBoundingClientRect().top - top };
+        anchors.current.set(targetId ?? "", anchor); onScrollAnchor?.(anchor);
+      }
+    }} onMouseUp={(event) => {
       if ((event.target as Element).closest("button")) return;
       const selection = window.getSelection();
       selectedText.current = selection?.toString() ?? "";
       selectedMessageId.current = selection?.anchorNode?.parentElement?.closest("[data-message-id]")?.getAttribute("data-message-id") ?? "";
     }}>
+      {newContent ? <Button className="assistant-new-content" size="small" onClick={() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight; followingRef.current = true; setNewContent(false); }}>有新内容 · 返回底部</Button> : null}
+      <span className="sr-only" role="status">{messages.filter((message) => message.role === "assistant" && message.agentActivity?.status !== "working").length} 条完整回复</span>
       {captureStatus ? <p role="status">{captureStatus}</p> : null}
       {messages.map((message, index) => {
+        if (message.kind === "task_reference" && message.taskReference) return <article key={message.id} data-message-id={message.id} className="assistant-task-reference" aria-label="任务引用">
+          <strong>{message.taskReference.title}</strong><Button size="small" onClick={() => onOpenTask?.(message.taskReference!.taskId)}>查看任务</Button>
+        </article>;
         const paperAnchors = collectPaperAnchors(message.paperAnchors ?? [], paperAnchorsFromCitations(message.citations ?? [], papers, message.id));
         return (
           <article

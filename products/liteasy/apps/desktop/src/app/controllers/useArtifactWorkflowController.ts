@@ -152,6 +152,7 @@ type ArtifactWorkflowActions = {
   resumeArtifactTask: (taskId: string) => Promise<void>;
   retryInterruptedThinReadingBranch: (taskId: string) => Promise<void>;
   startAnalysis: (artifactType: ArtifactType) => string;
+  startAnalysisWithReceipt: (artifactType: ArtifactType, papers: Paper[], options?: AgentArtifactGenerationOptions) => { message: string; taskIds: string[] };
   startAnalysisForPapers: (artifactType: ArtifactType, papers: Paper[], options?: AgentArtifactGenerationOptions) => string;
   startThinReadingVisualization: (
     input: ThinReadingVisualizationNodeInput
@@ -507,6 +508,7 @@ export function useArtifactWorkflowController({
       retryInterruptedThinReadingBranch: artifactActions.retryInterruptedThinReadingBranch,
       startAnalysis: artifactActions.startAnalysis,
       startAnalysisForPapers: artifactActions.startAnalysisForPapers,
+      startAnalysisWithReceipt: artifactActions.startAnalysisWithReceipt,
       startThinReadingVisualization: thinReadingVisualization.startVisualization,
       setThinReadingVisualizationEnabled: thinReadingVisualization.setEnabled,
       updateThinReadingDocument: artifactActions.updateThinReadingDocument,

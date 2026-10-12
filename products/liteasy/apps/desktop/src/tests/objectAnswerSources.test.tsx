@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vitest";
 import { createDesktopAgentService } from "../app/controllers/agent/createDesktopAgentService";
-import { AssistantPane } from "../app/features/assistant/AssistantPane";
+import { AssistantSessionController as AssistantPane } from "../app/controllers/assistant/AssistantSessionController";
 import type { FrontendAgentClient } from "../app/features/agent-api/frontendAgentClient";
 import { createSettingsStore } from "../app/features/settings/settings.store";
 import type { ContextSnapshot } from "../app/features/context/objectContext";

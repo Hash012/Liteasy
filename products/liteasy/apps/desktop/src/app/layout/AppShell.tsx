@@ -2332,16 +2332,17 @@ export function AppShell({
           onApplyThemePreset={runtimeActionContext.applyThemePreset}
           onResumeArtifactTask={artifactWorkflow.actions.resumeArtifactTask}
           onCancelArtifactTask={artifactWorkflow.actions.cancelArtifactTask}
-          onGenerateArtifact={(artifactType, paperIds, context, contextRefs, systemPrompt) => {
+          onGenerateArtifact={(artifactType, paperIds, context, contextRefs, systemPrompt, origin) => {
             const ids = paperIds?.length ? paperIds : workspaceStoreRef.current.getSelectedDocumentSet().locked
               ? workspaceStoreRef.current.getSelectedDocumentSet().documentIds : [];
             const papers = ids.map((id) => workspaceStoreRef.current.getState().papers.find((paper) => paper.id === id));
             if ((!papers.length && !contextRefs?.length) || papers.some((paper) => !paper)) return "请指定论文或将笔记、白板等资源拖入对话后再生成。";
             const sources = papers.filter((paper): paper is Paper => Boolean(paper));
-            const options = { supplementalContext: context, contextRefs, systemPrompt };
-            return artifactType === "thin_reading"
-              ? sources.map((paper) => artifactWorkflow.actions.startAnalysisForPapers(artifactType, [paper], options)).join("\n")
-              : artifactWorkflow.actions.startAnalysisForPapers(artifactType, sources, options);
+            const options = { supplementalContext: context, contextRefs, systemPrompt, origin: origin ? { ...origin, initiatedBy: { ...origin.initiatedBy, id: assistantScopeId } } : undefined };
+            const receipts = artifactType === "thin_reading"
+              ? sources.map((paper) => artifactWorkflow.actions.startAnalysisWithReceipt(artifactType, [paper], options))
+              : [artifactWorkflow.actions.startAnalysisWithReceipt(artifactType, sources, options)];
+            return { message: receipts.map((receipt) => receipt.message).join("\n"), taskIds: receipts.flatMap((receipt) => receipt.taskIds) };
           }}
           onImportSelectedSet={runtimeActionContext.importSelectedSet}
           lazyPaperContext

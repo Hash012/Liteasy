@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { mockFocusLayout } from "./fixtures/mockFocusLayout";
-import { AssistantPane } from "../app/features/assistant/AssistantPane";
+import { AssistantSessionController as AssistantPane } from "../app/controllers/assistant/AssistantSessionController";
 import { artifactPromptTask, getGenerationPrompt, presetGenerationPrompt } from "../app/features/ai-prompts/generationPrompts";
 import { runAgentArtifactAnalysis } from "../app/controllers/agent/runAgentArtifactAnalysis";
 import type { FrontendAgentClient } from "../app/features/agent-api/frontendAgentClient";
@@ -55,7 +55,7 @@ test.each([
   await user.keyboard("{Escape}");
   const systemPrompt = presetGenerationPrompt(artifactPromptTask(type), "concise");
   await user.click(screen.getByRole("button", { name: "发送", exact: true }));
-  await waitFor(() => expect(onGenerateArtifact).toHaveBeenCalledWith(type, [paper.id], expect.stringContaining("面向初学者，包含对比表"), undefined, systemPrompt));
+  await waitFor(() => expect(onGenerateArtifact).toHaveBeenCalledWith(type, [paper.id], expect.stringContaining("面向初学者，包含对比表"), undefined, systemPrompt, expect.objectContaining({ kind: "conversation_action", parentConversationId: expect.any(String), triggerMessageId: expect.any(String) })));
   await generation;
   expect(agentClient.send).toHaveBeenCalledTimes(1);
   expect(agentClient.send).toHaveBeenCalledWith(expect.objectContaining({
@@ -78,6 +78,6 @@ test("keeps @ paper scope and requirements when starting an outline without a lo
   await user.click(paperSuggestion);
   await user.type(input, "/制作提纲 讲清方法与局限");
   await user.click(screen.getByRole("button", { name: "发送", exact: true }));
-  await waitFor(() => expect(onGenerateArtifact).toHaveBeenCalledWith("tree", [paper.id], expect.stringContaining("讲清方法与局限"), undefined, getGenerationPrompt("tree")));
+  await waitFor(() => expect(onGenerateArtifact).toHaveBeenCalledWith("tree", [paper.id], expect.stringContaining("讲清方法与局限"), undefined, getGenerationPrompt("tree"), expect.objectContaining({ kind: "conversation_action", parentConversationId: expect.any(String), triggerMessageId: expect.any(String) })));
   expect(onGenerateArtifact.mock.calls[0][2]).toContain(paper.title);
 });

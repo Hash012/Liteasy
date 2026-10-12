@@ -151,7 +151,7 @@ describe("AssistantMessageList", () => {
       />
     );
 
-    const content = screen.getByText(/第一行/);
+    const content = screen.getByText(/第一行/).closest(".assistant-user-message-content")!;
     expect(content).toHaveClass("collapsed");
     const toggle = screen.getByRole("button", { name: "展开完整消息" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");

@@ -6,13 +6,45 @@ import type { ArtifactTask, ArtifactType } from "../artifacts/artifact.types";
 import { presentArtifactFailure } from "../artifacts/artifactFailurePresentation";
 import { projectArtifactTaskMessage } from "./assistantArtifactActivity";
 
+export type AssistantTaskStartResult = string | { message: string; taskIds: string[] };
 export type ArtifactSessionOpenRequest = { requestId: string; taskId: string };
-export type AssistantSessionDraft = { input: string; tokens: AssistantContextToken[]; readerContexts: ReaderConversationContext[] };
+export type AssistantSessionDraft = { input: string; tokens: AssistantContextToken[]; readerContexts: ReaderConversationContext[]; selection?: { start: number; end: number }; thinkingDepth?: import("./thinkingDepth").ThinkingDepth };
+import type { AssistantOrigin, AssistantTaskBinding } from "./assistantSessionContracts";
+import type { ObjectRef } from "../objects/object.types";
 
 export type AssistantSessionKind = "conversation" | "artifact_generation";
-export type AssistantSessionStatus = "idle" | "running" | "completed" | "failed" | "cancelled";
+export type AssistantSessionStatus = "idle" | "running" | "completed" | "failed" | "cancelled" | "interrupted" | "unknown";
 
 export type AssistantSessionHistoryItem = {
+  schemaVersion?: "liteasy.assistant-session/v2";
+  scopeId?: string;
+  origin?: AssistantOrigin;
+  titleSource?: "automatic" | "user";
+  lifecycle?: "active" | "archived" | "tombstoned";
+  pinned?: boolean;
+  readAt?: string;
+  branchId?: string;
+  parentConversationId?: string;
+  branchBoundaryMessageId?: string;
+  sourceTaskId?: string;
+  resultRefs?: ObjectRef[];
+  taskBinding?: AssistantTaskBinding;
+  taskInput?: {
+    taskId: string;
+    workflowId: string;
+    sourcePaperIds: string[];
+    contextRefs: import("../context/objectContext").ContextRef[];
+    supplementalContext?: string;
+    systemPrompt?: string;
+    available: boolean;
+  };
+  messagesLoaded?: boolean;
+  messageCount?: number;
+  runId?: string;
+  inbox?: { runId: string; sequence: number; eventIds: string[] };
+  scrollAnchor?: { messageId: string; offset: number };
+  outbox?: Array<{ requestId: string; userMessageId: string; state: "pending" | "accepted" | "finished" | "needs_review"; runId?: string; input: unknown }>;
+
   artifactId?: string;
   artifactTaskId?: string;
   artifactType?: ArtifactType;
@@ -143,6 +175,11 @@ export function createAssistantSession({
   const timestamp = createTimestamp(now);
   const sessionId = id ?? createSessionId(now, randomId);
   return {
+    schemaVersion: "liteasy.assistant-session/v2",
+    origin: { kind: "direct_chat", entryPoint: "assistant.composer", initiatedBy: { type: "user", id: "local" } },
+    titleSource: "automatic",
+    lifecycle: "active",
+    branchId: sessionId,
     createdAt: timestamp,
     id: sessionId,
     kind,
@@ -173,11 +210,14 @@ export function snapshotAssistantSession({
     mode: state.mode,
     status: state.pending
       ? "running"
-      : session.status === "cancelled"
-        ? "cancelled"
+      : session.status && ["cancelled", "unknown", "interrupted"].includes(session.status)
+        ? session.status
         : "idle",
-    title: getConversationTitle(state.messages, session.title),
-    updatedAt: createTimestamp(now)
+    title: session.titleSource === "user" ? session.title : getConversationTitle(state.messages, session.title),
+    messagesLoaded: true,
+    messageCount: state.messages.length,
+    updatedAt: state.messages.length !== session.messages.length || state.pending !== (session.status === "running")
+      ? createTimestamp(now) : session.updatedAt
   };
 }
 
@@ -270,6 +310,23 @@ export function createArtifactTaskSession(
   }
 
   return {
+    ...previous,
+    schemaVersion: "liteasy.assistant-session/v2",
+    origin: task.origin ?? previous?.origin ?? { kind: "legacy_unknown", entryPoint: "legacy", initiatedBy: { type: "import", id: "local" } },
+    taskInput: previous?.taskInput ?? {
+      taskId: task.id, workflowId: task.type, sourcePaperIds: task.sourcePaperIds ?? task.recovery?.papers.map((paper) => paper.id) ?? [],
+      contextRefs: structuredClone(task.recovery?.options?.contextRefs ?? []),
+      supplementalContext: task.recovery?.options?.supplementalContext,
+      systemPrompt: task.recovery?.options?.systemPrompt,
+      available: !!task.recovery
+    },
+    taskBinding: {
+      schemaVersion: "liteasy.workflow-task/v2", taskId: sessionId,
+      origin: task.origin ?? previous?.origin ?? { kind: "legacy_unknown", entryPoint: "legacy", initiatedBy: { type: "import", id: "local" } },
+      workflowId: task.type, workflowVersion: "1", inputSnapshotId: previous?.taskBinding?.inputSnapshotId ?? `assistant/v2/task-input/${encodeURIComponent(task.id)}`,
+      runIds: [...new Set([...(previous?.taskBinding?.runIds ?? []), ...(task.agentRunId ? [task.agentRunId] : [])])],
+      resultRefs: previous?.taskBinding?.resultRefs ?? [], relatedConversationId: previous?.taskBinding?.relatedConversationId
+    },
     artifactId: task.artifactId ?? previous?.artifactId,
     artifactTaskId: task.id,
     artifactType: task.type,
@@ -278,14 +335,8 @@ export function createArtifactTaskSession(
     id: sessionId,
     kind: "artifact_generation",
     messages: task.type === "thin_reading" ? [
-      { content: title, id: `${sessionId}:request`, role: "user" },
       ...thinReadingMessages
     ] : [
-      {
-        content: title,
-        id: `${sessionId}:request`,
-        role: "user"
-      },
       {
         content: progressMessage,
         id: `${sessionId}:progress`,
@@ -294,8 +345,8 @@ export function createArtifactTaskSession(
     ],
     mode: "qa",
     status,
-    title,
-    updatedAt: timestamp
+    title: previous?.titleSource === "user" ? previous.title : title,
+    updatedAt: previous?.status === status && previous.artifactTaskId === task.id ? previous.updatedAt : timestamp
   };
 }
 
