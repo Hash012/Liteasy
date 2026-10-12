@@ -58,7 +58,7 @@ test("production message evidence adapter preserves actual source navigation", a
   await page.goto(`${fixture}?entry=message`);
   await page.getByRole("button", { name: /1 篇来源.*1 处引用.*未逐条核验/ }).click();
   await page.getByRole("button", { name: "查看全部证据" }).click();
-  await expect(page.getByRole("blockquote")).toContainText("消息入口保存的真实测试摘录。");
+  await expect(page.locator(".evidence-lens .content-view .markdown-content")).toContainText("消息入口保存的真实测试摘录。");
   await page.getByRole("button", { name: "打开原文" }).click();
   await expect(page.getByRole("complementary", { name: "已打开的来源" })).toHaveText("消息原文：fixture-paper 第 3 页");
 });
@@ -85,7 +85,7 @@ test("source-only answers expose excerpts immediately and keep checks secondary"
   const trigger = page.getByRole("button", { name: /1 篇来源.*1 处引用/ });
   await expect(trigger).toBeVisible();
   await trigger.click();
-  await expect(page.getByRole("blockquote")).toContainText("消息入口保存的真实测试摘录。");
+  await expect(page.locator(".evidence-lens .content-view .markdown-content")).toContainText("消息入口保存的真实测试摘录。");
   await expect(page.locator("details.evidence-lens__checks")).not.toHaveAttribute("open", "");
   await page.locator("details.evidence-lens__checks summary").focus();
   await page.keyboard.press("Enter");
@@ -102,7 +102,7 @@ for (const theme of ["light", "dark"]) {
     await page.setViewportSize({ width: 320, height: 1000 });
     await page.goto(`${fixture}?entry=assistant&theme=${theme}`);
     await page.getByRole("button", { name: /1 篇来源.*1 处引用/ }).click();
-    await expect(page.getByRole("blockquote")).toContainText("消息入口保存的真实测试摘录。");
+    await expect(page.locator(".evidence-lens .content-view .markdown-content")).toContainText("消息入口保存的真实测试摘录。");
     await noHorizontalOverflow(page);
     await page.getByRole("button", { name: "打开原文" }).click();
     await expect(page.getByRole("complementary")).toHaveText("消息原文：fixture-paper 第 3 页");

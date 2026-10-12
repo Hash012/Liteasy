@@ -16,6 +16,7 @@ test("research.memo joins real discovery, read, context, native, evidence, CAS a
   const service = create();
   const found = (await service.search({ query: "Memo" })).find(asset => asset.kind === "research.memo")!;
   expect(found).toBeDefined();
+  expect((await service.resourceTypes.navigate(found.path)).path).toContain(note.objectId);
   const read = await service.read(found.path);
   expect(read.text).toBe(objectText(note));
   expect((await service.context(found.path))[0].ref).toEqual({ objectId: note.objectId, revision: note.revision });
@@ -34,10 +35,37 @@ test("research.memo joins real discovery, read, context, native, evidence, CAS a
 test("registration rejects missing context obligations, handlers, fixtures and untrusted profiles", () => {
   const registry = createResourceTypeRegistry(() => true);
   const base: any = { typeId: "research.invalid", schemaVersion: 1, owner: "test", nativeCodec: "md/v1", profile: "liteasy-research-markdown/v1", viewId: "content", fixtureIds: ["f"],
-    source: { accepts() {}, read() {}, search() {}, stat() {} }, context: { supported: false, reason: "read only" }, write: { supported: false, reason: "read only" }, file: { supported: false, reason: "not materialized" } };
+    navigation: { supported: false, reason: "test" }, source: { accepts() {}, read() {}, search() {}, stat() {} }, context: { supported: false, reason: "read only" }, write: { supported: false, reason: "read only" }, file: { supported: false, reason: "not materialized" } };
   for (const change of [{ context: undefined }, { context: { supported: true } }, { profile: "execute-html" }, { fixtureIds: [] }, { file: { supported: true, implementation: {} } }]) {
     expect(() => registry.register({ ...base, ...change })).toThrow();
   }
   registry.register(base);
   expect(registry.matrix()[0].context).toBe("read only");
+});
+
+test("every registered object type has a real fixture with native roundtrip and context handler", async () => {
+  const scope = crypto.randomUUID();
+  const repository = createObjectRepository(createObjectStorage(scope, () => scope), scope);
+  const service = createWorkspaceAgentAssetService({ repository, active: () => true });
+  const source = await repository.create({ kind: "content.note", title: "source", content: { schema: "liteasy.note/v1", payload: { text: "source", origin: "user" } } });
+  const drafts: any[] = [
+    { kind: "content.note", content: { schema: "liteasy.note/v1", payload: { text: "memo", origin: "user" } } },
+    { kind: "content.fragment", content: { schema: "liteasy.fragment/v1", payload: { text: "fragment", partial: true, anchors: [{ type: "text", sourceRef: { objectId: source.objectId, revision: source.revision }, blockId: "b", quote: { exact: "source", prefix: "", suffix: "" } }] } } },
+    { kind: "conversation.message", content: { schema: "liteasy.message/v1", payload: { messageId: "message", blockId: "b", text: "message", partial: false } } },
+    { kind: "artifact.document", content: { schema: "liteasy.document/v1", payload: { blocks: [{ blockId: "b", type: "markdown", text: "artifact", sourceRefs: [] }] } } },
+    { kind: "source.document", content: { schema: "liteasy.source-document/v1", payload: { paperId: "p", text: "paper", availability: "local", legacyKey: "fixture" } } },
+    { kind: "workspace.board", content: { schema: "liteasy.board/v1", payload: { description: "board" } } },
+  ];
+  for (const draft of drafts) {
+    const object = await repository.create({ ...draft, title: draft.kind });
+    const path = `liteasy://resources/${draft.kind}/${object.objectId}?scope=${scope}&revision=${object.revision}`;
+    const read = await service.read(path);
+    expect(read.asset.revision).toBe(object.revision);
+    expect((await service.context(path))[0].ref.revision).toBe(object.revision);
+    const native = JSON.parse((await service.resourceFiles.read(path, { representation: "native", maxBytes: 80000 })).content);
+    expect(draft.kind === "workspace.board" ? native.object : native).toEqual(object);
+    const row = service.resourceTypes.matrix().find(row => row.typeId === draft.kind)!;
+    expect(row.context).toBe("supported");
+    expect(row.fixtures).toHaveLength(1);
+  }
 });

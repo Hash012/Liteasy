@@ -30,10 +30,10 @@ export function createContentReadLedger(runId: string, scopeId: string) {
       }
       return id;
     },
-    async delivered(requestId: string, payload: string, readIds: string[]) {
+    async delivered(requestId: string, payload: string, readIds: string[], ranges: Record<string, Array<{ start: number; end: number; unit: "utf16" }>> = {}) {
       const records = ledger.reads.filter(record => readIds.includes(record.id));
       ledger.deliveries.push({ id: `${requestId}:delivery`, requestId, audience: "model", readIds: records.map(record => record.id),
-        ranges: records.map(record => ({ readId: record.id, ranges: record.ranges })), payloadHash: await resourceContentRevision(payload), at: new Date().toISOString() });
+        ranges: records.map(record => ({ readId: record.id, ranges: ranges[record.id] ?? record.ranges })), payloadHash: await resourceContentRevision(payload), at: new Date().toISOString() });
     },
   };
 }

@@ -1268,6 +1268,7 @@ export function AppShell({
   const objectAgentScopeRef = useRef(objectWorkbench.repository.scopeId);
   objectAgentScopeRef.current = objectWorkbench.repository.scopeId;
   const openAgentAsset = createAgentAssetNavigator({
+    resolveResource: path => objectWorkbench.agentAssets.resourceTypes.navigate(path),
     repository: objectWorkbench.repository,
     projects: paperProjects.repository,
     files: createNoteFileService(objectWorkbench.repository.scopeId, () => objectAgentScopeRef.current),

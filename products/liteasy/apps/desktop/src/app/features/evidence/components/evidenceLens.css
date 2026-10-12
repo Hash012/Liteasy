@@ -103,3 +103,8 @@
 .evidence-lens__inspector .evidence-lens__source-title { display: block !important; -webkit-line-clamp: unset; overflow: visible; }
 .evidence-lens__inspector .evidence-lens__version { white-space: normal; overflow-wrap: anywhere; }
 .evidence-lens__claim-text, .evidence-lens__peek-claim { font-size: 13px; }
+.evidence-lens__source-preview .content-view { max-height: 250px; overflow: hidden; }
+.evidence-lens .content-view .markdown-content { font-size: 13px; line-height: 1.6; }
+.evidence-lens .content-view table { min-width: max-content; }
+.evidence-lens .content-view th, .evidence-lens .content-view td { max-width: 32ch; white-space: normal; }
+.evidence-lens__inspector .content-view { max-height: none; }

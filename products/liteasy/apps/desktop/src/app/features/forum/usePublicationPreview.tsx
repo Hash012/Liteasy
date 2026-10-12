@@ -1,3 +1,5 @@
+import { ContentView } from "../markdown/ContentView";
+import { legacyContent } from "../markdown/contentFragment";
 import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle } from "@fluentui/react-components";
 import { useEffect, useRef, useState } from "react";
 import type { PublicationAuthorProfile } from "./forum.types";
@@ -47,7 +49,7 @@ export function usePublicationPreview(getActor: () => PublicationActorBinding | 
           <p><strong>接收范围：</strong>{pending?.preview.recipient}</p>
           <p>下面仅列出本次操作涉及的内容。不会附带全文 PDF、其他笔记、聊天记录或本机路径。</p>
           {pending?.preview.body && <section aria-label="批注正文" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{pending.preview.body}</section>}
-          {pending?.preview.excerpts?.map((excerpt, index) => <section key={index} style={{ marginBlock: 12 }}><strong>{excerpt.label}</strong><blockquote style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{excerpt.text}</blockquote></section>)}
+          {pending?.preview.excerpts?.map((excerpt, index) => <section key={index} style={{ marginBlock: 12 }}><strong>{excerpt.label}</strong><ContentView content={legacyContent(excerpt.text, "literal/v1")} /></section>)}
           {pending?.preview.authorProfiles?.map(({ label, profile }, index) => <section key={index} aria-label={label}>
             <strong>{label}</strong>
             <p>{profile.author.name} · {profile.author.initials}</p>

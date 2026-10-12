@@ -1,3 +1,4 @@
+import { parseEvidenceReport } from "../../features/evidence/evidenceReport";
 import type {
   AgentEvent,
   AgentJsonValue,
@@ -170,7 +171,11 @@ export function inspectAgentStateSnapshot(value: unknown): AgentStateInspection 
       }
       runIds.add(run.runId);
       requestIds.add(run.idempotencyKey);
-      runs.push(run);
+      if (run.evidenceCheckpoint !== undefined && !parseEvidenceReport(run.evidenceCheckpoint)) {
+        issues.push(`${path}.runs[${runIndex}].evidenceCheckpoint`);
+        const { evidenceCheckpoint: _invalidCheckpoint, ...readableRun } = run;
+        runs.push(readableRun);
+      } else runs.push(run);
     });
     sessions.push({ session, runs });
   });

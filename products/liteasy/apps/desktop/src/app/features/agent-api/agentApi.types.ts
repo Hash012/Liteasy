@@ -205,6 +205,7 @@ export type AgentEvent = AgentEventPayload & {
 };
 
 export type AgentRun = {
+  evidenceCheckpoint?: import("../evidence/evidenceReport").EvidenceReportV1;
   contextRefs?: ContextRef[];
   contextPurpose?: string;
   contextSnapshotId?: string;

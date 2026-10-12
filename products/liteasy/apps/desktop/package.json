@@ -36,7 +36,8 @@
     "schema:resources": "vite-node scripts/write-resource-schemas.ts && vite-node scripts/write-extension-schemas.ts",
     "i18n:check": "node scripts/check-i18n.mjs",
     "i18n:audit": "node scripts/audit-i18n.mjs",
-    "test:i18n": "vitest run src/tests/uiLanguage.test.tsx src/tests/uiLanguagePolicy.test.ts src/tests/i18nCatalog.test.ts"
+    "test:i18n": "vitest run src/tests/uiLanguage.test.tsx src/tests/uiLanguagePolicy.test.ts src/tests/i18nCatalog.test.ts",
+    "ci:content": "node scripts/check-content-boundaries.mjs && node --test scripts/check-content-boundaries.node-test.mjs && vitest run src/tests/unifiedContent.test.tsx src/tests/contentReadLedger.test.ts src/tests/resourceTypeRegistry.test.ts src/tests/modelContentProjection.test.ts"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",

@@ -17,6 +17,7 @@ export type ResourceTypeDefinition = {
   context: ResourceCapability<NonNullable<AgentAssetAdapter["context"]>>;
   write: ResourceCapability<NonNullable<AgentAssetAdapter["write"]>>;
   file: ResourceCapability<ResourceProvider>;
+  navigation: ResourceCapability<(path: string) => Promise<{ path: string; revision: string; scopeId: string }>>;
 };
 function assertCapability(value: unknown, name: string, callable = true): asserts value is ResourceCapability<unknown> {
   if (!value || typeof value !== "object" || !("supported" in value)) throw new Error(`${name}: 缺少能力声明`);
@@ -34,7 +35,7 @@ export function createResourceTypeRegistry(active: () => boolean) {
     if (definition.schemaVersion !== 1 || !definition.owner || !definition.nativeCodec || !definition.fixtureIds?.length) throw new Error("资产类型缺少 codec、所有者或契约 fixture");
     if (!["liteasy-research-markdown/v1", "literal/v1"].includes(definition.profile) || !["content", "native"].includes(definition.viewId)) throw new Error("未注册的内容 profile/view");
     for (const method of ["accepts", "stat", "search", "read"] as const) if (typeof definition.source?.[method] !== "function") throw new Error(`缺少 source.${method}`);
-    assertCapability(definition.context, "context"); assertCapability(definition.write, "write"); assertCapability(definition.file, "file", false);
+    assertCapability(definition.context, "context"); assertCapability(definition.write, "write"); assertCapability(definition.file, "file", false); assertCapability(definition.navigation, "navigation");
     if (definition.file.supported) {
       const provider = definition.file.implementation;
       for (const method of ["stat", "list", "read"] as const) if (typeof provider[method] !== "function") throw new Error(`缺少 provider.${method}`);
@@ -49,15 +50,21 @@ export function createResourceTypeRegistry(active: () => boolean) {
       async search(options) { check(); const result = await definition.source.search(options); check(); return result.map(capabilities); },
       async stat(path, options) { check(); const result = await definition.source.stat(path, options); check(); return capabilities(result); },
       async read(path, options): Promise<AgentAssetRead> { check(); const result = await definition.source.read(path, options); check(); return { ...result, asset: capabilities(result.asset) }; },
-      ...(definition.context.supported ? { context: definition.context.implementation } : {}),
-      ...(definition.write.supported ? { write: definition.write.implementation } : {}),
+      context: definition.context.supported ? definition.context.implementation : undefined,
+      write: definition.write.supported ? definition.write.implementation : undefined,
     };
   }
   return {
     register, files,
+    async navigate(path: string) {
+      check();
+      const definition = [...definitions.values()].find(item => item.source.accepts(path));
+      if (!definition?.navigation.supported) throw new AgentAssetError("unavailable", definition?.navigation.supported === false ? definition.navigation.reason : "此类型尚不支持定位");
+      const target = await definition.navigation.implementation(path); check(); return target;
+    },
     adapters: () => [...definitions.values()].map(adapter),
     matrix: () => [...definitions.values()].map(definition => ({ typeId: definition.typeId, owner: definition.owner, nativeCodec: definition.nativeCodec,
-      profile: definition.profile, viewId: definition.viewId, fixtures: definition.fixtureIds,
+      profile: definition.profile, viewId: definition.viewId, navigation: definition.navigation.supported ? "supported" : definition.navigation.reason, fixtures: definition.fixtureIds,
       context: definition.context.supported ? "supported" : definition.context.reason,
       write: definition.write.supported ? "supported" : definition.write.reason,
       file: definition.file.supported ? "supported" : definition.file.reason })),
@@ -77,6 +84,7 @@ export function legacyAssetDefinition(source: AgentAssetAdapter): ResourceTypeDe
     profile: "liteasy-research-markdown/v1", viewId: "content", fixtureIds: [`agentAssetService:${source.id}`], source,
     context: source.context ? { supported: true, implementation: source.context } : { supported: false, reason: "此环境未提供固定上下文入口" },
     write: source.write ? { supported: true, implementation: source.write } : { supported: false, reason: "只读资产；请创建派生笔记" },
+    navigation: { supported: false, reason: "通过既有领域导航器定位" },
     file: { supported: false, reason: "原生文件由领域仓库导出，尚未接入通用 ResourceProvider" } };
 }
 

@@ -7,7 +7,8 @@ export const RESEARCH_CONTENT_PROFILE = "liteasy-research-markdown/v1" as const;
 /** Host-owned allowlist. Content cannot select plugins, CSS, handlers or protocols. */
 const researchSchema = {
   ...defaultSchema,
-  protocols: { ...defaultSchema.protocols, href: ["http", "https", "mailto", "liteasy", "liteasy-reference"], src: ["http", "https", "data", "blob", "liteasy", "liteasy-reference"] },
+  tagNames: [...(defaultSchema.tagNames ?? []), "caption"],
+  protocols: { ...defaultSchema.protocols, href: ["http", "https", "mailto", "liteasy", "liteasy-reference"], src: ["http", "https", "data", "blob", "attachment", "liteasy", "liteasy-reference"] },
   attributes: {
     ...defaultSchema.attributes,
     "*": (defaultSchema.attributes?.["*"] ?? []).filter((attribute) =>
@@ -21,9 +22,14 @@ const researchSchema = {
 function boundTableAttributes() {
   return (tree: { children?: unknown[] }) => {
     let count = 0;
+    let bounded = false;
+    const ids = new Set<string>();
+    const cells: any[] = [];
     const visit = (node: any, depth: number) => {
-      if (++count > 30000 || depth > 64) { node.children = []; return; }
+      if (++count > 30000 || depth > 64) { bounded = true; node.children = []; if (node.type === "text") node.value = ""; return; }
+      if (typeof node.properties?.id === "string") ids.add(node.properties.id);
       if (node.type === "element" && ["th", "td"].includes(node.tagName)) {
+        cells.push(node);
         for (const key of ["colSpan", "rowSpan"]) {
           if (node.properties?.[key] !== undefined) {
             const value = Number(node.properties[key]);
@@ -35,6 +41,13 @@ function boundTableAttributes() {
       node.children?.forEach((child: unknown) => visit(child, depth + 1));
     };
     visit(tree, 0);
+    // Sanitization prefixes IDs to prevent DOM clobbering. Keep header references aligned.
+    for (const cell of cells) {
+      const headers = cell.properties?.headers;
+      if (headers) cell.properties.headers = (Array.isArray(headers) ? headers : String(headers).split(/\s+/)).map((id: string) =>
+        ids.has(id) ? id : ids.has(`user-content-${id}`) ? `user-content-${id}` : id);
+    }
+    if (bounded) tree.children?.push({ type: "element", tagName: "p", properties: { role: "status" }, children: [{ type: "text", value: "内容结构超过展示限制，部分预览已收起；完整来源未修改，请分段读取。" }] });
   };
 }
 // Preserve only properties created by trusted remark transforms, never attributes from raw HTML.

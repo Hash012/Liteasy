@@ -64,11 +64,14 @@ export function evidenceReportFromAssetReads(input: {
 }): EvidenceReportV1 {
   const report = evidenceReportFromAnchors({ id: input.id, answer: input.answer, anchors: [] });
   report.readLedger = input.readLedger;
+  const sourceIds = new Map<string, string>();
   input.reads.forEach((read, index) => {
-    const sourceId = `source:${index + 1}`;
-    report.sources.push({ id: sourceId, kind: "object", title: read.asset.title, resourcePath: read.asset.path,
+    const key = JSON.stringify([input.scopeId, read.asset.path, read.asset.revision]);
+    const sourceId = sourceIds.get(key) ?? `source:${sourceIds.size + 1}`;
+    if (!sourceIds.has(key)) report.sources.push({ id: sourceId, kind: "object", title: read.asset.title, resourcePath: read.asset.path,
       revision: read.asset.revision, scopeId: input.scopeId,
       coverage: read.evidence?.kind === "metadata" ? "metadata_only" : read.text ? "partial_text" : "unknown" });
+    sourceIds.set(key, sourceId);
     report.passages.push({ id: `passage:${index + 1}`, sourceId, quote: read.text, content: read.content,
       sourceRevision: read.asset.revision, locator: { precision: "unavailable" }, locatorIntegrity: "unknown",
       retrievalReason: `实际读取字符 ${read.offset + 1}–${read.offset + read.text.length}；仅展示本轮读取快照。` });

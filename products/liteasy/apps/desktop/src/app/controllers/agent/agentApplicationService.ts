@@ -54,6 +54,7 @@ export type ResolvedAgentContext = {
 };
 
 export type AgentCommandExecutionInput = {
+  reportEvidenceCheckpoint?: (report: import("../../features/evidence/evidenceReport").EvidenceReportV1) => Promise<void>;
   conversationHistory: AssistantConversationTurn[];
   context: ResolvedAgentContext;
   coreTurn: AgentCorePreparedTurn;
@@ -848,6 +849,13 @@ export function createAgentApplicationService(
               traceId: `trace-${runId}`,
               type: "progress.started"
             });
+          },
+          async reportEvidenceCheckpoint(report) {
+            run.evidenceCheckpoint = structuredClone(report);
+            if (!(await persistState())) {
+              abortController.abort("checkpoint_persistence_failed");
+              throw new Error("读取回执保存失败，已停止本轮任务。");
+            }
           },
           reportAssetWrite(receipt) {
             emit(stored, run, { receipt, type: "asset.written" });

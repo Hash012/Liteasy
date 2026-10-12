@@ -49,9 +49,10 @@ export function revealRenderedResource(root: HTMLElement | null, target: Resourc
   if (element) { element.scrollIntoView?.({ block: "center" }); element.classList.add("resource-search-location"); setTimeout(() => element?.classList.remove("resource-search-location"), 3000); }
 }
 /** Unified Markdown source positions, also usable by other locator consumers. */
-export function rehypeResourcePositions() {
+export function rehypeResourcePositions(options?: { disabled?: boolean }) {
   return (tree: { children?: unknown[] }) => {
     const visit = (node: { type?: string; properties?: Record<string, unknown>; position?: { start?: { line?: number } }; children?: unknown[] }) => {
+      if (options?.disabled) delete node.position;
       if (node.type === "element" && node.position?.start?.line) { node.properties ??= {}; node.properties["data-source-line"] = node.position.start.line; }
       for (const child of node.children ?? []) visit(child as typeof node);
     };

@@ -239,7 +239,7 @@ export const MarkdownContent = memo(function MarkdownContent({
     } };
   }, [components, inline, onOpenLiteasyPath, renderResourceImage, references, referenceSource, mediaPolicy]);
   const remark = useMemo(() => [...baseRemarkPlugins, ...remarkPlugins, ...(references ? [remarkResourceReferences] : []), remarkLiteasyLinks(liteasyLinkTitles), remarkPaperAnchorReferences(paperAnchors)], [liteasyLinkTitles, paperAnchors, remarkPlugins, Boolean(references)]);
-  const rehype = useMemo(() => [...(html === "sanitized" ? researchContentPlugins : []), ...rehypePluginsBeforeMath, ...mathPlugin, rehypeResourcePositions], [html, rehypePluginsBeforeMath]);
+  const rehype = useMemo<NonNullable<Options["rehypePlugins"]>>(() => [...(html === "sanitized" ? researchContentPlugins : []), ...rehypePluginsBeforeMath, ...mathPlugin, [rehypeResourcePositions, { disabled: markdown !== value }]], [html, rehypePluginsBeforeMath, markdown, value]);
   const resolveUrl = useMemo<UrlTransform>(() => (url, key, node) =>
     references && (url.startsWith("liteasy-reference:") || url.startsWith("liteasy://") || referenceSource && !/^[a-z][a-z0-9+.-]*:|^[\/\\]/i.test(url)) ? url :
     key === "src" && renderResourceImage && (safeLiteasyMarkdownUrl(url) || allowRelativeImages && !/^[a-z][a-z0-9+.-]*:|^[\/\\]/i.test(url)) ? url : key === "href" && onOpenLiteasyPath && safeLiteasyMarkdownUrl(url) ? url
@@ -247,7 +247,8 @@ export const MarkdownContent = memo(function MarkdownContent({
   const Root = inline ? "span" : "div";
   if (!value.trim()) return emptyLabel ? <Root className={`markdown-content ${className} is-empty`}>{emptyLabel}</Root> : null;
   return (
-    <Root ref={(element) => { revealRoot.current = element; }} className={`markdown-content${inline ? " markdown-content--inline" : ""} ${className}`.trim()}>
+    <Root ref={(element) => { revealRoot.current = element; }} data-source-mapping={markdown === value ? "original" : "unavailable"} aria-busy={streaming || undefined} className={`markdown-content${inline ? " markdown-content--inline" : ""} ${className}`.trim()}>
+      {streaming && <span className="markdown-content__draft-label">生成中，内容尚未完整</span>}
       <StreamingContext.Provider value={streaming}>
         <InlineContext.Provider value={inline}>
           <ReactMarkdown components={mergedComponents} rehypePlugins={rehype} remarkPlugins={remark} skipHtml={html === "skip"} urlTransform={resolveUrl}>

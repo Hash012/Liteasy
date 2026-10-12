@@ -10,6 +10,7 @@ import type { PaperAttachmentController } from "../usePaperAttachmentController"
 
 /** Route verified asset receipts through the same editors used by the library. */
 export function createAgentAssetNavigator(input: {
+  resolveResource?(path: string): Promise<{ path: string; revision: string; scopeId: string }>;
   repository: ObjectRepository;
   projects: PaperProjectRepository;
   files: NoteFileService;
@@ -24,6 +25,13 @@ export function createAgentAssetNavigator(input: {
   return async (path: string, location?: AssetOpenLocation) => {
     const check = () => { if (!input.active()) throw new Error("账号已切换，请重新打开文件。"); };
     check();
+    if (path.startsWith("liteasy://resources/")) {
+      if (!input.resolveResource) throw new Error("此资源类型未注册导航器。");
+      const target = await input.resolveResource(path);
+      if (location && (target.revision !== location.revision || target.scopeId !== location.scopeId)) throw new Error("revision_unavailable：引用版本已变化。");
+      path = target.path; location = { ...location, revision: target.revision, scopeId: target.scopeId };
+      check();
+    }
     if (location && location.scopeId !== input.repository.scopeId) throw new Error("引用属于其他账号。");
     const reveal = () => { if (location) revealResource({ path, line: location.line, quote: location.quote }); };
     const target = parseLiteasyPath(path, input.repository.scopeId);

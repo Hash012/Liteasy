@@ -1,3 +1,4 @@
+import { parseResourceUri } from "../../resource-filesystem/resourceFileService";
 import { useObjectWorkbench } from "../../objects/objectWorkbenchPort";
 import { parseLiteasyPath } from "../../resource-filesystem/liteasyPath";
 import type { AssistantMessage } from "../../assistant/assistant.types";
@@ -28,7 +29,12 @@ export function MessageEvidence({ message, papers, onOpenCitation, onOpenAsset }
   // Opening still resolves through the workbench/asset service and its current permissions.
   for (const source of report.sources) {
     if (source.kind === "object" && source.resourcePath && workbench?.scopeId && source.scopeId === workbench.scopeId) {
-      try { parseLiteasyPath(source.resourcePath, workbench.scopeId); sourceIds.add(source.id); } catch { /* Different scope stays inaccessible. */ }
+      try {
+        if (source.resourcePath.startsWith("liteasy://resources/")) {
+          if (parseResourceUri(source.resourcePath).scopeId !== workbench.scopeId) continue;
+        } else parseLiteasyPath(source.resourcePath, workbench.scopeId);
+        sourceIds.add(source.id);
+      } catch { /* Different scope stays inaccessible. */ }
     }
   }
   const currentRevisions = new Map(report.sources.flatMap(source => {
@@ -44,7 +50,7 @@ export function MessageEvidence({ message, papers, onOpenCitation, onOpenAsset }
   const canOpen = (passage: EvidencePassage) => {
     if (passage.locatorIntegrity === "stale") return false;
     const source = sourceMap.get(passage.sourceId);
-    if (source?.kind === "object" && source.resourcePath) return !!onOpenAsset;
+    if (source?.kind === "object" && source.resourcePath) return !!onOpenAsset && !!source.revision && !!source.scopeId;
     const anchor = resolveAnchor(passage);
     return !!anchor?.locator.page && !!(workbench?.openPaperAnchor || onOpenCitation);
   };

@@ -26,6 +26,9 @@ jobs:
       - name: Verify resources, generated contracts and TypeScript
         working-directory: products/liteasy/apps/desktop
         run: npm run ci:contracts
+      - name: Enforce content and asset contracts
+        working-directory: products/liteasy/apps/desktop
+        run: npm run ci:content
       - name: Check Windows resource and module naming regressions
         working-directory: products/liteasy/apps/desktop
         run: npm run ci:smoke

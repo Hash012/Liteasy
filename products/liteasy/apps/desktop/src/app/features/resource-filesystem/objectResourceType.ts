@@ -1,4 +1,4 @@
-import { objectText, refOf, type ObjectEnvelope } from "../objects/object.types";
+import { refOf, type ObjectEnvelope } from "../objects/object.types";
 import type { ObjectRepository } from "../objects/objectRepository";
 import { liteasyPath } from "./liteasyPath";
 import { parseResourceUri, resourceUri } from "./resourceFileService";
@@ -51,7 +51,11 @@ export function objectResourceType(input: {
     async read(ref, options) {
       const object = await resolve(ref);
       const resource = await stat({ ...ref, revision: object.revision });
-      const content = options.representation === "native" ? canonicalResourceJson(object) : objectText(object);
+      const projection = options.representation === "markdown" ? await adapter.read(address(object), { maxCharacters: 80000, signal: options.signal }) : undefined;
+      if (projection?.truncated) throw new ResourceFileError("read_limit_exceeded", "完整投影超过读取预算，请使用分页读取。");
+      if (object.kind === "workspace.board" && (await repository.resolveLatest(object.objectId)).revision !== object.revision) throw new ResourceFileError("revision_unavailable", "白板布局历史快照不可用。");
+      const content = options.representation === "native" ? canonicalResourceJson(object.kind === "workspace.board"
+        ? { schema: "liteasy.board-bundle/v1", object, placements: await repository.listPlacements(object.objectId), edges: await repository.listEdges(object.objectId) } : object) : projection!.text;
       const byteLength = new TextEncoder().encode(content).byteLength;
       if (byteLength > options.maxBytes) throw new ResourceFileError("read_limit_exceeded", "完整内容超过读取预算。");
       check(); return { resource, representation: options.representation, fileName: `${object.objectId}.${options.representation === "native" ? "json" : "md"}`,
@@ -72,8 +76,9 @@ export function objectResourceType(input: {
     const asset = { ...legacy.asset, path: resourceUri({ providerId: typeId, resourceId: object.objectId, scopeId: repository.scopeId, revision: object.revision }), kind: typeId };
     return { ...legacy, asset, ...(legacy.content ? { content: { ...legacy.content, binding: { kind: "pinned" as const, path: asset.path, revision: object.revision, scopeId: repository.scopeId }, representationId: `${asset.path}:text/v1` } } : {}) };
   };
-  return { typeId, schemaVersion: 1, owner: "ObjectRepository", nativeCodec: "liteasy.object/v1", profile: "liteasy-research-markdown/v1", viewId: "content", fixtureIds: [input.fixtureId], source,
+  return { typeId, schemaVersion: 1, owner: "ObjectRepository", nativeCodec: input.kind === "workspace.board" ? "liteasy.board-bundle/v1" : "liteasy.object/v1", profile: "liteasy-research-markdown/v1", viewId: "content", fixtureIds: [input.fixtureId], source,
     file: { supported: true, implementation: provider },
+    navigation: { supported: true, implementation: async path => { const object = await resolve(refForPath(path)); return { path: address(object), revision: object.revision, scopeId: repository.scopeId }; } },
     context: adapter.context ? { supported: true, implementation: async path => adapter.context!(address(await resolve(refForPath(path)))) } : { supported: false, reason: "当前环境未提供上下文入口" },
     write: adapter.write && input.kind === "content.note" ? { supported: true, implementation: async (path, options) => {
       const object = await resolve(refForPath(path));

@@ -25,3 +25,41 @@ test("display expansion never counts as model or verifier delivery", async () =>
   expect(ledger.snapshot().deliveries.map(receipt => receipt.audience)).toEqual(["display"]);
   expect(ledger.snapshot().reads[0].ranges).toEqual([{ start: 28, end: 29, unit: "utf16" }]);
 });
+
+test("persists an interrupted run's read checkpoint without replaying tools or claiming an answer", async () => {
+  const { createAgentApplicationService } = await import("../app/controllers/agent/agentApplicationService");
+  const { inspectAgentStateSnapshot } = await import("../app/controllers/agent/agentStatePersistence");
+  let persisted: unknown;
+  const stateStore = { load: () => persisted, save: (value: unknown) => { persisted = structuredClone(value); } };
+  let stop!: () => void;
+  const paused = new Promise<void>(resolve => { stop = resolve; });
+  let checkpointed!: () => void;
+  const ready = new Promise<void>(resolve => { checkpointed = resolve; });
+  const ledger = createContentReadLedger("checkpoint", "local");
+  await ledger.append(readAgentAssetText(asset, "preserved source", {}));
+  const report = evidenceReportFromAssetReads({ id: "checkpoint", answer: "", scopeId: "local", reads: ledger.reads(), readLedger: ledger.snapshot() });
+  const api = createAgentApplicationService({ stateStore,
+    executeCommand: () => ({ events: [], settingsChanged: false }),
+    executeKnowledge: () => ({ message: "unused" }),
+    async executeManagerTurn(input) {
+      await input.reportEvidenceCheckpoint!(report);
+      checkpointed(); await paused;
+      return { kind: "knowledge", result: { message: "late answer" } };
+    },
+  });
+  const session = await api.createSession({ consumer: "frontend" });
+  if (!session.ok) throw new Error("session");
+  let runId = "";
+  api.subscribe(session.data.sessionId, event => { runId = event.runId; });
+  const submitted = api.submitTurn({ sessionId: session.data.sessionId, idempotencyKey: "cancel", input: { mode: "qa", message: "read" } });
+  await ready;
+  await api.cancelRun({ sessionId: session.data.sessionId, runId });
+  stop(); await submitted;
+  const saved = inspectAgentStateSnapshot(persisted);
+  expect(saved.issues).toEqual([]);
+  expect(saved.snapshot?.sessions[0].runs[0]).toMatchObject({ status: "cancelled", evidenceCheckpoint: { readLedger: { reads: [{ revision: "r1" }] } } });
+  const restored = createAgentApplicationService({ stateStore, executeCommand: () => { throw new Error("must not replay"); }, executeKnowledge: () => { throw new Error("must not replay"); } });
+  const run = await restored.getRun({ sessionId: session.data.sessionId, runId });
+  expect(run.ok && run.data.evidenceCheckpoint?.passages[0].quote).toBe("preserved source");
+  expect(run.ok && run.data.events.some(event => event.type === "assistant.message")).toBe(false);
+});

@@ -8,6 +8,8 @@ const parser = unified().use(remarkParse).use(remarkGfm).use(remarkMath);
 export type ContentBlock = { start: number; end: number; type: string; atomic: boolean };
 /** Source positions always refer to original UTF-16, before CRLF/math/render normalization. */
 export function contentBlocks(text: string): ContentBlock[] {
+  // Avoid constructing an unbounded AST for a giant source just to read a small window.
+  if (text.length > 2_000_000) return [{ start: 0, end: text.length, type: "source-budget", atomic: true }];
   const tree = parser.parse(text);
   return tree.children.flatMap(node => {
     const start = node.position?.start.offset, end = node.position?.end.offset;
@@ -36,8 +38,15 @@ export function sourceContent(input: {
   const end = Math.max(exact.end, ...overlapping.map(block => block.end));
   const definitions = blocks.filter(block => ["definition", "footnoteDefinition"].includes(block.type) && (block.end <= start || block.start >= end));
   const ranges = [{ start, end }, ...definitions].sort((a, b) => a.start - b.start).map(({ start, end }) => ({ start, end, unit: "utf16" as const }));
+  let cursor = 0;
+  const segments = ranges.map((sourceRange, index) => {
+    const outputStart = cursor; cursor += sourceRange.end - sourceRange.start;
+    const outputEnd = cursor; if (index < ranges.length - 1) cursor += 2;
+    return { outputStart, outputEnd, sourceRange };
+  });
   const view = ranges.map(range => text.slice(range.start, range.end)).join("\n\n");
-  const overBudget = view.length > (input.maxViewCharacters ?? 80000);
+  const overBudget = view.length > Math.min(200000, input.maxViewCharacters ?? 80000);
+  const previewRange = safeUtf16Range(text, exact.start, Math.min(exact.end, exact.start + 200000));
   const expanded = start !== exact.start || end !== exact.end || definitions.length > 0;
   // Unclosed HTML tables/fences remain explicit snapshots; never fabricate closing syntax.
   const selected = text.slice(exact.start, exact.end);
@@ -54,7 +63,8 @@ export function sourceContent(input: {
     binding: revision ? { kind: "pinned", path, revision, scopeId } : { kind: "legacy-unpinned", reason: "来源未提供可固定版本" },
     representationId: `${path}:text/v1`, profile, sourceLine: text.slice(0, exact.start).split("\n").length,
     exactSelection: { text: selected, ranges: [exact] },
-    viewContext: { text: overBudget ? selected : view, ranges: overBudget ? [exact] : ranges,
+    viewContext: { text: overBudget ? text.slice(previewRange.start, previewRange.end) : view, ranges: overBudget ? [previewRange] : ranges,
+      segments: overBudget ? [{ outputStart: 0, outputEnd: previewRange.end - previewRange.start, sourceRange: previewRange }] : segments,
       expansion: overBudget || !expanded ? "none" : definitions.length ? "dependency-closure" : "enclosing-block",
       materialBeyondSelection: !overBudget && expanded },
     integrity: overBudget ? "budget-exceeded" : incomplete ? "incomplete-snapshot" : exact.start === 0 && exact.end === text.length ? "complete" : "structured-partial",
