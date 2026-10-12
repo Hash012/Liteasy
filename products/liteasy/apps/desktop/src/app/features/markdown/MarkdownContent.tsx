@@ -1,3 +1,4 @@
+import { researchContentPlugins } from "./contentProfile";
 import { useResourceReveal, observeRenderedResource, rehypeResourcePositions } from "../resource-links/resourceReveal";
 import {
   Children, Component, createContext, createElement, isValidElement, lazy, memo, Suspense, useContext, useMemo,
@@ -33,7 +34,8 @@ export type MarkdownContentProps = {
   allowRelativeImages?: boolean;
   renderResourceImage?: (source: string, alt: string) => ReactNode;
   emptyLabel?: string;
-  /** HTML is omitted by default. Sanitized mode requires an explicit sanitizer pipeline. */
+  /** Safe research profile is host-owned and shared by every body surface. */
+  mediaPolicy?: "default" | "blocked";
   html?: "text" | "skip" | "sanitized";
   inline?: boolean;
   normalizeMath?: boolean;
@@ -189,7 +191,7 @@ const inlineComponents: Components = {
 
 /** Shared rich-text foundation. Adapters add source links, attachment lookup and domain AST marks. */
 export const MarkdownContent = memo(function MarkdownContent({
-  className = "", components, renderResourceImage, allowRelativeImages = false, emptyLabel, html = "skip", inline = false, normalizeMath = true,
+  className = "", components, renderResourceImage, allowRelativeImages = false, emptyLabel, html = "sanitized", mediaPolicy = "default", inline = false, normalizeMath = true,
   paperAnchors = emptyAnchors, rehypePluginsBeforeMath = emptyPlugins, remarkPlugins = emptyPlugins, streaming = false,
   urlTransform = markdownUrlTransform, onOpenLiteasyPath, liteasyLinkTitles, value
 }: MarkdownContentProps) {
@@ -202,6 +204,7 @@ export const MarkdownContent = memo(function MarkdownContent({
   const markdown = useMemo(() => normalizeMath ? normalizeMarkdownMathDelimiters(value) : value, [normalizeMath, value]);
   const mergedComponents = useMemo<Components>(() => {
     const merged: Components = { ...markdownComponents, ...(inline ? inlineComponents : {}), ...components, ...(renderResourceImage ? { img: (props: { src?: string; alt?: string }) => props.src ? renderResourceImage(props.src, props.alt ?? "图片") : <img src={props.src} alt={props.alt ?? ""} loading="lazy" decoding="async" /> } : {}) };
+    if (mediaPolicy === "blocked") { merged.img = () => <span>图片未加载（证据预览）</span>; return merged; }
     if (references && !inline) {
       const previousLink = merged.a!, previousImage = merged.img!, previousParagraph = merged.p;
       const locator = (href: string) => fromReferenceHref(href) ?? (href.startsWith("liteasy://") || referenceSource && !/^[a-z][a-z0-9+.-]*:|^[\/\\]/i.test(href) ? href : undefined);
@@ -233,13 +236,13 @@ export const MarkdownContent = memo(function MarkdownContent({
         });
       }}>{props.children}</a>;
     } };
-  }, [components, inline, onOpenLiteasyPath, renderResourceImage, references, referenceSource]);
+  }, [components, inline, onOpenLiteasyPath, renderResourceImage, references, referenceSource, mediaPolicy]);
   const remark = useMemo(() => [...baseRemarkPlugins, ...remarkPlugins, ...(references ? [remarkResourceReferences] : []), remarkLiteasyLinks(liteasyLinkTitles), remarkPaperAnchorReferences(paperAnchors)], [liteasyLinkTitles, paperAnchors, remarkPlugins, Boolean(references)]);
-  const rehype = useMemo(() => [...rehypePluginsBeforeMath, ...mathPlugin, rehypeResourcePositions], [rehypePluginsBeforeMath]);
+  const rehype = useMemo(() => [...(html === "sanitized" ? researchContentPlugins : []), ...rehypePluginsBeforeMath, ...mathPlugin, rehypeResourcePositions], [html, rehypePluginsBeforeMath]);
   const resolveUrl = useMemo<UrlTransform>(() => (url, key, node) =>
     references && (url.startsWith("liteasy-reference:") || url.startsWith("liteasy://") || referenceSource && !/^[a-z][a-z0-9+.-]*:|^[\/\\]/i.test(url)) ? url :
     key === "src" && renderResourceImage && (safeLiteasyMarkdownUrl(url) || allowRelativeImages && !/^[a-z][a-z0-9+.-]*:|^[\/\\]/i.test(url)) ? url : key === "href" && onOpenLiteasyPath && safeLiteasyMarkdownUrl(url) ? url
-      : safeResolvedUrl(urlTransform(url, key, node), key), [onOpenLiteasyPath, urlTransform, renderResourceImage, allowRelativeImages, references, referenceSource]);
+      : safeResolvedUrl(urlTransform(url, key, node), key), [onOpenLiteasyPath, urlTransform, renderResourceImage, allowRelativeImages, references, referenceSource, mediaPolicy]);
   const Root = inline ? "span" : "div";
   if (!value.trim()) return emptyLabel ? <Root className={`markdown-content ${className} is-empty`}>{emptyLabel}</Root> : null;
   return (

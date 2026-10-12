@@ -106,3 +106,8 @@
 .markdown-content--inline { display: inline; }
 .markdown-content--inline .markdown-content__image { display: inline-grid; }
 .resource-search-location { outline: 2px solid var(--colorBrandStroke1); outline-offset: 3px; border-radius: 4px; }
+
+.content-view { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.content-view > small { display: block; color: var(--text-muted); margin-block: 4px; }
+.content-view__source { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
+.content-view .markdown-content__table-scroll { max-width: 100%; overflow-x: auto; }

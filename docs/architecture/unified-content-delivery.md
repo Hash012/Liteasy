@@ -21,3 +21,7 @@
 | 临时界面文本/诊断 | React literal | 保持字面文本，不文件化 |
 
 合成 fixture 来自任务包，不是用户 Larimar 原文。WP00 使用 expected-failure 测试记录两个可重复失败，后续阶段转成正常断言。
+
+## WP01：共享渲染
+
+加入宿主固定 research profile（raw→sanitize→有界表格属性→受限 KaTeX），MinerU 不再自建净化流水线。Evidence 使用 ContentView，旧字符串通过集中 legacy adapter，标题保持 literal；证据禁用自动图片/嵌入加载，提供原样源码按钮。完整表格渲染不意味着残片已经修复。共享 Markdown/证据回归测试覆盖安全链接和攻击内容。

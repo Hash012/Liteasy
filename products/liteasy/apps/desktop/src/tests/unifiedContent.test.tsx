@@ -7,7 +7,7 @@ import { readAgentAssetText } from "../app/features/resource-filesystem/agentAss
 const fixture = (name: string) => readFileSync(`../../../../development/test-data/unified-content/${name}`, "utf8");
 const asset = { path: "liteasy://objects/memo?scope=local", title: "合成研究笔记", kind: "content.note", revision: "r1", capabilities: [] };
 
-test.fails("shared evidence body renders merged HTML table headers", () => {
+test("shared evidence body renders merged HTML table headers", () => {
   const report = evidenceReportFromAssetReads({ id: "r", answer: "", scopeId: "local", reads: [readAgentAssetText(asset, fixture("mixed-content.md"), {})] });
   const { container } = render(<EvidenceLens report={report} />);
   fireEvent.click(screen.getByRole("button", { name: /1 篇来源/ }));

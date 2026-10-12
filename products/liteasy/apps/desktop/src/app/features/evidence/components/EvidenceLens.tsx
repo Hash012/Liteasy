@@ -1,3 +1,5 @@
+import { ContentView } from "../../markdown/ContentView";
+import { legacyContent } from "../../markdown/contentFragment";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Button, Select, Tooltip } from "@fluentui/react-components";
 import { ArrowLeft20Regular, ChevronDown16Regular, ChevronRight16Regular, Dismiss20Regular, DocumentSearch20Regular, Open20Regular, Info16Regular, CheckmarkCircle16Regular, Warning16Regular, SubtractCircle16Regular, DocumentText16Regular } from "@fluentui/react-icons";
@@ -102,7 +104,7 @@ function PassageCard({ report, passage, claim, onOpenPassage, canOpenPassage, st
     </div>
     {edge ? <p className="evidence-lens__relationship">{t(`evidence.relation.${streaming || claim?.assessment === "unverified" ? "unassessed" : edge.relation}`,
       streaming || claim?.assessment === "unverified" ? relations.unassessed : relations[edge.relation])}</p> : null}
-    {passage.quote ? <blockquote>{passage.quote}</blockquote> : <p>{t("evidence.noQuote", "未保存原文摘录。")}</p>}
+    {passage.quote ? <ContentView content={legacyContent(passage.quote)} purpose="evidence" allowSource /> : <p>{t("evidence.noQuote", "未保存原文摘录。")}</p>}
     {edge?.condition ? <p>{t("evidence.condition", "条件：")}{edge.condition}</p> : null}
     {edge?.explanation ? <p>{t("evidence.relationNote", "关系说明（待结合核验记录阅读）：")}{edge.explanation}</p> : null}
     <div className="evidence-lens__passage-footer"><Button size="small" appearance="subtle" icon={<Open20Regular />} disabled={!available || opening} onClick={() => { void open(); }}>

@@ -1,29 +1,11 @@
-import { defaultSchema } from "hast-util-sanitize";
 import { type ComponentPropsWithoutRef } from "react";
 import { MarkdownContent } from "../markdown/MarkdownContent";
-import rehypeRaw from "rehype-raw";
-import rehypeSanitize from "rehype-sanitize";
 import type { MineruFigure } from "./import.types";
 import { resolveMineruImageSource } from "./mineruImageSources";
 
 type MineruMarkdownProps = {
   content: string;
   figures?: readonly MineruFigure[];
-};
-
-const mineruSanitizeSchema = {
-  ...defaultSchema,
-  attributes: {
-    ...defaultSchema.attributes,
-    img: [...(defaultSchema.attributes?.img ?? []), ["loading"], ["title"], ["alt"]],
-    table: [...(defaultSchema.attributes?.table ?? []), ["className"]],
-    td: [...(defaultSchema.attributes?.td ?? []), ["colSpan"], ["rowSpan"]],
-    th: [...(defaultSchema.attributes?.th ?? []), ["colSpan"], ["rowSpan"]]
-  },
-  protocols: {
-    ...defaultSchema.protocols,
-    src: [...(defaultSchema.protocols?.src ?? []), "data"]
-  }
 };
 
 function safeHref(value: string | undefined) {
@@ -69,7 +51,6 @@ export function MineruMarkdown({ content, figures = [] }: MineruMarkdownProps) {
         },
         img: (props) => <MarkdownImage {...props} figures={figures} />
       }}
-      rehypePluginsBeforeMath={[rehypeRaw, [rehypeSanitize, mineruSanitizeSchema]]}
       urlTransform={(url, key) => (
         key === "src" ? resolveMineruImageSource(url, figures) : safeHref(url)
       ) ?? ""}
