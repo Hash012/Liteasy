@@ -13,6 +13,7 @@ export type AgentExecutionRuntime =
   | "custom_manager"
   | "liteasy_command_workflow"
   | "liteasy_knowledge_workflow"
+  | "codex_app_server"
   | "openai_agents_sdk";
 
 export type AgentManagerActivity = {
@@ -49,6 +50,12 @@ export type AgentCitation = {
 };
 
 export type AgentCapability = {
+  contractVersion?: number;
+  outputSchema?: AgentJsonValue;
+  resourceScope?: string;
+  outwardBehavior?: string;
+  maxOutputBytes?: number;
+  idempotency?: string;
   available?: boolean;
   unavailableReason?: string;
   actionId: string;
@@ -95,6 +102,7 @@ export type SubmitAgentTurnRequest = {
   input: {
     conversationHistory?: import("../assistant/assistantConversationContext").AssistantConversationTurn[];
     branchId?: string;
+    researchTaskId?: string;
     networkMode?: "online" | "local-only";
     artifactType?: AgentArtifactType;
     systemPrompt?: string;

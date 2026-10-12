@@ -5,7 +5,7 @@ export default defineConfig(({ mode }) => ({
   // Do not inherit .env.local endpoints or secrets in the isolated profile.
   envDir: mode === "local-only" ? process.env.LITEASY_LOCAL_DEV_PROFILE : undefined,
   plugins: [react()],
-  build: { rollupOptions: { input: { app: "index.html", "document-export-cli": "document-export-cli.html", "document-export-diagram": "document-export-diagram.html" } } },
+  build: { rollupOptions: { input: { app: "index.html", "document-export-cli": "document-export-cli.html", "document-export-diagram": "document-export-diagram.html", "research-demo": "research-demo.html" } } },
   test: {
     environment: "jsdom",
     // Keep unit tests deterministic even when a developer's browser preview selects

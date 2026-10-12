@@ -26,6 +26,7 @@ export type DocumentNode = {
   source?: { start: number; end: number };
 };
 export type ExportAsset = { id: string; sha256: string; mediaType: string; bytes: Uint8Array; path: string; origin?: "original" | "generated" };
+export type ExportAttachment = { sha256: string; mediaType: "application/json" | "text/plain"; bytes: Uint8Array; path: string };
 export type ExportSource = { identity: string; revision?: string; state: "pinned" | "legacy-unpinned" | "draft"; sha256: string };
 export type ExportDocument = {
   version: "liteasy.export-document/v1";
@@ -37,6 +38,7 @@ export type ExportDocument = {
   spatialAtlas?: import("./spatialAtlas").SpatialAtlas;
   nodes: DocumentNode[];
   assets: ExportAsset[];
+  attachments?: ExportAttachment[];
   diagnostics: ExportDiagnostic[];
   sources: ExportSource[];
   sourceDigest: string;

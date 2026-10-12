@@ -296,3 +296,35 @@ test("partial research keeps read-backed findings and clickable sources alongsid
     expect(fixture.write).not.toHaveBeenCalled();
   } finally { fixture.api.dispose(); }
 });
+
+test("an explicitly bound research turn uses one backend through the existing AgentPublicApi", async () => {
+  const fixture = setup([]);
+  const executeResearchTurn = vi.fn(async (input: Parameters<NonNullable<DesktopAgentEnvironment["executeResearchTurn"]>>[0]) => {
+    input.reportDelta("研究流");
+    return { message: "研究回答", metadata: { backend: "codex_app_server", semanticStatus: "unverified" } };
+  });
+  fixture.environment.executeResearchTurn = executeResearchTurn;
+  const session = await fixture.api.createSession({ consumer: "frontend", metadata: { purpose: "research_task" } });
+  if (!session.ok) throw new Error(session.error.message);
+  const request = { sessionId: session.data.sessionId, idempotencyKey: "research-attempt", input: { message: "检查固定来源", mode: "qa" as const, researchTaskId: "task" } };
+  const result = await fixture.api.submitTurn(request);
+  expect(result.ok).toBe(true);
+  if (!result.ok) throw new Error(result.error.message);
+  expect(result.data).toMatchObject({ status: "completed", input: { researchTaskId: "task" } });
+  expect(result.data.events).toContainEqual(expect.objectContaining({ type: "assistant.delta", delta: "研究流" }));
+  expect(result.data.events).toContainEqual(expect.objectContaining({ type: "assistant.message", message: "研究回答" }));
+  await fixture.api.submitTurn(request);
+  expect(executeResearchTurn).toHaveBeenCalledOnce();
+  expect(fixture.managerRun).not.toHaveBeenCalled(); expect(fixture.prompts).toEqual([]);
+  fixture.api.dispose();
+});
+test("unavailable research backend does not fall back to a configured paid model route", async () => {
+  const fixture = setup(["must not be requested"]);
+  const session = await fixture.api.createSession({ consumer: "frontend" });
+  if (!session.ok) throw new Error(session.error.message);
+  const result = await fixture.api.submitTurn({ sessionId: session.data.sessionId, idempotencyKey: "unavailable",
+    input: { message: "研究问题", mode: "qa", researchTaskId: "task" } });
+  expect(result.ok && result.data.status).toBe("failed");
+  expect(fixture.prompts).toEqual([]); expect(fixture.managerRun).not.toHaveBeenCalled();
+  fixture.api.dispose();
+});

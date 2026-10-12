@@ -67,6 +67,8 @@ import { useApplicationViewController } from "../controllers/useApplicationViewC
 import { useWorkbenchNavigationController } from "../controllers/useWorkbenchNavigationController";
 import { useNotesController } from "../controllers/useNotesController";
 import { NotesPanel } from "../features/notes/NotesPanel";
+import { ResearchWorkbench } from "../features/research-loop/ResearchWorkbench";
+import { useResearchWorkbenchController } from "../controllers/useResearchWorkbenchController";
 import { NotesContext } from "../features/notes/notesPort";
 import { refOf, objectLink } from "../features/objects/object.types";
 import { makeObjectTransfer, writeObjectTransfer } from "../features/object-transfer/objectTransfer";
@@ -1390,7 +1392,9 @@ export function AppShell({
     if (objectWorkbench.visible && dock.findItemRegion("board")) workbenchNavigation.open("board");
   }, [objectWorkbench.board?.objectId, objectWorkbench.placements.length]);
 
+  const researchWorkbench = useResearchWorkbenchController({ repository: objectWorkbench.repository, assets: objectWorkbench.agentAssets, api: objectAgentApiRef });
   const assistantAgent = useAssistantAgentController({
+    executeResearchTurn: researchWorkbench.executeResearchTurn,
     getConfirmationBinding: () => JSON.stringify(getPublicationActorBinding()),
     principalId: objectWorkbench.repository.scopeId,
     resolveObjectContext: objectWorkbench.resolveContext,
@@ -2303,6 +2307,7 @@ export function AppShell({
     }
 
     if (itemId === "notes") return <NotesPanel model={notes.model} />;
+    if (itemId === "research") return <ResearchWorkbench model={researchWorkbench} />;
     if (itemId === "board") return <ObjectWorkbench key={objectWorkbench.repository.scopeId} model={objectWorkbench} />;
     if (itemId === "assistant") return <DockSurfaceSlot host={assistantSurfaceHost} />;
 
@@ -2818,6 +2823,8 @@ export function AppShell({
         }
       >
         <ActivityBar
+          researchOpen={workbenchNavigation.isVisible("research")}
+          onOpenResearch={() => workbenchNavigation.open("research")}
           onExpandLibrary={() => { openDockedLeftRailView("library"); setLibraryExpanded(true); }}
           notesOpen={workbenchNavigation.isVisible("notes")}
           onOpenNotes={() => notes.port.open()}

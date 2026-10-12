@@ -1,5 +1,6 @@
 import { zip, strToU8 } from "fflate";
 import { documentNodeHtml } from "./documentHtml";
+import { sha256 } from "./documentExport.types";
 import type { DocumentNode, ExportDocument } from "./documentExport.types";
 const literal = (value: string) => value.replace(/([\\`*[\]<>!|])/g, "\\$1");
 const text = (node: DocumentNode): string => (node.value ?? (node.children ?? []).map(text).join(""));
@@ -53,9 +54,20 @@ export function renderDocumentMarkdown(document: ExportDocument) {
 }
 export async function renderMarkdownPackage(document: ExportDocument) {
   const markdown = renderDocumentMarkdown(document);
-  if (!document.assets.length) return { bytes: strToU8(markdown), extension: "md", mimeType: "text/markdown;charset=utf-8" };
+  if (!document.assets.length && !document.attachments?.length) return { bytes: strToU8(markdown), extension: "md", mimeType: "text/markdown;charset=utf-8" };
   const files: Record<string, Uint8Array> = { "document.md": strToU8(markdown), "manifest.json": strToU8(JSON.stringify({ version: "liteasy.export-package/v1", sourceDigest: document.sourceDigest, profileId: document.options.profileId, assets: document.assets.map(({ path, sha256, mediaType, bytes }) => ({ path, sha256, mediaType, byteLength: bytes.length })), diagnostics: document.diagnostics }, null, 2) + "\n"), "README.md": strToU8("请解压整个压缩包，保持 document.md 与 assets/ 的相对位置。数学、脚注和合并表格需要 research Markdown 兼容阅读器。\n") };
   for (const asset of document.assets) files[asset.path] = asset.bytes;
+  for (const attachment of document.attachments ?? []) {
+    if (!/^assets\/research\/[a-z0-9-]+\.(json|txt)$/.test(attachment.path) || files[attachment.path]) throw new Error("研究附件路径无效。");
+    if (await sha256(attachment.bytes) !== attachment.sha256) throw new Error("研究附件哈希核验失败。");
+    files[attachment.path] = attachment.bytes;
+  }
+  if (document.attachments?.length) {
+    files["README.md"] = strToU8(new TextDecoder().decode(files["README.md"]) + "\n原始研究附件（请按 replay-instructions.txt 独立重放；测量与科学支持分开判断）：\n\n" + document.attachments.map(item => `- [${item.path}](${item.path})`).join("\n") + "\n");
+    const manifest = JSON.parse(new TextDecoder().decode(files["manifest.json"]));
+    manifest.attachments = document.attachments.map(({ path, sha256, mediaType, bytes }) => ({ path, sha256, mediaType, byteLength: bytes.length }));
+    files["manifest.json"] = strToU8(JSON.stringify(manifest, null, 2) + "\n");
+  }
   const bytes = await new Promise<Uint8Array>((resolve, reject) => zip(files, { level: 0 }, (error, data) => error ? reject(error) : resolve(data)));
   return { bytes, extension: "zip", mimeType: "application/zip" };
 }

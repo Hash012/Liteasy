@@ -9,6 +9,8 @@ import { paperAnchorsForArtifact } from "../features/paper-anchors/paperAnchorAd
 import { createNoteFileService } from "../features/note-files/noteFileService";
 import { resolveLiteasyContext, contextAttachments } from "../features/resource-filesystem/resourceContext";
 import { describeResourceLocation } from "../features/resource-filesystem/resourceLocation";
+import { researchResourceType } from "../features/research-loop/researchResourceType";
+import { createResearchHostClient } from "../features/research-loop/researchHostClient";
 import { createWorkspaceAgentAssetService } from "../features/resource-filesystem/workspaceAgentAssetService";
 import { createPaperProjectRepository } from "../features/paper-projects/paperProjectRepository";
 import { extractQuickAskAbstract } from "../features/pdf/pdfQuickAsk";
@@ -1066,6 +1068,7 @@ export function useObjectWorkbenchController(input: {
   const assetContextResolver = useRef(resolveLegacyContext);
   assetContextResolver.current = resolveLegacyContext;
   const agentAssets = useMemo(() => createWorkspaceAgentAssetService({
+    typeFactories: isTauri() ? [objects => researchResourceType({ host: createResearchHostClient(repository.scopeId, active), scope: repository.scopeId, active, objects })] : [],
     repository,
     active,
     artifactScopeId: latest.current.artifactScopeId ?? "device",

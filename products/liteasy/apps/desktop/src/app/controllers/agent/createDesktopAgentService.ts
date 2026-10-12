@@ -80,6 +80,7 @@ type KnowledgeEnvironment = Omit<
 >;
 
 export type DesktopAgentEnvironment = {
+  executeResearchTurn?: (input: AgentCommandExecutionInput) => Promise<AgentKnowledgeExecutionResult>;
   personalization?: { summary?: string; response?: string };
   assets?: AgentAssetService;
   extensionStudio?: import("../../features/workflow-studio/extensionStudioService").ExtensionStudioService;
@@ -160,6 +161,10 @@ async function executeKnowledgeTurn(
   }
 ): Promise<AgentKnowledgeExecutionResult> {
   if (input.request.input.networkMode === "local-only") return { message: "本轮仅限本机操作，未连接模型或外部服务。可继续在阅读器、笔记和本机资产工具中阅读或编辑资料。" };
+  if (input.request.input.researchTaskId) {
+    if (!environment.executeResearchTurn) throw new Error("研究后端尚未连接，请在研究工作台选择授权账号。");
+    return environment.executeResearchTurn(input);
+  }
   const {
     conversationHistory,
     coreTurn,
@@ -350,6 +355,7 @@ export function createDesktopAgentService(
     executeManagerTurn: options.managerAgent
       ? async (input) => {
           const environment = input.context.value as DesktopAgentEnvironment;
+          if (input.request.input.researchTaskId) return { kind: "knowledge", result: await executeKnowledgeTurn(input, environment) };
           const runtimeContext = createDesktopRuntimeContext(environment, {
             agentCore: input.coreTurn.runtimeContext,
             runtimeInput: {

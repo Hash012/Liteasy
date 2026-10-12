@@ -61,6 +61,13 @@ fn begin_session_request() -> Result<u64, String> {
         .begin_request())
 }
 
+pub(crate) fn authorization_epoch() -> Result<u64, String> {
+    Ok(IDENTITY_STATE
+        .lock()
+        .map_err(|_| "oauth_session_unavailable")?
+        .generation)
+}
+
 const CREDENTIAL_SERVICE: &str = "com.liteasy.desktop.identity";
 const CREDENTIAL_USERNAME: &str = "primary-refresh-token";
 const EXPECTED_AUDIENCE: &str = "liteasy-desktop";

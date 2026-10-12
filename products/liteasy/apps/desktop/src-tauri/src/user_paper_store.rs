@@ -184,12 +184,20 @@ pub fn save_user_paper_artifact(
 ) -> Result<(), String> {
     let path = artifact_path(&app, &paper_id, &artifact_kind)?;
     crate::local_library::with_local_library_index_transaction(&app, || {
-        let mut serialized = serde_json::to_vec(&snapshot).map_err(|error| format!("无法编码用户阅读产物：{error}"))?;
+        let mut serialized = serde_json::to_vec(&snapshot)
+            .map_err(|error| format!("无法编码用户阅读产物：{error}"))?;
         if artifact_kind == "annotations" {
-            let previous = if path.exists() { Some(fs::read(&path).map_err(|e| e.to_string())?) } else { None };
-            serialized = liteasy_annotation_sync::prepare(previous.as_deref(), &serialized, &paper_id)?;
+            let previous = if path.exists() {
+                Some(fs::read(&path).map_err(|e| e.to_string())?)
+            } else {
+                None
+            };
+            serialized =
+                liteasy_annotation_sync::prepare(previous.as_deref(), &serialized, &paper_id)?;
         }
-        if serialized.len() as u64 > MAX_USER_PAPER_ARTIFACT_BYTES { return Err("用户阅读产物超过大小限制。".into()); }
+        if serialized.len() as u64 > MAX_USER_PAPER_ARTIFACT_BYTES {
+            return Err("用户阅读产物超过大小限制。".into());
+        }
         write_json_atomically(&path, &serialized)
     })
 }

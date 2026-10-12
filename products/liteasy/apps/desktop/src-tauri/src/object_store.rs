@@ -20,7 +20,7 @@ pub struct ObjectChange {
     expected: Option<String>,
     row: Option<ObjectRow>,
 }
-fn open(app: &AppHandle, scope: &str) -> Result<Connection, String> {
+pub(crate) fn open(app: &AppHandle, scope: &str) -> Result<Connection, String> {
     // Scope is checked against the OAuth credential held by the host, never a model payload.
     let active = crate::desktop_identity::local_object_scope()?;
     if active != scope {

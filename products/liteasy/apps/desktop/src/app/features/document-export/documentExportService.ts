@@ -52,7 +52,7 @@ export async function renderExportDocument(document: ExportDocument, format: Doc
   }
   signal?.throwIfAborted();
   const fontManifest = "system-fonts/unverified";
-  const renderKey = await sha256(stableJson({ sourceDigest: document.sourceDigest, format, profile: document.options, renderer, fontManifest, nodes: document.nodes, assets: document.assets.map(asset => asset.sha256) }));
+  const renderKey = await sha256(stableJson({ sourceDigest: document.sourceDigest, format, profile: document.options, renderer, fontManifest, nodes: document.nodes, assets: document.assets.map(asset => asset.sha256), attachments: document.attachments?.map(item => item.sha256) }));
   const receipt: ExportReceipt = { renderKey, fontManifest, version: "liteasy.export-receipt/v1", requestId, sourceDigest: document.sourceDigest, profileId: document.options.profileId, sources: document.sources, diagnostics: document.diagnostics, mimeType, byteLength: bytes.length, sha256: await sha256(bytes), renderer };
   return { artifactId: document.sources[0]?.identity ?? requestId, title: document.title, format,
     content: bytesBase64(bytes), contentEncoding: "base64", fileName: `${safeDocumentStem(document.title)}.${extension}`, mimeType, container: extension === "zip" ? "zip" : undefined, receipt, scopeId: document.scopeId, sessionGeneration: document.sessionGeneration, protectedPaths: document.protectedPaths };

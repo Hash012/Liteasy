@@ -19,6 +19,7 @@ export type CoreDockItemId =
   | "assistant"
   | "help"
   | "notes"
+  | "research"
   | "board"
   | "artifacts";
 

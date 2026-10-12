@@ -1,3 +1,4 @@
+import { researchCapabilities } from "../../features/research-loop/researchCapabilities";
 import { contextRefSchema, redactDiagnostic } from "../../features/context/objectContext";
 import {
   createAgentCoreSession,
@@ -737,6 +738,7 @@ export function createAgentApplicationService(
         );
       }
       if (request.input.networkMode !== undefined && !["online", "local-only"].includes(request.input.networkMode)) return apiError("invalid_request", "Unsupported network mode");
+      if (request.input.researchTaskId !== undefined && (!request.input.researchTaskId || request.input.researchTaskId.length > 160 || request.input.mode === "command")) return apiError("invalid_request", "Invalid research task binding");
       if (request.input.systemPrompt !== undefined && (typeof request.input.systemPrompt !== "string" || request.input.systemPrompt.length > 4000)) {
         return apiError("invalid_request", "系统提示词最多 4,000 字符。");
       }
@@ -766,6 +768,7 @@ export function createAgentApplicationService(
         if (
           JSON.stringify(existingRun.input.conversationHistory) !== JSON.stringify(request.input.conversationHistory) ||
           existingRun.input.branchId !== request.input.branchId ||
+          existingRun.input.researchTaskId !== request.input.researchTaskId ||
           existingRun.input.message !== request.input.message ||
           existingRun.input.mode !== request.input.mode ||
           existingRun.input.networkMode !== request.input.networkMode ||
@@ -878,7 +881,7 @@ export function createAgentApplicationService(
           runId,
           signal: abortController.signal
         };
-        const runtime = ports.executeManagerTurn
+        const runtime = request.input.researchTaskId ? "codex_app_server" : ports.executeManagerTurn
           ? ports.managerRuntime ?? "custom_manager"
           : request.input.mode === "command"
             ? "liteasy_command_workflow"
@@ -1168,7 +1171,7 @@ export function createAgentApplicationService(
     },
 
     async listCapabilities() {
-      const capabilities = [...(ports.listCapabilities?.() ?? defaultCapabilities())];
+      const capabilities = [...(ports.listCapabilities?.() ?? defaultCapabilities()), ...researchCapabilities()];
       if (ports.supportsObjectContext) capabilities.push({
         actionId: "context.resolve",
         label: "询问所选内容",

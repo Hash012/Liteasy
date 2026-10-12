@@ -43,6 +43,7 @@ import { useTauriAgentHostBridge } from "./useTauriAgentHostBridge";
 type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 
 export type AssistantAgentControllerInput = {
+  executeResearchTurn?: import("./createDesktopAgentService").DesktopAgentEnvironment["executeResearchTurn"];
   principalId?: string;
   getConfirmationBinding?: () => string;
   extensionStudio?: import("../../features/workflow-studio/extensionStudioService").ExtensionStudioService;
@@ -176,6 +177,7 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
         });
 
         return {
+          executeResearchTurn: current.executeResearchTurn,
           personalization: current.profileEnabled ? { summary: current.profilePersonalizationSummary, response: current.responsePreferences } : undefined,
           assets: current.agentAssets,
           extensionStudio: current.extensionStudio,

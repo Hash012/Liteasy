@@ -6,6 +6,9 @@ mod agent_state;
 mod artifact_catalog_state;
 mod artifact_export;
 mod assistant_history;
+mod chatgpt_plan;
+mod chatgpt_stream;
+mod codex_backend;
 mod data_location;
 mod desktop_identity;
 mod device_control;
@@ -24,6 +27,10 @@ mod object_store;
 mod paper_cache;
 mod paper_fulltext;
 mod paper_services;
+mod research_demo_cli;
+mod research_harness;
+mod research_host;
+mod research_runner;
 mod selection_lookup;
 mod semantic_index;
 mod system_fonts;
@@ -35,10 +42,22 @@ use tauri::Manager;
 mod local_dev;
 
 fn main() {
+    if let Some(code) = research_host::cli_replay(&std::env::args().skip(1).collect::<Vec<_>>()) {
+        std::process::exit(code);
+    }
     if let Err(error) = local_dev::initialize() {
         eprintln!("{error}");
         std::process::exit(1);
     }
+    let research_demo =
+        match research_demo_cli::parse(&std::env::args().skip(1).collect::<Vec<_>>()) {
+            Ok(value) => value,
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(2);
+            }
+        };
+    let research_demo_setup = research_demo.clone();
     if let Some(code) = headless_cli::run_external_mode(
         data_location::headless_root,
         desktop_identity::local_object_scope,
@@ -65,13 +84,13 @@ fn main() {
             }
         };
     let export_cli_setup = export_cli.clone();
-    if export_cli.is_none() {
+    if export_cli.is_none() && research_demo.is_none() {
         if let Some(exit_code) = agent_host::run_external_mode() {
             std::process::exit(exit_code);
         }
     }
     let mut context = tauri::generate_context!();
-    if local_dev::recovery_scope().is_some() || export_cli.is_some() {
+    if local_dev::recovery_scope().is_some() || export_cli.is_some() || research_demo.is_some() {
         for window in &mut context.config_mut().app.windows {
             window.create = false;
         }
@@ -81,7 +100,7 @@ fn main() {
             Some(tauri::utils::config::Csp::Policy(csp.into()));
     }
     let mut builder = tauri::Builder::default();
-    if local_dev::recovery_scope().is_none() && export_cli.is_none() {
+    if local_dev::recovery_scope().is_none() && export_cli.is_none() && research_demo.is_none() {
         builder = builder
             .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
                 native_open::enqueue_argv(
@@ -96,6 +115,9 @@ fn main() {
     let app = builder
         .manage(agent_host::AgentHostState::default())
         .manage(local_mcp::LocalMcpState::default())
+        .manage(research_host::ResearchHostState::default())
+        .manage(chatgpt_plan::ChatgptPlanState::default())
+        .manage(codex_backend::CodexBackendState::default())
         .manage(direct_model::DirectModelState::default())
         .manage(selection_lookup::SelectionLookupState::default())
         .manage(paper_fulltext::FullTextState::default())
@@ -103,6 +125,23 @@ fn main() {
         .manage(local_library::LocalLibraryWatchState::default())
         .setup(move |app| {
             data_location::initialize(app.handle()).map_err(std::io::Error::other)?;
+            if let Some(output) = research_demo_setup {
+                app.manage(research_demo_cli::ResearchDemoState::new(output));
+                tauri::WebviewWindowBuilder::new(
+                    app,
+                    "research-demo",
+                    tauri::WebviewUrl::App("research-demo.html".into()),
+                )
+                .visible(false)
+                .incognito(true)
+                .data_directory(
+                    data_location::root(app.handle())
+                        .map_err(std::io::Error::other)?
+                        .join("research-demo-webview"),
+                )
+                .build()?;
+                return Ok(());
+            }
             if let Some(request) = export_cli_setup {
                 app.manage(document_export_cli::ExportCliState::new(request));
                 tauri::WebviewWindowBuilder::new(
@@ -168,6 +207,23 @@ fn main() {
         .invoke_handler({
             let handler: fn(tauri::ipc::Invoke) -> bool = tauri::generate_handler![
                 local_dev::local_runtime_profile,
+                research_host::research_host_command,
+                research_demo_cli::research_demo_authorize,
+                research_demo_cli::research_demo_complete,
+                research_harness::research_harness_configure,
+                research_harness::research_harness_check,
+                chatgpt_plan::chatgpt_plan_accounts,
+                chatgpt_plan::chatgpt_plan_login,
+                chatgpt_plan::chatgpt_plan_cancel,
+                chatgpt_plan::chatgpt_plan_select,
+                chatgpt_plan::chatgpt_plan_logout,
+                chatgpt_plan::chatgpt_plan_models,
+                chatgpt_plan::chatgpt_plan_infer,
+                codex_backend::codex_backend_configure,
+                codex_backend::codex_backend_capability,
+                codex_backend::codex_backend_start,
+                codex_backend::codex_backend_send,
+                codex_backend::codex_backend_stop,
                 local_recovery::local_recovery_prepare_backup,
                 local_recovery::local_recovery_prepare_restore,
                 local_recovery::local_recovery_commit,

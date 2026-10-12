@@ -3,6 +3,7 @@ import { useUiTranslation } from "../shared/i18n/useUiTranslation";
 import { Button, Tooltip } from "@fluentui/react-components";
 import {
   BookRegular,
+  BeakerRegular,
   NoteRegular,
   BotRegular,
   FolderOpenRegular,
@@ -17,6 +18,8 @@ import type { LeftRailView } from "./useLeftRailNavigation";
 import { commandShortcut } from "../features/workbench/workbenchCommands";
 
 type ActivityBarProps = {
+  researchOpen?: boolean;
+  onOpenResearch?: () => void;
   onExpandLibrary?: () => void;
   agentOpen?: boolean;
   notesOpen?: boolean;
@@ -45,6 +48,8 @@ const activityItems: Array<{
 ];
 
 export function ActivityBar({
+  researchOpen = false,
+  onOpenResearch,
   onExpandLibrary,
   agentOpen = false,
   notesOpen = false,
@@ -122,6 +127,11 @@ export function ActivityBar({
           />
         </Tooltip>
       ) : null}
+      {onOpenResearch ? <Tooltip content="研究工作台" positioning="after" relationship="description">
+        <Button appearance="subtle" aria-label="研究工作台" aria-pressed={researchOpen}
+          className={"activity-button" + (researchOpen ? " active" : "")} icon={<BeakerRegular />}
+          onClick={onOpenResearch} draggable onDragStart={event => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData(dockItemMimeType, "research"); }} />
+      </Tooltip> : null}
       {onOpenAgent ? (
         <Tooltip content={message("shell.assistant.tooltip", { shortcut: commandShortcut("assistant") })} positioning="after" relationship="description">
           <Button
