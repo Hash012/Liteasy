@@ -576,6 +576,7 @@ export function useObjectWorkbenchController(input: {
     return refs;
   }
   const resolveLegacyContext = (path: string) => resolveLiteasyContext({ path, repository, active,
+    resolveResource: (resourcePath) => agentAssets.context(resourcePath),
     artifactScopeId: latest.current.artifactScopeId ?? "device",
     files: createNoteFileService(repository.scopeId, () => latest.current.scopeId),
     getPapers: () => latest.current.getPapers(), getArtifacts: () => latest.current.listLegacyArtifacts?.() ?? Promise.resolve([]),
@@ -1065,6 +1066,7 @@ export function useObjectWorkbenchController(input: {
   const agentAssets = useMemo(() => createWorkspaceAgentAssetService({
     repository,
     active,
+    artifactScopeId: latest.current.artifactScopeId ?? "device",
     files: createNoteFileService(repository.scopeId, () => latest.current.scopeId),
     projects: createPaperProjectRepository(createObjectStorage(repository.scopeId, () => latest.current.scopeId), repository.scopeId),
     getPapers: () => latest.current.getPapers(),

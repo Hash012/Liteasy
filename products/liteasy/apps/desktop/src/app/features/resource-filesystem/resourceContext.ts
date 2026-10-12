@@ -12,8 +12,6 @@ import { artifactAnnotationNotes } from "../notes/artifactNotesSource";
 import type { Paper } from "../workspace/workspace.types";
 import type { PdfAnnotationCaptureInput } from "../objects/objectWorkbenchPort";
 import { parseLiteasyPath } from "./liteasyPath";
-import { parseResourceUri } from "./resourceFileService";
-import { canonicalResourceJson, resourceContentRevision } from "./resourceFileContent";
 
 export async function contextAttachments(repository: ObjectRepository, refs: ObjectRef[], active: () => boolean): Promise<ResourceContextAttachment[]> {
   const attachments: ResourceContextAttachment[] = [];
@@ -46,6 +44,7 @@ export async function contextAttachments(repository: ObjectRepository, refs: Obj
 }
 
 export async function resolveLiteasyContext(input: {
+  resolveResource?(path: string): Promise<ResourceContextAttachment[]>;
   path: string; repository: ObjectRepository; active(): boolean; artifactScopeId: string;
   files: NoteFileService; getPapers(): Paper[]; getArtifacts(): Promise<AgentArtifactResult[]>;
   capturePapers(ids: string[]): Promise<ObjectRef[]>;
@@ -54,16 +53,11 @@ export async function resolveLiteasyContext(input: {
 }) {
   if (!input.active()) throw new Error("账号已切换。");
   const { repository } = input;
-  let pinnedArtifact: AgentArtifactResult | undefined;
-  const target = input.path.startsWith("liteasy://resources/") ? await (async () => {
-    const ref = parseResourceUri(input.path);
-    if (ref.providerId !== "artifacts" || ref.scopeId !== input.artifactScopeId) throw new Error("资源不属于当前账户或不支持读取。");
-    pinnedArtifact = (await input.getArtifacts()).find((artifact) => artifact.artifactId === ref.resourceId);
-    if (!pinnedArtifact) throw new Error("生成产物不可用。");
-    if (ref.revision && await resourceContentRevision(canonicalResourceJson(pinnedArtifact)) !== ref.revision)
-      throw new Error("该产物版本已变化，请重新复制当前 Liteasy Path。");
-    return { kind: "artifact" as const, artifactId: ref.resourceId };
-  })() : parseLiteasyPath(input.path, repository.scopeId);
+  if (input.path.startsWith("liteasy://resources/")) {
+    if (!input.resolveResource) throw new Error("此资源类型未注册上下文适配器。");
+    return input.resolveResource(input.path);
+  }
+  const target = parseLiteasyPath(input.path, repository.scopeId);
   let refs: ObjectRef[];
   if (target.kind === "object") {
     const object = target.followLatest ? await repository.resolveLatest(target.ref.objectId) : await repository.get(target.ref);
@@ -96,7 +90,7 @@ export async function resolveLiteasyContext(input: {
     if (!note?.annotation) throw new Error("论文批注不可用。");
     refs = await input.captureAnnotation({ paper, annotation: note.annotation });
   } else {
-    const artifact = pinnedArtifact ?? (await input.getArtifacts()).find((item) => item.artifactId === target.artifactId);
+    const artifact = (await input.getArtifacts()).find((item) => item.artifactId === target.artifactId);
     if (!artifact) throw new Error("生成产物在当前账户不可用。");
     const note = target.kind === "artifact-annotation" ? artifactAnnotationNotes([artifact]).find((item) =>
       item.target.kind === "artifact-annotation" && item.target.annotationId === target.annotationId) : undefined;

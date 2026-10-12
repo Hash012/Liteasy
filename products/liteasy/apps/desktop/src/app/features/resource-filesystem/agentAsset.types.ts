@@ -59,6 +59,8 @@ export type AgentAssetCreate = {
 /** Register a trusted adapter to add asset kinds without changing model tools. */
 export type AgentAssetAdapter = {
   id: string;
+  /** Host-owned compatibility scope; never sourced from document content. */
+  scopeId?: string;
   accepts(path: string): boolean;
   search(input: AgentAssetSearch): Promise<AgentAsset[]>;
   stat(path: string, options?: { signal?: AbortSignal }): Promise<AgentAsset>;

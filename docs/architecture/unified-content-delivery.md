@@ -33,3 +33,7 @@
 ## WP03：读取账本与定位
 
 追加式读取账本保留同路径不同范围/版本。模型请求前记录实际保留下来的 read IDs、UTF-16 范围与序列化输入 SHA-256；展示扩展单独标记，绝不注入模型或提升核验等级。最新 read Map 仅用于 CAS。账本随 evidence report 持久化；来源绑定不匹配则拒绝解析。导航支持版本与原文行/摘录，外部版本变化拒绝打开，内部历史对象走 repository.get，避免打开最新附件。43 项回归及账本专项 2 项通过，TypeScript 通过。
+
+## WP04：注册与多入口
+
+新增宿主类型组合根，注册时拒绝缺失 context、handler、fixture、codec 和未知 profile。生产对象、挂载文件、论文、产物都经注册派生 Agent 门面；六种对象类型另派生 ResourceProvider，原生导出保留 ObjectEnvelope JSON。资源上下文路由不再限定 artifacts；旧 artifacts URI 的账号/版本兼容由独立 provider bridge 承担。research.memo 挑战在真实 IndexedDB 对象仓库完成发现、固定上下文、Agent 读取、native roundtrip、证据、CAS、重开与历史读取，无 Assistant/Evidence/context-picker 分支改动。59 项相关测试通过。挂载文件/原始 PDF 的通用 native provider 仍明确返回未接入原因，原领域导出能力保留。

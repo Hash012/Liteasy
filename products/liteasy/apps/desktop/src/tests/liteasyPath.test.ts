@@ -1,3 +1,4 @@
+import { createWorkspaceAgentAssetService } from "../app/features/resource-filesystem/workspaceAgentAssetService";
 import "fake-indexeddb/auto";
 import { expect, test, vi } from "vitest";
 import { liteasyPath, parseLiteasyPath, type ResourceTarget } from "../app/features/resource-filesystem/liteasyPath";
@@ -39,7 +40,9 @@ function fixture() {
   const input = { repository, files, getPapers: () => [], getArtifacts: async () => artifacts,
     artifactScopeId: "device", active: () => current === scope,
     capturePapers: vi.fn(), captureAnnotation: vi.fn(), resolveBoard: vi.fn() };
-  return { scope, repository, input, artifacts, switchAccount: () => { current = "different"; } };
+  const assets = createWorkspaceAgentAssetService({ ...input, resolveContext: path => resolveLiteasyContext({ ...input, path }) });
+  const resolveResource = (path: string) => assets.context(path);
+  return { scope, repository, input: { ...input, resolveResource }, artifacts, switchAccount: () => { current = "different"; } };
 }
 test("resolves latest and pinned object paths to immutable context content", async () => {
   const f = fixture();

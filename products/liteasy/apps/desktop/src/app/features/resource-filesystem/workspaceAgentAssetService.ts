@@ -1,3 +1,6 @@
+import { objectResourceType } from "./objectResourceType";
+import { artifactResourceAlias } from "./artifactResourceAlias";
+import { createResourceTypeRegistry, legacyAssetDefinition, type ResourceTypeDefinition } from "./resourceTypeRegistry";
 import { objectSourceLineage, type ObjectSourceLineage } from "../objects/objectSourceLineage";
 import { paperSourceReferences, noteSourceReferences } from "./assetSourceReferences";
 import { relativeImagePath } from "./attachmentPath";
@@ -23,6 +26,9 @@ import { parseCanvasFile } from "../boards/boardFileFormat";
 import { sourceDocumentBodyCapability } from "../reading-library/readingResourceCapabilities";
 
 export type WorkspaceAgentAssetInput = {
+  resourceTypes?: ResourceTypeDefinition[];
+  typeFactories?: Array<(adapter: AgentAssetAdapter) => ResourceTypeDefinition>;
+  artifactScopeId?: string;
   repository: ObjectRepository;
   files?: NoteFileService;
   projects?: PaperProjectRepository;
@@ -423,7 +429,19 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
       async read(path, options) { const artifact = await findArtifact(path); return readAgentAssetText(artifactStat(artifact, await resourceContentRevision(canonicalResourceJson(artifact))), artifactContextText(artifact), options, { kind: "derived", coverage: "unknown" }); },
     });
   }
-  return createAgentAssetService({ scopeId: scope, active: input.active, adapters,
+  const artifacts = adapters.find(adapter => adapter.id === "artifacts");
+  if (artifacts && input.artifactScopeId) adapters.push(artifactResourceAlias(artifacts, scope, input.artifactScopeId));
+  const registry = createResourceTypeRegistry(input.active);
+  adapters.forEach(adapter => registry.register(legacyAssetDefinition(adapter)));
+  for (const kind of ["content.note", "content.fragment", "conversation.message", "artifact.document", "source.document", "workspace.board"] as const) {
+    const definition = objectResourceType({ typeId: kind, kind, repository: input.repository, adapter: objects, active: input.active, fixtureId: `objects:${kind}` });
+    // Legacy discovery stays canonical to the user's existing URI; avoid duplicate catalog rows.
+    definition.source.search = async () => [];
+    registry.register(definition);
+  }
+  input.resourceTypes?.forEach(registry.register);
+  input.typeFactories?.forEach(factory => registry.register(factory(objects)));
+  const service = createAgentAssetService({ scopeId: scope, active: input.active, adapters: registry.adapters(),
     async create(options) {
       check(options.signal);
       if (options.paperPath) {
@@ -443,4 +461,5 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
       return objectStat(await input.repository.resolveLatest(object.objectId));
     },
   });
+  return { ...service, resourceTypes: registry, resourceFiles: registry.files };
 }
