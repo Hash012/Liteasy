@@ -70,6 +70,8 @@ export function createObjectStorage(
         ),
       commit: (changes) =>
         wrap(() => invoke("object_store_commit", { scope, changes }), changes),
+      snapshot: (prefixes) =>
+        wrap(() => invoke("object_store_snapshot", { scope, prefixes })),
     };
   let dbPromise: Promise<IDBDatabase> | undefined;
   const db = () =>
