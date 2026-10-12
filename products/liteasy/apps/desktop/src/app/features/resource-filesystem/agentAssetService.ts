@@ -1,3 +1,4 @@
+import { sourceContent, safeUtf16Range } from "../markdown/contentStructure";
 import { MAX_NOTE_FILE_BYTES } from "../note-files/noteFileService";
 import { validateModelImages } from "../models/modelImages";
 import { AgentAssetError, type AgentAsset, type AgentAssetAdapter, type AgentAssetCreate, type AgentAssetReadOptions, type AgentAssetSearch, type AgentAssetWriteOptions } from "./agentAsset.types";
@@ -106,9 +107,12 @@ export function createAgentAssetService(input: { scopeId: string; active(): bool
 export type AgentAssetService = ReturnType<typeof createAgentAssetService>;
 
 export function readAgentAssetText(asset: AgentAsset, text: string, options: AgentAssetReadOptions, evidence?: import("./agentAsset.types").AgentAssetRead["evidence"]) {
-  const offset = options.offset ?? 0;
-  const end = Math.min(text.length, offset + (options.maxCharacters ?? 12000));
-  return { asset, text: text.slice(offset, end), offset, totalCharacters: text.length,
+  const requestedOffset = options.offset ?? 0;
+  const { start: offset, end } = safeUtf16Range(text, requestedOffset, requestedOffset + (options.maxCharacters ?? 12000));
+  const content = sourceContent({ text, path: asset.path, revision: asset.revision,
+    scopeId: new URL(asset.path).searchParams.get("scope") ?? "legacy",
+    start: offset, end, profile: /\.(txt|json|canvas)(?:[?#]|$)/i.test(asset.path) || asset.kind === "workspace.board" ? "literal/v1" : undefined });
+  return { asset, content, text: text.slice(offset, end), offset, totalCharacters: text.length,
     truncated: offset > 0 || end < text.length, ...(end < text.length ? { nextOffset: end } : {}), ...(evidence ? { evidence } : {}) };
 }
 

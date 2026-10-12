@@ -25,3 +25,7 @@
 ## WP01：共享渲染
 
 加入宿主固定 research profile（raw→sanitize→有界表格属性→受限 KaTeX），MinerU 不再自建净化流水线。Evidence 使用 ContentView，旧字符串通过集中 legacy adapter，标题保持 literal；证据禁用自动图片/嵌入加载，提供原样源码按钮。完整表格渲染不意味着残片已经修复。共享 Markdown/证据回归测试覆盖安全链接和攻击内容。
+
+## WP02：结构片段
+
+基于现有 remark 生态建立原始 UTF-16 块索引，保留 CRLF 与精确选区；完整父块/脚注定义仅进入 viewContext，记录展示扩展。超过结构预算保留原始摘录并明确降级。证据取消 4000 字符二次截断，快照可持久化 ContentFragment。上下文预算不再切开 HTML 表、fence、数学、列表。47 项相关断言通过；TypeScript 编译通过。

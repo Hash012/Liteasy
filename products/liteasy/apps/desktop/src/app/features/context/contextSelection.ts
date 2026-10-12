@@ -1,3 +1,4 @@
+import { contentBlocks } from "../markdown/contentStructure";
 export type ContextRange = { start: number; end: number };
 export type ContextCoverage = {
   status: "full" | "partial" | "omitted";
@@ -53,13 +54,18 @@ export function selectContextText(text: string, budget: number, question = ""): 
   let ranges: ContextRange[] = [];
   if (full) ranges = text.length ? [{ start: 0, end: text.length }] : [];
   else if (budget > 0) {
-    const chunks: Array<ContextRange & { score: number }> = [];
+    const atomic = contentBlocks(text).filter(block => block.atomic);
+    const chunks: Array<ContextRange & { score: number; atomic?: boolean }> = [];
     for (let start = 0; start < text.length;) {
       let end = safeEnd(text, Math.min(text.length, start + 1200));
       const paragraph = start + text.slice(start, end).lastIndexOf("\n");
       if (paragraph > start + 400) end = paragraph + 1;
+      const protectedBlock = atomic.find(block => block.start <= start && block.end > start);
+      const nextBlock = atomic.find(block => block.start > start && block.start < end);
+      if (protectedBlock) end = protectedBlock.end;
+      else if (nextBlock) end = nextBlock.start;
       const body = text.slice(start, end).toLocaleLowerCase();
-      chunks.push({ start, end, score: terms.reduce((score, term) => score + (body.includes(term) ? 1 : 0), 0) });
+      chunks.push({ start, end, atomic: !!protectedBlock, score: terms.reduce((score, term) => score + (body.includes(term) ? 1 : 0), 0) });
       start = end;
     }
     // Relevance wins, then spread selections through the resource instead of always taking its start.
@@ -69,6 +75,7 @@ export function selectContextText(text: string, budget: number, question = ""): 
     for (const chunk of order) {
       const separatorCost = ranges.length ? contextTokens("\n\n[…]\n\n") : 0;
       let start = chunk.start;
+      if (chunk.atomic && contextTokens(text.slice(start, chunk.end)) > remaining - separatorCost) continue;
       if (chunk.score && contextTokens(text.slice(start, chunk.end)) > remaining - separatorCost) {
         const body = text.slice(start, chunk.end).toLocaleLowerCase();
         const firstMatch = Math.min(...terms.map((term) => body.indexOf(term)).filter((index) => index >= 0));

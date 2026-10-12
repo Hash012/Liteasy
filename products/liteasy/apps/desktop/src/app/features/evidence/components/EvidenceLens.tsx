@@ -104,7 +104,7 @@ function PassageCard({ report, passage, claim, onOpenPassage, canOpenPassage, st
     </div>
     {edge ? <p className="evidence-lens__relationship">{t(`evidence.relation.${streaming || claim?.assessment === "unverified" ? "unassessed" : edge.relation}`,
       streaming || claim?.assessment === "unverified" ? relations.unassessed : relations[edge.relation])}</p> : null}
-    {passage.quote ? <ContentView content={legacyContent(passage.quote)} purpose="evidence" allowSource /> : <p>{t("evidence.noQuote", "未保存原文摘录。")}</p>}
+    {passage.quote ? <ContentView content={passage.content ?? legacyContent(passage.quote)} purpose="evidence" allowSource /> : <p>{t("evidence.noQuote", "未保存原文摘录。")}</p>}
     {edge?.condition ? <p>{t("evidence.condition", "条件：")}{edge.condition}</p> : null}
     {edge?.explanation ? <p>{t("evidence.relationNote", "关系说明（待结合核验记录阅读）：")}{edge.explanation}</p> : null}
     <div className="evidence-lens__passage-footer"><Button size="small" appearance="subtle" icon={<Open20Regular />} disabled={!available || opening} onClick={() => { void open(); }}>

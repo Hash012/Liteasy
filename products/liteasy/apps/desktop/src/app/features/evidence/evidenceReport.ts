@@ -1,3 +1,4 @@
+import { contentFragmentSchema } from "../markdown/contentFragment";
 import { z } from "zod";
 import { objectRefSchema } from "../objects/objectAnchor.types";
 
@@ -15,6 +16,7 @@ const sourceSchema = z.strictObject({
 });
 const passageSchema = z.strictObject({
   id, sourceId: id, quote: text,
+  content: contentFragmentSchema.optional(),
   locator: z.strictObject({ page: z.number().int().positive().optional(), start: z.number().int().nonnegative().optional(), end: z.number().int().positive().optional(), precision: z.enum(["text", "page", "unavailable"]) }),
   locatorIntegrity: z.enum(["exact_text", "page_only", "unknown", "unavailable", "stale"]),
   sourceRevision: id.optional(), retrievalReason: text.optional(), evidenceAnchorId: id.optional(),

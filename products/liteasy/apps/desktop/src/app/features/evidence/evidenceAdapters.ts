@@ -68,9 +68,9 @@ export function evidenceReportFromAssetReads(input: {
     report.sources.push({ id: sourceId, kind: "object", title: read.asset.title, resourcePath: read.asset.path,
       revision: read.asset.revision, scopeId: input.scopeId,
       coverage: read.evidence?.kind === "metadata" ? "metadata_only" : read.text ? "partial_text" : "unknown" });
-    report.passages.push({ id: `passage:${index + 1}`, sourceId, quote: read.text.slice(0, 4000),
+    report.passages.push({ id: `passage:${index + 1}`, sourceId, quote: read.text, content: read.content,
       sourceRevision: read.asset.revision, locator: { precision: "unavailable" }, locatorIntegrity: "unknown",
-      retrievalReason: `实际读取字符 ${read.offset + 1}–${read.offset + Math.min(4000, read.text.length)}；仅展示本轮读取快照。` });
+      retrievalReason: `实际读取字符 ${read.offset + 1}–${read.offset + read.text.length}；仅展示本轮读取快照。` });
   });
   return report;
 }

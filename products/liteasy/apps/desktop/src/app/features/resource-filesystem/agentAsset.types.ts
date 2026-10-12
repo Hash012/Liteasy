@@ -20,6 +20,7 @@ export type AgentAssetSearch = { query: string; limit?: number; signal?: AbortSi
 export type AgentAssetReadOptions = { offset?: number; maxCharacters?: number; signal?: AbortSignal };
 export type AgentAssetRead = {
   asset: AgentAsset;
+  content?: import("../markdown/contentFragment").ContentFragment;
   text: string;
   offset: number;
   totalCharacters: number;
