@@ -165,7 +165,7 @@ type AssistantPaneProps = {
   onMoveDockItem?: ActionContext["moveDockItem"];
   onOpenAcademicArchive?: ActionContext["openAcademicArchive"];
   onOpenArtifact?: (artifactId: string) => void;
-  onOpenAsset?: (path: string) => void | Promise<void>;
+  onOpenAsset?: import("../resource-filesystem/assetNavigation").OpenAgentAsset;
   onOpenCitation?: (citation: Citation) => void;
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onActiveSessionChange?: (session: AssistantSessionHistoryItem) => void;

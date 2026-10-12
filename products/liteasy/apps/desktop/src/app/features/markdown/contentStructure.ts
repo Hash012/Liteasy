@@ -52,7 +52,7 @@ export function sourceContent(input: {
   });
   return contentFragmentSchema.parse({ schema: "liteasy.content-fragment/v1",
     binding: revision ? { kind: "pinned", path, revision, scopeId } : { kind: "legacy-unpinned", reason: "来源未提供可固定版本" },
-    representationId: `${path}:text/v1`, profile,
+    representationId: `${path}:text/v1`, profile, sourceLine: text.slice(0, exact.start).split("\n").length,
     exactSelection: { text: selected, ranges: [exact] },
     viewContext: { text: overBudget ? selected : view, ranges: overBudget ? [exact] : ranges,
       expansion: overBudget || !expanded ? "none" : definitions.length ? "dependency-closure" : "enclosing-block",

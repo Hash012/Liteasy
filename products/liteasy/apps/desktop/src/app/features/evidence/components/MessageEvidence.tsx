@@ -10,7 +10,7 @@ import { EvidenceLens } from "./EvidenceLens";
 
 export function MessageEvidence({ message, papers, onOpenCitation, onOpenAsset }: {
   message: AssistantMessage; papers: Paper[]; onOpenCitation?: (citation: Citation) => void;
-  onOpenAsset?: (path: string) => void | Promise<void>;
+  onOpenAsset?: import("../../resource-filesystem/assetNavigation").OpenAgentAsset;
 }) {
   const workbench = useObjectWorkbench();
   const anchors = collectPaperAnchors(message.paperAnchors ?? [], paperAnchorsFromCitations(message.citations ?? [], papers, message.id));
@@ -53,7 +53,10 @@ export function MessageEvidence({ message, papers, onOpenCitation, onOpenAsset }
   return <EvidenceLens report={projected} canOpenPassage={canOpen} onOpenPassage={async passage => {
     if (!canOpen(passage)) throw new Error("来源暂不可用。");
     const source = sourceMap.get(passage.sourceId);
-    if (source?.kind === "object" && source.resourcePath) { await onOpenAsset?.(source.resourcePath); return; }
+    if (source?.kind === "object" && source.resourcePath) { const binding = passage.content?.binding;
+      if (!source.revision || !source.scopeId) throw new Error("历史引用未固定版本，请从文献库打开当前文件。");
+      await onOpenAsset?.(source.resourcePath, { revision: source.revision, scopeId: source.scopeId,
+        ...(binding?.kind === "pinned" ? { line: passage.content?.sourceLine, quote: passage.quote } : {}) }); return; }
     const anchor = resolveAnchor(passage)!;
     if (workbench?.openPaperAnchor) await workbench.openPaperAnchor(anchor);
     else onOpenCitation?.(message.citations?.find(citation => citation.paperId === anchor.source.paperId && citation.page === anchor.locator.page && citation.snippet === anchor.snapshot.quote) ?? { paperAnchor: anchor, paperId: anchor.source.paperId, page: anchor.locator.page!, snippet: anchor.snapshot.quote });

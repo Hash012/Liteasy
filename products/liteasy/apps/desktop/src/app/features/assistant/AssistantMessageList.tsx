@@ -90,7 +90,7 @@ function contextTokenTitle(token: AssistantContextToken) {
 type AssistantMessageListProps = {
   papers?: Paper[];
   onOpenArtifact?: (artifactId: string) => void;
-  onOpenAsset?: (path: string) => void | Promise<void>;
+  onOpenAsset?: import("../resource-filesystem/assetNavigation").OpenAgentAsset;
   onResumeArtifactTask?: (taskId: string) => Promise<void>;
   onCancelArtifactTask?: (taskId: string) => void;
   onOpenCitation?: (citation: Citation) => void;

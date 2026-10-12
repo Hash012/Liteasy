@@ -1,3 +1,4 @@
+import { contentReadLedgerSchema } from "../resource-filesystem/contentReadLedger";
 import { contentFragmentSchema } from "../markdown/contentFragment";
 import { z } from "zod";
 import { objectRefSchema } from "../objects/objectAnchor.types";
@@ -40,6 +41,7 @@ export const evidenceReportSchema = z.strictObject({
   sources: z.array(sourceSchema).max(1000), passages: z.array(passageSchema).max(2000),
   claims: z.array(claimSchema).max(1000), verifications: z.array(verificationSchema).max(1000),
   coverage: z.strictObject({ expectedSourceIds: z.array(id).optional(), unreadSourceIds: z.array(id).optional() }).optional(),
+  readLedger: contentReadLedgerSchema.optional(),
   generatedAt: z.string(),
 }).superRefine((report, ctx) => {
   const bad = (message: string) => ctx.addIssue({ code: "custom", message });
@@ -52,6 +54,12 @@ export const evidenceReportSchema = z.strictObject({
   const verifierIds = new Set(report.verifications.map(record => record.id));
   for (const passage of report.passages) {
     if (!sourceIds.has(passage.sourceId)) bad("Unknown evidence source");
+    if (passage.content) {
+      const source = report.sources.find(item => item.id === passage.sourceId);
+      const binding = passage.content.binding;
+      if (passage.content.exactSelection.text !== passage.quote) bad("Fragment quote mismatch");
+      if (binding.kind === "pinned" && (binding.path !== source?.resourcePath || binding.revision !== source.revision || binding.scopeId !== source.scopeId)) bad("Fragment source mismatch");
+    }
     const { start, end, page, precision } = passage.locator;
     if ((start !== undefined || end !== undefined) && !(start !== undefined && end !== undefined && end > start)) bad("Invalid text range");
     if (precision !== "unavailable" && !page || precision === "text" && start === undefined) bad("Missing source location");

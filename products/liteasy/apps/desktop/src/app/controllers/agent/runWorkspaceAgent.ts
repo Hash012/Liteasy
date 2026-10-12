@@ -1,3 +1,4 @@
+import { createContentReadLedger } from "../../features/resource-filesystem/contentReadLedger";
 import { evidenceReportFromAssetReads } from "../../features/evidence/evidenceAdapters";
 import { researchTaskSummary, researchToolInstruction, reviewResearchTask, startResearchTask, stopResearchTask, type ResearchTask, type ResearchStopReason } from "../../features/research-loop/researchLoop";
 import { workspaceWriteConfirmation } from "./workspaceWriteConfirmation";
@@ -82,6 +83,7 @@ export async function runWorkspaceAgent(input: AgentCommandExecutionInput, envir
   const inputLimit = maxTokens - reserve;
   const known = new Map<string, AgentAsset>();
   const reads = new Map<string, AgentAssetRead>();
+  const readLedger = createContentReadLedger(input.runId, scope);
   const blockReads = new Map<string, string>();
   const readCoverage = new Map<string, { revision?: string; ranges: Array<[number, number]>; total: number }>();
   const writes: AgentAssetWriteReceipt[] = [];
@@ -119,9 +121,9 @@ export async function runWorkspaceAgent(input: AgentCommandExecutionInput, envir
       metadata: JSON.parse(JSON.stringify({
         executionTrace: trace,
         researchLoop: research,
-        evidenceReport: evidenceReportFromAssetReads({ id: input.runId, answer: message, scopeId: scope, reads: [...reads.values()] }),
+        evidenceReport: evidenceReportFromAssetReads({ id: input.runId, answer: message, scopeId: scope, reads: readLedger.reads(), readLedger: readLedger.snapshot() }),
         assetWrites: writes,
-        assetReads: [...reads.values()].map(({ asset, offset, totalCharacters, text, truncated }) => ({
+        assetReads: readLedger.reads().map(({ asset, offset, totalCharacters, text, truncated }) => ({
           path: asset.path, title: asset.title, revision: asset.revision, offset,
           includedCharacters: text.length, totalCharacters, status: truncated ? "partial" : "full"
         }))
@@ -205,6 +207,10 @@ export async function runWorkspaceAgent(input: AgentCommandExecutionInput, envir
     }
     let generation;
     try {
+      await readLedger.delivered(`${input.runId}:request:${step}`, prompt, observations.flatMap(observation => {
+        const value = observation.result as { text?: string; receiptId?: string } | undefined;
+        return typeof value?.text === "string" && value.receiptId ? [value.receiptId] : [];
+      }));
       generation = await gateway.generateAnswer({ prompt, outputFormat, model: getModelForSettings(settings),
         provider: getActiveModelProvider(settings), requireLive: true, signal: input.signal, images: [...imageInputs.values()].flat() });
     } catch (error) {
@@ -304,7 +310,10 @@ export async function runWorkspaceAgent(input: AgentCommandExecutionInput, envir
           ranges.sort((left, right) => left[0] - right[0]);
           readCoverage.set(path, { revision: read.asset.revision, ranges, total: read.totalCharacters });
           remember(read.asset);
-          result = read;
+          const receiptId = await readLedger.append(read);
+          // Display expansion never enters the model request accidentally.
+          const { content: _displayContent, ...modelRead } = read;
+          result = { ...modelRead, receiptId };
         } else {
           if (!target.capabilities.includes("write")) throw new Error("此资产只读，不能提出写入。 ");
           const read = reads.get(path);

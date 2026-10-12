@@ -47,7 +47,7 @@ type AssistantSidebarProps = {
   onOpenAcademicArchive?: ActionContext["openAcademicArchive"];
   onOpenCitation?: (citation: Citation) => void;
   onOpenArtifact?: (artifactId: string) => void;
-  onOpenAsset?: (path: string) => void | Promise<void>;
+  onOpenAsset?: import("../features/resource-filesystem/assetNavigation").OpenAgentAsset;
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onActiveSessionChange?: (session: AssistantSessionHistoryItem) => void;
   onSettingsChanged?: (settings: SettingsState) => void;

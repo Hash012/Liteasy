@@ -9,6 +9,7 @@ export const contentFragmentSchema = z.strictObject({
     z.strictObject({ kind: z.literal("legacy-unpinned"), reason: z.string().min(1) }),
   ]),
   representationId: z.string().min(1),
+  sourceLine: z.number().int().positive().optional(),
   profile: z.enum(["liteasy-research-markdown/v1", "literal/v1"]),
   exactSelection: z.strictObject({ text: z.string().max(200000), ranges: z.array(range).max(1000) }),
   viewContext: z.strictObject({ text: z.string().max(200000), ranges: z.array(range).max(1000), expansion: z.enum(["none", "enclosing-block", "dependency-closure"]), materialBeyondSelection: z.boolean() }),

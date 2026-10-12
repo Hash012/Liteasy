@@ -60,9 +60,10 @@ export function accessibleEvidenceSources(report: EvidenceReportV1, anchors: rea
 }
 
 export function evidenceReportFromAssetReads(input: {
-  id: string; answer: string; scopeId: string; reads: readonly import("../resource-filesystem/agentAsset.types").AgentAssetRead[];
+  id: string; answer: string; scopeId: string; readLedger?: import("../resource-filesystem/contentReadLedger").ContentReadLedger; reads: readonly import("../resource-filesystem/agentAsset.types").AgentAssetRead[];
 }): EvidenceReportV1 {
   const report = evidenceReportFromAnchors({ id: input.id, answer: input.answer, anchors: [] });
+  report.readLedger = input.readLedger;
   input.reads.forEach((read, index) => {
     const sourceId = `source:${index + 1}`;
     report.sources.push({ id: sourceId, kind: "object", title: read.asset.title, resourcePath: read.asset.path,
