@@ -1,0 +1,1221 @@
+{
+  "schema": "liteasy.export-acceptance-plan/v1",
+  "baseline": "ac08379d8626847216f422306e36bb65916a0506",
+  "date": "2026-10-12",
+  "interpretation": "PASS仅覆盖notes中本次实际合成fixture；NOT_RUN包含未实施或专项未验收，不代表隐含通过。原规格包保持原样。",
+  "cases": [
+    {
+      "id": "E01",
+      "priority": "P0",
+      "category": "isolated",
+      "title": "旧矩阵镜像复现",
+      "fixture": "随包非对称图片；旧 CTM",
+      "acceptance": "Poppler/MuPDF 均判为 vertically_flipped；这表示缺陷被复现，不表示旧导出正确。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "PASS_ISOLATED_PROBE",
+      "status": "NOT_RUN",
+      "notes": "随包隔离实验未重跑；保留包内 PASS_ISOLATED_PROBE 的原结论，不升级为本次生产证据。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E02",
+      "priority": "P0",
+      "category": "isolated",
+      "title": "正向矩阵对照",
+      "fixture": "相同图片；正向 CTM",
+      "acceptance": "两个读取器均判为 upright，其他图像几何不变。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "PASS_ISOLATED_PROBE",
+      "status": "NOT_RUN",
+      "notes": "同 E01；本次方向生产证据在 E03。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E03",
+      "priority": "P0",
+      "category": "integration",
+      "title": "生产函数方向",
+      "fixture": "调用真实 createArtifactPdf/新 PDF backend；真实 JPEG",
+      "acceptance": "生成文件在两个独立读取器中无镜像；不 mock 编码。",
+      "testImplementation": "npm run ci:export; npx vitest run src/tests/artifactPdfOrientation.test.ts; python verify.py (PyMuPDF/Pillow + Poppler)",
+      "evidence": [
+        "orientation.pdf",
+        "orientation-results.json",
+        "native-reader-results.json"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "PASS",
+      "notes": "真实生产兼容 writer + JPEG；PDF.js/MuPDF/Poppler 像素检测通过。新 Windows PDF 中同一图片也经 MuPDF/Poppler 检测正向。",
+      "commands": [
+        "npm run ci:export",
+        "npx vitest run src/tests/artifactPdfOrientation.test.ts",
+        "python verify.py (PyMuPDF/Pillow + Poppler)"
+      ],
+      "fixtureHashes": {
+        "orientation.jpg": "1a93f27061dd04296678d393690610c5c4b10d35d596bc3b5523207ff517ef9c",
+        "windows-input.md": "e6f4812b0940451fb3eea90863e5659e6f108a28f5fa333e75d03583c2a16fe3"
+      },
+      "artifactHashes": {
+        "orientation.pdf": "144d27925505f5fbec46c880e0ac2e24e07536fa36cd577268b43d3099e026e0",
+        "orientation-results.json": "b7ee3e884f3633853e7f944ebb26f7375996d53c61571de6efa399b047d8daec",
+        "native-reader-results.json": "86480cc160f03851e1dc13a864b9edcb9eccb991dbb117ddc0615d4e9d8f34d6"
+      },
+      "fixtureDefinitionHashes": {}
+    },
+    {
+      "id": "E04",
+      "priority": "P0",
+      "category": "content",
+      "title": "正文文本层",
+      "fixture": "中文英文正文与末段唯一标记",
+      "acceptance": "PDF 中可提取/搜索/选择应有正文；不以不可见假文本层掩盖位图。",
+      "testImplementation": "npm run ci:export; python verify.py (PyMuPDF/Pillow + Poppler); npx playwright test src/tests/browser/artifactExport.browser.spec.ts; liteasy-desktop.exe --agent-cli document-export --input windows-input.md --format pdf --output windows-report.pdf",
+      "evidence": [
+        "windows-report.pdf",
+        "research-report.pdf",
+        "windows-report.txt",
+        "windows-page-1.png"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "PASS",
+      "notes": "Windows WebView2 原生 PDF 与 Chromium 打印 PDF 的实际文本提取包含中文正文、表格末行、末段标记；已检查可见页图。",
+      "commands": [
+        "npm run ci:export",
+        "python verify.py (PyMuPDF/Pillow + Poppler)",
+        "npx playwright test src/tests/browser/artifactExport.browser.spec.ts",
+        "liteasy-desktop.exe --agent-cli document-export --input windows-input.md --format pdf --output windows-report.pdf"
+      ],
+      "fixtureHashes": {
+        "orientation.jpg": "1a93f27061dd04296678d393690610c5c4b10d35d596bc3b5523207ff517ef9c",
+        "windows-input.md": "e6f4812b0940451fb3eea90863e5659e6f108a28f5fa333e75d03583c2a16fe3"
+      },
+      "artifactHashes": {
+        "windows-report.pdf": "c19c25a63b95a66c5694a14358daac043fcdb88319705c0c8e6881aa2f364ab5",
+        "research-report.pdf": "35300b63cda6b4bb75e973032b6a63061bf03cef2d19033d59d214f878d163d3",
+        "windows-report.txt": "600894c8139b22ee4ccdf6e9a6ce432f2179c7ef7146656d870c8aed10e45048",
+        "windows-page-1.png": "8a3302ede697e55bcdcae9b67bd3d9361bdfb3aa4978136621387292d1cc7f3e"
+      },
+      "fixtureDefinitionHashes": {}
+    },
+    {
+      "id": "E05",
+      "priority": "P1",
+      "category": "content",
+      "title": "段落与行内结构",
+      "fixture": "两段、粗体、链接、代码、列表",
+      "acceptance": "IR 与三格式保留段落、行内结构；字面标题不执行 HTML。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "段落/行内结构已有覆盖；全部三格式专项输出断言未完成。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E06",
+      "priority": "P1",
+      "category": "content",
+      "title": "列表起始号及嵌套",
+      "fixture": "从 3 开始的有序列表与两层子列表",
+      "acceptance": "不一律变圆点；DOCX 使用真实 numbering。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "已有真实 numbering；尚未对从3开始及两层嵌套在全部目标格式做完整断言。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E07",
+      "priority": "P1",
+      "category": "layout",
+      "title": "中英文/组合字符/特殊符号",
+      "fixture": "CJK、English、组合字符、数学符号",
+      "acceptance": "无缺字/重叠/反向；排版换行不破坏语义。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "已观察合成 PDF 中文/英文；组合字符和完整字体覆盖矩阵未验收。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E08",
+      "priority": "P1",
+      "category": "layout",
+      "title": "长代码跨页",
+      "fixture": "多页代码、长行、最后一行 sentinel",
+      "acceptance": "完整保留；软换行可理解；复制/源码内容一致。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "代码尾标记通过；多页长代码复制一致性/长行专项未完成。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E09",
+      "priority": "P1",
+      "category": "layout",
+      "title": "标题孤行与末页",
+      "fixture": "标题紧临页尾、单独末行",
+      "acceptance": "最终 PDF 合理避开孤立标题/无意义空白页；不只检查 CSS。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "已有 break CSS；尚未构造页尾标题与孤行专项真实分页验收。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E10",
+      "priority": "P1",
+      "category": "layout",
+      "title": "普通表格与跨页表头",
+      "fixture": "三页长表、最后一行 sentinel",
+      "acceptance": "重复表头，所有行完整；不截图替代。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "普通语义表格通过；三页表头重复专项未验证。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E11",
+      "priority": "P1",
+      "category": "layout",
+      "title": "宽表",
+      "fixture": "多列含长 URL/英文的数据表",
+      "acceptance": "横向/按列组处理并重复关键列；不越页/极小字号。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "尚未实现宽表按列组重排。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E12",
+      "priority": "P1",
+      "category": "layout",
+      "title": "合并表格",
+      "fixture": "rowSpan/colSpan/单元格多段落",
+      "acceptance": "PDF/DOCX 结构正确；MD 兼容降级有说明。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "合并单元格 HTML/OOXML 结构测试通过；跨宿主实际版式未验收。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E13",
+      "priority": "P1",
+      "category": "layout",
+      "title": "超高单元格",
+      "fixture": "单行内容高于一页",
+      "acceptance": "明确续行/字段重排，内容不丢失，不因 avoid 溢出。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "超高单元格明确续行/字段重排尚未完成。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E14",
+      "priority": "P1",
+      "category": "math",
+      "title": "常见公式",
+      "fixture": "上下标/分数/根号/求和/矩阵",
+      "acceptance": "PDF 可读无剪裁；DOCX 支持范围内为 OMML。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "常见分数、根式、脚本、求和为 OMML；矩阵暂不支持可编辑，需同意保留 TeX。未完成全部视觉矩阵。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E15",
+      "priority": "P1",
+      "category": "math",
+      "title": "不支持与超宽公式",
+      "fixture": "不可编辑语法、过宽 display math",
+      "acceptance": "明确诊断与同意后的局部图/源码回退；不改数学含义。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "不支持公式有诊断与原 TeX；局部公式图和超宽处理尚未完成。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E16",
+      "priority": "P1",
+      "category": "assets",
+      "title": "图片实际嵌入",
+      "fixture": "本地原图、caption、参考式 Markdown 图片",
+      "acceptance": "收集 AST 依赖并改写真实包内路径；不是仅输出图号。",
+      "testImplementation": "npm run ci:export; npx vitest run src/tests/documentExport.test.ts; python verify.py (PyMuPDF/Pillow + Poppler)",
+      "evidence": [
+        "windows-report.zip",
+        "windows-report.docx",
+        "research-report.pdf"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "PASS",
+      "notes": "真实 JPEG 被嵌入 PDF、OOXML media 和 MD ZIP；资源哈希、相对引用、参考式图片由共享 AST 收集。",
+      "commands": [
+        "npm run ci:export",
+        "npx vitest run src/tests/documentExport.test.ts",
+        "python verify.py (PyMuPDF/Pillow + Poppler)"
+      ],
+      "fixtureHashes": {
+        "orientation.jpg": "1a93f27061dd04296678d393690610c5c4b10d35d596bc3b5523207ff517ef9c",
+        "windows-input.md": "e6f4812b0940451fb3eea90863e5659e6f108a28f5fa333e75d03583c2a16fe3"
+      },
+      "artifactHashes": {
+        "windows-report.zip": "b60fd40f7657565703b3641a3a119413c2ab1a44996ad322eae3e8de083e8907",
+        "windows-report.docx": "236d8b68d7ae372398ea9d7b8f373675c78ba597790e492cf2ce2aed604ff606",
+        "research-report.pdf": "35300b63cda6b4bb75e973032b6a63061bf03cef2d19033d59d214f878d163d3"
+      },
+      "fixtureDefinitionHashes": {}
+    },
+    {
+      "id": "E17",
+      "priority": "P1",
+      "category": "assets",
+      "title": "缺图/歧义绑定",
+      "fixture": "缺失文件、同页不同论文、多个候选",
+      "acceptance": "不猜来源；预检给出缺失/歧义并按用户选择继续。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "缺资源诊断和同意合同已测；同页不同论文/多候选全部绑定矩阵未验收。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E18",
+      "priority": "P1",
+      "category": "assets",
+      "title": "图注和大图分页",
+      "fixture": "高图、长图注、页尾图",
+      "acceptance": "图与说明可理解且不拉伸/不裁关键内容。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "实际图片方向和自然比例通过；高图/长图注/页尾图专项未验收。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E19",
+      "priority": "P1",
+      "category": "assets",
+      "title": "字体和资源就绪",
+      "fixture": "延迟字体/图片 decode、离线数学资源",
+      "acceptance": "资源明确 ready 后才打印，缺失有诊断而非成功空白。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "Windows 驱动等待 fonts/images/stable layout，初始空白导航已修复；延迟资源/缺字体注入实验未完成。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E20",
+      "priority": "P1",
+      "category": "assets",
+      "title": "来源方向与裁切",
+      "fixture": "PDF CropBox+0/90/180/270旋转；EXIF",
+      "acceptance": "来源方向只转换一次；CTM 补丁不破坏领域裁切。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "PDF CropBox/四种旋转与 EXIF 专项未完成。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E21",
+      "priority": "P1",
+      "category": "thin-reading",
+      "title": "全文与折叠节点",
+      "fixture": "隐藏但保存的节点、屏幕外节点",
+      "acceptance": "full_saved 导出全部所选已存内容；不依赖 DOM 挂载。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "适配器读取保存模型；全部折叠/屏幕外节点矩阵未专门运行。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E22",
+      "priority": "P1",
+      "category": "thin-reading",
+      "title": "分支与未完成内容",
+      "fixture": "子树/未生成/失败/运行中节点",
+      "acceptance": "范围清楚；不自动生成内容；部分导出有状态。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "子树/节点范围已有合同；未生成/失败/运行中完整矩阵未验收。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E23",
+      "priority": "P1",
+      "category": "thin-reading",
+      "title": "旧 v1/v2 兼容",
+      "fixture": "旧 mermaid/html 字段与新正文",
+      "acceptance": "源不回写；不执行旧 HTML；新正文不全转义。",
+      "testImplementation": "npm run ci:export; npx vitest run src/tests/artifactDocumentExport.test.ts",
+      "evidence": [
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "PASS",
+      "notes": "旧 Mermaid/HTML 安全兼容与 v2 分段/代码回归通过；源不回写。",
+      "commands": [
+        "npm run ci:export",
+        "npx vitest run src/tests/artifactDocumentExport.test.ts"
+      ],
+      "fixtureHashes": {},
+      "artifactHashes": {
+        "final-ci-export.log": "f5ef94ac1ef28ab77e6a5a28eca54230bda4dac2d24b64ab199c0c16338a145b"
+      },
+      "fixtureDefinitionHashes": {
+        "products/liteasy/apps/desktop/src/tests/artifactDocumentExport.test.ts": "b3729060ae6c787279e2a5f74a4da0caeca0509c259a9137db58789b21732bc0",
+        "products/liteasy/apps/desktop/src/tests/fixtures/thinReadingFixtures.ts": "2cc24dd97506263dbb0d61b8a6fffb923d16928d5cd193d59dc4e3268772882c"
+      }
+    },
+    {
+      "id": "E24",
+      "priority": "P1",
+      "category": "evidence",
+      "title": "证据篇幅与来源",
+      "fixture": "长引文 references/excerpts/full_appendix",
+      "acceptance": "截引有标签；完整附录不丢尾部；不指向未交付 JSON 冒充完整。",
+      "testImplementation": "npm run ci:export; npx vitest run src/tests/documentExport.test.ts",
+      "evidence": [
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "PASS",
+      "notes": "默认截引明确标为证据摘录，full_appendix 保留 COMPLETE_EVIDENCE_TAIL，来源模式已回归。",
+      "commands": [
+        "npm run ci:export",
+        "npx vitest run src/tests/documentExport.test.ts"
+      ],
+      "fixtureHashes": {},
+      "artifactHashes": {
+        "final-ci-export.log": "f5ef94ac1ef28ab77e6a5a28eca54230bda4dac2d24b64ab199c0c16338a145b"
+      },
+      "fixtureDefinitionHashes": {
+        "products/liteasy/apps/desktop/src/tests/documentExport.test.ts": "fcf02b9eae8847d4ee6a75eca2e3b9088c41e94c9f385825cae5e63e797d90ba",
+        "products/liteasy/apps/desktop/src/tests/fixtures/thinReadingFixtures.ts": "2cc24dd97506263dbb0d61b8a6fffb923d16928d5cd193d59dc4e3268772882c"
+      }
+    },
+    {
+      "id": "E25",
+      "priority": "P1",
+      "category": "evidence",
+      "title": "核验状态守恒",
+      "fixture": "待关联、未核验、原图/生成图/外部来源",
+      "acceptance": "不凭导出成功提升可信状态或补造引用信息。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "不提升核验状态；全部待关联/原图/生成图/外部来源矩阵未验收。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E26",
+      "priority": "P1",
+      "category": "snapshot",
+      "title": "源版本变化",
+      "fixture": "冻结前/中/后的文档修改",
+      "acceptance": "一致冻结或明确失败；不混合版本；冻结后渲染稳定。",
+      "testImplementation": "npm run ci:export; npx vitest run src/tests/documentExport.test.ts",
+      "evidence": [
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "PASS",
+      "notes": "冻结前同步 structuredClone 后修改原源，渲染仍为冻结内容；记录 legacy-unpinned 而不补造 revision。",
+      "commands": [
+        "npm run ci:export",
+        "npx vitest run src/tests/documentExport.test.ts"
+      ],
+      "fixtureHashes": {},
+      "artifactHashes": {
+        "final-ci-export.log": "f5ef94ac1ef28ab77e6a5a28eca54230bda4dac2d24b64ab199c0c16338a145b"
+      },
+      "fixtureDefinitionHashes": {
+        "products/liteasy/apps/desktop/src/tests/documentExport.test.ts": "fcf02b9eae8847d4ee6a75eca2e3b9088c41e94c9f385825cae5e63e797d90ba",
+        "products/liteasy/apps/desktop/src/tests/fixtures/thinReadingFixtures.ts": "2cc24dd97506263dbb0d61b8a6fffb923d16928d5cd193d59dc4e3268772882c"
+      }
+    },
+    {
+      "id": "E27",
+      "priority": "P1",
+      "category": "snapshot",
+      "title": "白板布局及成员快照",
+      "fixture": "并发移动/连边/修改成员对象",
+      "acceptance": "全部快照闭包一致；无法证明历史布局时拒绝。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "只读事务固定布局、immutable revision、成员读取和拒绝历史已有测试；并发竞态注入矩阵尚未完整运行。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E28",
+      "priority": "P1",
+      "category": "snapshot",
+      "title": "摘录与展示扩展",
+      "fixture": "半张表/脚注选区需父块上下文",
+      "acceptance": "补充上下文标注，原选区/模型读取/核验范围不偷换。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "选区父块上下文扩展及标注尚未提供。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E29",
+      "priority": "P1",
+      "category": "snapshot",
+      "title": "超预览预算",
+      "fixture": "正文超过200000字符/深树",
+      "acceptance": "读取完整源或明确分卷/失败；不导出截短 viewContext 当全文。",
+      "testImplementation": "npm run ci:export; npx vitest run src/tests/documentExport.test.ts",
+      "evidence": [
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "PASS",
+      "notes": "约30万字符完整源保留末段；超过8MiB明确失败，不使用截短 viewContext。",
+      "commands": [
+        "npm run ci:export",
+        "npx vitest run src/tests/documentExport.test.ts"
+      ],
+      "fixtureHashes": {
+        "generated:documentExport.long-text (UTF-8)": "201329aa9e0abb1da767651e9edfb86686889dfab534b398b5a66ff7089a5f16"
+      },
+      "artifactHashes": {
+        "final-ci-export.log": "f5ef94ac1ef28ab77e6a5a28eca54230bda4dac2d24b64ab199c0c16338a145b"
+      },
+      "fixtureDefinitionHashes": {}
+    },
+    {
+      "id": "E30",
+      "priority": "P1",
+      "category": "canvas",
+      "title": "生成式 UI 静态适配",
+      "fixture": "uiDsl 表/卡/图与交互控件",
+      "acceptance": "专业结构被消费，交互静态化且注明；没有只导出 answer。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "UIDsl 结构和控件静态说明已接入；live dataSources拒绝，专业科学/3D静态快照仍不完整。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E31",
+      "priority": "P1",
+      "category": "canvas",
+      "title": "白板阅读报告",
+      "fixture": "多组卡、重复对象 placements、带标签有向边",
+      "acceptance": "总览+完整正文+准确关系；排序稳定可调整，不编造因果。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "完整白板正文、重复placements、总览图片通过；有向/无向关系与排序完整目标输出专项未验收。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E32",
+      "priority": "P1",
+      "category": "canvas",
+      "title": "白板缩放无关",
+      "fixture": "同一模型在25/100/200%和不同DPR",
+      "acceptance": "空间导出几何一致，排除视口变换。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "模型坐标计算无视口依赖；真实25/100/200%+DPR对照未运行。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E33",
+      "priority": "P1",
+      "category": "canvas",
+      "title": "白板大图平铺",
+      "fixture": "超出单页可读范围的大白板",
+      "acceptance": "不压到极小字号；总览/页号/跨页边；未裁断正文不悄悄丢失。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "已平铺且保留正文附录；混合A3/A4、跨页边和切分质量尚未验收。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E34",
+      "priority": "P1",
+      "category": "canvas",
+      "title": "原生 Canvas roundtrip",
+      "fixture": "白板 ZIP 含附件/关系/扩展字段",
+      "acceptance": "原生导出仍可用且不被报告替代；导入后语义保持。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "原生ZIP入口保留且既有套件通过；此次附件/扩展字段roundtrip专用矩阵未运行。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E35",
+      "priority": "P1",
+      "category": "markdown",
+      "title": "移动和离线读取",
+      "fixture": "导出含附件 ZIP；移动到新目录",
+      "acceptance": "解压后所有已打包图片可打开；无 blob/本机绝对路径依赖。",
+      "testImplementation": "npm run ci:export; python verify.py (PyMuPDF/Pillow + Poppler)",
+      "evidence": [
+        "windows-report.zip",
+        "native-reader-results.json"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "PASS",
+      "notes": "实际原生MD ZIP移到随机新目录解压，所有相对图片由Pillow打开并校验，无 data/blob/file 依赖。",
+      "commands": [
+        "npm run ci:export",
+        "python verify.py (PyMuPDF/Pillow + Poppler)"
+      ],
+      "fixtureHashes": {
+        "orientation.jpg": "1a93f27061dd04296678d393690610c5c4b10d35d596bc3b5523207ff517ef9c",
+        "windows-input.md": "e6f4812b0940451fb3eea90863e5659e6f108a28f5fa333e75d03583c2a16fe3"
+      },
+      "artifactHashes": {
+        "windows-report.zip": "b60fd40f7657565703b3641a3a119413c2ab1a44996ad322eae3e8de083e8907",
+        "native-reader-results.json": "86480cc160f03851e1dc13a864b9edcb9eccb991dbb117ddc0615d4e9d8f34d6"
+      },
+      "fixtureDefinitionHashes": {}
+    },
+    {
+      "id": "E36",
+      "priority": "P1",
+      "category": "markdown",
+      "title": "兼容 profile",
+      "fixture": "合并表格、公式、脚注、静态图",
+      "acceptance": "research/portable 的损失策略正确；源 Markdown 原样出口仍在。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "仅 research profile；portable损失策略和完整兼容矩阵尚未完成。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E37",
+      "priority": "P1",
+      "category": "docx",
+      "title": "可编辑 OOXML",
+      "fixture": "标题、正文、编号、表、图片、页码",
+      "acceptance": "真实元素及样式；不是 HTML 改后缀/整页图片；MIME 正确。",
+      "testImplementation": "npm run ci:export; npx vitest run src/tests/documentExport.test.ts; python verify.py (PyMuPDF/Pillow + Poppler)",
+      "evidence": [
+        "windows-report.docx"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "PASS",
+      "notes": "真实DOCX的段落/编号/表格/合并/图片/页眉页脚与PAGE域检查通过，MIME与扩展名一致。",
+      "commands": [
+        "npm run ci:export",
+        "npx vitest run src/tests/documentExport.test.ts",
+        "python verify.py (PyMuPDF/Pillow + Poppler)"
+      ],
+      "fixtureHashes": {
+        "orientation.jpg": "1a93f27061dd04296678d393690610c5c4b10d35d596bc3b5523207ff517ef9c",
+        "windows-input.md": "e6f4812b0940451fb3eea90863e5659e6f108a28f5fa333e75d03583c2a16fe3"
+      },
+      "artifactHashes": {
+        "windows-report.docx": "236d8b68d7ae372398ea9d7b8f373675c78ba597790e492cf2ce2aed604ff606"
+      },
+      "fixtureDefinitionHashes": {}
+    },
+    {
+      "id": "E38",
+      "priority": "P1",
+      "category": "docx",
+      "title": "跨编辑器兼容",
+      "fixture": "选定版本 Word/WPS/LibreOffice",
+      "acceptance": "无修复提示；中文/公式/表/图片正常；记录实际版本及未测项。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "Word/WPS/LibreOffice实际版本打开测试未运行。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E39",
+      "priority": "P1",
+      "category": "security",
+      "title": "恶意 HTML/URL/SVG",
+      "fixture": "脚本、onerror、CSS url、SVG外链",
+      "acceptance": "无执行、无越权访问，安全正文仍能排版。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "恶意脚本、事件、CSS、URL安全测试通过；SVG各类外链执行专项未完整运行。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E40",
+      "priority": "P1",
+      "category": "security",
+      "title": "网络与本地文件隔离",
+      "fixture": "file://、内网URL、远程跟踪图片",
+      "acceptance": "默认不请求，只有授权 manifest 资源可读；重定向亦受限。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "默认远程图片不读、CLI相对目录授权已测试；重定向/内网/file完整动态隔离矩阵未运行。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E41",
+      "priority": "P1",
+      "category": "security",
+      "title": "元数据隐私",
+      "fixture": "凭据查询串、本地路径、trace、账户ID",
+      "acceptance": "公开文档/manifest 无未授权信息；来源文字仍可读。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "未完成所有凭据查询串/trace/账户ID公开投影矩阵。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E42",
+      "priority": "P1",
+      "category": "save",
+      "title": "取消与中断",
+      "fixture": "排版/预览关闭/发布前取消/worker crash",
+      "acceptance": "显式取消才取消；异常不伪成功；原文件保持。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "取消signal、关闭预览保持任务、失败不发布已有实现；crash/中断全矩阵与持久化任务账本尚未完成。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E43",
+      "priority": "P1",
+      "category": "save",
+      "title": "原子替换与磁盘满",
+      "fixture": "已有目标、磁盘不足、输出失败",
+      "acceptance": "不破坏旧目标；无声称有效的部分文件。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "写入失败保留旧文件的Rust回归通过；真实磁盘满注入未运行。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E44",
+      "priority": "P1",
+      "category": "save",
+      "title": "源文件保护和路径安全",
+      "fixture": "同源别名、符号链接、保留名/长文件名",
+      "acceptance": "防止覆盖源；不越权；错误可解释。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "源文件/硬链接/符号链接保护和保留名测试通过；完整Windows路径边界专项未运行。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E45",
+      "priority": "P1",
+      "category": "save",
+      "title": "历史记录失败",
+      "fixture": "输出已保存而历史写入失败",
+      "acceptance": "返回 saved + history_write_failed；能找到文件，不伪装未保存。",
+      "testImplementation": "cargo +1.98.1 test --locked --no-default-features --manifest-path products/liteasy/apps/desktop/src-tauri/Cargo.toml artifact_export::tests",
+      "evidence": [
+        "final-rust-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "PASS",
+      "notes": "Rust真实临时目录：文件保存成功而历史目录写入失败，返回 saved + history_write_failed。",
+      "commands": [
+        "cargo +1.98.1 test --locked --no-default-features --manifest-path products/liteasy/apps/desktop/src-tauri/Cargo.toml artifact_export::tests"
+      ],
+      "fixtureHashes": {},
+      "artifactHashes": {
+        "final-rust-export.log": "3c0d0df862c0535c3e5b6afd6c4ee3a4e0d2fa00b19284bb023fd43605c9ca62"
+      },
+      "fixtureDefinitionHashes": {
+        "products/liteasy/apps/desktop/src-tauri/src/artifact_export.rs": "00b402aba869f602374d9b5b972b6221851a48b7f6ab85c26ae42b7db5a0d74a"
+      }
+    },
+    {
+      "id": "E46",
+      "priority": "P1",
+      "category": "save",
+      "title": "浏览器真实状态",
+      "fixture": "普通 a.download / 用户取消实际下载",
+      "acceptance": "只承诺 download_started；不把磁盘存在作为事实。",
+      "testImplementation": "npm run ci:export; npx vitest run src/tests/artifactExportClient.test.ts; npx playwright test src/tests/browser/artifactExport.browser.spec.ts",
+      "evidence": [
+        "final-browser-export.log",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "PASS",
+      "notes": "实际浏览器下载只报告 download_started，界面说明保存位置由浏览器管理；后台不能确认磁盘存在。",
+      "commands": [
+        "npm run ci:export",
+        "npx vitest run src/tests/artifactExportClient.test.ts",
+        "npx playwright test src/tests/browser/artifactExport.browser.spec.ts"
+      ],
+      "fixtureHashes": {},
+      "artifactHashes": {
+        "final-browser-export.log": "1f6665a32fae7bbae9460bb7f1238e865e3bbea933e7026af2c2590329844d04",
+        "final-ci-export.log": "f5ef94ac1ef28ab77e6a5a28eca54230bda4dac2d24b64ab199c0c16338a145b"
+      },
+      "fixtureDefinitionHashes": {
+        "products/liteasy/apps/desktop/src/tests/artifactExportClient.test.ts": "f204971b441edc200f0f2f935c3c645098b7065125a624ed36801356d6a1aab3",
+        "products/liteasy/apps/desktop/src/tests/fixtures/artifactExportBrowserFixture.tsx": "6464ad1144f2cb172a06bcd54f9ae9981333ac9678320c502a926c72fd21c8fa"
+      }
+    },
+    {
+      "id": "E47",
+      "priority": "P1",
+      "category": "security",
+      "title": "scope/权限切换",
+      "fixture": "导出中账户切换/权限撤销",
+      "acceptance": "发布前核验，按策略拒绝；不沿用过期授权。",
+      "testImplementation": "npm run ci:export; npx vitest run src/tests/useArtifactExportController.test.ts",
+      "evidence": [
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "PASS",
+      "notes": "读/发布前账户scope校验及logout后回到同账号的sessionGeneration撤销测试通过。",
+      "commands": [
+        "npm run ci:export",
+        "npx vitest run src/tests/useArtifactExportController.test.ts"
+      ],
+      "fixtureHashes": {},
+      "artifactHashes": {
+        "final-ci-export.log": "f5ef94ac1ef28ab77e6a5a28eca54230bda4dac2d24b64ab199c0c16338a145b"
+      },
+      "fixtureDefinitionHashes": {
+        "products/liteasy/apps/desktop/src/tests/useArtifactExportController.test.ts": "b5423cd0ff5f2d7cec6e6a50fb25a1528d7df8c6fde653fa7a0d37cba75e2db9",
+        "products/liteasy/apps/desktop/src/tests/boardDocumentExport.test.ts": "b8116969de59ca2eaf54fb5a5e7bfd57bdf9dd26c5ffd5f393487487d4355ab1"
+      }
+    },
+    {
+      "id": "E48",
+      "priority": "P1",
+      "category": "host",
+      "title": "安装包真实能力",
+      "fixture": "Windows正式包、离线、新用户环境",
+      "acceptance": "不要求用户Node；字体/worker正确分发；没有伪全平台承诺。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "实际运行Windows调试custom-protocol exe，未跑最终Release/NSIS安装包、新用户离线环境。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E49",
+      "priority": "P1",
+      "category": "host",
+      "title": "输出预览同一字节",
+      "fixture": "PDF预览后保存；修改设置再保存",
+      "acceptance": "已预览PDF与保存PDF哈希一致；旧预览不能保存成新任务结果。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "预览/保存复用同一payload已实现；Windows GUI哈希对照和设置失效专项未运行。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E50",
+      "priority": "P2",
+      "category": "performance",
+      "title": "大文档基准和预算",
+      "fixture": "1/20/100页，200卡；超预算输入",
+      "acceptance": "记录冷暖耗时/峰值内存/主线程/产物大小；超限不静默截断。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "预算有界；1/20/100页、200卡 cold/warm/RSS/主线程基准及安装包增量未测量。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E51",
+      "priority": "P1",
+      "category": "architecture",
+      "title": "新增类型 conformance",
+      "fixture": "新增research.memo测试类型",
+      "acceptance": "注册/adapter即可接入；不改三套renderer资产switch；能力真实。",
+      "testImplementation": "npm run ci:export; npx vitest run src/tests/resourceTypeRegistry.test.ts; node scripts/check-export-boundaries.mjs",
+      "evidence": [
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "PASS",
+      "notes": "research.memo只通过资源类型注册即可编译HTML/MD/DOCX；三格式serializer不增加资产类型分支。",
+      "commands": [
+        "npm run ci:export",
+        "npx vitest run src/tests/resourceTypeRegistry.test.ts",
+        "node scripts/check-export-boundaries.mjs"
+      ],
+      "fixtureHashes": {},
+      "artifactHashes": {
+        "final-ci-export.log": "f5ef94ac1ef28ab77e6a5a28eca54230bda4dac2d24b64ab199c0c16338a145b"
+      },
+      "fixtureDefinitionHashes": {
+        "products/liteasy/apps/desktop/src/tests/resourceTypeRegistry.test.ts": "c04ffd87185b00e3256786325aef51a47f6571f60d0b1392e4349b6485faece5"
+      }
+    },
+    {
+      "id": "E52",
+      "priority": "P1",
+      "category": "architecture",
+      "title": "门禁负例",
+      "fixture": "绕过parser、UI写PDF、base64错误MIME",
+      "acceptance": "AST/依赖门禁实际拒绝负例，并允许合法局部科学图片。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "AST门禁实际拒绝parser/network/liveDOM/Playwright/legacy默认入口等负例；错误base64 MIME专用负例未覆盖。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    },
+    {
+      "id": "E53",
+      "priority": "P1",
+      "category": "scope",
+      "title": "导出不改源与不调模型",
+      "fixture": "导出前后源哈希/任务日志/网络调用",
+      "acceptance": "源内容/视口不改，不发起模型生成或后台付费请求。",
+      "testImplementation": "参见README中可重跑命令与仓库测试",
+      "evidence": [
+        "README.md",
+        "native-receipts.json",
+        "orientation-results.json",
+        "final-ci-export.log"
+      ],
+      "sourceStatus": "NOT_RUN",
+      "status": "NOT_RUN",
+      "notes": "源文件哈希保持、只读白板快照测试通过，CLI不启动业务模型服务；所有入口的模型/付费网络监测矩阵未完成。",
+      "commands": [],
+      "fixtureHashes": {},
+      "artifactHashes": {}
+    }
+  ],
+  "validationCommit": "cdcaf3df23109fed843f8736b0ebbd9def941777"
+}

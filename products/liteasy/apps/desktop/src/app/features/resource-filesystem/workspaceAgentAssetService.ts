@@ -1,3 +1,6 @@
+import { compileArtifactDocument } from "../document-export/artifactExportAdapter";
+import { compileDocument } from "../document-export/documentCompiler";
+import { resourceUri, parseResourceUri } from "./resourceFileService";
 import { objectResourceType } from "./objectResourceType";
 import { artifactResourceAlias } from "./artifactResourceAlias";
 import { createResourceTypeRegistry, legacyAssetDefinition, type ResourceTypeDefinition } from "./resourceTypeRegistry";
@@ -432,9 +435,22 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
   const artifacts = adapters.find(adapter => adapter.id === "artifacts");
   if (artifacts && input.artifactScopeId) adapters.push(artifactResourceAlias(artifacts, scope, input.artifactScopeId));
   const registry = createResourceTypeRegistry(input.active);
-  adapters.forEach(adapter => registry.register(legacyAssetDefinition(adapter)));
+  adapters.forEach(adapter => {
+    const definition = legacyAssetDefinition(adapter);
+    if (adapter.id === "artifacts" || adapter.id === "artifact-resources") definition.export = { supported: true, implementation: { formats: ["pdf", "markdown", "docx", "html"], async compile(path, options) {
+      check();
+      const parsed = adapter.id === "artifact-resources" ? parseResourceUri(path) : target(path);
+      const id = "resourceId" in parsed ? parsed.resourceId : parsed.kind === "artifact" ? parsed.artifactId : undefined;
+      const artifact = (await input.getArtifacts?.())?.find(item => item.artifactId === id);
+      if (!artifact) throw new AgentAssetError("unavailable", "产物不可读取。");
+      if ("revision" in parsed && parsed.revision && parsed.revision !== await resourceContentRevision(canonicalResourceJson(artifact))) throw new AgentAssetError("revision_conflict", "产物旧版本未保存，不能回退到最新版本。");
+      const document = await compileArtifactDocument({ ...artifact, type: artifact.artifactType }, { options, assets: service, basePath: liteasyPath(scope, { kind: "artifact", artifactId: artifact.artifactId }), active: input.active });
+      document.scopeId = scope; check(); return document;
+    } } };
+    registry.register(definition);
+  });
   for (const kind of ["content.note", "content.fragment", "conversation.message", "artifact.document", "source.document", "workspace.board"] as const) {
-    const definition = objectResourceType({ typeId: kind, kind, repository: input.repository, adapter: objects, active: input.active, fixtureId: `objects:${kind}` });
+    const definition = objectResourceType({ typeId: kind, kind, repository: input.repository, adapter: objects, active: input.active, fixtureId: `objects:${kind}`, assets: () => service });
     // Legacy discovery stays canonical to the user's existing URI; avoid duplicate catalog rows.
     definition.source.search = async () => [];
     registry.register(definition);

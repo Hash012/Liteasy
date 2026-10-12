@@ -202,7 +202,7 @@ describe("ArtifactTabs", () => {
 
     renderExportMenu(onExportArtifact);
 
-    expect(await screen.findByText("文档已导出，由浏览器下载设置管理。"))
+    expect(await screen.findByText("已交给浏览器下载，保存位置由浏览器管理。"))
       .toBeInTheDocument();
   });
 

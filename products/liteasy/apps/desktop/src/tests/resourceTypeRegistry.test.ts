@@ -1,3 +1,6 @@
+import { renderDocumentHtml } from "../app/features/document-export/documentHtml";
+import { renderMarkdownPackage } from "../app/features/document-export/documentMarkdown";
+import { renderDocumentDocx } from "../app/features/document-export/documentDocx";
 import "fake-indexeddb/auto";
 import { expect, test } from "vitest";
 import { createObjectRepository } from "../app/features/objects/objectRepository";
@@ -20,6 +23,10 @@ test("research.memo joins real discovery, read, context, native, evidence, CAS a
   const read = await service.read(found.path);
   expect(read.text).toBe(objectText(note));
   expect((await service.context(found.path))[0].ref).toEqual({ objectId: note.objectId, revision: note.revision });
+  const exported = await service.resourceTypes.compileExport(found.path, "docx");
+  expect(renderDocumentHtml(exported)).toContain("<table>");
+  expect((await renderMarkdownPackage(exported)).extension).toBe("md");
+  expect((await renderDocumentDocx(exported)).length).toBeGreaterThan(1000);
   const native = await service.resourceFiles.read(found.path, { representation: "native", maxBytes: 80000 });
   expect(JSON.parse(native.content)).toEqual(note);
   const report = evidenceReportFromAssetReads({ id: "challenge", answer: "", scopeId: scope, reads: [read] });

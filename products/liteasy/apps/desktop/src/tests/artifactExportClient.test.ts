@@ -87,7 +87,7 @@ describe("artifact export client", () => {
         status: "browser_managed",
         title: payload.title
       },
-      status: "saved"
+      status: "download_started"
     });
     const [record] = await client.list();
     expect(record).not.toHaveProperty("path");
@@ -101,7 +101,7 @@ describe("artifact export client", () => {
       storage: window.localStorage
     });
     const outcome = await client.export(payload);
-    if (outcome.status !== "saved") throw new Error("expected saved export");
+    if (outcome.status !== "download_started") throw new Error("expected browser download handoff");
 
     await expect(client.open(outcome.record.id)).rejects.toThrow("该导出由浏览器管理");
     await expect(client.reveal(outcome.record.id)).rejects.toThrow("该导出由浏览器管理");
@@ -134,5 +134,26 @@ describe("artifact export client", () => {
     expect(records).toHaveLength(200);
     expect(records[0].title).toBe("薄读 204");
     expect(records.at(-1)?.title).toBe("薄读 5");
+  });
+
+  test("migrates v1 explicitly and retains opaque future formats as readonly records", async () => {
+    const future = { artifactId: "future", exportedAt: "2026-10-12", fileName: "future.bin", format: "future-reader", id: "future", location: "browser", status: "browser_managed", title: "未来文档", opaque: { preserve: true } };
+    const legacy = JSON.stringify({ version: "liteasy.artifact-export-history/v1", records: [future] });
+    window.localStorage.setItem("liteasy.artifact-export-history.browser.v1", legacy);
+    const client = createArtifactExportClient({ download: vi.fn(), storage: window.localStorage });
+    expect((await client.list())[0]).toMatchObject({ id: "future", format: "unknown", status: "unsupported", originalFormat: "future-reader" });
+    await client.export(payload);
+    expect(window.localStorage.getItem("liteasy.artifact-export-history.browser.v1")).toBe(legacy);
+    const migrated = JSON.parse(window.localStorage.getItem("liteasy.artifact-export-history.browser.v2")!);
+    expect(migrated.version).toBe("liteasy.artifact-export-history/v2");
+    expect(migrated.records).toContainEqual(future);
+  });
+
+  test("a browser download keeps its honest receipt when history storage fails", async () => {
+    const download = vi.fn();
+    const client = createArtifactExportClient({ download, storage: { getItem: () => null, setItem: () => { throw new Error("quota"); } } });
+    const result = await client.export(payload);
+    expect(result).toMatchObject({ status: "download_started", warnings: ["history_write_failed"] });
+    expect(download).toHaveBeenCalledOnce();
   });
 });

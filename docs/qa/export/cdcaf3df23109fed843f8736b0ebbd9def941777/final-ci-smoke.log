@@ -1,0 +1,32 @@
+
+> liteasy-desktop@0.1.45 ci:smoke
+> vitest run src/tests/sourceModuleCasing.test.ts src/tests/tauriResourceConfig.test.ts && npm run i18n:check
+
+
+ RUN  v3.2.4 <workspace>/products/liteasy/apps/desktop
+
+ ✓ src/tests/sourceModuleCasing.test.ts (1 test) 14ms
+ ✓ src/tests/tauriResourceConfig.test.ts (8 tests) 74ms
+
+ Test Files  2 passed (2)
+      Tests  9 passed (9)
+   Start at  18:58:27
+   Duration  700ms (transform 48ms, setup 132ms, collect 40ms, tests 88ms, environment 526ms, prepare 81ms)
+
+
+> liteasy-desktop@0.1.45 i18n:check
+> node scripts/check-i18n.mjs
+
+{
+  "status": "passed",
+  "locales": [
+    "zh-CN",
+    "en-US"
+  ],
+  "sourceKeys": 273,
+  "missingTranslations": {
+    "zh-CN": 0,
+    "en-US": 0
+  },
+  "scope": "bundled catalogs and generated types; NOT whole-application translation coverage"
+}

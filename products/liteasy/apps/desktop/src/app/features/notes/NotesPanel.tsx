@@ -1,3 +1,5 @@
+import { DocumentExportDialog } from "../document-export/DocumentExportDialog";
+import { useDocumentExportPort } from "../document-export/documentExportPort";
 import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
 import { NoteLabelFilter, emptyNoteFilter, matchesNoteFilter } from "./NoteLabelFilter";
 import { noteLabelEntries, noteLabels, resolvedNoteLabels, type NoteLabel } from "./noteLabels";
@@ -89,6 +91,9 @@ function noteIconKey(item: NotesItem) {
 }
 function NotesPanelContent({ model }: { model: NotesViewModel }) {
   const preference = useMarkdownEditing();
+  const exportPort = useDocumentExportPort();
+  const [exportMessage, setExportMessage] = useState("");
+  const [exportItem, setExportItem] = useState<NotesItem>();
   const [filter, setFilter] = useState(emptyNoteFilter);
   const labeledItems = useMemo(() => model.items.map((item) => ({ ...item, labels: item.labels ?? resolvedNoteLabels(item) })), [model.items]);
   const filteredItems = labeledItems.filter((item) => matchesNoteFilter(item.labels, filter));
@@ -105,6 +110,7 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
     setDraft(undefined);
     setEditingItem(undefined);
     setCollecting(undefined);
+    setExportItem(undefined);
   }, [model.folderId]);
   const run = (action: Promise<void>) => {
     void action.catch(() => undefined);
@@ -137,6 +143,10 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
   };
   return (
     <section className="notes-panel" aria-label="笔记" aria-busy={model.busy}>
+      {exportPort && exportItem ? <DocumentExportDialog open title={exportItem.title} initialFormat="markdown"
+        compile={(options, signal) => exportPort.compileNote(exportItem, options, signal)} publish={exportPort.publish}
+        onClose={() => setExportItem(undefined)} onOutcome={outcome => { if (outcome.status !== "cancelled") setExportMessage(outcome.record.location === "desktop" ? `已导出到 ${outcome.record.path}` : "已交给浏览器下载，保存位置由浏览器管理。"); }} /> : null}
+      {exportMessage ? <p aria-live="polite">{exportMessage}</p> : null}
       <header className="notes-toolbar">
         <NoteRegular aria-hidden="true" />
         <strong>笔记</strong>
@@ -433,6 +443,7 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
                   <header>
                     <strong>{filename(item)}</strong>
                     <span>{item.source}</span>
+                    {exportPort && item.object?.kind !== "workspace.board" ? <Button size="small" appearance="subtle" disabled={item.unavailable} onClick={() => setExportItem(item)}>导出阅读文档</Button> : null}
                   </header>
                   {item.target.kind === "external-file" ? <Button appearance="subtle" icon={<ArrowUpRightRegular />} onClick={() => model.openSource(item)}>在阅读区打开</Button> : item.annotation ? <PdfAnnotationMarkdown value={item.text} images={item.annotation.images} />
                     : <ReferenceSourceContext.Provider value={liteasyPath(model.scopeId ?? "local", item.target)}>{preference.mode === "live" && item.editable && item.object?.kind === "content.note" ? <NotesInlineEditor key={item.key} item={item} model={model} path={liteasyPath(model.scopeId ?? "local", item.target)} /> : <ContentView content={legacyContent(item.text)} paperAnchors={item.paperAnchors ?? item.object?.paperAnchors} />}</ReferenceSourceContext.Provider>}

@@ -11,6 +11,8 @@ export interface ObjectStorage {
   get(key: string): Promise<StorageRow | null>;
   list(prefix: string, after?: string, limit?: number): Promise<StorageRow[]>;
   commit(changes: StorageChange[]): Promise<void>;
+  /** One readonly transaction. Reject over-budget results instead of truncating. */
+  snapshot?(prefixes: string[]): Promise<StorageRow[]>;
 }
 const storageListeners = new Map<string, Set<(keys?: readonly string[]) => void>>();
 /** Observe successful writes from other views using this account's shared store. */
@@ -120,6 +122,27 @@ export function createObjectStorage(
           request.onerror = () => reject(request.error);
         });
       }),
+    snapshot: (prefixes) => wrap(async () => {
+      if (!prefixes.length || prefixes.length > 16 || prefixes.some(prefix => !prefix || prefix.length > 2048 || prefix.startsWith("asset/"))) throw new Error("Invalid snapshot prefixes");
+      const database = await db(); check();
+      return new Promise<StorageRow[]>((resolve, reject) => {
+        const tx = database.transaction("records", "readonly"), store = tx.objectStore("records");
+        const rows = new Map<string, StorageRow>(); let bytes = 0;
+        for (const prefix of prefixes) {
+          const request = store.getAll(IDBKeyRange.bound(keyFor(prefix), keyFor(prefix) + "\uffff"), 1002);
+          request.onsuccess = () => {
+            for (const row of request.result as StorageRow[]) {
+              if (rows.has(row.key)) continue;
+              rows.set(row.key, row); bytes += JSON.stringify(row).length * 2;
+            }
+            if (rows.size > 1000 || bytes > 32 * 1024 * 1024) tx.abort();
+          };
+        }
+        tx.oncomplete = () => resolve([...rows.values()].sort((a, b) => a.key.localeCompare(b.key)));
+        tx.onabort = () => reject(new Error("Snapshot exceeds budget or was interrupted"));
+        tx.onerror = () => reject(tx.error);
+      });
+    }),
     commit: (changes) =>
       wrap(async () => {
         if (
@@ -149,7 +172,7 @@ export function createObjectStorage(
                     "revision_conflict",
                     "内容已被修改，请刷新后重试。",
                   );
-                if (change.key.startsWith("revision/") && request.result)
+                if ((change.key.startsWith("revision/") || /^visual-block\/[^/]+\/[^/]+$/.test(change.key)) && request.result)
                   throw new ObjectStoreError(
                     "revision_conflict",
                     "历史版本不能覆盖。",

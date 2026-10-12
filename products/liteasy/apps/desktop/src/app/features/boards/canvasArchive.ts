@@ -9,10 +9,11 @@ import { liteasyPath } from "../resource-filesystem/liteasyPath";
 import { stageDataUrl, stageImage } from "../objects/objectAssets";
 /** Portable Canvas + real relative image files. No network or new directory grants. */
 export async function createCanvasArchive(board: ObjectEnvelope, repository: ObjectRepository, assets: AgentAssetService): Promise<Blob> {
-  const placements = await repository.listPlacements(board.objectId);
+  const snapshot = await repository.captureBoardExportSnapshot({ objectId: board.objectId, revision: board.revision });
+  const placements = snapshot.placements;
   if (placements.length > 200) throw new Error("单次附件导出最多 200 张卡片，请拆分白板后导出。");
   const binding = await repository.getBoardFileBinding<BoardFileBinding>(board.objectId);
-  const document = parseCanvasFile(await serializeCanvasFile({ board, placements, edges: await repository.listEdges(board.objectId), repository, binding }));
+  const document = parseCanvasFile(await serializeCanvasFile({ board, placements, edges: snapshot.edges, repository, binding }));
   const files: Record<string, Uint8Array> = {}, missing: string[] = []; let bytes = 0;
   async function image(source: string, base: string) {
     try {

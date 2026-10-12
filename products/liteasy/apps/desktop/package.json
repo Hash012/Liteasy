@@ -37,7 +37,8 @@
     "i18n:check": "node scripts/check-i18n.mjs",
     "i18n:audit": "node scripts/audit-i18n.mjs",
     "test:i18n": "vitest run src/tests/uiLanguage.test.tsx src/tests/uiLanguagePolicy.test.ts src/tests/i18nCatalog.test.ts",
-    "ci:content": "node scripts/check-content-boundaries.mjs && node --test scripts/check-content-boundaries.node-test.mjs && vitest run src/tests/unifiedContent.test.tsx src/tests/contentReadLedger.test.ts src/tests/resourceTypeRegistry.test.ts src/tests/modelContentProjection.test.ts"
+    "ci:content": "node scripts/check-content-boundaries.mjs && node --test scripts/check-content-boundaries.node-test.mjs && vitest run src/tests/unifiedContent.test.tsx src/tests/contentReadLedger.test.ts src/tests/resourceTypeRegistry.test.ts src/tests/modelContentProjection.test.ts",
+    "ci:export": "node scripts/check-export-boundaries.mjs && node --test scripts/check-export-boundaries.node-test.mjs && vitest run src/tests/documentExport.test.ts src/tests/boardDocumentExport.test.ts src/tests/artifactPdfOrientation.test.ts src/tests/artifactDocumentExport.test.ts src/tests/artifactExportClient.test.ts src/tests/useArtifactExportController.test.ts src/tests/resourceTypeRegistry.test.ts"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",
@@ -54,6 +55,7 @@
     "@xyflow/react": "^12.11.2",
     "chevrotain": "^11.2.0",
     "d3-force": "^3.0.0",
+    "docx": "9.5.1",
     "fflate": "0.8.3",
     "i18next": "26.4.2",
     "katex": "^0.16.47",
@@ -67,9 +69,11 @@
     "rehype-katex": "^7.0.1",
     "rehype-raw": "^7.0.0",
     "rehype-sanitize": "^6.0.0",
+    "remark-frontmatter": "5.0.0",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "remark-parse": "11.0.0",
+    "remark-rehype": "11.1.2",
     "tesseract.js": "^6.0.1",
     "three": "^0.185.1",
     "unified": "11.0.5",

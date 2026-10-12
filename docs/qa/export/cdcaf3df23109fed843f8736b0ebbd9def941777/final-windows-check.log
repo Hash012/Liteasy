@@ -1,0 +1,146 @@
+    Checking liteasy-desktop v0.1.45 (<workspace>\products\liteasy\apps\desktop\src-tauri)
+warning: method `bind_condition` is never used
+  --> tests\..\src\local-archive\archive.rs:86:12
+   |
+85 | impl Plan {
+   | --------- method in this implementation
+86 |     pub fn bind_condition(&mut self, source: SourceInput, expected: String) {
+   |            ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `metadata_bytes` is never used
+   --> tests\..\src\local-archive\archive.rs:208:8
+    |
+208 | pub fn metadata_bytes(source: &SourceInput) -> Result<Vec<u8>, String> {
+    |        ^^^^^^^^^^^^^^
+
+warning: function `verify_document` is never used
+   --> tests\..\src\local-archive\archive.rs:891:8
+    |
+891 | pub fn verify_document(root: &Path, manifest: &Manifest, id: &str) -> Result<PathBuf, String> {
+    |        ^^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> tests\..\src\local-recovery\profile.rs:889:9
+    |
+889 |     let mut builder = fs::DirBuilder::new();
+    |         ----^^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: `liteasy-desktop` (test "local_archive") generated 3 warnings
+warning: `liteasy-desktop` (test "local_recovery") generated 1 warning (run `cargo fix --test "local_recovery" -p liteasy-desktop` to apply 1 suggestion)
+warning: unused imports: `BufReader`, `BufWriter`, and `Write`
+ --> src\agent_host.rs:4:24
+  |
+4 | use std::io::{BufRead, BufReader, BufWriter, Write};
+  |                        ^^^^^^^^^  ^^^^^^^^^  ^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `Emitter` and `Manager`
+ --> src\agent_host.rs:8:24
+  |
+8 | use tauri::{AppHandle, Emitter, Manager, State};
+  |                        ^^^^^^^  ^^^^^^^
+
+warning: unused import: `super::*`
+   --> src\webdav\local.rs:157:9
+    |
+157 |     use super::*;
+    |         ^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> src\data_location.rs:175:9
+    |
+175 |     let mut builder = fs::DirBuilder::new();
+    |         ----^^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `path`
+    --> src\local_library.rs:1005:26
+     |
+1005 | fn sync_parent_directory(path: &Path) -> Result<(), String> {
+     |                          ^^^^ help: if this is intentional, prefix it with an underscore: `_path`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> src\local-recovery\profile.rs:889:9
+    |
+889 |     let mut builder = fs::DirBuilder::new();
+    |         ----^^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: constant `HOST_EVENT` is never used
+  --> src\agent_host.rs:10:7
+   |
+10 | const HOST_EVENT: &str = "liteasy-agent-host-request";
+   |       ^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `RESPONSE_TIMEOUT` is never used
+  --> src\agent_host.rs:11:7
+   |
+11 | const RESPONSE_TIMEOUT: Duration = Duration::from_secs(120);
+   |       ^^^^^^^^^^^^^^^^
+
+warning: struct `ExternalHostRequest` is never constructed
+  --> src\agent_host.rs:20:8
+   |
+20 | struct ExternalHostRequest {
+   |        ^^^^^^^^^^^^^^^^^^^
+
+warning: struct `FrontendHostRequest` is never constructed
+  --> src\agent_host.rs:28:8
+   |
+28 | struct FrontendHostRequest {
+   |        ^^^^^^^^^^^^^^^^^^^
+
+warning: function `configured_socket_path` is never used
+  --> src\agent_host.rs:51:4
+   |
+51 | fn configured_socket_path() -> PathBuf {
+   |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `request_id` is never used
+  --> src\agent_host.rs:75:4
+   |
+75 | fn request_id() -> String {
+   |    ^^^^^^^^^^
+
+warning: function `commit` is never used
+   --> src\local-archive\archive.rs:790:8
+    |
+790 | pub fn commit(plan: Plan) -> Result<Receipt, String> {
+    |        ^^^^^^
+
+warning: function `normalized_account_key` is never used
+  --> src\local_library.rs:45:4
+   |
+45 | fn normalized_account_key(account_key: Option<&str>) -> String {
+   |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `legacy_account_namespace` is never used
+  --> src\local_library.rs:54:15
+   |
+54 | pub(crate) fn legacy_account_namespace(account_key: Option<&str>) -> String {
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `run_external_mode` is never used
+   --> src\headless-cli\..\headless_cli.rs:183:8
+    |
+183 | pub fn run_external_mode(
+    |        ^^^^^^^^^^^^^^^^^
+
+warning: `liteasy-desktop` (bin "liteasy-desktop") generated 14 warnings (run `cargo fix --bin "liteasy-desktop" -p liteasy-desktop` to apply 5 suggestions)
+warning: `liteasy-desktop` (bin "liteasy-desktop" test) generated 14 warnings (12 duplicates) (run `cargo fix --bin "liteasy-desktop" -p liteasy-desktop --tests` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.96s

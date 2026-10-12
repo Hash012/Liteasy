@@ -7,8 +7,10 @@ import type {
   ArtifactExportRecord
 } from "./artifactExport.types";
 
-const browserHistoryKey = "liteasy.artifact-export-history.browser.v1";
-const browserHistoryVersion = "liteasy.artifact-export-history/v1";
+const browserHistoryKey = "liteasy.artifact-export-history.browser.v2";
+const legacyBrowserHistoryKey = "liteasy.artifact-export-history.browser.v1";
+const browserHistoryVersion = "liteasy.artifact-export-history/v2";
+const legacyBrowserHistoryVersion = "liteasy.artifact-export-history/v1";
 const maxBrowserRecords = 200;
 
 type ArtifactExportInvoke = (
@@ -37,7 +39,7 @@ type BrowserHistorySnapshot = {
   version: typeof browserHistoryVersion;
 };
 
-const formats = new Set<ArtifactDocumentFormat>(["html", "markdown", "pdf"]);
+const formats = new Set<ArtifactDocumentFormat>(["html", "markdown", "pdf", "docx"]);
 
 function isTauriRuntime() {
   return typeof window !== "undefined" &&
@@ -63,15 +65,19 @@ function isBrowserRecord(value: unknown): value is ArtifactExportRecord {
 }
 
 function readBrowserHistory(storage: Pick<Storage, "getItem">): ArtifactExportRecord[] {
-  const serialized = storage.getItem(browserHistoryKey);
+  const serialized = storage.getItem(browserHistoryKey) ?? storage.getItem(legacyBrowserHistoryKey);
   if (!serialized) return [];
   try {
     const parsed: unknown = JSON.parse(serialized);
-    if (!isRecord(parsed) || parsed.version !== browserHistoryVersion ||
-      !Array.isArray(parsed.records) || !parsed.records.every(isBrowserRecord)) {
+    if (!isRecord(parsed) || ![browserHistoryVersion, legacyBrowserHistoryVersion].includes(String(parsed.version)) ||
+      !Array.isArray(parsed.records)) {
       return [];
     }
-    return parsed.records
+    return parsed.records.flatMap((raw: unknown) => {
+      if (isBrowserRecord(raw)) return [raw];
+      if (isRecord(raw) && typeof raw.format === "string" && !formats.has(raw.format as ArtifactDocumentFormat) && typeof raw.id === "string" && raw.location === "browser") return [{ artifactId: String(raw.artifactId ?? ""), exportedAt: String(raw.exportedAt ?? ""), fileName: String(raw.fileName ?? "未知格式记录"), format: "unknown" as const, originalFormat: raw.format, id: raw.id, title: String(raw.title ?? "未支持的历史格式"), location: "browser" as const, status: "unsupported" as const }];
+      return [];
+    })
       .slice(0, maxBrowserRecords)
       .sort((left, right) => right.exportedAt.localeCompare(left.exportedAt));
   } catch {
@@ -80,11 +86,15 @@ function readBrowserHistory(storage: Pick<Storage, "getItem">): ArtifactExportRe
 }
 
 function saveBrowserHistory(
-  storage: Pick<Storage, "setItem">,
+  storage: Pick<Storage, "getItem" | "setItem">,
   records: ArtifactExportRecord[]
 ) {
-  const snapshot: BrowserHistorySnapshot = {
-    records: records.slice(0, maxBrowserRecords),
+  let unknownRecords: unknown[] = [];
+  try { const raw = JSON.parse(storage.getItem(browserHistoryKey) ?? storage.getItem(legacyBrowserHistoryKey) ?? "null"); if ([browserHistoryVersion, legacyBrowserHistoryVersion].includes(raw?.version) && Array.isArray(raw.records)) unknownRecords = raw.records.filter((record: unknown) => !isBrowserRecord(record)); } catch { /* corrupt input is not interpreted */ }
+  const existing = storage.getItem(browserHistoryKey);
+  if (existing) { const raw = JSON.parse(existing); if (raw?.version !== browserHistoryVersion) throw new Error("不支持的历史版本；保留原始记录。"); }
+  const snapshot = {
+    records: [...records.filter(isBrowserRecord).slice(0, maxBrowserRecords), ...unknownRecords],
     version: browserHistoryVersion
   };
   storage.setItem(browserHistoryKey, JSON.stringify(snapshot));
@@ -137,16 +147,15 @@ export function createArtifactExportClient({
         id: createId(),
         location: "browser",
         status: "browser_managed",
-        title: payload.title
+        title: payload.title,
+        ...(payload.receipt ? { receipt: payload.receipt } : {})
       };
       try {
         saveBrowserHistory(storage, [record, ...readBrowserHistory(storage)]);
       } catch (error) {
-        throw new Error(
-          `文件已下载，但未写入导出历史：${error instanceof Error ? error.message : String(error)}`
-        );
+        return { record, status: "download_started", warnings: ["history_write_failed"] };
       }
-      return { record, status: "saved" };
+      return { record, status: "download_started" };
     },
     list: async () => readBrowserHistory(storage),
     open: async () => {

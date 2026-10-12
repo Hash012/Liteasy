@@ -1,10 +1,7 @@
-import { unified } from "unified";
-import remarkParse from "remark-parse";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
+import { researchMarkdownParser } from "./researchParser";
 import { contentFragmentSchema, type ContentFragment } from "./contentFragment";
 
-const parser = unified().use(remarkParse).use(remarkGfm).use(remarkMath);
+const parser = researchMarkdownParser();
 export type ContentBlock = { start: number; end: number; type: string; atomic: boolean };
 /** Source positions always refer to original UTF-16, before CRLF/math/render normalization. */
 export function contentBlocks(text: string): ContentBlock[] {

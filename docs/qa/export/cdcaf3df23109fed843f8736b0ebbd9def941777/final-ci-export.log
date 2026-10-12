@@ -1,0 +1,50 @@
+
+> liteasy-desktop@0.1.45 ci:export
+> node scripts/check-export-boundaries.mjs && node --test scripts/check-export-boundaries.node-test.mjs && vitest run src/tests/documentExport.test.ts src/tests/boardDocumentExport.test.ts src/tests/artifactPdfOrientation.test.ts src/tests/artifactDocumentExport.test.ts src/tests/artifactExportClient.test.ts src/tests/useArtifactExportController.test.ts src/tests/resourceTypeRegistry.test.ts
+
+Export boundaries passed.
+TAP version 13
+# Subtest: gate rejects unsafe export imports, scripts, network and live DOM
+ok 1 - gate rejects unsafe export imports, scripts, network and live DOM
+  ---
+  duration_ms: 5.412083
+  type: 'test'
+  ...
+# Subtest: gate permits registered IR rendering, authorized asset ports and semantic local scientific bitmaps
+ok 2 - gate permits registered IR rendering, authorized asset ports and semantic local scientific bitmaps
+  ---
+  duration_ms: 1.001793
+  type: 'test'
+  ...
+# Subtest: format serializers cannot branch on asset types
+ok 3 - format serializers cannot branch on asset types
+  ---
+  duration_ms: 0.485077
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 265.75553
+
+ RUN  v3.2.4 <workspace>/products/liteasy/apps/desktop
+
+ ✓ src/tests/resourceTypeRegistry.test.ts (3 tests) 157ms
+ ✓ src/tests/documentExport.test.ts (11 tests) 928ms
+   ✓ unified document export > packages real relative image files and a hash manifest for offline migration  491ms
+ ✓ src/tests/boardDocumentExport.test.ts (4 tests) 142ms
+ ✓ src/tests/artifactExportClient.test.ts (6 tests) 65ms
+ ✓ src/tests/artifactDocumentExport.test.ts (18 tests) 118ms
+ ✓ src/tests/artifactPdfOrientation.test.ts (1 test) 183ms
+ ✓ src/tests/useArtifactExportController.test.ts (6 tests) 66ms
+
+ Test Files  7 passed (7)
+      Tests  49 passed (49)
+   Start at  19:03:25
+   Duration  3.64s (transform 671ms, setup 394ms, collect 2.31s, tests 1.66s, environment 1.57s, prepare 302ms)
+

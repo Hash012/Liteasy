@@ -1,0 +1,13 @@
+[WebServer] (node:168820) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:168833) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 2 tests using 1 worker
+
+(node:168889) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 src/tests/browser/artifactExport.browser.spec.ts:17:1 › shared dialog downloads portable Markdown, standalone HTML and editable DOCX with honest browser receipts (19.6s)
+  ✓  2 src/tests/browser/artifactExport.browser.spec.ts:42:1 › production static HTML prints actual searchable PDF with upright image, tables, formulas and tail (5.4s)
+
+  2 passed (2.7m)

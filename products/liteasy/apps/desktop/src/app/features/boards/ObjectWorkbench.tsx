@@ -1,3 +1,5 @@
+import { DocumentExportDialog } from "../document-export/DocumentExportDialog";
+import { useDocumentExportPort } from "../document-export/documentExportPort";
 import { MarkdownEditor } from "../markdown/MarkdownEditor";
 import { GenerationPromptEditor } from "../ai-prompts/GenerationPromptEditor";
 import { ExtensionActions } from "../extensions/ExtensionActions";
@@ -119,6 +121,7 @@ export type WorkbenchViewModel = {
   fileBusy?: boolean;
   chooseBoardFile?(): Promise<void>;
   saveBoardFile?(choose?: boolean): Promise<void>;
+  compileBoardReport?(options: Partial<import("../document-export/documentExport.types").ExportOptions>, signal?: AbortSignal): Promise<import("../document-export/documentExport.types").ExportDocument>;
   exportBoardBundle?(): Promise<Blob>;
   connect?(
     from: Placement,
@@ -129,6 +132,8 @@ export type WorkbenchViewModel = {
   removeConnection?(edgeId: string): Promise<unknown>;
 };
 export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
+  const exportPort = useDocumentExportPort();
+  const [exportReport, setExportReport] = useState(false);
   const boardAppearance = useBlockPresentation(model.repository, model.board?.objectId);
   useEffect(() => {
     if (!model.visible) return;
@@ -434,6 +439,12 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
               />
             </Tooltip>
           ) : null}
+          {model.compileBoardReport && exportPort ? <><Tooltip content="导出白板阅读报告" relationship="description"><Button size="small" appearance="subtle" aria-label="导出白板阅读报告" icon={<ArrowDownloadRegular />} disabled={!model.board || model.busy} onClick={() => setExportReport(true)} /></Tooltip>
+            {exportReport && model.board ? <DocumentExportDialog open allowSpatial title={model.board.title} initialFormat="markdown"
+              nodes={model.placements.map((p, index) => ({ id: p.placementId, title: `卡片 ${index + 1}` }))}
+              compile={(options, signal) => model.compileBoardReport!(options, signal)} publish={exportPort.publish}
+              onClose={() => setExportReport(false)} onOutcome={outcome => { if (outcome.status !== "cancelled") model.setStatus(outcome.record.location === "desktop" ? `已导出到 ${outcome.record.path}` : "已交给浏览器下载，保存位置由浏览器管理。"); }} /> : null}
+          </> : null}
           {model.exportBoardBundle ? <Tooltip content="导出白板与附件" relationship="description"><Button size="small" appearance="subtle" aria-label="导出白板与附件" icon={<ArrowDownloadRegular />} disabled={!model.board || model.busy} onClick={() => void model.exportBoardBundle!().then((blob) => { const url = URL.createObjectURL(blob), link = document.createElement("a"); link.href = url; link.download = "Liteasy-Canvas.zip"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }).catch(error)} /></Tooltip> : null}
           <Tooltip content="关闭白板" relationship="description">
             <Button

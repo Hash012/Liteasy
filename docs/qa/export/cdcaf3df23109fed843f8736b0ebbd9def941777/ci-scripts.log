@@ -1,0 +1,568 @@
+TAP version 13
+# Subtest: Desktop-only publication, account, and organization changes require service regression
+ok 1 - Desktop-only publication, account, and organization changes require service regression
+  ---
+  duration_ms: 2.673374
+  type: 'test'
+  ...
+# Subtest: authority and shared-contract changes include every client, without installers
+ok 2 - authority and shared-contract changes include every client, without installers
+  ---
+  duration_ms: 0.31271
+  type: 'test'
+  ...
+# Subtest: cloud storage, identity, Agent and references select their actual Desktop tests
+ok 3 - cloud storage, identity, Agent and references select their actual Desktop tests
+  ---
+  duration_ms: 1.155076
+  type: 'test'
+  ...
+# Subtest: failed real PG process is a failing suite and stops later commands
+ok 4 - failed real PG process is a failing suite and stops later commands
+  ---
+  duration_ms: 0.596095
+  type: 'test'
+  ...
+# Subtest: portable evidence excludes arbitrary outputs and labels untested native layers
+ok 5 - portable evidence excludes arbitrary outputs and labels untested native layers
+  ---
+  duration_ms: 0.412064
+  type: 'test'
+  ...
+# Subtest: workflow includes client ingress paths, same-checkout runners and only summary artifact files
+ok 6 - workflow includes client ingress paths, same-checkout runners and only summary artifact files
+  ---
+  duration_ms: 0.597041
+  type: 'test'
+  ...
+# Subtest: accepts a clean real Git worktree
+ok 7 - accepts a clean real Git worktree
+  ---
+  duration_ms: 75.00194
+  type: 'test'
+  ...
+# Subtest: rejects unstaged lockfile changes without printing file contents
+ok 8 - rejects unstaged lockfile changes without printing file contents
+  ---
+  duration_ms: 61.040361
+  type: 'test'
+  ...
+# Subtest: rejects staged changes even when the working tree matches the index
+ok 9 - rejects staged changes even when the working tree matches the index
+  ---
+  duration_ms: 59.685865
+  type: 'test'
+  ...
+# Subtest: rejects untracked generated schemas
+ok 10 - rejects untracked generated schemas
+  ---
+  duration_ms: 58.343968
+  type: 'test'
+  ...
+# Subtest: ignores changes outside the selected paths
+ok 11 - ignores changes outside the selected paths
+  ---
+  duration_ms: 56.94552
+  type: 'test'
+  ...
+# Subtest: rejects tracked file deletion
+ok 12 - rejects tracked file deletion
+  ---
+  duration_ms: 52.779787
+  type: 'test'
+  ...
+# Subtest: rejects staged rename
+ok 13 - rejects staged rename
+  ---
+  duration_ms: 61.176539
+  type: 'test'
+  ...
+# Subtest: rejects empty CLI path lists
+ok 14 - rejects empty CLI path lists
+  ---
+  duration_ms: 54.336792
+  type: 'test'
+  ...
+# Subtest: rejects blank paths in a non-empty list
+ok 15 - rejects blank paths in a non-empty list
+  ---
+  duration_ms: 0.502563
+  type: 'test'
+  ...
+# Subtest: fails closed when Git status cannot run
+ok 16 - fails closed when Git status cannot run
+  ---
+  duration_ms: 38.216156
+  type: 'test'
+  ...
+# Subtest: treats argument metacharacters as literal path names
+ok 17 - treats argument metacharacters as literal path names
+  ---
+  duration_ms: 60.519821
+  type: 'test'
+  ...
+# Subtest: quotes unusual filenames without injecting log lines
+ok 18 - quotes unusual filenames without injecting log lines
+  ---
+  duration_ms: 58.383796
+  type: 'test'
+  ...
+# Subtest: ordinary push stays basic
+ok 19 - ordinary push stays basic
+  ---
+  duration_ms: 1.305548
+  type: 'test'
+  ...
+# Subtest: head commit marker opts in
+ok 20 - head commit marker opts in
+  ---
+  duration_ms: 0.233764
+  type: 'test'
+  ...
+# Subtest: marker is case insensitive
+ok 21 - marker is case insensitive
+  ---
+  duration_ms: 0.141334
+  type: 'test'
+  ...
+# Subtest: older commits cannot opt in
+ok 22 - older commits cannot opt in
+  ---
+  duration_ms: 0.090463
+  type: 'test'
+  ...
+# Subtest: missing head does not scan commits
+ok 23 - missing head does not scan commits
+  ---
+  duration_ms: 0.067108
+  type: 'test'
+  ...
+# Subtest: plain keyword is not a marker
+ok 24 - plain keyword is not a marker
+  ---
+  duration_ms: 0.084218
+  type: 'test'
+  ...
+# Subtest: partial marker does not match
+ok 25 - partial marker does not match
+  ---
+  duration_ms: 0.071508
+  type: 'test'
+  ...
+# Subtest: whitespace inside marker does not match
+ok 26 - whitespace inside marker does not match
+  ---
+  duration_ms: 0.1164
+  type: 'test'
+  ...
+# Subtest: non-string message does not match
+ok 27 - non-string message does not match
+  ---
+  duration_ms: 0.280758
+  type: 'test'
+  ...
+# Subtest: PR title opts in
+ok 28 - PR title opts in
+  ---
+  duration_ms: 0.294195
+  type: 'test'
+  ...
+# Subtest: PR body opts in
+ok 29 - PR body opts in
+  ---
+  duration_ms: 1.188166
+  type: 'test'
+  ...
+# Subtest: PR build label opts in
+ok 30 - PR build label opts in
+  ---
+  duration_ms: 0.125528
+  type: 'test'
+  ...
+# Subtest: PR windows label opts in case insensitively
+ok 31 - PR windows label opts in case insensitively
+  ---
+  duration_ms: 0.088976
+  type: 'test'
+  ...
+# Subtest: nearby label does not opt in
+ok 32 - nearby label does not opt in
+  ---
+  duration_ms: 0.061037
+  type: 'test'
+  ...
+# Subtest: label removal uses current labels
+ok 33 - label removal uses current labels
+  ---
+  duration_ms: 0.074529
+  type: 'test'
+  ...
+# Subtest: remaining marker opts in after label removal
+ok 34 - remaining marker opts in after label removal
+  ---
+  duration_ms: 0.059651
+  type: 'test'
+  ...
+# Subtest: malformed labels are ignored
+ok 35 - malformed labels are ignored
+  ---
+  duration_ms: 0.058439
+  type: 'test'
+  ...
+# Subtest: label object is ignored
+ok 36 - label object is ignored
+  ---
+  duration_ms: 0.04818
+  type: 'test'
+  ...
+# Subtest: manual boolean true opts in
+ok 37 - manual boolean true opts in
+  ---
+  duration_ms: 0.102881
+  type: 'test'
+  ...
+# Subtest: manual string true opts in
+ok 38 - manual string true opts in
+  ---
+  duration_ms: 0.053663
+  type: 'test'
+  ...
+# Subtest: manual boolean false stays basic
+ok 39 - manual boolean false stays basic
+  ---
+  duration_ms: 0.040373
+  type: 'test'
+  ...
+# Subtest: manual string false stays basic
+ok 40 - manual string false stays basic
+  ---
+  duration_ms: 0.039455
+  type: 'test'
+  ...
+# Subtest: manual arbitrary truthy string stays basic
+ok 41 - manual arbitrary truthy string stays basic
+  ---
+  duration_ms: 0.041383
+  type: 'test'
+  ...
+# Subtest: manual marker in other data does not opt in
+ok 42 - manual marker in other data does not opt in
+  ---
+  duration_ms: 0.055655
+  type: 'test'
+  ...
+# Subtest: merge queue stays basic
+ok 43 - merge queue stays basic
+  ---
+  duration_ms: 0.047886
+  type: 'test'
+  ...
+# Subtest: unsupported event stays basic
+ok 44 - unsupported event stays basic
+  ---
+  duration_ms: 0.040171
+  type: 'test'
+  ...
+# Subtest: pull_request_target stays basic
+ok 45 - pull_request_target stays basic
+  ---
+  duration_ms: 0.037049
+  type: 'test'
+  ...
+# Subtest: missing event stays basic
+ok 46 - missing event stays basic
+  ---
+  duration_ms: 0.036938
+  type: 'test'
+  ...
+# Subtest: null push data stays basic
+ok 47 - null push data stays basic
+  ---
+  duration_ms: 0.10845
+  type: 'test'
+  ...
+# Subtest: empty PR data stays basic
+ok 48 - empty PR data stays basic
+  ---
+  duration_ms: 0.079094
+  type: 'test'
+  ...
+# Subtest: missing dispatch input stays basic
+ok 49 - missing dispatch input stays basic
+  ---
+  duration_ms: 0.067219
+  type: 'test'
+  ...
+# Subtest: shell-shaped text alone stays basic
+ok 50 - shell-shaped text alone stays basic
+  ---
+  duration_ms: 0.074262
+  type: 'test'
+  ...
+# Subtest: shell-shaped text with marker remains plain data
+ok 51 - shell-shaped text with marker remains plain data
+  ---
+  duration_ms: 0.065078
+  type: 'test'
+  ...
+# Subtest: CLI emits only the fixed boolean output and explanation, preserving other outputs
+ok 52 - CLI emits only the fixed boolean output and explanation, preserving other outputs
+  ---
+  duration_ms: 34.25356
+  type: 'test'
+  ...
+# Subtest: CLI emits false when no opt-in is provided
+ok 53 - CLI emits false when no opt-in is provided
+  ---
+  duration_ms: 33.601726
+  type: 'test'
+  ...
+# Subtest: CLI fails closed on malformed event JSON without logging event content
+ok 54 - CLI fails closed on malformed event JSON without logging event content
+  ---
+  duration_ms: 31.903163
+  type: 'test'
+  ...
+# Subtest: platform packaging requires explicit dispatch and cannot publish or alter Windows depth
+ok 55 - platform packaging requires explicit dispatch and cannot publish or alter Windows depth
+  ---
+  duration_ms: 1.091586
+  type: 'test'
+  ...
+# Subtest: native candidates reuse frontend validation and setup with default-feature locked production builds
+ok 56 - native candidates reuse frontend validation and setup with default-feature locked production builds
+  ---
+  duration_ms: 0.83388
+  type: 'test'
+  ...
+# Subtest: native dependencies use segregated optional caches and no native node_modules cache
+ok 57 - native dependencies use segregated optional caches and no native node_modules cache
+  ---
+  duration_ms: 0.209755
+  type: 'test'
+  ...
+# Subtest: outcomes and artifact evidence survive failures and skipped required jobs fail the aggregate
+ok 58 - outcomes and artifact evidence survive failures and skipped required jobs fail the aggregate
+  ---
+  duration_ms: 0.157131
+  type: 'test'
+  ...
+# Subtest: candidate selection is explicit and rejects unexpected input
+ok 59 - candidate selection is explicit and rejects unexpected input
+  ---
+  duration_ms: 2.086284
+  type: 'test'
+  ...
+# Subtest: Rust pin is read from the unchanged Windows workflow without a fallback
+ok 60 - Rust pin is read from the unchanged Windows workflow without a fallback
+  ---
+  duration_ms: 0.704807
+  type: 'test'
+  ...
+# Subtest: successful packaging never promotes native UI, installation or signing evidence
+ok 61 - successful packaging never promotes native UI, installation or signing evidence
+  ---
+  duration_ms: 0.325402
+  type: 'test'
+  ...
+# Subtest: failed, cancelled, missing and skipped build requirements cannot report a build pass
+ok 62 - failed, cancelled, missing and skipped build requirements cannot report a build pass
+  ---
+  duration_ms: 1.367981
+  type: 'test'
+  ...
+# Subtest: candidate aggregate fails for every omitted required layer
+ok 63 - candidate aggregate fails for every omitted required layer
+  ---
+  duration_ms: 1.293985
+  type: 'test'
+  ...
+# Subtest: artifact records include exact bytes, SHA256 and revision and reject incomplete package sets
+ok 64 - artifact records include exact bytes, SHA256 and revision and reject incomplete package sets
+  ---
+  duration_ms: 5.518178
+  type: 'test'
+  ...
+# Subtest: app artifact transport preserves synthetic executable modes and symlinks
+ok 65 - app artifact transport preserves synthetic executable modes and symlinks
+  ---
+  duration_ms: 20.586365
+  type: 'test'
+  ...
+# Subtest: accepts only completed successful validation layers
+ok 66 - accepts only completed successful validation layers
+  ---
+  duration_ms: 0.834018
+  type: 'test'
+  ...
+# Subtest: rejects policy with result failure
+ok 67 - rejects policy with result failure
+  ---
+  duration_ms: 0.805961
+  type: 'test'
+  ...
+# Subtest: rejects policy with result cancelled
+ok 68 - rejects policy with result cancelled
+  ---
+  duration_ms: 0.151427
+  type: 'test'
+  ...
+# Subtest: rejects policy with result skipped
+ok 69 - rejects policy with result skipped
+  ---
+  duration_ms: 0.128762
+  type: 'test'
+  ...
+# Subtest: rejects policy with result timed_out
+ok 70 - rejects policy with result timed_out
+  ---
+  duration_ms: 0.107141
+  type: 'test'
+  ...
+# Subtest: rejects policy with result empty
+ok 71 - rejects policy with result empty
+  ---
+  duration_ms: 0.194106
+  type: 'test'
+  ...
+# Subtest: rejects a missing policy layer
+ok 72 - rejects a missing policy layer
+  ---
+  duration_ms: 0.273874
+  type: 'test'
+  ...
+# Subtest: rejects frontend with result failure
+ok 73 - rejects frontend with result failure
+  ---
+  duration_ms: 0.12944
+  type: 'test'
+  ...
+# Subtest: rejects frontend with result cancelled
+ok 74 - rejects frontend with result cancelled
+  ---
+  duration_ms: 0.264365
+  type: 'test'
+  ...
+# Subtest: rejects frontend with result skipped
+ok 75 - rejects frontend with result skipped
+  ---
+  duration_ms: 0.416674
+  type: 'test'
+  ...
+# Subtest: rejects frontend with result timed_out
+ok 76 - rejects frontend with result timed_out
+  ---
+  duration_ms: 0.18382
+  type: 'test'
+  ...
+# Subtest: rejects frontend with result empty
+ok 77 - rejects frontend with result empty
+  ---
+  duration_ms: 0.127503
+  type: 'test'
+  ...
+# Subtest: rejects a missing frontend layer
+ok 78 - rejects a missing frontend layer
+  ---
+  duration_ms: 0.158564
+  type: 'test'
+  ...
+# Subtest: rejects windows with result failure
+ok 79 - rejects windows with result failure
+  ---
+  duration_ms: 0.111918
+  type: 'test'
+  ...
+# Subtest: rejects windows with result cancelled
+ok 80 - rejects windows with result cancelled
+  ---
+  duration_ms: 1.077697
+  type: 'test'
+  ...
+# Subtest: rejects windows with result skipped
+ok 81 - rejects windows with result skipped
+  ---
+  duration_ms: 0.148378
+  type: 'test'
+  ...
+# Subtest: rejects windows with result timed_out
+ok 82 - rejects windows with result timed_out
+  ---
+  duration_ms: 0.080637
+  type: 'test'
+  ...
+# Subtest: rejects windows with result empty
+ok 83 - rejects windows with result empty
+  ---
+  duration_ms: 0.18112
+  type: 'test'
+  ...
+# Subtest: rejects a missing windows layer
+ok 84 - rejects a missing windows layer
+  ---
+  duration_ms: 0.089031
+  type: 'test'
+  ...
+# Subtest: rejects absent results instead of reporting a false green check
+ok 85 - rejects absent results instead of reporting a false green check
+  ---
+  duration_ms: 0.102587
+  type: 'test'
+  ...
+# Subtest: ordinary pushes and PR changes reach policy without opting into installers by default
+ok 86 - ordinary pushes and PR changes reach policy without opting into installers by default
+  ---
+  duration_ms: 3.256959
+  type: 'test'
+  ...
+# Subtest: the policy selects both full tests and installer packaging for the same revision
+ok 87 - the policy selects both full tests and installer packaging for the same revision
+  ---
+  duration_ms: 0.524311
+  type: 'test'
+  ...
+# Subtest: basic frontend checks always run but complete test shards require opt-in
+ok 88 - basic frontend checks always run but complete test shards require opt-in
+  ---
+  duration_ms: 0.662422
+  type: 'test'
+  ...
+# Subtest: ordinary Windows checks avoid production build, test execution, Release linking and NSIS
+ok 89 - ordinary Windows checks avoid production build, test execution, Release linking and NSIS
+  ---
+  duration_ms: 1.844453
+  type: 'test'
+  ...
+# Subtest: development compilation has a real dev URL and keeps production features for installers
+ok 90 - development compilation has a real dev URL and keeps production features for installers
+  ---
+  duration_ms: 0.42921
+  type: 'test'
+  ...
+# Subtest: the manual installer reuses both full validation layers without bypassing tests
+ok 91 - the manual installer reuses both full validation layers without bypassing tests
+  ---
+  duration_ms: 0.316429
+  type: 'test'
+  ...
+# Subtest: the ready gate receives every requested layer even after failures or cancellations
+ok 92 - the ready gate receives every requested layer even after failures or cancellations
+  ---
+  duration_ms: 0.225204
+  type: 'test'
+  ...
+# Subtest: shared setup installs the lockfile and workflows keep untrusted event text out of shell code
+ok 93 - shared setup installs the lockfile and workflows keep untrusted event text out of shell code
+  ---
+  duration_ms: 0.361009
+  type: 'test'
+  ...
+1..93
+# tests 93
+# suites 0
+# pass 93
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 694.593802

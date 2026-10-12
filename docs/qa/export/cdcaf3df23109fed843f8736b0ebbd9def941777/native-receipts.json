@@ -1,0 +1,102 @@
+[
+  {
+    "format": "html",
+    "fileName": "windows-report.html",
+    "status": "saved",
+    "receipt": {
+      "byteLength": 141969,
+      "diagnostics": [],
+      "fontManifest": "system-fonts/unverified",
+      "mimeType": "text/html;charset=utf-8",
+      "profileId": "research-report/v1",
+      "renderKey": "3330237db88c2e98e3899f3bfad193deedd51f38ba94259ae7aa41ee129a8c9f",
+      "renderer": "liteasy-static-document/v1",
+      "requestId": "93db8444-edd3-4ab3-9eda-09123c9d73d6",
+      "sha256": "70e27310f31514b84e80b3aca98639853e50eeb728ff2cbd947d82d392ea68a6",
+      "sourceDigest": "fc1aa5c6209bd4e05a49384f514cea7ee8229b2d7585fa48da69c2d474baef62",
+      "sources": [
+        {
+          "identity": "explicit-local-file",
+          "sha256": "e6f4812b0940451fb3eea90863e5659e6f108a28f5fa333e75d03583c2a16fe3",
+          "state": "pinned"
+        }
+      ],
+      "version": "liteasy.export-receipt/v1"
+    }
+  },
+  {
+    "format": "docx",
+    "fileName": "windows-report.docx",
+    "status": "saved",
+    "receipt": {
+      "byteLength": 38173,
+      "diagnostics": [],
+      "fontManifest": "system-fonts/unverified",
+      "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "profileId": "research-report/v1",
+      "renderKey": "8ce9f2d9038328226ab4c0d4d4a10521e19dd4e815aa7f354062d80226d50afa",
+      "renderer": "docx/9.5.1",
+      "requestId": "606fe5ec-9d14-4b2d-b817-ac4c09dcf3e9",
+      "sha256": "236d8b68d7ae372398ea9d7b8f373675c78ba597790e492cf2ce2aed604ff606",
+      "sourceDigest": "fc1aa5c6209bd4e05a49384f514cea7ee8229b2d7585fa48da69c2d474baef62",
+      "sources": [
+        {
+          "identity": "explicit-local-file",
+          "sha256": "e6f4812b0940451fb3eea90863e5659e6f108a28f5fa333e75d03583c2a16fe3",
+          "state": "pinned"
+        }
+      ],
+      "version": "liteasy.export-receipt/v1"
+    }
+  },
+  {
+    "format": "markdown",
+    "fileName": "windows-report.zip",
+    "status": "saved",
+    "receipt": {
+      "byteLength": 106067,
+      "diagnostics": [],
+      "fontManifest": "system-fonts/unverified",
+      "mimeType": "application/zip",
+      "profileId": "research-report/v1",
+      "renderKey": "8334c9a162266f98a1ea8514e68ac8d0cf84d13bccc47a4c4d8fc31e148a2abf",
+      "renderer": "liteasy-static-document/v1",
+      "requestId": "90a38174-7b8c-4561-8ac0-2d73efea4c8f",
+      "sha256": "b60fd40f7657565703b3641a3a119413c2ab1a44996ad322eae3e8de083e8907",
+      "sourceDigest": "fc1aa5c6209bd4e05a49384f514cea7ee8229b2d7585fa48da69c2d474baef62",
+      "sources": [
+        {
+          "identity": "explicit-local-file",
+          "sha256": "e6f4812b0940451fb3eea90863e5659e6f108a28f5fa333e75d03583c2a16fe3",
+          "state": "pinned"
+        }
+      ],
+      "version": "liteasy.export-receipt/v1"
+    }
+  },
+  {
+    "format": "pdf",
+    "fileName": "windows-report.pdf",
+    "status": "saved",
+    "receipt": {
+      "byteLength": 144771,
+      "diagnostics": [],
+      "fontManifest": "system-fonts/unverified",
+      "mimeType": "application/pdf",
+      "profileId": "research-report/v1",
+      "renderKey": "56aec71e2e2e99d70e143a565352be1dcc4c9748387f8bd89f7daaa490753e34",
+      "renderer": "WebView2/154.0.4258.62",
+      "requestId": "80565c92-77be-405a-8a25-aa9f3ac2de96",
+      "sha256": "c19c25a63b95a66c5694a14358daac043fcdb88319705c0c8e6881aa2f364ab5",
+      "sourceDigest": "fc1aa5c6209bd4e05a49384f514cea7ee8229b2d7585fa48da69c2d474baef62",
+      "sources": [
+        {
+          "identity": "explicit-local-file",
+          "sha256": "e6f4812b0940451fb3eea90863e5659e6f108a28f5fa333e75d03583c2a16fe3",
+          "state": "pinned"
+        }
+      ],
+      "version": "liteasy.export-receipt/v1"
+    }
+  }
+]

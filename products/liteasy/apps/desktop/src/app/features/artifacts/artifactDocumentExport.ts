@@ -1,3 +1,8 @@
+import { documentFormats } from "../document-export/documentExport.types";
+import { researchDocumentNodes } from "../document-export/documentCompiler";
+import { documentNodeMarkdown } from "../document-export/documentMarkdown";
+import { documentNodeHtml, printCss } from "../document-export/documentHtml";
+import type { ExportOptions } from "../document-export/documentExport.types";
 import { formatPaperAnchorText, type PaperAnchorEntity } from "../paper-anchors/paperAnchorEntity";
 import { paperAnchorsForArtifact } from "../paper-anchors/paperAnchorAdapters";
 import type { ArtifactOutlineNode, ArtifactTab, ArtifactType } from "./artifact.types";
@@ -50,7 +55,7 @@ function compactMarkdownEvidenceQuote(value: string) {
   if (normalized.length <= maximumMarkdownEvidenceQuoteCharacters) {
     return normalized;
   }
-  return `${normalized.slice(0, maximumMarkdownEvidenceQuoteCharacters)}…（完整证据见原始产物 JSON）`;
+  return `${normalized.slice(0, maximumMarkdownEvidenceQuoteCharacters)}…（证据摘录；可选择完整证据附录）`;
 }
 
 function exportedEvidenceIds(ids: readonly string[]) {
@@ -122,6 +127,7 @@ function sourceFiguresToMarkdown(figures: readonly MineruFigure[], tab: Artifact
     lines.push(`- 图：${safeMarkdownText(figure.id)}`);
     lines.push(`- 来源：${safeMarkdownText(tab.papers?.find((paper) => paper.id === paperId)?.title ?? "引用文献")} · 第 ${figure.page} 页`);
     lines.push(`- 图注：${safeMarkdownText(caption)}`);
+    if (figure.dataUrl) lines.push("", `![${safeMarkdownText(caption)}](${figure.dataUrl})`, "");
     if (evidenceIds.length) {
       lines.push(`- 论文出处：${evidenceIds.join("、")}`);
     }
@@ -153,7 +159,7 @@ function outlineToMarkdown(nodes: readonly ArtifactOutlineNode[], anchors: reado
   const visit = (node: ArtifactOutlineNode, depth: number, path: ReadonlySet<string>) => {
     if (path.has(node.id)) return;
     const evidenceCount = node.evidenceIds?.length ?? 0;
-    lines.push(`${"  ".repeat(depth)}- ${cleanExportText(node.label, anchors)}${evidenceCount ? `（${evidenceCount} 条证据）` : ""}`);
+    lines.push(`${"  ".repeat(depth)}- ${safeMarkdownText(node.label, anchors)}${evidenceCount ? `（${evidenceCount} 条证据）` : ""}`);
     const nextPath = new Set(path).add(node.id);
     (byParent.get(node.id) ?? []).forEach((child) => visit(child, depth + 1, nextPath));
   };
@@ -161,7 +167,7 @@ function outlineToMarkdown(nodes: readonly ArtifactOutlineNode[], anchors: reado
   return lines.join("\n");
 }
 
-function thinReadingToMarkdown(tab: ArtifactTab, anchors: readonly PaperAnchorEntity[]) {
+function thinReadingToMarkdown(tab: ArtifactTab, anchors: readonly PaperAnchorEntity[], options: Partial<ExportOptions> = {}) {
   const document = tab.thinReadingDocument;
   if (!document) return { markdown: "薄读内容缺失。", isV2: false };
   const lines: string[] = [];
@@ -175,7 +181,7 @@ function thinReadingToMarkdown(tab: ArtifactTab, anchors: readonly PaperAnchorEn
     const headingLevel = Math.min(6, node.depth + 2);
     const safeText = (value: string) => document.version === "liteasy.thin-reading/v2"
       ? safeMarkdownText(value, anchors) : cleanExportText(value, anchors);
-    lines.push(`${"#".repeat(headingLevel)} ${safeText(node.title)}`, "", safeText(node.summary), "");
+    lines.push(`${"#".repeat(headingLevel)} ${safeMarkdownText(node.title, anchors)}`, "", removeInternalEvidenceIds(node.summary, anchors), "");
     const legacyEvidence = document.version === "liteasy.thin-reading/v1"
       ? document.nodes[nodeId]?.evidence
       : undefined;
@@ -190,28 +196,36 @@ function thinReadingToMarkdown(tab: ArtifactTab, anchors: readonly PaperAnchorEn
       exportedEvidenceSpanIds.add(evidence.id);
       return true;
     });
-    if (unexportedEvidence.length) {
+    if (unexportedEvidence.length && options.evidenceMode === "references") {
+      lines.push("**来源索引**", "", ...unexportedEvidence.map(evidence => `- ${safeMarkdownText(tab.papers?.find(paper => paper.id === evidence.paperId)?.title ?? "引用文献")} · 第 ${evidence.page ?? "?"} 页`), "");
+    }
+    if (unexportedEvidence.length && options.evidenceMode !== "references") {
       lines.push("**论文证据**", "");
       unexportedEvidence.forEach((evidence) => {
-        lines.push(`> 第 ${evidence.page ?? "?"} 页：${safeText(compactMarkdownEvidenceQuote(evidence.quote))}`, "");
+        lines.push(`> 第 ${evidence.page ?? "?"} 页：${safeText(options.evidenceMode === "full_appendix" ? evidence.quote : compactMarkdownEvidenceQuote(evidence.quote))}`, "");
       });
     }
-    node.childIds.forEach(visit);
+    if (options.scope !== "selected_nodes") node.childIds.forEach(visit);
   };
-  visit(document.rootNodeId);
-  Object.keys(document.nodes).forEach(visit);
+  if (options.scope === "selected_nodes" || options.scope === "current_subtree") {
+    if (!options.nodeIds?.length || options.nodeIds.some(id => !document.nodes[id])) throw new Error("请选择有效的薄读节点。");
+    options.nodeIds.forEach(visit);
+  } else {
+    visit(document.rootNodeId);
+    Object.keys(document.nodes).forEach(visit);
+  }
   if (document.version === "liteasy.thin-reading/v2") {
-    const visuals = Object.values(document.nodes).flatMap((node) => node.visualizations);
+    const visuals = [...visited].flatMap(id => document.nodes[id].visualizations);
     const visual = visualizationToMarkdown(visuals, anchors);
     if (visual) lines.push("", visual);
-    const sourceFigures = sourceFiguresToMarkdown(tab.figures ?? [], tab, document);
+    const sourceFigures = sourceFiguresToMarkdown(tab.figures ?? [], tab, { ...document, nodes: Object.fromEntries([...visited].map(id => [id, document.nodes[id]])) } as typeof document);
     if (sourceFigures) lines.push("", sourceFigures);
     return { markdown: lines.join("\n").trim(), isV2: true };
   }
   return { markdown: lines.join("\n").trim(), isV2: false };
 }
 
-export function createArtifactMarkdown(tab: ArtifactTab, options: { includeExportedAt?: boolean } = {}) {
+export function createArtifactSourceMarkdown(tab: ArtifactTab, options: Partial<ExportOptions> & { includeExportedAt?: boolean } = {}) {
   const anchors = paperAnchorsForArtifact(tab);
   if (tab.type === "skill_doc") return `${removeInternalEvidenceIds(tab.markdown?.trim() || `# ${tab.title}`, anchors)}\n`;
 
@@ -228,22 +242,22 @@ export function createArtifactMarkdown(tab: ArtifactTab, options: { includeExpor
 
   let isV2ThinReading = false;
   if (tab.type === "thin_reading") {
-    const thinReadingMarkdown = thinReadingToMarkdown(tab, anchors);
+    const thinReadingMarkdown = thinReadingToMarkdown(tab, anchors, options);
     lines.push(thinReadingMarkdown.markdown);
-    if (tab.answer?.trim()) lines.push("", "## Agent 分析", "", thinReadingMarkdown.isV2 ? safeMarkdownText(tab.answer, anchors) : cleanExportText(tab.answer, anchors));
+    if ((!options.scope || options.scope === "full_saved") && tab.answer?.trim()) lines.push("", "## Agent 分析", "", removeInternalEvidenceIds(tab.answer, anchors));
     isV2ThinReading = thinReadingMarkdown.isV2;
   } else {
     const outline = tab.outlineNodes?.length
       ? outlineToMarkdown(tab.outlineNodes, anchors)
-      : cleanExportText(tab.outlineMarkdown ?? "", anchors);
+      : removeInternalEvidenceIds(tab.outlineMarkdown ?? "", anchors);
     if (outline) lines.push("## 结构化内容", "", outline, "");
-    if (tab.answer?.trim()) lines.push("## Agent 分析", "", cleanExportText(tab.answer, anchors), "");
+    if (tab.answer?.trim()) lines.push("## Agent 分析", "", removeInternalEvidenceIds(tab.answer, anchors), "");
     if (!outline && !tab.answer?.trim() && tab.preview) {
       lines.push("## 结构化内容", "", `- ${tab.preview.rootLabel}`, ...tab.preview.nodes.map((node) => `  - ${node}`), "");
     }
   }
 
-  if (tab.analysis?.evidence.length && !isV2ThinReading) {
+  if (tab.analysis?.evidence.length && !isV2ThinReading && (!options.scope || options.scope === "full_saved")) {
     lines.push("## 证据索引", "");
     tab.analysis.evidence.forEach((evidence, index) => {
       lines.push(`${index + 1}. **${safeMarkdownText(evidence.paperTitle)} · 第 ${evidence.page} 页**`, `   > ${safeMarkdownText(evidence.quote)}`, "");
@@ -270,48 +284,12 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#39;");
 }
 
-function inlineMarkdown(value: string) {
-  return escapeHtml(value)
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/\$([^$\n]+)\$/g, '<span class="math">$1</span>');
+export function createArtifactMarkdown(tab: ArtifactTab, options: { includeExportedAt?: boolean } = {}) {
+  return researchDocumentNodes(createArtifactSourceMarkdown(tab, options)).nodes.map(documentNodeMarkdown).join("").trimEnd() + "\n";
 }
 
 export function artifactMarkdownToHtml(markdown: string) {
-  const output: string[] = [];
-  let codeFence: { language: string; lines: string[] } | undefined;
-  markdown.split(/\r?\n/).forEach((line) => {
-    const fence = line.match(/^```(.*)$/);
-    if (fence) {
-      if (codeFence) {
-        output.push(`<pre><code class="language-${escapeHtml(codeFence.language)}">${escapeHtml(codeFence.lines.join("\n"))}</code></pre>`);
-        codeFence = undefined;
-      } else {
-        codeFence = { language: fence[1].trim(), lines: [] };
-      }
-      return;
-    }
-    if (codeFence) {
-      codeFence.lines.push(line);
-      return;
-    }
-    const heading = line.match(/^(#{1,6})\s+(.+)$/);
-    if (heading) {
-      const level = heading[1].length;
-      output.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`);
-    } else if (/^>\s?/.test(line)) {
-      output.push(`<blockquote>${inlineMarkdown(line.replace(/^>\s?/, ""))}</blockquote>`);
-    } else if (/^\s*[-*]\s+/.test(line)) {
-      const indent = Math.min(6, Math.floor((line.match(/^\s*/)?.[0].length ?? 0) / 2));
-      output.push(`<div class="list-item depth-${indent}">• ${inlineMarkdown(line.replace(/^\s*[-*]\s+/, ""))}</div>`);
-    } else if (/^\s*\d+\.\s+/.test(line)) {
-      output.push(`<div class="list-item">${inlineMarkdown(line.trim())}</div>`);
-    } else if (line.trim()) {
-      output.push(`<p>${inlineMarkdown(line)}</p>`);
-    }
-  });
-  if (codeFence) output.push(`<pre><code>${escapeHtml(codeFence.lines.join("\n"))}</code></pre>`);
-  return output.join("\n");
+  return researchDocumentNodes(markdown).nodes.map(node => documentNodeHtml(node)).join("\n");
 }
 
 export function createArtifactHtml(tab: ArtifactTab) {
@@ -323,21 +301,7 @@ export function createArtifactHtml(tab: ArtifactTab) {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>
-  <style>
-    :root { color: #26383d; background: #f5f5f2; font-family: Inter, "Noto Sans SC", system-ui, sans-serif; }
-    body { box-sizing: border-box; max-width: 900px; margin: 0 auto; padding: 52px 64px 80px; background: #fff; }
-    h1, h2, h3, h4, h5, h6 { color: #244f4c; line-height: 1.28; break-after: avoid; }
-    h1 { padding-bottom: 14px; border-bottom: 1px solid #cedbd7; font-size: 30px; }
-    h2 { margin-top: 34px; font-size: 22px; } h3 { margin-top: 26px; font-size: 18px; }
-    p, .list-item, blockquote { font-size: 14px; line-height: 1.75; overflow-wrap: anywhere; }
-    blockquote { margin: 12px 0; padding: 8px 14px; border-left: 3px solid #83aca5; background: #f4f8f6; }
-    .list-item { margin: 5px 0; padding-left: 18px; } .depth-1 { padding-left: 40px; } .depth-2 { padding-left: 62px; }
-    code { padding: 2px 5px; border-radius: 4px; background: #eef2f1; font-family: "SFMono-Regular", Consolas, monospace; }
-    pre { overflow: auto; padding: 16px; border: 1px solid #d8e1de; border-radius: 6px; background: #f6f8f7; white-space: pre-wrap; }
-    pre code { padding: 0; background: transparent; } .math { font-family: "Times New Roman", serif; font-style: italic; }
-    @page { size: A4; margin: 16mm; }
-    @media print { :root, body { background: #fff; } body { max-width: none; padding: 0; } pre, blockquote { break-inside: avoid; } }
-  </style>
+  <style>${printCss}</style>
 </head>
 <body>${artifactMarkdownToHtml(markdown)}</body>
 </html>`;
@@ -410,7 +374,7 @@ function combinePdfBytes(chunks: readonly Uint8Array[]) {
   return output;
 }
 
-function createPdfDocument(pageImages: readonly Uint8Array[]) {
+export function createCompatibilityImagePdf(pageImages: readonly Uint8Array[]) {
   const encoder = new TextEncoder();
   const chunks: Uint8Array[] = [];
   const offsets: number[] = [0];
@@ -440,7 +404,7 @@ function createPdfDocument(pageImages: readonly Uint8Array[]) {
     const pageObject = pageObjectNumbers[index];
     const contentObject = pageObject + 1;
     const imageObject = pageObject + 2;
-    const content = "q\n595.28 0 0 -841.89 0 841.89 cm\n/Im0 Do\nQ";
+    const content = "q\n595.28 0 0 841.89 0 0 cm\n/Im0 Do\nQ";
     addObject(pageObject, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /XObject << /Im0 ${imageObject} 0 R >> >> /Contents ${contentObject} 0 R >>`);
     addObject(contentObject, `<< /Length ${encoder.encode(content).length} >>\nstream\n${content}\nendstream`);
     offsets[imageObject] = length;
@@ -458,7 +422,8 @@ function createPdfDocument(pageImages: readonly Uint8Array[]) {
   return combinePdfBytes(chunks);
 }
 
-export function createArtifactPdf(tab: ArtifactTab) {
+/** Legacy image PDF: no searchable body text. Never the report service default. */
+export function createCompatibilityArtifactPdf(tab: ArtifactTab) {
   const markdown = createArtifactMarkdown(tab);
   const pages: PdfCanvasPage[] = [];
   let page: PdfCanvasPage | undefined;
@@ -536,18 +501,19 @@ export function createArtifactPdf(tab: ArtifactTab) {
 
   if (!pages.length) startPage();
   const images = pages.map(({ canvas }) => decodeBase64(canvas.toDataURL("image/jpeg", 0.92).split(",")[1]));
-  return createPdfDocument(images);
+  return createCompatibilityImagePdf(images);
 }
 
-export function createArtifactExportPayload(
+export function createCompatibilityArtifactExportPayload(
   tab: ArtifactTab,
   format: ArtifactDocumentFormat
 ): ArtifactExportPayload {
+  if (format === "docx") throw new Error("DOCX 请使用统一文档导出服务。");
   const fileStem = safeFileStem(tab.title);
   if (format === "markdown") {
     return {
       artifactId: tab.artifactId,
-      content: `\uFEFF${createArtifactMarkdown(tab)}`,
+      content: createArtifactMarkdown(tab),
       contentEncoding: "utf8",
       fileName: `${fileStem}.md`,
       format,
@@ -567,7 +533,7 @@ export function createArtifactExportPayload(
   }
   return {
     artifactId: tab.artifactId,
-    content: encodeBase64(createArtifactPdf(tab)),
+    content: encodeBase64(createCompatibilityArtifactPdf(tab)),
     contentEncoding: "base64",
     fileName: `${fileStem}.pdf`,
     format,
@@ -577,15 +543,14 @@ export function createArtifactExportPayload(
 
 export function downloadArtifactPayload(payload: ArtifactExportPayload) {
   if (payload.contentEncoding === "base64") {
-    downloadBlob(payload.fileName, decodeBase64(payload.content), "application/pdf");
+    downloadBlob(payload.fileName, decodeBase64(payload.content), payload.container === "zip" ? "application/zip" : documentFormats[payload.format].mimeType);
     return;
   }
-  const mimeType = payload.format === "markdown"
-    ? "text/markdown;charset=utf-8"
-    : "text/html;charset=utf-8";
-  downloadBlob(payload.fileName, payload.content, mimeType);
+  downloadBlob(payload.fileName, payload.content, documentFormats[payload.format].mimeType);
 }
 
 export async function exportArtifactDocument(tab: ArtifactTab, format: ArtifactDocumentFormat) {
-  downloadArtifactPayload(createArtifactExportPayload(tab, format));
+  const { compileArtifactDocument } = await import("../document-export/artifactExportAdapter");
+  const { renderExportDocument } = await import("../document-export/documentExportService");
+  downloadArtifactPayload(await renderExportDocument(await compileArtifactDocument(tab), format));
 }

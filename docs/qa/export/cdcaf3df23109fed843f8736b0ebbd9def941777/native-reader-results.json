@@ -1,0 +1,32 @@
+{
+  "windows-page-2.png": {
+    "top_rgb": [
+      236,
+      36,
+      36
+    ],
+    "bottom_rgb": [
+      37,
+      72,
+      238
+    ],
+    "status": "PASS"
+  },
+  "windows-poppler-page-2.png": {
+    "top_rgb": [
+      236,
+      36,
+      36
+    ],
+    "bottom_rgb": [
+      37,
+      72,
+      238
+    ],
+    "status": "PASS"
+  },
+  "moved_markdown_zip": {
+    "status": "PASS",
+    "images": 1
+  }
+}

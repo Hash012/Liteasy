@@ -1,3 +1,4 @@
+import { researchRemarkPlugins } from "./researchParser";
 import { researchContentPlugins } from "./contentProfile";
 import { useResourceReveal, observeRenderedResource, rehypeResourcePositions } from "../resource-links/resourceReveal";
 import {
@@ -8,8 +9,6 @@ import { Button, Tooltip } from "@fluentui/react-components";
 import { CheckmarkRegular, CopyRegular } from "@fluentui/react-icons";
 import ReactMarkdown, { type Components, type Options, type UrlTransform } from "react-markdown";
 import rehypeKatex from "rehype-katex";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
 import { remarkPaperAnchorReferences, type PaperAnchorEntity } from "../paper-anchors/paperAnchorEntity";
 import { remarkLiteasyLinks, safeLiteasyMarkdownUrl } from "./liteasyMarkdownLinks";
 import { ResourceReferencesContext, ReferenceSourceContext } from "../resource-links/ResourceReferencesContext";
@@ -24,7 +23,7 @@ const MermaidPreview = lazy(() => import("../mermaid/MermaidPreview").then((modu
 const StreamingContext = createContext(false);
 const InlineContext = createContext(false);
 const emptyPlugins: NonNullable<Options["remarkPlugins"]> = [];
-const baseRemarkPlugins: NonNullable<Options["remarkPlugins"]> = [remarkGfm, remarkMath];
+const baseRemarkPlugins: NonNullable<Options["remarkPlugins"]> = researchRemarkPlugins;
 const mathPlugin: NonNullable<Options["rehypePlugins"]> = [[rehypeKatex, { maxExpand: 500, maxSize: 20, trust: false }]];
 const emptyAnchors: readonly PaperAnchorEntity[] = [];
 

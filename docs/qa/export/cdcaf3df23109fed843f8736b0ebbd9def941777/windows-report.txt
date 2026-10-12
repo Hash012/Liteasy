@@ -1,0 +1,10 @@
+合成 Windows 报告
+这是一份本机导出测试，不是真实论文。
+列 A
+列 B
+中文
+WINDOWS_TABLE_TAIL
+𝑎
+𝑏+ √𝑥
+
+WINDOWS_SOURCE_LAST_PARAGRAPH

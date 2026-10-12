@@ -1,3 +1,4 @@
+import { DocumentExportContext } from "../features/document-export/documentExportPort";
 import { useCommunitySourceController } from "../controllers/useCommunitySourceController";
 import { useSpaceOperationsController } from "../controllers/useSpaceOperationsController";
 import { usePublicationPreview } from "../features/forum/usePublicationPreview";
@@ -630,9 +631,6 @@ export function AppShell({
       });
     }
   });
-  const artifactExports = useArtifactExportController({
-    client: artifactExportClientRef.current
-  });
   const {
     artifactCatalog,
     artifactCatalogLoadState,
@@ -1195,6 +1193,9 @@ export function AppShell({
     getPapers: () => workspaceStoreRef.current.getState().papers,
     getSettings: () => settingsStoreRef.current.getState(),
     openEvidence: openEvidenceInReader
+  });
+  const artifactExports = useArtifactExportController({
+    client: artifactExportClientRef.current!, sessionGeneration: getAccountSessionGeneration(), scopeId: objectWorkbench.repository.scopeId, assets: objectWorkbench.agentAssets
   });
   const communitySource = useCommunitySourceController({
     actorKey: JSON.stringify([accountSession?.issuer, accountSession?.userId, resolveIntuechoEndpoint()]), client: forum.client,
@@ -2776,6 +2777,7 @@ export function AppShell({
     <OnboardingContext.Provider value={onboarding}>
     <ObjectWorkbenchContext.Provider value={objectWorkbench.port}>
     <ExtensionWorkbenchContext.Provider value={extensionWorkbench}>
+    <DocumentExportContext.Provider value={artifactExports.actions}>
     <VisualAssetContext.Provider value={objectWorkbench.agentAssets}>
     <ResourceReferencesContext.Provider value={resourceLinks}>
     <MarkdownEditingContext.Provider value={{ mode: settingsState["view.markdown_mode"] ?? "live", autosave: settingsState["view.markdown_autosave"] !== false }}>
@@ -2968,6 +2970,7 @@ export function AppShell({
     </MarkdownEditingContext.Provider>
     </ResourceReferencesContext.Provider>
     </VisualAssetContext.Provider>
+    </DocumentExportContext.Provider>
     </ExtensionWorkbenchContext.Provider>
     </ObjectWorkbenchContext.Provider>
     </OnboardingContext.Provider>

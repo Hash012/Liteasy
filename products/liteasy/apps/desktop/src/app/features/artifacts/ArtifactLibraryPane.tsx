@@ -76,7 +76,9 @@ type ArtifactLibraryPaneProps = {
 const formatLabels: Record<ArtifactExportRecord["format"], string> = {
   html: "HTML",
   markdown: "Markdown",
-  pdf: "PDF"
+  pdf: "PDF",
+  docx: "DOCX",
+  unknown: "未知格式（只读）"
 };
 
 function displayDate(value?: string) {
@@ -540,6 +542,7 @@ function ExportRecordList({
       {error ? <div className="artifact-library-inline-error" role="alert">{error}</div> : null}
       <ul aria-label="已导出产物" className="artifact-library-list">
         {records.map((record) => {
+          const unsupported = record.status === "unsupported";
           const missing = record.location === "desktop" && record.status === "missing";
           return (
             <li className="artifact-library-row artifact-library-export-row" key={record.id}>
@@ -549,7 +552,7 @@ function ExportRecordList({
                   {record.title} · {formatLabels[record.format]} · {displayDate(record.exportedAt)}
                 </span>
                 <span className={`artifact-library-status${missing ? " is-missing" : ""}`}>
-                  {record.location === "browser"
+                  {unsupported ? `此版本不支持 ${record.originalFormat ?? "此格式"}，记录已保留。` : record.location === "browser"
                     ? "由浏览器管理"
                     : missing ? "文件不可用" : "文件可用"}
                 </span>
@@ -567,7 +570,7 @@ function ExportRecordList({
                       <Button
                         appearance="subtle"
                         aria-label={`打开文件：${record.fileName}`}
-                        disabled={missing}
+                        disabled={missing || unsupported}
                         icon={<OpenRegular />}
                         onClick={() => onOpen(record.id)}
                         size="small"
@@ -577,7 +580,7 @@ function ExportRecordList({
                       <Button
                         appearance="subtle"
                         aria-label={`在文件夹中显示：${record.fileName}`}
-                        disabled={missing}
+                        disabled={missing || unsupported}
                         icon={<FolderOpenRegular />}
                         onClick={() => onReveal(record.id)}
                         size="small"
@@ -590,6 +593,7 @@ function ExportRecordList({
                     appearance="subtle"
                     aria-label={`移除导出记录：${record.fileName}`}
                     icon={<DeleteRegular />}
+                    disabled={unsupported}
                     onClick={() => onRemove(record.id)}
                     size="small"
                   />

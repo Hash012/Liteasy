@@ -1,3 +1,4 @@
+import type { ExportDocument, ExportOptions, DocumentFormat } from "../document-export/documentExport.types";
 import type { AgentAsset, AgentAssetAdapter, AgentAssetRead } from "./agentAsset.types";
 import { AgentAssetError } from "./agentAsset.types";
 import { createResourceFileService, parseResourceUri } from "./resourceFileService";
@@ -17,6 +18,7 @@ export type ResourceTypeDefinition = {
   context: ResourceCapability<NonNullable<AgentAssetAdapter["context"]>>;
   write: ResourceCapability<NonNullable<AgentAssetAdapter["write"]>>;
   file: ResourceCapability<ResourceProvider>;
+  export?: ResourceCapability<{ formats: readonly DocumentFormat[]; compile(path: string, options?: Partial<ExportOptions>): Promise<ExportDocument> }>;
   navigation: ResourceCapability<(path: string) => Promise<{ path: string; revision: string; scopeId: string }>>;
 };
 function assertCapability(value: unknown, name: string, callable = true): asserts value is ResourceCapability<unknown> {
@@ -36,6 +38,10 @@ export function createResourceTypeRegistry(active: () => boolean) {
     if (!["liteasy-research-markdown/v1", "literal/v1"].includes(definition.profile) || !["content", "native"].includes(definition.viewId)) throw new Error("未注册的内容 profile/view");
     for (const method of ["accepts", "stat", "search", "read"] as const) if (typeof definition.source?.[method] !== "function") throw new Error(`缺少 source.${method}`);
     assertCapability(definition.context, "context"); assertCapability(definition.write, "write"); assertCapability(definition.file, "file", false); assertCapability(definition.navigation, "navigation");
+    if (definition.export) {
+      assertCapability(definition.export, "export", false);
+      if (definition.export.supported && (!definition.export.implementation.formats.length || definition.export.implementation.formats.some(format => !["pdf", "markdown", "docx", "html"].includes(format)) || typeof definition.export.implementation.compile !== "function")) throw new Error("export: 缺少格式或静态适配器");
+    }
     if (definition.file.supported) {
       const provider = definition.file.implementation;
       for (const method of ["stat", "list", "read"] as const) if (typeof provider[method] !== "function") throw new Error(`缺少 provider.${method}`);
@@ -56,6 +62,14 @@ export function createResourceTypeRegistry(active: () => boolean) {
   }
   return {
     register, files,
+    async compileExport(path: string, format: DocumentFormat, options?: Partial<ExportOptions>) {
+      check();
+      const matches = [...definitions.values()].filter(definition => definition.source.accepts(path));
+      if (matches.length !== 1 || !matches[0].export?.supported) throw new AgentAssetError("unavailable", matches[0]?.export?.supported === false ? matches[0].export.reason : "此类型尚未注册静态导出能力。");
+      const capability = matches[0].export.implementation;
+      if (!capability.formats.includes(format)) throw new AgentAssetError("unavailable", "此类型不支持所选文档格式。");
+      const document = await capability.compile(path, options); check(); return document;
+    },
     async navigate(path: string) {
       check();
       const definition = [...definitions.values()].find(item => item.source.accepts(path));
@@ -64,6 +78,7 @@ export function createResourceTypeRegistry(active: () => boolean) {
     },
     adapters: () => [...definitions.values()].map(adapter),
     matrix: () => [...definitions.values()].map(definition => ({ typeId: definition.typeId, owner: definition.owner, nativeCodec: definition.nativeCodec,
+      export: definition.export?.supported ? definition.export.implementation.formats : definition.export?.reason ?? "尚未注册静态导出适配器",
       profile: definition.profile, viewId: definition.viewId, navigation: definition.navigation.supported ? "supported" : definition.navigation.reason, fixtures: definition.fixtureIds,
       context: definition.context.supported ? "supported" : definition.context.reason,
       write: definition.write.supported ? "supported" : definition.write.reason,

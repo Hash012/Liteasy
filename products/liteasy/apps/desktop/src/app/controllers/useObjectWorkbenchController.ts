@@ -1,3 +1,5 @@
+import { getAccountSessionGeneration } from "../features/account/accountSessionStorage";
+import { compileBoardDocument } from "../features/document-export/boardExportAdapter";
 import { getGenerationPrompt } from "../features/ai-prompts/generationPrompts";
 import { createCanvasArchive } from "../features/boards/canvasArchive";
 import { createExtensionPackageStore } from "../features/extensions/extensionPackageStore";
@@ -1101,6 +1103,7 @@ export function useObjectWorkbenchController(input: {
     ...boardFiles,
     extensions,
     agentAssets,
+    compileBoardReport: async (options: Partial<import("../features/document-export/documentExport.types").ExportOptions>, signal?: AbortSignal) => { if (!board) throw new Error("请先选择白板。"); const generation = getAccountSessionGeneration(); const document = await compileBoardDocument(board, repository, { options, signal, assets: agentAssets, blockRegistry: extensions.snapshot.registry, active: () => generation === getAccountSessionGeneration() }); document.sessionGeneration = generation; return document; },
     exportBoardBundle: async () => { if (!board) throw new Error("请先选择白板。"); return createCanvasArchive(board, repository, agentAssets); },
     repository,
     port,

@@ -10,6 +10,8 @@ mod data_location;
 mod desktop_identity;
 mod device_control;
 mod direct_model;
+mod document_export_cli;
+mod document_pdf;
 mod external_navigation;
 mod headless_cli;
 mod local_archive;
@@ -54,12 +56,22 @@ fn main() {
         }
         return;
     }
-    if let Some(exit_code) = agent_host::run_external_mode() {
-        std::process::exit(exit_code);
+    let export_cli =
+        match document_export_cli::parse_args(&std::env::args().skip(1).collect::<Vec<_>>()) {
+            Ok(value) => value,
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(2);
+            }
+        };
+    let export_cli_setup = export_cli.clone();
+    if export_cli.is_none() {
+        if let Some(exit_code) = agent_host::run_external_mode() {
+            std::process::exit(exit_code);
+        }
     }
-
     let mut context = tauri::generate_context!();
-    if local_dev::recovery_scope().is_some() {
+    if local_dev::recovery_scope().is_some() || export_cli.is_some() {
         for window in &mut context.config_mut().app.windows {
             window.create = false;
         }
@@ -69,7 +81,7 @@ fn main() {
             Some(tauri::utils::config::Csp::Policy(csp.into()));
     }
     let mut builder = tauri::Builder::default();
-    if local_dev::recovery_scope().is_none() {
+    if local_dev::recovery_scope().is_none() && export_cli.is_none() {
         builder = builder
             .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
                 native_open::enqueue_argv(
@@ -89,8 +101,25 @@ fn main() {
         .manage(paper_fulltext::FullTextState::default())
         .manage(semantic_index::SemanticIndexState::default())
         .manage(local_library::LocalLibraryWatchState::default())
-        .setup(|app| {
+        .setup(move |app| {
             data_location::initialize(app.handle()).map_err(std::io::Error::other)?;
+            if let Some(request) = export_cli_setup {
+                app.manage(document_export_cli::ExportCliState::new(request));
+                tauri::WebviewWindowBuilder::new(
+                    app,
+                    "document-export-cli",
+                    tauri::WebviewUrl::App("document-export-cli.html".into()),
+                )
+                .visible(false)
+                .incognito(true)
+                .data_directory(
+                    data_location::root(app.handle())
+                        .map_err(std::io::Error::other)?
+                        .join("document-export-cli-webview"),
+                )
+                .build()?;
+                return Ok(());
+            }
             if local_dev::recovery_scope().is_some() {
                 let root = local_dev::profile_root()
                     .ok_or_else(|| std::io::Error::other("Missing recovery root"))?;
@@ -212,12 +241,19 @@ fn main() {
                 agent_artifacts::delete_local_agent_artifact,
                 object_store::object_store_get,
                 object_store::object_store_list,
+                object_store::object_store_snapshot,
                 object_store::object_store_commit,
                 agent_state::load_agent_state,
                 agent_state::save_agent_state,
                 artifact_catalog_state::load_artifact_catalog_state,
                 artifact_catalog_state::save_artifact_catalog_state,
                 artifact_export::export_artifact_document,
+                document_pdf::document_pdf_capability,
+                document_export_cli::document_export_cli_source,
+                document_export_cli::document_export_cli_image,
+                document_export_cli::document_export_cli_complete,
+                document_pdf::render_document_pdf,
+                document_pdf::cancel_document_pdf,
                 artifact_export::list_artifact_exports,
                 artifact_export::open_artifact_export,
                 artifact_export::remove_artifact_export,
@@ -272,7 +308,11 @@ fn main() {
         })
         .build(context)
         .expect("error while building Liteasy desktop");
-    app.run(|app_handle, event| {
+    let export_cli_mode = export_cli.is_some();
+    app.run(move |app_handle, event| {
+        if export_cli_mode {
+            return;
+        }
         #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
         if let tauri::RunEvent::Opened { urls } = &event {
             native_open::enqueue_urls(app_handle, urls.clone());

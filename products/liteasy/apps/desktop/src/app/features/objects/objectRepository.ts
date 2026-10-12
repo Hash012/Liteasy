@@ -1191,6 +1191,21 @@ export function createObjectRepository(
     getRunRecord: async (runId: string) =>
       (await storage.get(`run/${runId}`))?.value as
         { status: string; createdAt: string; question: string } | undefined,
+    captureBoardExportSnapshot: async (boardRef: ObjectRef, selectedIds?: readonly string[]) => {
+      if (!storage.snapshot) throw new ObjectStoreError("persistence_failed", "当前存储不能固定白板布局快照。");
+      const rows = await storage.snapshot([headKey(boardRef.objectId), `placement/${boardRef.objectId}/`, `edge/${boardRef.objectId}/`, `block-presentation/${boardRef.objectId}/`]);
+      const board = readObject(rows.find(row => row.key === headKey(boardRef.objectId)) ?? null);
+      if (board.kind !== "workspace.board" || board.lifecycle !== "active" || board.revision !== boardRef.revision) throw new ObjectStoreError("revision_conflict", "历史白板布局不可用，请打开当前白板后导出。");
+      const placements = rows.filter(row => row.key.startsWith(`placement/${boardRef.objectId}/`)).map(row => row.value as Placement);
+      if (placements.length > 200) throw new ObjectStoreError("persistence_failed", "单次导出最多 200 张卡片，请拆分白板。");
+      const edges = rows.filter(row => row.key.startsWith(`edge/${boardRef.objectId}/`)).map(row => row.value as BoardConnection);
+      const members = selectedIds ? placements.filter(p => selectedIds.includes(p.placementId)) : placements;
+      if (selectedIds && members.length !== new Set(selectedIds).size) throw new ObjectStoreError("object_not_found", "所选白板卡片已变化。");
+      const objects = await Promise.all([...new Map(members.map(p => [JSON.stringify(p.ref), p.ref])).values()].map(get));
+      const presentations = Object.fromEntries(rows.filter(row => row.key.startsWith(`block-presentation/${boardRef.objectId}/`)).map(row => [row.key.slice(`block-presentation/${boardRef.objectId}/`.length), blockPresentationSchema.parse(row.value)]));
+      const structured = await Promise.all(objects.map(async object => ({ ref: refOf(object), block: await (async () => { const row = await storage.get(`visual-block/${object.objectId}/${object.revision}`); return row ? structuredBlockSchema.parse(row.value) : undefined; })() })));
+      return { board, placements, edges, objects, presentations, structured, layoutVersions: rows.map(({ key, version }) => ({ key, version })) };
+    },
     listEdges: async (boardId: string): Promise<BoardConnection[]> => {
       await resolveLatest(boardId);
       return (await storage.list(`edge/${boardId}/`, "", 1000)).map(

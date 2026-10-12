@@ -1,3 +1,5 @@
+import { createThinReadingFixture } from "./fixtures/thinReadingFixtures";
+import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import { useArtifactExportController } from "../app/controllers/useArtifactExportController";
@@ -9,6 +11,7 @@ const tab: ArtifactTab = {
   answer: "薄读内容",
   artifactId: "artifact-thin-reading",
   title: "薄读",
+  thinReadingDocument: createThinReadingDocument(createThinReadingFixture()),
   type: "thin_reading"
 };
 
@@ -36,6 +39,15 @@ function client(overrides: Partial<ArtifactExportClient> = {}): ArtifactExportCl
 }
 
 describe("useArtifactExportController", () => {
+  test("a prepared A snapshot cannot publish after A -> logout -> A with a new session", async () => {
+    const exportClient = client();
+    const { result, rerender } = renderHook(({ generation }) => useArtifactExportController({ client: exportClient, scopeId: "A", sessionGeneration: generation }), { initialProps: { generation: "session-1" } });
+    let document: Awaited<ReturnType<typeof result.current.actions.compileArtifact>>;
+    await act(async () => { document = await result.current.actions.compileArtifact(tab); });
+    rerender({ generation: "session-3" });
+    await expect(result.current.actions.publish({ artifactId: tab.artifactId, title: tab.title, format: "markdown", fileName: "report.md", content: "body", contentEncoding: "utf8", scopeId: document!.scopeId, sessionGeneration: document!.sessionGeneration })).rejects.toThrow("账号已切换");
+    expect(exportClient.export).not.toHaveBeenCalled();
+  });
   test("reports loading until the initial device export history resolves", async () => {
     let resolveList: (records: ArtifactExportRecord[]) => void = () => undefined;
     const listPromise = new Promise<ArtifactExportRecord[]>((resolve) => {

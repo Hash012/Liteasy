@@ -25,9 +25,9 @@ if (typeof ResizeObserver === "undefined") {
 
 // CodeMirror measures text ranges in a real browser. JSDOM has no layout engine;
 // layout, scrolling and cursor placement are covered by the browser suite.
-if (!Range.prototype.getClientRects) {
+if (typeof Range !== "undefined" && !Range.prototype.getClientRects) {
   Range.prototype.getClientRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList;
 }
-if (!Range.prototype.getBoundingClientRect) {
+if (typeof Range !== "undefined" && !Range.prototype.getBoundingClientRect) {
   Range.prototype.getBoundingClientRect = () => new DOMRect(0, 0, 0, 0);
 }

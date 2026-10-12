@@ -1,3 +1,7 @@
+import { compileDocument } from "../document-export/documentCompiler";
+import { compileBoardDocument } from "../document-export/boardExportAdapter";
+import { sha256, stableJson } from "../document-export/documentExport.types";
+import { objectText } from "../objects/object.types";
 import { refOf, type ObjectEnvelope } from "../objects/object.types";
 import type { ObjectRepository } from "../objects/objectRepository";
 import { liteasyPath } from "./liteasyPath";
@@ -11,7 +15,7 @@ import { canonicalResourceJson } from "./resourceFileContent";
 /** Object type registration reuses its authoritative repository and existing permission-aware adapter. */
 export function objectResourceType(input: {
   typeId: string; kind: ObjectEnvelope["kind"]; repository: ObjectRepository; adapter: AgentAssetAdapter;
-  active(): boolean; fixtureId: string;
+  active(): boolean; fixtureId: string; assets?: () => import("./agentAssetService").AgentAssetService;
 }): ResourceTypeDefinition {
   const { repository, adapter, typeId } = input;
   const check = () => { if (!input.active()) throw new ResourceFileError("scope_changed", "账号已切换。"); };
@@ -77,6 +81,13 @@ export function objectResourceType(input: {
     return { ...legacy, asset, ...(legacy.content ? { content: { ...legacy.content, binding: { kind: "pinned" as const, path: asset.path, revision: object.revision, scopeId: repository.scopeId }, representationId: `${asset.path}:text/v1` } } : {}) };
   };
   return { typeId, schemaVersion: 1, owner: "ObjectRepository", nativeCodec: input.kind === "workspace.board" ? "liteasy.board-bundle/v1" : "liteasy.object/v1", profile: "liteasy-research-markdown/v1", viewId: "content", fixtureIds: [input.fixtureId], source,
+    export: { supported: true, implementation: { formats: ["markdown", "html", "docx", "pdf"], async compile(path, options) {
+      const object = await resolve(refForPath(path));
+      if (object.kind === "workspace.board") return compileBoardDocument(object, repository, { options, active: input.active, assets: input.assets?.() });
+      if (object.kind === "source.document" && object.content.payload.availability !== "local") throw new ResourceFileError("resource_unavailable", "论文正文尚未本地读取，不能导出完整报告。");
+      return compileDocument({ title: object.title, markdown: objectText(object), basePath: address(object), options, assets: input.assets?.(), active: input.active,
+        sources: [{ identity: object.objectId, revision: object.revision, state: "pinned", sha256: await sha256(stableJson(object)) }] });
+    } } },
     file: { supported: true, implementation: provider },
     navigation: { supported: true, implementation: async path => { const object = await resolve(refForPath(path)); return { path: address(object), revision: object.revision, scopeId: repository.scopeId }; } },
     context: adapter.context ? { supported: true, implementation: async path => adapter.context!(address(await resolve(refForPath(path)))) } : { supported: false, reason: "当前环境未提供上下文入口" },

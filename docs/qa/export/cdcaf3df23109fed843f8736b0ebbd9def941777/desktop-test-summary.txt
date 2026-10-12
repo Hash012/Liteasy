@@ -1,0 +1,5 @@
+ Test Files  553 passed | 3 skipped (556)
+      Tests  3844 passed | 7 skipped (3851)
+   Start at  18:55:36
+   Duration  402.10s (transform 10.77s, setup 26.50s, collect 347.90s, tests 201.57s, environment 144.91s, prepare 22.78s)
+

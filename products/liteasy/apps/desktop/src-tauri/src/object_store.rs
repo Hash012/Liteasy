@@ -83,7 +83,10 @@ fn commit(
         if previous.as_ref().map(|r| &r.version) != change.expected.as_ref() {
             return Err("revision_conflict".into());
         }
-        if change.key.starts_with("revision/") && previous.is_some() {
+        if (change.key.starts_with("revision/")
+            || (change.key.starts_with("visual-block/") && change.key.split('/').count() == 3))
+            && previous.is_some()
+        {
             return Err("revision_conflict: immutable revision".into());
         }
         match &change.row {
@@ -187,6 +190,65 @@ pub fn object_store_list(
     })
     .collect()
 }
+fn read_snapshot(
+    connection: &mut Connection,
+    scope: &str,
+    prefixes: &[String],
+) -> Result<Vec<ObjectRow>, String> {
+    if prefixes.is_empty()
+        || prefixes.len() > 16
+        || prefixes
+            .iter()
+            .any(|p| p.is_empty() || p.len() > 2048 || p.starts_with("asset/"))
+    {
+        return Err("persistence_failed: invalid snapshot prefixes".into());
+    }
+    let tx = connection.transaction().map_err(|e| e.to_string())?;
+    let mut rows = std::collections::BTreeMap::new();
+    let mut bytes = 0usize;
+    for prefix in prefixes {
+        let end = format!("{prefix}\u{ffff}");
+        let mut statement = tx.prepare("SELECT key,version,value FROM object_records WHERE scope=?1 AND key>=?2 AND key<?3 ORDER BY key LIMIT 1002").map_err(|e| e.to_string())?;
+        let results = statement
+            .query_map(params![scope, prefix, end], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?;
+        for result in results {
+            let (key, version, value) = result.map_err(|e| e.to_string())?;
+            if rows.contains_key(&key) {
+                continue;
+            }
+            bytes += value.len();
+            rows.insert(
+                key.clone(),
+                ObjectRow {
+                    key,
+                    version,
+                    value: serde_json::from_str(&value).map_err(|e| e.to_string())?,
+                },
+            );
+            if rows.len() > 1000 || bytes > 32 * 1024 * 1024 {
+                return Err("persistence_failed: snapshot exceeds budget".into());
+            }
+        }
+    }
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(rows.into_values().collect())
+}
+#[tauri::command]
+pub fn object_store_snapshot(
+    app: AppHandle,
+    scope: String,
+    prefixes: Vec<String>,
+) -> Result<Vec<ObjectRow>, String> {
+    read_snapshot(&mut open(&app, &scope)?, &scope, &prefixes)
+}
+
 #[tauri::command]
 pub fn object_store_commit(
     app: AppHandle,
@@ -669,6 +731,35 @@ mod tests {
             }),
         }
     }
+    #[test]
+    fn snapshot_is_readonly_scope_partitioned_and_rejects_invalid_prefixes() {
+        let mut db = Connection::open_in_memory().unwrap();
+        initialize(&db).unwrap();
+        db.execute(
+            "INSERT INTO object_records VALUES (?1,?2,?3,?4)",
+            params!["a", "head/board", "generation", "{\"revision\":\"r1\"}"],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO object_records VALUES (?1,?2,?3,?4)",
+            params!["b", "head/board", "other", "{}"],
+        )
+        .unwrap();
+        let rows = read_snapshot(
+            &mut db,
+            "a",
+            &["head/board".into(), "placement/board/".into()],
+        )
+        .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].version, "generation");
+        assert_eq!(
+            get(&db, "a", "head/board").unwrap().unwrap().version,
+            "generation"
+        );
+        assert!(read_snapshot(&mut db, "a", &["asset/".into()]).is_err());
+    }
+
     #[test]
     fn sync_filters_linked_notes_and_merges_atomically_without_changing_revisions() {
         let mut db = Connection::open_in_memory().unwrap();

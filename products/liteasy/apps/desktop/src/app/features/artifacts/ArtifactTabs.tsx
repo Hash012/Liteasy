@@ -206,7 +206,7 @@ export function ArtifactTabs({
         status: "browser_managed",
         title: tab.title
       },
-      status: "saved"
+      status: "download_started"
     };
   },
   onGenerateThinReadingBranch,

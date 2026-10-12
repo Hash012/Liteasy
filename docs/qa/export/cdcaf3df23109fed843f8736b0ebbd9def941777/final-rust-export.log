@@ -1,0 +1,87 @@
+   Compiling liteasy-desktop v0.1.45 (<workspace>/products/liteasy/apps/desktop/src-tauri)
+warning: method `bind_condition` is never used
+  --> tests/../src/local-archive/archive.rs:86:12
+   |
+85 | impl Plan {
+   | --------- method in this implementation
+86 |     pub fn bind_condition(&mut self, source: SourceInput, expected: String) {
+   |            ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `metadata_bytes` is never used
+   --> tests/../src/local-archive/archive.rs:208:8
+    |
+208 | pub fn metadata_bytes(source: &SourceInput) -> Result<Vec<u8>, String> {
+    |        ^^^^^^^^^^^^^^
+
+warning: function `verify_document` is never used
+   --> tests/../src/local-archive/archive.rs:891:8
+    |
+891 | pub fn verify_document(root: &Path, manifest: &Manifest, id: &str) -> Result<PathBuf, String> {
+    |        ^^^^^^^^^^^^^^^
+
+warning: `liteasy-desktop` (test "local_archive") generated 3 warnings
+warning: function `commit` is never used
+   --> src/local-archive/archive.rs:790:8
+    |
+790 | pub fn commit(plan: Plan) -> Result<Receipt, String> {
+    |        ^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `normalized_account_key` is never used
+  --> src/local_library.rs:45:4
+   |
+45 | fn normalized_account_key(account_key: Option<&str>) -> String {
+   |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `legacy_account_namespace` is never used
+  --> src/local_library.rs:54:15
+   |
+54 | pub(crate) fn legacy_account_namespace(account_key: Option<&str>) -> String {
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `run_external_mode` is never used
+   --> src/headless-cli/../headless_cli.rs:183:8
+    |
+183 | pub fn run_external_mode(
+    |        ^^^^^^^^^^^^^^^^^
+
+warning: `liteasy-desktop` (bin "liteasy-desktop" test) generated 2 warnings (1 duplicate)
+warning: `liteasy-desktop` (bin "liteasy-desktop") generated 3 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.95s
+     Running unittests src/main.rs (products/liteasy/apps/desktop/src-tauri/target/debug/deps/liteasy_desktop-dea0046de3adc092)
+
+running 10 tests
+test artifact_export::tests::quarantines_a_malformed_snapshot ... ok
+test artifact_export::tests::refuses_source_hardlink_and_symlink_targets ... ok
+test artifact_export::tests::reports_the_saved_path_when_history_cannot_be_updated ... ok
+test artifact_export::tests::resolves_paths_only_from_existing_record_ids ... ok
+test artifact_export::tests::failed_output_publish_keeps_existing_target_and_cleans_temporary_file ... ok
+test artifact_export::tests::saves_and_lists_newest_exports_first ... ok
+test artifact_export::tests::marks_an_export_missing_when_its_file_disappears ... ok
+test artifact_export::tests::removing_history_keeps_the_exported_file ... ok
+test artifact_export::tests::keeps_the_previous_snapshot_when_publish_fails ... ok
+test artifact_export::tests::refuses_source_overwrite_and_preserves_opaque_future_history ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 194 filtered out; finished in 0.02s
+
+     Running tests/local_archive.rs (products/liteasy/apps/desktop/src-tauri/target/debug/deps/local_archive-2bebd9598dd270fe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+
+     Running tests/local_recovery.rs (products/liteasy/apps/desktop/src-tauri/target/debug/deps/local_recovery-d4872bb360bd6a72)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+
+     Running tests/native_open.rs (products/liteasy/apps/desktop/src-tauri/target/debug/deps/native_open-fbd4c35661b752eb)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.00s
+

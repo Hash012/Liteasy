@@ -1,0 +1,26 @@
+{
+  "baseline": "ac08379d8626847216f422306e36bb65916a0506",
+  "validationCommit": "cdcaf3df23109fed843f8736b0ebbd9def941777",
+  "specZipSha256": "9f356179e955bbeb281e19546fec0ea6115dbf7a030ee8c61ad7655178308ca8",
+  "host": "Ubuntu/WSL2",
+  "windows": {
+    "Caption": "Microsoft Windows 11 Pro",
+    "Version": "10.0.26200",
+    "BuildNumber": "26200"
+  },
+  "node": "22.23.2",
+  "rust": "1.98.1",
+  "chromium": "151.0.7922.34",
+  "webview2": "154.0.4258.62",
+  "mupdf": "1.28.2",
+  "poppler": "24.02.0",
+  "pdfjs": "5.6.205",
+  "fixtures": {
+    "development/test-data/document-export/mixed-research.md": "1352b232d998475becc4f32932163521d07dc576db93284aeb924f3df964ed0b",
+    "development/test-data/document-export/orientation.jpg": "1a93f27061dd04296678d393690610c5c4b10d35d596bc3b5523207ff517ef9c"
+  },
+  "originalFullTestLogSha256": "86567914005178f093812f81110239a6a7805642b6edcd9802a63d166efc0630",
+  "originalBuildLogSha256": "e484ea405b00df0c6e7fc11592afab1d23ee85327fb02e8e13236489511aaf22",
+  "installerDelta": "NOT_MEASURED",
+  "coldWarmRss": "NOT_MEASURED"
+}

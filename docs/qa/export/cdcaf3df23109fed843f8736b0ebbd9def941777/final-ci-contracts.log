@@ -1,0 +1,22 @@
+
+> liteasy-desktop@0.1.45 ci:contracts
+> npm run verify:tauri-resources -- --require-git-tracked && npm run schema:visualization && npm run schema:objects && npm run schema:resources && tsc --noEmit && node ../../../../.github/scripts/check-clean.mjs package-lock.json src-tauri/Cargo.lock ../../packages/shared
+
+
+> liteasy-desktop@0.1.45 verify:tauri-resources
+> node scripts/verify-tauri-resources.mjs --require-git-tracked
+
+{"checkedResources":7,"verified":true,"windowsIcon":"icons/icon.ico"}
+
+> liteasy-desktop@0.1.45 schema:visualization
+> vite-node scripts/write-visualization-artifact-schema.ts
+
+
+> liteasy-desktop@0.1.45 schema:objects
+> vite-node scripts/write-object-schemas.ts
+
+
+> liteasy-desktop@0.1.45 schema:resources
+> vite-node scripts/write-resource-schemas.ts && vite-node scripts/write-extension-schemas.ts
+
+Selected paths match Git; no generated-file or lockfile drift detected.

@@ -28,6 +28,8 @@ webbrowser = { version = "1.2.4", features = ["hardened"] }
 sqlite-vec = "=0.1.9"
 
 [target.'cfg(windows)'.dependencies]
+webview2-com = "=0.38.2"
+windows = { version = "=0.61.3", features = ["Win32_Foundation"] }
 windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }
 
 [features]

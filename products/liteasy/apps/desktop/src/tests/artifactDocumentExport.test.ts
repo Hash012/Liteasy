@@ -3,7 +3,7 @@ import {
   artifactMarkdownToHtml,
   createArtifactHtml,
   createArtifactMarkdown,
-  createArtifactExportPayload
+  createCompatibilityArtifactExportPayload
 } from "../app/features/artifacts/artifactDocumentExport";
 import type { ArtifactTab, ArtifactType } from "../app/features/artifacts/artifact.types";
 import { createThinReadingFixture } from "./fixtures/thinReadingFixtures";
@@ -77,8 +77,8 @@ describe("artifact document export", () => {
     ].join("\n"));
 
     expect(html).toContain("<h1>标题</h1>");
-    expect(html).toContain('class="list-item depth-1"');
-    expect(html).toContain("<blockquote>证据摘录</blockquote>");
+    expect(html).toMatch(/<li>一级[\s\S]*<ul>[\s\S]*<li>二级<\/li>/);
+    expect(html).toMatch(/<blockquote>\s*<p>证据摘录<\/p>/);
     expect(html).toContain('class="language-mermaid"');
   });
 
@@ -185,7 +185,7 @@ describe("artifact document export", () => {
     });
 
     expect(markdown).toContain("quote-start");
-    expect(markdown).toContain("完整证据见原始产物 JSON");
+    expect(markdown).toContain("证据摘录；可选择完整证据附录");
     expect(markdown).not.toContain("quote-end");
     expect(markdown.match(/quote-start/g)).toHaveLength(1);
     expect(markdown.length).toBeLessThan(2_000);
@@ -304,7 +304,7 @@ describe("artifact document export", () => {
     }) as VisualizationArtifactV1;
     const markdown = createArtifactMarkdown({
       artifactId: document.artifactId,
-      answer: "<script>answer()</script> [link](javascript:alert(1)) `code`",
+      answer: "<script>answer()</script>\n\n[link](javascript:alert(1)) `code`",
       thinReadingDocument: {
         ...document,
         nodes: { ...document.nodes, [root.id]: { ...root, visualizations: [visual] } }
@@ -316,11 +316,12 @@ describe("artifact document export", () => {
     expect(markdown).toContain("〔来源待关联〕");
     expect(markdown).not.toContain("evidence-one-more");
     expect(markdown).not.toContain("evidence-one and");
-    expect(markdown).toContain("__LITEASY_EVIDENCE_0__");
+    expect(artifactMarkdownToHtml(markdown)).toContain("LITEASY_EVIDENCE_0");
     expect(markdown).not.toContain("<script>");
     expect(markdown).not.toContain("</script>");
     expect(markdown).not.toContain("[link]");
-    expect(markdown).not.toContain("`code`");
+    expect(markdown).toContain("`code`");
+    expect(artifactMarkdownToHtml(markdown)).not.toContain('href="javascript:');
   });
 
   test("exports only uniquely bound recommended source figures with their actual paper", () => {
@@ -393,7 +394,7 @@ describe("artifact document export", () => {
   test("creates a native payload without triggering a browser download", () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click");
 
-    const payload = createArtifactExportPayload(createTab("thin_reading"), "markdown");
+    const payload = createCompatibilityArtifactExportPayload(createTab("thin_reading"), "markdown");
 
     expect(payload).toEqual(expect.objectContaining({
       artifactId: "artifact-thin_reading",
@@ -417,7 +418,7 @@ describe("artifact document export", () => {
     vi.spyOn(HTMLCanvasElement.prototype, "toDataURL")
       .mockReturnValue("data:image/jpeg;base64,/9j/");
 
-    const payload = createArtifactExportPayload(createTab("mindmap"), "pdf");
+    const payload = createCompatibilityArtifactExportPayload(createTab("mindmap"), "pdf");
 
     expect(payload.contentEncoding).toBe("base64");
     expect(payload.fileName).toBe("mindmap 导出样例.pdf");
