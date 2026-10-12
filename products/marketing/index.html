@@ -5,17 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Liteasy 从你最想知道的内容开始，带你沿着词句、证据与关联文献探索，并让每一步理解都能辨明依据。"
+      content="Liteasy 从你最想知道的内容开始，带你沿着词句、证据与关联文献探索，并让每一步理解都能有据可循。"
     />
-    <meta property="og:title" content="Liteasy | 先读懂最想知道的，再像研究者一样探索深入" />
+    <meta property="og:title" content="Liteasy | 先读懂最想知道的，再像研究者一样深入探索" />
     <meta
       property="og:description"
       content="从证据化薄读到多模态理解与共同阅读，让复杂文献成为可以继续探索的研究路径。"
     />
     <meta property="og:type" content="website" />
-    <title>Liteasy | 先读懂最想知道的，再像研究者一样探索深入</title>
-    <link rel="preload" href="assets/program.png" as="image" />
-    <link rel="stylesheet" href="styles.css" />
+    <title>Liteasy | 先读懂最想知道的，再像研究者一样深入探索</title>
+    <link rel="preload" href="assets/new/program-main.webp" as="image" type="image/webp" />
+    <link rel="stylesheet" href="styles.css?v=20261011-1" />
   </head>
   <body>
     <a class="skip-link" href="#main-content">跳到正文</a>
@@ -23,16 +23,15 @@
     <header class="site-header" data-header>
       <div class="nav-shell">
         <a class="brand" href="#top" aria-label="Liteasy 首页">
-          <img class="brand-icon" src="assets/brand-icon.png" alt="" />
-          <span>Liteasy</span>
+          <img class="brand-logo" src="assets/liteasy-logo.webp" alt="Liteasy" />
         </a>
         <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" data-menu-toggle>
           <span class="sr-only">打开导航</span>
           <span aria-hidden="true">+</span>
         </button>
         <nav id="site-nav" class="site-nav" aria-label="主导航" data-site-nav>
-          <a href="#" data-external-link="github-community">GitHub 社区</a>
-          <a href="#" data-external-link="user-forum">用户论坛</a>
+          <a href="#waitlist" data-download-link>Download</a>
+          <a href="https://community.staging.liteasyclaw.com/">用户论坛</a>
           <a class="nav-cta" href="#waitlist">加入体验计划</a>
         </nav>
       </div>
@@ -41,15 +40,15 @@
     <main id="main-content">
       <section id="top" class="hero" data-marketing-section="hero" aria-labelledby="hero-title">
         <div class="hero-media" aria-hidden="true">
-          <img src="assets/program.png" alt="" />
+          <img src="assets/new/program-main.webp" alt="" fetchpriority="high" decoding="async" />
         </div>
         <div class="hero-shade" aria-hidden="true"></div>
         <div class="hero-content content-shell">
           <p class="eyebrow light">LITEASY / EVIDENCE-LED READING</p>
-          <h1 id="hero-title" aria-label="先读懂最想知道的，再像研究者一样探索深入。">先读懂最想知道的，<br />再像研究者一样探索深入。</h1>
+          <h1 id="hero-title" aria-label="先读懂最想知道的，再像研究者一样深入探索。">先读懂最想知道的，<br />再像研究者一样深入探索。</h1>
           <p class="hero-copy">
             Liteasy 从你最想知道的内容开始，带你沿着词句、证据与关联文献继续探索，
-            并让每一步理解都能辨明依据。
+            并让每一步理解都能有据可循。
           </p>
           <div class="hero-actions">
             <a class="button button-primary" href="#waitlist">加入体验计划 <span aria-hidden="true">&#8594;</span></a>
@@ -69,7 +68,7 @@
           <article>
             <span class="proof-index">02</span>
             <h2>辨明依据</h2>
-            <p>论文原文、可信外部来源与 AI 独立理解，都有清楚的身份。</p>
+            <p>论文原文、可信外部来源与 AI 的分析判断，来源清晰、彼此可辨。</p>
           </article>
           <article>
             <span class="proof-index">03</span>
@@ -83,7 +82,7 @@
         <div class="content-shell section-intro split-intro">
           <div>
             <p class="eyebrow">RESEARCHER'S READING LOOP</p>
-            <h2 id="workflow-title">从最想知道的开始，<br />一步步形成自己的判断。</h2>
+            <h2 id="workflow-title">从最想研究的问题切入，<br />一步步形成自己的判断。</h2>
           </div>
           <p>
             Liteasy 把文献、追问、依据与阅读结果放在同一工作台。
@@ -114,9 +113,19 @@
               <h3 data-workflow-title>打开文献</h3>
               <p data-workflow-copy>把当前真正想理解的文献带进桌面阅读工作台。</p>
             </div>
-            <div class="workbench-frame" data-workflow-media>
-              <img src="assets/program.png" alt="Liteasy 桌面文献阅读工作台" />
-              <span class="focus-outline focus-left" aria-hidden="true"></span>
+            <div class="workbench-frame" data-workflow-media data-focus="open">
+              <div class="workflow-scene is-active" data-workflow-scene data-step="open">
+                <img src="assets/new/workflow-1.webp" alt="从文献库打开 Q-VLM 论文，PDF 原文与批注在同一工作台中显示" loading="lazy" decoding="async" />
+                <span class="workflow-spotlight" aria-hidden="true"></span>
+              </div>
+              <div class="workflow-scene" data-workflow-scene aria-hidden="true">
+                <img alt="" />
+                <span class="workflow-spotlight" aria-hidden="true"></span>
+              </div>
+            </div>
+            <div class="workflow-caption">
+              <span data-workflow-detail>文献库与 PDF 原文</span>
+              <a href="assets/new/workflow-1.png" data-workflow-original target="_blank" rel="noopener">查看完整截图 &#8599;</a>
             </div>
           </div>
         </div>
@@ -128,8 +137,7 @@
             <p class="eyebrow">KNOW THE BASIS</p>
             <h2 id="evidence-title">不只看到解释，<br />也知道它从哪里来。</h2>
             <p>
-              Liteasy 会区分每段理解的依据。来自论文的内容可以回到相关原文位置，
-              外部知识会标明来源；没有文献依据的内容，也会明确告诉你这是 AI 独立理解。
+              Liteasy 会标明每一段内容的依据。来自论文的内容可以回到原文位置，外部信息会注明来源；没有文献依据的内容，也会明确标注为 AI 独立理解。
             </p>
             <div class="evidence-types" aria-label="理解依据类型">
               <div class="evidence-type">
@@ -138,27 +146,18 @@
               </div>
               <div class="evidence-type">
                 <strong>来自外部来源</strong>
-                <span>看见补充理解所依据的材料</span>
+                <span>查看补充信息的来源与依据</span>
               </div>
               <div class="evidence-type">
                 <strong>AI 独立理解</strong>
-                <span>没有文献依据时直接说明性质</span>
+                <span>没有文献依据时明确标注</span>
               </div>
             </div>
           </div>
-          <div class="evidence-visual" aria-label="解释与论文原文位置相互关联的示意">
-            <div class="answer-note">
-              <p class="note-label">来自论文</p>
-              <p>方法通过分层匹配保留关键关系，同时减少需要处理的候选范围。</p>
-              <span class="note-source">回到相关原文 &#8594;</span>
-            </div>
-            <div class="evidence-line" aria-hidden="true"></div>
-            <div class="source-page">
-              <img src="assets/program.png" alt="" />
-              <span class="source-highlight" aria-hidden="true"></span>
-              <p>论文原文 / 相关上下文</p>
-            </div>
-          </div>
+          <figure class="evidence-visual">
+            <img src="assets/new/proof.webp" loading="lazy" decoding="async" alt="Q-VLM 思维导图的依据面板：论文证据、外部补充与模型推断分别计数，原文引用带有 PDF 页码" />
+            <figcaption>来源分类清晰，原文证据可回到 PDF 核对。</figcaption>
+          </figure>
         </div>
       </section>
 
@@ -177,26 +176,20 @@
             <button id="result-science" class="artifact-tab result-tab" type="button" role="tab" aria-selected="false" aria-controls="result-panel" data-result="science">科学图解</button>
             <button id="result-math" class="artifact-tab result-tab" type="button" role="tab" aria-selected="false" aria-controls="result-panel" data-result="math">数学与几何</button>
             <button id="result-process" class="artifact-tab result-tab" type="button" role="tab" aria-selected="false" aria-controls="result-panel" data-result="process">过程演示</button>
-            <button id="result-illustration" class="artifact-tab result-tab" type="button" role="tab" aria-selected="false" aria-controls="result-panel" data-result="illustration">视觉重绘</button>
           </div>
-          <div id="result-panel" class="artifact-panel result-panel" role="tabpanel" aria-labelledby="result-sourceFigure" tabindex="0">
+          <div id="result-panel" class="artifact-panel result-panel" data-result-state="sourceFigure" role="tabpanel" aria-labelledby="result-sourceFigure" tabindex="0">
             <div class="artifact-description result-description">
               <p class="artifact-kicker" data-result-kicker>保留原文关系</p>
               <h3 data-result-title>论文原图</h3>
-              <p data-result-copy>自动找到与当前理解相关的原图、表格或图注，连同页码与证据位置放回阅读上下文。</p>
-              <span data-result-use>薄读呈现：原图、图注与位置关联</span>
+              <p data-result-copy>在阅读上下文中保留论文原文、图表与图注，结合选区和批注核对研究内容。</p>
+              <span data-result-use>原文阅读：页面配色、选区与批注</span>
             </div>
-            <div class="artifact-preview result-preview result-source-figure-preview" data-result-preview aria-label="论文原图自动定位插入预览">
-              <div class="thin-toolbar"><span>薄读 / 论文原图</span><span>第 4 页 · Fig. 2</span></div>
-              <div class="source-figure-card">
-                <img src="assets/program.png" alt="论文原图的示意预览" />
-                <span class="source-figure-marker">当前段落相关</span>
-                <p>方法结构 · 原图与图注保持原文身份</p>
-              </div>
+            <div class="artifact-preview result-preview result-source-figure-preview" data-result-preview aria-label="论文原文阅读界面预览">
+              <img class="result-product-image" src="assets/new/paper-read.webp" loading="lazy" decoding="async" alt="Q-VLM 原文阅读界面：护眼配色保留图片原色，原文选区和批注清晰可见" />
             </div>
           </div>
         </div>
-        <p class="content-shell artifact-disclaimer">示意内容用于展示理解方式，不代表特定论文的真实结论。</p>
+        <p class="content-shell artifact-disclaimer">产品截图展示实际阅读界面；科学、数学与过程示意用于说明呈现方式。</p>
       </section>
 
       <section id="associations" class="section associations-section" data-marketing-section="associations" aria-labelledby="associations-title">
@@ -209,7 +202,7 @@
         </div>
         <div class="content-shell association-canvas-shell">
           <div class="association-canvas" data-association-canvas>
-            <img src="assets/association-graph-product.png" alt="Liteasy 真实关联推荐界面：正文概念锚点与关联论文节点通过连线相连" />
+            <img src="assets/association-graph-product.webp" loading="lazy" decoding="async" alt="Liteasy 真实关联推荐界面：正文概念锚点与关联论文节点通过连线相连" />
             <button class="association-hotspot association-hotspot--anchor is-active" type="button" data-association="anchors"><span>01</span>标出概念</button>
             <button class="association-hotspot association-hotspot--focus" type="button" data-association="focus"><span>02</span>聚焦关联</button>
             <button class="association-hotspot association-hotspot--paper" type="button" data-association="paper"><span>03</span>打开文献</button>
@@ -254,7 +247,7 @@
           <div>
             <p class="eyebrow">FIRST EXPERIENCE</p>
             <h2 id="waitlist-title">从下一篇文献开始，<br />像研究者一样探索。</h2>
-            <p>加入体验计划，用 Liteasy 读懂最想知道的内容，并把每一步理解变成可以核对、继续和分享的研究路径。</p>
+            <p>加入体验计划，用 Liteasy 读懂最想知道的内容，并把每一步理解变成可以核对、深入和分享的研究路径。</p>
             <ul class="trust-list">
               <li>桌面优先的文献阅读工作台</li>
               <li>本地文献与个人阅读材料有清晰边界</li>
@@ -289,7 +282,7 @@
               最想解决的问题 <span>可选</span>
               <textarea name="problem" rows="3" placeholder="阅读、比较、整理或汇报文献时，最困扰你的是什么？"></textarea>
             </label>
-            <button class="button button-primary form-submit" type="submit">提交体验申请 <span aria-hidden="true">&#8594;</span></button>
+            <button class="button button-primary form-submit" type="submit">提交体验申请并获取安装包 <span aria-hidden="true">&#8594;</span></button>
             <p class="form-status" aria-live="polite" data-form-status></p>
           </form>
         </div>
@@ -298,12 +291,12 @@
 
     <footer class="site-footer">
       <div class="content-shell footer-layout">
-        <a class="brand footer-brand" href="#top"><span class="brand-mark" aria-hidden="true">L</span><span>Liteasy</span></a>
-        <p>让理解有依据，也能继续生长。</p>
+        <a class="brand footer-brand" href="#top"><img class="brand-logo" src="assets/liteasy-logo.webp" loading="lazy" alt="Liteasy" /></a>
+        <p>让理解有据可依，让认知破土生长。</p>
         <p class="footer-note">Evidence-led research reading</p>
       </div>
     </footer>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=20261011-2"></script>
   </body>
 </html>

@@ -1,28 +1,48 @@
 const workflowData = {
   open: {
+    image: "assets/new/workflow-1.webp",
+    original: "assets/new/workflow-1.png",
+    alt: "从文献库打开 Q-VLM 论文，PDF 原文与批注在同一工作台中显示",
+    detail: "文献库与 PDF 原文",
     number: "01 / 05",
     title: "打开文献",
     copy: "把当前真正想理解的文献带进桌面阅读工作台。"
   },
   core: {
+    image: "assets/new/workflow-2.webp",
+    original: "assets/new/workflow-2.png",
+    alt: "Q-VLM 薄读结果中的一句话总览、核心方法与可深入概念",
+    detail: "一句话总览与核心方法",
     number: "02 / 05",
     title: "看见核心",
     copy: "从你最想知道的内容开始，建立对论文主线的第一层理解。"
   },
   explore: {
+    image: "assets/new/workflow-3.webp",
+    original: "assets/new/workflow-3.png",
+    alt: "深入跨层依赖与块级搜索，阅读核心机制及下一层概念",
+    detail: "沿着概念进入下一层",
     number: "03 / 05",
     title: "选择深入",
     copy: "选中词句或尚未展开的板块，沿着问题进入下一层。"
   },
   verify: {
+    image: "assets/new/workflow-4.webp",
+    original: "assets/new/workflow-4.png",
+    alt: "薄读结果中的论文原图、实验表格及原文第 7 页标记",
+    detail: "原图、表格与原文页码",
     number: "04 / 05",
     title: "核对依据",
     copy: "辨认内容依据，并回到相关原文位置核对上下文。"
   },
   keep: {
+    image: "assets/new/workflow-5.webp",
+    original: "assets/new/workflow-5.png",
+    alt: "论文原文与研究白板并排，笔记卡片保留原文和个人理解",
+    detail: "笔记、原文与研究白板",
     number: "05 / 05",
     title: "留下理解",
-    copy: "批注、整理、导出或分享这一轮阅读形成的理解。"
+    copy: "把原文与自己的理解留在笔记和研究白板中，继续整理这一轮阅读。"
   }
 };
 
@@ -30,13 +50,11 @@ const resultData = {
   sourceFigure: {
     kicker: "保留原文关系",
     title: "论文原图",
-    copy: "自动找到与当前理解相关的原图、表格或图注，连同页码与证据位置放回阅读上下文。",
-    use: "薄读呈现：原图、图注与位置关联",
+    copy: "在阅读上下文中保留论文原文、图表与图注，结合选区和批注核对研究内容。",
+    use: "原文阅读：页面配色、选区与批注",
     className: "result-source-figure-preview",
-    ariaLabel: "论文原图自动定位插入预览",
-    markup: `
-      <div class="thin-toolbar"><span>薄读 / 论文原图</span><span>第 4 页 · Fig. 2</span></div>
-      <div class="source-figure-card"><img src="assets/program.png" alt="论文原图的示意预览" /><span class="source-figure-marker">当前段落相关</span><p>方法结构 · 原图与图注保持原文身份</p></div>`
+    ariaLabel: "论文原文阅读界面预览",
+    markup: `<img class="result-product-image" src="assets/new/paper-read.webp" loading="lazy" decoding="async" alt="Q-VLM 原文阅读界面：护眼配色保留图片原色，原文选区和批注清晰可见" />`
   },
   structure: {
     kicker: "生成结构表达",
@@ -45,8 +63,7 @@ const resultData = {
     use: "薄读生成：流程图、思维导图、因果图与时间线",
     className: "result-structure-preview",
     ariaLabel: "薄读生成结构表达预览",
-    markup: `
-      <div class="structure-canvas"><span class="structure-node structure-node--root">研究问题</span><span class="structure-node structure-node--one">方法</span><span class="structure-node structure-node--two">证据</span><span class="structure-node structure-node--three">结果</span><i class="structure-line structure-line--a"></i><i class="structure-line structure-line--b"></i><i class="structure-line structure-line--c"></i></div><p class="preview-caption">结构由当前文献证据绑定，可继续查看节点依据</p>`
+    markup: `<img class="result-product-image" src="assets/new/mindmap.webp" loading="lazy" decoding="async" alt="Q-VLM 实际生成的文献思维导图：核心结论、关键链条、关键数据和实验依据按层级展开" />`
   },
   science: {
     kicker: "生成科学图解",
@@ -55,8 +72,7 @@ const resultData = {
     use: "薄读生成：电路、物理示意与生物结构",
     className: "result-science-preview",
     ariaLabel: "薄读生成科学图解预览",
-    markup: `
-      <div class="science-diagram"><span class="science-label science-label--input">输入</span><span class="science-box science-box--core">核心对象</span><span class="science-label science-label--output">输出</span><i class="science-arrow science-arrow--a"></i><i class="science-arrow science-arrow--b"></i><small>证据绑定标注</small></div>`
+    markup: `<img class="science-product-image" src="assets/science-optics.svg" loading="lazy" alt="简洁凸透镜光路示意：三束平行光通过透镜后汇聚于焦点 F" />`
   },
   math: {
     kicker: "生成数学与几何表达",
@@ -78,16 +94,7 @@ const resultData = {
     markup: `
       <div class="process-stage"><div class="process-scene"><span>初始状态</span><i>&#8594;</i><b>变化中</b><i>&#8594;</i><span>结果状态</span></div><div class="process-timeline"><span></span><b></b><i></i></div><p>逐帧查看 · 关键事件与证据绑定</p></div>`
   },
-  illustration: {
-    kicker: "生成证据绑定插图",
-    title: "视觉重绘",
-    copy: "当原文图像难以直接阅读时，把已核对的结构和标签重绘成清晰的辅助插图，并明确标记它不是论文原图。",
-    use: "薄读生成：带证据标签的辅助视觉表达",
-    className: "result-illustration-preview",
-    ariaLabel: "薄读生成证据绑定辅助插图预览",
-    markup: `
-      <div class="illustration-stage"><div class="illustration-card"><span class="illustration-badge">AI 辅助插图</span><div class="illustration-shape"></div><div class="illustration-labels"><span>对象 A</span><span>对象 B</span><span>证据 01</span></div></div><p>与原文图清晰区分，标签与证据保持对应</p></div>`
-  }
+
 };
 
 const associationData = {
@@ -144,15 +151,59 @@ navigation.querySelectorAll("a").forEach((link) => {
   });
 });
 
-const workflowButtons = [...document.querySelectorAll("[data-step]")];
+const workflowButtons = [...document.querySelectorAll('[role="tab"][data-step]')];
 const workflowTitle = document.querySelector("[data-workflow-title]");
 const workflowCopy = document.querySelector("[data-workflow-copy]");
 const workflowNumber = document.querySelector(".step-number");
 const workflowMedia = document.querySelector("[data-workflow-media]");
 const workflowPanel = document.querySelector("#workflow-panel");
 
-function updateWorkflow(step) {
+const workflowScenes = [...document.querySelectorAll("[data-workflow-scene]")];
+const workflowDetail = document.querySelector("[data-workflow-detail]");
+const workflowOriginal = document.querySelector("[data-workflow-original]");
+let workflowRequest = 0;
+
+// Cache requested screenshots while keeping the current picture visible during loading.
+const workflowImages = new Map();
+function loadWorkflowImage(step) {
+  if (!workflowImages.has(step)) {
+    const image = new Image();
+    image.src = workflowData[step].image;
+    workflowImages.set(step, image.decode().then(() => true).catch(() => false));
+  }
+  return workflowImages.get(step);
+}
+
+// Warm remaining steps sequentially only when the workflow approaches the viewport.
+const workflowObserver = new IntersectionObserver(async (entries, observer) => {
+  if (!entries.some((entry) => entry.isIntersecting)) return;
+  observer.disconnect();
+  for (const step of Object.keys(workflowData)) await loadWorkflowImage(step);
+}, { rootMargin: "200px" });
+workflowObserver.observe(workflowPanel);
+
+async function updateWorkflow(step) {
+  const request = ++workflowRequest;
+  workflowPanel.setAttribute("aria-busy", "true");
+  const loaded = await loadWorkflowImage(step);
+  if (request !== workflowRequest) return;
+  workflowPanel.setAttribute("aria-busy", "false");
+  if (!loaded) return;
   const data = workflowData[step];
+  const current = workflowScenes.find((scene) => scene.classList.contains("is-active"));
+  if (current.dataset.step !== step) {
+    const incoming = workflowScenes.find((scene) => scene !== current);
+    const image = incoming.querySelector("img");
+    image.src = data.image;
+    image.alt = data.alt;
+    incoming.dataset.step = step;
+    incoming.setAttribute("aria-hidden", "false");
+    // Commit the incoming position before its fade/pan transition begins.
+    void incoming.offsetWidth;
+    incoming.classList.add("is-active");
+    current.classList.remove("is-active");
+    current.setAttribute("aria-hidden", "true");
+  }
   workflowButtons.forEach((button) => {
     const active = button.dataset.step === step;
     button.classList.toggle("is-active", active);
@@ -161,6 +212,8 @@ function updateWorkflow(step) {
   workflowNumber.textContent = data.number;
   workflowTitle.textContent = data.title;
   workflowCopy.textContent = data.copy;
+  workflowDetail.textContent = data.detail;
+  workflowOriginal.href = data.original;
   workflowMedia.dataset.focus = step;
   workflowPanel.setAttribute("aria-labelledby", `step-${step}`);
 }
@@ -188,6 +241,7 @@ const resultPanel = document.querySelector("#result-panel");
 
 function updateResult(result) {
   const data = resultData[result];
+  resultPanel.dataset.resultState = result;
   resultButtons.forEach((button) => {
     const active = button.dataset.result === result;
     button.classList.toggle("is-active", active);
@@ -256,16 +310,49 @@ associationButtons.forEach((button) => {
   });
 });
 
-const waitlistUrl = window.LITEASY_WAITLIST_URL || "";
+const waitlistUrl = window.LITEASY_WAITLIST_URL || "/api/waitlist";
 const waitlistForm = document.querySelector("[data-waitlist-form]");
 const formStatus = document.querySelector("[data-form-status]");
+const submitButton = waitlistForm.querySelector('button[type="submit"]');
+const submitButtonLabel = submitButton.innerHTML;
 
-waitlistForm.addEventListener("submit", (event) => {
-  if (waitlistUrl) {
-    waitlistForm.action = waitlistUrl;
-    waitlistForm.method = "get";
-    return;
-  }
+document.querySelectorAll("[data-download-link]").forEach((link) => {
+  link.addEventListener("click", () => {
+    formStatus.textContent = "安装包面向已提交体验申请的用户开放。请先完成下方申请，审核信息提交后即可获取当前版本。";
+  });
+});
+
+waitlistForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  formStatus.textContent = "体验申请入口尚未开放。开放后可在这里提交申请。";
+  if (!waitlistForm.reportValidity()) return;
+
+  submitButton.disabled = true;
+  submitButton.textContent = "正在提交申请...";
+  formStatus.textContent = "";
+
+  try {
+    const response = await fetch(waitlistUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(Object.fromEntries(new FormData(waitlistForm)))
+    });
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok || !result.ok) {
+      throw new Error(result.error || "申请提交失败，请稍后重试。");
+    }
+
+    if (!result.downloadUrl) {
+      formStatus.textContent = result.message || "体验申请已提交。安装包准备完成后，我们将通过邮件通知你。";
+      return;
+    }
+
+    formStatus.textContent = "体验申请已提交，安装包即将开始下载。";
+    window.location.assign(result.downloadUrl);
+  } catch (error) {
+    formStatus.textContent = error.message || "申请提交失败，请稍后重试。";
+  } finally {
+    submitButton.disabled = false;
+    submitButton.innerHTML = submitButtonLabel;
+  }
 });
