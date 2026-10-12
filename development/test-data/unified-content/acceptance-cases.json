@@ -1,0 +1,421 @@
+{
+  "schema": "liteasy.consistency-acceptance/reference-v1",
+  "sourceRevision": "679f022a7ff231a73c2d625eaf41c7d4cd7af0f7",
+  "note": "以下均为实施方待执行的验收要求，不是本次已通过测试。",
+  "cases": [
+    {
+      "id": "C01",
+      "category": "render",
+      "name": "完整 GFM 表格跨表面",
+      "expected": "阅读器、证据、笔记、白板上的单元格文字/对齐和表头不丢失。",
+      "fixture": "fixtures/mixed-content.md",
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C02",
+      "category": "render",
+      "name": "HTML rowspan/colspan",
+      "expected": "跨行/跨列、caption、thead/th 语义保留；不是原始标签或丢失表格。",
+      "fixture": "fixtures/mixed-content.md",
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C03",
+      "category": "render",
+      "name": "正文数学与代码隔离",
+      "expected": "数学正常，代码 fence 内的 HTML 与 LaTeX 保持源码。",
+      "fixture": "fixtures/mixed-content.md",
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C04",
+      "category": "render",
+      "name": "脚注和引用式链接依赖",
+      "expected": "片段展示能找到所需定义；不能从另一个版本借定义。",
+      "fixture": "fixtures/mixed-content.md",
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C05",
+      "category": "render",
+      "name": "源标题是 literal",
+      "expected": "含标签的标题只显示文本，不加载资源；正文仍可富渲染。",
+      "fixture": "fixtures/hostile-content.md",
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C06",
+      "category": "render",
+      "name": "源码切换",
+      "expected": "默认富内容，显式查看源码后字节/文本不被净化回写。",
+      "fixture": "fixtures/mixed-content.md",
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C07",
+      "category": "fragment",
+      "name": "从属性中间切入",
+      "expected": "有同版本真源时找到父表作为显示上下文；原 quote/选区不改。",
+      "fixture": "fixtures/incomplete-html-table.txt",
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C08",
+      "category": "fragment",
+      "name": "历史残片无真源",
+      "expected": "显示结构不完整与保留原始快照；不猜表头，不标精确支持。",
+      "fixture": "fixtures/incomplete-html-table.txt",
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C09",
+      "category": "fragment",
+      "name": "4000 字符边界",
+      "expected": "不能二次裁剪破坏表格；采用结构预览/分页/明确大小限制。",
+      "fixture": "fixtures/long-table.md",
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C10",
+      "category": "fragment",
+      "name": "跨行表头和范围预算",
+      "expected": "所选行的必要表头、rowspan 条件随结构片段保留，记录扩展范围。",
+      "fixture": "fixtures/mixed-content.md",
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C11",
+      "category": "fragment",
+      "name": "超大单块",
+      "expected": "不能悄悄超预算或返回半个结构当完整内容；明确降级。",
+      "fixture": "fixtures/long-table.md",
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C12",
+      "category": "fragment",
+      "name": "UTF-16 和 UTF-8",
+      "expected": "不切开 surrogate，范围单位明确，hash 基准一致。",
+      "fixture": "fixtures/unicode-crlf.md",
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C13",
+      "category": "fragment",
+      "name": "CRLF 与数学规范化",
+      "expected": "展示变换后定位仍映射原文本；无映射则标精度下降。",
+      "fixture": "fixtures/unicode-crlf.md",
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C14",
+      "category": "ledger",
+      "name": "同路径多次读取",
+      "expected": "最终 report 保留每个实际 read receipt；同版本覆盖取范围并集而非最后片段。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C15",
+      "category": "ledger",
+      "name": "不同修订读取",
+      "expected": "不能将不同 revision 范围拼为一份全文或证据。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C16",
+      "category": "ledger",
+      "name": "展示额外加载整表",
+      "expected": "生成 display receipt，不补填历史 model/verifier delivery，不提升核验状态。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C17",
+      "category": "ledger",
+      "name": "模型预算裁剪",
+      "expected": "read receipt 与实际模型输入分别记录；已获取不等于已送模型。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C18",
+      "category": "ledger",
+      "name": "重复引用计数",
+      "expected": "去重展示不删除真实调用历史，也不把同源重复片段算成独立验证。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C19",
+      "category": "navigation",
+      "name": "同版本文件定位",
+      "expected": "定位正确 block/行/选区，不只打开文件首页；无精确位置明确说明。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C20",
+      "category": "navigation",
+      "name": "来源替换与历史引用",
+      "expected": "可读历史则打开历史，否则 revision_unavailable；禁止悄悄 latest。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C21",
+      "category": "navigation",
+      "name": "重命名与别名",
+      "expected": "身份不变，别名/路径更新后仍解析原资源；不能凭同名猜测。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C22",
+      "category": "navigation",
+      "name": "PDF 与 Canvas selector",
+      "expected": "按各自 page/region/element 定位，不能套用 Markdown 字符坐标。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C23",
+      "category": "security",
+      "name": "HTML 执行与危险 URL",
+      "expected": "无脚本/事件/iframe 执行，无 javascript/file URL；安全表格文字保留。",
+      "fixture": "fixtures/hostile-content.md",
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C24",
+      "category": "security",
+      "name": "预览远程图片",
+      "expected": "证据预览不偷偷请求远程跟踪图；授权与加载动作可追踪。",
+      "fixture": "fixtures/hostile-content.md",
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C25",
+      "category": "security",
+      "name": "资源嵌入与循环",
+      "expected": "相对路径、liteasy 嵌入经 scope 检查；循环/过深依赖明确截断。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C26",
+      "category": "security",
+      "name": "切账号与权限撤回",
+      "expected": "正在读取/渲染/缓存/上下文回放不得把旧主体内容投到新主体。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C27",
+      "category": "security",
+      "name": "组织来源转笔记",
+      "expected": "来源限制不因文件导出、Markdown 转换、显示净化而消失。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C28",
+      "category": "security",
+      "name": "正文提示注入",
+      "expected": "正文中的命令不授予写入/外发权限；原有确认与 CAS 仍生效。",
+      "fixture": "fixtures/hostile-content.md",
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C29",
+      "category": "registry",
+      "name": "缺 context 义务注册",
+      "expected": "缺字段拒绝；显式 unsupported 允许但 UI 清楚说明且不能声称已支持。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C30",
+      "category": "registry",
+      "name": "宣称能力无 handler",
+      "expected": "注册失败，不等到用户点击才返回空值。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C31",
+      "category": "registry",
+      "name": "未知安全 profile",
+      "expected": "外部/插件数据不能增加任意执行插件；profile 不在 host 注册表则拒绝。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C32",
+      "category": "registry",
+      "name": "research.memo 挑战",
+      "expected": "仅加类型定义/真源 adapter/fixture 即可走发现、视图、上下文、定位；不改多个 feature switch。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C33",
+      "category": "parity",
+      "name": "@、拖拽、菜单",
+      "expected": "同 pinned ref 的内容身份、版本、范围含义一致；不同预算显式记录。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C34",
+      "category": "parity",
+      "name": "GUI、CLI、MCP",
+      "expected": "同核心请求在可用宿主端口下投影一致；无 React 环境不另造业务规则。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C35",
+      "category": "parity",
+      "name": "原生与 Markdown 表示",
+      "expected": "native round-trip 保持格式；派生 Markdown 有 provenance，不反写覆盖原 JSON/PDF。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C36",
+      "category": "persistence",
+      "name": "旧 report 迁移",
+      "expected": "保留 quote/未知范围；没有假精确定位、假版本或假核验状态。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C37",
+      "category": "persistence",
+      "name": "关闭重开与取消",
+      "expected": "读账本、内容引用和选择器可恢复；取消不损坏已保存来源。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C38",
+      "category": "persistence",
+      "name": "CAS 与并发修改",
+      "expected": "保存使用读取版本；冲突停止，不自动拿 latest 覆盖。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C39",
+      "category": "persistence",
+      "name": "缓存版本与 scope",
+      "expected": "profile/提取器/资源版本变化正确失效；跨 scope 不复用私有 payload。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C40",
+      "category": "ui",
+      "name": "窄栏深浅主题与缩放",
+      "expected": "320/360/720px、深浅、200% 文本缩放无外层横溢；表格独立水平滚动。",
+      "fixture": "fixtures/mixed-content.md",
+      "phase": "browser",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C41",
+      "category": "ui",
+      "name": "键盘与屏幕阅读语义",
+      "expected": "打开/返回焦点明确；表格 region、标题、列头关联保留；状态不只用颜色。",
+      "fixture": null,
+      "phase": "browser",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C42",
+      "category": "ui",
+      "name": "流式未闭合内容",
+      "expected": "未结束 fence/math/table 暂缓富渲染或标草稿，完成后切共享渲染；不改正文。",
+      "fixture": "fixtures/mixed-content.md",
+      "phase": "browser",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C43",
+      "category": "gates",
+      "name": "正文绕过负例",
+      "expected": "新增 JSX 裸富正文/自建 ReactMarkdown 管线被有针对性的规则或合同测试阻止。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C44",
+      "category": "gates",
+      "name": "测试安全语义",
+      "expected": "危险标签不执行与正常表格/安全链接可用同时成立；不再断言正文永远没有 a/img。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C45",
+      "category": "integration",
+      "name": "真实截图链路",
+      "expected": "文件导入/挂载→Agent 多段读取→真实参数产生 report→证据显示→同版本定位，非手造 report 独立页面。",
+      "fixture": "fixtures/long-table.md",
+      "phase": "browser+tauri",
+      "status": "required_not_executed_here"
+    },
+    {
+      "id": "C46",
+      "category": "integration",
+      "name": "能力矩阵可核对",
+      "expected": "已声明支持的每类资产有 fixture/handler/结果；明确不支持不被计入完成。",
+      "fixture": null,
+      "phase": "contract+integration",
+      "status": "required_not_executed_here"
+    }
+  ]
+}
