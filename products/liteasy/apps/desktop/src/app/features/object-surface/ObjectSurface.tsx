@@ -19,7 +19,8 @@ import {
   type ObjectEnvelope,
   type ObjectRef,
 } from "../objects/object.types";
-import { MarkdownContent } from "../markdown/MarkdownContent";
+import { ContentView } from "../markdown/ContentView";
+import { legacyContent } from "../markdown/contentFragment";
 import {
   makeObjectTransfer,
   writeObjectTransfer,
@@ -133,7 +134,7 @@ export function ObjectSurface({
                 : undefined
             }
           >
-            <MarkdownContent allowRelativeImages renderResourceImage={(source, alt) => <AssetImage source={source} alt={alt} basePath={liteasyPath(object.scopeId, { kind: "object", ref: refOf(object) })} />} value={text} paperAnchors={object.paperAnchors} />
+            <ContentView allowRelativeImages renderResourceImage={(source, alt) => <AssetImage source={source} alt={alt} basePath={liteasyPath(object.scopeId, { kind: "object", ref: refOf(object) })} />} content={legacyContent(text)} paperAnchors={object.paperAnchors} />
           </div>
         ) : null)}
       {object.lifecycle !== "tombstoned" ? <PaperAnchorReferences anchors={object.paperAnchors ?? []} /> : null}
@@ -145,7 +146,7 @@ export function ObjectSurface({
           >
             原文
           </summary>
-          <blockquote><MarkdownContent value={sourceText} /></blockquote>
+          <blockquote><ContentView content={legacyContent(sourceText)} /></blockquote>
         </details>
       ) : null}
       {presentation !== "canvas" ? (
@@ -260,7 +261,7 @@ export function ObjectDetails({
     <section className="object-details" aria-label="内容详情">
       <Button onClick={onClose}>关闭详情</Button>
       <h3>{object.title}</h3>
-      <ReferenceSourceContext.Provider value={liteasyPath(object.scopeId, { kind: "object", ref: refOf(object) })}><MarkdownContent allowRelativeImages renderResourceImage={(source, alt) => <AssetImage source={source} alt={alt} basePath={liteasyPath(object.scopeId, { kind: "object", ref: refOf(object) })} />} value={objectDisplayText(object)} paperAnchors={object.paperAnchors} /></ReferenceSourceContext.Provider>
+      <ReferenceSourceContext.Provider value={liteasyPath(object.scopeId, { kind: "object", ref: refOf(object) })}><ContentView allowRelativeImages renderResourceImage={(source, alt) => <AssetImage source={source} alt={alt} basePath={liteasyPath(object.scopeId, { kind: "object", ref: refOf(object) })} />} content={legacyContent(objectDisplayText(object))} paperAnchors={object.paperAnchors} /></ReferenceSourceContext.Provider>
       <PaperAnchorReferences anchors={object.paperAnchors ?? []} />
       {object.assets.map((asset) => (
         <ObjectAssetImage

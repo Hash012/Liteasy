@@ -2,7 +2,8 @@ import { AssetImage, VisualResourceContext } from "./AssetImage";
 import { Component, useContext, type CSSProperties, type ReactNode } from "react";
 import type { BlockPresentation } from "../objects/visualBlock.types";
 import { defaultReadingFontCss } from "../settings/readingFonts";
-import { MarkdownContent } from "../markdown/MarkdownContent";
+import { ContentView } from "../markdown/ContentView";
+import { legacyContent } from "../markdown/contentFragment";
 import "./visualBlocks.css";
 
 class ContentBoundary extends Component<{ children: ReactNode; fallback: string }, { failed: boolean }> {
@@ -32,5 +33,5 @@ export function VisualBlockBase({ presentation, identity, fallback, children, re
 
 export function RichTextBlock({ text, onOpenPath }: { text: string; onOpenPath?(path: string): Promise<void> }) {
   const basePath = useContext(VisualResourceContext);
-  return <MarkdownContent allowRelativeImages={Boolean(basePath)} value={text} onOpenLiteasyPath={onOpenPath} renderResourceImage={(source, alt) => <AssetImage source={source} alt={alt} />} />;
+  return <ContentView allowRelativeImages={Boolean(basePath)} content={legacyContent(text)} onOpenLiteasyPath={onOpenPath} renderResourceImage={(source, alt) => <AssetImage source={source} alt={alt} />} />;
 }

@@ -204,7 +204,7 @@ export const MarkdownContent = memo(function MarkdownContent({
   const markdown = useMemo(() => normalizeMath ? normalizeMarkdownMathDelimiters(value) : value, [normalizeMath, value]);
   const mergedComponents = useMemo<Components>(() => {
     const merged: Components = { ...markdownComponents, ...(inline ? inlineComponents : {}), ...components, ...(renderResourceImage ? { img: (props: { src?: string; alt?: string }) => props.src ? renderResourceImage(props.src, props.alt ?? "图片") : <img src={props.src} alt={props.alt ?? ""} loading="lazy" decoding="async" /> } : {}) };
-    if (mediaPolicy === "blocked") { merged.img = () => <span>图片未加载（证据预览）</span>; return merged; }
+    if (mediaPolicy === "blocked") { merged.img = () => <span>图片未加载（证据预览）</span>; }
     if (references && !inline) {
       const previousLink = merged.a!, previousImage = merged.img!, previousParagraph = merged.p;
       const locator = (href: string) => fromReferenceHref(href) ?? (href.startsWith("liteasy://") || referenceSource && !/^[a-z][a-z0-9+.-]*:|^[\/\\]/i.test(href) ? href : undefined);
@@ -213,6 +213,7 @@ export const MarkdownContent = memo(function MarkdownContent({
         return target !== undefined ? <ResourceLink locator={target} source={referenceSource}>{props.children}</ResourceLink> : createElement(previousLink, props);
       };
       merged.img = (props) => {
+        if (mediaPolicy === "blocked") return createElement(previousImage, props);
         const target = props.src ? locator(props.src) : undefined;
         if (target === undefined) return createElement(previousImage, props);
         if (props.src?.startsWith("liteasy-reference:") || !/\.(png|jpe?g|gif|webp|svg)(?:[?#]|$)/i.test(props.src ?? "")) return <ResourceEmbed locator={target} source={referenceSource} />;

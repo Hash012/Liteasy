@@ -1,3 +1,6 @@
+import { sourceContent } from "../markdown/contentStructure";
+import { legacyContent, type ContentFragment } from "../markdown/contentFragment";
+import { liteasyPath } from "../resource-filesystem/liteasyPath";
 import { paperAnchorFromObject, type PaperAnchorEntity } from "../paper-anchors/paperAnchorEntity";
 import { z } from "zod";
 import {
@@ -39,6 +42,7 @@ export type ContextSnapshot = {
     paperAnchors?: PaperAnchorEntity[];
     anchorMappingIncluded?: boolean;
     coverage?: ContextCoverage;
+    content?: ContentFragment[];
     sourceSha256?: string;
     images?: ObjectEnvelope["assets"];
     ref: ContextRef;
@@ -252,6 +256,7 @@ export async function resolveContextSnapshot(input: {
       ref,
       title,
       text,
+      content: ["objectId" in ref ? sourceContent({ text, path: liteasyPath(input.repository.scopeId, { kind: "object", ref }), revision: ref.revision, scopeId: input.repository.scopeId }) : legacyContent(text, "literal/v1")],
       tokens,
       sha256: await hashText(text),
       origin: input.pinnedRefs?.some(
@@ -275,6 +280,10 @@ export async function resolveContextSnapshot(input: {
       const selected = selectContextText(original, allocations[index] - (entry.anchorMappingIncluded ? anchorBudget : 0), input.question);
       entry.text = selected.text;
       entry.coverage = selected.coverage;
+      const contentRef = entry.ref;
+      entry.content = "objectId" in contentRef ? selected.coverage.ranges.map(range => sourceContent({ text: original,
+        path: liteasyPath(input.repository.scopeId, { kind: "object", ref: contentRef }), revision: contentRef.revision,
+        scopeId: input.repository.scopeId, start: range.start, end: range.end })) : [legacyContent(selected.text, "literal/v1")];
       if (selected.coverage.status !== "full") {
         const anchors: PaperAnchorEntity[] = [];
         for (const anchor of entry.paperAnchors ?? []) {

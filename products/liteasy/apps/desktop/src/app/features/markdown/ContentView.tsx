@@ -11,6 +11,7 @@ export type ContentViewProps = Omit<MarkdownContentProps, "value" | "html" | "re
 export function ContentView({ content, purpose = "reading", allowSource = false, ...props }: ContentViewProps) {
   const [source, setSource] = useState(false);
   const evidence = purpose === "evidence";
+  if (!evidence && !allowSource && content.profile !== "literal/v1") return <MarkdownContent {...props} value={content.viewContext.text} html="sanitized" />;
   return <div className="content-view" data-content-integrity={content.integrity}>
     {allowSource && <button type="button" onClick={() => setSource(!source)} aria-pressed={source}>{source ? "查看正文" : "查看源码"}</button>}
     {evidence && content.integrity !== "complete" && content.integrity !== "structured-partial" &&

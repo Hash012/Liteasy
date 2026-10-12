@@ -1,7 +1,8 @@
 import { Button, Select, Tooltip } from "@fluentui/react-components";
 import { ChevronLeftRegular, ChevronRightRegular } from "@fluentui/react-icons";
 import { useState } from "react";
-import { MarkdownContent } from "../markdown/MarkdownContent";
+import { ContentView } from "../markdown/ContentView";
+import { legacyContent } from "../markdown/contentFragment";
 import { formatPaperAnchorText, type PaperAnchorEntity } from "../paper-anchors/paperAnchorEntity";
 import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
 import "./slideDeckView.css";
@@ -47,9 +48,9 @@ export function SlideDeckView({ onOpenPaperAnchor, paperAnchors, slides, title }
           </Tooltip>
         </nav>
         <article className="genui-slide slide-deck-page" aria-label={`第 ${index + 1} 页幻灯片`} key={text(slide, "id", String(index))}>
-          <h3><MarkdownContent inline paperAnchors={paperAnchors} value={text(slide, "title", `第 ${index + 1} 页`)} /></h3>
-          {markdown ? <MarkdownContent paperAnchors={paperAnchors} value={markdown} /> : <ul>
-            {bullets.map((bullet, bulletIndex) => <li key={bulletIndex}><MarkdownContent paperAnchors={paperAnchors} value={bullet} /></li>)}
+          <h3><ContentView inline paperAnchors={paperAnchors} content={legacyContent(text(slide, "title", `第 ${index + 1} 页`))} /></h3>
+          {markdown ? <ContentView paperAnchors={paperAnchors} content={legacyContent(markdown)} /> : <ul>
+            {bullets.map((bullet, bulletIndex) => <li key={bulletIndex}><ContentView paperAnchors={paperAnchors} content={legacyContent(bullet)} /></li>)}
           </ul>}
           <PaperAnchorReferences anchors={slideAnchors} label="本页引用原文" onOpen={onOpenPaperAnchor} />
         </article>
@@ -57,7 +58,7 @@ export function SlideDeckView({ onOpenPaperAnchor, paperAnchors, slides, title }
           <Button appearance="subtle" aria-expanded={showNotes} onClick={() => setShowNotes(!showNotes)} size="small">
             {showNotes ? "收起演讲备注" : "显示演讲备注"}
           </Button>
-          {showNotes ? <div aria-label="演讲备注"><MarkdownContent paperAnchors={paperAnchors} value={notes} /></div> : null}
+          {showNotes ? <div aria-label="演讲备注"><ContentView paperAnchors={paperAnchors} content={legacyContent(notes)} /></div> : null}
         </div> : null}
       </>}
     </section>

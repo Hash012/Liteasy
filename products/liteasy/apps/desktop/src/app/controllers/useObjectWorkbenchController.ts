@@ -575,7 +575,7 @@ export function useObjectWorkbenchController(input: {
     setStatus("已保存到本机");
     return refs;
   }
-  const resolveLegacyContext = (path: string) => resolveLiteasyContext({ path, repository, active,
+  const resolveLegacyContext = (path: string): Promise<import("../features/object-transfer/contextTransfer").ResourceContextAttachment[]> => resolveLiteasyContext({ path, repository, active,
     resolveResource: (resourcePath) => agentAssets.context(resourcePath),
     artifactScopeId: latest.current.artifactScopeId ?? "device",
     files: createNoteFileService(repository.scopeId, () => latest.current.scopeId),

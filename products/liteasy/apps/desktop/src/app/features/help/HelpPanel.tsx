@@ -8,7 +8,8 @@ import {
   PlayRegular,
   SearchRegular,
 } from "@fluentui/react-icons";
-import { MarkdownContent } from "../markdown/MarkdownContent";
+import { ContentView } from "../markdown/ContentView";
+import { legacyContent } from "../markdown/contentFragment";
 import { LocalDiagnosticsPanel } from "../local-diagnostics/LocalDiagnosticsPanel";
 import type { HelpViewModel } from "./help.types";
 import "./help.css";
@@ -99,7 +100,7 @@ export function HelpPanel({ model, onStartTour, tourError }: { model: HelpViewMo
             model.article ? (
               <article aria-label={model.article.title}>
                 <h1>{model.article.title}</h1>
-                <MarkdownContent html="skip" value={model.article.body} />
+                <ContentView  content={legacyContent(model.article.body)} />
               </article>
             ) : (
               <p>未找到此帮助条目。</p>

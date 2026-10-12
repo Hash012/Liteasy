@@ -2,7 +2,8 @@ import { useMarkdownEditing } from "../markdown/MarkdownEditingContext";
 import { useContext, useEffect, useMemo, useState } from "react";
 import { Button, Select } from "@fluentui/react-components";
 import { BookOpenRegular, EditRegular, SaveRegular } from "@fluentui/react-icons";
-import { MarkdownContent } from "../markdown/MarkdownContent";
+import { ContentView } from "../markdown/ContentView";
+import { legacyContent } from "../markdown/contentFragment";
 import { MarkdownFontControl, useMarkdownFontSize } from "../markdown/MarkdownFontControl";
 import { MarkdownEditor } from "../markdown/MarkdownEditor";
 import { textChapters } from "../reading-library/readingTextChapters";
@@ -65,7 +66,7 @@ export function ExternalNoteEditor({ model }: { model: ExternalNoteModel }) {
         {preview.chapters.map((chapter, index) => <option key={chapter.id} value={index}>{chapter.title}</option>)}
       </Select> : null}
       <article className="external-note-preview" key={`${session.snapshot.mountId}:${session.snapshot.path}:${selectedPart}`}>
-        {preview.error ? <p role="alert">{preview.error}</p> : <MarkdownContent value={preview.chapters[selectedPart]?.content ?? ""} />}
+        {preview.error ? <p role="alert">{preview.error}</p> : <ContentView content={legacyContent(preview.chapters[selectedPart]?.content ?? "")} />}
       </article>
     </>}
   </section></ReferenceSourceContext.Provider>;

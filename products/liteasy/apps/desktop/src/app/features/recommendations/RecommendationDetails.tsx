@@ -4,7 +4,8 @@ import { Button } from "@fluentui/react-components";
 import { useState } from "react";
 import { ExternalNavigation } from "../navigation/externalNavigation";
 import { ArrowClockwiseRegular, ArrowUpRightRegular } from "@fluentui/react-icons";
-import { MarkdownContent } from "../markdown/MarkdownContent";
+import { ContentView } from "../markdown/ContentView";
+import { legacyContent } from "../markdown/contentFragment";
 import type { RecommendationItem } from "./recommendation.types";
 import { recommendationDateLabel, recommendationSourceUrl } from "./recommendationPresentation";
 import { RecommendationDownload, type DownloadRecommendation, type RecommendationLocations } from "./RecommendationDownload";
@@ -46,11 +47,11 @@ export function RecommendationDetails({ item, onDownload, locations, page = fals
       {topics.length ? <ResourceTagChips label="论文主题" tags={topics} limit={8} /> : null}
       <section className="recommendation-abstract" aria-label="论文摘要">
         {page ? <h2>摘要</h2> : null}
-        {item.abstract ? <MarkdownContent value={item.abstract} /> : <p className="recommendation-muted">来源暂未提供摘要，可打开论文网站阅读全文介绍。</p>}
+        {item.abstract ? <ContentView content={legacyContent(item.abstract)} /> : <p className="recommendation-muted">来源暂未提供摘要，可打开论文网站阅读全文介绍。</p>}
       </section>
       {page && (item.reason || item.relatedDocumentTitle) ? <aside className="recommendation-rationale">
         <h2>为什么推荐这篇论文</h2>
-        {item.reason ? <MarkdownContent value={item.reason} onOpenLiteasyPath={openPath} /> : null}
+        {item.reason ? <ContentView content={legacyContent(item.reason)} onOpenLiteasyPath={openPath} /> : null}
         {item.relatedDocumentTitle ? <p className="recommendation-muted">关联文献：{(item.relatedDocumentTitles?.length ? item.relatedDocumentTitles : [item.relatedDocumentTitle]).join("；")}</p> : null}
       </aside> : null}
       {onDownload && !item.resourcePath ? <RecommendationDownload key={item.id} item={item} locations={locations} onDownload={onDownload} /> : null}

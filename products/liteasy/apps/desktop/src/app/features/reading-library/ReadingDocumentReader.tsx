@@ -1,3 +1,5 @@
+import { ContentView } from "../markdown/ContentView";
+import { legacyContent } from "../markdown/contentFragment";
 import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
 import { compileSearchQuery, type SearchMetadata } from "../search/searchQuery";
 import { highlightSearchText } from "../search/searchDomHighlight";
@@ -7,7 +9,7 @@ import { defaultReadingFontCss, readingFontOptions } from "../settings/readingFo
 import { memo, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Button, Field, Input, Popover, PopoverSurface, PopoverTrigger, Select, Slider, Tooltip } from "@fluentui/react-components";
 import { ArrowLeftRegular, ArrowRightRegular, BookOpenRegular, DismissRegular, FullScreenMaximizeRegular, SearchRegular, TextFontSizeRegular } from "@fluentui/react-icons";
-import { MarkdownContent, safeMarkdownUrl } from "../markdown/MarkdownContent";
+import {  safeMarkdownUrl } from "../markdown/MarkdownContent";
 import type { ParsedReadingDocument, ReadingChapter } from "./readingDocument.types";
 import { readingAnchorId } from "./parseReadingFile";
 import "./readingDocumentReader.css";
@@ -244,7 +246,7 @@ function ReaderSession({ searchMetadata, document, documentId, storageScope, onP
           if (link) { event.preventDefault(); goTo(link.getAttribute("data-reading-chapter")!, link.getAttribute("data-reading-anchor") ?? undefined); }
         }}>
           <div className="reading-document__chapter-caption">{label} · {chapterIndex + 1} / {document.chapters.length}</div>
-          {chapter.format === "html" ? <EpubContent chapter={chapter} document={document} key={chapter.id} /> : chapter.format === "markdown" ? <MarkdownContent value={chapter.content} urlTransform={(url, key) => key === "src" && /^data:image\/(?:png|jpeg|gif|webp|avif);base64,[a-z0-9+/=]+$/i.test(url) ? url : safeMarkdownUrl(url, key) ?? ""} /> : <div className="reading-document__plain-text">{chapter.content}</div>}
+          {chapter.format === "html" ? <EpubContent chapter={chapter} document={document} key={chapter.id} /> : chapter.format === "markdown" ? <ContentView content={legacyContent(chapter.content)} urlTransform={(url, key) => key === "src" && /^data:image\/(?:png|jpeg|gif|webp|avif);base64,[a-z0-9+/=]+$/i.test(url) ? url : safeMarkdownUrl(url, key) ?? ""} /> : <div className="reading-document__plain-text">{chapter.content}</div>}
           {document.warnings.length ? <details className="reading-document__notes"><summary>文件说明</summary>{document.warnings.map((warning) => <p key={warning}>{warning}</p>)}</details> : null}
           <div className="reading-document__chapter-end"><span>{chapterIndex + 1 === document.chapters.length ? "已到文末" : "本节结束"}</span>{chapterIndex + 1 < document.chapters.length ? <Button appearance="subtle" icon={<ArrowRightRegular />} iconPosition="after" onClick={() => goTo(document.chapters[chapterIndex + 1].id)}>下一节</Button> : <Button appearance="subtle" onClick={() => updatePosition({ chapterId: chapter.id, ratio: 1 })}>标记读完</Button>}</div>
         </article>

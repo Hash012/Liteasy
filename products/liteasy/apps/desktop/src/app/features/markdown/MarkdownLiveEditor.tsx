@@ -7,7 +7,9 @@ import { Decoration, EditorView, WidgetType, keymap, type DecorationSet } from "
 import { defaultKeymap, history, historyKeymap, undo, redo, undoDepth, redoDepth } from "@codemirror/commands";
 import { syntaxTree } from "@codemirror/language";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { MarkdownContent, type MarkdownContentProps } from "./MarkdownContent";
+import { ContentView } from "./ContentView";
+import { legacyContent } from "./contentFragment";
+import type { MarkdownContentProps } from "./MarkdownContent";
 import { MarkdownEditingToolbar } from "./MarkdownEditingToolbar";
 import { formatMarkdown, type MarkdownCommand } from "./markdownEditing";
 import { ResourceReferencesContext } from "../resource-links/ResourceReferencesContext";
@@ -158,7 +160,7 @@ export function MarkdownLiveEditor({ value, onChange, documentKey, className = "
     {!readOnly && toolbar !== "none" ? <MarkdownEditingToolbar presentation={toolbar} execute={execute} undo={() => { if (view) undo(view); }} redo={() => { if (view) redo(view); }} canUndo={Boolean(view && undoDepth(view.state))} canRedo={Boolean(view && redoDepth(view.state))}
       insertReference={references ? () => { if (!view) return; const range = view.state.selection.main; view.dispatch({ changes: { from: range.from, to: range.to, insert: "[[]]" }, selection: { anchor: range.from + 2 }, userEvent: "input" }); setLinkOpen(true); } : undefined} /> : null}
     <div className="markdown-live-host" ref={host} />
-    {previews.map((preview) => createPortal(<MarkdownContent {...previewProps} value={preview.text} />, preview.dom, String(preview.id)))}
+    {previews.map((preview) => createPortal(<ContentView {...previewProps} content={legacyContent(preview.text)} />, preview.dom, String(preview.id)))}
     {wiki && view && references ? <WikiLinkEditor key={`${documentKey}:${wiki.start}`} raw={view.state.sliceDoc(wiki.start + 2, wiki.end - 2)} target={{ getBoundingClientRect: () => { const rect = view.coordsAtPos(wiki.start); return rect ? new DOMRect(rect.left, rect.top, 1, rect.bottom - rect.top) : new DOMRect(); } }}
       onChange={(raw) => editWiki(raw)} onFinish={(raw, beforeLast) => editWiki(raw, true, beforeLast)} onHistory={(back) => { setLinkOpen(false); (back ? undo : redo)(view); view.focus(); }} /> : null}
   </div>;

@@ -12,6 +12,7 @@ const researchSchema = {
     ...defaultSchema.attributes,
     "*": (defaultSchema.attributes?.["*"] ?? []).filter((attribute) =>
       !["className", "style"].includes(typeof attribute === "string" ? attribute : String(attribute[0]))),
+    span: [...(defaultSchema.attributes?.span ?? []), "dataLiteasyHost"],
     td: ["align", "colSpan", "rowSpan", "headers"],
     th: ["align", "colSpan", "rowSpan", "scope", "headers"],
     table: [],
@@ -30,9 +31,36 @@ function boundTableAttributes() {
           }
         }
       }
+      if (node.type === "element" && ["table", "thead", "tbody", "tfoot", "tr"].includes(node.tagName)) node.children = node.children?.filter((child: any) => child.type !== "text" || child.value.trim());
       node.children?.forEach((child: unknown) => visit(child, depth + 1));
     };
     visit(tree, 0);
   };
 }
-export const researchContentPlugins: NonNullable<Options["rehypePlugins"]> = [rehypeRaw, [rehypeSanitize, researchSchema], boundTableAttributes];
+// Preserve only properties created by trusted remark transforms, never attributes from raw HTML.
+// The per-render random marker is removed again after sanitization.
+function captureHostMarks() {
+  return (tree: any, file: any) => {
+    const marks = new Map<string, Record<string, unknown>>();
+    const visit = (node: any) => {
+      if (node.type === "element" && node.tagName === "span") {
+        const properties = Object.fromEntries(Object.entries(node.properties ?? {}).filter(([key]) => /^data[-A-Z]/.test(key) || key === "className"));
+        if (Object.keys(properties).length) { const key = crypto.randomUUID(); marks.set(key, properties); node.properties.dataLiteasyHost = key; }
+      }
+      node.children?.forEach(visit);
+    };
+    visit(tree); file.data.liteasyHostMarks = marks;
+  };
+}
+function restoreHostMarks() {
+  return (tree: any, file: any) => {
+    const marks: Map<string, Record<string, unknown>> = file.data.liteasyHostMarks ?? new Map();
+    const visit = (node: any) => {
+      const key = node.properties?.dataLiteasyHost;
+      if (key) { delete node.properties.dataLiteasyHost; Object.assign(node.properties, marks.get(key) ?? {}); }
+      node.children?.forEach(visit);
+    };
+    visit(tree);
+  };
+}
+export const researchContentPlugins: NonNullable<Options["rehypePlugins"]> = [captureHostMarks, rehypeRaw, [rehypeSanitize, researchSchema], restoreHostMarks, boundTableAttributes];

@@ -1,4 +1,6 @@
-import { MarkdownContent, markdownUrlTransform } from "../markdown/MarkdownContent";
+import { ContentView } from "../markdown/ContentView";
+import { legacyContent } from "../markdown/contentFragment";
+import {  markdownUrlTransform } from "../markdown/MarkdownContent";
 import { isPdfTextBoxImages, type PdfTextBoxImages } from "./pdfTextBoxImages";
 
 type PdfAnnotationMarkdownProps = {
@@ -13,10 +15,10 @@ export function PdfAnnotationMarkdown({
   className = "pdf-annotation-markdown", emptyLabel, value, images
 }: PdfAnnotationMarkdownProps) {
   return (
-    <MarkdownContent
+    <ContentView
       className={className}
       emptyLabel={emptyLabel}
-      value={value}
+      content={legacyContent(value)}
       urlTransform={pdfAnnotationUrlTransform(images)}
     />
   );

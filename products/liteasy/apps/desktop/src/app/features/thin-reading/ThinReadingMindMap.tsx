@@ -1,6 +1,7 @@
 import { DismissRegular } from "@fluentui/react-icons";
 import { useEffect, useMemo, useState, type DragEvent } from "react";
-import { MarkdownContent } from "../markdown/MarkdownContent";
+import { ContentView } from "../markdown/ContentView";
+import { legacyContent } from "../markdown/contentFragment";
 import type { ThinReadingDocument, ThinReadingNode } from "./thinReading.types";
 
 type ThinReadingMindMapProps = {
@@ -36,7 +37,7 @@ export function normalizeMindMapMarkdown(value: string) {
 }
 
 function MindMapMarkdown({ children }: { children: string }) {
-  return <MarkdownContent inline value={normalizeMindMapMarkdown(children)} />;
+  return <ContentView inline content={legacyContent(normalizeMindMapMarkdown(children))} />;
 }
 
 function evidenceCount(node: ThinReadingNode) {

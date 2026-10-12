@@ -1,9 +1,11 @@
+import { ContentView } from "../markdown/ContentView";
+import { legacyContent } from "../markdown/contentFragment";
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { Button, Tooltip } from "@fluentui/react-components";
 import type { Root } from "mdast";
 import { type Components } from "react-markdown";
 import {
-  MarkdownContent,
+  
   normalizeMarkdownMathDelimiters
 } from "../markdown/MarkdownContent";
 import type { ThinReadingAnchor, ThinReadingSummarySentence } from "./thinReading.types";
@@ -270,14 +272,14 @@ export function ThinReadingMarkdown({
 
   return (
     <MarkdownInteractionContext.Provider value={{ sentenceById, anchorById, activeAnchorId, generating, locale, marksVisible, onDeepen, onSelectAnchor, renderReferences }}>
-      <MarkdownContent
+      <ContentView
         className="assistant-markdown thin-reading__markdown"
         components={components}
         normalizeMath={false}
         paperAnchors={paperAnchors}
         remarkPlugins={[plugin]}
         streaming={generating}
-        value={markdown}
+        content={legacyContent(markdown)}
       />
     </MarkdownInteractionContext.Provider>
   );

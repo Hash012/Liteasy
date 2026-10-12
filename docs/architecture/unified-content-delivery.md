@@ -37,3 +37,7 @@
 ## WP04：注册与多入口
 
 新增宿主类型组合根，注册时拒绝缺失 context、handler、fixture、codec 和未知 profile。生产对象、挂载文件、论文、产物都经注册派生 Agent 门面；六种对象类型另派生 ResourceProvider，原生导出保留 ObjectEnvelope JSON。资源上下文路由不再限定 artifacts；旧 artifacts URI 的账号/版本兼容由独立 provider bridge 承担。research.memo 挑战在真实 IndexedDB 对象仓库完成发现、固定上下文、Agent 读取、native roundtrip、证据、CAS、重开与历史读取，无 Assistant/Evidence/context-picker 分支改动。59 项相关测试通过。挂载文件/原始 PDF 的通用 native provider 仍明确返回未接入原因，原领域导出能力保留。
+
+## WP05：正文表面迁移
+
+阅读器、外部 Markdown、笔记、白板文本、薄读、批注、消息、生成演示/思维图、帮助与资源预览均改用 typed ContentView；旧正文通过集中 legacyContent 适配，不伪造固定来源。ContextSnapshot 增加结构片段并保留原有 text/预算协议。共享净化保留宿主产生的薄读交互标记，原始 HTML 无法伪造这些标记；原有引用/术语/表格测试保留。静态入口已收敛，专用原生格式仍由领域处理。

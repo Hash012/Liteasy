@@ -4,7 +4,8 @@ import { Button, Field, Input, Select, Tooltip } from "@fluentui/react-component
 import { ArrowDownloadRegular, CopyRegular, DeleteRegular, EditRegular, FolderOpenRegular, OpenRegular } from "@fluentui/react-icons";
 import { bibliographicFields } from "./bibliographicFields";
 import { assetTypeLabels } from "./libraryAssetMetadata";
-import { MarkdownContent } from "../markdown/MarkdownContent";
+import { ContentView } from "../markdown/ContentView";
+import { legacyContent } from "../markdown/contentFragment";
 import { displayPath } from "../resource-filesystem/displayPath";
 import { readingResourceCapabilities } from "../reading-library/readingResourceCapabilities";
 import { formatCatalogFileSize, readingCatalogCitation } from "./readingCatalogSearch";
@@ -124,7 +125,7 @@ export function ReadingCatalogDetails({ entry, ...actions }: { entry: ReadingCat
       </Field>
       {actions.onMetadataChange ? <Button disabled={!dirty || busy} onClick={() => void save()}>{busy ? "保存中…" : "保存整理信息"}</Button> : null}
     </section>
-    {entry.abstract ? <section className="reading-catalog-detail-section" aria-label="摘要"><h4>摘要</h4><MarkdownContent value={entry.abstract} /></section> : null}
+    {entry.abstract ? <section className="reading-catalog-detail-section" aria-label="摘要"><h4>摘要</h4><ContentView content={legacyContent(entry.abstract)} /></section> : null}
     {entry.physicalPath || entry.liteasyPath || actions.onReveal || (actions.onExport && entry.canExport !== false) ? <section className="reading-catalog-detail-section" aria-label="文件位置">
       <h4>文件与位置</h4>
       {entry.physicalPath ? <CopyValue label="实际位置" value={displayPath(entry.physicalPath)} onCopy={(value) => void copy(value)} /> : null}

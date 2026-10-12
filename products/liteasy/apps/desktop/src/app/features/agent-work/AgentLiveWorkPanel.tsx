@@ -1,7 +1,8 @@
 import { Button } from "@fluentui/react-components";
 import { ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
 import { useEffect, useId, useState } from "react";
-import { MarkdownContent } from "../markdown/MarkdownContent";
+import { ContentView } from "../markdown/ContentView";
+import { legacyContent } from "../markdown/contentFragment";
 import { toUserVisibleAgentWorkMarkdown } from "../agent-runtime/agentWorkPresentation";
 import "./agentLiveWorkPanel.css";
 
@@ -69,11 +70,11 @@ export function AgentLiveWorkPanel({
       {open ? (
         <div aria-label="实时生成内容" className="agent-live-work__body" id={detailId}>
           {visibleMarkdown ? (
-            <MarkdownContent streaming
+            <ContentView streaming
               components={{
                 a: ({ children }) => <span>{children}</span>
               }}
-              value={visibleMarkdown}
+              content={legacyContent(visibleMarkdown)}
             />
           ) : (
             <p>模型正在整理上下文和结构化内容，新的可读片段会显示在这里。</p>

@@ -1,7 +1,8 @@
 import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Button, Popover, PopoverSurface, PopoverTrigger, Tooltip } from "@fluentui/react-components";
 import { ArrowExpandRegular, DismissRegular } from "@fluentui/react-icons";
-import { MarkdownContent } from "../markdown/MarkdownContent";
+import { ContentView } from "../markdown/ContentView";
+import { legacyContent } from "../markdown/contentFragment";
 import { AssetImage, VisualResourceContext } from "../visual-blocks/AssetImage";
 import { writeAssetContextTransfer } from "../object-transfer/assetContextTransfer";
 import { ReferenceDepthContext, ReferenceSourceContext, ResourceReferencesContext } from "./ResourceReferencesContext";
@@ -40,7 +41,7 @@ export function ResourceReferenceView({ locator, source, embed = false, onResolv
     <span className="resource-reference-heading"><strong>{candidate?.title || "引用内容"}</strong>{candidate && references ? <Tooltip content="打开原文件" relationship="label"><Button size="small" appearance="subtle" icon={<ArrowExpandRegular />} aria-label="打开原文件" onClick={() => { void Promise.resolve(references.open(candidate.path)).catch((e) => setError(String(e))); }} /></Tooltip> : null}</span>
     {chain.length >= 2 ? <span>嵌套引用已折叠，请打开原文件继续阅读。</span> : error ? <span role="alert">{error}<Button size="small" onClick={() => setAttempt((value) => value + 1)}>重试</Button></span> : isImage && candidate ? <AssetImage source={candidate.path} alt={candidate.title} /> : document ? <>
       {!text && fragment ? <span role="status">{fragment}</span> : <ReferenceDepthContext.Provider value={[...chain, candidate!.path]}><ReferenceSourceContext.Provider value={candidate!.path}>
-        <MarkdownContent value={text ?? ""} renderResourceImage={(url, alt) => <AssetImage source={url} basePath={candidate!.path} alt={alt} />} allowRelativeImages />
+        <ContentView content={legacyContent(text ?? "")} renderResourceImage={(url, alt) => <AssetImage source={url} basePath={candidate!.path} alt={alt} />} allowRelativeImages />
       </ReferenceSourceContext.Provider></ReferenceDepthContext.Provider>}
       {!document.complete ? <span className="reference-hint">仅载入部分内容。<Button size="small" disabled={limit >= 80000} onClick={() => setLimit((value) => Math.min(value + 12000, 80000))}>继续载入</Button></span> : null}
     </> : <span role="status">正在读取引用…</span>}

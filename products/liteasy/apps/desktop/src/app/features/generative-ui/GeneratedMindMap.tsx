@@ -1,6 +1,7 @@
 import { DismissRegular } from "@fluentui/react-icons";
 import { useEffect, useMemo, useState, type DragEvent } from "react";
-import { MarkdownContent } from "../markdown/MarkdownContent";
+import { ContentView } from "../markdown/ContentView";
+import { legacyContent } from "../markdown/contentFragment";
 
 export type GeneratedMindMapNode = {
   evidenceIds: string[];
@@ -44,7 +45,7 @@ export function normalizeGeneratedMindMapMarkdown(value: string) {
 }
 
 function MindMapMarkdown({ children }: { children: string }) {
-  return <MarkdownContent inline value={normalizeGeneratedMindMapMarkdown(children)} />;
+  return <ContentView inline content={legacyContent(normalizeGeneratedMindMapMarkdown(children))} />;
 }
 
 function collectInitiallyExpanded(

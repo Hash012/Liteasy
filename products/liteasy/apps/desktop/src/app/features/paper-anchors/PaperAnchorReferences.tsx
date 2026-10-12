@@ -1,7 +1,8 @@
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import { Button } from "@fluentui/react-components";
 import { useEffect, useState } from "react";
-import { MarkdownContent } from "../markdown/MarkdownContent";
+import { ContentView } from "../markdown/ContentView";
+import { legacyContent } from "../markdown/contentFragment";
 import {
   formatPaperAnchorText,
   paperAnchorLabel,
@@ -39,7 +40,7 @@ export function PaperAnchorReferences({ anchors, onOpen, label = "查看引用�
           }}
           size="small"
         >{paperAnchorLabel(anchor)}</Button>
-        {anchor.snapshot.quote ? <blockquote><MarkdownContent value={anchor.snapshot.quote} /></blockquote> : null}
+        {anchor.snapshot.quote ? <blockquote><ContentView content={legacyContent(anchor.snapshot.quote)} /></blockquote> : null}
         {anchor.snapshot.summary && anchor.snapshot.summary !== anchor.snapshot.quote ? (
           <p>摘要：{formatPaperAnchorText(anchor.snapshot.summary)}</p>
         ) : null}

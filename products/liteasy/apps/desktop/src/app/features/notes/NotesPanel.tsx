@@ -48,7 +48,8 @@ import {
 import { MarkdownEditor } from "../markdown/MarkdownEditor";
 import { ReferenceSourceContext } from "../resource-links/ResourceReferencesContext";
 import { liteasyPath } from "../resource-filesystem/liteasyPath";
-import { MarkdownContent } from "../markdown/MarkdownContent";
+import { ContentView } from "../markdown/ContentView";
+import { legacyContent } from "../markdown/contentFragment";
 import { PdfAnnotationMarkdown } from "../pdf/PdfAnnotationMarkdown";
 import { LibraryIconProvider, LibraryIconMenuItem, LibraryItemIcon } from "../library/LibraryItemIcon";
 import { NotesFolderTree } from "./NotesFolderTree";
@@ -434,12 +435,12 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
                     <span>{item.source}</span>
                   </header>
                   {item.target.kind === "external-file" ? <Button appearance="subtle" icon={<ArrowUpRightRegular />} onClick={() => model.openSource(item)}>在阅读区打开</Button> : item.annotation ? <PdfAnnotationMarkdown value={item.text} images={item.annotation.images} />
-                    : <ReferenceSourceContext.Provider value={liteasyPath(model.scopeId ?? "local", item.target)}>{preference.mode === "live" && item.editable && item.object?.kind === "content.note" ? <NotesInlineEditor key={item.key} item={item} model={model} path={liteasyPath(model.scopeId ?? "local", item.target)} /> : <MarkdownContent value={item.text} paperAnchors={item.paperAnchors ?? item.object?.paperAnchors} />}</ReferenceSourceContext.Provider>}
+                    : <ReferenceSourceContext.Provider value={liteasyPath(model.scopeId ?? "local", item.target)}>{preference.mode === "live" && item.editable && item.object?.kind === "content.note" ? <NotesInlineEditor key={item.key} item={item} model={model} path={liteasyPath(model.scopeId ?? "local", item.target)} /> : <ContentView content={legacyContent(item.text)} paperAnchors={item.paperAnchors ?? item.object?.paperAnchors} />}</ReferenceSourceContext.Provider>}
                   <PaperAnchorReferences anchors={item.paperAnchors ?? item.object?.paperAnchors ?? []} />
                   {quote && !item.text.includes(quote) && (
                     <details>
                       <summary>原文</summary>
-                      <blockquote><MarkdownContent value={quote} /></blockquote>
+                      <blockquote><ContentView content={legacyContent(quote)} /></blockquote>
                     </details>
                   )}
                   <div className="notes-item-actions">

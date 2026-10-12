@@ -1,5 +1,6 @@
 import { type ComponentPropsWithoutRef } from "react";
-import { MarkdownContent } from "../markdown/MarkdownContent";
+import { ContentView } from "../markdown/ContentView";
+import { legacyContent } from "../markdown/contentFragment";
 import type { MineruFigure } from "./import.types";
 import { resolveMineruImageSource } from "./mineruImageSources";
 
@@ -38,10 +39,10 @@ function MarkdownImage({
  */
 export function MineruMarkdown({ content, figures = [] }: MineruMarkdownProps) {
   return (
-    <MarkdownContent
+    <ContentView
       className="mineru-markdown"
-      html="sanitized"
-      value={content}
+      
+      content={legacyContent(content)}
       components={{
         a: ({ href, children, ...props }) => {
           const safe = safeHref(href);

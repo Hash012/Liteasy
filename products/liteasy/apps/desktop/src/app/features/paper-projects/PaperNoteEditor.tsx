@@ -4,7 +4,8 @@ import { Button, Select } from "@fluentui/react-components";
 import { MarkdownEditor } from "../markdown/MarkdownEditor";
 import { ReferenceSourceContext, ResourceReferencesContext } from "../resource-links/ResourceReferencesContext";
 import { liteasyPath } from "../resource-filesystem/liteasyPath";
-import { MarkdownContent } from "../markdown/MarkdownContent";
+import { ContentView } from "../markdown/ContentView";
+import { legacyContent } from "../markdown/contentFragment";
 import { MarkdownFontControl, useMarkdownFontSize } from "../markdown/MarkdownFontControl";
 import { textChapters } from "../reading-library/readingTextChapters";
 import "../note-files/externalNoteEditor.css";
@@ -39,7 +40,7 @@ export function PaperNoteEditor({ model }: { model: Model }) {
     {model.error ? <p role="alert">{model.error}</p> : null}
     {live || editing ? <MarkdownEditor documentKey={note.object.objectId} className="external-note-source" label="论文笔记 Markdown 源码" value={note.draft} onChange={model.setDraft} /> : <>
       {preview.chapters.length > 1 ? <Select aria-label="笔记章节" value={part} onChange={(_, data) => setPart(Number(data.value))}>{preview.chapters.map((chapter, index) => <option key={chapter.id} value={index}>{chapter.title}</option>)}</Select> : null}
-      <article className="external-note-preview">{preview.error ? <p role="alert">{preview.error}</p> : <MarkdownContent value={preview.chapters[Math.min(part, preview.chapters.length - 1)]?.content ?? ""} />}</article>
+      <article className="external-note-preview">{preview.error ? <p role="alert">{preview.error}</p> : <ContentView content={legacyContent(preview.chapters[Math.min(part, preview.chapters.length - 1)]?.content ?? "")} />}</article>
     </>}
   </section></ReferenceSourceContext.Provider>;
 }
