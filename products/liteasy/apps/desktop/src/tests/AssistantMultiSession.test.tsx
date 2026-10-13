@@ -89,7 +89,7 @@ describe("AssistantPane multi-session registry", () => {
 
     await user.click(screen.getByRole("button", { name: "历史" }));
     await user.click(screen.getByRole("button", { name: "打开会话：第一条问题" }));
-    await user.type(composer, "第一条追问");
+    await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "第一条追问");
     await user.click(screen.getByRole("button", { name: "发送" }));
     await screen.findByText("answer:第一条追问");
 
@@ -387,7 +387,7 @@ describe("AssistantPane multi-session registry", () => {
     await waitFor(() => {
       expect(screen.getByLabelText("当前会话")).toHaveAttribute("data-session-kind", "conversation");
     });
-    await user.click(screen.getByRole("button", { name: "历史" }));
+    await user.click(screen.getByRole("button", { name: "任务", exact: true }));
     expect(screen.getByText("产物生成 · 已完成")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "打开会话：生成：文献树" }));
 

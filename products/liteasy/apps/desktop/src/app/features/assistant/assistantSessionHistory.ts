@@ -29,6 +29,7 @@ export type AssistantSessionHistoryItem = {
   sourceTaskId?: string;
   resultRefs?: ObjectRef[];
   taskBinding?: AssistantTaskBinding;
+  taskRuns?: Array<{ id: string; taskId: string; status: AssistantSessionStatus; messages: AssistantMessage[]; artifactId?: string; resultRefs?: ObjectRef[] }>;
   taskInput?: {
     taskId: string;
     workflowId: string;
@@ -309,8 +310,17 @@ export function createArtifactTaskSession(
     else thinReadingMessages.push(message);
   }
 
+  const runId = task.agentRunId ?? `${task.id}:attempt:${task.attempt ?? 0}`;
+  const runMessages: AssistantMessage[] = task.type === "thin_reading"
+    ? thinReadingMessages.filter((message) => message.artifactTask?.id === task.id)
+    : [{ content: progressMessage, id: `${sessionId}:progress`, role: "assistant", runId }];
+  const taskRuns = (previous?.taskRuns ?? []).filter((run) => !(task.agentRunId && run.taskId === task.id && run.status === "running" && run.id === `${task.id}:attempt:${task.attempt ?? 0}`));
+  const runIndex = taskRuns.findIndex((run) => run.id === runId);
+  const attempt = { id: runId, taskId: task.id, status, messages: runMessages, artifactId: task.status === "completed" ? task.artifactId : undefined };
+  if (runIndex < 0) taskRuns.push(attempt); else taskRuns[runIndex] = { ...taskRuns[runIndex], ...attempt };
   return {
     ...previous,
+    taskRuns,
     schemaVersion: "liteasy.assistant-session/v2",
     origin: task.origin ?? previous?.origin ?? { kind: "legacy_unknown", entryPoint: "legacy", initiatedBy: { type: "import", id: "local" } },
     taskInput: previous?.taskInput ?? {

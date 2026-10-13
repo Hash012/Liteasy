@@ -98,6 +98,14 @@ export async function compileDocument(input: {
   if (document.assets.reduce((total, asset) => { const image = exportImageDimensions(asset.bytes, asset.mediaType); return total + image.width * image.height; }, 0) > 100_000_000) throw new Error("附件总像素超过导出预算，请拆分导出。");
   check();
   walkDocument(document.nodes, node => {
+    if (node.tag === "p") {
+      const text = (item: DocumentNode): string => item.value ?? (item.children ?? []).map(text).join("");
+      if (text(node).length > 1200) document.diagnostics.push({ code: "source_long_paragraph", severity: "warning", nodeId: node.id, message: "源内容含较长的单段正文；导出保留原段落，不自动改写或分段。如需重排，请先编辑并审阅来源。" });
+    }
+    if (node.type === "math" && (node.value?.length ?? 0) > 160) {
+      node.properties = { ...node.properties, wide: true };
+      document.diagnostics.push({ code: "wide_math_source", severity: "warning", nodeId: node.id, message: "此公式较长，纸张版使用可换行的完整 TeX 源码作为明确替代，避免裁剪或缩小；屏幕与 Markdown 保留原公式。" });
+    }
     if (node.type === "math") { try { katex.renderToString(node.value ?? "", { output: "mathml", trust: false, maxExpand: 500, maxSize: 20, throwOnError: true }); }
       catch { document.diagnostics.push({ code: "math_source_fallback", severity: "warning", nodeId: node.id, message: "公式无法安全排版，保留完整 TeX 源码。" }); } }
   });

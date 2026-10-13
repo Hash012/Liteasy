@@ -38,4 +38,4 @@ export const assistantConversationSchema = z.object({
   parentConversationId: z.string().optional(),
   branchBoundaryMessageId: z.string().optional()
 });
-export type AssistantPersistenceStatus = "dirty" | "saving" | "saved" | "failed";
+export type AssistantPersistenceStatus = "dirty" | "saving" | "saved" | "failed" | "conflict";

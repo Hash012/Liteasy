@@ -36,6 +36,6 @@ describe("AssistantSidebar", () => {
     expect(screen.queryByText("普通对话")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "新建" })).toHaveAttribute("title", "开始一个新的 AI 对话");
     expect(screen.getByRole("button", { name: "历史" })).toHaveAttribute("title", "查看历史会话");
-    expect(screen.getByLabelText("AI助手初始消息区")).toBeInTheDocument();
+    expect(screen.getByLabelText("助手首页")).toBeInTheDocument();
   });
 });

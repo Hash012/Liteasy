@@ -1,3 +1,4 @@
+import { VisuallyHidden } from "../../shared/ui/VisuallyHidden";
 import { copyAnswerWithEvidence } from "../evidence/evidenceCopy";
 import { MessageEvidence } from "../evidence/components/MessageEvidence";
 import { displayPath } from "../resource-filesystem/displayPath";
@@ -193,7 +194,7 @@ export function AssistantMessageList({
       selectedMessageId.current = selection?.anchorNode?.parentElement?.closest("[data-message-id]")?.getAttribute("data-message-id") ?? "";
     }}>
       {newContent ? <Button className="assistant-new-content" size="small" onClick={() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight; followingRef.current = true; setNewContent(false); }}>有新内容 · 返回底部</Button> : null}
-      <span className="sr-only" role="status">{messages.filter((message) => message.role === "assistant" && message.agentActivity?.status !== "working").length} 条完整回复</span>
+      <VisuallyHidden role="status">{new Set(messages.filter((message) => message.role === "assistant" && !message.artifactTask && !message.confirmation && (!message.kind || message.kind === "assistant_message") && (message.agentActivity?.status === "completed" || message.turnOutcome === "completed")).map((message) => message.runId ?? message.id)).size} 条完整回复</VisuallyHidden>
       {captureStatus ? <p role="status">{captureStatus}</p> : null}
       {messages.map((message, index) => {
         if (message.kind === "task_reference" && message.taskReference) return <article key={message.id} data-message-id={message.id} className="assistant-task-reference" aria-label="任务引用">

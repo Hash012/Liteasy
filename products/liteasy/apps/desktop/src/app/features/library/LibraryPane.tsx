@@ -133,13 +133,8 @@ import {
   type PaperFileMetadata
 } from "./paperFileMetadata";
 
-export type LibraryPaperChildItem = {
-  id: string;
-  kind: "artifact" | "note" | "board" | PaperResourceKind;
-  objectId?: string;
-  label: string;
-  meta?: string;
-};
+export type { LibraryPaperChildItem } from "./libraryInventory";
+import { inventoryLabel, libraryChildGroup, type LibraryInventory, type LibraryPaperChildItem } from "./libraryInventory";
 
 const CitationGraphDialog = lazy(() => import("../citation-graph/CitationGraphDialog"));
 
@@ -164,6 +159,8 @@ type LibraryPaneProps = {
   organizationStorageAccess?: OrganizationStorageAccess;
   organizationWorkspaceLabel?: string;
   paperChildren?: Record<string, LibraryPaperChildItem[]>;
+  paperInventory?: Record<string, LibraryInventory>;
+  onRefreshPaperInventory?: () => void;
   papers: Paper[];
   recommendationService?: PaperServiceConfig;
   recommendationItems: RecommendationItem[];
@@ -504,6 +501,8 @@ function LibraryPaneContent({
   onOpenPaperChild,
   onCreatePaperChild,
   paperChildren = {},
+  paperInventory,
+  onRefreshPaperInventory,
   papers,
   onRefreshLocalLibrary,
   onRenameFolder,
@@ -1106,7 +1105,11 @@ function LibraryPaneContent({
   function renderEntry(area: "local" | "collection" | "organization", entry: ExplorerEntry, depth: number) {
     const selected = area === "local" && selectedPaperIds.includes(entry.id);
     const sourcePaper = papers.find((paper) => paper.id === entry.id);
-    const children = sourcePaper ? paperChildren[sourcePaper.id] ?? [] : [];
+    const inventory: LibraryInventory = (sourcePaper && paperInventory?.[sourcePaper.id]) || {
+      state: sourcePaper && Object.hasOwn(paperChildren, sourcePaper.id) ? "ready" : "unknown",
+      items: sourcePaper ? paperChildren[sourcePaper.id] ?? [] : [], extraction: "unknown"
+    };
+    const children = inventory.items;
     const childrenExpanded = expandedPaperChildren.includes(entry.id);
     const pending = pendingNodeIds.includes(entry.id);
     const canAttachPdf = entry.source.area !== "local" &&
@@ -1166,11 +1169,11 @@ function LibraryPaneContent({
             type="checkbox"
           />
         ) : <span className="library-disclosure-spacer" />}
-        {children.length ? <Tooltip content={childrenExpanded ? "收起论文附件" : `展开 ${children.length} 个论文附件`} relationship="description">
-          <button className="library-attachment-count" type="button" aria-label={`${childrenExpanded ? "收起" : "展开"} ${entry.label} 的 ${children.length} 个附件`}
+        <Tooltip content={inventoryLabel(inventory)} relationship="description">
+          <button className="library-attachment-count" type="button" aria-label={`${childrenExpanded ? "收起" : "展开"} ${entry.label} 的${inventoryLabel(inventory)}`}
             aria-expanded={childrenExpanded} onClick={(event) => { event.stopPropagation(); setExpandedPaperChildren((current) => current.includes(entry.id)
-              ? current.filter((id) => id !== entry.id) : [...current, entry.id]); }}>+{children.length}</button>
-        </Tooltip> : null}
+              ? current.filter((id) => id !== entry.id) : [...current, entry.id]); }}>{childrenExpanded ? "−" : "+"}</button>
+        </Tooltip>
         <span aria-hidden="true" className="library-paper-icon">
           <LibraryItemIcon itemKey={`file:${area}:${entry.id}`} kind={entry.bodyAvailable ? "pdf" : "text"} />
         </span>
@@ -1264,15 +1267,24 @@ function LibraryPaneContent({
     return (
       <li className={`library-paper-node${selected ? " active" : ""}`} key={entry.id}>
         {row}
-        {sourcePaper && children.length > 0 && childrenExpanded ? (
+        {childrenExpanded ? (
           <div className="library-paper-children" style={{ marginInlineStart: `${depth * 18 + 50}px` }}>
+            <p role="status">{inventoryLabel(inventory)}{inventory.state !== "ready" && children.length > 0 ? ` · 以下为上次已知的 ${children.length} 项` : ""}</p>
+            {inventory.summary ? <p>{inventory.summary}</p> : null}
+            {inventory.state === "error" && onRefreshPaperInventory ? <Button size="small" onClick={onRefreshPaperInventory}>重试关联内容</Button> : null}
+            <dl className="library-resource-facts">
+              <dt>原文件</dt><dd>{entry.bodyAvailable ? "可打开" : "仅元数据，暂无原文件"}</dd>
+              <dt>题录</dt><dd>{sourcePaper?.authors?.length ? "已记录作者；可在题录详情核对" : "题录待核对"}</dd>
+              <dt>提取</dt><dd>{{ unknown: "尚未查询", not_extracted: "未提取", loading: "正在提取", ready: "已有提取内容", error: "提取失败" }[inventory.extraction]}</dd>
+            </dl>
             <ul aria-label={`${entry.label} 的论文文件`}>
-              {children.map((child) => (
-                <li key={child.id}>
+              {children.map((child, index) => (
+                <li key={child.ref ? `${child.ref.objectId}:${child.ref.revision}` : child.id}>
+                  {index === 0 || libraryChildGroup(children[index - 1].kind) !== libraryChildGroup(child.kind) ? <h4>{libraryChildGroup(child.kind)}</h4> : null}
                   <Menu openOnContext><MenuTrigger disableButtonEnhancement><Button
                     appearance="subtle"
                     size="small"
-                    icon={<LibraryItemIcon itemKey={`child:${sourcePaper.id}:${child.id}`} kind={child.kind} />}
+                    icon={<LibraryItemIcon itemKey={`child:${sourcePaper?.id ?? entry.id}:${child.id}`} kind={child.kind} />}
                     title={child.meta ? `${child.label} · ${child.meta}` : child.label}
                     aria-label={`打开论文文件：${child.label}`}
                     data-reading-entry="true"
@@ -1281,17 +1293,17 @@ function LibraryPaneContent({
                       event.stopPropagation();
                       event.dataTransfer.effectAllowed = "copy";
                       if (child.objectId) writeAssetContextTransfer(event.dataTransfer, contextScopeId, {
-                        kind: "path", path: liteasyPath(contextScopeId, { kind: "object", ref: { objectId: child.objectId, revision: "latest" }, followLatest: true }),
+                        kind: "path", path: liteasyPath(contextScopeId, { kind: "object", ref: child.ref ?? { objectId: child.objectId, revision: "latest" }, followLatest: !child.ref }),
                       }, child.label);
                       else if (child.kind === "artifact") {
                         writeAssetContextTransfer(event.dataTransfer, contextScopeId, { kind: "path", path: liteasyPath(contextScopeId, { kind: "artifact", artifactId: child.id }) }, child.label);
                       } else if (child.kind === "extracted_text" || child.kind === "figures" || child.kind === "multimodal") {
-                        writeAssetContextTransfer(event.dataTransfer, contextScopeId, { kind: "paper-resource", paperId: sourcePaper.id, resourceKind: child.kind }, child.label);
+                        writeAssetContextTransfer(event.dataTransfer, contextScopeId, { kind: "paper-resource", paperId: sourcePaper?.id ?? entry.id, resourceKind: child.kind }, child.label);
                       } else event.preventDefault();
                     }}
-                    onClick={() => onOpenPaperChild?.(child, sourcePaper)}
+                    onClick={() => { if (sourcePaper) onOpenPaperChild?.(child, sourcePaper); }}
                   >{child.label}</Button></MenuTrigger><MenuPopover><MenuList>
-                    <LibraryIconMenuItem itemKey={`child:${sourcePaper.id}:${child.id}`} title={child.label} />
+                    <LibraryIconMenuItem itemKey={`child:${sourcePaper?.id ?? entry.id}:${child.id}`} title={child.label} />
                   </MenuList></MenuPopover></Menu>
                 </li>
               ))}

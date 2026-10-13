@@ -1,3 +1,5 @@
+import { useContext } from "react";
+import { VisualPreviewContext } from "./visualPreviewContext";
 import { CompositePrimitive } from "./CompositePrimitives";
 import { AssetImage } from "./AssetImage";
 import { Button } from "@fluentui/react-components";
@@ -6,6 +8,7 @@ import type { ComponentTree } from "./blockRegistry";
 import type { JsonObject, JsonValue } from "../extensions/extensionSchema";
 
 export function ComponentTreeView({ tree, data, openPath }: { tree: ComponentTree; data: JsonObject; openPath?(path: string): Promise<void> }) {
+  const preview = useContext(VisualPreviewContext);
   const read = (key: string): JsonValue | undefined => {
     const value = tree.props?.[key];
     if (value && typeof value === "object" && !Array.isArray(value) && typeof value.$field === "string") {
@@ -28,6 +31,7 @@ export function ComponentTreeView({ tree, data, openPath }: { tree: ComponentTre
   }
   if (tree.component === "ResourceCard") {
     const path = text("path");
+    if (preview && path) return <div className="visual-resource-card"><strong>{text("title") || "引用资源"}</strong><p>预览未授权读取此资源；请在工作区核查来源。</p><code>{path}</code></div>;
     return path ? <div className="visual-resource-card"><Button appearance="subtle" disabled={!openPath || !path.startsWith("liteasy://")} onClick={() => void openPath?.(path)}>{text("title") || "打开引用资源"}</Button><RichTextBlock text={path.startsWith("liteasy://") ? `[查看内容](${path})` : path} onOpenPath={openPath} /></div> : null;
   }
   if (tree.component === "Table") {

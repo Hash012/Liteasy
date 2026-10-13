@@ -133,7 +133,7 @@ export async function renderDocumentDocx(document: ExportDocument): Promise<Uint
   }
   let listId = 0;
   const numberings: any[] = [];
-  const blocks = (nodes: DocumentNode[], list?: { reference: string; level: number }): Array<Paragraph | Table> => nodes.flatMap(node => {
+  const blocks = (nodes: DocumentNode[], list?: { reference: string; level: number }, quoted = false): Array<Paragraph | Table> => nodes.flatMap(node => {
     if (node.properties?.footnoteDefinition) return [];
     if (node.tag === "table") {
       const rows = (node.children ?? []).flatMap(child => child.tag === "tr" ? [child] : (child.children ?? []).filter(row => row.tag === "tr"));
@@ -143,18 +143,34 @@ export async function renderDocumentDocx(document: ExportDocument): Promise<Uint
     if (node.tag === "ul" || node.tag === "ol") {
       const reference = `list-${++listId}`;
       numberings.push({ reference, levels: Array.from({ length: 9 }, (_, level) => ({ level, format: node.tag === "ol" ? LevelFormat.DECIMAL : LevelFormat.BULLET, text: node.tag === "ol" ? `%${level + 1}.` : "•", start: Number(node.properties?.start ?? 1), style: { paragraph: { indent: { left: 360 * (level + 1), hanging: 240 } } } })) });
-      return (node.children ?? []).flatMap(child => blocks(child.children ?? [], { reference, level: Math.min(8, (list?.level ?? -1) + 1) }));
+      const numbering = { reference, level: Math.min(8, (list?.level ?? -1) + 1) };
+      return (node.children ?? []).filter(child => child.tag === "li").flatMap(child => {
+        const groups: DocumentNode[] = [];
+        let pending: DocumentNode[] = [];
+        const flush = () => { if (pending.some(item => item.type !== "text" || item.value?.trim())) groups.push({ id: `${child.id}-paragraph-${groups.length}`, type: "element", tag: "p", children: pending }); pending = []; };
+        for (const item of child.children ?? []) {
+          if (["p", "pre", "ul", "ol", "table", "div", "blockquote"].includes(item.tag ?? "")) { flush(); groups.push(item); }
+          else pending.push(item);
+        }
+        flush();
+        let numbered = false;
+        return groups.flatMap(group => {
+          if (group.tag === "ul" || group.tag === "ol") return blocks([group], numbering, quoted);
+          const first = !numbered; numbered = true;
+          return blocks([group], first ? numbering : undefined, quoted);
+        });
+      });
     }
-    if (["section", "div", "blockquote"].includes(node.tag ?? "")) return blocks(node.children ?? [], list);
+    if (["section", "div", "blockquote"].includes(node.tag ?? "")) return blocks(node.children ?? [], list, quoted || node.tag === "blockquote");
     if (node.tag === "hr") return [new Paragraph({ children: [new TextRun("────────────────")], spacing: { after: 120 } })];
     if (node.tag === "pre") return [new Paragraph({ children: rawText(node).split("\n").flatMap((line, index) => [new TextRun({ text: line, font: "Consolas", size: 18, ...(index ? { break: 1 } : {}) })]), spacing: { after: 120 } })];
     if (node.type === "text" && !node.value?.trim()) return [];
     const heading = /^h[1-6]$/.test(node.tag ?? "") ? Number(node.tag![1]) : undefined;
-    return [new Paragraph({ children: inline(node), heading: heading ? [HeadingLevel.TITLE, HeadingLevel.HEADING_1, HeadingLevel.HEADING_2, HeadingLevel.HEADING_3, HeadingLevel.HEADING_4, HeadingLevel.HEADING_5][heading - 1] : undefined, keepNext: Boolean(heading), widowControl: true, numbering: list, spacing: { after: 120, line: 352 } })];
+    return [new Paragraph({ children: inline(node), heading: heading ? [HeadingLevel.TITLE, HeadingLevel.HEADING_1, HeadingLevel.HEADING_2, HeadingLevel.HEADING_3, HeadingLevel.HEADING_4, HeadingLevel.HEADING_5][heading - 1] : undefined, keepNext: Boolean(heading), style: quoted ? "Quote" : undefined, indent: quoted ? { left: 360, right: 360 } : undefined, widowControl: true, numbering: list, spacing: { after: 120, line: 352 } })];
   });
   const children = blocks(document.nodes);
   if (document.diagnostics.length) children.push(new Paragraph({ text: "导出说明", heading: HeadingLevel.HEADING_1 }), ...document.diagnostics.map(issue => new Paragraph(issue.message)));
   const footnotes = Object.fromEntries([...footnoteNodes].map(([key, node]) => [String(footnoteIds.get(key)), { children: blocks(node.children ?? []).filter((block): block is Paragraph => block instanceof Paragraph) }]));
-  const result = new Document({ footnotes, title: document.title, creator: "Liteasy", styles: { default: { document: { run: { font: { ascii: "Calibri", hAnsi: "Calibri", eastAsia: "Microsoft YaHei" }, size: 22 }, paragraph: { spacing: { after: 120 } } } } }, numbering: { config: numberings }, sections: [{ properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 1134, right: 1134, bottom: 1247, left: 1134 } } }, headers: { default: new Header({ children: [new Paragraph({ children: [new TextRun({ text: document.title.slice(0, 60), size: 18 })] })] }) }, footers: { default: new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ children: [PageNumber.CURRENT], size: 18 })] })] }) }, children }] });
+  const result = new Document({ footnotes, title: document.title, creator: "Liteasy", styles: { paragraphStyles: [{ id: "Quote", name: "引用", basedOn: "Normal", paragraph: { indent: { left: 360, right: 360 } } }], default: { document: { run: { font: { ascii: "Calibri", hAnsi: "Calibri", eastAsia: "Microsoft YaHei" }, size: 22 }, paragraph: { spacing: { after: 120 } } } } }, numbering: { config: numberings }, sections: [{ properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 1134, right: 1134, bottom: 1247, left: 1134 } } }, headers: { default: new Header({ children: [new Paragraph({ children: [new TextRun({ text: document.title.slice(0, 60), size: 18 })] })] }) }, footers: { default: new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ children: [PageNumber.CURRENT], size: 18 })] })] }) }, children }] });
   return new Uint8Array(await Packer.toArrayBuffer(result));
 }

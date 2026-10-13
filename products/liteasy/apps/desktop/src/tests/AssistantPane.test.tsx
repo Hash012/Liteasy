@@ -110,7 +110,7 @@ test("shows the unified composer before a conversation starts", async () => {
     />
   );
 
-  expect(screen.getByLabelText("AI助手初始消息区")).toBeInTheDocument();
+  expect(screen.getByLabelText("助手首页")).toBeInTheDocument();
   expect(screen.queryByLabelText("对话模式切换")).not.toBeInTheDocument();
   expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveAttribute(
     "title",
@@ -121,7 +121,7 @@ test("shows the unified composer before a conversation starts", async () => {
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   await waitFor(() => {
-    expect(screen.queryByLabelText("AI助手初始消息区")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("助手首页")).not.toBeInTheDocument();
   });
   expect(await screen.findByText(/云端回答：总结这篇论文的核心方法/)).toBeInTheDocument();
 });
@@ -140,19 +140,21 @@ test.each([false, true])("creates a background thin-reading session without chan
   await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("新对话"));
   expect(input).toHaveValue("当前对话的草稿");
   expect(screen.queryByText(/正在规划薄读路径与证据范围/)).not.toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "历史" }));
+  await user.click(screen.getByRole("button", { name: "任务 1" }));
   expect(screen.getByRole("button", { name: "打开会话：生成：薄读" })).toBeInTheDocument();
   rerender(<AssistantPane {...props} artifactTasks={[task]}
     artifactSessionOpenRequest={{ requestId: "details-1", taskId: task.id }} />);
   await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("生成：薄读"));
   expect(screen.getAllByText(/正在规划薄读路径与证据范围/).length).toBeGreaterThan(0);
+  expect(screen.getByText("运行日志").closest("details")).not.toHaveAttribute("open");
+  await user.click(screen.getByText("运行日志"));
   expect(screen.getByRole("button", { name: "中断薄读" })).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "查看 Agent 执行过程" }));
   await user.click(screen.getByRole("button", { name: "正文草稿" }));
   expect(screen.getByText(/尚未审计的薄读正文/)).toBeVisible();
   await user.click(screen.getByRole("button", { name: "历史" }));
   await user.click(screen.getByRole("button", { name: "打开会话：新对话" }));
-  expect(input).toHaveValue("当前对话的草稿");
+  expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveValue("当前对话的草稿");
   // Assigning the artifact ID and changing diagnostic access must retain this session.
   rerender(<AssistantPane {...props} developerDiagnostics={!developerDiagnostics}
     artifactTasks={[{ ...task, artifactId: "thin-paper", message: "正在核验薄读证据" }]}
@@ -656,12 +658,12 @@ test("renders command result DSL after a theme command while keeping the empty l
     />
   );
 
-  expect(screen.getByLabelText("AI助手初始消息区")).toBeInTheDocument();
+  expect(screen.getByLabelText("助手首页")).toBeInTheDocument();
 
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/让 UI 变成卡通风格");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(screen.queryByLabelText("AI助手初始消息区")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("助手首页")).not.toBeInTheDocument();
   expect(await screen.findByLabelText("动态界面：已应用卡通风格。")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "恢复默认" })).toBeInTheDocument();
   expect(screen.getByText(/执行审计：已回放 5 条 journal 事实。/)).toBeInTheDocument();
@@ -924,7 +926,7 @@ test("archives the current assistant session when starting a new one", async () 
 
   await user.click(screen.getByRole("button", { name: "历史" }));
 
-  expect(screen.getByText("历史会话")).toBeInTheDocument();
+  expect(screen.getByLabelText("历史会话面板")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "打开会话：/关闭联网推荐" })).toBeInTheDocument();
   expect(screen.getByText("5 条消息 · 命令")).toBeInTheDocument();
 });
@@ -976,7 +978,7 @@ test("starts a separate session from the session toolbar", async () => {
   await user.click(screen.getByRole("button", { name: "新建" }));
 
   expect(screen.queryByText("/关闭联网推荐")).not.toBeInTheDocument();
-  expect(screen.getByLabelText("AI助手初始消息区")).toBeInTheDocument();
+  expect(screen.getByLabelText("助手首页")).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "历史" }));
 
@@ -1762,5 +1764,5 @@ test("opens settings from the single conversation toolbar without creating a mes
   expect(within(header).queryByText("普通对话")).not.toBeInTheDocument();
   await userEvent.setup().click(within(header).getByRole("button", { name: "对话设置" }));
   expect(onApplyPanelAction).toHaveBeenCalledExactlyOnceWith({ operation: "open", panel: "settings" });
-  expect(screen.getByLabelText("AI助手初始消息区")).toBeInTheDocument();
+  expect(screen.getByLabelText("助手首页")).toBeInTheDocument();
 });

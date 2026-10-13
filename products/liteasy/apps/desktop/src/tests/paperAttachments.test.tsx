@@ -96,3 +96,16 @@ test("autosave writes a new revision while preserving edits made during the writ
   expect(objectText(await repository.resolveLatest(source.objectId))).toBe("AI changed the note");
   unmount();
 }, 12000);
+
+test("opening a pinned library revision does not silently substitute the latest body", async () => {
+  const scope = crypto.randomUUID(), storage = createObjectStorage(scope, () => scope);
+  const repository = createObjectRepository(storage, scope), projects = createPaperProjectRepository(storage, scope);
+  const paper = { id: "pinned-paper", title: "Pinned paper" };
+  const project = await projects.ensurePaperProject({ paperId: paper.id, title: paper.title });
+  const asset = await projects.createNote(project.projectId, "Original revision", "Pinned note");
+  await repository.editNote(asset.ref!, "Newer revision");
+  const { result } = renderHook(() => usePaperAttachmentController({ repository, projects, openEditor: vi.fn(), openBoard: vi.fn() }));
+  await act(() => result.current.open({ id: asset.assetId, kind: "note", label: asset.title, objectId: asset.ref!.objectId, ref: asset.ref }, paper));
+  expect(result.current.session?.draft).toBe("Original revision");
+  expect(refOf(result.current.session!.object)).toEqual(asset.ref);
+});

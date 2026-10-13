@@ -440,7 +440,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
             </Tooltip>
           ) : null}
           {model.compileBoardReport && exportPort ? <><Tooltip content="导出白板阅读报告" relationship="description"><Button size="small" appearance="subtle" aria-label="导出白板阅读报告" icon={<ArrowDownloadRegular />} disabled={!model.board || model.busy} onClick={() => setExportReport(true)} /></Tooltip>
-            {exportReport && model.board ? <DocumentExportDialog open allowSpatial title={model.board.title} initialFormat="markdown"
+            {exportReport && model.board ? <DocumentExportDialog open allowSpatial jobScope={exportPort.jobScope} sourceIdentity={JSON.stringify([model.repository.scopeId, model.board, model.placements])} title={model.board.title} initialFormat="markdown"
               nodes={model.placements.map((p, index) => ({ id: p.placementId, title: `卡片 ${index + 1}` }))}
               compile={(options, signal) => model.compileBoardReport!(options, signal)} publish={exportPort.publish}
               onClose={() => setExportReport(false)} onOutcome={outcome => { if (outcome.status !== "cancelled") model.setStatus(outcome.record.location === "desktop" ? `已导出到 ${outcome.record.path}` : "已交给浏览器下载，保存位置由浏览器管理。"); }} /> : null}

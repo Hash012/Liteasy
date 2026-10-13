@@ -1,3 +1,4 @@
+import { projectLibraryPaperInventory } from "../controllers/libraryPaperInventory";
 import { DocumentExportContext } from "../features/document-export/documentExportPort";
 import { useCommunitySourceController } from "../controllers/useCommunitySourceController";
 import { useSpaceOperationsController } from "../controllers/useSpaceOperationsController";
@@ -1666,50 +1667,9 @@ export function AppShell({
   const topPaneSize = bottomPaneVisible
     ? `minmax(0, ${100 - paneLayout.layout.bottom}fr)`
     : "minmax(0, 1fr)";
-  const libraryPaperChildren = workspaceState.papers.reduce<
-    Record<string, LibraryPaperChildItem[]>
-  >((entries, paper) => {
-    const resources = getPaperMineruResources(paper.id);
-    const extractedResources: LibraryPaperChildItem[] = resources
-      ? [
-          ...(resources.textChunks.length > 0 ? [{
-            id: `text-${paper.id}`,
-            kind: "extracted_text" as const,
-            label: "论文提取文本",
-            meta: `MinerU · ${resources.textChunks.length} 个文本片段`
-          }] : []),
-          ...(resources.figures.length > 0 ? [{
-            id: `figures-${paper.id}`,
-            kind: "figures" as const,
-            label: "论文插图",
-            meta: `MinerU · ${resources.figures.length} 张高清图表`
-          }] : []),
-          ...(resources.textChunks.length > 0 || resources.figures.length > 0 ? [{
-            id: `multimodal-${paper.id}`,
-            kind: "multimodal" as const,
-            label: "论文提取图文版",
-            meta: `MinerU · 按原文顺序组合文本与 ${resources.figures.length} 张图表`
-          }] : [])
-        ]
-      : [];
-    const savedArtifacts = artifactCatalog
-      .filter(
-        (tab) =>
-          tab.papers?.some((sourcePaper) => sourcePaper.id === paper.id) ||
-          tab.analysis?.run.coverage.selectedPaperIds.includes(paper.id)
-      )
-      .map((tab) => ({
-        id: tab.artifactId,
-        kind: "artifact" as const,
-        label: tab.title,
-        meta: tab.createdAt ? new Date(tab.createdAt).toLocaleString() : undefined
-      }));
-    const attachments = paperProjects.catalog.find((item) => item.project.paperId === paper.id)?.assets
-      .filter((asset) => (asset.kind === "note" || asset.kind === "board") && asset.ref)
-      .map((asset) => ({ id: asset.assetId, kind: asset.kind as "note" | "board", label: asset.title, objectId: asset.ref!.objectId })) ?? [];
-    entries[paper.id] = [...extractedResources, ...attachments, ...savedArtifacts];
-    return entries;
-  }, {});
+  const libraryPaperInventory = projectLibraryPaperInventory({ scopeId: objectWorkbench.repository.scopeId,
+    papers: workspaceState.papers, artifacts: artifactCatalog, projects: paperProjects, artifactState: artifactCatalogLoadState,
+    extractionState: paperServices.catalogState, importJobs: importJobsByDocumentId, getResources: getPaperMineruResources });
 
   function openPaperInReader(paperId: string) {
     setLibraryExpanded(false);
@@ -1932,7 +1892,8 @@ export function AppShell({
     exportRecords: artifactExports.model.records,
     exportStatus: artifactExports.model.status,
     importJobs: importJobsByDocumentId,
-    libraryPaperChildren,
+    libraryPaperInventory,
+    onRefreshPaperInventory: () => { paperProjects.refresh(); paperServices.refreshCatalog(); void artifactWorkflow.actions.reloadArtifactCatalog(); },
     localRecommendations: knowledgeSync.model.localRecommendations,
     localLibraryError,
     localLibrarySnapshot,

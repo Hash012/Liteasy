@@ -1,3 +1,4 @@
+import { VisualPreviewContext } from "./visualPreviewContext";
 import { MarkdownEditor } from "../markdown/MarkdownEditor";
 import { useMarkdownEditing } from "../markdown/MarkdownEditingContext";
 import { useMarkdownAutosave } from "../markdown/useMarkdownAutosave";
@@ -14,12 +15,14 @@ import { VisualizationArtifactHost } from "../visualization/VisualizationArtifac
 import { visualEditorDrafts as editorDrafts } from "./visualEditorDrafts";
 
 export function CompositePrimitive({ tree, read, children, openPath }: { tree: ComponentTree; read(key: string): JsonValue | undefined; children?: ReactNode[]; openPath?(path: string): Promise<void> }) {
+  const preview = useContext(VisualPreviewContext);
   const [selected, setSelected] = useState(0), [open, setOpen] = useState(false), [page, setPage] = useState(0);
   const text = (key: string) => String(read(key) ?? "");
   const markdown = (value: JsonValue) => <RichTextBlock text={typeof value === "string" ? value : JSON.stringify(value)} onOpenPath={openPath} />;
   if (tree.component === "Tabs") { const labels = read("labels"); return <div><TabList selectedValue={selected} onTabSelect={(_, data) => setSelected(Number(data.value))}>{(Array.isArray(labels) ? labels : []).map((label, index) => <Tab value={index} key={index}>{String(label)}</Tab>)}</TabList><div role="tabpanel">{children?.[selected]}</div></div>; }
   if (tree.component === "Dialog") return <><Button onClick={() => setOpen(true)}>{text("title")}</Button><Dialog open={open} onOpenChange={(_, data) => setOpen(data.open)}><DialogSurface><DialogBody><DialogTitle>{text("title")}</DialogTitle><DialogContent>{children}</DialogContent><Button onClick={() => setOpen(false)}>关闭</Button></DialogBody></DialogSurface></Dialog></>;
   if (tree.component === "Visualization") { try { return <VisualizationArtifactHost artifact={parseVisualizationArtifact(read("artifact"))} />; } catch (error) { return <div role="status">图形数据未通过契约校验：{String(error)}</div>; } }
+  if (preview && ["MarkdownEditor", "ResourcePicker", "Visualization"].includes(tree.component)) return <p role="status">{tree.component}：请在工作区授权后使用；此处仅预览结构。</p>;
   if (tree.component === "MarkdownEditor") return <ResourceEditor path={text("path")} />;
   if (tree.component === "ResourcePicker") return <ResourcePicker openPath={openPath} />;
   const values = read("items"), items = Array.isArray(values) ? values : [];

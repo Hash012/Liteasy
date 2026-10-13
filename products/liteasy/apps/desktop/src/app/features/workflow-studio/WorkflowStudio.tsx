@@ -1,57 +1,142 @@
-import { WorkflowBindingEditor } from "./WorkflowBindingEditor";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button, Field, FluentProvider, Input, Select, Tab, TabList, Textarea, webDarkTheme, webLightTheme } from "@fluentui/react-components";
 import { AddRegular, PlayRegular, SaveRegular } from "@fluentui/react-icons";
 import { useExtensionWorkbench } from "../extensions/extensionWorkbenchContext";
 import { downloadExtensionJson } from "../extensions/ExtensionViews";
 import { paperLensPackage } from "../extensions/paperLensPackage";
-import { buildExtensionPackage, type BoardTemplate, type ValidatedExtension } from "../extensions/extensionPackage";
+import { buildExtensionPackage, validateExtensionPackage, type BoardTemplate, type ValidatedExtension } from "../extensions/extensionPackage";
 import type { ExtensionDraft, DraftChange, TrialReport } from "./extensionDraftStore";
 import { StudioGraph } from "./StudioGraph";
-import { compileWorkflow, type WorkflowDefinition } from "../workflows/workflowDefinition";
-import { operationCatalog, operationIds } from "../workflows/operationCatalog";
+import { StudioCardPreview } from "./StudioCardPreview";
+import type { WorkflowDefinition } from "../workflows/workflowDefinition";
+import { operationCatalog, operationIds, type OperationId } from "../workflows/operationCatalog";
 import { createBlockRegistry, blockRegistryCapabilities, type DerivedBlockDefinition } from "../visual-blocks/blockRegistry";
 import { ComponentTreeView } from "../visual-blocks/ComponentTreeView";
+import { VisualPreviewContext } from "../visual-blocks/visualPreviewContext";
 import { SchemaFields } from "../extensions/SchemaFields";
 import { parseDataSchema, schemaDefaults, type JsonObject } from "../extensions/extensionSchema";
+import { WorkflowBindingEditor } from "./WorkflowBindingEditor";
+import { editStudioFiles, parseStudioFile, studioBlocks, studioSourceError, studioTabForPath, travelStudioHistory, type StudioEditState, type StudioFiles } from "./studioEditing";
+import { studioTutorialFiles, studioTutorialPath, readStudioTutorial } from "./studioTutorial";
 import "./workflowStudio.css";
 
+function PreviewTheme({ mode, children }: { mode: string; children: ReactNode }) {
+  return mode === "inherit" ? <>{children}</> : <FluentProvider theme={mode === "dark" ? webDarkTheme : webLightTheme}>{children}</FluentProvider>;
+}
 export function WorkflowStudio() {
   const host = useExtensionWorkbench(), model = host?.studio;
   const [drafts, setDrafts] = useState<ExtensionDraft[]>([]), [draft, setDraft] = useState<ExtensionDraft>();
-  const [tab, setTab] = useState("composition"), [path, setPath] = useState("liteasy.extension.json"), [text, setText] = useState("");
+  const [edit, setEdit] = useState<StudioEditState>({ files: {}, past: [], future: [] });
+  const [tab, setTab] = useState("composition"), [path, setPath] = useState("liteasy.extension.json");
   const [error, setError] = useState(""), [busy, setBusy] = useState(false), [preview, setPreview] = useState<ValidatedExtension>(), [report, setReport] = useState<TrialReport>();
-  const [selectedNode, setSelectedNode] = useState(""), [operator, setOperator] = useState<string>("core.value");
-  const [dark, setDark] = useState(false), [narrow, setNarrow] = useState(false), [request, setRequest] = useState(""), [proposal, setProposal] = useState<{ revision: string; changes: DraftChange[] }>();
+  const [selectedNode, setSelectedNode] = useState(""), [operator, setOperator] = useState<OperationId>("core.value");
+  const [previewMode, setPreviewMode] = useState("inherit"), [narrow, setNarrow] = useState(false), [panel, setPanel] = useState("canvas");
+  const [tutorialOpen, setTutorialOpen] = useState(true);
+  const [request, setRequest] = useState(""), [proposal, setProposal] = useState<{ revision: string; changes: DraftChange[] }>();
   const importFile = useRef<HTMLInputElement>(null), abort = useRef<AbortController>();
-  const dirty = !!draft && text !== (draft.files[path] ?? "");
-  useEffect(() => { if (!model) return; let alive = true; const reload = () => void model.drafts.list().then((items) => { if (alive) setDrafts(items); }); reload(); const dispose = model.drafts.subscribe(reload); return () => { alive = false; dispose(); abort.current?.abort(); }; }, [model]);
-  useEffect(() => { setText(draft?.files[path] ?? ""); setPreview(undefined); setReport(undefined); }, [draft, path]);
+  const lastValid = useRef<Record<string, unknown>>({});
+  const files = edit.files, text = files[path] ?? "";
+  const dirty = !!draft && JSON.stringify(files) !== JSON.stringify(draft.files);
+  useEffect(() => {
+    if (!model) return;
+    let alive = true;
+    const reload = () => void model.drafts.list().then((items) => { if (alive) setDrafts(items); });
+    reload(); const dispose = model.drafts.subscribe(reload);
+    return () => { alive = false; dispose(); abort.current?.abort(); };
+  }, [model]);
+  useEffect(() => {
+    if (!dirty) return;
+    const protect = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", protect);
+    return () => window.removeEventListener("beforeunload", protect);
+  }, [dirty]);
   if (!host || !model) return <p>正在加载制作工作台…</p>;
   async function run(action: () => Promise<unknown>) { setBusy(true); setError(""); try { await action(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); } }
-  const paths = draft ? Object.keys(draft.files).filter((file) => tab === "composition" ? file.startsWith("templates/") : tab === "type" ? file.startsWith("blocks/") : tab === "workflow" ? file.startsWith("workflows/") : tab === "settings" ? file.startsWith("settings/") : true) : [];
-  const choose = (value: ExtensionDraft) => { setDraft(value); setPath(Object.keys(value.files).find((file) => file.startsWith("templates/")) ?? "liteasy.extension.json"); setProposal(undefined); };
-  const updateJson = (value: unknown) => setText(JSON.stringify(value, null, 2));
-  let parsed: unknown; try { parsed = JSON.parse(text); } catch { /* Source editor retains incomplete drafts. */ }
-  const document = parsed as Record<string, unknown> | undefined;
+  function choose(value: ExtensionDraft) {
+    setTutorialOpen(!!readStudioTutorial(value.files) && !readStudioTutorial(value.files)!.saved);
+    setDraft(value); setEdit({ files: value.files, past: [], future: [] }); lastValid.current = {};
+    const next = Object.keys(value.files).find((file) => file.startsWith("templates/")) ?? "liteasy.extension.json";
+    setPath(next); setTab(studioTabForPath(next)); setSelectedNode(""); setProposal(undefined); setPreview(undefined); setReport(undefined);
+  }
+  function changeFiles(next: StudioFiles) { setEdit((current) => editStudioFiles(current, next)); setPreview(undefined); setReport(undefined); }
+  function updateText(next: string) {
+    const changed = { ...files, [path]: next };
+    if (path !== studioTutorialPath && readStudioTutorial(changed)) { const tutorial = readStudioTutorial(changed)!; changed[studioTutorialPath] = JSON.stringify({ ...tutorial, edited: tutorial.edited || path.startsWith("templates/"), previewed: false, saved: false }); }
+    changeFiles(changed);
+  }
+  function updateJson(value: unknown) {
+    const next = { ...files, [path]: JSON.stringify(value, null, 2) };
+    if (readStudioTutorial(next)) { const tutorial = readStudioTutorial(next)!; next[studioTutorialPath] = JSON.stringify({ ...tutorial, edited: true, previewed: false, saved: false }); }
+    changeFiles(next);
+  }
+  function switchTab(next: string) {
+    setTab(next);
+    if (next !== "source" && next !== "api" && studioTabForPath(path) !== next) setPath(Object.keys(files).find((file) => studioTabForPath(file) === next) ?? "");
+    setSelectedNode("");
+  }
+  let document: Record<string, unknown> | undefined, sourceError = "";
+  if (text && path.endsWith(".json")) {
+    try { const value = parseStudioFile(path, text); lastValid.current[path] = value; document = value as Record<string, unknown>; }
+    catch (e) { sourceError = studioSourceError(path, text, e); document = lastValid.current[path] as Record<string, unknown> | undefined; }
+  }
   const workflow = document?.schema === "liteasy.workflow/v2" ? document as unknown as WorkflowDefinition : undefined;
   const composition = document?.schema === "liteasy.board-template/v1" ? document as unknown as BoardTemplate : undefined;
-  let type: ReturnType<ReturnType<typeof createBlockRegistry>["resolve"]> | undefined;
-  try { if (tab === "type" && draft && parsed) { const definitions = Object.entries(draft.files).filter(([file]) => file.startsWith("blocks/")).map(([file, source]) => JSON.parse(file === path ? text : source) as DerivedBlockDefinition); const registry = createBlockRegistry(definitions); const item = parsed as DerivedBlockDefinition; type = registry.resolve(item.id, item.version); } } catch { /* Validation gives structured diagnostics on request. */ }
-  return <section className="extension-page workflow-studio"><header><div><h1>制作工作台</h1><p>用基础块组合自己的研究方式；内容、布局、流程分别保存。</p></div><Button icon={<AddRegular />} disabled={busy || dirty} onClick={() => void run(async () => { const files = { ...(await paperLensPackage()).files }; const manifest = JSON.parse(files["liteasy.extension.json"]); const original = manifest.id; manifest.id = `plugin.personal-${crypto.randomUUID().slice(0, 8)}`; manifest.name = "我的论文比较台"; manifest.version = "1.0.0"; for (const file of Object.keys(files)) files[file] = files[file].split(original).join(manifest.id); files["liteasy.extension.json"] = JSON.stringify(manifest, null, 2); choose(await model.drafts.create(manifest.name, files)); })}>从论文比较模板开始</Button></header>
-    <div className="extension-toolbar"><Select aria-label="选择扩展草稿" value={draft?.id ?? ""} disabled={dirty || busy} onChange={(_, data) => void run(async () => choose(await model.drafts.get(data.value)))}><option value="" disabled>选择草稿</option>{drafts.map((item) => <option value={item.id} key={item.id}>{item.title}</option>)}</Select><Button disabled={dirty || busy} onClick={() => importFile.current?.click()}>导入项目</Button><Button onClick={() => host.openRuns()}>运行记录</Button></div>
-    <input ref={importFile} hidden type="file" accept=".json" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void run(async () => { if (file.size > 24 * 1024 * 1024) throw new Error("包文件过大。"); const { validateExtensionPackage } = await import("../extensions/extensionPackage"); const pkg = await validateExtensionPackage(JSON.parse(await file.text())); choose(await model.drafts.create(pkg.manifest.name, pkg.bundle.files)); }); }} />
-    {draft ? <><div className="extension-toolbar"><strong>{draft.title}</strong><span>{dirty ? "未保存" : "草稿已保存"}</span><Button icon={<SaveRegular />} disabled={!dirty || busy} onClick={() => void run(async () => setDraft(await model.drafts.patch(draft.id, draft.revision, [{ path, text }], "user")))}>保存草稿</Button><Button disabled={dirty || busy} onClick={() => void run(async () => setPreview(await model.drafts.validate(draft.id)))}>校验与预览</Button><Button icon={<PlayRegular />} disabled={dirty || busy} onClick={() => void run(async () => { const value = await model.service.call("liteasy_extension_trial", { id: draft.id }, { writable: true }); setReport(value as TrialReport); })}>隔离样例试跑</Button><Button disabled={dirty || busy || !report?.passed} onClick={() => void run(async () => { const pkg = await model.drafts.publish(draft.id, host.packages.store); setError(`已发布 ${pkg.manifest.version}；请在扩展中检查新增入口并启用。`); })}>发布本地版本</Button><Button disabled={dirty} onClick={() => void run(async () => downloadExtensionJson(`${draft.title}.liteasy-extension.json`, await buildExtensionPackage(draft.files)))}>导出包</Button></div>
-      <TabList selectedValue={tab} onTabSelect={(_, data) => { setTab(String(data.value)); }}><Tab value="composition">组合</Tab><Tab value="type">类型</Tab><Tab value="workflow">流程</Tab><Tab value="settings">设置</Tab><Tab value="source">源码</Tab><Tab value="api">API 目录</Tab></TabList>
-      {tab === "api" ? <div><p>共享基础能力：{blockRegistryCapabilities.join(" · ")}</p>{operationIds.map((id) => <details key={id}><summary>{id} · {operationCatalog[id].effect}</summary><p>版本 {operationCatalog[id].version} · 重试 {operationCatalog[id].retry} · {operationCatalog[id].capability ?? "无额外权限"}</p></details>)}</div> : <><Select aria-label="项目文件" disabled={dirty} value={path} onChange={(_, data) => { setPath(data.value); setSelectedNode(""); }}>{[...new Set([path, ...paths])].map((file) => <option key={file}>{file}</option>)}</Select>
-      {(workflow || composition) && (tab === "workflow" || tab === "composition") ? <><StudioGraph value={workflow ?? composition!} onSelect={setSelectedNode} onChange={updateJson} />{workflow ? <div className="studio-step-list" aria-label="工作流步骤列表">{workflow.nodes.map((node) => <Button key={node.id} appearance={selectedNode === node.id ? "secondary" : "subtle"} onClick={() => setSelectedNode(node.id)}>{node.title} · {node.operation.id}</Button>)}<Select aria-label="添加的操作类型" value={operator} onChange={(_, data) => setOperator(data.value)}>{operationIds.map((id) => <option key={id}>{id}</option>)}</Select><Button onClick={() => { const id = `node-${crypto.randomUUID().slice(0, 8)}`; updateJson({ ...workflow, nodes: [...workflow.nodes, { id, title: "新步骤", operation: { id: operator, version: "1.0.0" }, input: {}, retries: 0, breakpoint: false }] }); setSelectedNode(id); }}>添加步骤</Button><Button disabled={!selectedNode} onClick={() => updateJson({ ...workflow, nodes: workflow.nodes.map((node) => node.id === selectedNode ? { ...node, breakpoint: !node.breakpoint } : node) })}>切换断点</Button><Button disabled={!selectedNode} onClick={() => updateJson({ ...workflow, nodes: workflow.nodes.filter((node) => node.id !== selectedNode), edges: workflow.edges.filter((edge) => edge.from !== selectedNode && edge.to !== selectedNode) })}>移除步骤</Button></div> : null}</> : null}
-      {type ? <div className="studio-type-preview"><p>继承 {type.family} · {blockRegistryCapabilities.join(" / ")}</p><SchemaFields key={`${path}:${type.version}`} schema={type.dataSchema} value={type.defaults} onChange={(defaults) => updateJson({ ...document, defaults })} /><FluentProvider theme={dark ? webDarkTheme : webLightTheme}>{type.templates.map((tree, index) => <ComponentTreeView key={index} tree={tree} data={type!.defaults} openPath={host.openLink} />)}</FluentProvider></div> : null}
-      {tab === "settings" && document?.type === "object" ? (() => { try { const schema = parseDataSchema(document); return <SchemaFields schema={schema} value={schemaDefaults(schema) as JsonObject} onChange={(value) => updateJson({ ...schema, properties: Object.fromEntries(Object.entries(schema.properties ?? {}).map(([key, field]) => [key, { ...field, default: value[key] }])) })} />; } catch { return null; } })() : null}
-      {workflow && tab === "workflow" ? <WorkflowBindingEditor workflow={workflow} selected={selectedNode} onChange={updateJson} /> : null}
-      <Field label={workflow ? `定义与绑定${selectedNode ? ` · 选中 ${selectedNode}` : ""}` : "文件内容"}><Textarea className="studio-source" aria-label="扩展源文件" resize="vertical" value={text} onChange={(_, data) => setText(data.value)} /></Field></>}
-      {preview ? <section className="studio-preview"><div className="extension-toolbar"><h2>实际组件预览</h2><Button onClick={() => setDark(!dark)}>{dark ? "浅色" : "深色"}</Button><Button onClick={() => setNarrow(!narrow)}>{narrow ? "正常宽度" : "窄栏"}</Button></div><FluentProvider theme={dark ? webDarkTheme : webLightTheme} style={{ maxWidth: narrow ? 320 : undefined }}><p>{preview.manifest.name} · {preview.manifest.version}</p>{preview.templates.map((template) => <section key={template.id}><h3>{template.title}</h3>{template.cards.map((card) => { const registry = createBlockRegistry(preview.blocks), type = registry.resolve(card.type.id, card.type.version), data = registry.instantiate(card.type.id, card.type.version, card.data); return <article key={card.id} className="extension-library-card"><h4>{card.title}</h4>{type.templates.map((tree, index) => <ComponentTreeView key={index} tree={tree} data={data} openPath={host.openLink} />)}</article>; })}</section>)}</FluentProvider></section> : null}
+  let blocks: DerivedBlockDefinition[] = [], blockError = "";
+  try { blocks = studioBlocks(files); } catch (e) { blockError = `类型文件无效：${String(e)}`; }
+  const selectedCard = composition?.cards.find((card) => card.id === selectedNode);
+  const tutorial = readStudioTutorial(files);
+  const paths = Object.keys(files).filter((file) => tab === "source" || studioTabForPath(file) === tab);
+  async function save() {
+    const next = { ...files };
+    if (tutorial?.edited && tutorial.previewed) next[studioTutorialPath] = JSON.stringify({ ...tutorial, saved: true });
+    const changes = Object.entries(next).filter(([file, value]) => value !== draft!.files[file]).map(([path, text]) => ({ path, text }));
+    const saved = await model!.drafts.patch(draft!.id, draft!.revision, changes, "user");
+    if (tutorial?.edited && tutorial.previewed) setTutorialOpen(false);
+    setDraft(saved); setEdit((current) => ({ ...current, files: saved.files }));
+  }
+  async function validate() {
+    const validated = await validateExtensionPackage(await buildExtensionPackage(files));
+    setPreview(validated);
+    if (tutorial?.edited) setEdit((current) => ({ ...current, files: { ...current.files, [studioTutorialPath]: JSON.stringify({ ...tutorial, previewed: true, saved: false }) } }));
+  }
+  const previewThemeControl = <Select aria-label="预览主题" value={previewMode} onChange={(_, data) => setPreviewMode(data.value)}><option value="inherit">跟随应用主题</option><option value="light">强制浅色预览</option><option value="dark">强制深色预览</option></Select>;
+  return <section className="extension-page workflow-studio">
+    <header className="studio-header"><div><h1>{draft?.title ?? "制作工作台"}</h1>{draft ? <span role="status">{busy ? "正在处理…" : dirty ? "未保存" : "草稿已保存"}</span> : null}</div><div className="extension-toolbar">
+      {draft ? <><Button icon={<SaveRegular />} disabled={!dirty || busy} onClick={() => void run(save)}>保存草稿</Button><Button appearance="primary" disabled={busy || !!sourceError} onClick={() => void run(validate)}>校验与预览</Button><Button icon={<PlayRegular />} disabled={dirty || busy} onClick={() => void run(async () => setReport(await model.service.call("liteasy_extension_trial", { id: draft.id }, { writable: true }) as TrialReport))}>隔离样例试跑</Button></> : null}
+      <details className="studio-more"><summary>更多</summary><div className="studio-more-content">
+        <Select aria-label="选择扩展草稿" value={draft?.id ?? ""} disabled={dirty || busy} onChange={(_, data) => void run(async () => choose(await model.drafts.get(data.value)))}><option value="" disabled>选择草稿</option>{drafts.map((item) => <option value={item.id} key={item.id}>{item.title}</option>)}</Select>
+        <Button disabled={dirty || busy} onClick={() => importFile.current?.click()}>导入项目</Button><Button onClick={() => host.openRuns()}>运行记录</Button>
+        <Button icon={<AddRegular />} disabled={busy || dirty} onClick={() => void run(async () => { const files = { ...(await paperLensPackage()).files }; const manifest = JSON.parse(files["liteasy.extension.json"]); const original = manifest.id; manifest.id = `plugin.personal-${crypto.randomUUID().slice(0, 8)}`; manifest.name = "我的论文比较台"; manifest.version = "1.0.0"; for (const file of Object.keys(files)) files[file] = files[file].split(original).join(manifest.id); files["liteasy.extension.json"] = JSON.stringify(manifest, null, 2); choose(await model.drafts.create(manifest.name, files)); })}>从论文比较模板开始</Button>
+        {draft ? <><Button disabled={dirty || busy || !report?.passed} onClick={() => void run(async () => { const pkg = await model.drafts.publish(draft.id, host.packages.store); setError(`已发布 ${pkg.manifest.version}；请在扩展中检查新增入口并启用。`); })}>发布本地版本</Button><Button disabled={dirty || busy} onClick={() => void run(async () => downloadExtensionJson(`${draft.title}.liteasy-extension.json`, await buildExtensionPackage(draft.files)))}>导出包</Button></> : null}
+      </div></details>
+    </div></header>
+    <input ref={importFile} hidden type="file" accept=".json" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void run(async () => { if (file.size > 24 * 1024 * 1024) throw new Error("包文件过大。"); const pkg = await validateExtensionPackage(JSON.parse(await file.text())); choose(await model.drafts.create(pkg.manifest.name, pkg.bundle.files)); }); }} />
+    <details className="studio-tutorial" open={tutorialOpen} onToggle={(event) => setTutorialOpen(event.currentTarget.open)}><summary>{tutorial?.saved ? "演示已完成" : "查看离线示例"}</summary><p>演示数据：认识四张卡片 → 修改正文 → 对比预览 → 保存草稿。示例与真实论文独立，不需要登录或模型连接。</p><Button disabled={dirty || busy} onClick={() => void run(async () => choose(await model.drafts.create("离线演示：四张研究卡片", await studioTutorialFiles(), "离线教学示例 v1；不含真实证据。")))}>开始离线演示</Button>{tutorial ? <p>{tutorial.edited ? "已修改" : "待修改"} · {tutorial.previewed ? "已预览" : "待预览"} · {tutorial.saved ? "已保存" : "待保存"}</p> : null}</details>
+    {draft ? <>
+      <div className="studio-taskbar"><TabList selectedValue={tab} onTabSelect={(_, data) => switchTab(String(data.value))}><Tab value="composition">组合</Tab><Tab value="type">类型</Tab><Tab value="workflow">流程</Tab><Tab value="settings">设置</Tab><Tab value="source">源码</Tab><Tab value="api">API 目录</Tab></TabList><Button disabled={!edit.past.length || busy} onClick={() => { setEdit((current) => travelStudioHistory(current, "undo")); setPreview(undefined); setReport(undefined); }}>撤销</Button><Button disabled={!edit.future.length || busy} onClick={() => { setEdit((current) => travelStudioHistory(current, "redo")); setPreview(undefined); setReport(undefined); }}>重做</Button></div>
+      {tab === "api" ? <div><p>共享基础能力：{blockRegistryCapabilities.join(" · ")}</p>{operationIds.map((id) => <details key={id}><summary>{id} · {operationCatalog[id].effect}</summary><p>版本 {operationCatalog[id].version} · 重试 {operationCatalog[id].retry} · {operationCatalog[id].capability ?? "无额外权限"}</p></details>)}</div> : <>
+        {paths.length > 1 || tab === "source" ? <Select aria-label="项目文件" value={path} onChange={(_, data) => { setPath(data.value); setSelectedNode(""); }}>{paths.map((file) => <option key={file}>{file}</option>)}</Select> : null}
+        {sourceError ? <div role="alert"><p>{sourceError}</p><p>源码输入已保留；画布显示最后一个有效版本。请修复源码后继续可视化编辑。</p></div> : null}
+        {blockError ? <p role="alert">{blockError}</p> : null}
+        {(workflow || composition) && (tab === "workflow" || tab === "composition") ? <>
+          <div className="studio-panel-switch"><Button aria-pressed={panel === "canvas"} onClick={() => setPanel("canvas")}>画布</Button><Button aria-pressed={panel === "properties"} onClick={() => setPanel("properties")}>属性</Button></div>
+          <div className="studio-editor" data-panel={panel}>
+            <div className="studio-canvas"><StudioGraph key={`${draft.id}:${path}`} value={workflow ?? composition!} blocks={blocks} readOnly={busy || !!sourceError} onSelect={(id) => { setSelectedNode(id); setPanel("properties"); }} onChange={updateJson} /><p className="studio-overview-hint">画布可缩放；选择卡片可在属性区阅读完整正文。调整面板不会重置视角。</p></div>
+            <fieldset disabled={busy || !!sourceError} className="studio-properties" onKeyDown={(event) => { if (event.key === "Delete" || event.key === "Backspace") event.stopPropagation(); }}>
+              {composition ? <><div className="studio-card-list" aria-label="组合卡片">{composition.cards.map((card) => <Button key={card.id} aria-pressed={card.id === selectedNode} onClick={() => setSelectedNode(card.id)}>{card.title}</Button>)}</div><div className="extension-toolbar"><Button onClick={() => { const id = `card-${crypto.randomUUID().slice(0, 8)}`; updateJson({ ...composition, cards: [...composition.cards, { id, title: "新卡片", type: { id: "liteasy/RichTextBlock", version: "1.0.0" }, data: { text: "" }, position: { x: 20, y: 20 }, size: { width: 320, height: 320 } }] }); setSelectedNode(id); }}>添加卡片</Button><Button disabled={!selectedCard} onClick={() => { updateJson({ ...composition, cards: composition.cards.filter((card) => card.id !== selectedNode) }); setSelectedNode(""); }}>删除卡片</Button></div>
+                {selectedCard ? <><Field label="卡片标题"><Input aria-label="卡片标题" value={selectedCard.title} onChange={(_, data) => updateJson({ ...composition, cards: composition.cards.map((card) => card.id === selectedNode ? { ...card, title: data.value } : card) })} /></Field>{(() => { try { const registry = createBlockRegistry(blocks), type = registry.resolve(selectedCard.type.id, selectedCard.type.version); const schema = { ...type.dataSchema, properties: { ...type.dataSchema.properties, text: { ...type.dataSchema.properties!.text, title: "卡片正文" } } }; return <SchemaFields key={`${path}:${selectedCard.id}`} schema={schema} value={{ ...type.defaults, ...selectedCard.data }} onChange={(data) => updateJson({ ...composition, cards: composition.cards.map((card) => card.id === selectedNode ? { ...card, data } : card) })} />; } catch { return <p>请在源码中修复此卡片的类型引用；原数据未丢失。</p>; } })()}<section aria-label="选中卡片预览"><StudioCardPreview card={selectedCard} blocks={blocks} /></section></> : <p>选择一张卡片，阅读或修改其内容。</p>}
+              </> : workflow ? <><div className="studio-step-list">{workflow.nodes.map((node) => <Button key={node.id} appearance={selectedNode === node.id ? "secondary" : "subtle"} onClick={() => setSelectedNode(node.id)}>{node.title} · {node.operation.id}</Button>)}</div><Select aria-label="添加的操作类型" value={operator} onChange={(_, data) => setOperator(data.value as OperationId)}>{operationIds.map((id) => <option key={id}>{id}</option>)}</Select><Button onClick={() => { const id = `node-${crypto.randomUUID().slice(0, 8)}`; updateJson({ ...workflow, nodes: [...workflow.nodes, { id, title: "新步骤", operation: { id: operator, version: "1.0.0" }, input: {}, retries: 0, breakpoint: false }] }); setSelectedNode(id); }}>添加步骤</Button><Button disabled={!selectedNode} onClick={() => updateJson({ ...workflow, nodes: workflow.nodes.map((node) => node.id === selectedNode ? { ...node, breakpoint: !node.breakpoint } : node) })}>切换断点</Button><Button disabled={!selectedNode} onClick={() => updateJson({ ...workflow, nodes: workflow.nodes.filter((node) => node.id !== selectedNode), edges: workflow.edges.filter((edge) => edge.from !== selectedNode && edge.to !== selectedNode), layout: Object.fromEntries(Object.entries(workflow.layout).filter(([id]) => id !== selectedNode)) })}>移除步骤</Button><WorkflowBindingEditor workflow={workflow} selected={selectedNode} onChange={updateJson} /></> : null}
+            </fieldset>
+          </div>
+        </> : null}
+        {tab === "type" && document ? (() => { try { const registry = createBlockRegistry(blocks), item = document as unknown as DerivedBlockDefinition, type = registry.resolve(item.id, item.version); return <section className="studio-type-preview"><p>继承 {type.family}</p>{previewThemeControl}<fieldset disabled={busy || !!sourceError}><SchemaFields key={`${path}:${type.version}`} schema={type.dataSchema} value={type.defaults} onChange={(defaults) => updateJson({ ...document, defaults })} /></fieldset><PreviewTheme mode={previewMode}><VisualPreviewContext.Provider value={true}>{type.templates.map((tree, index) => <ComponentTreeView key={index} tree={tree} data={type.defaults} />)}</VisualPreviewContext.Provider></PreviewTheme></section>; } catch (e) { return <p role="status">无法预览此类型：{String(e)}。请检查源码。</p>; } })() : null}
+        {tab === "settings" && document?.type === "object" ? (() => { try { const schema = parseDataSchema(document); return <fieldset disabled={busy || !!sourceError}><SchemaFields schema={schema} value={schemaDefaults(schema) as JsonObject} onChange={(value) => updateJson({ ...schema, properties: Object.fromEntries(Object.entries(schema.properties ?? {}).map(([key, field]) => [key, { ...field, default: value[key] }])) })} /></fieldset>; } catch { return null; } })() : null}
+        {tab === "source" ? <Field label="文件源码"><Textarea disabled={busy} className="studio-source" aria-label="扩展源文件" resize="vertical" value={text} onChange={(_, data) => updateText(data.value)} /></Field> : null}
+        {!path && tab !== "api" ? <p>此项目尚无对应文件；可在源码中查看现有项目文件。</p> : null}
+      </>}
+      {preview ? <section className="studio-preview"><div className="extension-toolbar"><h2>实际组件预览</h2>{previewThemeControl}<Button onClick={() => setNarrow(!narrow)}>{narrow ? "正常宽度" : "窄栏"}</Button><Button onClick={() => setPreview(undefined)}>关闭预览</Button></div><PreviewTheme mode={previewMode}><div style={{ maxWidth: narrow ? 320 : undefined }}><p>{preview.manifest.name} · {preview.manifest.version}</p>{preview.templates.map((template) => <section key={template.id}><h3>{template.title}</h3>{template.cards.map((card) => <article key={card.id} className="extension-library-card"><h4>{card.title}</h4><StudioCardPreview card={card} blocks={preview.blocks} /></article>)}</section>)}</div></PreviewTheme></section> : null}
       {report ? <section><h2>样例报告 · {report.passed ? "通过" : "未通过"}</h2>{report.cases.map((item, i) => <p key={i}>{item.name} · {item.passed ? "通过" : item.error}</p>)}</section> : null}
-      <details><summary>AI 制作助手</summary><Textarea aria-label="描述扩展需求" value={request} onChange={(_, data) => setRequest(data.value)} placeholder="描述输入、输出、保存位置，以及希望如何组织内容" /><Button disabled={busy || dirty || !request.trim()} onClick={() => void run(async () => { abort.current?.abort(); abort.current = new AbortController(); setProposal({ revision: draft.revision, changes: await model.propose(draft, request, abort.current.signal) }); })}>生成草稿变更</Button>{busy ? <Button onClick={() => abort.current?.abort()}>停止生成</Button> : null}{proposal ? <><h3>待应用变更</h3>{proposal.changes.map((change) => <details key={change.path}><summary>{change.path} · {change.text === null ? "删除" : draft.files[change.path] ? "修改" : "新增"}</summary><div className="studio-diff"><pre>{draft.files[change.path] ?? ""}</pre><pre>{change.text ?? ""}</pre></div></details>)}<Button disabled={busy || dirty} onClick={() => void run(async () => { setDraft(await model.drafts.patch(draft.id, proposal.revision, proposal.changes, "ai")); setProposal(undefined); })}>应用到草稿</Button></> : null}</details>
-    </> : <p>从模板或本地项目开始，也可以让连接到 Liteasy 的 AI 通过 MCP 创建草稿。</p>}{error ? <p role="status">{error}</p> : null}
+      <details><summary>AI 制作助手</summary><Textarea aria-label="描述扩展需求" value={request} onChange={(_, data) => setRequest(data.value)} placeholder="描述输入、输出、保存位置，以及希望如何组织内容" /><Button disabled={busy || dirty || !request.trim()} onClick={() => void run(async () => { abort.current?.abort(); abort.current = new AbortController(); setProposal({ revision: draft.revision, changes: await model.propose(draft, request, abort.current.signal) }); })}>生成草稿变更</Button>{busy ? <Button onClick={() => abort.current?.abort()}>停止生成</Button> : null}{proposal ? <><h3>待应用变更</h3>{proposal.changes.map((change) => <details key={change.path}><summary>{change.path} · {change.text === null ? "删除" : draft.files[change.path] ? "修改" : "新增"}</summary><div className="studio-diff"><pre>{draft.files[change.path] ?? ""}</pre><pre>{change.text ?? ""}</pre></div></details>)}<Button disabled={busy || dirty} onClick={() => void run(async () => { choose(await model.drafts.patch(draft.id, proposal.revision, proposal.changes, "ai")); setProposal(undefined); })}>应用到草稿</Button></> : null}</details>
+    </> : null}{error ? <p role="status">{error}</p> : null}
   </section>;
 }

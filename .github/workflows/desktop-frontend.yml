@@ -29,6 +29,12 @@ jobs:
       - name: Enforce content and asset contracts
         working-directory: products/liteasy/apps/desktop
         run: npm run ci:content
+      - name: Enforce document export contracts
+        working-directory: products/liteasy/apps/desktop
+        run: npm run ci:export
+      - name: Check UI state and geometry contracts
+        working-directory: products/liteasy/apps/desktop
+        run: npm run ci:ui
       - name: Check Windows resource and module naming regressions
         working-directory: products/liteasy/apps/desktop
         run: npm run ci:smoke
@@ -58,5 +64,29 @@ jobs:
         with:
           name: desktop-tests-${{ matrix.shard }}-${{ github.run_attempt }}
           path: products/liteasy/apps/desktop/test-results/unit-*.xml
+          retention-days: 7
+          if-no-files-found: error
+
+  ui-browser:
+    name: L1 - UI browser contracts
+    needs: contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: products/liteasy/apps/desktop
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: ./.github/actions/setup-desktop
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Exercise real UI components and Dock
+        run: npm run ci:ui-browser
+      - name: Preserve UI evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: desktop-ui-browser-${{ github.run_attempt }}
+          path: products/liteasy/apps/desktop/test-results/ui-browser-ci
           retention-days: 7
           if-no-files-found: error

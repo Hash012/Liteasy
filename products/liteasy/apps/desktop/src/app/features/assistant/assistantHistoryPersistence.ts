@@ -77,8 +77,7 @@ export function createAssistantHistoryPersistence(transport?: Transport) {
   let cached: AssistantHistorySnapshot | null = null;
   let loading: Promise<AssistantHistorySnapshot | null> | undefined;
   let queue = Promise.resolve();
-  let revision = 0;
-  let savedRevision = -1;
+
   return {
     raw: () => activeTransport.load(),
     async load() {
@@ -91,13 +90,10 @@ export function createAssistantHistoryPersistence(transport?: Transport) {
     save(snapshot: AssistantHistorySnapshot) {
       if (!loaded) return Promise.reject(new Error("对话历史尚未读取，已阻止覆盖。"));
       cached = structuredClone(snapshot);
-      revision += 1;
-      queue = queue.catch(() => {}).then(async () => {
-        if (savedRevision === revision) return;
-        const savingRevision = revision;
-        await activeTransport.save(structuredClone(cached!));
-        savedRevision = savingRevision;
-      });
+      // An acknowledgement belongs to this exact immutable snapshot. Coalescing
+      // through `cached` could acknowledge a different target or revision.
+      const savingSnapshot = structuredClone(snapshot);
+      queue = queue.catch(() => {}).then(() => activeTransport.save(savingSnapshot));
       return queue;
     },
     flush() { return queue; },

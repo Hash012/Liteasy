@@ -14,6 +14,7 @@ export type { AssistantMode };
 export type AssistantConfirmationRequest = HumanConfirmationRequest | AgentConfirmationRequest;
 
 export type AssistantMessage = {
+  turnOutcome?: "completed" | "failed";
   kind?: "user_message" | "assistant_message" | "task_reference" | "result_reference" | "system_notice";
   taskReference?: { taskId: string; title: string };
   requestId?: string;

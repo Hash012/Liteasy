@@ -221,6 +221,10 @@ fn recovery_command(command: &str) -> bool {
             | "list_local_agent_artifacts"
             | "save_local_agent_artifact"
             | "delete_local_agent_artifact"
+            // Static PDF rendering stays offline and uses this profile's own data root.
+            | "document_pdf_capability"
+            | "render_document_pdf"
+            | "cancel_document_pdf"
             | "export_artifact_document"
             | "list_artifact_exports"
             | "open_artifact_export"
@@ -313,6 +317,9 @@ mod recovery_tests {
             "object_store_commit",
             "note_files_dispatch",
             "load_user_paper_artifact",
+            "document_pdf_capability",
+            "render_document_pdf",
+            "cancel_document_pdf",
         ] {
             assert!(recovery_command(command));
         }

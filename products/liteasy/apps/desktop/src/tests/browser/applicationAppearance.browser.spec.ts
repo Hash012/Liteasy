@@ -4,6 +4,7 @@ test("appearance follows the system and an explicit choice persists across launc
   test.setTimeout(75_000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/");
@@ -14,7 +15,9 @@ test("appearance follows the system and an explicit choice persists across launc
   await expect(appearance).toHaveValue("system");
   await expect(page.locator(".activity-bar")).toHaveCSS("background-color", "rgb(31, 31, 31)");
   await expect(page.locator(".reader-layout-button:not(.active)").first()).toHaveCSS("background-color", "rgb(31, 31, 31)");
-  await expect(page.locator(".assistant-active-session-kind")).toHaveCSS("background-color", "rgb(23, 59, 86)");
+  const assistantHome = page.getByRole("region", { name: "助手首页", exact: true });
+  await expect(assistantHome.getByRole("heading", { name: "开始新对话", exact: true })).toBeVisible();
+  await expect(assistantHome).toHaveCSS("color", "rgb(255, 255, 255)");
   await page.getByRole("combobox", { name: "界面字号", exact: true }).click();
   const options = page.getByRole("listbox");
   await expect(options).toBeVisible();
@@ -25,6 +28,7 @@ test("appearance follows the system and an explicit choice persists across launc
   await appearance.selectOption("light");
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "light");
   await expect(page.locator(".activity-bar")).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(assistantHome).toHaveCSS("color", "rgb(36, 36, 36)");
   await page.screenshot({ path: testInfo.outputPath("appearance-light.png"), fullPage: true, animations: "disabled" });
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "light");

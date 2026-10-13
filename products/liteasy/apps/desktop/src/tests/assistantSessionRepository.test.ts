@@ -105,3 +105,42 @@ test("unknown snapshots retain queued intent and reject future versions without 
   expect(parseAssistantHistory(raw)!.sessions[0].messages[0].queuedDelivery).toEqual({ policy: "after_run" });
   expect(() => parseAssistantHistory({ ...raw, version: "future" })).toThrow("原记录已保留");
 });
+
+test("A02-12 legacy messages without origin remain unknown and raw backup supports rollback after repeat migration", async () => {
+  const scope = crypto.randomUUID();
+  const storage = createObjectStorage(scope, () => scope);
+  const raw = fixture();
+  delete raw.sessions[0].origin;
+  raw.sessions[0].messages.push({ id: "diagnostic", role: "assistant", content: "openai_agents_sdk_result_missing" });
+  await storage.commit([{ key: "assistant-history/current", expected: null, row: { key: "assistant-history/current", version: "legacy", value: raw } }]);
+  const migrated = (await createScopedAssistantHistoryPersistence(scope, () => scope).load())!;
+  const repeated = (await createScopedAssistantHistoryPersistence(scope, () => scope).load())!;
+  expect(migrated.sessions[0].origin?.kind).toBe("legacy_unknown");
+  expect(migrated.sessions[0].taskBinding).toBeUndefined();
+  expect(repeated.sessions[0].messages).toEqual(migrated.sessions[0].messages);
+  const backup = (await storage.get("assistant/v2/legacy-backup"))!.value;
+  expect(backup).toEqual(raw);
+  expect(parseAssistantHistory(backup)!.sessions[0].messages).toEqual(migrated.sessions[0].messages);
+});
+
+test("A02-13 separate conversations retain both window drafts and scroll anchors after reopening", async () => {
+  const scope = crypto.randomUUID();
+  const a = createScopedAssistantHistoryPersistence(scope, () => scope, { viewId: "window-a" });
+  await a.load();
+  const initial = fixture(); initial.sessions.push({ ...structuredClone(initial.sessions[0]), id: "b" });
+  await a.save(initial);
+  const b = createScopedAssistantHistoryPersistence(scope, () => scope, { viewId: "window-b" });
+  const right = (await b.load())!;
+  right.sessions[1] = (await b.loadSession!("b"))!;
+  right.activeSessionId = "b";
+  right.sessions[1].draft = { input: "draft B", tokens: [], readerContexts: [] };
+  right.sessions[1].scrollAnchor = { messageId: "u1", offset: 25 };
+  await b.save(right);
+  initial.sessions[0].draft = { input: "draft A", tokens: [], readerContexts: [] };
+  initial.sessions[0].scrollAnchor = { messageId: "u1", offset: 10 };
+  await a.save(initial);
+  const restoredA = (await createScopedAssistantHistoryPersistence(scope, () => scope, { viewId: "window-a" }).load())!;
+  const restoredB = (await createScopedAssistantHistoryPersistence(scope, () => scope, { viewId: "window-b" }).load())!;
+  expect(restoredA.sessions.find((session) => session.id === "a")).toMatchObject({ draft: { input: "draft A" }, scrollAnchor: { offset: 10 } });
+  expect(restoredB.sessions.find((session) => session.id === "b")).toMatchObject({ draft: { input: "draft B" }, scrollAnchor: { offset: 25 } });
+});

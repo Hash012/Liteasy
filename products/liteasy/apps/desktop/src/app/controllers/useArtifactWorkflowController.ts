@@ -261,7 +261,7 @@ export function useArtifactWorkflowController({
   function handleArtifactTasksChanged(tasks: ArtifactTask[]) {
     if (taskPersistenceReady.current) {
       const scopeKey = artifactResultScopeKey ?? "device";
-      const checkpointTasks = tasks.filter((task) => task.type === "thin_reading" && task.status !== "completed");
+      const checkpointTasks = tasks.filter((task) => (task.type === "thin_reading" || !!task.pendingResult) && task.status !== "completed");
       const previous = lastTaskCheckpointRef.current;
       const unchanged = previous?.scopeKey === scopeKey && previous.tasks.length === checkpointTasks.length &&
         checkpointTasks.every((task, index) => {

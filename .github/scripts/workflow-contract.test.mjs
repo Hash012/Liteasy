@@ -85,10 +85,14 @@ test("the policy selects both full tests and installer packaging for the same re
 });
 
 test("basic frontend checks always run but complete test shards require opt-in", () => {
-  for (const command of ["npm run ci:contracts", "npm run ci:smoke"]) {
+  for (const command of ["npm run ci:contracts", "npm run ci:content", "npm run ci:export", "npm run ci:ui", "npm run ci:smoke"]) {
     const step = findStep(frontend, "contracts", command);
     assert.equal(value(step, "if", 8), undefined);
   }
+  const uiJob = job(frontend, "ui-browser");
+  assert.equal(value(uiJob, "needs", 4), "contracts");
+  assert.equal(value(uiJob, "if", 4), undefined);
+  assert.match(uiJob, /run: npm run ci:ui-browser/);
   const testJob = job(frontend, "tests");
   assert.equal(expression(value(testJob, "if", 4)), "inputs.full-tests");
   assert.equal(value(testJob, "needs", 4), "contracts");

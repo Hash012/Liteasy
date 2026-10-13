@@ -1,3 +1,4 @@
+import type { LibraryInventory } from "../features/library/libraryInventory";
 import type { SpaceOperationsView } from "../features/spaces/SpaceOperationsPanel";
 import type { PaperServiceConfig } from "../features/paper-services/paperServiceTransport";
 import type { ProfileMemoryController } from "../features/profile/useProfileMemory";
@@ -78,6 +79,8 @@ export type LeftPaneProps = {
   importJobs: Record<string, ImportJob>;
   localRecommendations?: boolean;
   libraryPaperChildren?: Record<string, LibraryPaperChildItem[]>;
+  libraryPaperInventory?: Record<string, LibraryInventory>;
+  onRefreshPaperInventory?: () => void;
   leftRailView: LeftRailView;
   list: OrganizationList | null;
   listMessage: string;
@@ -219,6 +222,8 @@ export function LeftPane({
   onSelectLegacyLibraryRoot,
   importJobs,
   libraryPaperChildren,
+  libraryPaperInventory,
+  onRefreshPaperInventory,
   localRecommendations,
   leftRailView,
   list,
@@ -422,6 +427,8 @@ export function LeftPane({
             literatureHydration={literatureHydration}
             localRecommendations={localRecommendations}
             paperChildren={libraryPaperChildren}
+            paperInventory={libraryPaperInventory}
+            onRefreshPaperInventory={onRefreshPaperInventory}
             onAddExternalPdf={onAddExternalPdf}
             onAddDroppedPdfFiles={onAddDroppedPdfFiles}
             onClearRecommendations={onClearRecommendations}

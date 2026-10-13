@@ -77,14 +77,16 @@ export function RecommendationList({ items, service, selectedId, pendingIds, can
           onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); onOpen?.(item); } }}>
           <DocumentRegular aria-hidden="true" />
           <span className="recommendation-row-content">
-            <span className="recommendation-title-line"><span className="recommendation-compact-title"><SearchHighlight text={item.title} query={query} /></span><time>{recommendationDateLabel(item)}</time></span>
+            <span className="recommendation-title-line"><span className="recommendation-compact-title"><SearchHighlight text={item.title} query={query} /></span></span>
+            <span className="recommendation-row-reason" title={item.reason?.trim() || "相关主题资料；未提供个别推荐理由"}>{item.reason?.trim() || "相关主题资料；未提供个别推荐理由"}</span>
             <span className="recommendation-row-meta">
+              <time>{recommendationDateLabel(item)}</time>
               {item.venue ? <span className="recommendation-venue">{item.venue}</span> : null}
               {item.fullText?.status === "available" ? <span className="recommendation-access-label">PDF 已验证</span> : null}
             </span>
           </span>
         </button>
-        <div className="recommendation-keywords"><ResourceTagChips tags={tags.get(item.id) ?? []} label={`${item.title} 的关键词`} onSelect={(tag) => setQuery(tag.label)} /></div>
+        <div className="recommendation-keywords"><ResourceTagChips limit={2} tags={tags.get(item.id) ?? []} label={`${item.title} 的关键词`} onSelect={(tag) => setQuery(tag.label)} /></div>
         <div className="recommendation-compact-actions">
           <Tooltip content="收藏" relationship="label"><Button appearance="subtle" size="small" aria-label={`收藏 ${item.title}`} disabled={Boolean(item.resourcePath) || !canSave || pendingIds.includes(item.id)} icon={<BookmarkRegular />} onClick={() => onSave(item)} /></Tooltip>
           <Tooltip content="不感兴趣" relationship="label"><Button appearance="subtle" size="small" aria-label={`忽略 ${item.title}`} icon={<DeleteRegular />} onClick={() => onDismiss(item)} /></Tooltip>

@@ -132,6 +132,7 @@ export function useArtifactExportController({ client, scopeId, sessionGeneration
 
   return {
     actions: {
+      jobScope: JSON.stringify([scopeId, sessionGeneration]),
       exportArtifact,
       compileArtifact,
       compileNote,

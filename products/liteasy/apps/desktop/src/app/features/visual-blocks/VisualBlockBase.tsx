@@ -4,6 +4,8 @@ import type { BlockPresentation } from "../objects/visualBlock.types";
 import { defaultReadingFontCss } from "../settings/readingFonts";
 import { ContentView } from "../markdown/ContentView";
 import { legacyContent } from "../markdown/contentFragment";
+import { VisualPreviewContext } from "./visualPreviewContext";
+import { ResourceReferencesContext, ReferenceSourceContext } from "../resource-links/ResourceReferencesContext";
 import "./visualBlocks.css";
 
 class ContentBoundary extends Component<{ children: ReactNode; fallback: string }, { failed: boolean }> {
@@ -32,6 +34,8 @@ export function VisualBlockBase({ presentation, identity, fallback, children, re
 }
 
 export function RichTextBlock({ text, onOpenPath }: { text: string; onOpenPath?(path: string): Promise<void> }) {
+  const preview = useContext(VisualPreviewContext);
   const basePath = useContext(VisualResourceContext);
+  if (preview) return <ResourceReferencesContext.Provider value={null}><ReferenceSourceContext.Provider value={undefined}><ContentView content={legacyContent(text)} mediaPolicy="blocked" components={{ a: ({ children }) => <span title="预览未授权打开链接">{children}</span> }} /></ReferenceSourceContext.Provider></ResourceReferencesContext.Provider>;
   return <ContentView allowRelativeImages={Boolean(basePath)} content={legacyContent(text)} onOpenLiteasyPath={onOpenPath} renderResourceImage={(source, alt) => <AssetImage source={source} alt={alt} />} />;
 }

@@ -13,7 +13,7 @@
 .recommendation-compact-row { display: flex; align-items: flex-start; gap: 8px; width: 100%; min-width: 0; padding: 11px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--colorNeutralForeground1); text-align: left; font: inherit; cursor: pointer; }
 .recommendation-compact-row > svg { flex-shrink: 0; color: var(--colorNeutralForeground3); margin-top: 2px; }
 .recommendation-row-content { flex: 1; min-width: 0; display: grid; gap: 5px; }
-.recommendation-compact-title { font-size: 13px; font-weight: 600; line-height: 1.5; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.recommendation-compact-title { font-size: calc(14px * var(--app-font-ratio, 1)); font-weight: 600; line-height: 1.5; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .recommendation-row-authors { color: var(--colorNeutralForeground2); font-size: 12px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .recommendation-row-meta { display: flex; align-items: center; gap: 8px; padding-right: 58px; color: var(--colorNeutralForeground3); font-size: 11px; line-height: 20px; min-width: 0; }
 .recommendation-row-meta time { flex-shrink: 0; font-variant-numeric: tabular-nums; }
@@ -64,3 +64,11 @@
 .recommendation-keywords .resource-tag-chip { flex: 0 1 auto; }
 .recommendation-keywords .resource-tags-overflow { flex-shrink: 0; }
 .recommendation-filter-row:has(.fui-Checkbox) { flex-wrap: wrap; }
+
+.recommendation-row-reason { color: var(--colorNeutralForeground2); font-size: calc(12px * var(--app-font-ratio, 1)); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.recommendation-compact-row:focus-visible .recommendation-compact-title { -webkit-line-clamp: unset; }
+.recommendation-compact-row:focus-visible .recommendation-row-reason { white-space: normal; }
+.recommendation-row-meta { padding-right: 0; flex-wrap: wrap; }
+.recommendation-row-meta time { color: var(--colorNeutralForeground2); }
+.recommendation-keywords { min-height: 28px; }
+.recommendation-compact-actions .fui-Button { min-width: 28px; min-height: 28px; }

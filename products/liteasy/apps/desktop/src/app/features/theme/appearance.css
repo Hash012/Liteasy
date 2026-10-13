@@ -40,6 +40,10 @@
 .appearance-options .fui-Radio__label > span { display: inline-flex; align-items: center; gap: 5px; }
 .appearance-options svg { width: 18px; height: 18px; }
 
+/* Legacy compatibility owners: layout (activity/dock), assistant (legacy controls),
+   library (tree/navigation), reader (PDF chrome), artifacts, settings and generative-ui.
+   Remove each selector when its owner adopts paired Fluent tokens; do not add new
+   surfaces here. Thin reading, Studio and inline library actions own their tokens. */
 /* Chrome, side panels and editing surfaces. No blanket filters or inversion:
    PDF canvases, cover art and slides must keep their original colors. */
 html[data-color-scheme="dark"] :is(
@@ -94,7 +98,7 @@ html[data-color-scheme="dark"] :is(
   .library-section-count, .library-folder-count, .library-file-drop-hint,
   .library-paper-metadata, .library-metadata-editor small,
   .library-selection-summary, .library-empty-collection, .library-workspace-root,
-  .library-inline-button, .library-disclosure, .library-section-icon,
+  .library-disclosure, .library-section-icon,
   .sidebar-section-disclosure, .assistant-thinking-labels,
   .assistant-history-item-meta, .assistant-active-session-kind,
   .assistant-queued-message, .agent-settings-row-description,

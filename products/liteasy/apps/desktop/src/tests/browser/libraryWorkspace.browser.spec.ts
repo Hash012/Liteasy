@@ -7,6 +7,7 @@ test("expanded library creates persistent paper notes and boards and accepts joi
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
+  await page.addInitScript(() => localStorage.setItem("liteasy.view-settings.v1", JSON.stringify({ "view.markdown_mode": "manual" })));
   const pdf = await readFile(new URL("../../../../../../../development/test-data/pdf-selection/glyph-boundaries.pdf", import.meta.url));
   await page.route("**/manual-preview/das24a.pdf", (route) => route.fulfill({ body: pdf, contentType: "application/pdf" }));
   await page.setViewportSize({ width: 1600, height: 1000 });
@@ -31,7 +32,7 @@ test("expanded library creates persistent paper notes and boards and accepts joi
   await page.reload();
   await activity.dblclick();
   await expect(library).toBeVisible();
-  await library.getByRole("button", { name: /展开 das24a.pdf 的 \d+ 个附件/ }).click();
+  await library.getByRole("button", { name: /展开 das24a.pdf 的\d+ 项关联内容/ }).click();
   const child = library.getByRole("button", { name: "打开论文文件：实验复现", exact: true });
   await expect(child).toBeVisible();
   await child.click({ button: "right" });
@@ -46,7 +47,7 @@ test("expanded library creates persistent paper notes and boards and accepts joi
   await page.getByRole("textbox", { name: "论文附件名称" }).fill("论证画布");
   await page.getByRole("button", { name: "创建", exact: true }).click();
   await expect(page.locator(".object-workbench")).toBeVisible();
-  await page.getByRole("region", { name: "本地文献库", exact: true }).getByRole("button", { name: /展开 das24a.pdf 的 \d+ 个附件/ }).click();
+  await page.getByRole("region", { name: "本地文献库", exact: true }).getByRole("button", { name: /展开 das24a.pdf 的\d+ 项关联内容/ }).click();
   await expect(page.getByRole("button", { name: "打开论文文件：论证画布", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "打开论文文件：实验复现", exact: true }).click();
   await expect(editor).toBeVisible();
@@ -60,9 +61,15 @@ test("local recommendations work without login and profile data can be exported"
     localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true");
     localStorage.setItem("liteasy.local-literature.v1", JSON.stringify({ "papers.local_mode": true, "profile.local_enabled": true }));
   });
-  await page.route("https://api.crossref.org/works?**", (route) => route.fulfill({ json: { message: { items: [
-    { DOI: "10.1234/graph", title: ["Graph neural networks for research"], published: { "date-parts": [[2026]] }, "is-referenced-by-count": 42 },
-  ] } } }));
+  const recommendationQueries: string[] = [];
+  const relatedTitle = "Episodic memory for language models";
+  await page.route("https://api.crossref.org/works?**", (route) => {
+    recommendationQueries.push(new URL(route.request().url()).searchParams.get("query.bibliographic") ?? "");
+    return route.fulfill({ json: { message: { items: [
+      { DOI: "10.1234/memory", title: [relatedTitle], published: { "date-parts": [[2026]] }, "is-referenced-by-count": 42 },
+      { DOI: "10.1234/graph", title: ["Graph neural networks for research"], published: { "date-parts": [[2026]] }, "is-referenced-by-count": 100 },
+    ] } } });
+  });
   await prepareMetadataFixture(page);
   await page.goto("/?pdf-highlight-fixture#importable");
   await useBrowserMetadataStore(page);
@@ -71,7 +78,9 @@ test("local recommendations work without login and profile data can be exported"
   await page.getByRole("menuitem", { name: "获取元数据", exact: true }).click();
   await library.getByRole("button", { name: larimarTitle, exact: true }).dblclick();
   const recs = page.getByRole("region", { name: "关联推荐", exact: true });
-  await expect(recs.getByText("Graph neural networks for research", { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(recs.getByText(relatedTitle, { exact: true })).toBeVisible({ timeout: 20_000 });
+  expect(recommendationQueries.some((query) => query.includes(larimarTitle))).toBe(true);
+  await expect(recs.getByText("Graph neural networks for research", { exact: true })).toHaveCount(0);
   await expect(recs.getByRole("button", { name: "刷新推荐" })).toBeEnabled();
   await page.getByRole("navigation", { name: "左边栏导航" }).getByRole("button", { name: "设置", exact: true }).click();
   const settings = page.getByRole("region", { name: "应用设置" });

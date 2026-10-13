@@ -62,7 +62,7 @@ test("library note, board, extracted text/images and ebook rows drag through the
   fireEvent.click(screen.getByRole("button", { name: "展开Research" }));
   const paperRow = screen.getByRole("button", { name: "Cicada", exact: true }).closest(".library-paper-row")!;
   expect(paperRow).toHaveStyle({ paddingInlineStart: "24px" });
-  fireEvent.click(screen.getByRole("button", { name: "展开 Cicada 的 5 个附件" }));
+  fireEvent.click(screen.getByRole("button", { name: "展开 Cicada 的5 项关联内容" }));
   const expected = ["Actual saved Markdown", "白板结构", "Optimistic concurrency control", "An architecture figure", "Optimistic concurrency control", "A serializable database"];
   for (const [index, label] of [...children.map((child) => `打开论文文件：${child.label}`), "选择文件 Transactions Handbook"].entries()) {
     const data = transfer();

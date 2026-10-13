@@ -27,7 +27,10 @@ export function documentNodeMarkdown(node: DocumentNode): string {
       return `${fence}${language}\n${raw}\n${fence}\n\n`;
     }
     case "code": { const raw = text(node); const fence = "`".repeat(Math.max(1, ...[...raw.matchAll(/`+/g)].map(match => match[0].length + 1))); const padding = raw.startsWith("`") || raw.endsWith("`") ? " " : ""; return `${fence}${padding}${raw}${padding}${fence}`; }
-    case "blockquote": return `${value.trimEnd().split("\n").map(line => `> ${line}`).join("\n")}\n\n`;
+    case "blockquote": {
+      const quoted = (node.children ?? []).filter(child => child.type !== "text" || child.value?.trim()).map(documentNodeMarkdown).join("").trimEnd();
+      return `${quoted.split("\n").map(line => `> ${line}`).join("\n")}\n\n`;
+    }
     case "ul": case "ol": return (node.children ?? []).filter(child => child.tag === "li").map((child, index) => {
       const marker = node.tag === "ol" ? `${Number(node.properties?.start ?? 1) + index}. ` : "- ";
       const lines = documentNodeMarkdown(child).trimEnd().split("\n");

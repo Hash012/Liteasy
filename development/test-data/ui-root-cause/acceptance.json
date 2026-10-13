@@ -1,0 +1,646 @@
+{
+  "schema": "liteasy.ui-review.acceptance/v1",
+  "baseline_commit": "6bb59f32d72fcadeb21fcf40449c0a6d9808dff5",
+  "cases": [
+    {
+      "id": "A00-01",
+      "task_id": "PR-00",
+      "title": "可追溯构建",
+      "given": "当前源码与用户安装包可能不同",
+      "when": "打开版本诊断并记录运行环境",
+      "then": "commit/版本/DPR/字体可追溯；无法获取的项写 unknown",
+      "verification": "元数据/人工核对",
+      "status": "not_run"
+    },
+    {
+      "id": "A00-02",
+      "task_id": "PR-00",
+      "title": "失败用例触达真实路径",
+      "given": "两个标注截图与隔离测试资料",
+      "when": "运行新增 fixture 的初始版本",
+      "then": "明确哪条用例失败、为何失败；没有为制造RED加入无关断言",
+      "verification": "浏览器与测试审阅",
+      "status": "not_run"
+    },
+    {
+      "id": "A00-03",
+      "task_id": "PR-00",
+      "title": "不污染真实数据",
+      "given": "真实资料库存在",
+      "when": "执行所有 fixture 初始化和清理",
+      "then": "真实目录、账号历史与模型预算不变",
+      "verification": "副作用/存储检查",
+      "status": "not_run"
+    },
+    {
+      "id": "A00-04",
+      "task_id": "PR-00",
+      "title": "源码漂移核对",
+      "given": "本地 HEAD 不等于审计 SHA",
+      "when": "比较相关符号与现有规范",
+      "then": "记录已修复、仍存在和新变化；不倒退到旧实现",
+      "verification": "git diff/源码审阅",
+      "status": "not_run"
+    },
+    {
+      "id": "A01-01",
+      "task_id": "PR-01",
+      "title": "深色薄读正文",
+      "given": "主题为dark，薄读含证据标注与菜单",
+      "when": "打开正文、证据详情和portal",
+      "then": "前景/背景配对正确，未意外出现固定浅色UI",
+      "verification": "生产CSS/computed style/人工",
+      "status": "not_run"
+    },
+    {
+      "id": "A01-02",
+      "task_id": "PR-01",
+      "title": "纸张颜色隔离",
+      "given": "深色UI、原始PDF与彩色科学图",
+      "when": "切换light/dark",
+      "then": "原PDF与图像颜色不变，导出内容不受UI色影响",
+      "verification": "图像比较/字节检查",
+      "status": "not_run"
+    },
+    {
+      "id": "A01-03",
+      "task_id": "PR-01",
+      "title": "登录按钮不是白上浅灰",
+      "given": "未登录的收藏区",
+      "when": "hover、focus并尝试登录",
+      "then": "文字可读、焦点可见；匿名本地功能仍可用",
+      "verification": "对比度/键盘/行为",
+      "status": "not_run"
+    },
+    {
+      "id": "A01-04",
+      "task_id": "PR-01",
+      "title": "ReactFlow完整主题",
+      "given": "深色工作台含node/edge/controls",
+      "when": "切换主题并操作图控件",
+      "then": "控件、选区、边、归属文字均可辨认且行为保留",
+      "verification": "浏览器/人工",
+      "status": "not_run"
+    },
+    {
+      "id": "A01-05",
+      "task_id": "PR-01",
+      "title": "读屏公告不泄漏",
+      "given": "有已完成回复",
+      "when": "渲染生产build",
+      "then": "公告不占可见布局但在可访问树保留",
+      "verification": "computed style/可访问树",
+      "status": "not_run"
+    },
+    {
+      "id": "A01-06",
+      "task_id": "PR-01",
+      "title": "主题继承与显式预览",
+      "given": "全局dark，类型预览inherit",
+      "when": "切换inherit/light/dark再返回",
+      "then": "inherit跟随根模式；显式预览状态标注准确",
+      "verification": "组件浏览器",
+      "status": "not_run"
+    },
+    {
+      "id": "A01-07",
+      "task_id": "PR-01",
+      "title": "颜色回归门",
+      "given": "普通文字与可交互状态",
+      "when": "读取真实合成背景并测量",
+      "then": "普通文字4.5:1，大文字3:1；豁免与特殊表面单列",
+      "verification": "自动测量+人工分类",
+      "status": "not_run"
+    },
+    {
+      "id": "A02-01",
+      "task_id": "PR-02",
+      "title": "新对话没有旧日志",
+      "given": "已有失败/成功任务与普通聊天",
+      "when": "创建新会话首页",
+      "then": "只出现最近记录和可信上下文建议，无旧transcript/已保存声明",
+      "verification": "集成浏览器",
+      "status": "not_run"
+    },
+    {
+      "id": "A02-02",
+      "task_id": "PR-02",
+      "title": "任务列表互斥",
+      "given": "当前对话有多条消息",
+      "when": "切到任务列表",
+      "then": "主内容仅为任务列表；原消息不混在下方",
+      "verification": "DOM语义与视觉",
+      "status": "not_run"
+    },
+    {
+      "id": "A02-03",
+      "task_id": "PR-02",
+      "title": "任务归属准确",
+      "given": "任务A/B各有两次run",
+      "when": "打开A并切换run",
+      "then": "只显示A对应run；B事件不进入A详情",
+      "verification": "带ID事件注入/浏览器",
+      "status": "not_run"
+    },
+    {
+      "id": "A02-04",
+      "task_id": "PR-02",
+      "title": "隐藏视图不取消任务",
+      "given": "任务正在执行",
+      "when": "关闭Dock、到首页、归档任务",
+      "then": "run继续，重新打开可见进度；显式取消才终止",
+      "verification": "service集成/事件记录",
+      "status": "not_run"
+    },
+    {
+      "id": "A02-05",
+      "task_id": "PR-02",
+      "title": "旧结果与新失败并存",
+      "given": "run1已保存r1，run2失败",
+      "when": "查看任务并围绕r1提问",
+      "then": "r1仍可访问，状态不谎称run2成功，对话绑定r1",
+      "verification": "状态/引用断言",
+      "status": "not_run"
+    },
+    {
+      "id": "A02-06",
+      "task_id": "PR-02",
+      "title": "空目标没有保存假象",
+      "given": "无消息、无草稿、无任务",
+      "when": "刷新或新建首页",
+      "then": "不写空索引，不显示已保存",
+      "verification": "存储/浏览器",
+      "status": "not_run"
+    },
+    {
+      "id": "A02-07",
+      "task_id": "PR-02",
+      "title": "迟到回执不能跨目标",
+      "given": "A正在保存，切到B并编辑",
+      "when": "A的成功ack迟到",
+      "then": "B不变为saved；A自己的保存记录准确",
+      "verification": "持久化适配器单测",
+      "status": "not_run"
+    },
+    {
+      "id": "A02-08",
+      "task_id": "PR-02",
+      "title": "迟到回执不能跨修订",
+      "given": "同目标r7正在保存，已编辑r8",
+      "when": "收到r7成功ack",
+      "then": "r8仍dirty；只确认r7",
+      "verification": "revision契约测试",
+      "status": "not_run"
+    },
+    {
+      "id": "A02-09",
+      "task_id": "PR-02",
+      "title": "失败计数不是成功回复",
+      "given": "assistant工具事件、failed与真正完成turn混合",
+      "when": "结束一个turn",
+      "then": "公告只按定义好的完成turn更新，不广播token和失败日志数量",
+      "verification": "状态测试/可访问树",
+      "status": "not_run"
+    },
+    {
+      "id": "A02-10",
+      "task_id": "PR-02",
+      "title": "旧SDK错误区别处理",
+      "given": "历史result_missing与新run具体错误并存",
+      "when": "查看历史后运行失败fixture",
+      "then": "保留历史诊断；新run保留具体cause；不无条件重试",
+      "verification": "SDK测试+UI",
+      "status": "not_run"
+    },
+    {
+      "id": "A02-11",
+      "task_id": "PR-02",
+      "title": "保存失败不重复生成",
+      "given": "模型结果已获得，首次持久化失败",
+      "when": "点击恢复",
+      "then": "优先重试保存同一结果，不重复模型调用",
+      "verification": "副作用调用/结果hash",
+      "status": "not_run"
+    },
+    {
+      "id": "A02-12",
+      "task_id": "PR-02",
+      "title": "迁移未知旧消息",
+      "given": "旧记录无可靠task/run映射",
+      "when": "迁移两次并回滚",
+      "then": "记录不丢失、不猜归属，迁移幂等，回滚可读",
+      "verification": "迁移fixture/快照语义",
+      "status": "not_run"
+    },
+    {
+      "id": "A02-13",
+      "task_id": "PR-02",
+      "title": "跨窗口与草稿",
+      "given": "两窗口打开不同会话并各有草稿",
+      "when": "并发更新、切换、重启",
+      "then": "无旧快照覆盖新数据；草稿/滚动锚点保留",
+      "verification": "多上下文集成",
+      "status": "not_run"
+    },
+    {
+      "id": "A03-01",
+      "task_id": "PR-03",
+      "title": "卡片正文真实可见",
+      "given": "示例含Markdown/表格/资源引用",
+      "when": "打开组合页",
+      "then": "显示实际内容和证据占位，不是只有标题的空框",
+      "verification": "真实renderer/视觉",
+      "status": "not_run"
+    },
+    {
+      "id": "A03-02",
+      "task_id": "PR-03",
+      "title": "可视化修改持久化",
+      "given": "有效草稿与正文",
+      "when": "修改正文、预览、保存、重启",
+      "then": "同一canonical数据在画布/源码/运行预览一致",
+      "verification": "存储/内容比较",
+      "status": "not_run"
+    },
+    {
+      "id": "A03-03",
+      "task_id": "PR-03",
+      "title": "非法源码不丢稿",
+      "given": "源码有未保存且非法JSON",
+      "when": "切tab/文件并恢复编辑",
+      "then": "保留编辑内容和错误位置，不覆盖最后有效模型",
+      "verification": "编辑器/状态",
+      "status": "not_run"
+    },
+    {
+      "id": "A03-04",
+      "task_id": "PR-03",
+      "title": "删除撤销与重载",
+      "given": "组合有4块且有边",
+      "when": "Delete、撤销、重做、保存重载",
+      "then": "图和canonical模型始终一致，无重新冒出的已删节点",
+      "verification": "图交互/持久化",
+      "status": "not_run"
+    },
+    {
+      "id": "A03-05",
+      "task_id": "PR-03",
+      "title": "正文Delete不删块",
+      "given": "焦点位于卡片正文编辑器",
+      "when": "按Delete或Backspace",
+      "then": "仅编辑正文，不删除画布节点",
+      "verification": "键盘浏览器",
+      "status": "not_run"
+    },
+    {
+      "id": "A03-06",
+      "task_id": "PR-03",
+      "title": "真实教学闭环",
+      "given": "全新工作区、离线",
+      "when": "开始演示、修改一块、预览、保存",
+      "then": "操作确实完成；无模型请求与真实论文修改；明确演示数据",
+      "verification": "端到端/网络拦截",
+      "status": "not_run"
+    },
+    {
+      "id": "A03-07",
+      "task_id": "PR-03",
+      "title": "窄Dock不变成微缩图",
+      "given": "窗口宽但中间Dock仅420px",
+      "when": "调整Dock宽度并编辑",
+      "then": "使用窄布局切换属性，不把全文不断fit缩小，焦点不丢",
+      "verification": "container/resize浏览器",
+      "status": "not_run"
+    },
+    {
+      "id": "A03-08",
+      "task_id": "PR-03",
+      "title": "缺失类型与预览权限",
+      "given": "某type未安装或资源未授权",
+      "when": "打开含该块的草稿",
+      "then": "给可恢复具体提示；预览不触发越权动作",
+      "verification": "capability/浏览器",
+      "status": "not_run"
+    },
+    {
+      "id": "A04-01",
+      "task_id": "PR-04",
+      "title": "未查不等于零",
+      "given": "资源目录尚未hydration",
+      "when": "打开库并缓慢返回目录",
+      "then": "unknown/loading明确，未提前显示确定0或空结论",
+      "verification": "慢服务fixture",
+      "status": "not_run"
+    },
+    {
+      "id": "A04-02",
+      "task_id": "PR-04",
+      "title": "真空与读取失败不同",
+      "given": "一个ready空目录，一个读取失败目录",
+      "when": "并排显示条目",
+      "then": "零与错误不同；错误可重试，不归零",
+      "verification": "selector/UI",
+      "status": "not_run"
+    },
+    {
+      "id": "A04-03",
+      "task_id": "PR-04",
+      "title": "+3含义清楚",
+      "given": "仅有文本/插图/图文三个派生视图",
+      "when": "展开关联内容",
+      "then": "三类清楚，不显示为三份原始PDF或元数据评分",
+      "verification": "UI语义",
+      "status": "not_run"
+    },
+    {
+      "id": "A04-04",
+      "task_id": "PR-04",
+      "title": "别名与版本去重",
+      "given": "同资源两别名、另有旧revision",
+      "when": "刷新清单",
+      "then": "同canonical ref合并；不同版本可追溯，不按标题丢失",
+      "verification": "identity单测",
+      "status": "not_run"
+    },
+    {
+      "id": "A04-05",
+      "task_id": "PR-04",
+      "title": "资源生命周期刷新",
+      "given": "已保存笔记/产物并有解析结果",
+      "when": "新增、删除、移动、重启、接收旧事件",
+      "then": "清单及时正确，旧事件不回滚新inventory",
+      "verification": "持久化/事件",
+      "status": "not_run"
+    },
+    {
+      "id": "A04-06",
+      "task_id": "PR-04",
+      "title": "轻量加载",
+      "given": "1000条文献含未解析PDF",
+      "when": "显示列表及展开少量行",
+      "then": "不自动解析或调用模型；读取次数、CPU与时延有记录",
+      "verification": "性能/副作用",
+      "status": "not_run"
+    },
+    {
+      "id": "A04-07",
+      "task_id": "PR-04",
+      "title": "元数据独立状态",
+      "given": "题录完整但未解析，另一项仅文件名",
+      "when": "显示条目详情",
+      "then": "元数据/原文件/解析/关联内容分别准确",
+      "verification": "schema/UI",
+      "status": "not_run"
+    },
+    {
+      "id": "A04-08",
+      "task_id": "PR-04",
+      "title": "推荐层级与诚实理由",
+      "given": "有理由、无理由、长标题、多标签推荐",
+      "when": "在280/360/480px宽度浏览",
+      "then": "标题可读、理由不编造、标签不挤操作；键盘收藏忽略有效",
+      "verification": "视觉/键盘/内容",
+      "status": "not_run"
+    },
+    {
+      "id": "A04-09",
+      "task_id": "PR-04",
+      "title": "不误判modal暗幕",
+      "given": "推荐列表dark/light正常",
+      "when": "打开与关闭导出modal",
+      "then": "列表独立可读；背景减光仅在modal期间发生",
+      "verification": "主题集成",
+      "status": "not_run"
+    },
+    {
+      "id": "A05-01",
+      "task_id": "PR-05",
+      "title": "高DPR预览",
+      "given": "已知文字PDF，DPR1/1.25/1.5/2",
+      "when": "fit-width、100%、200%切换",
+      "then": "backing与CSS尺寸及transform一致；文本清楚；无CSS假放大",
+      "verification": "真实PDF.js/尺寸/人工",
+      "status": "not_run"
+    },
+    {
+      "id": "A05-02",
+      "task_id": "PR-05",
+      "title": "同页数同页码换源",
+      "given": "同一预览组件实例内A/B各10页，第一页标记不同；当前A第1页；另记录真实调用方是否重建实例",
+      "when": "替换payload为B",
+      "then": "B ready后显示B标记；不得保留标为B的A画面",
+      "verification": "真实页面内容/渲染测试",
+      "status": "not_run"
+    },
+    {
+      "id": "A05-03",
+      "task_id": "PR-05",
+      "title": "旧加载晚于新加载",
+      "given": "A加载很慢，B较快",
+      "when": "快速从A切B再等A完成",
+      "then": "当前仍B，A不覆盖state/canvas/error",
+      "verification": "受控Promise/浏览器",
+      "status": "not_run"
+    },
+    {
+      "id": "A05-04",
+      "task_id": "PR-05",
+      "title": "关闭后异源重开",
+      "given": "同一Dialog实例重用，A尚在compile/render；另核查真实调用方是否满足此前提",
+      "when": "关闭，再打开B，A随后完成",
+      "then": "B view/publish保持B；A只更新A job",
+      "verification": "job/view集成",
+      "status": "not_run"
+    },
+    {
+      "id": "A05-05",
+      "task_id": "PR-05",
+      "title": "翻页取消串行",
+      "given": "同一canvas上页面渲染很慢",
+      "when": "连续翻页与缩放",
+      "then": "旧RenderTask终结后复用canvas；无竞态错误和旧图覆盖",
+      "verification": "真实RenderTask/日志",
+      "status": "not_run"
+    },
+    {
+      "id": "A05-06",
+      "task_id": "PR-05",
+      "title": "预览即保存字节",
+      "given": "某job预览PDF已完成",
+      "when": "保存后读取实际文件",
+      "then": "保存文件hash等于该job预览payload，不隐式重生成",
+      "verification": "文件hash/授权/结果回执",
+      "status": "not_run"
+    },
+    {
+      "id": "A05-07",
+      "task_id": "PR-05",
+      "title": "关闭不取消、取消才取消",
+      "given": "导出任务正在生成",
+      "when": "先关闭恢复，再显式取消另一任务",
+      "then": "生命周期按策略；取消后不发布；已完成job可重新查看",
+      "verification": "service/副作用",
+      "status": "not_run"
+    },
+    {
+      "id": "A05-08",
+      "task_id": "PR-05",
+      "title": "来源选项使旧预览失效",
+      "given": "A已预览，有旧accepted降级状态",
+      "when": "改变来源范围/证据模式/格式",
+      "then": "旧预览明确失效；旧accepted不误授权新job",
+      "verification": "状态/preview identity",
+      "status": "not_run"
+    },
+    {
+      "id": "A05-09",
+      "task_id": "PR-05",
+      "title": "容器与内存极限",
+      "given": "0宽隐藏Dock与极大页面/高DPR",
+      "when": "显示、resize、超预算缩放",
+      "then": "不创建非法canvas，预算受控，降级明确，恢复后正确",
+      "verification": "几何+真实viewer",
+      "status": "not_run"
+    },
+    {
+      "id": "A05-10",
+      "task_id": "PR-05",
+      "title": "错误恢复与清理",
+      "given": "错误PDF后换正常PDF，反复开关预览",
+      "when": "重试与切换",
+      "then": "旧错误清除，资源释放；正常PDF可读可选择文本",
+      "verification": "资源/辅助功能/浏览器",
+      "status": "not_run"
+    },
+    {
+      "id": "A05-11",
+      "task_id": "PR-05",
+      "title": "浏览器打印边界真实",
+      "given": "非Tauri环境只能使用结构预览与系统打印",
+      "when": "生成预览并打开系统打印",
+      "then": "明确标为结构预览；不能宣称已生成或保存可核验PDF；与桌面真实PDF路径分开验收",
+      "verification": "浏览器平台分支/文案/副作用",
+      "status": "not_run"
+    },
+    {
+      "id": "A06-01",
+      "task_id": "PR-06",
+      "title": "富文本语义保留",
+      "given": "rich-document.md经已有schema导入",
+      "when": "屏幕阅读及导出Markdown/PDF/DOCX",
+      "then": "段落、代码、公式、表格、引用不变成一坨或被误拆",
+      "verification": "结构断言/文本抽取/人工",
+      "status": "not_run"
+    },
+    {
+      "id": "A06-02",
+      "task_id": "PR-06",
+      "title": "旧长段不被悄悄改写",
+      "given": "没有段落的旧summary",
+      "when": "导出并检查网络",
+      "then": "原内容保留，无模型调用；必要时提示源结构不足",
+      "verification": "内容hash/网络",
+      "status": "not_run"
+    },
+    {
+      "id": "A06-03",
+      "task_id": "PR-06",
+      "title": "标题分页与长表格",
+      "given": "跨多页文本、表格和页脚前标题",
+      "when": "生成最终PDF并逐页检查",
+      "then": "无裁字、无漏行；标题与后文合理同页，续表有标识",
+      "verification": "实际PDF文本+页面检查",
+      "status": "not_run"
+    },
+    {
+      "id": "A06-04",
+      "task_id": "PR-06",
+      "title": "宽公式代码与目标降级",
+      "given": "超宽公式、长代码行、目标不支持语法",
+      "when": "各格式导出",
+      "then": "不静默裁剪或缩到不可读，降级显式并保留源内容",
+      "verification": "各renderer输出",
+      "status": "not_run"
+    },
+    {
+      "id": "A06-05",
+      "task_id": "PR-06",
+      "title": "全量不是仅DOM",
+      "given": "折叠/屏幕外的已保存薄读节点",
+      "when": "选择全部已保存内容导出",
+      "then": "所有应包含节点进入文档，无重复或遗漏",
+      "verification": "节点ID/文本校对",
+      "status": "not_run"
+    },
+    {
+      "id": "A06-06",
+      "task_id": "PR-06",
+      "title": "证据与资源缺失",
+      "given": "有明确来源、缺图、600字以上摘录",
+      "when": "选择索引/摘录/完整附录导出",
+      "then": "不同模式语义准确，截短有标识，缺失资源有diagnostic",
+      "verification": "适配器/最终文件",
+      "status": "not_run"
+    },
+    {
+      "id": "A06-07",
+      "task_id": "PR-06",
+      "title": "字体与原图边界",
+      "given": "本机缺字体，正文含中文，作者图有色彩编码",
+      "when": "生成并打开PDF/DOCX",
+      "then": "中文可读、回退有依据；图色不随UI改变；不承诺Word固定分页",
+      "verification": "Windows/人工/抽取",
+      "status": "not_run"
+    },
+    {
+      "id": "A07-01",
+      "task_id": "PR-07",
+      "title": "完整三栏用户路径",
+      "given": "隔离冷启动工作区",
+      "when": "读文献→开工作台→改卡片→任务→导出→重启",
+      "then": "内容、归属、结果与保存状态全程一致",
+      "verification": "真实Dock E2E",
+      "status": "not_run"
+    },
+    {
+      "id": "A07-02",
+      "task_id": "PR-07",
+      "title": "窗口与字体回归",
+      "given": "dark/light、多Dock宽、中文/英文、用户字体",
+      "when": "resize/切主题/文本缩放200%",
+      "then": "无关键控件被截、无文字重叠、焦点不丢",
+      "verification": "生产build视觉矩阵",
+      "status": "not_run"
+    },
+    {
+      "id": "A07-03",
+      "task_id": "PR-07",
+      "title": "Windows独立门",
+      "given": "Windows候选安装包与WebView",
+      "when": "DPR/字体/真实导出/翻页保存检查",
+      "then": "有该commit真实证据；未运行时not_run，不以Linux代替",
+      "verification": "Windows人工/自动化",
+      "status": "not_run"
+    },
+    {
+      "id": "A07-04",
+      "task_id": "PR-07",
+      "title": "基线审批与保护",
+      "given": "新增快照和现有ci:content/ci:export",
+      "when": "提交最终修复",
+      "then": "独立审批快照；既有安全测试未删除弱化；未通过项保留",
+      "verification": "代码/证据审阅",
+      "status": "not_run"
+    },
+    {
+      "id": "A07-05",
+      "task_id": "PR-07",
+      "title": "无假通过报告",
+      "given": "部分平台或测试被环境阻断",
+      "when": "生成验收报告",
+      "then": "passed/failed/blocked/not_run明确，reference测试不冒充应用",
+      "verification": "报告自动校验/人工",
+      "status": "not_run"
+    }
+  ]
+}

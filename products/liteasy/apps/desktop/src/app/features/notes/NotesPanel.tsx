@@ -143,7 +143,7 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
   };
   return (
     <section className="notes-panel" aria-label="笔记" aria-busy={model.busy}>
-      {exportPort && exportItem ? <DocumentExportDialog open title={exportItem.title} initialFormat="markdown"
+      {exportPort && exportItem ? <DocumentExportDialog open jobScope={exportPort.jobScope} sourceIdentity={JSON.stringify([model.scopeId, exportItem.key, exportItem.updatedAt, exportItem.target, exportItem.title, exportItem.text])} title={exportItem.title} initialFormat="markdown"
         compile={(options, signal) => exportPort.compileNote(exportItem, options, signal)} publish={exportPort.publish}
         onClose={() => setExportItem(undefined)} onOutcome={outcome => { if (outcome.status !== "cancelled") setExportMessage(outcome.record.location === "desktop" ? `已导出到 ${outcome.record.path}` : "已交给浏览器下载，保存位置由浏览器管理。"); }} /> : null}
       {exportMessage ? <p aria-live="polite">{exportMessage}</p> : null}

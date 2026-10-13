@@ -12,10 +12,10 @@ p{margin:0 0 6pt;orphans:2;widows:2}li{orphans:2;widows:2}
 table{border-collapse:collapse;width:100%;font-size:9.5pt;table-layout:fixed;margin:10pt 0}
 thead{display:table-header-group}td,th{vertical-align:top;padding:4pt 6pt;border-bottom:1px solid #d8e1de;overflow-wrap:anywhere}th{background:#f1f5f3;text-align:left}
 caption{font-size:9pt;text-align:left;break-after:avoid}tr{break-inside:auto}pre{white-space:pre-wrap;overflow:visible;font-size:9pt;padding:8pt;border:1px solid #d8e1de;overflow-wrap:anywhere}
-pre code{white-space:pre-wrap;font-family:Consolas,"Noto Sans Mono",monospace}blockquote{margin:8pt 0;padding-left:10pt;border-left:2px solid #83aca5}
-img{max-width:100%;max-height:235mm;object-fit:contain}a{color:#244f4c;text-decoration:underline}math[display=block]{margin:8pt 0;max-width:100%}
+pre code{white-space:pre-wrap;word-break:break-word;font-family:Consolas,"Noto Sans Mono",monospace}blockquote{margin:8pt 0;padding-left:10pt;border-left:2px solid #83aca5}
+img{max-width:100%;max-height:235mm;object-fit:contain}a{color:#244f4c;text-decoration:underline}math[display=block]{margin:8pt 0;max-width:100%}.export-math-wide{display:block;max-width:100%;overflow-x:auto}.export-math-source{display:block;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;font-size:10pt}.export-math-source>summary{font-size:9pt}
 .export-diagnostics{font-size:9pt;border-top:1px solid #d8e1de;margin-top:16pt}.export-meta{font-size:9pt;color:#536766}
-@media screen{body{padding:20mm;max-width:210mm;margin:auto}}@media print{main{max-width:none}body{padding:0}}`;
+@media screen{body{padding:20mm;max-width:210mm;margin:auto}}@media print{main{max-width:none}body{padding:0}.export-math-wide>.katex,.export-math-wide>.katex-display{display:none}.export-math-source{break-inside:auto}.export-math-source>pre{white-space:pre-wrap}h1+p,h2+p,h3+p,h4+p,h5+p,h6+p{break-before:avoid}}`;
 export function escapeDocumentHtml(value: string) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
@@ -27,7 +27,10 @@ export function bytesBase64(bytes: Uint8Array) {
 export function documentNodeHtml(node: DocumentNode, document?: ExportDocument): string {
   if (node.type === "text") return escapeDocumentHtml(node.value ?? "");
   if (node.type === "math") {
-    try { return katex.renderToString(node.value ?? "", { output: "mathml", displayMode: Boolean(node.properties?.display), trust: false, maxExpand: 500, maxSize: 20, throwOnError: true }); }
+    try {
+      const math = katex.renderToString(node.value ?? "", { output: "mathml", displayMode: Boolean(node.properties?.display), trust: false, maxExpand: 500, maxSize: 20, throwOnError: true });
+      return node.properties?.wide ? `<span class="export-math-wide">${math}<span class="export-math-source">完整公式源码（纸张版替代排版）：<code>${escapeDocumentHtml(node.value ?? "")}</code></span></span>` : math;
+    }
     catch { return `<code>${escapeDocumentHtml(node.value ?? "")}</code>`; }
   }
   if (node.properties?.footnoteId !== undefined) {
@@ -43,6 +46,11 @@ export function documentNodeHtml(node: DocumentNode, document?: ExportDocument):
   }
   const names: Record<string, string> = { colSpan: "colspan", rowSpan: "rowspan", className: "class" };
   const attributes = Object.entries(properties).filter(([key]) => ["href", "src", "alt", "title", "start", "colSpan", "rowSpan", "id", "scope", "headers", "className"].includes(key)).map(([key, value]) => ` ${names[key] ?? key}="${escapeDocumentHtml(Array.isArray(value) ? value.join(" ") : String(value))}"`).join("");
+  if (tag === "thead") {
+    const firstRow = node.children?.find(child => child.tag === "tr");
+    const columns = Math.max(1, (firstRow?.children ?? []).filter(child => child.tag === "th" || child.tag === "td").reduce((sum, cell) => sum + Number(cell.properties?.colSpan ?? 1), 0));
+    return `<thead><tr class="export-table-continuation"><td colspan="${columns}">表头（跨页重复）</td></tr>${(node.children ?? []).map(child => documentNodeHtml(child, document)).join("")}</thead>`;
+  }
   return `<${tag}${attributes}>${["img", "br", "hr"].includes(tag) ? "" : `${(node.children ?? []).map(child => documentNodeHtml(child, document)).join("")}</${tag}>`}`;
 }
 export function renderDocumentHtml(document: ExportDocument) {

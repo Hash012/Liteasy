@@ -16,9 +16,12 @@ export function usePaperServicesController(input: {
 }) {
   const [materials, setMaterials] = useState<Record<string, Material>>({});
   const [running, setRunning] = useState<string[]>([]);
+  const [catalogState, setCatalogState] = useState<import("../features/artifacts/artifact.types").ArtifactCatalogLoadState>({ status: "loading" });
+  const [catalogRetry, setCatalogRetry] = useState(0);
   const pending = useRef(new Map<string, Promise<Material>>());
   useEffect(() => {
     let active = true;
+    setCatalogState({ status: "loading" });
     loadDurableEntries("paper-services").then((entries) => {
       if (!active) return;
       const restored: Record<string, Material> = {};
@@ -27,9 +30,10 @@ export function usePaperServicesController(input: {
         if (key.startsWith("mineru:") && Array.isArray(material?.chunks) && Array.isArray(material.figures) && material.chunks.every((chunk) => chunk && typeof chunk === "object" && typeof chunk.snippet === "string" && Number.isInteger(chunk.page)) && material.chunks.some((chunk) => chunk.textExtraction === "mineru")) restored[key.slice(7)] = material;
       }
       setMaterials((current) => ({ ...restored, ...current }));
-    }).catch((error) => { if (active) input.onProgress(`无法读取论文解析缓存：${String(error)}`); });
+      setCatalogState({ status: "ready" });
+    }).catch((error) => { if (active) { setCatalogState({ status: "error", message: "无法读取论文解析缓存，请重试。" }); input.onProgress(`无法读取论文解析缓存：${String(error)}`); } });
     return () => { active = false; };
-  }, []);
+  }, [catalogRetry]);
   const literatureClient = useMemo(() => input.settings["papers.metadata_provider"] === "cloud"
     ? createLiteratureAuthorityClient({ endpoint: input.cloudEndpoint, getSessionId: () => input.getSessionId() ?? undefined })
     : createMetadataProviderClient({ provider: input.settings["papers.metadata_provider"], endpoint: input.settings["papers.metadata_endpoint"] }),
@@ -59,5 +63,5 @@ export function usePaperServicesController(input: {
     const material = materials[paper.id];
     return material && (material.contentHash && paper.contentHash ? material.contentHash === paper.contentHash : material.sourcePath === paper.sourcePath) ? [[paper.id, { textChunks: material.chunks, figures: material.figures }]] : [];
   })), [input.papers, materials]);
-  return { extract, literatureClient, resources, running };
+  return { extract, literatureClient, resources, running, catalogState, refreshCatalog: () => setCatalogRetry(value => value + 1) };
 }

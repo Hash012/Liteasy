@@ -1,3 +1,4 @@
+import { researchMarkdownParser } from "../markdown/researchParser";
 import { documentFormats } from "../document-export/documentExport.types";
 import { researchDocumentNodes } from "../document-export/documentCompiler";
 import { documentNodeMarkdown } from "../document-export/documentMarkdown";
@@ -36,8 +37,19 @@ function cleanExportText(value: string, anchors: readonly PaperAnchorEntity[] = 
 }
 
 function removeInternalEvidenceIds(value: string, anchors: readonly PaperAnchorEntity[] = []) {
-  return formatPaperAnchorText(value, anchors)
-    .replace(/[ \t]+([，。；：,.!?])/g, "$1");
+  // Match the screen's text-node formatter. Code, math, URLs and whitespace remain verbatim.
+  const edits: Array<{ start: number; end: number; text: string }> = [];
+  const visit = (node: { type: string; position?: { start: { offset?: number }; end: { offset?: number } }; children?: unknown[] }) => {
+    const start = node.position?.start.offset, end = node.position?.end.offset;
+    if (node.type === "text" && start !== undefined && end !== undefined) {
+      const original = value.slice(start, end), text = formatPaperAnchorText(original, anchors);
+      if (text !== original) edits.push({ start, end, text });
+    }
+    node.children?.forEach(child => visit(child as Parameters<typeof visit>[0]));
+  };
+  visit(researchMarkdownParser().parse(value));
+  for (const edit of edits.sort((a, b) => b.start - a.start)) value = value.slice(0, edit.start) + edit.text + value.slice(edit.end);
+  return value;
 }
 
 function safeMarkdownText(value: string, anchors: readonly PaperAnchorEntity[] = []) {
@@ -202,7 +214,10 @@ function thinReadingToMarkdown(tab: ArtifactTab, anchors: readonly PaperAnchorEn
     if (unexportedEvidence.length && options.evidenceMode !== "references") {
       lines.push("**论文证据**", "");
       unexportedEvidence.forEach((evidence) => {
-        lines.push(`> 第 ${evidence.page ?? "?"} 页：${safeText(options.evidenceMode === "full_appendix" ? evidence.quote : compactMarkdownEvidenceQuote(evidence.quote))}`, "");
+        const quote = options.evidenceMode === "full_appendix"
+          ? formatPaperAnchorText(evidence.quote, anchors).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/([\\`*_[\]<>!|])/g, "\\$1")
+          : safeText(compactMarkdownEvidenceQuote(evidence.quote));
+        lines.push(`> 第 ${evidence.page ?? "?"} 页：${quote.split(/\r?\n/).join("\n> ")}`, "");
       });
     }
     if (options.scope !== "selected_nodes") node.childIds.forEach(visit);

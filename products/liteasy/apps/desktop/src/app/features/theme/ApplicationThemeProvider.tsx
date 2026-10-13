@@ -1,6 +1,6 @@
 import { resolveTypography } from "../settings/typography";
 import type { SettingsState } from "../settings/settings.types";
-import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 import { FluentProvider, webDarkTheme, webLightTheme } from "@fluentui/react-components";
 import {
   appearanceChangeEvent,
@@ -18,6 +18,8 @@ function readTypography(): Partial<SettingsState> {
 }
 
 const darkMediaQuery = "(prefers-color-scheme: dark)";
+const ApplicationColorScheme = createContext<"light" | "dark">("light");
+export const useApplicationColorScheme = () => useContext(ApplicationColorScheme);
 
 export function initializeApplicationAppearance() {
   applyDocumentColorScheme(resolveColorScheme(readAppearancePreference(), globalThis.matchMedia?.(darkMediaQuery).matches ?? false));
@@ -70,9 +72,9 @@ export function ApplicationThemeProvider({ children }: { children: ReactNode }) 
   }), [scheme, fontFamily]);
 
   return (
-    <FluentProvider theme={theme} className="fluent-app-root" applyStylesToPortals>
+    <ApplicationColorScheme.Provider value={scheme}><FluentProvider theme={theme} className="fluent-app-root" applyStylesToPortals>
       <style data-liteasy-typography>{typography.css}</style>
       {children}
-    </FluentProvider>
+    </FluentProvider></ApplicationColorScheme.Provider>
   );
 }

@@ -20,7 +20,7 @@ import type { AgentRun } from "../app/features/agent-api/agentApi.types";
 import type { MineruFigure } from "../app/features/import/import.types";
 import { v1Fixture } from "./fixtures/thinReadingVersionFixtures";
 import { artifactWithSelectedObject } from "./fixtures/visualizationFixtures";
-import { createThinReadingBranchRecoverySnapshot } from "../app/features/artifacts/artifactTaskRecovery";
+import { createThinReadingBranchRecoverySnapshot, persistInterruptedArtifactTasks, takeInterruptedArtifactTasks } from "../app/features/artifacts/artifactTaskRecovery";
 import { artifactResourceScope, createArtifactResourceService } from "../app/features/resource-filesystem/artifactResourceProvider";
 
 function createMindmapArtifact(verificationStatus: "fail" | "pass" = "pass") {
@@ -317,6 +317,27 @@ function renderArtifactActions(options: {
 }
 
 describe("useArtifactActions", () => {
+  test("A02-11 retries the already generated payload after a save failure without another model call", async () => {
+    let fail = true;
+    const actions = renderArtifactActions({ imported: true, saveArtifactResult: async () => {
+      if (fail) throw new Error("disk full");
+      return "saved-result.json";
+    } });
+    act(() => { actions.result.current.startAnalysisForPapers("tree", [paper]); });
+    await waitForArtifactTask(actions.artifactStore, "failed");
+    const generated = structuredClone(actions.saveArtifactResult.mock.calls[0][0]);
+    persistInterruptedArtifactTasks(actions.artifactStore.getTasks());
+    const restored = takeInterruptedArtifactTasks()[0];
+    expect(restored.pendingResult?.document).toEqual(generated);
+    actions.artifactStore.restoreInterruptedTask(restored);
+    fail = false;
+    await act(async () => { await actions.result.current.resumeArtifactTask(actions.artifactStore.getTasks()[0].id); });
+    await waitForArtifactTask(actions.artifactStore);
+    expect(actions.runAgentAnalysis).toHaveBeenCalledTimes(1);
+    expect(actions.saveArtifactResult.mock.calls[1][0]).toEqual(generated);
+    expect(actions.artifactStore.getCatalog()[0].resultPath).toBe("saved-result.json");
+  });
+
   beforeEach(() => {
     vi.useFakeTimers();
   });

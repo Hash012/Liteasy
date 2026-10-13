@@ -48,7 +48,7 @@ export function usePaperAttachmentController(input: { repository: ObjectReposito
     if (!item.objectId) return;
     const ticket = ++request.current;
     try {
-      const object = await input.repository.resolveLatest(item.objectId);
+      const object = item.ref ? await input.repository.get(item.ref) : await input.repository.resolveLatest(item.objectId);
       if (!active() || ticket !== request.current) return;
       if (object.kind === "workspace.board") { await input.openBoard(object); return; }
       if (object.kind !== "content.note") return;

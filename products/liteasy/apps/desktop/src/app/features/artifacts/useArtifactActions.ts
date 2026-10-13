@@ -577,11 +577,19 @@ export function useArtifactActions({
     if (!receipt.publishable) throw new ArtifactSavedOutsideCurrentScope();
     return receipt.resultPath;
   };
+  async function saveGeneratedArtifact(taskId: string, document: Parameters<ArtifactResultClient["save"]>[0], tab: ArtifactTab) {
+    const scopeId = (resourceScope ?? artifactResourceScope()).id;
+    const frozen = structuredClone({ scopeId, document, tab });
+    artifactStore.updateTask(taskId, { pendingResult: frozen });
+    syncArtifacts(taskId);
+    const resultPath = await saveArtifact(frozen.document);
+    artifactStore.completeTask(taskId, { ...frozen.tab, resultPath });
+  }
   function handleSavedOutsideScope(taskId: string, error: unknown) {
     if (!(error instanceof ArtifactSavedOutsideCurrentScope)) return false;
     if (artifactStore.getTask(taskId)) {
       artifactStore.updateTask(taskId, { status: "completed", stage: "completed", progress: 100,
-        message: error.message, recovery: undefined, thinReadingBranchRecovery: undefined,
+        message: error.message, pendingResult: undefined, recovery: undefined, thinReadingBranchRecovery: undefined,
         partialAnswer: undefined, partialOutlineNodes: undefined });
       syncArtifacts(taskId);
     }
@@ -835,8 +843,7 @@ export function useArtifactActions({
           ),
           papers: scopedPapers.map((paper) => ({ id: paper.id, title: paper.title }))
         });
-        const resultPath = await saveArtifact(document);
-        artifactStore.completeTask(taskId, {
+        await saveGeneratedArtifact(taskId, document, {
           agentRunId: agentRun.runId,
           analysis: metadata.analysis,
           answer: answerEvent.message,
@@ -846,7 +853,6 @@ export function useArtifactActions({
           figures: document.figures,
           mineruTextChunks: document.mineruTextChunks,
           papers: document.papers,
-          resultPath,
           supplementalContext: document.supplementalContext,
           thinReadingDocument,
           title: "薄读",
@@ -935,8 +941,7 @@ export function useArtifactActions({
         stage: "saving_result"
       });
       syncArtifacts(taskId);
-      const resultPath = await saveArtifact(document);
-      artifactStore.completeTask(taskId, {
+      await saveGeneratedArtifact(taskId, document, {
         agentRunId: agentRun.runId,
         analysis: metadata.analysis,
         authoredArtifact,
@@ -958,7 +963,6 @@ export function useArtifactActions({
         papers: document.papers,
         preview: buildArtifactPreview(selectedPapers, importedChunksByPaperId),
         regeneratedFromArtifactId: document.regeneratedFromArtifactId,
-        resultPath,
         title,
         type: artifactType,
         supplementalContext: document.supplementalContext,
@@ -1561,7 +1565,7 @@ export function useArtifactActions({
         });
         syncArtifacts(taskId);
         const createdAt = existing.createdAt ?? new Date().toISOString();
-        const resultPath = await saveArtifact(createThinReadingResultDocument({
+        await saveGeneratedArtifact(taskId, createThinReadingResultDocument({
           agentRun,
           analysis: metadata.analysis,
           answer: answerEvent.message,
@@ -1572,15 +1576,13 @@ export function useArtifactActions({
           figures: existing.figures,
           papers,
           uiDsl: existing.uiDsl
-        }));
-        artifactStore.completeTask(taskId, {
+        }), {
           ...existing,
           agentRunId: agentRun.runId,
           analysis: metadata.analysis,
           answer: answerEvent.message,
           citations: answerEvent.citations,
           papers,
-          resultPath,
           thinReadingDocument: nextDocument
         });
         syncArtifacts(taskId);
@@ -1882,6 +1884,22 @@ export function useArtifactActions({
     await activeExecutions.get(artifactStore)?.get(taskId);
     const task = artifactStore.getTask(taskId);
     if (!task || !["failed", "cancelled"].includes(task.status)) return;
+    if (task.pendingResult) {
+      if (task.pendingResult.scopeId !== (resourceScope ?? artifactResourceScope()).id) throw new Error("结果属于原资料库，请返回原资料库重试保存。");
+      resources.assertCurrent();
+      const pending = task.pendingResult;
+      const finish = trackExecution(artifactStore, taskId);
+      artifactStore.updateTask(taskId, { status: "running", stage: task.type === "thin_reading" ? "thin_reading_saving" : "saving_result", message: "正在重试保存已有结果", failure: undefined });
+      syncArtifacts(taskId);
+      try {
+        await saveGeneratedArtifact(taskId, pending.document, pending.tab);
+        if (pending.tab.thinReadingDocument?.version === "liteasy.thin-reading/v2") onThinReadingDocumentPersisted?.({ artifactId: pending.tab.artifactId, document: pending.tab.thinReadingDocument, nodeId: pending.tab.thinReadingDocument.activeNodeId });
+        onAnalysisHint("已有结果已保存，未重新生成。");
+      } catch (error) {
+        if (!handleSavedOutsideScope(taskId, error)) artifactStore.failTask(taskId, { failedStage: task.type === "thin_reading" ? "thin_reading_saving" : "saving_result", message: error instanceof Error ? error.message : String(error), occurredAt: new Date().toISOString(), recovery: ["重试保存已有结果"] });
+      } finally { syncArtifacts(taskId); finish(); }
+      return;
+    }
     if (task.thinReadingBranchRecovery) return retryInterruptedThinReadingBranch(taskId);
     if (!task.recovery) throw new Error("此旧任务没有恢复快照，请重新指定论文生成。");
     const snapshot = task.recovery;

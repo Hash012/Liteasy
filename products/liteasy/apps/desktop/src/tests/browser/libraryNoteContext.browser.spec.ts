@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 
 test("a paper Markdown attachment drags into chat and keeps its reading font size", async ({ page }, testInfo) => {
   test.setTimeout(90_000);
+  await page.addInitScript(() => localStorage.setItem("liteasy.view-settings.v1", JSON.stringify({ "view.markdown_mode": "manual" })));
   const pdf = await readFile(new URL("../../../../../../../development/test-data/pdf-selection/glyph-boundaries.pdf", import.meta.url));
   await page.route("**/manual-preview/das24a.pdf", (route) => route.fulfill({ body: pdf, contentType: "application/pdf" }));
   await page.setViewportSize({ width: 1800, height: 1050 });
@@ -28,7 +29,7 @@ test("a paper Markdown attachment drags into chat and keeps its reading font siz
   await slider.press("Escape");
   const paragraph = editor.getByText("Cicada uses optimistic concurrency control.", { exact: true });
   await expect(paragraph).toHaveCSS("font-size", "24px");
-  const disclosure = library.getByRole("button", { name: /展开 das24a.pdf 的 \d+ 个附件/ });
+  const disclosure = library.getByRole("button", { name: /展开 das24a.pdf 的\d+ 项关联内容/ });
   await disclosure.click();
   const note = library.getByRole("button", { name: "打开论文文件：CicN", exact: true });
   await note.dragTo(page.locator(".assistant-pane"));

@@ -73,7 +73,7 @@ export function ArtifactExportMenu({ onExport, tab }: ArtifactExportMenuProps) {
           </MenuList>
         </MenuPopover>
       </Menu>
-      {port && format ? <DocumentExportDialog open title={tab.title} initialFormat={format} allowSubtree={Boolean(tab.thinReadingDocument)}
+      {port && format ? <DocumentExportDialog open jobScope={port.jobScope} sourceIdentity={JSON.stringify(tab)} title={tab.title} initialFormat={format} allowSubtree={Boolean(tab.thinReadingDocument)}
         nodes={tab.thinReadingDocument ? Object.values(tab.thinReadingDocument.nodes).map(node => ({ id: node.id, title: node.title })) : []}
         compile={(options, signal) => port.compileArtifact(tab, options, signal)} publish={port.publish}
         onClose={() => setFormat(undefined)} onOutcome={outcome => { if (outcome.status === "cancelled") setMessage(""); else setMessage(outcome.record.location === "desktop" ? `已导出到 ${outcome.record.path}${outcome.warnings?.length ? "（导出历史未保存）" : ""}` : "已交给浏览器下载，保存位置由浏览器管理。"); }} /> : null}

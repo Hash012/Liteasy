@@ -148,7 +148,7 @@ export function ResearchWorkbench({ model }: { model: ResearchWorkbenchModel }) 
         {exportNotice ? <p role="status">{exportNotice}</p> : null}
       </main>
     </div>
-    {exportOpen && exportPort ? <DocumentExportDialog title="导出研究证据" open initialFormat="markdown"
+    {exportOpen && exportPort ? <DocumentExportDialog jobScope={exportPort.jobScope} sourceIdentity={JSON.stringify(model.detail)} title="导出研究证据" open initialFormat="markdown"
       compile={(options, signal) => model.compileReport({ ...defaultExportOptions, ...options }, signal)}
       publish={exportPort.publish} onClose={() => setExportOpen(false)}
       onOutcome={outcome => setExportNotice(outcome.status === "saved" ? "研究证据文件已保存。" : outcome.status === "download_started" ? "已交给浏览器下载，保存位置由浏览器管理。" : "导出已取消。")} /> : null}

@@ -31,7 +31,7 @@ test("keeps rows compact, shows selected metadata below, and double-click opens 
   const user = userEvent.setup();
   const rows = screen.getByRole("list", { name: "推荐论文" });
   expect(rows).toHaveTextContent("2024-07");
-  expect(rows).not.toHaveTextContent(item.reason);
+  expect(rows).toHaveTextContent(item.reason);
   expect(rows).not.toHaveTextContent("Researcher A");
   const row = screen.getByRole("button", { name: `查看推荐 ${item.title}` });
   await user.click(row);

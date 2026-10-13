@@ -4,6 +4,7 @@ import type { ArtifactTab } from "../artifacts/artifact.types";
 import type { ArtifactExportOutcome, ArtifactExportPayload } from "../artifacts/artifactExport.types";
 import type { ExportDocument, ExportOptions } from "./documentExport.types";
 export type DocumentExportPort = {
+  jobScope?: string;
   compileArtifact(tab: ArtifactTab, options: Partial<ExportOptions>, signal?: AbortSignal): Promise<ExportDocument>;
   compileNote(item: NotesItem, options: Partial<ExportOptions>, signal?: AbortSignal): Promise<ExportDocument>;
   publish(payload: ArtifactExportPayload, signal?: AbortSignal): Promise<ArtifactExportOutcome>;

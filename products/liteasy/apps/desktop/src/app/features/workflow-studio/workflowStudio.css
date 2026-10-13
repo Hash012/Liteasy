@@ -1,10 +1,59 @@
-.workflow-studio { gap: 12px; }
-.studio-graph { height: 380px; min-height: 220px; border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; overflow: hidden; background: var(--colorNeutralBackground2); }
-.studio-graph .react-flow__node { color: var(--colorNeutralForeground1); background: var(--colorNeutralBackground1); border-color: var(--colorNeutralStroke2); border-radius: 8px; }
+.workflow-studio { container: studio / inline-size; display: flex; flex-direction: column; gap: 8px; padding: 12px; min-width: 0; }
+.workflow-studio > .studio-header { gap: 8px; margin: 0; flex-wrap: wrap; }
+.workflow-studio h1 { font-size: 18px; line-height: 1.4; margin: 0; }
+.workflow-studio fieldset { min-width: 0; border: 0; margin: 0; padding: 0; }
+.studio-header > div { min-width: 0; }
+.studio-header h1 { overflow-wrap: anywhere; }
+.studio-header [role="status"], .studio-overview-hint { color: var(--colorNeutralForeground2); font-size: 12px; }
+.studio-taskbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.studio-taskbar [role="tablist"] { flex-wrap: wrap; }
+.studio-more { position: relative; }
+.studio-more > summary, .studio-tutorial > summary { cursor: pointer; padding: 6px; border-radius: 4px; }
+.studio-more > summary:hover, .studio-tutorial > summary:hover { background: var(--colorNeutralBackground1Hover); }
+.studio-more > summary:focus-visible, .studio-tutorial > summary:focus-visible { outline: 2px solid var(--colorStrokeFocus2); outline-offset: 2px; }
+.studio-more-content { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; background: var(--colorNeutralBackground2); border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; }
+.studio-more[open] { flex-basis: 100%; }
+.studio-tutorial { border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; padding: 4px; }
+.studio-tutorial p { margin: 6px; }
+.studio-editor { flex: 1 0 auto; min-height: 360px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 32%); gap: 12px; }
+.studio-canvas { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.studio-graph { flex: 1; height: clamp(360px, 65vh, 900px); min-height: 360px; border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; overflow: hidden; background: var(--colorNeutralBackground2); }
+.studio-graph .react-flow {
+  --xy-background-color: var(--colorNeutralBackground2);
+  --xy-edge-stroke: var(--colorNeutralForeground3);
+  --xy-edge-stroke-selected: var(--colorBrandForeground1);
+  --xy-edge-label-background-color: var(--colorNeutralBackground1);
+  --xy-edge-label-color: var(--colorNeutralForeground1);
+  --xy-controls-button-background-color: var(--colorNeutralBackground1);
+  --xy-controls-button-background-color-hover: var(--colorNeutralBackground1Hover);
+  --xy-controls-button-color: var(--colorNeutralForeground1);
+  --xy-controls-button-color-hover: var(--colorNeutralForeground1Hover);
+  --xy-controls-button-border-color: var(--colorNeutralStroke2);
+  --xy-attribution-background-color: var(--colorNeutralBackground2);
+  --xy-selection-background-color: var(--colorNeutralBackground1Selected);
+  --xy-selection-border: 1px dotted var(--colorBrandStroke1);
+}
+.studio-graph .react-flow__attribution a { color: var(--colorNeutralForeground2); }
+.studio-graph .react-flow__node { color: var(--colorNeutralForeground1); background: var(--colorNeutralBackground1); border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; }
+.studio-graph .react-flow__node.selected, .studio-graph .react-flow__node:focus-visible { outline: 2px solid var(--colorBrandStroke1); }
+.studio-card-node { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.studio-card-node > header { padding: 8px 12px; font-weight: 600; border-bottom: 1px solid var(--colorNeutralStroke2); }
+.studio-card-body { flex: 1; overflow: auto; padding: 12px; overflow-wrap: anywhere; }
+.studio-card-body .markdown-content { font-size: inherit; }
+.studio-properties { display: flex; flex-direction: column; gap: 8px; overflow-wrap: anywhere; }
+.studio-properties textarea { min-height: 100px; }
+.studio-properties section[aria-label="选中卡片预览"] { padding: 12px; background: var(--colorNeutralBackground2); border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; }
+.studio-card-list, .studio-step-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.studio-panel-switch { display: none; gap: 4px; }
 .studio-source { width: 100%; min-height: 260px; }
 .studio-source textarea { font-family: ui-monospace, monospace; font-size: 13px; min-height: 250px; line-height: 1.6; }
-.studio-step-list { display: flex; flex-wrap: wrap; gap: 6px; margin-block: 8px; }
 .studio-type-preview, .studio-preview { border: 1px solid var(--colorNeutralStroke2); padding: 12px; border-radius: 8px; }
 .studio-diff { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .studio-diff pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 300px; overflow: auto; }
-@media(max-width: 700px) { .studio-diff { grid-template-columns: 1fr; } .studio-graph { height: 280px; } }
+@container studio (max-width: 720px) {
+  .studio-editor { display: block; }
+  .studio-panel-switch { display: flex; }
+  .studio-editor[data-panel="canvas"] > .studio-properties { display: none; }
+  .studio-editor[data-panel="properties"] > .studio-canvas { visibility: hidden; height: 0; min-height: 0; overflow: hidden; }
+  .studio-diff { grid-template-columns: 1fr; }
+}

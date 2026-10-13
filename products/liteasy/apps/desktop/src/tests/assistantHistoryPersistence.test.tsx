@@ -88,3 +88,22 @@ test("retains partial answers and queued intent while unknown owner state stays 
   expect(restored.sessions[0].messages[0].queuedDelivery).toEqual({ policy: "after_run" });
   expect(restored.sessions[0].messages.at(-1)?.content).toBe("已保存的回答");
 });
+
+test("queued saves acknowledge the exact requested snapshot rather than a newer cached target", async () => {
+  const writes: AssistantHistorySnapshot[] = [];
+  let release!: () => void;
+  const persistence = createAssistantHistoryPersistence({ load: async () => null, save: async (snapshot) => {
+    writes.push(structuredClone(snapshot));
+    if (writes.length === 1) await new Promise<void>((resolve) => { release = resolve; });
+  } });
+  await persistence.load();
+  const first = persistence.save(original);
+  await waitFor(() => expect(writes).toHaveLength(1));
+  const secondSnapshot = { ...structuredClone(original), activeSessionId: "second-target", draft: { input: "r8", tokens: [], readerContexts: [] } };
+  const second = persistence.save(secondSnapshot);
+  expect(writes).toEqual([original]);
+  release();
+  await first;
+  await second;
+  expect(writes).toEqual([original, secondSnapshot]);
+});

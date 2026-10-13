@@ -32,7 +32,7 @@ export function usePaperProjectsController(input: {
     fulltextVersions: new Map<string, number>(),
     sources: new Map<string, SourceCache>(),
   }), [repository]);
-  const [state, setState] = useState({ scopeId: input.scopeId, catalog: [] as ProjectCatalog[], error: "", busy: false });
+  const [state, setState] = useState({ scopeId: input.scopeId, catalog: [] as ProjectCatalog[], error: "", busy: false, catalogStatus: "unknown" as "unknown" | "loading" | "ready" | "error", catalogError: "", inventoryRevision: "" });
   const [revision, setRevision] = useState(0);
   const [fulltextRevision, setFulltextRevision] = useState(0);
   // Equivalent props from a parent render must not cancel and restart an in-flight import.
@@ -54,15 +54,16 @@ export function usePaperProjectsController(input: {
     let disposed = false;
     let readVersion = 0;
     let timer: ReturnType<typeof setTimeout>;
-    setState({ scopeId: input.scopeId, catalog: [], error: "", busy: false });
+    setState(old => old.scopeId === input.scopeId ? { ...old, catalogStatus: "loading", catalogError: "" } : { scopeId: input.scopeId, catalog: [], error: "", busy: false, catalogStatus: "loading", catalogError: "", inventoryRevision: "" });
     const refresh = async () => {
       const version = ++readVersion;
+      setState(old => ({ ...old, catalogStatus: "loading", catalogError: "" }));
       try {
         const projects = await repository.listProjects();
         const catalog = await Promise.all(projects.map(async (project) => ({ project, assets: await repository.listAssets(project.projectId) })));
-        if (!disposed && version === readVersion) setState((old) => JSON.stringify(old.catalog) === JSON.stringify(catalog) ? old : { ...old, catalog });
+        if (!disposed && version === readVersion) setState((old) => ({ ...old, catalog, catalogStatus: "ready", catalogError: "", inventoryRevision: crypto.randomUUID() }));
       } catch (failure) {
-        if (!disposed && version === readVersion) setState((old) => ({ ...old, error: failure instanceof Error ? failure.message : "项目目录暂不可用。" }));
+        if (!disposed && version === readVersion) setState((old) => ({ ...old, catalogStatus: "error", catalogError: failure instanceof Error ? failure.message : "项目目录暂不可用。" }));
       }
     };
     void refresh();
@@ -71,7 +72,7 @@ export function usePaperProjectsController(input: {
       timer = setTimeout(() => void refresh(), 120);
     });
     return () => { disposed = true; clearTimeout(timer); unsubscribe(); };
-  }, [repository, input.scopeId]);
+  }, [repository, input.scopeId, revision]);
 
   useEffect(() => {
     let disposed = false;
@@ -171,8 +172,8 @@ export function usePaperProjectsController(input: {
     return () => { disposed = true; };
   }, [repository, sync, input.scopeId, paperSignature, artifactSignature, input.extractionVersion, revision, fulltextRevision]);
 
-  const current = state.scopeId === input.scopeId ? state : { catalog: [] as ProjectCatalog[], error: "", busy: false };
-  return { catalog: current.catalog, error: current.error, busy: current.busy, repository, refresh: () => setRevision((value) => value + 1),
+  const current = state.scopeId === input.scopeId ? state : { catalog: [] as ProjectCatalog[], error: "", busy: false, catalogStatus: "unknown" as "unknown" | "loading" | "ready" | "error", catalogError: "", inventoryRevision: "" };
+  return { catalog: current.catalog, catalogStatus: current.catalogStatus, catalogError: current.catalogError, inventoryRevision: current.inventoryRevision, error: current.error || current.catalogError, busy: current.busy, repository, refresh: () => setRevision((value) => value + 1),
     createNote: (projectId: string, text: string) => repository.createNote(projectId, text),
     createEditableCopy: (projectId: string, ref: ObjectRef) => repository.createEditableCopy(projectId, ref),
   };

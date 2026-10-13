@@ -203,7 +203,7 @@ test("opens a saved multimodal document under its source paper", async () => {
   const open = vi.fn();
   const child = { id: "thin-1", kind: "artifact" as const, label: "薄读：方法" };
   renderLibraryPane({ paperChildren: { [paper.id]: [child] }, onOpenPaperChild: open });
-  await userEvent.click(screen.getByRole("button", { name: `展开 ${paper.title} 的 1 个附件` }));
+  await userEvent.click(screen.getByRole("button", { name: `展开 ${paper.title} 的1 项关联内容` }));
   await userEvent.click(screen.getByRole("button", { name: "打开论文文件：薄读：方法" }));
   expect(open).toHaveBeenCalledWith(child, paper);
 });
@@ -364,7 +364,7 @@ test("distinguishes paper derivatives and offers custom icons for ordinary files
     { id: "combined", label: "论文图文", kind: "multimodal" }
   ] }, fileLibrary: fileAccess({ entries: [{ id: "book", title: "My Book", format: "mobi" }] }) });
   expect(screen.queryByRole("button", { name: "打开论文文件：论文文本" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: `展开 ${paper.title} 的 3 个附件` }));
+  fireEvent.click(screen.getByRole("button", { name: `展开 ${paper.title} 的3 项关联内容` }));
   for (const [label, icon] of [["论文文本", "text"], ["论文插图", "images"], ["论文图文", "multimodal"]]) {
     expect(screen.getByRole("button", { name: `打开论文文件：${label}` }).querySelector("[data-icon]")).toHaveAttribute("data-icon", icon);
   }
@@ -465,4 +465,19 @@ test("shows a short author label while filtering with the full stored name", asy
   fireEvent.click(screen.getByRole("button", { name: "筛选本地文件" }));
   expect(screen.getByRole("textbox", { name: "筛选作者" })).toHaveValue("Ada Lovelace");
   expect(screen.getByRole("button", { name: paper.title })).toBeInTheDocument();
+});
+
+
+test("distinguishes unknown, empty and failed associated content without hiding the disclosure", async () => {
+  const view = renderLibraryPane();
+  await userEvent.click(screen.getByRole("button", { name: `展开 ${paper.title} 的关联内容尚未查询` }));
+  expect(screen.getByText("关联内容尚未查询", { selector: "p[role=status]" })).toBeVisible();
+  expect(screen.queryByText("0 项关联内容")).not.toBeInTheDocument();
+  view.unmount();
+  const retry = vi.fn();
+  renderLibraryPane({ paperInventory: { [paper.id]: { state: "error", items: [], summary: "目录权限不足", extraction: "unknown" } }, onRefreshPaperInventory: retry });
+  await userEvent.click(screen.getByRole("button", { name: `展开 ${paper.title} 的关联内容读取失败` }));
+  expect(screen.getByText("目录权限不足")).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "重试关联内容" })); expect(retry).toHaveBeenCalledOnce();
+  expect(screen.queryByText("0 项关联内容")).not.toBeInTheDocument();
 });

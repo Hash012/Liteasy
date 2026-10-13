@@ -7,6 +7,7 @@ test("a personal extension can be authored, actually trialled, published and reo
   await page.goto("/");
   await page.getByRole("button", { name: "扩展", exact: true }).click();
   await page.getByRole("button", { name: "制作扩展", exact: true }).click();
+  await page.locator(".studio-more > summary").click();
   await page.getByRole("button", { name: "从论文比较模板开始", exact: true }).click();
   await expect(page.getByText("草稿已保存", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "校验与预览", exact: true }).click();
@@ -21,10 +22,14 @@ test("a personal extension can be authored, actually trialled, published and reo
   await expect(page.getByRole("heading", { name: "我的论文比较台" })).toBeVisible();
   await page.getByRole("tabpanel", { name: "论文比较台", exact: true }).getByRole("button", { name: "新建论文比较板", exact: true }).click();
   const board = page.locator("section.object-workbench");
+  await expect(board.getByRole("status")).toContainText("已保存");
   await board.getByRole("button", { name: "适配全部卡片", exact: true }).click();
   await expect(board.locator(".object-placement")).toHaveCount(4);
   await page.screenshot({ path: info.outputPath("extension-comparison-board.png"), fullPage: true });
   await page.reload();
+  await board.getByRole("button", { name: "画布设置", exact: true }).click();
+  await expect(board.locator(".object-layer-list button")).toHaveCount(4);
+  await board.getByRole("button", { name: "收起工具", exact: true }).click();
   await board.getByRole("button", { name: "适配全部卡片", exact: true }).click();
   await expect(board.locator(".object-placement")).toHaveCount(4);
 });

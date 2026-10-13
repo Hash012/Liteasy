@@ -1,0 +1,225 @@
+{
+  "schema": "liteasy.ui-review.synthetic-scenarios/v1",
+  "production_importable": false,
+  "safety": {
+    "use_real_user_storage": false,
+    "network_allowed": false,
+    "paid_model_calls": false
+  },
+  "scenarios": [
+    {
+      "id": "assistant-mixed-history",
+      "scope": "isolated-ui-review",
+      "conversations": [
+        {
+          "id": "conv-a",
+          "title": "比较两篇示例论文",
+          "turns": 2
+        },
+        {
+          "id": "conv-empty",
+          "title": "新对话",
+          "turns": 0,
+          "draft": ""
+        }
+      ],
+      "tasks": [
+        {
+          "id": "task-a",
+          "originConversationId": "conv-a",
+          "runs": [
+            {
+              "id": "run-a1",
+              "status": "completed",
+              "artifactRef": "artifact-a@r1"
+            },
+            {
+              "id": "run-a2",
+              "status": "failed",
+              "error": "network-interrupted"
+            }
+          ]
+        },
+        {
+          "id": "task-b",
+          "origin": "unknown-legacy",
+          "runs": [
+            {
+              "id": "run-b1",
+              "status": "failed",
+              "legacyError": "openai_agents_sdk_result_missing"
+            }
+          ]
+        }
+      ],
+      "acceptance_ids": [
+        "A02-01",
+        "A02-02",
+        "A02-03",
+        "A02-05",
+        "A02-10",
+        "A02-12"
+      ]
+    },
+    {
+      "id": "persistence-late-ack",
+      "events": [
+        {
+          "type": "edit",
+          "target": "A",
+          "revision": "r7"
+        },
+        {
+          "type": "save-start",
+          "target": "A",
+          "revision": "r7"
+        },
+        {
+          "type": "edit",
+          "target": "A",
+          "revision": "r8"
+        },
+        {
+          "type": "select",
+          "target": "B"
+        },
+        {
+          "type": "edit",
+          "target": "B",
+          "revision": "r1"
+        },
+        {
+          "type": "ack",
+          "target": "A",
+          "revision": "r7"
+        }
+      ],
+      "expected": {
+        "A": "dirty-r8",
+        "B": "dirty-r1"
+      },
+      "acceptance_ids": [
+        "A02-07",
+        "A02-08"
+      ]
+    },
+    {
+      "id": "library-four-dimensions",
+      "papers": [
+        {
+          "id": "p1",
+          "metadata": "verified",
+          "original": "available",
+          "parse": "not-started",
+          "inventory": "unknown"
+        },
+        {
+          "id": "p2",
+          "metadata": "filename-only",
+          "original": "available",
+          "parse": "complete",
+          "inventory": "ready",
+          "linkedKinds": [
+            "extracted_text",
+            "figures",
+            "multimodal"
+          ]
+        },
+        {
+          "id": "p3",
+          "metadata": "verified",
+          "original": "missing",
+          "inventory": "error"
+        },
+        {
+          "id": "p4",
+          "metadata": "verified",
+          "original": "available",
+          "parse": "not-started",
+          "inventory": "ready",
+          "linkedKinds": []
+        }
+      ],
+      "acceptance_ids": [
+        "A04-01",
+        "A04-02",
+        "A04-03",
+        "A04-07"
+      ]
+    },
+    {
+      "id": "same-page-count-pdf",
+      "pdfA": {
+        "pages": 10,
+        "page1Marker": "DOCUMENT-A-FIRST",
+        "page10Marker": "DOCUMENT-A-LAST"
+      },
+      "pdfB": {
+        "pages": 10,
+        "page1Marker": "DOCUMENT-B-FIRST",
+        "page10Marker": "DOCUMENT-B-LAST"
+      },
+      "events": [
+        "load-A",
+        "view-page-1",
+        "replace-payload-with-B",
+        "await-B-ready"
+      ],
+      "expected": "B-first-page-displayed-and-B-bytes-saved",
+      "acceptance_ids": [
+        "A05-02",
+        "A05-06"
+      ],
+      "precondition": "Same ExportPdfPreview instance remains mounted while payload identity changes; separately verify whether the real caller permits this."
+    },
+    {
+      "id": "export-view-job-race",
+      "events": [
+        "start-job-A",
+        "close-view-A-without-cancel",
+        "open-view-for-source-B-before-A-finishes",
+        "job-A-completes-late",
+        "inspect-B-title-vs-document-and-payload",
+        "attempt-generate-or-save-for-B"
+      ],
+      "expected": "A may complete only as A-job; B must not gain A frozen document/payload; do not force-click disabled controls.",
+      "acceptance_ids": [
+        "A05-03",
+        "A05-04",
+        "A05-07"
+      ],
+      "precondition": "DocumentExportDialog instance is reused across open/source changes; record whether actual caller unmounts it."
+    },
+    {
+      "id": "studio-tutorial",
+      "synthetic": true,
+      "cards": [
+        {
+          "id": "question",
+          "title": "研究问题",
+          "markdown": "### 批量读取会减少等待吗？\n\n这是演示问题，不是已验证结论。"
+        },
+        {
+          "id": "method",
+          "title": "方法比较",
+          "markdown": "| 方法 | 示例配置 |\n|---|---|\n| A | 小批量 |\n| B | 大批量 |"
+        },
+        {
+          "id": "evidence",
+          "title": "证据与限制",
+          "markdown": "> 尚无真实测量；不要把示例当作研究证据。"
+        },
+        {
+          "id": "next",
+          "title": "下一步",
+          "markdown": "1. 选择真实数据。\n2. 固定变量。\n3. 比较结果与误差。"
+        }
+      ],
+      "acceptance_ids": [
+        "A03-01",
+        "A03-02",
+        "A03-06"
+      ]
+    }
+  ]
+}

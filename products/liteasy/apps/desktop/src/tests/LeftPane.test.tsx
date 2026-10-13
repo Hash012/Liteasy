@@ -215,7 +215,7 @@ describe("LeftPane", () => {
     const row = within(panel.getByRole("button", { name: `查看推荐 ${paper.title}` }));
     expect(row.getByText(dateLabel)).toBeInTheDocument();
     expect(panel.queryByText(/^引用 /)).not.toBeInTheDocument();
-    expect(panel.queryByText(paper.reason)).not.toBeInTheDocument();
+    expect(row.getByText(paper.reason)).toBeInTheDocument();
     expect(panel.queryByText(/2026-09-21|2024-02-29|2024-02-30|invalid-date|NaN/)).not.toBeInTheDocument();
   });
 
@@ -253,7 +253,7 @@ describe("LeftPane", () => {
     const row = panel.getByRole("button", { name: `查看推荐 ${recommendation.title}` });
     expect(within(row).getByText("2017")).toBeInTheDocument();
     expect(panel.queryByText("引用 1,200")).not.toBeInTheDocument();
-    expect(panel.queryByText(recommendation.reason)).not.toBeInTheDocument();
+    expect(panel.getByText(recommendation.reason)).toBeInTheDocument();
     expect(panel.queryByRole("link", { name: "Crossref" })).not.toBeInTheDocument();
     await user.click(row);
     expect(onInspectRecommendation).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ ...recommendation, fullText: { status: "unknown" } }));

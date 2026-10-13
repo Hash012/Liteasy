@@ -174,3 +174,30 @@ test("continuous streaming commits partial output without waiting for a pause in
     await act(async () => { finish(); });
   } finally { vi.useRealTimers(); }
 });
+
+test("A02-04 navigating home and archiving a running conversation retain its live execution", async () => {
+  let release!: () => void;
+  let signal!: AbortSignal;
+  const api = createAgentApplicationService({ executeCommand: () => ({ events: [], settingsChanged: false }), executeKnowledge: async (input) => {
+    signal = input.signal;
+    await new Promise<void>((resolve) => { release = resolve; });
+    return { message: "归档后仍完成" };
+  } });
+  const cancel = vi.spyOn(api, "cancelRun");
+  const user = userEvent.setup();
+  render(<AssistantSessionController {...props} agentClient={createFrontendAgentClient(api)} />);
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "归档中的任务");
+  await user.click(screen.getByRole("button", { name: "发送", exact: true }));
+  await waitFor(() => expect(release).toBeTypeOf("function"));
+  await user.click(screen.getByRole("button", { name: "首页", exact: true }));
+  await user.click(screen.getByRole("button", { name: "历史", exact: true }));
+  await user.click(screen.getByRole("button", { name: "管理 归档中的任务" }));
+  await user.click(screen.getByRole("menuitem", { name: "归档并保留运行" }));
+  expect(signal.aborted).toBe(false);
+  expect(cancel).not.toHaveBeenCalled();
+  await act(async () => { release(); });
+  await user.click(screen.getByRole("checkbox", { name: "查看归档" }));
+  await user.click(screen.getByRole("button", { name: "打开会话：归档中的任务" }));
+  expect(await screen.findByText("归档后仍完成")).toBeInTheDocument();
+  expect(cancel).not.toHaveBeenCalled();
+});

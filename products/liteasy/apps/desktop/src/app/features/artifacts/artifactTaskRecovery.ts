@@ -1,3 +1,4 @@
+import { isArtifactResult } from "./artifactResultClient";
 import type { ArtifactTask } from "./artifact.types";
 import { findThinReadingChildBySource } from "../thin-reading/thinReadingProjection";
 import { isDeepDiveTargetBoundToNode } from "../thin-reading/thinReadingDeepDiveTarget";
@@ -26,7 +27,7 @@ export type ThinReadingBranchRecoverySnapshot = {
   source: ThinReadingBranchSource;
 };
 
-type PersistedTask = Pick<ArtifactTask, "agentRunId" | "artifactId" | "id" | "message" | "progress" | "stage" | "thinReadingBranchRecovery" | "type" | "status">;
+type PersistedTask = Pick<ArtifactTask, "pendingResult" | "agentRunId" | "artifactId" | "id" | "message" | "progress" | "stage" | "thinReadingBranchRecovery" | "type" | "status">;
 
 function isUniqueBoundedStringArray(value: unknown) {
   return Array.isArray(value) && value.length <= maxSourceReferenceCount &&
@@ -173,7 +174,8 @@ function isPersistedTask(value: unknown): value is PersistedTask {
     typeof task.progress === "number" && Number.isFinite(task.progress) &&
     typeof task.stage === "string" &&
     typeof task.type === "string" &&
-    (task.status === "queued" || task.status === "running") &&
+    (task.status === "queued" || task.status === "running" || task.status === "failed" && !!task.pendingResult) &&
+    (task.pendingResult === undefined || typeof task.pendingResult.scopeId === "string" && isArtifactResult(task.pendingResult.document) && task.pendingResult.tab?.artifactId === task.pendingResult.document.artifactId && typeof task.pendingResult.tab.title === "string" && task.pendingResult.tab.type === task.type) &&
     (task.agentRunId === undefined || typeof task.agentRunId === "string") &&
     (task.artifactId === undefined || typeof task.artifactId === "string") &&
     (task.thinReadingBranchRecovery === undefined ||
@@ -202,9 +204,10 @@ export function persistInterruptedArtifactTasks(
   }
   const targetStorageKey = scopedStorageKey(scopeKey);
   const pending = tasks
-    .filter((task) => task.status === "queued" || task.status === "running")
+    .filter((task) => task.status === "queued" || task.status === "running" || task.status === "failed" && !!task.pendingResult)
     .slice(0, maxPersistedTaskCount)
-    .map(({ agentRunId, artifactId, id, message, progress, stage, status, thinReadingBranchRecovery, type }) => ({
+    .map(({ pendingResult, agentRunId, artifactId, id, message, progress, stage, status, thinReadingBranchRecovery, type }) => ({
+      ...(pendingResult ? { pendingResult } : {}),
       ...(agentRunId ? { agentRunId } : {}),
       ...(artifactId ? { artifactId } : {}),
       id,
