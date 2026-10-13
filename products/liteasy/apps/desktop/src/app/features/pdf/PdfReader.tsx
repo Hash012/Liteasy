@@ -1,3 +1,4 @@
+import type { QuickAskTransferInput, QuickAskTransferResult } from "./quickAskTransfer";
 import { highlightSearchText } from "../search/searchDomHighlight";
 import { compileSearchQuery } from "../search/searchQuery";
 import { noteLabels } from "../notes/noteLabels";
@@ -24,7 +25,16 @@ import { canGroupPdfInkStroke, pdfInkGroupBounds, pdfInkStrokes, type PdfInkMode
 import { PdfPaneResizeHandle } from "./PdfPaneResizeHandle";
 import { GenerationPromptDialog } from "../ai-prompts/GenerationPromptDialog";
 import { GenerationPromptEditor } from "../ai-prompts/GenerationPromptEditor";
-import { extractQuickAskAbstract, type PdfQuickAskRequest } from "./pdfQuickAsk";
+import { type PdfQuickAskRequest, type QuickAskGenerationReceipt, type QuickAskContextSnapshot } from "./pdfQuickAsk";
+import { preparePdfQuickAskContext } from "./quickAskContext";
+import { useQuickAskTask } from "./useQuickAskTask";
+import { QuickAskProvenance } from "./QuickAskProvenance";
+import { QuickAskSurface } from "./QuickAskSurface";
+import { resolveLocalAccountKey } from "../library/localAccountKey";
+import { useQuickAskPresets } from "../quick-ask-presets/useQuickAskPresets";
+import { QuickAskPresetPicker } from "../quick-ask-presets/QuickAskPresetPicker";
+import { QuickAskPresetManager } from "../quick-ask-presets/QuickAskPresetManager";
+import { resolveQuickAskInstruction, quickAskPrimaryAction } from "../quick-ask-presets/quickAskPresets";
 import { readerContextDragMime } from "../assistant/readerContextDrag";
 import { LiteratureGuideControls } from "../paper-reading/LiteratureGuideControls";
 import { useLiteratureGuide } from "../paper-reading/useLiteratureGuide";
@@ -177,6 +187,7 @@ type AnnotationKind = PdfAnnotationKind;
 type HighlightColor = PdfHighlightColor;
 
 type PdfSelection = {
+  sourcePages?: number[];
   excerpt: string;
   menuLeft: number;
   menuPlacement: "above" | "below";
@@ -263,6 +274,7 @@ type PdfReaderProps = {
   selectionLookup?: SelectionLookupPort;
   onDocumentInfo?: (info: import("./pdfDocumentInfo").PdfDocumentInfo) => void;
   onQuickAsk?: (request: PdfQuickAskRequest) => Promise<string>;
+  onQuickAskTransfer?: (input: QuickAskTransferInput) => Promise<QuickAskTransferResult>;
   onGenerateGuide?: GuideGenerator;
   readingControls?: ReactNode;
   readingView?: (annotations: PdfReadingAnnotations) => ReactNode;
@@ -697,7 +709,9 @@ function buildSelectionFromRange(stageElement: HTMLElement, selection: Selection
     return null;
   }
   const rangeRect = originalRange.getBoundingClientRect();
-  const pageElement = getSelectionPageElement(range, stageElement);
+  const startElement = range.startContainer instanceof Element ? range.startContainer : range.startContainer?.parentElement;
+  const pageElement = getSelectionPageElement(range, stageElement) ??
+    (startElement?.closest(".pdf-text-layer") && stageElement.contains(startElement) ? startElement.closest<HTMLElement>(".pdf-page-shell") : null);
   if (!pageElement) {
     return null;
   }
@@ -739,6 +753,10 @@ function buildSelectionFromRange(stageElement: HTMLElement, selection: Selection
     menuPlacement: menuPosition.placement,
     menuTop: menuPosition.top,
     normalizedStart,
+    sourcePages: Array.from(stageElement.querySelectorAll<HTMLElement>(".pdf-page-shell")).filter(element => {
+      const text = element.querySelector(".pdf-text-layer");
+      return text && (typeof range.intersectsNode === "function" ? range.intersectsNode(text) : element === pageElement);
+    }).map(element => Number(element.dataset.page)).filter(page => Number.isInteger(page) && page > 0),
     page: Number.isFinite(pageNumber) && pageNumber > 0 ? pageNumber : 1,
     rects
   };
@@ -1546,6 +1564,7 @@ export function PdfReader({
   zoom,
   onZoomChange,
   onQuickAsk,
+  onQuickAskTransfer,
   onGenerateGuide,
   onAddSelectionToConversation,
   onSelectionChanged,
@@ -1641,13 +1660,23 @@ export function PdfReader({
   const [lookupMode, setLookupMode] = useState<"auto" | "explain">("auto");
   const [lookupDismissed, setLookupDismissed] = useState(false);
   useEffect(() => { setLookupOpen(false); setLookupDismissed(false); setLookupMode("auto"); }, [selection?.excerpt, selection?.page, activePaper?.id]);
-  const [quickAskSelection, setQuickAskSelection] = useState<PdfSelection | null>(null);
+  const quickAskAccount = objectWorkbench?.scopeId ?? resolveLocalAccountKey();
+  const quickAskRevision = pdfReaderContentRevision(activePaper?.contentHash, loadedPositionDocument?.fingerprints) ?? "unresolved";
+  const quickAskScope = `${quickAskAccount}\u0000${activePaper?.id ?? ""}\u0000${quickAskRevision}\u0000${JSON.stringify([activePaper?.sourcePath, activePaper?.libraryReference])}`;
+  const quickAskScopeRef = useRef(quickAskScope);
+  const quickAskGeneration = useRef(0);
+  if (quickAskScopeRef.current !== quickAskScope) quickAskGeneration.current++;
+  quickAskScopeRef.current = quickAskScope;
+  const quickAskTask = useQuickAskTask<PdfSelection, PdfAnnotationV2>(quickAskScope);
+  const quickAskSelection = quickAskTask.draft.selection;
+  const quickAskQuestion = quickAskTask.draft.instruction;
+  const quickAskPrompt = quickAskTask.draft.preference;
+  const quickAskPending = quickAskTask.busy;
+  const [quickAskContext, setQuickAskContext] = useState<QuickAskContextSnapshot>();
+  const quickAskPresets = useQuickAskPresets({ scopeId: quickAskAccount });
+  const [quickAskPresetManagerOpen, setQuickAskPresetManagerOpen] = useState(false);
+  const [quickAskCustomDraft, setQuickAskCustomDraft] = useState("");
   const [reviewPromptId, setReviewPromptId] = useState<string>();
-  const [quickAskPrompt, setQuickAskPrompt] = useState<string>();
-  const [quickAskQuestion, setQuickAskQuestion] = useState("");
-  const [quickAskPending, setQuickAskPending] = useState(false);
-  const [quickAskError, setQuickAskError] = useState("");
-  const quickAskAbortRef = useRef<AbortController | null>(null);
 
   const [selectionPreview, setSelectionPreview] = useState<PdfSelectionPreview | null>(null);
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
@@ -1682,12 +1711,7 @@ export function PdfReader({
     setReaderView("document");
     readingScrollTop.current = 0;
   }, [annotationStorageKey, pdfDisplaySource]);
-  useEffect(() => {
-    setQuickAskSelection(null);
-    setQuickAskPending(false);
-    setQuickAskError("");
-    return () => { quickAskAbortRef.current?.abort(); quickAskAbortRef.current = null; };
-  }, [annotationStorageKey]);
+  useEffect(() => { setQuickAskContext(undefined); setQuickAskPresetManagerOpen(false); }, [quickAskScope]);
   const autoPublicStorageKey = pdfAnnotationAutoPublicStorageKey(activePaper);
   const whiteboardStorageKey = pdfWhiteboardStorageKey(activePaper);
   const [whiteboardState, setWhiteboardState] = useState<{
@@ -1814,7 +1838,7 @@ export function PdfReader({
     setSelection(null);
     setSelectionPreview(null);
     setAnnotationPopup(null);
-    setQuickAskSelection(null);
+    quickAskTask.close();
     setTextBoxToolActive(false);
     setInkMode(null);
     clearBrowserSelection();
@@ -2883,26 +2907,48 @@ export function PdfReader({
     clearBrowserSelection();
   }
 
-  async function answerSelectionQuestion(anchor: Pick<PdfSelection, "page" | "excerpt" | "rects" | "normalizedStart">, question: string, signal: AbortSignal, systemPrompt?: string) {
+  useEffect(() => {
+    if (!loadedPositionDocument || !activePaper || quickAskRevision === "unresolved") return;
+    const abort = new AbortController();
+    const timer = window.setTimeout(() => {
+      void preparePdfQuickAskContext({ source: { scopeId: quickAskAccount, paperId: activePaper.id, documentRevision: quickAskRevision, extractorRevision: "pdfjs-sections-v1" },
+        pageCount: loadedPositionDocument.numPages, sourcePages: [], excerpt: "", signal: abort.signal,
+        readPage: async page => { const pdfPage = await loadedPositionDocument.getPage(page); return normalizePdfPageText(joinPdfTextItems((await pdfPage.getTextContent()).items)); }
+      }).catch(() => { /* Preparation reports exact unavailable sources when the user submits. */ });
+    }, 800);
+    return () => { window.clearTimeout(timer); abort.abort(); };
+  }, [loadedPositionDocument, quickAskScope]);
+
+  async function answerSelectionQuestion(anchor: Pick<PdfSelection, "page" | "excerpt" | "rects" | "normalizedStart" | "sourcePages">, question: string, signal: AbortSignal, systemPrompt?: string, onDelta?: (text: string) => void, attemptId: string = crypto.randomUUID()) {
     assertReadingAnnotationsReady();
     if (!activePaper || !onQuickAsk) throw new Error("速问暂不可用。");
     const paper = activePaper;
+    const scope = quickAskScope;
+    const source = { scopeId: quickAskAccount, paperId: paper.id, documentRevision: quickAskRevision, extractorRevision: "pdfjs-sections-v1" };
     async function readPage(page: number) {
       if (pageTexts[page]?.trim()) return pageTexts[page];
       if (!pdfDocument) return "";
       const pdfPage = await pdfDocument.getPage(page);
       return normalizePdfPageText(joinPdfTextItems((await pdfPage.getTextContent()).items));
     }
-    const [pageText, ...openingPages] = await Promise.all([
-      readPage(anchor.page),
-      ...Array.from({ length: Math.min(pdfDocument?.numPages ?? pageCount, 3) }, (_, index) => readPage(index + 1))
-    ]);
+    let receipt: QuickAskGenerationReceipt | undefined;
+    const parts = await preparePdfQuickAskContext({ source, pageCount: pdfDocument?.numPages ?? pageCount, sourcePages: anchor.sourcePages?.length ? anchor.sourcePages : [anchor.page], excerpt: anchor.excerpt, readPage, signal });
     signal.throwIfAborted();
-    const abstractText = extractQuickAskAbstract(openingPages.join("\n\n"));
-    if (!pageText.trim() || !abstractText.trim()) throw new Error("页面或摘要文本尚未就绪，请先完成论文解析后重试。");
+    const textFor = (role: "page" | "abstract" | "introduction") => parts.filter(part => part.roles.includes(role)).map(part => part.text).join("\n\n");
+    const pageText = textFor("page"), abstractText = textFor("abstract"), introductionText = textFor("introduction");
+    const preset = quickAskPresets.selectedPreset;
     const answer = await onQuickAsk({ paper, page: anchor.page, excerpt: anchor.excerpt,
-      question, pageText, abstractText, signal, ...(systemPrompt !== undefined ? { systemPrompt } : {}) });
+      question, pageText, abstractText, introductionText, source, sourcePages: anchor.sourcePages?.length ? anchor.sourcePages : [anchor.page],
+      selectionId: createPdfReaderSelectionId(paper.id, anchor.page, anchor.normalizedStart, anchor.excerpt),
+      attemptId, requestId: attemptId, scopeGeneration: quickAskGeneration.current,
+      presetSnapshot: { id: preset.id, revision: preset.revision, instruction: preset.instruction },
+      loadContext: async () => parts,
+      onDelta: (_delta, accumulated) => { if (!signal.aborted && quickAskScopeRef.current === scope) onDelta?.(accumulated); },
+      onContext: (context) => { if (!signal.aborted && quickAskScopeRef.current === scope) setQuickAskContext(context); },
+      onReceipt: (value) => { receipt = value; },
+      signal, ...(systemPrompt !== undefined ? { systemPrompt } : {}) });
     signal.throwIfAborted();
+    if (quickAskScopeRef.current !== scope) throw new Error("文献或账号已变化，回答未写入新文献。");
     if (!answer.trim()) throw new Error("未收到回答，请重试。");
     const now = new Date().toISOString();
     const annotation: PdfAnnotationV2 = {
@@ -2911,7 +2957,7 @@ export function PdfReader({
       text: `速问 · 第 ${anchor.page} 页`, createdAt: now, updatedAt: now,
       paperIdentity: resolvePaperIdentity(paper), revision: 1,
       publication: { desiredVisibility: "private", state: "not_published" },
-      quickAsk: { question, answer, pageText, abstractText }
+      quickAsk: { question, answer, pageText, abstractText, introductionText, ...(receipt ? { receipt: structuredClone(receipt) } : {}) }
     };
     assertReadingAnnotationsReady();
     return annotation;
@@ -2919,32 +2965,33 @@ export function PdfReader({
 
   useEffect(() => setReviewPromptId(undefined), [annotationStorageKey]);
 
+  async function saveQuickAskAnnotation(annotation: PdfAnnotationV2) {
+    assertReadingAnnotationsReady();
+    const scope = quickAskScope;
+    if (annotation.paperIdentity.paperId !== activePaper!.id ||
+      (annotation.quickAsk?.receipt && annotation.quickAsk.receipt.context.source.documentRevision !== quickAskRevision)) throw new Error("文献版本已变化，回答仍保留在原草稿。");
+    if (annotation.quickAsk?.receipt) annotation.quickAsk.receipt.saved = { annotationId: annotation.id, revision: String(annotation.revision), committedAt: new Date().toISOString() };
+    const current = annotationsRef.current;
+    const next = current.some(item => item.id === annotation.id) ? current : [...current, annotation];
+    await persistPdfAnnotationState({ annotationStorageKey: annotationStorageKey!, autoPublicStorageKey,
+      paperId: activePaper!.id, contentHash: activePaper!.contentHash,
+      snapshot: { annotations: next, autoPublic: autoPublicAnnotations, version: 2 } });
+    if (quickAskScopeRef.current !== scope) return;
+    setCurrentAnnotations(items => items.some(item => item.id === annotation.id) ? items : [...items, annotation]);
+    setActiveAnnotationId(annotation.id);
+    await quickAskPresets.markCompleted(annotation.quickAsk?.receipt?.presetSnapshot.id ?? quickAskPresets.selectedPreset.id);
+  }
+
   async function submitQuickAsk() {
-    if (!quickAskSelection || !activePaper || !onQuickAsk || quickAskAbortRef.current ||
-      !quickAskQuestion.trim() || hydratedAnnotationStorageKey !== annotationStorageKey) return;
-    const abort = new AbortController();
-    quickAskAbortRef.current = abort;
-    setQuickAskPending(true);
-    setQuickAskError("");
+    if (!quickAskSelection || !activePaper || !onQuickAsk || quickAskPending || hydratedAnnotationStorageKey !== annotationStorageKey) return;
+    let question: string;
+    try { question = resolveQuickAskInstruction(quickAskQuestion, quickAskPresets.selectedPreset); }
+    catch (error) { quickAskTask.update({ error: error instanceof Error ? error.message : "指令无效。" }); return; }
     const anchor = quickAskSelection;
-    const paper = activePaper;
-    const question = quickAskQuestion.trim();
-    try {
-      const annotation = await answerSelectionQuestion(anchor, question, abort.signal, quickAskPrompt);
-      setCurrentAnnotations((current) => [...current, annotation]);
-      setQuickAskSelection(null);
-      setActiveAnnotationId(annotation.id);
-      setAnnotationPopup({ annotationId: annotation.id, left: anchor.menuLeft,
-        top: anchor.menuTop, placement: anchor.menuPlacement });
-      setStatus("");
-    } catch (error) {
-      if (!abort.signal.aborted) setQuickAskError(error instanceof Error ? error.message : "速问失败，请重试。");
-    } finally {
-      if (quickAskAbortRef.current === abort) {
-        quickAskAbortRef.current = null;
-        setQuickAskPending(false);
-      }
-    }
+    await quickAskTask.start(async (signal, onDelta, attemptId) => {
+      const result = await answerSelectionQuestion(anchor, question, signal, quickAskPrompt, onDelta, attemptId);
+      return { text: result.quickAsk!.answer, result };
+    }, saveQuickAskAnnotation);
   }
 
   function addSelectionToConversation() {
@@ -3558,13 +3605,19 @@ export function PdfReader({
           const anchor = await readingSelectionGeometry(input);
           await objectWorkbench.capturePdf({ paper: activePaper!, ...anchor }, target);
         },
+        openQuickAsk: onQuickAsk ? input => {
+          assertReadingAnnotationsReady();
+          if (!Number.isInteger(input.page) || input.page < 1 || input.page > pageCount || !input.excerpt.trim()) return;
+          quickAskTask.open({ page: input.page, excerpt: input.excerpt, rects: readingQuoteRects(pageCharModelsRef.current.get(input.page), input.excerpt),
+            menuLeft: 24, menuTop: 24, menuPlacement: "below" }, input.question ?? "");
+          setQuickAskContext(undefined);
+        } : undefined,
         quickAsk: onQuickAsk ? async (input, signal) => {
           const anchor = await readingSelectionGeometry(input);
           const annotation = await answerSelectionQuestion(anchor, input.question.trim(), signal, input.systemPrompt);
           signal.throwIfAborted(); assertReadingAnnotationsReady();
-          setCurrentAnnotations((current) => [...current, annotation]);
+          await saveQuickAskAnnotation(annotation);
           setReadingAnnotationId(annotation.id);
-          await persistReadingAnnotations();
         } : undefined,
         annotationTools: (annotation) => <>{renderAnnotationReviewButton(annotation)}{renderAnnotationReview(annotation)}
           {objectWorkbench?.captureAnnotation ? <Button size="small" onClick={() => void objectWorkbench.captureAnnotation!(annotationCaptureInput(annotation), "board").catch((failure) => setStatus(String(failure)))}>加入白板</Button> : null}</>,
@@ -3584,6 +3637,34 @@ export function PdfReader({
           locateAnnotation(annotation);
         },
       })}
+            {quickAskSelection ? <>
+              {!quickAskTask.draft.open ? <Button className="quick-ask-reopen" onClick={() => quickAskTask.update({ open: true })}>返回速问{quickAskPending ? "（正在回答）" : ""}</Button> : null}
+              <QuickAskSurface returnFocusRef={stageRef} open={quickAskTask.draft.open} onClose={quickAskTask.close}
+                page={quickAskSelection.page} excerpt={quickAskSelection.excerpt} width={documentFrameWidth || stageWidth}
+                anchor={{ getBoundingClientRect: () => { const stage = stageRef.current; const rect = stage?.getBoundingClientRect(); return new DOMRect((rect?.left ?? 0) + quickAskSelection.menuLeft - (stage?.scrollLeft ?? 0), (rect?.top ?? 0) + quickAskSelection.menuTop - (stage?.scrollTop ?? 0), 1, 1); } }}
+                instruction={quickAskQuestion} onInstruction={instruction => quickAskTask.update({ instruction })}
+                taskPicker={<><QuickAskPresetPicker presets={quickAskPresets.presets} selectedPresetId={quickAskPresets.selectedPreset.id}
+                  onSelect={quickAskPresets.selectPreset} customInstruction={quickAskQuestion}
+                  onUsePreset={() => { setQuickAskCustomDraft(quickAskQuestion); quickAskTask.update({ instruction: "" }); }} />
+                  {quickAskCustomDraft && !quickAskQuestion ? <Button size="small" onClick={() => quickAskTask.update({ instruction: quickAskCustomDraft })}>恢复本次指令草稿</Button> : null}
+                  <Button size="small" appearance="subtle" onClick={() => setQuickAskPresetManagerOpen(true)}>管理快捷指令</Button>
+                  {quickAskPresets.fallbackNotice ? <p role="status">{quickAskPresets.fallbackNotice}</p> : null}
+                  {quickAskPresets.error ? <p role="alert">{quickAskPresets.error}</p> : null}</>}
+                primaryAction={quickAskPrimaryAction(quickAskQuestion, quickAskPresets.selectedPreset)}
+                phase={quickAskTask.draft.phase} busy={quickAskPending} ready={hydratedAnnotationStorageKey === annotationStorageKey}
+                text={quickAskTask.draft.text} error={quickAskTask.draft.error} context={quickAskTask.draft.result?.quickAsk?.receipt?.context ?? quickAskContext}
+                onTransfer={onQuickAskTransfer && quickAskTask.draft.result?.quickAsk?.receipt ? () => {
+                  const answer = quickAskTask.draft.result!.quickAsk!;
+                  void onQuickAskTransfer({ paperTitle: activePaper?.title ?? "", excerpt: quickAskSelection.excerpt,
+                    answer: answer.answer, receipt: answer.receipt! }).then(() => setStatus("已转到独立对话。"), error => quickAskTask.update({ error: error instanceof Error ? error.message : "转到对话失败。" }));
+                } : undefined}
+                onSubmit={() => void submitQuickAsk()} onStop={quickAskTask.stop}
+                onRetrySave={() => void quickAskTask.retrySave(saveQuickAskAnnotation)} onDiscard={quickAskTask.discard}
+                onSavePreset={() => setQuickAskPresetManagerOpen(true)}
+                preferences={<GenerationPromptEditor task="selection_explanation" value={quickAskPrompt} onChange={preference => quickAskTask.update({ preference })} disabled={quickAskPending} />} />
+              {quickAskPresetManagerOpen ? <QuickAskPresetManager key={quickAskAccount} repository={quickAskPresets.repository} initialInstruction={quickAskQuestion}
+                onSaved={() => { setQuickAskPresetManagerOpen(false); setStatus("快捷指令已保存。"); }} onClose={() => setQuickAskPresetManagerOpen(false)} /> : null}
+            </> : null}
       <div
         aria-label="PDF 阅读工作区"
         hidden={Boolean(readingView)}
@@ -3837,7 +3918,7 @@ export function PdfReader({
                             <div className="pdf-annotation-editor">
                               {annotation.quickAsk ? <>
                                 <strong>{annotation.quickAsk.question}</strong>
-                                <PdfAnnotationMarkdown value={annotation.quickAsk.answer} />
+                                <PdfAnnotationMarkdown value={annotation.quickAsk.answer} /><QuickAskProvenance context={annotation.quickAsk.receipt?.context} answer={annotation.quickAsk.answer} />
                               </> : <>
 
                               <PdfAnnotationEditor value={annotationNoteDraft} onChange={setAnnotationNoteDraft}
@@ -4128,9 +4209,7 @@ export function PdfReader({
                   copy={() => void copySelectedText()} board={addSelectionToWhiteboard} dragBoard={handleSelectionWhiteboardDragStart}
                   tray={objectWorkbench ? () => { if (activePaper) void objectWorkbench.capturePdf({ paper: activePaper, ...selection }, "tray").catch((e) => setStatus(e.message)); } : undefined}
                   conversation={addSelectionToConversation} quickAsk={onQuickAsk ? () => {
-                    quickAskAbortRef.current?.abort(); quickAskAbortRef.current = null;
-                    setQuickAskPending(false); setQuickAskSelection(selection); setQuickAskQuestion(""); setQuickAskPrompt(undefined);
-                    setQuickAskError(""); setSelection(null); setSelectionPreview(null); clearBrowserSelection(); setAnnotationPopup(null);
+                    quickAskTask.open(selection); setQuickAskContext(undefined); setSelection(null); setSelectionPreview(null); clearBrowserSelection(); setAnnotationPopup(null);
                   } : undefined} />
                 {selectionLookup && !lookupDismissed && (lookupOpen || selectionLookup.autoQuery) ? <SelectionLookupCard
                   key={`${activePaper?.id}:${selection.page}:${selection.excerpt}`}
@@ -4140,38 +4219,13 @@ export function PdfReader({
                   onClose={() => { setLookupOpen(false); setLookupDismissed(true); }}
                   onSave={hydratedAnnotationStorageKey === annotationStorageKey && !annotationLoadError ? (note, lookupKind) => createReadingAnnotation({ page: selection.page, excerpt: selection.excerpt, note, lookupKind }) : undefined}
                   onExplain={onQuickAsk ? () => {
-                    quickAskAbortRef.current?.abort(); quickAskAbortRef.current = null;
-                    setQuickAskPending(false); setQuickAskSelection(selection); setQuickAskQuestion("请结合所在句子解释这个单词或短语在论文中的具体含义，说明它与常见释义的关系。");
-                    setQuickAskPrompt(undefined); setQuickAskError(""); setSelection(null); setSelectionPreview(null); clearBrowserSelection(); setAnnotationPopup(null);
+                    quickAskTask.open(selection, "请结合所在句子解释这个单词或短语在论文中的具体含义，说明它与常见释义的关系。"); setQuickAskContext(undefined); setSelection(null); setSelectionPreview(null); clearBrowserSelection(); setAnnotationPopup(null);
                   } : undefined} /> : null}
               </PdfSelectionMenu>
             ) : null}
             {reviewPromptId ? <GenerationPromptDialog task="annotation_review" title="AI 评阅批注" onClose={() => setReviewPromptId(undefined)} onConfirm={(systemPrompt) => {
               const id = reviewPromptId; setReviewPromptId(undefined); void annotationReview.generate(id, systemPrompt);
             }} /> : null}
-            {quickAskSelection ? (
-              <aside aria-label="速问" className="pdf-quick-ask-panel">
-                <form onSubmit={(event) => { event.preventDefault(); void submitQuickAsk(); }}>
-                  <header><strong>速问 · 第 {quickAskSelection.page} 页</strong></header>
-                  <p className="pdf-annotation-excerpt">{quickAskSelection.excerpt}</p>
-                  <textarea aria-label="速问问题" placeholder="想了解这段内容的什么？" autoFocus
-                    value={quickAskQuestion} onChange={(event) => setQuickAskQuestion(event.target.value)}
-                    disabled={quickAskPending} maxLength={4000} rows={3} />
-                  <GenerationPromptEditor task="selection_explanation" value={quickAskPrompt} onChange={setQuickAskPrompt} disabled={quickAskPending} />
-                  <small>上下文：当前页全文与论文摘要</small>
-                  {quickAskError ? <p role="alert">{quickAskError}</p> : null}
-                  <div className="editor-actions">
-                    <Button appearance="primary" type="submit" disabled={quickAskPending || !quickAskQuestion.trim() || hydratedAnnotationStorageKey !== annotationStorageKey}>
-                      {quickAskPending ? "正在回答…" : "提问"}
-                    </Button>
-                    <Button type="button" onClick={() => {
-                      quickAskAbortRef.current?.abort(); quickAskAbortRef.current = null;
-                      setQuickAskPending(false); setQuickAskSelection(null);
-                    }}>取消</Button>
-                  </div>
-                </form>
-              </aside>
-            ) : null}
             {annotationPopup && popupAnnotation && (guide.visible || !popupAnnotation.aiGuide) ? (
               <aside
                 aria-label={`${popupAnnotation.aiGuide ? "AI 讲解" : popupAnnotation.quickAsk ? "速问回答" : `${getAnnotationLabel(popupAnnotation.kind)}注释编辑器`}：${popupAnnotation.excerpt}`}
@@ -4196,7 +4250,7 @@ export function PdfReader({
                     onSave={saveAnnotationNote} onCancel={cancelAnnotationEditing} /></details>
                 </> : popupAnnotation.quickAsk ? <>
                   <strong>{popupAnnotation.quickAsk.question}</strong>
-                  <PdfAnnotationMarkdown value={popupAnnotation.quickAsk.answer} />
+                  <PdfAnnotationMarkdown value={popupAnnotation.quickAsk.answer} /><QuickAskProvenance context={popupAnnotation.quickAsk.receipt?.context} answer={popupAnnotation.quickAsk.answer} />
                 </> : <>
                 <PdfAnnotationEditor inline value={annotationNoteDraft} onChange={setAnnotationNoteDraft}
                   onSave={saveAnnotationNote} onCancel={cancelAnnotationEditing} />

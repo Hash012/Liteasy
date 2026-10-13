@@ -1,8 +1,9 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { AssistantMarkdown } from "./AssistantMarkdown";
 import { conversationDigest } from "./assistantSessionHistory";
 import type { AssistantMessage } from "./assistant.types";
 import type { DragEventHandler } from "react";
-import { Button, Popover, PopoverSurface, PopoverTrigger, Tooltip } from "@fluentui/react-components";
+import { Popover, PopoverSurface, PopoverTrigger, Tooltip } from "@fluentui/react-components";
 import { ArrowLeftRegular, ArrowRightRegular, OpenRegular, ComposeRegular, DocumentRegular, SettingsRegular, StopRegular } from "@fluentui/react-icons";
 
 type Props = {

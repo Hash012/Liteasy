@@ -95,7 +95,7 @@
 
 .visualization-process__table th,
 .visualization-process__table td {
-  border-bottom: 1px solid #e7edf2;
+  border-bottom: 1px solid var(--border-subtle);
   padding: 6px 8px;
   text-align: left;
 }

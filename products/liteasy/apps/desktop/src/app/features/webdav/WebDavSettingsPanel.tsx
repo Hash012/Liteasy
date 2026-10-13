@@ -1,5 +1,6 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { isTauri } from "@tauri-apps/api/core";
-import { Button, Checkbox, Field, Input } from "@fluentui/react-components";
+import { Checkbox, Field, Input } from "@fluentui/react-components";
 import { CloudSyncRegular } from "@fluentui/react-icons";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import {

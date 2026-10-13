@@ -1,6 +1,7 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { downloadExtensionJson } from "./ExtensionViews";
 import { useEffect, useState } from "react";
-import { Button, Select } from "@fluentui/react-components";
+import { Select } from "@fluentui/react-components";
 import { useExtensionWorkbench } from "./extensionWorkbenchContext";
 import { SchemaFields } from "./SchemaFields";
 import type { ValidatedExtension } from "./extensionPackage";

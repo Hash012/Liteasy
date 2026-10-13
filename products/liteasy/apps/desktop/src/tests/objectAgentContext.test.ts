@@ -1,4 +1,4 @@
-import { generationPromptTasks } from "../app/features/ai-prompts/generationPrompts";
+import { createSettingsStore } from "../app/features/settings/settings.store";
 import { expect, test, vi } from "vitest";
 import { createAgentApplicationService } from "../app/controllers/agent/agentApplicationService";
 import type { ContextSnapshot } from "../app/features/context/objectContext";
@@ -112,32 +112,10 @@ test("account invalidation propagates cancellation and suppresses late output", 
   ).toMatchObject({ ok: false, error: { code: "session_not_found" } });
 });
 
-test("quick ask uses captured references and the public run cancellation signal", async () => {
-  const capture = vi.fn(async () => [{ objectId: "fragment", revision: "v1" }]);
-  const ask = vi.fn(async () => "answer");
-  const abort = new AbortController();
-  const request = {
-    paper: { id: "paper", title: "Paper" },
-    page: 3,
-    excerpt: "quote",
-    question: "why",
-    pageText: "full page",
-    abstractText: "abstract",
-    signal: abort.signal,
-  };
-  expect(await usePdfQuickAskController({ capture, ask })(request)).toBe(
-    "answer",
-  );
-  expect(ask).toHaveBeenCalledWith(
-    "why",
-    [{ objectId: "fragment", revision: "v1" }],
-    abort.signal,
-    true,
-    { task: "selection_explanation", prompt: generationPromptTasks.selection_explanation.prompt },
-  );
-  abort.abort();
-  await expect(
-    usePdfQuickAskController({ capture, ask })(request),
-  ).rejects.toThrow("取消");
-  expect(capture).toHaveBeenCalledTimes(1);
+test("cancelled quick ask never enters a public Agent or model transport", async () => {
+  const transport = vi.fn();
+  const abort = new AbortController(); abort.abort(new Error("提问已取消。"));
+  const run = usePdfQuickAskController({ getSettings: () => createSettingsStore().getState(), modelTransport: transport });
+  await expect(run({ paper: { id: "paper", title: "Paper" }, page: 3, excerpt: "quote", question: "why", pageText: "full page", abstractText: "abstract", signal: abort.signal })).rejects.toThrow("取消");
+  expect(transport).not.toHaveBeenCalled();
 });

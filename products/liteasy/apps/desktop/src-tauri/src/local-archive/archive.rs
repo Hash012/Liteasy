@@ -256,6 +256,113 @@ fn generated(plan: &mut Plan, relative: String, value: &Value) -> Result<(), Str
         Payload::Generated(serde_json::to_vec_pretty(value).map_err(|e| e.to_string())?),
     )
 }
+// Strict projection prevents unknown/private fields from entering a portable quick-ask receipt.
+fn quick_ask_receipt(value: &Value) -> Result<Value, String> {
+    fn project(value: &Value, spec: &[(&str, &str)]) -> Result<Value, String> {
+        let object = value.as_object().ok_or("速问来源记录格式无效。")?;
+        if object
+            .keys()
+            .any(|key| !spec.iter().any(|(field, _)| key == field))
+        {
+            return Err("速问来源记录包含未知字段；请升级后重试，原文件未修改。".into());
+        }
+        let mut out = json!({});
+        for (field, kind) in spec {
+            let optional = kind.starts_with('?');
+            let kind = kind.trim_start_matches('?');
+            let Some(item) = object.get(*field) else {
+                if optional {
+                    continue;
+                }
+                return Err("速问来源记录缺少字段。".into());
+            };
+            let valid = match kind {
+                "text" => item.is_string(),
+                "id" => item.as_str().is_some_and(|v| !v.is_empty()),
+                "number" => item.as_f64().is_some_and(|v| v.is_finite() && v >= 0.0),
+                "integer" => item.as_u64().is_some(),
+                "positive" => item.as_u64().is_some_and(|v| v > 0),
+                "bool" => item.is_boolean(),
+                "hash" => item.as_str().is_some_and(|v| {
+                    let h = v.strip_prefix("sha256:").unwrap_or(v);
+                    h.len() == 64 && h.bytes().all(|b| b.is_ascii_hexdigit())
+                }),
+                "date" => item
+                    .as_str()
+                    .is_some_and(|v| chrono::DateTime::parse_from_rfc3339(v).is_ok()),
+                _ if kind.starts_with("enum:") => item
+                    .as_str()
+                    .is_some_and(|v| kind[5..].split('|').any(|x| x == v)),
+                _ => true,
+            };
+            if !valid {
+                return Err("速问来源记录字段无效。".into());
+            }
+            out[*field] = if let Some(element) = kind.strip_prefix("list:") {
+                let array = item.as_array().ok_or("速问来源范围格式无效。")?;
+                if array.len() > 10_000 {
+                    return Err("速问来源范围过大。".into());
+                }
+                Value::Array(
+                    array
+                        .iter()
+                        .map(|x| {
+                            project(&json!({"value":x}), &[("value", element)])
+                                .map(|v| v["value"].clone())
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                )
+            } else {
+                let schema: Option<&[(&str, &str)]> = match kind {
+                    "source" => Some(&[("scopeId","id"),("paperId","id"),("documentRevision","id"),("extractorRevision","id")]),
+                    "span" => Some(&[("page","positive"),("startUtf16","?integer"),("endUtf16","?integer"),("precision","enum:range|page|unknown")]),
+                    "part" => Some(&[("roles","list:enum:selection|page|abstract|introduction"),("status","enum:available|partial|not_found|not_ready|unreadable|omitted_budget|unsupported"),("text","text"),("spans","list:span"),("complete","bool"),("extraction","text"),("reason","?text")]),
+                    "omitted" => Some(&[("role","enum:selection|page|abstract|introduction"),("reason","text")]),
+                    "range" => Some(&[("start","integer"),("end","integer"),("unit","enum:utf16")]),
+                    "read" => Some(&[("id","id"),("path","id"),("revision","?text"),("scopeId","id"),("representationId","id"),("ranges","list:range"),("fetchedHash","hash"),("fetchedAt","date")]),
+                    "deliveryRange" => Some(&[("readId","id"),("ranges","list:range")]),
+                    "delivery" => Some(&[("id","id"),("requestId","id"),("audience","enum:model|display|verifier"),("readIds","list:id"),("payloadHash","hash"),("ranges","list:deliveryRange"),("at","date")]),
+                    "ledger" => Some(&[("reads","list:read"),("deliveries","list:delivery")]),
+                    "context" => Some(&[("schema","enum:liteasy.quick-ask-context/v1"),("snapshotId","id"),("source","source"),("selectionId","id"),("sourcePages","list:positive"),("available","list:part"),("delivered","list:part"),("omitted","list:omitted"),("inputHash","hash"),("inputTokenEstimate","integer"),("inputBudget","positive"),("ledger","ledger")]),
+                    "preset" => Some(&[("id","id"),("revision","id"),("instruction","id")]),
+                    "saved" => Some(&[("annotationId","id"),("revision","id"),("committedAt","date")]),
+                    _ => None,
+                };
+                if let Some(schema) = schema {
+                    project(item, schema)?
+                } else {
+                    item.clone()
+                }
+            };
+        }
+        Ok(out)
+    }
+    let projected = project(
+        value,
+        &[
+            ("schema", "enum:liteasy.quick-ask-receipt/v1"),
+            ("requestId", "id"),
+            ("attemptId", "id"),
+            ("scopeGeneration", "integer"),
+            ("terminal", "enum:completed|failed|incomplete|aborted"),
+            ("providerId", "id"),
+            ("modelId", "id"),
+            ("presetSnapshot", "preset"),
+            ("effectiveInstruction", "id"),
+            ("context", "context"),
+            ("createdAt", "date"),
+            ("modelAttempts", "positive"),
+            ("contextPrepareMs", "number"),
+            ("firstTokenMs", "?number"),
+            ("saved", "?saved"),
+        ],
+    )?;
+    if projected["modelAttempts"].as_u64() != Some(1) {
+        return Err("速问生成次数无效。".into());
+    }
+    Ok(projected)
+}
+
 fn portable_text(value: &str) -> String {
     // Machine-specific links cannot work elsewhere and must not reveal their paths/scope IDs.
     value
@@ -414,6 +521,16 @@ fn annotation_body(original: &Value, target: &mut Value) -> Result<(), String> {
                 projected[*field] = json!(portable_text(
                     value[*field].as_str().ok_or("批注附加文字格式无效。")?
                 ));
+            }
+            if key == "quickAsk" {
+                if let Some(introduction) = value.get("introductionText") {
+                    projected["introductionText"] = json!(portable_text(
+                        introduction.as_str().ok_or("速问引言格式无效。")?
+                    ));
+                }
+                if let Some(receipt) = value.get("receipt") {
+                    projected["receipt"] = quick_ask_receipt(receipt)?;
+                }
             }
             if key == "review" && value["sourceRevision"].is_u64() {
                 projected["sourceRevision"] = value["sourceRevision"].clone();

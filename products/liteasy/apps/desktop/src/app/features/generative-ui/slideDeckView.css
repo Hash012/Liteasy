@@ -4,5 +4,5 @@
 .slide-deck-navigation > :nth-child(2) { flex: 1; min-width: 0; }
 .slide-deck-page { background: #fff; border: 1px solid #d8e2e9; border-radius: 6px; min-height: 240px; padding: 20px; }
 .slide-deck-page > h3 { font-size: 1.25em; margin: 0 0 16px; }
-.slide-deck-notes { border-top: 1px solid #d8e2e9; margin-top: 10px; padding-top: 6px; }
+.slide-deck-notes { border-top: 1px solid var(--border-subtle); margin-top: 10px; padding-top: 6px; }
 .slide-deck-notes > div { margin: 8px; }

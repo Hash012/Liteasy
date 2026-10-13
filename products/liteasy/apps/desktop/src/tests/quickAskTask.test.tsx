@@ -1,0 +1,62 @@
+import { act, renderHook } from "@testing-library/react";
+import { expect, test, vi } from "vitest";
+import { useQuickAskTask } from "../app/features/pdf/useQuickAskTask";
+
+const deferred = <T,>() => { let resolve!: (v: T) => void; const promise = new Promise<T>(r => { resolve = r; }); return { promise, resolve }; };
+test("closing the surface preserves one streaming task and completed result", async () => {
+  const result = deferred<{ text: string; result: string }>();
+  let stream!: (s: string) => void;
+  const generate = vi.fn((_signal, delta) => { stream = delta; return result.promise; });
+  const save = vi.fn(async () => {});
+  const hook = renderHook(() => useQuickAskTask<string, string>("account\0paper\0v1"));
+  act(() => hook.result.current.open("selection"));
+  let task!: Promise<void>;
+  act(() => { task = hook.result.current.start(generate, save); });
+  act(() => { stream("partial"); hook.result.current.close(); });
+  expect(hook.result.current.draft).toMatchObject({ open: false, phase: "streaming", text: "partial" });
+  act(() => hook.result.current.open("new selection"));
+  expect(hook.result.current.draft.selection).toBe("selection");
+  await act(async () => { result.resolve({ text: "complete", result: "annotation" }); await task; });
+  expect(generate).toHaveBeenCalledTimes(1);
+  expect(save).toHaveBeenCalledWith("annotation");
+  expect(hook.result.current.draft.phase).toBe("saved");
+});
+test("failed persistence retries the frozen result without running the model again", async () => {
+  const generate = vi.fn(async () => ({ text: "answer", result: "annotation" }));
+  const save = vi.fn().mockRejectedValueOnce(new Error("disk full")).mockResolvedValueOnce(undefined);
+  const hook = renderHook(() => useQuickAskTask<string, string>("account\0paper\0v1"));
+  await act(async () => { await hook.result.current.start(generate, save); });
+  expect(hook.result.current.draft).toMatchObject({ phase: "save_failed", text: "answer", error: "disk full" });
+  await act(async () => { await hook.result.current.retrySave(save); });
+  expect(generate).toHaveBeenCalledTimes(1);
+  expect(save).toHaveBeenCalledTimes(2);
+  expect(hook.result.current.draft.phase).toBe("saved");
+});
+test("document changes abort transport, retain interrupted draft and reject late callbacks", async () => {
+  const result = deferred<{ text: string; result: string }>();
+  let signal!: AbortSignal, stream!: (s: string) => void;
+  const save = vi.fn();
+  const hook = renderHook(({ scope }) => useQuickAskTask<string, string>(scope), { initialProps: { scope: "account\0paper\0v1" } });
+  let task!: Promise<void>;
+  act(() => { hook.result.current.open("original"); task = hook.result.current.start((s, d) => { signal = s; stream = d; return result.promise; }, save); });
+  act(() => stream("partial"));
+  hook.rerender({ scope: "account\0other\0v1" });
+  expect(signal.aborted).toBe(true);
+  await act(async () => { stream("late"); result.resolve({ text: "late", result: "wrong" }); await task; });
+  expect(save).not.toHaveBeenCalled();
+  expect(hook.result.current.draft.text).toBe("");
+  hook.rerender({ scope: "account\0paper\0v1" });
+  expect(hook.result.current.draft).toMatchObject({ text: "partial", phase: "interrupted", selection: "original" });
+  hook.rerender({ scope: "other-account\0paper\0v1" });
+  hook.rerender({ scope: "account\0paper\0v1" });
+  expect(hook.result.current.draft.text).toBe("");
+});
+test("partial failure stays incomplete and empty completion never saves", async () => {
+  const save = vi.fn();
+  const hook = renderHook(() => useQuickAskTask<string, string>("account\0paper\0v1"));
+  await act(async () => { await hook.result.current.start(async (_signal, delta) => { delta("partial"); throw new Error("stream incomplete"); }, save); });
+  expect(hook.result.current.draft).toMatchObject({ phase: "failed", text: "partial" });
+  await act(async () => { await hook.result.current.start(async () => ({ text: " ", result: "empty" }), save); });
+  expect(hook.result.current.draft.phase).toBe("failed");
+  expect(save).not.toHaveBeenCalled();
+});

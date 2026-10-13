@@ -5,7 +5,10 @@ import type { AppearancePreference } from "../theme/appearancePreference";
 import type { GenerationPromptSettingKey } from "../ai-prompts/generationPrompts";
 import type { SelectionLookupSettingKey, SelectionLookupSettings } from "../selection-lookup/selectionLookup.types";
 
+import type { QuickAskPresetSettingKey } from "../quick-ask-presets/quickAskPresets";
+
 export type SettingKey =
+  | QuickAskPresetSettingKey
   | GenerationPromptSettingKey
   | SelectionLookupSettingKey
   | "thin_reading.mode"
@@ -53,6 +56,8 @@ export type SettingKey =
   | "view.pdf_custom_background";
 
 export type SettingsState = Partial<Record<GenerationPromptSettingKey, string>> & Partial<SelectionLookupSettings> & {
+  "ai.quickAsk.presets"?: string;
+  "ai.quickAsk.lastPresetId"?: string;
   "thin_reading.mode": "fast" | "rigorous";
   "papers.metadata_provider": "crossref" | "openalex" | "semantic-scholar" | "cloud";
   "papers.metadata_endpoint": string;

@@ -1,6 +1,7 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { useState } from "react";
 import { WorkbenchEmptyState } from "../workbench/WorkbenchPage";
-import { Button, Input, Spinner, Tooltip } from "@fluentui/react-components";
+import { Input, Spinner, Tooltip } from "@fluentui/react-components";
 import {
   ArrowClockwiseRegular,
   BookOpenRegular,

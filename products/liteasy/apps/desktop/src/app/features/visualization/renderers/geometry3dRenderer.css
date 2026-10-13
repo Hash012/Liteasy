@@ -57,7 +57,7 @@
 
 .visualization-geometry-3d__table th,
 .visualization-geometry-3d__table td {
-  border-bottom: 1px solid #e7edf2;
+  border-bottom: 1px solid var(--border-subtle);
   padding: 6px 8px;
   text-align: left;
 }

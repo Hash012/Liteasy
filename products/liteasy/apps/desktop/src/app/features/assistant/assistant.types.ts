@@ -14,6 +14,7 @@ export type { AssistantMode };
 export type AssistantConfirmationRequest = HumanConfirmationRequest | AgentConfirmationRequest;
 
 export type AssistantMessage = {
+  quickAskSource?: { receipt: import("../pdf/pdfQuickAsk").QuickAskGenerationReceipt; excerpt: string; paperTitle: string };
   turnOutcome?: "completed" | "failed";
   kind?: "user_message" | "assistant_message" | "task_reference" | "result_reference" | "system_notice";
   taskReference?: { taskId: string; title: string };

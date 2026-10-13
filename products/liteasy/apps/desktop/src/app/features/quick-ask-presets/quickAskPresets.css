@@ -1,0 +1,11 @@
+.quick-ask-preset-picker, .quick-ask-preset-manager { display: grid; gap: 8px; min-width: 0; }
+.quick-ask-preset-actions, .quick-ask-preset-hint, .quick-ask-preset-manager-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+.quick-ask-preset-actions > button { min-height: 32px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.quick-ask-preset-hint { color: var(--colorNeutralForeground2); font-size: var(--fontSizeBase200); }
+.quick-ask-preset-manager { padding: 8px; border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; background: var(--colorNeutralBackground1); }
+.quick-ask-preset-manager textarea { min-height: 96px; overflow-wrap: anywhere; }
+.quick-ask-preset-manager .fui-Select, .quick-ask-preset-manager .fui-Input, .quick-ask-preset-picker .fui-Select { min-width: 0; width: 100%; }
+.quick-ask-preset-manager select, .quick-ask-preset-picker select { min-width: 0; max-width: 100%; }
+.quick-ask-preset-manager-actions > button { min-height: 32px; max-width: 100%; white-space: normal; }
+@media (pointer: coarse) { .quick-ask-preset-actions > button, .quick-ask-preset-manager-actions > button { min-height: 44px; } }
+@media (forced-colors: active) { .quick-ask-preset-actions [aria-pressed="true"] { outline: 2px solid Highlight; outline-offset: -2px; } }

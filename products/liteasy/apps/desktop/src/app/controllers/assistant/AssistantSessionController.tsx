@@ -1,5 +1,7 @@
 import "../../features/assistant/assistantView.css";
 import { createAssistantSessionService } from "./assistantSessionService";
+import { registerQuickAskTransfer } from "../../features/pdf/quickAskTransfer";
+import { getAccountSessionGeneration } from "../../features/account/accountSessionStorage";
 import { assistantContentRevision, hasAssistantContent, type AssistantView } from "../../features/assistant/assistantView";
 import { liteasyPath } from "../../features/resource-filesystem/liteasyPath";
 import { redactDiagnostic } from "../../features/context/objectContext";
@@ -1031,7 +1033,8 @@ export function AssistantSessionController({
     syncAssistant();
   }
 
-  async function openSession(sessionId: string) {
+  async function openSession(sessionId: string, checkCurrent?: () => void) {
+    checkCurrent?.();
     if (!historyReadyRef.current) return;
     if (assistantStoreRef.current.getState().pending && !agentClient) return;
     saveActiveConversation();
@@ -1039,6 +1042,7 @@ export function AssistantSessionController({
     if (session?.messagesLoaded === false && historyPersistence?.loadSession) {
       try {
         session = await historyPersistence.loadSession(sessionId);
+        checkCurrent?.();
         if (!mountedRef.current || !session) return;
         sessionRegistryRef.current = upsertAssistantSession(sessionRegistryRef.current, session);
       } catch (error) { setHistoryError(String(error)); return; }
@@ -1063,6 +1067,41 @@ export function AssistantSessionController({
     connectPublicAgentSession(session);
     syncAssistant();
   }
+
+  useEffect(() => {
+    if (!historyReady) return;
+    const scope = objectWorkbench?.scopeId ?? "local";
+    let registered = true;
+    const unregister = registerQuickAskTransfer(scope, async (transfer, destinationConversationId) => {
+      const generation = getAccountSessionGeneration();
+      const checkCurrent = () => {
+        if (!registered || !mountedRef.current || currentSaveTargetRef.current.scope !== scope || getAccountSessionGeneration() !== generation) throw new Error("账号或对话已变化，未转入其他范围。");
+      };
+      checkCurrent();
+      if (!mountedRef.current || !historyReadyRef.current || currentSaveTargetRef.current.scope !== scope || transfer.receipt.context.source.scopeId !== scope) throw new Error("账号或速问来源已变化。");
+      if (assistantStoreRef.current.getState().pending && !agentClient) throw new Error("当前对话正在运行，请完成后再转到新对话。");
+      saveActiveConversation();
+      await persistConversation();
+      checkCurrent();
+      let session = sessionRegistryRef.current.find(item => item.id === destinationConversationId);
+      if (!session) {
+        session = createAssistantSession({ id: destinationConversationId, title: `速问 · ${transfer.paperTitle}`, mode: "qa" });
+        session.scopeId = scope;
+        session.origin = { kind: "direct_chat", entryPoint: "pdf.quick-ask.transfer", initiatedBy: { type: "user", id: scope } };
+        session.messages = [{ id: `${destinationConversationId}:source`, role: "user", content: `选段：\n${transfer.excerpt}\n\n原指令：\n${transfer.receipt.effectiveInstruction}`, quickAskSource: { receipt: transfer.receipt, excerpt: transfer.excerpt, paperTitle: transfer.paperTitle } },
+          { id: `${destinationConversationId}:answer`, role: "assistant", content: transfer.answer, turnOutcome: transfer.receipt.terminal === "completed" ? "completed" : "failed" }];
+        sessionRegistryRef.current = upsertAssistantSession(sessionRegistryRef.current, session);
+        setSessionHistory([...sessionRegistryRef.current]);
+      }
+      await openSession(session.id, checkCurrent);
+      checkCurrent();
+      draftRef.current = session.draft ?? { input: "", tokens: [], readerContexts: [] };
+      await persistConversation();
+      checkCurrent();
+      return { conversationId: session.id };
+    });
+    return () => { registered = false; unregister(); };
+  }, [historyReady, objectWorkbench?.scopeId, historyPersistence]);
 
   useEffect(() => {
     if (!historyReady || !artifactSessionOpenRequest ||

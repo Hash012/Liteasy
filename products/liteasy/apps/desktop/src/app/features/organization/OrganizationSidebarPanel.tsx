@@ -1,7 +1,8 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { OrganizationInvitationPanel } from "./OrganizationInvitationPanel";
 import { OrganizationActivityInbox } from "./OrganizationActivityInbox";
 import type { AccountSession } from "../account/account.types";
-import { Button, Tooltip } from "@fluentui/react-components";
+import { Tooltip } from "@fluentui/react-components";
 import {
   AddRegular,
   OpenRegular,

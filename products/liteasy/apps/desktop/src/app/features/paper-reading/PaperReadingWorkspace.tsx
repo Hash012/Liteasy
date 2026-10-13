@@ -227,6 +227,20 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
     catch (failure) { if (mounted.current) setError(String(failure)); }
     finally { if (mounted.current) setBusy(false); }
   }
+  function openSelectionQuickAsk(questionOverride?: string) {
+    if (!draft?.page || !draft.excerpt) return;
+    setLookupOpen(false); setLookupDismissed(true);
+    if (session.openQuickAsk) {
+      setAsking(false);
+      try { session.openQuickAsk({ page: Number(draft.page), excerpt: draft.excerpt, ...(questionOverride ? { question: questionOverride } : {}) }); }
+      catch (failure) { setError(failure instanceof Error ? failure.message : "速问暂时无法打开，请重试。"); }
+      return;
+    }
+    // Compatibility for embedders that have not supplied the shared reader surface yet.
+    setSystemPrompt(undefined);
+    if (questionOverride !== undefined) setQuestion(questionOverride);
+    setAsking(true);
+  }
   const draftEditor = draft ? <div className="paper-reading-comment-editor">
           <strong>{draft.id ? "编辑批注" : "新建批注"}</strong>
           {draft.excerpt ? <blockquote>{draft.excerpt}</blockquote> : null}
@@ -240,15 +254,15 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
               board={session.capture ? () => void selectionAction(() => session.capture!({ page: Number(draft.page), excerpt: draft.excerpt }, "board"), "摘录已加入白板。") : undefined}
               tray={session.capture ? () => void selectionAction(() => session.capture!({ page: Number(draft.page), excerpt: draft.excerpt }, "tray"), "摘录已加入所选内容对话。") : undefined}
               conversation={session.capture ? () => void selectionAction(() => session.capture!({ page: Number(draft.page), excerpt: draft.excerpt }, "conversation"), "选段已加入对话。") : undefined}
-              quickAsk={session.quickAsk ? () => { setSystemPrompt(undefined); setAsking(true); } : undefined} />
+              quickAsk={session.openQuickAsk || session.quickAsk ? () => openSelectionQuickAsk() : undefined} />
             {session.lookup && !lookupDismissed && (lookupOpen || session.lookup.autoQuery) ? <SelectionLookupCard
               key={draft.excerpt} lookup={session.lookup} text={draft.excerpt} context={draft.context}
               initialMode={lookupMode}
               paperId={session.paperId} paperTitle={session.paperTitle}
               onClose={() => { setLookupOpen(false); setLookupDismissed(true); }}
               onSave={session.ready && draft.page ? (translation, lookupKind) => session.create({ page: Number(draft.page), excerpt: draft.excerpt, note: translation, lookupKind }) : undefined}
-              onExplain={session.quickAsk && draft.page ? () => { setSystemPrompt(undefined); setQuestion("请结合所在句子解释这个单词或短语在论文中的具体含义，说明它与常见释义的关系。"); setAsking(true); setLookupOpen(false); setLookupDismissed(true); } : undefined} /> : null}
-            {asking && session.quickAsk ? <form aria-label="阅读速问" onSubmit={(event) => {
+              onExplain={(session.openQuickAsk || session.quickAsk) && draft.page ? () => openSelectionQuickAsk("请结合所在句子解释这个单词或短语在论文中的具体含义，说明它与常见释义的关系。") : undefined} /> : null}
+            {asking && !session.openQuickAsk && session.quickAsk ? <form aria-label="阅读速问" onSubmit={(event) => {
               event.preventDefault(); if (!question.trim() || busy) return;
               const abort = new AbortController(); askAbort.current = abort;
               void selectionAction(() => session.quickAsk!({ page: Number(draft.page), excerpt: draft.excerpt, question, ...(systemPrompt !== undefined ? { systemPrompt } : {}) }, abort.signal), "速问已保存到批注。PDF 与阅读模式均可查看。");

@@ -1,5 +1,6 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { useEffect, useState } from "react";
-import { Button, Field, Input, Radio, RadioGroup, Select } from "@fluentui/react-components";
+import { Field, Input, Radio, RadioGroup, Select } from "@fluentui/react-components";
 import type { SettingsState, UpdateSettingCommand } from "../settings/settings.types";
 import { deletePaperServiceKey, hasPaperServiceKey, savePaperServiceKey, validatePaperService, type PaperServiceConfig } from "./paperServiceTransport";
 

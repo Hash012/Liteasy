@@ -20,3 +20,10 @@ test("preserves selection actions and board dragging with named color choices", 
   fireEvent.dragStart(within(tools).getByRole("button", { name: "加入白板", exact: true }));
   expect(actions.dragBoard).toHaveBeenCalledTimes(1);
 });
+
+
+test("quick ask tooltip describes inspectable page, abstract and introduction sources", async () => {
+  render(<PaperSelectionTools highlight={vi.fn()} underline={vi.fn()} copy={vi.fn()} quickAsk={vi.fn()} />);
+  await userEvent.hover(screen.getByRole("button", { name: "速问", exact: true }));
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("解释选段，可查看本页、摘要与引言来源");
+});

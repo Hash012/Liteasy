@@ -13,6 +13,8 @@ export function createSeededSettingsStore(initialSettings?: Partial<SettingsStat
   }
 
   Object.entries(initialSettings).forEach(([target, value]) => {
+    // Scoped preset values are read-only projections; only their repository may import/write them with CAS.
+    if (target.startsWith("ai.quickAsk.")) return;
     store.apply({
       intent: "update_setting",
       target: target as keyof SettingsState,

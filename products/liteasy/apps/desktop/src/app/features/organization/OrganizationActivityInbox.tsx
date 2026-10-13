@@ -1,5 +1,6 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { useEffect, useRef, useState } from "react";
-import { Button, Checkbox } from "@fluentui/react-components";
+import { Checkbox } from "@fluentui/react-components";
 import { AlertRegular } from "@fluentui/react-icons";
 import type { AccountSession } from "../account/account.types";
 import { getAccountSessionGeneration } from "../account/accountSessionStorage";

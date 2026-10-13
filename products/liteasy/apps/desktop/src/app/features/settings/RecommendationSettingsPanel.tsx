@@ -1,7 +1,8 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { RecommendationIntelligenceSettings } from "../recommendations/RecommendationIntelligenceSettings";
 import { useState } from "react";
 import { clearLocalResearchProfile, exportLocalResearchProfile, loadLocalResearchProfile, localProfileTags } from "../profile/localResearchProfile";
-import { Button, Switch } from "@fluentui/react-components";
+import { Switch } from "@fluentui/react-components";
 import { RecommendationStyleControl } from "../recommendations/RecommendationStyleControl";
 import type { SettingsState, UpdateSettingCommand } from "./settings.types";
 

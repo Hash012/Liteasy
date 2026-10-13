@@ -1,3 +1,4 @@
+import { createQuickAskPresetSettings, type QuickAskPresetRepository } from "./quickAskPresetSettings";
 import { isUiLanguagePreference, type UiLanguagePreference } from "../../shared/i18n/localePolicy";
 import { readUiLanguagePreference, notifyUiLanguagePreference, persistUiLanguagePreference } from "./uiLanguagePreference";
 import { languageFontKeys, normalizeLanguageFont } from "./typography";
@@ -35,7 +36,7 @@ function loadGenerationPrompts() {
   try { saved = JSON.parse(globalThis.localStorage?.getItem(generationPromptsStorageKey) ?? "{}") ?? {}; } catch { /* Use built-in defaults. */ }
   return Object.fromEntries(Object.entries(generationPromptTasks).map(([task, item]) => {
     const key = generationPromptKey(task as keyof typeof generationPromptTasks);
-    return [key, typeof saved[key] === "string" ? saved[key].slice(0, generationPromptLimit) : item.prompt];
+    return [key, typeof saved[key] === "string" ? (task === "selection_explanation" ? saved[key] : saved[key].slice(0, generationPromptLimit)) : item.prompt];
   }));
 }
 
@@ -146,9 +147,11 @@ function persistViewSettings(state: SettingsState) {
 export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.env) {
   const cloudEndpoint = releaseEndpoint(runtimeEnv.VITE_LITEASY_CLOUD_URL, "http://127.0.0.1:8787");
   const forumEndpoint = releaseEndpoint(runtimeEnv.VITE_FORUM_API_URL, "");
-  const state: SettingsState & Record<(typeof languageFontKeys)[number], string> & SelectionLookupSettings & Record<GenerationPromptSettingKey, string> & { "view.language": UiLanguagePreference; "view.list_density": "comfortable" | "compact"; "assistant.context_window": string; "view.close_empty_panels": boolean; "view.markdown_mode": "live" | "manual"; "view.markdown_autosave": boolean } = {
+  const state: SettingsState & Record<(typeof languageFontKeys)[number], string> & SelectionLookupSettings & Record<GenerationPromptSettingKey, string> & Record<"ai.quickAsk.presets" | "ai.quickAsk.lastPresetId", string> & { "view.language": UiLanguagePreference; "view.list_density": "comfortable" | "compact"; "assistant.context_window": string; "view.close_empty_panels": boolean; "view.markdown_mode": "live" | "manual"; "view.markdown_autosave": boolean } = {
     ...loadGenerationPrompts() as Record<GenerationPromptSettingKey, string>,
     ...loadLookupSettings(),
+    "ai.quickAsk.presets": "",
+    "ai.quickAsk.lastPresetId": "explain",
     "thin_reading.mode": "fast",
     "papers.metadata_provider": "crossref",
     "papers.metadata_endpoint": "https://api.crossref.org",
@@ -200,8 +203,15 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
 
   state["assistant.context_window"] = String(agentContextLimit(state["assistant.context_window"]));
 
+  let quickAskScope: QuickAskPresetRepository | undefined;
   return {
+    quickAsk(scopeId: string, active: () => boolean = () => true) {
+      const repository = createQuickAskPresetSettings(scopeId, active);
+      quickAskScope = repository;
+      return repository;
+    },
     apply(command: UpdateSettingCommand) {
+      if (command.target.startsWith("ai.quickAsk.")) throw new Error("请通过快捷指令管理器按账号和版本保存设置。");
       if (command.target === "view.language" && !isUiLanguagePreference(command.value)) throw new Error("invalid_ui_language");
       if (command.target === "view.markdown_mode" && !["live", "manual"].includes(String(command.value))) throw new Error("invalid_markdown_mode");
       if (command.target === "view.markdown_autosave" && typeof command.value !== "boolean") throw new Error("invalid_markdown_autosave");
@@ -277,6 +287,15 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
       return state[command.target]!;
     },
     getState() {
+      if (quickAskScope) {
+        try {
+          const snapshot = quickAskScope.read();
+          state["ai.quickAsk.presets"] = JSON.stringify(snapshot);
+          state["ai.quickAsk.lastPresetId"] = snapshot.lastPresetId;
+        } catch {
+          state["ai.quickAsk.presets"] = ""; state["ai.quickAsk.lastPresetId"] = "explain";
+        }
+      }
       state["view.language"] = readUiLanguagePreference();
       return state;
     }

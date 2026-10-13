@@ -1,6 +1,7 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { useEffect, useRef, useState } from "react";
 import { WorkbenchPageHeader, WorkbenchEmptyState } from "../workbench/WorkbenchPage";
-import { Button, Input, Select, Spinner } from "@fluentui/react-components";
+import { Input, Select, Spinner } from "@fluentui/react-components";
 import { AddRegular, ArrowDownloadRegular, ArrowUploadRegular, PuzzlePieceRegular } from "@fluentui/react-icons";
 import { useExtensionWorkbench } from "./extensionWorkbenchContext";
 import { validateExtensionPackage, type ValidatedExtension } from "./extensionPackage";

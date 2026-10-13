@@ -1,6 +1,7 @@
 import type { PdfAppearance } from "../features/pdf/PdfAppearanceControl";
 import { GenerationPromptDialog } from "../features/ai-prompts/GenerationPromptDialog";
 import type { PdfQuickAskRequest } from "../features/pdf/pdfQuickAsk";
+import type { QuickAskTransferInput, QuickAskTransferResult } from "../features/pdf/quickAskTransfer";
 import type { SelectionLookupPort } from "../features/selection-lookup/selectionLookup.types";
 import { Button } from "@fluentui/react-components";
 import {
@@ -50,6 +51,7 @@ type ReaderPaneProps = {
   onGenerateGuide?: import("../features/paper-reading/literatureGuide").GuideGenerator;
   onDocumentInfo?: (info: import("../features/pdf/pdfDocumentInfo").PdfDocumentInfo) => void;
   onQuickAsk?: (request: PdfQuickAskRequest) => Promise<string>;
+  onQuickAskTransfer?: (input: QuickAskTransferInput) => Promise<QuickAskTransferResult>;
   readingContent?: ReactNode | ((annotations: PdfReadingAnnotations) => ReactNode);
   extractingPaper?: boolean;
   onExtractPaper?: () => Promise<void>;
@@ -132,6 +134,7 @@ export function ReaderPane({
   selectionLookup,
   onDocumentInfo,
   onQuickAsk,
+  onQuickAskTransfer,
   onGenerateGuide,
   readingContent, extractingPaper, onExtractPaper,
   allowServerPdfParsing = false,
@@ -237,6 +240,7 @@ export function ReaderPane({
             </section> : undefined}
             onDocumentInfo={onDocumentInfo}
             onQuickAsk={onQuickAsk}
+            onQuickAskTransfer={onQuickAskTransfer}
             readingControls={<>{thinReadingButton}{readingContent
               ? <Button size="small" onClick={() => setReadingMode(true)}>阅读模式</Button>
               : onExtractPaper ? <Button size="small" disabled={extractingPaper} onClick={() => {

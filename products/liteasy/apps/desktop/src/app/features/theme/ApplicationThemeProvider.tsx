@@ -1,3 +1,4 @@
+import "../../shared/ui/productPrimitives.css";
 import { resolveTypography } from "../settings/typography";
 import type { SettingsState } from "../settings/settings.types";
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";

@@ -1,3 +1,4 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { DocumentExportDialog } from "../document-export/DocumentExportDialog";
 import { useDocumentExportPort } from "../document-export/documentExportPort";
 import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
@@ -8,18 +9,7 @@ import { NotesInlineEditor } from "./NotesInlineEditor";
 import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
 import { ResourceLocationButton } from "../resource-filesystem/ResourceLocationButton";
 import { useEffect, useMemo, useState } from "react";
-import {
-  Button,
-  MenuItemCheckbox,
-  Input,
-  Menu,
-  MenuItem,
-  MenuList,
-  MenuPopover,
-  MenuTrigger,
-  Select,
-  Tooltip,
-} from "@fluentui/react-components";
+import { MenuItemCheckbox, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Select, Tooltip,  } from "@fluentui/react-components";
 import {
   AddRegular,
   ArrowClockwiseRegular,

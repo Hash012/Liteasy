@@ -4,8 +4,8 @@
 .onboarding-invitation p { font-size: 13px; line-height: 1.7; margin: 6px 0 12px; color: var(--colorNeutralForeground2); }
 .onboarding-invitation > div > div { display: flex; gap: 8px; flex-wrap: wrap; }
 .onboarding-backdrop { background: transparent; overflow: hidden; }
-.onboarding-dim { position: fixed; inset: 0; background: rgb(0 0 0 / 65%); }
-.onboarding-spotlight { position: fixed; box-sizing: border-box; border-radius: 8px; border: 2px solid #88c6fa; box-shadow: 0 0 0 100vmax rgb(0 0 0 / 65%), inset 0 0 0 1px rgb(255 255 255 / 60%); pointer-events: none; transition: left 220ms ease, top 220ms ease, width 220ms ease, height 220ms ease; }
+.onboarding-dim { position: fixed; inset: 0; background: var(--surface-base); }
+.onboarding-spotlight { position: fixed; box-sizing: border-box; border-radius: 8px; border: 2px solid var(--border-subtle); box-shadow: 0 0 0 100vmax rgb(0 0 0 / 65%), inset 0 0 0 1px rgb(255 255 255 / 60%); pointer-events: none; transition: left 220ms ease, top 220ms ease, width 220ms ease, height 220ms ease; }
 .fui-DialogSurface.onboarding-card { position: fixed; inset: auto; transform: none; margin: 0; box-sizing: border-box; width: min(360px, calc(100vw - 24px)); max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); padding: 20px; overflow-y: auto; border-radius: 8px; border: 1px solid var(--colorNeutralStroke2); background: var(--colorNeutralBackground1); color: var(--colorNeutralForeground1); box-shadow: var(--shadow28); transition: left 220ms ease, top 220ms ease; }
 .onboarding-card-header { display: flex; align-items: center; gap: 8px; color: var(--colorNeutralForeground3); font-size: 12px; }
 .onboarding-card-header > :first-child { flex: 1; }

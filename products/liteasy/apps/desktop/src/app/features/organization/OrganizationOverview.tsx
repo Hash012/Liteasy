@@ -1,4 +1,5 @@
-import { Avatar, Badge, Button, ProgressBar } from "@fluentui/react-components";
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
+import { Avatar, Badge, ProgressBar } from "@fluentui/react-components";
 import { BookOpenRegular, PeopleRegular, AlertRegular, StorageRegular } from "@fluentui/react-icons";
 import type { OrganizationSummary } from "./organization.types";
 import { OrganizationAccessDetails } from "./OrganizationAccessDetails";

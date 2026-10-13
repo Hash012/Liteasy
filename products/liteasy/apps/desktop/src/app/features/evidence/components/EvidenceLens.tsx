@@ -1,7 +1,8 @@
+import { ActionButton as Button } from "../../../shared/ui/productPrimitives";
 import { ContentView } from "../../markdown/ContentView";
 import { legacyContent } from "../../markdown/contentFragment";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Button, Select, Tooltip } from "@fluentui/react-components";
+import { Select, Tooltip } from "@fluentui/react-components";
 import { ArrowLeft20Regular, ChevronDown16Regular, ChevronRight16Regular, Dismiss20Regular, DocumentSearch20Regular, Open20Regular, Info16Regular, CheckmarkCircle16Regular, Warning16Regular, SubtractCircle16Regular, DocumentText16Regular } from "@fluentui/react-icons";
 import { useUiTranslation } from "../../../shared/i18n/useUiTranslation";
 import { evidenceCounts, type ClaimAssessment, type EvidenceClaim, type EvidencePassage, type EvidenceReportV1 } from "../evidenceReport";

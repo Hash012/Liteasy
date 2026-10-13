@@ -1,5 +1,6 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { useEffect, useState } from "react";
-import { Button, Checkbox, Field, Input, Select, Textarea, Tooltip } from "@fluentui/react-components";
+import { Checkbox, Field, Input, Select, Textarea, Tooltip } from "@fluentui/react-components";
 import { AddRegular, ArrowClockwiseRegular, DismissRegular, DocumentSaveRegular, PlayRegular } from "@fluentui/react-icons";
 import { ContentView } from "../markdown/ContentView";
 import { legacyContent } from "../markdown/contentFragment";

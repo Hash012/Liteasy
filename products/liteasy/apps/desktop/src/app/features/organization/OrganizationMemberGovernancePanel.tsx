@@ -1,5 +1,6 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { useEffect, useRef, useState } from "react";
-import { Button, Tooltip } from "@fluentui/react-components";
+import { Tooltip } from "@fluentui/react-components";
 import {
   ArrowSwapRegular,
   CheckmarkCircleRegular,

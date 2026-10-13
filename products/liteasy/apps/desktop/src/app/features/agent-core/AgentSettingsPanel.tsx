@@ -1,3 +1,4 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import {
   defaultAgentCoreConfig,
   getAgentEntryStatusLabel,
@@ -5,7 +6,7 @@ import {
   type AgentCoreConfig
 } from "./agentCoreConfig";
 import { useState } from "react";
-import { Button, Field, Select, Switch } from "@fluentui/react-components";
+import { Field, Select, Switch } from "@fluentui/react-components";
 import type { SettingsState, UpdateSettingCommand } from "../settings/settings.types";
 
 type AgentSettingsPanelProps = {

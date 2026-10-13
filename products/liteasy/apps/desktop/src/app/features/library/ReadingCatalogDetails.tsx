@@ -1,6 +1,7 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { ExtensionMetadataSections } from "../extensions/ExtensionMetadata";
 import { useEffect, useState, type ReactNode } from "react";
-import { Button, Field, Input, Select, Tooltip } from "@fluentui/react-components";
+import { Field, Input, Select, Tooltip } from "@fluentui/react-components";
 import { ArrowDownloadRegular, CopyRegular, DeleteRegular, EditRegular, FolderOpenRegular, OpenRegular } from "@fluentui/react-icons";
 import { bibliographicFields } from "./bibliographicFields";
 import { assetTypeLabels } from "./libraryAssetMetadata";

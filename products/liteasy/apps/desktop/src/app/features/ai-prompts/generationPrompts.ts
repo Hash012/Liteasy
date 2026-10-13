@@ -31,7 +31,9 @@ export function generationPromptKey(task: GenerationPromptTask): GenerationPromp
 }
 
 export function getGenerationPrompt(task: GenerationPromptTask, settings?: Partial<SettingsState>, override?: string) {
-  return (override?.trim() || settings?.[generationPromptKey(task)]?.trim() || generationPromptTasks[task].prompt).slice(0, generationPromptLimit);
+  const prompt = override?.trim() || settings?.[generationPromptKey(task)]?.trim() || generationPromptTasks[task].prompt;
+  // Quick Ask reads legacy preferences verbatim; the request owner validates instead of silently truncating.
+  return task === "selection_explanation" ? prompt : prompt.slice(0, generationPromptLimit);
 }
 
 export function presetGenerationPrompt(task: GenerationPromptTask, style: string) {

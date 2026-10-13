@@ -1,9 +1,10 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { GenerationPromptDialog } from "../ai-prompts/GenerationPromptDialog";
 import { EvidenceLens } from "../evidence/components/EvidenceLens";
 import { thinReadingEvidenceReport } from "./thinReadingEvidenceReport";
 import { paperAnchorFromEvidence, paperAnchorLabel, paperAnchorOpenRequest } from "../paper-anchors/paperAnchorEntity";
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
-import { Button, Switch, Tooltip } from "@fluentui/react-components";
+import { Switch, Tooltip } from "@fluentui/react-components";
 import {
   ArrowLeftRegular,
   ArrowRightRegular,

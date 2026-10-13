@@ -1,7 +1,8 @@
+import { ActionButton as Button } from "../shared/ui/productPrimitives";
 import { ReadingCatalogDetails, type ReadingCatalogActions } from "../features/library/ReadingCatalogDetails";
 import "../features/library/readingCatalog.css";
 import { displayPath } from "../features/resource-filesystem/displayPath";
-import { Button, Popover, PopoverSurface, PopoverTrigger, Tooltip } from "@fluentui/react-components";
+import { Popover, PopoverSurface, PopoverTrigger, Tooltip } from "@fluentui/react-components";
 import { EditRegular } from "@fluentui/react-icons";
 import type { FileStatus } from "../features/workspace/workspaceShell.types";
 import "../styles/workspaceShell.css";

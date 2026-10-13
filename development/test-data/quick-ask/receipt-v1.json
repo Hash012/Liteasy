@@ -1,0 +1,83 @@
+{
+  "schema": "liteasy.quick-ask-receipt/v1",
+  "requestId": "request-1",
+  "attemptId": "attempt-1",
+  "scopeGeneration": 0,
+  "terminal": "completed",
+  "providerId": "synthetic",
+  "modelId": "test-model",
+  "presetSnapshot": {
+    "id": "explain",
+    "revision": "builtin-v1",
+    "instruction": "Explain only."
+  },
+  "effectiveInstruction": "Explain only.",
+  "context": {
+    "schema": "liteasy.quick-ask-context/v1",
+    "snapshotId": "snapshot-1",
+    "source": {
+      "scopeId": "synthetic-account",
+      "paperId": "synthetic-paper",
+      "documentRevision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "extractorRevision": "test-v1"
+    },
+    "selectionId": "selection-1",
+    "sourcePages": [
+      1
+    ],
+    "available": [
+      {
+        "roles": [
+          "selection"
+        ],
+        "status": "available",
+        "text": "Synthetic source only.",
+        "spans": [
+          {
+            "page": 1,
+            "startUtf16": 0,
+            "endUtf16": 22,
+            "precision": "range"
+          }
+        ],
+        "complete": true,
+        "extraction": "synthetic-test"
+      }
+    ],
+    "delivered": [
+      {
+        "roles": [
+          "selection"
+        ],
+        "status": "available",
+        "text": "Synthetic source only.",
+        "spans": [
+          {
+            "page": 1,
+            "startUtf16": 0,
+            "endUtf16": 22,
+            "precision": "range"
+          }
+        ],
+        "complete": true,
+        "extraction": "synthetic-test"
+      }
+    ],
+    "omitted": [],
+    "inputHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "inputTokenEstimate": 100,
+    "inputBudget": 1000,
+    "ledger": {
+      "reads": [],
+      "deliveries": []
+    }
+  },
+  "createdAt": "2026-10-13T00:00:00.000Z",
+  "modelAttempts": 1,
+  "contextPrepareMs": 2,
+  "saved": {
+    "annotationId": "a",
+    "revision": "1",
+    "committedAt": "2026-10-13T00:00:01.000Z"
+  }
+}

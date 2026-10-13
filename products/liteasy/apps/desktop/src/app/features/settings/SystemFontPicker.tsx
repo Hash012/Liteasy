@@ -1,7 +1,8 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { message } from "../../shared/i18n/i18n";
 import { useUiTranslation } from "../../shared/i18n/useUiTranslation";
 import { useEffect, useRef, useState } from "react";
-import { Button, Combobox, Option } from "@fluentui/react-components";
+import { Combobox, Option } from "@fluentui/react-components";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 
 import "./systemFontPicker.css";

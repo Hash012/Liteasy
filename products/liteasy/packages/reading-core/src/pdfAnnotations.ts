@@ -1,3 +1,5 @@
+import type { QuickAskGenerationReceipt } from "./quickAsk";
+import { isQuickAskGenerationReceipt } from "./quickAskValidation";
 import type { PaperIdentity } from "./paperIdentity";
 import { isGuideAnnotation, type GuideAnnotation } from "./literatureGuide.types";
 import { isPdfInkStroke, isPdfInkStrokeGroup, type PdfInkStroke } from "./pdfInk";
@@ -63,7 +65,7 @@ type PdfAnnotationBase = {
   inkStrokes?: PdfInkStroke[];
   inkLastStrokeAt?: string;
   review?: PdfAnnotationReview;
-  quickAsk?: { question: string; answer: string; pageText: string; abstractText: string };
+  quickAsk?: { question: string; answer: string; pageText: string; abstractText: string; introductionText?: string; receipt?: QuickAskGenerationReceipt };
   aiGuide?: GuideAnnotation;
   lookupKind?: "dictionary" | "translation" | "explanation";
   /** Set only by an actual user change to the annotation body. */
@@ -266,7 +268,9 @@ function hasAnnotationFields(value: unknown) {
     (candidate.aiGuide === undefined || isGuideAnnotation(candidate.aiGuide)) &&
     (candidate.quickAsk === undefined || (candidate.quickAsk !== null &&
       typeof candidate.quickAsk.question === "string" && typeof candidate.quickAsk.answer === "string" &&
-      typeof candidate.quickAsk.pageText === "string" && typeof candidate.quickAsk.abstractText === "string")) &&
+      typeof candidate.quickAsk.pageText === "string" && typeof candidate.quickAsk.abstractText === "string" &&
+      (candidate.quickAsk.introductionText === undefined || typeof candidate.quickAsk.introductionText === "string") &&
+      (candidate.quickAsk.receipt === undefined || isQuickAskGenerationReceipt(candidate.quickAsk.receipt)))) &&
     (candidate.normalizedStart === undefined ||
       (isFiniteNumber(candidate.normalizedStart) && candidate.normalizedStart >= 0)) &&
     (candidate.kind !== "ink" || isPdfInkStroke(candidate.ink)) &&
@@ -317,7 +321,9 @@ function isLegacyAnnotation(value: unknown): value is Omit<
     (candidate.note === undefined || typeof candidate.note === "string") &&
     (candidate.quickAsk === undefined || (candidate.quickAsk !== null &&
       typeof candidate.quickAsk.question === "string" && typeof candidate.quickAsk.answer === "string" &&
-      typeof candidate.quickAsk.pageText === "string" && typeof candidate.quickAsk.abstractText === "string")) &&
+      typeof candidate.quickAsk.pageText === "string" && typeof candidate.quickAsk.abstractText === "string" &&
+      (candidate.quickAsk.introductionText === undefined || typeof candidate.quickAsk.introductionText === "string") &&
+      (candidate.quickAsk.receipt === undefined || isQuickAskGenerationReceipt(candidate.quickAsk.receipt)))) &&
     (candidate.kind !== "ink" || isPdfInkStroke(candidate.ink)) &&
     (candidate.inkStrokes === undefined || isPdfInkStrokeGroup(candidate.inkStrokes)) &&
     (candidate.inkLastStrokeAt === undefined ||

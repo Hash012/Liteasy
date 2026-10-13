@@ -92,6 +92,7 @@ import { LocalMcpContext } from "../features/local-mcp/localMcpContext";
 import { useLocalAssetMcp } from "../controllers/agent/useLocalAssetMcp";
 import { ObjectWorkbench } from "../features/boards/ObjectWorkbench";
 import { usePdfQuickAskController } from "../controllers/usePdfQuickAskController";
+import { transferQuickAskToConversation } from "../features/pdf/quickAskTransfer";
 import { useSelectionLookupController } from "../controllers/useSelectionLookupController";
 import { usePaperServicesController } from "../controllers/usePaperServicesController";
 import type { CSSProperties } from "react";
@@ -1443,8 +1444,9 @@ export function AppShell({
   objectAgentApiRef.current = assistantAgent.publicApi;
   const askPdfQuestion = usePdfQuickAskController({
     getSettings: () => settingsStoreRef.current.getState(),
-    capture: objectWorkbench.captureQuickAsk,
-    ask: objectWorkbench.ask
+    modelTransport: effectiveModelTransport,
+    getScopeId: () => objectAgentScopeRef.current,
+    getScopeGeneration: getAccountSessionGeneration
   });
   const generateLiteratureGuide = useLiteratureGuideController({
     getSettings: () => settingsStoreRef.current.getState(), profile: profileActions.academicProfile,
@@ -2387,6 +2389,7 @@ export function AppShell({
         selectionLookup={selectionLookup}
         onDocumentInfo={pdfFileStatus.onDocumentInfo}
         onQuickAsk={askPdfQuestion}
+        onQuickAskTransfer={transferQuickAskToConversation}
         onGenerateGuide={generateLiteratureGuide}
         {...teamAnnotations.readerBindings(paper)}
         allowServerPdfParsing={false}

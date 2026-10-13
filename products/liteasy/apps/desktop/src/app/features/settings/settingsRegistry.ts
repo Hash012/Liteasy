@@ -4,6 +4,8 @@ import type { SettingKey } from "./settings.types";
 
 export const settingsRegistry: Record<SettingKey, { label: string; help?: string; dependencies?: string[]; restartRequirement?: "none" | "next-run" }> = {
   ...Object.fromEntries(Object.entries(generationPromptTasks).map(([task, item]) => [generationPromptKey(task as keyof typeof generationPromptTasks), { get label() { return message("settings.prompts.label", { task: item.label }); }, get help() { return message("settings.help.prompts"); } }])) as Record<import("../ai-prompts/generationPrompts").GenerationPromptSettingKey, { label: string; help: string }>,
+  "ai.quickAsk.presets": { label: "速问快捷指令", help: "当前账号的快捷指令，包含完整正文和版本；通过速问中的管理入口保存、导入或导出。", restartRequirement: "next-run" },
+  "ai.quickAsk.lastPresetId": { label: "最近完成的速问任务", help: "只在生成成功完成后更新；缺失时回退为讲清楚。", restartRequirement: "next-run" },
   "view.language": { get label() { return message("ui.language.label"); }, get help() { return message("ui.language.description"); }, dependencies: [], restartRequirement: "none" },
   "thin_reading.mode": { get label() { return message("settings.label.thin_reading.mode"); } },
   "lookup.dictionary_service": { get label() { return message("settings.label.lookup.dictionary_service"); }, get help() { return message("settings.help.dictionary"); } },

@@ -235,3 +235,34 @@ test("selecting text opens floating tools without opening or resizing the commen
   fireEvent.keyDown(paragraph, { key: "Escape" });
   expect(screen.queryByRole("region", { name: "阅读选段操作" })).not.toBeInTheDocument();
 });
+
+
+test("reading quick ask opens the shared zero-input task surface without a second form or model request", async () => {
+  const openQuickAsk = vi.fn(), quickAsk = vi.fn();
+  const session: PdfReadingAnnotations = { scopeKey: "shared-quick-ask", ready: true, annotations: [], pageTexts: { 2: chunks[0].snippet },
+    pageCount: 2, focusedPage: 2, create: vi.fn(), openQuickAsk, quickAsk, update: vi.fn(), remove: vi.fn(), openPdf: vi.fn() };
+  render(content(session));
+  const paragraph = screen.getByText(chunks[0].snippet), range = document.createRange();
+  range.selectNodeContents(paragraph); window.getSelection()?.removeAllRanges(); window.getSelection()?.addRange(range); fireEvent.mouseUp(paragraph);
+  await userEvent.click(within(screen.getByRole("toolbar", { name: "选段工具" })).getByRole("button", { name: "速问", exact: true }));
+  expect(openQuickAsk).toHaveBeenCalledExactlyOnceWith({ page: 2, excerpt: chunks[0].snippet });
+  expect(quickAsk).not.toHaveBeenCalled();
+  expect(screen.queryByRole("form", { name: "阅读速问" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("textbox", { name: "速问问题" })).not.toBeInTheDocument();
+});
+
+test("reading sentence explanation routes its explicit task to the same surface and closes lookup", async () => {
+  const openQuickAsk = vi.fn(), quickAsk = vi.fn();
+  const query = vi.fn(async () => ({ text: "experiment", kind: "dictionary" as const, service: "youdao", sourceLabel: "有道词典", senses: [{ definition: "实验" }], pronunciations: [] }));
+  const session: PdfReadingAnnotations = { scopeKey: "shared-sentence-quick-ask", ready: true, annotations: [], pageTexts: { 2: chunks[0].snippet },
+    pageCount: 2, focusedPage: 2, lookup: { query, autoQuery: true, translationUsesAi: true }, create: vi.fn(), openQuickAsk, quickAsk, update: vi.fn(), remove: vi.fn(), openPdf: vi.fn() };
+  render(content(session));
+  const paragraph = screen.getByText(chunks[0].snippet), range = document.createRange();
+  range.setStart(paragraph.firstChild!, 4); range.setEnd(paragraph.firstChild!, 14);
+  window.getSelection()?.removeAllRanges(); window.getSelection()?.addRange(range); fireEvent.mouseUp(paragraph);
+  await userEvent.click(await screen.findByRole("button", { name: "结合本句解释", exact: true }));
+  expect(openQuickAsk).toHaveBeenCalledExactlyOnceWith({ page: 2, excerpt: "experiment", question: "请结合所在句子解释这个单词或短语在论文中的具体含义，说明它与常见释义的关系。" });
+  expect(quickAsk).not.toHaveBeenCalled();
+  expect(screen.queryByRole("button", { name: "结合本句解释", exact: true })).not.toBeInTheDocument();
+  expect(screen.queryByRole("form", { name: "阅读速问" })).not.toBeInTheDocument();
+});

@@ -1,27 +1,9 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { SearchOptions } from "../search/SearchOptions";
 import { compileSearchQuery } from "../search/searchQuery";
 import { ARTIFACT_CONTEXT_MIME } from "../object-transfer/contextTransfer";
 import { ResourceLocationButton } from "../resource-filesystem/ResourceLocationButton";
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-  Input,
-  Menu,
-  MenuItem,
-  MenuList,
-  MenuPopover,
-  MenuTrigger,
-  Spinner,
-  Select,
-  Tab,
-  TabList,
-  Tooltip
-} from "@fluentui/react-components";
+import { Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Spinner, Select, Tab, TabList, Tooltip } from "@fluentui/react-components";
 import {
   ArrowClockwiseRegular,
   DeleteRegular,

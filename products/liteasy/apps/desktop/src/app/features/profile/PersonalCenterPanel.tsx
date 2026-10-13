@@ -1,9 +1,10 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { WorkbenchPageHeader } from "../workbench/WorkbenchPage";
 import { SpaceOperationsPanel, type SpaceOperationsView } from "../spaces/SpaceOperationsPanel";
 import type { AccountSession } from "../account/account.types";
 import { AccountDataExportPanel } from "../account/AccountDataExportPanel";
 import { useState } from "react";
-import { Button, Switch, Tab, TabList, Tooltip } from "@fluentui/react-components";
+import { Switch, Tab, TabList, Tooltip } from "@fluentui/react-components";
 import { ArchiveRegular, DeleteRegular, PersonRegular, SignOutRegular, SparkleRegular, BookOpenRegular } from "@fluentui/react-icons";
 import type { OrganizationSummary } from "../organization/organization.types";
 import type { AgentMemoryEntry } from "../agent-core/agentCoreConfig";

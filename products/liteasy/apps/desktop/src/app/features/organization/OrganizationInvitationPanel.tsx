@@ -1,5 +1,6 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@fluentui/react-components";
+
 import { ChevronDownRegular, ChevronRightRegular, PeopleAddRegular } from "@fluentui/react-icons";
 import type { AccountSession } from "../account/account.types";
 import { createOrganizationActionClient, type OrganizationActionTransport, type OrganizationInvitation } from "./organizationActionsClient";

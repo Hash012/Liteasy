@@ -38,11 +38,11 @@
 .evidence-lens header { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
 .evidence-lens header strong { font-size: 12px; min-width: 0; }
 .evidence-lens p { margin: 6px 0; }
-.evidence-lens__passage { min-width: 0; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--colorNeutralStroke2, #80808040); }
+.evidence-lens__passage { min-width: 0; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--colorNeutralStroke2); }
 .evidence-lens__passage strong { display: block; font-size: 12px; overflow-wrap: anywhere; }
 .evidence-lens__metadata { display: flex; flex-wrap: wrap; gap: 3px 8px; color: var(--colorNeutralForeground3, inherit); font-size: 11px; margin-top: 4px; }
 .evidence-lens blockquote {
-  margin: 8px 0; padding: 2px 8px; border-left: 2px solid var(--colorBrandStroke2, #80808060);
+  margin: 8px 0; padding: 2px 8px; border-left: 2px solid var(--colorBrandStroke2);
   white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.55;
   max-height: 180px; overflow: auto;
 }
@@ -53,7 +53,7 @@
 .evidence-lens__filter { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
 .evidence-lens__filter > * { min-width: 0; max-width: 100%; }
 .evidence-lens__inspector-body { max-height: min(640px, 70vh); overflow: auto; overscroll-behavior: contain; min-width: 0; }
-.evidence-lens__claim-detail { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--colorNeutralStroke2, #80808040); }
+.evidence-lens__claim-detail { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--colorNeutralStroke2); }
 .evidence-lens__claim-detail h4 { margin: 8px 0 4px; font-size: 12px; font-weight: 600; line-height: 1.5; }
 @container (max-width: 350px) {
   .evidence-lens__summary-text { gap: 2px 6px; font-size: 11px; }

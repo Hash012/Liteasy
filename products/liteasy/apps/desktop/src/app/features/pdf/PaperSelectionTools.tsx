@@ -50,7 +50,7 @@ export function PaperSelectionTools(props: {
       {props.aiLookup ? <Tooltip content="只解释选中的词，不附带论文或对话上下文" relationship="description"><Button appearance="subtle" size="small" disabled={props.lookupDisabled ?? props.disabled} icon={<SparkleRegular />} onClick={props.aiLookup}>AI 查词</Button></Tooltip> : null}
       {props.board ? <Tooltip content="加入白板，也可拖动摘录" relationship="description"><Button appearance="subtle" size="small" disabled={props.disabled} icon={<WhiteboardRegular />} draggable={Boolean(props.dragBoard)} onDragStart={props.dragBoard} onClick={props.board}>加入白板</Button></Tooltip> : null}
       {props.tray ? <Tooltip content="收集选段后一起提问" relationship="description"><Button appearance="subtle" size="small" disabled={props.disabled} icon={<TextQuoteRegular />} onClick={props.tray}>加入摘录对话</Button></Tooltip> : null}
-      {props.quickAsk ? <Tooltip content="结合当前页和摘要提问" relationship="description"><Button appearance="subtle" size="small" disabled={props.disabled} icon={<SparkleRegular />} onClick={props.quickAsk}>速问</Button></Tooltip> : null}
+      {props.quickAsk ? <Tooltip content="解释选段，可查看本页、摘要与引言来源" relationship="description"><Button appearance="subtle" size="small" disabled={props.disabled} icon={<SparkleRegular />} onClick={props.quickAsk}>速问</Button></Tooltip> : null}
       {props.conversation ? <Tooltip content="将选段加入 AI 对话上下文" relationship="description"><Button appearance="subtle" size="small" disabled={props.disabled} icon={<ChatRegular />} onClick={props.conversation}>加入对话</Button></Tooltip> : null}
     </div> : null}
     {props.extensionActions}

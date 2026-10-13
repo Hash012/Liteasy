@@ -1,5 +1,6 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { useState } from "react";
-import { Button, Input, Checkbox, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem, Tooltip } from "@fluentui/react-components";
+import { Input, Checkbox, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem, Tooltip } from "@fluentui/react-components";
 import { MoreHorizontalRegular } from "@fluentui/react-icons";
 import { getModeLabel } from "./assistantPresentation";
 import type { AssistantSessionHistoryItem, AssistantSessionKind } from "./assistantSessionHistory";

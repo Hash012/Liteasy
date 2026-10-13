@@ -7,6 +7,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { AssistantSessionDraft, AssistantSessionHistoryItem } from "./assistantSessionHistory";
 import type { AssistantMessage } from "./assistant.types";
+import { isQuickAskGenerationReceipt } from "../../../../../../packages/reading-core/src/quickAskValidation";
 
 export const assistantHistoryStorageKey = "liteasy.assistant-history.v1";
 export type AssistantHistorySnapshot = {
@@ -44,6 +45,10 @@ export function parseAssistantHistory(value: unknown): AssistantHistorySnapshot 
         return;
       }
       messageIds.add(message.id);
+      if (message.quickAskSource !== undefined && (!record(message.quickAskSource) || typeof message.quickAskSource.excerpt !== "string" || typeof message.quickAskSource.paperTitle !== "string" || !isQuickAskGenerationReceipt(message.quickAskSource.receipt) || (candidate.scopeId !== undefined && candidate.scopeId !== message.quickAskSource.receipt.context.source.scopeId))) {
+        quarantined.push({ path: `sessions[${index}].messages[${messageIndex}].quickAskSource`, value: message.quickAskSource });
+        message = { ...message, quickAskSource: undefined };
+      }
       const { confirmation: _expiredAuthorization, ...saved } = message as unknown as AssistantMessage;
       messages.push({ ...saved,
         assetWrites: parseSavedAssistantAssetWrites(saved.assetWrites),

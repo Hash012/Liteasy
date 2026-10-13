@@ -1,5 +1,5 @@
 .mermaid-preview { border: 1px solid #d7e0e8; border-radius: 6px; background: #fff; overflow: hidden; margin: 18px 0; }
-.mermaid-preview__header { min-height: 42px; display: flex; align-items: center; gap: 12px; padding: 6px 10px; border-bottom: 1px solid #e5ebf0; background: #f8fafc; }
+.mermaid-preview__header { min-height: 42px; display: flex; align-items: center; gap: 12px; padding: 6px 10px; border-bottom: 1px solid var(--border-subtle); background: #f8fafc; }
 .mermaid-preview__header > div { display: inline-flex; align-items: center; gap: 6px; color: #29465b; white-space: nowrap; }
 .mermaid-preview__header > button { margin-left: auto; }
 .mermaid-preview__svg { overflow: auto; padding: 18px; min-height: 220px; text-align: center; }

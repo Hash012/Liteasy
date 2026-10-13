@@ -1,3 +1,4 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { DocumentExportDialog } from "../document-export/DocumentExportDialog";
 import { useDocumentExportPort } from "../document-export/documentExportPort";
 import { MarkdownEditor } from "../markdown/MarkdownEditor";
@@ -21,13 +22,7 @@ import {
   type SetStateAction,
   type ReactElement,
 } from "react";
-import {
-  Button,
-  Checkbox,
-  Input,
-  Textarea,
-  Tooltip,
-} from "@fluentui/react-components";
+import { Checkbox, Input, Textarea, Tooltip,  } from "@fluentui/react-components";
 import {
   ArrowDownloadRegular,
   DismissRegular,

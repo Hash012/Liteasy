@@ -28,6 +28,8 @@ export type PdfReadingAnnotations = {
   remove(id: string): Promise<void>;
   openPdf(id: string): void;
   capture?: (input: { page: number; excerpt: string }, target: "board" | "tray" | "conversation") => Promise<void>;
+  /** Opens the shared reader-owned task surface; reading mode owns no parallel generation state. */
+  openQuickAsk?: (input: { page: number; excerpt: string; question?: string }) => void;
   quickAsk?: (input: { page: number; excerpt: string; question: string; systemPrompt?: string }, signal: AbortSignal) => Promise<void>;
   annotationTools?: (annotation: PdfAnnotationV2) => ReactNode;
 

@@ -1,5 +1,6 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Button, Field, FluentProvider, Input, Select, Tab, TabList, Textarea, webDarkTheme, webLightTheme } from "@fluentui/react-components";
+import { Field, FluentProvider, Input, Select, Tab, TabList, Textarea, webDarkTheme, webLightTheme } from "@fluentui/react-components";
 import { AddRegular, PlayRegular, SaveRegular } from "@fluentui/react-icons";
 import { useExtensionWorkbench } from "../extensions/extensionWorkbenchContext";
 import { downloadExtensionJson } from "../extensions/ExtensionViews";

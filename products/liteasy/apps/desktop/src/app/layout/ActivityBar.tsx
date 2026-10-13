@@ -1,6 +1,7 @@
+import { ActionButton as Button } from "../shared/ui/productPrimitives";
 import { message } from "../shared/i18n/i18n";
 import { useUiTranslation } from "../shared/i18n/useUiTranslation";
-import { Button, Tooltip } from "@fluentui/react-components";
+import { Tooltip } from "@fluentui/react-components";
 import {
   BookRegular,
   BeakerRegular,

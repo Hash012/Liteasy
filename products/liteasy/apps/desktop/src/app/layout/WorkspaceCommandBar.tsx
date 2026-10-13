@@ -1,6 +1,7 @@
+import { ActionButton as Button } from "../shared/ui/productPrimitives";
 import { getRecoveryRuntime } from "../features/local-recovery/runtimeProfile";
 import { useLayoutEffect, useRef, useState } from "react";
-import { Button, Menu, MenuItem, MenuItemCheckbox, MenuList, MenuPopover, MenuTrigger, Toolbar, Tooltip, useRestoreFocusTarget } from "@fluentui/react-components";
+import { Menu, MenuItem, MenuItemCheckbox, MenuList, MenuPopover, MenuTrigger, Toolbar, Tooltip, useRestoreFocusTarget } from "@fluentui/react-components";
 import { ArrowLeftRegular, ArrowRightRegular, HistoryRegular, MoreHorizontalRegular, PanelLeftRegular, SearchRegular, SettingsRegular, SubtractRegular, SquareRegular, SquareMultipleRegular, DismissRegular } from "@fluentui/react-icons";
 import type { ToolbarAction, WorkspaceToolbarState, WindowControlsState } from "../features/workspace/workspaceShell.types";
 import "../styles/workspaceShell.css";

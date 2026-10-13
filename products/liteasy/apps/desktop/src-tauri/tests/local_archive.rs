@@ -258,3 +258,41 @@ fn source_or_archive_symlink_cannot_escape_the_selected_root() {
     assert!(prepare_restore(&exported, &root.join("restored")).is_err());
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn quick_ask_receipt_round_trips_with_legacy_body_and_rejects_unknown_fields() {
+    let root = fixture();
+    let receipt: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../../../development/test-data/quick-ask/receipt-v1.json"
+    ))
+    .unwrap();
+    let mut doc = document(&root);
+    let quick = &mut doc.annotations.as_mut().unwrap()["annotations"][0]["quickAsk"];
+    quick["receipt"] = receipt.clone();
+    quick["introductionText"] = json!("Synthetic introduction.");
+    let output = root.join("receipt-export");
+    let plan = prepare_export(vec![doc], &records(), &output).unwrap();
+    commit(plan).unwrap();
+    let exported: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(output.join("annotations/document-0001.json")).unwrap(),
+    )
+    .unwrap();
+    let quick = &exported["annotations"][0]["quickAsk"];
+    assert_eq!(quick["receipt"], receipt);
+    assert_eq!(quick["answer"], "Full answer");
+    assert_eq!(quick["introductionText"], "Synthetic introduction.");
+    let restored = root.join("restored-receipt");
+    let restore = prepare_restore(&output, &restored).unwrap();
+    commit(restore).unwrap();
+    let roundtrip: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(restored.join("annotations/document-0001.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(roundtrip["annotations"][0]["quickAsk"], *quick);
+    let mut bad = document(&root);
+    let mut unsupported = receipt;
+    unsupported["apiKey"] = json!("must-not-export");
+    bad.annotations.as_mut().unwrap()["annotations"][0]["quickAsk"]["receipt"] = unsupported;
+    assert!(prepare_export(vec![bad], &records(), &root.join("bad")).is_err());
+    fs::remove_dir_all(root).unwrap();
+}

@@ -21,12 +21,14 @@ export type GenerateAnswerInput = {
   images?: ModelImageInput[];
   provider: string;
   requireLive?: boolean;
+  requireTerminal?: boolean;
   signal?: AbortSignal;
 };
 
 export type ModelGenerationResult = {
   answer: string;
   trace: ModelExecutionTrace;
+  terminal?: "completed";
 };
 
 type ModelGatewayDeps = {

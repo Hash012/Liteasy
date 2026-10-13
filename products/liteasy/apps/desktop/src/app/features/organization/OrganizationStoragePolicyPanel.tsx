@@ -1,5 +1,6 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Field, Select, Spinner, Tooltip } from "@fluentui/react-components";
+import { Field, Select, Spinner, Tooltip } from "@fluentui/react-components";
 import { ArrowSyncRegular, SaveRegular } from "@fluentui/react-icons";
 import { createCloudLibraryStorageClient } from "../library/cloudLibraryStorageClient";
 import type { OrganizationSummary } from "./organization.types";

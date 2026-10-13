@@ -1,8 +1,9 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { OpenRegular } from "@fluentui/react-icons";
 import { rememberVerifiedModel, forgetVerifiedModel, modelProfileId, directModelSettingCommands } from "./verifiedModelProfiles";
 import { useVerifiedModels } from "./useVerifiedModels";
 import { useEffect, useId, useRef, useState } from "react";
-import { Button, Field, Input, Select, Textarea } from "@fluentui/react-components";
+import { Field, Input, Select, Textarea } from "@fluentui/react-components";
 import { isTauri } from "@tauri-apps/api/core";
 import type { SettingsState, UpdateSettingCommand } from "../settings/settings.types";
 import { createDirectModelClient } from "./directModelClient";

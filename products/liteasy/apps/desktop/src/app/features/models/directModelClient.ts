@@ -43,11 +43,12 @@ function textContent(content: unknown): string {
 }
 
 // Decode bytes incrementally: UTF-8 characters and SSE frames can cross IPC chunks.
-export function createDirectModelStream(protocol: DirectModelConfig["protocol"], onDelta: NonNullable<GenerateAnswerInput["onDelta"]>, onReasoningDelta?: GenerateAnswerInput["onReasoningDelta"]) {
+export function createDirectModelStream(protocol: DirectModelConfig["protocol"], onDelta: NonNullable<GenerateAnswerInput["onDelta"]>, onReasoningDelta?: GenerateAnswerInput["onReasoningDelta"], requireTerminal = false) {
   const budget = createModelTextBudget();
   let answer = "";
   let reasoning = "";
   let completed = false;
+  let successfulStop = false;
   let failure: Error | undefined;
   function frame(raw: string) {
     const data = raw.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trimStart()).join("\n");
@@ -64,9 +65,11 @@ export function createDirectModelStream(protocol: DirectModelConfig["protocol"],
       if (event.type === "content_block_start" && event.content_block?.type === "thinking") reasoningDelta = event.content_block.thinking ?? "";
       if (event.type === "content_block_delta" && event.delta?.type === "thinking_delta") reasoningDelta = event.delta.thinking ?? "";
       if (event.type === "message_stop") completed = true;
+      if (event.type === "message_delta" && ["end_turn", "stop_sequence"].includes(event.delta?.stop_reason)) successfulStop = true;
       limitReached = event.type === "message_delta" && event.delta?.stop_reason === "max_tokens";
     } else {
       const choice = event.choices?.[0];
+      if (choice?.finish_reason === "stop") successfulStop = true;
       limitReached = choice?.finish_reason === "length";
       if (choice?.finish_reason === "content_filter") throw new Error("模型服务未能返回内容，请调整请求后重试。");
       delta = textContent(choice?.delta?.content);
@@ -90,6 +93,7 @@ export function createDirectModelStream(protocol: DirectModelConfig["protocol"],
       if (failure) throw failure;
       frames.finish();
       if (!completed) throw new Error("模型连接提前结束，响应未完成，请重试。");
+      if (requireTerminal && !successfulStop) throw new Error("模型未提供正常完成回执，已保留部分回答。");
       if (!answer.trim()) throw new Error("模型未返回文本，请检查所选模型是否支持对话。");
       return answer;
     }
@@ -100,7 +104,7 @@ export function createDirectModelClient(inputConfig: DirectModelConfig, transpor
   return async (input: GenerateAnswerInput): Promise<ModelGenerationResult> => {
     input.signal?.throwIfAborted();
     const config = validateDirectModelConfig(inputConfig);
-    const stream = input.onDelta ? createDirectModelStream(config.protocol, input.onDelta, input.onReasoningDelta) : undefined;
+    const stream = input.onDelta ? createDirectModelStream(config.protocol, input.onDelta, input.onReasoningDelta, input.requireTerminal) : undefined;
     const raw = await transport({ config, body: buildDirectModelBody(config, input), signal: input.signal, onChunk: stream?.push });
     input.signal?.throwIfAborted();
     let answer: string;
@@ -109,6 +113,7 @@ export function createDirectModelClient(inputConfig: DirectModelConfig, transpor
       assertModelResponseSize(modelTextBytes(raw), MODEL_RESPONSE_LIMITS.wireBytes, "响应数据");
       const result = parseResponseJson(raw);
       const stop = config.protocol === "anthropic" ? result.stop_reason : result.choices?.[0]?.finish_reason;
+      if (input.requireTerminal && !["stop", "end_turn", "stop_sequence"].includes(stop)) throw new Error("模型未提供正常完成回执。");
       answer = textContent(config.protocol === "anthropic" ? result.content : result.choices?.[0]?.message?.content);
       const reasoning = config.protocol === "anthropic"
         ? (result.content ?? []).filter((part: { type: string }) => part.type === "thinking").map((part: { thinking: string }) => part.thinking).join("\n")
@@ -121,6 +126,6 @@ export function createDirectModelClient(inputConfig: DirectModelConfig, transpor
       if (stop === "length" || stop === "max_tokens") throw new Error("模型输出达到长度上限，请缩小生成范围后重试。");
       if (!answer.trim()) throw new Error("模型未返回文本，请检查所选模型是否支持对话。");
     }
-    return { answer, trace: { backend: "direct_api", endpoint: config.endpoint, mode: "live", provider: config.provider, source: "direct_api" } };
+    return { answer, ...(input.requireTerminal ? { terminal: "completed" as const } : {}), trace: { backend: "direct_api", endpoint: config.endpoint, mode: "live", provider: config.provider, source: "direct_api" } };
   };
 }

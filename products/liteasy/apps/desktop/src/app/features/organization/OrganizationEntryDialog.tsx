@@ -1,5 +1,6 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { useState } from "react";
-import { Button, Dialog, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Tooltip } from "@fluentui/react-components";
+import { Dialog, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Tooltip } from "@fluentui/react-components";
 import { DismissRegular, SearchRegular } from "@fluentui/react-icons";
 import type { OrganizationList, OrganizationSummary } from "./organization.types";
 import { OrganizationOverview, organizationRoleLabel } from "./OrganizationOverview";

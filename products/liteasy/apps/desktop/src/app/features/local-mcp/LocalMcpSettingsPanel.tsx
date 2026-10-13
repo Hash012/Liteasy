@@ -1,6 +1,7 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { useContext, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
-import { Button, Switch, Textarea } from "@fluentui/react-components";
+import { Switch, Textarea } from "@fluentui/react-components";
 import { CopyRegular, PlugConnectedRegular } from "@fluentui/react-icons";
 import { LocalMcpContext, localMcpCodexConfig } from "./localMcpContext";
 

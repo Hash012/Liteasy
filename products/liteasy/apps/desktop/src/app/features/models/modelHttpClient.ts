@@ -191,7 +191,9 @@ async function readStreamingAnswer(input: {
   if (!completedPayload) {
     throw new Error(`模型流式响应未正常完成（${input.source}）`);
   }
+  if (input.generateInput.requireTerminal && !(completedPayload as AnswerPayload).answer.trim()) throw new Error("模型完成回执没有可保存的正文。");
   return {
+    ...(input.generateInput.requireTerminal ? { terminal: "completed" as const } : {}),
     answer: (completedPayload as AnswerPayload).answer || answer,
     trace: buildExecutionTrace(completedPayload as AnswerPayload, input.endpoint, input.source)
   };

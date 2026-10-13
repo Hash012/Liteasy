@@ -1,3 +1,4 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { citationPaper, normalizeCitationDoi, type CitationPaper } from "../citation-graph/citationGraph";
 import { createCitationGraphClient } from "../citation-graph/citationGraphClient";
 import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
@@ -30,25 +31,7 @@ import {
   type ReactElement,
   type ReactNode
 } from "react";
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-  Input,
-  Field, Popover, PopoverSurface, PopoverTrigger,
-  Menu,
-  MenuItem,
-  MenuList,
-  MenuPopover,
-  MenuTrigger,
-  Select,
-  Textarea,
-  Tooltip, useRestoreFocusTarget
-} from "@fluentui/react-components";
+import { Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Field, Popover, PopoverSurface, PopoverTrigger, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Select, Textarea, Tooltip, useRestoreFocusTarget } from "@fluentui/react-components";
 import {
   AddRegular,
   FilterRegular,

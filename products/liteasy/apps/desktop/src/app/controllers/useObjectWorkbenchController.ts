@@ -1,3 +1,5 @@
+import { quickAskPresetResourceType } from "../features/quick-ask-presets/quickAskPresetResourceType";
+import { createSettingsStore } from "../features/settings/settings.store";
 import { getAccountSessionGeneration } from "../features/account/accountSessionStorage";
 import { compileBoardDocument } from "../features/document-export/boardExportAdapter";
 import { getGenerationPrompt } from "../features/ai-prompts/generationPrompts";
@@ -1068,6 +1070,7 @@ export function useObjectWorkbenchController(input: {
   const assetContextResolver = useRef(resolveLegacyContext);
   assetContextResolver.current = resolveLegacyContext;
   const agentAssets = useMemo(() => createWorkspaceAgentAssetService({
+    resourceTypes: [quickAskPresetResourceType({ settings: createSettingsStore().quickAsk(repository.scopeId, active), objects: repository, active })],
     typeFactories: isTauri() ? [objects => researchResourceType({ host: createResearchHostClient(repository.scopeId, active), scope: repository.scopeId, active, objects })] : [],
     repository,
     active,

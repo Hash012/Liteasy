@@ -1,7 +1,8 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { displayPath } from "../resource-filesystem/displayPath";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
-import { Button, Input } from "@fluentui/react-components";
+import { Input } from "@fluentui/react-components";
 import { FolderOpenRegular } from "@fluentui/react-icons";
 
 type DataLocation = { currentPath: string; pendingPath?: string | null; migrationError?: string | null };

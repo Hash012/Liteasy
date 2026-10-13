@@ -1,8 +1,9 @@
+import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { useState } from "react";
 import { ContentView } from "../markdown/ContentView";
 import { legacyContent } from "../markdown/contentFragment";
 import { displayPath } from "../resource-filesystem/displayPath";
-import { Button, Field, Input, Select, Textarea, Tooltip } from "@fluentui/react-components";
+import { Field, Input, Select, Textarea, Tooltip } from "@fluentui/react-components";
 import { AddRegular, ArrowClockwiseRegular, CopyRegular, EditRegular, DeleteRegular, SaveRegular } from "@fluentui/react-icons";
 import { bibliographicFields, type BibliographicDraft } from "./bibliographicFields";
 import { assetTypeLabels } from "./libraryAssetMetadata";
